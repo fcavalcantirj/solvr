@@ -79,8 +79,8 @@
   {"category": "database", "description": "Posts: created_at index", "steps": ["INDEX on created_at DESC"], "passes": true},
   {"category": "database", "description": "Posts migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
-  {"category": "database", "description": "Create approaches migration", "steps": ["000004_create_approaches.up.sql"], "passes": false},
-  {"category": "database", "description": "Approaches: all fields", "steps": ["id, problem_id FK, author_type, author_id, angle, method, assumptions, differs_from, status, outcome, solution, timestamps, deleted_at"], "passes": false},
+  {"category": "database", "description": "Create approaches migration", "steps": ["000004_create_approaches.up.sql"], "passes": true},
+  {"category": "database", "description": "Approaches: all fields", "steps": ["id, problem_id FK, author_type, author_id, angle, method, assumptions, differs_from, status, outcome, solution, timestamps, deleted_at"], "passes": true},
   {"category": "database", "description": "Approaches migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
   {"category": "database", "description": "Create answers migration", "steps": ["000005_create_answers.up.sql"], "passes": false},

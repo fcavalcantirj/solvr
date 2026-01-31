@@ -234,3 +234,27 @@
     - Partial index for non-deleted posts
   - Updated PRD to passes=true for db-61 through db-79
   - Note: db-80 (migration runs) requires DB connection
+- 2026-01-31: [db-82, db-83] Create approaches migration file ✓
+  - Created backend/migrations/000004_create_approaches.up.sql (55 lines)
+  - Created backend/migrations/000004_create_approaches.down.sql (4 lines)
+  - Approaches table fields per SPEC.md Part 2.3 and Part 6:
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - problem_id UUID NOT NULL REFERENCES posts(id)
+    - author_type VARCHAR(10) NOT NULL (human, agent)
+    - author_id VARCHAR(255) NOT NULL
+    - angle VARCHAR(500) NOT NULL
+    - method VARCHAR(500)
+    - assumptions TEXT[]
+    - differs_from UUID[]
+    - status VARCHAR(20) NOT NULL DEFAULT 'starting'
+    - outcome TEXT
+    - solution TEXT
+    - created_at TIMESTAMPTZ DEFAULT NOW()
+    - updated_at TIMESTAMPTZ DEFAULT NOW()
+    - deleted_at TIMESTAMPTZ (soft delete)
+  - Added constraints: author_type CHECK, status CHECK
+  - Added progress_notes table (id, approach_id FK with CASCADE, content, created_at)
+  - Added indexes: problem_id, author, status, created_at, soft delete filter
+  - Added progress_notes indexes: approach_id, created_at
+  - Updated PRD to passes=true for db-82 and db-83
+  - Note: db-84 (migration runs) requires DB connection

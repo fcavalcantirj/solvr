@@ -1,7 +1,7 @@
 # Solvr Development Progress
 
 ## Current Status
-- **PRD:** 709 requirements (0% complete)
+- **PRD:** 709 requirements (1 complete, ~0.1%)
 - **Spec:** v1.5, 2800+ lines, 19 parts
 - **Ready to begin development**
 
@@ -51,3 +51,5 @@
   - Error handling broken out
   - Input validation per field
   - Edge cases covered
+- 2026-01-31 21:15: [infra-1] Create root project structure ✓
+  - backend/, frontend/, specs/ directories verified present

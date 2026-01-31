@@ -1,7 +1,7 @@
 # Solvr Development Progress
 
 ## Current Status
-- **PRD:** 709 requirements (13 complete, ~1.8%)
+- **PRD:** 709 requirements (14 complete, ~2.0%)
 - **Spec:** v1.5, 2800+ lines, 19 parts
 - **Infrastructure setup in progress**
 
@@ -102,3 +102,7 @@
   - infra-13: PostgreSQL env vars (USER, PASSWORD, DB) - already in docker-compose.yml
   - infra-14: PostgreSQL healthcheck (pg_isready) - already in docker-compose.yml
   - Updated PRD to passes=true for infra-12, 13, 14
+- 2026-01-31: [infra-17] Create migrations directory ✓
+  - Created backend/migrations/ directory
+  - Added .gitkeep to track empty directory in git
+  - Updated PRD to passes=true

@@ -18,6 +18,21 @@ BATCH_PAUSE_MINS=${BATCH_PAUSE_MINS:-15}     # Pause between successful batches
 WAIT_TIME_SECS=$((WAIT_TIME_HOURS * 3600))
 BATCH_PAUSE_SECS=$((BATCH_PAUSE_MINS * 60))
 
+# Telegram notification settings (optional - set env vars to enable)
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-""}
+TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-"152099202"}  # Felipe's Telegram ID
+
+# Send Telegram notification
+send_telegram() {
+  local message="$1"
+  if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+      -d "chat_id=${TELEGRAM_CHAT_ID}" \
+      -d "text=${message}" \
+      -d "parse_mode=Markdown" > /dev/null 2>&1
+  fi
+}
+
 batch_count=0
 total_iterations=0
 runner_start=$(date +%s)
@@ -146,6 +161,14 @@ while true; do
     echo -e "${RED}${BOLD}└───────────────────────────────────────────────────────────────────┘${NC}"
     echo ""
 
+    # Notify via Telegram about API error
+    send_telegram "🚨 *Solvr Ralph* - API Error
+
+❌ Error: ${error_msg}
+⏸️ Pausing for ${WAIT_TIME_HOURS} hours
+🔄 Resume: ${resume_time}
+📊 Progress: $(./progress.sh)"
+
     # Countdown display with progress bar
     remaining=$WAIT_TIME_SECS
     total_wait=$WAIT_TIME_SECS
@@ -220,6 +243,17 @@ while true; do
     echo -e "${GREEN}${BOLD}║                                                                   ║${NC}"
     echo -e "${GREEN}${BOLD}╚═══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
+
+    # Notify via Telegram about completion!
+    send_telegram "🎉 *Solvr PRD COMPLETE!* 🎉
+
+📦 Total batches: ${batch_count}
+🔄 Total iterations: ${total_iterations}
+⏱️ Total time: $(format_time $total_time)
+📊 $(./progress.sh)
+
+Time to celebrate! 🚀"
+
     exit 0
   fi
 done

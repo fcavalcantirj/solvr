@@ -795,5 +795,71 @@
   {"category": "finalization", "description": "Code: No >800 lines", "steps": ["All files under limit"], "passes": false},
   {"category": "finalization", "description": "Code: Coverage >=80%", "steps": ["Both frontend and backend"], "passes": false},
   {"category": "finalization", "description": "Code: No TODOs", "steps": ["No TODO comments"], "passes": false},
-  {"category": "finalization", "description": "Code: Lint clean", "steps": ["Zero lint warnings"], "passes": false}
+  {"category": "finalization", "description": "Code: Lint clean", "steps": ["Zero lint warnings"], "passes": false},
+
+  {"category": "api-flags", "description": "POST /flags - user flag endpoint", "steps": ["Any authenticated user can flag content"], "passes": false},
+  {"category": "api-flags", "description": "Flag: target_type param", "steps": ["post, comment, answer, approach, response"], "passes": false},
+  {"category": "api-flags", "description": "Flag: reason param", "steps": ["spam, inappropriate, duplicate, other"], "passes": false},
+
+  {"category": "notifications", "description": "Create notification on new answer", "steps": ["Notify question author when answer posted"], "passes": false},
+  {"category": "notifications", "description": "Create notification on approach update", "steps": ["Notify problem author on approach status change"], "passes": false},
+  {"category": "notifications", "description": "Create notification on comment", "steps": ["Notify post/answer author when commented"], "passes": false},
+  {"category": "notifications", "description": "Create notification on accepted answer", "steps": ["Notify answer author when accepted"], "passes": false},
+  {"category": "notifications", "description": "Create notification on upvote milestone", "steps": ["Notify at 10, 50, 100 upvotes"], "passes": false},
+  {"category": "notifications", "description": "Create notification on mention", "steps": ["Notify when @mentioned in content"], "passes": false},
+  {"category": "notifications", "description": "Notification service", "steps": ["internal/services/notification.go"], "passes": false},
+  {"category": "notifications", "description": "Notification service tests", "steps": ["Test all notification triggers"], "passes": false},
+
+  {"category": "email", "description": "Email service setup", "steps": ["internal/services/email.go"], "passes": false},
+  {"category": "email", "description": "SMTP configuration", "steps": ["Parse SMTP env vars (host, port, user, pass)"], "passes": false},
+  {"category": "email", "description": "Email: send function", "steps": ["SendEmail(to, subject, html, text)"], "passes": false},
+  {"category": "email", "description": "Email template: welcome", "steps": ["Welcome email on signup"], "passes": false},
+  {"category": "email", "description": "Email template: new answer", "steps": ["Your question got an answer"], "passes": false},
+  {"category": "email", "description": "Email template: approach update", "steps": ["Approach status changed"], "passes": false},
+  {"category": "email", "description": "Email template: digest", "steps": ["Daily/weekly activity summary"], "passes": false},
+  {"category": "email", "description": "Email: queue system", "steps": ["Don't block request on email send"], "passes": false},
+  {"category": "email", "description": "Email: retry on failure", "steps": ["Retry failed sends"], "passes": false},
+  {"category": "email", "description": "Email service tests", "steps": ["Mock SMTP, verify templates"], "passes": false},
+
+  {"category": "frontend-pages", "description": "Dashboard page /dashboard", "steps": ["app/dashboard/page.tsx"], "passes": false},
+  {"category": "frontend-pages", "description": "Dashboard: your posts section", "steps": ["List user's own posts"], "passes": false},
+  {"category": "frontend-pages", "description": "Dashboard: activity feed", "steps": ["Recent activity on your content"], "passes": false},
+  {"category": "frontend-pages", "description": "Dashboard: stats summary", "steps": ["Total posts, upvotes, etc."], "passes": false},
+  {"category": "frontend-pages", "description": "Dashboard tests", "steps": ["Test dashboard components"], "passes": false},
+
+  {"category": "frontend-pages", "description": "Feed page /feed", "steps": ["app/feed/page.tsx"], "passes": false},
+  {"category": "frontend-pages", "description": "Feed: sort options", "steps": ["Latest, top, hot"], "passes": false},
+  {"category": "frontend-pages", "description": "Feed: filter by type", "steps": ["All, problems, questions, ideas"], "passes": false},
+  {"category": "frontend-pages", "description": "Feed: pagination", "steps": ["Load more / infinite scroll"], "passes": false},
+  {"category": "frontend-pages", "description": "Feed tests", "steps": ["Test feed components"], "passes": false},
+
+  {"category": "api-admin", "description": "DELETE /admin/posts/:id", "steps": ["Hard delete post (admin only)"], "passes": false},
+  {"category": "api-admin", "description": "DELETE /admin/users/:id", "steps": ["Hard delete user (super admin)"], "passes": false},
+  {"category": "api-admin", "description": "DELETE /admin/agents/:id", "steps": ["Hard delete agent (super admin)"], "passes": false},
+  {"category": "api-admin", "description": "DELETE /admin/comments/:id", "steps": ["Hard delete comment"], "passes": false},
+  {"category": "api-admin", "description": "Admin delete: audit log", "steps": ["Log all hard deletes"], "passes": false},
+  {"category": "api-admin", "description": "Admin delete tests", "steps": ["Test hard delete endpoints"], "passes": false},
+
+  {"category": "api-admin", "description": "POST /admin/posts/:id/restore", "steps": ["Restore soft-deleted post"], "passes": false},
+  {"category": "api-admin", "description": "Admin restore tests", "steps": ["Test restore endpoint"], "passes": false},
+
+  {"category": "reputation", "description": "Reputation calculation service", "steps": ["internal/services/reputation.go"], "passes": false},
+  {"category": "reputation", "description": "Rep: upvote on post +10", "steps": ["Gain 10 rep per upvote received"], "passes": false},
+  {"category": "reputation", "description": "Rep: accepted answer +25", "steps": ["Gain 25 rep when answer accepted"], "passes": false},
+  {"category": "reputation", "description": "Rep: downvote -2", "steps": ["Lose 2 rep per downvote received"], "passes": false},
+  {"category": "reputation", "description": "Reputation service tests", "steps": ["Test rep calculations"], "passes": false},
+
+  {"category": "database", "description": "Create config table migration", "steps": ["000009_create_config.up.sql"], "passes": false},
+  {"category": "database", "description": "Config: key-value schema", "steps": ["key VARCHAR PRIMARY KEY, value JSONB"], "passes": false},
+  {"category": "database", "description": "Config migration runs", "steps": ["migrate up succeeds"], "passes": false},
+
+  {"category": "frontend-pages", "description": "API docs page /docs/api", "steps": ["app/docs/api/page.tsx"], "passes": false},
+  {"category": "frontend-pages", "description": "API docs: Swagger UI embed", "steps": ["Embed OpenAPI viewer"], "passes": false},
+  {"category": "frontend-pages", "description": "API docs tests", "steps": ["Test docs page renders"], "passes": false},
+
+  {"category": "moderation", "description": "Auto-flag: spam detection", "steps": ["Flag posts with spam patterns"], "passes": false},
+  {"category": "moderation", "description": "Auto-flag: duplicate detection", "steps": ["Flag similar title/content"], "passes": false},
+  {"category": "moderation", "description": "Auto-flag: rate abuse", "steps": ["Flag users posting too fast"], "passes": false},
+  {"category": "moderation", "description": "Auto-flag: link spam", "steps": ["Flag excessive external links"], "passes": false},
+  {"category": "moderation", "description": "Auto-flag tests", "steps": ["Test detection rules"], "passes": false}
 ]

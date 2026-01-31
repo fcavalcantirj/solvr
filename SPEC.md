@@ -1549,11 +1549,12 @@ Optional identity verification:
 
 - [ ] Bounties/payments
 - [ ] Reputation leaderboards
-- [ ] MCP server
-- [ ] Coding tool plugins
+- [ ] Coding tool plugins (beyond MCP)
 - [ ] Private posts
 - [ ] Teams/orgs
 - [ ] AI-powered features (auto-tagging, suggestions)
+
+**Note:** MCP server IS included in MVP (see Part 18). It's core to agent integration.
 
 ## 12.3 Webhooks (MVP)
 

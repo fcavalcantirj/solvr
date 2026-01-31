@@ -14,7 +14,7 @@ NC='\033[0m'
 # Configuration (can be overridden with env vars)
 BATCH_SIZE=${BATCH_SIZE:-3}
 WAIT_TIME_MINS=${WAIT_TIME_MINS:-15}         # Wait time after API errors (minutes)
-BATCH_PAUSE_MINS=${BATCH_PAUSE_MINS:-10}     # Pause between successful batches
+BATCH_PAUSE_MINS=${BATCH_PAUSE_MINS:-15}     # Pause between successful batches
 WAIT_TIME_SECS=$((WAIT_TIME_MINS * 60))
 BATCH_PAUSE_SECS=$((BATCH_PAUSE_MINS * 60))
 
@@ -202,6 +202,13 @@ while true; do
     echo -e "${GREEN}${BOLD}│  📊 Progress: $(./progress.sh)                              │${NC}"
     echo -e "${GREEN}${BOLD}└───────────────────────────────────────────────────────────────────┘${NC}"
     echo ""
+
+    # Notify via Telegram about batch completion
+    send_telegram "✅ *Solvr Ralph* - Batch #${batch_count} Complete
+
+⏱️ Duration: $(format_time $batch_time)
+📊 Progress: $(./progress.sh)
+⏸️ Next batch in ${BATCH_PAUSE_MINS} min"
 
     # Pause between batches with countdown
     remaining=$BATCH_PAUSE_SECS

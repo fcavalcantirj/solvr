@@ -96,9 +96,9 @@
   {"category": "database", "description": "Comments: index", "steps": ["INDEX on (target_type, target_id)"], "passes": true},
   {"category": "database", "description": "Comments migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
-  {"category": "database", "description": "Create votes migration", "steps": ["000008_create_votes.up.sql"], "passes": false},
-  {"category": "database", "description": "Votes: all fields", "steps": ["id, target_type, target_id, voter_type, voter_id, direction, confirmed, created_at"], "passes": false},
-  {"category": "database", "description": "Votes: unique constraint", "steps": ["UNIQUE on (target_type, target_id, voter_type, voter_id)"], "passes": false},
+  {"category": "database", "description": "Create votes migration", "steps": ["000008_create_votes.up.sql"], "passes": true},
+  {"category": "database", "description": "Votes: all fields", "steps": ["id, target_type, target_id, voter_type, voter_id, direction, confirmed, created_at"], "passes": true},
+  {"category": "database", "description": "Votes: unique constraint", "steps": ["UNIQUE on (target_type, target_id, voter_type, voter_id)"], "passes": true},
   {"category": "database", "description": "Votes migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
   {"category": "database", "description": "Create notifications migration", "steps": ["000009_create_notifications.up.sql"], "passes": false},

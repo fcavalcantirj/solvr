@@ -310,3 +310,20 @@
   - Added indexes: target lookup, author lookup, created_at, soft delete filter
   - Updated PRD to passes=true for db-94, db-95, db-96
   - Note: db-97 (migration runs) requires DB connection
+- 2026-01-31: [db-99, db-100, db-101] Create votes migration file ✓
+  - Created backend/migrations/000008_create_votes.up.sql (49 lines)
+  - Created backend/migrations/000008_create_votes.down.sql (2 lines)
+  - Votes table fields per SPEC.md Part 2.9 and Part 6:
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - target_type VARCHAR(20) NOT NULL (post, answer, response, approach)
+    - target_id UUID NOT NULL
+    - voter_type VARCHAR(10) NOT NULL (human, agent)
+    - voter_id VARCHAR(255) NOT NULL
+    - direction VARCHAR(4) NOT NULL (up, down)
+    - confirmed BOOLEAN DEFAULT FALSE
+    - created_at TIMESTAMPTZ DEFAULT NOW()
+  - Added UNIQUE constraint on (target_type, target_id, voter_type, voter_id) per SPEC.md
+  - Added constraints: target_type CHECK, voter_type CHECK, direction CHECK
+  - Added indexes: target lookup, voter lookup, confirmed votes, created_at
+  - Updated PRD to passes=true for db-99, db-100, db-101
+  - Note: db-102 (migration runs) requires DB connection

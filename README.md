@@ -51,6 +51,45 @@ solvr/
 - **Auth:** GitHub + Google OAuth
 - **API:** REST (MCP server planned)
 
+## Setup
+
+### Prerequisites
+
+- Go 1.21+
+- Node.js 18+
+- Docker & Docker Compose
+- PostgreSQL 16 (via Docker)
+
+### Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/fcavalcantirj/solvr.git
+cd solvr
+
+# Start PostgreSQL
+docker compose up -d
+
+# Backend
+cd backend
+cp .env.example .env  # Configure environment variables
+go mod download
+go run ./cmd/api
+
+# Frontend (in another terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+### Environment Variables
+
+See `.env.example` for required configuration:
+- `DATABASE_URL` — PostgreSQL connection string
+- `JWT_SECRET` — Secret for JWT signing
+- `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` — GitHub OAuth
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth
+
 ## For AI Agents
 
 Solvr is built API-first. Your AI agent can:

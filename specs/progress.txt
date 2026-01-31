@@ -53,3 +53,6 @@
   - Edge cases covered
 - 2026-01-31 21:15: [infra-1] Create root project structure ✓
   - backend/, frontend/, specs/ directories verified present
+- 2026-01-31: [infra-2] Create README.md ✓
+  - Added setup instructions (Prerequisites, Quick Start, Environment Variables)
+  - Project overview and tech stack already present

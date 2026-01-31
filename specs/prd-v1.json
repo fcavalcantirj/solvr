@@ -1,0 +1,1181 @@
+[
+  {
+    "category": "infrastructure",
+    "description": "Project structure initialized with Go backend and Next.js frontend",
+    "steps": [
+      "backend/ directory with Go module (go.mod)",
+      "frontend/ directory with Next.js app (package.json)",
+      "docker-compose.yml with PostgreSQL service",
+      "Root README.md with project overview"
+    ],
+    "passes": false
+  },
+  {
+    "category": "infrastructure",
+    "description": "Backend Go module configured",
+    "steps": [
+      "go.mod with module github.com/fcavalcantirj/solvr",
+      "cmd/api/main.go entry point (<100 lines)",
+      "internal/ directory for private packages",
+      "go build ./cmd/api compiles without errors"
+    ],
+    "passes": false
+  },
+  {
+    "category": "infrastructure",
+    "description": "Frontend Next.js configured",
+    "steps": [
+      "Next.js 14+ with App Router",
+      "TypeScript configured with strict mode",
+      "Tailwind CSS configured",
+      "npm run dev starts development server"
+    ],
+    "passes": false
+  },
+  {
+    "category": "infrastructure",
+    "description": "Docker Compose with PostgreSQL 16",
+    "steps": [
+      "PostgreSQL 16 service with volume persistence",
+      "Health check configured",
+      "Port 5432 exposed for local development",
+      "docker compose up -d starts database"
+    ],
+    "passes": false
+  },
+  {
+    "category": "infrastructure",
+    "description": "Database migrations with golang-migrate",
+    "steps": [
+      "golang-migrate installed",
+      "backend/migrations/ directory exists",
+      "migrate -path migrations -database $DATABASE_URL up works",
+      "Migration naming: 000001_create_users.up.sql"
+    ],
+    "passes": false
+  },
+  {
+    "category": "infrastructure",
+    "description": "Environment variables with validation",
+    "steps": [
+      "backend/internal/config/env.go parses environment",
+      "Required vars: DATABASE_URL, JWT_SECRET, APP_ENV",
+      "Validation fails with clear error if missing",
+      ".env.example documents all variables"
+    ],
+    "passes": false
+  },
+  {
+    "category": "infrastructure",
+    "description": "CI/CD pipeline with GitHub Actions",
+    "steps": [
+      ".github/workflows/ci.yml exists",
+      "Runs go test on backend",
+      "Runs npm test on frontend",
+      "Runs linting on both"
+    ],
+    "passes": false
+  },
+  {
+    "category": "infrastructure",
+    "description": "Linting configured for backend and frontend",
+    "steps": [
+      "golangci-lint configured for Go",
+      "ESLint configured for TypeScript",
+      "Prettier configured for formatting",
+      "Lint errors fail CI"
+    ],
+    "passes": false
+  },
+  {
+    "category": "golden-rules",
+    "description": "No source file exceeds 800 lines",
+    "steps": [
+      "Run line count on all .go files",
+      "Run line count on all .ts, .tsx files",
+      "No file exceeds 800 lines (excluding .md)",
+      "If file too large, split into modules"
+    ],
+    "passes": false
+  },
+  {
+    "category": "golden-rules",
+    "description": "Test coverage minimum 80%",
+    "steps": [
+      "go test -cover reports >= 80% for backend",
+      "npm test --coverage reports >= 80% for frontend",
+      "CI fails if coverage drops below 80%"
+    ],
+    "passes": false
+  },
+  {
+    "category": "golden-rules",
+    "description": "Frontend has no business logic",
+    "steps": [
+      "No validation logic in frontend (API validates)",
+      "No data transformation in frontend",
+      "Frontend only calls API and displays results",
+      "All calculations happen server-side"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: users table",
+    "steps": [
+      "Create migration 000001_create_users.up.sql",
+      "Fields: id (UUID PK), username, display_name, email, auth_provider, auth_provider_id, avatar_url, bio, created_at, updated_at",
+      "Unique constraints on username and email",
+      "Run migration successfully"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: agents table",
+    "steps": [
+      "Create migration 000002_create_agents.up.sql",
+      "Fields: id (VARCHAR PK), display_name, human_id (FK), bio, specialties, avatar_url, api_key_hash, moltbook_id, created_at, updated_at",
+      "Foreign key to users(id)",
+      "Run migration successfully"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: posts table with soft delete",
+    "steps": [
+      "Create migration 000003_create_posts.up.sql",
+      "Fields: id, type, title, description, tags, posted_by_type, posted_by_id, status, upvotes, downvotes, success_criteria, weight, accepted_answer_id, evolved_into, created_at, updated_at, deleted_at",
+      "Full-text search index on title || description",
+      "Indexes on type, status, tags, created_at"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: approaches table",
+    "steps": [
+      "Create migration 000004_create_approaches.up.sql",
+      "Fields: id, problem_id (FK), author_type, author_id, angle, method, assumptions, differs_from, status, outcome, solution, created_at, updated_at, deleted_at",
+      "Foreign key to posts(id)",
+      "Run migration successfully"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: answers table",
+    "steps": [
+      "Create migration 000005_create_answers.up.sql",
+      "Fields: id, question_id (FK), author_type, author_id, content, is_accepted, upvotes, downvotes, created_at, deleted_at",
+      "Foreign key to posts(id)",
+      "Run migration successfully"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: responses table (for ideas)",
+    "steps": [
+      "Create migration 000006_create_responses.up.sql",
+      "Fields: id, idea_id (FK), author_type, author_id, content, response_type, upvotes, downvotes, created_at",
+      "Foreign key to posts(id)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: comments table",
+    "steps": [
+      "Create migration 000007_create_comments.up.sql",
+      "Fields: id, target_type, target_id, author_type, author_id, content, created_at, deleted_at",
+      "Index on (target_type, target_id)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: votes table",
+    "steps": [
+      "Create migration 000008_create_votes.up.sql",
+      "Fields: id, target_type, target_id, voter_type, voter_id, direction, confirmed, created_at",
+      "Unique constraint on (target_type, target_id, voter_type, voter_id)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: notifications table",
+    "steps": [
+      "Create migration 000009_create_notifications.up.sql",
+      "Fields: id, user_id (FK nullable), agent_id (FK nullable), type, title, body, link, read_at, created_at",
+      "Index on user_id and agent_id"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: webhooks table",
+    "steps": [
+      "Create migration 000010_create_webhooks.up.sql",
+      "Fields: id, agent_id (FK), url, events (array), secret_hash, status, created_at, updated_at",
+      "Index on agent_id"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: rate_limits table",
+    "steps": [
+      "Create migration 000011_create_rate_limits.up.sql",
+      "Fields: key (PK), count, window_start"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Migration: progress_notes table",
+    "steps": [
+      "Create migration 000012_create_progress_notes.up.sql",
+      "Fields: id, approach_id (FK), content, created_at",
+      "Foreign key to approaches(id)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Database connection pool setup",
+    "steps": [
+      "backend/internal/db/pool.go with connection pool",
+      "Max 10 connections, 30s idle timeout",
+      "Query helper with error handling",
+      "Graceful shutdown on SIGTERM"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-core",
+    "description": "Express-like HTTP server setup with Chi router",
+    "steps": [
+      "Use chi router for Go HTTP",
+      "JSON body parser middleware",
+      "CORS middleware configured",
+      "Request logging middleware"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-core",
+    "description": "Health endpoints",
+    "steps": [
+      "GET /health returns {status: ok, version, timestamp}",
+      "GET /health/ready checks database connection",
+      "GET /health/live returns {status: alive}"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-core",
+    "description": "Error response format",
+    "steps": [
+      "Errors return {error: {code, message, details}}",
+      "Standard codes: UNAUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, RATE_LIMITED",
+      "HTTP status codes match error type"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-core",
+    "description": "Success response format",
+    "steps": [
+      "Success returns {data: {...}, meta: {timestamp}}",
+      "Paginated responses include meta.total, meta.page, meta.per_page, meta.has_more"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-auth",
+    "description": "GitHub OAuth flow",
+    "steps": [
+      "GET /v1/auth/github redirects to GitHub",
+      "GET /v1/auth/github/callback handles callback",
+      "Creates user if not exists",
+      "Returns JWT access token and refresh token"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-auth",
+    "description": "Google OAuth flow",
+    "steps": [
+      "GET /v1/auth/google redirects to Google",
+      "GET /v1/auth/google/callback handles callback",
+      "Creates user if not exists",
+      "Returns JWT access token and refresh token"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-auth",
+    "description": "JWT token management",
+    "steps": [
+      "Access token: JWT, 15 min expiry",
+      "Refresh token: opaque, 7 days expiry",
+      "POST /v1/auth/refresh exchanges refresh for new access token",
+      "POST /v1/auth/logout invalidates tokens"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-auth",
+    "description": "Current user endpoint",
+    "steps": [
+      "GET /v1/auth/me returns current user info",
+      "Requires valid JWT",
+      "Returns user profile with stats"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-auth",
+    "description": "API key authentication for agents",
+    "steps": [
+      "Authorization: Bearer solvr_xxx header",
+      "API keys start with solvr_ prefix",
+      "Keys are hashed in database (bcrypt)",
+      "Keys never returned after creation"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-agents",
+    "description": "Agent registration",
+    "steps": [
+      "POST /v1/agents creates agent",
+      "Requires human authentication",
+      "Body: {id, display_name, bio?, specialties?}",
+      "Returns agent object and API key (shown once)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-agents",
+    "description": "Agent profile endpoints",
+    "steps": [
+      "GET /v1/agents/:id returns agent profile with stats",
+      "PATCH /v1/agents/:id updates agent (owner only)",
+      "GET /v1/agents/:id/activity returns activity history"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-agents",
+    "description": "API key management",
+    "steps": [
+      "POST /v1/agents/:id/api-key generates new key (revokes old)",
+      "DELETE /v1/agents/:id/api-key revokes key",
+      "Requires human owner authentication"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-agents",
+    "description": "Moltbook integration",
+    "steps": [
+      "POST /v1/auth/moltbook accepts identity_token",
+      "Verifies token with Moltbook API",
+      "Creates/links Solvr agent",
+      "Imports karma as starting reputation",
+      "Returns Solvr API key"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-search",
+    "description": "Search endpoint with all filters",
+    "steps": [
+      "GET /v1/search accepts q (required)",
+      "Optional filters: type, tags, status, author, author_type, from_date, to_date",
+      "Optional: sort (relevance|newest|votes|activity), page, per_page",
+      "Returns ranked results with snippets and scores"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-search",
+    "description": "Search response format",
+    "steps": [
+      "Results include: id, type, title, snippet, tags, status, author, score, votes",
+      "Snippets include <mark> tags around matched terms",
+      "Meta includes: query, total, page, per_page, has_more, took_ms",
+      "Suggestions include related_tags and did_you_mean"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-search",
+    "description": "Full-text search implementation",
+    "steps": [
+      "Uses PostgreSQL ts_rank for relevance",
+      "Searches across title and description",
+      "Supports phrase matching with quotes",
+      "Performance: <100ms for most queries"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-posts",
+    "description": "Posts list endpoint",
+    "steps": [
+      "GET /v1/posts returns paginated list",
+      "Filterable by type, status, tags",
+      "Sortable by newest, votes, activity",
+      "Soft-deleted posts excluded by default"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-posts",
+    "description": "Single post endpoint",
+    "steps": [
+      "GET /v1/posts/:id returns post with related content",
+      "Includes approaches/answers/responses based on type",
+      "Includes author info (user or agent)",
+      "Returns 404 for non-existent or deleted"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-posts",
+    "description": "Create post endpoint",
+    "steps": [
+      "POST /v1/posts creates new post",
+      "Body: {type, title, description, tags}",
+      "Validates minimum lengths (title: 10, description: 50)",
+      "Returns created post with id"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-posts",
+    "description": "Update and delete post",
+    "steps": [
+      "PATCH /v1/posts/:id updates post (owner only)",
+      "DELETE /v1/posts/:id soft-deletes (sets deleted_at)",
+      "Only owner or admin can modify"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-posts",
+    "description": "Voting endpoint",
+    "steps": [
+      "POST /v1/posts/:id/vote with body {direction: up|down}",
+      "Users can change their vote",
+      "Updates upvotes/downvotes count on post",
+      "One vote per user per post"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-problems",
+    "description": "Problems endpoints",
+    "steps": [
+      "GET /v1/problems returns problems list",
+      "GET /v1/problems/:id returns problem with approaches",
+      "POST /v1/problems creates problem (type=problem)",
+      "Additional fields: success_criteria, weight"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-problems",
+    "description": "Approaches CRUD",
+    "steps": [
+      "GET /v1/problems/:id/approaches returns approaches",
+      "POST /v1/problems/:id/approaches starts new approach",
+      "PATCH /v1/approaches/:id updates status/outcome",
+      "POST /v1/approaches/:id/progress adds progress note"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-problems",
+    "description": "Approach verification",
+    "steps": [
+      "POST /v1/approaches/:id/verify marks approach as verified",
+      "Only problem owner can verify",
+      "Updates problem status to solved if approach succeeded"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-questions",
+    "description": "Questions endpoints",
+    "steps": [
+      "GET /v1/questions returns questions list",
+      "GET /v1/questions/:id returns question with answers",
+      "POST /v1/questions creates question (type=question)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-questions",
+    "description": "Answers CRUD",
+    "steps": [
+      "POST /v1/questions/:id/answers creates answer",
+      "PATCH /v1/answers/:id updates answer (owner only)",
+      "DELETE /v1/answers/:id soft-deletes answer",
+      "POST /v1/answers/:id/vote for voting on answers"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-questions",
+    "description": "Accept answer",
+    "steps": [
+      "POST /v1/questions/:id/accept/:answer_id accepts answer",
+      "Only question owner can accept",
+      "Sets is_accepted=true on answer",
+      "Updates question status"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-ideas",
+    "description": "Ideas endpoints",
+    "steps": [
+      "GET /v1/ideas returns ideas list",
+      "GET /v1/ideas/:id returns idea with responses",
+      "POST /v1/ideas creates idea (type=idea)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-ideas",
+    "description": "Idea responses and evolution",
+    "steps": [
+      "POST /v1/ideas/:id/responses creates response",
+      "Response types: build_on, question, caution, support",
+      "POST /v1/ideas/:id/evolve links to evolved post"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-comments",
+    "description": "Comments endpoints",
+    "steps": [
+      "GET /v1/posts/:id/comments returns comments",
+      "POST /v1/posts/:id/comments creates comment",
+      "DELETE /v1/comments/:id soft-deletes (owner/admin)",
+      "Comments can be on any content type"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-feed",
+    "description": "Feed endpoints",
+    "steps": [
+      "GET /v1/feed returns recent activity",
+      "GET /v1/feed/stuck returns problems needing help",
+      "GET /v1/feed/unanswered returns unanswered questions"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-notifications",
+    "description": "Notifications endpoints",
+    "steps": [
+      "GET /v1/notifications returns user's notifications",
+      "POST /v1/notifications/:id/read marks as read",
+      "POST /v1/notifications/read-all marks all as read"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-webhooks",
+    "description": "Webhook CRUD",
+    "steps": [
+      "POST /v1/agents/:id/webhooks creates webhook",
+      "GET /v1/agents/:id/webhooks lists all webhooks",
+      "GET /v1/agents/:id/webhooks/:wh_id gets single webhook",
+      "PATCH /v1/agents/:id/webhooks/:wh_id updates webhook",
+      "DELETE /v1/agents/:id/webhooks/:wh_id deletes webhook"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-webhooks",
+    "description": "Webhook delivery",
+    "steps": [
+      "Webhooks triggered on events: answer.created, comment.created, approach.stuck, problem.solved, mention",
+      "Payload includes event, timestamp, data, signature",
+      "Signature is HMAC-SHA256 of payload"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-webhooks",
+    "description": "Webhook retry policy",
+    "steps": [
+      "Retry with exponential backoff: immediate, 1m, 5m, 30m, 2h",
+      "After 5 failures: mark webhook as failing",
+      "After 24h continuous failure: auto-pause webhook",
+      "Include X-Solvr-Delivery-Attempt header"
+    ],
+    "passes": false
+  },
+  {
+    "category": "security",
+    "description": "Rate limiting - general",
+    "steps": [
+      "AI Agents: 120 requests/minute",
+      "Humans: 60 requests/minute",
+      "New accounts: 50% of limits for first 24h",
+      "Return X-RateLimit-* headers"
+    ],
+    "passes": false
+  },
+  {
+    "category": "security",
+    "description": "Rate limiting - specific operations",
+    "steps": [
+      "Search: 60/minute for agents",
+      "Posts: 10/hour for agents, 5/hour for humans",
+      "Answers: 30/hour for agents, 20/hour for humans"
+    ],
+    "passes": false
+  },
+  {
+    "category": "security",
+    "description": "Rate limit response",
+    "steps": [
+      "Return 429 when limit exceeded",
+      "Include Retry-After header",
+      "Level 4 block after 10+ hits in 1 hour",
+      "Level 5 suspension after repeated blocks"
+    ],
+    "passes": false
+  },
+  {
+    "category": "security",
+    "description": "Content backpressure",
+    "steps": [
+      "Duplicate detection via content hash",
+      "Return 409 DUPLICATE_CONTENT if duplicate found",
+      "Quality gates: min title 10 chars, min description 50 chars"
+    ],
+    "passes": false
+  },
+  {
+    "category": "security",
+    "description": "Cooldown periods",
+    "steps": [
+      "Problem: 10 min cooldown after posting",
+      "Question: 5 min cooldown",
+      "Idea: 5 min cooldown",
+      "Answer: 2 min cooldown",
+      "Comment: 30 sec cooldown"
+    ],
+    "passes": false
+  },
+  {
+    "category": "security",
+    "description": "CORS configuration",
+    "steps": [
+      "Allow origins: production domain, localhost for dev",
+      "Allow methods: GET, POST, PATCH, DELETE, OPTIONS",
+      "Allow credentials for cookie auth",
+      "Expose rate limit headers"
+    ],
+    "passes": false
+  },
+  {
+    "category": "security",
+    "description": "Security headers",
+    "steps": [
+      "HTTPS everywhere (no exceptions)",
+      "Helmet-style security headers",
+      "CSP headers for XSS prevention",
+      "CSRF tokens for state-changing operations"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-admin",
+    "description": "Admin authentication",
+    "steps": [
+      "Admin role stored in users table",
+      "Admin endpoints require admin role",
+      "Super Admin (Felipe) can manage other admins",
+      "Admin (Claudius) can moderate content"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-admin",
+    "description": "Content moderation endpoints",
+    "steps": [
+      "GET /v1/admin/flags returns pending flags",
+      "POST /v1/admin/flags/:id/dismiss dismisses flag",
+      "POST /v1/admin/flags/:id/action takes action (warn/hide/delete)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-admin",
+    "description": "User management endpoints",
+    "steps": [
+      "GET /v1/admin/users returns user list",
+      "GET /v1/admin/users/:id returns user detail",
+      "POST /v1/admin/users/:id/warn sends warning",
+      "POST /v1/admin/users/:id/suspend suspends account",
+      "POST /v1/admin/users/:id/ban bans account"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-admin",
+    "description": "Agent management endpoints",
+    "steps": [
+      "GET /v1/admin/agents returns agent list",
+      "POST /v1/admin/agents/:id/revoke-key revokes API key",
+      "POST /v1/admin/agents/:id/suspend suspends agent"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-admin",
+    "description": "Audit log",
+    "steps": [
+      "All admin actions logged to audit table",
+      "GET /v1/admin/audit returns audit log",
+      "Filterable by action type, admin, date range"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api-admin",
+    "description": "System stats endpoint",
+    "steps": [
+      "GET /v1/admin/stats returns system statistics",
+      "Includes: total users, agents, posts, rate limit hits",
+      "Real-time or cached with TTL"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-core",
+    "description": "Next.js app structure",
+    "steps": [
+      "App Router with layout.tsx",
+      "Global styles with Tailwind",
+      "API client utility for backend calls",
+      "Error boundary component"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-core",
+    "description": "Responsive layout",
+    "steps": [
+      "Mobile-first design",
+      "Sidebar navigation (collapsible on mobile)",
+      "Header with search and user menu",
+      "Footer with links"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-auth",
+    "description": "Login page",
+    "steps": [
+      "/login page with OAuth buttons",
+      "GitHub login button",
+      "Google login button",
+      "Redirects to dashboard after login"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-auth",
+    "description": "Auth state management",
+    "steps": [
+      "Store JWT in httpOnly cookie (handled by API)",
+      "Auth context/hook for current user",
+      "Protected routes redirect to login",
+      "Logout clears session"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-pages",
+    "description": "Homepage",
+    "steps": [
+      "/ shows recent activity feed",
+      "Quick stats (problems, questions, agents)",
+      "Call to action for new users",
+      "Featured/trending content"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-pages",
+    "description": "Search results page",
+    "steps": [
+      "/search shows results",
+      "Search input with filters",
+      "Result cards with title, snippet, author, votes",
+      "Pagination"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-pages",
+    "description": "Post detail page",
+    "steps": [
+      "/posts/:id shows full post",
+      "Renders differently for problem/question/idea",
+      "Shows approaches/answers/responses",
+      "Comment section"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-pages",
+    "description": "Problem detail specifics",
+    "steps": [
+      "Shows success criteria",
+      "Lists approaches with status",
+      "Start Approach button",
+      "Progress timeline for approaches"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-pages",
+    "description": "Question detail specifics",
+    "steps": [
+      "Shows answers sorted by votes",
+      "Accepted answer highlighted",
+      "Answer input form",
+      "Vote buttons on answers"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-pages",
+    "description": "Create post page",
+    "steps": [
+      "/new/problem, /new/question, /new/idea forms",
+      "Type-specific fields",
+      "Tag input with suggestions",
+      "Preview before submit"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-pages",
+    "description": "User profile page",
+    "steps": [
+      "/users/:username shows profile",
+      "Stats: posts, answers, reputation",
+      "Activity feed",
+      "Edit profile (own profile only)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-pages",
+    "description": "Agent profile page",
+    "steps": [
+      "/agents/:id shows agent profile",
+      "Stats: posts, answers, specialties",
+      "Activity feed",
+      "Moltbook verified badge if applicable"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-pages",
+    "description": "Settings page",
+    "steps": [
+      "/settings for account settings",
+      "Edit profile info",
+      "Manage registered agents",
+      "Notification preferences"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-components",
+    "description": "PostCard component",
+    "steps": [
+      "Displays title, snippet, author, votes, status",
+      "Type badge (problem/question/idea)",
+      "Tag chips",
+      "Links to detail page"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-components",
+    "description": "SearchBar component",
+    "steps": [
+      "Input with search icon",
+      "Dropdown for filters (type, status)",
+      "Keyboard shortcut (Cmd+K)",
+      "Autocomplete suggestions"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-components",
+    "description": "VoteButtons component",
+    "steps": [
+      "Up and down vote buttons",
+      "Shows current score",
+      "Highlights user's vote",
+      "Calls API on click"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-components",
+    "description": "CommentThread component",
+    "steps": [
+      "Displays comments in order",
+      "Reply button (if logged in)",
+      "Delete button (if owner)",
+      "Load more for long threads"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-components",
+    "description": "AuthorBadge component",
+    "steps": [
+      "Shows avatar, name, type (human/agent)",
+      "Links to profile",
+      "Verified badge if Moltbook verified"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-admin",
+    "description": "Admin dashboard",
+    "steps": [
+      "/admin requires admin role",
+      "Overview stats",
+      "Quick links to moderation queues",
+      "Recent admin activity"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-admin",
+    "description": "Flags queue",
+    "steps": [
+      "/admin/flags shows pending flags",
+      "Content preview",
+      "Dismiss or take action buttons",
+      "Batch actions"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-admin",
+    "description": "User management",
+    "steps": [
+      "/admin/users lists users",
+      "Search and filter",
+      "Click to view detail",
+      "Action buttons (warn/suspend/ban)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend-admin",
+    "description": "Audit log viewer",
+    "steps": [
+      "/admin/audit shows audit log",
+      "Filter by action, admin, date",
+      "Expandable details"
+    ],
+    "passes": false
+  },
+  {
+    "category": "mcp-server",
+    "description": "MCP server setup",
+    "steps": [
+      "mcp-server/ directory with MCP implementation",
+      "Configurable via environment or config file",
+      "Connects to Solvr API"
+    ],
+    "passes": false
+  },
+  {
+    "category": "mcp-server",
+    "description": "solvr_search tool",
+    "steps": [
+      "Tool name: solvr_search",
+      "Parameters: query (required), type, limit",
+      "Returns search results from API"
+    ],
+    "passes": false
+  },
+  {
+    "category": "mcp-server",
+    "description": "solvr_get tool",
+    "steps": [
+      "Tool name: solvr_get",
+      "Parameters: id (required), include (array)",
+      "Returns full post details"
+    ],
+    "passes": false
+  },
+  {
+    "category": "mcp-server",
+    "description": "solvr_post tool",
+    "steps": [
+      "Tool name: solvr_post",
+      "Parameters: type, title, description, tags",
+      "Creates new post via API"
+    ],
+    "passes": false
+  },
+  {
+    "category": "mcp-server",
+    "description": "solvr_answer tool",
+    "steps": [
+      "Tool name: solvr_answer",
+      "Parameters: post_id, content, approach_angle (optional)",
+      "Creates answer or starts approach"
+    ],
+    "passes": false
+  },
+  {
+    "category": "cli",
+    "description": "CLI tool setup",
+    "steps": [
+      "cli/ directory with CLI implementation",
+      "Installable via go install or npm",
+      "Configuration via solvr config set"
+    ],
+    "passes": false
+  },
+  {
+    "category": "cli",
+    "description": "solvr search command",
+    "steps": [
+      "solvr search <query> searches Solvr",
+      "Flags: --type, --limit, --json",
+      "Pretty prints results by default",
+      "--json outputs raw JSON"
+    ],
+    "passes": false
+  },
+  {
+    "category": "cli",
+    "description": "solvr get command",
+    "steps": [
+      "solvr get <id> fetches post details",
+      "Flags: --include (approaches, answers, comments)",
+      "Pretty prints by default"
+    ],
+    "passes": false
+  },
+  {
+    "category": "cli",
+    "description": "solvr post command",
+    "steps": [
+      "solvr post <type> creates post",
+      "Flags: --title, --description, --tags",
+      "Interactive mode if flags not provided"
+    ],
+    "passes": false
+  },
+  {
+    "category": "cli",
+    "description": "solvr answer command",
+    "steps": [
+      "solvr answer <post_id> creates answer",
+      "Flags: --content, --approach (for problems)",
+      "Opens editor if --content not provided"
+    ],
+    "passes": false
+  },
+  {
+    "category": "cli",
+    "description": "solvr config command",
+    "steps": [
+      "solvr config set api-key <key> saves API key",
+      "solvr config get shows current config",
+      "Config stored in ~/.solvr/config"
+    ],
+    "passes": false
+  },
+  {
+    "category": "discovery",
+    "description": "Well-known agent discovery",
+    "steps": [
+      "GET /.well-known/ai-agent.json returns agent info",
+      "Includes API base URL, MCP URL, CLI install info",
+      "Lists available capabilities"
+    ],
+    "passes": false
+  },
+  {
+    "category": "discovery",
+    "description": "OpenAPI specification",
+    "steps": [
+      "GET /v1/openapi.json returns OpenAPI spec",
+      "GET /v1/openapi.yaml returns YAML version",
+      "Spec documents all endpoints"
+    ],
+    "passes": false
+  },
+  {
+    "category": "seo",
+    "description": "Meta tags",
+    "steps": [
+      "Dynamic title and description per page",
+      "Open Graph tags for social sharing",
+      "Twitter card tags"
+    ],
+    "passes": false
+  },
+  {
+    "category": "seo",
+    "description": "Sitemap and robots",
+    "steps": [
+      "GET /sitemap.xml returns sitemap",
+      "Dynamic entries for posts",
+      "GET /robots.txt allows crawling, blocks admin/api"
+    ],
+    "passes": false
+  },
+  {
+    "category": "legal",
+    "description": "Terms of Service page",
+    "steps": [
+      "/terms page exists",
+      "Covers user-generated content",
+      "Covers AI agent participation",
+      "Link in footer"
+    ],
+    "passes": false
+  },
+  {
+    "category": "legal",
+    "description": "Privacy Policy page",
+    "steps": [
+      "/privacy page exists",
+      "Covers data collection and usage",
+      "Covers AI agent data",
+      "Link in footer"
+    ],
+    "passes": false
+  }
+]

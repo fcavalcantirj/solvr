@@ -1,0 +1,225 @@
+#!/bin/bash
+
+# Colors
+CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+MAGENTA='\033[0;35m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+# Configuration (can be overridden with env vars)
+BATCH_SIZE=${BATCH_SIZE:-3}
+WAIT_TIME_HOURS=${WAIT_TIME_HOURS:-3}        # Wait time after API errors
+BATCH_PAUSE_MINS=${BATCH_PAUSE_MINS:-15}     # Pause between successful batches
+WAIT_TIME_SECS=$((WAIT_TIME_HOURS * 3600))
+BATCH_PAUSE_SECS=$((BATCH_PAUSE_MINS * 60))
+
+batch_count=0
+total_iterations=0
+runner_start=$(date +%s)
+
+# Cleanup on Ctrl+C
+cleanup() {
+  echo ""
+  echo -e "${YELLOW}${BOLD}Interrupted. Exiting...${NC}"
+  exit 1
+}
+trap cleanup INT TERM
+
+# Format seconds to hh:mm:ss
+format_time() {
+  local secs=$1
+  printf "%02d:%02d:%02d" $((secs/3600)) $((secs%3600/60)) $((secs%60))
+}
+
+# Print a progress bar
+print_progress_bar() {
+  local current=$1
+  local total=$2
+  local width=40
+  local percent=$((current * 100 / total))
+  local filled=$((current * width / total))
+  local empty=$((width - filled))
+
+  printf "${YELLOW}["
+  printf "%${filled}s" | tr ' ' '█'
+  printf "%${empty}s" | tr ' ' '░'
+  printf "] ${percent}%%${NC}"
+}
+
+clear
+echo ""
+echo -e "${MAGENTA}${BOLD}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${MAGENTA}${BOLD}║                                                                   ║${NC}"
+echo -e "${MAGENTA}${BOLD}║   🚀  SOLVR - RALPH CONTINUOUS RUNNER                             ║${NC}"
+echo -e "${MAGENTA}${BOLD}║                                                                   ║${NC}"
+printf "${MAGENTA}${BOLD}║   📦 Batch size:     %-3s iterations                              ║${NC}\n" "$BATCH_SIZE"
+printf "${MAGENTA}${BOLD}║   ⏸️  Batch pause:    %-3s minutes                                ║${NC}\n" "$BATCH_PAUSE_MINS"
+printf "${MAGENTA}${BOLD}║   ⏰ Wait on error:  %-3s hours                                   ║${NC}\n" "$WAIT_TIME_HOURS"
+echo -e "${MAGENTA}${BOLD}║   🕐 Started at:     $(date '+%Y-%m-%d %H:%M:%S')                        ║${NC}"
+echo -e "${MAGENTA}${BOLD}║                                                                   ║${NC}"
+echo -e "${MAGENTA}${BOLD}╚═══════════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+while true; do
+  batch_count=$((batch_count + 1))
+  batch_start=$(date +%s)
+
+  echo ""
+  echo -e "${CYAN}${BOLD}┌───────────────────────────────────────────────────────────────────┐${NC}"
+  echo -e "${CYAN}${BOLD}│  ▶ BATCH #${batch_count}                                                        │${NC}"
+  echo -e "${CYAN}${BOLD}│  📅 $(date '+%Y-%m-%d %H:%M:%S')                                            │${NC}"
+  echo -e "${CYAN}${BOLD}│  🔄 Running ${BATCH_SIZE} iterations...                                        │${NC}"
+  echo -e "${CYAN}${BOLD}└───────────────────────────────────────────────────────────────────┘${NC}"
+  echo ""
+
+  # Run ralph.sh and capture output + exit code
+  tmplog=$(mktemp)
+  ./ralph.sh $BATCH_SIZE 2>&1 | tee "$tmplog"
+  exit_code=${PIPESTATUS[0]}
+
+  # Check for API errors
+  api_error=false
+  error_msg=""
+
+  # Common API error patterns
+  if grep -qi "rate limit" "$tmplog"; then
+    api_error=true
+    error_msg="Rate limit hit"
+  elif grep -qi "hit your limit" "$tmplog"; then
+    api_error=true
+    error_msg="You've hit your limit"
+  elif grep -qi "429" "$tmplog"; then
+    api_error=true
+    error_msg="HTTP 429 (Too Many Requests)"
+  elif grep -qi "503" "$tmplog"; then
+    api_error=true
+    error_msg="HTTP 503 (Service Unavailable)"
+  elif grep -qi "capacity" "$tmplog"; then
+    api_error=true
+    error_msg="API at capacity"
+  elif grep -qi "No messages returned" "$tmplog"; then
+    api_error=true
+    error_msg="No messages returned (API error)"
+  elif grep -qi "concurrency" "$tmplog"; then
+    api_error=true
+    error_msg="Tool use concurrency issue"
+  elif grep -qi "API Error" "$tmplog"; then
+    api_error=true
+    error_msg="API Error detected"
+  elif [ $exit_code -ne 0 ]; then
+    if grep -qi "error" "$tmplog"; then
+      api_error=true
+      error_msg="Unknown error (exit code: $exit_code)"
+    fi
+  fi
+
+  # Check if PRD is complete before cleaning up
+  prd_complete=false
+  if grep -q "PRD COMPLETE" "$tmplog" 2>/dev/null; then
+    prd_complete=true
+  fi
+
+  rm -f "$tmplog"
+
+  batch_end=$(date +%s)
+  batch_time=$((batch_end - batch_start))
+  total_iterations=$((total_iterations + BATCH_SIZE))
+
+  if [ "$api_error" = true ]; then
+    # Calculate resume time (Linux compatible)
+    resume_time=$(date -d "+${WAIT_TIME_HOURS} hours" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -v+${WAIT_TIME_HOURS}H '+%Y-%m-%d %H:%M:%S')
+
+    echo ""
+    echo -e "${RED}${BOLD}┌───────────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${RED}${BOLD}│                                                                   │${NC}"
+    echo -e "${RED}${BOLD}│   🚨🚨🚨  API ERROR DETECTED  🚨🚨🚨                              │${NC}"
+    echo -e "${RED}${BOLD}│                                                                   │${NC}"
+    echo -e "${RED}${BOLD}│   ❌ Error: ${error_msg}${NC}"
+    echo -e "${RED}${BOLD}│   ⏸️  Pausing for ${WAIT_TIME_HOURS} hours to avoid rate limits                    │${NC}"
+    echo -e "${RED}${BOLD}│   🔄 Will resume at: ${resume_time}                       │${NC}"
+    echo -e "${RED}${BOLD}│                                                                   │${NC}"
+    echo -e "${RED}${BOLD}└───────────────────────────────────────────────────────────────────┘${NC}"
+    echo ""
+
+    # Countdown display with progress bar
+    remaining=$WAIT_TIME_SECS
+    total_wait=$WAIT_TIME_SECS
+
+    while [ $remaining -gt 0 ]; do
+      elapsed=$((total_wait - remaining))
+      hours=$((remaining / 3600))
+      mins=$(((remaining % 3600) / 60))
+      secs=$((remaining % 60))
+
+      echo -ne "\r${YELLOW}${BOLD}   ⏳ Waiting: ${NC}${YELLOW}$(format_time $remaining)${NC}  "
+      print_progress_bar $elapsed $total_wait
+      echo -ne "  ${DIM}Resume: ${resume_time}${NC}   "
+
+      sleep 1
+      remaining=$((remaining - 1))
+    done
+
+    echo ""
+    echo ""
+    echo -e "${GREEN}${BOLD}   ✅ Wait complete! Resuming operations...${NC}"
+    echo ""
+  else
+    # Calculate resume time (Linux compatible)
+    resume_time=$(date -d "+${BATCH_PAUSE_MINS} minutes" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -v+${BATCH_PAUSE_MINS}M '+%Y-%m-%d %H:%M:%S')
+
+    echo ""
+    echo -e "${GREEN}${BOLD}┌───────────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${GREEN}${BOLD}│  ✅ BATCH #${batch_count} COMPLETED                                          │${NC}"
+    echo -e "${GREEN}${BOLD}│  ⏱️  Duration: $(format_time $batch_time)                                         │${NC}"
+    echo -e "${GREEN}${BOLD}│  📊 Progress: $(./progress.sh)                              │${NC}"
+    echo -e "${GREEN}${BOLD}└───────────────────────────────────────────────────────────────────┘${NC}"
+    echo ""
+
+    # Pause between batches with countdown
+    remaining=$BATCH_PAUSE_SECS
+    total_pause=$BATCH_PAUSE_SECS
+
+    while [ $remaining -gt 0 ]; do
+      elapsed=$((total_pause - remaining))
+      mins=$((remaining / 60))
+      secs=$((remaining % 60))
+
+      echo -ne "\r${YELLOW}   ⏸️  Breathing space: ${NC}${YELLOW}$(printf '%02d:%02d' $mins $secs)${NC}  "
+      print_progress_bar $elapsed $total_pause
+      echo -ne "  ${DIM}Next batch: ${resume_time}${NC}   "
+
+      sleep 1
+      remaining=$((remaining - 1))
+    done
+
+    echo ""
+    echo ""
+    echo -e "${GREEN}   ✅ Starting next batch...${NC}"
+    echo ""
+  fi
+
+  # Check if PRD is complete
+  if [ "$prd_complete" = true ]; then
+    runner_end=$(date +%s)
+    total_time=$((runner_end - runner_start))
+
+    echo ""
+    echo -e "${GREEN}${BOLD}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}${BOLD}║                                                                   ║${NC}"
+    echo -e "${GREEN}${BOLD}║   🎉🎉🎉  PRD IS COMPLETE!  🎉🎉🎉                                ║${NC}"
+    echo -e "${GREEN}${BOLD}║                                                                   ║${NC}"
+    echo -e "${GREEN}${BOLD}║   📦 Total batches:     ${batch_count}                                          ║${NC}"
+    echo -e "${GREEN}${BOLD}║   🔄 Total iterations:  ${total_iterations}                                         ║${NC}"
+    echo -e "${GREEN}${BOLD}║   ⏱️  Total time:        $(format_time $total_time)                                  ║${NC}"
+    echo -e "${GREEN}${BOLD}║   📊 $(./progress.sh)                                   ║${NC}"
+    echo -e "${GREEN}${BOLD}║                                                                   ║${NC}"
+    echo -e "${GREEN}${BOLD}╚═══════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    exit 0
+  fi
+done

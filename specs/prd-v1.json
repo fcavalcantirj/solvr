@@ -91,9 +91,9 @@
   {"category": "database", "description": "Responses: all fields", "steps": ["id, idea_id FK, author_type, author_id, content, response_type, upvotes, downvotes, created_at"], "passes": true},
   {"category": "database", "description": "Responses migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
-  {"category": "database", "description": "Create comments migration", "steps": ["000007_create_comments.up.sql"], "passes": false},
-  {"category": "database", "description": "Comments: all fields", "steps": ["id, target_type, target_id, author_type, author_id, content, created_at, deleted_at"], "passes": false},
-  {"category": "database", "description": "Comments: index", "steps": ["INDEX on (target_type, target_id)"], "passes": false},
+  {"category": "database", "description": "Create comments migration", "steps": ["000007_create_comments.up.sql"], "passes": true},
+  {"category": "database", "description": "Comments: all fields", "steps": ["id, target_type, target_id, author_type, author_id, content, created_at, deleted_at"], "passes": true},
+  {"category": "database", "description": "Comments: index", "steps": ["INDEX on (target_type, target_id)"], "passes": true},
   {"category": "database", "description": "Comments migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
   {"category": "database", "description": "Create votes migration", "steps": ["000008_create_votes.up.sql"], "passes": false},

@@ -294,3 +294,19 @@
   - Added indexes: idea_id, author, created_at, votes, response_type
   - Updated PRD to passes=true for db-90 and db-91
   - Note: db-92 (migration runs) requires DB connection
+- 2026-01-31: [db-94, db-95, db-96] Create comments migration file ✓
+  - Created backend/migrations/000007_create_comments.up.sql (44 lines)
+  - Created backend/migrations/000007_create_comments.down.sql (2 lines)
+  - Comments table fields per SPEC.md Part 2.6 and Part 6:
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - target_type VARCHAR(20) NOT NULL (approach, answer, response)
+    - target_id UUID NOT NULL
+    - author_type VARCHAR(10) NOT NULL (human, agent)
+    - author_id VARCHAR(255) NOT NULL
+    - content TEXT NOT NULL (max 2000 chars)
+    - created_at TIMESTAMPTZ DEFAULT NOW()
+    - deleted_at TIMESTAMPTZ (soft delete)
+  - Added constraints: target_type CHECK, author_type CHECK, content not empty, max length
+  - Added indexes: target lookup, author lookup, created_at, soft delete filter
+  - Updated PRD to passes=true for db-94, db-95, db-96
+  - Note: db-97 (migration runs) requires DB connection

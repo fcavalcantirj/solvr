@@ -1,9 +1,9 @@
 # Solvr Development Progress
 
 ## Current Status
-- **PRD:** 709 requirements (1 complete, ~0.1%)
+- **PRD:** 709 requirements (13 complete, ~1.8%)
 - **Spec:** v1.5, 2800+ lines, 19 parts
-- **Ready to begin development**
+- **Infrastructure setup in progress**
 
 ## Requirements Breakdown (709 total)
 - infrastructure: ~30
@@ -96,3 +96,9 @@
   - Added healthcheck with pg_isready
   - Port 5432 exposed
   - Note: Docker not installed in dev environment, but YAML is valid
+- 2026-01-31: [infra-11,12,13,14] PRD update - mark PostgreSQL config as passing ✓
+  - infra-11: docker-compose.yml exists (already passed)
+  - infra-12: PostgreSQL service (postgres:16, volume, port) - already in docker-compose.yml
+  - infra-13: PostgreSQL env vars (USER, PASSWORD, DB) - already in docker-compose.yml
+  - infra-14: PostgreSQL healthcheck (pg_isready) - already in docker-compose.yml
+  - Updated PRD to passes=true for infra-12, 13, 14

@@ -861,5 +861,19 @@
   {"category": "moderation", "description": "Auto-flag: duplicate detection", "steps": ["Flag similar title/content"], "passes": false},
   {"category": "moderation", "description": "Auto-flag: rate abuse", "steps": ["Flag users posting too fast"], "passes": false},
   {"category": "moderation", "description": "Auto-flag: link spam", "steps": ["Flag excessive external links"], "passes": false},
-  {"category": "moderation", "description": "Auto-flag tests", "steps": ["Test detection rules"], "passes": false}
+  {"category": "moderation", "description": "Auto-flag tests", "steps": ["Test detection rules"], "passes": false},
+
+  {"category": "security", "description": "Rate limit: violation escalation", "steps": ["1hr block after repeated violations", "Suspension after continued abuse"], "passes": false},
+  {"category": "security", "description": "API keys: never log plaintext", "steps": ["Redact API keys in all logs", "Only log key prefix (first 8 chars)"], "passes": false},
+  {"category": "security", "description": "Security: sensitive data redaction", "steps": ["Passwords, tokens, keys never in logs"], "passes": false},
+
+  {"category": "database", "description": "Connection pool: max 10", "steps": ["SetMaxOpenConns(10)", "SetMaxIdleConns(5)"], "passes": false},
+  {"category": "database", "description": "Approach status enum", "steps": ["CHECK constraint: starting, working, stuck, failed, succeeded"], "passes": false},
+  {"category": "database", "description": "Post status by type", "steps": ["Problems: open, in_progress, solved", "Questions: open, answered, closed", "Ideas: draft, published, evolved"], "passes": false},
+
+  {"category": "api-webhooks", "description": "Webhook: auto-disable on failures", "steps": ["Disable after 24h continuous failures", "Email owner on disable"], "passes": false},
+  {"category": "api-webhooks", "description": "Webhook: max retry backoff 2hr", "steps": ["Cap backoff at 2 hours"], "passes": false},
+
+  {"category": "api-posts", "description": "Vote: confirm step", "steps": ["Vote starts unconfirmed", "Confirm locks vote direction"], "passes": false},
+  {"category": "api-posts", "description": "Vote: prevent abuse", "steps": ["Rate limit votes per user", "Detect vote manipulation patterns"], "passes": false}
 ]

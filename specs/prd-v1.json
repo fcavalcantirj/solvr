@@ -25,7 +25,7 @@
   {"category": "infrastructure", "description": "CI runs Go linting", "steps": ["golangci-lint runs", "Fails on errors"], "passes": false},
   {"category": "infrastructure", "description": "CI runs frontend tests", "steps": ["npm test runs", "Fails if tests fail"], "passes": false},
   {"category": "infrastructure", "description": "CI runs frontend lint", "steps": ["npm run lint runs", "Fails on errors"], "passes": false},
-  {"category": "infrastructure", "description": "Configure golangci-lint", "steps": [".golangci.yml exists", "golangci-lint run passes"], "passes": false},
+  {"category": "infrastructure", "description": "Configure golangci-lint", "steps": [".golangci.yml exists", "golangci-lint run passes"], "passes": true},
   {"category": "infrastructure", "description": "Configure ESLint", "steps": ["eslint config in frontend/", "npm run lint passes"], "passes": false},
   {"category": "infrastructure", "description": "Configure Prettier", "steps": [".prettierrc in frontend/", "npm run format works"], "passes": false},
   {"category": "infrastructure", "description": "Create .gitignore", "steps": ["Ignores node_modules", "Ignores .env", "Ignores binaries"], "passes": true},

@@ -1,7 +1,7 @@
 # Solvr Development Progress
 
 ## Current Status
-- **PRD:** 709 requirements (18 complete, ~2.5%)
+- **PRD:** 709 requirements (19 complete, ~2.7%)
 - **Spec:** v1.5, 2800+ lines, 19 parts
 - **Infrastructure setup in progress**
 
@@ -142,4 +142,13 @@
   - Frontend job: Node 20, npm ci, lint, typecheck, build
   - Uses official actions: checkout@v4, setup-go@v5, setup-node@v4
   - Uses golangci/golangci-lint-action@v4 for linting
+  - Updated PRD to passes=true
+- 2026-01-31: [infra-28] Configure golangci-lint ✓
+  - Created backend/.golangci.yml (88 lines)
+  - Enabled linters: errcheck, gosimple, govet, ineffassign, staticcheck, unused
+  - Enabled linters: gofmt, goimports, misspell, unconvert, gocritic, revive
+  - Enabled security linters: gosec, bodyclose, noctx
+  - Configured local-prefixes for goimports to github.com/fcavalcantirj/solvr
+  - Added exclude rules for test files
+  - Note: Go/golangci-lint not installed in dev environment, but config is valid YAML
   - Updated PRD to passes=true

@@ -1,0 +1,95 @@
+# golangci-lint configuration for Solvr backend
+# Docs: https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck      # Check for unchecked errors
+    - gosimple      # Simplify code
+    - govet         # Report suspicious constructs
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Static analysis checks
+    - unused        # Check for unused code
+    - gofmt         # Check formatting
+    - goimports     # Check import ordering
+    - misspell      # Check for misspelled words
+    - unconvert     # Remove unnecessary type conversions
+    - gocritic      # Opinionated linter
+    - revive        # Fast, configurable linter
+    - gosec         # Security checks
+    - bodyclose     # Check HTTP response body is closed
+    - noctx         # Check context is passed to HTTP requests
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  govet:
+    enable-all: true
+
+  goimports:
+    local-prefixes: github.com/fcavalcantirj/solvr
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - whyNoLint  # Allow //nolint without explanation during development
+
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+
+  gosec:
+    excludes:
+      - G104  # Allow unhandled errors in deferred calls during development
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  exclude-rules:
+    # Allow unused parameters in test files
+    - path: _test\.go
+      linters:
+        - unused
+        - gosec
+
+    # Allow dot imports in tests
+    - path: _test\.go
+      text: "dot-imports"
+
+    # Allow package comments to be optional for internal packages
+    - path: internal/
+      text: "should have a package comment"
+
+output:
+  formats:
+    - format: colored-line-number
+  sort-results: true

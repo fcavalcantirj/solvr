@@ -1,9 +1,9 @@
 # Solvr Development Progress
 
 ## Current Status
-- **PRD:** 709 requirements (25 complete, ~3.5%)
+- **PRD:** 709 requirements (34 complete, ~4.8%)
 - **Spec:** v1.5, 2800+ lines, 19 parts
-- **Infrastructure setup in progress**
+- **Database migrations in progress**
 
 ## Requirements Breakdown (709 total)
 - infrastructure: ~30
@@ -170,3 +170,21 @@
   - npm run format works, formats src/**/*.{ts,tsx,js,jsx,json,css,md}
   - npm run format:check works for CI validation
   - Updated PRD to passes=true
+- 2026-01-31: [db-39 to db-47] Create users migration file ✓
+  - Created backend/migrations/000001_create_users.up.sql (24 lines)
+  - Created backend/migrations/000001_create_users.down.sql (4 lines)
+  - Users table fields per SPEC.md Part 6:
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - username VARCHAR(30) UNIQUE NOT NULL
+    - display_name VARCHAR(50) NOT NULL
+    - email VARCHAR(255) UNIQUE NOT NULL
+    - auth_provider VARCHAR(20) NOT NULL
+    - auth_provider_id VARCHAR(255) NOT NULL
+    - avatar_url TEXT
+    - bio VARCHAR(500)
+    - role VARCHAR(20) DEFAULT 'user'
+    - created_at TIMESTAMPTZ DEFAULT NOW()
+    - updated_at TIMESTAMPTZ DEFAULT NOW()
+  - Added indexes: auth_provider lookup, username, email
+  - Updated PRD to passes=true for db-39 through db-47
+  - Note: db-48, db-49 (migration runs/rollback) require DB connection

@@ -13,9 +13,9 @@ NC='\033[0m'
 
 # Configuration (can be overridden with env vars)
 BATCH_SIZE=${BATCH_SIZE:-3}
-WAIT_TIME_HOURS=${WAIT_TIME_HOURS:-3}        # Wait time after API errors
-BATCH_PAUSE_MINS=${BATCH_PAUSE_MINS:-15}     # Pause between successful batches
-WAIT_TIME_SECS=$((WAIT_TIME_HOURS * 3600))
+WAIT_TIME_MINS=${WAIT_TIME_MINS:-15}         # Wait time after API errors (minutes)
+BATCH_PAUSE_MINS=${BATCH_PAUSE_MINS:-10}     # Pause between successful batches
+WAIT_TIME_SECS=$((WAIT_TIME_MINS * 60))
 BATCH_PAUSE_SECS=$((BATCH_PAUSE_MINS * 60))
 
 # Telegram notification settings (optional - set env vars to enable)
@@ -74,7 +74,7 @@ echo -e "${MAGENTA}${BOLD}║   🚀  SOLVR - RALPH CONTINUOUS RUNNER           
 echo -e "${MAGENTA}${BOLD}║                                                                   ║${NC}"
 printf "${MAGENTA}${BOLD}║   📦 Batch size:     %-3s iterations                              ║${NC}\n" "$BATCH_SIZE"
 printf "${MAGENTA}${BOLD}║   ⏸️  Batch pause:    %-3s minutes                                ║${NC}\n" "$BATCH_PAUSE_MINS"
-printf "${MAGENTA}${BOLD}║   ⏰ Wait on error:  %-3s hours                                   ║${NC}\n" "$WAIT_TIME_HOURS"
+printf "${MAGENTA}${BOLD}║   ⏰ Wait on error:  %-3s minutes                                 ║${NC}\n" "$WAIT_TIME_MINS"
 echo -e "${MAGENTA}${BOLD}║   🕐 Started at:     $(date '+%Y-%m-%d %H:%M:%S')                        ║${NC}"
 echo -e "${MAGENTA}${BOLD}║                                                                   ║${NC}"
 echo -e "${MAGENTA}${BOLD}╚═══════════════════════════════════════════════════════════════════╝${NC}"
@@ -147,7 +147,7 @@ while true; do
 
   if [ "$api_error" = true ]; then
     # Calculate resume time (Linux compatible)
-    resume_time=$(date -d "+${WAIT_TIME_HOURS} hours" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -v+${WAIT_TIME_HOURS}H '+%Y-%m-%d %H:%M:%S')
+    resume_time=$(date -d "+${WAIT_TIME_MINS} minutes" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -v+${WAIT_TIME_MINS}M '+%Y-%m-%d %H:%M:%S')
 
     echo ""
     echo -e "${RED}${BOLD}┌───────────────────────────────────────────────────────────────────┐${NC}"
@@ -155,7 +155,7 @@ while true; do
     echo -e "${RED}${BOLD}│   🚨🚨🚨  API ERROR DETECTED  🚨🚨🚨                              │${NC}"
     echo -e "${RED}${BOLD}│                                                                   │${NC}"
     echo -e "${RED}${BOLD}│   ❌ Error: ${error_msg}${NC}"
-    echo -e "${RED}${BOLD}│   ⏸️  Pausing for ${WAIT_TIME_HOURS} hours to avoid rate limits                    │${NC}"
+    echo -e "${RED}${BOLD}│   ⏸️  Pausing for ${WAIT_TIME_MINS} minutes to avoid rate limits                    │${NC}"
     echo -e "${RED}${BOLD}│   🔄 Will resume at: ${resume_time}                       │${NC}"
     echo -e "${RED}${BOLD}│                                                                   │${NC}"
     echo -e "${RED}${BOLD}└───────────────────────────────────────────────────────────────────┘${NC}"
@@ -165,7 +165,7 @@ while true; do
     send_telegram "🚨 *Solvr Ralph* - API Error
 
 ❌ Error: ${error_msg}
-⏸️ Pausing for ${WAIT_TIME_HOURS} hours
+⏸️ Pausing for ${WAIT_TIME_MINS} minutes
 🔄 Resume: ${resume_time}
 📊 Progress: $(./progress.sh)"
 

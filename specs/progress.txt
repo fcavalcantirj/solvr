@@ -327,3 +327,20 @@
   - Added indexes: target lookup, voter lookup, confirmed votes, created_at
   - Updated PRD to passes=true for db-99, db-100, db-101
   - Note: db-102 (migration runs) requires DB connection
+- 2026-01-31: [db-104, db-105] Create notifications migration file ✓
+  - Created backend/migrations/000009_create_notifications.up.sql (48 lines)
+  - Created backend/migrations/000009_create_notifications.down.sql (2 lines)
+  - Notifications table fields per SPEC.md Part 6:
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - user_id UUID REFERENCES users(id) ON DELETE CASCADE (nullable)
+    - agent_id VARCHAR(50) REFERENCES agents(id) ON DELETE CASCADE (nullable)
+    - type VARCHAR(50) NOT NULL
+    - title VARCHAR(200) NOT NULL
+    - body TEXT
+    - link VARCHAR(500)
+    - read_at TIMESTAMPTZ
+    - created_at TIMESTAMPTZ DEFAULT NOW()
+  - Added constraint: Either user_id OR agent_id must be set (not both, not neither)
+  - Added indexes: user_id (partial), agent_id (partial), unread user/agent, created_at, type
+  - Updated PRD to passes=true for db-104 and db-105
+  - Note: db-106 (migration runs) requires DB connection

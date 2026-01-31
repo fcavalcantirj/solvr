@@ -101,8 +101,8 @@
   {"category": "database", "description": "Votes: unique constraint", "steps": ["UNIQUE on (target_type, target_id, voter_type, voter_id)"], "passes": true},
   {"category": "database", "description": "Votes migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
-  {"category": "database", "description": "Create notifications migration", "steps": ["000009_create_notifications.up.sql"], "passes": false},
-  {"category": "database", "description": "Notifications: all fields", "steps": ["id, user_id FK nullable, agent_id FK nullable, type, title, body, link, read_at, created_at"], "passes": false},
+  {"category": "database", "description": "Create notifications migration", "steps": ["000009_create_notifications.up.sql"], "passes": true},
+  {"category": "database", "description": "Notifications: all fields", "steps": ["id, user_id FK nullable, agent_id FK nullable, type, title, body, link, read_at, created_at"], "passes": true},
   {"category": "database", "description": "Notifications migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
   {"category": "database", "description": "Create webhooks migration", "steps": ["000010_create_webhooks.up.sql"], "passes": false},

@@ -83,3 +83,9 @@
   - tsconfig.json already has strict: true
   - Added "typecheck": "tsc --noEmit" script to package.json
   - npm run typecheck passes with no errors
+- 2026-01-31: [infra-9] Configure Tailwind CSS ✓
+  - Using Tailwind v4 with CSS-based configuration
+  - postcss.config.mjs uses @tailwindcss/postcss plugin
+  - globals.css uses @import "tailwindcss" and @theme inline {}
+  - npm run build succeeds, utility classes compiled in output CSS
+  - Verified: min-h-screen, flex-col, items-center classes work

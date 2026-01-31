@@ -7,7 +7,7 @@
   {"category": "infrastructure", "description": "Create main.go entry point", "steps": ["backend/cmd/api/main.go exists", "File under 100 lines", "Compiles with go build"], "passes": true},
   {"category": "infrastructure", "description": "Initialize Next.js frontend", "steps": ["npx create-next-app in frontend/", "App Router selected", "TypeScript enabled"], "passes": true},
   {"category": "infrastructure", "description": "Configure TypeScript strict mode", "steps": ["tsconfig.json strict: true", "npm run typecheck passes"], "passes": true},
-  {"category": "infrastructure", "description": "Configure Tailwind CSS", "steps": ["tailwind.config.js exists", "Styles work in components"], "passes": false},
+  {"category": "infrastructure", "description": "Configure Tailwind CSS", "steps": ["Tailwind v4 config via CSS @import and @theme", "Styles work in components"], "passes": true},
   {"category": "infrastructure", "description": "Create docker-compose.yml", "steps": ["File at project root", "Services section defined"], "passes": false},
   {"category": "infrastructure", "description": "Add PostgreSQL service", "steps": ["postgres:16 image", "Volume for persistence", "Port 5432 exposed"], "passes": false},
   {"category": "infrastructure", "description": "Add PostgreSQL environment vars", "steps": ["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"], "passes": false},

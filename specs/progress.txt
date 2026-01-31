@@ -1,7 +1,7 @@
 # Solvr Development Progress
 
 ## Current Status
-- **PRD:** 709 requirements (16 complete, ~2.3%)
+- **PRD:** 709 requirements (17 complete, ~2.4%)
 - **Spec:** v1.5, 2800+ lines, 19 parts
 - **Infrastructure setup in progress**
 
@@ -127,3 +127,11 @@
   - Tests cover: required vars, missing var errors, defaults, custom values
   - Note: Go not installed in dev environment, but code is valid Go
   - Updated PRD to passes=true for infra-20 and infra-21
+- 2026-01-31: [infra-31] Create .gitignore ✓
+  - Created .gitignore at project root
+  - Ignores node_modules/
+  - Ignores .env and .env.* files
+  - Ignores Go binaries (*.exe, *.dll, *.so, *.dylib)
+  - Ignores IDE files (.idea/, .vscode/)
+  - Ignores coverage files, logs, temp files
+  - Updated PRD to passes=true

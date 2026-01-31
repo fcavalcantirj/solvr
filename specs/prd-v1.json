@@ -28,7 +28,7 @@
   {"category": "infrastructure", "description": "Configure golangci-lint", "steps": [".golangci.yml exists", "golangci-lint run passes"], "passes": false},
   {"category": "infrastructure", "description": "Configure ESLint", "steps": ["eslint config in frontend/", "npm run lint passes"], "passes": false},
   {"category": "infrastructure", "description": "Configure Prettier", "steps": [".prettierrc in frontend/", "npm run format works"], "passes": false},
-  {"category": "infrastructure", "description": "Create .gitignore", "steps": ["Ignores node_modules", "Ignores .env", "Ignores binaries"], "passes": false},
+  {"category": "infrastructure", "description": "Create .gitignore", "steps": ["Ignores node_modules", "Ignores .env", "Ignores binaries"], "passes": true},
 
   {"category": "golden-rules", "description": "Verify Go files under 800 lines", "steps": ["wc -l on all .go files", "None exceed 800"], "passes": false},
   {"category": "golden-rules", "description": "Verify TS files under 800 lines", "steps": ["wc -l on all .ts/.tsx files", "None exceed 800"], "passes": false},

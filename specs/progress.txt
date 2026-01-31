@@ -1,7 +1,7 @@
 # Solvr Development Progress
 
 ## Current Status
-- **PRD:** 709 requirements (17 complete, ~2.4%)
+- **PRD:** 709 requirements (18 complete, ~2.5%)
 - **Spec:** v1.5, 2800+ lines, 19 parts
 - **Infrastructure setup in progress**
 
@@ -134,4 +134,12 @@
   - Ignores Go binaries (*.exe, *.dll, *.so, *.dylib)
   - Ignores IDE files (.idea/, .vscode/)
   - Ignores coverage files, logs, temp files
+  - Updated PRD to passes=true
+- 2026-01-31: [infra-22] Create GitHub Actions workflow file ✓
+  - Created .github/workflows/ci.yml (77 lines)
+  - Triggers on push and pull_request to main/develop branches
+  - Backend job: Go 1.22, tests, coverage, golangci-lint, build
+  - Frontend job: Node 20, npm ci, lint, typecheck, build
+  - Uses official actions: checkout@v4, setup-go@v5, setup-node@v4
+  - Uses golangci/golangci-lint-action@v4 for linting
   - Updated PRD to passes=true

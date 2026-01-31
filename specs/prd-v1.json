@@ -19,7 +19,7 @@
   {"category": "infrastructure", "description": "Document OAuth env vars", "steps": ["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"], "passes": true},
   {"category": "infrastructure", "description": "Create env config parser", "steps": ["backend/internal/config/env.go", "Parses all required vars"], "passes": true},
   {"category": "infrastructure", "description": "Env parser validation", "steps": ["Fails with clear error if var missing"], "passes": true},
-  {"category": "infrastructure", "description": "Create GitHub Actions workflow file", "steps": [".github/workflows/ci.yml exists"], "passes": false},
+  {"category": "infrastructure", "description": "Create GitHub Actions workflow file", "steps": [".github/workflows/ci.yml exists"], "passes": true},
   {"category": "infrastructure", "description": "CI triggers", "steps": ["Triggers on push", "Triggers on pull_request"], "passes": false},
   {"category": "infrastructure", "description": "CI runs Go tests", "steps": ["go test ./... runs", "Fails if tests fail"], "passes": false},
   {"category": "infrastructure", "description": "CI runs Go linting", "steps": ["golangci-lint runs", "Fails on errors"], "passes": false},

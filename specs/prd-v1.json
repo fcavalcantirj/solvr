@@ -23,7 +23,7 @@
   {"category": "infrastructure", "description": "CI triggers", "steps": ["Triggers on push", "Triggers on pull_request"], "passes": true},
   {"category": "infrastructure", "description": "CI runs Go tests", "steps": ["go test ./... runs", "Fails if tests fail"], "passes": true},
   {"category": "infrastructure", "description": "CI runs Go linting", "steps": ["golangci-lint runs", "Fails on errors"], "passes": true},
-  {"category": "infrastructure", "description": "CI runs frontend tests", "steps": ["npm test runs", "Fails if tests fail"], "passes": false},
+  {"category": "infrastructure", "description": "CI runs frontend tests", "steps": ["npm test runs", "Fails if tests fail"], "passes": true},
   {"category": "infrastructure", "description": "CI runs frontend lint", "steps": ["npm run lint runs", "Fails on errors"], "passes": true},
   {"category": "infrastructure", "description": "Configure golangci-lint", "steps": [".golangci.yml exists", "golangci-lint run passes"], "passes": true},
   {"category": "infrastructure", "description": "Configure ESLint", "steps": ["eslint config in frontend/", "npm run lint passes"], "passes": true},

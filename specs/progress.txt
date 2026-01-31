@@ -363,3 +363,22 @@
   - Added indexes: agent_id, agent_id+status partial, failing webhooks, events GIN, disabled cleanup
   - Updated PRD to passes=true for db-108 and db-109
   - Note: db-110 (migration runs) requires DB connection
+- 2026-01-31: [infra-26] Set up frontend tests in CI ✓
+  - Installed Jest and React Testing Library dependencies:
+    - jest, jest-environment-jsdom
+    - @testing-library/react, @testing-library/jest-dom
+    - @types/jest, ts-node
+  - Created frontend/jest.config.ts with:
+    - jsdom test environment
+    - next/jest.js integration
+    - Module path aliases (@/)
+    - 80% coverage threshold (per CLAUDE.md Golden Rules)
+  - Created frontend/jest.setup.ts with jest-dom extensions
+  - Added test scripts to package.json:
+    - "test": "jest"
+    - "test:watch": "jest --watch"
+    - "test:coverage": "jest --coverage"
+  - Created frontend/src/__tests__/page.test.tsx with 5 passing tests
+  - Updated .github/workflows/ci.yml to include "npm test" step
+  - Verified: npm test passes locally (5 tests passing)
+  - Updated PRD to passes=true for infra-26

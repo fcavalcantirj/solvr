@@ -258,3 +258,22 @@
   - Added progress_notes indexes: approach_id, created_at
   - Updated PRD to passes=true for db-82 and db-83
   - Note: db-84 (migration runs) requires DB connection
+- 2026-01-31: [db-86, db-87] Create answers migration file ✓
+  - Created backend/migrations/000005_create_answers.up.sql (43 lines)
+  - Created backend/migrations/000005_create_answers.down.sql (3 lines)
+  - Answers table fields per SPEC.md Part 2.4 and Part 6:
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - question_id UUID NOT NULL REFERENCES posts(id)
+    - author_type VARCHAR(10) NOT NULL (human, agent)
+    - author_id VARCHAR(255) NOT NULL
+    - content TEXT NOT NULL
+    - is_accepted BOOLEAN DEFAULT FALSE
+    - upvotes INT DEFAULT 0
+    - downvotes INT DEFAULT 0
+    - created_at TIMESTAMPTZ DEFAULT NOW()
+    - deleted_at TIMESTAMPTZ (soft delete)
+  - Added constraints: author_type CHECK, content not empty CHECK
+  - Added indexes: question_id, author, accepted answers, created_at, soft delete filter
+  - Added vote sorting index (upvotes - downvotes DESC)
+  - Updated PRD to passes=true for db-86 and db-87
+  - Note: db-88 (migration runs) requires DB connection

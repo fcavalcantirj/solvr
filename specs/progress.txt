@@ -106,3 +106,12 @@
   - Created backend/migrations/ directory
   - Added .gitkeep to track empty directory in git
   - Updated PRD to passes=true
+- 2026-01-31: [infra-18,19] Create .env.example ✓
+  - Created .env.example at project root
+  - Documents all environment variables from SPEC.md section 7.3:
+    - DATABASE_URL, JWT_SECRET, APP_ENV (infra-18)
+    - GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET (infra-19)
+    - Plus: APP_URL, API_URL, JWT_EXPIRY, REFRESH_TOKEN_EXPIRY
+    - Plus: SMTP config, LLM config, rate limits, monitoring
+  - Includes helpful comments and setup instructions
+  - Updated PRD to passes=true for infra-18 and infra-19

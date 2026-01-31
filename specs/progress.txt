@@ -1,7 +1,7 @@
 # Solvr Development Progress
 
 ## Current Status
-- **PRD:** 709 requirements (19 complete, ~2.7%)
+- **PRD:** 709 requirements (25 complete, ~3.5%)
 - **Spec:** v1.5, 2800+ lines, 19 parts
 - **Infrastructure setup in progress**
 
@@ -151,4 +151,22 @@
   - Configured local-prefixes for goimports to github.com/fcavalcantirj/solvr
   - Added exclude rules for test files
   - Note: Go/golangci-lint not installed in dev environment, but config is valid YAML
+  - Updated PRD to passes=true
+- 2026-01-31: [infra-23,24,25,27] CI workflow verification ✓
+  - CI triggers on push and pull_request (infra-23) - verified in ci.yml
+  - CI runs Go tests with coverage (infra-24) - go test ./... -v -race -coverprofile
+  - CI runs Go linting (infra-25) - golangci/golangci-lint-action@v4
+  - CI runs frontend lint (infra-27) - npm run lint
+  - All already configured in .github/workflows/ci.yml
+  - Updated PRD to passes=true for infra-23, 24, 25, 27
+- 2026-01-31: [infra-29] Configure ESLint ✓
+  - ESLint already configured via eslint.config.mjs (created by Next.js)
+  - Uses eslint-config-next with core-web-vitals and typescript
+  - npm run lint passes with no errors
+  - Updated PRD to passes=true
+- 2026-01-31: [infra-30] Configure Prettier ✓
+  - Created frontend/.prettierrc with standard settings
+  - Added "format" and "format:check" scripts to package.json
+  - npm run format works, formats src/**/*.{ts,tsx,js,jsx,json,css,md}
+  - npm run format:check works for CI validation
   - Updated PRD to passes=true

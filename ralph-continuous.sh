@@ -121,13 +121,13 @@ while true; do
   elif grep -qi "overloaded" "$tmplog"; then
     api_error=true
     error_msg="API overloaded"
-  elif grep -qiE "(HTTP|status|code).*429|429.*(too many|rate|limit)" "$tmplog"; then
+  elif grep -qiE "HTTP[/ ]429|\"status\":\s*429|status[_-]?code.*429|429 Too Many Requests" "$tmplog"; then
     api_error=true
     error_msg="HTTP 429 (Too Many Requests)"
-  elif grep -qiE "(HTTP|status|code).*503|503.*(unavailable|service)" "$tmplog"; then
+  elif grep -qiE "HTTP[/ ]503|\"status\":\s*503|status[_-]?code.*503|503 Service Unavailable" "$tmplog"; then
     api_error=true
     error_msg="HTTP 503 (Service Unavailable)"
-  elif grep -qiE "(HTTP|status|code).*500|500.*(error|internal|server)" "$tmplog"; then
+  elif grep -qiE "HTTP[/ ]500|\"status\":\s*500|status[_-]?code.*500|500 Internal Server Error" "$tmplog"; then
     api_error=true
     error_msg="HTTP 500 (Internal Server Error)"
   elif grep -qi "capacity" "$tmplog"; then

@@ -89,3 +89,10 @@
   - globals.css uses @import "tailwindcss" and @theme inline {}
   - npm run build succeeds, utility classes compiled in output CSS
   - Verified: min-h-screen, flex-col, items-center classes work
+- 2026-01-31: [infra-10] Create docker-compose.yml ✓
+  - Created docker-compose.yml at project root
+  - Added PostgreSQL 16 service with persistence volume
+  - Configured environment vars: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+  - Added healthcheck with pg_isready
+  - Port 5432 exposed
+  - Note: Docker not installed in dev environment, but YAML is valid

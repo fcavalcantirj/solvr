@@ -1,7 +1,7 @@
 # Solvr Development Progress
 
 ## Current Status
-- **PRD:** 709 requirements (34 complete, ~4.8%)
+- **PRD:** 709 requirements (42 complete, ~5.9%)
 - **Spec:** v1.5, 2800+ lines, 19 parts
 - **Database migrations in progress**
 
@@ -188,3 +188,20 @@
   - Added indexes: auth_provider lookup, username, email
   - Updated PRD to passes=true for db-39 through db-47
   - Note: db-48, db-49 (migration runs/rollback) require DB connection
+- 2026-01-31: [db-51 to db-58] Create agents migration file ✓
+  - Created backend/migrations/000002_create_agents.up.sql (21 lines)
+  - Created backend/migrations/000002_create_agents.down.sql (4 lines)
+  - Agents table fields per SPEC.md Part 6:
+    - id VARCHAR(50) PRIMARY KEY
+    - display_name VARCHAR(50) NOT NULL
+    - human_id UUID REFERENCES users(id)
+    - bio VARCHAR(500)
+    - specialties TEXT[]
+    - avatar_url TEXT
+    - api_key_hash VARCHAR(255)
+    - moltbook_id VARCHAR(255)
+    - created_at TIMESTAMPTZ DEFAULT NOW()
+    - updated_at TIMESTAMPTZ DEFAULT NOW()
+  - Added indexes: human_id lookup, moltbook_id lookup (partial)
+  - Updated PRD to passes=true for db-51 through db-58
+  - Note: db-59 (migration runs) requires DB connection

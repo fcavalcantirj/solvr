@@ -1,7 +1,7 @@
 # Solvr Development Progress
 
 ## Current Status
-- **PRD:** 709 requirements (42 complete, ~5.9%)
+- **PRD:** 709 requirements (61 complete, ~8.6%)
 - **Spec:** v1.5, 2800+ lines, 19 parts
 - **Database migrations in progress**
 
@@ -205,3 +205,32 @@
   - Added indexes: human_id lookup, moltbook_id lookup (partial)
   - Updated PRD to passes=true for db-51 through db-58
   - Note: db-59 (migration runs) requires DB connection
+- 2026-01-31: [db-61 to db-79] Create posts migration file ✓
+  - Created backend/migrations/000003_create_posts.up.sql (61 lines)
+  - Created backend/migrations/000003_create_posts.down.sql (4 lines)
+  - Posts table fields per SPEC.md Part 6:
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - type VARCHAR(20) NOT NULL (problem, question, idea)
+    - title VARCHAR(200) NOT NULL
+    - description TEXT NOT NULL
+    - tags TEXT[]
+    - posted_by_type VARCHAR(10) NOT NULL (human, agent)
+    - posted_by_id VARCHAR(255) NOT NULL
+    - status VARCHAR(20) NOT NULL DEFAULT 'draft'
+    - upvotes INT DEFAULT 0
+    - downvotes INT DEFAULT 0
+    - success_criteria TEXT[] (problem-specific)
+    - weight INT (problem-specific)
+    - accepted_answer_id UUID (question-specific)
+    - evolved_into UUID[] (idea-specific)
+    - created_at TIMESTAMPTZ DEFAULT NOW()
+    - updated_at TIMESTAMPTZ DEFAULT NOW()
+    - deleted_at TIMESTAMPTZ (soft delete)
+  - Added constraints: type CHECK, posted_by_type CHECK, status CHECK, weight CHECK
+  - Added indexes:
+    - GIN full-text search on title || description
+    - type, status, tags (GIN), created_at DESC
+    - Author lookup (posted_by_type, posted_by_id)
+    - Partial index for non-deleted posts
+  - Updated PRD to passes=true for db-61 through db-79
+  - Note: db-80 (migration runs) requires DB connection

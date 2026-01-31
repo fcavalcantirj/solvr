@@ -56,3 +56,6 @@
 - 2026-01-31: [infra-2] Create README.md ✓
   - Added setup instructions (Prerequisites, Quick Start, Environment Variables)
   - Project overview and tech stack already present
+- 2026-01-31: [infra-3] Initialize Go module ✓
+  - Created backend/go.mod with module github.com/fcavalcantirj/solvr
+  - Go version 1.22

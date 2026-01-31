@@ -1,7 +1,7 @@
 [
   {"category": "infrastructure", "description": "Create root project structure", "steps": ["Create backend/ directory", "Create frontend/ directory", "Create specs/ directory"], "passes": true},
   {"category": "infrastructure", "description": "Create README.md", "steps": ["Project overview", "Tech stack listed", "Setup instructions placeholder"], "passes": true},
-  {"category": "infrastructure", "description": "Initialize Go module", "steps": ["go mod init github.com/fcavalcantirj/solvr", "go.mod exists"], "passes": false},
+  {"category": "infrastructure", "description": "Initialize Go module", "steps": ["go mod init github.com/fcavalcantirj/solvr", "go.mod exists"], "passes": true},
   {"category": "infrastructure", "description": "Create backend cmd directory", "steps": ["backend/cmd/api/ exists"], "passes": false},
   {"category": "infrastructure", "description": "Create backend internal directories", "steps": ["internal/api/", "internal/db/", "internal/models/", "internal/services/", "internal/config/", "internal/auth/"], "passes": false},
   {"category": "infrastructure", "description": "Create main.go entry point", "steps": ["backend/cmd/api/main.go exists", "File under 100 lines", "Compiles with go build"], "passes": false},

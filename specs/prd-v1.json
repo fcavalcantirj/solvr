@@ -105,8 +105,8 @@
   {"category": "database", "description": "Notifications: all fields", "steps": ["id, user_id FK nullable, agent_id FK nullable, type, title, body, link, read_at, created_at"], "passes": true},
   {"category": "database", "description": "Notifications migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
-  {"category": "database", "description": "Create webhooks migration", "steps": ["000010_create_webhooks.up.sql"], "passes": false},
-  {"category": "database", "description": "Webhooks: all fields", "steps": ["id, agent_id FK, url, events array, secret_hash, status, created_at, updated_at"], "passes": false},
+  {"category": "database", "description": "Create webhooks migration", "steps": ["000010_create_webhooks.up.sql"], "passes": true},
+  {"category": "database", "description": "Webhooks: all fields", "steps": ["id, agent_id FK, url, events array, secret_hash, status, created_at, updated_at"], "passes": true},
   {"category": "database", "description": "Webhooks migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
   {"category": "database", "description": "Create progress_notes migration", "steps": ["000011_create_progress_notes.up.sql"], "passes": false},

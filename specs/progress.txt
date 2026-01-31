@@ -344,3 +344,22 @@
   - Added indexes: user_id (partial), agent_id (partial), unread user/agent, created_at, type
   - Updated PRD to passes=true for db-104 and db-105
   - Note: db-106 (migration runs) requires DB connection
+- 2026-01-31: [db-108, db-109] Create webhooks migration file ✓
+  - Created backend/migrations/000010_create_webhooks.up.sql (55 lines)
+  - Created backend/migrations/000010_create_webhooks.down.sql (2 lines)
+  - Webhooks table fields per SPEC.md Part 12.3:
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - agent_id VARCHAR(50) NOT NULL REFERENCES agents(id) ON DELETE CASCADE
+    - url VARCHAR(2048) NOT NULL
+    - events TEXT[] NOT NULL
+    - secret_hash VARCHAR(255) NOT NULL
+    - status VARCHAR(20) NOT NULL DEFAULT 'active' (active, paused, failing, disabled)
+    - consecutive_failures INT NOT NULL DEFAULT 0
+    - last_failure_at TIMESTAMPTZ
+    - last_success_at TIMESTAMPTZ
+    - created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    - updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  - Added constraints: status CHECK, HTTPS URL CHECK, non-empty events CHECK
+  - Added indexes: agent_id, agent_id+status partial, failing webhooks, events GIN, disabled cleanup
+  - Updated PRD to passes=true for db-108 and db-109
+  - Note: db-110 (migration runs) requires DB connection

@@ -59,3 +59,6 @@
 - 2026-01-31: [infra-3] Initialize Go module ✓
   - Created backend/go.mod with module github.com/fcavalcantirj/solvr
   - Go version 1.22
+- 2026-01-31: [infra-4] Create backend cmd directory ✓
+  - Created backend/cmd/api/ directory structure
+  - Added .gitkeep to track empty directory

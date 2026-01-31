@@ -92,6 +92,12 @@ while true; do
   echo -e "${CYAN}${BOLD}└───────────────────────────────────────────────────────────────────┘${NC}"
   echo ""
 
+  # Notify batch START via Telegram
+  send_telegram "🚀 *Solvr Ralph* - Batch #${batch_count} Starting
+
+📊 Current: $(./progress.sh)
+🔄 Running ${BATCH_SIZE} iterations..."
+
   # Run ralph.sh and capture output + exit code
   tmplog=$(mktemp)
   ./ralph.sh $BATCH_SIZE 2>&1 | tee "$tmplog"
@@ -100,6 +106,10 @@ while true; do
   # Check for API errors
   api_error=false
   error_msg=""
+  error_detail=""
+
+  # Extract actual error lines from log (last 50 lines containing error keywords)
+  error_detail=$(grep -i "error\|429\|503\|rate.limit\|capacity\|overloaded\|failed" "$tmplog" | tail -5 | head -c 500)
 
   # Common API error patterns
   if grep -qi "rate limit" "$tmplog"; then
@@ -108,12 +118,18 @@ while true; do
   elif grep -qi "hit your limit" "$tmplog"; then
     api_error=true
     error_msg="You've hit your limit"
+  elif grep -qi "overloaded" "$tmplog"; then
+    api_error=true
+    error_msg="API overloaded"
   elif grep -qi "429" "$tmplog"; then
     api_error=true
     error_msg="HTTP 429 (Too Many Requests)"
   elif grep -qi "503" "$tmplog"; then
     api_error=true
     error_msg="HTTP 503 (Service Unavailable)"
+  elif grep -qi "500" "$tmplog"; then
+    api_error=true
+    error_msg="HTTP 500 (Internal Server Error)"
   elif grep -qi "capacity" "$tmplog"; then
     api_error=true
     error_msg="API at capacity"
@@ -123,6 +139,12 @@ while true; do
   elif grep -qi "concurrency" "$tmplog"; then
     api_error=true
     error_msg="Tool use concurrency issue"
+  elif grep -qi "timeout" "$tmplog"; then
+    api_error=true
+    error_msg="Request timeout"
+  elif grep -qi "connection refused\|ECONNREFUSED" "$tmplog"; then
+    api_error=true
+    error_msg="Connection refused"
   elif grep -qi "API Error" "$tmplog"; then
     api_error=true
     error_msg="API Error detected"
@@ -161,13 +183,23 @@ while true; do
     echo -e "${RED}${BOLD}└───────────────────────────────────────────────────────────────────┘${NC}"
     echo ""
 
-    # Notify via Telegram about API error
-    send_telegram "🚨 *Solvr Ralph* - API Error
+    # Notify via Telegram about API error (with actual error detail if available)
+    if [ -n "$error_detail" ]; then
+      send_telegram "🚨 *Solvr Ralph* - API Error
+
+❌ Error: ${error_msg}
+📝 Detail: \`${error_detail:0:200}\`
+⏸️ Pausing for ${WAIT_TIME_MINS} minutes
+🔄 Resume: ${resume_time}
+📊 Progress: $(./progress.sh)"
+    else
+      send_telegram "🚨 *Solvr Ralph* - API Error
 
 ❌ Error: ${error_msg}
 ⏸️ Pausing for ${WAIT_TIME_MINS} minutes
 🔄 Resume: ${resume_time}
 📊 Progress: $(./progress.sh)"
+    fi
 
     # Countdown display with progress bar
     remaining=$WAIT_TIME_SECS

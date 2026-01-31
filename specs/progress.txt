@@ -1,38 +1,38 @@
 # Solvr Development Progress
 
 ## Current Status
-- **PRD:** 124 requirements (0% complete)
+- **PRD:** 337 requirements (0% complete)
 - **Spec:** v1.5, 2800+ lines, 19 parts
 - **Ready to begin development**
 
-## Requirements Breakdown
-- infrastructure: 9
-- golden-rules: 3
-- database: 13
-- api-core: 4
-- api-auth: 5
-- api-agents: 4
-- api-search: 3
-- api-posts: 5
-- api-problems: 3
-- api-questions: 3
-- api-ideas: 2
-- api-comments: 1
-- api-feed: 1
-- api-notifications: 1
-- api-webhooks: 3
-- security: 7
-- api-admin: 6
-- frontend-core: 2
-- frontend-auth: 2
-- frontend-pages: 8
-- frontend-components: 5
-- frontend-admin: 4
-- mcp-server: 5
-- cli: 6
-- discovery: 2
-- seo: 2
-- legal: 2
+## Requirements Breakdown (337 total)
+- infrastructure: 23
+- golden-rules: 4
+- database: 33
+- api-core: 12
+- api-auth: 16
+- api-agents: 10
+- api-search: 19
+- api-posts: 21
+- api-problems: 10
+- api-questions: 10
+- api-ideas: 5
+- api-comments: 3
+- api-feed: 3
+- api-notifications: 3
+- api-webhooks: 16
+- security: 20
+- api-admin: 17
+- frontend-core: 8
+- frontend-auth: 7
+- frontend-pages: 37
+- frontend-components: 8
+- frontend-admin: 11
+- mcp-server: 7
+- cli: 13
+- discovery: 3
+- seo: 6
+- legal: 3
 - finalization: 13
 
 ## Next Steps
@@ -45,4 +45,5 @@
 - 2026-01-31 19:58: PRD v1 created with 111 requirements
 - 2026-01-31 20:00: Added 13 finalization tasks, total 124 requirements
 - 2026-01-31 20:00: CLAUDE.md created with Golden Rules
-- 2026-01-31 20:00: Ralph harness scripts ready (ralph.sh, ralph-continuous.sh, progress.sh)
+- 2026-01-31 20:00: Ralph harness scripts ready
+- 2026-01-31 20:05: PRD expanded to 337 granular requirements

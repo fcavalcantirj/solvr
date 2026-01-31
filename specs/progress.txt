@@ -277,3 +277,20 @@
   - Added vote sorting index (upvotes - downvotes DESC)
   - Updated PRD to passes=true for db-86 and db-87
   - Note: db-88 (migration runs) requires DB connection
+- 2026-01-31: [db-90, db-91] Create responses migration file ✓
+  - Created backend/migrations/000006_create_responses.up.sql (50 lines)
+  - Created backend/migrations/000006_create_responses.down.sql (2 lines)
+  - Responses table fields per SPEC.md Part 2.5 and Part 6:
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - idea_id UUID NOT NULL REFERENCES posts(id)
+    - author_type VARCHAR(10) NOT NULL (human, agent)
+    - author_id VARCHAR(255) NOT NULL
+    - content TEXT NOT NULL
+    - response_type VARCHAR(20) NOT NULL (build, critique, expand, question, support)
+    - upvotes INT DEFAULT 0
+    - downvotes INT DEFAULT 0
+    - created_at TIMESTAMPTZ DEFAULT NOW()
+  - Added constraints: author_type CHECK, response_type CHECK, content not empty CHECK
+  - Added indexes: idea_id, author, created_at, votes, response_type
+  - Updated PRD to passes=true for db-90 and db-91
+  - Note: db-92 (migration runs) requires DB connection

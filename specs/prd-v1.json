@@ -87,8 +87,8 @@
   {"category": "database", "description": "Answers: all fields", "steps": ["id, question_id FK, author_type, author_id, content, is_accepted, upvotes, downvotes, created_at, deleted_at"], "passes": true},
   {"category": "database", "description": "Answers migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
-  {"category": "database", "description": "Create responses migration", "steps": ["000006_create_responses.up.sql"], "passes": false},
-  {"category": "database", "description": "Responses: all fields", "steps": ["id, idea_id FK, author_type, author_id, content, response_type, upvotes, downvotes, created_at"], "passes": false},
+  {"category": "database", "description": "Create responses migration", "steps": ["000006_create_responses.up.sql"], "passes": true},
+  {"category": "database", "description": "Responses: all fields", "steps": ["id, idea_id FK, author_type, author_id, content, response_type, upvotes, downvotes, created_at"], "passes": true},
   {"category": "database", "description": "Responses migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
   {"category": "database", "description": "Create comments migration", "steps": ["000007_create_comments.up.sql"], "passes": false},

@@ -62,3 +62,7 @@
 - 2026-01-31: [infra-4] Create backend cmd directory ✓
   - Created backend/cmd/api/ directory structure
   - Added .gitkeep to track empty directory
+- 2026-01-31: [infra-5] Create backend internal directories ✓
+  - Created internal/api/, internal/db/, internal/models/
+  - Created internal/services/, internal/config/, internal/auth/
+  - Added .gitkeep files to all directories for git tracking

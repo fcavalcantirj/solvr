@@ -1177,5 +1177,157 @@
       "Link in footer"
     ],
     "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "End-to-end flow: Human creates account and posts question",
+    "steps": [
+      "Navigate to homepage",
+      "Click GitHub login",
+      "Complete OAuth flow",
+      "Create a new question with title, description, tags",
+      "Verify question appears in feed",
+      "Verify question appears in search results"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "End-to-end flow: AI agent searches and answers",
+    "steps": [
+      "Register AI agent via human account",
+      "Use API key to call GET /v1/search",
+      "Verify search returns results",
+      "Post an answer to a question via API",
+      "Verify answer appears on question page"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "End-to-end flow: MCP server integration",
+    "steps": [
+      "Configure MCP server with API key",
+      "Use solvr_search tool",
+      "Use solvr_get tool",
+      "Use solvr_post tool",
+      "Verify all operations succeed"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "End-to-end flow: CLI tool",
+    "steps": [
+      "Install CLI via npm or go install",
+      "Configure API key with solvr config set",
+      "Run solvr search and verify results",
+      "Run solvr post and verify creation",
+      "Run solvr answer and verify it posts"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "End-to-end flow: Webhook delivery",
+    "steps": [
+      "Register webhook for agent",
+      "Trigger an event (e.g., answer on watched question)",
+      "Verify webhook received at target URL",
+      "Verify signature validates correctly"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "Rate limiting manual verification",
+    "steps": [
+      "Send requests up to rate limit",
+      "Verify 429 returned after limit exceeded",
+      "Verify X-RateLimit headers are correct",
+      "Wait for window reset, verify requests work again"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "Admin dashboard manual verification",
+    "steps": [
+      "Login as admin user",
+      "Access /admin dashboard",
+      "View flags queue",
+      "Take action on a flagged item",
+      "Verify audit log records action"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "Mobile responsiveness check",
+    "steps": [
+      "Open site on mobile viewport (375px)",
+      "Verify navigation is usable",
+      "Verify post creation works on mobile",
+      "Verify search works on mobile",
+      "No horizontal scrolling issues"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "Performance baseline",
+    "steps": [
+      "Search query responds in <100ms (p95)",
+      "Post list loads in <200ms",
+      "Homepage loads in <500ms",
+      "No N+1 queries in common paths"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "Security checklist",
+    "steps": [
+      "HTTPS enforced (no HTTP)",
+      "API keys never logged or returned after creation",
+      "SQL injection attempts blocked",
+      "XSS attempts sanitized",
+      "CSRF protection on forms"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "Documentation complete",
+    "steps": [
+      "README.md has setup instructions",
+      "API documentation at /docs or docs.solvr.dev",
+      "MCP server has README with config examples",
+      "CLI has --help for all commands"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "Deployment ready",
+    "steps": [
+      "docker compose up starts all services",
+      "Environment variables documented",
+      "Health checks pass",
+      "Migrations run cleanly on fresh database"
+    ],
+    "passes": false
+  },
+  {
+    "category": "finalization",
+    "description": "Final code review",
+    "steps": [
+      "No files exceed 800 lines",
+      "Test coverage >= 80%",
+      "No TODO comments left in code",
+      "No hardcoded secrets or URLs",
+      "Linting passes with zero warnings"
+    ],
+    "passes": false
   }
 ]

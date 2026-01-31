@@ -79,3 +79,7 @@
   - TypeScript enabled with strict mode
   - Tailwind CSS configured
   - ESLint configured
+- 2026-01-31: [infra-8] Configure TypeScript strict mode ✓
+  - tsconfig.json already has strict: true
+  - Added "typecheck": "tsc --noEmit" script to package.json
+  - npm run typecheck passes with no errors

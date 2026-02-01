@@ -1966,3 +1966,163 @@ All homepage requirements now pass=true.
 - frontend/src/app/page.tsx (updated, 327 lines)
 - frontend/src/__tests__/page.test.tsx (deleted)
 - specs/prd-v2.json (updated lines 454-459 to passes=true)
+
+## Session: Frontend Search Page (frontend-pages)
+Date: 2026-02-01
+
+### Completed Requirements (PRD lines 460-465)
+All search page requirements now pass=true.
+
+### What Was Done
+- TDD approach: Created search.test.tsx FIRST with 25 test functions
+- Created frontend/src/__tests__/search.test.tsx (407 lines):
+  - Tests for basic structure (main container, heading)
+  - Tests for search input (renders, binds to URL, updates URL on submit, clear button)
+  - Tests for filters (type, status, sort dropdowns with correct options)
+  - Tests for filter URL binding (changes update URL, initialized from URL)
+  - Tests for search results (fetches /v1/search, displays results, type badges, authors, votes, tags, snippets)
+  - Tests for pagination (page controls, current page, next/prev buttons, disabled states, hidden when no results)
+  - Tests for loading state (skeletons shown, removed after load)
+  - Tests for empty states (no query message, no results message with suggestions)
+  - Tests for error state (error message, retry button, retry functionality)
+  - Tests for accessibility (heading hierarchy, accessible labels, semantic structure)
+  - Tests for query display (heading shows query, search time displayed)
+
+- Created frontend/src/app/search/page.tsx (506 lines):
+  - Per SPEC.md Part 5.5 Search API and Part 4.4 Feed Page
+  - Search input bound to URL query param 'q'
+  - Type filter dropdown (All, Problems, Questions, Ideas)
+  - Status filter dropdown (All, Open, Solved, Answered, Active, Closed)
+  - Sort filter dropdown (Relevance, Newest, Most Votes, Recent Activity)
+  - Results list with ResultCard components
+  - ResultCard displays: type badge, title, snippet with highlighted terms, tags, author, votes
+  - Pagination controls (Previous/Next buttons, page number display)
+  - Loading skeletons (ResultSkeleton components)
+  - Empty states: no query prompt, no results message with suggestions
+  - Error state with retry button
+  - Suspense boundary for useSearchParams
+  - Responsive design with Tailwind CSS
+  - Proper accessibility (aria-labels, semantic HTML, list/listitem roles)
+
+### Test Results
+- Total tests: 214 passing (25 search tests + existing tests)
+- Coverage: 91.84% statements, 94.56% lines (above 80% requirement)
+- Build passes with npm run build
+- All files under 800 lines per CLAUDE.md Golden Rules
+
+### Files Created/Modified
+- frontend/src/__tests__/search.test.tsx (new, 407 lines)
+- frontend/src/app/search/page.tsx (new, 506 lines)
+- specs/prd-v2.json (updated lines 460-465 to passes=true)
+
+## Session: Frontend Post Detail Page (frontend-pages)
+Date: 2026-02-01
+
+### Completed Requirements (PRD lines 466-478)
+All post detail page requirements now pass=true.
+
+### What Was Done
+- TDD approach: Created posts-detail.test.tsx FIRST with 39 test functions
+- Created frontend/src/__tests__/posts-detail.test.tsx (~600 lines):
+  - Tests for basic structure (main container, article element)
+  - Tests for loading state (skeleton shown, removed after load)
+  - Tests for post display (title, description, tags, type badge, status badge)
+  - Tests for author info (author name, human/agent type indicator, profile link)
+  - Tests for votes (vote score, upvote/downvote buttons)
+  - Tests for 404 handling (calls notFound when post not found)
+  - Tests for error handling (error message, retry button, retry functionality)
+  - Tests for problem-specific features (success criteria, difficulty, approaches list, status indicators, Start Approach button)
+  - Tests for question-specific features (answers section, sorted by votes, accepted answer highlighted, answer count, Your Answer form)
+  - Tests for idea-specific features (responses section, response type badges, Add Response form, response type selector)
+  - Tests for timestamps (created date display)
+  - Tests for accessibility (heading hierarchy, accessible vote buttons, semantic article element)
+
+- Created frontend/src/app/posts/[id]/page.tsx (~560 lines):
+  - Per SPEC.md Part 5.2 Posts API and type-specific sections
+  - PostSkeleton component for loading state
+  - TypeBadge component (problem/question/idea with colors)
+  - StatusBadge component (open/solved/answered/closed)
+  - ResponseTypeBadge component for idea responses
+  - AuthorBadge component with human/agent type indicator
+  - VoteButtons component with upvote/downvote
+  - DifficultyIndicator component for problems
+  - Main PostDetailPage component:
+    - Fetches post data from /v1/posts/:id
+    - Fetches type-specific data (approaches/answers/responses)
+    - Displays post title, description, tags
+    - Shows author info with profile link
+    - Shows created date
+    - Problem-specific: success criteria, difficulty, approaches list with status
+    - Question-specific: answers sorted by votes, accepted answer highlight, answer form
+    - Idea-specific: responses with type badges, response form with type selector
+    - 404 handling with notFound()
+    - Error handling with retry button
+    - Responsive design with Tailwind CSS
+    - Proper accessibility (aria-labels, semantic HTML)
+
+### Test Results
+- Total tests: 39 passing
+- All files under 800 lines per CLAUDE.md Golden Rules
+- TDD approach followed: tests written first, implementation made tests pass
+
+### Files Created/Modified
+- frontend/src/__tests__/posts-detail.test.tsx (new, ~600 lines)
+- frontend/src/app/posts/[id]/page.tsx (new, ~560 lines)
+- specs/prd-v2.json (updated lines 466-478 to passes=true)
+
+## Session: Frontend New Problem Page (frontend-pages)
+Date: 2026-02-01
+
+### Completed Requirements (PRD lines 479-482)
+All new problem page requirements now pass=true.
+
+### What Was Done
+- TDD approach: Created new-problem.test.tsx FIRST with 43 test functions
+- Created frontend/src/__tests__/new-problem.test.tsx (475 lines):
+  - Tests for basic structure (main element, heading, form)
+  - Tests for authentication (loading state, redirect to login, form when authenticated)
+  - Tests for form fields (title, description, tags, success criteria, difficulty)
+  - Tests for form interactions (typing in fields, input binding)
+  - Tests for preview tab (tab buttons, switching, markdown rendering)
+  - Tests for form submission (submit/cancel buttons, API call, redirect)
+  - Tests for validation (title min length, description min length, max tags)
+  - Tests for error handling (API errors, network errors, dismiss error)
+  - Tests for accessibility (heading hierarchy, labels, alert roles)
+  - Tests for responsive design (max-width container)
+
+- Created frontend/src/app/new/problem/page.tsx (347 lines):
+  - Per SPEC.md Part 4.8 (New Post Pages)
+  - Authentication check with redirect to login
+  - Write/Preview tabs for markdown editing
+  - Form fields:
+    - Title input (required, max 200 chars, min 10 chars)
+    - Description textarea (required, supports Markdown, min 50 chars)
+    - Tags input (comma-separated, max 5 tags)
+    - Success Criteria textarea (one per line)
+    - Difficulty/Weight select (1-5 scale)
+  - Preview panel with markdown rendering using marked library
+  - Client-side validation before submit
+  - POST to /v1/problems API
+  - Redirect to /posts/:id on success
+  - Error display with dismiss button
+  - Loading/submitting state management
+  - Cancel button returns to previous page
+  - Responsive design with Tailwind CSS
+
+- Installed marked package for markdown rendering
+- Updated jest.config.ts with transformIgnorePatterns for ESM support
+- Added marked mock in test file
+
+### Test Results
+- Total tests: 296 passing (43 new tests + 253 existing)
+- Coverage: 85.88% statements, 82.66% branches, 83.68% functions, 89.02% lines
+- All above 80% threshold per CLAUDE.md Golden Rules
+- Build passes with npm run build
+- All files under 800 lines per CLAUDE.md Golden Rules
+
+### Files Created/Modified
+- frontend/src/__tests__/new-problem.test.tsx (new, 475 lines)
+- frontend/src/app/new/problem/page.tsx (new, 347 lines)
+- frontend/package.json (added marked dependency)
+- frontend/jest.config.ts (added transformIgnorePatterns)
+- specs/prd-v2.json (updated lines 479-482 to passes=true)

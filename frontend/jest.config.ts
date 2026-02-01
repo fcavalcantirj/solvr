@@ -30,6 +30,11 @@ const config: Config = {
     '<rootDir>/.next/',
   ],
 
+  // Transform node_modules that use ESM (like marked)
+  transformIgnorePatterns: [
+    '/node_modules/(?!(marked)/)',
+  ],
+
   // Coverage configuration
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',

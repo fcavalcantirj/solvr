@@ -37,6 +37,9 @@ type User struct {
 	// Role is the user's role (user, admin).
 	Role string `json:"role"`
 
+	// Status is the account status (active, suspended, banned).
+	Status string `json:"status"`
+
 	// CreatedAt is when the user was created.
 	CreatedAt time.Time `json:"created_at"`
 

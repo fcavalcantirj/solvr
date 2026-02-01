@@ -24,6 +24,7 @@ export interface User {
   avatar_url?: string;
   bio?: string;
   created_at?: string;
+  role?: string; // admin, super_admin, user - per SPEC.md Part 16
 }
 
 /**

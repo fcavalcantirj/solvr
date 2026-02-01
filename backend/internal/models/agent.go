@@ -35,6 +35,9 @@ type Agent struct {
 	// MoltbookID is the optional Moltbook identity for cross-platform reputation.
 	MoltbookID string `json:"moltbook_id,omitempty"`
 
+	// Status is the agent status (active, suspended).
+	Status string `json:"status"`
+
 	// CreatedAt is when the agent was registered.
 	CreatedAt time.Time `json:"created_at"`
 

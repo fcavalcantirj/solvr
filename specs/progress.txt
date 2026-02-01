@@ -443,3 +443,21 @@
   - Added table and column comments
   - Updated PRD to passes=true for db-114 and db-115
   - Note: db-116 (migration runs) requires DB connection
+- 2026-02-01: [db-121 to db-129] Create database connection pool ✓
+  - TDD approach: Created pool_test.go FIRST with 14 test functions
+  - Then implemented pool.go (161 lines, under 800 limit)
+  - Pool struct wrapping *pgxpool.Pool
+  - NewPool(ctx, databaseURL) with configuration per SPEC:
+    - MaxConns: 10
+    - MinConns: 2
+    - MaxConnIdleTime: 30s
+    - HealthCheckPeriod: 30s
+  - Query helpers: Query(), QueryRow(), Exec() with error wrapping
+  - Transaction support: BeginTx(), Tx interface, Commit/Rollback
+  - WithTx helper for automatic rollback on error
+  - Close() method for graceful shutdown
+  - Config() method to expose pool configuration
+  - Added pgx/v5 v5.7.2 dependency to go.mod
+  - Tests cover: connection, invalid URL, query, exec, transactions, rollback
+  - Note: Tests require DATABASE_URL env var (skip if not set)
+  - Updated PRD to passes=true for db-121 through db-129

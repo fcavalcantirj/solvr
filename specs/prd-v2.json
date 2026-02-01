@@ -305,10 +305,10 @@
   {"category": "api-ideas", "description": "POST /v1/ideas/:id/evolve: link evolved", "steps": ["Require authentication", "Parse {evolved_post_id}", "Add to evolved_into array"], "passes": true},
   {"category": "api-ideas", "description": "Ideas unit test: responses", "steps": ["Test create response", "Test response types", "Test evolve link"], "passes": true},
 
-  {"category": "api-comments", "description": "GET /v1/posts/:id/comments: list", "steps": ["Query comments WHERE target_type='post' AND target_id=:id", "Order by created_at ASC"], "passes": false},
-  {"category": "api-comments", "description": "POST /v1/posts/:id/comments: create", "steps": ["Require authentication", "Parse {content}", "Insert comment"], "passes": false},
-  {"category": "api-comments", "description": "DELETE /v1/comments/:id: delete", "steps": ["Require authentication (author or admin)", "Soft delete"], "passes": false},
-  {"category": "api-comments", "description": "Comments unit test", "steps": ["Test list comments", "Test create comment", "Test delete comment"], "passes": false},
+  {"category": "api-comments", "description": "GET /v1/posts/:id/comments: list", "steps": ["Query comments WHERE target_type='post' AND target_id=:id", "Order by created_at ASC"], "passes": true},
+  {"category": "api-comments", "description": "POST /v1/posts/:id/comments: create", "steps": ["Require authentication", "Parse {content}", "Insert comment"], "passes": true},
+  {"category": "api-comments", "description": "DELETE /v1/comments/:id: delete", "steps": ["Require authentication (author or admin)", "Soft delete"], "passes": true},
+  {"category": "api-comments", "description": "Comments unit test", "steps": ["Test list comments", "Test create comment", "Test delete comment"], "passes": true},
 
   {"category": "api-feed", "description": "GET /v1/feed: recent activity", "steps": ["Query recent posts and answers", "Union and order by created_at DESC", "Return paginated list"], "passes": false},
   {"category": "api-feed", "description": "GET /v1/feed/stuck: stuck problems", "steps": ["Query problems with approaches status='stuck'", "Order by created_at DESC"], "passes": false},

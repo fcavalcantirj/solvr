@@ -1170,3 +1170,42 @@
   - Note: Go not installed in dev environment, code follows existing patterns
   - Note: Comments are on approaches, answers, responses per SPEC.md Part 2.6
   - Updated PRD to passes=true for lines 308-311
+- 2026-02-01: [api-feed 313-318] Implement Feed API endpoints ✓
+  - TDD approach: Created feed_test.go FIRST with 20 test functions
+  - Created backend/internal/api/handlers/feed_test.go (617 lines):
+    - TestFeed_RecentActivity_Success: tests successful feed retrieval
+    - TestFeed_RecentActivity_Pagination: tests page/per_page params
+    - TestFeed_RecentActivity_PerPageMax: tests per_page capped at 50
+    - TestFeed_RecentActivity_DefaultPagination: tests defaults page=1, per_page=20
+    - TestFeed_RecentActivity_EmptyResult: tests empty feed
+    - TestFeed_RecentActivity_IncludesAllTypes: tests all post types in feed
+    - TestFeed_Stuck_Success: tests stuck problems retrieval
+    - TestFeed_Stuck_Pagination: tests pagination for stuck feed
+    - TestFeed_Stuck_Empty: tests empty stuck feed
+    - TestFeed_Unanswered_Success: tests unanswered questions retrieval
+    - TestFeed_Unanswered_OnlyQuestions: tests only questions returned
+    - TestFeed_Unanswered_Pagination: tests pagination for unanswered
+    - TestFeed_Unanswered_Empty: tests empty unanswered feed
+    - TestFeedItem_IncludesRequiredFields: tests FeedItem structure
+    - TestFeedItem_JSONSerialization: tests JSON output format
+    - MockFeedRepository for dependency injection
+  - Created backend/internal/api/handlers/feed.go (234 lines):
+    - FeedItem struct per SPEC.md Part 4.4 (Post cards in feed)
+    - FeedAuthor struct for author info display
+    - FeedMeta struct for pagination metadata
+    - FeedResponse struct for API response
+    - FeedRepositoryInterface for database operations (mockable)
+    - FeedHandler struct with Feed, Stuck, Unanswered methods
+    - Feed handler: GET /v1/feed - recent activity
+      - Union of posts ordered by created_at DESC
+      - Pagination with page/per_page (max 50)
+    - Stuck handler: GET /v1/feed/stuck - stuck problems
+      - Problems with approaches status='stuck'
+      - Ordered by created_at DESC
+    - Unanswered handler: GET /v1/feed/unanswered - unanswered questions
+      - Questions with zero answers
+      - Ordered by created_at DESC
+    - Helper functions: parseFeedPagination, calculateHasMore
+  - All files under 800 lines per CLAUDE.md Golden Rules
+  - Note: Go not installed in dev environment, code follows existing patterns
+  - Updated PRD to passes=true for lines 313-318

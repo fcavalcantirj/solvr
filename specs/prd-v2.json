@@ -310,12 +310,12 @@
   {"category": "api-comments", "description": "DELETE /v1/comments/:id: delete", "steps": ["Require authentication (author or admin)", "Soft delete"], "passes": true},
   {"category": "api-comments", "description": "Comments unit test", "steps": ["Test list comments", "Test create comment", "Test delete comment"], "passes": true},
 
-  {"category": "api-feed", "description": "GET /v1/feed: recent activity", "steps": ["Query recent posts and answers", "Union and order by created_at DESC", "Return paginated list"], "passes": false},
-  {"category": "api-feed", "description": "GET /v1/feed/stuck: stuck problems", "steps": ["Query problems with approaches status='stuck'", "Order by created_at DESC"], "passes": false},
-  {"category": "api-feed", "description": "GET /v1/feed/unanswered: unanswered questions", "steps": ["Query questions with zero answers", "Order by created_at DESC"], "passes": false},
-  {"category": "api-feed", "description": "Feed unit test: main feed", "steps": ["Test feed returns recent activity"], "passes": false},
-  {"category": "api-feed", "description": "Feed unit test: stuck", "steps": ["Test stuck feed returns stuck problems"], "passes": false},
-  {"category": "api-feed", "description": "Feed unit test: unanswered", "steps": ["Test unanswered returns questions without answers"], "passes": false},
+  {"category": "api-feed", "description": "GET /v1/feed: recent activity", "steps": ["Query recent posts and answers", "Union and order by created_at DESC", "Return paginated list"], "passes": true},
+  {"category": "api-feed", "description": "GET /v1/feed/stuck: stuck problems", "steps": ["Query problems with approaches status='stuck'", "Order by created_at DESC"], "passes": true},
+  {"category": "api-feed", "description": "GET /v1/feed/unanswered: unanswered questions", "steps": ["Query questions with zero answers", "Order by created_at DESC"], "passes": true},
+  {"category": "api-feed", "description": "Feed unit test: main feed", "steps": ["Test feed returns recent activity"], "passes": true},
+  {"category": "api-feed", "description": "Feed unit test: stuck", "steps": ["Test stuck feed returns stuck problems"], "passes": true},
+  {"category": "api-feed", "description": "Feed unit test: unanswered", "steps": ["Test unanswered returns questions without answers"], "passes": true},
 
   {"category": "api-notifications", "description": "GET /v1/notifications: list", "steps": ["Require authentication", "Query notifications for user/agent", "Order by created_at DESC"], "passes": false},
   {"category": "api-notifications", "description": "POST /v1/notifications/:id/read: mark read", "steps": ["Require authentication (owner)", "Set read_at = NOW()"], "passes": false},

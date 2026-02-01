@@ -71,18 +71,28 @@ for ((i=1; i<=$1; i++)); do
   iter_start=$(date +%s)
 
   # Run claude synchronously
-  claude --dangerously-skip-permissions --no-session-persistence -p --output-format json "@CLAUDE.md @SPEC.md @specs/prd-v1.json @specs/progress.txt \
-1. Read CLAUDE.md for project guidelines (GOLDEN RULES: 800 line limit, 80% coverage, API-smart/client-dumb). \
-2. Read SPEC.md for full specification details when needed. \
-3. Find the highest-priority requirement in specs/prd-v1.json where passes=false and work ONLY on that. \
-4. Write tests first (TDD), then implement. \
-5. For backend: run 'cd backend && go test ./...' to verify. \
-6. For frontend: run 'cd frontend && npm test' to verify. \
-7. Update specs/progress.txt with what you did. \
-8. Update specs/prd-v1.json with passes=true for completed requirement. \
-9. Commit your changes with descriptive message. \
-10. Push to repository. \
-ONLY DO ONE TASK AT A TIME. Ensure no file exceeds 800 lines - split if needed." > "$tmpfile" 2>&1 || true
+  claude --dangerously-skip-permissions --no-session-persistence -p --output-format json "@CLAUDE.md @SPEC.md @specs/prd-v2.json @specs/progress.txt \
+
+=== GOLDEN RULES (MUST FOLLOW) ===
+• TDD: Write failing test FIRST, then implement (RED→GREEN→REFACTOR)
+• 80% test coverage minimum - no exceptions
+• 800 lines max per file - split if needed
+• API is smart, client is dumb - all logic server-side
+
+=== WORKFLOW ===
+1. Read CLAUDE.md for project guidelines and golden rules.
+2. Read SPEC.md for full specification details when needed.
+3. Find the highest-priority requirement in specs/prd-v2.json where passes=false and work ONLY on that.
+4. WRITE TESTS FIRST (TDD) - create _test.go or .test.tsx BEFORE implementation.
+5. Implement minimum code to make tests pass.
+6. For backend: run 'cd backend && go test ./...' to verify.
+7. For frontend: run 'cd frontend && npm test' to verify.
+8. Update specs/progress.txt with what you did.
+9. Update specs/prd-v2.json with passes=true for completed requirement.
+10. Commit your changes with descriptive message.
+11. Push to repository.
+
+CRITICAL: ONE TASK AT A TIME. NO FILE OVER 800 LINES." > "$tmpfile" 2>&1 || true
 
   iter_end=$(date +%s)
   iter_time=$((iter_end - iter_start))

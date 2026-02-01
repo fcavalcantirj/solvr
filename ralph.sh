@@ -89,8 +89,10 @@ for ((i=1; i<=$1; i++)); do
 7. For frontend: run 'cd frontend && npm test' to verify.
 8. Update specs/progress.txt with what you did.
 9. Update specs/prd-v2.json with passes=true for completed requirement.
-10. Commit your changes with descriptive message.
+10. COMMIT your changes with descriptive message.
 11. Push to repository.
+
+Make sure you ALWAYS commit and push your changes after each iteration.
 
 CRITICAL: ONE TASK AT A TIME. NO FILE OVER 800 LINES." > "$tmpfile" 2>&1 || true
 

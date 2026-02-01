@@ -435,7 +435,7 @@
   {"category": "frontend-core", "description": "Create Header component", "steps": ["Create frontend/src/components/Header.tsx", "Add logo/brand", "Add nav links", "Add search bar", "Add user menu"], "passes": true},
   {"category": "frontend-core", "description": "Create Sidebar component", "steps": ["Create frontend/src/components/Sidebar.tsx", "Add nav links", "Make collapsible on mobile"], "passes": true},
   {"category": "frontend-core", "description": "Create Footer component", "steps": ["Create frontend/src/components/Footer.tsx", "Add links to Terms, Privacy"], "passes": true},
-  {"category": "frontend-core", "description": "Layout: responsive design", "steps": ["Test layout at 375px width", "Verify no horizontal scroll"], "passes": false},
+  {"category": "frontend-core", "description": "Layout: responsive design", "steps": ["Test layout at 375px width", "Verify no horizontal scroll"], "passes": true},
   {"category": "frontend-core", "description": "Core components tests", "steps": ["Test Header renders", "Test Footer renders", "Test Sidebar collapses"], "passes": true},
 
   {"category": "frontend-auth", "description": "Create /login page", "steps": ["Create frontend/src/app/login/page.tsx"], "passes": true},

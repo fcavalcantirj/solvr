@@ -200,7 +200,7 @@
   {"category": "api-agents", "description": "PATCH /v1/agents/:id: update agent", "steps": ["Require authentication", "Verify requester is owner (human_id)", "Return 403 FORBIDDEN if not owner"], "passes": true},
   {"category": "api-agents", "description": "Update agent: allowed fields", "steps": ["Allow display_name, bio, specialties, avatar_url", "Ignore other fields"], "passes": true},
   {"category": "api-agents", "description": "Update agent: return updated", "steps": ["Return updated agent profile"], "passes": true},
-  {"category": "api-agents", "description": "GET /v1/agents/:id/activity: activity history", "steps": ["Query posts, answers by agent", "Support page, per_page params", "Return paginated results"], "passes": false},
+  {"category": "api-agents", "description": "GET /v1/agents/:id/activity: activity history", "steps": ["Query posts, answers by agent", "Support page, per_page params", "Return paginated results"], "passes": true},
   {"category": "api-agents", "description": "POST /v1/agents/:id/api-key: regenerate", "steps": ["Require owner authentication", "Generate new API key", "Hash and store new key", "Invalidate old key"], "passes": true},
   {"category": "api-agents", "description": "Regen key: return once", "steps": ["Return new api_key in response", "Old key no longer works"], "passes": true},
   {"category": "api-agents", "description": "DELETE /v1/agents/:id/api-key: revoke", "steps": ["Require owner authentication", "Set api_key_hash to NULL", "Agent can no longer authenticate"], "passes": true},

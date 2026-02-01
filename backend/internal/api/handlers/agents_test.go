@@ -95,6 +95,14 @@ func (m *MockAgentRepository) RevokeAPIKey(ctx context.Context, agentID string) 
 	return nil
 }
 
+func (m *MockAgentRepository) GetActivity(ctx context.Context, agentID string, page, perPage int) ([]models.ActivityItem, int, error) {
+	if _, exists := m.agents[agentID]; !exists {
+		return nil, 0, ErrAgentNotFound
+	}
+	// Return empty by default for basic mock
+	return []models.ActivityItem{}, 0, nil
+}
+
 // Helper to add JWT claims to request context
 func addJWTClaimsToContext(r *http.Request, userID, email, role string) *http.Request {
 	claims := &auth.Claims{

@@ -6,11 +6,13 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
+
 
 // Error types for agent operations
 var (
@@ -26,6 +28,7 @@ type AgentRepositoryInterface interface {
 	GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error)
 	UpdateAPIKeyHash(ctx context.Context, agentID, hash string) error
 	RevokeAPIKey(ctx context.Context, agentID string) error
+	GetActivity(ctx context.Context, agentID string, page, perPage int) ([]models.ActivityItem, int, error)
 }
 
 // AgentsHandler handles agent-related HTTP requests.
@@ -377,6 +380,71 @@ func (h *AgentsHandler) RevokeAPIKey(w http.ResponseWriter, r *http.Request, age
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ActivityResponse is the response structure for the activity endpoint.
+type ActivityResponse struct {
+	Data []models.ActivityItem `json:"data"`
+	Meta struct {
+		Total   int  `json:"total"`
+		Page    int  `json:"page"`
+		PerPage int  `json:"per_page"`
+		HasMore bool `json:"has_more"`
+	} `json:"meta"`
+}
+
+// GetActivity handles GET /v1/agents/:id/activity - activity history.
+// Per SPEC.md Part 4.9 and Part 5.6.
+func (h *AgentsHandler) GetActivity(w http.ResponseWriter, r *http.Request, agentID string) {
+	// Parse pagination parameters with defaults per SPEC.md Part 5.6
+	page := 1
+	perPage := 20
+	maxPerPage := 50
+
+	if p := r.URL.Query().Get("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	if pp := r.URL.Query().Get("per_page"); pp != "" {
+		if parsed, err := strconv.Atoi(pp); err == nil && parsed > 0 {
+			perPage = parsed
+		}
+	}
+
+	// Cap per_page at max per SPEC.md Part 5.6
+	if perPage > maxPerPage {
+		perPage = maxPerPage
+	}
+
+	// Get activity from repository
+	activities, total, err := h.repo.GetActivity(r.Context(), agentID, page, perPage)
+	if err != nil {
+		if errors.Is(err, ErrAgentNotFound) {
+			writeAgentError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
+			return
+		}
+		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get activity")
+		return
+	}
+
+	// Calculate has_more
+	hasMore := page*perPage < total
+
+	// Build response
+	resp := ActivityResponse{}
+	resp.Data = activities
+	if resp.Data == nil {
+		resp.Data = []models.ActivityItem{} // Ensure empty array, not null
+	}
+	resp.Meta.Total = total
+	resp.Meta.Page = page
+	resp.Meta.PerPage = perPage
+	resp.Meta.HasMore = hasMore
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // writeAgentError writes an error response.

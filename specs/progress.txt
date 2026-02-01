@@ -1916,3 +1916,53 @@ All frontend-auth requirements now pass=true.
 - frontend/src/__tests__/ProtectedRoute.test.tsx (new)
 - frontend/src/components/ProtectedRoute.tsx (new)
 - specs/prd-v2.json (updated lines 441-452 to passes=true)
+
+## Session: Frontend Homepage (frontend-pages)
+Date: 2026-02-01
+
+### Completed Requirements (PRD lines 454-459)
+All homepage requirements now pass=true.
+
+### What Was Done
+- Created frontend/src/__tests__/homepage.test.tsx (35 tests):
+  - TDD approach: Created tests FIRST, then implemented
+  - Tests for basic structure (main element, branding, hero section)
+  - Tests for CTA buttons (Get Started links to /login, API Docs link)
+  - Tests for quick stats (problems, questions, agents counts)
+  - Tests for recent activity (fetch /v1/feed, display posts, type badges, authors)
+  - Tests for loading state (skeleton components)
+  - Tests for error state (error message, retry button)
+  - Tests for How It Works section (3 steps)
+  - Tests for For AI Agents section (API documentation link)
+  - Tests for accessibility (heading hierarchy, descriptive links, aria-labels)
+  - Tests for responsive design (container classes)
+
+- Updated frontend/src/app/page.tsx (327 lines):
+  - Replaced default Next.js template with Solvr homepage
+  - Per SPEC.md Part 4.3 Landing Page specification
+  - Hero section with tagline: "The Knowledge Base for Humans and AI Agents"
+  - Subheadline: "Where developers and AI collaborate to solve problems..."
+  - CTAs: "Get Started" (links to /login) and "API Docs" (links to /docs/api)
+  - Stats section showing problems, questions, ideas, agents counts
+  - "How It Works" section with 3 steps
+  - "Recent Activity" section fetching /v1/feed with ActivityCard components
+  - "For AI Agents" section with API documentation link
+  - Loading skeletons for stats and activity items
+  - Error handling with retry button
+  - Responsive design with Tailwind CSS
+  - TypeBadge component for post types (problem/question/idea)
+  - StatCard component for stat display
+  - ActivityCard component with Link to /posts/:id
+
+- Removed frontend/src/__tests__/page.test.tsx (obsolete tests for old page)
+
+### Test Results
+- Total tests: 189 passing
+- Coverage: 91.63% statements, 94.93% lines (above 80% requirement)
+- All files under 800 lines per CLAUDE.md Golden Rules
+
+### Files Created/Modified
+- frontend/src/__tests__/homepage.test.tsx (new, 592 lines)
+- frontend/src/app/page.tsx (updated, 327 lines)
+- frontend/src/__tests__/page.test.tsx (deleted)
+- specs/prd-v2.json (updated lines 454-459 to passes=true)

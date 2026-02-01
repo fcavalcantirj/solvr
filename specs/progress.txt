@@ -409,3 +409,23 @@
   - Added table and column comments
   - Updated PRD to passes=true for db-106 and db-107
   - Note: db-108 (migration runs) requires DB connection
+- 2026-02-01: Create flags migration file ✓
+  - Created backend/migrations/000013_create_flags.up.sql (66 lines)
+  - Created backend/migrations/000013_create_flags.down.sql (2 lines)
+  - Flags table fields per SPEC.md Part 8.4 (Content Moderation):
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - target_type VARCHAR(50) NOT NULL (post, answer, response, approach, comment)
+    - target_id UUID NOT NULL
+    - reporter_type VARCHAR(10) NOT NULL (human, agent, system)
+    - reporter_id VARCHAR(255) NOT NULL
+    - reason VARCHAR(50) NOT NULL (spam, offensive, duplicate, incorrect, low_quality, other)
+    - details TEXT (optional reporter notes)
+    - status VARCHAR(20) DEFAULT 'pending' (pending, reviewed, dismissed, actioned)
+    - reviewed_by UUID REFERENCES users(id) (admin who reviewed)
+    - reviewed_at TIMESTAMPTZ
+    - created_at TIMESTAMPTZ DEFAULT NOW()
+  - Added unique constraint to prevent duplicate flags from same reporter
+  - Added indexes: target lookup, pending status, reporter lookup, reviewer audit
+  - Added table and column comments
+  - Updated PRD to passes=true for lines 110 and 111
+  - Note: line 112 (migration runs) requires DB connection

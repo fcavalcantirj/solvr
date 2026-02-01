@@ -1369,3 +1369,66 @@
   - All files under 800 lines per CLAUDE.md Golden Rules
   - Note: Go not installed in dev environment, code follows existing patterns
   - Updated PRD to passes=true for lines 341-355 (15 rate limit requirements) and line 369 (unit tests)
+- 2026-02-01: [security 356-359, 370-371] Implement duplicate detection service with TDD ✓
+  - TDD approach: Created duplicate_test.go FIRST with 15 test functions
+  - Created backend/internal/services/duplicate_test.go (370 lines):
+    - MockDuplicateStore implementing DuplicateStore interface
+    - TestHashContent: tests SHA-256 hash generation (64 hex chars)
+    - TestHashContent_Deterministic: tests same inputs produce same hash
+    - TestHashContent_DifferentInputsDifferentHash: tests uniqueness
+    - TestHashContent_EmptyInputs: handles empty strings
+    - TestHashContent_VerifyAlgorithm: verifies "title|description" format
+    - TestDuplicateService_CheckDuplicate_NoDuplicate: tests first post scenario
+    - TestDuplicateService_CheckDuplicate_Found: tests duplicate detection
+    - TestDuplicateService_CheckDuplicate_ExpiredNotReturned: tests 24h expiry
+    - TestDuplicateService_RegisterContent: tests hash storage
+    - TestDuplicateService_Cleanup: tests old record removal
+    - TestDuplicateService_SimilarButNotDuplicate: tests exact match only
+    - TestDuplicateService_CaseSensitive: tests case-sensitive hashing
+    - TestDuplicateRecord_IsExpired: tests expiry logic
+  - Created backend/internal/services/duplicate.go (158 lines):
+    - DuplicateRecord struct with PostID, Hash, CreatedAt
+    - IsExpired(maxAge) method per SPEC.md Part 8.3 (24h default)
+    - DuplicateStore interface for storage abstraction
+    - DuplicateDetectionService with store and maxAge config
+    - HashContent(title, description) - SHA-256 hash of "title|description"
+    - CheckDuplicate(ctx, title, description) - returns DuplicateRecord if found
+    - RegisterContent(ctx, postID, title, description, createdAt) - stores hash
+    - Cleanup(ctx, cutoff) - removes old records
+    - InMemoryDuplicateStore - reference implementation for single-instance
+  - All files under 800 lines per CLAUDE.md Golden Rules
+  - Note: Go not installed in dev environment, code follows existing patterns
+  - Updated PRD to passes=true for lines 356-359 and 371
+- 2026-02-01: [security 360-364, 370] Implement cooldown service with TDD ✓
+  - TDD approach: Created cooldown_test.go FIRST with 20 test functions
+  - Created backend/internal/services/cooldown_test.go (422 lines):
+    - MockCooldownStore implementing CooldownStore interface
+    - TestDefaultCooldownConfig: verifies SPEC.md Part 8.3 values
+    - TestCooldownService_CheckCooldown_NoPreviousPost: tests first post
+    - TestCooldownService_CheckCooldown_CooldownActive: tests active cooldown
+    - TestCooldownService_CheckCooldown_CooldownExpired: tests expired cooldown
+    - TestCooldownService_Problem10MinCooldown: tests problem cooldown
+    - TestCooldownService_Question5MinCooldown: tests question cooldown
+    - TestCooldownService_Idea5MinCooldown: tests idea cooldown
+    - TestCooldownService_Answer2MinCooldown: tests answer cooldown
+    - TestCooldownService_Comment30SecCooldown: tests comment cooldown
+    - TestCooldownService_DifferentContentTypesIndependent: tests isolation
+    - TestCooldownService_DifferentUsersIndependent: tests user isolation
+    - TestCooldownService_RecordPost: tests post time recording
+    - TestCooldownService_GetCooldownDuration: tests duration lookup
+    - TestCooldownResult_RetryAfterSeconds: tests Retry-After calculation
+    - TestCooldownService_BuildKey: tests key format
+  - Created backend/internal/services/cooldown.go (176 lines):
+    - ContentType enum: problem, question, idea, answer, comment
+    - CooldownConfig struct with durations per SPEC.md Part 8.3:
+      - Problem: 10 minutes, Question: 5 minutes, Idea: 5 minutes
+      - Answer: 2 minutes, Comment: 30 seconds
+    - CooldownResult struct with ContentType, Remaining, ResetAt
+    - RetryAfterSeconds() method (rounds up to next second)
+    - CooldownStore interface for storage abstraction
+    - CooldownService with CheckCooldown, RecordPost, GetCooldownDuration
+    - buildKey helper: "cooldown:{userID}:{contentType}"
+    - InMemoryCooldownStore - reference implementation
+  - All files under 800 lines per CLAUDE.md Golden Rules
+  - Note: Go not installed in dev environment, code follows existing patterns
+  - Updated PRD to passes=true for lines 360-364 and 370

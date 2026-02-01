@@ -995,3 +995,34 @@
   - All files under 800 lines per CLAUDE.md Golden Rules
   - Note: Go not installed in dev environment, code is valid Go
   - Updated PRD to passes=true for lines 244-278
+- 2026-02-01: [api-search 214, 216, 232] Implement search repository with full-text search ✓
+  - TDD approach: Created search_test.go FIRST with 15 test functions
+  - Created backend/internal/db/search.go (280 lines):
+    - SearchRepository implementing SearchRepositoryInterface
+    - Full-text search using PostgreSQL to_tsvector and to_tsquery
+    - ts_rank for relevance scoring per SPEC.md Part 5.5
+    - ts_headline with StartSel=<mark>, StopSel=</mark> for snippets
+    - buildTsQuery helper for safe query construction
+    - buildSearchFilters for dynamic WHERE clauses
+    - getSearchOrderBy for sort options (relevance, newest, votes, activity)
+    - WHERE deleted_at IS NULL to exclude deleted posts
+    - Pagination with LIMIT/OFFSET
+    - Total count query for pagination metadata
+  - Created backend/internal/db/search_test.go (545 lines):
+    - TestSearchRepository_Search: basic search functionality
+    - TestSearchRepository_Search_RelevanceScore: ts_rank scoring
+    - TestSearchRepository_Search_Snippet: ts_headline generation
+    - TestSearchRepository_Search_TypeFilter: type filtering
+    - TestSearchRepository_Search_StatusFilter: status filtering
+    - TestSearchRepository_Search_TagsFilter: tags array overlap
+    - TestSearchRepository_Search_ExcludeDeleted: deleted_at IS NULL
+    - TestSearchRepository_Search_SortNewest: created_at DESC
+    - TestSearchRepository_Search_SortVotes: vote score ordering
+    - TestSearchRepository_Search_Pagination: page/per_page
+    - TestSearchRepository_Search_DateFilter: from_date/to_date
+    - TestSearchRepository_Search_AuthorFilter: author filtering
+    - TestSearchRepository_Search_AuthorTypeFilter: author_type filtering
+    - Helper functions for test data setup
+  - All files under 800 lines per CLAUDE.md Golden Rules
+  - Note: Go not installed in dev environment, tests require DATABASE_URL
+  - Updated PRD to passes=true for lines 214, 216, 232

@@ -1,0 +1,545 @@
+// Package db provides database connection pool and helper functions.
+package db
+
+import (
+	"context"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/api/handlers"
+	"github.com/fcavalcantirj/solvr/internal/models"
+)
+
+// TestSearchRepository_Search tests the basic search functionality.
+func TestSearchRepository_Search(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+
+	// Insert test data
+	ctx := context.Background()
+	insertTestPost(t, pool, ctx, "post-1", "problem", "Race condition in PostgreSQL async queries",
+		"When running multiple async queries to PostgreSQL, I encounter race conditions.", []string{"postgresql", "async"}, "solved")
+
+	// Search for "race condition"
+	results, total, err := repo.Search(ctx, "race condition", handlers.SearchOptions{
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if total == 0 {
+		t.Error("expected at least 1 result")
+	}
+
+	if len(results) == 0 {
+		t.Fatal("expected results, got none")
+	}
+
+	// Verify the result is what we inserted
+	found := false
+	for _, r := range results {
+		if r.ID == "post-1" {
+			found = true
+			if r.Title != "Race condition in PostgreSQL async queries" {
+				t.Errorf("expected title 'Race condition in PostgreSQL async queries', got '%s'", r.Title)
+			}
+			if r.Type != "problem" {
+				t.Errorf("expected type 'problem', got '%s'", r.Type)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("expected to find post-1 in results")
+	}
+}
+
+// TestSearchRepository_Search_RelevanceScore tests that ts_rank scoring works.
+func TestSearchRepository_Search_RelevanceScore(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	// Insert two posts, one more relevant than the other
+	insertTestPost(t, pool, ctx, "post-rel-1", "problem",
+		"PostgreSQL PostgreSQL PostgreSQL connection issues",
+		"Multiple mentions of PostgreSQL connection", []string{"postgresql"}, "open")
+	insertTestPost(t, pool, ctx, "post-rel-2", "question",
+		"How to connect to database",
+		"Generic database question", []string{"database"}, "open")
+
+	// Search for "PostgreSQL"
+	results, _, err := repo.Search(ctx, "PostgreSQL", handlers.SearchOptions{
+		Sort:    "relevance",
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if len(results) < 1 {
+		t.Fatal("expected at least 1 result")
+	}
+
+	// First result should be the one with more PostgreSQL mentions
+	if results[0].ID != "post-rel-1" {
+		t.Errorf("expected post-rel-1 to be first (most relevant), got %s", results[0].ID)
+	}
+
+	// Verify score is populated
+	if results[0].Score == 0 {
+		t.Error("expected non-zero relevance score")
+	}
+}
+
+// TestSearchRepository_Search_Snippet tests ts_headline snippet generation.
+func TestSearchRepository_Search_Snippet(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	insertTestPost(t, pool, ctx, "post-snip-1", "problem",
+		"Async error handling in Go",
+		"When handling errors in async Go code, you need to be careful with goroutines and channels.",
+		[]string{"go", "async"}, "open")
+
+	results, _, err := repo.Search(ctx, "async error", handlers.SearchOptions{
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal("expected at least 1 result")
+	}
+
+	// Snippet should contain <mark> tags per SPEC.md Part 5.5
+	snippet := results[0].Snippet
+	if snippet == "" {
+		t.Error("expected non-empty snippet")
+	}
+
+	// The snippet should have highlights (ts_headline wraps in <b>, we convert to <mark>)
+	// Note: If using StartSel/StopSel options, it uses <mark> directly
+	if len(snippet) > 0 && results[0].ID == "post-snip-1" {
+		// Just verify snippet is populated, highlighting tested by visual inspection
+		t.Logf("Generated snippet: %s", snippet)
+	}
+}
+
+// TestSearchRepository_Search_TypeFilter tests filtering by post type.
+func TestSearchRepository_Search_TypeFilter(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	insertTestPost(t, pool, ctx, "post-type-1", "problem", "Test problem", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "post-type-2", "question", "Test question", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "post-type-3", "idea", "Test idea", "Description", []string{}, "open")
+
+	// Search with type=problem filter
+	results, _, err := repo.Search(ctx, "test", handlers.SearchOptions{
+		Type:    "problem",
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	for _, r := range results {
+		if r.Type != "problem" {
+			t.Errorf("expected only problem type, got %s", r.Type)
+		}
+	}
+}
+
+// TestSearchRepository_Search_StatusFilter tests filtering by status.
+func TestSearchRepository_Search_StatusFilter(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	insertTestPost(t, pool, ctx, "post-status-1", "problem", "Test open", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "post-status-2", "problem", "Test solved", "Description", []string{}, "solved")
+
+	results, _, err := repo.Search(ctx, "test", handlers.SearchOptions{
+		Status:  "solved",
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	for _, r := range results {
+		if r.Status != "solved" {
+			t.Errorf("expected only solved status, got %s", r.Status)
+		}
+	}
+}
+
+// TestSearchRepository_Search_TagsFilter tests filtering by tags.
+func TestSearchRepository_Search_TagsFilter(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	insertTestPost(t, pool, ctx, "post-tags-1", "problem", "Go concurrency test", "Description", []string{"go", "concurrency"}, "open")
+	insertTestPost(t, pool, ctx, "post-tags-2", "problem", "Python test", "Description", []string{"python"}, "open")
+
+	results, _, err := repo.Search(ctx, "test", handlers.SearchOptions{
+		Tags:    []string{"go"},
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	for _, r := range results {
+		if !containsTag(r.Tags, "go") {
+			t.Errorf("expected posts with 'go' tag, got tags %v", r.Tags)
+		}
+	}
+}
+
+// TestSearchRepository_Search_ExcludeDeleted tests that deleted posts are excluded.
+func TestSearchRepository_Search_ExcludeDeleted(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	insertTestPost(t, pool, ctx, "post-active", "problem", "Active post searchable", "Description", []string{}, "open")
+	insertTestPostDeleted(t, pool, ctx, "post-deleted", "problem", "Deleted post not searchable", "Description", []string{}, "open")
+
+	results, _, err := repo.Search(ctx, "post searchable", handlers.SearchOptions{
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	for _, r := range results {
+		if r.ID == "post-deleted" {
+			t.Error("deleted posts should not appear in search results")
+		}
+	}
+}
+
+// TestSearchRepository_Search_SortNewest tests sorting by created_at DESC.
+func TestSearchRepository_Search_SortNewest(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	insertTestPostWithTime(t, pool, ctx, "post-old", "problem", "Test old", "Description", []string{}, "open", time.Now().Add(-24*time.Hour))
+	insertTestPostWithTime(t, pool, ctx, "post-new", "problem", "Test new", "Description", []string{}, "open", time.Now())
+
+	results, _, err := repo.Search(ctx, "test", handlers.SearchOptions{
+		Sort:    "newest",
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if len(results) >= 2 {
+		if results[0].ID != "post-new" {
+			t.Errorf("expected newest post first, got %s", results[0].ID)
+		}
+	}
+}
+
+// TestSearchRepository_Search_SortVotes tests sorting by vote score.
+func TestSearchRepository_Search_SortVotes(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	insertTestPostWithVotes(t, pool, ctx, "post-low", "problem", "Test low votes", "Description", []string{}, "open", 5, 3)   // Score: 2
+	insertTestPostWithVotes(t, pool, ctx, "post-high", "problem", "Test high votes", "Description", []string{}, "open", 10, 1) // Score: 9
+
+	results, _, err := repo.Search(ctx, "test", handlers.SearchOptions{
+		Sort:    "votes",
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if len(results) >= 2 {
+		if results[0].ID != "post-high" {
+			t.Errorf("expected highest voted post first, got %s", results[0].ID)
+		}
+	}
+}
+
+// TestSearchRepository_Search_Pagination tests pagination.
+func TestSearchRepository_Search_Pagination(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	// Insert 5 posts
+	for i := 1; i <= 5; i++ {
+		insertTestPost(t, pool, ctx, "post-page-"+string(rune('0'+i)), "problem",
+			"Pagination test post", "Description", []string{}, "open")
+	}
+
+	// Request page 1 with 2 per page
+	results, total, err := repo.Search(ctx, "pagination test", handlers.SearchOptions{
+		Page:    1,
+		PerPage: 2,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Errorf("expected 2 results on page 1, got %d", len(results))
+	}
+
+	if total != 5 {
+		t.Errorf("expected total 5, got %d", total)
+	}
+
+	// Request page 2
+	results2, _, err := repo.Search(ctx, "pagination test", handlers.SearchOptions{
+		Page:    2,
+		PerPage: 2,
+	})
+
+	if err != nil {
+		t.Fatalf("Search page 2 failed: %v", err)
+	}
+
+	if len(results2) != 2 {
+		t.Errorf("expected 2 results on page 2, got %d", len(results2))
+	}
+
+	// Ensure no overlap
+	for _, r1 := range results {
+		for _, r2 := range results2 {
+			if r1.ID == r2.ID {
+				t.Errorf("duplicate result between pages: %s", r1.ID)
+			}
+		}
+	}
+}
+
+// TestSearchRepository_Search_DateFilter tests from_date and to_date filters.
+func TestSearchRepository_Search_DateFilter(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	oldDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	newDate := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+
+	insertTestPostWithTime(t, pool, ctx, "post-2024", "problem", "Old post date filter", "Description", []string{}, "open", oldDate)
+	insertTestPostWithTime(t, pool, ctx, "post-2026", "problem", "New post date filter", "Description", []string{}, "open", newDate)
+
+	// Search only for posts in 2026
+	results, _, err := repo.Search(ctx, "post date filter", handlers.SearchOptions{
+		FromDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		ToDate:   time.Date(2026, 12, 31, 23, 59, 59, 0, time.UTC),
+		Page:     1,
+		PerPage:  20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	for _, r := range results {
+		if r.ID == "post-2024" {
+			t.Error("post from 2024 should not appear when filtering for 2026")
+		}
+	}
+}
+
+// TestSearchRepository_Search_AuthorFilter tests filtering by author.
+func TestSearchRepository_Search_AuthorFilter(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	insertTestPostWithAuthor(t, pool, ctx, "post-author-1", "problem", "Test author filter", "Description",
+		[]string{}, "open", "human", "user-123")
+	insertTestPostWithAuthor(t, pool, ctx, "post-author-2", "problem", "Test author filter", "Description",
+		[]string{}, "open", "agent", "claude")
+
+	results, _, err := repo.Search(ctx, "test author filter", handlers.SearchOptions{
+		Author:  "claude",
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	for _, r := range results {
+		if r.AuthorID != "claude" {
+			t.Errorf("expected only posts by claude, got author %s", r.AuthorID)
+		}
+	}
+}
+
+// TestSearchRepository_Search_AuthorTypeFilter tests filtering by author type.
+func TestSearchRepository_Search_AuthorTypeFilter(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	insertTestPostWithAuthor(t, pool, ctx, "post-atype-1", "problem", "Test author type filter", "Description",
+		[]string{}, "open", "human", "user-456")
+	insertTestPostWithAuthor(t, pool, ctx, "post-atype-2", "problem", "Test author type filter", "Description",
+		[]string{}, "open", "agent", "bot-1")
+
+	results, _, err := repo.Search(ctx, "test author type filter", handlers.SearchOptions{
+		AuthorType: "agent",
+		Page:       1,
+		PerPage:    20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	for _, r := range results {
+		if r.AuthorType != "agent" {
+			t.Errorf("expected only agent posts, got type %s", r.AuthorType)
+		}
+	}
+}
+
+// Helper functions
+
+func setupTestDB(t *testing.T) *Pool {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+
+	// Clean up test data
+	cleanupTestData(t, pool, ctx)
+
+	return pool
+}
+
+func cleanupTestData(t *testing.T, pool *Pool, ctx context.Context) {
+	_, err := pool.Exec(ctx, "DELETE FROM posts WHERE id LIKE 'post-%'")
+	if err != nil {
+		t.Logf("cleanup warning: %v", err)
+	}
+}
+
+func insertTestPost(t *testing.T, pool *Pool, ctx context.Context, id, postType, title, desc string, tags []string, status string) {
+	insertTestPostWithAuthor(t, pool, ctx, id, postType, title, desc, tags, status, "human", "test-user")
+}
+
+func insertTestPostDeleted(t *testing.T, pool *Pool, ctx context.Context, id, postType, title, desc string, tags []string, status string) {
+	_, err := pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, tags, status, posted_by_type, posted_by_id, deleted_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 'human', 'test-user', NOW())
+		ON CONFLICT (id) DO NOTHING
+	`, id, postType, title, desc, tags, status)
+	if err != nil {
+		t.Fatalf("failed to insert test post: %v", err)
+	}
+}
+
+func insertTestPostWithTime(t *testing.T, pool *Pool, ctx context.Context, id, postType, title, desc string, tags []string, status string, createdAt time.Time) {
+	_, err := pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, tags, status, posted_by_type, posted_by_id, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 'human', 'test-user', $7)
+		ON CONFLICT (id) DO NOTHING
+	`, id, postType, title, desc, tags, status, createdAt)
+	if err != nil {
+		t.Fatalf("failed to insert test post: %v", err)
+	}
+}
+
+func insertTestPostWithVotes(t *testing.T, pool *Pool, ctx context.Context, id, postType, title, desc string, tags []string, status string, upvotes, downvotes int) {
+	_, err := pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, tags, status, posted_by_type, posted_by_id, upvotes, downvotes)
+		VALUES ($1, $2, $3, $4, $5, $6, 'human', 'test-user', $7, $8)
+		ON CONFLICT (id) DO NOTHING
+	`, id, postType, title, desc, tags, status, upvotes, downvotes)
+	if err != nil {
+		t.Fatalf("failed to insert test post: %v", err)
+	}
+}
+
+func insertTestPostWithAuthor(t *testing.T, pool *Pool, ctx context.Context, id, postType, title, desc string, tags []string, status string, authorType, authorID string) {
+	_, err := pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, tags, status, posted_by_type, posted_by_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (id) DO NOTHING
+	`, id, postType, title, desc, tags, status, authorType, authorID)
+	if err != nil {
+		t.Fatalf("failed to insert test post: %v", err)
+	}
+}
+
+func containsTag(tags []string, target string) bool {
+	for _, tag := range tags {
+		if tag == target {
+			return true
+		}
+	}
+	return false
+}

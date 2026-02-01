@@ -521,8 +521,8 @@
   {"category": "frontend-admin", "description": "Flags: content preview", "steps": ["Show flagged content preview"], "passes": true},
   {"category": "frontend-admin", "description": "Flags: action buttons", "steps": ["Add dismiss, warn, hide, delete buttons"], "passes": true},
   {"category": "frontend-admin", "description": "Create /admin/users page", "steps": ["Create frontend/src/app/admin/users/page.tsx", "Paginated user list with search"], "passes": true},
-  {"category": "frontend-admin", "description": "Create /admin/users/[id] page", "steps": ["Create frontend/src/app/admin/users/[id]/page.tsx", "User detail with activity"], "passes": false},
-  {"category": "frontend-admin", "description": "User admin: action buttons", "steps": ["Add warn, suspend, ban buttons"], "passes": false},
+  {"category": "frontend-admin", "description": "Create /admin/users/[id] page", "steps": ["Create frontend/src/app/admin/users/[id]/page.tsx", "User detail with activity"], "passes": true},
+  {"category": "frontend-admin", "description": "User admin: action buttons", "steps": ["Add warn, suspend, ban buttons"], "passes": true},
   {"category": "frontend-admin", "description": "Create /admin/audit page", "steps": ["Create frontend/src/app/admin/audit/page.tsx", "List audit log with filters"], "passes": false},
   {"category": "frontend-admin", "description": "Admin page tests", "steps": ["Test admin pages render", "Test action flows"], "passes": false},
 

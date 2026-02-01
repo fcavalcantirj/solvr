@@ -2932,3 +2932,49 @@ Admin users list page requirement now passes=true.
 - frontend/src/__tests__/admin-users.test.tsx (new, ~600 lines)
 - frontend/src/app/admin/users/page.tsx (new, ~330 lines)
 - specs/prd-v2.json (updated line 523 to passes=true)
+
+## Session: Frontend Admin User Detail Page (frontend-admin)
+Date: 2026-02-01
+
+### Completed Requirements (PRD lines 524-525)
+- Create /admin/users/[id] page - now passes=true
+- User admin: action buttons - now passes=true
+
+### What Was Done
+- TDD approach: Created admin-users-detail.test.tsx FIRST with 37 test functions
+- Created frontend/src/__tests__/admin-users-detail.test.tsx (560 lines):
+  - Tests for basic structure (heading, main container, back link)
+  - Tests for authentication (loading state, redirect, admin role check)
+  - Tests for user info display (name, username, email, bio, avatar, status, provider, role, joined date)
+  - Tests for activity section (heading, activity items, empty state)
+  - Tests for admin actions (warn, suspend, ban buttons)
+  - Tests for action flows (API calls, success messages, status updates)
+  - Tests for error handling (user not found, fetch failures, action errors)
+  - Tests for loading states (skeleton, disabled buttons)
+  - Tests for accessibility (heading hierarchy, accessible buttons)
+
+- Created frontend/src/app/admin/users/[id]/page.tsx (407 lines):
+  - Per SPEC.md Part 16.3 and PRD lines 524-525
+  - Requires admin role (admin or super_admin)
+  - Fetches user detail from /v1/admin/users/:id API
+  - User profile card with avatar, display name, username, status badge
+  - User info grid: email, auth provider, role, joined date
+  - User bio display
+  - Recent Activity section with timeline of user actions
+  - Admin action buttons: Warn, Suspend, Ban
+  - Ban confirmation dialog (Are you sure? Yes/No)
+  - Success/error messages for actions
+  - Loading skeleton during fetch
+  - Error state with retry button
+  - Responsive design with Tailwind CSS
+
+### Test Results
+- 37 new tests, all passing
+- Total frontend tests: 891 passing
+- Both files under 800 lines per CLAUDE.md Golden Rules
+- TDD approach followed
+
+### Files Created/Modified
+- frontend/src/__tests__/admin-users-detail.test.tsx (new, ~560 lines)
+- frontend/src/app/admin/users/[id]/page.tsx (new, ~407 lines)
+- specs/prd-v2.json (updated lines 524-525 to passes=true)

@@ -161,3 +161,75 @@ func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 
 	return user, nil
 }
+
+// GetUserStats returns computed statistics for a user.
+// Per SPEC.md Part 2.8 and Part 10.3: Reputation algorithm.
+func (r *UserRepository) GetUserStats(ctx context.Context, userID string) (*models.UserStats, error) {
+	// Query to compute user stats based on SPEC.md Part 10.3 reputation formula:
+	// reputation = problems_solved * 100
+	//            + problems_contributed * 25
+	//            + answers_accepted * 50
+	//            + answers_given * 10
+	//            + ideas_posted * 15
+	//            + responses_given * 5
+	//            + upvotes_received * 2
+	//            - downvotes_received * 1
+	query := `
+		WITH user_posts AS (
+			SELECT COUNT(*) as posts_created
+			FROM posts
+			WHERE posted_by_type = 'human' AND posted_by_id = $1 AND deleted_at IS NULL
+		),
+		user_answers AS (
+			SELECT
+				COUNT(*) as answers_given,
+				COUNT(*) FILTER (WHERE is_accepted = true) as answers_accepted
+			FROM answers
+			WHERE author_type = 'human' AND author_id = $1 AND deleted_at IS NULL
+		),
+		user_votes_received AS (
+			SELECT
+				COALESCE(SUM(CASE WHEN direction = 'up' THEN 1 ELSE 0 END), 0) as upvotes,
+				COALESCE(SUM(CASE WHEN direction = 'down' THEN 1 ELSE 0 END), 0) as downvotes
+			FROM votes v
+			WHERE confirmed = true AND (
+				(v.target_type = 'post' AND EXISTS (
+					SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'human' AND p.posted_by_id = $1
+				))
+				OR (v.target_type = 'answer' AND EXISTS (
+					SELECT 1 FROM answers a WHERE a.id = v.target_id AND a.author_type = 'human' AND a.author_id = $1
+				))
+			)
+		)
+		SELECT
+			COALESCE(up.posts_created, 0)::int,
+			COALESCE(ua.answers_given, 0)::int,
+			COALESCE(ua.answers_accepted, 0)::int,
+			COALESCE(uv.upvotes, 0)::int,
+			(COALESCE(ua.answers_accepted, 0) * 50 +
+			 COALESCE(ua.answers_given, 0) * 10 +
+			 COALESCE(uv.upvotes, 0) * 2 -
+			 COALESCE(uv.downvotes, 0))::int as reputation
+		FROM user_posts up, user_answers ua, user_votes_received uv
+	`
+
+	row := r.pool.QueryRow(ctx, query, userID)
+	stats := &models.UserStats{}
+	err := row.Scan(
+		&stats.PostsCreated,
+		&stats.AnswersGiven,
+		&stats.AnswersAccepted,
+		&stats.UpvotesReceived,
+		&stats.Reputation,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// No data, return zero stats
+			return &models.UserStats{}, nil
+		}
+		return nil, err
+	}
+
+	return stats, nil
+}

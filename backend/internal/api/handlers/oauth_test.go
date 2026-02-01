@@ -473,3 +473,294 @@ func TestGitHubGetPrimaryEmail_NoEmails(t *testing.T) {
 		t.Fatal("expected error when no emails found")
 	}
 }
+
+// ============================================================
+// GitHub OAuth Complete Flow Tests (PRD lines 174-176)
+// ============================================================
+
+// TestGitHubCallback_CompleteFlow_NewUser tests the complete flow for a new user.
+func TestGitHubCallback_CompleteFlow_NewUser(t *testing.T) {
+	// Create a mock GitHub server
+	mockGitHubServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		switch r.URL.Path {
+		case "/login/oauth/access_token":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"access_token": "gho_test_token",
+				"token_type":   "bearer",
+				"scope":        "user:email",
+			})
+		case "/user":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":         67890,
+				"login":      "newuser",
+				"email":      "newuser@example.com",
+				"name":       "New User",
+				"avatar_url": "https://avatars.githubusercontent.com/u/67890",
+			})
+		case "/user/emails":
+			json.NewEncoder(w).Encode([]map[string]interface{}{
+				{"email": "newuser@example.com", "primary": true, "verified": true},
+			})
+		default:
+			t.Errorf("unexpected request to %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer mockGitHubServer.Close()
+
+	// Create handlers with mock config
+	cfg := &OAuthConfig{
+		GitHubClientID:     "test-client-id",
+		GitHubClientSecret: "test-client-secret",
+		GitHubRedirectURI:  "http://localhost:8080/v1/auth/github/callback",
+		JWTSecret:          "test-jwt-secret-32-chars-long!!",
+		JWTExpiry:          "15m",
+		RefreshExpiry:      "7d",
+	}
+
+	// Create a mock user service
+	mockUserService := &MockOAuthUserService{
+		users: make(map[string]*MockUserData),
+	}
+
+	handler := NewOAuthHandlersWithDeps(cfg, nil, nil, mockUserService, mockGitHubServer.URL)
+
+	// Make request with valid code
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback?code=valid-code&state=state", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GitHubCallback(rec, req)
+
+	// Should return 200 with tokens
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d. Body: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp AuthSuccessResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v. Body: %s", err, rec.Body.String())
+	}
+
+	if resp.Data.AccessToken == "" {
+		t.Error("expected access_token to be set")
+	}
+	if resp.Data.RefreshToken == "" {
+		t.Error("expected refresh_token to be set")
+	}
+	if resp.Data.User.Email != "newuser@example.com" {
+		t.Errorf("expected user email newuser@example.com, got %s", resp.Data.User.Email)
+	}
+}
+
+// TestGitHubCallback_CompleteFlow_ExistingUser tests login for an existing user.
+func TestGitHubCallback_CompleteFlow_ExistingUser(t *testing.T) {
+	// Create a mock GitHub server
+	mockGitHubServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		switch r.URL.Path {
+		case "/login/oauth/access_token":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"access_token": "gho_test_token",
+				"token_type":   "bearer",
+			})
+		case "/user":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":         12345,
+				"login":      "existinguser",
+				"email":      "existing@example.com",
+				"name":       "Existing User",
+				"avatar_url": "https://avatars.githubusercontent.com/u/12345",
+			})
+		case "/user/emails":
+			json.NewEncoder(w).Encode([]map[string]interface{}{
+				{"email": "existing@example.com", "primary": true, "verified": true},
+			})
+		}
+	}))
+	defer mockGitHubServer.Close()
+
+	cfg := &OAuthConfig{
+		GitHubClientID:     "test-client-id",
+		GitHubClientSecret: "test-client-secret",
+		GitHubRedirectURI:  "http://localhost:8080/v1/auth/github/callback",
+		JWTSecret:          "test-jwt-secret-32-chars-long!!",
+		JWTExpiry:          "15m",
+		RefreshExpiry:      "7d",
+	}
+
+	// Create a mock user service with existing user
+	mockUserService := &MockOAuthUserService{
+		users: map[string]*MockUserData{
+			"github:12345": {
+				ID:       "existing-user-id",
+				Email:    "existing@example.com",
+				Username: "existinguser",
+				IsNew:    false,
+			},
+		},
+	}
+
+	handler := NewOAuthHandlersWithDeps(cfg, nil, nil, mockUserService, mockGitHubServer.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback?code=valid-code&state=state", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GitHubCallback(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d. Body: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp AuthSuccessResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Data.User.ID != "existing-user-id" {
+		t.Errorf("expected user ID existing-user-id, got %s", resp.Data.User.ID)
+	}
+}
+
+// TestGitHubCallback_GitHubAPIError tests error handling when GitHub API fails.
+func TestGitHubCallback_GitHubAPIError(t *testing.T) {
+	// Create a mock GitHub server that returns 500
+	mockGitHubServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mockGitHubServer.Close()
+
+	cfg := &OAuthConfig{
+		GitHubClientID:     "test-client-id",
+		GitHubClientSecret: "test-client-secret",
+		GitHubRedirectURI:  "http://localhost:8080/v1/auth/github/callback",
+		JWTSecret:          "test-jwt-secret-32-chars-long!!",
+	}
+
+	handler := NewOAuthHandlersWithDeps(cfg, nil, nil, nil, mockGitHubServer.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback?code=valid-code&state=state", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GitHubCallback(rec, req)
+
+	// Should return 502 BAD_GATEWAY per SPEC.md
+	if rec.Code != http.StatusBadGateway {
+		t.Errorf("expected status %d, got %d", http.StatusBadGateway, rec.Code)
+	}
+
+	var resp ErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Error.Code != "BAD_GATEWAY" {
+		t.Errorf("expected error code BAD_GATEWAY, got %s", resp.Error.Code)
+	}
+}
+
+// TestGitHubCallback_InvalidCode tests error handling when code is invalid.
+func TestGitHubCallback_InvalidCode(t *testing.T) {
+	// Create a mock GitHub server that returns OAuth error
+	mockGitHubServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":             "bad_verification_code",
+			"error_description": "The code passed is incorrect or expired.",
+		})
+	}))
+	defer mockGitHubServer.Close()
+
+	cfg := &OAuthConfig{
+		GitHubClientID:     "test-client-id",
+		GitHubClientSecret: "test-client-secret",
+		GitHubRedirectURI:  "http://localhost:8080/v1/auth/github/callback",
+		JWTSecret:          "test-jwt-secret-32-chars-long!!",
+	}
+
+	handler := NewOAuthHandlersWithDeps(cfg, nil, nil, nil, mockGitHubServer.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback?code=invalid-code&state=state", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GitHubCallback(rec, req)
+
+	// Should return 400 for invalid code
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// Mock types for testing
+
+// MockOAuthUserService is a mock implementation of OAuthUserServiceInterface.
+type MockOAuthUserService struct {
+	users map[string]*MockUserData
+}
+
+// MockUserData represents mock user data.
+type MockUserData struct {
+	ID       string
+	Email    string
+	Username string
+	IsNew    bool
+}
+
+// FindOrCreateUser mocks the user service.
+func (m *MockOAuthUserService) FindOrCreateUser(ctx context.Context, info *OAuthUserInfo) (*UserResponse, bool, error) {
+	key := info.Provider + ":" + info.ProviderID
+
+	if userData, ok := m.users[key]; ok {
+		return &UserResponse{
+			ID:          userData.ID,
+			Email:       userData.Email,
+			Username:    userData.Username,
+			DisplayName: info.DisplayName,
+		}, false, nil
+	}
+
+	// Create new user
+	newUser := &UserResponse{
+		ID:          "new-user-" + info.ProviderID,
+		Email:       info.Email,
+		Username:    strings.ToLower(strings.ReplaceAll(info.DisplayName, " ", "")),
+		DisplayName: info.DisplayName,
+	}
+
+	return newUser, true, nil
+}
+
+// AuthSuccessResponse is the success response for OAuth authentication.
+type AuthSuccessResponse struct {
+	Data struct {
+		AccessToken  string       `json:"access_token"`
+		RefreshToken string       `json:"refresh_token"`
+		TokenType    string       `json:"token_type"`
+		ExpiresIn    int          `json:"expires_in"`
+		User         UserResponse `json:"user"`
+	} `json:"data"`
+}
+
+// UserResponse represents a user in the response.
+type UserResponse struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Email       string `json:"email"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	Role        string `json:"role,omitempty"`
+}
+
+// OAuthUserInfo represents OAuth user info in handler context.
+type OAuthUserInfo struct {
+	Provider    string
+	ProviderID  string
+	Email       string
+	DisplayName string
+	AvatarURL   string
+}

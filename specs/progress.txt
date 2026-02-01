@@ -1821,3 +1821,98 @@
   - Coverage: 94.69% statements, 98.11% lines (above 80% requirement)
   - All files under 800 lines per CLAUDE.md Golden Rules
   - Updated PRD to passes=true for lines 435-437 (Header, Sidebar, Footer)
+
+## Session: Frontend Authentication (frontend-auth)
+Date: 2026-02-01
+
+### Completed Requirements (PRD lines 441-452)
+All frontend-auth requirements now pass=true.
+
+### What Was Done
+- Created frontend/src/__tests__/login.test.tsx (21 tests):
+  - Tests login container and card structure
+  - Tests GitHub OAuth button with proper styling
+  - Tests Google OAuth button with proper styling
+  - Tests OAuth redirect functionality
+  - Tests error message display from query params
+  - Tests Terms/Privacy links
+  - Tests accessibility features (aria-labels)
+  - Tests branding elements (logo, heading)
+
+- Created frontend/src/app/login/page.tsx (196 lines):
+  - Login page with GitHub and Google OAuth buttons
+  - GitHub button styled with dark GitHub colors (#24292e)
+  - Google button with standard Google OAuth styling
+  - OAuth redirects to /v1/auth/github or /v1/auth/google
+  - Error handling via query params (?error=)
+  - Suspense boundary for useSearchParams
+  - Links to Terms and Privacy pages
+  - Proper accessibility with aria-labels
+
+- Created frontend/src/__tests__/callback.test.tsx (11 tests):
+  - Tests token storage in localStorage
+  - Tests redirect to dashboard on success
+  - Tests custom redirect_to parameter
+  - Tests error handling (missing token, OAuth errors)
+  - Tests open redirect prevention (security)
+  - Tests loading/success/error states
+
+- Created frontend/src/app/auth/callback/page.tsx (144 lines):
+  - OAuth callback handler page
+  - Parses token from URL query params
+  - Stores token in localStorage (solvr_auth_token)
+  - Redirects to /dashboard or redirect_to param
+  - sanitizeRedirectUrl() prevents open redirect attacks
+  - Loading spinner during processing
+  - Error handling with redirect to /login
+
+- Created frontend/src/__tests__/useAuth.test.tsx (16 tests):
+  - Tests return value structure {user, isLoading, login, logout}
+  - Tests user fetching on mount with token
+  - Tests no fetch when no token exists
+  - Tests user state after successful fetch
+  - Tests token clear on 401 response
+  - Tests loading states
+  - Tests login function accepts provider param
+  - Tests logout clears token, sets user null, redirects
+
+- Created frontend/src/hooks/useAuth.ts (166 lines):
+  - useAuth hook for authentication state management
+  - Returns {user, isLoading, login, logout}
+  - Fetches /v1/auth/me on mount when token exists
+  - Caches user in state
+  - Clears token on 401 response
+  - login(provider) redirects to OAuth endpoint
+  - logout() calls API, clears token, redirects to /
+  - Exported User interface for typing
+
+- Created frontend/src/__tests__/ProtectedRoute.test.tsx (10 tests):
+  - Tests loading state display
+  - Tests children render when authenticated
+  - Tests redirect to /login when unauthenticated
+  - Tests custom redirect path
+  - Tests custom fallback UI
+  - Tests multiple children rendering
+
+- Created frontend/src/components/ProtectedRoute.tsx (76 lines):
+  - ProtectedRoute wrapper component
+  - Shows loading indicator while checking auth
+  - Redirects to /login (or custom path) if not authenticated
+  - Renders children when authenticated
+  - Supports custom fallback prop for loading state
+
+### Test Results
+- Total tests: 159 passing
+- Coverage: 90.86% statements, 94.44% lines (above 80% requirement)
+- All files under 800 lines per CLAUDE.md Golden Rules
+
+### Files Created/Modified
+- frontend/src/__tests__/login.test.tsx (new)
+- frontend/src/app/login/page.tsx (new)
+- frontend/src/__tests__/callback.test.tsx (new)
+- frontend/src/app/auth/callback/page.tsx (new)
+- frontend/src/__tests__/useAuth.test.tsx (new)
+- frontend/src/hooks/useAuth.ts (new)
+- frontend/src/__tests__/ProtectedRoute.test.tsx (new)
+- frontend/src/components/ProtectedRoute.tsx (new)
+- specs/prd-v2.json (updated lines 441-452 to passes=true)

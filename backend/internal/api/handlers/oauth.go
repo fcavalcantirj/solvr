@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
@@ -69,6 +70,7 @@ type OAuthHandlers struct {
 	tokenStore    *auth.RefreshTokenStore
 	userService   OAuthUserServiceInterface
 	gitHubBaseURL string // Allows overriding for tests
+	googleBaseURL string // Allows overriding for tests
 }
 
 // NewOAuthHandlers creates a new OAuthHandlers instance.
@@ -78,6 +80,7 @@ func NewOAuthHandlers(config *OAuthConfig, pool *db.Pool, tokenStore *auth.Refre
 		pool:          pool,
 		tokenStore:    tokenStore,
 		gitHubBaseURL: "https://github.com",
+		googleBaseURL: "https://oauth2.googleapis.com",
 	}
 }
 
@@ -95,6 +98,26 @@ func NewOAuthHandlersWithDeps(
 		tokenStore:    tokenStore,
 		userService:   userService,
 		gitHubBaseURL: gitHubBaseURL,
+		googleBaseURL: "https://oauth2.googleapis.com",
+	}
+}
+
+// NewOAuthHandlersWithAllDeps creates OAuthHandlers with all dependencies including Google for testing.
+func NewOAuthHandlersWithAllDeps(
+	config *OAuthConfig,
+	pool *db.Pool,
+	tokenStore *auth.RefreshTokenStore,
+	userService OAuthUserServiceInterface,
+	gitHubBaseURL string,
+	googleBaseURL string,
+) *OAuthHandlers {
+	return &OAuthHandlers{
+		config:        config,
+		pool:          pool,
+		tokenStore:    tokenStore,
+		userService:   userService,
+		gitHubBaseURL: gitHubBaseURL,
+		googleBaseURL: googleBaseURL,
 	}
 }
 
@@ -284,9 +307,12 @@ func (h *OAuthHandlers) GoogleRedirect(w http.ResponseWriter, r *http.Request) {
 // Exchanges code for token, fetches user info, creates/updates user, returns tokens.
 // Per SPEC.md Part 5.2: Google OAuth callback endpoint.
 func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	// Check for error from Google
 	if errParam := r.URL.Query().Get("error"); errParam != "" {
-		writeOAuthError(w, errParam, "")
+		errDesc := r.URL.Query().Get("error_description")
+		writeOAuthError(w, errParam, errDesc)
 		return
 	}
 
@@ -297,14 +323,120 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Implement Google OAuth flow similar to GitHub
-	// 1. Exchange code for access token
-	// 2. Fetch user info from Google
-	// 3. Create or update user in database
-	// 4. Generate JWT and refresh token
-	// 5. Return tokens to client
+	// Step 1: Exchange code for access token
+	googleClient := NewGoogleOAuthClient(
+		h.config.GoogleClientID,
+		h.config.GoogleClientSecret,
+		h.config.GoogleRedirectURI,
+		h.googleBaseURL,
+	)
 
-	writeInternalError(w, "Google OAuth flow not fully implemented")
+	tokenResp, err := googleClient.ExchangeCode(ctx, code)
+	if err != nil {
+		// Check if it's an OAuth error (e.g., invalid code)
+		if oauthErr, ok := err.(*OAuthError); ok {
+			writeOAuthError(w, oauthErr.Code, oauthErr.Description)
+			return
+		}
+		// Other errors are gateway errors
+		log.Printf("Google token exchange failed: %v", err)
+		writeBadGateway(w, "Failed to communicate with Google")
+		return
+	}
+
+	// Step 2: Fetch user info from Google
+	googleUser, err := googleClient.GetUser(ctx, tokenResp.AccessToken)
+	if err != nil {
+		log.Printf("Google user fetch failed: %v", err)
+		writeBadGateway(w, "Failed to fetch user info from Google")
+		return
+	}
+
+	// Step 3: Create or find user in database
+	userInfo := &OAuthUserInfoData{
+		Provider:    models.AuthProviderGoogle,
+		ProviderID:  googleUser.Sub,
+		Email:       googleUser.Email,
+		DisplayName: googleUser.Name,
+		AvatarURL:   googleUser.Picture,
+	}
+
+	// Use email as display name fallback if Name is empty
+	if userInfo.DisplayName == "" {
+		// Extract username part from email
+		if idx := strings.Index(googleUser.Email, "@"); idx > 0 {
+			userInfo.DisplayName = googleUser.Email[:idx]
+		} else {
+			userInfo.DisplayName = googleUser.Email
+		}
+	}
+
+	var user *OAuthUserResult
+	if h.userService != nil {
+		user, _, err = h.userService.FindOrCreateUser(ctx, userInfo)
+		if err != nil {
+			log.Printf("User creation/lookup failed: %v", err)
+			writeInternalError(w, "Failed to create or find user")
+			return
+		}
+	} else {
+		// Fallback for when user service is not injected (testing or minimal setup)
+		user = &OAuthUserResult{
+			ID:          "mock-user-id",
+			Username:    userInfo.DisplayName,
+			DisplayName: userInfo.DisplayName,
+			Email:       googleUser.Email,
+			AvatarURL:   googleUser.Picture,
+			Role:        models.UserRoleUser,
+		}
+	}
+
+	// Step 4: Generate JWT
+	jwtExpiry, err := time.ParseDuration(h.config.JWTExpiry)
+	if err != nil {
+		jwtExpiry = 15 * time.Minute // Default
+	}
+
+	accessToken, err := auth.GenerateJWT(h.config.JWTSecret, user.ID, user.Email, user.Role, jwtExpiry)
+	if err != nil {
+		log.Printf("JWT generation failed: %v", err)
+		writeInternalError(w, "Failed to generate access token")
+		return
+	}
+
+	// Step 5: Generate refresh token
+	refreshToken := auth.GenerateRefreshToken()
+
+	// Store refresh token if token store is available
+	if h.tokenStore != nil {
+		refreshExpiry, err := time.ParseDuration(h.config.RefreshExpiry)
+		if err != nil {
+			refreshExpiry = 7 * 24 * time.Hour // Default 7 days
+		}
+		expiresAt := time.Now().Add(refreshExpiry)
+		if err := h.tokenStore.StoreToken(ctx, user.ID, refreshToken, expiresAt); err != nil {
+			log.Printf("Refresh token storage failed: %v", err)
+			// Continue anyway - user can still use access token
+		}
+	}
+
+	// Step 6: Return tokens and user info
+	response := map[string]interface{}{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+		"token_type":    "Bearer",
+		"expires_in":    int(jwtExpiry.Seconds()),
+		"user": map[string]interface{}{
+			"id":           user.ID,
+			"username":     user.Username,
+			"display_name": user.DisplayName,
+			"email":        user.Email,
+			"avatar_url":   user.AvatarURL,
+			"role":         user.Role,
+		},
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 // generateState generates a random state parameter for CSRF protection.

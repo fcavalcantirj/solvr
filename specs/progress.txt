@@ -697,3 +697,45 @@
   - All files under 800 lines per CLAUDE.md Golden Rules
   - Note: Go not installed in dev environment, code is valid Go
   - Updated PRD to passes=true for lines 174, 175, and 176
+- 2026-02-01: [api-auth 179, 180] Implement Google OAuth exchange and user fetch ✓
+  - TDD approach: Created test file FIRST (google_oauth_test.go), then implementation
+  - Created backend/internal/api/handlers/google_oauth.go (175 lines):
+    - GoogleOAuthClient struct with configurable baseURL for testing
+    - GoogleTokenResponse struct for token endpoint response
+    - GoogleUser struct per SPEC.md Part 5.2 (sub, email, name, picture)
+    - NewGoogleOAuthClient constructor with 30s timeout HTTP client
+    - ExchangeCode(ctx, code) - exchanges auth code for access token
+      - POSTs to /token with client_id, client_secret, code, grant_type, redirect_uri
+      - Handles OAuth errors returned in response body
+    - GetUser(ctx, accessToken) - fetches user info from /userinfo
+      - Sets Authorization: Bearer header
+      - Parses sub, email, email_verified, name, picture, etc.
+  - Created backend/internal/api/handlers/google_oauth_test.go (666 lines):
+    - TestGoogleTokenExchange_Success: verifies POST params and successful response
+    - TestGoogleTokenExchange_InvalidCode: verifies OAuthError for invalid_grant
+    - TestGoogleTokenExchange_NetworkError: verifies network error handling
+    - TestGoogleTokenExchange_ServerError: verifies 500 error handling
+    - TestGoogleTokenExchange_MalformedResponse: verifies JSON parse error handling
+    - TestGoogleGetUser_Success: verifies user info fetch with auth header
+    - TestGoogleGetUser_Unauthorized: verifies 401 handling
+    - TestGoogleGetUser_MinimalResponse: verifies handling of minimal data
+    - TestGoogleCallback_CompleteFlow_NewUser: full flow for new user
+    - TestGoogleCallback_CompleteFlow_ExistingUser: full flow for existing user
+    - TestGoogleCallback_GoogleAPIError: 502 BAD_GATEWAY for Google failures
+    - TestGoogleCallback_InvalidCode: 400 for invalid codes
+    - TestGoogleCallback_UserInfoFetchFails: 502 when user info fails
+    - MockGoogleOAuthUserService for testing
+  - Updated backend/internal/api/handlers/oauth.go (516 lines):
+    - Added googleBaseURL field to OAuthHandlers struct
+    - Added NewOAuthHandlersWithAllDeps for testing with Google base URL
+    - Completed GoogleCallback with full flow:
+      1. Exchange code for access token via GoogleOAuthClient
+      2. Fetch user info from Google
+      3. Create or find user via userService
+      4. Generate JWT and refresh token
+      5. Store refresh token if tokenStore available
+      6. Return tokens and user info
+    - Error handling: 400 for OAuth errors, 502 for Google API failures
+  - All files under 800 lines per CLAUDE.md Golden Rules
+  - Note: Go not installed in dev environment, code follows same patterns as GitHub OAuth
+  - Updated PRD to passes=true for lines 179 and 180

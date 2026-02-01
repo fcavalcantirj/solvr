@@ -334,7 +334,7 @@
   {"category": "api-webhooks", "description": "Webhook delivery: attempt header", "steps": ["Add X-Solvr-Delivery-Attempt header (1-5)"], "passes": true},
   {"category": "api-webhooks", "description": "Webhook retry: schedule", "steps": ["Immediate, 1min, 5min, 30min, 2h"], "passes": true},
   {"category": "api-webhooks", "description": "Webhook retry: mark failing", "steps": ["After 5 failures, set status='failing'"], "passes": true},
-  {"category": "api-webhooks", "description": "Webhook retry: auto-disable", "steps": ["After 24h continuous failure, set status='disabled'"], "passes": false},
+  {"category": "api-webhooks", "description": "Webhook retry: auto-disable", "steps": ["After 24h continuous failure, set status='disabled'"], "passes": true},
   {"category": "api-webhooks", "description": "Webhooks unit test: CRUD", "steps": ["Test create, get, update, delete webhook"], "passes": true},
   {"category": "api-webhooks", "description": "Webhooks unit test: delivery", "steps": ["Test delivery with mock HTTP", "Test retry logic", "Test signature generation"], "passes": true},
 

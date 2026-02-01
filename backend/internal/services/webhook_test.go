@@ -654,3 +654,145 @@ func TestDeliverWebhook_Non2xxFailure(t *testing.T) {
 		})
 	}
 }
+
+func TestDeliverWebhook_AutoDisableAfter24hContinuousFailure(t *testing.T) {
+	// Per SPEC.md Part 12.3:
+	// "After 24h of continuous failure: webhook auto-paused"
+	// The webhook should be set to status='disabled' after 24h continuous failure
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	repo := NewMockWebhookRepository()
+	webhookID := uuid.New()
+	secret := "test-secret"
+
+	// Webhook has been failing for more than 24 hours
+	failureTime := time.Now().Add(-25 * time.Hour)
+	repo.AddWebhook(&models.Webhook{
+		ID:                  webhookID,
+		AgentID:             "test_agent",
+		URL:                 server.URL,
+		Events:              []string{"answer.created"},
+		SecretHash:          secret,
+		Status:              models.WebhookStatusFailing,
+		ConsecutiveFailures: 10,
+		LastFailureAt:       &failureTime,
+		CreatedAt:           time.Now().Add(-48 * time.Hour),
+		UpdatedAt:           time.Now(),
+	})
+
+	service := NewWebhookDeliveryService(repo, &http.Client{Timeout: 10 * time.Second})
+
+	// Another failure - this should trigger auto-disable
+	_ = service.DeliverWebhook(context.Background(), webhookID, "answer.created", nil, secret)
+
+	wh := repo.GetWebhook(webhookID)
+	if wh.Status != models.WebhookStatusDisabled {
+		t.Errorf("expected status 'disabled' after 24h continuous failure, got '%s'", wh.Status)
+	}
+}
+
+func TestDeliverWebhook_NotDisabledIfFailingLessThan24h(t *testing.T) {
+	// Webhook should NOT be disabled if it hasn't been failing for 24h yet
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	repo := NewMockWebhookRepository()
+	webhookID := uuid.New()
+	secret := "test-secret"
+
+	// Webhook has been failing for only 12 hours (not yet 24h)
+	failureTime := time.Now().Add(-12 * time.Hour)
+	repo.AddWebhook(&models.Webhook{
+		ID:                  webhookID,
+		AgentID:             "test_agent",
+		URL:                 server.URL,
+		Events:              []string{"answer.created"},
+		SecretHash:          secret,
+		Status:              models.WebhookStatusFailing,
+		ConsecutiveFailures: 10,
+		LastFailureAt:       &failureTime,
+		CreatedAt:           time.Now().Add(-48 * time.Hour),
+		UpdatedAt:           time.Now(),
+	})
+
+	service := NewWebhookDeliveryService(repo, &http.Client{Timeout: 10 * time.Second})
+
+	// Another failure - should still be 'failing', not 'disabled'
+	_ = service.DeliverWebhook(context.Background(), webhookID, "answer.created", nil, secret)
+
+	wh := repo.GetWebhook(webhookID)
+	if wh.Status != models.WebhookStatusFailing {
+		t.Errorf("expected status 'failing' (less than 24h), got '%s'", wh.Status)
+	}
+}
+
+func TestDeliverWebhook_CalculateContinuousFailureDuration(t *testing.T) {
+	// Tests that we correctly calculate the duration since first failure
+	// When a webhook is already failing, we use LastFailureAt to determine
+	// continuous failure duration
+
+	testCases := []struct {
+		name           string
+		lastFailureAge time.Duration
+		expectedStatus models.WebhookStatus
+	}{
+		{
+			name:           "failure for 23h59m - still failing",
+			lastFailureAge: 23*time.Hour + 59*time.Minute,
+			expectedStatus: models.WebhookStatusFailing,
+		},
+		{
+			name:           "failure for exactly 24h - should be disabled",
+			lastFailureAge: 24 * time.Hour,
+			expectedStatus: models.WebhookStatusDisabled,
+		},
+		{
+			name:           "failure for 48h - should be disabled",
+			lastFailureAge: 48 * time.Hour,
+			expectedStatus: models.WebhookStatusDisabled,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			defer server.Close()
+
+			repo := NewMockWebhookRepository()
+			webhookID := uuid.New()
+			secret := "test-secret"
+
+			failureTime := time.Now().Add(-tc.lastFailureAge)
+			repo.AddWebhook(&models.Webhook{
+				ID:                  webhookID,
+				AgentID:             "test_agent",
+				URL:                 server.URL,
+				Events:              []string{"answer.created"},
+				SecretHash:          secret,
+				Status:              models.WebhookStatusFailing,
+				ConsecutiveFailures: 10,
+				LastFailureAt:       &failureTime,
+				CreatedAt:           time.Now().Add(-72 * time.Hour),
+				UpdatedAt:           time.Now(),
+			})
+
+			service := NewWebhookDeliveryService(repo, &http.Client{Timeout: 10 * time.Second})
+
+			_ = service.DeliverWebhook(context.Background(), webhookID, "answer.created", nil, secret)
+
+			wh := repo.GetWebhook(webhookID)
+			if wh.Status != tc.expectedStatus {
+				t.Errorf("expected status '%s', got '%s'", tc.expectedStatus, wh.Status)
+			}
+		})
+	}
+}

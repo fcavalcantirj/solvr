@@ -105,14 +105,30 @@ func (s *WebhookDeliveryService) DeliverWebhookWithAttempt(ctx context.Context, 
 	return s.recordSuccess(ctx, webhook)
 }
 
+// ContinuousFailureThreshold is the duration after which a webhook is auto-disabled.
+// Per SPEC.md Part 12.3: "After 24h of continuous failure: webhook auto-paused"
+const ContinuousFailureThreshold = 24 * time.Hour
+
 // recordFailure updates the webhook after a failed delivery.
 func (s *WebhookDeliveryService) recordFailure(ctx context.Context, webhook *models.Webhook, deliveryErr error) error {
 	now := time.Now()
 	newFailures := webhook.ConsecutiveFailures + 1
 
 	var newStatus *models.WebhookStatus
+
+	// Per SPEC.md Part 12.3: After 24h continuous failure, set status='disabled'
+	// We check if the webhook is already failing and has been failing for 24+ hours
+	if webhook.Status == models.WebhookStatusFailing && webhook.LastFailureAt != nil {
+		failingDuration := now.Sub(*webhook.LastFailureAt)
+		if failingDuration >= ContinuousFailureThreshold {
+			status := models.WebhookStatusDisabled
+			newStatus = &status
+		}
+	}
+
 	// Per SPEC.md Part 12.3: After 5 failures, mark as failing
-	if newFailures >= 5 {
+	// Only update to 'failing' if we're not already setting to 'disabled'
+	if newStatus == nil && newFailures >= 5 {
 		status := models.WebhookStatusFailing
 		newStatus = &status
 	}

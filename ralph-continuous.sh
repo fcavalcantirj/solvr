@@ -108,52 +108,34 @@ while true; do
   error_msg=""
   error_detail=""
 
-  # Extract actual error lines from log (last 50 lines containing error keywords)
-  error_detail=$(grep -i "error\|429\|503\|rate.limit\|capacity\|overloaded\|failed" "$tmplog" | tail -5 | head -c 500)
-
-  # Common API error patterns
-  if grep -qi "rate limit" "$tmplog"; then
-    api_error=true
-    error_msg="Rate limit hit"
-  elif grep -qi "hit your limit" "$tmplog"; then
-    api_error=true
-    error_msg="You've hit your limit"
-  elif grep -qi "overloaded" "$tmplog"; then
-    api_error=true
-    error_msg="API overloaded"
-  elif grep -qiE "HTTP[/ ]429|\"status\":\s*429|status[_-]?code.*429|429 Too Many Requests" "$tmplog"; then
-    api_error=true
-    error_msg="HTTP 429 (Too Many Requests)"
-  elif grep -qiE "HTTP[/ ]503|\"status\":\s*503|status[_-]?code.*503|503 Service Unavailable" "$tmplog"; then
-    api_error=true
-    error_msg="HTTP 503 (Service Unavailable)"
-  # REMOVED: 500 check was causing false positives on numbers like duration_ms
-  # elif grep -qiE "HTTP 500|500 Internal Server Error" "$tmplog"; then
-  #   api_error=true
-  #   error_msg="HTTP 500 (Internal Server Error)"
-  elif grep -qi "capacity" "$tmplog"; then
-    api_error=true
-    error_msg="API at capacity"
-  elif grep -qi "No messages returned" "$tmplog"; then
-    api_error=true
-    error_msg="No messages returned (API error)"
-  elif grep -qi "concurrency" "$tmplog"; then
-    api_error=true
-    error_msg="Tool use concurrency issue"
-  elif grep -qi "timeout" "$tmplog"; then
-    api_error=true
-    error_msg="Request timeout"
-  elif grep -qi "connection refused\|ECONNREFUSED" "$tmplog"; then
-    api_error=true
-    error_msg="Connection refused"
-  elif grep -qi "API Error" "$tmplog"; then
-    api_error=true
-    error_msg="API Error detected"
+  # FIRST: Check if output indicates SUCCESS - if so, skip error detection
+  if grep -q '"is_error":false' "$tmplog" && grep -q '"subtype":"success"' "$tmplog"; then
+    api_error=false
+  # Only check for errors if exit code is non-zero OR explicit error indicators
   elif [ $exit_code -ne 0 ]; then
-    if grep -qi "error" "$tmplog"; then
-      api_error=true
+    api_error=true
+    # Try to identify specific error type
+    if grep -qi "rate limit\|rate_limit\|ratelimit" "$tmplog"; then
+      error_msg="Rate limit hit"
+    elif grep -qi "hit your limit" "$tmplog"; then
+      error_msg="You've hit your limit"
+    elif grep -qi "overloaded" "$tmplog"; then
+      error_msg="API overloaded"
+    elif grep -qi "Too Many Requests" "$tmplog"; then
+      error_msg="HTTP 429 (Too Many Requests)"
+    elif grep -qi "Service Unavailable" "$tmplog"; then
+      error_msg="HTTP 503 (Service Unavailable)"
+    elif grep -qi "at capacity" "$tmplog"; then
+      error_msg="API at capacity"
+    elif grep -qi "No messages returned" "$tmplog"; then
+      error_msg="No messages returned"
+    elif grep -qi "ECONNREFUSED\|connection refused" "$tmplog"; then
+      error_msg="Connection refused"
+    else
       error_msg="Unknown error (exit code: $exit_code)"
     fi
+    # Extract error context
+    error_detail=$(grep -i "error\|failed\|refused\|limit" "$tmplog" | grep -v "is_error.*false" | tail -3 | head -c 300)
   fi
 
   # Check if PRD is complete before cleaning up

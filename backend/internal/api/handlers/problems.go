@@ -1,0 +1,649 @@
+// Package handlers contains HTTP request handlers for the Solvr API.
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/go-chi/chi/v5"
+)
+
+// ProblemsRepositoryInterface defines the database operations for problems.
+type ProblemsRepositoryInterface interface {
+	// ListProblems returns problems matching the given options.
+	ListProblems(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error)
+
+	// FindProblemByID returns a single problem by ID.
+	FindProblemByID(ctx context.Context, id string) (*models.PostWithAuthor, error)
+
+	// CreateProblem creates a new problem and returns it.
+	CreateProblem(ctx context.Context, post *models.Post) (*models.Post, error)
+
+	// ListApproaches returns approaches for a problem.
+	ListApproaches(ctx context.Context, problemID string, opts models.ApproachListOptions) ([]models.ApproachWithAuthor, int, error)
+
+	// CreateApproach creates a new approach and returns it.
+	CreateApproach(ctx context.Context, approach *models.Approach) (*models.Approach, error)
+
+	// FindApproachByID returns a single approach by ID.
+	FindApproachByID(ctx context.Context, id string) (*models.ApproachWithAuthor, error)
+
+	// UpdateApproach updates an existing approach and returns it.
+	UpdateApproach(ctx context.Context, approach *models.Approach) (*models.Approach, error)
+
+	// AddProgressNote adds a progress note to an approach.
+	AddProgressNote(ctx context.Context, note *models.ProgressNote) (*models.ProgressNote, error)
+
+	// UpdateProblemStatus updates the status of a problem.
+	UpdateProblemStatus(ctx context.Context, problemID string, status models.PostStatus) error
+}
+
+// ProblemsHandler handles problem-related HTTP requests.
+type ProblemsHandler struct {
+	repo ProblemsRepositoryInterface
+}
+
+// NewProblemsHandler creates a new ProblemsHandler.
+func NewProblemsHandler(repo ProblemsRepositoryInterface) *ProblemsHandler {
+	return &ProblemsHandler{repo: repo}
+}
+
+// ProblemsListResponse is the response for listing problems.
+type ProblemsListResponse struct {
+	Data []models.PostWithAuthor `json:"data"`
+	Meta ProblemsListMeta        `json:"meta"`
+}
+
+// ProblemsListMeta contains metadata for list responses.
+type ProblemsListMeta struct {
+	Total   int  `json:"total"`
+	Page    int  `json:"page"`
+	PerPage int  `json:"per_page"`
+	HasMore bool `json:"has_more"`
+}
+
+// ProblemResponse is the response for a single problem.
+type ProblemResponse struct {
+	Data models.PostWithAuthor `json:"data"`
+}
+
+// ApproachesListResponse is the response for listing approaches.
+type ApproachesListResponse struct {
+	Data []models.ApproachWithAuthor `json:"data"`
+	Meta ProblemsListMeta            `json:"meta"`
+}
+
+// CreateProblemRequest is the request body for creating a problem.
+type CreateProblemRequest struct {
+	Title           string   `json:"title"`
+	Description     string   `json:"description"`
+	Tags            []string `json:"tags,omitempty"`
+	SuccessCriteria []string `json:"success_criteria,omitempty"`
+	Weight          *int     `json:"weight,omitempty"`
+}
+
+// ProgressNoteRequest is the request body for adding a progress note.
+type ProgressNoteRequest struct {
+	Content string `json:"content"`
+}
+
+// VerifyApproachRequest is the request body for verifying an approach.
+type VerifyApproachRequest struct {
+	Verified bool `json:"verified"`
+}
+
+// List handles GET /v1/problems - list problems.
+func (h *ProblemsHandler) List(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	opts := models.PostListOptions{
+		Type:    models.PostTypeProblem, // Always filter by problem type
+		Page:    parseProblemsIntParam(r.URL.Query().Get("page"), 1),
+		PerPage: parseProblemsIntParam(r.URL.Query().Get("per_page"), 20),
+	}
+
+	if opts.Page < 1 {
+		opts.Page = 1
+	}
+	if opts.PerPage < 1 {
+		opts.PerPage = 20
+	}
+	if opts.PerPage > 50 {
+		opts.PerPage = 50 // Cap at 50 per SPEC.md
+	}
+
+	// Parse status filter
+	if statusParam := r.URL.Query().Get("status"); statusParam != "" {
+		opts.Status = models.PostStatus(statusParam)
+	}
+
+	// Parse tags filter
+	if tagsParam := r.URL.Query().Get("tags"); tagsParam != "" {
+		opts.Tags = strings.Split(tagsParam, ",")
+		for i, tag := range opts.Tags {
+			opts.Tags[i] = strings.TrimSpace(tag)
+		}
+	}
+
+	// Execute query
+	problems, total, err := h.repo.ListProblems(r.Context(), opts)
+	if err != nil {
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list problems")
+		return
+	}
+
+	// Calculate has_more
+	hasMore := (opts.Page * opts.PerPage) < total
+
+	response := ProblemsListResponse{
+		Data: problems,
+		Meta: ProblemsListMeta{
+			Total:   total,
+			Page:    opts.Page,
+			PerPage: opts.PerPage,
+			HasMore: hasMore,
+		},
+	}
+
+	writeProblemsJSON(w, http.StatusOK, response)
+}
+
+// Get handles GET /v1/problems/:id - get a single problem.
+func (h *ProblemsHandler) Get(w http.ResponseWriter, r *http.Request) {
+	problemID := chi.URLParam(r, "id")
+	if problemID == "" {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "problem ID is required")
+		return
+	}
+
+	problem, err := h.repo.FindProblemByID(r.Context(), problemID)
+	if err != nil {
+		if errors.Is(err, ErrProblemNotFound) {
+			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
+			return
+		}
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get problem")
+		return
+	}
+
+	// Check if it's actually a problem
+	if problem.Type != models.PostTypeProblem {
+		writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
+		return
+	}
+
+	// Check if deleted
+	if problem.DeletedAt != nil {
+		writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
+		return
+	}
+
+	writeProblemsJSON(w, http.StatusOK, ProblemResponse{Data: *problem})
+}
+
+// Create handles POST /v1/problems - create a new problem.
+func (h *ProblemsHandler) Create(w http.ResponseWriter, r *http.Request) {
+	// Require authentication
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		writeProblemsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	// Parse request body
+	var req CreateProblemRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid JSON body")
+		return
+	}
+
+	// Validate title
+	if req.Title == "" {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "title is required")
+		return
+	}
+	if len(req.Title) < 10 {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "title must be at least 10 characters")
+		return
+	}
+	if len(req.Title) > 200 {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "title must be at most 200 characters")
+		return
+	}
+
+	// Validate description
+	if req.Description == "" {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "description is required")
+		return
+	}
+	if len(req.Description) < 50 {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "description must be at least 50 characters")
+		return
+	}
+
+	// Validate tags (max 5)
+	if len(req.Tags) > 5 {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "maximum 5 tags allowed")
+		return
+	}
+
+	// Validate problem-specific fields
+	if req.Weight != nil && (*req.Weight < 1 || *req.Weight > 5) {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "weight must be between 1 and 5")
+		return
+	}
+	if len(req.SuccessCriteria) > 10 {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "maximum 10 success criteria allowed")
+		return
+	}
+
+	// Create problem
+	post := &models.Post{
+		Type:            models.PostTypeProblem,
+		Title:           req.Title,
+		Description:     req.Description,
+		Tags:            req.Tags,
+		PostedByType:    models.AuthorTypeHuman, // TODO: Support agent auth
+		PostedByID:      claims.UserID,
+		Status:          models.PostStatusOpen,
+		SuccessCriteria: req.SuccessCriteria,
+		Weight:          req.Weight,
+	}
+
+	createdPost, err := h.repo.CreateProblem(r.Context(), post)
+	if err != nil {
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create problem")
+		return
+	}
+
+	writeProblemsJSON(w, http.StatusCreated, map[string]interface{}{
+		"data": createdPost,
+	})
+}
+
+// ListApproaches handles GET /v1/problems/:id/approaches - list approaches for a problem.
+func (h *ProblemsHandler) ListApproaches(w http.ResponseWriter, r *http.Request) {
+	problemID := chi.URLParam(r, "id")
+	if problemID == "" {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "problem ID is required")
+		return
+	}
+
+	// Verify problem exists
+	problem, err := h.repo.FindProblemByID(r.Context(), problemID)
+	if err != nil {
+		if errors.Is(err, ErrProblemNotFound) {
+			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
+			return
+		}
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get problem")
+		return
+	}
+
+	if problem.Type != models.PostTypeProblem {
+		writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
+		return
+	}
+
+	// Parse query parameters
+	opts := models.ApproachListOptions{
+		ProblemID: problemID,
+		Page:      parseProblemsIntParam(r.URL.Query().Get("page"), 1),
+		PerPage:   parseProblemsIntParam(r.URL.Query().Get("per_page"), 20),
+	}
+
+	if opts.Page < 1 {
+		opts.Page = 1
+	}
+	if opts.PerPage < 1 {
+		opts.PerPage = 20
+	}
+	if opts.PerPage > 50 {
+		opts.PerPage = 50
+	}
+
+	// Execute query
+	approaches, total, err := h.repo.ListApproaches(r.Context(), problemID, opts)
+	if err != nil {
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list approaches")
+		return
+	}
+
+	// Calculate has_more
+	hasMore := (opts.Page * opts.PerPage) < total
+
+	response := ApproachesListResponse{
+		Data: approaches,
+		Meta: ProblemsListMeta{
+			Total:   total,
+			Page:    opts.Page,
+			PerPage: opts.PerPage,
+			HasMore: hasMore,
+		},
+	}
+
+	writeProblemsJSON(w, http.StatusOK, response)
+}
+
+// CreateApproach handles POST /v1/problems/:id/approaches - create a new approach.
+func (h *ProblemsHandler) CreateApproach(w http.ResponseWriter, r *http.Request) {
+	// Require authentication
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		writeProblemsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	problemID := chi.URLParam(r, "id")
+	if problemID == "" {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "problem ID is required")
+		return
+	}
+
+	// Verify problem exists
+	problem, err := h.repo.FindProblemByID(r.Context(), problemID)
+	if err != nil {
+		if errors.Is(err, ErrProblemNotFound) {
+			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
+			return
+		}
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get problem")
+		return
+	}
+
+	if problem.Type != models.PostTypeProblem {
+		writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
+		return
+	}
+
+	// Parse request body
+	var req models.CreateApproachRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid JSON body")
+		return
+	}
+
+	// Validate angle
+	if req.Angle == "" {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "angle is required")
+		return
+	}
+	if len(req.Angle) > 500 {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "angle must be at most 500 characters")
+		return
+	}
+
+	// Validate method
+	if len(req.Method) > 500 {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "method must be at most 500 characters")
+		return
+	}
+
+	// Validate assumptions (max 10)
+	if len(req.Assumptions) > 10 {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "maximum 10 assumptions allowed")
+		return
+	}
+
+	// Create approach
+	approach := &models.Approach{
+		ProblemID:   problemID,
+		AuthorType:  models.AuthorTypeHuman, // TODO: Support agent auth
+		AuthorID:    claims.UserID,
+		Angle:       req.Angle,
+		Method:      req.Method,
+		Assumptions: req.Assumptions,
+		DiffersFrom: req.DiffersFrom,
+		Status:      models.ApproachStatusStarting,
+	}
+
+	createdApproach, err := h.repo.CreateApproach(r.Context(), approach)
+	if err != nil {
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create approach")
+		return
+	}
+
+	writeProblemsJSON(w, http.StatusCreated, map[string]interface{}{
+		"data": createdApproach,
+	})
+}
+
+// UpdateApproach handles PATCH /v1/approaches/:id - update an approach.
+func (h *ProblemsHandler) UpdateApproach(w http.ResponseWriter, r *http.Request) {
+	// Require authentication
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		writeProblemsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	approachID := chi.URLParam(r, "id")
+	if approachID == "" {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "approach ID is required")
+		return
+	}
+
+	// Get existing approach
+	existingApproach, err := h.repo.FindApproachByID(r.Context(), approachID)
+	if err != nil {
+		if errors.Is(err, ErrApproachNotFound) {
+			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "approach not found")
+			return
+		}
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get approach")
+		return
+	}
+
+	// Check ownership - only author can update
+	if existingApproach.AuthorType != models.AuthorTypeHuman || existingApproach.AuthorID != claims.UserID {
+		writeProblemsError(w, http.StatusForbidden, "FORBIDDEN", "you can only update your own approaches")
+		return
+	}
+
+	// Parse request body
+	var req models.UpdateApproachRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid JSON body")
+		return
+	}
+
+	// Apply updates
+	updatedApproach := existingApproach.Approach
+
+	if req.Status != nil {
+		newStatus := models.ApproachStatus(*req.Status)
+		if !models.IsValidApproachStatus(newStatus) {
+			writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid status")
+			return
+		}
+		updatedApproach.Status = newStatus
+	}
+
+	if req.Outcome != nil {
+		if len(*req.Outcome) > 10000 {
+			writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "outcome must be at most 10000 characters")
+			return
+		}
+		updatedApproach.Outcome = *req.Outcome
+	}
+
+	if req.Method != nil {
+		if len(*req.Method) > 500 {
+			writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "method must be at most 500 characters")
+			return
+		}
+		updatedApproach.Method = *req.Method
+	}
+
+	result, err := h.repo.UpdateApproach(r.Context(), &updatedApproach)
+	if err != nil {
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update approach")
+		return
+	}
+
+	writeProblemsJSON(w, http.StatusOK, map[string]interface{}{
+		"data": result,
+	})
+}
+
+// AddProgressNote handles POST /v1/approaches/:id/progress - add a progress note.
+func (h *ProblemsHandler) AddProgressNote(w http.ResponseWriter, r *http.Request) {
+	// Require authentication
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		writeProblemsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	approachID := chi.URLParam(r, "id")
+	if approachID == "" {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "approach ID is required")
+		return
+	}
+
+	// Get existing approach
+	existingApproach, err := h.repo.FindApproachByID(r.Context(), approachID)
+	if err != nil {
+		if errors.Is(err, ErrApproachNotFound) {
+			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "approach not found")
+			return
+		}
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get approach")
+		return
+	}
+
+	// Check ownership - only author can add progress notes
+	if existingApproach.AuthorType != models.AuthorTypeHuman || existingApproach.AuthorID != claims.UserID {
+		writeProblemsError(w, http.StatusForbidden, "FORBIDDEN", "you can only add progress notes to your own approaches")
+		return
+	}
+
+	// Parse request body
+	var req ProgressNoteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid JSON body")
+		return
+	}
+
+	// Validate content
+	if req.Content == "" {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "content is required")
+		return
+	}
+
+	// Create progress note
+	note := &models.ProgressNote{
+		ApproachID: approachID,
+		Content:    req.Content,
+	}
+
+	createdNote, err := h.repo.AddProgressNote(r.Context(), note)
+	if err != nil {
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to add progress note")
+		return
+	}
+
+	writeProblemsJSON(w, http.StatusCreated, map[string]interface{}{
+		"data": createdNote,
+	})
+}
+
+// VerifyApproach handles POST /v1/approaches/:id/verify - verify an approach solution.
+func (h *ProblemsHandler) VerifyApproach(w http.ResponseWriter, r *http.Request) {
+	// Require authentication
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		writeProblemsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	approachID := chi.URLParam(r, "id")
+	if approachID == "" {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "approach ID is required")
+		return
+	}
+
+	// Get existing approach
+	approach, err := h.repo.FindApproachByID(r.Context(), approachID)
+	if err != nil {
+		if errors.Is(err, ErrApproachNotFound) {
+			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "approach not found")
+			return
+		}
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get approach")
+		return
+	}
+
+	// Get the problem to verify ownership
+	problem, err := h.repo.FindProblemByID(r.Context(), approach.ProblemID)
+	if err != nil {
+		if errors.Is(err, ErrProblemNotFound) {
+			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
+			return
+		}
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get problem")
+		return
+	}
+
+	// Check ownership - only problem owner can verify
+	if problem.PostedByType != models.AuthorTypeHuman || problem.PostedByID != claims.UserID {
+		writeProblemsError(w, http.StatusForbidden, "FORBIDDEN", "only the problem owner can verify approaches")
+		return
+	}
+
+	// Parse request body
+	var req VerifyApproachRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid JSON body")
+		return
+	}
+
+	// If verified and approach succeeded, update problem status to solved
+	if req.Verified && approach.Status == models.ApproachStatusSucceeded {
+		if err := h.repo.UpdateProblemStatus(r.Context(), problem.ID, models.PostStatusSolved); err != nil {
+			writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update problem status")
+			return
+		}
+	}
+
+	writeProblemsJSON(w, http.StatusOK, map[string]interface{}{
+		"message":  "approach verified",
+		"verified": req.Verified,
+	})
+}
+
+// parseProblemsIntParam parses a string to int with a default value.
+func parseProblemsIntParam(s string, defaultVal int) int {
+	if s == "" {
+		return defaultVal
+	}
+	val, err := strconv.Atoi(s)
+	if err != nil {
+		return defaultVal
+	}
+	return val
+}
+
+// writeProblemsJSON writes a JSON response.
+func writeProblemsJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}
+
+// writeProblemsError writes an error JSON response.
+func writeProblemsError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":    code,
+			"message": message,
+		},
+	})
+}

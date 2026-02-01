@@ -2887,3 +2887,48 @@ Created comprehensive responsive layout tests in `frontend/src/__tests__/respons
 ### Files Created/Modified
 - frontend/src/__tests__/responsive-layout.test.tsx (new, 347 lines)
 - specs/prd-v2.json (updated line 438 to passes=true)
+
+## Session: Frontend Admin Users Page (frontend-admin)
+Date: 2026-02-01
+
+### Completed Requirements (PRD line 523)
+Admin users list page requirement now passes=true.
+
+### What Was Done
+- TDD approach: Created admin-users.test.tsx FIRST with 36 test functions
+- Created frontend/src/__tests__/admin-users.test.tsx (600 lines):
+  - Tests for basic structure (main element, heading, back link)
+  - Tests for authentication (loading state, redirect to login, admin role check)
+  - Tests for user list display (fetches users, shows username/email/status)
+  - Tests for search functionality (displays search input, searches on input)
+  - Tests for status filter (filter dropdown, filters by active/suspended/banned)
+  - Tests for pagination (controls, page numbers, next/previous buttons)
+  - Tests for user detail navigation (view links with correct hrefs)
+  - Tests for error handling (error message, retry button)
+  - Tests for accessibility (heading hierarchy, search input with label, table structure)
+
+- Created frontend/src/app/admin/users/page.tsx (330 lines):
+  - Per SPEC.md Part 16.3 (Admin Dashboard - User Management)
+  - Requires admin role (admin or super_admin)
+  - Fetches users from /v1/admin/users API
+  - Search input with 300ms debounce
+  - Status filter dropdown (all/active/suspended/banned)
+  - User table with columns: User (avatar, username, display_name), Email, Provider, Status, Actions
+  - Status badges with color coding (green=active, yellow=suspended, red=banned)
+  - View link for each user navigating to /admin/users/:id
+  - Pagination with Previous/Next buttons and page indicator
+  - Loading skeletons during data fetch
+  - Error state with retry button
+  - Empty state when no users found
+  - Responsive design with Tailwind CSS
+
+### Test Results
+- 36 new tests, all passing
+- Total frontend tests: 854 passing
+- Both files under 800 lines per CLAUDE.md Golden Rules
+- TDD approach followed
+
+### Files Created/Modified
+- frontend/src/__tests__/admin-users.test.tsx (new, ~600 lines)
+- frontend/src/app/admin/users/page.tsx (new, ~330 lines)
+- specs/prd-v2.json (updated line 523 to passes=true)

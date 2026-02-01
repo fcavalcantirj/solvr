@@ -1,0 +1,428 @@
+// Package handlers contains HTTP request handlers for the Solvr API.
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/go-chi/chi/v5"
+)
+
+// IdeasRepositoryInterface defines the database operations for ideas.
+type IdeasRepositoryInterface interface {
+	// ListIdeas returns ideas matching the given options.
+	ListIdeas(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error)
+
+	// FindIdeaByID returns a single idea by ID.
+	FindIdeaByID(ctx context.Context, id string) (*models.PostWithAuthor, error)
+
+	// CreateIdea creates a new idea and returns it.
+	CreateIdea(ctx context.Context, post *models.Post) (*models.Post, error)
+
+	// ListResponses returns responses for an idea.
+	ListResponses(ctx context.Context, ideaID string, opts models.ResponseListOptions) ([]models.ResponseWithAuthor, int, error)
+
+	// CreateResponse creates a new response and returns it.
+	CreateResponse(ctx context.Context, response *models.Response) (*models.Response, error)
+
+	// AddEvolvedInto adds a post ID to the idea's evolved_into array.
+	AddEvolvedInto(ctx context.Context, ideaID, evolvedPostID string) error
+
+	// FindPostByID returns a single post by ID (for verifying evolved post exists).
+	FindPostByID(ctx context.Context, id string) (*models.PostWithAuthor, error)
+}
+
+// IdeasHandler handles idea-related HTTP requests.
+type IdeasHandler struct {
+	repo IdeasRepositoryInterface
+}
+
+// NewIdeasHandler creates a new IdeasHandler.
+func NewIdeasHandler(repo IdeasRepositoryInterface) *IdeasHandler {
+	return &IdeasHandler{repo: repo}
+}
+
+// IdeasListResponse is the response for listing ideas.
+type IdeasListResponse struct {
+	Data []models.PostWithAuthor `json:"data"`
+	Meta IdeasListMeta           `json:"meta"`
+}
+
+// IdeasListMeta contains metadata for list responses.
+type IdeasListMeta struct {
+	Total   int  `json:"total"`
+	Page    int  `json:"page"`
+	PerPage int  `json:"per_page"`
+	HasMore bool `json:"has_more"`
+}
+
+// IdeaResponse is the response for a single idea with responses.
+type IdeaResponse struct {
+	models.PostWithAuthor
+	Responses []models.ResponseWithAuthor `json:"responses"`
+}
+
+// CreateIdeaRequest is the request body for creating an idea.
+type CreateIdeaRequest struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags,omitempty"`
+}
+
+// EvolveRequest is the request body for evolving an idea.
+type EvolveRequest struct {
+	EvolvedPostID string `json:"evolved_post_id"`
+}
+
+// List handles GET /v1/ideas - list ideas.
+func (h *IdeasHandler) List(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	opts := models.PostListOptions{
+		Type:    models.PostTypeIdea, // Always filter by idea type
+		Page:    parseIdeasIntParam(r.URL.Query().Get("page"), 1),
+		PerPage: parseIdeasIntParam(r.URL.Query().Get("per_page"), 20),
+	}
+
+	if opts.Page < 1 {
+		opts.Page = 1
+	}
+	if opts.PerPage < 1 {
+		opts.PerPage = 20
+	}
+	if opts.PerPage > 50 {
+		opts.PerPage = 50 // Cap at 50 per SPEC.md
+	}
+
+	// Parse status filter
+	if statusParam := r.URL.Query().Get("status"); statusParam != "" {
+		opts.Status = models.PostStatus(statusParam)
+	}
+
+	// Parse tags filter
+	if tagsParam := r.URL.Query().Get("tags"); tagsParam != "" {
+		opts.Tags = strings.Split(tagsParam, ",")
+		for i, tag := range opts.Tags {
+			opts.Tags[i] = strings.TrimSpace(tag)
+		}
+	}
+
+	// Execute query
+	ideas, total, err := h.repo.ListIdeas(r.Context(), opts)
+	if err != nil {
+		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list ideas")
+		return
+	}
+
+	// Calculate has_more
+	hasMore := (opts.Page * opts.PerPage) < total
+
+	response := IdeasListResponse{
+		Data: ideas,
+		Meta: IdeasListMeta{
+			Total:   total,
+			Page:    opts.Page,
+			PerPage: opts.PerPage,
+			HasMore: hasMore,
+		},
+	}
+
+	writeIdeasJSON(w, http.StatusOK, response)
+}
+
+// Get handles GET /v1/ideas/:id - get a single idea with responses.
+func (h *IdeasHandler) Get(w http.ResponseWriter, r *http.Request) {
+	ideaID := chi.URLParam(r, "id")
+	if ideaID == "" {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "idea ID is required")
+		return
+	}
+
+	idea, err := h.repo.FindIdeaByID(r.Context(), ideaID)
+	if err != nil {
+		if errors.Is(err, ErrIdeaNotFound) {
+			writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
+			return
+		}
+		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get idea")
+		return
+	}
+
+	// Check if it's actually an idea
+	if idea.Type != models.PostTypeIdea {
+		writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
+		return
+	}
+
+	// Check if deleted
+	if idea.DeletedAt != nil {
+		writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
+		return
+	}
+
+	// Get responses for the idea
+	responses, _, err := h.repo.ListResponses(r.Context(), ideaID, models.ResponseListOptions{
+		IdeaID:  ideaID,
+		Page:    1,
+		PerPage: 100, // Get up to 100 responses
+	})
+	if err != nil {
+		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get responses")
+		return
+	}
+
+	response := IdeaResponse{
+		PostWithAuthor: *idea,
+		Responses:      responses,
+	}
+
+	writeIdeasJSON(w, http.StatusOK, map[string]interface{}{
+		"data": response,
+	})
+}
+
+// Create handles POST /v1/ideas - create a new idea.
+func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {
+	// Require authentication
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		writeIdeasError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	// Parse request body
+	var req CreateIdeaRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid JSON body")
+		return
+	}
+
+	// Validate title
+	if req.Title == "" {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "title is required")
+		return
+	}
+	if len(req.Title) < 10 {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "title must be at least 10 characters")
+		return
+	}
+	if len(req.Title) > 200 {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "title must be at most 200 characters")
+		return
+	}
+
+	// Validate description
+	if req.Description == "" {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "description is required")
+		return
+	}
+	if len(req.Description) < 50 {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "description must be at least 50 characters")
+		return
+	}
+
+	// Validate tags (max 5)
+	if len(req.Tags) > 5 {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "maximum 5 tags allowed")
+		return
+	}
+
+	// Create idea
+	post := &models.Post{
+		Type:         models.PostTypeIdea,
+		Title:        req.Title,
+		Description:  req.Description,
+		Tags:         req.Tags,
+		PostedByType: models.AuthorTypeHuman, // TODO: Support agent auth
+		PostedByID:   claims.UserID,
+		Status:       models.PostStatusOpen,
+	}
+
+	createdPost, err := h.repo.CreateIdea(r.Context(), post)
+	if err != nil {
+		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create idea")
+		return
+	}
+
+	writeIdeasJSON(w, http.StatusCreated, map[string]interface{}{
+		"data": createdPost,
+	})
+}
+
+// CreateResponse handles POST /v1/ideas/:id/responses - create a new response.
+func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
+	// Require authentication
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		writeIdeasError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	ideaID := chi.URLParam(r, "id")
+	if ideaID == "" {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "idea ID is required")
+		return
+	}
+
+	// Verify idea exists
+	idea, err := h.repo.FindIdeaByID(r.Context(), ideaID)
+	if err != nil {
+		if errors.Is(err, ErrIdeaNotFound) {
+			writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
+			return
+		}
+		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get idea")
+		return
+	}
+
+	if idea.Type != models.PostTypeIdea {
+		writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
+		return
+	}
+
+	// Parse request body
+	var req models.CreateResponseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid JSON body")
+		return
+	}
+
+	// Validate content
+	if req.Content == "" {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "content is required")
+		return
+	}
+	if len(req.Content) > 10000 {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "content must be at most 10000 characters")
+		return
+	}
+
+	// Validate response type
+	if !models.IsValidResponseType(req.ResponseType) {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "response_type must be one of: build, critique, expand, question, support")
+		return
+	}
+
+	// Create response
+	response := &models.Response{
+		IdeaID:       ideaID,
+		AuthorType:   models.AuthorTypeHuman, // TODO: Support agent auth
+		AuthorID:     claims.UserID,
+		Content:      req.Content,
+		ResponseType: req.ResponseType,
+	}
+
+	createdResponse, err := h.repo.CreateResponse(r.Context(), response)
+	if err != nil {
+		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create response")
+		return
+	}
+
+	writeIdeasJSON(w, http.StatusCreated, map[string]interface{}{
+		"data": createdResponse,
+	})
+}
+
+// Evolve handles POST /v1/ideas/:id/evolve - link an evolved post.
+func (h *IdeasHandler) Evolve(w http.ResponseWriter, r *http.Request) {
+	// Require authentication
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		writeIdeasError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	ideaID := chi.URLParam(r, "id")
+	if ideaID == "" {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "idea ID is required")
+		return
+	}
+
+	// Verify idea exists
+	idea, err := h.repo.FindIdeaByID(r.Context(), ideaID)
+	if err != nil {
+		if errors.Is(err, ErrIdeaNotFound) {
+			writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
+			return
+		}
+		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get idea")
+		return
+	}
+
+	if idea.Type != models.PostTypeIdea {
+		writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
+		return
+	}
+
+	// Parse request body
+	var req EvolveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid JSON body")
+		return
+	}
+
+	// Validate evolved_post_id
+	if req.EvolvedPostID == "" {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "evolved_post_id is required")
+		return
+	}
+
+	// Verify evolved post exists
+	_, err = h.repo.FindPostByID(r.Context(), req.EvolvedPostID)
+	if err != nil {
+		if errors.Is(err, ErrIdeaNotFound) {
+			writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "evolved post not found")
+			return
+		}
+		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get evolved post")
+		return
+	}
+
+	// Add evolved link
+	if err := h.repo.AddEvolvedInto(r.Context(), ideaID, req.EvolvedPostID); err != nil {
+		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to add evolved link")
+		return
+	}
+
+	writeIdeasJSON(w, http.StatusOK, map[string]interface{}{
+		"message":         "idea evolution linked",
+		"idea_id":         ideaID,
+		"evolved_post_id": req.EvolvedPostID,
+	})
+}
+
+// parseIdeasIntParam parses a string to int with a default value.
+func parseIdeasIntParam(s string, defaultVal int) int {
+	if s == "" {
+		return defaultVal
+	}
+	val, err := strconv.Atoi(s)
+	if err != nil {
+		return defaultVal
+	}
+	return val
+}
+
+// writeIdeasJSON writes a JSON response.
+func writeIdeasJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}
+
+// writeIdeasError writes an error JSON response.
+func writeIdeasError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":    code,
+			"message": message,
+		},
+	})
+}

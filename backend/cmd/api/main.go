@@ -9,29 +9,48 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/api"
+	"github.com/fcavalcantirj/solvr/internal/config"
+	"github.com/fcavalcantirj/solvr/internal/db"
 )
 
 func main() {
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("Warning: Configuration incomplete: %v", err)
+		// Continue without full config for development
+	}
+
 	// Get port from environment or default to 8080
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	// Create a simple mux for now (will be replaced with chi router)
-	mux := http.NewServeMux()
+	// Initialize database pool (optional - server can run without it)
+	var pool *db.Pool
+	if cfg != nil && cfg.DatabaseURL != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		pool, err = db.NewPool(ctx, cfg.DatabaseURL)
+		cancel()
+		if err != nil {
+			log.Printf("Warning: Database connection failed: %v", err)
+			log.Println("Server will start without database (health/ready will return 503)")
+		} else {
+			log.Println("Database connection established")
+			defer pool.Close()
+		}
+	}
 
-	// Basic health endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
-	})
+	// Create router with database pool
+	router := api.NewRouter(pool)
 
 	// Create server
 	server := &http.Server{
 		Addr:         ":" + port,
-		Handler:      mux,
+		Handler:      router,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -39,7 +58,7 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("Starting server on port %s", port)
+		log.Printf("Starting Solvr API server on port %s", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}

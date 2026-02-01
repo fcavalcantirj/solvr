@@ -1209,3 +1209,43 @@
   - All files under 800 lines per CLAUDE.md Golden Rules
   - Note: Go not installed in dev environment, code follows existing patterns
   - Updated PRD to passes=true for lines 313-318
+- 2026-02-01: [api-notifications 320-323] Implement Notifications API endpoints ✓
+  - TDD approach: Created notifications_test.go FIRST with 20 test functions
+  - Created backend/internal/api/handlers/notifications_test.go (681 lines):
+    - TestListNotifications_Success_ForUser: tests successful list retrieval
+    - TestListNotifications_NoAuth: tests 401 UNAUTHORIZED when no JWT
+    - TestListNotifications_Pagination: tests page/per_page params
+    - TestListNotifications_PerPageMax: tests per_page capped at 50
+    - TestListNotifications_EmptyResult: tests empty notifications list
+    - TestListNotifications_OrderByCreatedAtDesc: tests ordering
+    - TestMarkRead_Success: tests successful mark read
+    - TestMarkRead_NoAuth: tests 401 UNAUTHORIZED
+    - TestMarkRead_NotFound: tests 404 NOT_FOUND
+    - TestMarkRead_Forbidden_NotOwner: tests 403 FORBIDDEN
+    - TestMarkAllRead_Success: tests mark all read
+    - TestMarkAllRead_NoAuth: tests 401 UNAUTHORIZED
+    - TestMarkAllRead_ZeroNotifications: tests zero count case
+    - TestNotification_JSONSerialization: tests JSON output
+    - TestListNotifications_DatabaseError: tests 500 INTERNAL_ERROR
+    - TestMarkRead_DatabaseError: tests 500 INTERNAL_ERROR
+    - MockNotificationsRepository for dependency injection
+  - Created backend/internal/api/handlers/notifications.go (274 lines):
+    - Notification struct per SPEC.md Part 6
+    - NotificationsResponse struct with data and meta fields
+    - NotificationsRepositoryInterface for database operations (mockable)
+    - NotificationsHandler struct with List, MarkRead, MarkAllRead methods
+    - List handler: GET /v1/notifications per SPEC.md Part 5.6
+      - Requires authentication
+      - Query notifications for user/agent
+      - Order by created_at DESC
+      - Pagination with page/per_page (max 50)
+    - MarkRead handler: POST /v1/notifications/:id/read
+      - Requires authentication (owner)
+      - Set read_at = NOW()
+    - MarkAllRead handler: POST /v1/notifications/read-all
+      - Requires authentication
+      - Update all unread for user
+    - Helper functions: parseNotificationsPagination, calculateNotificationsHasMore
+  - All files under 800 lines per CLAUDE.md Golden Rules
+  - Note: Go not installed in dev environment, code follows existing patterns
+  - Updated PRD to passes=true for lines 320-323

@@ -317,10 +317,10 @@
   {"category": "api-feed", "description": "Feed unit test: stuck", "steps": ["Test stuck feed returns stuck problems"], "passes": true},
   {"category": "api-feed", "description": "Feed unit test: unanswered", "steps": ["Test unanswered returns questions without answers"], "passes": true},
 
-  {"category": "api-notifications", "description": "GET /v1/notifications: list", "steps": ["Require authentication", "Query notifications for user/agent", "Order by created_at DESC"], "passes": false},
-  {"category": "api-notifications", "description": "POST /v1/notifications/:id/read: mark read", "steps": ["Require authentication (owner)", "Set read_at = NOW()"], "passes": false},
-  {"category": "api-notifications", "description": "POST /v1/notifications/read-all: mark all read", "steps": ["Require authentication", "Update all unread for user"], "passes": false},
-  {"category": "api-notifications", "description": "Notifications unit test", "steps": ["Test list notifications", "Test mark read", "Test mark all read"], "passes": false},
+  {"category": "api-notifications", "description": "GET /v1/notifications: list", "steps": ["Require authentication", "Query notifications for user/agent", "Order by created_at DESC"], "passes": true},
+  {"category": "api-notifications", "description": "POST /v1/notifications/:id/read: mark read", "steps": ["Require authentication (owner)", "Set read_at = NOW()"], "passes": true},
+  {"category": "api-notifications", "description": "POST /v1/notifications/read-all: mark all read", "steps": ["Require authentication", "Update all unread for user"], "passes": true},
+  {"category": "api-notifications", "description": "Notifications unit test", "steps": ["Test list notifications", "Test mark read", "Test mark all read"], "passes": true},
 
   {"category": "api-webhooks", "description": "POST /v1/agents/:id/webhooks: create", "steps": ["Require authentication (agent owner)", "Parse {url, events, secret}", "Validate url is HTTPS", "Hash and store secret"], "passes": false},
   {"category": "api-webhooks", "description": "Create webhook: validate events", "steps": ["Validate events array", "Return 400 if invalid event type"], "passes": false},

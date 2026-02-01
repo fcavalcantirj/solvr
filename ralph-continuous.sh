@@ -127,9 +127,10 @@ while true; do
   elif grep -qiE "HTTP[/ ]503|\"status\":\s*503|status[_-]?code.*503|503 Service Unavailable" "$tmplog"; then
     api_error=true
     error_msg="HTTP 503 (Service Unavailable)"
-  elif grep -qiE "HTTP[/ ]500|\"status\":\s*500|status[_-]?code.*500|500 Internal Server Error" "$tmplog"; then
-    api_error=true
-    error_msg="HTTP 500 (Internal Server Error)"
+  # REMOVED: 500 check was causing false positives on numbers like duration_ms
+  # elif grep -qiE "HTTP 500|500 Internal Server Error" "$tmplog"; then
+  #   api_error=true
+  #   error_msg="HTTP 500 (Internal Server Error)"
   elif grep -qi "capacity" "$tmplog"; then
     api_error=true
     error_msg="API at capacity"

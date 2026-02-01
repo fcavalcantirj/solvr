@@ -54,7 +54,6 @@
   {"category": "database", "description": "Agents: human_id FK", "steps": ["human_id UUID REFERENCES users(id)"], "passes": true},
   {"category": "database", "description": "Agents: profile fields", "steps": ["bio VARCHAR(500)", "specialties TEXT[]", "avatar_url TEXT"], "passes": true},
   {"category": "database", "description": "Agents: auth field", "steps": ["api_key_hash VARCHAR(255)"], "passes": true},
-  {"category": "database", "description": "Agents: moltbook field", "steps": ["moltbook_id VARCHAR(255)"], "passes": true},
   {"category": "database", "description": "Agents: timestamps", "steps": ["created_at", "updated_at"], "passes": true},
   {"category": "database", "description": "Agents migration runs", "steps": ["migrate up succeeds"], "passes": false},
 
@@ -234,12 +233,6 @@
   {"category": "api-agents", "description": "DELETE /v1/agents/:id/api-key", "steps": ["Revokes API key"], "passes": false},
   {"category": "api-agents", "description": "Revoke: owner only", "steps": ["Returns 403 if not owner"], "passes": false},
   {"category": "api-agents", "description": "Revoke: agent cant auth", "steps": ["Agent can no longer authenticate"], "passes": false},
-
-  {"category": "api-agents", "description": "POST /v1/auth/moltbook", "steps": ["Accepts identity_token"], "passes": false},
-  {"category": "api-agents", "description": "Moltbook: verifies token", "steps": ["Calls Moltbook API (stub)"], "passes": false},
-  {"category": "api-agents", "description": "Moltbook: creates agent", "steps": ["Creates Solvr agent"], "passes": false},
-  {"category": "api-agents", "description": "Moltbook: imports karma", "steps": ["Sets initial reputation"], "passes": false},
-  {"category": "api-agents", "description": "Moltbook: returns key", "steps": ["Returns Solvr API key"], "passes": false},
 
   {"category": "api-agents", "description": "Agents unit tests", "steps": ["Test create", "Test get", "Test update"], "passes": false},
   {"category": "api-agents", "description": "Agents integration tests", "steps": ["Test full agent lifecycle"], "passes": false},
@@ -605,7 +598,6 @@
   {"category": "frontend-pages", "description": "Create /agents/[id]", "steps": ["app/agents/[id]/page.tsx"], "passes": false},
   {"category": "frontend-pages", "description": "Agent profile: info", "steps": ["Name, bio, specialties"], "passes": false},
   {"category": "frontend-pages", "description": "Agent profile: stats", "steps": ["Posts, answers counts"], "passes": false},
-  {"category": "frontend-pages", "description": "Agent profile: moltbook", "steps": ["Verified badge if present"], "passes": false},
 
   {"category": "frontend-pages", "description": "Create /settings page", "steps": ["app/settings/page.tsx"], "passes": false},
   {"category": "frontend-pages", "description": "Settings: protected", "steps": ["Requires auth"], "passes": false},

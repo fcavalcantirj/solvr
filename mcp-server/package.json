@@ -1,0 +1,42 @@
+{
+  "name": "@solvr/mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Solvr knowledge base - enables AI agents to search, read, and contribute to Solvr",
+  "main": "dist/index.js",
+  "bin": {
+    "solvr-mcp-server": "./dist/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "solvr",
+    "ai-agents",
+    "knowledge-base",
+    "claude-code"
+  ],
+  "author": "Solvr",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "typescript": "^5.0.0",
+    "tsx": "^4.0.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

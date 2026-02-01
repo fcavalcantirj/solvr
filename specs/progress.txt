@@ -3025,3 +3025,105 @@ Date: 2026-02-01
 - frontend/src/__tests__/admin-audit.test.tsx (new, ~480 lines)
 - frontend/src/app/admin/audit/page.tsx (new, ~400 lines)
 - specs/prd-v2.json (updated lines 526-527 to passes=true)
+
+## Session: Infrastructure - golang-migrate CLI (infrastructure)
+Date: 2026-02-01
+
+### Completed Requirements (PRD line 21)
+- Install golang-migrate CLI - now passes=true
+
+### What Was Done
+- Installed Go programming language via Homebrew (go version go1.25.6)
+- Installed golang-migrate CLI with postgres support:
+  - `go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest`
+- Verified installation with `migrate --version` (output: "dev")
+
+### Notes
+- Database migration execution tasks (lines 47, 57, 71, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 118, 119) require running Docker/PostgreSQL
+- Docker not available in current development environment
+- Migration files already exist in backend/migrations/ (000001-000014)
+- CLI tool ready for use when database is available
+
+### Files Modified
+- specs/prd-v2.json (updated line 21 to passes=true)
+
+## Session: MCP Server Implementation (mcp-server)
+Date: 2026-02-01
+
+### Completed Requirements (PRD lines 529-537)
+All MCP server requirements now pass=true:
+- Create mcp-server directory - passes
+- MCP: configuration - passes
+- MCP: tool manifest - passes
+- Implement solvr_search tool - passes
+- Implement solvr_get tool - passes
+- Implement solvr_post tool - passes
+- Implement solvr_answer tool - passes
+- MCP: README - passes
+- MCP: tests - passes
+
+### What Was Done
+- TDD approach: Created tests FIRST, then implementation
+- Created mcp-server/ directory with TypeScript/Node.js setup
+- package.json with @solvr/mcp-server name, bin entry for CLI
+- tsconfig.json with strict mode, ESM modules
+- vitest.config.ts with 80% coverage thresholds
+
+### Source Files Created
+- src/config.ts (30 lines): Environment configuration
+  - Loads SOLVR_API_KEY (required)
+  - Loads SOLVR_API_URL (optional, defaults to https://api.solvr.dev)
+  - Throws descriptive error if API key missing
+
+- src/api.ts (185 lines): API client
+  - SolvrApiClient class with all HTTP methods
+  - search() - calls /v1/search with query, type?, limit?
+  - getPost() - calls /v1/posts/:id with include? option
+  - createPost() - POST /v1/posts
+  - createAnswer() - POST /v1/questions/:id/answers
+  - createApproach() - POST /v1/problems/:id/approaches
+  - Proper error handling with status codes
+
+- src/tools.ts (319 lines): MCP tool implementations
+  - SolvrTools class
+  - getManifest() returns tool definitions per SPEC.md Part 18
+  - executeTool() dispatches to appropriate handler
+  - 4 tools: solvr_search, solvr_get, solvr_post, solvr_answer
+  - Formatted output for human-readable results
+
+- src/index.ts (179 lines): MCP server entry point
+  - JSON-RPC over stdio transport
+  - Handles: initialize, tools/list, tools/call, shutdown
+  - Proper error handling and graceful shutdown
+
+### Test Files Created
+- src/config.test.ts (58 lines): 6 tests
+- src/api.test.ts (266 lines): 15 tests
+- src/tools.test.ts (272 lines): 18 tests
+
+### Test Results
+- 39 tests passing
+- Coverage: config.ts 100%, api.ts 100%, tools.ts 93.79%
+- All files under 800 lines per CLAUDE.md Golden Rules
+
+### Documentation
+- README.md with:
+  - Installation instructions (npm, source)
+  - Environment variable reference
+  - Claude Code and Cursor configuration examples
+  - All 4 tools documented with parameters and examples
+  - "Search Before Work" pattern explanation
+
+### Files Created
+- mcp-server/package.json
+- mcp-server/tsconfig.json
+- mcp-server/vitest.config.ts
+- mcp-server/README.md
+- mcp-server/src/config.ts
+- mcp-server/src/config.test.ts
+- mcp-server/src/api.ts
+- mcp-server/src/api.test.ts
+- mcp-server/src/tools.ts
+- mcp-server/src/tools.test.ts
+- mcp-server/src/index.ts
+- specs/prd-v2.json (lines 529-537 updated to passes=true)

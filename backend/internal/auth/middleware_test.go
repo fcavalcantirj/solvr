@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 func TestJWTMiddleware(t *testing.T) {
@@ -206,6 +208,210 @@ func TestOptionalJWTMiddleware(t *testing.T) {
 			}
 			if !tt.wantClaims && gotClaims != nil {
 				t.Error("expected no claims but got some")
+			}
+		})
+	}
+}
+
+func TestAPIKeyMiddleware(t *testing.T) {
+	// Create mock database with test agent
+	db := NewMockAgentDB()
+	testKey := "solvr_testkey123456789012345678901234567890"
+	_, err := db.AddTestAgent("test_agent", "Test Agent", testKey)
+	if err != nil {
+		t.Fatalf("failed to add test agent: %v", err)
+	}
+
+	validator := NewAPIKeyValidator(db)
+
+	tests := []struct {
+		name           string
+		authHeader     string
+		wantStatusCode int
+		wantAgent      bool
+	}{
+		{
+			name:           "valid API key",
+			authHeader:     "Bearer " + testKey,
+			wantStatusCode: http.StatusOK,
+			wantAgent:      true,
+		},
+		{
+			name:           "missing authorization header",
+			authHeader:     "",
+			wantStatusCode: http.StatusUnauthorized,
+			wantAgent:      false,
+		},
+		{
+			name:           "invalid API key",
+			authHeader:     "Bearer solvr_invalidkey1234567890123456789012345",
+			wantStatusCode: http.StatusUnauthorized,
+			wantAgent:      false,
+		},
+		{
+			name:           "non-API key token (JWT format)",
+			authHeader:     "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMTIzIn0.abcd",
+			wantStatusCode: http.StatusUnauthorized,
+			wantAgent:      false,
+		},
+		{
+			name:           "missing Bearer prefix",
+			authHeader:     testKey,
+			wantStatusCode: http.StatusUnauthorized,
+			wantAgent:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotAgent *models.Agent
+			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotAgent = AgentFromContext(r.Context())
+				w.WriteHeader(http.StatusOK)
+			})
+
+			middleware := APIKeyMiddleware(validator)(nextHandler)
+
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantStatusCode {
+				t.Errorf("status code = %v, want %v", rr.Code, tt.wantStatusCode)
+			}
+
+			if tt.wantAgent && gotAgent == nil {
+				t.Error("expected agent in context but got nil")
+			}
+			if !tt.wantAgent && gotAgent != nil {
+				t.Error("expected no agent but got some")
+			}
+
+			if tt.wantAgent && gotAgent != nil {
+				if gotAgent.ID != "test_agent" {
+					t.Errorf("agent ID = %v, want test_agent", gotAgent.ID)
+				}
+			}
+		})
+	}
+}
+
+func TestAgentFromContext(t *testing.T) {
+	agent := &models.Agent{
+		ID:          "test_agent",
+		DisplayName: "Test Agent",
+	}
+
+	ctx := ContextWithAgent(context.Background(), agent)
+	gotAgent := AgentFromContext(ctx)
+
+	if gotAgent == nil {
+		t.Fatal("AgentFromContext() returned nil for context with agent")
+	}
+	if gotAgent.ID != agent.ID {
+		t.Errorf("ID = %v, want %v", gotAgent.ID, agent.ID)
+	}
+
+	// Test with no agent in context
+	emptyCtx := context.Background()
+	emptyAgent := AgentFromContext(emptyCtx)
+	if emptyAgent != nil {
+		t.Error("AgentFromContext() should return nil for context without agent")
+	}
+}
+
+func TestCombinedAuthMiddleware(t *testing.T) {
+	secret := "test-secret-key-for-testing-purposes-only"
+
+	// Create mock database with test agent
+	db := NewMockAgentDB()
+	testAPIKey := "solvr_testkey123456789012345678901234567890"
+	_, err := db.AddTestAgent("test_agent", "Test Agent", testAPIKey)
+	if err != nil {
+		t.Fatalf("failed to add test agent: %v", err)
+	}
+	validator := NewAPIKeyValidator(db)
+
+	// Generate valid JWT
+	validJWT, _ := GenerateJWT(secret, "user-123", "test@example.com", "user", 15*time.Minute)
+
+	tests := []struct {
+		name           string
+		authHeader     string
+		wantStatusCode int
+		wantClaims     bool
+		wantAgent      bool
+	}{
+		{
+			name:           "valid JWT authentication",
+			authHeader:     "Bearer " + validJWT,
+			wantStatusCode: http.StatusOK,
+			wantClaims:     true,
+			wantAgent:      false,
+		},
+		{
+			name:           "valid API key authentication",
+			authHeader:     "Bearer " + testAPIKey,
+			wantStatusCode: http.StatusOK,
+			wantClaims:     false,
+			wantAgent:      true,
+		},
+		{
+			name:           "missing authorization header",
+			authHeader:     "",
+			wantStatusCode: http.StatusUnauthorized,
+			wantClaims:     false,
+			wantAgent:      false,
+		},
+		{
+			name:           "invalid token and invalid API key",
+			authHeader:     "Bearer invalid_token",
+			wantStatusCode: http.StatusUnauthorized,
+			wantClaims:     false,
+			wantAgent:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotClaims *Claims
+			var gotAgent *models.Agent
+			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotClaims = ClaimsFromContext(r.Context())
+				gotAgent = AgentFromContext(r.Context())
+				w.WriteHeader(http.StatusOK)
+			})
+
+			middleware := CombinedAuthMiddleware(secret, validator)(nextHandler)
+
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantStatusCode {
+				t.Errorf("status code = %v, want %v", rr.Code, tt.wantStatusCode)
+			}
+
+			if tt.wantClaims && gotClaims == nil {
+				t.Error("expected claims in context but got nil")
+			}
+			if !tt.wantClaims && gotClaims != nil {
+				t.Error("expected no claims but got some")
+			}
+
+			if tt.wantAgent && gotAgent == nil {
+				t.Error("expected agent in context but got nil")
+			}
+			if !tt.wantAgent && gotAgent != nil {
+				t.Error("expected no agent but got some")
 			}
 		})
 	}

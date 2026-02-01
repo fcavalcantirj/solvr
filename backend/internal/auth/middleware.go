@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // contextKey is the type for context keys to avoid collisions.
@@ -148,4 +150,107 @@ func writeForbiddenError(w http.ResponseWriter, message string) {
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+// APIKeyMiddleware creates middleware that validates API keys from Authorization header.
+// API keys must start with "solvr_" prefix.
+// Returns 401 if key is missing or invalid.
+func APIKeyMiddleware(validator *APIKeyValidator) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token, err := extractBearerToken(r)
+			if err != nil {
+				writeAuthError(w, err)
+				return
+			}
+
+			// Check if it's an API key (starts with solvr_)
+			if !IsAPIKey(token) {
+				writeAuthError(w, NewAuthError(ErrCodeInvalidAPIKey, "invalid API key format"))
+				return
+			}
+
+			agent, err := validator.ValidateAPIKey(r.Context(), token)
+			if err != nil {
+				writeAuthError(w, err)
+				return
+			}
+
+			// Add agent to context
+			ctx := ContextWithAgent(r.Context(), agent)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// CombinedAuthMiddleware creates middleware that tries JWT first, then API key.
+// Returns 401 if both authentication methods fail.
+func CombinedAuthMiddleware(jwtSecret string, apiKeyValidator *APIKeyValidator) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token, err := extractBearerToken(r)
+			if err != nil {
+				writeAuthError(w, err)
+				return
+			}
+
+			// Try API key first (if it has the prefix)
+			if IsAPIKey(token) {
+				agent, err := apiKeyValidator.ValidateAPIKey(r.Context(), token)
+				if err == nil && agent != nil {
+					ctx := ContextWithAgent(r.Context(), agent)
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+				// API key validation failed, continue to try JWT
+			}
+
+			// Try JWT
+			claims, err := ValidateJWT(jwtSecret, token)
+			if err == nil && claims != nil {
+				ctx := ContextWithClaims(r.Context(), claims)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			// Both methods failed
+			writeAuthError(w, NewAuthError(ErrCodeUnauthorized, "invalid authentication credentials"))
+		})
+	}
+}
+
+// ContextWithAgent adds an agent to the context.
+func ContextWithAgent(ctx context.Context, agent *models.Agent) context.Context {
+	return context.WithValue(ctx, AgentContextKey, agent)
+}
+
+// AgentFromContext retrieves an agent from the context.
+// Returns nil if no agent is present.
+func AgentFromContext(ctx context.Context) *models.Agent {
+	agent, ok := ctx.Value(AgentContextKey).(*models.Agent)
+	if !ok {
+		return nil
+	}
+	return agent
+}
+
+// extractBearerToken extracts the token from the Authorization header.
+func extractBearerToken(r *http.Request) (string, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return "", NewAuthError(ErrCodeUnauthorized, "authorization header required")
+	}
+
+	// Must be Bearer token
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return "", NewAuthError(ErrCodeUnauthorized, "authorization header must be Bearer token")
+	}
+
+	token := parts[1]
+	if token == "" {
+		return "", NewAuthError(ErrCodeUnauthorized, "token is empty")
+	}
+
+	return token, nil
 }

@@ -1296,3 +1296,35 @@
   - All files under 800 lines per CLAUDE.md Golden Rules
   - Note: Go not installed in dev environment, code follows existing patterns
   - Updated PRD to passes=true for lines 325-330 and 338
+- 2026-02-01: [api-webhooks 331-334, 339] Create webhook delivery service ✓
+  - TDD approach: Created webhook_test.go FIRST with 17 test functions
+  - Created backend/internal/services/webhook_test.go (656 lines):
+    - MockWebhookRepository implementing WebhookRepository interface
+    - TestDeliverWebhook_Success: tests successful delivery with headers and payload
+    - TestDeliverWebhook_SignatureFormat: verifies HMAC-SHA256 "sha256=..." format
+    - TestDeliverWebhook_Failure_ServerError: tests 500 response handling
+    - TestDeliverWebhook_Failure_Timeout: tests timeout handling
+    - TestDeliverWebhook_MarkFailingAfter5Failures: tests status='failing' after 5 failures
+    - TestDeliverWebhook_SuccessResetsFailures: tests failure count reset on success
+    - TestDeliverWebhook_WebhookNotFound: tests 404 handling
+    - TestDeliverWebhook_AttemptNumber: tests X-Solvr-Delivery-Attempt header
+    - TestGenerateSignature: tests HMAC-SHA256 signature generation
+    - TestBuildPayload: tests {event, timestamp, data} format
+    - TestBuildPayload_NilData: tests handling of nil data
+    - TestGetRetryDelays: tests retry schedule (immediate, 1min, 5min, 30min, 2h)
+    - TestDeliverWebhook_HTTP2xxSuccess: tests 200, 201, 202, 204 all succeed
+    - TestDeliverWebhook_Non2xxFailure: tests 400, 401, 403, 404, 500, 502, 503 all fail
+  - Created backend/internal/services/webhook.go (201 lines):
+    - WebhookRepository interface for database operations
+    - WebhookDeliveryService struct with HTTP client
+    - DeliverWebhook(ctx, webhookID, event, data, secret) - main delivery method
+    - DeliverWebhookWithAttempt - delivery with specific attempt number
+    - BuildPayload(event, data) - builds {event, timestamp, data} JSON
+    - GenerateSignature(payload, secret) - HMAC-SHA256 "sha256=..." format
+    - GetRetryDelays() - returns [0, 1min, 5min, 30min, 2h] schedule
+    - recordFailure - updates consecutive_failures, marks 'failing' after 5
+    - recordSuccess - resets failures to 0, sets status 'active'
+    - Headers: X-Solvr-Signature, X-Solvr-Webhook-ID, X-Solvr-Delivery-Attempt, Content-Type
+  - All files under 800 lines per CLAUDE.md Golden Rules
+  - Note: Go not installed in dev environment, code follows existing patterns
+  - Updated PRD to passes=true for lines 331-334 and 339

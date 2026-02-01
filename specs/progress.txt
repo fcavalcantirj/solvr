@@ -1328,3 +1328,44 @@
   - All files under 800 lines per CLAUDE.md Golden Rules
   - Note: Go not installed in dev environment, code follows existing patterns
   - Updated PRD to passes=true for lines 331-334 and 339
+- 2026-02-01: [security 341-355, 369] Implement rate limit middleware with TDD ✓
+  - TDD approach: Created ratelimit_test.go FIRST with 22 test functions
+  - Created backend/internal/api/middleware/ratelimit_test.go (610 lines):
+    - TestRateLimiter_AgentGeneralLimit: tests 120 requests/min for agents
+    - TestRateLimiter_HumanGeneralLimit: tests 60 requests/min for humans
+    - TestRateLimiter_SearchLimit: tests 60 searches/min for agents
+    - TestRateLimiter_PostsLimitAgent: tests 10 posts/hour for agents
+    - TestRateLimiter_PostsLimitHuman: tests 5 posts/hour for humans
+    - TestRateLimiter_AnswersLimitAgent: tests 30 answers/hour for agents
+    - TestRateLimiter_AnswersLimitHuman: tests 20 answers/hour for humans
+    - TestRateLimiter_NewAccount50Percent: tests 50% limit for accounts < 24h
+    - TestRateLimiter_Returns429: tests 429 status on rate limit
+    - TestRateLimiter_XRateLimitLimitHeader: tests X-RateLimit-Limit header
+    - TestRateLimiter_XRateLimitRemainingHeader: tests X-RateLimit-Remaining header
+    - TestRateLimiter_XRateLimitResetHeader: tests X-RateLimit-Reset header
+    - TestRateLimiter_RetryAfterHeader: tests Retry-After header on 429
+    - TestRateLimiter_DifferentUsersIndependent: tests user isolation
+    - TestRateLimiter_KeyGeneration: tests rate limit key format
+    - TestRateLimiter_OperationDetection: tests operation type detection
+    - TestRateLimitConfig_Default: tests default config values
+    - TestRateLimiter_ResponseBody: tests 429 response JSON format
+    - MockRateLimitStore for dependency injection testing
+  - Created backend/internal/api/middleware/ratelimit.go (260 lines):
+    - RateLimitConfig struct with all SPEC.md Part 5.6 limits:
+      - AgentGeneralLimit: 120/min, HumanGeneralLimit: 60/min
+      - SearchLimitPerMin: 60/min
+      - AgentPostsPerHour: 10, HumanPostsPerHour: 5
+      - AgentAnswersPerHour: 30, HumanAnswersPerHour: 20
+      - NewAccountThreshold: 24h
+    - RateLimitStore interface for database/cache abstraction
+    - RateLimitRecord struct for storing limit state
+    - RateLimiter struct with Middleware() method
+    - Middleware sets X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset headers
+    - Middleware returns 429 with Retry-After header when rate limited
+    - GenerateRateLimitKey: format "{type}:{identifier}:{operation}"
+    - DetectOperation: detects search, posts, answers, or general operations
+    - 50% rate limit applied to accounts younger than 24 hours
+    - JSON error response with RATE_LIMITED code
+  - All files under 800 lines per CLAUDE.md Golden Rules
+  - Note: Go not installed in dev environment, code follows existing patterns
+  - Updated PRD to passes=true for lines 341-355 (15 rate limit requirements) and line 369 (unit tests)

@@ -1,0 +1,260 @@
+// Package middleware provides HTTP middleware for the Solvr API.
+package middleware
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/auth"
+)
+
+// RateLimitConfig holds configuration for rate limiting per SPEC.md Part 5.6.
+type RateLimitConfig struct {
+	// General request limits
+	AgentGeneralLimit int           // 120 requests/minute for agents
+	HumanGeneralLimit int           // 60 requests/minute for humans
+	GeneralWindow     time.Duration // Window for general limits
+
+	// Search limits
+	SearchLimitPerMin int // 60 searches/minute for agents
+
+	// Post creation limits
+	AgentPostsPerHour int // 10 posts/hour for agents
+	HumanPostsPerHour int // 5 posts/hour for humans
+	PostsWindow       time.Duration
+
+	// Answer limits
+	AgentAnswersPerHour int // 30 answers/hour for agents
+	HumanAnswersPerHour int // 20 answers/hour for humans
+	AnswersWindow       time.Duration
+
+	// New account restrictions
+	NewAccountThreshold time.Duration // 24 hours - accounts younger get 50% limits
+}
+
+// DefaultRateLimitConfig returns the default rate limit configuration per SPEC.md Part 5.6.
+func DefaultRateLimitConfig() *RateLimitConfig {
+	return &RateLimitConfig{
+		AgentGeneralLimit: 120,
+		HumanGeneralLimit: 60,
+		GeneralWindow:     time.Minute,
+
+		SearchLimitPerMin: 60,
+
+		AgentPostsPerHour: 10,
+		HumanPostsPerHour: 5,
+		PostsWindow:       time.Hour,
+
+		AgentAnswersPerHour: 30,
+		HumanAnswersPerHour: 20,
+		AnswersWindow:       time.Hour,
+
+		NewAccountThreshold: 24 * time.Hour,
+	}
+}
+
+// RateLimitRecord represents a rate limit record from the database.
+type RateLimitRecord struct {
+	Key         string
+	Count       int
+	WindowStart time.Time
+}
+
+// RateLimitStore defines the interface for rate limit storage.
+type RateLimitStore interface {
+	// GetRecord retrieves a rate limit record by key.
+	GetRecord(ctx context.Context, key string) (*RateLimitRecord, error)
+	// IncrementAndGet increments the count and returns the updated record.
+	// If the window has expired, it starts a new window.
+	IncrementAndGet(ctx context.Context, key string, window time.Duration) (*RateLimitRecord, error)
+}
+
+// RateLimiter implements rate limiting middleware.
+type RateLimiter struct {
+	store  RateLimitStore
+	config *RateLimitConfig
+}
+
+// NewRateLimiter creates a new RateLimiter with the given store and config.
+func NewRateLimiter(store RateLimitStore, config *RateLimitConfig) *RateLimiter {
+	return &RateLimiter{
+		store:  store,
+		config: config,
+	}
+}
+
+// Middleware returns HTTP middleware that enforces rate limits.
+func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get identity from context
+		isAgent, identifier, createdAt := rl.getIdentity(r)
+
+		// If no identity, allow through (auth middleware will handle)
+		if identifier == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Detect operation type
+		operation := DetectOperation(r)
+
+		// Get the applicable limit and window
+		limit, window := rl.getLimitAndWindow(isAgent, operation, createdAt)
+
+		// Generate the rate limit key
+		key := GenerateRateLimitKey(isAgent, identifier, operation)
+
+		// Increment and check the limit
+		record, err := rl.store.IncrementAndGet(r.Context(), key, window)
+		if err != nil {
+			// On error, allow request through (fail open)
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Calculate reset time
+		resetTime := record.WindowStart.Add(window)
+
+		// Set rate limit headers
+		w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+		remaining := limit - record.Count
+		if remaining < 0 {
+			remaining = 0
+		}
+		w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetTime.Unix(), 10))
+
+		// Check if rate limited
+		if record.Count > limit {
+			rl.writeRateLimitError(w, resetTime)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// getIdentity extracts identity information from the request context.
+// Returns (isAgent, identifier, createdAt).
+func (rl *RateLimiter) getIdentity(r *http.Request) (bool, string, time.Time) {
+	// Check for agent first
+	agent := auth.AgentFromContext(r.Context())
+	if agent != nil {
+		return true, agent.ID, agent.CreatedAt
+	}
+
+	// Check for human (JWT claims)
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims != nil {
+		return false, claims.UserID, time.Time{} // CreatedAt not available in claims
+	}
+
+	return false, "", time.Time{}
+}
+
+// getLimitAndWindow returns the rate limit and window for the given operation.
+func (rl *RateLimiter) getLimitAndWindow(isAgent bool, operation string, createdAt time.Time) (int, time.Duration) {
+	var limit int
+	var window time.Duration
+
+	switch operation {
+	case "search":
+		limit = rl.config.SearchLimitPerMin
+		window = time.Minute
+	case "posts":
+		if isAgent {
+			limit = rl.config.AgentPostsPerHour
+		} else {
+			limit = rl.config.HumanPostsPerHour
+		}
+		window = rl.config.PostsWindow
+	case "answers":
+		if isAgent {
+			limit = rl.config.AgentAnswersPerHour
+		} else {
+			limit = rl.config.HumanAnswersPerHour
+		}
+		window = rl.config.AnswersWindow
+	default: // "general"
+		if isAgent {
+			limit = rl.config.AgentGeneralLimit
+		} else {
+			limit = rl.config.HumanGeneralLimit
+		}
+		window = rl.config.GeneralWindow
+	}
+
+	// Apply new account restriction (50% limit for accounts < 24h old)
+	if !createdAt.IsZero() && time.Since(createdAt) < rl.config.NewAccountThreshold {
+		limit = limit / 2
+	}
+
+	return limit, window
+}
+
+// writeRateLimitError writes a 429 Too Many Requests response.
+func (rl *RateLimiter) writeRateLimitError(w http.ResponseWriter, resetTime time.Time) {
+	// Calculate Retry-After in seconds
+	retryAfter := int(time.Until(resetTime).Seconds())
+	if retryAfter < 1 {
+		retryAfter = 1
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+	w.WriteHeader(http.StatusTooManyRequests)
+
+	response := map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":    "RATE_LIMITED",
+			"message": "too many requests, please slow down",
+		},
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// GenerateRateLimitKey generates a unique key for rate limiting.
+// Format: "{type}:{identifier}:{operation}"
+// Example: "agent:my-agent:general" or "human:user-uuid:search"
+func GenerateRateLimitKey(isAgent bool, identifier, operation string) string {
+	entityType := "human"
+	if isAgent {
+		entityType = "agent"
+	}
+	return fmt.Sprintf("%s:%s:%s", entityType, identifier, operation)
+}
+
+// DetectOperation determines the operation type from the request.
+// Returns: "general", "search", "posts", or "answers"
+func DetectOperation(r *http.Request) string {
+	path := r.URL.Path
+
+	// Search detection
+	if strings.HasPrefix(path, "/v1/search") {
+		return "search"
+	}
+
+	// Post creation detection (POST to posts, problems, questions, ideas)
+	if r.Method == http.MethodPost {
+		// Creating a new post
+		if path == "/v1/posts" ||
+			path == "/v1/problems" ||
+			path == "/v1/questions" ||
+			path == "/v1/ideas" {
+			return "posts"
+		}
+
+		// Creating an answer
+		if strings.Contains(path, "/answers") {
+			return "answers"
+		}
+	}
+
+	return "general"
+}

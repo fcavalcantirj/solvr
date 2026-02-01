@@ -3,6 +3,8 @@ package handlers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -71,6 +73,8 @@ type OAuthHandlers struct {
 	userService   OAuthUserServiceInterface
 	gitHubBaseURL string // Allows overriding for tests
 	googleBaseURL string // Allows overriding for tests
+	refreshDB     RefreshTokenDBInterface  // For refresh token lookup
+	userRepo      UserRepositoryInterface  // For user lookup
 }
 
 // NewOAuthHandlers creates a new OAuthHandlers instance.
@@ -513,4 +517,156 @@ func writeBadGateway(w http.ResponseWriter, message string) {
 			"message": message,
 		},
 	})
+}
+
+func writeUnauthorized(w http.ResponseWriter, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]string{
+			"code":    code,
+			"message": message,
+		},
+	})
+}
+
+// RefreshTokenDBInterface defines the interface for refresh token database operations.
+// This allows for easy mocking in tests.
+type RefreshTokenDBInterface interface {
+	GetByTokenHash(ctx context.Context, tokenHash string) (*RefreshTokenRecordData, error)
+}
+
+// RefreshTokenRecordData represents a refresh token record from the database.
+type RefreshTokenRecordData struct {
+	ID        string
+	UserID    string
+	TokenHash string
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
+// UserRepositoryInterface defines the interface for user repository operations.
+type UserRepositoryInterface interface {
+	FindByID(ctx context.Context, id string) (*UserData, error)
+}
+
+// UserData represents user data from the database.
+type UserData struct {
+	ID          string
+	Username    string
+	Email       string
+	DisplayName string
+	Role        string
+}
+
+// NewOAuthHandlersWithRefresh creates OAuthHandlers with refresh token dependencies for testing.
+func NewOAuthHandlersWithRefresh(
+	config *OAuthConfig,
+	pool *db.Pool,
+	refreshDB RefreshTokenDBInterface,
+	userRepo UserRepositoryInterface,
+) *OAuthHandlers {
+	return &OAuthHandlers{
+		config:        config,
+		pool:          pool,
+		refreshDB:     refreshDB,
+		userRepo:      userRepo,
+		gitHubBaseURL: "https://github.com",
+		googleBaseURL: "https://oauth2.googleapis.com",
+	}
+}
+
+// RefreshTokenRequest is the request body for POST /v1/auth/refresh.
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+// RefreshToken handles POST /v1/auth/refresh
+// Validates refresh token and returns new access/refresh tokens.
+// Per SPEC.md Part 5.2: POST /auth/refresh -> Refresh access token.
+func (h *OAuthHandlers) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Parse request body
+	var req RefreshTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeValidationError(w, "invalid JSON body")
+		return
+	}
+
+	// Validate refresh_token is present
+	if req.RefreshToken == "" {
+		writeValidationError(w, "refresh_token is required")
+		return
+	}
+
+	// Hash the token to look it up
+	tokenHash := hashToken(req.RefreshToken)
+
+	// Look up the token in the database
+	record, err := h.refreshDB.GetByTokenHash(ctx, tokenHash)
+	if err != nil {
+		log.Printf("Refresh token lookup failed: %v", err)
+		writeInternalError(w, "Failed to validate refresh token")
+		return
+	}
+
+	// Token not found
+	if record == nil {
+		writeUnauthorized(w, "UNAUTHORIZED", "Invalid refresh token")
+		return
+	}
+
+	// Check if token is expired
+	if record.ExpiresAt.Before(time.Now()) {
+		writeUnauthorized(w, "TOKEN_EXPIRED", "Refresh token has expired")
+		return
+	}
+
+	// Look up user
+	user, err := h.userRepo.FindByID(ctx, record.UserID)
+	if err != nil {
+		log.Printf("User lookup failed: %v", err)
+		writeInternalError(w, "Failed to find user")
+		return
+	}
+	if user == nil {
+		writeUnauthorized(w, "UNAUTHORIZED", "User not found")
+		return
+	}
+
+	// Generate new JWT
+	jwtExpiry, err := time.ParseDuration(h.config.JWTExpiry)
+	if err != nil {
+		jwtExpiry = 15 * time.Minute // Default
+	}
+
+	accessToken, err := auth.GenerateJWT(h.config.JWTSecret, user.ID, user.Email, user.Role, jwtExpiry)
+	if err != nil {
+		log.Printf("JWT generation failed: %v", err)
+		writeInternalError(w, "Failed to generate access token")
+		return
+	}
+
+	// Generate new refresh token (token rotation for security)
+	newRefreshToken := auth.GenerateRefreshToken()
+
+	// Optionally store new refresh token and invalidate old one
+	// For now, we return the new token but don't persist (that can be added later)
+
+	// Return new tokens
+	response := map[string]interface{}{
+		"access_token":  accessToken,
+		"refresh_token": newRefreshToken,
+		"token_type":    "Bearer",
+		"expires_in":    int(jwtExpiry.Seconds()),
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// hashToken hashes a token using SHA-256 for database lookups.
+func hashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }

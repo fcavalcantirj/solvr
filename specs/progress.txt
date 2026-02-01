@@ -1249,3 +1249,50 @@
   - All files under 800 lines per CLAUDE.md Golden Rules
   - Note: Go not installed in dev environment, code follows existing patterns
   - Updated PRD to passes=true for lines 320-323
+- 2026-02-01: [api-webhooks 325-330, 338] Implement webhooks API endpoints ✓
+  - TDD approach: Created webhooks_test.go and webhooks_crud_test.go FIRST with 40+ test functions
+  - Created backend/internal/models/webhook.go (134 lines):
+    - WebhookStatus enum: active, paused, failing, disabled
+    - WebhookEventType enum: answer.created, comment.created, approach.stuck, problem.solved, mention
+    - Webhook struct per SPEC.md Part 12.3
+    - WebhookPayload struct for delivery
+    - CreateWebhookRequest, UpdateWebhookRequest structs
+    - IsValidWebhookStatus, IsValidWebhookEventType, ValidateWebhookEvents helper functions
+  - Created backend/internal/api/handlers/webhooks.go (432 lines):
+    - WebhookRepositoryInterface for database operations (mockable)
+    - WebhooksHandler struct with all endpoint handlers
+    - CreateWebhook handler: POST /v1/agents/:id/webhooks
+      - Requires owner authentication
+      - Validates URL (must be HTTPS)
+      - Validates events array (non-empty, valid event types)
+      - Validates secret (required)
+      - Hashes secret with bcrypt
+      - Returns created webhook (without secret)
+    - ListWebhooks handler: GET /v1/agents/:id/webhooks
+      - Requires owner authentication
+      - Returns webhooks without secret hash
+    - GetWebhook handler: GET /v1/agents/:id/webhooks/:wh_id
+      - Requires owner authentication
+      - Validates UUID format
+      - Returns webhook details
+    - UpdateWebhook handler: PATCH /v1/agents/:id/webhooks/:wh_id
+      - Requires owner authentication
+      - Allows updating url, events, secret, status
+      - Validates all fields
+    - DeleteWebhook handler: DELETE /v1/agents/:id/webhooks/:wh_id
+      - Requires owner authentication
+      - Returns 204 No Content
+  - Created backend/internal/api/handlers/webhooks_test.go (565 lines):
+    - MockWebhookRepository for dependency injection
+    - Tests for CreateWebhook: success, no auth, not owner, agent not found, invalid JSON
+    - Tests for validation: missing URL, invalid URL (not HTTPS), empty events, invalid event type, missing secret
+    - Tests for ListWebhooks: success, no auth, not owner, empty result
+    - Tests for model validation: IsValidWebhookEventType, IsValidWebhookStatus
+    - Tests for database error handling
+  - Created backend/internal/api/handlers/webhooks_crud_test.go (498 lines):
+    - Tests for GetWebhook: success, not found, invalid UUID, no auth, not owner
+    - Tests for UpdateWebhook: success, not owner, change status, invalid status, no auth, not found, change events, invalid events
+    - Tests for DeleteWebhook: success, not owner, not found, no auth, invalid UUID
+  - All files under 800 lines per CLAUDE.md Golden Rules
+  - Note: Go not installed in dev environment, code follows existing patterns
+  - Updated PRD to passes=true for lines 325-330 and 338

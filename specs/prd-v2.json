@@ -99,8 +99,8 @@
   {"category": "database", "description": "Webhooks table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add agent_id VARCHAR(50) REFERENCES agents(id)", "Add url TEXT NOT NULL", "Add events TEXT[] NOT NULL", "Add secret_hash VARCHAR(255)", "Add status VARCHAR(20) DEFAULT 'active'", "Add created_at, updated_at"], "passes": true},
   {"category": "database", "description": "Webhooks migration executes successfully", "steps": ["Run migrate up for 000010", "Verify webhooks table exists"], "passes": false},
 
-  {"category": "database", "description": "Create rate_limits migration file", "steps": ["Create backend/migrations/000011_create_rate_limits.up.sql", "Create backend/migrations/000011_create_rate_limits.down.sql"], "passes": false},
-  {"category": "database", "description": "Rate_limits table: all fields", "steps": ["Add key VARCHAR(255) PRIMARY KEY", "Add count INT DEFAULT 0", "Add window_start TIMESTAMPTZ DEFAULT NOW()"], "passes": false},
+  {"category": "database", "description": "Create rate_limits migration file", "steps": ["Create backend/migrations/000011_create_rate_limits.up.sql", "Create backend/migrations/000011_create_rate_limits.down.sql"], "passes": true},
+  {"category": "database", "description": "Rate_limits table: all fields", "steps": ["Add key VARCHAR(255) PRIMARY KEY", "Add count INT DEFAULT 0", "Add window_start TIMESTAMPTZ DEFAULT NOW()"], "passes": true},
   {"category": "database", "description": "Rate_limits migration executes successfully", "steps": ["Run migrate up for 000011", "Verify rate_limits table exists"], "passes": false},
 
   {"category": "database", "description": "Create audit_log migration file", "steps": ["Create backend/migrations/000012_create_audit_log.up.sql", "Create backend/migrations/000012_create_audit_log.down.sql"], "passes": false},

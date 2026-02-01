@@ -382,3 +382,14 @@
   - Updated .github/workflows/ci.yml to include "npm test" step
   - Verified: npm test passes locally (5 tests passing)
   - Updated PRD to passes=true for infra-26
+- 2026-02-01: [db-102, db-103] Create rate_limits migration file ✓
+  - Created backend/migrations/000011_create_rate_limits.up.sql (19 lines)
+  - Created backend/migrations/000011_create_rate_limits.down.sql (4 lines)
+  - Rate_limits table fields per SPEC.md Part 6:
+    - key VARCHAR(255) PRIMARY KEY
+    - count INT NOT NULL DEFAULT 0
+    - window_start TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  - Added index on window_start for cleanup of old entries
+  - Added table and column comments
+  - Updated PRD to passes=true for db-102 and db-103
+  - Note: db-104 (migration runs) requires DB connection

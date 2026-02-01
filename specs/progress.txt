@@ -2126,3 +2126,98 @@ All new problem page requirements now pass=true.
 - frontend/package.json (added marked dependency)
 - frontend/jest.config.ts (added transformIgnorePatterns)
 - specs/prd-v2.json (updated lines 479-482 to passes=true)
+
+## Session: Frontend New Question Page (frontend-pages)
+Date: 2026-02-01
+
+### Completed Requirements (PRD line 483)
+New question page requirement now passes=true.
+
+### What Was Done
+- TDD approach: Created new-question.test.tsx FIRST with 41 test functions
+- Created frontend/src/__tests__/new-question.test.tsx (476 lines):
+  - Tests for basic structure (main element, heading, form)
+  - Tests for authentication (loading state, redirect to login, form when authenticated)
+  - Tests for form fields (title, description, tags - no success criteria or difficulty for questions)
+  - Tests for form interactions (typing in fields, input binding)
+  - Tests for preview tab (tab buttons, switching, markdown rendering)
+  - Tests for form submission (submit/cancel buttons, API call, redirect)
+  - Tests for validation (title min length, description min length, max tags)
+  - Tests for error handling (API errors, network errors, dismiss error)
+  - Tests for accessibility (heading hierarchy, labels, alert roles)
+  - Tests for responsive design (max-width container)
+
+- Created frontend/src/app/new/question/page.tsx (317 lines):
+  - Per SPEC.md Part 4.8 (New Post Pages)
+  - Authentication check with redirect to login
+  - Write/Preview tabs for markdown editing
+  - Form fields:
+    - Title input (required, max 200 chars, min 10 chars)
+    - Description textarea (required, supports Markdown, min 50 chars)
+    - Tags input (comma-separated, max 5 tags)
+  - No success criteria or difficulty fields (questions don't need them)
+  - Preview panel with markdown rendering using marked library
+  - Client-side validation before submit
+  - POST to /v1/questions API
+  - Redirect to /posts/:id on success
+  - Error display with dismiss button
+  - Loading/submitting state management
+  - Cancel button returns to previous page
+
+### Test Results
+- Total tests: 337 passing (41 new question tests + existing tests)
+- All files under 800 lines per CLAUDE.md Golden Rules
+- TDD approach followed: tests written first, implementation made tests pass
+
+### Files Created/Modified
+- frontend/src/__tests__/new-question.test.tsx (new, 476 lines)
+- frontend/src/app/new/question/page.tsx (new, 317 lines)
+- specs/prd-v2.json (updated line 483 to passes=true)
+
+## Session: Frontend New Idea Page (frontend-pages)
+Date: 2026-02-01
+
+### Completed Requirements (PRD line 484)
+Create /new/idea page requirement now passes=true.
+
+### What Was Done
+- TDD approach: Created new-idea.test.tsx FIRST with 41 test functions
+- Created frontend/src/__tests__/new-idea.test.tsx (475 lines):
+  - Tests for basic structure (main element, heading, form)
+  - Tests for authentication (loading state, redirect to login, form when authenticated)
+  - Tests for form fields (title, description, tags - no success criteria or difficulty)
+  - Tests for form interactions (typing in fields, input binding)
+  - Tests for preview tab (tab buttons, switching, markdown rendering)
+  - Tests for form submission (submit/cancel buttons, API call, redirect)
+  - Tests for validation (title min length, description min length, max tags)
+  - Tests for error handling (API errors, network errors, dismiss error)
+  - Tests for accessibility (heading hierarchy, labels, alert roles)
+  - Tests for responsive design (max-width container)
+
+- Created frontend/src/app/new/idea/page.tsx (341 lines):
+  - Per SPEC.md Part 4.8 (New Post Pages)
+  - Authentication check with redirect to login
+  - Write/Preview tabs for markdown editing
+  - Form fields:
+    - Title input (required, max 200 chars, min 10 chars)
+    - Description textarea (required, supports Markdown, min 50 chars)
+    - Tags input (comma-separated, max 5 tags)
+  - No success criteria or difficulty fields (ideas don't need them)
+  - Preview panel with markdown rendering using marked library
+  - Client-side validation before submit
+  - POST to /v1/ideas API
+  - Redirect to /posts/:id on success
+  - Error display with dismiss button
+  - Loading/submitting state management
+  - Cancel button returns to previous page
+
+### Test Results
+- Total tests: 378 passing (41 new idea tests + existing tests)
+- Build passes with npm run build
+- All files under 800 lines per CLAUDE.md Golden Rules
+- TDD approach followed: tests written first, implementation made tests pass
+
+### Files Created/Modified
+- frontend/src/__tests__/new-idea.test.tsx (new, 475 lines)
+- frontend/src/app/new/idea/page.tsx (new, 341 lines)
+- specs/prd-v2.json (updated line 484 to passes=true)

@@ -46,6 +46,20 @@ type SearchAuthor struct {
 	DisplayName string `json:"display_name"`
 }
 
+// SearchOptions represents all available search filters and options.
+type SearchOptions struct {
+	Type       string    // Filter by post type (problem, question, idea)
+	Tags       []string  // Filter by tags
+	Status     string    // Filter by status
+	Author     string    // Filter by author_id
+	AuthorType string    // Filter by author_type (human, agent)
+	FromDate   time.Time // Filter posts created after this date
+	ToDate     time.Time // Filter posts created before this date
+	Sort       string    // Sort order (relevance, newest, votes, activity)
+	Page       int       // Page number (1-indexed)
+	PerPage    int       // Results per page
+}
+
 // ToResponse converts a SearchResult to a SearchResultResponse.
 func (r *SearchResult) ToResponse() SearchResultResponse {
 	return SearchResultResponse{

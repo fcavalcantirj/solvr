@@ -12,25 +12,11 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
-// SearchOptions represents all available search filters and options.
-type SearchOptions struct {
-	Type       string    // Filter by post type (problem, question, idea)
-	Tags       []string  // Filter by tags
-	Status     string    // Filter by status
-	Author     string    // Filter by author_id
-	AuthorType string    // Filter by author_type (human, agent)
-	FromDate   time.Time // Filter posts created after this date
-	ToDate     time.Time // Filter posts created before this date
-	Sort       string    // Sort order (relevance, newest, votes, activity)
-	Page       int       // Page number (1-indexed)
-	PerPage    int       // Results per page
-}
-
 // SearchRepositoryInterface defines the database operations for search.
 type SearchRepositoryInterface interface {
 	// Search performs a full-text search with the given query and options.
 	// Returns results, total count, and any error.
-	Search(ctx context.Context, query string, opts SearchOptions) ([]models.SearchResult, int, error)
+	Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error)
 }
 
 // SearchHandler handles search-related HTTP requests.
@@ -83,7 +69,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse filters
-	opts := SearchOptions{
+	opts := models.SearchOptions{
 		Type:       r.URL.Query().Get("type"),
 		Status:     r.URL.Query().Get("status"),
 		Author:     r.URL.Query().Get("author"),

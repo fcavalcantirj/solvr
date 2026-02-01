@@ -17,7 +17,7 @@ type MockSearchRepository struct {
 	total       int
 	searchErr   error
 	searchQuery string
-	searchOpts  SearchOptions
+	searchOpts  models.SearchOptions
 }
 
 func NewMockSearchRepository() *MockSearchRepository {
@@ -26,7 +26,7 @@ func NewMockSearchRepository() *MockSearchRepository {
 	}
 }
 
-func (m *MockSearchRepository) Search(ctx context.Context, query string, opts SearchOptions) ([]models.SearchResult, int, error) {
+func (m *MockSearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
 	m.searchQuery = query
 	m.searchOpts = opts
 	if m.searchErr != nil {

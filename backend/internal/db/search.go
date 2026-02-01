@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/jackc/pgx/v5"
 )
@@ -29,7 +28,7 @@ func NewSearchRepository(pool *Pool) *SearchRepository {
 // - Sorting by relevance, newest, votes, or activity
 // - Pagination with page and per_page
 // - Excludes deleted posts (deleted_at IS NULL)
-func (r *SearchRepository) Search(ctx context.Context, query string, opts handlers.SearchOptions) ([]models.SearchResult, int, error) {
+func (r *SearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
 	// Build the tsquery from the search query
 	// Convert query to websearch format (handles phrases, OR, AND, NOT)
 	tsquery := buildTsQuery(query)
@@ -154,7 +153,7 @@ func buildTsQuery(query string) string {
 }
 
 // buildSearchFilters builds the WHERE clause filters based on search options.
-func buildSearchFilters(opts handlers.SearchOptions, args []any, argNum int) (string, []any, int) {
+func buildSearchFilters(opts models.SearchOptions, args []any, argNum int) (string, []any, int) {
 	var filters []string
 
 	if opts.Type != "" {
@@ -254,7 +253,7 @@ func scanSearchResults(rows pgx.Rows) ([]models.SearchResult, error) {
 }
 
 // getSearchCount returns the total count of matching posts.
-func (r *SearchRepository) getSearchCount(ctx context.Context, tsquery string, opts handlers.SearchOptions) (int, error) {
+func (r *SearchRepository) getSearchCount(ctx context.Context, tsquery string, opts models.SearchOptions) (int, error) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM posts p

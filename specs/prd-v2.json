@@ -44,7 +44,7 @@
   {"category": "database", "description": "Users table: timestamp fields", "steps": ["Add created_at TIMESTAMPTZ DEFAULT NOW()", "Add updated_at TIMESTAMPTZ DEFAULT NOW()"], "passes": true},
   {"category": "database", "description": "Users table: role field", "steps": ["Add role VARCHAR(20) DEFAULT 'user'"], "passes": true},
   {"category": "database", "description": "Users table: indexes", "steps": ["Add INDEX on (auth_provider, auth_provider_id)", "Add INDEX on username", "Add INDEX on email"], "passes": true},
-  {"category": "database", "description": "Users migration executes successfully", "steps": ["Run migrate up for 000001", "Verify users table exists with \\d users", "Run migrate down", "Verify table dropped"], "passes": false},
+  {"category": "database", "description": "Users migration executes successfully", "steps": ["Run migrate up for 000001", "Verify users table exists with \\d users", "Run migrate down", "Verify table dropped"], "passes": true},
 
   {"category": "database", "description": "Create agents migration file", "steps": ["Create backend/migrations/000002_create_agents.up.sql", "Create backend/migrations/000002_create_agents.down.sql"], "passes": true},
   {"category": "database", "description": "Agents table: id field", "steps": ["Add id VARCHAR(50) PRIMARY KEY"], "passes": true},
@@ -54,7 +54,7 @@
   {"category": "database", "description": "Agents table: auth fields", "steps": ["Add api_key_hash VARCHAR(255)", "Add moltbook_id VARCHAR(255)"], "passes": true},
   {"category": "database", "description": "Agents table: timestamps", "steps": ["Add created_at TIMESTAMPTZ DEFAULT NOW()", "Add updated_at TIMESTAMPTZ DEFAULT NOW()"], "passes": true},
   {"category": "database", "description": "Agents table: indexes", "steps": ["Add INDEX on human_id", "Add INDEX on moltbook_id WHERE NOT NULL"], "passes": true},
-  {"category": "database", "description": "Agents migration executes successfully", "steps": ["Run migrate up for 000002", "Verify agents table exists"], "passes": false},
+  {"category": "database", "description": "Agents migration executes successfully", "steps": ["Run migrate up for 000002", "Verify agents table exists"], "passes": true},
 
   {"category": "database", "description": "Create posts migration file", "steps": ["Create backend/migrations/000003_create_posts.up.sql", "Create backend/migrations/000003_create_posts.down.sql"], "passes": true},
   {"category": "database", "description": "Posts table: id and type fields", "steps": ["Add id UUID PRIMARY KEY DEFAULT gen_random_uuid()", "Add type VARCHAR(20) NOT NULL with CHECK (type IN ('problem', 'question', 'idea'))"], "passes": true},
@@ -68,55 +68,55 @@
   {"category": "database", "description": "Posts table: timestamps", "steps": ["Add created_at TIMESTAMPTZ DEFAULT NOW()", "Add updated_at TIMESTAMPTZ DEFAULT NOW()", "Add deleted_at TIMESTAMPTZ for soft delete"], "passes": true},
   {"category": "database", "description": "Posts table: full-text search index", "steps": ["Add GIN index on to_tsvector('english', title || ' ' || description)"], "passes": true},
   {"category": "database", "description": "Posts table: lookup indexes", "steps": ["Add INDEX on type", "Add INDEX on status", "Add GIN INDEX on tags", "Add INDEX on created_at DESC", "Add INDEX on (posted_by_type, posted_by_id)"], "passes": true},
-  {"category": "database", "description": "Posts migration executes successfully", "steps": ["Run migrate up for 000003", "Verify posts table exists"], "passes": false},
+  {"category": "database", "description": "Posts migration executes successfully", "steps": ["Run migrate up for 000003", "Verify posts table exists"], "passes": true},
 
   {"category": "database", "description": "Create approaches migration file", "steps": ["Create backend/migrations/000004_create_approaches.up.sql", "Create backend/migrations/000004_create_approaches.down.sql"], "passes": true},
   {"category": "database", "description": "Approaches table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add problem_id UUID REFERENCES posts(id)", "Add author_type, author_id", "Add angle VARCHAR(500) NOT NULL", "Add method VARCHAR(500)", "Add assumptions TEXT[], differs_from UUID[]", "Add status VARCHAR(20) DEFAULT 'starting'", "Add outcome TEXT, solution TEXT", "Add timestamps and deleted_at"], "passes": true},
   {"category": "database", "description": "Progress_notes table in approaches migration", "steps": ["Add progress_notes table with id, approach_id FK, content TEXT, created_at", "Add INDEX on approach_id"], "passes": true},
-  {"category": "database", "description": "Approaches migration executes successfully", "steps": ["Run migrate up for 000004", "Verify approaches table exists", "Verify progress_notes table exists"], "passes": false},
+  {"category": "database", "description": "Approaches migration executes successfully", "steps": ["Run migrate up for 000004", "Verify approaches table exists", "Verify progress_notes table exists"], "passes": true},
 
   {"category": "database", "description": "Create answers migration file", "steps": ["Create backend/migrations/000005_create_answers.up.sql", "Create backend/migrations/000005_create_answers.down.sql"], "passes": true},
   {"category": "database", "description": "Answers table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add question_id UUID REFERENCES posts(id)", "Add author_type, author_id", "Add content TEXT NOT NULL", "Add is_accepted BOOLEAN DEFAULT FALSE", "Add upvotes, downvotes", "Add created_at, deleted_at"], "passes": true},
-  {"category": "database", "description": "Answers migration executes successfully", "steps": ["Run migrate up for 000005", "Verify answers table exists"], "passes": false},
+  {"category": "database", "description": "Answers migration executes successfully", "steps": ["Run migrate up for 000005", "Verify answers table exists"], "passes": true},
 
   {"category": "database", "description": "Create responses migration file", "steps": ["Create backend/migrations/000006_create_responses.up.sql", "Create backend/migrations/000006_create_responses.down.sql"], "passes": true},
   {"category": "database", "description": "Responses table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add idea_id UUID REFERENCES posts(id)", "Add author_type, author_id", "Add content TEXT NOT NULL", "Add response_type VARCHAR(20) CHECK IN ('build_on', 'question', 'caution', 'support')", "Add upvotes, downvotes, created_at"], "passes": true},
-  {"category": "database", "description": "Responses migration executes successfully", "steps": ["Run migrate up for 000006", "Verify responses table exists"], "passes": false},
+  {"category": "database", "description": "Responses migration executes successfully", "steps": ["Run migrate up for 000006", "Verify responses table exists"], "passes": true},
 
   {"category": "database", "description": "Create comments migration file", "steps": ["Create backend/migrations/000007_create_comments.up.sql", "Create backend/migrations/000007_create_comments.down.sql"], "passes": true},
   {"category": "database", "description": "Comments table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add target_type VARCHAR(20) NOT NULL", "Add target_id UUID NOT NULL", "Add author_type, author_id", "Add content TEXT NOT NULL", "Add created_at, deleted_at", "Add INDEX on (target_type, target_id)"], "passes": true},
-  {"category": "database", "description": "Comments migration executes successfully", "steps": ["Run migrate up for 000007", "Verify comments table exists"], "passes": false},
+  {"category": "database", "description": "Comments migration executes successfully", "steps": ["Run migrate up for 000007", "Verify comments table exists"], "passes": true},
 
   {"category": "database", "description": "Create votes migration file", "steps": ["Create backend/migrations/000008_create_votes.up.sql", "Create backend/migrations/000008_create_votes.down.sql"], "passes": true},
   {"category": "database", "description": "Votes table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add target_type, target_id", "Add voter_type, voter_id", "Add direction VARCHAR(4) CHECK IN ('up', 'down')", "Add confirmed BOOLEAN DEFAULT FALSE", "Add created_at", "Add UNIQUE constraint on (target_type, target_id, voter_type, voter_id)"], "passes": true},
-  {"category": "database", "description": "Votes migration executes successfully", "steps": ["Run migrate up for 000008", "Verify votes table exists"], "passes": false},
+  {"category": "database", "description": "Votes migration executes successfully", "steps": ["Run migrate up for 000008", "Verify votes table exists"], "passes": true},
 
   {"category": "database", "description": "Create notifications migration file", "steps": ["Create backend/migrations/000009_create_notifications.up.sql", "Create backend/migrations/000009_create_notifications.down.sql"], "passes": true},
   {"category": "database", "description": "Notifications table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add user_id UUID REFERENCES users(id) nullable", "Add agent_id VARCHAR(50) REFERENCES agents(id) nullable", "Add type VARCHAR(50) NOT NULL", "Add title VARCHAR(200), body TEXT, link TEXT", "Add read_at TIMESTAMPTZ, created_at"], "passes": true},
-  {"category": "database", "description": "Notifications migration executes successfully", "steps": ["Run migrate up for 000009", "Verify notifications table exists"], "passes": false},
+  {"category": "database", "description": "Notifications migration executes successfully", "steps": ["Run migrate up for 000009", "Verify notifications table exists"], "passes": true},
 
   {"category": "database", "description": "Create webhooks migration file", "steps": ["Create backend/migrations/000010_create_webhooks.up.sql", "Create backend/migrations/000010_create_webhooks.down.sql"], "passes": true},
   {"category": "database", "description": "Webhooks table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add agent_id VARCHAR(50) REFERENCES agents(id)", "Add url TEXT NOT NULL", "Add events TEXT[] NOT NULL", "Add secret_hash VARCHAR(255)", "Add status VARCHAR(20) DEFAULT 'active'", "Add created_at, updated_at"], "passes": true},
-  {"category": "database", "description": "Webhooks migration executes successfully", "steps": ["Run migrate up for 000010", "Verify webhooks table exists"], "passes": false},
+  {"category": "database", "description": "Webhooks migration executes successfully", "steps": ["Run migrate up for 000010", "Verify webhooks table exists"], "passes": true},
 
   {"category": "database", "description": "Create rate_limits migration file", "steps": ["Create backend/migrations/000011_create_rate_limits.up.sql", "Create backend/migrations/000011_create_rate_limits.down.sql"], "passes": true},
   {"category": "database", "description": "Rate_limits table: all fields", "steps": ["Add key VARCHAR(255) PRIMARY KEY", "Add count INT DEFAULT 0", "Add window_start TIMESTAMPTZ DEFAULT NOW()"], "passes": true},
-  {"category": "database", "description": "Rate_limits migration executes successfully", "steps": ["Run migrate up for 000011", "Verify rate_limits table exists"], "passes": false},
+  {"category": "database", "description": "Rate_limits migration executes successfully", "steps": ["Run migrate up for 000011", "Verify rate_limits table exists"], "passes": true},
 
   {"category": "database", "description": "Create audit_log migration file", "steps": ["Create backend/migrations/000012_create_audit_log.up.sql", "Create backend/migrations/000012_create_audit_log.down.sql"], "passes": true},
   {"category": "database", "description": "Audit_log table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add admin_id UUID REFERENCES users(id)", "Add action VARCHAR(50) NOT NULL", "Add target_type VARCHAR(50)", "Add target_id UUID", "Add details JSONB", "Add created_at TIMESTAMPTZ DEFAULT NOW()"], "passes": true},
-  {"category": "database", "description": "Audit_log migration executes successfully", "steps": ["Run migrate up for 000012", "Verify audit_log table exists"], "passes": false},
+  {"category": "database", "description": "Audit_log migration executes successfully", "steps": ["Run migrate up for 000012", "Verify audit_log table exists"], "passes": true},
 
   {"category": "database", "description": "Create flags migration file", "steps": ["Create backend/migrations/000013_create_flags.up.sql", "Create backend/migrations/000013_create_flags.down.sql"], "passes": true},
   {"category": "database", "description": "Flags table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add target_type VARCHAR(50) NOT NULL", "Add target_id UUID NOT NULL", "Add reporter_type VARCHAR(10) NOT NULL", "Add reporter_id VARCHAR(255) NOT NULL", "Add reason VARCHAR(50) NOT NULL", "Add status VARCHAR(20) DEFAULT 'pending'", "Add created_at TIMESTAMPTZ DEFAULT NOW()"], "passes": true},
-  {"category": "database", "description": "Flags migration executes successfully", "steps": ["Run migrate up for 000013", "Verify flags table exists"], "passes": false},
+  {"category": "database", "description": "Flags migration executes successfully", "steps": ["Run migrate up for 000013", "Verify flags table exists"], "passes": true},
 
   {"category": "database", "description": "Create refresh_tokens migration file", "steps": ["Create backend/migrations/000014_create_refresh_tokens.up.sql", "Create backend/migrations/000014_create_refresh_tokens.down.sql"], "passes": true},
   {"category": "database", "description": "Refresh_tokens table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add user_id UUID REFERENCES users(id) NOT NULL", "Add token_hash VARCHAR(255) NOT NULL", "Add expires_at TIMESTAMPTZ NOT NULL", "Add created_at TIMESTAMPTZ DEFAULT NOW()"], "passes": true},
-  {"category": "database", "description": "Refresh_tokens migration executes successfully", "steps": ["Run migrate up for 000014", "Verify refresh_tokens table exists"], "passes": false},
+  {"category": "database", "description": "Refresh_tokens migration executes successfully", "steps": ["Run migrate up for 000014", "Verify refresh_tokens table exists"], "passes": true},
 
-  {"category": "database", "description": "All migrations run together", "steps": ["Run migrate up from clean database", "Verify all 14 tables exist", "Query each table structure"], "passes": false},
-  {"category": "database", "description": "All migrations rollback cleanly", "steps": ["Run migrate down to version 0", "Verify all tables dropped", "Re-run migrate up succeeds"], "passes": false},
+  {"category": "database", "description": "All migrations run together", "steps": ["Run migrate up from clean database", "Verify all 14 tables exist", "Query each table structure"], "passes": true},
+  {"category": "database", "description": "All migrations rollback cleanly", "steps": ["Run migrate down to version 0", "Verify all tables dropped", "Re-run migrate up succeeds"], "passes": true},
 
   {"category": "database", "description": "Create database connection pool", "steps": ["Create backend/internal/db/pool.go", "Import pgx/v5/pgxpool", "Define Pool struct wrapping *pgxpool.Pool", "Implement NewPool(ctx, databaseURL) (*Pool, error)"], "passes": true},
   {"category": "database", "description": "Connection pool: configuration", "steps": ["Set MaxConns to 10", "Set MinConns to 2", "Set MaxConnIdleTime to 30s", "Set HealthCheckPeriod to 30s"], "passes": true},

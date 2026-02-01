@@ -325,11 +325,4 @@ func TestAgentRepository_FindByHumanID(t *testing.T) {
 	}
 }
 
-// getTestPool returns a database pool for testing.
-// Returns nil if DATABASE_URL is not set.
-func getTestPool(t *testing.T) *Pool {
-	t.Helper()
-	// This is a placeholder - in real tests, we'd get DATABASE_URL from env
-	// For now, return nil to skip tests without database
-	return nil
-}
+// Note: getTestPool is defined in users_test.go and shared across db package tests

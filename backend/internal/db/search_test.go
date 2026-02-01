@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
@@ -24,7 +23,7 @@ func TestSearchRepository_Search(t *testing.T) {
 		"When running multiple async queries to PostgreSQL, I encounter race conditions.", []string{"postgresql", "async"}, "solved")
 
 	// Search for "race condition"
-	results, total, err := repo.Search(ctx, "race condition", handlers.SearchOptions{
+	results, total, err := repo.Search(ctx, "race condition", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -77,7 +76,7 @@ func TestSearchRepository_Search_RelevanceScore(t *testing.T) {
 		"Generic database question", []string{"database"}, "open")
 
 	// Search for "PostgreSQL"
-	results, _, err := repo.Search(ctx, "PostgreSQL", handlers.SearchOptions{
+	results, _, err := repo.Search(ctx, "PostgreSQL", models.SearchOptions{
 		Sort:    "relevance",
 		Page:    1,
 		PerPage: 20,
@@ -115,7 +114,7 @@ func TestSearchRepository_Search_Snippet(t *testing.T) {
 		"When handling errors in async Go code, you need to be careful with goroutines and channels.",
 		[]string{"go", "async"}, "open")
 
-	results, _, err := repo.Search(ctx, "async error", handlers.SearchOptions{
+	results, _, err := repo.Search(ctx, "async error", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -155,7 +154,7 @@ func TestSearchRepository_Search_TypeFilter(t *testing.T) {
 	insertTestPost(t, pool, ctx, "post-type-3", "idea", "Test idea", "Description", []string{}, "open")
 
 	// Search with type=problem filter
-	results, _, err := repo.Search(ctx, "test", handlers.SearchOptions{
+	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Type:    "problem",
 		Page:    1,
 		PerPage: 20,
@@ -183,7 +182,7 @@ func TestSearchRepository_Search_StatusFilter(t *testing.T) {
 	insertTestPost(t, pool, ctx, "post-status-1", "problem", "Test open", "Description", []string{}, "open")
 	insertTestPost(t, pool, ctx, "post-status-2", "problem", "Test solved", "Description", []string{}, "solved")
 
-	results, _, err := repo.Search(ctx, "test", handlers.SearchOptions{
+	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Status:  "solved",
 		Page:    1,
 		PerPage: 20,
@@ -211,7 +210,7 @@ func TestSearchRepository_Search_TagsFilter(t *testing.T) {
 	insertTestPost(t, pool, ctx, "post-tags-1", "problem", "Go concurrency test", "Description", []string{"go", "concurrency"}, "open")
 	insertTestPost(t, pool, ctx, "post-tags-2", "problem", "Python test", "Description", []string{"python"}, "open")
 
-	results, _, err := repo.Search(ctx, "test", handlers.SearchOptions{
+	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Tags:    []string{"go"},
 		Page:    1,
 		PerPage: 20,
@@ -239,7 +238,7 @@ func TestSearchRepository_Search_ExcludeDeleted(t *testing.T) {
 	insertTestPost(t, pool, ctx, "post-active", "problem", "Active post searchable", "Description", []string{}, "open")
 	insertTestPostDeleted(t, pool, ctx, "post-deleted", "problem", "Deleted post not searchable", "Description", []string{}, "open")
 
-	results, _, err := repo.Search(ctx, "post searchable", handlers.SearchOptions{
+	results, _, err := repo.Search(ctx, "post searchable", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -266,7 +265,7 @@ func TestSearchRepository_Search_SortNewest(t *testing.T) {
 	insertTestPostWithTime(t, pool, ctx, "post-old", "problem", "Test old", "Description", []string{}, "open", time.Now().Add(-24*time.Hour))
 	insertTestPostWithTime(t, pool, ctx, "post-new", "problem", "Test new", "Description", []string{}, "open", time.Now())
 
-	results, _, err := repo.Search(ctx, "test", handlers.SearchOptions{
+	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Sort:    "newest",
 		Page:    1,
 		PerPage: 20,
@@ -294,7 +293,7 @@ func TestSearchRepository_Search_SortVotes(t *testing.T) {
 	insertTestPostWithVotes(t, pool, ctx, "post-low", "problem", "Test low votes", "Description", []string{}, "open", 5, 3)   // Score: 2
 	insertTestPostWithVotes(t, pool, ctx, "post-high", "problem", "Test high votes", "Description", []string{}, "open", 10, 1) // Score: 9
 
-	results, _, err := repo.Search(ctx, "test", handlers.SearchOptions{
+	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Sort:    "votes",
 		Page:    1,
 		PerPage: 20,
@@ -326,7 +325,7 @@ func TestSearchRepository_Search_Pagination(t *testing.T) {
 	}
 
 	// Request page 1 with 2 per page
-	results, total, err := repo.Search(ctx, "pagination test", handlers.SearchOptions{
+	results, total, err := repo.Search(ctx, "pagination test", models.SearchOptions{
 		Page:    1,
 		PerPage: 2,
 	})
@@ -344,7 +343,7 @@ func TestSearchRepository_Search_Pagination(t *testing.T) {
 	}
 
 	// Request page 2
-	results2, _, err := repo.Search(ctx, "pagination test", handlers.SearchOptions{
+	results2, _, err := repo.Search(ctx, "pagination test", models.SearchOptions{
 		Page:    2,
 		PerPage: 2,
 	})
@@ -382,7 +381,7 @@ func TestSearchRepository_Search_DateFilter(t *testing.T) {
 	insertTestPostWithTime(t, pool, ctx, "post-2026", "problem", "New post date filter", "Description", []string{}, "open", newDate)
 
 	// Search only for posts in 2026
-	results, _, err := repo.Search(ctx, "post date filter", handlers.SearchOptions{
+	results, _, err := repo.Search(ctx, "post date filter", models.SearchOptions{
 		FromDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		ToDate:   time.Date(2026, 12, 31, 23, 59, 59, 0, time.UTC),
 		Page:     1,
@@ -413,7 +412,7 @@ func TestSearchRepository_Search_AuthorFilter(t *testing.T) {
 	insertTestPostWithAuthor(t, pool, ctx, "post-author-2", "problem", "Test author filter", "Description",
 		[]string{}, "open", "agent", "claude")
 
-	results, _, err := repo.Search(ctx, "test author filter", handlers.SearchOptions{
+	results, _, err := repo.Search(ctx, "test author filter", models.SearchOptions{
 		Author:  "claude",
 		Page:    1,
 		PerPage: 20,
@@ -443,7 +442,7 @@ func TestSearchRepository_Search_AuthorTypeFilter(t *testing.T) {
 	insertTestPostWithAuthor(t, pool, ctx, "post-atype-2", "problem", "Test author type filter", "Description",
 		[]string{}, "open", "agent", "bot-1")
 
-	results, _, err := repo.Search(ctx, "test author type filter", handlers.SearchOptions{
+	results, _, err := repo.Search(ctx, "test author type filter", models.SearchOptions{
 		AuthorType: "agent",
 		Page:       1,
 		PerPage:    20,

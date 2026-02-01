@@ -111,8 +111,8 @@
   {"category": "database", "description": "Flags table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add target_type VARCHAR(50) NOT NULL", "Add target_id UUID NOT NULL", "Add reporter_type VARCHAR(10) NOT NULL", "Add reporter_id VARCHAR(255) NOT NULL", "Add reason VARCHAR(50) NOT NULL", "Add status VARCHAR(20) DEFAULT 'pending'", "Add created_at TIMESTAMPTZ DEFAULT NOW()"], "passes": true},
   {"category": "database", "description": "Flags migration executes successfully", "steps": ["Run migrate up for 000013", "Verify flags table exists"], "passes": false},
 
-  {"category": "database", "description": "Create refresh_tokens migration file", "steps": ["Create backend/migrations/000014_create_refresh_tokens.up.sql", "Create backend/migrations/000014_create_refresh_tokens.down.sql"], "passes": false},
-  {"category": "database", "description": "Refresh_tokens table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add user_id UUID REFERENCES users(id) NOT NULL", "Add token_hash VARCHAR(255) NOT NULL", "Add expires_at TIMESTAMPTZ NOT NULL", "Add created_at TIMESTAMPTZ DEFAULT NOW()"], "passes": false},
+  {"category": "database", "description": "Create refresh_tokens migration file", "steps": ["Create backend/migrations/000014_create_refresh_tokens.up.sql", "Create backend/migrations/000014_create_refresh_tokens.down.sql"], "passes": true},
+  {"category": "database", "description": "Refresh_tokens table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add user_id UUID REFERENCES users(id) NOT NULL", "Add token_hash VARCHAR(255) NOT NULL", "Add expires_at TIMESTAMPTZ NOT NULL", "Add created_at TIMESTAMPTZ DEFAULT NOW()"], "passes": true},
   {"category": "database", "description": "Refresh_tokens migration executes successfully", "steps": ["Run migrate up for 000014", "Verify refresh_tokens table exists"], "passes": false},
 
   {"category": "database", "description": "All migrations run together", "steps": ["Run migrate up from clean database", "Verify all 14 tables exist", "Query each table structure"], "passes": false},

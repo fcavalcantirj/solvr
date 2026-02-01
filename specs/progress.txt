@@ -429,3 +429,17 @@
   - Added table and column comments
   - Updated PRD to passes=true for lines 110 and 111
   - Note: line 112 (migration runs) requires DB connection
+- 2026-02-01: [db-114, db-115] Create refresh_tokens migration file
+  - Created backend/migrations/000014_create_refresh_tokens.up.sql (31 lines)
+  - Created backend/migrations/000014_create_refresh_tokens.down.sql (3 lines)
+  - Refresh_tokens table fields per SPEC.md Part 5.2 and PRD:
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+    - token_hash VARCHAR(255) NOT NULL
+    - expires_at TIMESTAMPTZ NOT NULL
+    - created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  - Added indexes: user_id (user lookup), token_hash (authentication), expires_at (cleanup)
+  - Added unique constraint on token_hash to prevent duplicates
+  - Added table and column comments
+  - Updated PRD to passes=true for db-114 and db-115
+  - Note: db-116 (migration runs) requires DB connection

@@ -71,10 +71,11 @@ type OAuthHandlers struct {
 	pool          *db.Pool
 	tokenStore    *auth.RefreshTokenStore
 	userService   OAuthUserServiceInterface
-	gitHubBaseURL string // Allows overriding for tests
-	googleBaseURL string // Allows overriding for tests
-	refreshDB     RefreshTokenDBInterface  // For refresh token lookup
-	userRepo      UserRepositoryInterface  // For user lookup
+	gitHubBaseURL string                       // Allows overriding for tests
+	googleBaseURL string                       // Allows overriding for tests
+	refreshDB     RefreshTokenDBInterface      // For refresh token lookup
+	userRepo      UserRepositoryInterface      // For user lookup
+	logoutDB      LogoutRefreshTokenDBInterface // For logout token deletion
 }
 
 // NewOAuthHandlers creates a new OAuthHandlers instance.
@@ -536,6 +537,12 @@ type RefreshTokenDBInterface interface {
 	GetByTokenHash(ctx context.Context, tokenHash string) (*RefreshTokenRecordData, error)
 }
 
+// LogoutRefreshTokenDBInterface extends RefreshTokenDBInterface with deletion for logout.
+type LogoutRefreshTokenDBInterface interface {
+	RefreshTokenDBInterface
+	DeleteByTokenHash(ctx context.Context, tokenHash string) error
+}
+
 // RefreshTokenRecordData represents a refresh token record from the database.
 type RefreshTokenRecordData struct {
 	ID        string
@@ -669,4 +676,66 @@ func (h *OAuthHandlers) RefreshToken(w http.ResponseWriter, r *http.Request) {
 func hashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hash[:])
+}
+
+// NewOAuthHandlersWithLogout creates OAuthHandlers with logout dependencies for testing.
+func NewOAuthHandlersWithLogout(
+	config *OAuthConfig,
+	pool *db.Pool,
+	logoutDB LogoutRefreshTokenDBInterface,
+) *OAuthHandlers {
+	return &OAuthHandlers{
+		config:        config,
+		pool:          pool,
+		logoutDB:      logoutDB,
+		gitHubBaseURL: "https://github.com",
+		googleBaseURL: "https://oauth2.googleapis.com",
+	}
+}
+
+// LogoutRequest is the request body for POST /v1/auth/logout.
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+// Logout handles POST /v1/auth/logout
+// Requires valid JWT, deletes refresh token from database.
+// Per SPEC.md Part 5.2: POST /auth/logout -> Invalidate tokens.
+func (h *OAuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Check for valid JWT authentication (claims should be set by middleware)
+	claims := auth.ClaimsFromContext(ctx)
+	if claims == nil {
+		writeUnauthorized(w, "UNAUTHORIZED", "Authentication required")
+		return
+	}
+
+	// Parse request body
+	var req LogoutRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeValidationError(w, "invalid JSON body")
+		return
+	}
+
+	// Validate refresh_token is present
+	if req.RefreshToken == "" {
+		writeValidationError(w, "refresh_token is required")
+		return
+	}
+
+	// Hash the token to look it up in database
+	tokenHash := hashToken(req.RefreshToken)
+
+	// Delete the token from the database
+	// Note: This is idempotent - if token doesn't exist, we still return 204
+	if h.logoutDB != nil {
+		if err := h.logoutDB.DeleteByTokenHash(ctx, tokenHash); err != nil {
+			log.Printf("Error deleting refresh token: %v", err)
+			// We still return 204 - logout should be idempotent
+		}
+	}
+
+	// Return 204 No Content per SPEC.md
+	w.WriteHeader(http.StatusNoContent)
 }

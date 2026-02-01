@@ -1537,3 +1537,50 @@
   - All files under 800 lines per CLAUDE.md Golden Rules
   - Note: Go not installed in dev environment, code follows existing patterns
   - Updated PRD to passes=true for lines 394, 395, 396, 397
+- 2026-02-01: [notifications 399-406] Implement notification service with TDD ✓
+  - TDD approach: Created notification_test.go and notification_triggers_test.go FIRST
+  - Created backend/internal/services/notification_test.go (427 lines):
+    - MockNotificationRepository implementing NotificationRepository interface
+    - MockUserLookup, MockAgentLookup, MockPostLookup, MockAnswerLookup, MockApproachLookup
+    - TestCreateNotification_ForUser: tests notification creation for user recipient
+    - TestCreateNotification_ForAgent: tests notification creation for agent recipient
+    - TestCreateNotification_ValidationError: tests missing recipient error
+    - TestCreateNotification_BothRecipients: tests error when both user and agent specified
+    - TestCreateNotification_MissingType: tests error for missing notification type
+    - TestCreateNotification_MissingTitle: tests error for missing title
+    - TestCreateNotification_DatabaseError: tests database error handling
+    - TestParseMentions: tests @username parsing from content
+    - TestNotificationTypes: tests all notification type constants
+    - TestIsUpvoteMilestone: tests milestone detection (10, 50, 100)
+  - Created backend/internal/services/notification_triggers_test.go (723 lines):
+    - TestNotifyOnNewAnswer: tests notification trigger when answer created
+    - TestNotifyOnNewAnswer_AuthorIsAgent: tests agent recipient notification
+    - TestNotifyOnNewAnswer_SelfAnswer: tests no notification for self-answer
+    - TestNotifyOnApproachUpdate: tests notification on approach status change
+    - TestNotifyOnComment: tests notification when comment created
+    - TestNotifyOnAcceptedAnswer: tests notification when answer accepted
+    - TestNotifyOnUpvoteMilestone: table tests for 10, 50, 100 upvote milestones
+    - TestNotifyOnMention: tests @username mention notification
+    - TestNotifyOnMention_SelfMention: tests no notification for self-mention
+    - TestNotifyOnComment_SelfComment: tests no notification for self-comment
+    - TestNotifyOnApproachUpdate_StatusMessages: tests correct message per status
+    - TestNotifyOnMention_MultipleUsers: tests multiple user mentions
+    - TestNotifyOnMention_SkipsNotFoundUsers: tests handling of unknown usernames
+  - Created backend/internal/services/notification.go (521 lines):
+    - NotificationType enum: answer.created, comment.created, approach.updated, problem.solved, mention, answer.accepted, upvote.milestone
+    - Error types: ErrInvalidRecipient, ErrInvalidNotificationType, ErrInvalidNotificationTitle
+    - NotificationInput, NotificationRecord, CreateNotificationParams structs
+    - Event structs: NewAnswerEvent, ApproachUpdateEvent, CommentEvent, AcceptedAnswerEvent, UpvoteEvent, MentionEvent
+    - Lookup interfaces: UserLookup, AgentLookup, PostLookup, AnswerLookup, ApproachLookup
+    - NotificationService struct with CreateNotification method
+    - NotifyOnNewAnswer: notifies question author when answer created (skips self-answer)
+    - NotifyOnApproachUpdate: notifies problem author on status change (succeeded, stuck, failed)
+    - NotifyOnComment: notifies content author on new comment (skips self-comment)
+    - NotifyOnAcceptedAnswer: notifies answer author when accepted
+    - NotifyOnUpvoteMilestone: notifies at 10, 50, 100 upvotes
+    - NotifyOnMention: notifies users mentioned with @username (skips self-mention)
+    - ParseMentions: regex-based @username parsing, deduplicates, excludes emails
+    - isUpvoteMilestone: helper for milestone detection
+  - All files under 800 lines per CLAUDE.md Golden Rules
+  - Note: Go not installed in dev environment, code follows existing patterns
+  - Updated PRD to passes=true for lines 399-406 (8 notification requirements)

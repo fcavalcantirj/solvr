@@ -393,3 +393,19 @@
   - Added table and column comments
   - Updated PRD to passes=true for db-102 and db-103
   - Note: db-104 (migration runs) requires DB connection
+- 2026-02-01: [db-106, db-107] Create audit_log migration file ✓
+  - Created backend/migrations/000012_create_audit_log.up.sql (38 lines)
+  - Created backend/migrations/000012_create_audit_log.down.sql (3 lines)
+  - Audit_log table fields per SPEC.md Part 16 and PRD:
+    - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    - admin_id UUID REFERENCES users(id) ON DELETE SET NULL
+    - action VARCHAR(50) NOT NULL
+    - target_type VARCHAR(50)
+    - target_id UUID
+    - details JSONB
+    - ip_address INET (additional field for tracking)
+    - created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  - Added indexes: admin_id, action, target (type+id), created_at DESC
+  - Added table and column comments
+  - Updated PRD to passes=true for db-106 and db-107
+  - Note: db-108 (migration runs) requires DB connection

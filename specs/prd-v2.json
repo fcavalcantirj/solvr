@@ -103,8 +103,8 @@
   {"category": "database", "description": "Rate_limits table: all fields", "steps": ["Add key VARCHAR(255) PRIMARY KEY", "Add count INT DEFAULT 0", "Add window_start TIMESTAMPTZ DEFAULT NOW()"], "passes": true},
   {"category": "database", "description": "Rate_limits migration executes successfully", "steps": ["Run migrate up for 000011", "Verify rate_limits table exists"], "passes": false},
 
-  {"category": "database", "description": "Create audit_log migration file", "steps": ["Create backend/migrations/000012_create_audit_log.up.sql", "Create backend/migrations/000012_create_audit_log.down.sql"], "passes": false},
-  {"category": "database", "description": "Audit_log table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add admin_id UUID REFERENCES users(id)", "Add action VARCHAR(50) NOT NULL", "Add target_type VARCHAR(50)", "Add target_id UUID", "Add details JSONB", "Add created_at TIMESTAMPTZ DEFAULT NOW()"], "passes": false},
+  {"category": "database", "description": "Create audit_log migration file", "steps": ["Create backend/migrations/000012_create_audit_log.up.sql", "Create backend/migrations/000012_create_audit_log.down.sql"], "passes": true},
+  {"category": "database", "description": "Audit_log table: all fields", "steps": ["Add id UUID PRIMARY KEY", "Add admin_id UUID REFERENCES users(id)", "Add action VARCHAR(50) NOT NULL", "Add target_type VARCHAR(50)", "Add target_id UUID", "Add details JSONB", "Add created_at TIMESTAMPTZ DEFAULT NOW()"], "passes": true},
   {"category": "database", "description": "Audit_log migration executes successfully", "steps": ["Run migrate up for 000012", "Verify audit_log table exists"], "passes": false},
 
   {"category": "database", "description": "Create flags migration file", "steps": ["Create backend/migrations/000013_create_flags.up.sql", "Create backend/migrations/000013_create_flags.down.sql"], "passes": false},

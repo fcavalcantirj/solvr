@@ -1,0 +1,172 @@
+// Package models contains data structures for the Solvr API.
+package models
+
+import (
+	"time"
+)
+
+// PostType represents the type of post.
+type PostType string
+
+const (
+	PostTypeProblem  PostType = "problem"
+	PostTypeQuestion PostType = "question"
+	PostTypeIdea     PostType = "idea"
+)
+
+// PostStatus represents the status of a post.
+type PostStatus string
+
+// Post status constants per SPEC.md Part 2.2.
+const (
+	// Common statuses
+	PostStatusDraft PostStatus = "draft"
+	PostStatusOpen  PostStatus = "open"
+
+	// Problem statuses
+	PostStatusInProgress PostStatus = "in_progress"
+	PostStatusSolved     PostStatus = "solved"
+	PostStatusClosed     PostStatus = "closed"
+	PostStatusStale      PostStatus = "stale"
+
+	// Question statuses
+	PostStatusAnswered PostStatus = "answered"
+
+	// Idea statuses
+	PostStatusActive  PostStatus = "active"
+	PostStatusDormant PostStatus = "dormant"
+	PostStatusEvolved PostStatus = "evolved"
+)
+
+// AuthorType represents whether the author is a human or AI agent.
+type AuthorType string
+
+const (
+	AuthorTypeHuman AuthorType = "human"
+	AuthorTypeAgent AuthorType = "agent"
+)
+
+// Post represents a problem, question, or idea on Solvr.
+// Per SPEC.md Part 2.2 and Part 6 (posts table).
+type Post struct {
+	// ID is the unique identifier for the post.
+	ID string `json:"id"`
+
+	// Type is the post type: problem, question, or idea.
+	Type PostType `json:"type"`
+
+	// Title is the post title.
+	// Max 200 chars.
+	Title string `json:"title"`
+
+	// Description is the post content in markdown.
+	// Max varies by type: 50,000 for problems/ideas, 20,000 for questions.
+	Description string `json:"description"`
+
+	// Tags is a list of tags for the post.
+	// Max 5 tags.
+	Tags []string `json:"tags,omitempty"`
+
+	// PostedByType is the author type: human or agent.
+	PostedByType AuthorType `json:"posted_by_type"`
+
+	// PostedByID is the author's ID (user UUID or agent ID).
+	PostedByID string `json:"posted_by_id"`
+
+	// Status is the current status of the post.
+	Status PostStatus `json:"status"`
+
+	// Upvotes is the number of upvotes.
+	Upvotes int `json:"upvotes"`
+
+	// Downvotes is the number of downvotes.
+	Downvotes int `json:"downvotes"`
+
+	// SuccessCriteria is for problems only - list of success criteria.
+	// Max 10 items per SPEC.md Part 2.2.
+	SuccessCriteria []string `json:"success_criteria,omitempty"`
+
+	// Weight is for problems only - difficulty rating (1-5).
+	Weight *int `json:"weight,omitempty"`
+
+	// AcceptedAnswerID is for questions only - the accepted answer ID.
+	AcceptedAnswerID *string `json:"accepted_answer_id,omitempty"`
+
+	// EvolvedInto is for ideas only - IDs of posts this idea evolved into.
+	EvolvedInto []string `json:"evolved_into,omitempty"`
+
+	// CreatedAt is when the post was created.
+	CreatedAt time.Time `json:"created_at"`
+
+	// UpdatedAt is when the post was last modified.
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// DeletedAt is when the post was soft deleted (null if not deleted).
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+}
+
+// VoteScore returns the computed vote score (upvotes - downvotes).
+func (p *Post) VoteScore() int {
+	return p.Upvotes - p.Downvotes
+}
+
+// PostAuthor contains author information for display.
+type PostAuthor struct {
+	Type        AuthorType `json:"type"`
+	ID          string     `json:"id"`
+	DisplayName string     `json:"display_name"`
+	AvatarURL   string     `json:"avatar_url,omitempty"`
+}
+
+// PostWithAuthor is a Post with embedded author information.
+type PostWithAuthor struct {
+	Post
+	Author    PostAuthor `json:"author"`
+	VoteScore int        `json:"vote_score"`
+}
+
+// PostListOptions contains options for listing posts.
+type PostListOptions struct {
+	Type    PostType   // Filter by post type
+	Status  PostStatus // Filter by status
+	Tags    []string   // Filter by tags
+	Page    int        // Page number (1-indexed)
+	PerPage int        // Results per page
+}
+
+// ValidPostTypes returns all valid post types.
+func ValidPostTypes() []PostType {
+	return []PostType{PostTypeProblem, PostTypeQuestion, PostTypeIdea}
+}
+
+// IsValidPostType checks if a post type is valid.
+func IsValidPostType(t PostType) bool {
+	switch t {
+	case PostTypeProblem, PostTypeQuestion, PostTypeIdea:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValidPostStatus checks if a post status is valid for the given type.
+func IsValidPostStatus(status PostStatus, postType PostType) bool {
+	switch postType {
+	case PostTypeProblem:
+		switch status {
+		case PostStatusDraft, PostStatusOpen, PostStatusInProgress, PostStatusSolved, PostStatusClosed, PostStatusStale:
+			return true
+		}
+	case PostTypeQuestion:
+		switch status {
+		case PostStatusDraft, PostStatusOpen, PostStatusAnswered, PostStatusClosed, PostStatusStale:
+			return true
+		}
+	case PostTypeIdea:
+		switch status {
+		case PostStatusDraft, PostStatusOpen, PostStatusActive, PostStatusDormant, PostStatusEvolved:
+			return true
+		}
+	}
+	return false
+}

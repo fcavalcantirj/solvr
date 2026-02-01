@@ -2572,3 +2572,58 @@ The dashboard page (frontend/src/app/dashboard/page.tsx, 652 lines) includes:
 - frontend/src/__tests__/dashboard.test.tsx (837 lines) - under 800 line limit
 - specs/prd-v2.json (updated lines 495-497 to passes=true)
 
+
+---
+
+## 2026-02-01: Feed Page Implementation (TDD)
+
+### Summary
+Implemented the Feed page (/feed) following TDD methodology with comprehensive tests.
+
+### Requirements Completed (PRD lines 498-501)
+All feed requirements now pass=true:
+- Create /feed page (frontend/src/app/feed/page.tsx)
+- Feed: sort options (Add sort dropdown with latest, top, hot options)
+- Feed: type filter (Filter by all, problems, questions, ideas)
+- Feed: pagination (Add load more button)
+
+### Test-Driven Development Process
+1. Wrote 38 tests covering all requirements in feed.test.tsx
+2. Implemented FeedPage component to pass all tests
+3. Fixed pagination test bug (regex matching "page=2" in "per_page=20")
+
+### Implementation Details
+The feed page (frontend/src/app/feed/page.tsx, ~290 lines) includes:
+- Page heading and responsive layout (max-w-4xl)
+- Type filter buttons (All, Problems, Questions, Ideas) with aria-pressed states
+- Sort dropdown (Latest, Top, Hot) mapping to API params (newest, votes, activity)
+- Loading skeleton while fetching
+- PostCard display for each post (via PostCard component)
+- Load More pagination with loading state indicator
+- Error state with retry button
+- Empty state with link to create post
+
+### API Integration
+- GET /v1/feed with query params:
+  - page (pagination)
+  - per_page (20 items)
+  - sort (newest|votes|activity)
+  - type (problem|question|idea) - only when filtered
+
+### Test Results
+- 38 tests passing in feed.test.tsx
+- 692 total frontend tests passing
+- Tests cover:
+  - Basic structure (main container, heading)
+  - Posts display (fetch, display, badges, votes, authors, links, empty state)
+  - Sort options (dropdown, options, default, API calls)
+  - Type filter (buttons, default, API calls, highlighting)
+  - Pagination (load more button, loading state, append posts, reset on filter)
+  - Error handling (error display, retry)
+  - Accessibility (heading hierarchy, accessible buttons/dropdowns, loading states)
+  - Layout (responsive container, filter bar)
+
+### Files Created/Modified
+- frontend/src/app/feed/page.tsx (new, ~290 lines)
+- frontend/src/__tests__/feed.test.tsx (new, ~760 lines)
+- specs/prd-v2.json (updated lines 498-501 to passes=true)

@@ -6130,12 +6130,15 @@
   },
   {
     "category": "design-branding",
-    "description": "Design Solvr mascot/character",
+    "description": "Design Solvr mascot: Pirate-themed character",
     "steps": [
-      "Friendly but smart character (owl? robot? hybrid?)",
-      "Should work in avatar, hero, empty states",
-      "Multiple expressions: thinking, celebrating, helping",
-      "Not childish \u2014 professional but warm"
+      "Pirate theme: We're ALL pirates in the sea of knowledge \ud83c\udff4\u200d\u2620\ufe0f",
+      "Options: Parrot with eyepatch, octopus with captain hat, robot pirate, skull with lightbulb",
+      "Friendly but clever \u2014 not scary, not childish",
+      "Works at all sizes: favicon (16px) to hero (512px)",
+      "Multiple expressions: searching (telescope), found treasure (celebrating), helping (pointing), thinking (hand on chin)",
+      "Colors: Should pop on dark backgrounds",
+      "Name the mascot! (Solvey? Captain Sol? The Navigator?)"
     ],
     "passes": false
   },

@@ -75,5 +75,13 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
       - name: Build
         run: npm run build
+
+      - name: Run E2E tests
+        run: npm run test:e2e -- --project=chromium
+        env:
+          E2E_BASE_URL: http://localhost:3000

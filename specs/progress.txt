@@ -4326,3 +4326,59 @@ Per SPEC.md Part 19.2 SEO specification:
 - All frontend dashboard tests passing (39 tests)
 - All frontend posts-detail tests passing (39 tests)
 - All CLI tests passing
+
+---
+
+## 2026-02-02: [finalization] E2E: Human signup flow ✓
+
+### Problem
+Need end-to-end tests for human signup/login flow per prd-v2.json requirement:
+- Test OAuth login end-to-end
+- Verify auth callback flow
+- Test redirect handling and security
+
+### Solution: Set up Playwright E2E testing framework
+
+**Playwright Setup:**
+- Installed @playwright/test as dev dependency
+- Created playwright.config.ts with chromium and mobile-chrome projects
+- Configured webServer to auto-start Next.js dev server
+- Added npm scripts: test:e2e, test:e2e:ui, test:e2e:headed
+
+**E2E Tests Created (frontend/e2e/auth.spec.ts):**
+- Login Page tests (5 tests):
+  - Displays login page with OAuth buttons
+  - GitHub button redirects to OAuth endpoint
+  - Google button redirects to OAuth endpoint
+  - Displays error message when error param present
+  - Displays generic error for unknown error codes
+- Auth Callback tests (7 tests):
+  - Callback stores token and redirects to dashboard
+  - Callback redirects to redirect_to param when provided
+  - Callback prevents open redirect attacks
+  - Callback prevents protocol-relative redirect attacks
+  - Callback handles missing token gracefully
+  - Callback handles OAuth error gracefully
+  - Callback shows processing status
+- Authenticated State tests (2 tests):
+  - Authenticated user can access dashboard
+  - Logout clears token and redirects to home
+- Homepage tests (1 test):
+  - Homepage has login link in header
+
+**CI/CD Integration:**
+- Updated .github/workflows/ci.yml to install Playwright browsers
+- Added E2E test step after build step
+
+### Files Created/Modified
+- frontend/playwright.config.ts (new)
+- frontend/e2e/auth.spec.ts (new - 15 E2E tests)
+- frontend/package.json (added test:e2e scripts)
+- frontend/jest.config.ts (ignore e2e/ directory)
+- frontend/.gitignore (added playwright-report, test-results)
+- .github/workflows/ci.yml (added Playwright E2E step)
+
+### Tests
+- 15 E2E tests covering human signup flow
+- All 995 frontend unit tests still passing
+- E2E tests ready for CI/CD environment with browser dependencies

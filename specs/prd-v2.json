@@ -565,10 +565,10 @@
   {"category": "skill", "description": "Create skill/scripts/test.sh", "steps": ["Test solvr.sh commands", "Verify API responses", "Report pass/fail"], "passes": true},
   {"category": "finalization", "description": "Publish Solvr skill to ClawHub", "steps": ["Create solvr-skill GitHub repository", "Push skill/ contents", "Submit to clawhub.ai", "Verify discoverable and installable"], "passes": false},
 
-  {"category": "discovery", "description": "GET /.well-known/ai-agent.json", "steps": ["Create handler for discovery endpoint", "Return API URL, MCP info, CLI info"], "passes": false},
-  {"category": "discovery", "description": "GET /v1/openapi.json", "steps": ["Generate or serve OpenAPI spec", "Validate as OpenAPI 3.0"], "passes": false},
-  {"category": "discovery", "description": "GET /v1/openapi.yaml", "steps": ["Serve YAML version of spec"], "passes": false},
-  {"category": "discovery", "description": "Discovery tests", "steps": ["Test discovery endpoints"], "passes": false},
+  {"category": "discovery", "description": "GET /.well-known/ai-agent.json", "steps": ["Create handler for discovery endpoint", "Return API URL, MCP info, CLI info"], "passes": true},
+  {"category": "discovery", "description": "GET /v1/openapi.json", "steps": ["Generate or serve OpenAPI spec", "Validate as OpenAPI 3.0"], "passes": true},
+  {"category": "discovery", "description": "GET /v1/openapi.yaml", "steps": ["Serve YAML version of spec"], "passes": true},
+  {"category": "discovery", "description": "Discovery tests", "steps": ["Test discovery endpoints"], "passes": true},
 
   {"category": "seo", "description": "Dynamic page titles", "steps": ["Set unique <title> per page", "Include post title on detail pages"], "passes": false},
   {"category": "seo", "description": "Meta descriptions", "steps": ["Add <meta name='description'> to pages"], "passes": false},

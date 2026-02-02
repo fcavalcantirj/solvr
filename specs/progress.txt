@@ -4078,3 +4078,47 @@ Add --include flag to get command for including approaches/answers/responses
 - skill/scripts/solvr.sh (executable)
 - skill/scripts/test.sh (executable)
 - skill/references/api.md
+
+---
+
+## Session: 2026-02-02
+
+### Task: Implement discovery endpoints
+
+### Completed Requirements (PRD lines 568-571)
+- GET /.well-known/ai-agent.json - passes=true (line 568)
+- GET /v1/openapi.json - passes=true (line 569)
+- GET /v1/openapi.yaml - passes=true (line 570)
+- Discovery tests - passes=true (line 571)
+
+### What Was Done (TDD approach)
+
+1. **RED: Wrote failing tests first** (discovery_test.go)
+   - 12 tests covering all three endpoints
+   - TestWellKnownAIAgentEndpoint, TestWellKnownAIAgentContent
+   - TestWellKnownAIAgentAPISection, TestWellKnownAIAgentMCPSection
+   - TestWellKnownAIAgentCapabilities
+   - TestOpenAPIJSONEndpoint, TestOpenAPIJSONContent, TestOpenAPIJSONHasSearchEndpoint
+   - TestOpenAPIYAMLEndpoint, TestOpenAPIYAMLContent, TestOpenAPIYAMLHasSearchPath
+   - TestDiscoveryEndpointsNoCORS
+
+2. **GREEN: Implemented handlers** (discovery.go)
+   - wellKnownAIAgentHandler: Returns agent discovery info per SPEC.md Part 18.3
+   - openAPIJSONHandler: Returns OpenAPI 3.0 spec in JSON
+   - openAPIYAMLHandler: Returns OpenAPI 3.0 spec in YAML
+
+3. **Registered routes in router.go**
+   - /.well-known/ai-agent.json
+   - /v1/openapi.json
+   - /v1/openapi.yaml
+
+### Test Results
+- All 12 discovery tests pass
+- API package coverage: 89.8%
+
+### Files Created
+- backend/internal/api/discovery.go (handlers and data structures)
+- backend/internal/api/discovery_test.go (12 tests)
+
+### Files Modified
+- backend/internal/api/router.go (added route registrations)

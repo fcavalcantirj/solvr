@@ -4382,3 +4382,55 @@ Need end-to-end tests for human signup/login flow per prd-v2.json requirement:
 - 15 E2E tests covering human signup flow
 - All 995 frontend unit tests still passing
 - E2E tests ready for CI/CD environment with browser dependencies
+
+---
+
+## 2026-02-02: E2E Tests for Human Posts Question Flow
+
+### Requirement
+E2E: Human posts question - per prd-v2.json finalization requirement:
+- Create question via UI
+- Verify appears in feed
+- Verify searchable
+
+### Solution: Playwright E2E tests with API mocking
+
+**E2E Tests Created (frontend/e2e/question.spec.ts):**
+
+Question Creation Page tests (6 tests):
+- Displays new question form for authenticated user
+- Redirects unauthenticated user to login
+- Validates form inputs before submission
+- Validates title length constraints
+- Validates tag count limit
+- Shows markdown preview when preview tab is clicked
+
+Question Submission tests (4 tests):
+- Successfully creates question and redirects to post page
+- Shows loading state during submission
+- Displays error message when submission fails
+- Allows dismissing error message
+
+Question Appears in Feed tests (3 tests):
+- Newly created question appears in feed
+- Feed shows questions when filtered by type
+- Question links to detail page from feed
+
+Question Is Searchable tests (5 tests):
+- Question appears in search results
+- Search result shows highlighted snippet
+- Search shows result metadata
+- Search can be performed from homepage
+- Search filters work correctly
+
+Full Question Posting Journey tests (1 test):
+- Complete flow: create question, view in feed, search
+
+### Files Created
+- frontend/e2e/question.spec.ts (650 lines - 19 E2E tests)
+
+### Testing Notes
+- Tests use API mocking via Playwright route interception
+- Mock responses follow SPEC.md Part 5.3 response format
+- Both desktop (chromium) and mobile (Pixel 5) viewports tested
+- Tests require Playwright browser dependencies to run

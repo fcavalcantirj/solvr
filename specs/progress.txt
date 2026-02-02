@@ -3586,3 +3586,46 @@ Limit the number of search results returned
 
 ### PRD Updates
 - search: --limit flag → passes: true
+
+## 2026-02-02: CLI get command
+
+### Requirement: CLI: get command
+Implement 'solvr get <id>' to show post details
+
+### Implementation
+- Created new get.go file with NewGetCmd() function
+- Added GetAPIResponse and PostDetail types for API response parsing
+- Command takes a single required argument: post ID
+- Calls GET /v1/posts/{id} on the API
+- Supports --api-url, --api-key, and --json flags (consistent with search)
+- Loads API key and URL from config if not provided via flags
+- Pretty output shows: type, title, ID, status, votes, author, tags, description
+- For problems: also shows weight and success criteria
+- --json flag outputs raw JSON response
+- Handles errors: 404 (not found), API errors, network errors
+
+### Tests Added (get_test.go)
+1. TestGetCommand_Exists: verifies command is registered
+2. TestGetCommand_RequiresID: verifies ID is required argument
+3. TestGetCommand_CallsAPI: verifies API is called with correct path
+4. TestGetCommand_DisplaysDetails: verifies output contains title, type, author
+5. TestGetCommand_NotFound: verifies 404 error handling
+6. TestGetCommand_APIError: verifies API error handling
+7. TestGetCommand_UsesAPIKey: verifies Authorization header is set
+8. TestGetCommand_HelpText: verifies help contains relevant info
+9. TestGetCommand_JSONFlag: verifies --json outputs valid JSON with data field
+10. TestGetCommand_DisplaysProblemDetails: verifies success criteria and weight shown
+11. TestGetCommand_DisplaysVotes: verifies vote score is displayed
+12. TestGetCommand_DisplaysDescription: verifies description is in output
+
+### Test Results
+- All 63 CLI tests pass
+- go test ./... -cover: 84.4% coverage (above 80% requirement)
+
+### Files Modified
+- cli/get.go: new file with get command implementation
+- cli/get_test.go: new file with 12 tests
+- cli/main.go: added NewGetCmd() to root command
+
+### PRD Updates
+- CLI: get command → passes: true

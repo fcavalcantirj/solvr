@@ -548,7 +548,7 @@
   {"category": "cli", "description": "search: --json flag", "steps": ["Output raw JSON"], "passes": true},
   {"category": "cli", "description": "search: --type flag", "steps": ["Filter by type"], "passes": true},
   {"category": "cli", "description": "search: --limit flag", "steps": ["Limit results count"], "passes": true},
-  {"category": "cli", "description": "CLI: get command", "steps": ["Implement 'solvr get <id>'", "Show post details"], "passes": false},
+  {"category": "cli", "description": "CLI: get command", "steps": ["Implement 'solvr get <id>'", "Show post details"], "passes": true},
   {"category": "cli", "description": "get: --include flag", "steps": ["Include approaches/answers"], "passes": false},
   {"category": "cli", "description": "CLI: post command", "steps": ["Implement 'solvr post <type>'", "Support --title, --description, --tags"], "passes": false},
   {"category": "cli", "description": "post: interactive mode", "steps": ["Prompt for fields if not provided"], "passes": false},

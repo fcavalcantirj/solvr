@@ -3629,3 +3629,57 @@ Implement 'solvr get <id>' to show post details
 
 ### PRD Updates
 - CLI: get command → passes: true
+
+## 2026-02-02: CLI get --include flag
+
+### Requirement: get: --include flag
+Add --include flag to get command for including approaches/answers/responses
+
+### Implementation
+- Added --include flag to get command (comma-separated values)
+- Supports three include types: approaches, answers, responses
+- When --include approaches is set and post is a problem:
+  - Calls GET /v1/problems/{id}/approaches to fetch approaches
+  - Displays approaches section with status icons, angles, methods, authors
+- When --include answers is set and post is a question:
+  - Calls GET /v1/questions/{id} which returns answers
+  - Displays answers section with content, vote scores, accepted indicator
+- When --include responses is set and post is an idea:
+  - Calls GET /v1/ideas/{id} which returns responses
+  - Displays responses section with content, type, vote scores
+- JSON output includes the related content in the data object
+- Added helper functions: parseIncludeOptions, fetchApproaches, fetchQuestionWithAnswers, fetchIdeaWithResponses
+- Added display functions: displayPostDetailsWithIncludes, displayGetJSONOutputWithIncludes
+
+### Types Added (get.go)
+- ApproachDetail: approach data including angle, method, status
+- ApproachesAPIResponse: wrapper for approaches list
+- AnswerDetail: answer data including content, vote info, is_accepted
+- QuestionWithAnswers: question with embedded answers
+- QuestionAPIResponse: wrapper for question with answers
+- ResponseDetail: response data including content, type, votes
+- IdeaWithResponses: idea with embedded responses
+- IdeaAPIResponse: wrapper for idea with responses
+- GetResponseWithIncludes: unified response type with optional includes
+
+### Tests Added
+- get_include_test.go (new file, 482 lines):
+  1. TestGetCommand_IncludeFlag: verifies --include flag exists
+  2. TestGetCommand_IncludeApproaches: verifies approaches are fetched and displayed
+  3. TestGetCommand_IncludeAnswers: verifies answers are fetched and displayed
+  4. TestGetCommand_IncludeResponses: verifies responses are fetched and displayed
+  5. TestGetCommand_IncludeMultiple: verifies multiple includes can be set
+  6. TestGetCommand_IncludeHelpText: verifies help mentions --include
+  7. TestGetCommand_IncludeJSONFormat: verifies JSON output contains includes
+
+### Test Results
+- All 70 CLI tests pass
+- go test ./... -cover: 81.7% coverage (above 80% requirement)
+
+### Files Modified
+- cli/get.go: added --include flag and related types/functions (511 lines)
+- cli/get_test.go: reduced to 474 lines (under 800 limit)
+- cli/get_include_test.go: new file with 7 tests (482 lines)
+
+### PRD Updates
+- get: --include flag → passes: true

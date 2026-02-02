@@ -3923,3 +3923,158 @@ Add --include flag to get command for including approaches/answers/responses
 
 ### Files Modified
 - specs/prd-v2.json (updated line 557 to passes=true)
+
+---
+
+## Session: 2026-02-02
+
+### Task: Create skill/ directory structure
+
+### Completed Requirements (PRD line 559)
+- Create skill/ directory structure - now passes=true
+
+### What Was Done
+- Created skill/ directory in project root
+- Created skill/scripts/ subdirectory for CLI tool and tests
+- Created skill/references/ subdirectory for API documentation
+
+### Files Created
+- skill/ (directory)
+- skill/scripts/ (directory)
+- skill/references/ (directory)
+
+---
+
+## Session: 2026-02-02
+
+### Task: Create skill/SKILL.md with agent guidance
+
+### Completed Requirements (PRD line 560)
+- Create skill/SKILL.md with agent guidance - now passes=true
+
+### What Was Done
+- Created SKILL.md with comprehensive agent guidance including:
+  - YAML frontmatter with name=solvr, description
+  - Section: What Solvr Is (collaborative knowledge base)
+  - Section: THE GOLDEN RULE - Search Before Work (always search first)
+  - Section: Prerequisites (API key storage options)
+  - Section: Testing Your Setup (solvr test)
+  - Section: Post Types (Problem vs Question vs Idea with fields and status flows)
+  - Section: Response Types (Approach vs Answer vs Response with usage)
+  - Section: Common Operations with bash examples
+  - Section: Tracking Contributions (memory file pattern)
+  - Section: API Endpoints summary table
+
+### Files Created
+- skill/SKILL.md (comprehensive agent guidance document)
+
+---
+
+## Session: 2026-02-02
+
+### Task: Create skill/scripts/solvr.sh CLI tool
+
+### Completed Requirements (PRD line 561)
+- Create skill/scripts/solvr.sh CLI tool - now passes=true
+
+### What Was Done
+- Created comprehensive bash CLI tool with:
+  - load_api_key(): Credential loading from env var, ~/.config/solvr/credentials.json, OpenClaw fallback
+  - api_call(): HTTP helper with Bearer auth, error handling, JSON support
+  - cmd_test: Verify API connection
+  - cmd_search: Search with --type, --limit, --json options
+  - cmd_get: Get post details with --include, --json options
+  - cmd_post: Create problem/question/idea with --tags, --json options
+  - cmd_answer: Post answer to question
+  - cmd_approach: Start approach to problem
+  - cmd_vote: Vote up/down on post
+  - cmd_help: Comprehensive help with examples
+  - urlencode(): URL encoding helper
+  - Color output support (disabled when not a terminal)
+
+### Files Created
+- skill/scripts/solvr.sh (executable bash CLI tool)
+
+---
+
+## Session: 2026-02-02
+
+### Task: Complete skill/ directory implementation
+
+### Completed Requirements (PRD lines 559-565)
+- Create skill/ directory structure - passes=true (line 559)
+- Create skill/SKILL.md with agent guidance - passes=true (line 560)
+- Create skill/scripts/solvr.sh CLI tool - passes=true (line 561)
+- Create skill/references/api.md - passes=true (line 562)
+- Create skill/INSTALL.md - passes=true (line 563)
+- Create skill/README.md - passes=true (line 564)
+- Create skill/scripts/test.sh - passes=true (line 565)
+
+### What Was Done
+
+1. **skill/ directory structure**
+   - Created skill/scripts/ and skill/references/ subdirectories
+
+2. **skill/SKILL.md** - Comprehensive agent guidance with:
+   - YAML frontmatter (name, description, version)
+   - What Solvr Is section
+   - THE GOLDEN RULE - Search Before Work
+   - Prerequisites (API key storage)
+   - Testing section (solvr test)
+   - Post Types (Problem, Question, Idea)
+   - Response Types (Approach, Answer, Response)
+   - Common Operations with bash examples
+   - Tracking Contributions (memory file pattern)
+   - API Endpoints summary table
+
+3. **skill/scripts/solvr.sh** - Complete bash CLI tool with:
+   - Credential loading (env var, config file, OpenClaw fallback)
+   - api_call() helper with Bearer auth
+   - Commands: test, search, get, post, answer, approach, vote, help
+   - Color output support (disabled when not terminal)
+   - Comprehensive help with examples
+
+4. **skill/references/api.md** - Full API documentation with:
+   - Authentication (Bearer token)
+   - Search endpoints with parameters and examples
+   - Posts endpoints (CRUD operations)
+   - Approaches endpoints
+   - Answers/Responses endpoints
+   - Voting endpoints
+   - Response schemas and error codes
+   - Rate limits
+
+5. **skill/INSTALL.md** - Installation guide with:
+   - Prerequisites (bash, curl, jq)
+   - Getting API key from solvr.dev
+   - Credential storage options (file, env, OpenClaw)
+   - Installation: ClawHub, GitHub, manual methods
+   - Verification with solvr test
+   - Troubleshooting section
+
+6. **skill/README.md** - Project README with:
+   - Title and badges
+   - What Solvr Is
+   - Why Use This Skill (comparison table)
+   - Quick Start guide
+   - Usage examples
+   - Repository structure
+   - Commands reference
+   - License and links
+
+7. **skill/scripts/test.sh** - Test script with:
+   - Prerequisite checks (bash, jq)
+   - Command existence tests
+   - Argument validation tests
+   - Help text content tests
+   - Error message tests
+   - Optional API tests (when credentials available)
+   - Pass/fail reporting
+
+### Files Created
+- skill/SKILL.md
+- skill/README.md
+- skill/INSTALL.md
+- skill/scripts/solvr.sh (executable)
+- skill/scripts/test.sh (executable)
+- skill/references/api.md

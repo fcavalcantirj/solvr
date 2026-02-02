@@ -4719,3 +4719,77 @@ Implemented comprehensive E2E tests for all three CLI commands (search, get, pos
 - backend/internal/services/notification.go (bug fix)
 - backend/internal/services/email_test.go (bug fix)
 - specs/prd-v2.json (updated line 5068 to passes=true)
+
+---
+
+## 2026-02-02: E2E Rate Limiting Tests
+
+### PRD Requirements Completed
+- **[finalization] E2E: Rate limiting** (line 5070-5078) - now passes=true
+  - Exceed rate limit
+  - Verify 429 response
+  - Verify resets after window
+
+### What Was Done (TDD Approach)
+
+Created comprehensive E2E tests for the rate limiting system that verify the complete flow:
+
+1. **TestE2E_RateLimit_ExceedLimitReturns429**
+   - Makes requests up to the configured limit (all succeed)
+   - Makes one more request that exceeds the limit
+   - Verifies 429 Too Many Requests status code
+   - Verifies Content-Type is application/json
+   - Verifies Retry-After header is present and valid
+   - Verifies error response has code: "RATE_LIMITED" and message
+   - Verifies X-RateLimit-Remaining is 0
+
+2. **TestE2E_RateLimit_ResetsAfterWindow**
+   - Exhausts the rate limit (2 requests with 10ms window)
+   - Verifies 429 response when exceeded
+   - Waits for window to expire (15ms)
+   - Verifies limit resets - request succeeds
+   - Verifies X-RateLimit-Remaining shows reset value
+
+3. **TestE2E_RateLimit_HumanFlowComplete**
+   - Tests complete flow for human users (JWT claims auth)
+   - Exhausts human limit (3 requests)
+   - Verifies 429 and Retry-After on 4th request
+
+4. **TestE2E_RateLimit_SearchEndpoint**
+   - Tests rate limiting specifically for /v1/search endpoint
+   - Verifies search has independent bucket from general requests
+   - Search rate limited at 3, but general requests still work
+
+5. **TestE2E_RateLimit_PostCreation**
+   - Tests POST /v1/posts rate limiting
+   - Verifies post creation has separate limit (2 per hour for agents)
+   - Verifies correct error code on rate limit
+
+6. **TestE2E_RateLimit_NewAccountHalfLimit**
+   - Tests 50% rate limit reduction for new accounts (<24h old)
+   - New agent with 12-hour-old account gets 5 instead of 10 limit
+   - Verifies X-RateLimit-Limit header shows reduced value
+
+7. **TestE2E_RateLimit_DifferentUsersIndependent**
+   - Tests that different users have independent rate limits
+   - Agent1 exhausts limit, Agent1 rate limited
+   - Agent2 still has full quota available
+   - Verifies remaining shows correct value for Agent2
+
+8. **TestE2E_RateLimit_HeadersComplete**
+   - Tests all required rate limit headers are present
+   - X-RateLimit-Limit (120 for agents)
+   - X-RateLimit-Remaining (decreases with each request)
+   - X-RateLimit-Reset (valid Unix timestamp in future)
+
+### Test Results
+- All 8 E2E rate limit tests pass
+- 94.7% coverage on middleware package (above 80% requirement)
+- All 33 total middleware tests pass
+
+### Files Created
+- backend/internal/api/middleware/ratelimit_e2e_test.go (370 lines)
+
+### Files Modified
+- specs/prd-v2.json (updated line 5078 to passes=true)
+- specs/progress.txt (this entry)

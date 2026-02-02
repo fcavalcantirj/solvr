@@ -5075,7 +5075,7 @@
       "Verify 429 response",
       "Verify resets after window"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "finalization",

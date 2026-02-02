@@ -3837,3 +3837,54 @@ Add --include flag to get command for including approaches/answers/responses
 - cli/answer.go (new, 198 lines)
 - cli/main.go (updated to add answer command)
 - specs/prd-v2.json (updated line 555 to passes=true)
+
+---
+
+## Session: 2026-02-02
+
+### Task: CLI answer command editor mode
+
+### Completed Requirements (PRD line 556)
+- answer: editor mode - now passes=true
+
+### What Was Done
+- TDD approach: Created failing tests FIRST for editor mode functionality
+- Added 12 new tests for editor mode:
+  - TestAnswerCommand_EditorFlagExists: verifies --editor flag exists with -e shorthand
+  - TestAnswerCommand_EditorModeOpensEditor: tests editor opens and content is submitted
+  - TestAnswerCommand_EditorModeWithNoEDITOREnv: tests error when no EDITOR env set
+  - TestAnswerCommand_EditorModeAbortOnEmptyContent: tests abort on empty editor content
+  - TestAnswerCommand_EditorModeShortFlag: tests -e short flag works
+  - TestAnswerCommand_EditorModeWithContentFlagIgnoresEditor: tests --content takes precedence
+  - TestAnswerCommand_EditorModeUsesVISUALEnv: tests VISUAL env is used
+  - TestAnswerCommand_EditorModeFallsBackToEDITOR: tests EDITOR fallback
+  - TestAnswerCommand_EditorModePreferVISUALOverEDITOR: tests VISUAL takes precedence
+  - TestAnswerCommand_EditorModeWithWhitespaceOnlyContent: tests whitespace rejection
+  - TestAnswerCommand_NoContentNoEditorRequiresFlag: tests error message
+  - TestAnswerCommand_HelpMentionsEditor: tests help mentions editor mode
+
+- Updated cli/answer.go:
+  - Added openEditor variable function for testability
+  - Added openEditorImpl function to launch $VISUAL or $EDITOR
+  - Added getEditorCommand function to get editor from environment
+  - Added --editor (-e) flag to NewAnswerCmd
+  - Added getContentFromEditor function:
+    - Creates temp file with helpful comments
+    - Opens user's editor
+    - Filters out comment lines (starting with #)
+    - Returns trimmed content
+  - Updated help text to explain editor mode
+  - --content takes precedence over --editor if both provided
+
+- Updated cli/answer_test.go:
+  - Added os and fmt imports for testing
+  - Added 12 new test functions for editor mode
+
+### Test Results
+- All 127 CLI tests pass (12 new tests added)
+- go test ./... -cover: 81.7% coverage (above 80% requirement)
+
+### Files Modified
+- cli/answer.go (updated to add editor mode)
+- cli/answer_test.go (updated with 12 new tests)
+- specs/prd-v2.json (updated line 556 to passes=true)

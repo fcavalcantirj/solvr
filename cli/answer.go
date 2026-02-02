@@ -6,11 +6,43 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 )
+
+// openEditor is a variable function to allow mocking in tests
+var openEditor = openEditorImpl
+
+// openEditorImpl opens the user's configured editor with the given file
+func openEditorImpl(path string) error {
+	editorCmd := getEditorCommand()
+	if editorCmd == "" {
+		return fmt.Errorf("no editor configured: set EDITOR or VISUAL environment variable")
+	}
+
+	cmd := exec.Command(editorCmd, path)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+// getEditorCommand returns the editor command from environment variables
+// Prefers VISUAL over EDITOR, returns empty string if neither is set
+func getEditorCommand() string {
+	if editor := os.Getenv("VISUAL"); editor != "" {
+		return editor
+	}
+	if editor := os.Getenv("EDITOR"); editor != "" {
+		return editor
+	}
+	return ""
+}
 
 // CreateAnswerRequest is the request body for creating an answer
 type CreateAnswerRequest struct {
@@ -41,6 +73,7 @@ func NewAnswerCmd() *cobra.Command {
 	var apiKey string
 	var content string
 	var jsonOutput bool
+	var useEditor bool
 
 	cmd := &cobra.Command{
 		Use:   "answer <post_id>",
@@ -49,9 +82,14 @@ func NewAnswerCmd() *cobra.Command {
 
 Provide the question's post ID and your answer content.
 
+You can provide content via --content flag or use --editor to open your
+configured text editor ($VISUAL or $EDITOR environment variable).
+
 Examples:
   solvr answer question_123 --content "The solution is to use transactions..."
   solvr answer question_123 -c "Short answer here"
+  solvr answer question_123 --editor              # Opens $EDITOR
+  solvr answer question_123 -e                    # Short form
   solvr answer question_123 --content "Answer content" --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -62,12 +100,24 @@ Examples:
 				return fmt.Errorf("post_id is required")
 			}
 
-			// Validate content is provided and not empty/whitespace
+			// If --content is provided, use it directly (ignore --editor)
+			// If --editor is provided and no --content, open editor
+			// If neither, return error
 			if content == "" {
-				return fmt.Errorf("--content is required")
+				if useEditor {
+					var err error
+					content, err = getContentFromEditor()
+					if err != nil {
+						return err
+					}
+				} else {
+					return fmt.Errorf("--content is required (or use --editor to open your editor)")
+				}
 			}
+
+			// Validate content is not empty/whitespace
 			if strings.TrimSpace(content) == "" {
-				return fmt.Errorf("--content cannot be empty or whitespace only")
+				return fmt.Errorf("answer content cannot be empty or whitespace only")
 			}
 
 			// Try to load API key from config if not provided via flag
@@ -158,10 +208,61 @@ Examples:
 	// Add flags
 	cmd.Flags().StringVar(&apiURL, "api-url", defaultAPIURL, "API base URL")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for authentication")
-	cmd.Flags().StringVarP(&content, "content", "c", "", "Answer content (required)")
+	cmd.Flags().StringVarP(&content, "content", "c", "", "Answer content (required unless --editor)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON response")
+	cmd.Flags().BoolVarP(&useEditor, "editor", "e", false, "Open $EDITOR to write answer content")
 
 	return cmd
+}
+
+// getContentFromEditor opens the user's editor and returns the content written
+func getContentFromEditor() (string, error) {
+	// Create a temporary file
+	tmpFile, err := os.CreateTemp("", "solvr-answer-*.md")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	// Write a helpful comment to the temp file
+	initialContent := `# Write your answer below this line
+# Lines starting with # will be ignored
+# Save and exit to submit, or leave empty to abort
+
+`
+	if _, err := tmpFile.WriteString(initialContent); err != nil {
+		tmpFile.Close()
+		return "", fmt.Errorf("failed to write to temp file: %w", err)
+	}
+	tmpFile.Close()
+
+	// Open the editor
+	if err := openEditor(tmpPath); err != nil {
+		return "", fmt.Errorf("failed to open editor: %w", err)
+	}
+
+	// Read the content back
+	contentBytes, err := os.ReadFile(tmpPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read temp file: %w", err)
+	}
+
+	// Filter out comment lines (lines starting with #)
+	var contentLines []string
+	for _, line := range strings.Split(string(contentBytes), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			contentLines = append(contentLines, line)
+		}
+	}
+
+	content := strings.TrimSpace(strings.Join(contentLines, "\n"))
+
+	if content == "" {
+		return "", fmt.Errorf("aborting: answer content is empty")
+	}
+
+	return content, nil
 }
 
 // displayCreatedAnswer formats and displays the created answer

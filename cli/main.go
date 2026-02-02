@@ -39,6 +39,7 @@ Use "solvr [command] --help" for more information about a command.`,
 
 	// Add subcommands
 	rootCmd.AddCommand(NewConfigCmd())
+	rootCmd.AddCommand(NewSearchCmd())
 
 	return rootCmd
 }

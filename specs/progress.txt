@@ -3448,3 +3448,51 @@ Date: 2026-02-02
 - cli/config.go (196 lines) - config command implementation
 - cli/config_test.go (486 lines) - 20 test functions
 - cli/main.go (52 lines) - added config command to root
+
+---
+
+## 2026-02-02: CLI: search command
+
+### Summary
+Implemented `solvr search <query>` command that calls the Solvr API `/v1/search` endpoint.
+
+### Implementation Details
+
+#### search.go (224 lines)
+- NewSearchCmd(): creates search command with flags
+- buildSearchURL(): constructs search API URL with query params
+- displaySearchResults(): formats results for terminal output
+- stripHTMLTags(): removes HTML tags from snippets
+
+#### Features
+- Calls /v1/search endpoint with query parameter
+- Supports --api-url flag for custom API URL
+- Supports --api-key flag (also reads from ~/.solvr/config)
+- Pretty-prints results with type badges, scores, votes
+- Shows "No results found" when empty
+- Handles API errors gracefully
+- Strips HTML tags from snippets for clean display
+
+### Tests (search_test.go - 310 lines)
+1. TestSearchCommand_Exists: verifies search command exists
+2. TestSearchCommand_RequiresQuery: verifies query is required
+3. TestSearchCommand_CallsAPI: verifies API is called correctly
+4. TestSearchCommand_DisplaysResults: verifies output format
+5. TestSearchCommand_NoResults: verifies empty results handling
+6. TestSearchCommand_APIError: verifies error handling
+7. TestSearchCommand_UsesAPIKey: verifies Authorization header
+8. TestSearchCommand_HelpText: verifies help output
+9. TestStripHTMLTags: verifies HTML tag stripping
+
+### Test Results
+- All 40 tests pass (previous 30 + 10 new search tests)
+- go test ./... -cover: 81.9% coverage (above 80% requirement)
+
+### Files Created/Modified
+- cli/search.go (224 lines) - new file
+- cli/search_test.go (310 lines) - new file
+- cli/main.go (53 lines) - added search command to root
+
+### PRD Updates
+- CLI: search command → passes: true
+- search: pretty output → passes: true

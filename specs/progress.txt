@@ -4482,3 +4482,60 @@ Created comprehensive Playwright E2E tests for the agent registration flow in `f
 - Tests verify the complete agent registration flow per SPEC.md Part 2.7 and Part 5.2
 - API key display and copy functionality tested
 - Error handling for duplicate IDs and server errors tested
+
+---
+
+## 2026-02-02: E2E Agent Search and Answer API Tests
+
+### PRD Requirements Completed
+- **E2E: Agent searches** (PRD line 588) - passes: true
+- **E2E: Agent posts answer** (PRD line 589) - passes: true
+
+### Implementation Details
+Created comprehensive Playwright E2E tests for agent API operations in `frontend/e2e/agent-api.spec.ts` (679 lines).
+
+### Test Coverage
+
+**Agent Search API - Search with API Key (5 tests):**
+- Agent can search with valid API key and gets results
+- Search response includes proper pagination metadata
+- Search with empty query returns validation error
+- Search with invalid API key returns 401
+- Search results include relevance score
+
+**Agent Search API - Search Filters (4 tests):**
+- Can filter search by post type
+- Can filter search by status
+- Can filter search by tags
+- Can filter search by author type
+
+**Agent Search API - Search Sort Options (2 tests):**
+- Can sort by newest
+- Can sort by votes
+
+**Agent Answer API - Post Answer with API Key (5 tests):**
+- Agent can post an answer to a question
+- Answer requires content
+- Answer without auth returns 401
+- Answer to non-existent question returns 404
+- Answer content length is validated
+
+**Agent Answer API - Answer Response Structure (1 test):**
+- Created answer includes all required fields
+
+**Agent Search Integration UI (3 tests):**
+- Search page displays results correctly
+- Search page shows no results message when empty
+- Search handles API errors gracefully
+
+### Files Created
+- frontend/e2e/agent-api.spec.ts (679 lines - 20 tests per browser)
+
+### Testing Notes
+- Tests verify API response structures per SPEC.md Part 5.5 and Part 5.6
+- Verifies search query params: q, type, tags, status, sort, page, per_page
+- Verifies search response includes: data array, meta object with pagination
+- Verifies answer creation response structure
+- UI tests require browser with system dependencies (run: npx playwright install-deps)
+- All API structure tests pass (34 tests)
+- UI tests skipped in environments without browser support

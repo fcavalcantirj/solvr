@@ -429,3 +429,121 @@ func TestSearchCommand_JSONFlagWithNoResults(t *testing.T) {
 		t.Error("data should be empty")
 	}
 }
+
+func TestSearchCommand_TypeFlag(t *testing.T) {
+	// Create mock API server that checks for type parameter
+	var receivedType string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedType = r.URL.Query().Get("type")
+
+		response := SearchAPIResponse{
+			Data: []SearchResult{
+				{
+					ID:      "post-123",
+					Type:    "problem",
+					Title:   "A problem post",
+					Snippet: "This is a problem...",
+					Tags:    []string{"go"},
+					Status:  "open",
+					Author: AuthorInfo{
+						ID:          "user-1",
+						Type:        "human",
+						DisplayName: "John",
+					},
+					Score:        0.90,
+					Votes:        5,
+					AnswersCount: 0,
+					CreatedAt:    time.Now(),
+				},
+			},
+			Meta: SearchMeta{
+				Query:   "test",
+				Total:   1,
+				Page:    1,
+				PerPage: 20,
+				HasMore: false,
+				TookMs:  10,
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	searchCmd := NewSearchCmd()
+	buf := new(bytes.Buffer)
+	searchCmd.SetOut(buf)
+	searchCmd.SetErr(buf)
+	searchCmd.Flags().Set("api-url", server.URL)
+	searchCmd.Flags().Set("type", "problem")
+	searchCmd.SetArgs([]string{"test"})
+
+	err := searchCmd.Execute()
+	if err != nil {
+		t.Fatalf("search command failed: %v", err)
+	}
+
+	if receivedType != "problem" {
+		t.Errorf("expected type 'problem', got '%s'", receivedType)
+	}
+}
+
+func TestSearchCommand_TypeFlagAllValues(t *testing.T) {
+	// Test all valid type values
+	validTypes := []string{"problem", "question", "idea", "all"}
+
+	for _, typeVal := range validTypes {
+		t.Run("type="+typeVal, func(t *testing.T) {
+			var receivedType string
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				receivedType = r.URL.Query().Get("type")
+				response := SearchAPIResponse{
+					Data: []SearchResult{},
+					Meta: SearchMeta{Query: "test", Total: 0},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(response)
+			}))
+			defer server.Close()
+
+			searchCmd := NewSearchCmd()
+			buf := new(bytes.Buffer)
+			searchCmd.SetOut(buf)
+			searchCmd.SetErr(buf)
+			searchCmd.Flags().Set("api-url", server.URL)
+			searchCmd.Flags().Set("type", typeVal)
+			searchCmd.SetArgs([]string{"test"})
+
+			err := searchCmd.Execute()
+			if err != nil {
+				t.Fatalf("search command failed for type %s: %v", typeVal, err)
+			}
+
+			if receivedType != typeVal {
+				t.Errorf("expected type '%s', got '%s'", typeVal, receivedType)
+			}
+		})
+	}
+}
+
+func TestSearchCommand_TypeFlagInHelpText(t *testing.T) {
+	searchCmd := NewSearchCmd()
+	buf := new(bytes.Buffer)
+	searchCmd.SetOut(buf)
+	searchCmd.SetArgs([]string{"--help"})
+
+	err := searchCmd.Execute()
+	if err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	output := buf.String()
+
+	// Check that help contains --type flag information
+	if !bytes.Contains([]byte(output), []byte("--type")) {
+		t.Error("help should mention '--type' flag")
+	}
+}

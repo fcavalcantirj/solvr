@@ -3524,3 +3524,33 @@ Output raw JSON from search command
 
 ### PRD Updates
 - search: --json flag → passes: true
+
+---
+
+## 2026-02-02: CLI search --type flag
+
+### Requirement: search: --type flag
+Filter search results by type (problem, question, idea, or all)
+
+### Implementation
+- Added `--type` flag to search command
+- Flag accepts: problem, question, idea, or all
+- When set, passes `type` query parameter to /v1/search API endpoint
+- Updated buildSearchURL to include optional type parameter
+- Added example in help text: `solvr search "bug fix" --type problem`
+
+### Tests Added (search_test.go)
+1. TestSearchCommand_TypeFlag: verifies type parameter is passed to API
+2. TestSearchCommand_TypeFlagAllValues: verifies all valid type values work
+3. TestSearchCommand_TypeFlagInHelpText: verifies --type mentioned in help
+
+### Test Results
+- All 45 tests pass
+- go test ./... -cover: 83.1% coverage (above 80% requirement)
+
+### Files Modified
+- cli/search.go: added --type flag and updated buildSearchURL
+- cli/search_test.go: added 3 new tests for --type flag
+
+### PRD Updates
+- search: --type flag → passes: true

@@ -6052,5 +6052,58 @@
       "Unlink agent button"
     ],
     "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Create claim_tokens migration file",
+    "steps": [
+      "Create claim_tokens table",
+      "Fields: id, token (unique), agent_id (FK), expires_at, used_at",
+      "Index on token for fast lookup",
+      "Index on agent_id",
+      "Constraint: one active token per agent"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Agents table: add human_claimed_at field",
+    "steps": [
+      "Add human_claimed_at TIMESTAMP NULL",
+      "Add human_id FK (already exists, verify)",
+      "Add UNIQUE constraint: one human claim per agent",
+      "Index on human_id for dashboard queries"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Claim tokens: expiry cleanup job",
+    "steps": [
+      "Cron/scheduled job to delete expired tokens",
+      "Run every hour",
+      "Delete where expires_at < NOW() AND used_at IS NULL"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-onboarding",
+    "description": "Agents table: name UNIQUE constraint enforced",
+    "steps": [
+      "UNIQUE constraint on agents.name",
+      "Return 409 Conflict if name taken",
+      "Suggest alternatives in error response"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-linking",
+    "description": "Claim constraint: one human per agent (DB enforced)",
+    "steps": [
+      "CHECK constraint: human_id can only be set once",
+      "Trigger prevents re-claiming",
+      "Return 409 if already claimed"
+    ],
+    "passes": false
   }
 ]

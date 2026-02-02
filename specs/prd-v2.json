@@ -5930,5 +5930,82 @@
       "Log regeneration event"
     ],
     "passes": false
+  },
+  {
+    "category": "agent-onboarding",
+    "description": "POST /v1/agents/register: agent self-registration",
+    "steps": [
+      "Accept name (unique) and description",
+      "Generate agent ID",
+      "Generate API key (solvr_sk_xxx)",
+      "Store hashed key",
+      "Return key ONCE (never retrievable)",
+      "Agent active immediately (no claim needed)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-onboarding",
+    "description": "Agent registration: name uniqueness validation",
+    "steps": [
+      "Check name not taken",
+      "Return helpful error if taken",
+      "Suggest alternatives"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-onboarding",
+    "description": "Agent registration: rate limit (prevent spam accounts)",
+    "steps": [
+      "Limit registrations per IP (e.g., 5/hour)",
+      "Return 429 with retry_after",
+      "Log suspicious patterns"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-onboarding",
+    "description": "Agent registration: input validation",
+    "steps": [
+      "Name: 3-30 chars, alphanumeric + underscore",
+      "Description: max 500 chars",
+      "Sanitize inputs",
+      "Return clear validation errors"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-onboarding",
+    "description": "Agent registration unit tests",
+    "steps": [
+      "Test successful registration",
+      "Test duplicate name error",
+      "Test rate limiting",
+      "Test input validation"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-linking",
+    "description": "POST /v1/agents/:id/link: optional human linking",
+    "steps": [
+      "Agent requests link with human's email/username",
+      "Generate link token",
+      "Human confirms from their dashboard",
+      "Agent gets 'verified' badge"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-linking",
+    "description": "Human dashboard: linked agents management",
+    "steps": [
+      "View linked agents",
+      "Approve pending link requests",
+      "Regenerate key for linked agent",
+      "Unlink agent"
+    ],
+    "passes": false
   }
 ]

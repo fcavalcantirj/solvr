@@ -275,7 +275,7 @@
   {"category": "api-posts", "description": "Posts unit test: update", "steps": ["Test update as owner", "Test update as non-owner returns 403"], "passes": true},
   {"category": "api-posts", "description": "Posts unit test: delete", "steps": ["Test delete as owner", "Test delete as admin", "Test delete as others returns 403"], "passes": true},
   {"category": "api-posts", "description": "Posts unit test: voting", "steps": ["Test upvote", "Test downvote", "Test change vote", "Test remove vote"], "passes": true},
-  {"category": "api-posts", "description": "Posts integration test: CRUD flow", "steps": ["Create post, read, update, delete", "Verify each step"], "passes": false},
+  {"category": "api-posts", "description": "Posts integration test: CRUD flow", "steps": ["Create post, read, update, delete", "Verify each step"], "passes": true},
 
   {"category": "api-problems", "description": "GET /v1/problems: list problems", "steps": ["Query posts WHERE type='problem'", "Return paginated list"], "passes": true},
   {"category": "api-problems", "description": "GET /v1/problems/:id: single problem", "steps": ["Query post by id", "Return 404 if not found or type != problem", "Include approaches in response"], "passes": true},

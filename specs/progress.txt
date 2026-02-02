@@ -3312,3 +3312,46 @@ Date: 2026-02-02
 - backend/internal/db/search_test.go (added ~150 lines for performance tests)
 - specs/prd-v2.json (line 234 updated to passes=true)
 
+
+
+## 2026-02-02: Posts Integration Test CRUD Flow
+
+### Requirement
+- api-posts: Posts integration test: CRUD flow ✓
+
+### What Was Done
+- TDD approach: Created posts_integration_test.go following the pattern from agents_integration_test.go and search_integration_test.go
+- Comprehensive integration tests covering the full posts lifecycle:
+  1. TestPostsCRUD_Integration: Full CRUD flow
+     - Step1_CreatePost: Creates a problem post
+     - Step2_ReadPost: Retrieves the post and verifies data
+     - Step3_UpdatePost: Updates title and description
+     - Step4_VerifyUpdate: Confirms update persisted
+     - Step5_DeletePost: Soft deletes the post
+     - Step6_VerifyDeletion: Confirms post returns 404
+  2. TestPostsCRUD_OwnershipEnforcement: Ownership and permissions
+     - CreateAsOwner: Creates post for testing
+     - NonOwnerCannotUpdate: Verifies 403 for non-owner
+     - NonOwnerCannotDelete: Verifies 403 for non-owner
+     - OwnerCanUpdate: Verifies owner can update
+     - AdminCanDelete: Verifies admin can delete any post
+  3. TestPostsCRUD_VotingFlow: Voting lifecycle
+     - CreatePost: Creates post for voting
+     - Upvote: Tests upvote
+     - ChangeVoteToDownvote: Tests vote direction change
+     - CannotVoteOnOwnPost: Verifies 403 for self-voting
+  4. TestPostsCRUD_ListAndPagination: List and filter tests
+     - CreateMultiplePosts: Creates 3 posts of different types
+     - ListAll: Tests listing all posts
+     - FilterByType: Tests type filtering
+     - Pagination: Tests page/per_page parameters
+     - PerPageMaxEnforced: Tests per_page capped at 50
+- Created MockPostsRepositoryForIntegration for stateful testing
+
+### Test Results
+- All posts integration tests pass (4 test functions, all subtests pass)
+- go test ./internal/api/handlers/... -run "TestPostsCRUD" - PASS
+- File under 800 lines per CLAUDE.md Golden Rules
+
+### Files Created
+- backend/internal/api/handlers/posts_integration_test.go (new)

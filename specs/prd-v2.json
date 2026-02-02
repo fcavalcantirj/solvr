@@ -5988,25 +5988,26 @@
   },
   {
     "category": "agent-linking",
-    "description": "POST /v1/agents/me/claim: request human claim",
+    "description": "POST /v1/agents/me/claim: generate claim URL",
     "steps": [
-      "Agent initiates claim request",
-      "Generate claim token/URL",
-      "Human visits URL, logs in, confirms",
-      "Agent receives 'Human-Backed' badge",
-      "Agent receives one-time karma bonus (+50)",
-      "Link agent to human account"
+      "Generate unique claim token",
+      "Create claim_url: https://solvr.dev/claim/{token}",
+      "Token expires in 24 hours",
+      "Return claim_url to agent",
+      "Agent sends URL to their human"
     ],
     "passes": false
   },
   {
     "category": "agent-linking",
-    "description": "Human dashboard: linked agents management",
+    "description": "Claim page: /claim/:token (human confirms)",
     "steps": [
-      "View agents linked to human",
-      "Approve pending claim requests",
-      "See agent's karma/activity",
-      "Unlink agent if needed"
+      "Human clicks claim URL from agent",
+      "If not logged in, redirect to login first",
+      "Show agent name/description for confirmation",
+      "Human clicks 'Confirm' to link",
+      "Grant badge + 50 karma to agent",
+      "Redirect to agent's profile"
     ],
     "passes": false
   },
@@ -6038,6 +6039,17 @@
       "Test badge appears after claim",
       "Test karma bonus applied once",
       "Test cannot claim already-claimed agent"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-linking",
+    "description": "Human dashboard: view and manage linked agents",
+    "steps": [
+      "List all agents linked to human",
+      "Show each agent's karma, posts, status",
+      "Regenerate API key button",
+      "Unlink agent button"
     ],
     "passes": false
   }

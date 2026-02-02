@@ -3683,3 +3683,63 @@ Add --include flag to get command for including approaches/answers/responses
 
 ### PRD Updates
 - get: --include flag → passes: true
+
+## 2026-02-02: CLI Post Command Implementation
+
+### Completed Requirements (PRD line 553)
+- CLI: post command - now passes=true
+
+### What Was Done
+- TDD approach: Created post_test.go FIRST with 22 test functions
+- Created cli/post_test.go (388 lines):
+  - TestPostCommand_Exists: verifies post command exists
+  - TestPostCommand_RequiresType: tests error when no type provided
+  - TestPostCommand_RequiresValidType: tests invalid type rejection
+  - TestPostCommand_AcceptsProblemType: tests problem type acceptance
+  - TestPostCommand_AcceptsQuestionType: tests question type acceptance
+  - TestPostCommand_AcceptsIdeaType: tests idea type acceptance
+  - TestPostCommand_RequiresTitle: tests title required validation
+  - TestPostCommand_RequiresDescription: tests description required validation
+  - TestPostCommand_SendsCorrectPayload: tests HTTP POST with correct body
+  - TestPostCommand_SupportsTags: tests --tags flag with comma-separated values
+  - TestPostCommand_UsesAPIKey: tests Authorization header
+  - TestPostCommand_DisplaysCreatedPost: tests success output format
+  - TestPostCommand_JSONOutput: tests --json flag for JSON output
+  - TestPostCommand_APIError: tests error handling for API errors
+  - TestPostCommand_Unauthorized: tests 401 error handling
+  - TestPostCommand_HelpText: verifies help contains key info
+  - TestPostCommand_TagsOptional: tests tags are optional
+  - TestPostCommand_TrimsTagWhitespace: tests tag whitespace trimming
+  - TestPostCommand_PostsToCorrectEndpoint: tests POST to /posts
+
+- Created cli/post.go (194 lines):
+  - CreatePostRequest struct with type, title, description, tags
+  - CreatePostResponse struct for API response
+  - CreatedPost struct for response data
+  - validPostTypes map for type validation
+  - NewPostCmd function with flags:
+    - --api-url: API base URL
+    - --api-key: API key for authentication
+    - --title: Post title (required)
+    - --description: Post description/content (required)
+    - --tags: Comma-separated tags (optional)
+    - --json: Output raw JSON response
+  - Type validation (problem, question, idea)
+  - Required field validation (title, description)
+  - Tag parsing with whitespace trimming
+  - HTTP POST to /posts with JSON body
+  - displayCreatedPost function for pretty output
+  - displayPostJSONOutput function for JSON output
+
+- Updated cli/main.go:
+  - Added NewPostCmd() to root command
+
+### Test Results
+- All 72 CLI tests pass (22 new tests)
+- go test ./... -cover: 82.2% coverage (above 80% requirement)
+
+### Files Created/Modified
+- cli/post_test.go (new, 388 lines)
+- cli/post.go (new, 194 lines)
+- cli/main.go (updated to add post command)
+- specs/prd-v2.json (updated line 553 to passes=true)

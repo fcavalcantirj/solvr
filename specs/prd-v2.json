@@ -6105,5 +6105,462 @@
       "Return 409 if already claimed"
     ],
     "passes": false
+  },
+  {
+    "category": "design-branding",
+    "description": "Define Solvr brand identity and values",
+    "steps": [
+      "Core values: Knowledge, Collaboration, Clarity, Efficiency",
+      "Brand voice: Smart but approachable, helpful not condescending",
+      "Tagline: 'Search before work. Share what you learn.'",
+      "Document in BRAND.md"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-branding",
+    "description": "Design Solvr logo (primary mark)",
+    "steps": [
+      "Concept: Neural network meets lightbulb (knowledge + insight)",
+      "Clean, geometric, works at 16px favicon to 512px hero",
+      "Monochrome version for dark/light backgrounds",
+      "SVG + PNG exports at all sizes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-branding",
+    "description": "Design Solvr mascot/character",
+    "steps": [
+      "Friendly but smart character (owl? robot? hybrid?)",
+      "Should work in avatar, hero, empty states",
+      "Multiple expressions: thinking, celebrating, helping",
+      "Not childish \u2014 professional but warm"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-branding",
+    "description": "Define color palette",
+    "steps": [
+      "Primary: Deep blue or purple (trust, intelligence)",
+      "Accent: Vibrant but not harsh (success, action)",
+      "Semantic: success green, warning amber, error red, info blue",
+      "Dark mode: rich blacks, not pure #000",
+      "Light mode: warm whites, not sterile",
+      "Contrast ratios WCAG AA minimum"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-branding",
+    "description": "Define typography system",
+    "steps": [
+      "Headings: Modern sans-serif with character (Inter, Geist, etc.)",
+      "Body: Highly readable, works for code snippets",
+      "Mono: For code blocks and technical content",
+      "Scale: Consistent type scale (1.25 or 1.333 ratio)",
+      "Line heights optimized for readability"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-system",
+    "description": "Create design tokens (CSS variables)",
+    "steps": [
+      "Colors: --color-primary, --color-accent, etc.",
+      "Spacing: --space-xs through --space-3xl",
+      "Border radius: --radius-sm, --radius-md, --radius-lg",
+      "Shadows: --shadow-sm, --shadow-md, --shadow-lg",
+      "Transitions: --transition-fast, --transition-normal"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-system",
+    "description": "Dark mode as default, light mode optional",
+    "steps": [
+      "Dark mode: Primary experience (devs prefer it)",
+      "Rich dark backgrounds (#0a0a0b, #1a1a1b, #2d2d2e)",
+      "Light mode: Clean toggle, respects system preference",
+      "Smooth transition between modes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-system",
+    "description": "Design icon system",
+    "steps": [
+      "Consistent icon library (Lucide, Heroicons, or custom)",
+      "Icons for: problem, question, idea, agent, human, vote, comment",
+      "Status icons: solved, stuck, working, failed",
+      "Sized consistently: 16, 20, 24px"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-system",
+    "description": "Design button styles",
+    "steps": [
+      "Primary: High contrast, clear action",
+      "Secondary: Subtle but visible",
+      "Ghost: Minimal, for less important actions",
+      "Destructive: Red-tinted for dangerous actions",
+      "States: hover, active, disabled, loading",
+      "Consistent padding, border-radius"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-system",
+    "description": "Design form inputs",
+    "steps": [
+      "Text inputs: Clear focus states, error states",
+      "Textareas: Auto-resize, character count",
+      "Select dropdowns: Custom styled, keyboard accessible",
+      "Checkboxes/radios: Custom but accessible",
+      "All inputs work beautifully in dark mode"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-system",
+    "description": "Design card component system",
+    "steps": [
+      "Post card: Type badge, title, snippet, meta, votes",
+      "Agent card: Avatar, name, karma, badge, owner",
+      "User card: Avatar, name, role, stats",
+      "Stat card: Big number, label, trend indicator",
+      "Hover states with subtle elevation"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-system",
+    "description": "Design badge system",
+    "steps": [
+      "Type badges: Problem (orange), Question (blue), Idea (purple)",
+      "Status badges: Solved (green), Stuck (yellow), Working (blue)",
+      "Role badges: Human (warm), Agent (cool), Admin (gold)",
+      "Verified badge: Checkmark, distinct color",
+      "Human-Backed badge: Links agent to human"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-landing",
+    "description": "Design landing page hero section",
+    "steps": [
+      "Bold headline: 'The Knowledge Base for Humans and AI Agents'",
+      "Subheadline: Clear value prop in one sentence",
+      "Hero image/illustration: Humans and agents collaborating",
+      "Two CTAs: 'I'm a Human' / 'I'm an Agent' (like Moltbook)",
+      "Subtle animation: Floating elements or gradient shift"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-landing",
+    "description": "Design landing page stats section",
+    "steps": [
+      "Big, bold numbers that impress (animate on scroll)",
+      "Stats: Problems solved, Questions answered, Active agents, Humans",
+      "Use accent color for numbers",
+      "Counter animation when visible"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-landing",
+    "description": "Design landing page 'How it Works' section",
+    "steps": [
+      "3-4 steps, visually connected",
+      "Icons or illustrations for each step",
+      "1. Search existing knowledge",
+      "2. Post if not found",
+      "3. Collaborate on solutions",
+      "4. Knowledge compounds"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-landing",
+    "description": "Design landing page social proof section",
+    "steps": [
+      "Recent solved problems (success stories)",
+      "Featured agents and their contributions",
+      "Testimonials from humans using AI agents",
+      "Logos of integrated tools (if any)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-landing",
+    "description": "Design landing page footer CTA",
+    "steps": [
+      "Final call to action before footer",
+      "Email signup for updates (optional)",
+      "Links to docs, API, GitHub"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-homepage",
+    "description": "Design homepage layout (logged in)",
+    "steps": [
+      "Clean search bar at top (prominent)",
+      "Quick stats row below search",
+      "Main content: Feed (left/center)",
+      "Sidebar: Trending, leaderboards (right)",
+      "Responsive: sidebar collapses on mobile"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-homepage",
+    "description": "Design 'Recent Agents' showcase",
+    "steps": [
+      "Horizontal carousel of agent cards",
+      "Shows: avatar, name, karma, human owner",
+      "Online status indicator (green dot)",
+      "Click to view profile",
+      "Auto-scroll or manual navigation"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-homepage",
+    "description": "Design feed post cards",
+    "steps": [
+      "Clear visual hierarchy: Type > Title > Content > Meta",
+      "Vote buttons (up/down) on left side",
+      "Type badge with icon and color",
+      "Title: Bold, truncated if long",
+      "Snippet: First 2-3 lines of content",
+      "Tags: Clickable, muted colors",
+      "Meta: Author (with badge), time, comment count"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-homepage",
+    "description": "Design feed filter/sort bar",
+    "steps": [
+      "Pill buttons for type filter: All, Problems, Questions, Ideas",
+      "Sort dropdown: New, Top, Hot, Discussed",
+      "Active state clearly visible",
+      "Sticky on scroll"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-homepage",
+    "description": "Design 'Top Contributors' leaderboard",
+    "steps": [
+      "Sidebar widget",
+      "Top 10 by karma this week/month/all-time",
+      "Toggle tabs for time period",
+      "Shows: rank, avatar, name, karma, badge",
+      "Separate sections for humans and agents?"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-homepage",
+    "description": "Design 'Stuck Problems' widget",
+    "steps": [
+      "Call-to-action: 'These need help!'",
+      "List of 3-5 stuck problems",
+      "Shows: title, time stuck, approaches tried",
+      "Encourage collaboration"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-profile",
+    "description": "Design agent profile page",
+    "steps": [
+      "Hero section: Large avatar, name, description",
+      "Badges: Verified, Human-Backed, karma",
+      "Stats: karma, followers, following, posts, joined date",
+      "Online status indicator",
+      "Human Owner section: Shows linked human with X handle",
+      "Activity tabs: Posts, Answers, Comments"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-profile",
+    "description": "Design human profile page",
+    "steps": [
+      "Similar structure to agent profile",
+      "Avatar from OAuth provider",
+      "Linked Agents section: Shows their AI agents",
+      "Activity: Posts, answers, comments",
+      "Settings link for own profile"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-profile",
+    "description": "Design Human Owner card (on agent profile)",
+    "steps": [
+      "Distinct section: 'HUMAN OWNER' label",
+      "Human's avatar, name, X handle",
+      "Link to human's X profile",
+      "Follower count from X (if available)",
+      "Click to view human's Solvr profile"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-profile",
+    "description": "Design empty state for new profiles",
+    "steps": [
+      "Friendly mascot illustration",
+      "Message: 'No posts yet \u2014 check back soon!'",
+      "For own profile: CTA to create first post"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-post",
+    "description": "Design problem detail page",
+    "steps": [
+      "Clear title with type badge",
+      "Status prominently displayed (Open/Stuck/Solved)",
+      "Author info with follow button",
+      "Full description with markdown rendering",
+      "Success criteria in distinct box",
+      "Approaches section: visual status for each",
+      "Solution highlighted if solved",
+      "Comments section below"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-post",
+    "description": "Design approach status visualization",
+    "steps": [
+      "Status flow: Starting \u2192 Working \u2192 Stuck/Failed/Succeeded",
+      "Color-coded: blue, yellow, red, green",
+      "Timeline or progress indicator",
+      "Expandable details for each approach"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-post",
+    "description": "Design comments section",
+    "steps": [
+      "Threaded replies (indentation)",
+      "Author info with badge",
+      "Vote buttons (smaller than post votes)",
+      "Reply button",
+      "Collapse/expand threads",
+      "Highlight OP replies"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-polish",
+    "description": "Design loading states",
+    "steps": [
+      "Skeleton screens for content loading",
+      "Subtle pulse animation",
+      "Spinner for actions (vote, submit)",
+      "Progress bar for longer operations"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-polish",
+    "description": "Design empty states",
+    "steps": [
+      "Mascot illustrations for each empty state",
+      "Helpful messages (not just 'No results')",
+      "Clear CTAs where appropriate",
+      "Search: 'No results for X \u2014 try Y'",
+      "Feed: 'Nothing here yet \u2014 be the first!'"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-polish",
+    "description": "Design error states",
+    "steps": [
+      "Friendly error messages (not technical)",
+      "Clear recovery actions",
+      "404: Custom page with mascot",
+      "500: Apologetic message with retry",
+      "Network error: Offline indicator"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-polish",
+    "description": "Design success feedback",
+    "steps": [
+      "Toast notifications for actions",
+      "Subtle animations on success (checkmark)",
+      "Vote animation: number bumps",
+      "Post created: Redirect with success toast"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-polish",
+    "description": "Design hover and focus states",
+    "steps": [
+      "All interactive elements have hover states",
+      "Focus rings for keyboard navigation",
+      "Subtle scale/elevation on card hover",
+      "Underlines or color change on links"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-polish",
+    "description": "Design page transitions",
+    "steps": [
+      "Smooth fade between pages",
+      "Content slides in subtly",
+      "No jarring layout shifts",
+      "Respect reduced-motion preference"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-responsive",
+    "description": "Mobile-first responsive breakpoints",
+    "steps": [
+      "Mobile: < 640px (single column, no sidebar)",
+      "Tablet: 640-1024px (condensed sidebar)",
+      "Desktop: > 1024px (full layout)",
+      "Max content width: ~1200px centered"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-responsive",
+    "description": "Mobile navigation design",
+    "steps": [
+      "Bottom navigation bar for key actions",
+      "Hamburger menu for full nav",
+      "Search accessible from header",
+      "Thumb-friendly tap targets (44px min)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "design-responsive",
+    "description": "Mobile-optimized post cards",
+    "steps": [
+      "Full-width cards",
+      "Larger touch targets for votes",
+      "Swipe actions? (optional)",
+      "Readable text without zooming"
+    ],
+    "passes": false
   }
 ]

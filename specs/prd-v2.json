@@ -5919,5 +5919,16 @@
       "Test key hashing security"
     ],
     "passes": false
+  },
+  {
+    "category": "api-keys",
+    "description": "POST /v1/users/me/api-keys/:id/regenerate: create new key value",
+    "steps": [
+      "Generate new key value (old one invalidated)",
+      "Return new key ONCE",
+      "Keep same key ID/name for tracking",
+      "Log regeneration event"
+    ],
+    "passes": false
   }
 ]

@@ -552,7 +552,7 @@
   {"category": "cli", "description": "get: --include flag", "steps": ["Include approaches/answers"], "passes": true},
   {"category": "cli", "description": "CLI: post command", "steps": ["Implement 'solvr post <type>'", "Support --title, --description, --tags"], "passes": true},
   {"category": "cli", "description": "post: interactive mode", "steps": ["Prompt for fields if not provided"], "passes": true},
-  {"category": "cli", "description": "CLI: answer command", "steps": ["Implement 'solvr answer <post_id>'", "Support --content flag"], "passes": false},
+  {"category": "cli", "description": "CLI: answer command", "steps": ["Implement 'solvr answer <post_id>'", "Support --content flag"], "passes": true},
   {"category": "cli", "description": "answer: editor mode", "steps": ["Open $EDITOR if --content not provided"], "passes": false},
   {"category": "cli", "description": "CLI tests", "steps": ["Test each command"], "passes": false},
 

@@ -3785,3 +3785,55 @@ Add --include flag to get command for including approaches/answers/responses
 - cli/post_interactive_test.go (new, 483 lines)
 - cli/post.go (updated from 194 to 307 lines)
 - specs/prd-v2.json (updated line 554 to passes=true)
+
+## 2026-02-02: CLI Answer Command Implementation
+
+### Completed Requirements (PRD line 555)
+- CLI: answer command - now passes=true
+
+### What Was Done
+- TDD approach: Created answer_test.go FIRST with 16 test functions
+- Created cli/answer_test.go (521 lines):
+  - TestAnswerCommand_Exists: verifies answer command exists
+  - TestAnswerCommand_RequiresPostID: tests error when post_id not provided
+  - TestAnswerCommand_RequiresContent: tests error when --content not provided
+  - TestAnswerCommand_AcceptsContentFlag: tests --content flag is accepted
+  - TestAnswerCommand_SendsCorrectPayload: tests correct JSON payload sent
+  - TestAnswerCommand_UsesAPIKey: tests Authorization header is set
+  - TestAnswerCommand_DisplaysCreatedAnswer: tests success output format
+  - TestAnswerCommand_JSONOutput: tests --json flag for JSON output
+  - TestAnswerCommand_APIError: tests error handling for API errors
+  - TestAnswerCommand_Unauthorized: tests 401 error handling
+  - TestAnswerCommand_NotFound: tests 404 error handling
+  - TestAnswerCommand_HelpText: tests help contains key information
+  - TestAnswerCommand_ContentShortFlag: tests -c short flag
+  - TestAnswerCommand_ContentTrimmed: tests content whitespace handling
+  - TestAnswerCommand_EmptyContentRejected: tests empty content rejection
+  - TestAnswerCommand_WhitespaceOnlyContentRejected: tests whitespace-only rejection
+
+- Created cli/answer.go (198 lines):
+  - CreateAnswerRequest struct with content field
+  - CreateAnswerResponse struct for API response
+  - CreatedAnswer struct for response data
+  - NewAnswerCmd function with flags:
+    - --api-url: API base URL
+    - --api-key: API key for authentication
+    - --content (-c): Answer content (required)
+    - --json: Output raw JSON response
+  - Posts to /questions/{post_id}/answers endpoint
+  - Content validation (non-empty, non-whitespace)
+  - displayCreatedAnswer function for pretty output
+  - displayAnswerJSONOutput function for JSON output
+
+- Updated cli/main.go:
+  - Added NewAnswerCmd() to root command
+
+### Test Results
+- All 116 CLI tests pass (16 new tests)
+- go test ./... -cover: 82.6% coverage (above 80% requirement)
+
+### Files Created/Modified
+- cli/answer_test.go (new, 521 lines)
+- cli/answer.go (new, 198 lines)
+- cli/main.go (updated to add answer command)
+- specs/prd-v2.json (updated line 555 to passes=true)

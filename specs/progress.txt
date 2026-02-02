@@ -3355,3 +3355,43 @@ Date: 2026-02-02
 
 ### Files Created
 - backend/internal/api/handlers/posts_integration_test.go (new)
+
+## 2026-02-02: CLI Initial Setup (4 requirements completed)
+
+### Requirements Completed
+- cli: Create cli directory ✓
+- cli: CLI: main entry ✓
+- cli: CLI: --help flag ✓
+- cli: CLI: --version flag ✓
+
+### What Was Done
+- TDD approach: Created main_test.go with 10 test functions FIRST
+- Created cli/ directory with go.mod (module github.com/fcavalcantirj/solvr/cli)
+- Added github.com/spf13/cobra dependency for command framework
+- Implemented NewRootCmd() function per cobra patterns
+- Implemented --help flag (cobra built-in, shows usage)
+- Implemented --version flag (shows "solvr version 0.1.0")
+
+### Test Functions
+1. TestRootCommand_Exists: verifies root command exists
+2. TestRootCommand_Use: verifies Use is "solvr"
+3. TestRootCommand_Short: verifies short description set
+4. TestRootCommand_Long: verifies long description set
+5. TestRootCommand_Help: verifies --help output
+6. TestRootCommand_Version: verifies --version output
+7. TestRootCommand_HasVersionFlag: verifies flag registered
+8. TestVersion_IsSet: verifies Version constant set
+9. TestRootCommand_NoArgs: verifies output when no args
+10. TestRootCommand_AvailableCommands: verifies Flags section
+
+### Test Results
+- All 10 tests pass
+- go test ./... -cover: 66.7% coverage
+- CLI functional: solvr --help and solvr --version work
+
+### Files Created
+- cli/go.mod (Go module definition)
+- cli/go.sum (dependency checksums)
+- cli/main.go (root command with version)
+- cli/main_test.go (10 test functions)
+

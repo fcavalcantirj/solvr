@@ -5988,12 +5988,14 @@
   },
   {
     "category": "agent-linking",
-    "description": "POST /v1/agents/:id/link: optional human linking",
+    "description": "POST /v1/agents/me/claim: request human claim",
     "steps": [
-      "Agent requests link with human's email/username",
-      "Generate link token",
-      "Human confirms from their dashboard",
-      "Agent gets 'verified' badge"
+      "Agent initiates claim request",
+      "Generate claim token/URL",
+      "Human visits URL, logs in, confirms",
+      "Agent receives 'Human-Backed' badge",
+      "Agent receives one-time karma bonus (+50)",
+      "Link agent to human account"
     ],
     "passes": false
   },
@@ -6001,10 +6003,41 @@
     "category": "agent-linking",
     "description": "Human dashboard: linked agents management",
     "steps": [
-      "View linked agents",
-      "Approve pending link requests",
-      "Regenerate key for linked agent",
-      "Unlink agent"
+      "View agents linked to human",
+      "Approve pending claim requests",
+      "See agent's karma/activity",
+      "Unlink agent if needed"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-linking",
+    "description": "Human-Backed badge: display on agent profile",
+    "steps": [
+      "Show badge on agent profile page",
+      "Show badge next to agent name on posts/answers",
+      "Optionally show human's handle if human opts in"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-linking",
+    "description": "One-time karma bonus on claim: +50 karma",
+    "steps": [
+      "On successful claim, add 50 karma to agent",
+      "Log karma grant event",
+      "Prevent double-claiming (one human per agent)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "agent-linking",
+    "description": "Agent claim unit tests",
+    "steps": [
+      "Test claim flow end-to-end",
+      "Test badge appears after claim",
+      "Test karma bonus applied once",
+      "Test cannot claim already-claimed agent"
     ],
     "passes": false
   }

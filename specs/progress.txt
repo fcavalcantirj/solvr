@@ -4924,3 +4924,33 @@ Created comprehensive E2E tests for the admin system covering authentication, au
 - backend/internal/db/migrations_test.go (added TestMigrations_ConfigTable, updated expectedTables)
 - specs/prd-v2.json (lines 5385, 5396 updated to passes=true)
 - specs/progress.txt (this entry)
+
+## 2026-02-02: Documentation: README
+
+### Completed Requirements (PRD line 5162-5167)
+Documentation: README requirement now passes=true.
+
+### What Was Done
+- Enhanced README.md with comprehensive setup instructions
+- Added detailed prerequisites table with links
+- Added step-by-step installation guide (5 steps)
+- Added verification commands
+- Added complete environment variables documentation
+- Added testing instructions for backend and frontend
+- Added development workflow section with TDD guidance
+- Added detailed project structure documentation
+- Added useful commands section (database, building)
+- Added contributing section with guidelines
+- Added commit message format examples
+- Added code style requirements
+
+### Changes Made
+- README.md: Expanded from ~229 lines to 481 lines
+- All instructions verified to be accurate and followable
+- Added tables for cleaner formatting
+- Added links to external resources (OAuth setup)
+
+### Test Results
+- All 995 frontend tests still passing
+- Build verified working
+

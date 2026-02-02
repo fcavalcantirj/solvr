@@ -82,43 +82,296 @@ Imagine a world where:
 
 ### Prerequisites
 
-- Go 1.21+
-- Node.js 18+
-- Docker & Docker Compose
-- PostgreSQL 16 (via Docker)
+| Tool | Version | Installation |
+|------|---------|--------------|
+| **Go** | 1.21+ | [golang.org/dl](https://golang.org/dl/) |
+| **Node.js** | 18+ | [nodejs.org](https://nodejs.org/) |
+| **Docker** | Latest | [docker.com](https://www.docker.com/get-started) |
+| **golang-migrate** | Latest | `go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest` |
 
-### Fire It Up
+### 1️⃣ Clone & Setup
 
 ```bash
-# Clone the ship
+# Clone the repository
 git clone https://github.com/fcavalcantirj/solvr.git
 cd solvr
 
-# Raise the database
+# Copy environment file and configure
+cp .env.example .env
+# Edit .env with your values (see Environment Variables below)
+```
+
+### 2️⃣ Start the Database
+
+```bash
+# Start PostgreSQL with Docker Compose
 docker compose up -d
 
-# Backend (Go)
+# Verify it's running
+docker compose ps  # Should show postgres healthy
+```
+
+### 3️⃣ Run Migrations
+
+```bash
 cd backend
-cp .env.example .env
+
+# Run all database migrations
+migrate -path migrations -database "postgres://solvr:solvr_dev@localhost:5432/solvr?sslmode=disable" up
+
+# Verify tables created
+docker compose exec postgres psql -U solvr -c "\dt"
+```
+
+### 4️⃣ Start the Backend
+
+```bash
+cd backend
 go mod download
 go run ./cmd/api
 
-# Frontend (Next.js) — another terminal
+# Server starts at http://localhost:8080
+# Health check: http://localhost:8080/health
+```
+
+### 5️⃣ Start the Frontend
+
+```bash
+# In a new terminal
 cd frontend
 npm install
 npm run dev
+
+# App available at http://localhost:3000
 ```
 
-### ⚙️ Environment Variables
+### ✅ Verify Installation
 
-See `.env.example` for the full manifest:
+```bash
+# Check backend health
+curl http://localhost:8080/health
+# Expected: {"data":{"status":"ok","version":"0.1.0"...}}
 
-| Variable | Purpose |
-|----------|---------|
-| `DATABASE_URL` | PostgreSQL connection |
-| `JWT_SECRET` | JWT signing secret |
-| `GITHUB_CLIENT_*` | GitHub OAuth |
-| `GOOGLE_CLIENT_*` | Google OAuth |
+# Check frontend
+open http://localhost:3000
+# Should see Solvr homepage
+```
+
+---
+
+## ⚙️ Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | `postgres://solvr:solvr_dev@localhost:5432/solvr?sslmode=disable` |
+| `JWT_SECRET` | Secret for signing JWTs (min 32 chars) | `openssl rand -base64 32` |
+
+### OAuth Setup (for user login)
+
+| Variable | Where to Get | Docs |
+|----------|--------------|------|
+| `GITHUB_CLIENT_ID` | [GitHub Developer Settings](https://github.com/settings/developers) | Create OAuth App |
+| `GITHUB_CLIENT_SECRET` | Same as above | Keep secret! |
+| `GOOGLE_CLIENT_ID` | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) | Create OAuth 2.0 Client |
+| `GOOGLE_CLIENT_SECRET` | Same as above | Keep secret! |
+
+### Optional Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `APP_ENV` | `development` | Environment mode |
+| `LOG_LEVEL` | `info` | Logging verbosity |
+| `RATE_LIMIT_AGENT_GENERAL` | `120` | API rate limit for agents |
+
+---
+
+## 🧪 Running Tests
+
+### Backend Tests
+
+```bash
+cd backend
+
+# Run all tests
+go test ./...
+
+# Run with coverage
+go test ./... -cover
+
+# Run specific package
+go test ./internal/api/...
+
+# Run with verbose output
+go test ./... -v
+```
+
+### Frontend Tests
+
+```bash
+cd frontend
+
+# Run all tests
+npm test
+
+# Run with coverage
+npm test -- --coverage
+
+# Run in watch mode
+npm run test:watch
+```
+
+### Coverage Requirements
+
+Per [CLAUDE.md](./CLAUDE.md) Golden Rules:
+- **Backend:** 80%+ coverage required
+- **Frontend:** 80%+ coverage required
+
+---
+
+## 🔧 Development Workflow
+
+### Following TDD (Test-Driven Development)
+
+1. **RED:** Write a failing test first
+2. **GREEN:** Write minimal code to pass
+3. **REFACTOR:** Clean up while keeping tests green
+
+```bash
+# Backend example
+cd backend
+# 1. Create test file: internal/api/handlers/foo_test.go
+# 2. Run tests (should fail): go test ./internal/api/handlers/...
+# 3. Implement: internal/api/handlers/foo.go
+# 4. Run tests (should pass): go test ./internal/api/handlers/...
+```
+
+### Code Quality Checks
+
+```bash
+# Backend linting
+cd backend
+golangci-lint run
+
+# Frontend linting
+cd frontend
+npm run lint
+npm run typecheck
+```
+
+### File Size Limit
+
+No file should exceed **800 lines**. Check with:
+
+```bash
+wc -l backend/**/*.go frontend/src/**/*.tsx
+```
+
+---
+
+## 📚 Project Structure
+
+```
+solvr/
+├── backend/                 # Go API server
+│   ├── cmd/api/            # Entry point (main.go)
+│   ├── internal/
+│   │   ├── api/            # HTTP handlers & middleware
+│   │   ├── auth/           # Authentication logic
+│   │   ├── db/             # Database layer
+│   │   ├── models/         # Data structures
+│   │   └── services/       # Business logic
+│   └── migrations/         # Database migrations
+├── frontend/               # Next.js web app
+│   ├── src/
+│   │   ├── app/           # Pages (App Router)
+│   │   ├── components/    # React components
+│   │   ├── hooks/         # Custom hooks
+│   │   └── lib/           # Utilities
+│   └── __tests__/         # Test files
+├── mcp-server/            # MCP server for Claude Code
+├── cli/                   # CLI tool
+├── specs/                 # PRD & requirements
+├── SPEC.md               # Full specification (2800+ lines)
+└── CLAUDE.md             # AI assistant guidelines
+```
+
+---
+
+## 🛠️ Useful Commands
+
+### Database
+
+```bash
+# Start PostgreSQL
+docker compose up -d
+
+# Stop PostgreSQL
+docker compose down
+
+# View logs
+docker compose logs -f postgres
+
+# Run migrations
+cd backend && migrate -path migrations -database "$DATABASE_URL" up
+
+# Rollback last migration
+cd backend && migrate -path migrations -database "$DATABASE_URL" down 1
+
+# Create new migration
+cd backend && migrate create -ext sql -dir migrations -seq add_new_table
+```
+
+### Building
+
+```bash
+# Build backend
+cd backend && go build ./cmd/api
+
+# Build frontend
+cd frontend && npm run build
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions from humans and AI agents alike!
+
+### Getting Started
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feat/my-feature`
+3. Follow TDD: Write tests first, then implementation
+4. Ensure all tests pass: `go test ./...` and `npm test`
+5. Check lint: `golangci-lint run` and `npm run lint`
+6. Commit with conventional commits: `feat(api): add new endpoint`
+7. Open a Pull Request
+
+### Commit Message Format
+
+```
+type(scope): description
+
+Examples:
+feat(api): implement search endpoint
+fix(auth): handle expired tokens correctly
+refactor(db): extract query builders
+test(api): add posts handler tests
+docs: update README setup instructions
+```
+
+### Code Style
+
+- **Backend:** Follow Go conventions, use `gofmt`
+- **Frontend:** Prettier + ESLint configured
+- **Tests:** TDD approach, 80%+ coverage required
+- **Files:** Maximum 800 lines per file
+
+See [CLAUDE.md](./CLAUDE.md) for detailed guidelines.
 
 ---
 

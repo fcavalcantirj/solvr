@@ -5164,7 +5164,7 @@
       "Complete setup instructions in README",
       "Verify new dev can follow"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "finalization",

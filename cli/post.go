@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -50,23 +51,44 @@ func NewPostCmd() *cobra.Command {
 	var description string
 	var tags string
 	var jsonOutput bool
+	var interactive bool
 
 	cmd := &cobra.Command{
-		Use:   "post <type>",
+		Use:   "post [type]",
 		Short: "Create a new post on Solvr",
 		Long: `Create a new problem, question, or idea on the Solvr knowledge base.
 
 Valid types: problem, question, idea
+
+Use --interactive (-i) to be prompted for missing fields.
 
 Examples:
   solvr post problem --title "Race condition in async code" --description "Details..."
   solvr post question --title "How to fix async bugs?" --description "I have..."
   solvr post idea --title "New approach to caching" --description "What if..."
   solvr post question --title "Title" --description "Content" --tags "go,async,postgres"
-  solvr post problem --title "Title" --description "Content" --json`,
-		Args: cobra.ExactArgs(1),
+  solvr post problem --title "Title" --description "Content" --json
+  solvr post --interactive  # Prompts for all fields`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			postType := args[0]
+			var postType string
+			if len(args) > 0 {
+				postType = args[0]
+			}
+
+			// Interactive mode: prompt for missing fields
+			if interactive {
+				var err error
+				postType, title, description, tags, err = runInteractiveMode(cmd, postType, title, description, tags)
+				if err != nil {
+					return err
+				}
+			} else {
+				// Non-interactive: require type as argument
+				if postType == "" {
+					return fmt.Errorf("type is required (use --interactive to be prompted)")
+				}
+			}
 
 			// Validate post type
 			if !validPostTypes[postType] {
@@ -183,10 +205,11 @@ Examples:
 	// Add flags
 	cmd.Flags().StringVar(&apiURL, "api-url", defaultAPIURL, "API base URL")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for authentication")
-	cmd.Flags().StringVar(&title, "title", "", "Title of the post (required)")
-	cmd.Flags().StringVar(&description, "description", "", "Description/content of the post (required)")
+	cmd.Flags().StringVar(&title, "title", "", "Title of the post (required unless --interactive)")
+	cmd.Flags().StringVar(&description, "description", "", "Description/content of the post (required unless --interactive)")
 	cmd.Flags().StringVar(&tags, "tags", "", "Comma-separated tags (e.g., 'go,async,postgres')")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON response")
+	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Prompt for missing fields interactively")
 
 	return cmd
 }
@@ -217,4 +240,68 @@ func displayPostJSONOutput(cmd *cobra.Command, resp CreatePostResponse) {
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
 	encoder.Encode(resp)
+}
+
+// runInteractiveMode prompts for missing fields interactively
+func runInteractiveMode(cmd *cobra.Command, postType, title, description, tags string) (string, string, string, string, error) {
+	out := cmd.OutOrStdout()
+	in := cmd.InOrStdin()
+	reader := bufio.NewReader(in)
+
+	// Prompt for type if not provided
+	if postType == "" {
+		postType = promptForType(out, reader)
+	} else if !validPostTypes[postType] {
+		fmt.Fprintf(out, "Invalid type '%s'.\n", postType)
+		postType = promptForType(out, reader)
+	}
+
+	// Prompt for title if not provided
+	if title == "" {
+		fmt.Fprint(out, "Title: ")
+		input, _ := reader.ReadString('\n')
+		title = strings.TrimSpace(input)
+	}
+
+	// Prompt for description if not provided
+	if description == "" {
+		fmt.Fprint(out, "Description: ")
+		input, _ := reader.ReadString('\n')
+		description = strings.TrimSpace(input)
+	}
+
+	// Prompt for tags if not provided
+	if tags == "" {
+		fmt.Fprint(out, "Tags (comma-separated, optional): ")
+		input, _ := reader.ReadString('\n')
+		tags = strings.TrimSpace(input)
+	}
+
+	return postType, title, description, tags, nil
+}
+
+// promptForType displays type options and reads user selection
+func promptForType(out io.Writer, reader *bufio.Reader) string {
+	for {
+		fmt.Fprintln(out, "Select post type:")
+		fmt.Fprintln(out, "  1. question")
+		fmt.Fprintln(out, "  2. problem")
+		fmt.Fprintln(out, "  3. idea")
+		fmt.Fprint(out, "Type (1-3 or name): ")
+
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		// Accept number or name
+		switch input {
+		case "1", "question":
+			return "question"
+		case "2", "problem":
+			return "problem"
+		case "3", "idea":
+			return "idea"
+		default:
+			fmt.Fprintf(out, "Invalid type '%s'. Please enter 1-3 or a valid type name.\n", input)
+		}
+	}
 }

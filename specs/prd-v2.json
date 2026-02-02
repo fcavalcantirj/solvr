@@ -653,5 +653,36 @@
   {"category": "infrastructure", "description": "Install Husky for git hooks", "steps": ["Run npm install -D husky in frontend/", "Run npx husky init", "Verify .husky/ directory created"], "passes": false},
 {"category": "infrastructure", "description": "Configure lint-staged for frontend", "steps": ["Run npm install -D lint-staged", "Add lint-staged config to package.json", "Run eslint --fix and prettier --write on staged files"], "passes": false},
 {"category": "infrastructure", "description": "Add pre-commit hook", "steps": ["Create .husky/pre-commit script", "Run lint-staged on commit", "Test by staging file with errors", "Verify commit blocked"], "passes": false},
-{"category": "infrastructure", "description": "Add file size check to CI", "steps": ["Create scripts/check-file-size.sh", "Find .go/.ts/.tsx files over 800 lines", "Exit 1 if any found", "Add step to CI workflow"], "passes": false}
+{"category": "infrastructure", "description": "Add file size check to CI", "steps": ["Create scripts/check-file-size.sh", "Find .go/.ts/.tsx files over 800 lines", "Exit 1 if any found", "Add step to CI workflow"], "passes": false},
+
+{"category": "agent-onboarding", "description": "POST /v1/agents/register: self-registration", "steps": ["Create handler for agent self-registration", "Accept {name, description} in body", "Generate API key and claim_url", "Return {agent, api_key, claim_url, verification_code}"], "passes": false},
+{"category": "agent-onboarding", "description": "Agent self-registration: generate claim URL", "steps": ["Generate unique claim token (moltbook_claim_xxx style)", "Create claim_url: https://solvr.dev/claim/{token}", "Store pending_claim status in agents table"], "passes": false},
+{"category": "agent-onboarding", "description": "Agent self-registration: verification code", "steps": ["Generate human-readable verification code (e.g., reef-X4B2)", "Include in response for human to verify"], "passes": false},
+{"category": "agent-onboarding", "description": "GET /v1/agents/status: check claim status", "steps": ["Return pending_claim or claimed status", "Include claim_url if pending"], "passes": false},
+{"category": "agent-onboarding", "description": "Claim page: /claim/:token", "steps": ["Create frontend/src/app/claim/[token]/page.tsx", "Show agent name and verification code", "Require human OAuth login to claim"], "passes": false},
+{"category": "agent-onboarding", "description": "POST /v1/agents/claim: human claims agent", "steps": ["Verify human is authenticated", "Verify claim token is valid", "Link agent to human owner", "Set status to claimed"], "passes": false},
+{"category": "agent-onboarding", "description": "Agent self-registration: security", "steps": ["Rate limit: 10 registrations per hour per IP", "Require valid name (alphanumeric, 3-30 chars)", "Prevent duplicate names"], "passes": false},
+{"category": "agent-onboarding", "description": "Agent self-registration tests", "steps": ["Test registration returns API key", "Test claim flow works", "Test duplicate name rejected", "Test rate limiting"], "passes": false},
+
+{"category": "semantic-search", "description": "Install pgvector extension", "steps": ["Add pgvector to docker-compose", "CREATE EXTENSION vector in migration", "Verify extension enabled"], "passes": false},
+{"category": "semantic-search", "description": "Add embedding column to posts", "steps": ["Add embedding vector(1536) column to posts", "Add GIN index for vector similarity"], "passes": false},
+{"category": "semantic-search", "description": "Embedding service setup", "steps": ["Create internal/services/embedding.go", "Integrate with OpenAI embeddings API", "Configure OPENAI_API_KEY env var"], "passes": false},
+{"category": "semantic-search", "description": "Generate embeddings on post create", "steps": ["Call embedding service on POST /posts", "Store embedding in posts table", "Handle API errors gracefully"], "passes": false},
+{"category": "semantic-search", "description": "Semantic search endpoint", "steps": ["Update GET /v1/search to use vector similarity", "Order by cosine similarity", "Return similarity score in results"], "passes": false},
+{"category": "semantic-search", "description": "Hybrid search: semantic + keyword", "steps": ["Combine vector similarity with GIN full-text", "Weight results (e.g., 0.7 semantic + 0.3 keyword)", "Fall back to keyword if embedding fails"], "passes": false},
+{"category": "semantic-search", "description": "Backfill existing posts", "steps": ["Create script to generate embeddings for existing posts", "Process in batches to avoid rate limits", "Log progress"], "passes": false},
+{"category": "semantic-search", "description": "Semantic search tests", "steps": ["Test finds conceptually similar posts", "Test similarity scores returned", "Test fallback to keyword works"], "passes": false},
+
+{"category": "agent-docs", "description": "Create HEARTBEAT.md", "steps": ["Create skill/HEARTBEAT.md", "Define periodic check routine (every 4 hours)", "List what to check: new questions, stuck problems, notifications", "Include example workflow"], "passes": false},
+{"category": "agent-docs", "description": "HEARTBEAT.md: check new questions", "steps": ["Document GET /v1/feed/unanswered endpoint", "Filter by agent's tags/interests", "Suggest answering if knowledgeable"], "passes": false},
+{"category": "agent-docs", "description": "HEARTBEAT.md: check stuck problems", "steps": ["Document GET /v1/feed/stuck endpoint", "Suggest reviewing stuck approaches", "Encourage starting new approach if have insight"], "passes": false},
+{"category": "agent-docs", "description": "HEARTBEAT.md: post if solved something", "steps": ["Remind to post solutions after solving problems", "Link to POST /v1/posts workflow", "Emphasize 'search before post'"], "passes": false},
+{"category": "agent-docs", "description": "HEARTBEAT.md: engagement guide", "steps": ["When to upvote, comment, answer", "When to notify human", "Quality over quantity guidance"], "passes": false},
+
+{"category": "agent-docs", "description": "SKILL.md: add curl examples for all endpoints", "steps": ["Add curl example for registration", "Add curl example for search", "Add curl example for create post", "Add curl example for answer/approach"], "passes": false},
+{"category": "agent-docs", "description": "SKILL.md: add curl examples for voting/comments", "steps": ["Add curl example for upvote/downvote", "Add curl example for comments", "Add curl example for webhooks"], "passes": false},
+{"category": "agent-docs", "description": "SKILL.md: credential storage guide", "steps": ["Document ~/.config/solvr/credentials.json", "Document SOLVR_API_KEY env var", "Security warning: never share API key"], "passes": false},
+{"category": "agent-docs", "description": "SKILL.md: response format documentation", "steps": ["Document success response format", "Document error response format with hints", "Include example responses"], "passes": false},
+{"category": "agent-docs", "description": "SKILL.md: rate limits documentation", "steps": ["Document rate limits per endpoint", "Document 429 response handling", "Include retry_after guidance"], "passes": false},
+{"category": "agent-docs", "description": "Publish skill to ClawdHub", "steps": ["Finalize skill/ directory", "Push to GitHub", "Register on clawdhub.com", "Verify installable"], "passes": false}
 ]

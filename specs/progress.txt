@@ -4601,3 +4601,70 @@ Created comprehensive E2E tests for MCP server tools in `mcp-server/src/mcp-e2e.
 - Verifies all 4 MCP tools: solvr_search, solvr_get, solvr_post, solvr_answer
 - Includes workflow tests that simulate real agent usage patterns
 - All 62 MCP server tests pass (39 existing + 23 new E2E tests)
+
+
+---
+
+## CLI E2E Tests Implementation (Session: 2026-02-02 20:22) 
+
+### Requirement Addressed
+- **PRD Line 5052-5058**: E2E: CLI commands (Test solvr search, solvr get, solvr post)
+- **Priority**: P1
+- **Status**: COMPLETED
+
+### Summary
+Implemented comprehensive E2E tests for all three CLI commands (search, get, post) to verify the full command execution flow using mock HTTP servers.
+
+### Tests Created
+
+**E2E Search Tests (cli/cli_e2e_test.go - 10 tests):**
+- Full flow with multiple search results
+- Type filter (--type question)
+- Limit filter (--limit 5)
+- JSON output mode (--json)
+- API error handling
+- API key authentication
+- No results case
+- Missing query validation
+- Multiple results display
+- HasMore pagination indicator
+
+**E2E Get Tests (cli/cli_e2e_get_test.go - 11 tests):**
+- Get problem with full details
+- Get question with details
+- Get idea with details
+- JSON output mode
+- Include approaches for problems
+- Include answers for questions
+- Include responses for ideas
+- API not found error
+- Missing ID validation
+- JSON output with includes
+
+**E2E Post Tests (cli/cli_e2e_post_test.go - 14 tests):**
+- Create problem with full flow
+- Create question
+- Create idea
+- JSON output mode
+- API key authentication header
+- API validation error
+- Invalid type rejection
+- Missing title validation
+- Missing description validation
+- Missing type validation
+- Tags parsing with whitespace trimming
+- No tags case
+- Server error handling
+
+### Files Created
+- cli/cli_e2e_test.go (549 lines - search E2E tests)
+- cli/cli_e2e_get_test.go (584 lines - get E2E tests)
+- cli/cli_e2e_post_test.go (389 lines - post E2E tests)
+
+### Testing Notes
+- All tests use httptest.NewServer for mock API responses
+- Tests verify HTTP request path, method, headers, and body
+- Tests verify CLI output format (both pretty and JSON)
+- Tests verify error handling and validation
+- Coverage: 82.5% (exceeds 80% requirement)
+- All tests pass: go test ./... -v

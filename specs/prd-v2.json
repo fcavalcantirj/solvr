@@ -5055,7 +5055,7 @@
     "steps": [
       "Test solvr search, solvr get, solvr post"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "finalization",

@@ -84,10 +84,7 @@ type CreateQuestionRequest struct {
 	Tags        []string `json:"tags,omitempty"`
 }
 
-// VoteRequest is the request body for voting.
-type VoteRequest struct {
-	Direction string `json:"direction"`
-}
+// Note: VoteRequest is defined in posts.go and shared across handlers.
 
 // List handles GET /v1/questions - list questions.
 func (h *QuestionsHandler) List(w http.ResponseWriter, r *http.Request) {

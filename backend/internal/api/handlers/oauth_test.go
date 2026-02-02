@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -711,24 +712,26 @@ type MockUserData struct {
 }
 
 // FindOrCreateUser mocks the user service.
-func (m *MockOAuthUserService) FindOrCreateUser(ctx context.Context, info *OAuthUserInfo) (*UserResponse, bool, error) {
+func (m *MockOAuthUserService) FindOrCreateUser(ctx context.Context, info *OAuthUserInfoData) (*OAuthUserResult, bool, error) {
 	key := info.Provider + ":" + info.ProviderID
 
 	if userData, ok := m.users[key]; ok {
-		return &UserResponse{
+		return &OAuthUserResult{
 			ID:          userData.ID,
 			Email:       userData.Email,
 			Username:    userData.Username,
 			DisplayName: info.DisplayName,
+			Role:        "user",
 		}, false, nil
 	}
 
 	// Create new user
-	newUser := &UserResponse{
+	newUser := &OAuthUserResult{
 		ID:          "new-user-" + info.ProviderID,
 		Email:       info.Email,
 		Username:    strings.ToLower(strings.ReplaceAll(info.DisplayName, " ", "")),
 		DisplayName: info.DisplayName,
+		Role:        "user",
 	}
 
 	return newUser, true, nil

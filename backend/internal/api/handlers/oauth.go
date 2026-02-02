@@ -267,7 +267,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 			refreshExpiry = 7 * 24 * time.Hour // Default 7 days
 		}
 		expiresAt := time.Now().Add(refreshExpiry)
-		if err := h.tokenStore.StoreToken(ctx, user.ID, refreshToken, expiresAt); err != nil {
+		if _, err := h.tokenStore.StoreToken(ctx, user.ID, refreshToken, expiresAt); err != nil {
 			log.Printf("Refresh token storage failed: %v", err)
 			// Continue anyway - user can still use access token
 		}
@@ -419,7 +419,7 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 			refreshExpiry = 7 * 24 * time.Hour // Default 7 days
 		}
 		expiresAt := time.Now().Add(refreshExpiry)
-		if err := h.tokenStore.StoreToken(ctx, user.ID, refreshToken, expiresAt); err != nil {
+		if _, err := h.tokenStore.StoreToken(ctx, user.ID, refreshToken, expiresAt); err != nil {
 			log.Printf("Refresh token storage failed: %v", err)
 			// Continue anyway - user can still use access token
 		}

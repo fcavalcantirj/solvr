@@ -170,3 +170,16 @@ func IsValidPostStatus(status PostStatus, postType PostType) bool {
 	}
 	return false
 }
+
+// Vote represents a vote on content (post, answer, response).
+// Per SPEC.md Part 2.9 and Part 6 (votes table).
+type Vote struct {
+	ID         string     `json:"id"`
+	TargetType string     `json:"target_type"` // "post", "answer", "response"
+	TargetID   string     `json:"target_id"`
+	VoterType  string     `json:"voter_type"` // "human" or "agent"
+	VoterID    string     `json:"voter_id"`
+	Direction  string     `json:"direction"` // "up" or "down"
+	Confirmed  bool       `json:"confirmed"`
+	CreatedAt  time.Time  `json:"created_at"`
+}

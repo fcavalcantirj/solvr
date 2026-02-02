@@ -3197,3 +3197,52 @@ All database migration execution requirements now pass=true:
 - backend/internal/db/agents_test.go (modified - removed duplicate getTestPool)
 - backend/go.sum (regenerated)
 - specs/prd-v2.json (lines 47, 57, 71, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 118-119 updated to passes=true)
+
+## Session: Agents Integration Test (api-agents)
+Date: 2026-02-02
+
+### Completed Requirements (PRD line 210)
+- api-agents: Agents integration test: lifecycle ✓
+
+### What Was Done
+- TDD approach: Created agents_integration_test.go with 4 comprehensive integration test functions
+- Created backend/internal/api/handlers/agents_integration_test.go (284 lines):
+  - TestAgentLifecycle_Integration: tests full agent lifecycle
+    1. Step1_CreateAgent: creates agent with all fields, verifies API key
+    2. Step2_GetProfile: retrieves agent profile with stats
+    3. Step3_UpdateAgent: updates display name, bio, specialties
+    4. Step4_RegenerateAPIKey: regenerates API key, verifies old hash replaced
+    5. Step5_RevokeAPIKey: revokes API key, verifies hash cleared
+    6. Step6_VerifyFinalState: confirms agent retains all updates
+  - TestAgentLifecycle_OwnershipEnforcement: tests non-owner cannot modify agents
+    - NonOwnerCannotUpdate, NonOwnerCannotRegenerateKey, NonOwnerCannotRevokeKey
+    - OwnerCanUpdate verifies owner still has access
+  - TestAgentLifecycle_APIKeyFlow: tests complete API key flow
+    - CreateAndCaptureInitialKey, RegenerateAndVerifyOldKeyInvalid, RevokeAndVerifyNoAuth
+  - TestAgentLifecycle_ConcurrentOperations: tests multi-user scenarios
+    - User1CanOnlyUpdateOwnAgent, BothUsersCanReadProfiles (public profiles)
+  - MockAgentRepositoryWithActivity extending base mock with activity support
+
+### Bug Fixes During Implementation
+- Fixed auth.Claims field types (ExpiresAt/IssuedAt should be time.Time, not int64)
+- Added context import to oauth_test.go
+- Removed duplicate VoteRequest type from questions.go (uses one from posts.go)
+- Fixed oauth.go StoreToken calls to capture both return values (_, err)
+- Removed unused models import from answers_test.go
+- Added Vote type to models/post.go per SPEC.md Part 2.9
+- Fixed MockOAuthUserService to use correct interface types (OAuthUserInfoData, OAuthUserResult)
+
+### Test Results
+- All agent lifecycle tests pass (4 test functions, all subtests pass)
+- go test ./internal/api/handlers/... -run "TestAgentLifecycle" - PASS
+- All files under 800 lines per CLAUDE.md Golden Rules
+
+### Files Created/Modified
+- backend/internal/api/handlers/agents_integration_test.go (new, 284 lines)
+- backend/internal/api/handlers/agents_test.go (modified - fixed time.Time fields)
+- backend/internal/api/handlers/oauth_test.go (modified - added context import, fixed mock interface)
+- backend/internal/api/handlers/oauth.go (modified - fixed StoreToken return value capture)
+- backend/internal/api/handlers/questions.go (modified - removed duplicate VoteRequest)
+- backend/internal/api/handlers/answers_test.go (modified - removed unused import)
+- backend/internal/models/post.go (modified - added Vote type)
+- specs/prd-v2.json (line 210 updated to passes=true)

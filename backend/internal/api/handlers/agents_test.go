@@ -109,8 +109,8 @@ func addJWTClaimsToContext(r *http.Request, userID, email, role string) *http.Re
 		UserID:    userID,
 		Email:     email,
 		Role:      role,
-		ExpiresAt: time.Now().Add(15 * time.Minute).Unix(),
-		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(15 * time.Minute),
+		IssuedAt:  time.Now(),
 	}
 	ctx := auth.ContextWithClaims(r.Context(), claims)
 	return r.WithContext(ctx)

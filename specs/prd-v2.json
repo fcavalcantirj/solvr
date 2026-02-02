@@ -207,7 +207,7 @@
   {"category": "api-agents", "description": "Agents unit test: create", "steps": ["Create backend/internal/api/handlers/agents_test.go", "Test create with valid data", "Test create with invalid id format", "Test create with duplicate id"], "passes": true},
   {"category": "api-agents", "description": "Agents unit test: get", "steps": ["Test get existing agent", "Test get non-existent returns 404"], "passes": true},
   {"category": "api-agents", "description": "Agents unit test: update", "steps": ["Test update as owner succeeds", "Test update as non-owner returns 403"], "passes": true},
-  {"category": "api-agents", "description": "Agents integration test: lifecycle", "steps": ["Create agent, get profile, update, regenerate key, revoke"], "passes": false},
+  {"category": "api-agents", "description": "Agents integration test: lifecycle", "steps": ["Create agent, get profile, update, regenerate key, revoke"], "passes": true},
 
   {"category": "api-search", "description": "Create search handlers file", "steps": ["Create backend/internal/api/handlers/search.go", "Import database and response packages"], "passes": true},
   {"category": "api-search", "description": "GET /v1/search: basic endpoint", "steps": ["Parse q query parameter", "Return 400 if q missing", "Return 400 if q empty"], "passes": true},

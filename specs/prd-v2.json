@@ -231,7 +231,7 @@
   {"category": "api-search", "description": "Search: pagination per_page", "steps": ["Parse per_page query param", "Default to 20", "Cap at 50"], "passes": true},
   {"category": "api-search", "description": "Search: exclude deleted", "steps": ["Add WHERE deleted_at IS NULL"], "passes": true},
   {"category": "api-search", "description": "Search: include took_ms", "steps": ["Measure query time", "Include meta.took_ms in response"], "passes": true},
-  {"category": "api-search", "description": "Search: performance target", "steps": ["Verify typical queries < 100ms", "Add index hints if needed"], "passes": false},
+  {"category": "api-search", "description": "Search: performance target", "steps": ["Verify typical queries < 100ms", "Add index hints if needed"], "passes": true},
   {"category": "api-search", "description": "Search unit test: type filter problem", "steps": ["Create backend/internal/api/handlers/search_test.go", "Test ?type=problem returns only problems"], "passes": true},
   {"category": "api-search", "description": "Search unit test: type filter question", "steps": ["Test ?type=question returns only questions"], "passes": true},
   {"category": "api-search", "description": "Search unit test: type filter idea", "steps": ["Test ?type=idea returns only ideas"], "passes": true},

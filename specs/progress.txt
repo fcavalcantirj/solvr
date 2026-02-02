@@ -4888,3 +4888,39 @@ Created comprehensive E2E tests for the admin system covering authentication, au
 ### Files Modified
 - specs/prd-v2.json (updated line 5088 to passes=true)
 - specs/progress.txt (this entry)
+
+---
+
+## Session: 2026-02-02
+
+### Task: Create config table migration
+
+### Completed Requirements (PRD lines 5380-5396)
+- Create config migration file - passes=true
+- Config table: all fields - passes=true
+
+### What Was Done
+- Created migration 000015_create_config following TDD approach:
+  1. First wrote failing test (TestMigrations_ConfigTable) to verify:
+     - Config table exists
+     - Columns: key, value, created_at, updated_at
+     - key is PRIMARY KEY
+     - value is JSONB type
+  2. Updated TestMigrations_AllTablesExist to include "config"
+  3. Created migration files following project conventions
+
+- Migration creates config table per SPEC.md Part 6:
+  - key VARCHAR(100) PRIMARY KEY - configuration key
+  - value JSONB NOT NULL - configuration value as JSON
+  - created_at TIMESTAMPTZ - when entry was created
+  - updated_at TIMESTAMPTZ - when entry was last updated
+  - Index on key for faster lookups
+
+### Files Created
+- backend/migrations/000015_create_config.up.sql (21 lines)
+- backend/migrations/000015_create_config.down.sql (3 lines)
+
+### Files Modified
+- backend/internal/db/migrations_test.go (added TestMigrations_ConfigTable, updated expectedTables)
+- specs/prd-v2.json (lines 5385, 5396 updated to passes=true)
+- specs/progress.txt (this entry)

@@ -5382,7 +5382,7 @@
       "Create backend/migrations/000015_create_config.up.sql",
       "Create backend/migrations/000015_create_config.down.sql"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "database",
@@ -5393,7 +5393,7 @@
       "Add created_at TIMESTAMPTZ DEFAULT NOW()",
       "Add updated_at TIMESTAMPTZ DEFAULT NOW()"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "database",

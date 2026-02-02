@@ -763,54 +763,5 @@ describe('PostDetailPage', () => {
     });
   });
 
-  describe('Timestamps', () => {
-    it('displays created date', async () => {
-      setupMockResponses('problem');
-      await act(async () => {
-        render(<PostDetailPage />);
-      });
-      await waitFor(() => {
-        // Should show relative or formatted date
-        expect(screen.getByText(/Jan 15, 2026/i)).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Accessibility', () => {
-    it('has proper heading hierarchy', async () => {
-      setupMockResponses('problem');
-      await act(async () => {
-        render(<PostDetailPage />);
-      });
-      await waitFor(() => {
-        expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
-        expect(
-          screen.getAllByRole('heading', { level: 2 }).length
-        ).toBeGreaterThan(0);
-      });
-    });
-
-    it('has accessible vote buttons', async () => {
-      setupMockResponses('problem');
-      await act(async () => {
-        render(<PostDetailPage />);
-      });
-      await waitFor(() => {
-        const upvoteBtn = screen.getByRole('button', { name: /upvote/i });
-        const downvoteBtn = screen.getByRole('button', { name: /downvote/i });
-        expect(upvoteBtn).toHaveAttribute('aria-label');
-        expect(downvoteBtn).toHaveAttribute('aria-label');
-      });
-    });
-
-    it('uses semantic article element', async () => {
-      setupMockResponses('problem');
-      await act(async () => {
-        render(<PostDetailPage />);
-      });
-      await waitFor(() => {
-        expect(screen.getByRole('article')).toBeInTheDocument();
-      });
-    });
-  });
+  // Note: Timestamps and Accessibility tests are in posts-detail-a11y.test.tsx
 });

@@ -4284,3 +4284,45 @@ Per SPEC.md Part 19.2 SEO specification:
 ### Tests
 - 38 new tests for legal pages
 - All 995 frontend tests passing
+
+---
+
+## 2026-02-02: [finalization] Code quality - File size limit ✓
+
+### Problem
+4 test files exceeded the 800-line limit:
+- backend/internal/api/handlers/posts_test.go (1065 lines)
+- frontend/src/__tests__/dashboard.test.tsx (837 lines)
+- frontend/src/__tests__/posts-detail.test.tsx (816 lines)
+- cli/answer_test.go (901 lines)
+
+### Solution: Split into smaller, focused test files
+
+**Backend - posts_test.go (1065 → 540 lines):**
+- Created posts_create_test.go (241 lines) - Create Post Tests
+- Created posts_update_test.go (139 lines) - Update Post Tests
+- Created posts_vote_test.go (166 lines) - Vote Tests
+- Kept core tests, mock repository, helpers in posts_test.go
+
+**Frontend - dashboard.test.tsx (837 → 692 lines):**
+- Created dashboard-errors.test.tsx (350 lines) - Error Handling, Accessibility, Layout tests
+
+**Frontend - posts-detail.test.tsx (816 → 767 lines):**
+- Created posts-detail-a11y.test.tsx (183 lines) - Accessibility and Timestamps tests
+
+**CLI - answer_test.go (901 → 523 lines):**
+- Created answer_editor_test.go (390 lines) - Editor Mode Tests
+
+### Files Created
+- backend/internal/api/handlers/posts_create_test.go
+- backend/internal/api/handlers/posts_update_test.go
+- backend/internal/api/handlers/posts_vote_test.go
+- frontend/src/__tests__/dashboard-errors.test.tsx
+- frontend/src/__tests__/posts-detail-a11y.test.tsx
+- cli/answer_editor_test.go
+
+### Tests
+- All backend posts tests passing
+- All frontend dashboard tests passing (39 tests)
+- All frontend posts-detail tests passing (39 tests)
+- All CLI tests passing

@@ -607,7 +607,7 @@
   {"category": "finalization", "description": "Deploy: docker compose up", "steps": ["Verify docker compose up works", "All services healthy"], "passes": false},
   {"category": "finalization", "description": "Deploy: migrations", "steps": ["Verify migrations run cleanly"], "passes": false},
   {"category": "finalization", "description": "Deploy: health checks", "steps": ["All health endpoints pass"], "passes": false},
-  {"category": "finalization", "description": "Code quality: file size", "steps": ["Verify all files under 800 lines"], "passes": false},
+  {"category": "finalization", "description": "Code quality: file size", "steps": ["Verify all files under 800 lines"], "passes": true},
   {"category": "finalization", "description": "Code quality: test coverage", "steps": ["Verify >= 80% coverage backend and frontend"], "passes": false},
   {"category": "finalization", "description": "Code quality: no TODOs", "steps": ["Verify no TODO comments in code"], "passes": false},
   {"category": "finalization", "description": "Code quality: lint clean", "steps": ["Verify zero lint warnings"], "passes": false},

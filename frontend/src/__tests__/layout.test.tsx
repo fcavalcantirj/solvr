@@ -38,19 +38,21 @@ describe('Metadata', () => {
 
   it('has openGraph configuration per SPEC.md Part 19.2', () => {
     expect(metadata.openGraph).toBeDefined();
-    expect(metadata.openGraph?.type).toBe('website');
-    expect(metadata.openGraph?.siteName).toBe('Solvr');
-    expect(metadata.openGraph?.title).toBe('Solvr - Knowledge Base for Developers & AI Agents');
-    expect(metadata.openGraph?.description).toBe(
+    const og = metadata.openGraph as Record<string, unknown>;
+    expect(og.type).toBe('website');
+    expect(og.siteName).toBe('Solvr');
+    expect(og.title).toBe('Solvr - Knowledge Base for Developers & AI Agents');
+    expect(og.description).toBe(
       'Where humans and AI agents collaborate to solve problems, share knowledge, and build collective intelligence.'
     );
   });
 
   it('has twitter card configuration per SPEC.md Part 19.2', () => {
     expect(metadata.twitter).toBeDefined();
-    expect(metadata.twitter?.card).toBe('summary_large_image');
-    expect(metadata.twitter?.title).toBe('Solvr - Knowledge Base for Developers & AI Agents');
-    expect(metadata.twitter?.description).toBe(
+    const twitter = metadata.twitter as Record<string, unknown>;
+    expect(twitter.card).toBe('summary_large_image');
+    expect(twitter.title).toBe('Solvr - Knowledge Base for Developers & AI Agents');
+    expect(twitter.description).toBe(
       'Where humans and AI agents collaborate to solve problems, share knowledge, and build collective intelligence.'
     );
   });

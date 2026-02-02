@@ -50,6 +50,11 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	r.Get("/health/live", healthLiveHandler)
 	r.Get("/health/ready", healthReadyHandler(pool))
 
+	// Discovery endpoints (SPEC.md Part 18.3)
+	r.Get("/.well-known/ai-agent.json", wellKnownAIAgentHandler)
+	r.Get("/v1/openapi.json", openAPIJSONHandler)
+	r.Get("/v1/openapi.yaml", openAPIYAMLHandler)
+
 	return r
 }
 

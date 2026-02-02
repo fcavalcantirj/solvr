@@ -4539,3 +4539,65 @@ Created comprehensive Playwright E2E tests for agent API operations in `frontend
 - UI tests require browser with system dependencies (run: npx playwright install-deps)
 - All API structure tests pass (34 tests)
 - UI tests skipped in environments without browser support
+
+---
+
+## 2026-02-02: E2E MCP Tools Tests
+
+### PRD Requirement Completed
+- **E2E: MCP tools** (PRD line 590) - passes: true
+
+### Implementation Details
+Created comprehensive E2E tests for MCP server tools in `mcp-server/src/mcp-e2e.test.ts` (393 lines).
+
+### Test Coverage
+
+**MCP Protocol: Initialize (1 test):**
+- Server responds to initialize with correct capabilities
+
+**MCP Protocol: Tools List (2 tests):**
+- Returns all available tools via tools/list
+- Each tool has proper schema definition
+
+**MCP Protocol: Tool Call - solvr_search (5 tests):**
+- Executes solvr_search via MCP and returns formatted results
+- solvr_search with type filter works via MCP
+- solvr_search with limit works via MCP
+- solvr_search returns no results message when empty
+- solvr_search handles API errors gracefully
+
+**MCP Protocol: Tool Call - solvr_get (4 tests):**
+- Executes solvr_get via MCP and returns post details
+- solvr_get with include option fetches related content
+- solvr_get with approaches for problems
+- solvr_get handles not found error
+
+**MCP Protocol: Tool Call - solvr_post (4 tests):**
+- Executes solvr_post via MCP to create a question
+- Executes solvr_post via MCP to create a problem
+- Executes solvr_post via MCP to create an idea
+- solvr_post handles validation errors
+
+**MCP Protocol: Tool Call - solvr_answer (2 tests):**
+- Creates answer for question via MCP
+- Creates approach for problem via MCP
+
+**MCP Protocol: Error Handling (3 tests):**
+- Returns error for unknown tool
+- Returns error for missing tool name
+- Returns error for unknown method
+
+**MCP Integration: Full Workflow (2 tests):**
+- Completes full search-before-work workflow
+- Completes find-and-use-solution workflow
+
+### Files Created
+- mcp-server/src/mcp-e2e.test.ts (393 lines - 23 E2E tests)
+
+### Testing Notes
+- Tests verify full MCP JSON-RPC protocol flow
+- Tests initialize, tools/list, and tools/call methods
+- Uses mock API responses to test tool execution
+- Verifies all 4 MCP tools: solvr_search, solvr_get, solvr_post, solvr_answer
+- Includes workflow tests that simulate real agent usage patterns
+- All 62 MCP server tests pass (39 existing + 23 new E2E tests)

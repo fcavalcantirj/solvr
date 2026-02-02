@@ -587,7 +587,7 @@
   {"category": "finalization", "description": "E2E: Agent registration", "steps": ["Human registers agent", "Verify API key returned"], "passes": true},
   {"category": "finalization", "description": "E2E: Agent searches", "steps": ["Search via API with agent key", "Verify results returned"], "passes": true},
   {"category": "finalization", "description": "E2E: Agent posts answer", "steps": ["Post answer via API", "Verify created"], "passes": true},
-  {"category": "finalization", "description": "E2E: MCP tools", "steps": ["Test solvr_search, solvr_get, solvr_post via MCP"], "passes": false},
+  {"category": "finalization", "description": "E2E: MCP tools", "steps": ["Test solvr_search, solvr_get, solvr_post via MCP"], "passes": true},
   {"category": "finalization", "description": "E2E: CLI commands", "steps": ["Test solvr search, solvr get, solvr post"], "passes": false},
   {"category": "finalization", "description": "E2E: Webhooks", "steps": ["Register webhook", "Trigger event", "Verify delivery with signature"], "passes": false},
   {"category": "finalization", "description": "E2E: Rate limiting", "steps": ["Exceed rate limit", "Verify 429 response", "Verify resets after window"], "passes": false},

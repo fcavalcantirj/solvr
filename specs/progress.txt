@@ -4668,3 +4668,54 @@ Implemented comprehensive E2E tests for all three CLI commands (search, get, pos
 - Tests verify error handling and validation
 - Coverage: 82.5% (exceeds 80% requirement)
 - All tests pass: go test ./... -v
+
+## 2026-02-02: E2E Webhooks Implementation
+
+### Completed Requirements (PRD line 5062-5068)
+- E2E: Webhooks - now passes=true
+
+### What Was Done
+- TDD approach: Created webhook_e2e_test.go with 6 comprehensive E2E test functions
+- Created backend/internal/services/webhook_e2e_test.go (465 lines):
+  - TestE2E_Webhook_CompleteFlow: Full lifecycle test
+    - Sets up mock HTTPS receiver
+    - Registers webhook with events and secret
+    - Triggers event delivery
+    - Verifies payload received with correct structure
+    - Verifies HMAC-SHA256 signature (sha256=... format)
+    - Verifies headers (X-Solvr-Signature, X-Solvr-Webhook-ID, X-Solvr-Delivery-Attempt)
+  - TestE2E_Webhook_MultipleEventsFlow: Tests multiple event subscriptions
+    - Registers for problem.solved and mention events
+    - Triggers both events
+    - Verifies both deliveries received with valid signatures
+  - TestE2E_Webhook_FailureRecoveryFlow: Tests failure and recovery
+    - Simulates 500 errors then recovery
+    - Verifies consecutive failures tracked
+    - Verifies success resets failure counter
+  - TestE2E_Webhook_RetryFlow: Tests retry mechanism
+    - Delivers with different attempt numbers
+    - Verifies X-Solvr-Delivery-Attempt header matches
+  - TestE2E_Webhook_PayloadIntegrity: Tests complex payload preservation
+    - Nested objects, arrays, special characters
+    - Unicode and emoji preservation
+    - Signature valid for complex payloads
+  - TestE2E_Webhook_DifferentStatusCodes: Tests response handling
+    - All 2xx codes treated as success (200, 201, 202, 204)
+    - All non-2xx codes treated as failure (400, 401, 403, 404, 500, 502, 503)
+    - Signature verification works regardless of response status
+
+### Bug Fixes
+- Fixed notification.go line 347: event.ApproachID → event.TargetID
+  - CommentEvent struct uses TargetType/TargetID, not ApproachID
+- Fixed email_test.go: Removed invalid method assignment
+  - Used sendFunc callback pattern instead of reassigning Send method
+
+### Test Results
+- All 27 webhook tests pass (6 new E2E tests + 21 existing unit tests)
+- go test ./internal/services/... -run "Webhook": PASS
+
+### Files Created/Modified
+- backend/internal/services/webhook_e2e_test.go (new, 465 lines)
+- backend/internal/services/notification.go (bug fix)
+- backend/internal/services/email_test.go (bug fix)
+- specs/prd-v2.json (updated line 5068 to passes=true)

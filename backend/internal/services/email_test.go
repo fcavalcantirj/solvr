@@ -228,14 +228,17 @@ func TestEmailService_SendEmailWithRetry_Success(t *testing.T) {
 	callCount := 0
 	mockClient := &MockSMTPClient{}
 
-	// Override Send to track calls
-	originalSend := mockClient.Send
-	mockClient.Send = func(msg *EmailMessage) error {
-		callCount++
-		return originalSend(mockClient, msg)
+	service := &EmailService{
+		client:       mockClient,
+		fromEmail:    "noreply@solvr.dev",
+		maxRetries:   3,
+		retryBackoff: 10 * time.Millisecond,
+		sendFunc: func(msg *EmailMessage) error {
+			callCount++
+			mockClient.SentEmails = append(mockClient.SentEmails, *msg)
+			return nil
+		},
 	}
-
-	service := NewEmailServiceWithRetry(mockClient, "noreply@solvr.dev", 3, 10*time.Millisecond)
 
 	msg := &EmailMessage{
 		To:      "user@example.com",

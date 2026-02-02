@@ -344,7 +344,7 @@ func (s *NotificationService) NotifyOnComment(ctx context.Context, event *Commen
 		authorID = answer.AuthorID
 
 	case "approach":
-		approach, err := s.approachLookup.FindByID(ctx, event.ApproachID)
+		approach, err := s.approachLookup.FindByID(ctx, event.TargetID)
 		if err != nil {
 			return fmt.Errorf("failed to find approach: %w", err)
 		}

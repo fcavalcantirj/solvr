@@ -5065,7 +5065,7 @@
       "Trigger event",
       "Verify delivery with signature"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "finalization",

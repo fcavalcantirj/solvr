@@ -37,6 +37,9 @@ Use "solvr [command] --help" for more information about a command.`,
 	// Add --version flag
 	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Print version information")
 
+	// Add subcommands
+	rootCmd.AddCommand(NewConfigCmd())
+
 	return rootCmd
 }
 

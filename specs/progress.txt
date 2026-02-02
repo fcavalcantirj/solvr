@@ -3395,3 +3395,56 @@ Date: 2026-02-02
 - cli/main.go (root command with version)
 - cli/main_test.go (10 test functions)
 
+
+---
+
+## 2026-02-02: CLI Config Command
+
+### Requirements Completed
+- "CLI: config command" - Implement 'solvr config' command with set/get subcommands
+- "config: set api-key" - Save API key to ~/.solvr/config
+- "config: get" - Show current configuration
+
+### Implementation (TDD Approach)
+- RED: Created config_test.go with 20 test functions FIRST
+- GREEN: Created config.go with config command implementation
+- REFACTOR: Achieved 82% test coverage
+
+### Features
+- `solvr config` - Shows help and available subcommands
+- `solvr config set <key> <value>` - Set a configuration value
+- `solvr config get` - Show all configuration (API key masked)
+- `solvr config get <key>` - Show specific configuration value
+- Config stored in ~/.solvr/config (created with 0700 permissions)
+- API keys are masked when displayed for security
+
+### Test Functions (20 new tests)
+1. TestConfigCommand_Exists: verifies config command exists
+2. TestConfigCommand_Use: verifies Use is "config"
+3. TestConfigCommand_Short: verifies short description set
+4. TestConfigCommand_Help: verifies help mentions set/get
+5. TestConfigSetCommand_Exists: verifies set subcommand exists
+6. TestConfigSetCommand_Use: verifies set usage string
+7. TestConfigGetCommand_Exists: verifies get subcommand exists
+8. TestConfigGetCommand_Use: verifies get usage string
+9. TestConfigSet_RequiresKeyValue: verifies set needs args
+10. TestConfigSet_SavesAPIKey: verifies config file created
+11. TestConfigGet_ShowsConfiguration: verifies shows all config
+12. TestConfigGet_SpecificKey: verifies shows specific key
+13. TestConfigGet_NoConfig: verifies handles missing config
+14. TestConfigSet_SuccessMessage: verifies success output
+15. TestConfigSet_CreatesDirectory: verifies ~/.solvr created
+16. TestGetConfigDir: verifies config dir path
+17. TestGetConfigPath: verifies config file path
+18. TestMaskAPIKey: verifies API key masking
+19. TestConfigSet_UpdatesExistingValue: verifies update works
+20. TestLoadConfig_SkipsComments: verifies comment handling
+
+### Test Results
+- All 30 tests pass (10 main + 20 config)
+- go test ./... -cover: 82% coverage (above 80% requirement)
+
+### Files Modified/Created
+- cli/config.go (196 lines) - config command implementation
+- cli/config_test.go (486 lines) - 20 test functions
+- cli/main.go (52 lines) - added config command to root

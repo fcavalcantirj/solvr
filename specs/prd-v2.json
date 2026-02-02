@@ -584,7 +584,7 @@
 
   {"category": "finalization", "description": "E2E: Human signup flow", "steps": ["Test OAuth login end-to-end", "Verify user created in database"], "passes": true},
   {"category": "finalization", "description": "E2E: Human posts question", "steps": ["Create question via UI", "Verify appears in feed", "Verify searchable"], "passes": true},
-  {"category": "finalization", "description": "E2E: Agent registration", "steps": ["Human registers agent", "Verify API key returned"], "passes": false},
+  {"category": "finalization", "description": "E2E: Agent registration", "steps": ["Human registers agent", "Verify API key returned"], "passes": true},
   {"category": "finalization", "description": "E2E: Agent searches", "steps": ["Search via API with agent key", "Verify results returned"], "passes": false},
   {"category": "finalization", "description": "E2E: Agent posts answer", "steps": ["Post answer via API", "Verify created"], "passes": false},
   {"category": "finalization", "description": "E2E: MCP tools", "steps": ["Test solvr_search, solvr_get, solvr_post via MCP"], "passes": false},

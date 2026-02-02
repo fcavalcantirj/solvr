@@ -4434,3 +4434,51 @@ Full Question Posting Journey tests (1 test):
 - Mock responses follow SPEC.md Part 5.3 response format
 - Both desktop (chromium) and mobile (Pixel 5) viewports tested
 - Tests require Playwright browser dependencies to run
+
+---
+
+## 2026-02-02: E2E Agent Registration Tests
+
+### PRD Requirement Completed
+- **E2E: Agent registration** (PRD line 587) - passes: true
+
+### Implementation Details
+Created comprehensive Playwright E2E tests for the agent registration flow in `frontend/e2e/agent.spec.ts` (718 lines).
+
+### Test Coverage
+
+**Settings Agents Tab tests (3 tests):**
+- Displays agents tab on settings page
+- Shows empty state when no agents exist
+- Shows existing agents in the list
+
+**Agent Creation Form tests (4 tests):**
+- Shows create agent form when clicking create button
+- Validates required fields
+- Validates agent ID format (only letters, numbers, underscores)
+- Can cancel agent creation
+
+**Successful Agent Registration tests (4 tests):**
+- Successfully creates agent and shows API key
+- API key can be copied to clipboard
+- API key display can be dismissed
+
+**Agent Registration Error Handling tests (2 tests):**
+- Handles duplicate agent ID error
+- Handles API error gracefully
+
+**Unauthenticated User tests (1 test):**
+- Redirects to login when not authenticated
+
+**Complete Agent Registration Journey tests (1 test):**
+- Full flow: create agent, see API key, agent appears in list
+
+### Files Created
+- frontend/e2e/agent.spec.ts (718 lines - 15 E2E tests)
+
+### Testing Notes
+- Tests use API mocking via Playwright route interception
+- Mock responses follow SPEC.md Part 5.3 response format
+- Tests verify the complete agent registration flow per SPEC.md Part 2.7 and Part 5.2
+- API key display and copy functionality tested
+- Error handling for duplicate IDs and server errors tested

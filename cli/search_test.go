@@ -308,3 +308,124 @@ func TestStripHTMLTags(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchCommand_JSONFlag(t *testing.T) {
+	// Create mock API server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := SearchAPIResponse{
+			Data: []SearchResult{
+				{
+					ID:      "post-123",
+					Type:    "question",
+					Title:   "How to fix async bugs?",
+					Snippet: "I have an <mark>async</mark> bug...",
+					Tags:    []string{"go", "async"},
+					Status:  "open",
+					Author: AuthorInfo{
+						ID:          "user-1",
+						Type:        "human",
+						DisplayName: "John",
+					},
+					Score:        0.95,
+					Votes:        10,
+					AnswersCount: 2,
+					CreatedAt:    time.Now(),
+				},
+			},
+			Meta: SearchMeta{
+				Query:   "async bug",
+				Total:   1,
+				Page:    1,
+				PerPage: 20,
+				HasMore: false,
+				TookMs:  15,
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	searchCmd := NewSearchCmd()
+	buf := new(bytes.Buffer)
+	searchCmd.SetOut(buf)
+	searchCmd.SetErr(buf)
+	searchCmd.Flags().Set("api-url", server.URL)
+	searchCmd.Flags().Set("json", "true")
+	searchCmd.SetArgs([]string{"async bug"})
+
+	err := searchCmd.Execute()
+	if err != nil {
+		t.Fatalf("search command failed: %v", err)
+	}
+
+	output := buf.String()
+
+	// Output should be valid JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Errorf("output should be valid JSON, got error: %v\nOutput was: %s", err, output)
+	}
+
+	// Should contain data field
+	if _, ok := result["data"]; !ok {
+		t.Error("JSON output should contain 'data' field")
+	}
+
+	// Should contain meta field
+	if _, ok := result["meta"]; !ok {
+		t.Error("JSON output should contain 'meta' field")
+	}
+}
+
+func TestSearchCommand_JSONFlagWithNoResults(t *testing.T) {
+	// Create mock API server that returns no results
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := SearchAPIResponse{
+			Data: []SearchResult{},
+			Meta: SearchMeta{
+				Query:   "nonexistent",
+				Total:   0,
+				Page:    1,
+				PerPage: 20,
+				HasMore: false,
+				TookMs:  5,
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	searchCmd := NewSearchCmd()
+	buf := new(bytes.Buffer)
+	searchCmd.SetOut(buf)
+	searchCmd.SetErr(buf)
+	searchCmd.Flags().Set("api-url", server.URL)
+	searchCmd.Flags().Set("json", "true")
+	searchCmd.SetArgs([]string{"nonexistent"})
+
+	err := searchCmd.Execute()
+	if err != nil {
+		t.Fatalf("search command failed: %v", err)
+	}
+
+	output := buf.String()
+
+	// Output should still be valid JSON even with no results
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Errorf("output should be valid JSON, got error: %v", err)
+	}
+
+	// data should be an empty array
+	data, ok := result["data"].([]interface{})
+	if !ok {
+		t.Error("data should be an array")
+	}
+	if len(data) != 0 {
+		t.Error("data should be empty")
+	}
+}

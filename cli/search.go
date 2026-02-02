@@ -65,6 +65,7 @@ type APIError struct {
 func NewSearchCmd() *cobra.Command {
 	var apiURL string
 	var apiKey string
+	var jsonOutput bool
 
 	cmd := &cobra.Command{
 		Use:   "search <query>",
@@ -76,7 +77,8 @@ Search before you start working on a problem - someone might have already solved
 Examples:
   solvr search "async postgres race condition"
   solvr search "ECONNREFUSED" --api-key solvr_xxx
-  solvr search "error handling" --api-url http://localhost:8080/v1`,
+  solvr search "error handling" --api-url http://localhost:8080/v1
+  solvr search "async bug" --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			query := args[0]
@@ -147,8 +149,12 @@ Examples:
 				return fmt.Errorf("failed to parse response: %w", err)
 			}
 
-			// Display results
-			displaySearchResults(cmd, searchResp)
+			// Output as JSON or pretty display
+			if jsonOutput {
+				displayJSONOutput(cmd, searchResp)
+			} else {
+				displaySearchResults(cmd, searchResp)
+			}
 
 			return nil
 		},
@@ -157,6 +163,7 @@ Examples:
 	// Add flags
 	cmd.Flags().StringVar(&apiURL, "api-url", defaultAPIURL, "API base URL")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for authentication")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON")
 
 	return cmd
 }
@@ -249,4 +256,12 @@ func stripHTMLTags(s string) string {
 		}
 	}
 	return string(result)
+}
+
+// displayJSONOutput outputs the search response as raw JSON
+func displayJSONOutput(cmd *cobra.Command, resp SearchAPIResponse) {
+	out := cmd.OutOrStdout()
+	encoder := json.NewEncoder(out)
+	encoder.SetIndent("", "  ")
+	encoder.Encode(resp)
 }

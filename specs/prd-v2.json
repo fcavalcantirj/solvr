@@ -545,7 +545,7 @@
   {"category": "cli", "description": "config: get", "steps": ["Show current configuration"], "passes": true},
   {"category": "cli", "description": "CLI: search command", "steps": ["Implement 'solvr search <query>'", "Call /v1/search"], "passes": true},
   {"category": "cli", "description": "search: pretty output", "steps": ["Format results nicely for terminal"], "passes": true},
-  {"category": "cli", "description": "search: --json flag", "steps": ["Output raw JSON"], "passes": false},
+  {"category": "cli", "description": "search: --json flag", "steps": ["Output raw JSON"], "passes": true},
   {"category": "cli", "description": "search: --type flag", "steps": ["Filter by type"], "passes": false},
   {"category": "cli", "description": "search: --limit flag", "steps": ["Limit results count"], "passes": false},
   {"category": "cli", "description": "CLI: get command", "steps": ["Implement 'solvr get <id>'", "Show post details"], "passes": false},

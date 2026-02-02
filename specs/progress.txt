@@ -3496,3 +3496,31 @@ Implemented `solvr search <query>` command that calls the Solvr API `/v1/search`
 ### PRD Updates
 - CLI: search command → passes: true
 - search: pretty output → passes: true
+
+---
+
+## 2026-02-02: CLI search --json flag
+
+### Requirement: search: --json flag
+Output raw JSON from search command
+
+### Implementation
+- Added `--json` flag to search command
+- When enabled, outputs raw JSON response instead of pretty-printed format
+- JSON output includes full `data` and `meta` fields
+- Useful for piping to jq or other tools
+
+### Tests Added (search_test.go)
+1. TestSearchCommand_JSONFlag: verifies JSON output format
+2. TestSearchCommand_JSONFlagWithNoResults: verifies JSON output with empty results
+
+### Test Results
+- All 42 tests pass
+- go test ./... passes
+
+### Files Modified
+- cli/search.go: added --json flag and displayJSONOutput function
+- cli/search_test.go: added 2 new tests
+
+### PRD Updates
+- search: --json flag → passes: true

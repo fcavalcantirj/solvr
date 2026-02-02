@@ -5085,7 +5085,7 @@
       "View and action flags",
       "Verify audit log"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "finalization",

@@ -4793,3 +4793,98 @@ Created comprehensive E2E tests for the rate limiting system that verify the com
 ### Files Modified
 - specs/prd-v2.json (updated line 5078 to passes=true)
 - specs/progress.txt (this entry)
+
+---
+
+## 2026-02-02: E2E Admin Flows Tests
+
+### PRD Requirements Completed
+- **[finalization] E2E: Admin flows** (line 5080-5088) - now passes=true
+  - Admin login
+  - View and action flags
+  - Verify audit log
+
+### What Was Done (TDD Approach)
+
+Created comprehensive E2E tests for the admin system covering authentication, authorization, and complete workflows:
+
+#### Authentication & Authorization Tests (admin_e2e_auth_test.go - 297 lines)
+
+1. **TestE2E_Admin_AuthenticationRequired**
+   - Tests all admin endpoints require authentication
+   - Verifies 401 Unauthorized for unauthenticated requests
+   - Tests ListFlags, ListUsers, ListAgents, ListAuditLog, GetStats
+
+2. **TestE2E_Admin_NonAdminForbidden**
+   - Tests non-admin users receive 403 Forbidden
+   - Verifies regular users cannot access admin endpoints
+   - Checks error response structure with FORBIDDEN code
+
+3. **TestE2E_Admin_LoginFlow**
+   - Tests admin users can access all protected endpoints
+   - Verifies successful authentication with admin JWT claims
+   - Confirms response contains data field
+
+4. **TestE2E_Admin_SuperAdminAccess**
+   - Tests super_admin role has equivalent admin access
+   - Per SPEC.md Part 16.4, both roles have admin privileges
+
+5. **TestE2E_Admin_MiddlewareIntegration**
+   - Tests AdminOnly middleware with various roles
+   - NoAuth → 401, RegularUser → 403, Admin → 200, SuperAdmin → 200
+
+#### Workflow & Flag Action Tests (admin_e2e_flow_test.go - 789 lines)
+
+1. **TestE2E_Admin_ViewAndListFlags**
+   - Tests listing flags with multiple entries
+   - Verifies response structure (data array, total count)
+
+2. **TestE2E_Admin_DismissFlagAndAuditLog**
+   - Tests dismissing a flag updates status to "dismissed"
+   - Verifies ReviewedBy and ReviewedAt are set
+   - Confirms audit log entry with action "dismiss_flag"
+
+3. **TestE2E_Admin_ActionOnFlagAndAuditLog**
+   - Tests taking action (hide) on a flag
+   - Verifies flag status updated to "actioned"
+   - Confirms audit log entry with action details
+
+4. **TestE2E_Admin_ActionOnFlagInvalidAction**
+   - Tests invalid actions are rejected with 400 Bad Request
+   - Verifies INVALID_ACTION error code
+
+5. **TestE2E_Admin_FlagNotFound**
+   - Tests 404 for non-existent flags
+   - Covers both dismiss and action endpoints
+
+6. **TestE2E_Admin_AuditLogListWithFilters**
+   - Tests listing audit log with multiple entries
+   - Verifies different action types recorded
+
+7. **TestE2E_Admin_GetStats**
+   - Tests retrieving admin statistics
+   - Verifies users_count, agents_count, posts_count fields
+
+8. **TestE2E_Admin_UserManagement**
+   - Tests complete user management flow
+   - GetUserDetail, WarnUser, SuspendUser, BanUser
+   - Verifies user status updates and audit log entries
+
+9. **TestE2E_Admin_CompleteWorkflow**
+   - End-to-end test of complete admin workflow
+   - Step 1: View pending flags
+   - Step 2: Take action on flag (delete)
+   - Step 3: Verify action in audit log
+   - Logs each step for visibility
+
+### Test Results
+- All 14 E2E admin tests pass
+- Covers authentication, authorization, flag management, user management, audit log
+
+### Files Created
+- backend/internal/api/handlers/admin_e2e_auth_test.go (297 lines)
+- backend/internal/api/handlers/admin_e2e_flow_test.go (789 lines)
+
+### Files Modified
+- specs/prd-v2.json (updated line 5088 to passes=true)
+- specs/progress.txt (this entry)

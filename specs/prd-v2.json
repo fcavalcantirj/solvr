@@ -6130,15 +6130,17 @@
   },
   {
     "category": "design-branding",
-    "description": "Design Solvr mascot: Pirate-themed character",
+    "description": "Design Solvr mascot: Captain Octavius the Octopus \ud83d\udc19",
     "steps": [
-      "Pirate theme: We're ALL pirates in the sea of knowledge \ud83c\udff4\u200d\u2620\ufe0f",
-      "Options: Parrot with eyepatch, octopus with captain hat, robot pirate, skull with lightbulb",
-      "Friendly but clever \u2014 not scary, not childish",
-      "Works at all sizes: favicon (16px) to hero (512px)",
-      "Multiple expressions: searching (telescope), found treasure (celebrating), helping (pointing), thinking (hand on chin)",
-      "Colors: Should pop on dark backgrounds",
-      "Name the mascot! (Solvey? Captain Sol? The Navigator?)"
+      "Name: Captain Octavius ('Octo' for short)",
+      "Character: Friendly octopus with tiny captain's hat + monocle",
+      "Personality: Clever, helpful, always has a tentacle for everything",
+      "8 arms = multitasking, handling many problems at once",
+      "Deep sea = deep knowledge, explores the depths",
+      "Colors: Warm purple/magenta body, gold accents (hat, monocle rim)",
+      "Expressions: Searching (telescope), Eureka! (lightbulb), Helping (pointing), Thinking (tentacle on head), Celebrating (arms up)",
+      "Works at: 16px favicon, 32px avatar, 128px cards, 512px hero",
+      "Accessory variations: Sometimes holds a scroll, compass, or treasure map"
     ],
     "passes": false
   },

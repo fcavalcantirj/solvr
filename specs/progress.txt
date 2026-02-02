@@ -4224,3 +4224,63 @@ Per SPEC.md Part 19.2 SEO specification:
 ### Tests
 - 17 new tests (9 for sitemap, 8 for robots)
 - All 957 frontend tests passing
+
+---
+
+## 2026-02-02: Legal Pages Implementation
+
+### PRD Requirements Completed
+- **legal: Create /terms page** - passes: true
+- **legal: Create /privacy page** - passes: true
+- **legal: Footer legal links** - passes: true (already existed)
+
+### Implementation Details
+
+**Terms of Service Page (/terms):**
+- Created frontend/src/app/terms/page.tsx
+- Created frontend/src/app/terms/metadata.ts
+- Sections cover per SPEC.md Part 19.1:
+  - Acceptance of Terms
+  - User-Generated Content ownership
+  - AI Agent Participation rules
+  - API Usage Terms
+  - Limitation of Liability
+  - Account Termination conditions
+  - Changes to Terms
+  - Contact information
+
+**Privacy Policy Page (/privacy):**
+- Created frontend/src/app/privacy/page.tsx
+- Created frontend/src/app/privacy/metadata.ts
+- Sections cover per SPEC.md Part 19.1:
+  - Introduction
+  - Data We Collect (account info, content, usage, AI agent data)
+  - How We Use Your Data
+  - Data Sharing with Third Parties
+  - Data Retention
+  - Your Rights (access, correction, deletion, export, opt-out)
+  - Cookies and Tracking (privacy-focused, minimal cookies)
+  - AI Agent Privacy
+  - Data Security
+  - Changes to Policy
+  - Contact Us
+
+**Footer (already had legal links):**
+- Links to /terms and /privacy already present in Footer.tsx
+- Footer tests already verify these links exist
+
+### Tests Written (TDD Approach)
+- frontend/src/__tests__/terms.test.tsx (18 tests)
+- frontend/src/__tests__/privacy.test.tsx (20 tests)
+
+### Files Created
+- frontend/src/app/terms/page.tsx (168 lines)
+- frontend/src/app/terms/metadata.ts (24 lines)
+- frontend/src/app/privacy/page.tsx (234 lines)
+- frontend/src/app/privacy/metadata.ts (24 lines)
+- frontend/src/__tests__/terms.test.tsx (134 lines)
+- frontend/src/__tests__/privacy.test.tsx (175 lines)
+
+### Tests
+- 38 new tests for legal pages
+- All 995 frontend tests passing

@@ -578,9 +578,9 @@
   {"category": "seo", "description": "GET /robots.txt", "steps": ["Serve robots.txt", "Allow /, disallow /admin, /api"], "passes": true},
   {"category": "seo", "description": "SEO tests", "steps": ["Test meta tags present"], "passes": true},
 
-  {"category": "legal", "description": "Create /terms page", "steps": ["Create frontend/src/app/terms/page.tsx", "Add Terms of Service content"], "passes": false},
-  {"category": "legal", "description": "Create /privacy page", "steps": ["Create frontend/src/app/privacy/page.tsx", "Add Privacy Policy content"], "passes": false},
-  {"category": "legal", "description": "Footer: legal links", "steps": ["Add links to Terms, Privacy in Footer"], "passes": false},
+  {"category": "legal", "description": "Create /terms page", "steps": ["Create frontend/src/app/terms/page.tsx", "Add Terms of Service content"], "passes": true},
+  {"category": "legal", "description": "Create /privacy page", "steps": ["Create frontend/src/app/privacy/page.tsx", "Add Privacy Policy content"], "passes": true},
+  {"category": "legal", "description": "Footer: legal links", "steps": ["Add links to Terms, Privacy in Footer"], "passes": true},
 
   {"category": "finalization", "description": "E2E: Human signup flow", "steps": ["Test OAuth login end-to-end", "Verify user created in database"], "passes": false},
   {"category": "finalization", "description": "E2E: Human posts question", "steps": ["Create question via UI", "Verify appears in feed", "Verify searchable"], "passes": false},

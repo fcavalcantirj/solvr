@@ -67,6 +67,7 @@ func NewSearchCmd() *cobra.Command {
 	var apiKey string
 	var jsonOutput bool
 	var typeFilter string
+	var limit int
 
 	cmd := &cobra.Command{
 		Use:   "search <query>",
@@ -80,7 +81,8 @@ Examples:
   solvr search "ECONNREFUSED" --api-key solvr_xxx
   solvr search "error handling" --api-url http://localhost:8080/v1
   solvr search "async bug" --json
-  solvr search "bug fix" --type problem`,
+  solvr search "bug fix" --type problem
+  solvr search "test" --limit 5`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			query := args[0]
@@ -105,8 +107,8 @@ Examples:
 				}
 			}
 
-			// Build search URL with optional type filter
-			searchURL, err := buildSearchURL(apiURL, query, typeFilter)
+			// Build search URL with optional type filter and limit
+			searchURL, err := buildSearchURL(apiURL, query, typeFilter, limit)
 			if err != nil {
 				return fmt.Errorf("failed to build search URL: %w", err)
 			}
@@ -167,12 +169,13 @@ Examples:
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for authentication")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON")
 	cmd.Flags().StringVar(&typeFilter, "type", "", "Filter by type: problem, question, idea, or all")
+	cmd.Flags().IntVar(&limit, "limit", 0, "Limit the number of results (1-50)")
 
 	return cmd
 }
 
 // buildSearchURL constructs the search API URL with query parameters
-func buildSearchURL(baseURL, query, typeFilter string) (string, error) {
+func buildSearchURL(baseURL, query, typeFilter string, limit int) (string, error) {
 	u, err := url.Parse(baseURL + "/search")
 	if err != nil {
 		return "", err
@@ -182,6 +185,9 @@ func buildSearchURL(baseURL, query, typeFilter string) (string, error) {
 	q.Set("q", query)
 	if typeFilter != "" {
 		q.Set("type", typeFilter)
+	}
+	if limit > 0 {
+		q.Set("per_page", fmt.Sprintf("%d", limit))
 	}
 	u.RawQuery = q.Encode()
 

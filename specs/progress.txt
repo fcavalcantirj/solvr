@@ -3554,3 +3554,35 @@ Filter search results by type (problem, question, idea, or all)
 
 ### PRD Updates
 - search: --type flag → passes: true
+
+---
+
+## 2026-02-02: CLI search --limit flag
+
+### Requirement: search: --limit flag
+Limit the number of search results returned
+
+### Implementation
+- Added `--limit` flag to search command
+- Flag accepts an integer value (1-50)
+- When set, passes `per_page` query parameter to /v1/search API endpoint
+- When not set (default 0), per_page is not sent (uses API default)
+- Updated buildSearchURL to include optional limit parameter
+- Added example in help text: `solvr search "test" --limit 5`
+
+### Tests Added (search_test.go)
+1. TestSearchCommand_LimitFlag: verifies limit is passed as per_page to API
+2. TestSearchCommand_LimitFlagDefaultNotSent: verifies per_page not sent when limit not specified
+3. TestSearchCommand_LimitFlagInHelpText: verifies --limit mentioned in help
+4. TestSearchCommand_LimitFlagDifferentValues: verifies various limit values work (1, 10, 50)
+
+### Test Results
+- All 50 tests pass
+- go test ./... -cover: 83.9% coverage (above 80% requirement)
+
+### Files Modified
+- cli/search.go: added --limit flag and updated buildSearchURL signature
+- cli/search_test.go: added 4 new tests for --limit flag
+
+### PRD Updates
+- search: --limit flag → passes: true

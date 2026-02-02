@@ -547,3 +547,158 @@ func TestSearchCommand_TypeFlagInHelpText(t *testing.T) {
 		t.Error("help should mention '--type' flag")
 	}
 }
+
+func TestSearchCommand_LimitFlag(t *testing.T) {
+	// Create mock API server that checks for per_page parameter
+	var receivedLimit string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedLimit = r.URL.Query().Get("per_page")
+
+		response := SearchAPIResponse{
+			Data: []SearchResult{
+				{
+					ID:      "post-123",
+					Type:    "question",
+					Title:   "Result 1",
+					Snippet: "This is result 1...",
+					Tags:    []string{"go"},
+					Status:  "open",
+					Author: AuthorInfo{
+						ID:          "user-1",
+						Type:        "human",
+						DisplayName: "John",
+					},
+					Score:        0.90,
+					Votes:        5,
+					AnswersCount: 0,
+					CreatedAt:    time.Now(),
+				},
+			},
+			Meta: SearchMeta{
+				Query:   "test",
+				Total:   10,
+				Page:    1,
+				PerPage: 5,
+				HasMore: true,
+				TookMs:  10,
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	searchCmd := NewSearchCmd()
+	buf := new(bytes.Buffer)
+	searchCmd.SetOut(buf)
+	searchCmd.SetErr(buf)
+	searchCmd.Flags().Set("api-url", server.URL)
+	searchCmd.Flags().Set("limit", "5")
+	searchCmd.SetArgs([]string{"test"})
+
+	err := searchCmd.Execute()
+	if err != nil {
+		t.Fatalf("search command failed: %v", err)
+	}
+
+	if receivedLimit != "5" {
+		t.Errorf("expected per_page '5', got '%s'", receivedLimit)
+	}
+}
+
+func TestSearchCommand_LimitFlagDefaultNotSent(t *testing.T) {
+	// Create mock API server that checks that per_page is NOT sent when limit not specified
+	var receivedLimit string
+	var hasPerPageParam bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedLimit = r.URL.Query().Get("per_page")
+		hasPerPageParam = r.URL.Query().Has("per_page")
+
+		response := SearchAPIResponse{
+			Data: []SearchResult{},
+			Meta: SearchMeta{Query: "test", Total: 0},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	searchCmd := NewSearchCmd()
+	buf := new(bytes.Buffer)
+	searchCmd.SetOut(buf)
+	searchCmd.SetErr(buf)
+	searchCmd.Flags().Set("api-url", server.URL)
+	// Don't set --limit flag
+	searchCmd.SetArgs([]string{"test"})
+
+	err := searchCmd.Execute()
+	if err != nil {
+		t.Fatalf("search command failed: %v", err)
+	}
+
+	// per_page should NOT be sent when limit is not specified (use API default)
+	if hasPerPageParam {
+		t.Errorf("per_page should not be sent when --limit not specified, but got '%s'", receivedLimit)
+	}
+}
+
+func TestSearchCommand_LimitFlagInHelpText(t *testing.T) {
+	searchCmd := NewSearchCmd()
+	buf := new(bytes.Buffer)
+	searchCmd.SetOut(buf)
+	searchCmd.SetArgs([]string{"--help"})
+
+	err := searchCmd.Execute()
+	if err != nil {
+		t.Fatalf("help failed: %v", err)
+	}
+
+	output := buf.String()
+
+	// Check that help contains --limit flag information
+	if !bytes.Contains([]byte(output), []byte("--limit")) {
+		t.Error("help should mention '--limit' flag")
+	}
+}
+
+func TestSearchCommand_LimitFlagDifferentValues(t *testing.T) {
+	// Test different limit values
+	limitValues := []string{"1", "10", "50"}
+
+	for _, limitVal := range limitValues {
+		t.Run("limit="+limitVal, func(t *testing.T) {
+			var receivedLimit string
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				receivedLimit = r.URL.Query().Get("per_page")
+				response := SearchAPIResponse{
+					Data: []SearchResult{},
+					Meta: SearchMeta{Query: "test", Total: 0},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(response)
+			}))
+			defer server.Close()
+
+			searchCmd := NewSearchCmd()
+			buf := new(bytes.Buffer)
+			searchCmd.SetOut(buf)
+			searchCmd.SetErr(buf)
+			searchCmd.Flags().Set("api-url", server.URL)
+			searchCmd.Flags().Set("limit", limitVal)
+			searchCmd.SetArgs([]string{"test"})
+
+			err := searchCmd.Execute()
+			if err != nil {
+				t.Fatalf("search command failed for limit %s: %v", limitVal, err)
+			}
+
+			if receivedLimit != limitVal {
+				t.Errorf("expected limit '%s', got '%s'", limitVal, receivedLimit)
+			}
+		})
+	}
+}

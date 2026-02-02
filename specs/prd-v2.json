@@ -574,8 +574,8 @@
   {"category": "seo", "description": "Meta descriptions", "steps": ["Add <meta name='description'> to pages"], "passes": true},
   {"category": "seo", "description": "Open Graph tags", "steps": ["Add og:title, og:description, og:image"], "passes": true},
   {"category": "seo", "description": "Twitter cards", "steps": ["Add twitter:card, twitter:title meta tags"], "passes": true},
-  {"category": "seo", "description": "GET /sitemap.xml", "steps": ["Generate sitemap", "Include post URLs"], "passes": false},
-  {"category": "seo", "description": "GET /robots.txt", "steps": ["Serve robots.txt", "Allow /, disallow /admin, /api"], "passes": false},
+  {"category": "seo", "description": "GET /sitemap.xml", "steps": ["Generate sitemap", "Include post URLs"], "passes": true},
+  {"category": "seo", "description": "GET /robots.txt", "steps": ["Serve robots.txt", "Allow /, disallow /admin, /api"], "passes": true},
   {"category": "seo", "description": "SEO tests", "steps": ["Test meta tags present"], "passes": true},
 
   {"category": "legal", "description": "Create /terms page", "steps": ["Create frontend/src/app/terms/page.tsx", "Add Terms of Service content"], "passes": false},

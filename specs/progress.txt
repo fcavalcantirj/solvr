@@ -4192,3 +4192,35 @@ Following TDD approach per CLAUDE.md Golden Rules:
 ### Files Modified
 - frontend/src/__tests__/layout.test.tsx (fixed TypeScript types)
 - specs/prd-v2.json (updated 5 requirements to passes=true)
+
+## 2026-02-02: SEO - Sitemap and Robots.txt Implementation
+
+### Requirements Completed
+- [seo] GET /sitemap.xml - Generate sitemap with post URLs
+- [seo] GET /robots.txt - Serve robots.txt with proper rules
+
+### Implementation Details
+Per SPEC.md Part 19.2 SEO specification:
+
+**sitemap.xml:**
+- Static pages: homepage (priority 1.0), feed (priority 0.9), search (priority 0.8)
+- Dynamic post URLs fetched from API (priority 0.7)
+- Proper changeFrequency values: daily/hourly/weekly
+- lastModified set from post.updated_at
+- Graceful error handling when API unavailable
+
+**robots.txt:**
+- User-agent: * (applies to all crawlers)
+- Allow: / (root path crawlable)
+- Disallow: /admin/, /api/, /auth/
+- Sitemap: {baseUrl}/sitemap.xml
+
+### Files Created
+- frontend/src/app/sitemap.ts (101 lines)
+- frontend/src/app/robots.ts (42 lines)
+- frontend/src/__tests__/sitemap.test.ts (154 lines)
+- frontend/src/__tests__/robots.test.ts (93 lines)
+
+### Tests
+- 17 new tests (9 for sitemap, 8 for robots)
+- All 957 frontend tests passing

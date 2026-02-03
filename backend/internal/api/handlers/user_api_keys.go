@@ -17,6 +17,7 @@ type UserAPIKeyRepositoryInterface interface {
 	FindByID(ctx context.Context, id string) (*models.UserAPIKey, error)
 	Revoke(ctx context.Context, id, userID string) error
 	UpdateLastUsed(ctx context.Context, id string) error
+	Regenerate(ctx context.Context, id, userID, newKeyHash string) (*models.UserAPIKey, error)
 }
 
 // UserAPIKeysHandler handles user API key management endpoints.
@@ -276,4 +277,61 @@ func writeAPIKeyNotFound(w http.ResponseWriter, message string) {
 			"message": message,
 		},
 	})
+}
+
+// RegenerateAPIKeyResponse represents the response when an API key is regenerated.
+// Contains the full new key which is shown only once.
+type RegenerateAPIKeyResponse struct {
+	ID        string `json:"id"`
+	UserID    string `json:"user_id"`
+	Name      string `json:"name"`
+	Key       string `json:"key"` // Full new key, shown only once!
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// RegenerateAPIKey handles POST /v1/users/me/api-keys/:id/regenerate
+// Generates a new key value while keeping the same key ID/name.
+// Per prd-v2.json: "Generate new key value (old one invalidated), Return new key ONCE,
+// Keep same key ID/name for tracking, Log regeneration event"
+func (h *UserAPIKeysHandler) RegenerateAPIKey(w http.ResponseWriter, r *http.Request, keyID string) {
+	ctx := r.Context()
+
+	// Check for valid JWT authentication
+	claims := auth.ClaimsFromContext(ctx)
+	if claims == nil {
+		writeAPIKeyUnauthorized(w, "UNAUTHORIZED", "Authentication required")
+		return
+	}
+
+	// Generate a new API key with solvr_sk_ prefix
+	plainKey := generateUserAPIKey()
+
+	// Hash the new key for storage
+	keyHash, err := auth.HashAPIKey(plainKey)
+	if err != nil {
+		writeAPIKeyInternalError(w, "Failed to regenerate API key")
+		return
+	}
+
+	// Regenerate the key in database (verifies ownership and not revoked)
+	updated, err := h.repo.Regenerate(ctx, keyID, claims.UserID, keyHash)
+	if err != nil {
+		// Regenerate returns error for: key doesn't exist, wrong user, already revoked
+		// We intentionally don't distinguish to avoid information leakage
+		writeAPIKeyNotFound(w, "API key not found")
+		return
+	}
+
+	// Return the full new key (only time it's shown)
+	response := RegenerateAPIKeyResponse{
+		ID:        updated.ID,
+		UserID:    updated.UserID,
+		Name:      updated.Name,
+		Key:       plainKey,
+		CreatedAt: updated.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt: updated.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	writeAPIKeyJSON(w, http.StatusOK, response)
 }

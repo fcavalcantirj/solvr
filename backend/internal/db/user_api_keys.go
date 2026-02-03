@@ -124,6 +124,22 @@ func (r *UserAPIKeyRepository) UpdateLastUsed(ctx context.Context, id string) er
 	return err
 }
 
+// Regenerate updates an API key with a new hash value.
+// Only the owner (userID) can regenerate their own keys.
+// The key must not be revoked.
+// Per prd-v2.json: "Generate new key value (old one invalidated), Keep same key ID/name for tracking"
+func (r *UserAPIKeyRepository) Regenerate(ctx context.Context, id, userID, newKeyHash string) (*models.UserAPIKey, error) {
+	query := `
+		UPDATE user_api_keys
+		SET key_hash = $1, updated_at = NOW()
+		WHERE id = $2 AND user_id = $3 AND revoked_at IS NULL
+		RETURNING id, user_id, name, key_hash, last_used_at, revoked_at, created_at, updated_at
+	`
+
+	row := r.pool.QueryRow(ctx, query, newKeyHash, id, userID)
+	return r.scanUserAPIKey(row)
+}
+
 // scanUserAPIKey scans a single row into a UserAPIKey struct.
 func (r *UserAPIKeyRepository) scanUserAPIKey(row pgx.Row) (*models.UserAPIKey, error) {
 	key := &models.UserAPIKey{}

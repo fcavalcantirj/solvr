@@ -450,6 +450,185 @@ func TestUserAPIKeyRepository_UpdateLastUsed(t *testing.T) {
 	}
 }
 
+// TestUserAPIKeyRepository_Regenerate tests regenerating a key's hash.
+func TestUserAPIKeyRepository_Regenerate(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDBWithAPIKeys(t, pool)
+
+	// Create a user
+	userRepo := NewUserRepository(pool)
+	user, err := userRepo.Create(context.Background(), &models.User{
+		Username:       "regenerate_user",
+		DisplayName:    "Regenerate User",
+		Email:          "regenerate@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "regenerate_github_123",
+		Role:           models.UserRoleUser,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	repo := NewUserAPIKeyRepository(pool)
+	ctx := context.Background()
+
+	// Create a key
+	rawKey := auth.GenerateAPIKey()
+	oldHash, _ := auth.HashAPIKey(rawKey)
+	created, err := repo.Create(ctx, &models.UserAPIKey{
+		UserID:  user.ID,
+		Name:    "ToRegenerate",
+		KeyHash: oldHash,
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// Generate new key and hash
+	newRawKey := auth.GenerateAPIKey()
+	newHash, _ := auth.HashAPIKey(newRawKey)
+
+	// Regenerate the key
+	regenerated, err := repo.Regenerate(ctx, created.ID, user.ID, newHash)
+	if err != nil {
+		t.Fatalf("Regenerate() error = %v", err)
+	}
+
+	// Verify same ID and name
+	if regenerated.ID != created.ID {
+		t.Errorf("Regenerate() ID changed from %s to %s", created.ID, regenerated.ID)
+	}
+	if regenerated.Name != "ToRegenerate" {
+		t.Errorf("Regenerate() Name = %v, want ToRegenerate", regenerated.Name)
+	}
+
+	// Verify hash changed
+	if regenerated.KeyHash == oldHash {
+		t.Error("Regenerate() KeyHash should have changed")
+	}
+	if regenerated.KeyHash != newHash {
+		t.Error("Regenerate() KeyHash should match new hash")
+	}
+
+	// Verify UpdatedAt changed
+	if !regenerated.UpdatedAt.After(created.UpdatedAt) {
+		t.Error("Regenerate() UpdatedAt should be after original")
+	}
+}
+
+// TestUserAPIKeyRepository_Regenerate_WrongUser tests that users can only regenerate their own keys.
+func TestUserAPIKeyRepository_Regenerate_WrongUser(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDBWithAPIKeys(t, pool)
+
+	userRepo := NewUserRepository(pool)
+
+	// Create two users
+	user1, _ := userRepo.Create(context.Background(), &models.User{
+		Username:       "regen_user1",
+		DisplayName:    "Regenerate User 1",
+		Email:          "regen1@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "regen1_github_123",
+		Role:           models.UserRoleUser,
+	})
+
+	user2, _ := userRepo.Create(context.Background(), &models.User{
+		Username:       "regen_user2",
+		DisplayName:    "Regenerate User 2",
+		Email:          "regen2@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "regen2_github_123",
+		Role:           models.UserRoleUser,
+	})
+
+	repo := NewUserAPIKeyRepository(pool)
+	ctx := context.Background()
+
+	// Create a key for user1
+	rawKey := auth.GenerateAPIKey()
+	hash, _ := auth.HashAPIKey(rawKey)
+	created, _ := repo.Create(ctx, &models.UserAPIKey{
+		UserID:  user1.ID,
+		Name:    "User1Key",
+		KeyHash: hash,
+	})
+
+	// Try to regenerate user1's key as user2 - should fail
+	newHash, _ := auth.HashAPIKey(auth.GenerateAPIKey())
+	_, err := repo.Regenerate(ctx, created.ID, user2.ID, newHash)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("Regenerate() with wrong user error = %v, want ErrNotFound", err)
+	}
+}
+
+// TestUserAPIKeyRepository_Regenerate_Revoked tests that revoked keys cannot be regenerated.
+func TestUserAPIKeyRepository_Regenerate_Revoked(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDBWithAPIKeys(t, pool)
+
+	// Create a user
+	userRepo := NewUserRepository(pool)
+	user, err := userRepo.Create(context.Background(), &models.User{
+		Username:       "regen_revoked_user",
+		DisplayName:    "Regenerate Revoked User",
+		Email:          "regenrevoked@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "regenrevoked_github_123",
+		Role:           models.UserRoleUser,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	repo := NewUserAPIKeyRepository(pool)
+	ctx := context.Background()
+
+	// Create and revoke a key
+	rawKey := auth.GenerateAPIKey()
+	hash, _ := auth.HashAPIKey(rawKey)
+	created, _ := repo.Create(ctx, &models.UserAPIKey{
+		UserID:  user.ID,
+		Name:    "RevokedKey",
+		KeyHash: hash,
+	})
+	_ = repo.Revoke(ctx, created.ID, user.ID)
+
+	// Try to regenerate revoked key - should fail
+	newHash, _ := auth.HashAPIKey(auth.GenerateAPIKey())
+	_, err = repo.Regenerate(ctx, created.ID, user.ID, newHash)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("Regenerate() revoked key error = %v, want ErrNotFound", err)
+	}
+}
+
+// TestUserAPIKeyRepository_Regenerate_NotFound tests regenerating a non-existent key.
+func TestUserAPIKeyRepository_Regenerate_NotFound(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDBWithAPIKeys(t, pool)
+
+	repo := NewUserAPIKeyRepository(pool)
+	ctx := context.Background()
+
+	newHash, _ := auth.HashAPIKey(auth.GenerateAPIKey())
+	_, err := repo.Regenerate(ctx, "00000000-0000-0000-0000-000000000000", "fake-user", newHash)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("Regenerate() non-existent key error = %v, want ErrNotFound", err)
+	}
+}
+
 // cleanupTestDBWithAPIKeys extends cleanup to include user_api_keys.
 func cleanupTestDBWithAPIKeys(t *testing.T, pool *Pool) {
 	t.Helper()

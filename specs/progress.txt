@@ -5901,3 +5901,25 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
      - TestHashAPIKey, TestCompareAPIKey, TestAPIKeyFormat
   - All tests passing (go test ./...)
   - Updated prd-v2.json to mark API key unit tests as passes: true
+
+- 2026-02-03: [API-KEYS] POST /v1/users/me/api-keys/:id/regenerate - IMPLEMENTED ✓
+  - TDD approach: wrote failing tests first, then implemented
+  - Handler: backend/internal/api/handlers/user_api_keys.go
+    - Added RegenerateAPIKey method to handler
+    - Added Regenerate to UserAPIKeyRepositoryInterface
+  - Repository: backend/internal/db/user_api_keys.go
+    - Added Regenerate method for database operations
+  - Tests split across files (800 line limit):
+    - user_api_keys_test.go (493 lines): Mock + List tests
+    - user_api_keys_create_revoke_test.go (480 lines): Create/Revoke tests  
+    - user_api_keys_regenerate_test.go (272 lines): 6 Regenerate tests
+  - Test coverage:
+    - TestUserAPIKey_RegenerateAPIKey_Success
+    - TestUserAPIKey_RegenerateAPIKey_NoAuth (401)
+    - TestUserAPIKey_RegenerateAPIKey_NotFound (404)
+    - TestUserAPIKey_RegenerateAPIKey_WrongUser (404, no info leak)
+    - TestUserAPIKey_RegenerateAPIKey_AlreadyRevoked (404)
+    - TestUserAPIKey_RegenerateAPIKey_NewKeyDifferentFromOld
+  - DB tests: 4 tests for Regenerate in user_api_keys_test.go
+  - All 19 UserAPIKey handler tests passing
+  - Updated prd-v2.json to mark requirement as passes: true

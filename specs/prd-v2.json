@@ -400,7 +400,7 @@
       "Keep same key ID/name for tracking",
       "Log regeneration event"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "DATABASE",

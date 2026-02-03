@@ -18,6 +18,12 @@ const (
 
 	// AgentContextKey is the context key for authenticated agent.
 	AgentContextKey contextKey = "agent"
+
+	// APIKeyIDContextKey is the context key for the API key ID (for per-key rate limiting).
+	APIKeyIDContextKey contextKey = "apiKeyID"
+
+	// APIKeyTierContextKey is the context key for the API key tier (for tiered rate limits).
+	APIKeyTierContextKey contextKey = "apiKeyTier"
 )
 
 // JWTMiddleware creates middleware that validates JWT tokens from Authorization header.
@@ -253,4 +259,34 @@ func extractBearerToken(r *http.Request) (string, error) {
 	}
 
 	return token, nil
+}
+
+// ContextWithAPIKeyID adds an API key ID to the context for per-key rate limiting.
+func ContextWithAPIKeyID(ctx context.Context, apiKeyID string) context.Context {
+	return context.WithValue(ctx, APIKeyIDContextKey, apiKeyID)
+}
+
+// APIKeyIDFromContext retrieves the API key ID from the context.
+// Returns empty string if no API key ID is present.
+func APIKeyIDFromContext(ctx context.Context) string {
+	apiKeyID, ok := ctx.Value(APIKeyIDContextKey).(string)
+	if !ok {
+		return ""
+	}
+	return apiKeyID
+}
+
+// ContextWithAPIKeyTier adds an API key tier to the context for tiered rate limits.
+func ContextWithAPIKeyTier(ctx context.Context, tier string) context.Context {
+	return context.WithValue(ctx, APIKeyTierContextKey, tier)
+}
+
+// APIKeyTierFromContext retrieves the API key tier from the context.
+// Returns empty string if no tier is present.
+func APIKeyTierFromContext(ctx context.Context) string {
+	tier, ok := ctx.Value(APIKeyTierContextKey).(string)
+	if !ok {
+		return ""
+	}
+	return tier
 }

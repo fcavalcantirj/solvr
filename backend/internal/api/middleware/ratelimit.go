@@ -35,6 +35,10 @@ type RateLimitConfig struct {
 
 	// New account restrictions
 	NewAccountThreshold time.Duration // 24 hours - accounts younger get 50% limits
+
+	// API Key rate limiting (per key instead of per user)
+	APIKeyDefaultLimit int            // Default limit for API keys (uses human limit if 0)
+	APIKeyTierLimits   map[string]int // Tier-specific limits (e.g., "premium": 180)
 }
 
 // DefaultRateLimitConfig returns the default rate limit configuration per SPEC.md Part 5.6.
@@ -91,11 +95,11 @@ func NewRateLimiter(store RateLimitStore, config *RateLimitConfig) *RateLimiter 
 // Middleware returns HTTP middleware that enforces rate limits.
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Get identity from context
-		isAgent, identifier, createdAt := rl.getIdentity(r)
+		// Get identity from context (including API key info)
+		identity := rl.getIdentityInfo(r)
 
 		// If no identity, allow through (auth middleware will handle)
-		if identifier == "" {
+		if identity.Identifier == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -104,10 +108,10 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		operation := DetectOperation(r)
 
 		// Get the applicable limit and window
-		limit, window := rl.getLimitAndWindow(isAgent, operation, createdAt)
+		limit, window := rl.getLimitAndWindowWithAPIKey(identity, operation)
 
-		// Generate the rate limit key
-		key := GenerateRateLimitKey(isAgent, identifier, operation)
+		// Generate the rate limit key (uses API key ID if present)
+		key := GenerateRateLimitKeyWithAPIKey(identity.IsAgent, identity.Identifier, identity.APIKeyID, operation)
 
 		// Increment and check the limit
 		record, err := rl.store.IncrementAndGet(r.Context(), key, window)
@@ -139,8 +143,18 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	})
 }
 
+// IdentityInfo holds identity information for rate limiting.
+type IdentityInfo struct {
+	IsAgent    bool
+	Identifier string    // User ID or Agent ID
+	CreatedAt  time.Time // For new account restrictions
+	APIKeyID   string    // API Key ID (for per-key rate limiting)
+	APIKeyTier string    // API Key tier (for tiered rate limits)
+}
+
 // getIdentity extracts identity information from the request context.
 // Returns (isAgent, identifier, createdAt).
+// Deprecated: Use getIdentityInfo instead.
 func (rl *RateLimiter) getIdentity(r *http.Request) (bool, string, time.Time) {
 	// Check for agent first
 	agent := auth.AgentFromContext(r.Context())
@@ -155,6 +169,34 @@ func (rl *RateLimiter) getIdentity(r *http.Request) (bool, string, time.Time) {
 	}
 
 	return false, "", time.Time{}
+}
+
+// getIdentityInfo extracts full identity information including API key info.
+func (rl *RateLimiter) getIdentityInfo(r *http.Request) IdentityInfo {
+	ctx := r.Context()
+
+	// Check for agent first
+	agent := auth.AgentFromContext(ctx)
+	if agent != nil {
+		return IdentityInfo{
+			IsAgent:    true,
+			Identifier: agent.ID,
+			CreatedAt:  agent.CreatedAt,
+		}
+	}
+
+	// Check for human (JWT claims)
+	claims := auth.ClaimsFromContext(ctx)
+	if claims != nil {
+		return IdentityInfo{
+			IsAgent:    false,
+			Identifier: claims.UserID,
+			APIKeyID:   auth.APIKeyIDFromContext(ctx),
+			APIKeyTier: auth.APIKeyTierFromContext(ctx),
+		}
+	}
+
+	return IdentityInfo{}
 }
 
 // getLimitAndWindow returns the rate limit and window for the given operation.
@@ -197,6 +239,30 @@ func (rl *RateLimiter) getLimitAndWindow(isAgent bool, operation string, created
 	return limit, window
 }
 
+// getLimitAndWindowWithAPIKey returns the rate limit and window, considering API key tiers.
+func (rl *RateLimiter) getLimitAndWindowWithAPIKey(identity IdentityInfo, operation string) (int, time.Duration) {
+	// For agents, use standard logic (no API key tiers for agents)
+	if identity.IsAgent {
+		return rl.getLimitAndWindow(true, operation, identity.CreatedAt)
+	}
+
+	// For humans with API key, check for tier-specific limits
+	if identity.APIKeyID != "" && identity.APIKeyTier != "" && rl.config.APIKeyTierLimits != nil {
+		if tierLimit, ok := rl.config.APIKeyTierLimits[identity.APIKeyTier]; ok {
+			// Use tier-specific limit with standard window
+			return tierLimit, rl.config.GeneralWindow
+		}
+	}
+
+	// Use API key default limit if configured
+	if identity.APIKeyID != "" && rl.config.APIKeyDefaultLimit > 0 {
+		return rl.config.APIKeyDefaultLimit, rl.config.GeneralWindow
+	}
+
+	// Fall back to standard human limits
+	return rl.getLimitAndWindow(false, operation, identity.CreatedAt)
+}
+
 // writeRateLimitError writes a 429 Too Many Requests response.
 func (rl *RateLimiter) writeRateLimitError(w http.ResponseWriter, resetTime time.Time) {
 	// Calculate Retry-After in seconds
@@ -228,6 +294,20 @@ func GenerateRateLimitKey(isAgent bool, identifier, operation string) string {
 		entityType = "agent"
 	}
 	return fmt.Sprintf("%s:%s:%s", entityType, identifier, operation)
+}
+
+// GenerateRateLimitKeyWithAPIKey generates a rate limit key, using API key ID if present.
+// When an API key ID is provided, the key is based on the API key (per-key rate limiting).
+// Otherwise, falls back to user/agent-based rate limiting.
+// Format with API key: "apikey:{apiKeyID}:{operation}"
+// Format without: "{type}:{identifier}:{operation}"
+func GenerateRateLimitKeyWithAPIKey(isAgent bool, identifier, apiKeyID, operation string) string {
+	// If API key ID is present, use per-key rate limiting
+	if apiKeyID != "" {
+		return fmt.Sprintf("apikey:%s:%s", apiKeyID, operation)
+	}
+	// Fall back to entity-based rate limiting
+	return GenerateRateLimitKey(isAgent, identifier, operation)
 }
 
 // DetectOperation determines the operation type from the request.

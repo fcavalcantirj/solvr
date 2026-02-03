@@ -5865,3 +5865,13 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
 - specs/prd-v2.json (marked requirement as passes: true)
 - specs/progress.txt (this entry)
 
+
+- 2026-02-03: [API-KEYS] API keys: rate limit per key (not per user) ✓
+  - Added ContextWithAPIKeyID and APIKeyIDFromContext to auth package
+  - Added ContextWithAPIKeyTier and APIKeyTierFromContext for tiered limits
+  - Updated UserAPIKeyMiddleware to store API key ID in context
+  - Added GenerateRateLimitKeyWithAPIKey for per-key rate limit keys
+  - Added getLimitAndWindowWithAPIKey for tier-based limits
+  - Added APIKeyDefaultLimit and APIKeyTierLimits config options
+  - Tests: 8 new tests in ratelimit_apikey_test.go, all passing
+  - Coverage: 87% for middleware package

@@ -103,6 +103,8 @@ func UserAPIKeyMiddleware(validator *UserAPIKeyValidator) func(http.Handler) htt
 			}
 
 			ctx := ContextWithClaims(r.Context(), claims)
+			// Add API key ID for per-key rate limiting
+			ctx = ContextWithAPIKeyID(ctx, apiKey.ID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

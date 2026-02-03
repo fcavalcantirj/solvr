@@ -367,7 +367,7 @@
       "Apply rate limits independently",
       "Allow different limits per key tier"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-KEYS",

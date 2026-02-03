@@ -1,5 +1,105 @@
 [
   {
+    "category": "INTERFACE-FIX",
+    "description": "Fix AgentRepository.Create to return error only (not *Agent, error)",
+    "steps": [
+      "Update internal/db/agents.go Create() signature to return error",
+      "Update handler code to use FindByID after Create if needed",
+      "Run tests to verify"
+    ],
+    "passes": false
+  },
+  {
+    "category": "INTERFACE-FIX",
+    "description": "Fix AgentRepository.Update to return error only (not *Agent, error)",
+    "steps": [
+      "Update internal/db/agents.go Update() signature to return error",
+      "Update handler code to use FindByID after Update if needed",
+      "Run tests to verify"
+    ],
+    "passes": false
+  },
+  {
+    "category": "INTERFACE-FIX",
+    "description": "Add GetAgentByAPIKeyHash method to AgentRepository for auth.AgentDB interface",
+    "steps": [
+      "Add GetAgentByAPIKeyHash(ctx, key string) (*models.Agent, error) to AgentRepository",
+      "Implement bcrypt comparison against stored hashes",
+      "Run tests to verify API key validation works"
+    ],
+    "passes": false
+  },
+  {
+    "category": "INTERFACE-FIX",
+    "description": "Add Create method to ClaimTokenRepository",
+    "steps": [
+      "Add Create(ctx, *models.ClaimToken) error to ClaimTokenRepository",
+      "Insert claim token into claim_tokens table",
+      "Run tests to verify"
+    ],
+    "passes": false
+  },
+  {
+    "category": "INTERFACE-FIX",
+    "description": "Add FindByToken method to ClaimTokenRepository",
+    "steps": [
+      "Add FindByToken(ctx, token string) (*models.ClaimToken, error)",
+      "Query by token value",
+      "Run tests to verify"
+    ],
+    "passes": false
+  },
+  {
+    "category": "INTERFACE-FIX",
+    "description": "Add FindActiveByAgentID method to ClaimTokenRepository",
+    "steps": [
+      "Add FindActiveByAgentID(ctx, agentID string) (*models.ClaimToken, error)",
+      "Query for unexpired, unused tokens by agent",
+      "Run tests to verify"
+    ],
+    "passes": false
+  },
+  {
+    "category": "INTERFACE-FIX",
+    "description": "Add MarkUsed method to ClaimTokenRepository",
+    "steps": [
+      "Add MarkUsed(ctx, tokenID, humanID string) error",
+      "Update claim_tokens set used_at, used_by_human_id",
+      "Run tests to verify"
+    ],
+    "passes": false
+  },
+  {
+    "category": "INTERFACE-FIX",
+    "description": "Wire up agent registration endpoint in routes.go",
+    "steps": [
+      "Add POST /v1/agents/register route",
+      "Connect to agentsHandler.RegisterAgent",
+      "Test agent registration works end-to-end"
+    ],
+    "passes": false
+  },
+  {
+    "category": "INTERFACE-FIX",
+    "description": "Wire up claim endpoints in routes.go",
+    "steps": [
+      "Add GET /v1/claim/{token} route",
+      "Add POST /v1/claim/{token}/confirm route",
+      "Test claim flow works end-to-end"
+    ],
+    "passes": false
+  },
+  {
+    "category": "INTERFACE-FIX",
+    "description": "Wire up auth middleware for protected routes",
+    "steps": [
+      "Add auth.CombinedAuthMiddleware to protected route group",
+      "Test authenticated endpoints require valid token",
+      "Verify API key auth works"
+    ],
+    "passes": false
+  },
+  {
     "category": "AGENT-DOCS",
     "description": "Create HEARTBEAT.md",
     "steps": [

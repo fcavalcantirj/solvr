@@ -495,7 +495,7 @@
       "Set data-domain from config",
       "Verify no PII sent to Plausible"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",

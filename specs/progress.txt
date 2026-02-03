@@ -6114,3 +6114,44 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   - Added file-size-check job to .github/workflows/ci.yml
   - Tested script locally - all files pass
   - Updated PRD to passes=true for "Add file size check to CI"
+
+- 2026-02-03: [analytics] Add Plausible analytics script - IMPLEMENTED ✓
+  
+  **TDD Approach:**
+  - Phase 1 (RED): Wrote 13 tests in plausible.test.tsx
+  - Phase 2 (GREEN): Implemented PlausibleScript component and analytics lib
+  - Phase 3 (REFACTOR): Clean implementation with PII stripping
+  
+  **Files Created:**
+  1. frontend/src/components/analytics/PlausibleScript.tsx (55 lines)
+     - Renders Plausible script tag in <head>
+     - Uses NEXT_PUBLIC_PLAUSIBLE_DOMAIN for tracking domain
+     - Supports custom NEXT_PUBLIC_PLAUSIBLE_HOST for self-hosted instances
+     - Sets up window.plausible fallback queue
+     - Uses Next.js Script with afterInteractive strategy
+  
+  2. frontend/src/components/analytics/index.ts (export)
+  
+  3. frontend/src/lib/analytics.ts (83 lines)
+     - trackEvent() helper function for custom events
+     - Automatic PII stripping (email, user_id, query content, etc.)
+     - Per SPEC.md Part 19.3: Only safe data like query_length, results count
+  
+  4. frontend/src/__tests__/plausible.test.tsx (226 lines)
+     - 13 tests covering all requirements
+     - Tests script rendering, env vars, PII stripping
+  
+  **Files Modified:**
+  - frontend/src/app/layout.tsx - Added PlausibleScript import and component
+  - .env.example - Added NEXT_PUBLIC_PLAUSIBLE_DOMAIN and NEXT_PUBLIC_PLAUSIBLE_HOST
+  
+  **Requirements Met:**
+  1. "Add Plausible script tag to frontend/src/app/layout.tsx" ✓
+  2. "Set data-domain from config" ✓ (NEXT_PUBLIC_PLAUSIBLE_DOMAIN env var)
+  3. "Verify no PII sent to Plausible" ✓ (PII stripping in analytics.ts)
+  
+  **Test Coverage:**
+  - 13 new tests for Plausible integration, all passing
+  - 1109 total frontend tests, all passing
+  - Build succeeds
+

@@ -5313,7 +5313,7 @@
     "passes": false
   },
   {
-    "category": "api-auth",
+    "category": "API-AUTH",
     "description": "POST /v1/auth/moltbook: endpoint",
     "steps": [
       "Create handler for Moltbook auth",
@@ -5323,7 +5323,7 @@
     "passes": false
   },
   {
-    "category": "api-auth",
+    "category": "API-AUTH",
     "description": "Moltbook: verify token with Moltbook API",
     "steps": [
       "Call Moltbook verify endpoint",
@@ -5334,7 +5334,7 @@
     "passes": false
   },
   {
-    "category": "api-auth",
+    "category": "API-AUTH",
     "description": "Moltbook: create or link agent",
     "steps": [
       "Check if agent exists with moltbook_id",
@@ -5345,7 +5345,7 @@
     "passes": false
   },
   {
-    "category": "api-auth",
+    "category": "API-AUTH",
     "description": "Moltbook: import karma as reputation",
     "steps": [
       "Read karma from Moltbook response",
@@ -5355,7 +5355,7 @@
     "passes": false
   },
   {
-    "category": "api-auth",
+    "category": "API-AUTH",
     "description": "Moltbook: return API key",
     "steps": [
       "Generate new API key for agent",
@@ -5365,7 +5365,7 @@
     "passes": false
   },
   {
-    "category": "api-auth",
+    "category": "API-AUTH",
     "description": "Moltbook auth unit tests",
     "steps": [
       "Create backend/internal/api/handlers/moltbook_test.go",
@@ -5396,7 +5396,7 @@
     "passes": true
   },
   {
-    "category": "database",
+    "category": "DATABASE",
     "description": "Config migration executes successfully",
     "steps": [
       "Run migrate up for 000015",
@@ -5613,7 +5613,7 @@
     "passes": false
   },
   {
-    "category": "infrastructure",
+    "category": "INFRASTRUCTURE",
     "description": "Install Husky for git hooks",
     "steps": [
       "Run npm install -D husky in frontend/",
@@ -5623,7 +5623,7 @@
     "passes": false
   },
   {
-    "category": "infrastructure",
+    "category": "INFRASTRUCTURE",
     "description": "Configure lint-staged for frontend",
     "steps": [
       "Run npm install -D lint-staged",
@@ -5633,7 +5633,7 @@
     "passes": false
   },
   {
-    "category": "infrastructure",
+    "category": "INFRASTRUCTURE",
     "description": "Add pre-commit hook",
     "steps": [
       "Create .husky/pre-commit script",
@@ -5644,7 +5644,7 @@
     "passes": false
   },
   {
-    "category": "infrastructure",
+    "category": "INFRASTRUCTURE",
     "description": "Add file size check to CI",
     "steps": [
       "Create scripts/check-file-size.sh",
@@ -5734,7 +5734,7 @@
     "passes": false
   },
   {
-    "category": "agent-docs",
+    "category": "AGENT-DOCS",
     "description": "Create HEARTBEAT.md",
     "steps": [
       "Create skill/HEARTBEAT.md",
@@ -5745,7 +5745,7 @@
     "passes": false
   },
   {
-    "category": "agent-docs",
+    "category": "AGENT-DOCS",
     "description": "HEARTBEAT.md: check new questions",
     "steps": [
       "Document GET /v1/feed/unanswered endpoint",
@@ -5755,7 +5755,7 @@
     "passes": false
   },
   {
-    "category": "agent-docs",
+    "category": "AGENT-DOCS",
     "description": "HEARTBEAT.md: check stuck problems",
     "steps": [
       "Document GET /v1/feed/stuck endpoint",
@@ -5765,7 +5765,7 @@
     "passes": false
   },
   {
-    "category": "agent-docs",
+    "category": "AGENT-DOCS",
     "description": "HEARTBEAT.md: post if solved something",
     "steps": [
       "Remind to post solutions after solving problems",
@@ -5775,7 +5775,7 @@
     "passes": false
   },
   {
-    "category": "agent-docs",
+    "category": "AGENT-DOCS",
     "description": "HEARTBEAT.md: engagement guide",
     "steps": [
       "When to upvote, comment, answer",
@@ -5785,7 +5785,7 @@
     "passes": false
   },
   {
-    "category": "agent-docs",
+    "category": "AGENT-DOCS",
     "description": "SKILL.md: add curl examples for all endpoints",
     "steps": [
       "Add curl example for registration",
@@ -5796,7 +5796,7 @@
     "passes": false
   },
   {
-    "category": "agent-docs",
+    "category": "AGENT-DOCS",
     "description": "SKILL.md: add curl examples for voting/comments",
     "steps": [
       "Add curl example for upvote/downvote",
@@ -5806,7 +5806,7 @@
     "passes": false
   },
   {
-    "category": "agent-docs",
+    "category": "AGENT-DOCS",
     "description": "SKILL.md: credential storage guide",
     "steps": [
       "Document ~/.config/solvr/credentials.json",
@@ -5816,7 +5816,7 @@
     "passes": false
   },
   {
-    "category": "agent-docs",
+    "category": "AGENT-DOCS",
     "description": "SKILL.md: response format documentation",
     "steps": [
       "Document success response format",
@@ -5826,7 +5826,7 @@
     "passes": false
   },
   {
-    "category": "agent-docs",
+    "category": "AGENT-DOCS",
     "description": "SKILL.md: rate limits documentation",
     "steps": [
       "Document rate limits per endpoint",
@@ -5836,7 +5836,7 @@
     "passes": false
   },
   {
-    "category": "agent-docs",
+    "category": "AGENT-DOCS",
     "description": "Publish skill to ClawdHub",
     "steps": [
       "Finalize skill/ directory",
@@ -5847,7 +5847,7 @@
     "passes": false
   },
   {
-    "category": "api-keys",
+    "category": "API-KEYS",
     "description": "GET /v1/users/me/api-keys: list user's API keys",
     "steps": [
       "Return all API keys for authenticated user",
@@ -5857,7 +5857,7 @@
     "passes": false
   },
   {
-    "category": "api-keys",
+    "category": "API-KEYS",
     "description": "POST /v1/users/me/api-keys: create new API key",
     "steps": [
       "Accept name for the key",
@@ -5868,7 +5868,7 @@
     "passes": false
   },
   {
-    "category": "api-keys",
+    "category": "API-KEYS",
     "description": "DELETE /v1/users/me/api-keys/:id: revoke API key",
     "steps": [
       "Soft delete the key",
@@ -5878,7 +5878,7 @@
     "passes": false
   },
   {
-    "category": "api-keys",
+    "category": "API-KEYS",
     "description": "API key auth middleware: validate Bearer token",
     "steps": [
       "Extract token from Authorization header",
@@ -5889,7 +5889,7 @@
     "passes": false
   },
   {
-    "category": "api-keys",
+    "category": "API-KEYS",
     "description": "API keys: rate limit per key (not per user)",
     "steps": [
       "Track usage per API key",
@@ -5899,7 +5899,7 @@
     "passes": false
   },
   {
-    "category": "api-keys",
+    "category": "API-KEYS",
     "description": "Dashboard UI: API keys management page",
     "steps": [
       "List existing keys with usage stats",
@@ -5910,7 +5910,7 @@
     "passes": false
   },
   {
-    "category": "api-keys",
+    "category": "API-KEYS",
     "description": "API key unit tests",
     "steps": [
       "Test create/list/revoke flow",
@@ -5921,7 +5921,7 @@
     "passes": false
   },
   {
-    "category": "api-keys",
+    "category": "API-KEYS",
     "description": "POST /v1/users/me/api-keys/:id/regenerate: create new key value",
     "steps": [
       "Generate new key value (old one invalidated)",
@@ -5932,7 +5932,7 @@
     "passes": false
   },
   {
-    "category": "agent-onboarding",
+    "category": "AGENT-ONBOARDING",
     "description": "POST /v1/agents/register: agent self-registration",
     "steps": [
       "Accept name (unique) and description",
@@ -5945,7 +5945,7 @@
     "passes": false
   },
   {
-    "category": "agent-onboarding",
+    "category": "AGENT-ONBOARDING",
     "description": "Agent registration: name uniqueness validation",
     "steps": [
       "Check name not taken",
@@ -5955,7 +5955,7 @@
     "passes": false
   },
   {
-    "category": "agent-onboarding",
+    "category": "AGENT-ONBOARDING",
     "description": "Agent registration: rate limit (prevent spam accounts)",
     "steps": [
       "Limit registrations per IP (e.g., 5/hour)",
@@ -5965,7 +5965,7 @@
     "passes": false
   },
   {
-    "category": "agent-onboarding",
+    "category": "AGENT-ONBOARDING",
     "description": "Agent registration: input validation",
     "steps": [
       "Name: 3-30 chars, alphanumeric + underscore",
@@ -5976,7 +5976,7 @@
     "passes": false
   },
   {
-    "category": "agent-onboarding",
+    "category": "AGENT-ONBOARDING",
     "description": "Agent registration unit tests",
     "steps": [
       "Test successful registration",
@@ -5987,7 +5987,7 @@
     "passes": false
   },
   {
-    "category": "agent-linking",
+    "category": "AGENT-LINKING",
     "description": "POST /v1/agents/me/claim: generate claim URL",
     "steps": [
       "Generate unique claim token",
@@ -5999,7 +5999,7 @@
     "passes": false
   },
   {
-    "category": "agent-linking",
+    "category": "AGENT-LINKING",
     "description": "Claim page: /claim/:token (human confirms)",
     "steps": [
       "Human clicks claim URL from agent",
@@ -6012,7 +6012,7 @@
     "passes": false
   },
   {
-    "category": "agent-linking",
+    "category": "AGENT-LINKING",
     "description": "Human-Backed badge: display on agent profile",
     "steps": [
       "Show badge on agent profile page",
@@ -6022,7 +6022,7 @@
     "passes": false
   },
   {
-    "category": "agent-linking",
+    "category": "AGENT-LINKING",
     "description": "One-time karma bonus on claim: +50 karma",
     "steps": [
       "On successful claim, add 50 karma to agent",
@@ -6032,7 +6032,7 @@
     "passes": false
   },
   {
-    "category": "agent-linking",
+    "category": "AGENT-LINKING",
     "description": "Agent claim unit tests",
     "steps": [
       "Test claim flow end-to-end",
@@ -6043,7 +6043,7 @@
     "passes": false
   },
   {
-    "category": "agent-linking",
+    "category": "AGENT-LINKING",
     "description": "Human dashboard: view and manage linked agents",
     "steps": [
       "List all agents linked to human",
@@ -6054,7 +6054,7 @@
     "passes": false
   },
   {
-    "category": "database",
+    "category": "DATABASE",
     "description": "Create claim_tokens migration file",
     "steps": [
       "Create claim_tokens table",
@@ -6066,7 +6066,7 @@
     "passes": false
   },
   {
-    "category": "database",
+    "category": "DATABASE",
     "description": "Agents table: add human_claimed_at field",
     "steps": [
       "Add human_claimed_at TIMESTAMP NULL",
@@ -6077,7 +6077,7 @@
     "passes": false
   },
   {
-    "category": "database",
+    "category": "DATABASE",
     "description": "Claim tokens: expiry cleanup job",
     "steps": [
       "Cron/scheduled job to delete expired tokens",
@@ -6087,7 +6087,7 @@
     "passes": false
   },
   {
-    "category": "agent-onboarding",
+    "category": "AGENT-ONBOARDING",
     "description": "Agents table: name UNIQUE constraint enforced",
     "steps": [
       "UNIQUE constraint on agents.name",
@@ -6097,7 +6097,7 @@
     "passes": false
   },
   {
-    "category": "agent-linking",
+    "category": "AGENT-LINKING",
     "description": "Claim constraint: one human per agent (DB enforced)",
     "steps": [
       "CHECK constraint: human_id can only be set once",

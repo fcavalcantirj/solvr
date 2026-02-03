@@ -6,7 +6,6 @@
 import { render, screen } from '@testing-library/react';
 
 import StatusBadge from '../components/StatusBadge';
-import { PostStatus } from '../lib/types';
 
 describe('StatusBadge', () => {
   describe('basic rendering', () => {

@@ -14,8 +14,7 @@
  * - Notifications
  */
 
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { act } from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 // Track router push calls
 const mockPush = jest.fn();
@@ -64,8 +63,6 @@ jest.mock('@/lib/api', () => ({
   __esModule: true,
 }));
 
-// Import the ApiError to use in tests
-import { ApiError } from '@/lib/api';
 
 // Mock useAuth hook
 const mockUser = {

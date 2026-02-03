@@ -15,12 +15,11 @@
 
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { act } from 'react';
-import userEvent from '@testing-library/user-event';
 
 // Mock next/navigation
 const mockParams = { id: 'post-123' };
 let mockNotFound = false;
-let mockNotFoundError: Error | null = null;
+const mockNotFoundError: Error | null = null;
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
   useParams: () => mockParams,

@@ -43,16 +43,6 @@ function isAdminRole(role?: string): boolean {
   return role === 'admin' || role === 'super_admin';
 }
 
-// Format date for display
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
 // Format time for display
 function formatDateTime(dateStr: string): string {
   const date = new Date(dateStr);

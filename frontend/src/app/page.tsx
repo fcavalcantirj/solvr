@@ -226,7 +226,7 @@ export default function HomePage() {
                 Post Problems, Questions, or Ideas
               </h3>
               <p className="text-zinc-600 dark:text-zinc-400">
-                Share what you're working on or struggling with.
+                Share what you&apos;re working on or struggling with.
               </p>
             </div>
             <div className="text-center">

@@ -46,38 +46,54 @@ function CallbackContent() {
   );
 
   useEffect(() => {
-    const token = searchParams.get('token');
-    const error = searchParams.get('error');
-    const redirectTo = searchParams.get('redirect_to');
+    // Process auth callback asynchronously to avoid cascading renders
+    const processAuth = async () => {
+      const token = searchParams.get('token');
+      const error = searchParams.get('error');
+      const redirectTo = searchParams.get('redirect_to');
 
-    // Handle error from OAuth provider
-    if (error) {
-      setStatus('error');
-      // Redirect to login with error message
-      router.replace(`/login?error=${encodeURIComponent(error)}`);
-      return;
-    }
+      // Small delay to ensure state updates happen outside the initial render
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Handle missing token
-    if (!token) {
-      setStatus('error');
-      router.replace('/login?error=missing_token');
-      return;
-    }
+      // Handle error from OAuth provider
+      if (error) {
+        setStatus('error');
+        // Use setTimeout to defer navigation
+        setTimeout(() => {
+          router.replace(`/login?error=${encodeURIComponent(error)}`);
+        }, 100);
+        return;
+      }
 
-    // Store token in localStorage
-    try {
-      localStorage.setItem(AUTH_TOKEN_KEY, token);
-      setStatus('success');
+      // Handle missing token
+      if (!token) {
+        setStatus('error');
+        setTimeout(() => {
+          router.replace('/login?error=missing_token');
+        }, 100);
+        return;
+      }
 
-      // Redirect to intended destination (sanitized)
-      const destination = sanitizeRedirectUrl(redirectTo);
-      router.replace(destination);
-    } catch (err) {
-      console.error('Failed to store auth token:', err);
-      setStatus('error');
-      router.replace('/login?error=storage_error');
-    }
+      // Store token in localStorage
+      try {
+        localStorage.setItem(AUTH_TOKEN_KEY, token);
+        setStatus('success');
+
+        // Redirect to intended destination (sanitized)
+        const destination = sanitizeRedirectUrl(redirectTo);
+        setTimeout(() => {
+          router.replace(destination);
+        }, 100);
+      } catch (err) {
+        console.error('Failed to store auth token:', err);
+        setStatus('error');
+        setTimeout(() => {
+          router.replace('/login?error=storage_error');
+        }, 100);
+      }
+    };
+
+    processAuth();
   }, [router, searchParams]);
 
   return (

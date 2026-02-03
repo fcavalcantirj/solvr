@@ -117,7 +117,7 @@ export default function CommentThread({
           setComments(data);
           setLoading(false);
         }
-      } catch (err) {
+      } catch {
         if (mounted) {
           setError('Error loading comments');
           setLoading(false);
@@ -151,7 +151,7 @@ export default function CommentThread({
         // Add the new comment to the list
         setComments((prev) => [...prev, createdComment]);
         setNewComment('');
-      } catch (err) {
+      } catch {
         setSubmitError('Failed to post comment');
       } finally {
         setSubmitting(false);
@@ -169,7 +169,7 @@ export default function CommentThread({
         await api.delete(`/v1/comments/${commentId}`);
         // Remove the deleted comment from the list
         setComments((prev) => prev.filter((c) => c.id !== commentId));
-      } catch (err) {
+      } catch {
         setDeleteError('Failed to delete comment');
       }
     },

@@ -287,7 +287,8 @@ describe('Responsive Breakpoint Classes', () => {
   it('Components use mobile-first approach', () => {
     render(<Header />);
 
-    const header = screen.getByRole('banner');
+    // Verify banner exists
+    expect(screen.getByRole('banner')).toBeInTheDocument();
 
     // Mobile styles should be the base (no prefix)
     // Desktop styles should use md: prefix

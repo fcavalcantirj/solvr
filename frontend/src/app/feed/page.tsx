@@ -47,8 +47,7 @@ type SortOption = keyof typeof SORT_OPTIONS;
 /**
  * Type filter options
  */
-const TYPE_FILTERS = ['all', 'problems', 'questions', 'ideas'] as const;
-type TypeFilter = (typeof TYPE_FILTERS)[number];
+type TypeFilter = 'all' | 'problems' | 'questions' | 'ideas';
 
 /**
  * Map type filter to API parameter

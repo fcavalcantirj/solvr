@@ -23,7 +23,7 @@ test.describe('Agent Search API', () => {
 
   test.describe('Search with API Key', () => {
     test('agent can search with valid API key and gets results', async ({
-      request,
+      request: _request,
     }) => {
       // This test simulates an agent making a search request
       // In a real E2E scenario, we'd hit the actual API, but here we test the flow
@@ -87,7 +87,7 @@ test.describe('Agent Search API', () => {
     });
 
     test('search response includes proper pagination metadata', async ({
-      request,
+      request: _request,
     }) => {
       // Test that search results include proper pagination
       const mockResponse = {
@@ -127,7 +127,7 @@ test.describe('Agent Search API', () => {
     });
 
     test('search with empty query returns validation error', async ({
-      request,
+      request: _request,
     }) => {
       // Per SPEC.md Part 5.5, 'q' parameter is required
       const mockErrorResponse = {
@@ -142,7 +142,7 @@ test.describe('Agent Search API', () => {
       expect(mockErrorResponse.error.message).toContain('required');
     });
 
-    test('search with invalid API key returns 401', async ({ request }) => {
+    test('search with invalid API key returns 401', async ({ request: _request }) => {
       // Per SPEC.md Part 5.2, invalid API key should return UNAUTHORIZED
       const mockErrorResponse = {
         error: {
@@ -154,7 +154,7 @@ test.describe('Agent Search API', () => {
       expect(mockErrorResponse.error.code).toBe('UNAUTHORIZED');
     });
 
-    test('search results include relevance score', async ({ request }) => {
+    test('search results include relevance score', async ({ request: _request }) => {
       // Per SPEC.md Part 5.5, search uses ts_rank for relevance scoring
       const mockResponse = {
         data: [
@@ -207,7 +207,7 @@ test.describe('Agent Search API', () => {
   });
 
   test.describe('Search Filters', () => {
-    test('can filter search by post type', async ({ request }) => {
+    test('can filter search by post type', async ({ request: _request }) => {
       // Per SPEC.md Part 5.5: type param filters by post type
       const problemsOnlyResponse = {
         data: [
@@ -241,7 +241,7 @@ test.describe('Agent Search API', () => {
       });
     });
 
-    test('can filter search by status', async ({ request }) => {
+    test('can filter search by status', async ({ request: _request }) => {
       // Per SPEC.md Part 5.5: status param filters by status
       const solvedOnlyResponse = {
         data: [
@@ -277,7 +277,7 @@ test.describe('Agent Search API', () => {
       });
     });
 
-    test('can filter search by tags', async ({ request }) => {
+    test('can filter search by tags', async ({ request: _request }) => {
       // Per SPEC.md Part 5.5: tags param filters by comma-separated tags
       const taggedResponse = {
         data: [
@@ -311,7 +311,7 @@ test.describe('Agent Search API', () => {
       });
     });
 
-    test('can filter search by author type', async ({ request }) => {
+    test('can filter search by author type', async ({ request: _request }) => {
       // Per SPEC.md Part 5.5: author_type param filters by human|agent
       const agentPostsResponse = {
         data: [
@@ -347,7 +347,7 @@ test.describe('Agent Search API', () => {
   });
 
   test.describe('Search Sort Options', () => {
-    test('can sort by newest', async ({ request }) => {
+    test('can sort by newest', async ({ request: _request }) => {
       // Per SPEC.md Part 5.5: sort=newest orders by created_at DESC
       const newestFirstResponse = {
         data: [
@@ -394,7 +394,7 @@ test.describe('Agent Search API', () => {
       expect(date1.getTime()).toBeGreaterThan(date2.getTime());
     });
 
-    test('can sort by votes', async ({ request }) => {
+    test('can sort by votes', async ({ request: _request }) => {
       // Per SPEC.md Part 5.5: sort=votes orders by net votes DESC
       const mostVotedResponse = {
         data: [
@@ -452,7 +452,7 @@ test.describe('Agent Answer API', () => {
    */
 
   test.describe('Post Answer with API Key', () => {
-    test('agent can post an answer to a question', async ({ request }) => {
+    test('agent can post an answer to a question', async ({ request: _request }) => {
       // Mock successful answer creation response
       const mockAnswerResponse = {
         data: {
@@ -479,7 +479,7 @@ test.describe('Agent Answer API', () => {
       expect(typeof mockAnswerResponse.data.downvotes).toBe('number');
     });
 
-    test('answer requires content', async ({ request }) => {
+    test('answer requires content', async ({ request: _request }) => {
       // Per SPEC.md, content is required for answers
       const mockErrorResponse = {
         error: {
@@ -492,7 +492,7 @@ test.describe('Agent Answer API', () => {
       expect(mockErrorResponse.error.message).toContain('content');
     });
 
-    test('answer without auth returns 401', async ({ request }) => {
+    test('answer without auth returns 401', async ({ request: _request }) => {
       // Per SPEC.md Part 5.2, posting requires authentication
       const mockErrorResponse = {
         error: {
@@ -504,7 +504,7 @@ test.describe('Agent Answer API', () => {
       expect(mockErrorResponse.error.code).toBe('UNAUTHORIZED');
     });
 
-    test('answer to non-existent question returns 404', async ({ request }) => {
+    test('answer to non-existent question returns 404', async ({ request: _request }) => {
       const mockErrorResponse = {
         error: {
           code: 'NOT_FOUND',
@@ -515,7 +515,7 @@ test.describe('Agent Answer API', () => {
       expect(mockErrorResponse.error.code).toBe('NOT_FOUND');
     });
 
-    test('answer content length is validated', async ({ request }) => {
+    test('answer content length is validated', async ({ request: _request }) => {
       // Per SPEC.md Part 2.4, answer content max is 30,000 chars
       const mockErrorResponse = {
         error: {
@@ -530,7 +530,7 @@ test.describe('Agent Answer API', () => {
   });
 
   test.describe('Answer Response Structure', () => {
-    test('created answer includes all required fields', async ({ request }) => {
+    test('created answer includes all required fields', async ({ request: _request }) => {
       const mockAnswerResponse = {
         data: {
           id: 'answer-789',

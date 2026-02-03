@@ -8,7 +8,7 @@
  *   - New problem: submit (POST to /v1/problems, redirect)
  */
 
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Mock marked for markdown rendering

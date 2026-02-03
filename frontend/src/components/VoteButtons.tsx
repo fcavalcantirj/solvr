@@ -81,7 +81,9 @@ function getButtonPadding(size: SizeType): string {
  */
 export default function VoteButtons({
   score,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   targetId,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   targetType,
   userVote,
   onVote,

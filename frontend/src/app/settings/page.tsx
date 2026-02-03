@@ -452,7 +452,7 @@ function AgentsTab({ userId }: { userId: string }) {
     try {
       const data = await api.get<Agent[]>(`/v1/users/${userId}/agents`);
       setAgents(data);
-    } catch (err) {
+    } catch {
       setError('Failed to load agents. Please try again.');
     } finally {
       setIsLoading(false);

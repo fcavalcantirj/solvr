@@ -273,7 +273,8 @@ describe('PostCard variants', () => {
 
   it('renders full variant by default', () => {
     render(<PostCard post={mockProblemPost} />);
-    const card = screen.getByRole('article');
+    // Verify article element exists
+    expect(screen.getByRole('article')).toBeInTheDocument();
     // Full variant shows description (contains "data inconsistency" which is only in description)
     expect(screen.getByText(/data inconsistency/i)).toBeInTheDocument();
   });

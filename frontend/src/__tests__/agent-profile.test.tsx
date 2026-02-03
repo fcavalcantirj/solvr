@@ -58,12 +58,12 @@ jest.mock('@/lib/api', () => ({
 import { ApiError } from '@/lib/api';
 
 // Mock useAuth hook
-const mockUser = {
+const _mockUserTemplate = {
   id: 'owner-user-id',
   username: 'owner_user',
   display_name: 'Owner User',
 };
-let mockAuthUser: typeof mockUser | null = null;
+let mockAuthUser: typeof _mockUserTemplate | null = null;
 let mockAuthLoading = false;
 
 jest.mock('@/hooks/useAuth', () => ({

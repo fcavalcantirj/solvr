@@ -6409,3 +6409,93 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   - go test ./internal/db/... passes
   - go test ./internal/auth/... passes
   - go build ./... passes
+
+- 2026-02-03: [API-CRITICAL] Implement ClaimTokenRepository.Create - COMPLETED ✓
+  
+  **TDD Approach:**
+  - Wrote failing tests first (RED)
+  - Implemented minimum code to pass (GREEN)
+  
+  **Tests Added:**
+  backend/internal/db/claim_tokens_test.go
+  - TestClaimTokenRepository_Create: Tests successful token creation, verifies ID and CreatedAt populated
+  - TestClaimTokenRepository_Create_DuplicateToken: Tests unique constraint violation returns error
+  
+  **Implementation:**
+  backend/internal/db/claim_tokens.go
+  - Added Create(ctx, *models.ClaimToken) error method
+  - INSERT INTO claim_tokens with RETURNING id, created_at
+  - Added ErrDuplicateClaimToken error for unique constraint violations
+  - Token struct is populated in-place with DB-returned values
+  
+  **Files Changed:**
+  - backend/internal/db/claim_tokens.go: Added Create method
+  - backend/internal/db/claim_tokens_test.go: Added 2 tests, imported models
+  
+  **Tests:**
+  - go test ./internal/db/... passes
+  - go build ./... passes
+
+- 2026-02-03: [API-CRITICAL] Implement ClaimTokenRepository.FindByToken - COMPLETED ✓
+  
+  **TDD Approach:**
+  - Wrote failing tests first (RED)
+  - Implemented minimum code to pass (GREEN)
+  
+  **Tests Added:**
+  backend/internal/db/claim_tokens_test.go
+  - TestClaimTokenRepository_FindByToken: Tests successful token lookup, verifies all fields
+  - TestClaimTokenRepository_FindByToken_NotFound: Tests nil returned for non-existent token
+  
+  **Implementation:**
+  backend/internal/db/claim_tokens.go
+  - Added FindByToken(ctx, tokenValue string) (*models.ClaimToken, error) method
+  - SELECT query with full field scan
+  - Returns nil, nil for not found (not an error)
+  
+  **Tests:**
+  - go test ./internal/db/... passes
+  - go build ./... passes
+
+- 2026-02-03: [API-CRITICAL] Implement ClaimTokenRepository.FindActiveByAgentID - COMPLETED ✓
+  
+  **TDD Approach:**
+  - Wrote failing tests first (RED)
+  - Implemented minimum code to pass (GREEN)
+  
+  **Tests Added:**
+  backend/internal/db/claim_tokens_test.go
+  - TestClaimTokenRepository_FindActiveByAgentID: Tests finding active token by agent
+  - TestClaimTokenRepository_FindActiveByAgentID_ExpiredNotReturned: Tests expired tokens not returned
+  - TestClaimTokenRepository_FindActiveByAgentID_UsedNotReturned: Tests used tokens not returned
+  
+  **Implementation:**
+  backend/internal/db/claim_tokens.go
+  - Added FindActiveByAgentID(ctx, agentID string) (*models.ClaimToken, error) method
+  - Query filters: used_at IS NULL AND expires_at > NOW()
+  - Returns nil, nil for not found
+  
+  **Tests:**
+  - go test ./internal/db/... passes
+  - go build ./... passes
+
+- 2026-02-03: [API-CRITICAL] Implement ClaimTokenRepository.MarkUsed - COMPLETED ✓
+  
+  **TDD Approach:**
+  - Wrote failing tests first (RED)
+  - Implemented minimum code to pass (GREEN)
+  
+  **Tests Added:**
+  backend/internal/db/claim_tokens_test.go
+  - TestClaimTokenRepository_MarkUsed: Tests marking token as used with human ID
+  - TestClaimTokenRepository_MarkUsed_NotFound: Tests error for non-existent token
+  
+  **Implementation:**
+  backend/internal/db/claim_tokens.go
+  - Added MarkUsed(ctx, tokenID, humanID string) error method
+  - UPDATE query sets used_at = NOW() and used_by_human_id
+  - Added ErrClaimTokenNotFound error for missing tokens
+  
+  **Tests:**
+  - go test ./internal/db/... passes
+  - go build ./... passes

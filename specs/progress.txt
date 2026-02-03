@@ -5278,3 +5278,55 @@ system library (libnspr4.so). However:
 - frontend/src/app/login/page.tsx (responsive padding)
 - specs/prd-v2.json (line 5098 updated to passes=true)
 - specs/progress.txt (this entry)
+
+---
+
+## Session: 2026-02-03
+
+### Task: Security tests - SQL injection and XSS prevention
+
+### Completed Requirements (PRD lines 5150, 5158)
+- Security: SQL injection - now passes=true
+- Security: XSS prevention - now passes=true
+
+### What Was Done
+
+1. **Analyzed existing code for SQL injection prevention**
+   - Reviewed db/search.go: All queries use parameterized queries ($1, $2, etc.)
+   - Reviewed handlers/search.go: Query params passed to repository as data
+   - Reviewed handlers/posts.go: All user input passed as parameters
+   - The buildTsQuery function sanitizes full-text search queries
+
+2. **Created comprehensive SQL injection tests**
+   - Created backend/internal/api/handlers/security_test.go
+   - TestSQLInjectionPrevention with 3 subtests:
+     - search_query_injection_attempts: 21 SQL injection payloads tested
+     - search_filter_injection_attempts: 10 filter injection tests
+     - posts_endpoint_ID_injection_attempts: 10 ID injection tests
+   - All payloads properly URL-encoded for HTTP testing
+   - Tests verify handlers don't crash and return appropriate status codes
+
+3. **Created XSS prevention tests**
+   - TestXSSPrevention with 3 subtests:
+     - post_title_XSS_attempts: 12 XSS payload variants tested
+     - JSON_response_properly_encodes_HTML_entities: verifies JSON encoding
+     - search_snippet_HTML_in_response: verifies safe HTML handling
+
+4. **Protection mechanisms verified**
+   - SQL injection: Parameterized queries prevent SQL from being executed
+   - XSS: Go's json.Marshal escapes < and > as \u003c and \u003e
+   - All user input treated as data, not code
+
+### Test Results
+- All 47 security tests pass
+- TestSQLInjectionPrevention: 41 subtests pass
+- TestXSSPrevention: 6 subtests pass
+- Backend tests maintain 89.8% coverage
+
+### Files Created
+- backend/internal/api/handlers/security_test.go (425 lines)
+
+### Files Modified
+- specs/prd-v2.json (lines 5150, 5158 updated to passes=true)
+- specs/progress.txt (this entry)
+

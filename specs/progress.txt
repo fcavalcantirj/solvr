@@ -6045,3 +6045,52 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   **Model Support:**
   - models/agent.go includes `HumanClaimedAt *time.Time` field (line 47)
   - agents.go scans this field in scanAgent() and scanAgentRows()
+
+- 2026-02-03: [DATABASE] Claim tokens: expiry cleanup job - IMPLEMENTED ✓
+  
+  **TDD Approach:**
+  - Phase 1 (RED): Wrote tests first
+    - cleanup_test.go: 4 unit tests for CleanupJob
+    - claim_tokens_test.go: 2 integration tests for DeleteExpiredTokens
+  - Phase 2 (GREEN): Implemented minimum code to pass tests
+  - Phase 3 (REFACTOR): Clean implementation with interface for testing
+  
+  **Files Created:**
+  1. backend/internal/jobs/cleanup.go (70 lines)
+     - CleanupJob struct with ClaimTokenCleaner interface
+     - NewCleanupJob() constructor
+     - CleanupExpiredTokens() - runs cleanup once
+     - RunScheduled() - runs on interval with context cancellation
+     - DefaultCleanupInterval = 1 * time.Hour
+  
+  2. backend/internal/jobs/cleanup_test.go (107 lines)
+     - MockClaimTokenRepository for unit testing
+     - TestCleanupJob_DeleteExpiredTokens - tests successful cleanup
+     - TestCleanupJob_DeleteExpiredTokensError - tests error handling
+     - TestCleanupJob_RunScheduled - tests scheduled execution
+     - TestCleanupJob_DefaultInterval - verifies 1 hour interval
+  
+  3. backend/internal/db/claim_tokens.go (32 lines)
+     - ClaimTokenRepository struct
+     - NewClaimTokenRepository() constructor
+     - DeleteExpiredTokens() - SQL: DELETE WHERE expires_at < NOW() AND used_at IS NULL
+  
+  4. backend/internal/db/claim_tokens_test.go (132 lines)
+     - TestClaimTokenRepository_DeleteExpiredTokens - tests cleanup logic
+     - TestClaimTokenRepository_DeleteExpiredTokens_NoExpired - tests empty case
+  
+  **Files Modified:**
+  - backend/cmd/api/main.go (102 lines, under 800 limit)
+    - Added jobs package import
+    - Start cleanup job in goroutine if database is available
+    - Stop cleanup job on graceful shutdown
+  
+  **Requirements Met:**
+  - "Cron/scheduled job to delete expired tokens" ✓
+  - "Run every hour" - DefaultCleanupInterval = 1 * time.Hour ✓
+  - "Delete where expires_at < NOW() AND used_at IS NULL" ✓
+  
+  **Test Coverage:**
+  - jobs package: 81.2% coverage (exceeds 80% requirement)
+  - All 4 job tests passing
+  - All db tests passing (integration tests skip without DATABASE_URL)

@@ -13,6 +13,7 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/api"
 	"github.com/fcavalcantirj/solvr/internal/config"
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/jobs"
 )
 
 func main() {
@@ -47,6 +48,18 @@ func main() {
 	// Create router with database pool
 	router := api.NewRouter(pool)
 
+	// Start background cleanup job if database is available
+	// Per prd-v2.json: "Cron/scheduled job to delete expired tokens, Run every hour"
+	var cleanupCancel context.CancelFunc
+	if pool != nil {
+		var cleanupCtx context.Context
+		cleanupCtx, cleanupCancel = context.WithCancel(context.Background())
+		tokenRepo := db.NewClaimTokenRepository(pool)
+		cleanupJob := jobs.NewCleanupJob(tokenRepo)
+		go cleanupJob.RunScheduled(cleanupCtx, jobs.DefaultCleanupInterval)
+		log.Println("Cleanup job started (runs every hour)")
+	}
+
 	// Create server
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -70,6 +83,11 @@ func main() {
 	<-quit
 
 	log.Println("Shutting down server...")
+
+	// Stop the cleanup job if running
+	if cleanupCancel != nil {
+		cleanupCancel()
+	}
 
 	// Create shutdown context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

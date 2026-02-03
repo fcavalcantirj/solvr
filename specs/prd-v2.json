@@ -443,7 +443,7 @@
       "Run every hour",
       "Delete where expires_at < NOW() AND used_at IS NULL"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "INFRASTRUCTURE",

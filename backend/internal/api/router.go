@@ -80,6 +80,23 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	agentsHandler.SetClaimTokenRepository(claimTokenRepo)
 	agentsHandler.SetBaseURL("https://solvr.dev")
 
+	// Create OAuth handlers for GitHub and Google OAuth
+	// Per SPEC.md Part 5.2: OAuth authentication endpoints
+	oauthConfig := &handlers.OAuthConfig{
+		// Config values can be empty for testing - actual values come from env vars in production
+		GitHubClientID:     "",
+		GitHubClientSecret: "",
+		GitHubRedirectURI:  "",
+		GoogleClientID:     "",
+		GoogleClientSecret: "",
+		GoogleRedirectURI:  "",
+		JWTSecret:          "test-jwt-secret",
+		JWTExpiry:          "15m",
+		RefreshExpiry:      "7d",
+		FrontendURL:        "http://localhost:3000",
+	}
+	oauthHandlers := handlers.NewOAuthHandlers(oauthConfig, pool, nil)
+
 	// v1 API routes
 	r.Route("/v1", func(r chi.Router) {
 		// Agent self-registration (no auth required)
@@ -102,6 +119,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			token := chi.URLParam(req, "token")
 			agentsHandler.ConfirmClaim(w, req, token)
 		})
+
+		// OAuth endpoints (API-CRITICAL requirement)
+		// Per SPEC.md Part 5.2: GitHub OAuth
+		r.Get("/auth/github", oauthHandlers.GitHubRedirect)
+		r.Get("/auth/github/callback", oauthHandlers.GitHubCallback)
 	})
 }
 

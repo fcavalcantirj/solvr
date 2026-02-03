@@ -501,3 +501,65 @@ func TestConfirmClaimEndpointExists(t *testing.T) {
 		t.Errorf("expected status 401 or 500, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// TestGitHubOAuthRedirectEndpoint verifies GET /v1/auth/github endpoint is wired.
+// Per API-CRITICAL requirement: Wire OAuth endpoints /v1/auth/github/*.
+func TestGitHubOAuthRedirectEndpoint(t *testing.T) {
+	router := NewRouter(nil)
+
+	// GET /v1/auth/github should redirect to GitHub OAuth
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should NOT return 404 - endpoint should be wired
+	if w.Code == http.StatusNotFound {
+		t.Errorf("GET /v1/auth/github returned 404 - endpoint not wired")
+	}
+
+	// Should return 302 Found (redirect)
+	if w.Code != http.StatusFound {
+		t.Errorf("expected status 302 (redirect), got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Check redirect location contains GitHub OAuth URL
+	location := w.Header().Get("Location")
+	if location == "" {
+		t.Error("expected Location header for redirect")
+	}
+	if !strings.Contains(location, "github.com/login/oauth/authorize") {
+		t.Errorf("expected redirect to GitHub OAuth, got Location: %s", location)
+	}
+}
+
+// TestGitHubOAuthCallbackEndpoint verifies GET /v1/auth/github/callback endpoint is wired.
+// Per API-CRITICAL requirement: Wire OAuth endpoints /v1/auth/github/*.
+func TestGitHubOAuthCallbackEndpoint(t *testing.T) {
+	router := NewRouter(nil)
+
+	// GET /v1/auth/github/callback without code should return 400 (not 404)
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should NOT return 404 - endpoint should be wired
+	if w.Code == http.StatusNotFound {
+		t.Errorf("GET /v1/auth/github/callback returned 404 - endpoint not wired")
+	}
+
+	// Should return 400 Bad Request (missing authorization code)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 (missing code), got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify error response is JSON
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should have error object
+	if response["error"] == nil {
+		t.Error("expected error object in response")
+	}
+}

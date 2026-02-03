@@ -173,7 +173,7 @@
       "Test: redirect works, callback creates user",
       "go test ./internal/api/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",

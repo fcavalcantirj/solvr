@@ -6746,3 +6746,29 @@ backend/internal/api/inmemory_repo.go
 **Tests:**
 - go test ./internal/api -run "Claim" passes all 3 tests
 - go build ./... passes
+
+---
+
+## Wire OAuth endpoints /v1/auth/github/* (2026-02-03)
+
+**Requirement:** API-CRITICAL - Wire OAuth endpoints /v1/auth/github/*
+
+**TDD Approach:**
+- Wrote failing tests first (RED) - TestGitHubOAuthRedirectEndpoint, TestGitHubOAuthCallbackEndpoint
+- Implemented minimum code to pass (GREEN)
+
+**Tests Added:**
+backend/internal/api/router_test.go
+- TestGitHubOAuthRedirectEndpoint: Tests GET /v1/auth/github returns 302 redirect to GitHub OAuth
+- TestGitHubOAuthCallbackEndpoint: Tests GET /v1/auth/github/callback returns 400 when code is missing
+
+**Implementation:**
+backend/internal/api/router.go
+- Created OAuthConfig with default values for testing
+- Created OAuthHandlers instance in mountV1Routes
+- Wired GET /v1/auth/github to oauthHandlers.GitHubRedirect
+- Wired GET /v1/auth/github/callback to oauthHandlers.GitHubCallback
+
+**Tests:**
+- go test ./internal/api -run "TestGitHubOAuth" passes
+- go build ./... passes

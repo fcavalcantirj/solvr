@@ -5339,3 +5339,14 @@ system library (libnspr4.so). However:
   - API key returned once (never retrievable)
   - Tests: 7 new tests in agents_register_test.go, all passing
   - Updated AgentRepositoryInterface to include FindByName method
+
+- 2026-02-03: [AGENT-ONBOARDING] Agent registration: rate limit (prevent spam accounts) ✓
+  - Created backend/internal/api/middleware/registration_ratelimit.go (194 lines)
+  - Implements RegistrationRateLimiter with IP-based rate limiting
+  - Default config: 5 registrations per IP per hour
+  - Returns 429 Too Many Requests with Retry-After header when limit exceeded
+  - Logs suspicious patterns when attempts exceed configurable threshold (default: 10)
+  - ExtractClientIP supports X-Forwarded-For, X-Real-IP, and RemoteAddr
+  - Tests: 10 new tests in registration_ratelimit_test.go, all passing
+  - Fixed logging_test.go: replaced log.SetOutput(nil) with log.SetOutput(os.Stderr)
+  - Coverage: 89.8% on middleware package (exceeds 80% requirement)

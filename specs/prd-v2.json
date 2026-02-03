@@ -220,7 +220,7 @@
       "Return 429 with retry_after",
       "Log suspicious patterns"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-ONBOARDING",

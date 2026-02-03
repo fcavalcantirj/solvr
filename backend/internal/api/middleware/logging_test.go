@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -14,7 +15,7 @@ func TestLoggingMiddleware(t *testing.T) {
 	// Capture log output
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
-	defer log.SetOutput(nil)
+	defer log.SetOutput(os.Stderr)
 
 	// Create test handler
 	handler := Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +71,7 @@ func TestLoggingMiddleware(t *testing.T) {
 func TestLoggingMiddlewareWithRequestID(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
-	defer log.SetOutput(nil)
+	defer log.SetOutput(os.Stderr)
 
 	handler := Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -98,7 +99,7 @@ func TestLoggingMiddlewareWithRequestID(t *testing.T) {
 func TestLoggingMiddlewareErrorStatus(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
-	defer log.SetOutput(nil)
+	defer log.SetOutput(os.Stderr)
 
 	handler := Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -147,7 +148,7 @@ func TestLoggingMiddleware_NeverLogsAPIKey(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			log.SetOutput(&buf)
-			defer log.SetOutput(nil)
+			defer log.SetOutput(os.Stderr)
 
 			handler := Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -183,7 +184,7 @@ func TestLoggingMiddleware_NeverLogsAPIKey(t *testing.T) {
 func TestLoggingMiddleware_RedactsAuthorizationHeader(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
-	defer log.SetOutput(nil)
+	defer log.SetOutput(os.Stderr)
 
 	handler := Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -231,7 +232,7 @@ func TestLoggingMiddleware_DoesNotLogQueryParamsWithSecrets(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			log.SetOutput(&buf)
-			defer log.SetOutput(nil)
+			defer log.SetOutput(os.Stderr)
 
 			handler := Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)

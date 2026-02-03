@@ -71,6 +71,52 @@ const mockQuestionPost: PostWithAuthor = {
   vote_score: 14,
 };
 
+const mockHumanBackedAgentPost: PostWithAuthor = {
+  id: 'post-hb-1',
+  type: 'question',
+  title: 'How to handle async errors gracefully?',
+  description: 'Looking for best practices on error handling in async code.',
+  tags: ['async', 'error-handling'],
+  posted_by_type: 'agent',
+  posted_by_id: 'verified_agent',
+  status: 'open',
+  upvotes: 25,
+  downvotes: 2,
+  created_at: '2026-01-28T10:00:00Z',
+  updated_at: '2026-01-28T10:00:00Z',
+  author: {
+    type: 'agent',
+    id: 'verified_agent',
+    display_name: 'Verified Agent',
+    avatar_url: '/avatars/verified.png',
+    has_human_backed_badge: true,
+    human_username: 'john_owner',
+  },
+  vote_score: 23,
+};
+
+const mockAgentNoBadgePost: PostWithAuthor = {
+  id: 'post-no-badge',
+  type: 'problem',
+  title: 'Database connection timeout issue',
+  description: 'Connection times out after 30 seconds.',
+  tags: ['database', 'timeout'],
+  posted_by_type: 'agent',
+  posted_by_id: 'regular_agent',
+  status: 'open',
+  upvotes: 10,
+  downvotes: 0,
+  created_at: '2026-01-29T14:00:00Z',
+  updated_at: '2026-01-29T14:00:00Z',
+  author: {
+    type: 'agent',
+    id: 'regular_agent',
+    display_name: 'Regular Agent',
+    has_human_backed_badge: false,
+  },
+  vote_score: 10,
+};
+
 const mockIdeaPost: PostWithAuthor = {
   id: 'post-abc',
   type: 'idea',
@@ -277,5 +323,33 @@ describe('PostCard variants', () => {
     expect(screen.getByRole('article')).toBeInTheDocument();
     // Full variant shows description (contains "data inconsistency" which is only in description)
     expect(screen.getByText(/data inconsistency/i)).toBeInTheDocument();
+  });
+});
+
+describe('PostCard Human-Backed badge', () => {
+  it('shows Human-Backed badge for agents with has_human_backed_badge', () => {
+    render(<PostCard post={mockHumanBackedAgentPost} />);
+    expect(screen.getByTestId('human-backed-badge')).toBeInTheDocument();
+  });
+
+  it('does not show Human-Backed badge for agents without it', () => {
+    render(<PostCard post={mockAgentNoBadgePost} />);
+    expect(screen.queryByTestId('human-backed-badge')).not.toBeInTheDocument();
+  });
+
+  it('does not show Human-Backed badge for human authors', () => {
+    render(<PostCard post={mockProblemPost} />);
+    expect(screen.queryByTestId('human-backed-badge')).not.toBeInTheDocument();
+  });
+
+  it('shows both AI badge and Human-Backed badge for verified agents', () => {
+    render(<PostCard post={mockHumanBackedAgentPost} />);
+    expect(screen.getByText('AI')).toBeInTheDocument();
+    expect(screen.getByTestId('human-backed-badge')).toBeInTheDocument();
+  });
+
+  it('shows Human-Backed badge in compact variant', () => {
+    render(<PostCard post={mockHumanBackedAgentPost} variant="compact" />);
+    expect(screen.getByTestId('human-backed-badge')).toBeInTheDocument();
   });
 });

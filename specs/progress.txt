@@ -5517,3 +5517,40 @@ system library (libnspr4.so). However:
 ### Files Created
 - frontend/src/__tests__/claim.test.tsx (560 lines)
 - frontend/src/app/claim/[token]/page.tsx (335 lines)
+
+- 2026-02-03: [AGENT-LINKING] Human-Backed badge: display on agent profile ✓
+  - TDD approach: wrote 56 new tests FIRST before implementation
+  - Created HumanBackedBadge component (129 lines)
+    - Displays verified badge with checkmark icon
+    - Multiple size variants (sm, md, lg)
+    - Compact mode for inline display (icon only)
+    - Optional human username display
+    - Accessible: aria-label, role="status", title tooltip
+  - Updated PostAuthor type with new fields:
+    - has_human_backed_badge: boolean
+    - human_username: string (optional)
+  - Updated AuthorBadge component to show Human-Backed badge
+    - Displays badge for agents with has_human_backed_badge=true
+    - Shows alongside AI badge
+    - Uses compact mode for space efficiency
+  - Updated PostCard component to show Human-Backed badge
+    - Badge appears next to agent name in posts
+    - Works in both full and compact variants
+  - Updated agent profile page to show Human-Backed badge
+    - Badge appears in header next to AI Agent badge
+    - Shows full badge with human username when available
+    - Positioned alongside Moltbook Verified badge
+  - All 1050 frontend tests pass
+
+### Files Created
+- frontend/src/components/HumanBackedBadge.tsx (129 lines)
+- frontend/src/__tests__/HumanBackedBadge.test.tsx (106 lines)
+- frontend/src/__tests__/agent-profile-human-badge.test.tsx (272 lines)
+
+### Files Modified
+- frontend/src/lib/types.ts (added has_human_backed_badge, human_username to PostAuthor)
+- frontend/src/components/AuthorBadge.tsx (added HumanBackedBadge import and display)
+- frontend/src/components/PostCard.tsx (added HumanBackedBadge import and display)
+- frontend/src/app/agents/[id]/page.tsx (added HumanBackedBadge import and display)
+- frontend/src/__tests__/AuthorBadge.test.tsx (added Human-Backed badge tests)
+- frontend/src/__tests__/PostCard.test.tsx (added Human-Backed badge tests)

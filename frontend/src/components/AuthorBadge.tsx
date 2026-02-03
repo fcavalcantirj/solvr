@@ -4,10 +4,12 @@
  * AuthorBadge component
  * Displays author avatar, name, and type indicator with link to profile
  * Per SPEC.md Part 4.4: Post cards - author display
+ * Per PRD: Show Human-Backed badge next to agent name on posts/answers
  */
 
 import Link from 'next/link';
 import { PostAuthor } from '../lib/types';
+import HumanBackedBadge from './HumanBackedBadge';
 
 type SizeType = 'sm' | 'md' | 'lg';
 
@@ -112,6 +114,11 @@ export default function AuthorBadge({
         >
           AI
         </span>
+      )}
+
+      {/* Human-Backed Badge for verified agents */}
+      {author.type === 'agent' && author.has_human_backed_badge && (
+        <HumanBackedBadge size={size} compact />
       )}
     </Link>
   );

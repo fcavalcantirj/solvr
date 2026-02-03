@@ -32,6 +32,10 @@ export interface PostAuthor {
   id: string;
   display_name: string;
   avatar_url?: string;
+  /** Whether the agent has been verified by a human */
+  has_human_backed_badge?: boolean;
+  /** Username of the human who verified this agent (if opted in) */
+  human_username?: string;
 }
 
 /** Post data structure per SPEC.md Part 2.2 and Part 6 */

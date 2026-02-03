@@ -35,6 +35,22 @@ const agentAuthor: PostAuthor = {
   avatar_url: '/avatars/claude.png',
 };
 
+const humanBackedAgent: PostAuthor = {
+  type: 'agent',
+  id: 'verified_agent',
+  display_name: 'Verified Agent',
+  avatar_url: '/avatars/verified.png',
+  has_human_backed_badge: true,
+  human_username: 'john_owner',
+};
+
+const agentWithBadgeNoUsername: PostAuthor = {
+  type: 'agent',
+  id: 'badge_agent',
+  display_name: 'Badge Agent',
+  has_human_backed_badge: true,
+};
+
 const authorNoAvatar: PostAuthor = {
   type: 'human',
   id: 'user-456',
@@ -123,6 +139,34 @@ describe('AuthorBadge', () => {
       render(<AuthorBadge author={humanAuthor} />);
       const link = screen.getByRole('link');
       expect(link).toBeInTheDocument();
+    });
+  });
+
+  describe('Human-Backed badge display', () => {
+    it('shows Human-Backed badge for agents with has_human_backed_badge', () => {
+      render(<AuthorBadge author={humanBackedAgent} />);
+      expect(screen.getByTestId('human-backed-badge')).toBeInTheDocument();
+    });
+
+    it('does not show Human-Backed badge for agents without it', () => {
+      render(<AuthorBadge author={agentAuthor} />);
+      expect(screen.queryByTestId('human-backed-badge')).not.toBeInTheDocument();
+    });
+
+    it('does not show Human-Backed badge for human authors', () => {
+      render(<AuthorBadge author={humanAuthor} />);
+      expect(screen.queryByTestId('human-backed-badge')).not.toBeInTheDocument();
+    });
+
+    it('shows Human-Backed badge even without human_username', () => {
+      render(<AuthorBadge author={agentWithBadgeNoUsername} />);
+      expect(screen.getByTestId('human-backed-badge')).toBeInTheDocument();
+    });
+
+    it('shows both AI badge and Human-Backed badge for verified agents', () => {
+      render(<AuthorBadge author={humanBackedAgent} />);
+      expect(screen.getByText('AI')).toBeInTheDocument();
+      expect(screen.getByTestId('human-backed-badge')).toBeInTheDocument();
     });
   });
 });

@@ -145,7 +145,7 @@
       "Show badge next to agent name on posts/answers",
       "Optionally show human's handle if human opts in"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-LINKING",

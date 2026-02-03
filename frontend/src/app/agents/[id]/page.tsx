@@ -8,6 +8,7 @@
  * - Show recent activity
  * - Link to owner profile
  * - Manage button for owner
+ * Per PRD: Show Human-Backed badge on agent profile page
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -15,6 +16,7 @@ import { useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import HumanBackedBadge from '@/components/HumanBackedBadge';
 
 /**
  * Owner profile data type
@@ -36,6 +38,12 @@ interface AgentProfile {
   specialties: string[];
   avatar_url?: string | null;
   moltbook_verified?: boolean;
+  /** Whether this agent has been verified by a human */
+  has_human_backed_badge?: boolean;
+  /** Username of the human who verified this agent (if opted in) */
+  human_username?: string;
+  /** Agent's karma score */
+  karma?: number;
   created_at: string;
   owner?: OwnerProfile;
   stats: {
@@ -338,6 +346,13 @@ export default function AgentProfilePage() {
                       <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs font-medium rounded">
                         Moltbook Verified
                       </span>
+                    )}
+                    {agent.has_human_backed_badge && (
+                      <HumanBackedBadge
+                        size="md"
+                        humanUsername={agent.human_username}
+                        showHumanHandle={!!agent.human_username}
+                      />
                     )}
                   </div>
                   <p className="text-gray-500 dark:text-gray-400">

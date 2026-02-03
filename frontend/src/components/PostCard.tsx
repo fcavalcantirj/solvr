@@ -4,10 +4,12 @@
  * PostCard component
  * Displays a post summary with title, snippet, author, votes, type badge, and tags
  * Per SPEC.md Part 4.4: Post cards in feed
+ * Per PRD: Show Human-Backed badge next to agent name on posts/answers
  */
 
 import Link from 'next/link';
 import { PostWithAuthor, PostType, PostStatus } from '../lib/types';
+import HumanBackedBadge from './HumanBackedBadge';
 
 interface PostCardProps {
   post: PostWithAuthor;
@@ -194,6 +196,11 @@ export default function PostCard({ post, variant = 'full' }: PostCardProps) {
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200">
                   AI
                 </span>
+              )}
+
+              {/* Human-Backed Badge for verified agents */}
+              {post.author.type === 'agent' && post.author.has_human_backed_badge && (
+                <HumanBackedBadge size="sm" compact />
               )}
             </div>
 

@@ -32,8 +32,8 @@ func NewAgentRepository(pool *Pool) *AgentRepository {
 }
 
 // Create inserts a new agent into the database.
-// Returns the created agent with timestamps set.
-func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) (*models.Agent, error) {
+// The agent struct is populated with timestamps after successful creation.
+func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error {
 	query := `
 		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -50,7 +50,31 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) (*mod
 		agent.MoltbookID,
 	)
 
-	return r.scanAgent(row)
+	err := row.Scan(
+		&agent.ID,
+		&agent.DisplayName,
+		&agent.HumanID,
+		&agent.Bio,
+		&agent.Specialties,
+		&agent.AvatarURL,
+		&agent.APIKeyHash,
+		&agent.MoltbookID,
+		&agent.Status,
+		&agent.Karma,
+		&agent.HumanClaimedAt,
+		&agent.HasHumanBackedBadge,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
+			return ErrDuplicateAgentID
+		}
+		return err
+	}
+
+	return nil
 }
 
 // FindByID finds an agent by their ID.
@@ -94,7 +118,8 @@ func (r *AgentRepository) FindByAPIKeyHash(ctx context.Context, hash string) (*m
 
 // Update updates an existing agent.
 // Updates display_name, bio, specialties, avatar_url.
-func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) (*models.Agent, error) {
+// The agent struct is updated with new values after successful update.
+func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error {
 	query := `
 		UPDATE agents
 		SET display_name = $2, bio = $3, specialties = $4, avatar_url = $5, updated_at = NOW()
@@ -109,7 +134,31 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) (*mod
 		agent.AvatarURL,
 	)
 
-	return r.scanAgent(row)
+	err := row.Scan(
+		&agent.ID,
+		&agent.DisplayName,
+		&agent.HumanID,
+		&agent.Bio,
+		&agent.Specialties,
+		&agent.AvatarURL,
+		&agent.APIKeyHash,
+		&agent.MoltbookID,
+		&agent.Status,
+		&agent.Karma,
+		&agent.HumanClaimedAt,
+		&agent.HasHumanBackedBadge,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrAgentNotFound
+		}
+		return err
+	}
+
+	return nil
 }
 
 // UpdateAPIKeyHash updates the API key hash for an agent.

@@ -31,18 +31,19 @@ func TestAgentRepository_Create(t *testing.T) {
 		Specialties: []string{"testing", "golang"},
 	}
 
-	created, err := repo.Create(ctx, agent)
+	err := repo.Create(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	if created.ID != agent.ID {
-		t.Errorf("expected ID %s, got %s", agent.ID, created.ID)
+	// After Create, agent struct should be populated with DB values
+	if agent.ID == "" {
+		t.Error("expected ID to be set")
 	}
-	if created.DisplayName != agent.DisplayName {
-		t.Errorf("expected display name %s, got %s", agent.DisplayName, created.DisplayName)
+	if agent.DisplayName != "Test Agent" {
+		t.Errorf("expected display name 'Test Agent', got %s", agent.DisplayName)
 	}
-	if created.CreatedAt.IsZero() {
+	if agent.CreatedAt.IsZero() {
 		t.Error("expected created_at to be set")
 	}
 }
@@ -66,13 +67,18 @@ func TestAgentRepository_Create_Duplicate(t *testing.T) {
 	}
 
 	// Create first time
-	_, err := repo.Create(ctx, agent)
+	err := repo.Create(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to create first agent: %v", err)
 	}
 
 	// Try to create duplicate
-	_, err = repo.Create(ctx, agent)
+	duplicate := &models.Agent{
+		ID:          agentID,
+		DisplayName: "Test Agent Duplicate",
+		HumanID:     &humanID,
+	}
+	err = repo.Create(ctx, duplicate)
 	if err != ErrDuplicateAgentID {
 		t.Errorf("expected ErrDuplicateAgentID, got %v", err)
 	}
@@ -96,18 +102,18 @@ func TestAgentRepository_FindByID(t *testing.T) {
 		Bio:         "Bio here",
 	}
 
-	created, err := repo.Create(ctx, agent)
+	err := repo.Create(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	found, err := repo.FindByID(ctx, created.ID)
+	found, err := repo.FindByID(ctx, agent.ID)
 	if err != nil {
 		t.Fatalf("failed to find agent: %v", err)
 	}
 
-	if found.ID != created.ID {
-		t.Errorf("expected ID %s, got %s", created.ID, found.ID)
+	if found.ID != agent.ID {
+		t.Errorf("expected ID %s, got %s", agent.ID, found.ID)
 	}
 	if found.Bio != "Bio here" {
 		t.Errorf("expected bio 'Bio here', got %s", found.Bio)
@@ -148,25 +154,26 @@ func TestAgentRepository_Update(t *testing.T) {
 		Bio:         "Original bio",
 	}
 
-	created, err := repo.Create(ctx, agent)
+	err := repo.Create(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
 	// Update agent
-	created.DisplayName = "New Name"
-	created.Bio = "New bio"
+	agent.DisplayName = "New Name"
+	agent.Bio = "New bio"
 
-	updated, err := repo.Update(ctx, created)
+	err = repo.Update(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to update agent: %v", err)
 	}
 
-	if updated.DisplayName != "New Name" {
-		t.Errorf("expected display name 'New Name', got %s", updated.DisplayName)
+	// After Update, agent struct should be populated with new values
+	if agent.DisplayName != "New Name" {
+		t.Errorf("expected display name 'New Name', got %s", agent.DisplayName)
 	}
-	if updated.Bio != "New bio" {
-		t.Errorf("expected bio 'New bio', got %s", updated.Bio)
+	if agent.Bio != "New bio" {
+		t.Errorf("expected bio 'New bio', got %s", agent.Bio)
 	}
 }
 
@@ -187,12 +194,12 @@ func TestAgentRepository_GetAgentStats(t *testing.T) {
 		HumanID:     &humanID,
 	}
 
-	created, err := repo.Create(ctx, agent)
+	err := repo.Create(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	stats, err := repo.GetAgentStats(ctx, created.ID)
+	stats, err := repo.GetAgentStats(ctx, agent.ID)
 	if err != nil {
 		t.Fatalf("failed to get agent stats: %v", err)
 	}
@@ -224,19 +231,19 @@ func TestAgentRepository_UpdateAPIKeyHash(t *testing.T) {
 		APIKeyHash:  "original_hash",
 	}
 
-	created, err := repo.Create(ctx, agent)
+	err := repo.Create(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
 	// Update API key hash
-	err = repo.UpdateAPIKeyHash(ctx, created.ID, "new_hash")
+	err = repo.UpdateAPIKeyHash(ctx, agent.ID, "new_hash")
 	if err != nil {
 		t.Fatalf("failed to update API key hash: %v", err)
 	}
 
 	// Verify update
-	found, err := repo.FindByID(ctx, created.ID)
+	found, err := repo.FindByID(ctx, agent.ID)
 	if err != nil {
 		t.Fatalf("failed to find agent: %v", err)
 	}
@@ -263,19 +270,19 @@ func TestAgentRepository_RevokeAPIKey(t *testing.T) {
 		APIKeyHash:  "some_hash",
 	}
 
-	created, err := repo.Create(ctx, agent)
+	err := repo.Create(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
 	// Revoke API key
-	err = repo.RevokeAPIKey(ctx, created.ID)
+	err = repo.RevokeAPIKey(ctx, agent.ID)
 	if err != nil {
 		t.Fatalf("failed to revoke API key: %v", err)
 	}
 
 	// Verify revocation
-	found, err := repo.FindByID(ctx, created.ID)
+	found, err := repo.FindByID(ctx, agent.ID)
 	if err != nil {
 		t.Fatalf("failed to find agent: %v", err)
 	}
@@ -306,11 +313,11 @@ func TestAgentRepository_FindByHumanID(t *testing.T) {
 		HumanID:     &humanID,
 	}
 
-	_, err := repo.Create(ctx, agent1)
+	err := repo.Create(ctx, agent1)
 	if err != nil {
 		t.Fatalf("failed to create agent1: %v", err)
 	}
-	_, err = repo.Create(ctx, agent2)
+	err = repo.Create(ctx, agent2)
 	if err != nil {
 		t.Fatalf("failed to create agent2: %v", err)
 	}
@@ -347,7 +354,7 @@ func TestAgentRepository_LinkHuman_Success(t *testing.T) {
 		DisplayName: "Link Test Agent",
 	}
 
-	_, err := repo.Create(ctx, agent)
+	err := repo.Create(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
@@ -388,7 +395,7 @@ func TestAgentRepository_LinkHuman_RejectReclaim(t *testing.T) {
 		DisplayName: "Reclaim Test Agent",
 	}
 
-	_, err := repo.Create(ctx, agent)
+	err := repo.Create(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
@@ -448,7 +455,7 @@ func TestAgentRepository_AddKarma_Success(t *testing.T) {
 		DisplayName: "Karma Test Agent",
 	}
 
-	_, err := repo.Create(ctx, agent)
+	err := repo.Create(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
@@ -514,7 +521,7 @@ func TestAgentRepository_GrantHumanBackedBadge_Success(t *testing.T) {
 		DisplayName: "Badge Test Agent",
 	}
 
-	_, err := repo.Create(ctx, agent)
+	err := repo.Create(ctx, agent)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}

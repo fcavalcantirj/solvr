@@ -6363,3 +6363,28 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   **Verification:**
   - Handler at posts.go:166-170 checks DeletedAt and returns 404
   - DB layer uses WHERE deleted_at IS NULL consistently
+
+- 2026-02-03: [API-CRITICAL] Fix AgentRepository interface signatures - COMPLETED ✓
+  
+  **Task 1: Fix AgentRepository.Create() to return error only**
+  - Changed signature from `Create(ctx, *models.Agent) (*models.Agent, error)` to `Create(ctx, *models.Agent) error`
+  - Agent struct is now populated in-place with DB-returned values (timestamps, etc.)
+  - Added duplicate key detection with ErrDuplicateAgentID
+  
+  **Task 2: Fix AgentRepository.Update() to return error only**
+  - Changed signature from `Update(ctx, *models.Agent) (*models.Agent, error)` to `Update(ctx, *models.Agent) error`
+  - Agent struct is now populated in-place with updated values
+  - Added ErrAgentNotFound detection for non-existent agents
+  
+  **Files Changed:**
+  - backend/internal/db/agents.go: Updated Create() and Update() implementations
+  - backend/internal/db/agents_test.go: Updated all tests to use new signatures
+  
+  **Interface Match:**
+  - Now matches AgentRepositoryInterface in handlers/agents.go which expects error-only returns
+  - Handlers use pattern: `if err := h.repo.Create(ctx, agent); err != nil { ... }`
+  
+  **Tests:**
+  - All db package tests pass (go test ./internal/db/... passes)
+  - Build successful (go build ./... passes)
+

@@ -1,0 +1,12 @@
+{
+  "name": "solvr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Solvr - Knowledge base for developers and AI agents",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}

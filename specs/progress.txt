@@ -6094,3 +6094,23 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   - jobs package: 81.2% coverage (exceeds 80% requirement)
   - All 4 job tests passing
   - All db tests passing (integration tests skip without DATABASE_URL)
+- 2026-02-03: [infra-INFRASTRUCTURE] Set up Husky and lint-staged for pre-commit hooks ✓
+  - Created root package.json with Husky as a dev dependency
+  - Ran npm install at root to initialize Husky (.husky directory created)
+  - Installed lint-staged in frontend directory
+  - Added lint-staged configuration to frontend/package.json:
+    - *.{ts,tsx}: eslint --fix and prettier --write
+    - *.{js,jsx}: eslint --fix and prettier --write
+    - *.{json,css,md}: prettier --write
+  - Created .husky/pre-commit hook that runs lint-staged in frontend
+  - Updated PRD to passes=true for:
+    - Install Husky for git hooks
+    - Configure lint-staged for frontend
+    - Add pre-commit hook
+- 2026-02-03: [infra-INFRASTRUCTURE] Add file size check to CI ✓
+  - Created scripts/check-file-size.sh
+  - Script finds .go/.ts/.tsx files over 800 lines (Golden Rule #2)
+  - Returns exit code 1 if any violations found
+  - Added file-size-check job to .github/workflows/ci.yml
+  - Tested script locally - all files pass
+  - Updated PRD to passes=true for "Add file size check to CI"

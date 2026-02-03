@@ -2,6 +2,19 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
+    ]
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -36,8 +49,10 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "husky": "^9.1.7",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.8.1",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",

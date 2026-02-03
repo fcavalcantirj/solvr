@@ -7,6 +7,17 @@ on:
     branches: [main, develop]
 
 jobs:
+  file-size-check:
+    name: File Size Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check file sizes
+        run: ./scripts/check-file-size.sh
+
   backend:
     name: Backend (Go)
     runs-on: ubuntu-latest

@@ -453,7 +453,7 @@
       "Run npx husky init",
       "Verify .husky/ directory created"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "INFRASTRUCTURE",
@@ -463,7 +463,7 @@
       "Add lint-staged config to package.json",
       "Run eslint --fix and prettier --write on staged files"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "INFRASTRUCTURE",
@@ -474,7 +474,7 @@
       "Test by staging file with errors",
       "Verify commit blocked"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "INFRASTRUCTURE",
@@ -485,7 +485,7 @@
       "Exit 1 if any found",
       "Add step to CI workflow"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",

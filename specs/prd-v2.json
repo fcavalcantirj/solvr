@@ -1,101 +1,234 @@
 [
   {
-    "category": "INTERFACE-FIX",
-    "description": "Fix AgentRepository.Create to return error only (not *Agent, error)",
+    "category": "API-CRITICAL",
+    "description": "Fix AgentRepository interface: Create() should return error only",
     "steps": [
-      "Update internal/db/agents.go Create() signature to return error",
-      "Update handler code to use FindByID after Create if needed",
-      "Run tests to verify"
+      "Change Create(ctx, *models.Agent) (*models.Agent, error) to Create(ctx, *models.Agent) error in interface",
+      "OR change AgentRepository.Create to match interface",
+      "Write test to verify",
+      "go test ./internal/db/... passes"
     ],
     "passes": false
   },
   {
-    "category": "INTERFACE-FIX",
-    "description": "Fix AgentRepository.Update to return error only (not *Agent, error)",
+    "category": "API-CRITICAL",
+    "description": "Fix AgentRepository interface: Update() should return error only",
     "steps": [
-      "Update internal/db/agents.go Update() signature to return error",
-      "Update handler code to use FindByID after Update if needed",
-      "Run tests to verify"
+      "Change Update signature to match interface",
+      "Write test to verify",
+      "go test ./internal/db/... passes"
     ],
     "passes": false
   },
   {
-    "category": "INTERFACE-FIX",
-    "description": "Add GetAgentByAPIKeyHash method to AgentRepository for auth.AgentDB interface",
+    "category": "API-CRITICAL",
+    "description": "Add GetAgentByAPIKeyHash to AgentRepository for API key auth",
     "steps": [
-      "Add GetAgentByAPIKeyHash(ctx, key string) (*models.Agent, error) to AgentRepository",
-      "Implement bcrypt comparison against stored hashes",
-      "Run tests to verify API key validation works"
+      "Implement GetAgentByAPIKeyHash(ctx, key string) (*models.Agent, error)",
+      "Use bcrypt.CompareHashAndPassword against stored hashes",
+      "Write test: valid key returns agent, invalid returns nil",
+      "go test ./internal/db/... passes"
     ],
     "passes": false
   },
   {
-    "category": "INTERFACE-FIX",
-    "description": "Add Create method to ClaimTokenRepository",
+    "category": "API-CRITICAL",
+    "description": "Implement ClaimTokenRepository.Create",
     "steps": [
-      "Add Create(ctx, *models.ClaimToken) error to ClaimTokenRepository",
-      "Insert claim token into claim_tokens table",
-      "Run tests to verify"
+      "Add Create(ctx, *models.ClaimToken) error method",
+      "INSERT INTO claim_tokens",
+      "Write test",
+      "go test ./internal/db/... passes"
     ],
     "passes": false
   },
   {
-    "category": "INTERFACE-FIX",
-    "description": "Add FindByToken method to ClaimTokenRepository",
+    "category": "API-CRITICAL",
+    "description": "Implement ClaimTokenRepository.FindByToken",
     "steps": [
       "Add FindByToken(ctx, token string) (*models.ClaimToken, error)",
-      "Query by token value",
-      "Run tests to verify"
+      "SELECT * FROM claim_tokens WHERE token = $1",
+      "Write test",
+      "go test ./internal/db/... passes"
     ],
     "passes": false
   },
   {
-    "category": "INTERFACE-FIX",
-    "description": "Add FindActiveByAgentID method to ClaimTokenRepository",
+    "category": "API-CRITICAL",
+    "description": "Implement ClaimTokenRepository.FindActiveByAgentID",
     "steps": [
       "Add FindActiveByAgentID(ctx, agentID string) (*models.ClaimToken, error)",
-      "Query for unexpired, unused tokens by agent",
-      "Run tests to verify"
+      "Query for unexpired, unused tokens",
+      "Write test",
+      "go test ./internal/db/... passes"
     ],
     "passes": false
   },
   {
-    "category": "INTERFACE-FIX",
-    "description": "Add MarkUsed method to ClaimTokenRepository",
+    "category": "API-CRITICAL",
+    "description": "Implement ClaimTokenRepository.MarkUsed",
     "steps": [
       "Add MarkUsed(ctx, tokenID, humanID string) error",
-      "Update claim_tokens set used_at, used_by_human_id",
-      "Run tests to verify"
+      "UPDATE claim_tokens SET used_at, used_by_human_id",
+      "Write test",
+      "go test ./internal/db/... passes"
     ],
     "passes": false
   },
   {
-    "category": "INTERFACE-FIX",
-    "description": "Wire up agent registration endpoint in routes.go",
+    "category": "API-CRITICAL",
+    "description": "Create PostRepository with List method",
     "steps": [
-      "Add POST /v1/agents/register route",
+      "Create internal/db/posts.go",
+      "Implement List(ctx, opts) ([]models.PostWithAuthor, int, error)",
+      "Query posts table with filters, joins for author",
+      "Write test",
+      "go test ./internal/db/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Add PostRepository.FindByID method",
+    "steps": [
+      "Implement FindByID(ctx, id string) (*models.PostWithAuthor, error)",
+      "Write test",
+      "go test ./internal/db/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Add PostRepository.Create method",
+    "steps": [
+      "Implement Create(ctx, *models.Post) (*models.Post, error)",
+      "INSERT INTO posts",
+      "Write test",
+      "go test ./internal/db/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Add PostRepository.Update and Delete methods",
+    "steps": [
+      "Implement Update(ctx, *models.Post) (*models.Post, error)",
+      "Implement Delete(ctx, id string) error (soft delete)",
+      "Write tests",
+      "go test ./internal/db/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Add PostRepository.Vote method",
+    "steps": [
+      "Implement Vote(ctx, postID, voterType, voterID, direction string) error",
+      "INSERT/UPDATE votes table",
+      "Write test",
+      "go test ./internal/db/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Wire POST /v1/agents/register endpoint",
+    "steps": [
+      "Add route in routes.go",
       "Connect to agentsHandler.RegisterAgent",
-      "Test agent registration works end-to-end"
+      "Test: curl -X POST /v1/agents/register returns API key",
+      "go test ./internal/api/... passes"
     ],
     "passes": false
   },
   {
-    "category": "INTERFACE-FIX",
-    "description": "Wire up claim endpoints in routes.go",
+    "category": "API-CRITICAL",
+    "description": "Wire GET/POST /v1/agents/{id}/claim endpoints",
     "steps": [
-      "Add GET /v1/claim/{token} route",
-      "Add POST /v1/claim/{token}/confirm route",
-      "Test claim flow works end-to-end"
+      "Add POST /v1/agents/{id}/claim - generate claim token",
+      "Route uses agentsHandler.GenerateClaim",
+      "Test: curl -X POST /v1/agents/{id}/claim returns claim URL",
+      "go test ./internal/api/... passes"
     ],
     "passes": false
   },
   {
-    "category": "INTERFACE-FIX",
-    "description": "Wire up auth middleware for protected routes",
+    "category": "API-CRITICAL",
+    "description": "Wire /v1/claim/{token} endpoints",
+    "steps": [
+      "Add GET /v1/claim/{token} - get claim info",
+      "Add POST /v1/claim/{token}/confirm - confirm claim",
+      "Test both endpoints",
+      "go test ./internal/api/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Wire OAuth endpoints /v1/auth/github/*",
+    "steps": [
+      "Add GET /v1/auth/github - redirect to GitHub",
+      "Add GET /v1/auth/github/callback - handle callback",
+      "Create OAuthHandlers with config",
+      "Test: redirect works, callback creates user",
+      "go test ./internal/api/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Wire OAuth endpoints /v1/auth/google/*",
+    "steps": [
+      "Add GET /v1/auth/google - redirect to Google",
+      "Add GET /v1/auth/google/callback - handle callback",
+      "Test: redirect works, callback creates user"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Wire GET/POST /v1/posts endpoints",
+    "steps": [
+      "Add GET /v1/posts - list posts with PostsHandler",
+      "Add POST /v1/posts (protected) - create post",
+      "Add GET /v1/posts/{id} - get single post",
+      "Test all three endpoints",
+      "go test ./internal/api/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Wire /v1/me endpoint",
+    "steps": [
+      "Add GET /v1/me (protected)",
+      "Returns current user or agent based on auth type",
+      "Test with JWT and API key",
+      "go test ./internal/api/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Wire auth middleware for protected routes",
     "steps": [
       "Add auth.CombinedAuthMiddleware to protected route group",
-      "Test authenticated endpoints require valid token",
-      "Verify API key auth works"
+      "Protected routes: POST /v1/posts, PATCH /v1/posts/{id}, /v1/me",
+      "Test: unauthenticated returns 401",
+      "Test: valid API key allows access",
+      "go test ./internal/api/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "End-to-end test: Agent registration and posting",
+    "steps": [
+      "Test: POST /v1/agents/register -> get API key",
+      "Test: POST /v1/posts with API key -> creates post",
+      "Test: GET /v1/posts -> shows new post",
+      "Test: GET /v1/search?q=keyword -> finds post",
+      "All tests pass"
     ],
     "passes": false
   },

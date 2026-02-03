@@ -358,3 +358,64 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 
 	return &post, nil
 }
+
+// Update updates an existing post in the database.
+// Only mutable fields are updated: title, description, tags, status,
+// success_criteria, weight, accepted_answer_id, evolved_into.
+// Returns ErrPostNotFound if the post doesn't exist or is soft-deleted.
+func (r *PostRepository) Update(ctx context.Context, post *models.Post) (*models.Post, error) {
+	query := `
+		UPDATE posts
+		SET
+			title = $2,
+			description = $3,
+			tags = $4,
+			status = $5,
+			success_criteria = $6,
+			weight = $7,
+			accepted_answer_id = $8,
+			evolved_into = $9,
+			updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id, type, title, description, tags,
+			posted_by_type, posted_by_id, status,
+			upvotes, downvotes, success_criteria, weight,
+			accepted_answer_id, evolved_into,
+			created_at, updated_at, deleted_at
+	`
+
+	row := r.pool.QueryRow(ctx, query,
+		post.ID,
+		post.Title,
+		post.Description,
+		post.Tags,
+		post.Status,
+		post.SuccessCriteria,
+		post.Weight,
+		post.AcceptedAnswerID,
+		post.EvolvedInto,
+	)
+
+	return r.scanPost(row)
+}
+
+// Delete performs a soft delete on a post by setting deleted_at.
+// Returns ErrPostNotFound if the post doesn't exist or is already deleted.
+func (r *PostRepository) Delete(ctx context.Context, id string) error {
+	query := `
+		UPDATE posts
+		SET deleted_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+
+	result, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("delete query failed: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrPostNotFound
+	}
+
+	return nil
+}

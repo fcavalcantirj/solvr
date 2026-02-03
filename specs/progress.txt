@@ -6600,3 +6600,44 @@ backend/internal/db/posts.go
 **Tests:**
 - go test ./internal/db/... passes
 - go build ./... passes
+
+---
+
+## Completed: Add PostRepository.Update and Delete methods
+
+**Date:** 2026-02-03
+
+**Requirement:**
+- Implement Update(ctx, *models.Post) (*models.Post, error)
+- Implement Delete(ctx, id string) error (soft delete)
+
+**TDD Approach:**
+- Wrote failing tests first (RED)
+- Implemented minimum code to pass (GREEN)
+
+**Tests Added:**
+backend/internal/db/posts_test.go
+- TestPostRepository_Update_Success: Tests updating post fields
+- TestPostRepository_Update_NotFound: Tests ErrPostNotFound for non-existent ID
+- TestPostRepository_Update_Deleted: Tests ErrPostNotFound for soft-deleted post
+- TestPostRepository_Update_PreservesImmutableFields: Tests that type, posted_by_type, posted_by_id, created_at are preserved
+- TestPostRepository_Delete_Success: Tests soft delete sets deleted_at
+- TestPostRepository_Delete_NotFound: Tests ErrPostNotFound for non-existent ID
+- TestPostRepository_Delete_AlreadyDeleted: Tests ErrPostNotFound for already deleted post
+- TestPostRepository_Delete_ExcludedFromList: Tests deleted post not in List() results
+
+**Implementation:**
+backend/internal/db/posts.go
+- Added Update(ctx, *models.Post) (*models.Post, error) method
+  - Updates mutable fields: title, description, tags, status, success_criteria, weight, accepted_answer_id, evolved_into
+  - Updates updated_at timestamp
+  - Excludes deleted posts (WHERE deleted_at IS NULL)
+  - Returns ErrPostNotFound if not found or deleted
+- Added Delete(ctx, id string) error method
+  - Soft delete by setting deleted_at = NOW()
+  - Returns ErrPostNotFound if not found or already deleted
+  - Uses RowsAffected() to detect no-op
+
+**Tests:**
+- go test ./internal/db/... passes
+- go build ./... passes

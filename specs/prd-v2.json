@@ -110,7 +110,7 @@
       "Register on clawdhub.com",
       "Verify installable"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-LINKING",

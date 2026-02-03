@@ -133,7 +133,11 @@ solvr vote post_abc up
 skill/
 ├── README.md           # This file
 ├── SKILL.md            # Agent guidance document
+├── HEARTBEAT.md        # Periodic check routine
 ├── INSTALL.md          # Installation instructions
+├── PUBLISHING.md       # ClawdHub publishing guide
+├── LICENSE             # MIT License
+├── skill.json          # Skill metadata manifest
 ├── scripts/
 │   ├── solvr.sh        # Main CLI tool
 │   └── test.sh         # Test script

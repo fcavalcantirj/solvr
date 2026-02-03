@@ -479,3 +479,160 @@ func TestPostRepository_List_IncludesVoteScore(t *testing.T) {
 
 	t.Error("test post not found in results")
 }
+
+func TestPostRepository_FindByID_Success(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	ctx := context.Background()
+
+	timestamp := time.Now().Format("20060102150405")
+	postID := "findbyid_test_" + timestamp
+
+	// Insert a test post with all fields populated
+	_, err := pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, tags, posted_by_type, posted_by_id,
+			status, upvotes, downvotes, success_criteria, weight)
+		VALUES ($1, 'problem', 'Find By ID Test', 'Test Description', $2, 'agent', 'test_agent_findbyid',
+			'open', 5, 2, $3, 3)
+	`, postID, []string{"go", "testing"}, []string{"Criterion 1", "Criterion 2"})
+	if err != nil {
+		t.Fatalf("failed to insert test post: %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", postID)
+	}()
+
+	// Call FindByID
+	post, err := repo.FindByID(ctx, postID)
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+
+	// Verify returned post
+	if post == nil {
+		t.Fatal("expected non-nil post")
+	}
+
+	if post.ID != postID {
+		t.Errorf("expected ID %s, got %s", postID, post.ID)
+	}
+
+	if post.Type != models.PostTypeProblem {
+		t.Errorf("expected type problem, got %s", post.Type)
+	}
+
+	if post.Title != "Find By ID Test" {
+		t.Errorf("expected title 'Find By ID Test', got %s", post.Title)
+	}
+
+	if post.Description != "Test Description" {
+		t.Errorf("expected description 'Test Description', got %s", post.Description)
+	}
+
+	if len(post.Tags) != 2 {
+		t.Errorf("expected 2 tags, got %d", len(post.Tags))
+	}
+
+	if post.PostedByType != models.AuthorTypeAgent {
+		t.Errorf("expected posted_by_type agent, got %s", post.PostedByType)
+	}
+
+	if post.Status != models.PostStatusOpen {
+		t.Errorf("expected status open, got %s", post.Status)
+	}
+
+	if post.Upvotes != 5 {
+		t.Errorf("expected 5 upvotes, got %d", post.Upvotes)
+	}
+
+	if post.Downvotes != 2 {
+		t.Errorf("expected 2 downvotes, got %d", post.Downvotes)
+	}
+
+	// Verify vote score
+	expectedVoteScore := 5 - 2
+	if post.VoteScore != expectedVoteScore {
+		t.Errorf("expected vote score %d, got %d", expectedVoteScore, post.VoteScore)
+	}
+
+	// Verify author information is populated
+	if post.Author.Type != models.AuthorTypeAgent {
+		t.Errorf("expected author type agent, got %s", post.Author.Type)
+	}
+
+	if post.Author.ID != "test_agent_findbyid" {
+		t.Errorf("expected author ID test_agent_findbyid, got %s", post.Author.ID)
+	}
+}
+
+func TestPostRepository_FindByID_NotFound(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	ctx := context.Background()
+
+	// Try to find a non-existent post
+	post, err := repo.FindByID(ctx, "non_existent_post_id_12345")
+	if err == nil {
+		t.Fatal("expected error for non-existent post")
+	}
+
+	if err != ErrPostNotFound {
+		t.Errorf("expected ErrPostNotFound, got %v", err)
+	}
+
+	if post != nil {
+		t.Error("expected nil post for non-existent ID")
+	}
+}
+
+func TestPostRepository_FindByID_ExcludesDeleted(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	ctx := context.Background()
+
+	timestamp := time.Now().Format("20060102150405")
+	postID := "findbyid_deleted_" + timestamp
+
+	// Insert a soft-deleted post
+	_, err := pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status, deleted_at)
+		VALUES ($1, 'problem', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
+	`, postID)
+	if err != nil {
+		t.Fatalf("failed to insert deleted post: %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", postID)
+	}()
+
+	// FindByID should not return deleted posts
+	post, err := repo.FindByID(ctx, postID)
+	if err == nil {
+		t.Fatal("expected error for deleted post")
+	}
+
+	if err != ErrPostNotFound {
+		t.Errorf("expected ErrPostNotFound for deleted post, got %v", err)
+	}
+
+	if post != nil {
+		t.Error("expected nil post for deleted post")
+	}
+}

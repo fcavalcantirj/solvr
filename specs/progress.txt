@@ -6532,3 +6532,36 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   **Tests:**
   - go test ./internal/db/... passes
   - go build ./... passes
+
+---
+
+## Completed: Add PostRepository.FindByID method
+
+**Date:** 2026-02-03
+
+**Requirement:**
+- Implement FindByID(ctx, id string) (*models.PostWithAuthor, error)
+- Returns post with author information
+- Returns ErrPostNotFound for non-existent or deleted posts
+
+**TDD Approach:**
+- Wrote failing tests first (RED)
+- Implemented minimum code to pass (GREEN)
+
+**Tests Added:**
+backend/internal/db/posts_test.go
+- TestPostRepository_FindByID_Success: Tests finding existing post with all fields
+- TestPostRepository_FindByID_NotFound: Tests ErrPostNotFound for non-existent ID
+- TestPostRepository_FindByID_ExcludesDeleted: Tests soft-deleted posts return ErrPostNotFound
+
+**Implementation:**
+backend/internal/db/posts.go
+- Added FindByID(ctx, id string) (*models.PostWithAuthor, error) method
+- Query with LEFT JOINs for users/agents to get author display_name/avatar_url
+- Excludes deleted posts (WHERE deleted_at IS NULL)
+- Computes vote score (upvotes - downvotes)
+- Returns ErrPostNotFound on pgx.ErrNoRows
+
+**Tests:**
+- go test ./internal/db/... passes
+- go build ./... passes

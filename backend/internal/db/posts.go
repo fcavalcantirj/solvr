@@ -248,3 +248,68 @@ func (r *PostRepository) scanPostRows(rows pgx.Rows) (*models.Post, error) {
 	}
 	return post, nil
 }
+
+// FindByID returns a single post by ID with author information.
+// Returns ErrPostNotFound if the post doesn't exist or is soft-deleted.
+func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {
+	query := `
+		SELECT
+			p.id, p.type, p.title, p.description, p.tags,
+			p.posted_by_type, p.posted_by_id, p.status,
+			p.upvotes, p.downvotes, p.success_criteria, p.weight,
+			p.accepted_answer_id, p.evolved_into,
+			p.created_at, p.updated_at, p.deleted_at,
+			COALESCE(u.display_name, a.display_name, '') as author_display_name,
+			COALESCE(u.avatar_url, a.avatar_url, '') as author_avatar_url
+		FROM posts p
+		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
+		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
+		WHERE p.id = $1 AND p.deleted_at IS NULL
+	`
+
+	row := r.pool.QueryRow(ctx, query, id)
+
+	var post models.PostWithAuthor
+	var authorDisplayName, authorAvatarURL string
+
+	err := row.Scan(
+		&post.ID,
+		&post.Type,
+		&post.Title,
+		&post.Description,
+		&post.Tags,
+		&post.PostedByType,
+		&post.PostedByID,
+		&post.Status,
+		&post.Upvotes,
+		&post.Downvotes,
+		&post.SuccessCriteria,
+		&post.Weight,
+		&post.AcceptedAnswerID,
+		&post.EvolvedInto,
+		&post.CreatedAt,
+		&post.UpdatedAt,
+		&post.DeletedAt,
+		&authorDisplayName,
+		&authorAvatarURL,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPostNotFound
+		}
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
+
+	// Populate author information
+	post.Author = models.PostAuthor{
+		Type:        post.PostedByType,
+		ID:          post.PostedByID,
+		DisplayName: authorDisplayName,
+		AvatarURL:   authorAvatarURL,
+	}
+
+	// Compute vote score
+	post.VoteScore = post.Upvotes - post.Downvotes
+
+	return &post, nil
+}

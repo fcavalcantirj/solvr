@@ -422,7 +422,7 @@
       "Index on agent_id",
       "Constraint: one active token per agent"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "DATABASE",

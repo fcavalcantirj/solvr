@@ -5373,3 +5373,20 @@ system library (libnspr4.so). However:
     - down.sql: DROP INDEX
   - All 5 new tests pass
   - agents.go: 650 lines (under 800 limit)
+
+- 2026-02-03: [DATABASE] Create claim_tokens migration file ✓
+  - Created backend/migrations/000017_create_claim_tokens.up.sql (25 lines)
+  - Created backend/migrations/000017_create_claim_tokens.down.sql (6 lines)
+  - claim_tokens table for agent-human linking flow:
+    - id UUID PRIMARY KEY
+    - token VARCHAR(64) UNIQUE NOT NULL - the claim token
+    - agent_id VARCHAR(50) FK to agents(id) ON DELETE CASCADE
+    - expires_at TIMESTAMPTZ NOT NULL - 24h expiry
+    - used_at TIMESTAMPTZ - set when human claims
+    - used_by_human_id UUID FK to users(id) - who claimed
+    - created_at TIMESTAMPTZ
+  - Indexes:
+    - idx_claim_tokens_token - fast lookup during claim
+    - idx_claim_tokens_agent_id - listing agent's tokens
+    - idx_claim_tokens_one_active_per_agent - partial unique index
+      (only one active unused/unexpired token per agent)

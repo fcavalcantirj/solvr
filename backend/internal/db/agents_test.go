@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Note: These tests require a running PostgreSQL database.
@@ -565,4 +566,122 @@ func TestAgentRepository_GrantHumanBackedBadge_AgentNotFound(t *testing.T) {
 	if err != ErrAgentNotFound {
 		t.Errorf("expected ErrAgentNotFound, got %v", err)
 	}
+}
+
+// ============================================================================
+// Tests for GetAgentByAPIKeyHash (API-CRITICAL requirement)
+// Uses bcrypt.CompareHashAndPassword to find agent by raw API key
+// ============================================================================
+
+func TestAgentRepository_GetAgentByAPIKeyHash_ValidKey(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	// Generate a real API key and hash it using bcrypt
+	rawAPIKey := "solvr_test_key_" + time.Now().Format("20060102150405")
+	hashedKey, err := hashTestAPIKey(rawAPIKey)
+	if err != nil {
+		t.Fatalf("failed to hash API key: %v", err)
+	}
+
+	agent := &models.Agent{
+		ID:          "apikey_lookup_" + time.Now().Format("20060102150405"),
+		DisplayName: "API Key Lookup Agent",
+		APIKeyHash:  hashedKey,
+	}
+
+	err = repo.Create(ctx, agent)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	// GetAgentByAPIKeyHash should find the agent using bcrypt comparison
+	found, err := repo.GetAgentByAPIKeyHash(ctx, rawAPIKey)
+	if err != nil {
+		t.Fatalf("GetAgentByAPIKeyHash failed: %v", err)
+	}
+
+	if found == nil {
+		t.Fatal("expected to find agent, got nil")
+	}
+
+	if found.ID != agent.ID {
+		t.Errorf("expected agent ID %s, got %s", agent.ID, found.ID)
+	}
+}
+
+func TestAgentRepository_GetAgentByAPIKeyHash_InvalidKey(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	// Generate a real API key and hash it using bcrypt
+	rawAPIKey := "solvr_real_key_" + time.Now().Format("20060102150405")
+	hashedKey, err := hashTestAPIKey(rawAPIKey)
+	if err != nil {
+		t.Fatalf("failed to hash API key: %v", err)
+	}
+
+	agent := &models.Agent{
+		ID:          "apikey_invalid_" + time.Now().Format("20060102150405"),
+		DisplayName: "API Key Invalid Test Agent",
+		APIKeyHash:  hashedKey,
+	}
+
+	err = repo.Create(ctx, agent)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	// Try to find with wrong key - should return nil, nil (not found)
+	found, err := repo.GetAgentByAPIKeyHash(ctx, "solvr_wrong_key")
+	if err != nil {
+		t.Fatalf("GetAgentByAPIKeyHash should not error on wrong key: %v", err)
+	}
+
+	if found != nil {
+		t.Errorf("expected nil agent for invalid key, got %+v", found)
+	}
+}
+
+func TestAgentRepository_GetAgentByAPIKeyHash_NoAgentsWithKey(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	// Try to find agent when no agents have API keys
+	found, err := repo.GetAgentByAPIKeyHash(ctx, "solvr_nonexistent_key")
+	if err != nil {
+		t.Fatalf("GetAgentByAPIKeyHash should not error when no agents: %v", err)
+	}
+
+	if found != nil {
+		t.Errorf("expected nil agent when no matching key, got %+v", found)
+	}
+}
+
+// hashTestAPIKey is a test helper that hashes an API key using bcrypt.
+// Uses the same bcrypt cost as the production code (10).
+func hashTestAPIKey(key string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(key), 10)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
 }

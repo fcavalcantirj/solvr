@@ -7,6 +7,7 @@ import (
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Agent-related errors.
@@ -575,4 +576,41 @@ func (r *AgentRepository) FindByName(ctx context.Context, name string) (*models.
 
 	row := r.pool.QueryRow(ctx, query, name)
 	return r.scanAgent(row)
+}
+
+// GetAgentByAPIKeyHash finds an agent by validating the raw API key against stored hashes.
+// Uses bcrypt.CompareHashAndPassword to securely compare the key against stored hashes.
+// Returns the matching agent if found, or (nil, nil) if no agent matches.
+// Per SPEC.md Part 8.1: API keys are hashed with bcrypt and never stored plain.
+func (r *AgentRepository) GetAgentByAPIKeyHash(ctx context.Context, key string) (*models.Agent, error) {
+	// Query all agents that have an API key hash set
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE api_key_hash IS NOT NULL AND api_key_hash != ''`
+
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Iterate through agents and compare the key against each hash
+	for rows.Next() {
+		agent, err := r.scanAgentRows(rows)
+		if err != nil {
+			return nil, err
+		}
+
+		// Use bcrypt to compare the raw key against the stored hash
+		if err := bcrypt.CompareHashAndPassword([]byte(agent.APIKeyHash), []byte(key)); err == nil {
+			// Match found
+			return agent, nil
+		}
+		// If comparison fails, continue to next agent
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// No matching agent found
+	return nil, nil
 }

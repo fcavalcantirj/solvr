@@ -6388,3 +6388,24 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   - All db package tests pass (go test ./internal/db/... passes)
   - Build successful (go build ./... passes)
 
+
+- 2026-02-03: Add GetAgentByAPIKeyHash to AgentRepository for API key auth
+  - Implemented GetAgentByAPIKeyHash(ctx, key string) (*models.Agent, error) method
+  - Uses bcrypt.CompareHashAndPassword to securely compare raw API key against stored hashes
+  - Returns nil, nil if no matching agent found (allows validator to return proper error)
+  - Added bcrypt import to agents.go
+  - Method satisfies AgentDB interface in auth/apikey_validate.go
+  
+  **Tests Added:**
+  - TestAgentRepository_GetAgentByAPIKeyHash_ValidKey: valid key returns agent
+  - TestAgentRepository_GetAgentByAPIKeyHash_InvalidKey: invalid key returns nil
+  - TestAgentRepository_GetAgentByAPIKeyHash_NoAgentsWithKey: no matching agents returns nil
+  
+  **Files Changed:**
+  - backend/internal/db/agents.go: Added GetAgentByAPIKeyHash method with bcrypt comparison
+  - backend/internal/db/agents_test.go: Added 3 tests, imported bcrypt, added hashTestAPIKey helper
+  
+  **Tests:**
+  - go test ./internal/db/... passes
+  - go test ./internal/auth/... passes
+  - go build ./... passes

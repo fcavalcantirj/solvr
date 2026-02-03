@@ -29,7 +29,7 @@
       "Write test: valid key returns agent, invalid returns nil",
       "go test ./internal/db/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",

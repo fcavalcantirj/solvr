@@ -124,6 +124,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		// Per SPEC.md Part 5.2: GitHub OAuth
 		r.Get("/auth/github", oauthHandlers.GitHubRedirect)
 		r.Get("/auth/github/callback", oauthHandlers.GitHubCallback)
+
+		// Per SPEC.md Part 5.2: Google OAuth
+		r.Get("/auth/google", oauthHandlers.GoogleRedirect)
+		r.Get("/auth/google/callback", oauthHandlers.GoogleCallback)
 	})
 }
 

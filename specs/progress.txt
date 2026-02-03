@@ -6772,3 +6772,27 @@ backend/internal/api/router.go
 **Tests:**
 - go test ./internal/api -run "TestGitHubOAuth" passes
 - go build ./... passes
+
+---
+
+## Wire OAuth endpoints /v1/auth/google/* (2026-02-03)
+
+**Requirement:** API-CRITICAL - Wire OAuth endpoints /v1/auth/google/*
+
+**TDD Approach:**
+- Wrote failing tests first (RED) - TestGoogleOAuthRedirectEndpoint, TestGoogleOAuthCallbackEndpoint
+- Implemented minimum code to pass (GREEN)
+
+**Tests Added:**
+backend/internal/api/router_test.go
+- TestGoogleOAuthRedirectEndpoint: Tests GET /v1/auth/google returns 302 redirect to Google OAuth
+- TestGoogleOAuthCallbackEndpoint: Tests GET /v1/auth/google/callback returns 400 when code is missing
+
+**Implementation:**
+backend/internal/api/router.go
+- Wired GET /v1/auth/google to oauthHandlers.GoogleRedirect
+- Wired GET /v1/auth/google/callback to oauthHandlers.GoogleCallback
+
+**Tests:**
+- go test ./internal/api -run "TestGoogleOAuth" passes
+- go build ./... passes

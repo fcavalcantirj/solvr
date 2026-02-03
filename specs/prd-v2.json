@@ -183,7 +183,7 @@
       "Add GET /v1/auth/google/callback - handle callback",
       "Test: redirect works, callback creates user"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",

@@ -4954,3 +4954,31 @@ Documentation: README requirement now passes=true.
 - All 995 frontend tests still passing
 - Build verified working
 
+
+## 2026-02-03: Security: No key leaks (Logging Redaction)
+
+### Completed Requirements (PRD line 5137)
+Security: No key leaks requirement now passes=true.
+
+### What Was Done
+- Enhanced logging middleware to automatically redact sensitive data
+- Added RedactSensitiveData function for Bearer tokens, API keys, JWTs
+- Added RedactURLPath function to sanitize query parameters with secrets
+- Added sensitiveParams list: api_key, apikey, token, access_token, refresh_token, secret, password, key
+- API keys starting with "solvr_" are redacted to "solvr_***REDACTED***"
+- Bearer tokens are redacted to "Bearer ***REDACTED***"
+- JWT patterns are detected and redacted
+- URL query parameters with sensitive names have values redacted in logs
+
+### Changes Made
+- backend/internal/api/middleware/logging.go: Added security redaction (199 lines)
+- backend/internal/api/middleware/logging_test.go: Added comprehensive tests (341 lines)
+  - TestLoggingMiddleware_NeverLogsAPIKey (3 test cases)
+  - TestLoggingMiddleware_RedactsAuthorizationHeader
+  - TestLoggingMiddleware_DoesNotLogQueryParamsWithSecrets (3 test cases)
+  - TestRedactSensitiveData (4 test cases)
+  - TestRedactURLPath (6 test cases)
+
+### Test Results
+- All middleware tests passing (54 tests)
+- API keys, tokens, and JWTs confirmed never appearing in logs

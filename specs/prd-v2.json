@@ -5139,7 +5139,7 @@
       "Verify API keys not in logs",
       "Verify redaction works"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "finalization",

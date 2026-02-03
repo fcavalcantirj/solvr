@@ -6839,5 +6839,112 @@
       "go test ./internal/api/... passes"
     ],
     "passes": false
+  },
+  {
+    "category": "PERF-CRITICAL",
+    "description": "API key auth: O(1) lookup with key identifier",
+    "steps": [
+      "Add api_key_id column (first 12 chars of key, stored unhashed) to agents table",
+      "Add migration: ALTER TABLE agents ADD COLUMN api_key_id VARCHAR(16)",
+      "Add index: CREATE UNIQUE INDEX idx_agents_api_key_id ON agents(api_key_id) WHERE api_key_id IS NOT NULL",
+      "Update GenerateAPIKey to return (fullKey, keyID) - keyID is first 12 chars",
+      "Update CreateAgent to store api_key_id alongside api_key_hash",
+      "Update GetAgentByAPIKeyHash: SELECT WHERE api_key_id = $1, then single bcrypt verify",
+      "Update RegenerateAPIKey to update api_key_id",
+      "Write benchmark test: 100k agents, auth < 10ms",
+      "go test -bench ./internal/db/..."
+    ],
+    "passes": false
+  },
+  {
+    "category": "PERF-CRITICAL",
+    "description": "User API key auth: O(1) lookup with key identifier",
+    "steps": [
+      "Add key_id column (first 12 chars, unhashed) to user_api_keys table",
+      "Add migration: ALTER TABLE user_api_keys ADD COLUMN key_id VARCHAR(16)",
+      "Add index: CREATE UNIQUE INDEX idx_user_api_keys_key_id ON user_api_keys(key_id) WHERE revoked_at IS NULL",
+      "Update CreateAPIKey to store key_id (first 12 chars of plaintext key)",
+      "Update GetUserByAPIKey: SELECT WHERE key_id = $1, then single bcrypt verify",
+      "Update RegenerateAPIKey to update key_id",
+      "Write benchmark test: 100k keys, auth < 10ms",
+      "go test -bench ./internal/db/..."
+    ],
+    "passes": false
+  },
+  {
+    "category": "PERF-CRITICAL",
+    "description": "Posts count cache: avoid COUNT(*) full scans",
+    "steps": [
+      "Create table: post_stats (type VARCHAR, status VARCHAR, count INT, updated_at TIMESTAMP)",
+      "Add migration with table and unique index on (type, status)",
+      "Create trigger function: update_post_stats() that increments/decrements on INSERT/DELETE/UPDATE",
+      "Attach triggers: AFTER INSERT, AFTER DELETE, AFTER UPDATE OF status,deleted_at ON posts",
+      "Update List query to read from post_stats for total count",
+      "Add refresh function for initial population: SELECT type, status, COUNT(*) GROUP BY",
+      "Write test: insert 1000 posts, verify stats accurate",
+      "Write benchmark: stats lookup < 1ms"
+    ],
+    "passes": false
+  },
+  {
+    "category": "PERF-CRITICAL",
+    "description": "Fix author JOIN: proper polymorphic foreign key",
+    "steps": [
+      "Add migration: ALTER TABLE posts ADD COLUMN author_user_id UUID REFERENCES users(id)",
+      "Add migration: ALTER TABLE posts ADD COLUMN author_agent_id VARCHAR(50) REFERENCES agents(id)",
+      "Add migration: populate from posted_by_type/posted_by_id",
+      "Add indexes: idx_posts_author_user_id, idx_posts_author_agent_id",
+      "Update Post model with AuthorUserID, AuthorAgentID fields",
+      "Update Create/Update to set appropriate author column based on type",
+      "Update List/FindByID: LEFT JOIN users ON author_user_id, LEFT JOIN agents ON author_agent_id",
+      "Remove posted_by_id::text casts",
+      "Write test: verify joins work correctly",
+      "Benchmark: list 100 posts < 10ms with 1MM rows"
+    ],
+    "passes": false
+  },
+  {
+    "category": "PERF-CRITICAL",
+    "description": "Agent stats: materialized stats table with async updates",
+    "steps": [
+      "Create table: agent_stats_cache (agent_id PK, problems_solved, answers_accepted, upvotes, reputation, updated_at)",
+      "Add migration with proper indexes",
+      "Create function: refresh_agent_stats(agent_id) that computes and upserts",
+      "Create triggers on posts, answers, responses, votes to queue stats refresh",
+      "Create background job: process stats refresh queue every 30s",
+      "Update GetAgentStats to read from cache table (fast path)",
+      "Add fallback: if cache miss or stale > 5min, compute and cache",
+      "Write test: verify stats accuracy after various operations",
+      "Benchmark: GetAgentStats < 5ms"
+    ],
+    "passes": false
+  },
+  {
+    "category": "PERF-CRITICAL",
+    "description": "Search query: denormalize answers_count into posts table",
+    "steps": [
+      "Add migration: ALTER TABLE posts ADD COLUMN answers_count INT DEFAULT 0",
+      "Add migration: UPDATE posts SET answers_count = (SELECT COUNT(*) FROM answers...)",
+      "Create trigger: after INSERT/DELETE on answers, update posts.answers_count",
+      "Update search query to use p.answers_count instead of correlated subquery",
+      "Update CreateAnswer/DeleteAnswer handlers to maintain count (backup)",
+      "Write test: create answers, verify count updates",
+      "Benchmark: search with 1MM posts < 100ms"
+    ],
+    "passes": false
+  },
+  {
+    "category": "PERF-CRITICAL",
+    "description": "Add database query EXPLAIN ANALYZE tests",
+    "steps": [
+      "Create db/query_plans_test.go with EXPLAIN ANALYZE tests",
+      "Test search query uses idx_posts_search GIN index",
+      "Test posts list uses idx_posts_not_deleted partial index",
+      "Test agent lookup uses idx_agents_api_key_id",
+      "Test all queries avoid Seq Scan on tables > 10k rows",
+      "Add CI check: fail if any query plan shows Seq Scan on large tables",
+      "Document expected query plans in PERFORMANCE.md"
+    ],
+    "passes": false
   }
 ]

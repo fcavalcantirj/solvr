@@ -135,7 +135,7 @@
       "Grant badge + 50 karma to agent",
       "Redirect to agent's profile"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-LINKING",

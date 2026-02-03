@@ -5484,3 +5484,36 @@ system library (libnspr4.so). However:
 - specs/prd-v2.json (lines 157, 169 updated to passes=true)
 - specs/progress.txt (this entry)
 
+
+- 2026-02-03: [AGENT-LINKING] Frontend claim page implemented
+  - Created frontend/src/__tests__/claim.test.tsx (560 lines)
+    - 21 comprehensive tests covering:
+      - Loading states (auth check, fetching claim info)
+      - Unauthenticated user flow (redirect to login with return URL)
+      - Valid token flow (fetch info, display agent, confirm, redirect)
+      - Invalid token flow (expired, used, not found, already claimed)
+      - Error handling (network failure, confirm fails)
+      - Accessibility (landmarks, headings, status announcements)
+    - Follows TDD approach per CLAUDE.md Golden Rules
+  - Created frontend/src/app/claim/[token]/page.tsx (335 lines)
+    - Dynamic route for /claim/:token
+    - States: loading, auth_check, ready, confirming, success, error
+    - Fetches claim info via GET /v1/claim/:token
+    - Confirms claim via POST /v1/claim/:token
+    - Shows agent avatar, name, bio, specialties
+    - Lists benefits: verified human badge, +50 karma
+    - Shows token expiration date
+    - Handles all error cases gracefully
+    - Proper accessibility: main landmark, headings, status role
+    - Redirects to agent profile after successful claim
+  - Key implementation details:
+    - Guard against duplicate useEffect fetches with claimInfo null check
+    - Robust error extraction from both { error: string } and { error: { code, message } } formats
+    - 2-second delay before redirect to show success message
+    - Cancel button returns to home page
+  - All 21 claim tests pass
+  - All 1016 frontend tests pass
+
+### Files Created
+- frontend/src/__tests__/claim.test.tsx (560 lines)
+- frontend/src/app/claim/[token]/page.tsx (335 lines)

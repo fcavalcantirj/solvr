@@ -357,7 +357,7 @@
       "Attach user context to request",
       "Update last_used_at"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-KEYS",

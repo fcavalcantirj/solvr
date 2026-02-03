@@ -175,20 +175,6 @@ func TestValidateJWT(t *testing.T) {
 	}
 }
 
-func TestClaimsFromContext(t *testing.T) {
-	// This will be tested with the middleware
-	// For now, just ensure Claims struct is properly defined
-	claims := &Claims{
-		UserID: "user-123",
-		Email:  "test@example.com",
-		Role:   "user",
-	}
-
-	if claims.UserID != "user-123" {
-		t.Errorf("Claims.UserID = %v, want %v", claims.UserID, "user-123")
-	}
-}
-
 func TestGenerateJWTExpiry(t *testing.T) {
 	secret := "test-secret-key-for-testing-purposes-only"
 

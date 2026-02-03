@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/jackc/pgx/v5"
 )
@@ -166,4 +167,73 @@ func (r *UserAPIKeyRepository) scanUserAPIKeyFromRows(rows pgx.Rows) (*models.Us
 	}
 
 	return key, nil
+}
+
+// GetUserByAPIKey validates a plain text API key and returns the associated user and key.
+// This method iterates through all active keys and compares using bcrypt.
+// Returns nil, nil, nil if no matching key is found.
+// Per prd-v2.json: "Hash and lookup in database, Attach user context to request, Update last_used_at"
+func (r *UserAPIKeyRepository) GetUserByAPIKey(ctx context.Context, plainKey string) (*models.User, *models.UserAPIKey, error) {
+	// Get all active API keys
+	// Note: For production scale, consider adding a key identifier prefix for faster lookup
+	query := `
+		SELECT k.id, k.user_id, k.name, k.key_hash, k.last_used_at, k.revoked_at, k.created_at, k.updated_at,
+		       u.id, u.username, u.display_name, u.email, u.auth_provider, u.auth_provider_id,
+		       u.avatar_url, u.bio, u.role, u.status, u.created_at, u.updated_at
+		FROM user_api_keys k
+		JOIN users u ON k.user_id = u.id
+		WHERE k.revoked_at IS NULL
+	`
+
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		key := &models.UserAPIKey{}
+		user := &models.User{}
+
+		err := rows.Scan(
+			&key.ID,
+			&key.UserID,
+			&key.Name,
+			&key.KeyHash,
+			&key.LastUsedAt,
+			&key.RevokedAt,
+			&key.CreatedAt,
+			&key.UpdatedAt,
+			&user.ID,
+			&user.Username,
+			&user.DisplayName,
+			&user.Email,
+			&user.AuthProvider,
+			&user.AuthProviderID,
+			&user.AvatarURL,
+			&user.Bio,
+			&user.Role,
+			&user.Status,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Compare the plain key with the stored hash
+		err = auth.CompareAPIKey(plainKey, key.KeyHash)
+		if err == nil {
+			// Found matching key
+			return user, key, nil
+		}
+		// Key doesn't match, continue to next
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	// No matching key found
+	return nil, nil, nil
 }

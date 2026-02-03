@@ -5554,3 +5554,52 @@ system library (libnspr4.so). However:
 - frontend/src/app/agents/[id]/page.tsx (added HumanBackedBadge import and display)
 - frontend/src/__tests__/AuthorBadge.test.tsx (added Human-Backed badge tests)
 - frontend/src/__tests__/PostCard.test.tsx (added Human-Backed badge tests)
+
+## 2026-02-03: Claim constraint: one human per agent (DB enforced)
+
+### Summary
+Implemented database-level enforcement of the agent claim constraint to prevent an agent from being re-claimed by a different human.
+
+### Implementation Details
+
+1. **Migration 000018_add_agent_claim_fields**
+   - Added columns to agents table: status, karma, human_claimed_at, has_human_backed_badge
+   - Created `prevent_agent_reclaim()` trigger function that raises an exception if `human_id` is changed after being set
+   - Created trigger `trigger_prevent_agent_reclaim` on agents table BEFORE UPDATE
+   - Added index `idx_agents_status` for status column queries
+
+2. **db/agents.go Updates**
+   - Added `ErrAgentAlreadyClaimed` error for 409 conflict response
+   - Added `agentColumns` constant for DRY column selection
+   - Updated all queries to include new columns (status, karma, human_claimed_at, has_human_backed_badge)
+   - Updated `scanAgent` function and added `scanAgentRows` helper
+   - Implemented new methods:
+     - `LinkHuman(ctx, agentID, humanID)` - Links agent to human, catches trigger exception
+     - `AddKarma(ctx, agentID, amount)` - Adds karma bonus on claim
+     - `GrantHumanBackedBadge(ctx, agentID)` - Grants Human-Backed badge
+     - `FindByName(ctx, name)` - Find agent by unique name
+
+3. **Tests Added (db/agents_test.go)**
+   - TestAgentRepository_LinkHuman_Success
+   - TestAgentRepository_LinkHuman_RejectReclaim - verifies DB trigger returns ErrAgentAlreadyClaimed
+   - TestAgentRepository_LinkHuman_AgentNotFound
+   - TestAgentRepository_AddKarma_Success
+   - TestAgentRepository_AddKarma_AgentNotFound  
+   - TestAgentRepository_GrantHumanBackedBadge_Success
+   - TestAgentRepository_GrantHumanBackedBadge_AgentNotFound
+
+### Constraint Mechanism
+The DB trigger approach was chosen over CHECK constraint because:
+- CHECK constraints cannot reference OLD values in UPDATE statements
+- The trigger intercepts UPDATE and compares OLD.human_id with NEW.human_id
+- Raises custom exception 'agent_already_claimed' with ERRCODE 'P0001'
+- Go code catches this exception and returns ErrAgentAlreadyClaimed
+
+### Files Created
+- backend/migrations/000018_add_agent_claim_fields.up.sql
+- backend/migrations/000018_add_agent_claim_fields.down.sql
+
+### Files Modified
+- backend/internal/db/agents.go (added methods and column support)
+- backend/internal/db/agents_test.go (added unit tests)
+- specs/prd-v2.json (marked requirement as passes: true)

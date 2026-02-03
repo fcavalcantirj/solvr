@@ -326,3 +326,236 @@ func TestAgentRepository_FindByHumanID(t *testing.T) {
 }
 
 // Note: getTestPool is defined in users_test.go and shared across db package tests
+
+// ============================================================================
+// Tests for AGENT-LINKING requirement: One human per agent (DB enforced)
+// ============================================================================
+
+func TestAgentRepository_LinkHuman_Success(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	// Create agent without human_id
+	agent := &models.Agent{
+		ID:          "linktest_" + time.Now().Format("20060102150405"),
+		DisplayName: "Link Test Agent",
+	}
+
+	_, err := repo.Create(ctx, agent)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	// Link to human
+	humanID := "test-human-id-123"
+	err = repo.LinkHuman(ctx, agent.ID, humanID)
+	if err != nil {
+		t.Fatalf("failed to link human: %v", err)
+	}
+
+	// Verify link
+	found, err := repo.FindByID(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to find agent: %v", err)
+	}
+	if found.HumanID == nil || *found.HumanID != humanID {
+		t.Errorf("expected human_id %s, got %v", humanID, found.HumanID)
+	}
+	if found.HumanClaimedAt == nil {
+		t.Error("expected human_claimed_at to be set")
+	}
+}
+
+func TestAgentRepository_LinkHuman_RejectReclaim(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	// Create agent without human_id
+	agent := &models.Agent{
+		ID:          "reclaim_test_" + time.Now().Format("20060102150405"),
+		DisplayName: "Reclaim Test Agent",
+	}
+
+	_, err := repo.Create(ctx, agent)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	// First claim succeeds
+	firstHumanID := "first-human-123"
+	err = repo.LinkHuman(ctx, agent.ID, firstHumanID)
+	if err != nil {
+		t.Fatalf("first claim failed: %v", err)
+	}
+
+	// Second claim should fail with ErrAgentAlreadyClaimed
+	secondHumanID := "second-human-456"
+	err = repo.LinkHuman(ctx, agent.ID, secondHumanID)
+	if err != ErrAgentAlreadyClaimed {
+		t.Errorf("expected ErrAgentAlreadyClaimed, got %v", err)
+	}
+
+	// Verify original human is still linked
+	found, err := repo.FindByID(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to find agent: %v", err)
+	}
+	if found.HumanID == nil || *found.HumanID != firstHumanID {
+		t.Errorf("expected human_id %s to be preserved, got %v", firstHumanID, found.HumanID)
+	}
+}
+
+func TestAgentRepository_LinkHuman_AgentNotFound(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	err := repo.LinkHuman(ctx, "nonexistent_agent", "human-123")
+	if err != ErrAgentNotFound {
+		t.Errorf("expected ErrAgentNotFound, got %v", err)
+	}
+}
+
+func TestAgentRepository_AddKarma_Success(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	agent := &models.Agent{
+		ID:          "karma_test_" + time.Now().Format("20060102150405"),
+		DisplayName: "Karma Test Agent",
+	}
+
+	_, err := repo.Create(ctx, agent)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	// Add karma
+	err = repo.AddKarma(ctx, agent.ID, 50)
+	if err != nil {
+		t.Fatalf("failed to add karma: %v", err)
+	}
+
+	// Verify karma
+	found, err := repo.FindByID(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to find agent: %v", err)
+	}
+	if found.Karma != 50 {
+		t.Errorf("expected karma 50, got %d", found.Karma)
+	}
+
+	// Add more karma
+	err = repo.AddKarma(ctx, agent.ID, 25)
+	if err != nil {
+		t.Fatalf("failed to add more karma: %v", err)
+	}
+
+	found, err = repo.FindByID(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to find agent: %v", err)
+	}
+	if found.Karma != 75 {
+		t.Errorf("expected karma 75, got %d", found.Karma)
+	}
+}
+
+func TestAgentRepository_AddKarma_AgentNotFound(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	err := repo.AddKarma(ctx, "nonexistent_agent", 50)
+	if err != ErrAgentNotFound {
+		t.Errorf("expected ErrAgentNotFound, got %v", err)
+	}
+}
+
+func TestAgentRepository_GrantHumanBackedBadge_Success(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	agent := &models.Agent{
+		ID:          "badge_test_" + time.Now().Format("20060102150405"),
+		DisplayName: "Badge Test Agent",
+	}
+
+	_, err := repo.Create(ctx, agent)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	// Verify initially no badge
+	found, err := repo.FindByID(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to find agent: %v", err)
+	}
+	if found.HasHumanBackedBadge {
+		t.Error("expected agent to not have badge initially")
+	}
+
+	// Grant badge
+	err = repo.GrantHumanBackedBadge(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to grant badge: %v", err)
+	}
+
+	// Verify badge granted
+	found, err = repo.FindByID(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to find agent: %v", err)
+	}
+	if !found.HasHumanBackedBadge {
+		t.Error("expected agent to have Human-Backed badge")
+	}
+}
+
+func TestAgentRepository_GrantHumanBackedBadge_AgentNotFound(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	err := repo.GrantHumanBackedBadge(ctx, "nonexistent_agent")
+	if err != ErrAgentNotFound {
+		t.Errorf("expected ErrAgentNotFound, got %v", err)
+	}
+}

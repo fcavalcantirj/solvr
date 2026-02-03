@@ -11,8 +11,9 @@ import (
 
 // Agent-related errors.
 var (
-	ErrDuplicateAgentID = errors.New("agent ID already exists")
-	ErrAgentNotFound    = errors.New("agent not found")
+	ErrDuplicateAgentID    = errors.New("agent ID already exists")
+	ErrAgentNotFound       = errors.New("agent not found")
+	ErrAgentAlreadyClaimed = errors.New("agent is already claimed by a human")
 )
 
 // AgentRepository handles database operations for agents.
@@ -20,6 +21,10 @@ var (
 type AgentRepository struct {
 	pool *Pool
 }
+
+// agentColumns defines the standard columns returned when querying agents.
+// Used to keep queries consistent and DRY.
+const agentColumns = `id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, status, karma, human_claimed_at, has_human_backed_badge, created_at, updated_at`
 
 // NewAgentRepository creates a new AgentRepository.
 func NewAgentRepository(pool *Pool) *AgentRepository {
@@ -32,8 +37,7 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) (*mod
 	query := `
 		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, created_at, updated_at
-	`
+		RETURNING ` + agentColumns
 
 	row := r.pool.QueryRow(ctx, query,
 		agent.ID,
@@ -46,38 +50,12 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) (*mod
 		agent.MoltbookID,
 	)
 
-	created := &models.Agent{}
-	err := row.Scan(
-		&created.ID,
-		&created.DisplayName,
-		&created.HumanID,
-		&created.Bio,
-		&created.Specialties,
-		&created.AvatarURL,
-		&created.APIKeyHash,
-		&created.MoltbookID,
-		&created.CreatedAt,
-		&created.UpdatedAt,
-	)
-
-	if err != nil {
-		// Check for unique constraint violations
-		if strings.Contains(err.Error(), "agents_pkey") || strings.Contains(err.Error(), "duplicate key") {
-			return nil, ErrDuplicateAgentID
-		}
-		return nil, err
-	}
-
-	return created, nil
+	return r.scanAgent(row)
 }
 
 // FindByID finds an agent by their ID.
 func (r *AgentRepository) FindByID(ctx context.Context, id string) (*models.Agent, error) {
-	query := `
-		SELECT id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, created_at, updated_at
-		FROM agents
-		WHERE id = $1
-	`
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE id = $1`
 
 	row := r.pool.QueryRow(ctx, query, id)
 	return r.scanAgent(row)
@@ -85,12 +63,7 @@ func (r *AgentRepository) FindByID(ctx context.Context, id string) (*models.Agen
 
 // FindByHumanID finds all agents owned by a human user.
 func (r *AgentRepository) FindByHumanID(ctx context.Context, humanID string) ([]*models.Agent, error) {
-	query := `
-		SELECT id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, created_at, updated_at
-		FROM agents
-		WHERE human_id = $1
-		ORDER BY created_at DESC
-	`
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE human_id = $1 ORDER BY created_at DESC`
 
 	rows, err := r.pool.Query(ctx, query, humanID)
 	if err != nil {
@@ -100,19 +73,7 @@ func (r *AgentRepository) FindByHumanID(ctx context.Context, humanID string) ([]
 
 	var agents []*models.Agent
 	for rows.Next() {
-		agent := &models.Agent{}
-		err := rows.Scan(
-			&agent.ID,
-			&agent.DisplayName,
-			&agent.HumanID,
-			&agent.Bio,
-			&agent.Specialties,
-			&agent.AvatarURL,
-			&agent.APIKeyHash,
-			&agent.MoltbookID,
-			&agent.CreatedAt,
-			&agent.UpdatedAt,
-		)
+		agent, err := r.scanAgentRows(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -125,11 +86,7 @@ func (r *AgentRepository) FindByHumanID(ctx context.Context, humanID string) ([]
 // FindByAPIKeyHash finds an agent by their API key hash.
 // Used for API key authentication.
 func (r *AgentRepository) FindByAPIKeyHash(ctx context.Context, hash string) (*models.Agent, error) {
-	query := `
-		SELECT id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, created_at, updated_at
-		FROM agents
-		WHERE api_key_hash = $1
-	`
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE api_key_hash = $1`
 
 	row := r.pool.QueryRow(ctx, query, hash)
 	return r.scanAgent(row)
@@ -142,8 +99,7 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) (*mod
 		UPDATE agents
 		SET display_name = $2, bio = $3, specialties = $4, avatar_url = $5, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, created_at, updated_at
-	`
+		RETURNING ` + agentColumns
 
 	row := r.pool.QueryRow(ctx, query,
 		agent.ID,
@@ -294,6 +250,7 @@ func (r *AgentRepository) GetAgentStats(ctx context.Context, agentID string) (*m
 }
 
 // scanAgent scans an agent row into an Agent struct.
+// Expects columns in order defined by agentColumns constant.
 func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 	agent := &models.Agent{}
 	err := row.Scan(
@@ -305,6 +262,10 @@ func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 		&agent.AvatarURL,
 		&agent.APIKeyHash,
 		&agent.MoltbookID,
+		&agent.Status,
+		&agent.Karma,
+		&agent.HumanClaimedAt,
+		&agent.HasHumanBackedBadge,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 	)
@@ -316,6 +277,32 @@ func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 		return nil, err
 	}
 
+	return agent, nil
+}
+
+// scanAgentRows scans a rows result into an Agent struct.
+// Used for queries that return multiple rows.
+func (r *AgentRepository) scanAgentRows(rows pgx.Rows) (*models.Agent, error) {
+	agent := &models.Agent{}
+	err := rows.Scan(
+		&agent.ID,
+		&agent.DisplayName,
+		&agent.HumanID,
+		&agent.Bio,
+		&agent.Specialties,
+		&agent.AvatarURL,
+		&agent.APIKeyHash,
+		&agent.MoltbookID,
+		&agent.Status,
+		&agent.Karma,
+		&agent.HumanClaimedAt,
+		&agent.HasHumanBackedBadge,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
 	return agent, nil
 }
 
@@ -457,4 +444,86 @@ func (r *AgentRepository) GetActivity(ctx context.Context, agentID string, page,
 	}
 
 	return items, total, nil
+}
+
+// ============================================================================
+// Agent-Human Linking methods (AGENT-LINKING requirement)
+// ============================================================================
+
+// LinkHuman links an agent to a human user.
+// Per AGENT-LINKING requirement: "CHECK constraint: human_id can only be set once"
+// The database trigger prevents_agent_reclaim enforces this at DB level.
+// Returns ErrAgentAlreadyClaimed if the agent is already linked to a human.
+func (r *AgentRepository) LinkHuman(ctx context.Context, agentID, humanID string) error {
+	query := `
+		UPDATE agents
+		SET human_id = $2, human_claimed_at = NOW(), updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.pool.Exec(ctx, query, agentID, humanID)
+	if err != nil {
+		// Check for the trigger exception (agent_already_claimed)
+		if strings.Contains(err.Error(), "agent_already_claimed") {
+			return ErrAgentAlreadyClaimed
+		}
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrAgentNotFound
+	}
+
+	return nil
+}
+
+// AddKarma adds karma points to an agent.
+// Per AGENT-LINKING: +50 karma on human claim.
+func (r *AgentRepository) AddKarma(ctx context.Context, agentID string, amount int) error {
+	query := `
+		UPDATE agents
+		SET karma = karma + $2, updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.pool.Exec(ctx, query, agentID, amount)
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrAgentNotFound
+	}
+
+	return nil
+}
+
+// GrantHumanBackedBadge grants the Human-Backed badge to an agent.
+// Per AGENT-LINKING: granted on successful claim.
+func (r *AgentRepository) GrantHumanBackedBadge(ctx context.Context, agentID string) error {
+	query := `
+		UPDATE agents
+		SET has_human_backed_badge = true, updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.pool.Exec(ctx, query, agentID)
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrAgentNotFound
+	}
+
+	return nil
+}
+
+// FindByName finds an agent by their display name.
+// Used for name uniqueness checks during registration.
+func (r *AgentRepository) FindByName(ctx context.Context, name string) (*models.Agent, error) {
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE display_name = $1`
+
+	row := r.pool.QueryRow(ctx, query, name)
+	return r.scanAgent(row)
 }

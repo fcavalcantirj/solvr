@@ -187,7 +187,7 @@
       "Trigger prevents re-claiming",
       "Return 409 if already claimed"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-ONBOARDING",

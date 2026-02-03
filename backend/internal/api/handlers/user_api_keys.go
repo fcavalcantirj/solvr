@@ -123,3 +123,120 @@ func writeAPIKeyInternalError(w http.ResponseWriter, message string) {
 		},
 	})
 }
+
+// CreateAPIKeyRequest represents the request body for creating an API key.
+type CreateAPIKeyRequest struct {
+	Name string `json:"name"`
+}
+
+// CreateAPIKeyResponse represents the response when a new API key is created.
+// Contains the full key which is shown only once.
+type CreateAPIKeyResponse struct {
+	ID        string `json:"id"`
+	UserID    string `json:"user_id"`
+	Name      string `json:"name"`
+	Key       string `json:"key"` // Full key, shown only once!
+	CreatedAt string `json:"created_at"`
+}
+
+// CreateAPIKey handles POST /v1/users/me/api-keys
+// Creates a new API key for the authenticated user.
+// Per prd-v2.json: "Accept name for the key, Generate secure random key (solvr_sk_xxx),
+// Return full key ONCE (never stored in plain text), Store hashed version"
+func (h *UserAPIKeysHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Check for valid JWT authentication
+	claims := auth.ClaimsFromContext(ctx)
+	if claims == nil {
+		writeAPIKeyUnauthorized(w, "UNAUTHORIZED", "Authentication required")
+		return
+	}
+
+	// Parse request body
+	var req CreateAPIKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIKeyValidationError(w, "Invalid request body")
+		return
+	}
+
+	// Validate name
+	if err := h.validateKeyName(req.Name); err != nil {
+		writeAPIKeyValidationError(w, err.Error())
+		return
+	}
+
+	// Generate a new API key with solvr_sk_ prefix (sk = secret key)
+	plainKey := generateUserAPIKey()
+
+	// Hash the key for storage (never store plain text)
+	keyHash, err := auth.HashAPIKey(plainKey)
+	if err != nil {
+		writeAPIKeyInternalError(w, "Failed to create API key")
+		return
+	}
+
+	// Create the key in database
+	key := &models.UserAPIKey{
+		UserID:  claims.UserID,
+		Name:    req.Name,
+		KeyHash: keyHash,
+	}
+
+	created, err := h.repo.Create(ctx, key)
+	if err != nil {
+		writeAPIKeyInternalError(w, "Failed to create API key")
+		return
+	}
+
+	// Return the full key (only time it's shown)
+	response := CreateAPIKeyResponse{
+		ID:        created.ID,
+		UserID:    created.UserID,
+		Name:      created.Name,
+		Key:       plainKey,
+		CreatedAt: created.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	writeAPIKeyJSON(w, http.StatusCreated, response)
+}
+
+// validateKeyName validates the API key name.
+func (h *UserAPIKeysHandler) validateKeyName(name string) error {
+	if name == "" {
+		return &validationError{"Name is required"}
+	}
+	if len(name) > 100 {
+		return &validationError{"Name must be 100 characters or less"}
+	}
+	return nil
+}
+
+// validationError is a simple error type for validation errors.
+type validationError struct {
+	msg string
+}
+
+func (e *validationError) Error() string {
+	return e.msg
+}
+
+// generateUserAPIKey creates a new API key with the solvr_sk_ prefix.
+// Uses the auth package's key generation but with a different prefix for user keys.
+func generateUserAPIKey() string {
+	// Generate the base key (which has solvr_ prefix)
+	baseKey := auth.GenerateAPIKey()
+	// Replace solvr_ with solvr_sk_ for user secret keys
+	return "solvr_sk_" + baseKey[6:] // Remove "solvr_" and add "solvr_sk_"
+}
+
+func writeAPIKeyValidationError(w http.ResponseWriter, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]string{
+			"code":    "VALIDATION_ERROR",
+			"message": message,
+		},
+	})
+}

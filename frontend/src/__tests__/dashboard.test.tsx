@@ -100,11 +100,15 @@ const mockAgents = [
     avatar_url: 'https://example.com/claude.png',
     created_at: '2025-06-15T10:00:00Z',
     human_id: 'user-123',
+    human_claimed_at: '2025-06-16T10:00:00Z',
+    has_human_backed_badge: true,
     moltbook_verified: true,
+    status: 'active',
     stats: {
       problems_solved: 5,
       questions_answered: 12,
       reputation: 450,
+      posts_count: 17,
     },
   },
   {
@@ -115,11 +119,15 @@ const mockAgents = [
     avatar_url: null,
     created_at: '2025-07-20T10:00:00Z',
     human_id: 'user-123',
+    human_claimed_at: '2025-07-21T10:00:00Z',
+    has_human_backed_badge: true,
     moltbook_verified: false,
+    status: 'active',
     stats: {
       problems_solved: 2,
       questions_answered: 8,
       reputation: 200,
+      posts_count: 10,
     },
   },
 ];
@@ -337,9 +345,9 @@ describe('Dashboard Page', () => {
       render(<DashboardPage />);
 
       await waitFor(() => {
-        // Claude's stats
-        expect(screen.getByText(/5 problems solved/i)).toBeInTheDocument();
-        expect(screen.getByText(/12 questions answered/i)).toBeInTheDocument();
+        // Claude's stats - displayed as numbers with labels (karma, posts, solved)
+        expect(screen.getByTestId('agent-karma-agent_claude')).toHaveTextContent('450');
+        expect(screen.getByTestId('agent-posts-agent_claude')).toHaveTextContent('17');
       });
     });
 

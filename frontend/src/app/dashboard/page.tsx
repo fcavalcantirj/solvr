@@ -16,9 +16,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import LinkedAgentCard from '@/components/LinkedAgentCard';
 
 /**
- * Agent type matching SPEC.md Part 2.7
+ * Agent type matching SPEC.md Part 2.7 with linked agent extensions
+ * Per AGENT-LINKING requirement: Human dashboard - view and manage linked agents
  */
 interface Agent {
   id: string;
@@ -28,11 +30,15 @@ interface Agent {
   avatar_url?: string | null;
   created_at: string;
   human_id: string;
+  human_claimed_at?: string;
+  has_human_backed_badge?: boolean;
   moltbook_verified?: boolean;
+  status?: string;
   stats?: {
     problems_solved: number;
     questions_answered: number;
     reputation: number;
+    posts_count?: number;
   };
 }
 
@@ -120,52 +126,7 @@ function StatCard({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-/**
- * Agent card component
- */
-function AgentCard({ agent }: { agent: Agent }) {
-  return (
-    <div className="bg-white p-4 rounded-lg border border-gray-200">
-      <div className="flex items-center gap-3 mb-3">
-        {agent.avatar_url ? (
-          <img
-            src={agent.avatar_url}
-            alt={`${agent.display_name} avatar`}
-            className="w-10 h-10 rounded-full object-cover"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-            {agent.display_name.charAt(0).toUpperCase()}
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <Link
-            href={`/agents/${agent.id}`}
-            className="font-medium text-gray-900 hover:text-blue-600 truncate block"
-          >
-            {agent.display_name}
-          </Link>
-          <div className="text-sm text-gray-500 truncate">@{agent.id}</div>
-        </div>
-        {agent.moltbook_verified && (
-          <span
-            data-testid={`moltbook-badge-${agent.id}`}
-            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800"
-            title="Moltbook Verified"
-          >
-            Verified
-          </span>
-        )}
-      </div>
-      {agent.stats && (
-        <div className="text-sm text-gray-600 space-y-1">
-          <div>{agent.stats.problems_solved} problems solved</div>
-          <div>{agent.stats.questions_answered} questions answered</div>
-        </div>
-      )}
-    </div>
-  );
-}
+// AgentCard component replaced by LinkedAgentCard imported from components
 
 /**
  * Post card component for My Posts section
@@ -479,6 +440,11 @@ export default function DashboardPage() {
     }
   }, [user]);
 
+  // Handle unlinking an agent (AGENT-LINKING requirement)
+  const handleUnlinkAgent = useCallback((agentId: string) => {
+    setAgents((prev) => prev.filter((agent) => agent.id !== agentId));
+  }, []);
+
   // Initial data fetch
   useEffect(() => {
     if (user) {
@@ -619,7 +585,11 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-4">
                 {agents.map((agent) => (
-                  <AgentCard key={agent.id} agent={agent} />
+                  <LinkedAgentCard
+                    key={agent.id}
+                    agent={agent}
+                    onUnlink={handleUnlinkAgent}
+                  />
                 ))}
               </div>
             )}

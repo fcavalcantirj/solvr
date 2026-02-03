@@ -6499,3 +6499,36 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   **Tests:**
   - go test ./internal/db/... passes
   - go build ./... passes
+
+- 2026-02-03: [API-CRITICAL] Create PostRepository with List method - COMPLETED ✓
+  
+  **TDD Approach:**
+  - Wrote failing tests first (RED)
+  - Implemented minimum code to pass (GREEN)
+  
+  **Tests Added:**
+  backend/internal/db/posts_test.go
+  - TestPostRepository_List_Empty: Tests listing when no posts exist
+  - TestPostRepository_List_WithPosts: Tests listing with posts and author info
+  - TestPostRepository_List_FilterByType: Tests filtering by post type
+  - TestPostRepository_List_FilterByStatus: Tests filtering by status
+  - TestPostRepository_List_FilterByTags: Tests filtering by tags (PostgreSQL array overlap)
+  - TestPostRepository_List_Pagination: Tests page/perPage parameters
+  - TestPostRepository_List_ExcludesDeleted: Tests soft-deleted posts are excluded
+  - TestPostRepository_List_IncludesVoteScore: Tests vote score computation
+  
+  **Implementation:**
+  backend/internal/db/posts.go
+  - Created PostRepository struct with pool
+  - Added NewPostRepository(pool) constructor
+  - Implemented List(ctx, opts) ([]models.PostWithAuthor, int, error) method
+  - Dynamic query building with filter conditions
+  - LEFT JOINs for users/agents to get author info
+  - PostgreSQL array overlap (&&) for tags filtering
+  - Pagination with page/perPage/offset calculation
+  - Vote score computation (upvotes - downvotes)
+  - Helper scan methods: scanPostWithAuthorRows, scanPost, scanPostRows
+  
+  **Tests:**
+  - go test ./internal/db/... passes
+  - go build ./... passes

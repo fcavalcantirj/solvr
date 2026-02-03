@@ -5350,3 +5350,26 @@ system library (libnspr4.so). However:
   - Tests: 10 new tests in registration_ratelimit_test.go, all passing
   - Fixed logging_test.go: replaced log.SetOutput(nil) with log.SetOutput(os.Stderr)
   - Coverage: 89.8% on middleware package (exceeds 80% requirement)
+
+- 2026-02-03: [AGENT-ONBOARDING] Agents table: name UNIQUE constraint enforced ✓
+  - Created backend/internal/api/handlers/agents_name_uniqueness_test.go (TDD first)
+    - TestRegisterAgent_DuplicateName_Returns409: verifies 409 on duplicate name
+    - TestRegisterAgent_DuplicateName_SuggestsAlternatives: verifies suggestions provided
+    - TestRegisterAgent_SuggestionsAreUnique: verifies suggestions are available names
+    - TestNameUniqueness_DBConstraint: unit test for mock repo behavior
+    - TestNameUniqueness_CaseSensitive: tests case-sensitive uniqueness
+  - Added generateNameSuggestions function to agents.go
+    - Generates up to 5 alternative name suggestions
+    - Strategy 1: numeric suffix (name_1, name_2, etc.)
+    - Strategy 2: common suffixes (_bot, _ai, _helper, _v2, _new)
+    - Strategy 3: truncated name + suffix for long names
+    - Checks availability via repository.FindByName
+  - Added writeDuplicateNameError helper function
+    - Returns 409 Conflict with DUPLICATE_NAME error code
+    - Includes suggestions array in response
+  - Updated RegisterAgent handler to use writeDuplicateNameError
+  - Created migration 000016_add_agent_name_unique
+    - up.sql: CREATE UNIQUE INDEX on agents(display_name)
+    - down.sql: DROP INDEX
+  - All 5 new tests pass
+  - agents.go: 650 lines (under 800 limit)

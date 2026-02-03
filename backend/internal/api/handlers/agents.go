@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
@@ -190,7 +191,12 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.repo.Create(r.Context(), agent); err != nil {
 		if errors.Is(err, ErrDuplicateAgentID) || errors.Is(err, ErrDuplicateAgentName) {
-			writeAgentError(w, http.StatusConflict, "DUPLICATE_NAME", "agent name already exists")
+			// Generate suggestions by checking existence against repository
+			checkExists := func(name string) bool {
+				_, findErr := h.repo.FindByName(r.Context(), name)
+				return findErr == nil // Name exists if no error
+			}
+			writeDuplicateNameError(w, req.Name, checkExists)
 			return
 		}
 		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create agent")
@@ -580,4 +586,65 @@ func writeAgentUnauthorized(w http.ResponseWriter, message string) {
 // writeAgentValidationError writes a 400 Validation Error.
 func writeAgentValidationError(w http.ResponseWriter, message string) {
 	writeAgentError(w, http.StatusBadRequest, "VALIDATION_ERROR", message)
+}
+
+// generateNameSuggestions generates alternative name suggestions for a duplicate name.
+// Per AGENT-ONBOARDING requirement: Suggest alternatives in error response.
+func generateNameSuggestions(baseName string, checkExists func(string) bool) []string {
+	suggestions := []string{}
+	maxSuggestions := 5
+
+	// Strategy 1: Add numeric suffix
+	for i := 1; len(suggestions) < maxSuggestions && i <= 100; i++ {
+		candidate := baseName + "_" + strconv.Itoa(i)
+		// Ensure candidate doesn't exceed 30 char limit
+		if len(candidate) <= 30 && !checkExists(candidate) {
+			suggestions = append(suggestions, candidate)
+		}
+	}
+
+	// Strategy 2: Add common suffixes if we still need more suggestions
+	suffixes := []string{"_bot", "_ai", "_helper", "_v2", "_new"}
+	for _, suffix := range suffixes {
+		if len(suggestions) >= maxSuggestions {
+			break
+		}
+		candidate := baseName + suffix
+		// Ensure candidate doesn't exceed 30 char limit and suffix isn't already in name
+		if len(candidate) <= 30 && !checkExists(candidate) && !strings.HasSuffix(baseName, suffix) {
+			suggestions = append(suggestions, candidate)
+		}
+	}
+
+	// Strategy 3: Truncate name if needed and add suffix
+	if len(suggestions) < 3 && len(baseName) > 20 {
+		truncated := baseName[:20]
+		for i := 1; len(suggestions) < maxSuggestions && i <= 10; i++ {
+			candidate := truncated + "_" + strconv.Itoa(i)
+			if !checkExists(candidate) {
+				suggestions = append(suggestions, candidate)
+			}
+		}
+	}
+
+	return suggestions
+}
+
+// writeDuplicateNameError writes a 409 Conflict error with name suggestions.
+// Per AGENT-ONBOARDING requirement: Return 409 Conflict if name taken with alternatives.
+func writeDuplicateNameError(w http.ResponseWriter, baseName string, checkExists func(string) bool) {
+	suggestions := generateNameSuggestions(baseName, checkExists)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+
+	response := map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":        "DUPLICATE_NAME",
+			"message":     "agent name already exists",
+			"suggestions": suggestions,
+		},
+	}
+
+	json.NewEncoder(w).Encode(response)
 }

@@ -252,7 +252,7 @@
       "Return 409 Conflict if name taken",
       "Suggest alternatives in error response"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-AUTH",

@@ -325,7 +325,7 @@
       "Include name, created_at, last_used_at",
       "Mask actual key value (show prefix only)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-KEYS",

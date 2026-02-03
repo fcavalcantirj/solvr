@@ -5711,3 +5711,83 @@ Implemented the Moltbook authentication endpoint for agent fast-lane onboarding,
 
 ### Files Modified
 - specs/prd-v2.json (marked requirement as passes: true)
+
+---
+
+## 2026-02-03: [API-KEYS] GET /v1/users/me/api-keys - List User API Keys
+
+### Requirement
+Per prd-v2.json API-KEYS category: "GET /v1/users/me/api-keys: list user's API keys"
+- Return all API keys for authenticated user
+- Include name, created_at, last_used_at
+- Mask actual key value (show prefix only)
+
+### Implementation
+
+**TDD Approach:**
+1. Created database migration first (000019_create_user_api_keys)
+2. Created model (UserAPIKey)
+3. Wrote repository tests first (RED)
+4. Implemented repository (GREEN)
+5. Wrote handler tests first (RED)
+6. Implemented handler (GREEN)
+
+**Migration (000019_create_user_api_keys):**
+- Creates user_api_keys table with proper indexes
+- Fields: id, user_id, name, key_hash, last_used_at, revoked_at, created_at, updated_at
+- Separate from agent API keys (better design - allows multiple keys per user)
+- Soft delete via revoked_at field
+
+**Model (UserAPIKey):**
+- KeyHash field has `json:"-"` to never expose in responses
+- IsActive()/IsRevoked() helper methods
+- UserAPIKeyWithPreview for list responses
+- UserAPIKeyCreated for creation response (shows key once)
+
+**Repository (UserAPIKeyRepository):**
+- Create() - inserts new key with hashed value
+- FindByUserID() - returns only active keys for user
+- FindByID() - finds single key by ID
+- Revoke() - soft delete (sets revoked_at)
+- UpdateLastUsed() - tracks key usage
+
+**Handler (UserAPIKeysHandler):**
+- GET /v1/users/me/api-keys implemented
+- Requires JWT authentication
+- Returns list of user's active API keys
+- Keys masked with "solvr_...****" preview
+- Includes timestamps (created_at, last_used_at)
+
+### Tests
+- 7 handler tests (all passing):
+  - TestListAPIKeys_Success
+  - TestListAPIKeys_NoAuth (401)
+  - TestListAPIKeys_Empty
+  - TestListAPIKeys_OnlyShowsOwnKeys
+  - TestListAPIKeys_MasksKeyValue
+  - TestListAPIKeys_IncludesTimestamps
+  - TestListAPIKeys_DoesNotShowRevokedKeys
+
+- 9 repository tests (require DB, skip gracefully):
+  - TestUserAPIKeyRepository_Create
+  - TestUserAPIKeyRepository_FindByUserID
+  - TestUserAPIKeyRepository_FindByUserID_OnlyActive
+  - TestUserAPIKeyRepository_FindByUserID_Empty
+  - TestUserAPIKeyRepository_FindByID
+  - TestUserAPIKeyRepository_FindByID_NotFound
+  - TestUserAPIKeyRepository_Revoke
+  - TestUserAPIKeyRepository_Revoke_WrongUser
+  - TestUserAPIKeyRepository_UpdateLastUsed
+
+### Files Created
+- backend/migrations/000019_create_user_api_keys.up.sql
+- backend/migrations/000019_create_user_api_keys.down.sql
+- backend/internal/models/user_api_key.go
+- backend/internal/db/user_api_keys.go
+- backend/internal/db/user_api_keys_test.go
+- backend/internal/api/handlers/user_api_keys.go
+- backend/internal/api/handlers/user_api_keys_test.go
+
+### Files Modified
+- specs/prd-v2.json (marked requirement as passes: true)
+- specs/progress.txt (this entry)

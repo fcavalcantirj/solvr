@@ -433,7 +433,7 @@
       "Add UNIQUE constraint: one human claim per agent",
       "Index on human_id for dashboard queries"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "DATABASE",

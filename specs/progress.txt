@@ -6011,3 +6011,37 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   **All db package tests passing:** go test ./internal/db/... ✓
   - Updated prd-v2.json to mark requirement as passes: true
 
+
+- 2026-02-03: [DATABASE] Agents table: add human_claimed_at field - VERIFIED COMPLETE ✓
+  
+  **Implementation Already Exists:**
+  - Migration 000018_add_agent_claim_fields.up.sql adds all required fields
+  - All requirements verified as implemented:
+  
+  **Step 1: Add human_claimed_at TIMESTAMP NULL ✓**
+  - Line 13: `ALTER TABLE agents ADD COLUMN IF NOT EXISTS human_claimed_at TIMESTAMPTZ;`
+  - DB test: TestAgentRepository_LinkHuman_Success verifies field is set on claim
+  
+  **Step 2: Add human_id FK (already exists, verify) ✓**
+  - Base table (000002_create_agents.up.sql) line 7:
+    `human_id UUID REFERENCES users(id)`
+  - Index already exists: `CREATE INDEX idx_agents_human_id ON agents(human_id);`
+  
+  **Step 3: Add UNIQUE constraint: one human claim per agent ✓**
+  - Implemented via trigger (lines 19-39):
+    `CREATE OR REPLACE FUNCTION prevent_agent_reclaim()` 
+  - Raises exception 'agent_already_claimed' if agent is already linked
+  - DB test: TestAgentRepository_LinkHuman_RejectReclaim verifies constraint
+  
+  **Step 4: Index on human_id for dashboard queries ✓**
+  - Line 18 of 000002: `CREATE INDEX idx_agents_human_id ON agents(human_id);`
+  
+  **Tests Verified:**
+  - TestAgentRepository_LinkHuman_Success - links agent to human, sets human_claimed_at
+  - TestAgentRepository_LinkHuman_RejectReclaim - prevents re-claiming
+  - TestAgentRepository_LinkHuman_AgentNotFound - handles non-existent agent
+  - All backend tests pass: `go test ./... -cover`
+  
+  **Model Support:**
+  - models/agent.go includes `HumanClaimedAt *time.Time` field (line 47)
+  - agents.go scans this field in scanAgent() and scanAgentRows()

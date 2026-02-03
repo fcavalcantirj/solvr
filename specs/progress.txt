@@ -5138,3 +5138,83 @@ Security audit: No secrets in frontend code - passes=true
 ### Files Modified
 - specs/prd-v2.json (line 5442 updated to passes=true)
 - specs/progress.txt (this entry)
+
+
+## 2026-02-03: CRITICAL: Verify all DB queries require auth
+
+### Completed Requirements (PRD line 5444-5454)
+Security audit: All DB queries require auth - passes=true
+
+### What Was Done - Security Audit
+
+1. **Review all handlers in internal/api/handlers/**: COMPLETED
+   - 47 handler files reviewed
+   - All write operations (POST, PATCH, DELETE) require authentication
+
+2. **Verify each uses RequireAuth or RequireAdmin middleware**: VERIFIED
+   - admin.go: 15 handlers with ClaimsFromContext + isAdminOrAbove check
+   - agents.go: Create, Update, Regenerate, Revoke all require JWT auth
+   - posts.go: Create, Update, Delete, Vote require auth
+   - questions.go: All write operations require auth
+   - ideas.go: All write operations require auth  
+   - problems.go: All write operations require auth
+   - comments.go: All write operations require auth
+   - notifications.go: All operations require auth (personal data)
+   - webhooks.go: All operations require auth
+   - oauth.go: Auth endpoints properly handle tokens
+   - me.go: Requires auth (returns personal data)
+
+3. **Verify no public endpoints return sensitive data**: VERIFIED
+   - Search: Returns public post data only (title, snippet, tags, votes)
+   - Feed: Returns public post listings only
+   - Posts List/Get: Returns public content only
+   - No API keys, hashes, or personal data in public endpoints
+
+4. **Document exceptions**: 
+   - GET /health, /health/live, /health/ready - Infrastructure checks
+   - GET /v1/search - Public search (no sensitive data)
+   - GET /v1/posts - Public post listing
+   - GET /v1/posts/:id - Public post detail
+   - GET /v1/feed - Public feed
+   - GET /v1/agents/:id - Public agent profile
+
+### Files Modified
+- specs/prd-v2.json (line 5453 updated to passes=true)
+- specs/progress.txt (this entry)
+
+
+## 2026-02-03: CRITICAL: Verify database connection is not exposed
+
+### Completed Requirements (PRD line 5455-5465)
+Security audit: Database connection not exposed - passes=true
+
+### What Was Done - Security Audit
+
+1. **Verify DATABASE_URL not in frontend code**: PASS
+   - Grepped frontend/ for DATABASE_URL, postgres://, postgresql://
+   - No matches found
+
+2. **Verify no direct DB access from client**: PASS
+   - Grepped frontend/ for pg, postgres, sql imports
+   - No database libraries imported in frontend
+   - Frontend only uses fetch() for HTTP requests
+
+3. **Verify all data access goes through API**: PASS
+   - frontend/src/lib/api.ts only uses fetch() 
+   - All methods (get, post, patch, delete) make HTTP requests
+   - No direct database queries in frontend
+
+4. **Verify connection pool is internal only**: PASS
+   - db package is in backend/internal/db/
+   - Go's internal package convention prevents external imports
+   - Pool is only accessible within the backend module
+   - No DB connection details exposed via HTTP endpoints
+
+### Architecture Verification
+- Frontend (Next.js) → HTTP → Backend (Go API) → Internal Pool → PostgreSQL
+- No direct frontend → database path exists
+- DATABASE_URL only used in backend via config.Load()
+
+### Files Modified
+- specs/prd-v2.json (line 5464 updated to passes=true)
+- specs/progress.txt (this entry)

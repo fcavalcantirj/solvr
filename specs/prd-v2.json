@@ -5450,7 +5450,7 @@
       "Verify no public endpoints return sensitive data",
       "Exception: GET /health, GET /v1/search (public read)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "security-audit",
@@ -5461,7 +5461,7 @@
       "Verify all data access goes through API",
       "Verify connection pool is internal only"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "security-audit",

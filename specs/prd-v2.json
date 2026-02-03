@@ -5427,7 +5427,7 @@
       "Verify PATCH /v1/agents/:id never returns key",
       "Test with curl and verify response bodies"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "security-audit",
@@ -5439,7 +5439,7 @@
       "Verify NEXT_PUBLIC_ vars contain no secrets",
       "Run npm run build and check bundle for secrets"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "security-audit",

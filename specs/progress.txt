@@ -5059,3 +5059,82 @@ Performed comprehensive audit of API key storage security:
 ### Files Modified
 - specs/prd-v2.json (line 5418 updated to passes=true)
 - specs/progress.txt (this entry)
+
+
+## 2026-02-03: CRITICAL: Verify API keys only returned once
+
+### Completed Requirements (PRD line 5420-5431)
+Security audit: API keys only returned once - passes=true
+
+### What Was Done - Security Audit
+
+1. **Review POST /v1/agents handler**: VERIFIED
+   - CreateAgent (line 100-185) returns api_key at line 180
+   - This is the ONLY time api_key appears in response
+
+2. **Verify api_key only in creation response**: VERIFIED
+   - CreateAgentResponse struct includes api_key (line 58-64)
+   - GetAgentResponse struct does NOT include api_key (line 66-73)
+   - RegenerateAPIKey returns api_key (line 337-341) - correct for regen
+
+3. **Verify GET /v1/agents/:id never returns key**: VERIFIED
+   - GetAgent (line 187-212) returns GetAgentResponse with only Agent and Stats
+   - No api_key field in response
+   - Agent model has `json:"-"` tag on APIKeyHash (models/agent.go:33)
+
+4. **Verify PATCH /v1/agents/:id never returns key**: VERIFIED
+   - UpdateAgent (line 214-294) returns GetAgentResponse
+   - Same response structure as GET - no api_key
+
+5. **Added explicit security tests**: 
+   - TestGetAgent_NeverReturnsAPIKey: Verifies response doesn't contain api_key, api_key_hash, or hash value
+   - TestUpdateAgent_NeverReturnsAPIKey: Same verification for PATCH
+   - Both tests pass
+
+### Key Security Mechanisms
+- Agent model: `APIKeyHash string json:"-"` - never serialized
+- Separate response types for creation (with key) vs read (without key)
+- Tests explicitly check for absence of sensitive fields
+
+### Files Modified
+- backend/internal/api/handlers/agents_test.go (added 2 security tests, +75 lines)
+- specs/prd-v2.json (line 5430 updated to passes=true)
+- specs/progress.txt (this entry)
+
+
+## 2026-02-03: CRITICAL: Verify no secrets in frontend code
+
+### Completed Requirements (PRD line 5432-5443)
+Security audit: No secrets in frontend code - passes=true
+
+### What Was Done - Security Audit
+
+1. **Grep frontend/ for 'api_key', 'secret', 'password'**: PASS
+   - Found references are either:
+     - Test mock data (settings-agents.test.tsx)
+     - Type definitions for API responses (settings/page.tsx)
+   - No actual hardcoded secrets
+
+2. **Verify no hardcoded tokens in .tsx/.ts files**: PASS
+   - solvr_auth_token is a localStorage KEY NAME, not a token value
+   - Bearer headers are constructed dynamically from stored values
+   - No actual JWT tokens or API keys hardcoded
+
+3. **Verify .env is in .gitignore**: PASS
+   - Root .gitignore: .env, .env.local, .env.*.local
+   - frontend/.gitignore: .env*
+
+4. **Verify NEXT_PUBLIC_ vars contain no secrets**: PASS
+   - NEXT_PUBLIC_API_URL - API URL (not a secret)
+   - NEXT_PUBLIC_APP_URL - App URL (not a secret)
+   - No secret values exposed as NEXT_PUBLIC_
+
+5. **Run npm run build and check bundle for secrets**: PASS
+   - Build completed successfully
+   - No hardcoded JWTs (eyJ...) in bundle
+   - No hardcoded API keys (solvr_...) in bundle
+   - Only localStorage key names present (acceptable)
+
+### Files Modified
+- specs/prd-v2.json (line 5442 updated to passes=true)
+- specs/progress.txt (this entry)

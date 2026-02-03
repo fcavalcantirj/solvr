@@ -389,7 +389,7 @@
       "Test rate limiting per key",
       "Test key hashing security"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-KEYS",

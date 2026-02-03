@@ -5875,3 +5875,29 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   - Added APIKeyDefaultLimit and APIKeyTierLimits config options
   - Tests: 8 new tests in ratelimit_apikey_test.go, all passing
   - Coverage: 87% for middleware package
+
+- 2026-02-03: [API-KEYS] API key unit tests - VERIFICATION ✓
+  - Verified all required tests are already implemented and passing:
+  1. Test create/list/revoke flow: user_api_keys_test.go in handlers (31 tests)
+     - TestListAPIKeys_* (7 tests for list)
+     - TestCreateAPIKey_* (8 tests for create)
+     - TestUserAPIKey_RevokeAPIKey_* (5 tests for revoke)
+  2. Test auth middleware: user_apikey_middleware_test.go (15 tests)
+     - TestUserAPIKeyMiddleware (7 subtests)
+     - TestUserAPIKeyMiddleware_UpdatesLastUsed
+     - TestUserAPIKeyMiddleware_RejectsRevokedKey
+     - TestIsUserAPIKey (5 subtests)
+     - TestUserAPIKeyValidator_ValidateUserAPIKey (4 subtests)
+  3. Test rate limiting per key: ratelimit_apikey_test.go (8 tests)
+     - TestRateLimiter_PerAPIKey_IndependentLimits
+     - TestRateLimiter_PerAPIKey_KeyGeneration
+     - TestRateLimiter_PerAPIKey_UsesAPIKeyIDFromContext
+     - TestRateLimiter_PerAPIKey_DifferentTiers
+     - TestRateLimiter_PerAPIKey_FallbackToUser
+     - TestRateLimiter_PerAPIKey_Headers
+     - TestRateLimiter_PerAPIKey_TrackUsage
+  4. Test key hashing security: apikey_test.go (5 tests)
+     - TestGenerateAPIKey, TestGenerateAPIKeyUniqueness
+     - TestHashAPIKey, TestCompareAPIKey, TestAPIKeyFormat
+  - All tests passing (go test ./...)
+  - Updated prd-v2.json to mark API key unit tests as passes: true

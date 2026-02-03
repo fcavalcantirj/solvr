@@ -3,6 +3,8 @@ package auth
 import (
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestGenerateAPIKey(t *testing.T) {
@@ -129,5 +131,54 @@ func TestAPIKeyFormat(t *testing.T) {
 	// The random part should be URL-safe base64 (no + or /)
 	if strings.ContainsAny(parts[1], "+/") {
 		t.Error("GenerateAPIKey() should use URL-safe base64 encoding")
+	}
+}
+
+// TestBcryptCostFactor verifies that the bcrypt cost factor is appropriately strong.
+// Per security audit requirement: OWASP recommends at least cost 10 (2^10 iterations).
+// Current implementation uses cost 10 which is the minimum recommended.
+// Note: Higher cost provides more security but slower hash times.
+// Cost 10 is appropriate for API keys which aren't hashed as frequently as passwords.
+func TestBcryptCostFactor(t *testing.T) {
+	// The cost factor should be at least 10 (OWASP minimum recommendation)
+	const minSecureCost = 10
+
+	// Verify our constant is at least the minimum
+	if bcryptCost < minSecureCost {
+		t.Errorf("bcryptCost = %d, want at least %d (OWASP minimum)", bcryptCost, minSecureCost)
+	}
+
+	// Generate a hash and verify it actually uses the expected cost
+	key := "solvr_testkey12345"
+	hash, err := HashAPIKey(key)
+	if err != nil {
+		t.Fatalf("HashAPIKey() error = %v", err)
+	}
+
+	// Extract the cost from the hash using bcrypt.Cost
+	actualCost, err := bcrypt.Cost([]byte(hash))
+	if err != nil {
+		t.Fatalf("bcrypt.Cost() error = %v", err)
+	}
+
+	if actualCost != bcryptCost {
+		t.Errorf("Hash cost = %d, expected %d", actualCost, bcryptCost)
+	}
+
+	// Verify cost is at least minimum recommended
+	if actualCost < minSecureCost {
+		t.Errorf("Hash cost %d is below OWASP minimum %d", actualCost, minSecureCost)
+	}
+}
+
+// TestBcryptCostConstantExported verifies the constant value for security audit documentation.
+// This test serves as documentation that the cost is intentionally set to 10.
+func TestBcryptCostConstantValue(t *testing.T) {
+	// Document the expected value - if this test fails, it means
+	// someone changed the cost factor and should update documentation.
+	const expectedCost = 10
+	if bcryptCost != expectedCost {
+		t.Errorf("bcryptCost = %d, expected %d. "+
+			"If this change is intentional, update SECURITY.md documentation", bcryptCost, expectedCost)
 	}
 }

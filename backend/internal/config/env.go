@@ -7,6 +7,13 @@ import (
 	"strconv"
 )
 
+const (
+	// MinJWTSecretLength is the minimum required length for JWT secrets.
+	// Per security audit: HS256 requires at least 256 bits (32 bytes) for adequate security.
+	// This prevents brute-force attacks on the signing key.
+	MinJWTSecretLength = 32
+)
+
 // Config holds all configuration values for the application.
 type Config struct {
 	// App
@@ -73,6 +80,12 @@ func Load() (*Config, error) {
 
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("missing required environment variables: %v", missing)
+	}
+
+	// Validate JWT secret strength
+	// Per security audit: JWT secrets must be at least 32 bytes (256 bits) for HS256.
+	if len(cfg.JWTSecret) < MinJWTSecretLength {
+		return nil, fmt.Errorf("JWT_SECRET must be at least %d characters (got %d) for adequate security", MinJWTSecretLength, len(cfg.JWTSecret))
 	}
 
 	// App config with defaults

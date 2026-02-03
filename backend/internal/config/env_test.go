@@ -257,3 +257,72 @@ func TestLoad_IsDevelopment(t *testing.T) {
 		})
 	}
 }
+
+// TestLoad_JWTSecretStrength verifies JWT secret meets minimum security requirements.
+// Per security audit: JWT secrets should be at least 32 bytes (256 bits) for HS256.
+// This provides adequate security against brute-force attacks.
+func TestLoad_JWTSecretStrength(t *testing.T) {
+	tests := []struct {
+		name      string
+		secret    string
+		wantError bool
+	}{
+		{
+			name:      "valid 32-char secret",
+			secret:    "01234567890123456789012345678901",
+			wantError: false,
+		},
+		{
+			name:      "valid long secret",
+			secret:    "this-is-a-very-long-secret-key-that-is-definitely-more-than-32-characters",
+			wantError: false,
+		},
+		{
+			name:      "exactly 32 bytes",
+			secret:    "exactly-32-bytes-secret-keys!!!!",
+			wantError: false,
+		},
+		{
+			name:      "too short - 31 chars",
+			secret:    "0123456789012345678901234567890",
+			wantError: true,
+		},
+		{
+			name:      "too short - 10 chars",
+			secret:    "short-key!",
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Setenv("DATABASE_URL", "postgres://localhost/db")
+			os.Setenv("JWT_SECRET", tt.secret)
+			defer os.Unsetenv("DATABASE_URL")
+			defer os.Unsetenv("JWT_SECRET")
+
+			_, err := Load()
+
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("Load() should return error for short JWT_SECRET (%d chars)", len(tt.secret))
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Load() returned unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestJWTSecretMinLength documents the minimum required length.
+// If this constant changes, security documentation must be updated.
+func TestJWTSecretMinLength(t *testing.T) {
+	// Document the expected minimum - 32 bytes for HS256 (256 bits)
+	const expectedMinLength = 32
+	if MinJWTSecretLength != expectedMinLength {
+		t.Errorf("MinJWTSecretLength = %d, expected %d. "+
+			"Update SECURITY.md if this change is intentional", MinJWTSecretLength, expectedMinLength)
+	}
+}

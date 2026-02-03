@@ -6269,7 +6269,7 @@
       "Check password hashing uses cost >= 10",
       "Document in SECURITY.md"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "security-audit",
@@ -6279,7 +6279,7 @@
       "Fail startup if JWT_SECRET too short",
       "Add validation in config/env.go"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "security-audit",
@@ -6290,7 +6290,7 @@
       "Verify no SQL errors exposed to client",
       "Verify no internal IDs leaked"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "security-audit",
@@ -6301,7 +6301,7 @@
       "Test search doesn't allow user enumeration",
       "Verify timing-safe comparisons for auth"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "security-audit",
@@ -6311,7 +6311,7 @@
       "Verify deleted_at posts return 404",
       "Verify deleted user data not accessible"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "security-audit",

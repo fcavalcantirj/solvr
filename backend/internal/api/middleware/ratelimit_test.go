@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -606,5 +607,194 @@ func TestRateLimiter_ResponseBody(t *testing.T) {
 	body := rec.Body.String()
 	if body == "" {
 		t.Error("response body should not be empty")
+	}
+}
+
+// TestRateLimiter_PreventsEnumeration tests that rate limiting prevents enumeration attacks.
+// Per security audit requirement: Rate limiting should prevent attackers from
+// enumerating valid IDs (user IDs, post IDs, agent names, etc.) by making rapid requests.
+func TestRateLimiter_PreventsEnumeration(t *testing.T) {
+	t.Run("prevents user enumeration via GET requests", func(t *testing.T) {
+		store := NewMockRateLimitStore()
+		rl := NewRateLimiter(store, DefaultRateLimitConfig())
+		handler := rl.Middleware(okHandler())
+
+		// An attacker trying to enumerate valid user IDs would make many requests
+		// to endpoints like GET /v1/users/:id or GET /v1/agents/:id
+		// They should be rate limited after the general limit
+
+		// Simulate enumeration attack - 60 requests (human limit)
+		for i := 0; i < 60; i++ {
+			req := httptest.NewRequest("GET", "/v1/agents/test-agent-"+strconv.Itoa(i), nil)
+			req = addClaimsToContext(req, "attacker-user", "attacker@example.com", "user")
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+		}
+
+		// 61st enumeration attempt should be rate limited
+		req := httptest.NewRequest("GET", "/v1/agents/some-other-agent", nil)
+		req = addClaimsToContext(req, "attacker-user", "attacker@example.com", "user")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusTooManyRequests {
+			t.Error("Enumeration attack should be rate limited after reaching limit")
+		}
+	})
+
+	t.Run("prevents post ID enumeration", func(t *testing.T) {
+		store := NewMockRateLimitStore()
+		rl := NewRateLimiter(store, DefaultRateLimitConfig())
+		handler := rl.Middleware(okHandler())
+
+		// Attacker trying to enumerate post IDs
+		for i := 0; i < 60; i++ {
+			req := httptest.NewRequest("GET", "/v1/posts/post-id-"+strconv.Itoa(i), nil)
+			req = addClaimsToContext(req, "attacker-user", "attacker@example.com", "user")
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+		}
+
+		// Should be rate limited
+		req := httptest.NewRequest("GET", "/v1/posts/another-post-id", nil)
+		req = addClaimsToContext(req, "attacker-user", "attacker@example.com", "user")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusTooManyRequests {
+			t.Error("Post ID enumeration should be rate limited")
+		}
+	})
+
+	t.Run("search-based enumeration is limited", func(t *testing.T) {
+		store := NewMockRateLimitStore()
+		rl := NewRateLimiter(store, DefaultRateLimitConfig())
+		handler := rl.Middleware(okHandler())
+
+		// Attacker using search to find valid content
+		// Search has stricter limit (60/min) to prevent abuse
+		for i := 0; i < 60; i++ {
+			req := httptest.NewRequest("GET", "/v1/search?q=test"+strconv.Itoa(i), nil)
+			req = addAgentToContext(req, "enumeration-agent", time.Now().Add(-25*time.Hour))
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+		}
+
+		// Should be rate limited
+		req := httptest.NewRequest("GET", "/v1/search?q=another-search", nil)
+		req = addAgentToContext(req, "enumeration-agent", time.Now().Add(-25*time.Hour))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusTooManyRequests {
+			t.Error("Search enumeration should be rate limited")
+		}
+	})
+
+	t.Run("rate limits are per-user preventing distributed attacks within single session", func(t *testing.T) {
+		store := NewMockRateLimitStore()
+		rl := NewRateLimiter(store, DefaultRateLimitConfig())
+		handler := rl.Middleware(okHandler())
+
+		// Even if attacker uses different paths, they're limited as a single user
+		endpoints := []string{
+			"/v1/posts/id1",
+			"/v1/agents/name1",
+			"/v1/users/user1",
+			"/v1/questions/q1",
+		}
+
+		requestCount := 0
+		for requestCount < 60 {
+			for _, endpoint := range endpoints {
+				if requestCount >= 60 {
+					break
+				}
+				req := httptest.NewRequest("GET", endpoint, nil)
+				req = addClaimsToContext(req, "single-attacker", "attacker@example.com", "user")
+				rec := httptest.NewRecorder()
+				handler.ServeHTTP(rec, req)
+				requestCount++
+			}
+		}
+
+		// 61st request to any endpoint should be limited
+		req := httptest.NewRequest("GET", "/v1/posts/new-id", nil)
+		req = addClaimsToContext(req, "single-attacker", "attacker@example.com", "user")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusTooManyRequests {
+			t.Error("All requests from same user should count toward rate limit")
+		}
+	})
+
+	t.Run("new accounts have stricter limits for enumeration", func(t *testing.T) {
+		store := NewMockRateLimitStore()
+		rl := NewRateLimiter(store, DefaultRateLimitConfig())
+		handler := rl.Middleware(okHandler())
+
+		// New agent (12 hours old) gets 50% limit = 60 instead of 120
+		// This makes enumeration attacks even harder for new accounts
+		for i := 0; i < 60; i++ {
+			req := httptest.NewRequest("GET", "/v1/agents/target-"+strconv.Itoa(i), nil)
+			req = addAgentToContext(req, "new-attacker-agent", time.Now().Add(-12*time.Hour))
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+		}
+
+		// 61st request should be limited (50% of 120 = 60)
+		req := httptest.NewRequest("GET", "/v1/agents/another-target", nil)
+		req = addAgentToContext(req, "new-attacker-agent", time.Now().Add(-12*time.Hour))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusTooManyRequests {
+			t.Error("New accounts should have stricter limits against enumeration")
+		}
+	})
+}
+
+// TestRateLimiter_LimitsAreDocumented verifies that rate limits are clearly communicated.
+// Per security audit: Rate limits should be discoverable via headers.
+func TestRateLimiter_LimitsAreDocumented(t *testing.T) {
+	store := NewMockRateLimitStore()
+	rl := NewRateLimiter(store, DefaultRateLimitConfig())
+	handler := rl.Middleware(okHandler())
+
+	req := httptest.NewRequest("GET", "/v1/posts", nil)
+	req = addClaimsToContext(req, "user-123", "test@example.com", "user")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// Check all required headers are present
+	requiredHeaders := []string{
+		"X-RateLimit-Limit",
+		"X-RateLimit-Remaining",
+		"X-RateLimit-Reset",
+	}
+
+	for _, header := range requiredHeaders {
+		if rec.Header().Get(header) == "" {
+			t.Errorf("Required header %s should be set for rate limit transparency", header)
+		}
+	}
+
+	// On rate limit, Retry-After should be present
+	store.SetRecord("human:limited-user:general", &RateLimitRecord{
+		Key:         "human:limited-user:general",
+		Count:       60,
+		WindowStart: time.Now(),
+	})
+
+	req2 := httptest.NewRequest("GET", "/v1/posts", nil)
+	req2 = addClaimsToContext(req2, "limited-user", "limited@example.com", "user")
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+
+	if rec2.Code == http.StatusTooManyRequests {
+		if rec2.Header().Get("Retry-After") == "" {
+			t.Error("Retry-After header should be set when rate limited")
+		}
 	}
 }

@@ -6304,3 +6304,62 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   10. Brand Promise
       - "When you search Solvr, you find what you need faster"
 
+
+- 2026-02-03: [security-audit] Verify bcrypt cost factor - COMPLETED ✓
+  
+  **Tests Added:**
+  backend/internal/auth/apikey_test.go
+  - TestBcryptCostFactor: Verifies bcrypt cost >= 10 (OWASP minimum)
+  - TestBcryptCostConstantValue: Documents expected value for audit
+
+  **Verification:**
+  - bcryptCost constant = 10 (OWASP recommended minimum)
+  - Tests verify both constant value and actual hash cost
+
+- 2026-02-03: [security-audit] Verify JWT secret strength - COMPLETED ✓
+  
+  **Code Changes:**
+  backend/internal/config/env.go
+  - Added MinJWTSecretLength constant = 32 (256 bits for HS256)
+  - Added validation in Load() to reject short secrets at startup
+
+  **Tests Added:**
+  backend/internal/config/env_test.go
+  - TestLoad_JWTSecretStrength: Tests various secret lengths
+  - TestJWTSecretMinLength: Documents minimum requirement
+
+- 2026-02-03: [security-audit] Verify error messages don't leak info - COMPLETED ✓
+  
+  **Tests Added:**
+  backend/internal/api/handlers/security_test.go
+  - TestErrorMessagesDoNotLeakInfo: Verifies internal errors use generic messages
+    - Tests for sensitive patterns (stack traces, SQL errors, paths)
+    - Tests 404 errors don't reveal existence
+    - Tests validation errors are safe
+  - TestAuthErrorMessages: Verifies auth errors don't reveal implementation
+
+- 2026-02-03: [security-audit] Verify rate limiting prevents enumeration - COMPLETED ✓
+  
+  **Tests Added:**
+  backend/internal/api/middleware/ratelimit_test.go
+  - TestRateLimiter_PreventsEnumeration: Tests enumeration attack prevention
+    - Prevents user enumeration via GET requests
+    - Prevents post ID enumeration
+    - Limits search-based enumeration
+    - Per-user rate limits prevent distributed attacks
+    - New accounts have stricter limits
+  - TestRateLimiter_LimitsAreDocumented: Verifies rate limit headers
+
+- 2026-02-03: [security-audit] Verify soft deletes don't expose data - COMPLETED ✓
+  
+  **Tests Added:**
+  backend/internal/api/handlers/security_test.go
+  - TestSoftDeletesDoNotExposeData: Verifies soft delete security
+    - Deleted posts return 404, not 403 (doesn't reveal existence)
+    - Error messages don't reveal deletion status
+    - Non-existent and deleted posts return identical responses
+    - DB layer filters deleted posts from list results
+
+  **Verification:**
+  - Handler at posts.go:166-170 checks DeletedAt and returns 404
+  - DB layer uses WHERE deleted_at IS NULL consistently

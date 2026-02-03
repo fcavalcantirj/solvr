@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -73,13 +74,20 @@ func (m *MockUserAPIKeyRepository) FindByID(ctx context.Context, id string) (*mo
 	return key, nil
 }
 
+// errMockNotFound is used by the mock to signal not found
+var errMockNotFound = errors.New("not found")
+
 func (m *MockUserAPIKeyRepository) Revoke(ctx context.Context, id, userID string) error {
 	key, ok := m.keys[id]
 	if !ok {
-		return nil
+		return errMockNotFound
 	}
 	if key.UserID != userID {
-		return nil
+		return errMockNotFound
+	}
+	if key.RevokedAt != nil {
+		// Already revoked
+		return errMockNotFound
 	}
 	now := time.Now()
 	key.RevokedAt = &now
@@ -749,5 +757,184 @@ func TestCreateAPIKey_KeyStartsWithCorrectPrefix(t *testing.T) {
 	// Key should be reasonably long (base64 of 32 bytes + prefix)
 	if len(key) < 40 {
 		t.Errorf("key seems too short: %d chars", len(key))
+	}
+}
+
+// Tests for DELETE /v1/users/me/api-keys/:id (RevokeAPIKey)
+// Per prd-v2.json: "Soft delete the key, Immediately invalidate for auth, Return success"
+
+func TestUserAPIKey_RevokeAPIKey_Success(t *testing.T) {
+	repo := NewMockUserAPIKeyRepository()
+	handler := NewUserAPIKeysHandler(repo)
+	userID := "user-123"
+	keyID := "key-1"
+	now := time.Now()
+
+	// Add a key to the repo
+	repo.keys[keyID] = &models.UserAPIKey{
+		ID:        keyID,
+		UserID:    userID,
+		Name:      "Test Key",
+		KeyHash:   "hash",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	repo.keysByUser[userID] = []*models.UserAPIKey{repo.keys[keyID]}
+
+	// Create request
+	req := httptest.NewRequest(http.MethodDelete, "/v1/users/me/api-keys/"+keyID, nil)
+
+	// Add JWT claims
+	claims := &auth.Claims{
+		UserID: userID,
+		Email:  "test@example.com",
+		Role:   models.UserRoleUser,
+	}
+	ctx := auth.ContextWithClaims(req.Context(), claims)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.RevokeAPIKey(rr, req, keyID)
+
+	// Assert: 204 No Content
+	if rr.Code != http.StatusNoContent {
+		t.Errorf("expected status %d, got %d. Body: %s", http.StatusNoContent, rr.Code, rr.Body.String())
+	}
+
+	// Verify key is revoked
+	key := repo.keys[keyID]
+	if key.RevokedAt == nil {
+		t.Error("expected key to be revoked (RevokedAt set)")
+	}
+}
+
+func TestUserAPIKey_RevokeAPIKey_NoAuth(t *testing.T) {
+	repo := NewMockUserAPIKeyRepository()
+	handler := NewUserAPIKeysHandler(repo)
+
+	// Create request WITHOUT claims
+	req := httptest.NewRequest(http.MethodDelete, "/v1/users/me/api-keys/key-1", nil)
+
+	rr := httptest.NewRecorder()
+	handler.RevokeAPIKey(rr, req, "key-1")
+
+	// Assert: 401 Unauthorized
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, rr.Code)
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&response)
+	errObj := response["error"].(map[string]interface{})
+	if errObj["code"] != "UNAUTHORIZED" {
+		t.Errorf("expected error code UNAUTHORIZED, got %v", errObj["code"])
+	}
+}
+
+func TestUserAPIKey_RevokeAPIKey_NotFound(t *testing.T) {
+	repo := NewMockUserAPIKeyRepository()
+	handler := NewUserAPIKeysHandler(repo)
+	userID := "user-123"
+
+	// Key doesn't exist in repo
+	req := httptest.NewRequest(http.MethodDelete, "/v1/users/me/api-keys/nonexistent", nil)
+
+	claims := &auth.Claims{
+		UserID: userID,
+		Email:  "test@example.com",
+		Role:   models.UserRoleUser,
+	}
+	ctx := auth.ContextWithClaims(req.Context(), claims)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.RevokeAPIKey(rr, req, "nonexistent")
+
+	// Assert: 404 Not Found
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d. Body: %s", http.StatusNotFound, rr.Code, rr.Body.String())
+	}
+}
+
+func TestUserAPIKey_RevokeAPIKey_WrongUser(t *testing.T) {
+	repo := NewMockUserAPIKeyRepository()
+	handler := NewUserAPIKeysHandler(repo)
+	ownerID := "owner-user"
+	attackerID := "attacker-user"
+	keyID := "key-1"
+	now := time.Now()
+
+	// Key belongs to owner
+	repo.keys[keyID] = &models.UserAPIKey{
+		ID:        keyID,
+		UserID:    ownerID,
+		Name:      "Owner's Key",
+		KeyHash:   "hash",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	repo.keysByUser[ownerID] = []*models.UserAPIKey{repo.keys[keyID]}
+
+	// Attacker tries to revoke
+	req := httptest.NewRequest(http.MethodDelete, "/v1/users/me/api-keys/"+keyID, nil)
+
+	claims := &auth.Claims{
+		UserID: attackerID,
+		Email:  "attacker@example.com",
+		Role:   models.UserRoleUser,
+	}
+	ctx := auth.ContextWithClaims(req.Context(), claims)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.RevokeAPIKey(rr, req, keyID)
+
+	// Assert: 404 Not Found (don't reveal that key exists for different user)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d", http.StatusNotFound, rr.Code)
+	}
+
+	// Verify key is NOT revoked
+	key := repo.keys[keyID]
+	if key.RevokedAt != nil {
+		t.Error("key should NOT be revoked (attacker shouldn't have access)")
+	}
+}
+
+func TestUserAPIKey_RevokeAPIKey_AlreadyRevoked(t *testing.T) {
+	repo := NewMockUserAPIKeyRepository()
+	handler := NewUserAPIKeysHandler(repo)
+	userID := "user-123"
+	keyID := "key-1"
+	now := time.Now()
+	revokedAt := now.Add(-1 * time.Hour)
+
+	// Key is already revoked
+	repo.keys[keyID] = &models.UserAPIKey{
+		ID:        keyID,
+		UserID:    userID,
+		Name:      "Revoked Key",
+		KeyHash:   "hash",
+		RevokedAt: &revokedAt,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/users/me/api-keys/"+keyID, nil)
+
+	claims := &auth.Claims{
+		UserID: userID,
+		Email:  "test@example.com",
+		Role:   models.UserRoleUser,
+	}
+	ctx := auth.ContextWithClaims(req.Context(), claims)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.RevokeAPIKey(rr, req, keyID)
+
+	// Assert: 404 Not Found (already revoked keys are "not found")
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d", http.StatusNotFound, rr.Code)
 	}
 }

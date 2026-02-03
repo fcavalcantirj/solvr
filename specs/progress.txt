@@ -5791,3 +5791,20 @@ Per prd-v2.json API-KEYS category: "GET /v1/users/me/api-keys: list user's API k
 ### Files Modified
 - specs/prd-v2.json (marked requirement as passes: true)
 - specs/progress.txt (this entry)
+
+- 2026-02-03 18:11: [API-KEYS] POST /v1/users/me/api-keys: create new API key ✓
+  - Handler: CreateAPIKey in handlers/user_api_keys.go
+  - Accepts name for the key via JSON body
+  - Generates secure random key (solvr_sk_xxx prefix)
+  - Returns full key ONCE (never stored in plain text)
+  - Stores hashed version using bcrypt
+  - Tests: 8 tests passing (TestCreateAPIKey_*)
+  - Requirement verified and marked as passes: true
+
+- 2026-02-03 18:14: [API-KEYS] DELETE /v1/users/me/api-keys/:id: revoke API key ✓
+  - Handler: RevokeAPIKey in handlers/user_api_keys.go
+  - Soft deletes by setting revoked_at timestamp
+  - Returns 204 No Content on success
+  - Returns 404 for: not found, wrong user, already revoked
+  - Tests: 5 tests passing (TestUserAPIKey_RevokeAPIKey_*)
+  - Requirement verified and marked as passes: true

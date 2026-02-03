@@ -240,3 +240,40 @@ func writeAPIKeyValidationError(w http.ResponseWriter, message string) {
 		},
 	})
 }
+
+// RevokeAPIKey handles DELETE /v1/users/me/api-keys/:id
+// Soft deletes the API key, immediately invalidating it for authentication.
+// Per prd-v2.json: "Soft delete the key, Immediately invalidate for auth, Return success"
+func (h *UserAPIKeysHandler) RevokeAPIKey(w http.ResponseWriter, r *http.Request, keyID string) {
+	ctx := r.Context()
+
+	// Check for valid JWT authentication
+	claims := auth.ClaimsFromContext(ctx)
+	if claims == nil {
+		writeAPIKeyUnauthorized(w, "UNAUTHORIZED", "Authentication required")
+		return
+	}
+
+	// Revoke the key (repo verifies ownership and returns ErrNotFound if wrong user)
+	err := h.repo.Revoke(ctx, keyID, claims.UserID)
+	if err != nil {
+		// Revoke returns ErrNotFound for: key doesn't exist, wrong user, already revoked
+		// We intentionally don't distinguish to avoid information leakage
+		writeAPIKeyNotFound(w, "API key not found")
+		return
+	}
+
+	// Success - no content to return
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func writeAPIKeyNotFound(w http.ResponseWriter, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNotFound)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]string{
+			"code":    "NOT_FOUND",
+			"message": message,
+		},
+	})
+}

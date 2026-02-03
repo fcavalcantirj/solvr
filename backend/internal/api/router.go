@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/google/uuid"
 
+	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/db"
 )
@@ -55,7 +56,31 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	r.Get("/v1/openapi.json", openAPIJSONHandler)
 	r.Get("/v1/openapi.yaml", openAPIYAMLHandler)
 
+	// Mount v1 API routes
+	mountV1Routes(r, pool)
+
 	return r
+}
+
+// mountV1Routes mounts all v1 API routes.
+func mountV1Routes(r *chi.Mux, pool *db.Pool) {
+	// Create repositories and handlers
+	var agentRepo handlers.AgentRepositoryInterface
+	if pool != nil {
+		agentRepo = db.NewAgentRepository(pool)
+	} else {
+		// Use in-memory repository for testing when no DB is available
+		agentRepo = NewInMemoryAgentRepository()
+	}
+
+	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
+
+	// v1 API routes
+	r.Route("/v1", func(r chi.Router) {
+		// Agent self-registration (no auth required)
+		// Per AGENT-ONBOARDING requirement: POST /v1/agents/register
+		r.Post("/agents/register", agentsHandler.RegisterAgent)
+	})
 }
 
 // requestIDMiddleware adds a unique request ID to each request

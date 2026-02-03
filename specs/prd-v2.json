@@ -139,7 +139,7 @@
       "Test: curl -X POST /v1/agents/register returns API key",
       "go test ./internal/api/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",

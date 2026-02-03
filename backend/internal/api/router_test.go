@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -395,4 +396,43 @@ func findInCSV(csv, target string) bool {
 		}
 	}
 	return false
+}
+
+// TestAgentsRegisterEndpoint verifies POST /v1/agents/register endpoint is wired.
+// Per API-CRITICAL requirement: Wire POST /v1/agents/register endpoint.
+func TestAgentsRegisterEndpoint(t *testing.T) {
+	router := NewRouter(nil)
+
+	// Create a valid registration request
+	reqBody := `{"name":"test_agent","description":"A test agent"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should return 201 Created with API key on success
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Verify response contains api_key
+	if response["api_key"] == nil {
+		t.Error("expected api_key in response")
+	}
+
+	// Verify response contains agent
+	if response["agent"] == nil {
+		t.Error("expected agent in response")
+	}
+
+	// Verify success flag
+	if response["success"] != true {
+		t.Error("expected success=true in response")
+	}
 }

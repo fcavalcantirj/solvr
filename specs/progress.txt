@@ -6683,3 +6683,32 @@ backend/internal/db/posts.go
 **Tests:**
 - go test ./internal/db/... passes
 - go build ./... passes
+
+---
+
+## Wire POST /v1/agents/register endpoint (2026-02-03)
+
+**Requirement:** API-CRITICAL - Wire POST /v1/agents/register endpoint
+
+**TDD Approach:**
+- Wrote failing test first (RED) - TestAgentsRegisterEndpoint in router_test.go
+- Implemented minimum code to pass (GREEN)
+
+**Tests Added:**
+backend/internal/api/router_test.go
+- TestAgentsRegisterEndpoint: Tests POST /v1/agents/register returns 201 with API key
+
+**Implementation:**
+backend/internal/api/router.go
+- Added mountV1Routes function to wire v1 API routes
+- Wired POST /v1/agents/register to agentsHandler.RegisterAgent
+- Created conditional agent repository (db.NewAgentRepository when pool available, in-memory for testing)
+
+backend/internal/api/inmemory_repo.go (new file)
+- Created InMemoryAgentRepository for testing when no DB is available
+- Implements full AgentRepositoryInterface
+
+**Tests:**
+- go test ./internal/api -run TestAgentsRegisterEndpoint passes
+- go build ./... passes
+

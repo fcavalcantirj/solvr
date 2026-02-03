@@ -5390,3 +5390,31 @@ system library (libnspr4.so). However:
     - idx_claim_tokens_agent_id - listing agent's tokens
     - idx_claim_tokens_one_active_per_agent - partial unique index
       (only one active unused/unexpired token per agent)
+
+- 2026-02-03: [AGENT-LINKING] POST /v1/agents/me/claim: generate claim URL ✓
+  - Created backend/internal/models/claim_token.go (50 lines)
+    - ClaimToken struct with all fields from migration
+    - Helper methods: IsExpired(), IsUsed(), IsActive()
+  - Created backend/internal/api/handlers/agents_claim_test.go (380 lines)
+    - TDD: wrote tests FIRST before implementation
+    - MockClaimTokenRepository for testing
+    - TestGenerateClaim_RequiresAgentAuth: verifies API key auth required
+    - TestGenerateClaim_Success: successful token generation
+    - TestGenerateClaim_ReturnsExistingToken: returns active token if exists
+    - TestGenerateClaim_TokenFormat: 64 char hex token
+    - TestGenerateClaim_Instructions: response includes instructions
+    - TestGenerateClaim_CreateError: handles DB error
+    - TestGenerateClaim_NoClaimRepo: handles missing repo config
+  - Added to backend/internal/api/handlers/agents.go:
+    - ClaimTokenRepositoryInterface: Create, FindByToken, FindActiveByAgentID, MarkUsed
+    - SetClaimTokenRepository() and SetBaseURL() methods on AgentsHandler
+    - GenerateClaimResponse struct with claim_url, token, expires_at, instructions
+    - GenerateClaim handler implementing POST /v1/agents/me/claim
+      - Requires agent authentication (API key)
+      - Returns existing active token if one exists (200 OK)
+      - Generates new 32-byte hex token with 24h expiry (201 Created)
+      - Returns claim_url: https://solvr.dev/claim/{token}
+      - Includes instructions for agent to share with human
+    - generateClaimInstructions() helper
+  - agents.go: 763 lines (under 800 limit)
+  - All 7 claim tests pass, all 57 agent tests pass

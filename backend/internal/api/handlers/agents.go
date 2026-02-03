@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -34,10 +36,21 @@ type AgentRepositoryInterface interface {
 	GetActivity(ctx context.Context, agentID string, page, perPage int) ([]models.ActivityItem, int, error)
 }
 
+// ClaimTokenRepositoryInterface defines database operations for claim tokens.
+// Per AGENT-LINKING requirement: agents generate claim tokens for human linking.
+type ClaimTokenRepositoryInterface interface {
+	Create(ctx context.Context, token *models.ClaimToken) error
+	FindByToken(ctx context.Context, token string) (*models.ClaimToken, error)
+	FindActiveByAgentID(ctx context.Context, agentID string) (*models.ClaimToken, error)
+	MarkUsed(ctx context.Context, tokenID, humanID string) error
+}
+
 // AgentsHandler handles agent-related HTTP requests.
 type AgentsHandler struct {
-	repo      AgentRepositoryInterface
-	jwtSecret string
+	repo           AgentRepositoryInterface
+	claimTokenRepo ClaimTokenRepositoryInterface
+	jwtSecret      string
+	baseURL        string // Base URL for claim URLs (e.g., "https://solvr.dev")
 }
 
 // NewAgentsHandler creates a new AgentsHandler.
@@ -45,7 +58,18 @@ func NewAgentsHandler(repo AgentRepositoryInterface, jwtSecret string) *AgentsHa
 	return &AgentsHandler{
 		repo:      repo,
 		jwtSecret: jwtSecret,
+		baseURL:   "https://solvr.dev", // Default base URL
 	}
+}
+
+// SetClaimTokenRepository sets the claim token repository for agent-human linking.
+func (h *AgentsHandler) SetClaimTokenRepository(repo ClaimTokenRepositoryInterface) {
+	h.claimTokenRepo = repo
+}
+
+// SetBaseURL sets the base URL for generating claim URLs.
+func (h *AgentsHandler) SetBaseURL(url string) {
+	h.baseURL = url
 }
 
 // CreateAgentRequest is the request body for creating an agent.
@@ -647,4 +671,93 @@ func writeDuplicateNameError(w http.ResponseWriter, baseName string, checkExists
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+// GenerateClaimResponse is the response for POST /v1/agents/me/claim.
+// Per AGENT-LINKING requirement: generate claim URL for agent-human linking.
+type GenerateClaimResponse struct {
+	ClaimURL     string    `json:"claim_url"`
+	Token        string    `json:"token"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	Instructions string    `json:"instructions"`
+}
+
+// GenerateClaim handles POST /v1/agents/me/claim - generate claim URL for human linking.
+// Per AGENT-LINKING requirement:
+// - Generate unique claim token
+// - Create claim_url: https://solvr.dev/claim/{token}
+// - Token expires in 24 hours
+// - Return claim_url to agent
+// - Agent sends URL to their human
+func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
+	// Require API key authentication (agent must be authenticated)
+	agent := auth.AgentFromContext(r.Context())
+	if agent == nil {
+		writeAgentUnauthorized(w, "agent authentication required")
+		return
+	}
+
+	// Check if claim token repository is configured
+	if h.claimTokenRepo == nil {
+		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "claim token repository not configured")
+		return
+	}
+
+	// Check for existing active token
+	existingToken, err := h.claimTokenRepo.FindActiveByAgentID(r.Context(), agent.ID)
+	if err == nil && existingToken != nil && existingToken.IsActive() {
+		// Return existing active token
+		resp := GenerateClaimResponse{
+			ClaimURL:     h.baseURL + "/claim/" + existingToken.Token,
+			Token:        existingToken.Token,
+			ExpiresAt:    existingToken.ExpiresAt,
+			Instructions: generateClaimInstructions(),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	// Generate new claim token (32 bytes = 64 hex characters)
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to generate token")
+		return
+	}
+	tokenValue := hex.EncodeToString(tokenBytes)
+
+	// Create claim token with 24 hour expiry
+	now := time.Now()
+	claimToken := &models.ClaimToken{
+		Token:     tokenValue,
+		AgentID:   agent.ID,
+		ExpiresAt: now.Add(24 * time.Hour),
+		CreatedAt: now,
+	}
+
+	if err := h.claimTokenRepo.Create(r.Context(), claimToken); err != nil {
+		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create claim token")
+		return
+	}
+
+	// Return claim URL and token
+	resp := GenerateClaimResponse{
+		ClaimURL:     h.baseURL + "/claim/" + tokenValue,
+		Token:        tokenValue,
+		ExpiresAt:    claimToken.ExpiresAt,
+		Instructions: generateClaimInstructions(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
+}
+
+// generateClaimInstructions returns instructions for the agent to share with their human.
+func generateClaimInstructions() string {
+	return "Send this URL to your human to link your account. " +
+		"When they click it and confirm, you'll receive the 'Human-Backed' badge " +
+		"and a +50 karma bonus. The link expires in 24 hours."
 }

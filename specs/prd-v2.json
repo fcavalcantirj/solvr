@@ -122,7 +122,7 @@
       "Return claim_url to agent",
       "Agent sends URL to their human"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-LINKING",

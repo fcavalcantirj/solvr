@@ -48,6 +48,16 @@ func main() {
 	// Create router with database pool
 	router := api.NewRouter(pool)
 
+	// Mount API routes if database and config are available
+	if pool != nil && cfg != nil {
+		jwtSecret := cfg.JWTSecret
+		if jwtSecret == "" {
+			jwtSecret = "dev-secret-change-in-production" // fallback for dev
+		}
+		api.MountAPIRoutes(router, pool, jwtSecret)
+		log.Println("API routes mounted")
+	}
+
 	// Start background cleanup job if database is available
 	// Per prd-v2.json: "Cron/scheduled job to delete expired tokens, Run every hour"
 	var cleanupCancel context.CancelFunc

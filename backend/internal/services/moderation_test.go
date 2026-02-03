@@ -74,9 +74,10 @@ func TestDetectSpam_ExcessiveLinks(t *testing.T) {
 func TestDetectSpam_ExactLinkThreshold(t *testing.T) {
 	detector := NewSpamDetector()
 	// 5 links should be OK (threshold is 5)
+	// Title must be >= 10 chars, description >= 50 chars to avoid too_short
 	content := ModerationContent{
-		Title:       "Resources",
-		Description: "http://link1.com http://link2.com http://link3.com http://link4.com http://link5.com",
+		Title:       "Useful Resources for Developers",
+		Description: "Here are some helpful links for developers to explore and learn from: http://link1.com http://link2.com http://link3.com http://link4.com http://link5.com",
 	}
 
 	result := detector.CheckSpam(content)
@@ -175,13 +176,16 @@ func TestDetectSpam_ShortContent(t *testing.T) {
 
 func TestDetectSpam_CustomConfig(t *testing.T) {
 	config := SpamDetectorConfig{
-		MaxLinks:       10, // More permissive
-		MinTitleLength: 5,
-		MinDescLength:  10,
+		MaxLinks:          10, // More permissive
+		MinTitleLength:    5,
+		MinDescLength:     10,
+		MaxCapsPercentage: 50, // Must set to avoid 0 threshold
+		RepeatThreshold:   4,  // Must set to avoid 0 threshold
+		ForbiddenWords:    []string{},
 	}
 	detector := NewSpamDetectorWithConfig(config)
 	content := ModerationContent{
-		Title:       "Links",
+		Title:       "links collection",
 		Description: "http://a.com http://b.com http://c.com http://d.com http://e.com http://f.com normal text here",
 	}
 

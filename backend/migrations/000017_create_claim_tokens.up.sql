@@ -18,8 +18,8 @@ CREATE INDEX idx_claim_tokens_token ON claim_tokens(token);
 -- Index on agent_id for listing agent's tokens
 CREATE INDEX idx_claim_tokens_agent_id ON claim_tokens(agent_id);
 
--- Partial unique index: only one active (unused, not expired) token per agent
--- This allows creating new tokens while old ones exist (if expired or used)
+-- Partial unique index: only one unused token per agent at a time
+-- Expiry is checked in application code during validation
 CREATE UNIQUE INDEX idx_claim_tokens_one_active_per_agent
     ON claim_tokens(agent_id)
-    WHERE used_at IS NULL AND expires_at > NOW();
+    WHERE used_at IS NULL;

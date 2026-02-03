@@ -44,8 +44,9 @@ func TestOAuthHandlers_GitHubRedirect(t *testing.T) {
 	if !strings.Contains(location, "redirect_uri=") {
 		t.Errorf("expected redirect_uri in URL, got %s", location)
 	}
-	if !strings.Contains(location, "scope=user:email") {
-		t.Errorf("expected scope=user:email in URL, got %s", location)
+	// Note: URL encodes : as %3A
+	if !strings.Contains(location, "scope=user%3Aemail") && !strings.Contains(location, "scope=user:email") {
+		t.Errorf("expected scope=user:email (or URL-encoded) in URL, got %s", location)
 	}
 }
 

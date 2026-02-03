@@ -6,7 +6,7 @@
 -- Using CREATE UNIQUE INDEX instead of ALTER TABLE to handle potential duplicates gracefully
 -- and to allow conditional index if needed in the future
 
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_agents_display_name_unique
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_display_name_unique
 ON agents (display_name);
 
 -- Add a comment explaining the constraint

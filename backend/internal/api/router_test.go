@@ -285,10 +285,9 @@ func TestCORSCredentialsAllowed(t *testing.T) {
 func TestCORSExposedRateLimitHeaders(t *testing.T) {
 	router := NewRouter(nil)
 
-	// Make a preflight request
-	req := httptest.NewRequest(http.MethodOptions, "/health", nil)
+	// Make an actual GET request (not preflight) - exposed headers are only sent in actual responses
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
-	req.Header.Set("Access-Control-Request-Method", "GET")
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -303,18 +302,10 @@ func TestCORSExposedRateLimitHeaders(t *testing.T) {
 		"X-Request-ID",
 	}
 
+	// Headers are case-insensitive per HTTP spec, so use case-insensitive comparison
+	exposedHeadersLower := strings.ToLower(exposedHeaders)
 	for _, header := range expectedHeaders {
-		found := false
-		// The header might be a comma-separated list
-		if exposedHeaders != "" {
-			for _, h := range []string{exposedHeaders} {
-				if h == header || contains(exposedHeaders, header) {
-					found = true
-					break
-				}
-			}
-		}
-		if !found {
+		if !strings.Contains(exposedHeadersLower, strings.ToLower(header)) {
 			t.Errorf("expected Access-Control-Expose-Headers to include '%s', got '%s'", header, exposedHeaders)
 		}
 	}

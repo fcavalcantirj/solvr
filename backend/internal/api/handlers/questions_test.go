@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,11 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Error definitions for questions testing
-var (
-	ErrQuestionNotFound = errors.New("question not found")
-	ErrAnswerNotFound   = errors.New("answer not found")
-)
+// Note: ErrQuestionNotFound and ErrAnswerNotFound are defined in errors.go
 
 // MockQuestionsRepository implements QuestionsRepositoryInterface for testing.
 type MockQuestionsRepository struct {

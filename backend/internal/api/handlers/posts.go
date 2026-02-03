@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -31,7 +32,7 @@ type PostsRepositoryInterface interface {
 	Delete(ctx context.Context, id string) error
 
 	// Vote records a vote on a post.
-	Vote(ctx context.Context, postID string, voterType models.AuthorType, voterID string, direction string) error
+	Vote(ctx context.Context, postID, voterType, voterID, direction string) error
 }
 
 // PostsHandler handles post-related HTTP requests.
@@ -155,7 +156,7 @@ func (h *PostsHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	post, err := h.repo.FindByID(r.Context(), postID)
 	if err != nil {
-		if errors.Is(err, ErrPostNotFound) {
+		if errors.Is(err, db.ErrPostNotFound) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
 			return
 		}
@@ -279,7 +280,7 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Get existing post
 	existingPost, err := h.repo.FindByID(r.Context(), postID)
 	if err != nil {
-		if errors.Is(err, ErrPostNotFound) {
+		if errors.Is(err, db.ErrPostNotFound) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
 			return
 		}
@@ -369,7 +370,7 @@ func (h *PostsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Get existing post
 	existingPost, err := h.repo.FindByID(r.Context(), postID)
 	if err != nil {
-		if errors.Is(err, ErrPostNotFound) {
+		if errors.Is(err, db.ErrPostNotFound) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
 			return
 		}
@@ -425,7 +426,7 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 	// Get post to check it exists
 	post, err := h.repo.FindByID(r.Context(), postID)
 	if err != nil {
-		if errors.Is(err, ErrPostNotFound) {
+		if errors.Is(err, db.ErrPostNotFound) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
 			return
 		}
@@ -440,7 +441,7 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Record vote
-	err = h.repo.Vote(r.Context(), postID, models.AuthorTypeHuman, claims.UserID, req.Direction)
+	err = h.repo.Vote(r.Context(), postID, string(models.AuthorTypeHuman), claims.UserID, req.Direction)
 	if err != nil {
 		if errors.Is(err, ErrDuplicateVote) {
 			writePostsError(w, http.StatusConflict, "DUPLICATE_VOTE", "you have already voted on this post")

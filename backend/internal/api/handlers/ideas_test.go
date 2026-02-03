@@ -16,11 +16,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Error definitions for ideas testing
-var (
-	ErrIdeaNotFound     = errors.New("idea not found")
-	ErrResponseNotFound = errors.New("response not found")
-)
+// Error specific to ideas testing - ErrResponseNotFound is not in errors.go
+var ErrResponseNotFound = errors.New("response not found")
 
 // MockIdeasRepository implements IdeasRepositoryInterface for testing.
 type MockIdeasRepository struct {

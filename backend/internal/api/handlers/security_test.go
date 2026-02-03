@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -158,7 +159,7 @@ func TestSQLInjectionPrevention(t *testing.T) {
 						// The ID is passed as-is to the repository
 						// which will use parameterized query (WHERE id = $1)
 						capturedID = postID
-						return nil, ErrPostNotFound
+						return nil, db.ErrPostNotFound
 					},
 				}
 
@@ -353,7 +354,7 @@ type mockPostsRepo struct {
 	createFunc   func(ctx context.Context, post *models.Post) (*models.Post, error)
 	updateFunc   func(ctx context.Context, post *models.Post) (*models.Post, error)
 	deleteFunc   func(ctx context.Context, id string) error
-	voteFunc     func(ctx context.Context, postID string, voterType models.AuthorType, voterID string, direction string) error
+	voteFunc     func(ctx context.Context, postID, voterType, voterID, direction string) error
 }
 
 func (m *mockPostsRepo) List(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error) {
@@ -367,7 +368,7 @@ func (m *mockPostsRepo) FindByID(ctx context.Context, id string) (*models.PostWi
 	if m.findByIDFunc != nil {
 		return m.findByIDFunc(ctx, id)
 	}
-	return nil, ErrPostNotFound
+	return nil, db.ErrPostNotFound
 }
 
 func (m *mockPostsRepo) Create(ctx context.Context, post *models.Post) (*models.Post, error) {
@@ -391,7 +392,7 @@ func (m *mockPostsRepo) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (m *mockPostsRepo) Vote(ctx context.Context, postID string, voterType models.AuthorType, voterID string, direction string) error {
+func (m *mockPostsRepo) Vote(ctx context.Context, postID, voterType, voterID, direction string) error {
 	if m.voteFunc != nil {
 		return m.voteFunc(ctx, postID, voterType, voterID, direction)
 	}
@@ -505,7 +506,7 @@ func TestErrorMessagesDoNotLeakInfo(t *testing.T) {
 		// vs. doesn't exist at all
 		mockRepo := &mockPostsRepo{
 			findByIDFunc: func(ctx context.Context, id string) (*models.PostWithAuthor, error) {
-				return nil, ErrPostNotFound
+				return nil, db.ErrPostNotFound
 			},
 		}
 
@@ -719,7 +720,7 @@ func TestSoftDeletesDoNotExposeData(t *testing.T) {
 		// Then, get response for non-existent post
 		mockRepoNonExistent := &mockPostsRepo{
 			findByIDFunc: func(ctx context.Context, id string) (*models.PostWithAuthor, error) {
-				return nil, ErrPostNotFound
+				return nil, db.ErrPostNotFound
 			},
 		}
 

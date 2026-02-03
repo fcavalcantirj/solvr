@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -653,11 +654,11 @@ func (m *MockPostsRepositoryForIntegration) List(ctx context.Context, opts model
 func (m *MockPostsRepositoryForIntegration) FindByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {
 	post, exists := m.posts[id]
 	if !exists {
-		return nil, ErrPostNotFound
+		return nil, db.ErrPostNotFound
 	}
 	// Check if deleted
 	if post.DeletedAt != nil {
-		return nil, ErrPostNotFound
+		return nil, db.ErrPostNotFound
 	}
 	return post, nil
 }
@@ -685,7 +686,7 @@ func (m *MockPostsRepositoryForIntegration) Create(ctx context.Context, post *mo
 func (m *MockPostsRepositoryForIntegration) Update(ctx context.Context, post *models.Post) (*models.Post, error) {
 	existing, exists := m.posts[post.ID]
 	if !exists {
-		return nil, ErrPostNotFound
+		return nil, db.ErrPostNotFound
 	}
 
 	// Update fields
@@ -706,7 +707,7 @@ func (m *MockPostsRepositoryForIntegration) Update(ctx context.Context, post *mo
 func (m *MockPostsRepositoryForIntegration) Delete(ctx context.Context, id string) error {
 	post, exists := m.posts[id]
 	if !exists {
-		return ErrPostNotFound
+		return db.ErrPostNotFound
 	}
 
 	// Soft delete
@@ -716,20 +717,20 @@ func (m *MockPostsRepositoryForIntegration) Delete(ctx context.Context, id strin
 	return nil
 }
 
-func (m *MockPostsRepositoryForIntegration) Vote(ctx context.Context, postID string, voterType models.AuthorType, voterID string, direction string) error {
+func (m *MockPostsRepositoryForIntegration) Vote(ctx context.Context, postID, voterType, voterID, direction string) error {
 	if m.voteErr != nil {
 		return m.voteErr
 	}
 
 	_, exists := m.posts[postID]
 	if !exists {
-		return ErrPostNotFound
+		return db.ErrPostNotFound
 	}
 
 	m.vote = &models.Vote{
 		TargetType: "post",
 		TargetID:   postID,
-		VoterType:  string(voterType),
+		VoterType:  voterType,
 		VoterID:    voterID,
 		Direction:  direction,
 	}

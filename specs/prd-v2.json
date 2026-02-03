@@ -195,7 +195,7 @@
       "Test all three endpoints",
       "go test ./internal/api/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",

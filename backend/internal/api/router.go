@@ -13,6 +13,7 @@ import (
 
 	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
+	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 )
 
@@ -67,18 +68,27 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	// Create repositories and handlers
 	var agentRepo handlers.AgentRepositoryInterface
 	var claimTokenRepo handlers.ClaimTokenRepositoryInterface
+	var postsRepo handlers.PostsRepositoryInterface
 	if pool != nil {
 		agentRepo = db.NewAgentRepository(pool)
 		claimTokenRepo = db.NewClaimTokenRepository(pool)
+		postsRepo = db.NewPostRepository(pool)
 	} else {
 		// Use in-memory repository for testing when no DB is available
 		agentRepo = NewInMemoryAgentRepository()
 		claimTokenRepo = NewInMemoryClaimTokenRepository()
+		postsRepo = NewInMemoryPostRepository()
 	}
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
 	agentsHandler.SetClaimTokenRepository(claimTokenRepo)
 	agentsHandler.SetBaseURL("https://solvr.dev")
+
+	// Create posts handler
+	postsHandler := handlers.NewPostsHandler(postsRepo)
+
+	// JWT secret for auth middleware
+	jwtSecret := "test-jwt-secret"
 
 	// Create OAuth handlers for GitHub and Google OAuth
 	// Per SPEC.md Part 5.2: OAuth authentication endpoints
@@ -90,7 +100,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		GoogleClientID:     "",
 		GoogleClientSecret: "",
 		GoogleRedirectURI:  "",
-		JWTSecret:          "test-jwt-secret",
+		JWTSecret:          jwtSecret,
 		JWTExpiry:          "15m",
 		RefreshExpiry:      "7d",
 		FrontendURL:        "http://localhost:3000",
@@ -128,6 +138,27 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		// Per SPEC.md Part 5.2: Google OAuth
 		r.Get("/auth/google", oauthHandlers.GoogleRedirect)
 		r.Get("/auth/google/callback", oauthHandlers.GoogleCallback)
+
+		// Posts endpoints (API-CRITICAL requirement)
+		// Per SPEC.md Part 5.6: GET /v1/posts - list posts (no auth required)
+		r.Get("/posts", postsHandler.List)
+		// Per SPEC.md Part 5.6: GET /v1/posts/:id - single post (no auth required)
+		r.Get("/posts/{id}", postsHandler.Get)
+
+		// Protected posts routes (require authentication)
+		r.Group(func(r chi.Router) {
+			// Use JWT middleware for protected routes
+			r.Use(auth.JWTMiddleware(jwtSecret))
+
+			// Per SPEC.md Part 5.6: POST /v1/posts - create post (requires auth)
+			r.Post("/posts", postsHandler.Create)
+			// Per SPEC.md Part 5.6: PATCH /v1/posts/:id - update post (requires auth)
+			r.Patch("/posts/{id}", postsHandler.Update)
+			// Per SPEC.md Part 5.6: DELETE /v1/posts/:id - delete post (requires auth)
+			r.Delete("/posts/{id}", postsHandler.Delete)
+			// Per SPEC.md Part 5.6: POST /v1/posts/:id/vote - vote on post (requires auth)
+			r.Post("/posts/{id}/vote", postsHandler.Vote)
+		})
 	})
 }
 

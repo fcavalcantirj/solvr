@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -147,11 +146,7 @@ func (m *MockProblemsRepository) SetApproachesError(err error) {
 	m.approachesErr = err
 }
 
-// Error definitions for testing
-var (
-	ErrProblemNotFound  = errors.New("problem not found")
-	ErrApproachNotFound = errors.New("approach not found")
-)
+// Note: ErrProblemNotFound and ErrApproachNotFound are defined in errors.go
 
 // createTestProblem creates a test problem with default values.
 func createTestProblem(id, title string) models.PostWithAuthor {

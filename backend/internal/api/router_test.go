@@ -594,6 +594,15 @@ func TestGoogleOAuthRedirectEndpoint(t *testing.T) {
 	}
 }
 
+// getKeys returns the keys of a map
+func getKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // TestGoogleOAuthCallbackEndpoint verifies GET /v1/auth/google/callback endpoint is wired.
 // Per API-CRITICAL requirement: Wire OAuth endpoints /v1/auth/google/*.
 func TestGoogleOAuthCallbackEndpoint(t *testing.T) {
@@ -612,6 +621,127 @@ func TestGoogleOAuthCallbackEndpoint(t *testing.T) {
 	// Should return 400 Bad Request (missing authorization code)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400 (missing code), got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify error response is JSON
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should have error object
+	if response["error"] == nil {
+		t.Error("expected error object in response")
+	}
+}
+
+// TestGetPostsEndpoint verifies GET /v1/posts endpoint is wired.
+// Per API-CRITICAL requirement: Wire GET/POST /v1/posts endpoints.
+func TestGetPostsEndpoint(t *testing.T) {
+	router := NewRouter(nil)
+
+	// GET /v1/posts should return 200 with posts list
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should NOT return 404 - endpoint should be wired
+	if w.Code == http.StatusNotFound {
+		t.Errorf("GET /v1/posts returned 404 - endpoint not wired")
+	}
+
+	// Should return 200 OK
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify response is JSON with data and meta
+	bodyBytes := w.Body.Bytes()
+	t.Logf("Response body: %s", string(bodyBytes))
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should have data key (can be null/empty array when no posts)
+	if _, hasData := response["data"]; !hasData {
+		t.Errorf("expected data key in response, got keys: %v", getKeys(response))
+	}
+
+	// Should have meta object
+	if response["meta"] == nil {
+		t.Error("expected meta in response")
+	}
+
+	// Meta should have pagination fields
+	meta, ok := response["meta"].(map[string]interface{})
+	if !ok {
+		t.Error("meta should be an object")
+	} else {
+		if _, hasTotal := meta["total"]; !hasTotal {
+			t.Error("meta should have total field")
+		}
+		if _, hasPage := meta["page"]; !hasPage {
+			t.Error("meta should have page field")
+		}
+	}
+}
+
+// TestGetSinglePostEndpoint verifies GET /v1/posts/:id endpoint is wired.
+// Per API-CRITICAL requirement: Wire GET/POST /v1/posts endpoints.
+func TestGetSinglePostEndpoint(t *testing.T) {
+	router := NewRouter(nil)
+
+	// GET /v1/posts/:id with non-existent ID should return 404 (not found post, not route)
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts/00000000-0000-0000-0000-000000000001", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should return 404 NOT_FOUND (post not found), but with our standard error format
+	// This confirms the route exists but the post doesn't
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 (post not found), got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify error response is JSON with proper format
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should have error object with NOT_FOUND code
+	errObj, ok := response["error"].(map[string]interface{})
+	if !ok {
+		t.Error("expected error object in response")
+	} else {
+		if errObj["code"] != "NOT_FOUND" {
+			t.Errorf("expected error code NOT_FOUND, got %v", errObj["code"])
+		}
+	}
+}
+
+// TestCreatePostEndpointRequiresAuth verifies POST /v1/posts requires authentication.
+// Per API-CRITICAL requirement: Wire GET/POST /v1/posts endpoints.
+func TestCreatePostEndpointRequiresAuth(t *testing.T) {
+	router := NewRouter(nil)
+
+	// POST /v1/posts without auth should return 401
+	reqBody := `{"type":"question","title":"Test question title","description":"This is a test question description that is long enough"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/posts", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should NOT return 404 - endpoint should be wired
+	if w.Code == http.StatusNotFound {
+		t.Errorf("POST /v1/posts returned 404 - endpoint not wired")
+	}
+
+	// Should return 401 Unauthorized
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 (unauthorized), got %d: %s", w.Code, w.Body.String())
 	}
 
 	// Verify error response is JSON

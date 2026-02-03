@@ -6796,3 +6796,45 @@ backend/internal/api/router.go
 **Tests:**
 - go test ./internal/api -run "TestGoogleOAuth" passes
 - go build ./... passes
+
+---
+
+## Wire GET/POST /v1/posts endpoints (2026-02-03)
+
+**Requirement:** API-CRITICAL - Wire GET/POST /v1/posts endpoints
+
+**TDD Approach:**
+- Wrote failing tests first (RED) - TestGetPostsEndpoint, TestGetSinglePostEndpoint, TestCreatePostEndpointRequiresAuth
+- Implemented minimum code to pass (GREEN)
+
+**Tests Added:**
+backend/internal/api/router_test.go
+- TestGetPostsEndpoint: Tests GET /v1/posts returns 200 with data and meta fields
+- TestGetSinglePostEndpoint: Tests GET /v1/posts/{id} returns 404 for non-existent post
+- TestCreatePostEndpointRequiresAuth: Tests POST /v1/posts returns 401 without auth
+
+**Implementation:**
+backend/internal/api/router.go
+- Created InMemoryPostRepository for testing when no DB available
+- Created PostsHandler with postsRepo
+- Wired GET /v1/posts to postsHandler.List
+- Wired GET /v1/posts/{id} to postsHandler.Get
+- Wired protected routes with JWTMiddleware:
+  - POST /v1/posts to postsHandler.Create
+  - PATCH /v1/posts/{id} to postsHandler.Update
+  - DELETE /v1/posts/{id} to postsHandler.Delete
+  - POST /v1/posts/{id}/vote to postsHandler.Vote
+
+backend/internal/api/inmemory_repo.go
+- Added InMemoryPostRepository for testing when no DB available
+- Implements PostsRepositoryInterface (List, FindByID, Create, Update, Delete, Vote)
+
+**Bug Fixes:**
+- Fixed Vote interface signature mismatch: changed voterType from models.AuthorType to string
+- Fixed error identity: MockPostsRepository now returns db.ErrPostNotFound instead of handlers.ErrPostNotFound
+- Fixed redeclared errors in test files (removed duplicate declarations from problems_test.go, questions_test.go, ideas_test.go)
+- Removed unused imports in test files
+
+**Tests:**
+- go test ./internal/api -run "TestGetPostsEndpoint|TestGetSinglePostEndpoint|TestCreatePostEndpointRequiresAuth" passes
+- go build ./... passes

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
@@ -298,4 +299,155 @@ func (r *InMemoryClaimTokenRepository) MarkUsed(ctx context.Context, tokenID, hu
 		}
 	}
 	return errClaimTokenNotFound
+}
+
+
+// InMemoryPostRepository is an in-memory implementation of PostsRepositoryInterface.
+// Used for testing when no database is available.
+type InMemoryPostRepository struct {
+	mu    sync.RWMutex
+	posts map[string]*models.Post
+}
+
+// NewInMemoryPostRepository creates a new in-memory post repository.
+func NewInMemoryPostRepository() *InMemoryPostRepository {
+	return &InMemoryPostRepository{
+		posts: make(map[string]*models.Post),
+	}
+}
+
+// List returns posts matching the given options.
+func (r *InMemoryPostRepository) List(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var results []models.PostWithAuthor
+	for _, post := range r.posts {
+		if post.DeletedAt != nil {
+			continue
+		}
+
+		// Apply filters
+		if opts.Type != "" && post.Type != opts.Type {
+			continue
+		}
+		if opts.Status != "" && post.Status != opts.Status {
+			continue
+		}
+
+		results = append(results, models.PostWithAuthor{
+			Post: *post,
+			Author: models.PostAuthor{
+				Type: post.PostedByType,
+				ID:   post.PostedByID,
+			},
+			VoteScore: post.Upvotes - post.Downvotes,
+		})
+	}
+
+	total := len(results)
+
+	// Apply pagination
+	start := (opts.Page - 1) * opts.PerPage
+	if start > len(results) {
+		return []models.PostWithAuthor{}, total, nil
+	}
+	end := start + opts.PerPage
+	if end > len(results) {
+		end = len(results)
+	}
+
+	return results[start:end], total, nil
+}
+
+// FindByID returns a single post by ID.
+func (r *InMemoryPostRepository) FindByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	post, exists := r.posts[id]
+	if !exists || post.DeletedAt != nil {
+		return nil, db.ErrPostNotFound
+	}
+
+	return &models.PostWithAuthor{
+		Post: *post,
+		Author: models.PostAuthor{
+			Type: post.PostedByType,
+			ID:   post.PostedByID,
+		},
+		VoteScore: post.Upvotes - post.Downvotes,
+	}, nil
+}
+
+// Create creates a new post and returns it.
+func (r *InMemoryPostRepository) Create(ctx context.Context, post *models.Post) (*models.Post, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Generate ID if not set
+	if post.ID == "" {
+		post.ID = "post_" + time.Now().Format("20060102150405")
+	}
+
+	now := time.Now()
+	if post.CreatedAt.IsZero() {
+		post.CreatedAt = now
+	}
+	post.UpdatedAt = now
+
+	postCopy := *post
+	r.posts[post.ID] = &postCopy
+	return &postCopy, nil
+}
+
+// Update updates an existing post and returns it.
+func (r *InMemoryPostRepository) Update(ctx context.Context, post *models.Post) (*models.Post, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	existing, exists := r.posts[post.ID]
+	if !exists || existing.DeletedAt != nil {
+		return nil, db.ErrPostNotFound
+	}
+
+	post.UpdatedAt = time.Now()
+	postCopy := *post
+	r.posts[post.ID] = &postCopy
+	return &postCopy, nil
+}
+
+// Delete soft-deletes a post by ID.
+func (r *InMemoryPostRepository) Delete(ctx context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	post, exists := r.posts[id]
+	if !exists || post.DeletedAt != nil {
+		return db.ErrPostNotFound
+	}
+
+	now := time.Now()
+	post.DeletedAt = &now
+	return nil
+}
+
+// Vote records a vote on a post.
+func (r *InMemoryPostRepository) Vote(ctx context.Context, postID, voterType, voterID, direction string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	post, exists := r.posts[postID]
+	if !exists || post.DeletedAt != nil {
+		return db.ErrPostNotFound
+	}
+
+	// For simplicity, just update vote counts
+	if direction == "up" {
+		post.Upvotes++
+	} else if direction == "down" {
+		post.Downvotes++
+	}
+
+	return nil
 }

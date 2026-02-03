@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -47,7 +48,7 @@ func (m *MockPostsRepository) FindByID(ctx context.Context, id string) (*models.
 		return nil, m.err
 	}
 	if m.post == nil {
-		return nil, ErrPostNotFound
+		return nil, db.ErrPostNotFound
 	}
 	return m.post, nil
 }
@@ -80,14 +81,14 @@ func (m *MockPostsRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (m *MockPostsRepository) Vote(ctx context.Context, postID string, voterType models.AuthorType, voterID string, direction string) error {
+func (m *MockPostsRepository) Vote(ctx context.Context, postID, voterType, voterID, direction string) error {
 	if m.voteErr != nil {
 		return m.voteErr
 	}
 	m.vote = &models.Vote{
 		TargetType: "post",
 		TargetID:   postID,
-		VoterType:  string(voterType),
+		VoterType:  voterType,
 		VoterID:    voterID,
 		Direction:  direction,
 	}
@@ -111,12 +112,8 @@ func (m *MockPostsRepository) SetVoteError(err error) {
 	m.voteErr = err
 }
 
-// Error definitions for testing
-var (
-	ErrPostNotFound  = errors.New("post not found")
-	ErrDuplicateVote = errors.New("already voted")
-	ErrCannotVoteOwn = errors.New("cannot vote on own content")
-)
+// Error for testing - ErrCannotVoteOwn is specific to this test file
+var ErrCannotVoteOwn = errors.New("cannot vote on own content")
 
 // Helper to create test post
 func createTestPost(id, title string, postType models.PostType) models.PostWithAuthor {

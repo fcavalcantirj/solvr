@@ -664,12 +664,11 @@ func TestMarkRead_DatabaseError(t *testing.T) {
 }
 
 // Helper function to add URL parameter to request context
+// Note: urlParamKey type is defined in errors.go
 func addURLParam(req *http.Request, key, value string) *http.Request {
 	ctx := context.WithValue(req.Context(), urlParamKey(key), value)
 	return req.WithContext(ctx)
 }
-
-type urlParamKey string
 
 func containsString(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {

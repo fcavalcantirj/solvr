@@ -30,13 +30,7 @@ jest.mock('next/navigation', () => ({
 
 // Mock next/link
 jest.mock('next/link', () => {
-  return function MockLink({
-    children,
-    href,
-  }: {
-    children: React.ReactNode;
-    href: string;
-  }) {
+  return function MockLink({ children, href }: { children: React.ReactNode; href: string }) {
     return <a href={href}>{children}</a>;
   };
 });
@@ -101,9 +95,7 @@ describe('New Problem Page', () => {
 
     it('displays page heading', () => {
       render(<NewProblemPage />);
-      expect(
-        screen.getByRole('heading', { name: /new problem/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /new problem/i })).toBeInTheDocument();
     });
 
     it('has form element', () => {
@@ -239,16 +231,12 @@ describe('New Problem Page', () => {
   describe('Preview Tab', () => {
     it('has preview tab button', () => {
       render(<NewProblemPage />);
-      expect(
-        screen.getByRole('tab', { name: /preview/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /preview/i })).toBeInTheDocument();
     });
 
     it('has write/edit tab button', () => {
       render(<NewProblemPage />);
-      expect(
-        screen.getByRole('tab', { name: /write|edit/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /write|edit/i })).toBeInTheDocument();
     });
 
     it('shows form by default (Write tab active)', () => {
@@ -296,16 +284,12 @@ describe('New Problem Page', () => {
   describe('Form Submission', () => {
     it('has submit button', () => {
       render(<NewProblemPage />);
-      expect(
-        screen.getByRole('button', { name: /create problem|submit/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /create problem|submit/i })).toBeInTheDocument();
     });
 
     it('has cancel button', () => {
       render(<NewProblemPage />);
-      expect(
-        screen.getByRole('button', { name: /cancel/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
     });
 
     it('cancel button goes back', async () => {
@@ -329,10 +313,7 @@ describe('New Problem Page', () => {
         'This is a test problem description that is long enough to meet the minimum requirements.'
       );
       await user.type(screen.getByLabelText(/tags/i), 'test, golang');
-      await user.type(
-        screen.getByLabelText(/success criteria/i),
-        'All tests pass'
-      );
+      await user.type(screen.getByLabelText(/success criteria/i), 'All tests pass');
 
       // Submit
       const submitBtn = screen.getByRole('button', {
@@ -475,10 +456,7 @@ describe('New Problem Page', () => {
         screen.getByLabelText(/description/i),
         'A valid description that meets the minimum length requirements.'
       );
-      await user.type(
-        screen.getByLabelText(/tags/i),
-        'one, two, three, four, five, six'
-      );
+      await user.type(screen.getByLabelText(/tags/i), 'one, two, three, four, five, six');
 
       const submitBtn = screen.getByRole('button', {
         name: /create problem|submit/i,
@@ -494,9 +472,7 @@ describe('New Problem Page', () => {
   describe('Error Handling', () => {
     it('displays API error message', async () => {
       const user = userEvent.setup();
-      mockApiPost.mockRejectedValue(
-        new ApiError(400, 'VALIDATION_ERROR', 'Title already exists')
-      );
+      mockApiPost.mockRejectedValue(new ApiError(400, 'VALIDATION_ERROR', 'Title already exists'));
 
       render(<NewProblemPage />);
 
@@ -540,9 +516,7 @@ describe('New Problem Page', () => {
 
     it('can dismiss error message', async () => {
       const user = userEvent.setup();
-      mockApiPost.mockRejectedValue(
-        new ApiError(400, 'VALIDATION_ERROR', 'Some error')
-      );
+      mockApiPost.mockRejectedValue(new ApiError(400, 'VALIDATION_ERROR', 'Some error'));
 
       render(<NewProblemPage />);
 
@@ -588,9 +562,7 @@ describe('New Problem Page', () => {
 
     it('error messages are announced', async () => {
       const user = userEvent.setup();
-      mockApiPost.mockRejectedValue(
-        new ApiError(400, 'VALIDATION_ERROR', 'Error occurred')
-      );
+      mockApiPost.mockRejectedValue(new ApiError(400, 'VALIDATION_ERROR', 'Error occurred'));
 
       render(<NewProblemPage />);
 
@@ -626,6 +598,112 @@ describe('New Problem Page', () => {
 
       const container = screen.getByTestId('new-problem-container');
       expect(container).toHaveClass('max-w-3xl');
+    });
+  });
+
+  describe('Analytics: Track post creation events', () => {
+    let mockPlausible: jest.Mock;
+
+    beforeEach(() => {
+      mockPlausible = jest.fn();
+      (window as { plausible?: unknown }).plausible = mockPlausible;
+    });
+
+    afterEach(() => {
+      delete (window as { plausible?: unknown }).plausible;
+    });
+
+    it('fires PostCreated event on successful submission', async () => {
+      const user = userEvent.setup();
+      mockApiPost.mockResolvedValue({ id: 'created-123', type: 'problem' });
+
+      render(<NewProblemPage />);
+
+      // Fill minimum required fields
+      await user.type(screen.getByLabelText(/title/i), 'Test Problem Title');
+      await user.type(
+        screen.getByLabelText(/description/i),
+        'A sufficiently long description for the problem that meets minimum length requirements.'
+      );
+
+      // Submit
+      const submitBtn = screen.getByRole('button', {
+        name: /create problem|submit/i,
+      });
+      await user.click(submitBtn);
+
+      await waitFor(() => {
+        expect(mockPlausible).toHaveBeenCalledWith(
+          'PostCreated',
+          expect.objectContaining({
+            props: expect.objectContaining({
+              type: 'problem',
+            }),
+          })
+        );
+      });
+    });
+
+    it('includes author_type in PostCreated event', async () => {
+      const user = userEvent.setup();
+      mockApiPost.mockResolvedValue({ id: 'created-123', type: 'problem' });
+
+      render(<NewProblemPage />);
+
+      // Fill minimum required fields
+      await user.type(screen.getByLabelText(/title/i), 'Test Problem Title');
+      await user.type(
+        screen.getByLabelText(/description/i),
+        'A sufficiently long description for the problem that meets minimum length requirements.'
+      );
+
+      // Submit
+      const submitBtn = screen.getByRole('button', {
+        name: /create problem|submit/i,
+      });
+      await user.click(submitBtn);
+
+      await waitFor(() => {
+        const calls = mockPlausible.mock.calls;
+        const postCreatedCall = calls.find((call: unknown[]) => call[0] === 'PostCreated');
+        expect(postCreatedCall).toBeDefined();
+        if (postCreatedCall) {
+          const props = postCreatedCall[1]?.props;
+          expect(props).toHaveProperty('author_type', 'human');
+        }
+      });
+    });
+
+    it('does not fire PostCreated event on failed submission', async () => {
+      const user = userEvent.setup();
+      const { ApiError } = jest.requireActual('@/lib/api');
+      mockApiPost.mockRejectedValue(new ApiError(400, 'VALIDATION_ERROR', 'Invalid data'));
+
+      render(<NewProblemPage />);
+
+      // Fill minimum required fields
+      await user.type(screen.getByLabelText(/title/i), 'Test Problem Title');
+      await user.type(
+        screen.getByLabelText(/description/i),
+        'A sufficiently long description for the problem that meets minimum length requirements.'
+      );
+
+      // Submit
+      const submitBtn = screen.getByRole('button', {
+        name: /create problem|submit/i,
+      });
+      await user.click(submitBtn);
+
+      // Wait for error to appear
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeInTheDocument();
+      });
+
+      // Should NOT have fired PostCreated
+      const postCreatedCalls = mockPlausible.mock.calls.filter(
+        (call: unknown[]) => call[0] === 'PostCreated'
+      );
+      expect(postCreatedCalls).toHaveLength(0);
     });
   });
 });

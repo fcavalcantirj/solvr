@@ -11,10 +11,11 @@
  * - Loading and empty states
  */
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { trackEvent } from '@/lib/analytics';
 
 // Types for API responses per SPEC.md Part 5.5
 interface SearchAuthor {
@@ -119,7 +120,10 @@ function Tag({ tag }: { tag: string }) {
 // Result card component
 function ResultCard({ result }: { result: SearchResult }) {
   // Parse snippet HTML to display highlighted terms
-  const snippetHtml = result.snippet.replace(/<mark>/g, '<mark class="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">');
+  const snippetHtml = result.snippet.replace(
+    /<mark>/g,
+    '<mark class="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">'
+  );
 
   return (
     <li>
@@ -133,7 +137,9 @@ function ResultCard({ result }: { result: SearchResult }) {
           <span className="text-sm text-zinc-400 dark:text-zinc-600">•</span>
           <span className="text-sm text-zinc-500 dark:text-zinc-400">{result.status}</span>
         </div>
-        <h3 className="font-medium text-zinc-900 dark:text-white mb-1 line-clamp-1">{result.title}</h3>
+        <h3 className="font-medium text-zinc-900 dark:text-white mb-1 line-clamp-1">
+          {result.title}
+        </h3>
         <p
           className="text-sm text-zinc-600 dark:text-zinc-400 mb-2 line-clamp-2"
           dangerouslySetInnerHTML={{ __html: snippetHtml }}
@@ -186,6 +192,9 @@ function SearchContent() {
     return `/search?${urlParams.toString()}`;
   }, []);
 
+  // Track if we've already sent analytics for the current query
+  const lastTrackedQuery = useRef<string | null>(null);
+
   // Fetch search results
   const fetchResults = useCallback(async () => {
     if (!query) {
@@ -204,9 +213,21 @@ function SearchContent() {
       if (sort !== 'relevance') params.sort = sort;
       if (page > 1) params.page = String(page);
 
-      const response = await api.get<SearchResponse>('/v1/search', params, { includeMetadata: true });
+      const response = await api.get<SearchResponse>('/v1/search', params, {
+        includeMetadata: true,
+      });
       setResults(response.data || []);
       setMeta(response.meta || null);
+
+      // Track Search event after results load (per SPEC.md Part 19.3)
+      // Only track if query changed (avoid duplicate tracking on filter/page changes)
+      if (lastTrackedQuery.current !== query) {
+        trackEvent('Search', {
+          query_length: query.length,
+          results_count: response.meta?.total ?? 0,
+        });
+        lastTrackedQuery.current = query;
+      }
     } catch (err) {
       setError('Unable to load search results. Please try again.');
       console.error('Search fetch error:', err);
@@ -228,6 +249,15 @@ function SearchContent() {
   // Handle search submit
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Track Search event on submit (per SPEC.md Part 19.3)
+    // Include query_length but NOT query content (privacy)
+    if (inputValue.trim()) {
+      trackEvent('Search', {
+        query_length: inputValue.trim().length,
+      });
+      // Reset tracking so we track again when results arrive
+      lastTrackedQuery.current = null;
+    }
     router.push(buildUrl({ q: inputValue, type, status, sort, page: 1 }));
   };
 
@@ -286,8 +316,17 @@ function SearchContent() {
                   className="absolute right-12 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-600"
                   aria-label="Clear search"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                 </button>
               )}
@@ -305,7 +344,10 @@ function SearchContent() {
         {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-6">
           <div>
-            <label htmlFor="type-filter" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <label
+              htmlFor="type-filter"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+            >
               Type
             </label>
             <select
@@ -323,7 +365,10 @@ function SearchContent() {
           </div>
 
           <div>
-            <label htmlFor="status-filter" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <label
+              htmlFor="status-filter"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+            >
               Status
             </label>
             <select
@@ -341,7 +386,10 @@ function SearchContent() {
           </div>
 
           <div>
-            <label htmlFor="sort-filter" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <label
+              htmlFor="sort-filter"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+            >
               Sort by
             </label>
             <select

@@ -6155,3 +6155,51 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   - 1109 total frontend tests, all passing
   - Build succeeds
 
+
+- 2026-02-03: [analytics] Track search events - IMPLEMENTED ✓
+  
+  **TDD Approach:**
+  - Phase 1 (RED): Wrote 3 tests for search analytics in search.test.tsx
+  - Phase 2 (GREEN): Implemented trackEvent calls in search page
+  - Phase 3 (REFACTOR): All tests passing
+  
+  **Files Modified:**
+  1. frontend/src/app/search/page.tsx
+     - Added import for trackEvent from @/lib/analytics
+     - Added useRef for lastTrackedQuery to avoid duplicate tracking
+     - Fire 'Search' event after results load with query_length and results_count
+     - Fire 'Search' event on form submit with query_length
+  
+  2. frontend/src/__tests__/search.test.tsx
+     - Added describe block for "Analytics: Track search events"
+     - 3 new tests: fires event on submit, includes query_length not content, includes results_count
+  
+  **Requirements Met:**
+  1. "Fire Search event on search submit" ✓
+  2. "Include query length (not query content)" ✓ 
+  3. "Include results count" ✓
+  
+  **Privacy:** Query content is NOT sent (only length), per SPEC.md Part 19.3
+
+- 2026-02-03: [analytics] Track post creation events - IMPLEMENTED ✓
+  
+  **TDD Approach:**
+  - Phase 1 (RED): Wrote analytics tests for new-problem, new-question, new-idea pages
+  - Phase 2 (GREEN): Implemented trackEvent calls in all three pages
+  
+  **Files Modified:**
+  1. frontend/src/app/new/problem/page.tsx - Added trackEvent('PostCreated', {type: 'problem', author_type: 'human'})
+  2. frontend/src/app/new/question/page.tsx - Added trackEvent('PostCreated', {type: 'question', author_type: 'human'})
+  3. frontend/src/app/new/idea/page.tsx - Added trackEvent('PostCreated', {type: 'idea', author_type: 'human'})
+  4. frontend/src/__tests__/new-problem.test.tsx - Added 3 analytics tests
+  5. frontend/src/__tests__/new-question.test.tsx - Added 1 analytics test
+  6. frontend/src/__tests__/new-idea.test.tsx - Added 1 analytics test
+  
+  **Requirements Met:**
+  1. "Fire PostCreated event" ✓
+  2. "Include type (problem/question/idea)" ✓
+  3. "Include author_type (human/agent)" ✓
+  
+  **Test Results:**
+  - 1117 total frontend tests passing
+  - All analytics requirements verified via tests

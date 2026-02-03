@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { api, ApiError } from '@/lib/api';
+import { trackEvent } from '@/lib/analytics';
 
 // Markdown rendering for preview
 import { marked } from 'marked';
@@ -74,9 +75,7 @@ export default function NewIdeaPage() {
     return null;
   }
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -142,6 +141,13 @@ export default function NewIdeaPage() {
       };
 
       const result = await api.post<CreatedIdea>('/v1/ideas', payload);
+
+      // Track PostCreated event (per SPEC.md Part 19.3)
+      trackEvent('PostCreated', {
+        type: 'idea',
+        author_type: 'human',
+      });
+
       router.push(`/posts/${result.id}`);
     } catch (error) {
       if (error instanceof ApiError) {
@@ -172,10 +178,7 @@ export default function NewIdeaPage() {
 
   return (
     <main className="min-h-screen py-8 px-4">
-      <div
-        className="max-w-3xl mx-auto"
-        data-testid="new-idea-container"
-      >
+      <div className="max-w-3xl mx-auto" data-testid="new-idea-container">
         <h1 className="text-2xl font-bold mb-6">New Idea</h1>
 
         {/* Error Alert */}
@@ -229,9 +232,7 @@ export default function NewIdeaPage() {
             data-testid="preview-area"
             className="min-h-[300px] p-4 border rounded-lg bg-gray-50 mb-6 prose prose-sm max-w-none"
           >
-            <h2 className="text-xl font-semibold mb-2">
-              {formData.title || 'Untitled Idea'}
-            </h2>
+            <h2 className="text-xl font-semibold mb-2">{formData.title || 'Untitled Idea'}</h2>
             <div
               dangerouslySetInnerHTML={{
                 __html: renderMarkdown(formData.description || '*No description yet*'),
@@ -241,10 +242,7 @@ export default function NewIdeaPage() {
               <div className="mt-4">
                 <span className="font-medium">Tags: </span>
                 {parseTags(formData.tags).map((tag, i) => (
-                  <span
-                    key={i}
-                    className="inline-block bg-gray-200 px-2 py-1 rounded mr-2 text-sm"
-                  >
+                  <span key={i} className="inline-block bg-gray-200 px-2 py-1 rounded mr-2 text-sm">
                     {tag}
                   </span>
                 ))}
@@ -255,17 +253,10 @@ export default function NewIdeaPage() {
 
         {/* Form */}
         {activeTab === 'write' && (
-          <form
-            role="form"
-            onSubmit={handleSubmit}
-            className="space-y-6"
-          >
+          <form role="form" onSubmit={handleSubmit} className="space-y-6">
             {/* Title */}
             <div>
-              <label
-                htmlFor="title"
-                className="block font-medium mb-1"
-              >
+              <label htmlFor="title" className="block font-medium mb-1">
                 Title
               </label>
               <input
@@ -281,20 +272,13 @@ export default function NewIdeaPage() {
                 }`}
                 placeholder="Share your idea or observation"
               />
-              <p className="text-sm text-muted mt-1">
-                Maximum 200 characters
-              </p>
-              {errors.title && (
-                <p className="text-sm text-red-600 mt-1">{errors.title}</p>
-              )}
+              <p className="text-sm text-muted mt-1">Maximum 200 characters</p>
+              {errors.title && <p className="text-sm text-red-600 mt-1">{errors.title}</p>}
             </div>
 
             {/* Description */}
             <div>
-              <label
-                htmlFor="description"
-                className="block font-medium mb-1"
-              >
+              <label htmlFor="description" className="block font-medium mb-1">
                 Description
               </label>
               <textarea
@@ -309,9 +293,7 @@ export default function NewIdeaPage() {
                 }`}
                 placeholder="Describe your idea in detail. Share your thoughts, observations, or suggestions. You can use Markdown for formatting."
               />
-              <p className="text-sm text-muted mt-1">
-                Supports Markdown. Minimum 50 characters.
-              </p>
+              <p className="text-sm text-muted mt-1">Supports Markdown. Minimum 50 characters.</p>
               {errors.description && (
                 <p className="text-sm text-red-600 mt-1">{errors.description}</p>
               )}
@@ -319,10 +301,7 @@ export default function NewIdeaPage() {
 
             {/* Tags */}
             <div>
-              <label
-                htmlFor="tags"
-                className="block font-medium mb-1"
-              >
+              <label htmlFor="tags" className="block font-medium mb-1">
                 Tags
               </label>
               <input
@@ -336,12 +315,8 @@ export default function NewIdeaPage() {
                 }`}
                 placeholder="innovation, design, patterns"
               />
-              <p className="text-sm text-muted mt-1">
-                Comma-separated, up to 5 tags
-              </p>
-              {errors.tags && (
-                <p className="text-sm text-red-600 mt-1">{errors.tags}</p>
-              )}
+              <p className="text-sm text-muted mt-1">Comma-separated, up to 5 tags</p>
+              {errors.tags && <p className="text-sm text-red-600 mt-1">{errors.tags}</p>}
             </div>
 
             {/* Buttons */}

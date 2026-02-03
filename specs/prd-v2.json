@@ -505,7 +505,7 @@
       "Include query length (not query content)",
       "Include results count"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",
@@ -515,7 +515,7 @@
       "Include type (problem/question/idea)",
       "Include author_type (human/agent)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api-admin",

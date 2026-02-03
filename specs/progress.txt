@@ -6641,3 +6641,45 @@ backend/internal/db/posts.go
 **Tests:**
 - go test ./internal/db/... passes
 - go build ./... passes
+
+---
+
+## Completed: Add PostRepository.Vote method
+
+**Date:** 2026-02-03
+
+**Requirement:**
+- Implement Vote(ctx, postID, voterType, voterID, direction string) error
+- INSERT/UPDATE votes table
+- Update post upvotes/downvotes counters
+
+**TDD Approach:**
+- Wrote failing tests first (RED)
+- Implemented minimum code to pass (GREEN)
+
+**Tests Added:**
+backend/internal/db/posts_test.go
+- TestPostRepository_Vote_Upvote: Tests adding upvote increases upvotes count
+- TestPostRepository_Vote_Downvote: Tests adding downvote increases downvotes count
+- TestPostRepository_Vote_ChangeVote: Tests changing vote direction adjusts counts correctly
+- TestPostRepository_Vote_MultipleVoters: Tests multiple different voters can vote
+- TestPostRepository_Vote_SameVoteTwice: Tests voting same direction twice is no-op
+- TestPostRepository_Vote_PostNotFound: Tests ErrPostNotFound for non-existent post
+- TestPostRepository_Vote_InvalidDirection: Tests ErrInvalidVoteDirection for invalid direction
+- TestPostRepository_Vote_InvalidVoterType: Tests ErrInvalidVoterType for invalid voter type
+
+**Implementation:**
+backend/internal/db/posts.go
+- Added Vote(ctx, postID, voterType, voterID, direction string) error method
+  - Validates direction is "up" or "down"
+  - Validates voterType is "human" or "agent"
+  - Checks post exists and is not deleted
+  - If no existing vote: inserts vote and updates post counts
+  - If existing vote with different direction: updates vote and adjusts counts
+  - If existing vote with same direction: no-op
+  - Uses transaction (WithTx) for atomicity
+- Added error types: ErrInvalidVoteDirection, ErrInvalidVoterType
+
+**Tests:**
+- go test ./internal/db/... passes
+- go build ./... passes

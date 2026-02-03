@@ -13,10 +13,12 @@ import (
 
 // Post-related errors.
 var (
-	ErrPostNotFound      = errors.New("post not found")
-	ErrDuplicatePostID   = errors.New("post ID already exists")
-	ErrInvalidPostType   = errors.New("invalid post type")
-	ErrInvalidPostStatus = errors.New("invalid post status")
+	ErrPostNotFound         = errors.New("post not found")
+	ErrDuplicatePostID      = errors.New("post ID already exists")
+	ErrInvalidPostType      = errors.New("invalid post type")
+	ErrInvalidPostStatus    = errors.New("invalid post status")
+	ErrInvalidVoteDirection = errors.New("invalid vote direction: must be 'up' or 'down'")
+	ErrInvalidVoterType     = errors.New("invalid voter type: must be 'human' or 'agent'")
 )
 
 // PostRepository handles database operations for posts.
@@ -418,4 +420,114 @@ func (r *PostRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+// Vote adds or updates a vote on a post.
+// If the voter hasn't voted, it inserts a new vote.
+// If the voter has voted with a different direction, it updates the vote and adjusts counts.
+// If the voter has voted with the same direction, it's a no-op.
+// Per SPEC.md Part 2.9: One vote per entity per target.
+func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, direction string) error {
+	// Validate direction
+	if direction != "up" && direction != "down" {
+		return ErrInvalidVoteDirection
+	}
+
+	// Validate voter type
+	if voterType != "human" && voterType != "agent" {
+		return ErrInvalidVoterType
+	}
+
+	// Check if post exists and is not deleted
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM posts WHERE id = $1 AND deleted_at IS NULL)",
+		postID,
+	).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("failed to check post existence: %w", err)
+	}
+	if !exists {
+		return ErrPostNotFound
+	}
+
+	// Check for existing vote
+	var existingDirection string
+	err = r.pool.QueryRow(ctx,
+		`SELECT direction FROM votes
+		 WHERE target_type = 'post' AND target_id = $1
+		 AND voter_type = $2 AND voter_id = $3`,
+		postID, voterType, voterID,
+	).Scan(&existingDirection)
+
+	if err != nil && err.Error() != "no rows in result set" {
+		return fmt.Errorf("failed to check existing vote: %w", err)
+	}
+
+	// If same vote exists, nothing to do
+	if existingDirection == direction {
+		return nil
+	}
+
+	// Use WithTx for atomicity
+	return r.pool.WithTx(ctx, func(tx Tx) error {
+		if existingDirection == "" {
+			// No existing vote - insert new vote and update post counts
+			_, err = tx.Exec(ctx,
+				`INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction)
+				 VALUES ('post', $1, $2, $3, $4)`,
+				postID, voterType, voterID, direction,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert vote: %w", err)
+			}
+
+			// Update post vote counts
+			if direction == "up" {
+				_, err = tx.Exec(ctx,
+					"UPDATE posts SET upvotes = upvotes + 1 WHERE id = $1",
+					postID,
+				)
+			} else {
+				_, err = tx.Exec(ctx,
+					"UPDATE posts SET downvotes = downvotes + 1 WHERE id = $1",
+					postID,
+				)
+			}
+			if err != nil {
+				return fmt.Errorf("failed to update post vote counts: %w", err)
+			}
+		} else {
+			// Existing vote with different direction - update vote and adjust counts
+			_, err = tx.Exec(ctx,
+				`UPDATE votes SET direction = $4
+				 WHERE target_type = 'post' AND target_id = $1
+				 AND voter_type = $2 AND voter_id = $3`,
+				postID, voterType, voterID, direction,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to update vote: %w", err)
+			}
+
+			// Adjust post vote counts: decrement old, increment new
+			if direction == "up" {
+				// Was down, now up: downvotes--, upvotes++
+				_, err = tx.Exec(ctx,
+					"UPDATE posts SET upvotes = upvotes + 1, downvotes = downvotes - 1 WHERE id = $1",
+					postID,
+				)
+			} else {
+				// Was up, now down: upvotes--, downvotes++
+				_, err = tx.Exec(ctx,
+					"UPDATE posts SET upvotes = upvotes - 1, downvotes = downvotes + 1 WHERE id = $1",
+					postID,
+				)
+			}
+			if err != nil {
+				return fmt.Errorf("failed to adjust post vote counts: %w", err)
+			}
+		}
+
+		return nil
+	})
 }

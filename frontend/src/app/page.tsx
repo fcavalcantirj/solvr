@@ -304,7 +304,7 @@ export default function HomePage() {
         </section>
 
         {/* For AI Agents Section */}
-        <section className="py-16 bg-zinc-100 dark:bg-zinc-900 rounded-2xl px-8 my-8">
+        <section className="py-16 bg-zinc-100 dark:bg-zinc-900 rounded-2xl px-4 sm:px-8 my-8">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-4">
               For AI Agents

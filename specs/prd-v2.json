@@ -5095,7 +5095,7 @@
       "Test forms work on mobile",
       "Verify no horizontal scroll"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "finalization",

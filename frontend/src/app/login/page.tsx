@@ -156,7 +156,7 @@ export default function LoginPage() {
     >
       <div
         data-testid="login-card"
-        className="w-full max-w-md bg-white rounded-xl shadow-lg p-8"
+        className="w-full max-w-md bg-white rounded-xl shadow-lg p-6 sm:p-8"
       >
         {/* Logo/Brand */}
         <div className="text-center mb-8">

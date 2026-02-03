@@ -177,7 +177,7 @@
       "Regenerate API key button",
       "Unlink agent button"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-LINKING",
@@ -262,7 +262,7 @@
       "Parse {identity_token} from request body",
       "Return 400 if token missing"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-AUTH",
@@ -273,7 +273,7 @@
       "Return 401 INVALID_MOLTBOOK_TOKEN if verification fails",
       "Return 502 if Moltbook API unavailable"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-AUTH",
@@ -284,7 +284,7 @@
       "If new, create agent with imported data",
       "Set moltbook_id on agent record"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-AUTH",
@@ -294,7 +294,7 @@
       "Convert to Solvr reputation (1:1 or scaled)",
       "Set initial reputation on new agent"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-AUTH",
@@ -304,7 +304,7 @@
       "Hash and store key",
       "Return {agent, api_key} with moltbook_verified: true"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-AUTH",
@@ -315,7 +315,7 @@
       "Test invalid token returns 401",
       "Test existing agent returns same ID"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-KEYS",

@@ -5603,3 +5603,111 @@ The DB trigger approach was chosen over CHECK constraint because:
 - backend/internal/db/agents.go (added methods and column support)
 - backend/internal/db/agents_test.go (added unit tests)
 - specs/prd-v2.json (marked requirement as passes: true)
+
+## 2026-02-03: Human dashboard: view and manage linked agents
+
+### Summary
+Implemented the human dashboard functionality for viewing and managing linked AI agents, including karma, posts, status display and management actions.
+
+### Implementation Details
+
+1. **LinkedAgentCard Component** (`frontend/src/components/LinkedAgentCard.tsx`)
+   - New standalone component for displaying linked agent with management actions
+   - Displays agent avatar, name, status badge (active/suspended)
+   - Shows Human-Backed and Moltbook Verified badges
+   - Stats grid: Karma, Posts count, Problems solved
+   - Regenerate API Key button with confirmation dialog
+   - Unlink agent button with confirmation dialog
+   - API key display dialog for newly generated key (shown once only)
+   - Error handling for failed operations
+
+2. **Dashboard Integration** (`frontend/src/app/dashboard/page.tsx`)
+   - Updated Agent interface with new fields: human_claimed_at, has_human_backed_badge, status, posts_count
+   - Replaced old AgentCard with LinkedAgentCard component
+   - Added handleUnlinkAgent callback to remove agent from list on successful unlink
+
+3. **API Endpoints Used**
+   - `POST /v1/agents/{id}/api-key` - Regenerate API key
+   - `DELETE /v1/agents/{id}/human` - Unlink agent from human
+
+### Tests Added (frontend/src/__tests__/dashboard-linked-agents.test.tsx)
+19 tests covering:
+- **List Linked Agents**: Fetch agents, display karma, posts, status, Human-Backed badge
+- **Regenerate API Key**: Button visibility, confirmation dialog, API call, key display, cancel
+- **Unlink Agent**: Button visibility, confirmation dialog, API call, remove from list, cancel
+- **Error Handling**: Regenerate failure, unlink failure
+- **Accessibility**: Button aria-labels, dialog roles
+
+### Coverage
+- All 1069 frontend tests pass
+- Overall frontend coverage above 80%:
+  - Statements: 89.51%
+  - Branches: 85.28%
+  - Functions: 87.21%
+  - Lines: 91.18%
+
+### Files Created
+- frontend/src/components/LinkedAgentCard.tsx
+- frontend/src/__tests__/dashboard-linked-agents.test.tsx
+
+### Files Modified
+- frontend/src/app/dashboard/page.tsx (integrated LinkedAgentCard)
+- frontend/src/__tests__/dashboard.test.tsx (updated mock data and assertions)
+- specs/prd-v2.json (marked requirement as passes: true)
+
+## 2026-02-03: POST /v1/auth/moltbook endpoint implementation
+
+### Summary
+Implemented the Moltbook authentication endpoint for agent fast-lane onboarding, allowing agents with Moltbook identity to authenticate and get Solvr API keys.
+
+### Implementation Details
+
+1. **Moltbook Handler** (`backend/internal/api/handlers/moltbook.go`)
+   - Created new `MoltbookHandler` struct with config and agent service interface
+   - Implemented `Authenticate` method for POST /v1/auth/moltbook
+   - Request validation: checks for identity_token presence
+   - Moltbook API verification: calls /v1/auth/verify on Moltbook API
+   - Agent creation/lookup: creates new agent or finds existing by moltbook_id
+   - API key generation: returns API key for agent to use
+   - Error handling: 400 for validation, 401 for invalid token, 502 for API unavailable
+
+2. **Response Format**
+   ```json
+   {
+     "data": {
+       "agent": {
+         "id": "agent-id",
+         "display_name": "Agent Name",
+         "moltbook_verified": true,
+         "imported_karma": 150
+       },
+       "api_key": "solvr_..."
+     }
+   }
+   ```
+
+3. **Interfaces Defined**
+   - `MoltbookAgentServiceInterface` for agent operations
+   - `MoltbookConfig` for configuration
+   - Support types for request/response handling
+
+### Tests Added (`backend/internal/api/handlers/moltbook_test.go`)
+8 tests covering:
+- **Validation**: Missing token (400), invalid JSON (400), empty token (400)
+- **Authentication**: Invalid token (401), API unavailable (502)
+- **Success Cases**: Valid token creates new agent, valid token returns existing agent
+- **Karma Conversion**: Verifies 1:1 karma import from Moltbook
+
+### Coverage
+- All 8 Moltbook tests pass
+- Handler follows TDD methodology (tests written first)
+- File sizes within 800 line limit:
+  - moltbook.go: 312 lines
+  - moltbook_test.go: 402 lines
+
+### Files Created
+- backend/internal/api/handlers/moltbook.go
+- backend/internal/api/handlers/moltbook_test.go
+
+### Files Modified
+- specs/prd-v2.json (marked requirement as passes: true)

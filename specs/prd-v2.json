@@ -5415,7 +5415,7 @@
       "Verify no API key in any log statement",
       "Document in SECURITY.md"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "security-audit",

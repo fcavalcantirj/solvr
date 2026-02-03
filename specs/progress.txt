@@ -5021,3 +5021,41 @@ Code quality: lint clean requirement now passes=true.
 ### Test Results
 - npm run lint: 0 errors, 0 warnings
 - All 995 frontend tests still passing
+
+
+## 2026-02-03: CRITICAL: Verify API keys never stored plaintext
+
+### Completed Requirements (PRD line 5408-5419)
+Security audit: API keys never stored plaintext - passes=true
+
+### What Was Done - Security Audit
+Performed comprehensive audit of API key storage security:
+
+1. **Grep codebase for 'api_key' assignments**: PASS
+   - No `api_key =`, `api_key :=`, or `.api_key =` patterns found in backend code
+   - Only `api_key_hash` references exist
+
+2. **Verify only api_key_hash column exists in DB**: PASS
+   - `backend/migrations/000002_create_agents.up.sql:11` has `api_key_hash VARCHAR(255)`
+   - No plaintext `api_key` column exists
+
+3. **Verify HashAPIKey uses bcrypt cost >= 10**: PASS
+   - `backend/internal/auth/apikey.go:19` sets `bcryptCost = 10`
+   - Uses `golang.org/x/crypto/bcrypt` package
+
+4. **Verify no API key in any log statement**: PASS
+   - No `log.*api.?key` or `slog.*api.?key` patterns found
+   - Logging middleware redacts sensitive data automatically
+
+5. **Document in SECURITY.md**: COMPLETE
+   - Created comprehensive SECURITY.md (244 lines)
+   - Documents API key security, hashing, one-time display
+   - Documents logging redaction, rate limiting, input validation
+   - Documents security headers and database security
+
+### Files Created
+- SECURITY.md (244 lines) - Security documentation
+
+### Files Modified
+- specs/prd-v2.json (line 5418 updated to passes=true)
+- specs/progress.txt (this entry)

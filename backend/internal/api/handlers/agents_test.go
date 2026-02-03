@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -620,6 +621,91 @@ func TestRevokeAPIKey_NotOwner(t *testing.T) {
 
 	if rr.Code != http.StatusForbidden {
 		t.Errorf("expected status 403, got %d", rr.Code)
+	}
+}
+
+// TestGetAgent_NeverReturnsAPIKey verifies that GET /v1/agents/:id never returns api_key or api_key_hash.
+// This is a CRITICAL security requirement per SPEC.md Part 5.6.
+func TestGetAgent_NeverReturnsAPIKey(t *testing.T) {
+	repo := NewMockAgentRepository()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	// Create agent with an API key hash
+	humanID := "user-123"
+	repo.agents["my_agent"] = &models.Agent{
+		ID:          "my_agent",
+		DisplayName: "Test Agent",
+		HumanID:     &humanID,
+		APIKeyHash:  "hashed_secret_key_value",
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents/my_agent", nil)
+	rr := httptest.NewRecorder()
+	handler.GetAgent(rr, req, "my_agent")
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+
+	// SECURITY: Verify api_key is NOT in response
+	if strings.Contains(body, "api_key") {
+		t.Error("SECURITY VIOLATION: response contains 'api_key' field")
+	}
+
+	// SECURITY: Verify api_key_hash is NOT in response
+	if strings.Contains(body, "api_key_hash") {
+		t.Error("SECURITY VIOLATION: response contains 'api_key_hash' field")
+	}
+
+	// SECURITY: Verify the actual hash value is NOT in response
+	if strings.Contains(body, "hashed_secret_key_value") {
+		t.Error("SECURITY VIOLATION: response contains the API key hash value")
+	}
+}
+
+// TestUpdateAgent_NeverReturnsAPIKey verifies that PATCH /v1/agents/:id never returns api_key or api_key_hash.
+// This is a CRITICAL security requirement per SPEC.md Part 5.6.
+func TestUpdateAgent_NeverReturnsAPIKey(t *testing.T) {
+	repo := NewMockAgentRepository()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	// Create agent with an API key hash
+	humanID := "user-123"
+	repo.agents["my_agent"] = &models.Agent{
+		ID:          "my_agent",
+		DisplayName: "Test Agent",
+		HumanID:     &humanID,
+		APIKeyHash:  "hashed_secret_key_value",
+	}
+
+	reqBody := strings.NewReader(`{"display_name":"Updated Agent"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/v1/agents/my_agent", reqBody)
+	req = addJWTClaimsToContext(req, "user-123", "user@example.com", "user")
+
+	rr := httptest.NewRecorder()
+	handler.UpdateAgent(rr, req, "my_agent")
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+
+	// SECURITY: Verify api_key is NOT in response
+	if strings.Contains(body, "api_key") {
+		t.Error("SECURITY VIOLATION: response contains 'api_key' field")
+	}
+
+	// SECURITY: Verify api_key_hash is NOT in response
+	if strings.Contains(body, "api_key_hash") {
+		t.Error("SECURITY VIOLATION: response contains 'api_key_hash' field")
+	}
+
+	// SECURITY: Verify the actual hash value is NOT in response
+	if strings.Contains(body, "hashed_secret_key_value") {
+		t.Error("SECURITY VIOLATION: response contains the API key hash value")
 	}
 }
 

@@ -6565,3 +6565,38 @@ backend/internal/db/posts.go
 **Tests:**
 - go test ./internal/db/... passes
 - go build ./... passes
+
+---
+
+## Completed: Add PostRepository.Create method
+
+**Date:** 2026-02-03
+
+**Requirement:**
+- Implement Create(ctx, *models.Post) (*models.Post, error)
+- INSERT INTO posts
+- Returns created post with generated ID and timestamps
+
+**TDD Approach:**
+- Wrote failing tests first (RED)
+- Implemented minimum code to pass (GREEN)
+
+**Tests Added:**
+backend/internal/db/posts_test.go
+- TestPostRepository_Create_Problem: Tests creating a problem post with all fields
+- TestPostRepository_Create_Question: Tests creating a question post
+- TestPostRepository_Create_Idea: Tests creating an idea post
+- TestPostRepository_Create_WithNilTags: Tests creating post with nil tags
+- TestPostRepository_Create_DefaultStatus: Tests default status behavior
+
+**Implementation:**
+backend/internal/db/posts.go
+- Added Create(ctx, *models.Post) (*models.Post, error) method
+- INSERT with RETURNING to get generated ID and timestamps
+- Defaults status to 'draft' if not provided
+- Initializes upvotes/downvotes to 0
+- Uses existing scanPost helper for scanning result
+
+**Tests:**
+- go test ./internal/db/... passes
+- go build ./... passes

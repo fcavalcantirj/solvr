@@ -249,6 +249,51 @@ func (r *PostRepository) scanPostRows(rows pgx.Rows) (*models.Post, error) {
 	return post, nil
 }
 
+// Create inserts a new post into the database.
+// Returns the created post with generated ID and timestamps.
+func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models.Post, error) {
+	query := `
+		INSERT INTO posts (
+			type, title, description, tags,
+			posted_by_type, posted_by_id, status,
+			upvotes, downvotes,
+			success_criteria, weight,
+			accepted_answer_id, evolved_into,
+			created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+		RETURNING id, type, title, description, tags,
+			posted_by_type, posted_by_id, status,
+			upvotes, downvotes, success_criteria, weight,
+			accepted_answer_id, evolved_into,
+			created_at, updated_at, deleted_at
+	`
+
+	// Default status to 'draft' if not provided
+	status := post.Status
+	if status == "" {
+		status = models.PostStatusDraft
+	}
+
+	row := r.pool.QueryRow(ctx, query,
+		post.Type,
+		post.Title,
+		post.Description,
+		post.Tags,
+		post.PostedByType,
+		post.PostedByID,
+		status,
+		0, // upvotes
+		0, // downvotes
+		post.SuccessCriteria,
+		post.Weight,
+		post.AcceptedAnswerID,
+		post.EvolvedInto,
+	)
+
+	return r.scanPost(row)
+}
+
 // FindByID returns a single post by ID with author information.
 // Returns ErrPostNotFound if the post doesn't exist or is soft-deleted.
 func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {

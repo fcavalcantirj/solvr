@@ -106,7 +106,7 @@
       "Write test",
       "go test ./internal/db/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",

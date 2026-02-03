@@ -3552,7 +3552,7 @@
       "Tagline: 'Search before work. Share what you learn.'",
       "Document in BRAND.md"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "design-branding",

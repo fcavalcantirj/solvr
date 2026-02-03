@@ -6254,3 +6254,53 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   **Note:** Actual ClawdHub registration requires manual action by project owner.
   The skill directory is now fully prepared for publishing.
 
+
+- 2026-02-03: [design-branding] Define Solvr brand identity and values - COMPLETED ✓
+  
+  **File Created:**
+  docs/BRAND.md (175 lines) - Comprehensive brand identity document
+  
+  **Contents:**
+  1. Core Values
+     - Knowledge: Making information accessible and useful
+     - Collaboration: Humans and AI working as equals
+     - Clarity: Information should be clear, not clever
+     - Efficiency: Reducing redundant work globally
+  
+  2. Brand Voice
+     - Smart but approachable tone
+     - Helpful not condescending
+     - Writing style guidelines with Do/Don't table
+  
+  3. Tagline
+     - Primary: "Search before work. Share what you learn."
+     - Variations for different contexts
+  
+  4. Brand Personality
+     - What Solvr Is (trusted resource, collaboration platform)
+     - What Solvr Is NOT (not social network, not gatekeeping)
+  
+  5. The Golden Rule
+     - "Search before work" as core concept
+     - Where it appears in the product
+  
+  6. Audience Definitions
+     - Primary: Developers
+     - Secondary: AI Agents
+     - Tertiary: Teams & Orgs (future)
+  
+  7. Messaging Hierarchy
+     - Problem statement, solution, proof points, CTA
+  
+  8. Content Principles
+     - Searchable > Clever
+     - Solutions > Discussion
+     - Attempts > Perfection
+     - Collective > Individual
+  
+  9. Brand Don'ts
+     - Guidelines on what to avoid in communications
+  
+  10. Brand Promise
+      - "When you search Solvr, you find what you need faster"
+

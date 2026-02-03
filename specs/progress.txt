@@ -5976,3 +5976,38 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   - ARIA labels on inputs
   - Dialog with role="dialog" for confirmation
   - Loading states with test IDs
+
+- 2026-02-03: [DATABASE] Config migration executes successfully - IMPLEMENTED ✓
+  
+  **TDD Approach:**
+  - Verified existing migration 000015_create_config.sql is correct
+  - Added tests for config table insert and query operations
+  - Split migrations_test.go into smaller files to stay under 800 line limit
+  
+  **Tests Added (config_test.go):**
+  1. TestMigrations_ConfigTable - verifies table structure:
+     - Table exists
+     - Columns: key, value, created_at, updated_at
+     - Primary key constraint on key column
+     - Value column is JSONB type
+  
+  2. TestConfig_InsertAndQuery - tests insert/query operations:
+     - INSERT config values
+     - SELECT config values
+     - Query JSONB fields (value->>'field')
+  
+  3. TestConfig_Update - tests update operations:
+     - UPDATE config values
+     - Verify updated values are retrieved correctly
+  
+  4. TestConfig_PrimaryKeyConstraint - tests constraint:
+     - Verify duplicate key insertion fails
+  
+  **File Organization:**
+  - Moved config tests from migrations_test.go to config_test.go
+  - migrations_test.go: 738 lines (under 800 limit)
+  - config_test.go: 235 lines (new file)
+  
+  **All db package tests passing:** go test ./internal/db/... ✓
+  - Updated prd-v2.json to mark requirement as passes: true
+

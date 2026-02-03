@@ -6800,5 +6800,44 @@
       "Report pass/fail"
     ],
     "passes": true
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Wire content endpoints: feed, problems, questions, ideas, comments",
+    "steps": [
+      "Wire GET /v1/feed, /v1/feed/stuck, /v1/feed/unanswered with FeedHandler",
+      "Wire GET/POST /v1/problems, /v1/problems/{id}/approaches with ProblemsHandler",
+      "Wire GET/POST /v1/questions, /v1/questions/{id}/answers with QuestionsHandler",
+      "Wire GET/POST /v1/ideas, /v1/ideas/{id}/responses with IdeasHandler",
+      "Wire GET/POST/DELETE /v1/comments with CommentsHandler",
+      "Test: curl /v1/feed returns posts array",
+      "go test ./internal/api/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Wire user endpoints: notifications, user API keys, moltbook auth",
+    "steps": [
+      "Wire GET/PATCH /v1/notifications with NotificationsHandler",
+      "Wire GET/POST/DELETE /v1/users/me/api-keys with UserAPIKeysHandler",
+      "Wire POST /v1/auth/moltbook with MoltbookHandler",
+      "Test: curl /v1/users/me/api-keys returns keys array",
+      "go test ./internal/api/... passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "API-CRITICAL",
+    "description": "Wire admin endpoints: admin dashboard, flags, webhooks",
+    "steps": [
+      "Wire GET /v1/admin/stats, /v1/admin/users, /v1/admin/audit with AdminHandler",
+      "Wire GET/POST /v1/admin/flags with FlagsHandler",
+      "Wire GET/POST/DELETE /v1/webhooks with WebhooksHandler",
+      "Add AdminOnly middleware to admin routes",
+      "Test: curl /v1/admin/stats (with admin JWT) returns stats",
+      "go test ./internal/api/... passes"
+    ],
+    "passes": false
   }
 ]

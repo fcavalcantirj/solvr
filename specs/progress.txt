@@ -5418,3 +5418,69 @@ system library (libnspr4.so). However:
     - generateClaimInstructions() helper
   - agents.go: 763 lines (under 800 limit)
   - All 7 claim tests pass, all 57 agent tests pass
+
+- 2026-02-03: [AGENT-LINKING] One-time karma bonus on claim: +50 karma ✓
+  - Implemented ConfirmClaim handler in agents_claim.go
+  - On successful claim, adds 50 karma via AddKarma repository method
+  - Grants Human-Backed badge via GrantHumanBackedBadge method
+  - Links agent to human via LinkHuman method
+  - Prevents double-claiming (checks if agent.HumanID already set)
+  - Returns 409 AGENT_ALREADY_CLAIMED if agent is already linked
+
+- 2026-02-03: [AGENT-LINKING] Agent claim unit tests ✓
+  - Created agents_claim_confirm_test.go (480 lines)
+  - TDD approach: wrote 13 tests FIRST before implementation
+  - Tests cover:
+    - TestConfirmClaim_RequiresHumanAuth: validates JWT auth required
+    - TestConfirmClaim_InvalidToken_Returns404: invalid token handling
+    - TestConfirmClaim_ExpiredToken_Returns410: expired token returns 410 Gone
+    - TestConfirmClaim_AlreadyUsedToken_Returns409: token reuse prevention
+    - TestConfirmClaim_AgentAlreadyClaimed_Returns409: double-claim prevention
+    - TestConfirmClaim_Success_LinksAgentToHuman: successful linking
+    - TestConfirmClaim_Success_GrantsKarmaBonus: +50 karma granted
+    - TestConfirmClaim_Success_GrantsBadge: Human-Backed badge granted
+    - TestConfirmClaim_Success_MarksTokenUsed: token marked as used
+    - TestConfirmClaim_Success_ReturnsAgentProfile: agent profile in response
+    - TestConfirmClaim_NoClaimRepo_Returns500: missing repo handling
+    - TestGetClaimInfo_ReturnsAgentInfo: GET endpoint for claim info
+    - TestConfirmClaim_EmptyBody_StillWorks: empty body handling
+  - All 13 tests pass
+
+- 2026-02-03: [AGENT-LINKING] Backend claim confirmation API implemented
+  - Created backend/internal/api/handlers/agents_claim.go (305 lines)
+  - Split from agents.go to keep files under 800 line limit
+  - POST /v1/claim/:token - ConfirmClaim handler:
+    - Requires human JWT authentication
+    - Validates token (not expired, not used)
+    - Checks agent is not already claimed
+    - Links agent to human
+    - Grants +50 karma bonus (KarmaBonusOnClaim constant)
+    - Grants Human-Backed badge
+    - Marks token as used
+    - Returns agent profile and redirect URL
+  - GET /v1/claim/:token - GetClaimInfo handler:
+    - No auth required (for claim page to show agent info)
+    - Returns agent info if token valid
+    - Returns token_valid: false with error message if invalid
+  - Updated Agent model with new fields:
+    - Karma int
+    - HumanClaimedAt *time.Time
+    - HasHumanBackedBadge bool
+  - Updated AgentRepositoryInterface with new methods:
+    - LinkHuman(ctx, agentID, humanID)
+    - AddKarma(ctx, agentID, amount)
+    - GrantHumanBackedBadge(ctx, agentID)
+  - Updated all mock repositories to implement new interface
+
+### Files Created
+- backend/internal/api/handlers/agents_claim.go (305 lines)
+- backend/internal/api/handlers/agents_claim_confirm_test.go (480 lines)
+
+### Files Modified
+- backend/internal/api/handlers/agents.go (676 lines, down from 970 after split)
+- backend/internal/models/agent.go (added Karma, HumanClaimedAt, HasHumanBackedBadge fields)
+- backend/internal/api/handlers/agents_test.go (added LinkHuman, AddKarma, GrantHumanBackedBadge to mock)
+- backend/internal/api/handlers/agents_name_uniqueness_test.go (added new interface methods to mock)
+- specs/prd-v2.json (lines 157, 169 updated to passes=true)
+- specs/progress.txt (this entry)
+

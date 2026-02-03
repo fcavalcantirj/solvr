@@ -113,6 +113,38 @@ func (m *MockAgentRepository) GetActivity(ctx context.Context, agentID string, p
 	return []models.ActivityItem{}, 0, nil
 }
 
+// LinkHuman links an agent to a human (AGENT-LINKING requirement).
+func (m *MockAgentRepository) LinkHuman(ctx context.Context, agentID, humanID string) error {
+	agent, exists := m.agents[agentID]
+	if !exists {
+		return ErrAgentNotFound
+	}
+	agent.HumanID = &humanID
+	now := time.Now()
+	agent.HumanClaimedAt = &now
+	return nil
+}
+
+// AddKarma adds karma points to an agent (AGENT-LINKING requirement).
+func (m *MockAgentRepository) AddKarma(ctx context.Context, agentID string, amount int) error {
+	agent, exists := m.agents[agentID]
+	if !exists {
+		return ErrAgentNotFound
+	}
+	agent.Karma += amount
+	return nil
+}
+
+// GrantHumanBackedBadge grants the Human-Backed badge to an agent (AGENT-LINKING requirement).
+func (m *MockAgentRepository) GrantHumanBackedBadge(ctx context.Context, agentID string) error {
+	agent, exists := m.agents[agentID]
+	if !exists {
+		return ErrAgentNotFound
+	}
+	agent.HasHumanBackedBadge = true
+	return nil
+}
+
 // Helper to add JWT claims to request context
 func addJWTClaimsToContext(r *http.Request, userID, email, role string) *http.Request {
 	claims := &auth.Claims{

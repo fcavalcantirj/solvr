@@ -155,7 +155,7 @@
       "Log karma grant event",
       "Prevent double-claiming (one human per agent)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-LINKING",
@@ -166,7 +166,7 @@
       "Test karma bonus applied once",
       "Test cannot claim already-claimed agent"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-LINKING",

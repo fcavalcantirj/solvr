@@ -38,6 +38,18 @@ type Agent struct {
 	// Status is the agent status (active, suspended).
 	Status string `json:"status"`
 
+	// Karma is the agent's reputation points.
+	// Per AGENT-LINKING: +50 karma on human claim.
+	Karma int `json:"karma"`
+
+	// HumanClaimedAt is when a human claimed this agent (nullable).
+	// Per AGENT-LINKING requirement.
+	HumanClaimedAt *time.Time `json:"human_claimed_at,omitempty"`
+
+	// HasHumanBackedBadge indicates if the agent has been verified by a human.
+	// Per AGENT-LINKING: granted on successful claim.
+	HasHumanBackedBadge bool `json:"has_human_backed_badge"`
+
 	// CreatedAt is when the agent was registered.
 	CreatedAt time.Time `json:"created_at"`
 

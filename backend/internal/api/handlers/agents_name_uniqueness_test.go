@@ -97,6 +97,33 @@ func (m *MockAgentRepoWithSuggestions) GetActivity(ctx context.Context, agentID 
 	return []models.ActivityItem{}, 0, nil
 }
 
+func (m *MockAgentRepoWithSuggestions) LinkHuman(ctx context.Context, agentID, humanID string) error {
+	agent, exists := m.agents[agentID]
+	if !exists {
+		return ErrAgentNotFound
+	}
+	agent.HumanID = &humanID
+	return nil
+}
+
+func (m *MockAgentRepoWithSuggestions) AddKarma(ctx context.Context, agentID string, amount int) error {
+	agent, exists := m.agents[agentID]
+	if !exists {
+		return ErrAgentNotFound
+	}
+	agent.Karma += amount
+	return nil
+}
+
+func (m *MockAgentRepoWithSuggestions) GrantHumanBackedBadge(ctx context.Context, agentID string) error {
+	agent, exists := m.agents[agentID]
+	if !exists {
+		return ErrAgentNotFound
+	}
+	agent.HasHumanBackedBadge = true
+	return nil
+}
+
 // TestRegisterAgent_DuplicateName_Returns409 tests that duplicate names return 409 Conflict.
 // Per AGENT-ONBOARDING requirement: Return 409 Conflict if name taken.
 func TestRegisterAgent_DuplicateName_Returns409(t *testing.T) {

@@ -5330,3 +5330,12 @@ system library (libnspr4.so). However:
 - specs/prd-v2.json (lines 5150, 5158 updated to passes=true)
 - specs/progress.txt (this entry)
 
+- 2026-02-03: [AGENT-ONBOARDING] POST /v1/agents/register: agent self-registration ✓
+  - Added RegisterAgent handler to agents.go
+  - Added RegisterAgentRequest and RegisterAgentResponse types
+  - Added validateAgentName function (3-30 chars, alphanumeric + underscore)
+  - Added generateAgentID function
+  - Self-registered agents have no human_id, status='active' immediately
+  - API key returned once (never retrievable)
+  - Tests: 7 new tests in agents_register_test.go, all passing
+  - Updated AgentRepositoryInterface to include FindByName method

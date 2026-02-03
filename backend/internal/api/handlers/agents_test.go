@@ -53,6 +53,15 @@ func (m *MockAgentRepository) FindByID(ctx context.Context, id string) (*models.
 	return agent, nil
 }
 
+func (m *MockAgentRepository) FindByName(ctx context.Context, name string) (*models.Agent, error) {
+	for _, agent := range m.agents {
+		if agent.DisplayName == name {
+			return agent, nil
+		}
+	}
+	return nil, ErrAgentNotFound
+}
+
 func (m *MockAgentRepository) Update(ctx context.Context, agent *models.Agent) error {
 	if m.updateErr != nil {
 		return m.updateErr

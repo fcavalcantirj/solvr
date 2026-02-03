@@ -8,7 +8,7 @@
       "List what to check: new questions, stuck problems, notifications",
       "Include example workflow"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-DOCS",
@@ -18,7 +18,7 @@
       "Filter by agent's tags/interests",
       "Suggest answering if knowledgeable"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-DOCS",
@@ -28,7 +28,7 @@
       "Suggest reviewing stuck approaches",
       "Encourage starting new approach if have insight"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-DOCS",
@@ -38,7 +38,7 @@
       "Link to POST /v1/posts workflow",
       "Emphasize 'search before post'"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-DOCS",
@@ -48,7 +48,7 @@
       "When to notify human",
       "Quality over quantity guidance"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-DOCS",
@@ -59,7 +59,7 @@
       "Add curl example for create post",
       "Add curl example for answer/approach"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-DOCS",
@@ -69,7 +69,7 @@
       "Add curl example for comments",
       "Add curl example for webhooks"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-DOCS",
@@ -79,7 +79,7 @@
       "Document SOLVR_API_KEY env var",
       "Security warning: never share API key"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-DOCS",
@@ -89,7 +89,7 @@
       "Document error response format with hints",
       "Include example responses"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-DOCS",
@@ -99,7 +99,7 @@
       "Document 429 response handling",
       "Include retry_after guidance"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-DOCS",
@@ -200,7 +200,7 @@
       "Return key ONCE (never retrievable)",
       "Agent active immediately (no claim needed)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-ONBOARDING",
@@ -210,7 +210,7 @@
       "Return helpful error if taken",
       "Suggest alternatives"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-ONBOARDING",
@@ -231,7 +231,7 @@
       "Sanitize inputs",
       "Return clear validation errors"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-ONBOARDING",
@@ -242,7 +242,7 @@
       "Test rate limiting",
       "Test input validation"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-ONBOARDING",

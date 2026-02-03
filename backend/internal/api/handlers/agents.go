@@ -16,14 +16,16 @@ import (
 
 // Error types for agent operations
 var (
-	ErrDuplicateAgentID = errors.New("agent ID already exists")
-	ErrAgentNotFound    = errors.New("agent not found")
+	ErrDuplicateAgentID   = errors.New("agent ID already exists")
+	ErrDuplicateAgentName = errors.New("agent name already exists")
+	ErrAgentNotFound      = errors.New("agent not found")
 )
 
 // AgentRepositoryInterface defines the database operations for agents.
 type AgentRepositoryInterface interface {
 	Create(ctx context.Context, agent *models.Agent) error
 	FindByID(ctx context.Context, id string) (*models.Agent, error)
+	FindByName(ctx context.Context, name string) (*models.Agent, error)
 	Update(ctx context.Context, agent *models.Agent) error
 	GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error)
 	UpdateAPIKeyHash(ctx context.Context, agentID, hash string) error
@@ -80,8 +82,26 @@ type UpdateAgentRequest struct {
 	AvatarURL   *string  `json:"avatar_url,omitempty"`
 }
 
+// RegisterAgentRequest is the request body for agent self-registration.
+// Per AGENT-ONBOARDING requirement: agents can self-register without human auth.
+type RegisterAgentRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+// RegisterAgentResponse is the response for agent self-registration.
+type RegisterAgentResponse struct {
+	Success   bool         `json:"success"`
+	Agent     models.Agent `json:"agent"`
+	APIKey    string       `json:"api_key"`
+	Important string       `json:"important,omitempty"`
+}
+
 // validAgentID matches alphanumeric characters and underscores only, max 50 chars.
 var validAgentID = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+
+// validAgentName matches alphanumeric characters and underscores only, 3-30 chars.
+var validAgentName = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
 // validateAgentID validates the agent ID format per SPEC.md Part 2.7.
 func validateAgentID(id string) error {
@@ -95,6 +115,99 @@ func validateAgentID(id string) error {
 		return errors.New("id must contain only alphanumeric characters and underscores")
 	}
 	return nil
+}
+
+// validateAgentName validates the agent name for self-registration.
+// Per AGENT-ONBOARDING requirement: Name must be 3-30 chars, alphanumeric + underscore.
+func validateAgentName(name string) error {
+	if name == "" {
+		return errors.New("name is required")
+	}
+	if len(name) < 3 {
+		return errors.New("name must be at least 3 characters")
+	}
+	if len(name) > 30 {
+		return errors.New("name must not exceed 30 characters")
+	}
+	if !validAgentName.MatchString(name) {
+		return errors.New("name must contain only alphanumeric characters and underscores")
+	}
+	return nil
+}
+
+// generateAgentID creates a unique agent ID from the name.
+func generateAgentID(name string) string {
+	return "agent_" + name
+}
+
+// RegisterAgent handles POST /v1/agents/register - agent self-registration.
+// Per AGENT-ONBOARDING: agents can self-register without human auth.
+func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
+	// Parse request body
+	var req RegisterAgentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAgentValidationError(w, "invalid JSON body")
+		return
+	}
+
+	// Validate name format
+	if err := validateAgentName(req.Name); err != nil {
+		writeAgentValidationError(w, err.Error())
+		return
+	}
+
+	// Validate description length
+	if len(req.Description) > 500 {
+		writeAgentValidationError(w, "description must not exceed 500 characters")
+		return
+	}
+
+	// Generate unique agent ID from name
+	agentID := generateAgentID(req.Name)
+
+	// Generate API key
+	apiKey := auth.GenerateAPIKey()
+	apiKeyHash, err := auth.HashAPIKey(apiKey)
+	if err != nil {
+		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to generate API key")
+		return
+	}
+
+	// Create agent (no human_id for self-registered agents)
+	now := time.Now()
+	agent := &models.Agent{
+		ID:          agentID,
+		DisplayName: req.Name,
+		HumanID:     nil, // Self-registered, no human owner
+		Bio:         req.Description,
+		Specialties: []string{},
+		AvatarURL:   "",
+		APIKeyHash:  apiKeyHash,
+		Status:      "active", // Active immediately per requirement
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	if err := h.repo.Create(r.Context(), agent); err != nil {
+		if errors.Is(err, ErrDuplicateAgentID) || errors.Is(err, ErrDuplicateAgentName) {
+			writeAgentError(w, http.StatusConflict, "DUPLICATE_NAME", "agent name already exists")
+			return
+		}
+		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create agent")
+		return
+	}
+
+	// Return response with API key (shown only once per requirement)
+	resp := RegisterAgentResponse{
+		Success:   true,
+		Agent:     *agent,
+		APIKey:    apiKey,
+		Important: "⚠️ SAVE YOUR API KEY! Shown only once.",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // CreateAgent handles POST /v1/agents - create a new agent.

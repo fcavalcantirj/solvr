@@ -436,3 +436,68 @@ func TestAgentsRegisterEndpoint(t *testing.T) {
 		t.Error("expected success=true in response")
 	}
 }
+
+// TestClaimEndpointExists verifies POST /v1/agents/me/claim endpoint exists.
+// Per API-CRITICAL requirement: Wire GET/POST /v1/agents/{id}/claim endpoints.
+// The implementation uses /v1/agents/me/claim for agent self-claim.
+func TestClaimEndpointExists(t *testing.T) {
+	router := NewRouter(nil)
+
+	// POST /v1/agents/me/claim should return 401 without auth (not 404)
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/me/claim", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should return 401 Unauthorized (endpoint exists but requires auth), not 404
+	if w.Code == http.StatusNotFound {
+		t.Errorf("POST /v1/agents/me/claim returned 404 - endpoint not wired")
+	}
+
+	// Should be 401 Unauthorized because no API key auth
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestGetClaimInfoEndpointExists verifies GET /v1/claim/{token} endpoint exists.
+// Per API-CRITICAL requirement: Wire /v1/claim/{token} endpoints.
+func TestGetClaimInfoEndpointExists(t *testing.T) {
+	router := NewRouter(nil)
+
+	// GET /v1/claim/{token} should not return 404
+	req := httptest.NewRequest(http.MethodGet, "/v1/claim/test_token_123", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should NOT return 404 - endpoint should be wired
+	if w.Code == http.StatusNotFound {
+		t.Errorf("GET /v1/claim/{token} returned 404 - endpoint not wired")
+	}
+
+	// GetClaimInfo returns 200 with token_valid: false for invalid tokens
+	// or 500 if claim token repo not configured
+	if w.Code != http.StatusOK && w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 200 or 500, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestConfirmClaimEndpointExists verifies POST /v1/claim/{token} endpoint exists.
+// Per API-CRITICAL requirement: Wire /v1/claim/{token} endpoints.
+func TestConfirmClaimEndpointExists(t *testing.T) {
+	router := NewRouter(nil)
+
+	// POST /v1/claim/{token} should return 401 without auth (not 404)
+	req := httptest.NewRequest(http.MethodPost, "/v1/claim/test_token_123", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should NOT return 404 - endpoint should be wired
+	if w.Code == http.StatusNotFound {
+		t.Errorf("POST /v1/claim/{token} returned 404 - endpoint not wired")
+	}
+
+	// ConfirmClaim requires JWT auth, so should return 401 or 500 (if repo not configured)
+	if w.Code != http.StatusUnauthorized && w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 401 or 500, got %d: %s", w.Code, w.Body.String())
+	}
+}

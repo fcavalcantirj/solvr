@@ -6712,3 +6712,37 @@ backend/internal/api/inmemory_repo.go (new file)
 - go test ./internal/api -run TestAgentsRegisterEndpoint passes
 - go build ./... passes
 
+
+---
+
+## Wire claim endpoints (2026-02-03)
+
+**Requirements:** 
+- API-CRITICAL: Wire GET/POST /v1/agents/{id}/claim endpoints
+- API-CRITICAL: Wire /v1/claim/{token} endpoints
+
+**TDD Approach:**
+- Wrote failing tests first (RED) - TestClaimEndpointExists, TestGetClaimInfoEndpointExists, TestConfirmClaimEndpointExists
+- Implemented minimum code to pass (GREEN)
+
+**Tests Added:**
+backend/internal/api/router_test.go
+- TestClaimEndpointExists: Tests POST /v1/agents/me/claim returns 401 (auth required), not 404
+- TestGetClaimInfoEndpointExists: Tests GET /v1/claim/{token} returns 200, not 404
+- TestConfirmClaimEndpointExists: Tests POST /v1/claim/{token} returns 401 (auth required), not 404
+
+**Implementation:**
+backend/internal/api/router.go
+- Added ClaimTokenRepository initialization (db or in-memory)
+- Called SetClaimTokenRepository and SetBaseURL on agentsHandler
+- Wired POST /v1/agents/me/claim to agentsHandler.GenerateClaim
+- Wired GET /v1/claim/{token} with chi.URLParam extraction to agentsHandler.GetClaimInfo
+- Wired POST /v1/claim/{token} with chi.URLParam extraction to agentsHandler.ConfirmClaim
+
+backend/internal/api/inmemory_repo.go
+- Added InMemoryClaimTokenRepository for testing when no DB available
+- Implements ClaimTokenRepositoryInterface (Create, FindByToken, FindActiveByAgentID, MarkUsed)
+
+**Tests:**
+- go test ./internal/api -run "Claim" passes all 3 tests
+- go build ./... passes

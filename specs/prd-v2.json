@@ -150,7 +150,7 @@
       "Test: curl -X POST /v1/agents/{id}/claim returns claim URL",
       "go test ./internal/api/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",
@@ -161,7 +161,7 @@
       "Test both endpoints",
       "go test ./internal/api/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",

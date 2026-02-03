@@ -66,20 +66,42 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	// Create repositories and handlers
 	var agentRepo handlers.AgentRepositoryInterface
+	var claimTokenRepo handlers.ClaimTokenRepositoryInterface
 	if pool != nil {
 		agentRepo = db.NewAgentRepository(pool)
+		claimTokenRepo = db.NewClaimTokenRepository(pool)
 	} else {
 		// Use in-memory repository for testing when no DB is available
 		agentRepo = NewInMemoryAgentRepository()
+		claimTokenRepo = NewInMemoryClaimTokenRepository()
 	}
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
+	agentsHandler.SetClaimTokenRepository(claimTokenRepo)
+	agentsHandler.SetBaseURL("https://solvr.dev")
 
 	// v1 API routes
 	r.Route("/v1", func(r chi.Router) {
 		// Agent self-registration (no auth required)
 		// Per AGENT-ONBOARDING requirement: POST /v1/agents/register
 		r.Post("/agents/register", agentsHandler.RegisterAgent)
+
+		// Agent claim endpoints (API-CRITICAL requirement)
+		// POST /v1/agents/me/claim - agent generates claim URL (requires API key auth)
+		r.Post("/agents/me/claim", agentsHandler.GenerateClaim)
+
+		// Claim token endpoints (API-CRITICAL requirement)
+		// GET /v1/claim/{token} - get claim info (no auth required)
+		r.Get("/claim/{token}", func(w http.ResponseWriter, req *http.Request) {
+			token := chi.URLParam(req, "token")
+			agentsHandler.GetClaimInfo(w, req, token)
+		})
+
+		// POST /v1/claim/{token} - confirm claim (requires JWT auth)
+		r.Post("/claim/{token}", func(w http.ResponseWriter, req *http.Request) {
+			token := chi.URLParam(req, "token")
+			agentsHandler.ConfirmClaim(w, req, token)
+		})
 	})
 }
 

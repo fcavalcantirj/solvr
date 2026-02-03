@@ -218,3 +218,84 @@ func (r *InMemoryAgentRepository) GrantHumanBackedBadge(ctx context.Context, age
 	agent.UpdatedAt = time.Now()
 	return nil
 }
+
+// Error types for claim token operations
+var (
+	errClaimTokenNotFound = errors.New("claim token not found")
+)
+
+// InMemoryClaimTokenRepository is an in-memory implementation of ClaimTokenRepositoryInterface.
+// Used for testing when no database is available.
+type InMemoryClaimTokenRepository struct {
+	mu     sync.RWMutex
+	tokens map[string]*models.ClaimToken
+}
+
+// NewInMemoryClaimTokenRepository creates a new in-memory claim token repository.
+func NewInMemoryClaimTokenRepository() *InMemoryClaimTokenRepository {
+	return &InMemoryClaimTokenRepository{
+		tokens: make(map[string]*models.ClaimToken),
+	}
+}
+
+// Create creates a new claim token in memory.
+func (r *InMemoryClaimTokenRepository) Create(ctx context.Context, token *models.ClaimToken) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Set ID if not set
+	if token.ID == "" {
+		token.ID = token.Token[:8] // Use first 8 chars of token as ID
+	}
+	if token.CreatedAt.IsZero() {
+		token.CreatedAt = time.Now()
+	}
+
+	tokenCopy := *token
+	r.tokens[token.Token] = &tokenCopy
+	return nil
+}
+
+// FindByToken finds a claim token by token value.
+func (r *InMemoryClaimTokenRepository) FindByToken(ctx context.Context, tokenValue string) (*models.ClaimToken, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	token, exists := r.tokens[tokenValue]
+	if !exists {
+		return nil, errClaimTokenNotFound
+	}
+
+	tokenCopy := *token
+	return &tokenCopy, nil
+}
+
+// FindActiveByAgentID finds an active claim token for an agent.
+func (r *InMemoryClaimTokenRepository) FindActiveByAgentID(ctx context.Context, agentID string) (*models.ClaimToken, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, token := range r.tokens {
+		if token.AgentID == agentID && token.IsActive() {
+			tokenCopy := *token
+			return &tokenCopy, nil
+		}
+	}
+	return nil, errClaimTokenNotFound
+}
+
+// MarkUsed marks a claim token as used.
+func (r *InMemoryClaimTokenRepository) MarkUsed(ctx context.Context, tokenID, humanID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, token := range r.tokens {
+		if token.ID == tokenID {
+			now := time.Now()
+			token.UsedAt = &now
+			token.UsedByHumanID = &humanID
+			return nil
+		}
+	}
+	return errClaimTokenNotFound
+}

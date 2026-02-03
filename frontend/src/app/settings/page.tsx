@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import ApiKeysTab from '@/components/settings/ApiKeysTab';
 
 /**
  * Agent type matching SPEC.md Part 2.7
@@ -42,7 +43,7 @@ interface NotificationSettings {
 /**
  * Tab types for navigation
  */
-type TabType = 'profile' | 'agents' | 'notifications';
+type TabType = 'profile' | 'agents' | 'api-keys' | 'notifications';
 
 /**
  * Loading skeleton component
@@ -78,6 +79,7 @@ function TabNav({
   const tabs: { id: TabType; label: string }[] = [
     { id: 'profile', label: 'Profile' },
     { id: 'agents', label: 'Agents' },
+    { id: 'api-keys', label: 'API Keys' },
     { id: 'notifications', label: 'Notifications' },
   ];
 
@@ -786,6 +788,8 @@ export default function SettingsPage() {
       )}
 
       {activeTab === 'agents' && <AgentsTab userId={user.id} />}
+
+      {activeTab === 'api-keys' && <ApiKeysTab userId={user.id} />}
 
       {activeTab === 'notifications' && <NotificationsTab userId={user.id} />}
     </main>

@@ -5923,3 +5923,56 @@ Per prd-v2.json API-KEYS category: "API key auth middleware: validate Bearer tok
   - DB tests: 4 tests for Regenerate in user_api_keys_test.go
   - All 19 UserAPIKey handler tests passing
   - Updated prd-v2.json to mark requirement as passes: true
+
+- 2026-02-03: [API-KEYS] Dashboard UI: API keys management page - IMPLEMENTED ✓
+  
+  **TDD Approach:**
+  - Phase 1 (RED): Wrote 27 tests for ApiKeysTab component
+  - Phase 2 (GREEN): Implemented component to make tests pass
+  - Phase 3 (REFACTOR): Clean implementation with proper separation
+  
+  **Features Implemented:**
+  1. List existing API keys with usage stats:
+     - Key name and masked prefix (solvr_sk_xxx...)
+     - Creation date formatted
+     - Last used date or "Never used"
+     - Loading state, error state, empty state
+  
+  2. Create new key with name input:
+     - Form with name validation
+     - Error handling for API failures
+     - Cancel button to close form
+  
+  3. Show key ONCE on creation:
+     - Full key displayed after creation
+     - Warning: "Save this key now - it won't be shown again"
+     - Copy button with "Copied!" feedback
+  
+  4. Revoke button with confirmation:
+     - Confirmation dialog with key name
+     - Warning about immediate invalidation
+     - Error handling for failures
+     - Key removed from list on success
+  
+  **Files Created:**
+  - frontend/src/components/settings/ApiKeysTab.tsx (280 lines)
+  - frontend/src/__tests__/settings-api-keys.test.tsx (27 tests)
+  
+  **Files Modified:**
+  - frontend/src/app/settings/page.tsx
+    - Added import for ApiKeysTab
+    - Added 'api-keys' to TabType
+    - Added tab config for "API Keys"
+    - Added conditional render for ApiKeysTab
+    - Total lines: 797 (under 800 limit)
+  
+  **Test Coverage:**
+  - 27 new tests for API Keys tab, all passing
+  - 66 tests for settings-related files, all passing
+  - 1096 total frontend tests, all passing
+  
+  **Accessibility:**
+  - Proper heading structure
+  - ARIA labels on inputs
+  - Dialog with role="dialog" for confirmation
+  - Loading states with test IDs

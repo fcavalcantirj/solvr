@@ -378,7 +378,7 @@
       "Show key ONCE on creation (copy button)",
       "Revoke button with confirmation"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-KEYS",

@@ -9,6 +9,7 @@ import (
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Post-related errors.
@@ -20,6 +21,18 @@ var (
 	ErrInvalidVoteDirection = errors.New("invalid vote direction: must be 'up' or 'down'")
 	ErrInvalidVoterType     = errors.New("invalid voter type: must be 'human' or 'agent'")
 )
+
+// isInvalidUUIDError checks if an error is a PostgreSQL invalid UUID syntax error.
+// PostgreSQL error code 22P02 = invalid_text_representation (e.g., invalid UUID format).
+// FIX-007: Return ErrPostNotFound for invalid UUID syntax to avoid 500 errors.
+func isInvalidUUIDError(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		// 22P02 = invalid_text_representation (includes invalid UUID syntax)
+		return pgErr.Code == "22P02"
+	}
+	return false
+}
 
 // PostRepository handles database operations for posts.
 // Per SPEC.md Part 6: posts table.
@@ -216,6 +229,10 @@ func (r *PostRepository) scanPost(row pgx.Row) (*models.Post, error) {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrPostNotFound
 		}
+		// FIX-007: Invalid UUID format should return ErrPostNotFound (404), not 500.
+		if isInvalidUUIDError(err) {
+			return nil, ErrPostNotFound
+		}
 		return nil, err
 	}
 
@@ -344,6 +361,11 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrPostNotFound
 		}
+		// FIX-007: Invalid UUID format should return ErrPostNotFound (404), not 500.
+		// This makes behavior consistent: any invalid or non-existent post ID returns 404.
+		if isInvalidUUIDError(err) {
+			return nil, ErrPostNotFound
+		}
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
 
@@ -412,6 +434,10 @@ func (r *PostRepository) Delete(ctx context.Context, id string) error {
 
 	result, err := r.pool.Exec(ctx, query, id)
 	if err != nil {
+		// FIX-007: Invalid UUID format should return ErrPostNotFound (404), not 500.
+		if isInvalidUUIDError(err) {
+			return ErrPostNotFound
+		}
 		return fmt.Errorf("delete query failed: %w", err)
 	}
 
@@ -445,6 +471,10 @@ func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, d
 		postID,
 	).Scan(&exists)
 	if err != nil {
+		// FIX-007: Invalid UUID format should return ErrPostNotFound (404), not 500.
+		if isInvalidUUIDError(err) {
+			return ErrPostNotFound
+		}
 		return fmt.Errorf("failed to check post existence: %w", err)
 	}
 	if !exists {

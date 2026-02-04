@@ -103,7 +103,7 @@
       "Test: GET /v1/posts/{nonexistent} returns 404",
       "Test: GET /v1/posts/{valid} returns post data"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-008",

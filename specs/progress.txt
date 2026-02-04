@@ -7044,3 +7044,15 @@ Also, FeedRepository didn't exist in the db package.
   - Test: TestGetAgentProfileEndpoint verifies endpoint returns real agent data
   - Test confirms response has data.agent structure with id, display_name fields
   - All tests passing after routes.go deletion
+
+- 2026-02-04: [FIX-007] Fix GET /v1/posts/{id} 500 error ✓
+  - Root cause: PostgreSQL returns UUID syntax error (code 22P02) for invalid UUID formats like "test-123"
+  - This error was not being caught, causing 500 instead of 404
+  - Added isInvalidUUIDError() helper function to detect PostgreSQL error code 22P02
+  - Updated PostRepository methods to handle invalid UUID as ErrPostNotFound:
+    - FindByID: Returns 404 for invalid UUID
+    - scanPost (used by Update): Returns 404 for invalid UUID
+    - Delete: Returns 404 for invalid UUID
+    - Vote: Returns 404 for invalid UUID
+  - Added integration tests: TestPostRepository_FindByID_InvalidUUID, TestPostRepository_FindByID_ValidUUIDNotFound
+  - All tests pass

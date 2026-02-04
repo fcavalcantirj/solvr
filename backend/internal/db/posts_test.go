@@ -637,6 +637,74 @@ func TestPostRepository_FindByID_ExcludesDeleted(t *testing.T) {
 	}
 }
 
+// TestPostRepository_FindByID_InvalidUUID tests that an invalid UUID format returns ErrPostNotFound.
+// This is important for security (no DB error exposure) and UX (consistent 404 behavior).
+// FIX-007: Previously this returned 500 due to PostgreSQL UUID syntax error.
+func TestPostRepository_FindByID_InvalidUUID(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	ctx := context.Background()
+
+	// Test various invalid UUID formats
+	invalidIDs := []string{
+		"test-123",           // Not a UUID
+		"invalid",            // Plain string
+		"123",                // Just numbers
+		"not-a-valid-uuid",   // Looks like UUID but isn't
+		"",                   // Empty string
+		"abc",                // Short string
+	}
+
+	for _, invalidID := range invalidIDs {
+		post, err := repo.FindByID(ctx, invalidID)
+		if err == nil {
+			t.Errorf("expected error for invalid UUID %q", invalidID)
+			continue
+		}
+
+		if err != ErrPostNotFound {
+			t.Errorf("for invalid UUID %q: expected ErrPostNotFound, got %v", invalidID, err)
+		}
+
+		if post != nil {
+			t.Errorf("expected nil post for invalid UUID %q", invalidID)
+		}
+	}
+}
+
+// TestPostRepository_FindByID_ValidUUIDNotFound tests that a valid UUID format that doesn't exist returns ErrPostNotFound.
+func TestPostRepository_FindByID_ValidUUIDNotFound(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	ctx := context.Background()
+
+	// Valid UUID format but doesn't exist in DB
+	validUUID := "00000000-0000-0000-0000-000000000000"
+
+	post, err := repo.FindByID(ctx, validUUID)
+	if err == nil {
+		t.Fatal("expected error for non-existent UUID")
+	}
+
+	if err != ErrPostNotFound {
+		t.Errorf("expected ErrPostNotFound, got %v", err)
+	}
+
+	if post != nil {
+		t.Error("expected nil post for non-existent UUID")
+	}
+}
+
 // === Create Tests ===
 
 func TestPostRepository_Create_Problem(t *testing.T) {

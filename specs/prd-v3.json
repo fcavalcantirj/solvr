@@ -1,0 +1,139 @@
+[
+  {
+    "id": "FIX-001",
+    "category": "FIX-CRITICAL",
+    "description": "Remove routes.go placeholders that override router.go",
+    "problem": "routes.go is called AFTER router.go in main.go and adds placeholder endpoints that override real handlers",
+    "evidence": "GET /v1/posts returns 'coming soon' placeholder instead of real data",
+    "steps": [
+      "In cmd/api/main.go, remove call to api.MountAPIRoutes() on line 57",
+      "Move /v1/search handler from routes.go into router.go mountV1Routes()",
+      "Delete routes.go entirely OR keep only as reference",
+      "Test: GET /v1/posts returns real data (empty array), not placeholder",
+      "Test: GET /v1/agents/{id} returns real agent data, not placeholder"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-002",
+    "category": "FIX-CRITICAL",
+    "description": "Add API key auth middleware to /v1/agents/me/claim",
+    "problem": "POST /v1/agents/me/claim has no auth middleware but handler expects agent API key",
+    "evidence": "Returns 401 'agent authentication required' because no middleware extracts API key",
+    "steps": [
+      "In router.go, create APIKeyValidator with AgentRepository",
+      "Wrap /v1/agents/me/claim route with auth.APIKeyMiddleware(validator)",
+      "Test: POST /v1/agents/me/claim with valid API key returns claim URL",
+      "Test: POST /v1/agents/me/claim without API key returns 401"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-003",
+    "category": "FIX-CRITICAL",
+    "description": "Use CombinedAuthMiddleware for protected posts routes",
+    "problem": "Protected posts routes only use JWTMiddleware, agents with API keys get 'malformed token'",
+    "evidence": "POST /v1/posts with API key returns 'INVALID_TOKEN malformed token'",
+    "steps": [
+      "Create APIKeyValidator with AgentRepository in mountV1Routes",
+      "Replace r.Use(auth.JWTMiddleware(jwtSecret)) with r.Use(auth.CombinedAuthMiddleware(jwtSecret, validator))",
+      "Ensure CombinedAuthMiddleware sets Claims in context for both JWT and API key auth",
+      "Test: POST /v1/posts with API key creates post",
+      "Test: POST /v1/posts with JWT creates post",
+      "Test: POST /v1/posts without auth returns 401"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-004",
+    "category": "FIX-CRITICAL",
+    "description": "Wire /v1/feed endpoint",
+    "problem": "GET /v1/feed returns 404 - handler exists but not wired",
+    "evidence": "Server logs show 404 for /v1/feed",
+    "steps": [
+      "In router.go mountV1Routes, create FeedHandler with PostRepository",
+      "Wire r.Get('/feed', feedHandler.Feed)",
+      "Wire r.Get('/feed/stuck', feedHandler.Stuck)",
+      "Wire r.Get('/feed/unanswered', feedHandler.Unanswered)",
+      "Test: GET /v1/feed returns recent posts"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-005",
+    "category": "FIX-CRITICAL",
+    "description": "Wire /v1/me endpoint",
+    "problem": "GET /v1/me returns 404 - handler exists but not wired",
+    "evidence": "Server logs show 404 for /v1/me",
+    "steps": [
+      "In router.go mountV1Routes, create MeHandler",
+      "Add protected route group: r.Get('/me', meHandler.Get)",
+      "Use CombinedAuthMiddleware so both JWT and API key work",
+      "Test: GET /v1/me with JWT returns user info",
+      "Test: GET /v1/me with API key returns agent info"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-006",
+    "category": "FIX-CRITICAL",
+    "description": "Wire real /v1/agents/{id} handler",
+    "problem": "GET /v1/agents/{id} returns placeholder instead of real agent data",
+    "evidence": "Returns 'Agent endpoint - coming soon'",
+    "steps": [
+      "Remove placeholder in routes.go (or delete routes.go per FIX-001)",
+      "In router.go mountV1Routes, wire r.Get('/agents/{id}', agentsHandler.GetProfile)",
+      "Ensure AgentsHandler.GetProfile fetches from DB and returns proper response",
+      "Test: GET /v1/agents/{id} with valid ID returns agent profile",
+      "Test: GET /v1/agents/{id} with invalid ID returns 404"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-007",
+    "category": "FIX-CRITICAL",
+    "description": "Fix GET /v1/posts/{id} 500 error",
+    "problem": "GET /v1/posts/{id} returns 500 internal error",
+    "evidence": "Server logs show status 500 for /v1/posts/test-123",
+    "steps": [
+      "Check PostRepository.FindByID handles non-existent posts correctly",
+      "Ensure ErrPostNotFound is returned for missing posts, not generic error",
+      "Check DB connection is established before query",
+      "Add debug logging to identify root cause",
+      "Test: GET /v1/posts/{nonexistent} returns 404",
+      "Test: GET /v1/posts/{valid} returns post data"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-008",
+    "category": "FIX-CRITICAL",
+    "description": "Ensure DB pool is properly initialized in production",
+    "problem": "Endpoints may fail if DB pool is nil or not connected",
+    "evidence": "500 errors on DB queries suggest possible connection issues",
+    "steps": [
+      "In cmd/api/main.go, verify DATABASE_URL env var is set",
+      "Add startup check that pings DB before accepting requests",
+      "Log clear error if DB connection fails",
+      "Ensure /health/ready returns 503 if DB is down",
+      "Test: API works with valid DATABASE_URL",
+      "Test: API returns clear error without DATABASE_URL"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-009",
+    "category": "FIX-IMPORTANT",
+    "description": "Move search handler from routes.go to router.go",
+    "problem": "Search handler is in routes.go, should be consolidated in router.go",
+    "evidence": "Code split across two files causes confusion and override issues",
+    "steps": [
+      "Copy search handler logic from routes.go to mountV1Routes in router.go",
+      "Or better: create SearchHandler struct in handlers/search.go",
+      "Wire r.Get('/search', searchHandler.Search)",
+      "Delete routes.go after migration complete",
+      "Test: GET /v1/search?q=test still works"
+    ],
+    "passes": false
+  }
+]

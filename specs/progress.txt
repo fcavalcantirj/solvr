@@ -7024,3 +7024,14 @@ Also, FeedRepository didn't exist in the db package.
 - go test ./internal/db/... passes (feed tests)
 - go test ./internal/api/handlers/... passes (feed handler tests)
 - go test ./... passes (all backend tests)
+
+- 2026-02-04: [FIX-005] Wire /v1/me endpoint ✓
+  - Updated MeHandler to support both JWT (humans) and API key (agents)
+  - Added AgentMeResponse struct for agent-specific response
+  - Handler checks for agent auth first (API key), then user auth (JWT)
+  - Added InMemoryUserRepository for testing
+  - Wired GET /v1/me route with CombinedAuthMiddleware in router.go
+  - Tests: TestMeEndpointRequiresAuth, TestMeEndpointWithAPIKey
+  - Tests: TestMe_AgentWithAPIKey, TestMe_AgentWithHumanBackedBadge, TestMe_PrefersAgentOverClaims
+  - All tests passing
+

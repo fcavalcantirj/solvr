@@ -532,3 +532,49 @@ func (r *InMemoryFeedRepository) GetUnansweredQuestions(ctx context.Context, pag
 	// Return empty results for in-memory testing
 	return []models.FeedItem{}, 0, nil
 }
+
+// InMemoryUserRepository is an in-memory implementation of MeUserRepositoryInterface.
+// Used for testing when no database is available.
+type InMemoryUserRepository struct {
+	mu    sync.RWMutex
+	users map[string]*models.User
+	stats map[string]*models.UserStats
+}
+
+// NewInMemoryUserRepository creates a new in-memory user repository.
+func NewInMemoryUserRepository() *InMemoryUserRepository {
+	return &InMemoryUserRepository{
+		users: make(map[string]*models.User),
+		stats: make(map[string]*models.UserStats),
+	}
+}
+
+// FindByID finds a user by their ID.
+// Returns nil, nil if not found (matching DB behavior for MeHandler).
+func (r *InMemoryUserRepository) FindByID(ctx context.Context, id string) (*models.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	user, exists := r.users[id]
+	if !exists {
+		return nil, nil
+	}
+
+	userCopy := *user
+	return &userCopy, nil
+}
+
+// GetUserStats returns statistics for a user.
+// Returns empty stats if not found.
+func (r *InMemoryUserRepository) GetUserStats(ctx context.Context, userID string) (*models.UserStats, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	stats, exists := r.stats[userID]
+	if !exists {
+		return &models.UserStats{}, nil
+	}
+
+	statsCopy := *stats
+	return &statsCopy, nil
+}

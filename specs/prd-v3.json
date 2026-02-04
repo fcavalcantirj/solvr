@@ -72,7 +72,7 @@
       "Test: GET /v1/me with JWT returns user info",
       "Test: GET /v1/me with API key returns agent info"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-006",

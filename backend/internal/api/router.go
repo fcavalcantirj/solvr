@@ -71,12 +71,14 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	var postsRepo handlers.PostsRepositoryInterface
 	var searchRepo handlers.SearchRepositoryInterface
 	var feedRepo handlers.FeedRepositoryInterface
+	var userRepo handlers.MeUserRepositoryInterface
 	if pool != nil {
 		agentRepo = db.NewAgentRepository(pool)
 		claimTokenRepo = db.NewClaimTokenRepository(pool)
 		postsRepo = db.NewPostRepository(pool)
 		searchRepo = db.NewSearchRepository(pool)
 		feedRepo = db.NewFeedRepository(pool)
+		userRepo = db.NewUserRepository(pool)
 	} else {
 		// Use in-memory repository for testing when no DB is available
 		agentRepo = NewInMemoryAgentRepository()
@@ -84,6 +86,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		postsRepo = NewInMemoryPostRepository()
 		searchRepo = NewInMemorySearchRepository()
 		feedRepo = NewInMemoryFeedRepository()
+		userRepo = NewInMemoryUserRepository()
 	}
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
@@ -198,6 +201,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Delete("/posts/{id}", postsHandler.Delete)
 			// Per SPEC.md Part 5.6: POST /v1/posts/:id/vote - vote on post (requires auth)
 			r.Post("/posts/{id}/vote", postsHandler.Vote)
+
+			// Per FIX-005: GET /v1/me - current authenticated entity info
+			// Works with both JWT (humans) and API key (agents)
+			meHandler := handlers.NewMeHandler(oauthConfig, userRepo)
+			r.Get("/me", meHandler.Me)
 		})
 	})
 }

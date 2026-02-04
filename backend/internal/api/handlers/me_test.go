@@ -336,3 +336,185 @@ func TestMe_AdminUser(t *testing.T) {
 		t.Errorf("expected role %q, got %q", models.UserRoleAdmin, data["role"])
 	}
 }
+
+// Tests for API key authentication (agents) - per FIX-005
+
+func TestMe_AgentWithAPIKey(t *testing.T) {
+	// Setup: create handler
+	repo := NewMockMeUserRepository()
+	config := &OAuthConfig{
+		JWTSecret: "test-secret-key",
+	}
+	handler := NewMeHandler(config, repo)
+
+	// Create request with agent in context (simulating API key middleware)
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+
+	agent := &models.Agent{
+		ID:          "test_agent",
+		DisplayName: "Test Agent",
+		Bio:         "A test AI agent",
+		Specialties: []string{"golang", "testing"},
+		Status:      "active",
+		Karma:       100,
+	}
+	ctx := auth.ContextWithAgent(req.Context(), agent)
+	req = req.WithContext(ctx)
+
+	// Execute
+	rr := httptest.NewRecorder()
+	handler.Me(rr, req)
+
+	// Assert: 200 OK
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	// Assert: response contains agent data
+	var response map[string]interface{}
+	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	data, ok := response["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("response missing 'data' field")
+	}
+
+	// Check agent fields
+	if data["id"] != "test_agent" {
+		t.Errorf("expected id 'test_agent', got %q", data["id"])
+	}
+	if data["display_name"] != "Test Agent" {
+		t.Errorf("expected display_name 'Test Agent', got %q", data["display_name"])
+	}
+	if data["type"] != "agent" {
+		t.Errorf("expected type 'agent', got %q", data["type"])
+	}
+	if data["bio"] != "A test AI agent" {
+		t.Errorf("expected bio 'A test AI agent', got %q", data["bio"])
+	}
+	if int(data["karma"].(float64)) != 100 {
+		t.Errorf("expected karma 100, got %v", data["karma"])
+	}
+
+	// Check specialties
+	specialties, ok := data["specialties"].([]interface{})
+	if !ok {
+		t.Fatal("response missing 'specialties' field")
+	}
+	if len(specialties) != 2 {
+		t.Errorf("expected 2 specialties, got %d", len(specialties))
+	}
+}
+
+func TestMe_AgentWithHumanBackedBadge(t *testing.T) {
+	// Setup: create handler
+	repo := NewMockMeUserRepository()
+	config := &OAuthConfig{
+		JWTSecret: "test-secret-key",
+	}
+	handler := NewMeHandler(config, repo)
+
+	// Create request with claimed agent
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+
+	humanID := "human-123"
+	agent := &models.Agent{
+		ID:                  "claimed_agent",
+		DisplayName:         "Claimed Agent",
+		HumanID:             &humanID,
+		Status:              "active",
+		Karma:               150,
+		HasHumanBackedBadge: true,
+	}
+	ctx := auth.ContextWithAgent(req.Context(), agent)
+	req = req.WithContext(ctx)
+
+	// Execute
+	rr := httptest.NewRecorder()
+	handler.Me(rr, req)
+
+	// Assert: 200 OK
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	// Parse response
+	var response map[string]interface{}
+	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	data := response["data"].(map[string]interface{})
+
+	// Check human_backed_badge is true
+	if data["has_human_backed_badge"] != true {
+		t.Errorf("expected has_human_backed_badge true, got %v", data["has_human_backed_badge"])
+	}
+
+	// Check human_id is present
+	if data["human_id"] != humanID {
+		t.Errorf("expected human_id %q, got %v", humanID, data["human_id"])
+	}
+}
+
+func TestMe_PrefersAgentOverClaims(t *testing.T) {
+	// Setup: both agent and claims in context - agent should take precedence
+	repo := NewMockMeUserRepository()
+	userID := "user-123"
+	repo.users[userID] = &models.User{
+		ID:       userID,
+		Username: "testuser",
+		Email:    "test@example.com",
+		Role:     models.UserRoleUser,
+	}
+
+	config := &OAuthConfig{
+		JWTSecret: "test-secret-key",
+	}
+	handler := NewMeHandler(config, repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+
+	// Add both agent and claims to context
+	agent := &models.Agent{
+		ID:          "priority_agent",
+		DisplayName: "Priority Agent",
+		Status:      "active",
+	}
+	ctx := auth.ContextWithAgent(req.Context(), agent)
+
+	claims := &auth.Claims{
+		UserID: userID,
+		Email:  "test@example.com",
+		Role:   models.UserRoleUser,
+	}
+	ctx = auth.ContextWithClaims(ctx, claims)
+	req = req.WithContext(ctx)
+
+	// Execute
+	rr := httptest.NewRecorder()
+	handler.Me(rr, req)
+
+	// Assert: 200 OK
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	// Parse response - should return agent data, not user data
+	var response map[string]interface{}
+	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	data := response["data"].(map[string]interface{})
+
+	// Should be agent, not user
+	if data["id"] != "priority_agent" {
+		t.Errorf("expected agent id 'priority_agent', got %q", data["id"])
+	}
+	if data["type"] != "agent" {
+		t.Errorf("expected type 'agent', got %q", data["type"])
+	}
+}

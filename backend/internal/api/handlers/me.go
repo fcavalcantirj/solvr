@@ -31,32 +31,83 @@ func NewMeHandler(config *OAuthConfig, userRepo MeUserRepositoryInterface) *MeHa
 	}
 }
 
-// MeResponse represents the response for GET /v1/auth/me.
+// MeResponse represents the response for GET /v1/me for humans (JWT auth).
 // Per SPEC.md Part 5.2: GET /auth/me -> Current user info.
 type MeResponse struct {
-	ID          string            `json:"id"`
-	Username    string            `json:"username"`
-	DisplayName string            `json:"display_name"`
-	Email       string            `json:"email"`
-	AvatarURL   string            `json:"avatar_url,omitempty"`
-	Bio         string            `json:"bio,omitempty"`
-	Role        string            `json:"role"`
-	Stats       models.UserStats  `json:"stats"`
+	ID          string           `json:"id"`
+	Username    string           `json:"username"`
+	DisplayName string           `json:"display_name"`
+	Email       string           `json:"email"`
+	AvatarURL   string           `json:"avatar_url,omitempty"`
+	Bio         string           `json:"bio,omitempty"`
+	Role        string           `json:"role"`
+	Stats       models.UserStats `json:"stats"`
 }
 
-// Me handles GET /v1/auth/me
-// Requires valid JWT, returns current user profile with stats.
+// AgentMeResponse represents the response for GET /v1/me for agents (API key auth).
+// Per FIX-005: GET /v1/me with API key returns agent info.
+type AgentMeResponse struct {
+	ID                  string   `json:"id"`
+	Type                string   `json:"type"` // Always "agent" to distinguish from user response
+	DisplayName         string   `json:"display_name"`
+	Bio                 string   `json:"bio,omitempty"`
+	Specialties         []string `json:"specialties,omitempty"`
+	AvatarURL           string   `json:"avatar_url,omitempty"`
+	Status              string   `json:"status"`
+	Karma               int      `json:"karma"`
+	HumanID             string   `json:"human_id,omitempty"`
+	HasHumanBackedBadge bool     `json:"has_human_backed_badge"`
+}
+
+// Me handles GET /v1/me
+// Supports both JWT (humans) and API key (agents) authentication.
 // Per SPEC.md Part 5.2: GET /auth/me -> Current user info.
+// Per FIX-005: Must work with CombinedAuthMiddleware.
 func (h *MeHandler) Me(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Check for valid JWT authentication (claims should be set by middleware)
+	// Check for agent authentication first (API key)
+	// Per FIX-005: API key auth should return agent info
+	agent := auth.AgentFromContext(ctx)
+	if agent != nil {
+		h.handleAgentMe(w, agent)
+		return
+	}
+
+	// Check for user authentication (JWT)
 	claims := auth.ClaimsFromContext(ctx)
 	if claims == nil {
 		writeMeUnauthorized(w, "UNAUTHORIZED", "Authentication required")
 		return
 	}
 
+	h.handleUserMe(w, ctx, claims)
+}
+
+// handleAgentMe returns agent info for API key authenticated requests.
+func (h *MeHandler) handleAgentMe(w http.ResponseWriter, agent *models.Agent) {
+	response := AgentMeResponse{
+		ID:                  agent.ID,
+		Type:                "agent",
+		DisplayName:         agent.DisplayName,
+		Bio:                 agent.Bio,
+		Specialties:         agent.Specialties,
+		AvatarURL:           agent.AvatarURL,
+		Status:              agent.Status,
+		Karma:               agent.Karma,
+		HasHumanBackedBadge: agent.HasHumanBackedBadge,
+	}
+
+	// Include human_id if claimed
+	if agent.HumanID != nil {
+		response.HumanID = *agent.HumanID
+	}
+
+	writeMeJSON(w, http.StatusOK, response)
+}
+
+// handleUserMe returns user info for JWT authenticated requests.
+func (h *MeHandler) handleUserMe(w http.ResponseWriter, ctx context.Context, claims *auth.Claims) {
 	// Look up user by ID from claims
 	user, err := h.userRepo.FindByID(ctx, claims.UserID)
 	if err != nil {

@@ -941,3 +941,100 @@ func TestClaimEndpointWithInvalidAPIKey(t *testing.T) {
 		t.Error("expected error object in response")
 	}
 }
+
+// TestMeEndpointRequiresAuth verifies GET /v1/me requires authentication.
+// Per FIX-005: Wire /v1/me endpoint
+func TestMeEndpointRequiresAuth(t *testing.T) {
+	router := NewRouter(nil)
+
+	// GET /v1/me without auth should return 401
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should NOT return 404 - endpoint should be wired
+	if w.Code == http.StatusNotFound {
+		t.Errorf("GET /v1/me returned 404 - endpoint not wired (FIX-005)")
+	}
+
+	// Should return 401 Unauthorized
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 (unauthorized), got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify error response is JSON
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should have error object
+	if response["error"] == nil {
+		t.Error("expected error object in response")
+	}
+}
+
+// TestMeEndpointWithAPIKey verifies GET /v1/me returns agent info with API key auth.
+// Per FIX-005: GET /v1/me with API key returns agent info
+func TestMeEndpointWithAPIKey(t *testing.T) {
+	router := NewRouter(nil)
+
+	// First, register an agent to get an API key
+	reqBody := `{"name":"me_test_agent","description":"Test agent for /me endpoint"}`
+	regReq := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
+	regReq.Header.Set("Content-Type", "application/json")
+	regW := httptest.NewRecorder()
+	router.ServeHTTP(regW, regReq)
+
+	if regW.Code != http.StatusCreated {
+		t.Fatalf("failed to register test agent: %d - %s", regW.Code, regW.Body.String())
+	}
+
+	var regResp map[string]interface{}
+	if err := json.NewDecoder(regW.Body).Decode(&regResp); err != nil {
+		t.Fatalf("failed to decode registration response: %v", err)
+	}
+
+	apiKey, ok := regResp["api_key"].(string)
+	if !ok || apiKey == "" {
+		t.Fatal("expected api_key in registration response")
+	}
+
+	// Now test GET /v1/me with valid API key
+	meReq := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	meReq.Header.Set("Authorization", "Bearer "+apiKey)
+	meW := httptest.NewRecorder()
+	router.ServeHTTP(meW, meReq)
+
+	// Should return 200 OK
+	if meW.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", meW.Code, meW.Body.String())
+	}
+
+	var meResp map[string]interface{}
+	if err := json.NewDecoder(meW.Body).Decode(&meResp); err != nil {
+		t.Fatalf("failed to decode /me response: %v", err)
+	}
+
+	// Should have data object
+	data, ok := meResp["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected data in response")
+	}
+
+	// Should return agent data
+	if data["type"] != "agent" {
+		t.Errorf("expected type 'agent', got %v", data["type"])
+	}
+
+	// Should have agent ID (the registration handler prefixes with "agent_")
+	agentID, _ := data["id"].(string)
+	if agentID != "me_test_agent" && agentID != "agent_me_test_agent" {
+		t.Errorf("expected id to contain 'me_test_agent', got %v", data["id"])
+	}
+
+	// Should have display_name
+	if data["display_name"] == nil {
+		t.Error("expected display_name in response")
+	}
+}

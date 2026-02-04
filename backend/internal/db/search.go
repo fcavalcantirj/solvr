@@ -95,6 +95,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	// Execute main query
 	rows, err := r.pool.Query(ctx, baseQuery, args...)
 	if err != nil {
+		LogQueryError(ctx, "Search", "posts", err)
 		return nil, 0, fmt.Errorf("search query failed: %w", err)
 	}
 	defer rows.Close()
@@ -272,6 +273,7 @@ func (r *SearchRepository) getSearchCount(ctx context.Context, tsquery string, o
 	var total int
 	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
+		LogQueryError(ctx, "Search.Count", "posts", err)
 		return 0, fmt.Errorf("count query failed: %w", err)
 	}
 

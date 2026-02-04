@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -43,8 +44,10 @@ func (r *ClaimTokenRepository) Create(ctx context.Context, token *models.ClaimTo
 		// Check for unique constraint violation
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			slog.Info("duplicate key constraint", "op", "Create", "table", "claim_tokens", "constraint", "token")
 			return ErrDuplicateClaimToken
 		}
+		LogQueryError(ctx, "Create", "claim_tokens", err)
 		return err
 	}
 
@@ -76,6 +79,7 @@ func (r *ClaimTokenRepository) FindByToken(ctx context.Context, tokenValue strin
 		if err.Error() == "no rows in result set" {
 			return nil, nil
 		}
+		LogQueryError(ctx, "FindByToken", "claim_tokens", err)
 		return nil, err
 	}
 
@@ -109,6 +113,7 @@ func (r *ClaimTokenRepository) FindActiveByAgentID(ctx context.Context, agentID 
 		if err.Error() == "no rows in result set" {
 			return nil, nil
 		}
+		LogQueryError(ctx, "FindActiveByAgentID", "claim_tokens", err)
 		return nil, err
 	}
 
@@ -127,10 +132,12 @@ func (r *ClaimTokenRepository) MarkUsed(ctx context.Context, tokenID, humanID st
 
 	result, err := r.pool.Exec(ctx, query, tokenID, humanID)
 	if err != nil {
+		LogQueryError(ctx, "MarkUsed", "claim_tokens", err)
 		return err
 	}
 
 	if result.RowsAffected() == 0 {
+		slog.Debug("claim token not found", "op", "MarkUsed", "table", "claim_tokens", "id", tokenID)
 		return ErrClaimTokenNotFound
 	}
 
@@ -148,6 +155,7 @@ func (r *ClaimTokenRepository) DeleteExpiredTokens(ctx context.Context) (int64, 
 
 	result, err := r.pool.Exec(ctx, query)
 	if err != nil {
+		LogQueryError(ctx, "DeleteExpiredTokens", "claim_tokens", err)
 		return 0, err
 	}
 

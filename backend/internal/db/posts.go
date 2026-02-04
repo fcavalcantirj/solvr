@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -105,6 +106,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	var total int
 	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
+		LogQueryError(ctx, "List.Count", "posts", err)
 		return nil, 0, fmt.Errorf("count query failed: %w", err)
 	}
 
@@ -131,6 +133,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
+		LogQueryError(ctx, "List", "posts", err)
 		return nil, 0, fmt.Errorf("list query failed: %w", err)
 	}
 	defer rows.Close()
@@ -139,12 +142,14 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	for rows.Next() {
 		post, err := r.scanPostWithAuthorRows(rows)
 		if err != nil {
+			LogQueryError(ctx, "List.Scan", "posts", err)
 			return nil, 0, fmt.Errorf("scan failed: %w", err)
 		}
 		posts = append(posts, *post)
 	}
 
 	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "List.Rows", "posts", err)
 		return nil, 0, fmt.Errorf("rows iteration failed: %w", err)
 	}
 
@@ -359,13 +364,16 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Debug("post not found", "op", "FindByID", "table", "posts", "id", id)
 			return nil, ErrPostNotFound
 		}
 		// FIX-007: Invalid UUID format should return ErrPostNotFound (404), not 500.
 		// This makes behavior consistent: any invalid or non-existent post ID returns 404.
 		if isInvalidUUIDError(err) {
+			slog.Debug("invalid UUID format", "op", "FindByID", "table", "posts", "id", id)
 			return nil, ErrPostNotFound
 		}
+		LogQueryError(ctx, "FindByID", "posts", err)
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
 
@@ -436,8 +444,10 @@ func (r *PostRepository) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		// FIX-007: Invalid UUID format should return ErrPostNotFound (404), not 500.
 		if isInvalidUUIDError(err) {
+			slog.Debug("invalid UUID format", "op", "Delete", "table", "posts", "id", id)
 			return ErrPostNotFound
 		}
+		LogQueryError(ctx, "Delete", "posts", err)
 		return fmt.Errorf("delete query failed: %w", err)
 	}
 
@@ -473,8 +483,10 @@ func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, d
 	if err != nil {
 		// FIX-007: Invalid UUID format should return ErrPostNotFound (404), not 500.
 		if isInvalidUUIDError(err) {
+			slog.Debug("invalid UUID format", "op", "Vote.CheckExists", "table", "posts", "id", postID)
 			return ErrPostNotFound
 		}
+		LogQueryError(ctx, "Vote.CheckExists", "posts", err)
 		return fmt.Errorf("failed to check post existence: %w", err)
 	}
 	if !exists {
@@ -491,6 +503,7 @@ func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, d
 	).Scan(&existingDirection)
 
 	if err != nil && err.Error() != "no rows in result set" {
+		LogQueryError(ctx, "Vote.CheckExisting", "votes", err)
 		return fmt.Errorf("failed to check existing vote: %w", err)
 	}
 
@@ -509,6 +522,7 @@ func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, d
 				postID, voterType, voterID, direction,
 			)
 			if err != nil {
+				LogQueryError(ctx, "Vote.InsertVote", "votes", err)
 				return fmt.Errorf("failed to insert vote: %w", err)
 			}
 
@@ -525,6 +539,7 @@ func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, d
 				)
 			}
 			if err != nil {
+				LogQueryError(ctx, "Vote.UpdateCounts", "posts", err)
 				return fmt.Errorf("failed to update post vote counts: %w", err)
 			}
 		} else {
@@ -536,6 +551,7 @@ func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, d
 				postID, voterType, voterID, direction,
 			)
 			if err != nil {
+				LogQueryError(ctx, "Vote.UpdateDirection", "votes", err)
 				return fmt.Errorf("failed to update vote: %w", err)
 			}
 
@@ -554,6 +570,7 @@ func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, d
 				)
 			}
 			if err != nil {
+				LogQueryError(ctx, "Vote.AdjustCounts", "posts", err)
 				return fmt.Errorf("failed to adjust post vote counts: %w", err)
 			}
 		}

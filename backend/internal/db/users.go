@@ -4,6 +4,7 @@ package db
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -66,11 +67,14 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 	if err != nil {
 		// Check for unique constraint violations
 		if strings.Contains(err.Error(), "users_username_key") {
+			slog.Info("duplicate key constraint", "op", "Create", "table", "users", "constraint", "username")
 			return nil, ErrDuplicateUsername
 		}
 		if strings.Contains(err.Error(), "users_email_key") {
+			slog.Info("duplicate key constraint", "op", "Create", "table", "users", "constraint", "email")
 			return nil, ErrDuplicateEmail
 		}
+		LogQueryError(ctx, "Create", "users", err)
 		return nil, err
 	}
 
@@ -154,8 +158,10 @@ func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Debug("user not found during scan", "table", "users")
 			return nil, ErrNotFound
 		}
+		LogQueryError(context.Background(), "scanUser", "users", err)
 		return nil, err
 	}
 
@@ -228,6 +234,7 @@ func (r *UserRepository) GetUserStats(ctx context.Context, userID string) (*mode
 			// No data, return zero stats
 			return &models.UserStats{}, nil
 		}
+		LogQueryError(ctx, "GetUserStats", "users", err)
 		return nil, err
 	}
 

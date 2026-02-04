@@ -4,6 +4,7 @@ package db
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -52,6 +53,7 @@ func (r *UserAPIKeyRepository) FindByUserID(ctx context.Context, userID string) 
 
 	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
+		LogQueryError(ctx, "FindByUserID", "user_api_keys", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -60,12 +62,14 @@ func (r *UserAPIKeyRepository) FindByUserID(ctx context.Context, userID string) 
 	for rows.Next() {
 		key, err := r.scanUserAPIKeyFromRows(rows)
 		if err != nil {
+			LogQueryError(ctx, "FindByUserID.Scan", "user_api_keys", err)
 			return nil, err
 		}
 		keys = append(keys, key)
 	}
 
 	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "FindByUserID.Rows", "user_api_keys", err)
 		return nil, err
 	}
 
@@ -101,10 +105,12 @@ func (r *UserAPIKeyRepository) Revoke(ctx context.Context, id, userID string) er
 
 	tag, err := r.pool.Exec(ctx, query, id, userID)
 	if err != nil {
+		LogQueryError(ctx, "Revoke", "user_api_keys", err)
 		return err
 	}
 
 	if tag.RowsAffected() == 0 {
+		slog.Debug("api key not found", "op", "Revoke", "table", "user_api_keys", "id", id)
 		return ErrNotFound
 	}
 
@@ -121,6 +127,9 @@ func (r *UserAPIKeyRepository) UpdateLastUsed(ctx context.Context, id string) er
 	`
 
 	_, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		LogQueryError(ctx, "UpdateLastUsed", "user_api_keys", err)
+	}
 	return err
 }
 
@@ -156,8 +165,10 @@ func (r *UserAPIKeyRepository) scanUserAPIKey(row pgx.Row) (*models.UserAPIKey, 
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Debug("api key not found", "op", "scanUserAPIKey", "table", "user_api_keys")
 			return nil, ErrNotFound
 		}
+		LogQueryError(context.Background(), "scanUserAPIKey", "user_api_keys", err)
 		return nil, err
 	}
 
@@ -203,6 +214,7 @@ func (r *UserAPIKeyRepository) GetUserByAPIKey(ctx context.Context, plainKey str
 
 	rows, err := r.pool.Query(ctx, query)
 	if err != nil {
+		LogQueryError(ctx, "GetUserByAPIKey", "user_api_keys", err)
 		return nil, nil, err
 	}
 	defer rows.Close()
@@ -234,6 +246,7 @@ func (r *UserAPIKeyRepository) GetUserByAPIKey(ctx context.Context, plainKey str
 			&user.UpdatedAt,
 		)
 		if err != nil {
+			LogQueryError(ctx, "GetUserByAPIKey.Scan", "user_api_keys", err)
 			return nil, nil, err
 		}
 
@@ -247,6 +260,7 @@ func (r *UserAPIKeyRepository) GetUserByAPIKey(ctx context.Context, plainKey str
 	}
 
 	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "GetUserByAPIKey.Rows", "user_api_keys", err)
 		return nil, nil, err
 	}
 

@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -139,7 +139,7 @@ func (p *Pool) WithTx(ctx context.Context, fn func(tx Tx) error) error {
 
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
-			log.Printf("failed to rollback transaction: %v", err)
+			slog.Error("failed to rollback transaction", "error", err)
 		}
 	}()
 
@@ -156,7 +156,7 @@ func (p *Pool) WithTx(ctx context.Context, fn func(tx Tx) error) error {
 
 // Close closes the connection pool.
 func (p *Pool) Close() {
-	log.Println("closing database connection pool")
+	slog.Info("closing database connection pool")
 	p.pool.Close()
 }
 

@@ -8,6 +8,8 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
+// Note: Feed queries use LogQueryError from logger.go for error logging.
+
 // FeedRepository handles database operations for the feed.
 // Per SPEC.md Part 5.6: Feed endpoints.
 type FeedRepository struct {
@@ -39,6 +41,7 @@ func (r *FeedRepository) GetRecentActivity(ctx context.Context, page, perPage in
 	var total int
 	err := r.pool.QueryRow(ctx, countQuery).Scan(&total)
 	if err != nil {
+		LogQueryError(ctx, "GetRecentActivity.Count", "posts", err)
 		return nil, 0, fmt.Errorf("count query failed: %w", err)
 	}
 
@@ -63,6 +66,7 @@ func (r *FeedRepository) GetRecentActivity(ctx context.Context, page, perPage in
 
 	rows, err := r.pool.Query(ctx, query, perPage, offset)
 	if err != nil {
+		LogQueryError(ctx, "GetRecentActivity", "posts", err)
 		return nil, 0, fmt.Errorf("query failed: %w", err)
 	}
 	defer rows.Close()
@@ -71,12 +75,14 @@ func (r *FeedRepository) GetRecentActivity(ctx context.Context, page, perPage in
 	for rows.Next() {
 		item, err := r.scanFeedItem(rows)
 		if err != nil {
+			LogQueryError(ctx, "GetRecentActivity.Scan", "posts", err)
 			return nil, 0, fmt.Errorf("scan failed: %w", err)
 		}
 		items = append(items, *item)
 	}
 
 	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "GetRecentActivity.Rows", "posts", err)
 		return nil, 0, fmt.Errorf("rows iteration failed: %w", err)
 	}
 
@@ -118,6 +124,7 @@ func (r *FeedRepository) GetStuckProblems(ctx context.Context, page, perPage int
 	var total int
 	err := r.pool.QueryRow(ctx, countQuery).Scan(&total)
 	if err != nil {
+		LogQueryError(ctx, "GetStuckProblems.Count", "posts", err)
 		return nil, 0, fmt.Errorf("count query failed: %w", err)
 	}
 
@@ -152,6 +159,7 @@ func (r *FeedRepository) GetStuckProblems(ctx context.Context, page, perPage int
 
 	rows, err := r.pool.Query(ctx, query, perPage, offset)
 	if err != nil {
+		LogQueryError(ctx, "GetStuckProblems", "posts", err)
 		return nil, 0, fmt.Errorf("query failed: %w", err)
 	}
 	defer rows.Close()
@@ -160,12 +168,14 @@ func (r *FeedRepository) GetStuckProblems(ctx context.Context, page, perPage int
 	for rows.Next() {
 		item, err := r.scanFeedItem(rows)
 		if err != nil {
+			LogQueryError(ctx, "GetStuckProblems.Scan", "posts", err)
 			return nil, 0, fmt.Errorf("scan failed: %w", err)
 		}
 		items = append(items, *item)
 	}
 
 	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "GetStuckProblems.Rows", "posts", err)
 		return nil, 0, fmt.Errorf("rows iteration failed: %w", err)
 	}
 
@@ -202,6 +212,7 @@ func (r *FeedRepository) GetUnansweredQuestions(ctx context.Context, page, perPa
 	var total int
 	err := r.pool.QueryRow(ctx, countQuery).Scan(&total)
 	if err != nil {
+		LogQueryError(ctx, "GetUnansweredQuestions.Count", "posts", err)
 		return nil, 0, fmt.Errorf("count query failed: %w", err)
 	}
 
@@ -232,6 +243,7 @@ func (r *FeedRepository) GetUnansweredQuestions(ctx context.Context, page, perPa
 
 	rows, err := r.pool.Query(ctx, query, perPage, offset)
 	if err != nil {
+		LogQueryError(ctx, "GetUnansweredQuestions", "posts", err)
 		return nil, 0, fmt.Errorf("query failed: %w", err)
 	}
 	defer rows.Close()
@@ -240,12 +252,14 @@ func (r *FeedRepository) GetUnansweredQuestions(ctx context.Context, page, perPa
 	for rows.Next() {
 		item, err := r.scanFeedItem(rows)
 		if err != nil {
+			LogQueryError(ctx, "GetUnansweredQuestions.Scan", "posts", err)
 			return nil, 0, fmt.Errorf("scan failed: %w", err)
 		}
 		items = append(items, *item)
 	}
 
 	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "GetUnansweredQuestions.Rows", "posts", err)
 		return nil, 0, fmt.Errorf("rows iteration failed: %w", err)
 	}
 

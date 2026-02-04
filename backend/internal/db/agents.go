@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -70,8 +71,10 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
+			slog.Info("duplicate key constraint", "op", "Create", "table", "agents", "constraint", "id", "agent_id", agent.ID)
 			return ErrDuplicateAgentID
 		}
+		LogQueryError(ctx, "Create", "agents", err)
 		return err
 	}
 
@@ -92,6 +95,7 @@ func (r *AgentRepository) FindByHumanID(ctx context.Context, humanID string) ([]
 
 	rows, err := r.pool.Query(ctx, query, humanID)
 	if err != nil {
+		LogQueryError(ctx, "FindByHumanID", "agents", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -154,8 +158,10 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Debug("agent not found", "op", "Update", "table", "agents", "id", agent.ID)
 			return ErrAgentNotFound
 		}
+		LogQueryError(ctx, "Update", "agents", err)
 		return err
 	}
 
@@ -173,10 +179,12 @@ func (r *AgentRepository) UpdateAPIKeyHash(ctx context.Context, agentID, hash st
 
 	result, err := r.pool.Exec(ctx, query, agentID, hash)
 	if err != nil {
+		LogQueryError(ctx, "UpdateAPIKeyHash", "agents", err)
 		return err
 	}
 
 	if result.RowsAffected() == 0 {
+		slog.Debug("agent not found", "op", "UpdateAPIKeyHash", "table", "agents", "id", agentID)
 		return ErrAgentNotFound
 	}
 
@@ -193,10 +201,12 @@ func (r *AgentRepository) RevokeAPIKey(ctx context.Context, agentID string) erro
 
 	result, err := r.pool.Exec(ctx, query, agentID)
 	if err != nil {
+		LogQueryError(ctx, "RevokeAPIKey", "agents", err)
 		return err
 	}
 
 	if result.RowsAffected() == 0 {
+		slog.Debug("agent not found", "op", "RevokeAPIKey", "table", "agents", "id", agentID)
 		return ErrAgentNotFound
 	}
 
@@ -293,6 +303,7 @@ func (r *AgentRepository) GetAgentStats(ctx context.Context, agentID string) (*m
 			// No data, return zero stats
 			return &models.AgentStats{}, nil
 		}
+		LogQueryError(ctx, "GetAgentStats", "agents", err)
 		return nil, err
 	}
 
@@ -446,6 +457,7 @@ func (r *AgentRepository) GetActivity(ctx context.Context, agentID string, page,
 
 	rows, err := r.pool.Query(ctx, query, agentID, perPage, offset)
 	if err != nil {
+		LogQueryError(ctx, "GetActivity", "activity", err)
 		return nil, 0, err
 	}
 	defer rows.Close()
@@ -465,12 +477,14 @@ func (r *AgentRepository) GetActivity(ctx context.Context, agentID string, page,
 			&item.TargetTitle,
 		)
 		if err != nil {
+			LogQueryError(ctx, "GetActivity.Scan", "activity", err)
 			return nil, 0, err
 		}
 		items = append(items, item)
 	}
 
 	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "GetActivity.Rows", "activity", err)
 		return nil, 0, err
 	}
 
@@ -490,6 +504,7 @@ func (r *AgentRepository) GetActivity(ctx context.Context, agentID string, page,
 	var total int
 	err = r.pool.QueryRow(ctx, countQuery, agentID).Scan(&total)
 	if err != nil {
+		LogQueryError(ctx, "GetActivity.Count", "activity", err)
 		return nil, 0, err
 	}
 
@@ -515,12 +530,15 @@ func (r *AgentRepository) LinkHuman(ctx context.Context, agentID, humanID string
 	if err != nil {
 		// Check for the trigger exception (agent_already_claimed)
 		if strings.Contains(err.Error(), "agent_already_claimed") {
+			slog.Info("agent already claimed", "op", "LinkHuman", "table", "agents", "agent_id", agentID)
 			return ErrAgentAlreadyClaimed
 		}
+		LogQueryError(ctx, "LinkHuman", "agents", err)
 		return err
 	}
 
 	if result.RowsAffected() == 0 {
+		slog.Debug("agent not found", "op", "LinkHuman", "table", "agents", "id", agentID)
 		return ErrAgentNotFound
 	}
 
@@ -538,10 +556,12 @@ func (r *AgentRepository) AddKarma(ctx context.Context, agentID string, amount i
 
 	result, err := r.pool.Exec(ctx, query, agentID, amount)
 	if err != nil {
+		LogQueryError(ctx, "AddKarma", "agents", err)
 		return err
 	}
 
 	if result.RowsAffected() == 0 {
+		slog.Debug("agent not found", "op", "AddKarma", "table", "agents", "id", agentID)
 		return ErrAgentNotFound
 	}
 
@@ -559,10 +579,12 @@ func (r *AgentRepository) GrantHumanBackedBadge(ctx context.Context, agentID str
 
 	result, err := r.pool.Exec(ctx, query, agentID)
 	if err != nil {
+		LogQueryError(ctx, "GrantHumanBackedBadge", "agents", err)
 		return err
 	}
 
 	if result.RowsAffected() == 0 {
+		slog.Debug("agent not found", "op", "GrantHumanBackedBadge", "table", "agents", "id", agentID)
 		return ErrAgentNotFound
 	}
 
@@ -588,6 +610,7 @@ func (r *AgentRepository) GetAgentByAPIKeyHash(ctx context.Context, key string) 
 
 	rows, err := r.pool.Query(ctx, query)
 	if err != nil {
+		LogQueryError(ctx, "GetAgentByAPIKeyHash", "agents", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -608,6 +631,7 @@ func (r *AgentRepository) GetAgentByAPIKeyHash(ctx context.Context, key string) 
 	}
 
 	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "GetAgentByAPIKeyHash.Rows", "agents", err)
 		return nil, err
 	}
 

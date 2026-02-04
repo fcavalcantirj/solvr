@@ -233,6 +233,75 @@ func (h *IdeasHandler) Get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ResponsesListResponse is the response for listing responses.
+type ResponsesListResponse struct {
+	Data []models.ResponseWithAuthor `json:"data"`
+	Meta IdeasListMeta               `json:"meta"`
+}
+
+// ListResponses handles GET /v1/ideas/:id/responses - list responses for an idea.
+// Per FIX-024: Public endpoint (no auth required) to list responses for an idea.
+// Per FIX-023: Uses findIdea() to find ideas from either postsRepo or ideasRepo.
+func (h *IdeasHandler) ListResponses(w http.ResponseWriter, r *http.Request) {
+	ideaID := chi.URLParam(r, "id")
+	if ideaID == "" {
+		writeIdeasError(w, http.StatusBadRequest, "VALIDATION_ERROR", "idea ID is required")
+		return
+	}
+
+	// FIX-023: Use findIdea() which checks postsRepo first, then falls back to ideasRepo
+	_, err := h.findIdea(r.Context(), ideaID)
+	if err != nil {
+		if errors.Is(err, ErrIdeaNotFound) {
+			writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
+			return
+		}
+		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get idea")
+		return
+	}
+
+	// Type and deletion checks are now done in findIdea()
+
+	// Parse query parameters
+	opts := models.ResponseListOptions{
+		IdeaID:  ideaID,
+		Page:    parseIdeasIntParam(r.URL.Query().Get("page"), 1),
+		PerPage: parseIdeasIntParam(r.URL.Query().Get("per_page"), 20),
+	}
+
+	if opts.Page < 1 {
+		opts.Page = 1
+	}
+	if opts.PerPage < 1 {
+		opts.PerPage = 20
+	}
+	if opts.PerPage > 50 {
+		opts.PerPage = 50 // Cap at 50 per SPEC.md
+	}
+
+	// Execute query
+	responses, total, err := h.repo.ListResponses(r.Context(), ideaID, opts)
+	if err != nil {
+		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list responses")
+		return
+	}
+
+	// Calculate has_more
+	hasMore := (opts.Page * opts.PerPage) < total
+
+	response := ResponsesListResponse{
+		Data: responses,
+		Meta: IdeasListMeta{
+			Total:   total,
+			Page:    opts.Page,
+			PerPage: opts.PerPage,
+			HasMore: hasMore,
+		},
+	}
+
+	writeIdeasJSON(w, http.StatusOK, response)
+}
+
 // Create handles POST /v1/ideas - create a new idea.
 // Per SPEC.md Part 1.4 and FIX-017: Both humans (JWT) and AI agents (API key) can create ideas.
 func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {

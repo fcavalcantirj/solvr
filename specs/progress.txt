@@ -7334,3 +7334,19 @@ Also, FeedRepository didn't exist in the db package.
   - All tests now pass
   - File sizes: questions.go=730, problems.go=748, ideas.go=531 (all under 800)
   - All tests passing: go test ./... passes
+
+
+- 2026-02-04: [FIX-024] Wire GET /v1/ideas/:id/responses endpoint ✓
+  - Root cause: POST /v1/ideas/:id/responses was wired (line 302 in router.go) but GET was missing
+  - This caused 405 METHOD_NOT_ALLOWED when trying to list responses
+  - TDD approach followed:
+    1. Added failing tests first: TestListResponses_Success, TestListResponses_IdeaNotFound, TestListResponses_Pagination
+    2. Implemented ListResponses handler method in ideas.go
+    3. Tests passed after implementation
+  - Added ResponsesListResponse struct for consistent response format
+  - Added ListResponses handler method to IdeasHandler (public, no auth required)
+  - Uses findIdea() per FIX-023 to find ideas from either postsRepo or ideasRepo
+  - Added GET /v1/ideas/{id}/responses route in router.go (public, no auth required)
+  - Added router test case in TestIdeasEndpoints for the new endpoint
+  - File sizes: ideas.go=579, ideas_test.go=658, router.go=486, router_content_test.go=479 (all under 800)
+  - All tests passing: go test ./... passes

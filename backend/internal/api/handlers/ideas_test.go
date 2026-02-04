@@ -546,3 +546,113 @@ func TestCreateIdea_DescriptionTooShort(t *testing.T) {
 		t.Errorf("expected status 400, got %d", w.Code)
 	}
 }
+
+// TestListResponses_Success tests successful listing of responses for an idea.
+// Per FIX-024: GET /v1/ideas/:id/responses should return list of responses.
+func TestListResponses_Success(t *testing.T) {
+	repo := NewMockIdeasRepository()
+	idea := createTestIdea("idea-123", "Test Idea")
+	repo.SetIdea(&idea)
+	repo.SetResponses([]models.ResponseWithAuthor{
+		createTestResponse("response-1", "idea-123"),
+		createTestResponse("response-2", "idea-123"),
+	})
+
+	handler := NewIdeasHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/v1/ideas/idea-123/responses", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "idea-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+
+	handler.ListResponses(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	data, ok := resp["data"].([]interface{})
+	if !ok {
+		t.Fatal("expected data array in response")
+	}
+	if len(data) != 2 {
+		t.Errorf("expected 2 responses, got %d", len(data))
+	}
+
+	meta, ok := resp["meta"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected meta object in response")
+	}
+	if meta["total"].(float64) != 2 {
+		t.Errorf("expected total=2, got %v", meta["total"])
+	}
+}
+
+// TestListResponses_IdeaNotFound tests 404 when idea doesn't exist.
+func TestListResponses_IdeaNotFound(t *testing.T) {
+	repo := NewMockIdeasRepository()
+	repo.SetIdea(nil) // No idea set
+
+	handler := NewIdeasHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/v1/ideas/nonexistent/responses", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "nonexistent")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+
+	handler.ListResponses(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	errObj := resp["error"].(map[string]interface{})
+	if errObj["code"] != "NOT_FOUND" {
+		t.Errorf("expected error code NOT_FOUND, got %v", errObj["code"])
+	}
+}
+
+// TestListResponses_Pagination tests pagination parameters.
+func TestListResponses_Pagination(t *testing.T) {
+	repo := NewMockIdeasRepository()
+	idea := createTestIdea("idea-123", "Test Idea")
+	repo.SetIdea(&idea)
+	repo.SetResponses([]models.ResponseWithAuthor{
+		createTestResponse("response-1", "idea-123"),
+	})
+
+	handler := NewIdeasHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/v1/ideas/idea-123/responses?page=2&per_page=10", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "idea-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+
+	handler.ListResponses(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	meta := resp["meta"].(map[string]interface{})
+	if meta["page"].(float64) != 2 {
+		t.Errorf("expected page=2, got %v", meta["page"])
+	}
+	if meta["per_page"].(float64) != 10 {
+		t.Errorf("expected per_page=10, got %v", meta["per_page"])
+	}
+}

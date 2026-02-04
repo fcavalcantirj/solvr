@@ -363,7 +363,7 @@
       "Wire to IdeasHandler.ListResponses or ResponsesHandler.List",
       "Test: GET /v1/ideas/:id/responses returns list"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-025",

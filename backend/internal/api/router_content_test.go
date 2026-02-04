@@ -207,6 +207,18 @@ func TestIdeasEndpoints(t *testing.T) {
 			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+
+	// FIX-024: Test GET /v1/ideas/:id/responses endpoint
+	t.Run("GET /v1/ideas/:id/responses returns list or 404", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/ideas/test-idea-id/responses", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Should return 404 for nonexistent idea, or 200 with list
+		if w.Code != http.StatusOK && w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 200 or 404, got %d: %s", w.Code, w.Body.String())
+		}
+	})
 }
 
 // TestCommentsEndpoints verifies comments endpoints are wired.

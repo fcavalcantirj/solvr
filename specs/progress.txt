@@ -7409,3 +7409,26 @@ Also, FeedRepository didn't exist in the db package.
   - CreateAgent returns: 409 CONFLICT with code DUPLICATE_ID
   - File sizes: agents.go=689, agents_test.go=800, agents_name_uniqueness_test.go=460 (all under 800)
   - All tests passing: go test ./... passes
+
+
+- 2026-02-04: [FIX-028] Add request body size limit ✓
+  - TDD approach followed:
+    1. Added failing tests first in bodylimit_test.go:
+       - TestBodyLimit_AcceptsSmallPayload
+       - TestBodyLimit_RejectsLargePayload
+       - TestBodyLimit_AllowsGetRequests
+       - TestBodyLimit_AcceptsExactLimit
+       - TestBodyLimit_RejectsOneByteOverLimit
+       - TestBodyLimit_ChecksContentLength
+    2. Tests initially failed (BodyLimit undefined) - RED phase
+    3. Implemented BodyLimit middleware
+  - Solution: Created new middleware/bodylimit.go
+    - BodyLimit(maxBytes) returns middleware function
+    - Checks Content-Length header first (fast path)
+    - Uses http.MaxBytesReader to enforce limit during read
+    - Skips body check for GET/HEAD/OPTIONS requests
+    - Returns 413 PAYLOAD_TOO_LARGE with JSON error response
+  - Added to router middleware stack in router.go: apimiddleware.BodyLimit(64*1024)
+  - 64KB limit per spec (SPEC.md Part 8.2: Content Backpressure)
+  - File sizes: bodylimit.go=48, bodylimit_test.go=164, router.go=487 (all under 800)
+  - All tests passing: go test ./... passes

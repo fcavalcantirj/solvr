@@ -418,7 +418,7 @@
       "Return 413 Payload Too Large for oversized requests",
       "Test: POST with 100KB body returns 413"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-029",

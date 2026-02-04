@@ -28,6 +28,7 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	// Middleware stack
 	r.Use(requestIDMiddleware)
 	r.Use(apimiddleware.Logging)
+	r.Use(apimiddleware.BodyLimit(64 * 1024)) // FIX-028: 64KB request body limit
 	r.Use(securityHeadersMiddleware)
 	r.Use(jsonContentTypeMiddleware)
 	r.Use(middleware.RealIP)

@@ -597,19 +597,16 @@ func TestPostsCRUD_ListAndPagination(t *testing.T) {
 		}
 	})
 
-	// Per page max enforcement
+	// Per page max enforcement - FIX-029: Now returns 400 instead of silently capping
 	t.Run("PerPageMaxEnforced", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/posts?per_page=100", nil)
 		w := httptest.NewRecorder()
 
 		handler.List(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Fatalf("expected status 200, got %d", w.Code)
-		}
-
-		if repo.listOpts.PerPage != 50 {
-			t.Errorf("expected per_page capped at 50, got %d", repo.listOpts.PerPage)
+		// FIX-029: Changed from silently capping to returning error
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d", w.Code)
 		}
 	})
 }

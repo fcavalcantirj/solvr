@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
@@ -16,6 +18,50 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
+
+// Pagination constants per SPEC.md Part 5.6
+const (
+	DefaultPage    = 1
+	DefaultPerPage = 20
+	MaxPerPage     = 50
+)
+
+// parsePaginationParams validates and parses page and per_page query parameters.
+// FIX-029: Returns error for invalid values instead of silently correcting.
+// Per SPEC.md Part 5.6: page >= 1, per_page >= 1 and <= 50.
+func parsePaginationParams(r *http.Request) (page, perPage int, err error) {
+	page = DefaultPage
+	perPage = DefaultPerPage
+
+	// Parse page parameter
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		parsedPage, parseErr := strconv.Atoi(pageStr)
+		if parseErr != nil {
+			return 0, 0, fmt.Errorf("page must be a valid integer")
+		}
+		if parsedPage < 1 {
+			return 0, 0, fmt.Errorf("page must be >= 1")
+		}
+		page = parsedPage
+	}
+
+	// Parse per_page parameter
+	if perPageStr := r.URL.Query().Get("per_page"); perPageStr != "" {
+		parsedPerPage, parseErr := strconv.Atoi(perPageStr)
+		if parseErr != nil {
+			return 0, 0, fmt.Errorf("per_page must be a valid integer")
+		}
+		if parsedPerPage < 1 {
+			return 0, 0, fmt.Errorf("per_page must be >= 1")
+		}
+		if parsedPerPage > MaxPerPage {
+			return 0, 0, fmt.Errorf("per_page must be <= %d", MaxPerPage)
+		}
+		perPage = parsedPerPage
+	}
+
+	return page, perPage, nil
+}
 
 // PostsRepositoryInterface defines the database operations for posts.
 type PostsRepositoryInterface interface {
@@ -137,20 +183,16 @@ func getAuthInfo(r *http.Request) *authInfo {
 
 // List handles GET /v1/posts - list posts.
 func (h *PostsHandler) List(w http.ResponseWriter, r *http.Request) {
-	// Parse query parameters
-	opts := models.PostListOptions{
-		Page:    parseIntParam(r.URL.Query().Get("page"), 1),
-		PerPage: parseIntParam(r.URL.Query().Get("per_page"), 20),
+	// FIX-029: Validate pagination parameters
+	page, perPage, err := parsePaginationParams(r)
+	if err != nil {
+		response.WriteValidationError(w, err.Error(), nil)
+		return
 	}
 
-	if opts.Page < 1 {
-		opts.Page = 1
-	}
-	if opts.PerPage < 1 {
-		opts.PerPage = 20
-	}
-	if opts.PerPage > 50 {
-		opts.PerPage = 50 // Cap at 50 per SPEC.md
+	opts := models.PostListOptions{
+		Page:    page,
+		PerPage: perPage,
 	}
 
 	// Parse type filter

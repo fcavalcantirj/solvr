@@ -432,6 +432,6 @@
       "Return 400 BAD_REQUEST for invalid values",
       "Test: page=-1 returns 400"
     ],
-    "passes": false
+    "passes": true
   }
 ]

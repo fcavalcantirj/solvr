@@ -294,6 +294,8 @@ func TestListPosts_Pagination(t *testing.T) {
 }
 
 // TestListPosts_PerPageMax tests per_page capped at 50.
+// TestListPosts_PerPageMax tests that per_page > 50 returns 400.
+// FIX-029: Changed from silently capping to returning error.
 func TestListPosts_PerPageMax(t *testing.T) {
 	repo := NewMockPostsRepository()
 	repo.SetPosts([]models.PostWithAuthor{}, 0)
@@ -305,12 +307,9 @@ func TestListPosts_PerPageMax(t *testing.T) {
 
 	handler.List(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.listOpts.PerPage != 50 {
-		t.Errorf("expected per_page capped at 50, got %d", repo.listOpts.PerPage)
+	// FIX-029: Now returns 400 instead of silently capping
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", w.Code)
 	}
 }
 
@@ -533,5 +532,121 @@ func TestDeletePost_NoAuth(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected status 401, got %d", w.Code)
+	}
+}
+
+// ============================================================================
+// FIX-029: Pagination parameter validation tests
+// ============================================================================
+
+// TestListPosts_NegativePage tests that page=-1 returns 400 BAD_REQUEST.
+func TestListPosts_NegativePage(t *testing.T) {
+	repo := NewMockPostsRepository()
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts?page=-1", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("FIX-029: expected status 400 for page=-1, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var errResp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	errorObj, ok := errResp["error"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected error object in response")
+	}
+	if errorObj["code"] != "VALIDATION_ERROR" {
+		t.Errorf("FIX-029: expected error code VALIDATION_ERROR, got %s", errorObj["code"])
+	}
+}
+
+// TestListPosts_ZeroPage tests that page=0 returns 400 BAD_REQUEST.
+func TestListPosts_ZeroPage(t *testing.T) {
+	repo := NewMockPostsRepository()
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts?page=0", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("FIX-029: expected status 400 for page=0, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestListPosts_NegativePerPage tests that per_page=-1 returns 400 BAD_REQUEST.
+func TestListPosts_NegativePerPage(t *testing.T) {
+	repo := NewMockPostsRepository()
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts?per_page=-1", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("FIX-029: expected status 400 for per_page=-1, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestListPosts_ZeroPerPage tests that per_page=0 returns 400 BAD_REQUEST.
+func TestListPosts_ZeroPerPage(t *testing.T) {
+	repo := NewMockPostsRepository()
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts?per_page=0", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("FIX-029: expected status 400 for per_page=0, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestListPosts_PerPageTooLarge tests that per_page>50 returns 400 BAD_REQUEST.
+func TestListPosts_PerPageTooLarge(t *testing.T) {
+	repo := NewMockPostsRepository()
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts?per_page=100", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("FIX-029: expected status 400 for per_page=100, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestListPosts_ValidPagination tests that valid page and per_page are accepted.
+func TestListPosts_ValidPagination(t *testing.T) {
+	repo := NewMockPostsRepository()
+	repo.total = 0
+	repo.posts = []models.PostWithAuthor{}
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts?page=2&per_page=25", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("FIX-029: expected status 200 for valid pagination, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify the params were passed correctly to repo
+	if repo.listOpts.Page != 2 {
+		t.Errorf("expected page 2, got %d", repo.listOpts.Page)
+	}
+	if repo.listOpts.PerPage != 25 {
+		t.Errorf("expected per_page 25, got %d", repo.listOpts.PerPage)
 	}
 }

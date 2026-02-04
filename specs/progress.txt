@@ -7432,3 +7432,27 @@ Also, FeedRepository didn't exist in the db package.
   - 64KB limit per spec (SPEC.md Part 8.2: Content Backpressure)
   - File sizes: bodylimit.go=48, bodylimit_test.go=164, router.go=487 (all under 800)
   - All tests passing: go test ./... passes
+
+
+- 2026-02-04: [FIX-029] Validate pagination parameters ✓
+  - TDD approach followed:
+    1. Added failing tests first in posts_test.go:
+       - TestListPosts_NegativePage
+       - TestListPosts_ZeroPage
+       - TestListPosts_NegativePerPage
+       - TestListPosts_ZeroPerPage
+       - TestListPosts_PerPageTooLarge
+       - TestListPosts_ValidPagination
+    2. Tests initially failed with 200 instead of 400 (RED phase)
+    3. Implemented parsePaginationParams() helper function
+  - Solution: Created shared parsePaginationParams() function in posts.go
+    - Validates page >= 1 (returns error for 0 or negative)
+    - Validates per_page >= 1 and <= 50 (returns error for out of range)
+    - Returns errors instead of silently correcting invalid values
+    - Uses response.WriteValidationError for consistent 400 responses
+  - Updated two existing tests that expected silent capping behavior:
+    - TestListPosts_PerPageMax in posts_test.go
+    - TestPostsCRUD_ListAndPagination/PerPageMaxEnforced in posts_integration_test.go
+  - Breaking change: per_page > 50 now returns 400 instead of being silently capped
+  - File sizes: posts.go=633, posts_test.go=652, posts_integration_test.go=735 (all under 800)
+  - All tests passing: go test ./... passes

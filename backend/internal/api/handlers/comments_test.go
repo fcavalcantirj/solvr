@@ -643,3 +643,137 @@ func TestIsValidCommentTargetType(t *testing.T) {
 
 // Verify ErrCommentNotFound is defined
 var _ = errors.New("comment not found")
+
+// Helper to add agent auth context for comments tests (API key auth).
+// Per SPEC.md Part 1.4: Both humans and AI agents can perform all actions.
+func addCommentsAgentAuthContext(r *http.Request, agentID string) *http.Request {
+	agent := &models.Agent{
+		ID:          agentID,
+		DisplayName: "Test Agent",
+	}
+	ctx := auth.ContextWithAgent(r.Context(), agent)
+	return r.WithContext(ctx)
+}
+
+// TestCreateComment_SuccessWithAPIKey tests that agents can create comments via API key auth.
+// Per SPEC.md Part 1.4 and FIX-025: Both humans (JWT) and AI agents (API key) can comment.
+func TestCreateComment_SuccessWithAPIKey(t *testing.T) {
+	mockRepo := &MockCommentsRepository{
+		targetExists: true,
+	}
+
+	handler := NewCommentsHandler(mockRepo)
+
+	body := `{"content": "AI agent comment on this approach."}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/approaches/approach-123/comments", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	// Use API key auth (agent authentication) instead of JWT
+	req = addCommentsAgentAuthContext(req, "test-agent-123")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("target_type", "approach")
+	rctx.URLParams.Add("id", "approach-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rec := httptest.NewRecorder()
+	handler.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("expected status 201, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+
+	var response struct {
+		Data models.Comment `json:"data"`
+	}
+	json.NewDecoder(rec.Body).Decode(&response)
+
+	if response.Data.ID == "" {
+		t.Error("expected comment ID to be set")
+	}
+	if response.Data.Content != "AI agent comment on this approach." {
+		t.Errorf("expected content to match, got: %s", response.Data.Content)
+	}
+	if response.Data.AuthorType != models.AuthorTypeAgent {
+		t.Errorf("expected author_type 'agent', got: %s", response.Data.AuthorType)
+	}
+	if response.Data.AuthorID != "test-agent-123" {
+		t.Errorf("expected author_id 'test-agent-123', got: %s", response.Data.AuthorID)
+	}
+}
+
+// TestDeleteComment_AgentCanDeleteOwnComment tests that agents can delete their own comments.
+func TestDeleteComment_AgentCanDeleteOwnComment(t *testing.T) {
+	now := time.Now()
+	mockRepo := &MockCommentsRepository{
+		findByIDResult: &models.CommentWithAuthor{
+			Comment: models.Comment{
+				ID:         "comment-123",
+				TargetType: models.CommentTargetApproach,
+				TargetID:   "approach-123",
+				AuthorType: models.AuthorTypeAgent,
+				AuthorID:   "test-agent-123",
+				Content:    "Agent's own comment",
+				CreatedAt:  now,
+			},
+			Author: models.CommentAuthor{
+				ID:          "test-agent-123",
+				Type:        models.AuthorTypeAgent,
+				DisplayName: "Test Agent",
+			},
+		},
+	}
+
+	handler := NewCommentsHandler(mockRepo)
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/comments/comment-123", nil)
+	// Use API key auth (agent authentication)
+	req = addCommentsAgentAuthContext(req, "test-agent-123")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "comment-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rec := httptest.NewRecorder()
+	handler.Delete(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("expected status 204, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestDeleteComment_AgentCannotDeleteOthersComment tests that agents cannot delete other's comments.
+func TestDeleteComment_AgentCannotDeleteOthersComment(t *testing.T) {
+	now := time.Now()
+	mockRepo := &MockCommentsRepository{
+		findByIDResult: &models.CommentWithAuthor{
+			Comment: models.Comment{
+				ID:         "comment-123",
+				TargetType: models.CommentTargetApproach,
+				TargetID:   "approach-123",
+				AuthorType: models.AuthorTypeHuman,
+				AuthorID:   "user-456",
+				Content:    "Human's comment",
+				CreatedAt:  now,
+			},
+			Author: models.CommentAuthor{
+				ID:          "user-456",
+				Type:        models.AuthorTypeHuman,
+				DisplayName: "Human User",
+			},
+		},
+	}
+
+	handler := NewCommentsHandler(mockRepo)
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/comments/comment-123", nil)
+	// Use API key auth (agent authentication)
+	req = addCommentsAgentAuthContext(req, "test-agent-123")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "comment-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rec := httptest.NewRecorder()
+	handler.Delete(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected status 403, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+}

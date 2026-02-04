@@ -118,10 +118,11 @@ func (h *CommentsHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // Create handles POST /v1/{target_type}/{id}/comments - create a comment.
+// Per SPEC.md Part 1.4 and FIX-025: Both humans (JWT) and AI agents (API key) can comment.
 func (h *CommentsHandler) Create(w http.ResponseWriter, r *http.Request) {
-	// Require authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	// Require authentication (JWT or API key)
+	authInfo := getCommentsAuthInfo(r)
+	if authInfo == nil {
 		writeCommentsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
 	}
@@ -167,12 +168,12 @@ func (h *CommentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create comment
+	// Create comment with author info from authentication
 	comment := &models.Comment{
 		TargetType: targetType,
 		TargetID:   targetID,
-		AuthorType: models.AuthorTypeHuman, // TODO: Support agent auth
-		AuthorID:   claims.UserID,
+		AuthorType: authInfo.authorType,
+		AuthorID:   authInfo.authorID,
 		Content:    content,
 	}
 
@@ -188,10 +189,11 @@ func (h *CommentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete handles DELETE /v1/comments/:id - soft delete a comment.
+// Per SPEC.md Part 1.4 and FIX-025: Both humans (JWT) and AI agents (API key) can delete their comments.
 func (h *CommentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	// Require authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	// Require authentication (JWT or API key)
+	authInfo := getCommentsAuthInfo(r)
+	if authInfo == nil {
 		writeCommentsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
 	}
@@ -213,9 +215,9 @@ func (h *CommentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check permission - owner or admin can delete
-	isOwner := comment.AuthorType == models.AuthorTypeHuman && comment.AuthorID == claims.UserID
-	isAdmin := claims.Role == "admin"
+	// Check permission - owner or admin can delete (works for both humans and agents)
+	isOwner := comment.AuthorType == authInfo.authorType && comment.AuthorID == authInfo.authorID
+	isAdmin := authInfo.role == "admin"
 
 	if !isOwner && !isAdmin {
 		writeCommentsError(w, http.StatusForbidden, "FORBIDDEN", "you can only delete your own comments")
@@ -247,4 +249,41 @@ func writeCommentsError(w http.ResponseWriter, status int, code, message string)
 			"message": message,
 		},
 	})
+}
+
+// commentsAuthInfo holds authentication information for comment operations.
+// Supports both JWT authentication (humans) and API key authentication (agents).
+type commentsAuthInfo struct {
+	authorType models.AuthorType
+	authorID   string
+	role       string
+}
+
+// getCommentsAuthInfo extracts authentication information from the request context.
+// Supports both JWT authentication (humans) and API key authentication (agents).
+// Per SPEC.md Part 1.4: Both humans and AI agents can perform all actions.
+// Per FIX-025: Comments handler must support both auth methods.
+// Returns nil if not authenticated.
+func getCommentsAuthInfo(r *http.Request) *commentsAuthInfo {
+	// First try JWT claims (human authentication)
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims != nil {
+		return &commentsAuthInfo{
+			authorType: models.AuthorTypeHuman,
+			authorID:   claims.UserID,
+			role:       claims.Role,
+		}
+	}
+
+	// Then try agent authentication (API key)
+	agent := auth.AgentFromContext(r.Context())
+	if agent != nil {
+		return &commentsAuthInfo{
+			authorType: models.AuthorTypeAgent,
+			authorID:   agent.ID,
+			role:       "", // Agents don't have roles (yet)
+		}
+	}
+
+	return nil
 }

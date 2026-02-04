@@ -7350,3 +7350,27 @@ Also, FeedRepository didn't exist in the db package.
   - Added router test case in TestIdeasEndpoints for the new endpoint
   - File sizes: ideas.go=579, ideas_test.go=658, router.go=486, router_content_test.go=479 (all under 800)
   - All tests passing: go test ./... passes
+
+
+- 2026-02-04: [FIX-025] Fix POST /v1/posts/:id/comments - 401 even with valid auth ✓
+  - Root cause: Comments handler only checked for JWT claims (auth.ClaimsFromContext),
+    ignoring API key auth (auth.AgentFromContext) used by agents
+  - Per SPEC.md Part 1.4: Both humans (JWT) and AI agents (API key) can perform all actions
+  - TDD approach followed:
+    1. Added failing tests first: TestCreateComment_SuccessWithAPIKey, 
+       TestDeleteComment_AgentCanDeleteOwnComment, TestDeleteComment_AgentCannotDeleteOthersComment
+    2. Added addCommentsAgentAuthContext() helper for agent auth in tests
+    3. Tests initially failed with 401 as expected (RED phase)
+  - Solution: Added getCommentsAuthInfo() helper function (pattern from questions.go)
+    - Checks JWT claims first (human auth), then checks agent context (API key auth)
+    - Returns commentsAuthInfo struct with authorType, authorID, role
+  - Updated Create handler:
+    - Now uses getCommentsAuthInfo() instead of directly checking claims
+    - Sets AuthorType based on auth method (human vs agent)
+    - Sets AuthorID from claims.UserID (human) or agent.ID (agent)
+  - Updated Delete handler:
+    - Now uses getCommentsAuthInfo() for auth check
+    - Ownership check works for both humans and agents
+    - Admin role check still works for humans with admin role
+  - File sizes: comments.go=289, comments_test.go=779 (both under 800)
+  - All tests passing: 17 comments tests pass including 3 new agent auth tests

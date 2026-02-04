@@ -377,7 +377,7 @@
       "Add debug logging to trace auth flow",
       "Test: POST comment with valid API key succeeds"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-026",

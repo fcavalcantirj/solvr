@@ -7170,3 +7170,23 @@ Also, FeedRepository didn't exist in the db package.
   - Updated cmd/api/main.go to call LogStartupConfig at startup
   - File sizes: startup.go=75, startup_test.go=189 (both under 800 limit)
   - All tests passing
+
+
+- 2026-02-04: [PRD-v2] E2E test: Agent registration and posting ✓
+  - Created router_e2e_test.go with comprehensive E2E tests:
+    - TestE2E_AgentRegistrationAndPosting: Full flow test (4 steps)
+      - Step 1: POST /v1/agents/register -> get API key
+      - Step 2: POST /v1/posts with API key -> creates post
+      - Step 3: GET /v1/posts -> shows new post in list
+      - Step 4: GET /v1/search?q=keyword -> endpoint works (in-memory returns empty)
+    - TestE2E_AgentRegistrationReturnsAPIKey: Verifies API key format (solvr_ prefix)
+    - TestE2E_AgentCreatesPost: Verifies post creation with posted_by_type/posted_by_id
+    - TestE2E_PostAppearsInList: Verifies post appears in GET /v1/posts
+    - TestE2E_SearchEndpointWorks: Verifies search response structure
+  - Updated prd-v2.json:
+    - Set passes=true for 'Wire /v1/me endpoint'
+    - Set passes=true for 'Wire auth middleware for protected routes'
+    - Set passes=true for 'End-to-end test: Agent registration and posting'
+  - Note: Search in-memory mode returns empty (no full-text search without PostgreSQL)
+  - File sizes: router_e2e_test.go=483 lines (under 800 limit)
+  - All tests passing

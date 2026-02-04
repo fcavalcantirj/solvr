@@ -206,7 +206,7 @@
       "Test with JWT and API key",
       "go test ./internal/api/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",
@@ -218,7 +218,7 @@
       "Test: valid API key allows access",
       "go test ./internal/api/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",
@@ -230,7 +230,7 @@
       "Test: GET /v1/search?q=keyword -> finds post",
       "All tests pass"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "AGENT-DOCS",

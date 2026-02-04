@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/go-chi/chi/v5"
 )
 
 // ErrNotificationNotFound is returned when a notification is not found.
@@ -148,17 +149,18 @@ func writeNotificationsError(w http.ResponseWriter, status int, code, message st
 // getURLParam extracts a URL parameter from the context.
 // This works with chi router's URLParam or a custom urlParamKey for testing.
 func getURLParam(r *http.Request, key string) string {
-	// First try the custom urlParamKey (used in tests)
+	// First try chi's URL params (production)
+	if param := chi.URLParam(r, key); param != "" {
+		return param
+	}
+
+	// Then try the custom urlParamKey (used in tests)
 	if val := r.Context().Value(urlParamKey(key)); val != nil {
 		if s, ok := val.(string); ok {
 			return s
 		}
 	}
 
-	// Then try chi's URL params
-	// Since we don't import chi here, we use the context value directly
-	// Chi stores params with chi.RouteCtxKey
-	// For production, the router will set this; for tests, we use urlParamKey
 	return ""
 }
 

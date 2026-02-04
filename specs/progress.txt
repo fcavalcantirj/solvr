@@ -7210,3 +7210,34 @@ Also, FeedRepository didn't exist in the db package.
   - Fixed in-memory repos to use handlers package error types (ErrProblemNotFound, ErrQuestionNotFound, etc.) for proper 404 handling
   - All tests passing: go test ./internal/api/... passes
   - File sizes all under 800 lines
+
+
+- 2026-02-04: [PRD-v2 API-CRITICAL] Wire user endpoints: notifications, user API keys, moltbook auth ✓
+  - Created inmemory_user_repo.go (261 lines) with in-memory repositories:
+    - InMemoryNotificationsRepository: GetNotificationsForUser, GetNotificationsForAgent, MarkRead, MarkAllReadForUser, MarkAllReadForAgent, FindByID
+    - InMemoryUserAPIKeyRepository: Create, FindByUserID, FindByID, Revoke, UpdateLastUsed, Regenerate
+  - Updated router.go (470 lines) to wire all user endpoints:
+    - POST /v1/auth/moltbook - Moltbook authentication
+    - GET /v1/notifications - list notifications (requires auth)
+    - POST /v1/notifications/{id}/read - mark notification as read (requires auth)
+    - POST /v1/notifications/read-all - mark all as read (requires auth)
+    - GET /v1/users/me/api-keys - list user's API keys (requires auth)
+    - POST /v1/users/me/api-keys - create API key (requires auth)
+    - DELETE /v1/users/me/api-keys/{id} - revoke API key (requires auth)
+    - POST /v1/users/me/api-keys/{id}/regenerate - regenerate API key (requires auth)
+  - Updated notifications.go to use chi.URLParam for URL parameter extraction
+  - Created router_user_endpoints_test.go (282 lines) with 11 tests:
+    - TestUserEndpoints_NotificationsRequiresAuth
+    - TestUserEndpoints_NotificationsMarkReadRequiresAuth
+    - TestUserEndpoints_NotificationsMarkAllReadRequiresAuth
+    - TestUserEndpoints_APIKeysListRequiresAuth
+    - TestUserEndpoints_APIKeysCreateRequiresAuth
+    - TestUserEndpoints_APIKeysRevokeRequiresAuth
+    - TestUserEndpoints_APIKeysRegenerateRequiresAuth
+    - TestUserEndpoints_MoltbookAuthAcceptsPost
+    - TestUserEndpoints_MoltbookAuthValidation
+    - TestUserEndpoints_NotificationsWithJWT
+    - TestUserEndpoints_APIKeysListWithJWT
+  - All tests passing: go test ./... passes
+  - File sizes all under 800 lines
+

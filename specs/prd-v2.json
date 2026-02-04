@@ -6825,7 +6825,7 @@
       "Test: curl /v1/users/me/api-keys returns keys array",
       "go test ./internal/api/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",

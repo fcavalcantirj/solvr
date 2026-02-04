@@ -76,6 +76,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	var questionsRepo handlers.QuestionsRepositoryInterface
 	var ideasRepo handlers.IdeasRepositoryInterface
 	var commentsRepo handlers.CommentsRepositoryInterface
+	var notificationsRepo handlers.NotificationsRepositoryInterface
+	var userAPIKeysRepo handlers.UserAPIKeyRepositoryInterface
 	if pool != nil {
 		agentRepo = db.NewAgentRepository(pool)
 		claimTokenRepo = db.NewClaimTokenRepository(pool)
@@ -83,11 +85,13 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		searchRepo = db.NewSearchRepository(pool)
 		feedRepo = db.NewFeedRepository(pool)
 		userRepo = db.NewUserRepository(pool)
+		userAPIKeysRepo = db.NewUserAPIKeyRepository(pool)
 		// For now, use in-memory repos until DB implementations are added
 		problemsRepo = NewInMemoryProblemsRepository()
 		questionsRepo = NewInMemoryQuestionsRepository()
 		ideasRepo = NewInMemoryIdeasRepository()
 		commentsRepo = NewInMemoryCommentsRepository()
+		notificationsRepo = NewInMemoryNotificationsRepository()
 	} else {
 		// Use in-memory repository for testing when no DB is available
 		agentRepo = NewInMemoryAgentRepository()
@@ -100,6 +104,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		questionsRepo = NewInMemoryQuestionsRepository()
 		ideasRepo = NewInMemoryIdeasRepository()
 		commentsRepo = NewInMemoryCommentsRepository()
+		notificationsRepo = NewInMemoryNotificationsRepository()
+		userAPIKeysRepo = NewInMemoryUserAPIKeyRepository()
 	}
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
@@ -120,6 +126,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	questionsHandler := handlers.NewQuestionsHandler(questionsRepo)
 	ideasHandler := handlers.NewIdeasHandler(ideasRepo)
 	commentsHandler := handlers.NewCommentsHandler(commentsRepo)
+
+	// Create user-related handlers (API-CRITICAL per PRD-v2)
+	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
+	userAPIKeysHandler := handlers.NewUserAPIKeysHandler(userAPIKeysRepo)
 
 	// JWT secret for auth middleware
 	jwtSecret := "test-jwt-secret"
@@ -180,6 +190,14 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		// Per SPEC.md Part 5.2: Google OAuth
 		r.Get("/auth/google", oauthHandlers.GoogleRedirect)
 		r.Get("/auth/google/callback", oauthHandlers.GoogleCallback)
+
+		// Moltbook OAuth (API-CRITICAL per PRD-v2)
+		// Per SPEC.md Part 5.2: POST /auth/moltbook for agent authentication via Moltbook
+		moltbookConfig := &handlers.MoltbookConfig{
+			MoltbookAPIURL: "https://api.moltbook.dev",
+		}
+		moltbookHandler := handlers.NewMoltbookHandler(moltbookConfig, nil)
+		r.Post("/auth/moltbook", moltbookHandler.Authenticate)
 
 		// Search endpoint (API-CRITICAL per SPEC.md Part 5.5)
 		// GET /v1/search - search the knowledge base (no auth required)
@@ -278,6 +296,33 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Post("/answers/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "answer"))
 			r.Post("/responses/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "response"))
 			r.Delete("/comments/{id}", commentsHandler.Delete)
+
+			// Notifications endpoints (API-CRITICAL per PRD-v2)
+			// Per SPEC.md Part 5.6: GET /notifications - list notifications
+			r.Get("/notifications", notificationsHandler.List)
+			// Per SPEC.md Part 5.6: POST /notifications/:id/read - mark notification as read
+			r.Post("/notifications/{id}/read", func(w http.ResponseWriter, req *http.Request) {
+				// Set the notification ID in the context for the handler
+				notificationsHandler.MarkRead(w, req)
+			})
+			// Per SPEC.md Part 5.6: POST /notifications/read-all - mark all as read
+			r.Post("/notifications/read-all", notificationsHandler.MarkAllRead)
+
+			// User API keys endpoints (API-CRITICAL per PRD-v2)
+			// Per prd-v2.json: GET /users/me/api-keys - list user's API keys
+			r.Get("/users/me/api-keys", userAPIKeysHandler.ListAPIKeys)
+			// Per prd-v2.json: POST /users/me/api-keys - create new API key
+			r.Post("/users/me/api-keys", userAPIKeysHandler.CreateAPIKey)
+			// Per prd-v2.json: DELETE /users/me/api-keys/:id - revoke API key
+			r.Delete("/users/me/api-keys/{id}", func(w http.ResponseWriter, req *http.Request) {
+				keyID := chi.URLParam(req, "id")
+				userAPIKeysHandler.RevokeAPIKey(w, req, keyID)
+			})
+			// Per prd-v2.json: POST /users/me/api-keys/:id/regenerate - regenerate API key
+			r.Post("/users/me/api-keys/{id}/regenerate", func(w http.ResponseWriter, req *http.Request) {
+				keyID := chi.URLParam(req, "id")
+				userAPIKeysHandler.RegenerateAPIKey(w, req, keyID)
+			})
 		})
 	})
 }

@@ -164,21 +164,62 @@ func getURLParam(r *http.Request, key string) string {
 	return ""
 }
 
+// notificationsAuthInfo holds authentication info extracted from request context.
+// Supports both JWT (humans) and API key (agents) authentication per FIX-018.
+type notificationsAuthInfo struct {
+	isAgent bool   // true if authenticated via API key (agent), false for JWT (user)
+	id      string // user ID or agent ID depending on auth type
+}
+
+// getNotificationsAuthInfo extracts authentication info from the request context.
+// Supports both JWT (humans) and API key (agents) authentication.
+// Returns nil if not authenticated.
+func getNotificationsAuthInfo(r *http.Request) *notificationsAuthInfo {
+	// First try JWT claims (human authentication)
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims != nil {
+		return &notificationsAuthInfo{
+			isAgent: false,
+			id:      claims.UserID,
+		}
+	}
+
+	// Then try agent authentication (API key)
+	agent := auth.AgentFromContext(r.Context())
+	if agent != nil {
+		return &notificationsAuthInfo{
+			isAgent: true,
+			id:      agent.ID,
+		}
+	}
+
+	return nil
+}
+
 // List handles GET /v1/notifications - list notifications.
 // Per SPEC.md Part 5.6: GET /notifications -> List
 // Requires authentication. Queries notifications for user/agent. Orders by created_at DESC.
+// Per FIX-018: Supports both JWT (humans) and API key (agents) authentication.
 func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
-	// Require authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	// Require authentication (JWT or API key)
+	authInfo := getNotificationsAuthInfo(r)
+	if authInfo == nil {
 		writeNotificationsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
 	}
 
 	page, perPage := parseNotificationsPagination(r)
 
-	// Get notifications for the authenticated user
-	notifications, total, err := h.repo.GetNotificationsForUser(r.Context(), claims.UserID, page, perPage)
+	// Get notifications based on authentication type
+	var notifications []Notification
+	var total int
+	var err error
+
+	if authInfo.isAgent {
+		notifications, total, err = h.repo.GetNotificationsForAgent(r.Context(), authInfo.id, page, perPage)
+	} else {
+		notifications, total, err = h.repo.GetNotificationsForUser(r.Context(), authInfo.id, page, perPage)
+	}
 	if err != nil {
 		writeNotificationsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get notifications")
 		return
@@ -205,10 +246,11 @@ func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 // MarkRead handles POST /v1/notifications/:id/read - mark notification as read.
 // Per SPEC.md Part 5.6: POST /notifications/:id/read -> Mark read
 // Requires authentication (owner). Sets read_at = NOW().
+// Per FIX-018: Supports both JWT (humans) and API key (agents) authentication.
 func (h *NotificationsHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
-	// Require authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	// Require authentication (JWT or API key)
+	authInfo := getNotificationsAuthInfo(r)
+	if authInfo == nil {
 		writeNotificationsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
 	}
@@ -231,11 +273,19 @@ func (h *NotificationsHandler) MarkRead(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Check ownership - notification must belong to the authenticated user
-	if notification.UserID == nil || *notification.UserID != claims.UserID {
-		// Also check if it's for an agent owned by this user (future enhancement)
-		writeNotificationsError(w, http.StatusForbidden, "FORBIDDEN", "not authorized to modify this notification")
-		return
+	// Check ownership based on authentication type
+	if authInfo.isAgent {
+		// Agent authentication - check if notification belongs to this agent
+		if notification.AgentID == nil || *notification.AgentID != authInfo.id {
+			writeNotificationsError(w, http.StatusForbidden, "FORBIDDEN", "not authorized to modify this notification")
+			return
+		}
+	} else {
+		// User authentication - check if notification belongs to this user
+		if notification.UserID == nil || *notification.UserID != authInfo.id {
+			writeNotificationsError(w, http.StatusForbidden, "FORBIDDEN", "not authorized to modify this notification")
+			return
+		}
 	}
 
 	// Mark as read
@@ -250,17 +300,25 @@ func (h *NotificationsHandler) MarkRead(w http.ResponseWriter, r *http.Request) 
 
 // MarkAllRead handles POST /v1/notifications/read-all - mark all notifications as read.
 // Per SPEC.md Part 5.6: POST /notifications/read-all -> Mark all read
-// Requires authentication. Updates all unread for user.
+// Requires authentication. Updates all unread for user or agent.
+// Per FIX-018: Supports both JWT (humans) and API key (agents) authentication.
 func (h *NotificationsHandler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
-	// Require authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	// Require authentication (JWT or API key)
+	authInfo := getNotificationsAuthInfo(r)
+	if authInfo == nil {
 		writeNotificationsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
 	}
 
-	// Mark all notifications as read for the user
-	count, err := h.repo.MarkAllReadForUser(r.Context(), claims.UserID)
+	// Mark all notifications as read based on authentication type
+	var count int
+	var err error
+
+	if authInfo.isAgent {
+		count, err = h.repo.MarkAllReadForAgent(r.Context(), authInfo.id)
+	} else {
+		count, err = h.repo.MarkAllReadForUser(r.Context(), authInfo.id)
+	}
 	if err != nil {
 		writeNotificationsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to mark notifications as read")
 		return

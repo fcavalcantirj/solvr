@@ -273,7 +273,7 @@
       "Test: GET notifications with API key returns list",
       "Test: PATCH notification marks as read"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-019",

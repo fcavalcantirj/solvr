@@ -7261,3 +7261,18 @@ Also, FeedRepository didn't exist in the db package.
   - File sizes: questions.go=617, problems.go=689, ideas.go=467 (all under 800)
   - All tests passing
 
+
+- 2026-02-04: [FIX-018] Enable API key auth for notifications endpoints ✓
+  - Added getNotificationsAuthInfo() helper function to extract auth from both JWT and API key
+  - Updated List handler to use GetNotificationsForAgent when authenticated via API key
+  - Updated MarkRead handler to check agent ownership for agent notifications
+  - Updated MarkAllRead handler to use MarkAllReadForAgent when authenticated via API key
+  - Added 4 new tests for agent authentication:
+    - TestListNotifications_Success_ForAgent
+    - TestMarkRead_Success_ForAgent
+    - TestMarkRead_Forbidden_ForDifferentAgent
+    - TestMarkAllRead_Success_ForAgent
+  - All handlers now properly support both JWT (humans) and API key (agents) per SPEC.md Part 1.4
+  - File sizes: notifications.go=334, notifications_test.go=794 (both under 800)
+  - All tests passing
+

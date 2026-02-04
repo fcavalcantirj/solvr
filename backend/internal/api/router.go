@@ -72,6 +72,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	var searchRepo handlers.SearchRepositoryInterface
 	var feedRepo handlers.FeedRepositoryInterface
 	var userRepo handlers.MeUserRepositoryInterface
+	var problemsRepo handlers.ProblemsRepositoryInterface
+	var questionsRepo handlers.QuestionsRepositoryInterface
+	var ideasRepo handlers.IdeasRepositoryInterface
+	var commentsRepo handlers.CommentsRepositoryInterface
 	if pool != nil {
 		agentRepo = db.NewAgentRepository(pool)
 		claimTokenRepo = db.NewClaimTokenRepository(pool)
@@ -79,6 +83,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		searchRepo = db.NewSearchRepository(pool)
 		feedRepo = db.NewFeedRepository(pool)
 		userRepo = db.NewUserRepository(pool)
+		// For now, use in-memory repos until DB implementations are added
+		problemsRepo = NewInMemoryProblemsRepository()
+		questionsRepo = NewInMemoryQuestionsRepository()
+		ideasRepo = NewInMemoryIdeasRepository()
+		commentsRepo = NewInMemoryCommentsRepository()
 	} else {
 		// Use in-memory repository for testing when no DB is available
 		agentRepo = NewInMemoryAgentRepository()
@@ -87,6 +96,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		searchRepo = NewInMemorySearchRepository()
 		feedRepo = NewInMemoryFeedRepository()
 		userRepo = NewInMemoryUserRepository()
+		problemsRepo = NewInMemoryProblemsRepository()
+		questionsRepo = NewInMemoryQuestionsRepository()
+		ideasRepo = NewInMemoryIdeasRepository()
+		commentsRepo = NewInMemoryCommentsRepository()
 	}
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
@@ -101,6 +114,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 
 	// Create feed handler (per SPEC.md Part 5.6: GET /feed endpoints)
 	feedHandler := handlers.NewFeedHandler(feedRepo)
+
+	// Create content handlers (API-CRITICAL per PRD-v2)
+	problemsHandler := handlers.NewProblemsHandler(problemsRepo)
+	questionsHandler := handlers.NewQuestionsHandler(questionsRepo)
+	ideasHandler := handlers.NewIdeasHandler(ideasRepo)
+	commentsHandler := handlers.NewCommentsHandler(commentsRepo)
 
 	// JWT secret for auth middleware
 	jwtSecret := "test-jwt-secret"
@@ -187,6 +206,33 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		// GET /v1/feed/unanswered - unanswered questions (no auth required)
 		r.Get("/feed/unanswered", feedHandler.Unanswered)
 
+		// Problems endpoints (API-CRITICAL per PRD-v2)
+		// GET /v1/problems - list problems (no auth required)
+		r.Get("/problems", problemsHandler.List)
+		// GET /v1/problems/:id - single problem (no auth required)
+		r.Get("/problems/{id}", problemsHandler.Get)
+		// GET /v1/problems/:id/approaches - list approaches (no auth required)
+		r.Get("/problems/{id}/approaches", problemsHandler.ListApproaches)
+
+		// Questions endpoints (API-CRITICAL per PRD-v2)
+		// GET /v1/questions - list questions (no auth required)
+		r.Get("/questions", questionsHandler.List)
+		// GET /v1/questions/:id - single question (no auth required)
+		r.Get("/questions/{id}", questionsHandler.Get)
+
+		// Ideas endpoints (API-CRITICAL per PRD-v2)
+		// GET /v1/ideas - list ideas (no auth required)
+		r.Get("/ideas", ideasHandler.List)
+		// GET /v1/ideas/:id - single idea (no auth required)
+		r.Get("/ideas/{id}", ideasHandler.Get)
+
+		// Comments endpoints (API-CRITICAL per PRD-v2)
+		// GET /v1/{target_type}/{id}/comments - list comments (no auth required)
+		// Note: Routes use singular form (approach, answer, response) to match handler expectations
+		r.Get("/approaches/{id}/comments", wrapCommentsListWithType(commentsHandler, "approach"))
+		r.Get("/answers/{id}/comments", wrapCommentsListWithType(commentsHandler, "answer"))
+		r.Get("/responses/{id}/comments", wrapCommentsListWithType(commentsHandler, "response"))
+
 		// Protected posts routes (require authentication)
 		// Per FIX-003: Use CombinedAuthMiddleware so both JWT (humans) and API key (agents) work
 		r.Group(func(r chi.Router) {
@@ -206,6 +252,32 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			// Works with both JWT (humans) and API key (agents)
 			meHandler := handlers.NewMeHandler(oauthConfig, userRepo)
 			r.Get("/me", meHandler.Me)
+
+			// Protected problems endpoints (API-CRITICAL per PRD-v2)
+			r.Post("/problems", problemsHandler.Create)
+			r.Post("/problems/{id}/approaches", problemsHandler.CreateApproach)
+			r.Patch("/approaches/{id}", problemsHandler.UpdateApproach)
+			r.Post("/approaches/{id}/progress", problemsHandler.AddProgressNote)
+			r.Post("/approaches/{id}/verify", problemsHandler.VerifyApproach)
+
+			// Protected questions endpoints (API-CRITICAL per PRD-v2)
+			r.Post("/questions", questionsHandler.Create)
+			r.Post("/questions/{id}/answers", questionsHandler.CreateAnswer)
+			r.Patch("/answers/{id}", questionsHandler.UpdateAnswer)
+			r.Delete("/answers/{id}", questionsHandler.DeleteAnswer)
+			r.Post("/answers/{id}/vote", questionsHandler.VoteOnAnswer)
+			r.Post("/questions/{id}/accept/{aid}", questionsHandler.AcceptAnswer)
+
+			// Protected ideas endpoints (API-CRITICAL per PRD-v2)
+			r.Post("/ideas", ideasHandler.Create)
+			r.Post("/ideas/{id}/responses", ideasHandler.CreateResponse)
+			r.Post("/ideas/{id}/evolve", ideasHandler.Evolve)
+
+			// Protected comments endpoints (API-CRITICAL per PRD-v2)
+			r.Post("/approaches/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "approach"))
+			r.Post("/answers/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "answer"))
+			r.Post("/responses/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "response"))
+			r.Delete("/comments/{id}", commentsHandler.Delete)
 		})
 	})
 }
@@ -239,6 +311,27 @@ func jsonContentTypeMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// wrapCommentsListWithType wraps the CommentsHandler.List with a target_type param set.
+// This is needed because the routes use /approaches/{id}/comments but the handler
+// expects a "target_type" URL param with value "approach" (singular).
+func wrapCommentsListWithType(h *handlers.CommentsHandler, targetType string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Add target_type to chi context so it can be retrieved by chi.URLParam
+		rctx := chi.RouteContext(r.Context())
+		rctx.URLParams.Add("target_type", targetType)
+		h.List(w, r)
+	}
+}
+
+// wrapCommentsCreateWithType wraps the CommentsHandler.Create with a target_type param set.
+func wrapCommentsCreateWithType(h *handlers.CommentsHandler, targetType string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rctx := chi.RouteContext(r.Context())
+		rctx.URLParams.Add("target_type", targetType)
+		h.Create(w, r)
+	}
 }
 
 // HealthResponse is the response structure for health endpoints

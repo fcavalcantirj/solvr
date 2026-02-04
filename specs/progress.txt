@@ -7190,3 +7190,23 @@ Also, FeedRepository didn't exist in the db package.
   - Note: Search in-memory mode returns empty (no full-text search without PostgreSQL)
   - File sizes: router_e2e_test.go=483 lines (under 800 limit)
   - All tests passing
+
+- 2026-02-04: [PRD-v2 API-CRITICAL] Wire content endpoints: feed, problems, questions, ideas, comments ✓
+  - Created inmemory_content.go (754 lines) with in-memory repositories for:
+    - InMemoryProblemsRepository: ListProblems, FindProblemByID, CreateProblem, ListApproaches, CreateApproach, FindApproachByID, UpdateApproach, AddProgressNote, UpdateProblemStatus
+    - InMemoryQuestionsRepository: ListQuestions, FindQuestionByID, CreateQuestion, ListAnswers, CreateAnswer, FindAnswerByID, UpdateAnswer, DeleteAnswer, AcceptAnswer, VoteOnAnswer
+    - InMemoryIdeasRepository: ListIdeas, FindIdeaByID, CreateIdea, ListResponses, CreateResponse, AddEvolvedInto, FindPostByID
+    - InMemoryCommentsRepository: List, Create, FindByID, Delete, TargetExists
+  - Updated router.go (425 lines) to wire all content endpoints:
+    - Public GET endpoints: /problems, /problems/{id}, /problems/{id}/approaches, /questions, /questions/{id}, /ideas, /ideas/{id}
+    - Public comments GET: /approaches/{id}/comments, /answers/{id}/comments, /responses/{id}/comments
+    - Protected POST/PATCH/DELETE endpoints with CombinedAuthMiddleware for both JWT and API key auth
+    - Added wrapCommentsListWithType and wrapCommentsCreateWithType helper functions to inject target_type URL param
+  - Created router_content_test.go (233 lines) with tests:
+    - TestProblemsEndpoints: GET list, GET single, POST auth required, GET approaches
+    - TestQuestionsEndpoints: GET list, GET single, POST auth required, POST answers auth required
+    - TestIdeasEndpoints: GET list, GET single, POST auth required, POST responses auth required
+    - TestCommentsEndpoints: GET list, POST auth required, DELETE auth required
+  - Fixed in-memory repos to use handlers package error types (ErrProblemNotFound, ErrQuestionNotFound, etc.) for proper 404 handling
+  - All tests passing: go test ./internal/api/... passes
+  - File sizes all under 800 lines

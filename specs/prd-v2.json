@@ -6813,7 +6813,7 @@
       "Test: curl /v1/feed returns posts array",
       "go test ./internal/api/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "API-CRITICAL",

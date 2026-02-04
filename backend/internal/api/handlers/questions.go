@@ -64,6 +64,46 @@ func (h *QuestionsHandler) SetPostsRepository(postsRepo PostsRepositoryInterface
 	h.postsRepo = postsRepo
 }
 
+// findQuestion finds a question by ID using the shared postsRepo if available,
+// otherwise falls back to the questions-specific repo.
+// Per FIX-023: Posts created via POST /v1/posts are stored in the posts table,
+// but handlers were looking in separate type-specific repositories. This method
+// ensures questions can be found regardless of which endpoint created them.
+func (h *QuestionsHandler) findQuestion(ctx context.Context, id string) (*models.PostWithAuthor, error) {
+	// First try postsRepo if available (this is where POST /v1/posts stores questions)
+	if h.postsRepo != nil {
+		question, err := h.postsRepo.FindByID(ctx, id)
+		if err == nil {
+			// Verify it's actually a question
+			if question.Type != models.PostTypeQuestion {
+				return nil, ErrQuestionNotFound
+			}
+			// Check if deleted
+			if question.DeletedAt != nil {
+				return nil, ErrQuestionNotFound
+			}
+			return question, nil
+		}
+		// If postsRepo returned an error other than "not found", fall through to try questionsRepo
+	}
+
+	// Fall back to questions-specific repo (for backwards compatibility)
+	question, err := h.repo.FindQuestionByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify it's actually a question (the mock may not enforce this)
+	if question.Type != models.PostTypeQuestion {
+		return nil, ErrQuestionNotFound
+	}
+	// Check if deleted
+	if question.DeletedAt != nil {
+		return nil, ErrQuestionNotFound
+	}
+	return question, nil
+}
+
 // QuestionsListResponse is the response for listing questions.
 type QuestionsListResponse struct {
 	Data []models.PostWithAuthor `json:"data"`
@@ -157,6 +197,7 @@ func (h *QuestionsHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get handles GET /v1/questions/:id - get a single question with answers.
+// Per FIX-023: Uses findQuestion() to find questions from either postsRepo or questionsRepo.
 func (h *QuestionsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	questionID := chi.URLParam(r, "id")
 	if questionID == "" {
@@ -164,7 +205,8 @@ func (h *QuestionsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	question, err := h.repo.FindQuestionByID(r.Context(), questionID)
+	// FIX-023: Use findQuestion() which checks postsRepo first, then falls back to questionsRepo
+	question, err := h.findQuestion(r.Context(), questionID)
 	if err != nil {
 		if errors.Is(err, ErrQuestionNotFound) {
 			writeQuestionsError(w, http.StatusNotFound, "NOT_FOUND", "question not found")
@@ -174,17 +216,7 @@ func (h *QuestionsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if it's actually a question
-	if question.Type != models.PostTypeQuestion {
-		writeQuestionsError(w, http.StatusNotFound, "NOT_FOUND", "question not found")
-		return
-	}
-
-	// Check if deleted
-	if question.DeletedAt != nil {
-		writeQuestionsError(w, http.StatusNotFound, "NOT_FOUND", "question not found")
-		return
-	}
+	// Type and deletion checks are now done in findQuestion()
 
 	// Get answers for the question
 	answers, _, err := h.repo.ListAnswers(r.Context(), questionID, models.AnswerListOptions{
@@ -215,6 +247,7 @@ type AnswersListResponse struct {
 
 // ListAnswers handles GET /v1/questions/:id/answers - list answers for a question.
 // Per FIX-022: Public endpoint (no auth required) to list answers before answering.
+// Per FIX-023: Uses findQuestion() to find questions from either postsRepo or questionsRepo.
 func (h *QuestionsHandler) ListAnswers(w http.ResponseWriter, r *http.Request) {
 	questionID := chi.URLParam(r, "id")
 	if questionID == "" {
@@ -222,8 +255,8 @@ func (h *QuestionsHandler) ListAnswers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify question exists
-	question, err := h.repo.FindQuestionByID(r.Context(), questionID)
+	// FIX-023: Use findQuestion() which checks postsRepo first, then falls back to questionsRepo
+	_, err := h.findQuestion(r.Context(), questionID)
 	if err != nil {
 		if errors.Is(err, ErrQuestionNotFound) {
 			writeQuestionsError(w, http.StatusNotFound, "NOT_FOUND", "question not found")
@@ -233,10 +266,7 @@ func (h *QuestionsHandler) ListAnswers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if question.Type != models.PostTypeQuestion {
-		writeQuestionsError(w, http.StatusNotFound, "NOT_FOUND", "question not found")
-		return
-	}
+	// Type and deletion checks are now done in findQuestion()
 
 	// Parse query parameters
 	opts := models.AnswerListOptions{
@@ -349,6 +379,7 @@ func (h *QuestionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // CreateAnswer handles POST /v1/questions/:id/answers - create a new answer.
 // Per SPEC.md Part 1.4 and FIX-015: Both humans (JWT) and AI agents (API key) can answer.
+// Per FIX-023: Uses findQuestion() to find questions from either postsRepo or questionsRepo.
 func (h *QuestionsHandler) CreateAnswer(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
 	authInfo := getQuestionsAuthInfo(r)
@@ -363,8 +394,8 @@ func (h *QuestionsHandler) CreateAnswer(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Verify question exists
-	question, err := h.repo.FindQuestionByID(r.Context(), questionID)
+	// FIX-023: Use findQuestion() which checks postsRepo first, then falls back to questionsRepo
+	_, err := h.findQuestion(r.Context(), questionID)
 	if err != nil {
 		if errors.Is(err, ErrQuestionNotFound) {
 			writeQuestionsError(w, http.StatusNotFound, "NOT_FOUND", "question not found")
@@ -374,10 +405,7 @@ func (h *QuestionsHandler) CreateAnswer(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if question.Type != models.PostTypeQuestion {
-		writeQuestionsError(w, http.StatusNotFound, "NOT_FOUND", "question not found")
-		return
-	}
+	// Type and deletion checks are now done in findQuestion()
 
 	// Parse request body
 	var req models.CreateAnswerRequest
@@ -576,6 +604,7 @@ func (h *QuestionsHandler) VoteOnAnswer(w http.ResponseWriter, r *http.Request) 
 
 // AcceptAnswer handles POST /v1/questions/:id/accept/:aid - accept an answer.
 // Per FIX-015: Both humans (JWT) and AI agents (API key) who own the question can accept answers.
+// Per FIX-023: Uses findQuestion() to find questions from either postsRepo or questionsRepo.
 func (h *QuestionsHandler) AcceptAnswer(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
 	authInfo := getQuestionsAuthInfo(r)
@@ -596,8 +625,8 @@ func (h *QuestionsHandler) AcceptAnswer(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Get the question to verify ownership
-	question, err := h.repo.FindQuestionByID(r.Context(), questionID)
+	// FIX-023: Use findQuestion() which checks postsRepo first, then falls back to questionsRepo
+	question, err := h.findQuestion(r.Context(), questionID)
 	if err != nil {
 		if errors.Is(err, ErrQuestionNotFound) {
 			writeQuestionsError(w, http.StatusNotFound, "NOT_FOUND", "question not found")

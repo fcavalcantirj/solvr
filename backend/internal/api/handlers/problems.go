@@ -61,6 +61,46 @@ func (h *ProblemsHandler) SetPostsRepository(postsRepo PostsRepositoryInterface)
 	h.postsRepo = postsRepo
 }
 
+// findProblem finds a problem by ID using the shared postsRepo if available,
+// otherwise falls back to the problems-specific repo.
+// Per FIX-023: Posts created via POST /v1/posts are stored in the posts table,
+// but handlers were looking in separate type-specific repositories. This method
+// ensures problems can be found regardless of which endpoint created them.
+func (h *ProblemsHandler) findProblem(ctx context.Context, id string) (*models.PostWithAuthor, error) {
+	// First try postsRepo if available (this is where POST /v1/posts stores problems)
+	if h.postsRepo != nil {
+		problem, err := h.postsRepo.FindByID(ctx, id)
+		if err == nil {
+			// Verify it's actually a problem
+			if problem.Type != models.PostTypeProblem {
+				return nil, ErrProblemNotFound
+			}
+			// Check if deleted
+			if problem.DeletedAt != nil {
+				return nil, ErrProblemNotFound
+			}
+			return problem, nil
+		}
+		// If postsRepo returned an error other than "not found", fall through to try problemsRepo
+	}
+
+	// Fall back to problems-specific repo (for backwards compatibility)
+	problem, err := h.repo.FindProblemByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify it's actually a problem (the mock may not enforce this)
+	if problem.Type != models.PostTypeProblem {
+		return nil, ErrProblemNotFound
+	}
+	// Check if deleted
+	if problem.DeletedAt != nil {
+		return nil, ErrProblemNotFound
+	}
+	return problem, nil
+}
+
 // ProblemsListResponse is the response for listing problems.
 type ProblemsListResponse struct {
 	Data []models.PostWithAuthor `json:"data"`
@@ -169,6 +209,7 @@ func (h *ProblemsHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get handles GET /v1/problems/:id - get a single problem.
+// Per FIX-023: Uses findProblem() to find problems from either postsRepo or problemsRepo.
 func (h *ProblemsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	problemID := chi.URLParam(r, "id")
 	if problemID == "" {
@@ -176,7 +217,8 @@ func (h *ProblemsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	problem, err := h.repo.FindProblemByID(r.Context(), problemID)
+	// FIX-023: Use findProblem() which checks postsRepo first, then falls back to problemsRepo
+	problem, err := h.findProblem(r.Context(), problemID)
 	if err != nil {
 		if errors.Is(err, ErrProblemNotFound) {
 			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
@@ -186,18 +228,7 @@ func (h *ProblemsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if it's actually a problem
-	if problem.Type != models.PostTypeProblem {
-		writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
-		return
-	}
-
-	// Check if deleted
-	if problem.DeletedAt != nil {
-		writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
-		return
-	}
-
+	// Type and deletion checks are now done in findProblem()
 	writeProblemsJSON(w, http.StatusOK, ProblemResponse{Data: *problem})
 }
 
@@ -283,6 +314,7 @@ func (h *ProblemsHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListApproaches handles GET /v1/problems/:id/approaches - list approaches for a problem.
+// Per FIX-023: Uses findProblem() to find problems from either postsRepo or problemsRepo.
 func (h *ProblemsHandler) ListApproaches(w http.ResponseWriter, r *http.Request) {
 	problemID := chi.URLParam(r, "id")
 	if problemID == "" {
@@ -290,8 +322,8 @@ func (h *ProblemsHandler) ListApproaches(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Verify problem exists
-	problem, err := h.repo.FindProblemByID(r.Context(), problemID)
+	// FIX-023: Use findProblem() which checks postsRepo first, then falls back to problemsRepo
+	_, err := h.findProblem(r.Context(), problemID)
 	if err != nil {
 		if errors.Is(err, ErrProblemNotFound) {
 			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
@@ -301,10 +333,7 @@ func (h *ProblemsHandler) ListApproaches(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if problem.Type != models.PostTypeProblem {
-		writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
-		return
-	}
+	// Type and deletion checks are now done in findProblem()
 
 	// Parse query parameters
 	opts := models.ApproachListOptions{
@@ -348,6 +377,7 @@ func (h *ProblemsHandler) ListApproaches(w http.ResponseWriter, r *http.Request)
 
 // CreateApproach handles POST /v1/problems/:id/approaches - create a new approach.
 // Per SPEC.md Part 1.4 and FIX-016: Both humans (JWT) and AI agents (API key) can start approaches.
+// Per FIX-023: Uses findProblem() to find problems from either postsRepo or problemsRepo.
 func (h *ProblemsHandler) CreateApproach(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
 	authInfo := getProblemsAuthInfo(r)
@@ -362,8 +392,8 @@ func (h *ProblemsHandler) CreateApproach(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Verify problem exists
-	problem, err := h.repo.FindProblemByID(r.Context(), problemID)
+	// FIX-023: Use findProblem() which checks postsRepo first, then falls back to problemsRepo
+	_, err := h.findProblem(r.Context(), problemID)
 	if err != nil {
 		if errors.Is(err, ErrProblemNotFound) {
 			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
@@ -373,10 +403,7 @@ func (h *ProblemsHandler) CreateApproach(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if problem.Type != models.PostTypeProblem {
-		writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
-		return
-	}
+	// Type and deletion checks are now done in findProblem()
 
 	// Parse request body
 	var req models.CreateApproachRequest

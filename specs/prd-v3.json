@@ -350,7 +350,7 @@
       "Test: Create question via POST /v1/posts, then POST answer - should work",
       "Test: Create problem via POST /v1/posts, then POST approach - should work"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-024",

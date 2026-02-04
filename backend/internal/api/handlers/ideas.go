@@ -55,6 +55,46 @@ func (h *IdeasHandler) SetPostsRepository(postsRepo PostsRepositoryInterface) {
 	h.postsRepo = postsRepo
 }
 
+// findIdea finds an idea by ID using the shared postsRepo if available,
+// otherwise falls back to the ideas-specific repo.
+// Per FIX-023: Posts created via POST /v1/posts are stored in the posts table,
+// but handlers were looking in separate type-specific repositories. This method
+// ensures ideas can be found regardless of which endpoint created them.
+func (h *IdeasHandler) findIdea(ctx context.Context, id string) (*models.PostWithAuthor, error) {
+	// First try postsRepo if available (this is where POST /v1/posts stores ideas)
+	if h.postsRepo != nil {
+		idea, err := h.postsRepo.FindByID(ctx, id)
+		if err == nil {
+			// Verify it's actually an idea
+			if idea.Type != models.PostTypeIdea {
+				return nil, ErrIdeaNotFound
+			}
+			// Check if deleted
+			if idea.DeletedAt != nil {
+				return nil, ErrIdeaNotFound
+			}
+			return idea, nil
+		}
+		// If postsRepo returned an error other than "not found", fall through to try ideasRepo
+	}
+
+	// Fall back to ideas-specific repo (for backwards compatibility)
+	idea, err := h.repo.FindIdeaByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify it's actually an idea (the mock may not enforce this)
+	if idea.Type != models.PostTypeIdea {
+		return nil, ErrIdeaNotFound
+	}
+	// Check if deleted
+	if idea.DeletedAt != nil {
+		return nil, ErrIdeaNotFound
+	}
+	return idea, nil
+}
+
 // IdeasListResponse is the response for listing ideas.
 type IdeasListResponse struct {
 	Data []models.PostWithAuthor `json:"data"`
@@ -151,6 +191,7 @@ func (h *IdeasHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get handles GET /v1/ideas/:id - get a single idea with responses.
+// Per FIX-023: Uses findIdea() to find ideas from either postsRepo or ideasRepo.
 func (h *IdeasHandler) Get(w http.ResponseWriter, r *http.Request) {
 	ideaID := chi.URLParam(r, "id")
 	if ideaID == "" {
@@ -158,7 +199,8 @@ func (h *IdeasHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idea, err := h.repo.FindIdeaByID(r.Context(), ideaID)
+	// FIX-023: Use findIdea() which checks postsRepo first, then falls back to ideasRepo
+	idea, err := h.findIdea(r.Context(), ideaID)
 	if err != nil {
 		if errors.Is(err, ErrIdeaNotFound) {
 			writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
@@ -168,17 +210,7 @@ func (h *IdeasHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if it's actually an idea
-	if idea.Type != models.PostTypeIdea {
-		writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
-		return
-	}
-
-	// Check if deleted
-	if idea.DeletedAt != nil {
-		writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
-		return
-	}
+	// Type and deletion checks are now done in findIdea()
 
 	// Get responses for the idea
 	responses, _, err := h.repo.ListResponses(r.Context(), ideaID, models.ResponseListOptions{
@@ -272,6 +304,7 @@ func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // CreateResponse handles POST /v1/ideas/:id/responses - create a new response.
 // Per SPEC.md Part 1.4 and FIX-017: Both humans (JWT) and AI agents (API key) can respond to ideas.
+// Per FIX-023: Uses findIdea() to find ideas from either postsRepo or ideasRepo.
 func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
 	authInfo := getIdeasAuthInfo(r)
@@ -286,8 +319,8 @@ func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify idea exists
-	idea, err := h.repo.FindIdeaByID(r.Context(), ideaID)
+	// FIX-023: Use findIdea() which checks postsRepo first, then falls back to ideasRepo
+	_, err := h.findIdea(r.Context(), ideaID)
 	if err != nil {
 		if errors.Is(err, ErrIdeaNotFound) {
 			writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
@@ -297,10 +330,7 @@ func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if idea.Type != models.PostTypeIdea {
-		writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
-		return
-	}
+	// Type and deletion checks are now done in findIdea()
 
 	// Parse request body
 	var req models.CreateResponseRequest
@@ -347,6 +377,7 @@ func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
 
 // Evolve handles POST /v1/ideas/:id/evolve - link an evolved post.
 // Per FIX-017: Both humans (JWT) and AI agents (API key) can link evolved posts.
+// Per FIX-023: Uses findIdea() to find ideas from either postsRepo or ideasRepo.
 func (h *IdeasHandler) Evolve(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
 	authInfo := getIdeasAuthInfo(r)
@@ -362,8 +393,8 @@ func (h *IdeasHandler) Evolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify idea exists
-	idea, err := h.repo.FindIdeaByID(r.Context(), ideaID)
+	// FIX-023: Use findIdea() which checks postsRepo first, then falls back to ideasRepo
+	_, err := h.findIdea(r.Context(), ideaID)
 	if err != nil {
 		if errors.Is(err, ErrIdeaNotFound) {
 			writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
@@ -373,10 +404,7 @@ func (h *IdeasHandler) Evolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if idea.Type != models.PostTypeIdea {
-		writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "idea not found")
-		return
-	}
+	// Type and deletion checks are now done in findIdea()
 
 	// Parse request body
 	var req EvolveRequest

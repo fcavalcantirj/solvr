@@ -7318,3 +7318,19 @@ Also, FeedRepository didn't exist in the db package.
   - Returns 404 for non-existent question, 200 with list otherwise
   - File sizes: questions.go=703, router.go=483, router_content_test.go=467 (all under 800)
   - All tests passing: go test ./... passes
+
+
+- 2026-02-04: [FIX-023] Fix answers/approaches/responses endpoints - query posts table not separate tables ✓
+  - Root cause: Type-specific handlers used FindQuestionByID/FindProblemByID/FindIdeaByID which
+    queried separate in-memory repositories, not the shared PostRepository where /v1/posts stores data
+  - When a question was created via POST /v1/posts, it went to PostRepository
+  - But POST /v1/questions/:id/answers looked for the question in InMemoryQuestionsRepository
+  - Solution: Added findQuestion/findProblem/findIdea helper methods to each handler
+  - These helpers check postsRepo.FindByID first (where /v1/posts stores data)
+  - Then fall back to type-specific repo for backwards compatibility
+  - Updated Get, CreateAnswer/Approach/Response, ListAnswers/Approaches, AcceptAnswer, Evolve
+  - Added 3 failing tests first (TDD): TestCreateAnswer_QuestionFromPostsRepo,
+    TestGetQuestion_QuestionFromPostsRepo, TestListAnswers_QuestionFromPostsRepo
+  - All tests now pass
+  - File sizes: questions.go=730, problems.go=748, ideas.go=531 (all under 800)
+  - All tests passing: go test ./... passes

@@ -641,3 +641,168 @@ func TestCreateAnswer_SuccessWithAPIKey(t *testing.T) {
 		t.Errorf("expected author ID 'agent-claude', got '%s'", repo.createdAnswer.AuthorID)
 	}
 }
+
+// ============================================================================
+// FIX-023: Test that questions created via /v1/posts can receive answers
+// ============================================================================
+
+// MockPostsRepositoryForQuestions implements PostsRepositoryInterface for testing FIX-023.
+// This mock simulates posts created via the main posts endpoint.
+type MockPostsRepositoryForQuestions struct {
+	posts map[string]*models.PostWithAuthor
+}
+
+func NewMockPostsRepositoryForQuestions() *MockPostsRepositoryForQuestions {
+	return &MockPostsRepositoryForQuestions{
+		posts: make(map[string]*models.PostWithAuthor),
+	}
+}
+
+func (m *MockPostsRepositoryForQuestions) List(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error) {
+	var result []models.PostWithAuthor
+	for _, post := range m.posts {
+		if opts.Type != "" && post.Type != opts.Type {
+			continue
+		}
+		result = append(result, *post)
+	}
+	return result, len(result), nil
+}
+
+func (m *MockPostsRepositoryForQuestions) FindByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {
+	if post, exists := m.posts[id]; exists {
+		return post, nil
+	}
+	return nil, ErrQuestionNotFound // Return not found error
+}
+
+func (m *MockPostsRepositoryForQuestions) Create(ctx context.Context, post *models.Post) (*models.Post, error) {
+	postWithAuthor := &models.PostWithAuthor{
+		Post: *post,
+		Author: models.PostAuthor{
+			Type: post.PostedByType,
+			ID:   post.PostedByID,
+		},
+	}
+	m.posts[post.ID] = postWithAuthor
+	return post, nil
+}
+
+func (m *MockPostsRepositoryForQuestions) Update(ctx context.Context, post *models.Post) (*models.Post, error) {
+	return post, nil
+}
+
+func (m *MockPostsRepositoryForQuestions) Delete(ctx context.Context, id string) error {
+	delete(m.posts, id)
+	return nil
+}
+
+func (m *MockPostsRepositoryForQuestions) Vote(ctx context.Context, postID, voterType, voterID, direction string) error {
+	return nil
+}
+
+func (m *MockPostsRepositoryForQuestions) AddPost(post *models.PostWithAuthor) {
+	m.posts[post.ID] = post
+}
+
+// TestCreateAnswer_QuestionFromPostsRepo tests FIX-023: Creating an answer for a question
+// that was created via POST /v1/posts (stored in postsRepo, not questionsRepo).
+// This is the core bug: the question exists in the posts table but the handler looks in a
+// separate questions repository.
+func TestCreateAnswer_QuestionFromPostsRepo(t *testing.T) {
+	// Create question repo (empty - question is NOT here)
+	questionsRepo := NewMockQuestionsRepository()
+	// Question is NOT set in questionsRepo - simulating the bug
+
+	// Create posts repo with the question (this is where POST /v1/posts stores it)
+	postsRepo := NewMockPostsRepositoryForQuestions()
+	question := createTestQuestion("question-from-posts-123", "Question Created via /v1/posts")
+	postsRepo.AddPost(&question)
+
+	// Create handler and set posts repo
+	handler := NewQuestionsHandler(questionsRepo)
+	handler.SetPostsRepository(postsRepo)
+
+	body := map[string]interface{}{
+		"content": "This is an answer to a question created via POST /v1/posts endpoint.",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/questions/question-from-posts-123/answers", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "question-from-posts-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = addQuestionsAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.CreateAnswer(w, req)
+
+	// FIX-023: This should succeed (return 201) because the question exists in postsRepo.
+	// Currently this fails with 404 "question not found" because the handler only looks
+	// in questionsRepo, which is empty.
+	if w.Code != http.StatusCreated {
+		t.Errorf("FIX-023: expected status 201, got %d; body: %s", w.Code, w.Body.String())
+		t.Errorf("FIX-023: Question exists in postsRepo but handler returned 404 - handler must use postsRepo.FindByID when available")
+	}
+}
+
+// TestGetQuestion_QuestionFromPostsRepo tests FIX-023: Getting a question that was created
+// via POST /v1/posts (stored in postsRepo).
+func TestGetQuestion_QuestionFromPostsRepo(t *testing.T) {
+	// Create question repo (empty - question is NOT here)
+	questionsRepo := NewMockQuestionsRepository()
+
+	// Create posts repo with the question
+	postsRepo := NewMockPostsRepositoryForQuestions()
+	question := createTestQuestion("question-from-posts-456", "Question Created via /v1/posts")
+	postsRepo.AddPost(&question)
+
+	// Create handler and set posts repo
+	handler := NewQuestionsHandler(questionsRepo)
+	handler.SetPostsRepository(postsRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/questions/question-from-posts-456", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "question-from-posts-456")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+
+	handler.Get(w, req)
+
+	// FIX-023: This should succeed (return 200) because the question exists in postsRepo.
+	if w.Code != http.StatusOK {
+		t.Errorf("FIX-023: expected status 200, got %d; body: %s", w.Code, w.Body.String())
+		t.Errorf("FIX-023: Question exists in postsRepo but handler returned 404 - handler must use postsRepo.FindByID when available")
+	}
+}
+
+// TestListAnswers_QuestionFromPostsRepo tests FIX-023: Listing answers for a question
+// that was created via POST /v1/posts.
+func TestListAnswers_QuestionFromPostsRepo(t *testing.T) {
+	// Create question repo (empty - question is NOT here)
+	questionsRepo := NewMockQuestionsRepository()
+
+	// Create posts repo with the question
+	postsRepo := NewMockPostsRepositoryForQuestions()
+	question := createTestQuestion("question-from-posts-789", "Question Created via /v1/posts")
+	postsRepo.AddPost(&question)
+
+	// Create handler and set posts repo
+	handler := NewQuestionsHandler(questionsRepo)
+	handler.SetPostsRepository(postsRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/questions/question-from-posts-789/answers", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "question-from-posts-789")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+
+	handler.ListAnswers(w, req)
+
+	// FIX-023: This should succeed (return 200) because the question exists in postsRepo.
+	if w.Code != http.StatusOK {
+		t.Errorf("FIX-023: expected status 200, got %d; body: %s", w.Code, w.Body.String())
+		t.Errorf("FIX-023: Question exists in postsRepo but handler returned 404 - handler must use postsRepo.FindByID when available")
+	}
+}

@@ -7276,3 +7276,14 @@ Also, FeedRepository didn't exist in the db package.
   - File sizes: notifications.go=334, notifications_test.go=794 (both under 800)
   - All tests passing
 
+
+- 2026-02-04: [FIX-019] Wire POST /v1/posts/:id/comments endpoint ✓
+  - Added CommentTargetPost as valid comment target type in models/comment.go
+  - Added GET /v1/posts/{id}/comments route (public, no auth required)
+  - Added POST /v1/posts/{id}/comments route (protected, requires auth)
+  - Updated router.go with wrapCommentsListWithType/wrapCommentsCreateWithType for 'post' type
+  - Added tests in router_content_test.go for the new endpoints
+  - Updated TestIsValidCommentTargetType to include 'post' as valid
+  - File sizes: router.go=474, router_content_test.go=270, comment.go=80, comments_test.go=645
+  - All tests passing
+

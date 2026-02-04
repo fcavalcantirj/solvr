@@ -619,10 +619,12 @@ func TestCreateComment_OnResponse(t *testing.T) {
 // Test helper functions
 
 func TestIsValidCommentTargetType(t *testing.T) {
+	// FIX-019: Added "post" as a valid comment target type
 	validTypes := []models.CommentTargetType{
 		models.CommentTargetApproach,
 		models.CommentTargetAnswer,
 		models.CommentTargetResponse,
+		models.CommentTargetPost,
 	}
 
 	for _, tt := range validTypes {
@@ -631,7 +633,7 @@ func TestIsValidCommentTargetType(t *testing.T) {
 		}
 	}
 
-	invalidTypes := []models.CommentTargetType{"post", "problem", "question", "idea", "invalid"}
+	invalidTypes := []models.CommentTargetType{"problem", "question", "idea", "invalid"}
 	for _, tt := range invalidTypes {
 		if models.IsValidCommentTargetType(tt) {
 			t.Errorf("expected %s to be invalid", tt)

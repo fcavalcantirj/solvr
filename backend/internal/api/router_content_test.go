@@ -231,3 +231,40 @@ func TestCommentsEndpoints(t *testing.T) {
 		}
 	})
 }
+
+// TestPostCommentsEndpoints verifies /v1/posts/:id/comments endpoints per FIX-019.
+func TestPostCommentsEndpoints(t *testing.T) {
+	router := NewRouter(nil)
+
+	t.Run("GET /v1/posts/:id/comments returns list (no auth required)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/posts/test-post-id/comments", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Should return 200 with empty list or valid response
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		if _, ok := resp["data"]; !ok {
+			t.Error("Expected 'data' field in response")
+		}
+	})
+
+	t.Run("POST /v1/posts/:id/comments requires auth", func(t *testing.T) {
+		reqBody := `{"content":"Test comment on post"}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/posts/test-post-id/comments", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}

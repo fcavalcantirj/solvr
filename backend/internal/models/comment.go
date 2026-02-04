@@ -9,16 +9,18 @@ import (
 type CommentTargetType string
 
 // Comment target types per SPEC.md Part 2.6.
+// FIX-019: Added "post" target type for comments directly on posts (problems/questions/ideas).
 const (
 	CommentTargetApproach CommentTargetType = "approach"
 	CommentTargetAnswer   CommentTargetType = "answer"
 	CommentTargetResponse CommentTargetType = "response"
+	CommentTargetPost     CommentTargetType = "post"
 )
 
 // IsValidCommentTargetType checks if a target type is valid.
 func IsValidCommentTargetType(t CommentTargetType) bool {
 	switch t {
-	case CommentTargetApproach, CommentTargetAnswer, CommentTargetResponse:
+	case CommentTargetApproach, CommentTargetAnswer, CommentTargetResponse, CommentTargetPost:
 		return true
 	}
 	return false
@@ -30,6 +32,7 @@ func ValidCommentTargetTypes() []CommentTargetType {
 		CommentTargetApproach,
 		CommentTargetAnswer,
 		CommentTargetResponse,
+		CommentTargetPost,
 	}
 }
 

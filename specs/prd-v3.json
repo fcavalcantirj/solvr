@@ -289,7 +289,7 @@
       "Test: POST comment with auth succeeds",
       "Test: GET comments returns list"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-020",

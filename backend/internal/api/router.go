@@ -250,6 +250,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		r.Get("/approaches/{id}/comments", wrapCommentsListWithType(commentsHandler, "approach"))
 		r.Get("/answers/{id}/comments", wrapCommentsListWithType(commentsHandler, "answer"))
 		r.Get("/responses/{id}/comments", wrapCommentsListWithType(commentsHandler, "response"))
+		// FIX-019: GET /v1/posts/{id}/comments - list comments on posts (no auth required)
+		r.Get("/posts/{id}/comments", wrapCommentsListWithType(commentsHandler, "post"))
 
 		// Protected posts routes (require authentication)
 		// Per FIX-003: Use CombinedAuthMiddleware so both JWT (humans) and API key (agents) work
@@ -295,6 +297,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Post("/approaches/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "approach"))
 			r.Post("/answers/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "answer"))
 			r.Post("/responses/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "response"))
+			// FIX-019: POST /v1/posts/{id}/comments - create comment on posts (requires auth)
+			r.Post("/posts/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "post"))
 			r.Delete("/comments/{id}", commentsHandler.Delete)
 
 			// Notifications endpoints (API-CRITICAL per PRD-v2)

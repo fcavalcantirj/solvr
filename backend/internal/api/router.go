@@ -171,9 +171,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		r.Get("/posts/{id}", postsHandler.Get)
 
 		// Protected posts routes (require authentication)
+		// Per FIX-003: Use CombinedAuthMiddleware so both JWT (humans) and API key (agents) work
 		r.Group(func(r chi.Router) {
-			// Use JWT middleware for protected routes
-			r.Use(auth.JWTMiddleware(jwtSecret))
+			// Use combined auth middleware that accepts both JWT and API key
+			r.Use(auth.CombinedAuthMiddleware(jwtSecret, apiKeyValidator))
 
 			// Per SPEC.md Part 5.6: POST /v1/posts - create post (requires auth)
 			r.Post("/posts", postsHandler.Create)

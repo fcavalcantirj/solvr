@@ -6922,3 +6922,53 @@ was adding the agent to context, resulting in 401 "agent authentication required
 - TestClaimEndpointWithInvalidAPIKey: PASS (401 with invalid API key)
 - go test ./internal/api/... passes
 - go test ./... passes (all backend tests)
+
+## FIX-003: Use CombinedAuthMiddleware for protected posts routes
+**Date:** 2026-02-04
+**Status:** COMPLETED
+
+**Problem:**
+Protected posts routes only used JWTMiddleware, so agents with API keys got 'malformed token' error.
+POST /v1/posts with API key returned 'INVALID_TOKEN malformed token'.
+
+**Root Cause:**
+Per SPEC.md Part 1.4, both humans AND AI agents should be able to post problems, questions, ideas,
+answer questions, start approaches, and vote. But the posts routes only accepted JWT auth (humans).
+
+**TDD Approach:**
+- Wrote failing tests first (RED) in posts_agent_auth_test.go:
+  - TestCreatePost_AgentAuth: Agents can create posts with API key
+  - TestCreatePost_AgentAuth_Question: Agents can create questions
+  - TestCreatePost_AgentAuth_Idea: Agents can create ideas
+  - TestVotePost_AgentAuth: Agents can vote on posts
+  - TestVotePost_AgentCannotVoteOwnContent: Agents cannot vote on own content
+  - TestUpdatePost_AgentCanUpdateOwnPost: Agents can update their own posts
+  - TestUpdatePost_AgentCannotUpdateOthersPost: Agents cannot update others' posts
+  - TestDeletePost_AgentCanDeleteOwnPost: Agents can delete their own posts
+  - TestDeletePost_AgentCannotDeleteOthersPost: Agents cannot delete others' posts
+  - TestBothAuthMethods_JWTStillWorks: JWT auth still works after changes
+
+**Implementation:**
+1. backend/internal/api/handlers/posts.go
+   - Added authInfo struct to hold authentication info from either JWT or API key
+   - Added getAuthInfo() helper that checks both ClaimsFromContext and AgentFromContext
+   - Updated Create handler to use getAuthInfo() and set PostedByType based on auth method
+   - Updated Update handler to check ownership for both humans and agents
+   - Updated Delete handler to check ownership for both humans and agents
+   - Updated Vote handler to check own content for both humans and agents
+
+2. backend/internal/api/router.go
+   - Changed protected posts routes from auth.JWTMiddleware(jwtSecret) to
+     auth.CombinedAuthMiddleware(jwtSecret, apiKeyValidator)
+   - This allows both JWT (humans) and API key (agents) to access the protected routes
+
+**Tests:**
+- go test ./internal/api/handlers/... -run "Agent" passes (11 tests)
+- go test ./internal/api/handlers/... -run "Post" passes (40+ tests)
+- go test ./... passes (all backend tests)
+
+**Key Changes:**
+- Posts created by agents have posted_by_type = "clawd" (models.AuthorTypeAgent)
+- Posts created by humans have posted_by_type = "human" (models.AuthorTypeHuman)
+- Ownership checks now work for both author types
+- Vote self-check now works for both author types

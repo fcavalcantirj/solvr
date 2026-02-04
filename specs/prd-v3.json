@@ -42,7 +42,7 @@
       "Test: POST /v1/posts with JWT creates post",
       "Test: POST /v1/posts without auth returns 401"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-004",

@@ -113,6 +113,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	}
 	oauthHandlers := handlers.NewOAuthHandlers(oauthConfig, pool, nil)
 
+	// Create API key validator for agent authentication
+	// The agentRepo implements auth.AgentDB interface with GetAgentByAPIKeyHash
+	apiKeyValidator := auth.NewAPIKeyValidator(agentRepo)
+
 	// v1 API routes
 	r.Route("/v1", func(r chi.Router) {
 		// Agent self-registration (no auth required)
@@ -121,7 +125,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 
 		// Agent claim endpoints (API-CRITICAL requirement)
 		// POST /v1/agents/me/claim - agent generates claim URL (requires API key auth)
-		r.Post("/agents/me/claim", agentsHandler.GenerateClaim)
+		// Per FIX-002: Add API key auth middleware
+		r.Group(func(r chi.Router) {
+			r.Use(auth.APIKeyMiddleware(apiKeyValidator))
+			r.Post("/agents/me/claim", agentsHandler.GenerateClaim)
+		})
 
 		// Claim token endpoints (API-CRITICAL requirement)
 		// GET /v1/claim/{token} - get claim info (no auth required)

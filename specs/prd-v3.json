@@ -26,7 +26,7 @@
       "Test: POST /v1/agents/me/claim with valid API key returns claim URL",
       "Test: POST /v1/agents/me/claim without API key returns 401"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-003",

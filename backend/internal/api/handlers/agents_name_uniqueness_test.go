@@ -124,6 +124,13 @@ func (m *MockAgentRepoWithSuggestions) GrantHumanBackedBadge(ctx context.Context
 	return nil
 }
 
+// GetAgentByAPIKeyHash finds an agent by comparing the API key against stored hashes.
+// FIX-002: Required for API key authentication middleware.
+func (m *MockAgentRepoWithSuggestions) GetAgentByAPIKeyHash(ctx context.Context, key string) (*models.Agent, error) {
+	// No API key lookup needed for name uniqueness tests - return nil, nil
+	return nil, nil
+}
+
 // TestRegisterAgent_DuplicateName_Returns409 tests that duplicate names return 409 Conflict.
 // Per AGENT-ONBOARDING requirement: Return 409 Conflict if name taken.
 func TestRegisterAgent_DuplicateName_Returns409(t *testing.T) {

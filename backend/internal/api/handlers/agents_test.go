@@ -145,6 +145,23 @@ func (m *MockAgentRepository) GrantHumanBackedBadge(ctx context.Context, agentID
 	return nil
 }
 
+// GetAgentByAPIKeyHash finds an agent by comparing the API key against stored hashes.
+// FIX-002: Required for API key authentication middleware.
+func (m *MockAgentRepository) GetAgentByAPIKeyHash(ctx context.Context, key string) (*models.Agent, error) {
+	// Iterate through agents and compare key against stored hash using bcrypt
+	for _, agent := range m.agents {
+		if agent.APIKeyHash == "" {
+			continue
+		}
+		// Use bcrypt comparison
+		if err := auth.CompareAPIKey(key, agent.APIKeyHash); err == nil {
+			return agent, nil
+		}
+	}
+	// No matching agent found
+	return nil, nil
+}
+
 // Helper to add JWT claims to request context
 func addJWTClaimsToContext(r *http.Request, userID, email, role string) *http.Request {
 	claims := &auth.Claims{

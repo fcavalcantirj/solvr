@@ -160,6 +160,13 @@ func (m *MockAgentRepoForClaim) GrantHumanBackedBadge(ctx context.Context, agent
 	return nil
 }
 
+// GetAgentByAPIKeyHash finds an agent by comparing the API key against stored hashes.
+// FIX-002: Required for API key authentication middleware.
+func (m *MockAgentRepoForClaim) GetAgentByAPIKeyHash(ctx context.Context, key string) (*models.Agent, error) {
+	// No API key lookup needed for claim confirm tests - return nil, nil
+	return nil, nil
+}
+
 // Test: ConfirmClaim requires human authentication
 func TestConfirmClaim_RequiresHumanAuth(t *testing.T) {
 	agentRepo := NewMockAgentRepoForClaim()

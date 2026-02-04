@@ -861,3 +861,83 @@ func TestGetAgentProfileEndpoint(t *testing.T) {
 		t.Errorf("expected status 200 or 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// TestClaimEndpointWithAPIKeyAuth verifies POST /v1/agents/me/claim works with valid API key.
+// Per FIX-002: Add API key auth middleware to /v1/agents/me/claim
+func TestClaimEndpointWithAPIKeyAuth(t *testing.T) {
+	router := NewRouter(nil)
+
+	// First, register an agent to get an API key
+	reqBody := `{"name":"claim_test_agent","description":"Test agent for claim endpoint"}`
+	regReq := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
+	regReq.Header.Set("Content-Type", "application/json")
+	regW := httptest.NewRecorder()
+	router.ServeHTTP(regW, regReq)
+
+	if regW.Code != http.StatusCreated {
+		t.Fatalf("failed to register test agent: %d - %s", regW.Code, regW.Body.String())
+	}
+
+	var regResp map[string]interface{}
+	if err := json.NewDecoder(regW.Body).Decode(&regResp); err != nil {
+		t.Fatalf("failed to decode registration response: %v", err)
+	}
+
+	apiKey, ok := regResp["api_key"].(string)
+	if !ok || apiKey == "" {
+		t.Fatal("expected api_key in registration response")
+	}
+
+	// Now test POST /v1/agents/me/claim with valid API key
+	claimReq := httptest.NewRequest(http.MethodPost, "/v1/agents/me/claim", nil)
+	claimReq.Header.Set("Authorization", "Bearer "+apiKey)
+	claimW := httptest.NewRecorder()
+	router.ServeHTTP(claimW, claimReq)
+
+	// Should return 201 Created with claim URL (or 200 if reusing existing token)
+	if claimW.Code != http.StatusCreated && claimW.Code != http.StatusOK {
+		t.Errorf("expected status 201 or 200, got %d: %s", claimW.Code, claimW.Body.String())
+	}
+
+	var claimResp map[string]interface{}
+	if err := json.NewDecoder(claimW.Body).Decode(&claimResp); err != nil {
+		t.Fatalf("failed to decode claim response: %v", err)
+	}
+
+	// Should have claim_url in response
+	if claimResp["claim_url"] == nil {
+		t.Error("expected claim_url in response")
+	}
+
+	// Should have token in response
+	if claimResp["token"] == nil {
+		t.Error("expected token in response")
+	}
+}
+
+// TestClaimEndpointWithInvalidAPIKey verifies POST /v1/agents/me/claim rejects invalid API key.
+// Per FIX-002: Add API key auth middleware to /v1/agents/me/claim
+func TestClaimEndpointWithInvalidAPIKey(t *testing.T) {
+	router := NewRouter(nil)
+
+	// Try to call claim endpoint with invalid API key
+	claimReq := httptest.NewRequest(http.MethodPost, "/v1/agents/me/claim", nil)
+	claimReq.Header.Set("Authorization", "Bearer solvr_invalid_api_key_12345678901234567890")
+	claimW := httptest.NewRecorder()
+	router.ServeHTTP(claimW, claimReq)
+
+	// Should return 401 Unauthorized
+	if claimW.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d: %s", claimW.Code, claimW.Body.String())
+	}
+
+	var errResp map[string]interface{}
+	if err := json.NewDecoder(claimW.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+
+	// Should have error object
+	if errResp["error"] == nil {
+		t.Error("expected error object in response")
+	}
+}

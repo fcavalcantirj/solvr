@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
@@ -218,6 +219,29 @@ func (r *InMemoryAgentRepository) GrantHumanBackedBadge(ctx context.Context, age
 	agent.HasHumanBackedBadge = true
 	agent.UpdatedAt = time.Now()
 	return nil
+}
+
+// GetAgentByAPIKeyHash finds an agent by checking the API key against stored hashes.
+// This implements the auth.AgentDB interface for API key validation.
+// Returns nil, nil if no matching agent is found.
+func (r *InMemoryAgentRepository) GetAgentByAPIKeyHash(ctx context.Context, key string) (*models.Agent, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// Iterate through all agents and compare the key against each stored hash
+	for _, agent := range r.agents {
+		if agent.APIKeyHash == "" {
+			continue
+		}
+		// Use bcrypt comparison
+		if err := auth.CompareAPIKey(key, agent.APIKeyHash); err == nil {
+			agentCopy := *agent
+			return &agentCopy, nil
+		}
+	}
+
+	// No matching agent found
+	return nil, nil
 }
 
 // Error types for claim token operations

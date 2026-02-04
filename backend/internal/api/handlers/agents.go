@@ -23,6 +23,7 @@ var (
 )
 
 // AgentRepositoryInterface defines the database operations for agents.
+// This interface also satisfies auth.AgentDB for API key validation.
 type AgentRepositoryInterface interface {
 	Create(ctx context.Context, agent *models.Agent) error
 	FindByID(ctx context.Context, id string) (*models.Agent, error)
@@ -36,6 +37,9 @@ type AgentRepositoryInterface interface {
 	LinkHuman(ctx context.Context, agentID, humanID string) error
 	AddKarma(ctx context.Context, agentID string, amount int) error
 	GrantHumanBackedBadge(ctx context.Context, agentID string) error
+	// API key validation method (implements auth.AgentDB interface)
+	// FIX-002: Required for API key authentication middleware
+	GetAgentByAPIKeyHash(ctx context.Context, key string) (*models.Agent, error)
 }
 
 // ClaimTokenRepositoryInterface defines database operations for claim tokens.

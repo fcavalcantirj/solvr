@@ -6882,3 +6882,43 @@ backend/internal/api/router_test.go
 - go test ./internal/api -run "TestGetPostsEndpointNoPlaceholder|TestGetAgentProfileEndpoint" passes
 - go test ./... passes (all backend tests)
 - go build ./... passes
+
+## FIX-002: Add API key auth middleware to /v1/agents/me/claim
+**Date:** 2026-02-04
+**Status:** COMPLETED
+
+**Problem:**
+POST /v1/agents/me/claim had no auth middleware but handler expected agent API key.
+The handler checked for agent in context via auth.AgentFromContext() but no middleware
+was adding the agent to context, resulting in 401 "agent authentication required".
+
+**TDD Approach:**
+- Wrote failing tests first (RED):
+  - TestClaimEndpointWithAPIKeyAuth: Tests valid API key returns 201 with claim URL
+  - TestClaimEndpointWithInvalidAPIKey: Tests invalid API key returns 401
+
+**Implementation:**
+1. backend/internal/api/handlers/agents.go
+   - Added GetAgentByAPIKeyHash to AgentRepositoryInterface
+   - Interface now implements auth.AgentDB for API key validation
+
+2. backend/internal/api/inmemory_repo.go
+   - Added import of auth package
+   - Added GetAgentByAPIKeyHash method to InMemoryAgentRepository
+   - Uses bcrypt comparison via auth.CompareAPIKey()
+
+3. backend/internal/api/router.go
+   - Created APIKeyValidator with agentRepo (which implements auth.AgentDB)
+   - Wrapped /v1/agents/me/claim route with auth.APIKeyMiddleware(apiKeyValidator)
+
+4. backend/internal/api/handlers/*_test.go
+   - Added GetAgentByAPIKeyHash to MockAgentRepository
+   - Added GetAgentByAPIKeyHash to MockAgentRepoForClaim  
+   - Added GetAgentByAPIKeyHash to MockAgentRepoWithSuggestions
+
+**Tests:**
+- TestClaimEndpointExists: PASS (401 without auth)
+- TestClaimEndpointWithAPIKeyAuth: PASS (201 with valid API key)
+- TestClaimEndpointWithInvalidAPIKey: PASS (401 with invalid API key)
+- go test ./internal/api/... passes
+- go test ./... passes (all backend tests)

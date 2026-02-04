@@ -7056,3 +7056,15 @@ Also, FeedRepository didn't exist in the db package.
     - Vote: Returns 404 for invalid UUID
   - Added integration tests: TestPostRepository_FindByID_InvalidUUID, TestPostRepository_FindByID_ValidUUIDNotFound
   - All tests pass
+
+- 2026-02-04: [FIX-008] Ensure DB pool is properly initialized in production ✓
+  - Verified existing implementation meets all requirements:
+  - DATABASE_URL env var is required in config.Load() (internal/config/env.go:71-74)
+  - db.NewPool() includes startup ping check (internal/db/pool.go:86)
+  - main.go logs clear error if DB connection fails (lines 40-41)
+  - /health/ready returns 503 when DB unavailable (tested in TestHealthReadyEndpointNoPool)
+  - Pool configuration: MaxConns=10, MinConns=2, MaxConnIdleTime=30s, HealthCheckPeriod=30s
+  - Integration tests use getTestDatabaseURL() for valid DB testing
+  - Unit tests use NewRouter(nil) to test without DB
+  - All tests passing
+

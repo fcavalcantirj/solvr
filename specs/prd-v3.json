@@ -119,7 +119,7 @@
       "Test: API works with valid DATABASE_URL",
       "Test: API returns clear error without DATABASE_URL"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-009",

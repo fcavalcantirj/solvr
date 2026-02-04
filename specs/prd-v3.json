@@ -213,5 +213,126 @@
       "Test: Server startup shows clear config summary"
     ],
     "passes": true
+  },
+  {
+    "id": "FIX-015",
+    "category": "FIX-CRITICAL",
+    "description": "Wire POST /v1/questions/:id/answers with auth",
+    "problem": "Returns 401 even with valid API key - auth middleware not applied",
+    "evidence": "POST /v1/questions/:id/answers with Bearer token returns UNAUTHORIZED",
+    "steps": [
+      "In router.go, find or add /v1/questions/:id/answers route",
+      "Wrap with CombinedAuthMiddleware (not just JWTMiddleware)",
+      "Wire to QuestionsHandler.CreateAnswer or AnswersHandler.Create",
+      "Test: POST answer with API key succeeds",
+      "Test: POST answer without auth returns 401"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-016",
+    "category": "FIX-CRITICAL",
+    "description": "Wire POST /v1/problems/:id/approaches with auth",
+    "problem": "Returns 401 even with valid API key - auth middleware not applied",
+    "evidence": "POST /v1/problems/:id/approaches with Bearer token returns UNAUTHORIZED",
+    "steps": [
+      "In router.go, find or add /v1/problems/:id/approaches route",
+      "Wrap with CombinedAuthMiddleware",
+      "Wire to ProblemsHandler.CreateApproach or ApproachesHandler.Create",
+      "Test: POST approach with API key succeeds",
+      "Test: POST approach without auth returns 401"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-017",
+    "category": "FIX-CRITICAL",
+    "description": "Wire POST /v1/ideas/:id/responses with auth",
+    "problem": "Returns 401 even with valid API key - auth middleware not applied",
+    "evidence": "POST /v1/ideas/:id/responses with Bearer token returns UNAUTHORIZED",
+    "steps": [
+      "In router.go, find or add /v1/ideas/:id/responses route",
+      "Wrap with CombinedAuthMiddleware",
+      "Wire to IdeasHandler.CreateResponse or ResponsesHandler.Create",
+      "Test: POST response with API key succeeds",
+      "Test: POST response without auth returns 401"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-018",
+    "category": "FIX-CRITICAL",
+    "description": "Wire GET/PATCH /v1/notifications with auth",
+    "problem": "Returns 401 - endpoint exists but auth not applied",
+    "evidence": "GET /v1/notifications with Bearer token returns UNAUTHORIZED",
+    "steps": [
+      "In router.go, add notifications routes inside protected group",
+      "Use CombinedAuthMiddleware",
+      "Wire GET /v1/notifications to NotificationsHandler.List",
+      "Wire PATCH /v1/notifications/:id to NotificationsHandler.MarkRead",
+      "Test: GET notifications with API key returns list",
+      "Test: PATCH notification marks as read"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-019",
+    "category": "FIX-CRITICAL",
+    "description": "Wire POST /v1/posts/:id/comments endpoint",
+    "problem": "Returns 404 - endpoint not wired at all",
+    "evidence": "POST /v1/posts/:id/comments returns NOT_FOUND",
+    "steps": [
+      "Create CommentsHandler if not exists",
+      "In router.go, add POST /v1/posts/:id/comments inside protected group",
+      "Wire to CommentsHandler.Create",
+      "Add GET /v1/posts/:id/comments (public, no auth)",
+      "Test: POST comment with auth succeeds",
+      "Test: GET comments returns list"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-020",
+    "category": "FIX-IMPORTANT",
+    "description": "Fix GET /v1/problems, /v1/questions, /v1/ideas returning empty",
+    "problem": "Type-specific list endpoints return empty despite posts existing",
+    "evidence": "GET /v1/problems returns empty, but GET /v1/posts?type=problem works",
+    "steps": [
+      "Check if /v1/problems is wired to correct handler",
+      "Ensure handler queries posts WHERE type = problem",
+      "Same for /v1/questions and /v1/ideas",
+      "Or redirect to /v1/posts?type=X internally",
+      "Test: GET /v1/problems returns problem posts",
+      "Test: GET /v1/questions returns question posts"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-021",
+    "category": "FIX-IMPORTANT",
+    "description": "Wire GET /v1/problems/:id/approaches (list approaches)",
+    "problem": "Cannot list approaches for a problem",
+    "evidence": "Need to see existing approaches before starting work",
+    "steps": [
+      "In router.go, add GET /v1/problems/:id/approaches (public)",
+      "Wire to ApproachesHandler.List or ProblemsHandler.ListApproaches",
+      "Return approaches with author info and status",
+      "Test: GET approaches for problem returns list"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-022",
+    "category": "FIX-IMPORTANT",
+    "description": "Wire GET /v1/questions/:id/answers (list answers)",
+    "problem": "Cannot list answers for a question",
+    "evidence": "Need to see existing answers before answering",
+    "steps": [
+      "In router.go, add GET /v1/questions/:id/answers (public)",
+      "Wire to AnswersHandler.List or QuestionsHandler.ListAnswers",
+      "Return answers with author info, votes, accepted status",
+      "Test: GET answers for question returns list"
+    ],
+    "passes": false
   }
 ]

@@ -7068,3 +7068,12 @@ Also, FeedRepository didn't exist in the db package.
   - Unit tests use NewRouter(nil) to test without DB
   - All tests passing
 
+
+- 2026-02-04: [FIX-009] Move search handler from routes.go to router.go ✓
+  - Verified search handler already exists in handlers/search.go (192 lines)
+  - SearchHandler struct with SearchRepositoryInterface properly implemented
+  - Route already wired in router.go:167 - r.Get("/search", searchHandler.Search)
+  - routes.go was deleted in FIX-006 (dead code)
+  - Comprehensive tests exist: search_test.go (unit) + search_integration_test.go (integration)
+  - Tests verify: query params, filters, pagination, sorting, error handling, response format
+  - All 30+ search tests passing

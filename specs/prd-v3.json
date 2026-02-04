@@ -134,7 +134,7 @@
       "Delete routes.go after migration complete",
       "Test: GET /v1/search?q=test still works"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-010",

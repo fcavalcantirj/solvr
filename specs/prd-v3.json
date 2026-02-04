@@ -135,5 +135,83 @@
       "Test: GET /v1/search?q=test still works"
     ],
     "passes": false
+  },
+  {
+    "id": "FIX-010",
+    "category": "FIX-CRITICAL",
+    "description": "Add error details to request logs",
+    "problem": "500 errors show no details in logs - impossible to debug",
+    "evidence": "Log shows status:500 but no error message, stack trace, or cause",
+    "steps": [
+      "In logging middleware, capture and log error details for 5xx responses",
+      "Add error field to log output: {\"error\": \"actual error message\"}",
+      "For 500s, include the error type and message from handler",
+      "Use structured logging: slog.Error(\"request failed\", \"error\", err, \"path\", path)",
+      "Test: Trigger 500, verify error details appear in logs"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-011",
+    "category": "FIX-CRITICAL",
+    "description": "Log actual errors in handlers before returning 500",
+    "problem": "Handlers return generic 500 but dont log the actual error",
+    "evidence": "PostsHandler.Get returns INTERNAL_ERROR but logs nothing",
+    "steps": [
+      "In PostsHandler.Get, add slog.Error before writePostsError for 500s",
+      "In all handlers, log actual error with context before returning 500",
+      "Pattern: slog.Error(\"failed to get post\", \"error\", err, \"postID\", postID)",
+      "Include request ID in error logs for correlation",
+      "Review all handlers/*.go for missing error logging",
+      "Test: GET /posts/invalid logs the actual DB error"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-012",
+    "category": "FIX-IMPORTANT",
+    "description": "Add request body logging for failed POST/PATCH requests",
+    "problem": "When POST fails, no visibility into what was sent",
+    "evidence": "POST /v1/posts fails with no indication of request payload",
+    "steps": [
+      "In logging middleware, capture request body for non-GET requests",
+      "Log body only on 4xx/5xx responses (not success)",
+      "Redact sensitive fields (password, api_key, token) before logging",
+      "Limit body size in logs (max 1KB)",
+      "Test: POST with invalid JSON shows the malformed body in logs"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-013",
+    "category": "FIX-IMPORTANT",
+    "description": "Add DB query error logging",
+    "problem": "DB errors are swallowed, no visibility into query failures",
+    "evidence": "500 on /posts/{id} but no DB error in logs",
+    "steps": [
+      "In db/posts.go, add slog.Error for all query failures",
+      "Include query context: table, operation, parameters (not values)",
+      "Log connection errors separately from query errors",
+      "Pattern: slog.Error(\"db query failed\", \"op\", \"FindByID\", \"table\", \"posts\", \"error\", err)",
+      "Review all db/*.go for missing error logging",
+      "Test: Simulate DB error, verify detailed log appears"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-014",
+    "category": "FIX-IMPORTANT",
+    "description": "Add startup logging for configuration",
+    "problem": "No visibility into what config the server started with",
+    "evidence": "Only see \"Starting Solvr API server on port 8080\"",
+    "steps": [
+      "Log DB connection status on startup (connected/not configured)",
+      "Log which middleware are enabled",
+      "Log JWT secret presence (not value): \"JWT secret: configured\"",
+      "Log OAuth providers configured (GitHub: yes/no, Google: yes/no)",
+      "Log environment (dev/staging/prod) if set",
+      "Test: Server startup shows clear config summary"
+    ],
+    "passes": false
   }
 ]

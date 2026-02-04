@@ -44,13 +44,16 @@ type LogEntry struct {
 	Status     int     `json:"status"`
 	DurationMS float64 `json:"duration_ms"`
 	RemoteAddr string  `json:"remote_addr,omitempty"`
+	Error      string  `json:"error,omitempty"`      // Error message for 4xx/5xx responses
+	ErrorCode  string  `json:"error_code,omitempty"` // Error code for 4xx/5xx responses
 }
 
-// responseWriter wraps http.ResponseWriter to capture the status code.
+// responseWriter wraps http.ResponseWriter to capture the status code and body for error responses.
 type responseWriter struct {
 	http.ResponseWriter
 	status      int
 	wroteHeader bool
+	body        []byte // Captured body for error responses (4xx/5xx)
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
@@ -65,17 +68,21 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	if !rw.wroteHeader {
 		rw.WriteHeader(http.StatusOK)
 	}
+	// Capture body for error responses (4xx/5xx) to extract error details
+	if rw.status >= 400 {
+		rw.body = append(rw.body, b...)
+	}
 	return rw.ResponseWriter.Write(b)
 }
 
 // Logging returns middleware that logs HTTP requests in JSON format.
-// Log entries include: method, path, status code, and duration.
+// Log entries include: method, path, status code, duration, and error details for 4xx/5xx.
 // SECURITY: API keys, tokens, and other sensitive data are automatically redacted.
 func Logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		// Wrap response writer to capture status
+		// Wrap response writer to capture status and body
 		wrapped := &responseWriter{
 			ResponseWriter: w,
 			status:         http.StatusOK,
@@ -111,6 +118,17 @@ func Logging(next http.Handler) http.Handler {
 			entry.RemoteAddr = r.RemoteAddr
 		}
 
+		// Extract error details for 4xx/5xx responses
+		if wrapped.status >= 400 && len(wrapped.body) > 0 {
+			errCode, errMsg := extractErrorDetails(wrapped.body)
+			if errCode != "" {
+				entry.ErrorCode = errCode
+			}
+			if errMsg != "" {
+				entry.Error = errMsg
+			}
+		}
+
 		// Output JSON log
 		logJSON, err := json.Marshal(entry)
 		if err != nil {
@@ -131,6 +149,35 @@ func logLevel(status int) string {
 	default:
 		return "info"
 	}
+}
+
+// errorResponse represents the standard error response structure.
+type errorResponse struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// extractErrorDetails extracts error code and message from JSON response body.
+// Returns empty strings if the body is not valid JSON or doesn't match expected structure.
+func extractErrorDetails(body []byte) (code, message string) {
+	if len(body) == 0 {
+		return "", ""
+	}
+
+	var resp errorResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		// Not valid JSON or unexpected structure, return raw body truncated
+		// But only for non-empty bodies
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return "", bodyStr
+	}
+
+	return resp.Error.Code, resp.Error.Message
 }
 
 // RedactSensitiveData redacts sensitive data from a string value.

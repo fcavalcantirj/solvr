@@ -291,6 +291,188 @@ func TestRedactSensitiveData(t *testing.T) {
 	}
 }
 
+// TestLoggingMiddleware_CapturesErrorDetails verifies that 5xx errors include error details in logs
+func TestLoggingMiddleware_CapturesErrorDetails(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	// Simulate a handler that returns a 500 error with JSON error body
+	handler := Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":{"code":"INTERNAL_ERROR","message":"database connection failed"}}`))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/posts/123", nil)
+	req.Header.Set("X-Request-ID", "req-123")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	// Parse log
+	jsonStart := bytes.IndexByte(buf.Bytes(), '{')
+	if jsonStart == -1 {
+		t.Fatal("expected JSON log output")
+	}
+	var logEntry map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes()[jsonStart:], &logEntry); err != nil {
+		t.Fatalf("failed to parse log JSON: %v", err)
+	}
+
+	// Verify error field is included for 5xx responses
+	if logEntry["error"] == nil {
+		t.Error("expected 'error' field in log for 500 response")
+	}
+
+	// Verify error message is captured
+	errMsg, ok := logEntry["error"].(string)
+	if !ok {
+		t.Errorf("expected 'error' to be a string, got %T", logEntry["error"])
+	} else if errMsg == "" {
+		t.Error("expected non-empty error message")
+	}
+
+	// Verify status is 500
+	if status, ok := logEntry["status"].(float64); !ok || int(status) != 500 {
+		t.Errorf("expected status 500, got %v", logEntry["status"])
+	}
+
+	// Verify level is error
+	if logEntry["level"] != "error" {
+		t.Errorf("expected level 'error', got %v", logEntry["level"])
+	}
+}
+
+// TestLoggingMiddleware_CapturesErrorCode verifies error code is captured for 5xx responses
+func TestLoggingMiddleware_CapturesErrorCode(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	handler := Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":{"code":"DATABASE_ERROR","message":"connection timeout"}}`))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/posts", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	// Parse log
+	jsonStart := bytes.IndexByte(buf.Bytes(), '{')
+	var logEntry map[string]interface{}
+	json.Unmarshal(buf.Bytes()[jsonStart:], &logEntry)
+
+	// Verify error_code field is included
+	if logEntry["error_code"] == nil {
+		t.Error("expected 'error_code' field in log for 500 response")
+	}
+
+	if logEntry["error_code"] != "DATABASE_ERROR" {
+		t.Errorf("expected error_code 'DATABASE_ERROR', got %v", logEntry["error_code"])
+	}
+}
+
+// TestLoggingMiddleware_NoErrorFieldFor200 verifies no error field for successful responses
+func TestLoggingMiddleware_NoErrorFieldFor200(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	handler := Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"data":{"id":"123"}}`))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/posts", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	// Parse log
+	jsonStart := bytes.IndexByte(buf.Bytes(), '{')
+	var logEntry map[string]interface{}
+	json.Unmarshal(buf.Bytes()[jsonStart:], &logEntry)
+
+	// Verify no error fields for successful response
+	if logEntry["error"] != nil {
+		t.Errorf("expected no 'error' field for 200 response, got %v", logEntry["error"])
+	}
+	if logEntry["error_code"] != nil {
+		t.Errorf("expected no 'error_code' field for 200 response, got %v", logEntry["error_code"])
+	}
+}
+
+// TestLoggingMiddleware_CapturesErrorFor4xx verifies 4xx errors also capture error details
+func TestLoggingMiddleware_CapturesErrorFor4xx(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	handler := Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":{"code":"VALIDATION_ERROR","message":"invalid request body"}}`))
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/posts", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	// Parse log
+	jsonStart := bytes.IndexByte(buf.Bytes(), '{')
+	var logEntry map[string]interface{}
+	json.Unmarshal(buf.Bytes()[jsonStart:], &logEntry)
+
+	// Verify error field is included for 4xx responses too
+	if logEntry["error"] == nil {
+		t.Error("expected 'error' field in log for 400 response")
+	}
+
+	if logEntry["error_code"] != "VALIDATION_ERROR" {
+		t.Errorf("expected error_code 'VALIDATION_ERROR', got %v", logEntry["error_code"])
+	}
+}
+
+// TestLoggingMiddleware_HandlesNonJSONError verifies graceful handling of non-JSON error responses
+func TestLoggingMiddleware_HandlesNonJSONError(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	handler := Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/posts", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	// Parse log - should not crash
+	jsonStart := bytes.IndexByte(buf.Bytes(), '{')
+	if jsonStart == -1 {
+		t.Fatal("expected JSON log output")
+	}
+	var logEntry map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes()[jsonStart:], &logEntry); err != nil {
+		t.Fatalf("failed to parse log JSON: %v", err)
+	}
+
+	// Verify log was still written with status
+	if status, ok := logEntry["status"].(float64); !ok || int(status) != 500 {
+		t.Errorf("expected status 500, got %v", logEntry["status"])
+	}
+
+	// Error field might be empty or contain raw text for non-JSON
+	// Just verify it doesn't crash and logs something
+	if logEntry["level"] != "error" {
+		t.Errorf("expected level 'error', got %v", logEntry["level"])
+	}
+}
+
 // TestRedactURLPath verifies URL path redaction for sensitive query params
 func TestRedactURLPath(t *testing.T) {
 	tests := []struct {

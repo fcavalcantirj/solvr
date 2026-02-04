@@ -7077,3 +7077,13 @@ Also, FeedRepository didn't exist in the db package.
   - Comprehensive tests exist: search_test.go (unit) + search_integration_test.go (integration)
   - Tests verify: query params, filters, pagination, sorting, error handling, response format
   - All 30+ search tests passing
+
+- 2026-02-04: [FIX-010] Add error details to request logs ✓
+  - Extended LogEntry struct with Error and ErrorCode fields
+  - Updated responseWriter to capture response body for 4xx/5xx responses
+  - Added extractErrorDetails() to parse JSON error responses
+  - Logs now include error message and code for all error responses
+  - Added 5 new tests: CapturesErrorDetails, CapturesErrorCode, NoErrorFieldFor200, 
+    CapturesErrorFor4xx, HandlesNonJSONError
+  - All middleware tests passing (40+ tests)
+  - File size: 245 lines (under 800 limit)

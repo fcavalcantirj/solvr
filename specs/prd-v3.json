@@ -149,7 +149,7 @@
       "Use structured logging: slog.Error(\"request failed\", \"error\", err, \"path\", path)",
       "Test: Trigger 500, verify error details appear in logs"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-011",

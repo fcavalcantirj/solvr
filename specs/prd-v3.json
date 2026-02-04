@@ -334,5 +334,104 @@
       "Test: GET answers for question returns list"
     ],
     "passes": true
+  },
+  {
+    "id": "FIX-023",
+    "category": "FIX-CRITICAL",
+    "description": "Fix answers/approaches/responses endpoints - query posts table not separate tables",
+    "problem": "POST /v1/questions/:id/answers returns \"question not found\" even though post exists",
+    "evidence": "Created post with type=question, but /v1/questions/:id/answers says not found",
+    "root_cause": "Endpoints look in separate questions/problems/ideas tables instead of posts WHERE type=X",
+    "steps": [
+      "In QuestionsHandler, change FindByID to query posts WHERE id=X AND type=question",
+      "In ProblemsHandler, change FindByID to query posts WHERE id=X AND type=problem",
+      "In IdeasHandler, change FindByID to query posts WHERE id=X AND type=idea",
+      "Or create a shared helper: FindPostByIDAndType(id, type)",
+      "Test: Create question via POST /v1/posts, then POST answer - should work",
+      "Test: Create problem via POST /v1/posts, then POST approach - should work"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-024",
+    "category": "FIX-CRITICAL",
+    "description": "Wire GET /v1/ideas/:id/responses - returns 405",
+    "problem": "GET /v1/ideas/:id/responses returns METHOD_NOT_ALLOWED",
+    "evidence": "Endpoint not wired for GET method",
+    "steps": [
+      "In router.go, add r.Get for /v1/ideas/:id/responses",
+      "Wire to IdeasHandler.ListResponses or ResponsesHandler.List",
+      "Test: GET /v1/ideas/:id/responses returns list"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-025",
+    "category": "FIX-CRITICAL",
+    "description": "Fix POST /v1/posts/:id/comments - 401 even with valid auth",
+    "problem": "POST comments returns UNAUTHORIZED even with valid Bearer token",
+    "evidence": "Same API key works for POST /v1/posts but fails for comments",
+    "steps": [
+      "Check if comments route is inside CombinedAuthMiddleware group",
+      "Verify auth header is being passed to CommentsHandler",
+      "Add debug logging to trace auth flow",
+      "Test: POST comment with valid API key succeeds"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-026",
+    "category": "FIX-IMPORTANT",
+    "description": "Return proper error for non-existent agent (NOT_FOUND not INTERNAL_ERROR)",
+    "problem": "GET /v1/agents/nonexistent returns INTERNAL_ERROR instead of NOT_FOUND",
+    "evidence": "Error handling not distinguishing between DB error and not found",
+    "steps": [
+      "In AgentsHandler.GetProfile, check for ErrAgentNotFound",
+      "Return 404 NOT_FOUND for missing agents",
+      "Return 500 INTERNAL_ERROR only for actual errors",
+      "Test: GET /v1/agents/nonexistent returns 404"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-027",
+    "category": "FIX-IMPORTANT",
+    "description": "Return proper error for duplicate agent name (CONFLICT not INTERNAL_ERROR)",
+    "problem": "Registering duplicate agent name returns INTERNAL_ERROR",
+    "evidence": "Should return 409 CONFLICT with helpful message",
+    "steps": [
+      "In AgentsHandler.RegisterAgent, catch duplicate key DB error",
+      "Return 409 CONFLICT with code DUPLICATE_NAME",
+      "Include suggestion for alternative names",
+      "Test: Register same name twice returns 409"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-028",
+    "category": "FIX-IMPORTANT",
+    "description": "Add request body size limit",
+    "problem": "Large payloads (100KB+) accepted without limit",
+    "evidence": "Posted 100KB display_name and it was accepted",
+    "steps": [
+      "Add middleware to limit request body size (e.g., 64KB)",
+      "Return 413 Payload Too Large for oversized requests",
+      "Test: POST with 100KB body returns 413"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FIX-029",
+    "category": "FIX-IMPORTANT",
+    "description": "Validate pagination parameters",
+    "problem": "Negative page/per_page values not rejected",
+    "evidence": "page=-1 returns data instead of error",
+    "steps": [
+      "In handlers, validate page >= 1",
+      "Validate per_page >= 1 and <= max (50)",
+      "Return 400 BAD_REQUEST for invalid values",
+      "Test: page=-1 returns 400"
+    ],
+    "passes": false
   }
 ]

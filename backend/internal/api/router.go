@@ -243,6 +243,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		r.Get("/questions", questionsHandler.List)
 		// GET /v1/questions/:id - single question (no auth required)
 		r.Get("/questions/{id}", questionsHandler.Get)
+		// GET /v1/questions/:id/answers - list answers (no auth required)
+		// Per FIX-022: Allow viewing answers before answering
+		r.Get("/questions/{id}/answers", questionsHandler.ListAnswers)
 
 		// Ideas endpoints (API-CRITICAL per PRD-v2)
 		// GET /v1/ideas - list ideas (no auth required)

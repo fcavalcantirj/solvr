@@ -137,6 +137,18 @@ func TestQuestionsEndpoints(t *testing.T) {
 			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+
+	// FIX-022: Test GET /v1/questions/:id/answers endpoint
+	t.Run("GET /v1/questions/:id/answers returns list or 404", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/questions/test-question-id/answers", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Should return 404 for nonexistent question, or 200 with list
+		if w.Code != http.StatusOK && w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 200 or 404, got %d: %s", w.Code, w.Body.String())
+		}
+	})
 }
 
 // TestIdeasEndpoints verifies ideas endpoints are wired.

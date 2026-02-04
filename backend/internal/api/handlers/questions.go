@@ -207,6 +207,77 @@ func (h *QuestionsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// AnswersListResponse is the response for listing answers.
+type AnswersListResponse struct {
+	Data []models.AnswerWithAuthor `json:"data"`
+	Meta QuestionsListMeta         `json:"meta"`
+}
+
+// ListAnswers handles GET /v1/questions/:id/answers - list answers for a question.
+// Per FIX-022: Public endpoint (no auth required) to list answers before answering.
+func (h *QuestionsHandler) ListAnswers(w http.ResponseWriter, r *http.Request) {
+	questionID := chi.URLParam(r, "id")
+	if questionID == "" {
+		writeQuestionsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "question ID is required")
+		return
+	}
+
+	// Verify question exists
+	question, err := h.repo.FindQuestionByID(r.Context(), questionID)
+	if err != nil {
+		if errors.Is(err, ErrQuestionNotFound) {
+			writeQuestionsError(w, http.StatusNotFound, "NOT_FOUND", "question not found")
+			return
+		}
+		writeQuestionsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get question")
+		return
+	}
+
+	if question.Type != models.PostTypeQuestion {
+		writeQuestionsError(w, http.StatusNotFound, "NOT_FOUND", "question not found")
+		return
+	}
+
+	// Parse query parameters
+	opts := models.AnswerListOptions{
+		QuestionID: questionID,
+		Page:       parseQuestionsIntParam(r.URL.Query().Get("page"), 1),
+		PerPage:    parseQuestionsIntParam(r.URL.Query().Get("per_page"), 20),
+	}
+
+	if opts.Page < 1 {
+		opts.Page = 1
+	}
+	if opts.PerPage < 1 {
+		opts.PerPage = 20
+	}
+	if opts.PerPage > 50 {
+		opts.PerPage = 50
+	}
+
+	// Get answers for the question
+	answers, total, err := h.repo.ListAnswers(r.Context(), questionID, opts)
+	if err != nil {
+		writeQuestionsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list answers")
+		return
+	}
+
+	// Calculate has_more
+	hasMore := (opts.Page * opts.PerPage) < total
+
+	response := AnswersListResponse{
+		Data: answers,
+		Meta: QuestionsListMeta{
+			Total:   total,
+			Page:    opts.Page,
+			PerPage: opts.PerPage,
+			HasMore: hasMore,
+		},
+	}
+
+	writeQuestionsJSON(w, http.StatusOK, response)
+}
+
 // Create handles POST /v1/questions - create a new question.
 // Per SPEC.md Part 1.4 and FIX-015: Both humans (JWT) and AI agents (API key) can create questions.
 func (h *QuestionsHandler) Create(w http.ResponseWriter, r *http.Request) {

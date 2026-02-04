@@ -71,7 +71,7 @@ for ((i=1; i<=$1; i++)); do
   iter_start=$(date +%s)
 
   # Run claude synchronously
-  claude --dangerously-skip-permissions --no-session-persistence -p --output-format json "@CLAUDE.md @SPEC.md @specs/prd-v2.json @specs/progress.txt \
+  claude --dangerously-skip-permissions --no-session-persistence -p --output-format json "@CLAUDE.md @SPEC.md @specs/prd-v3.json @specs/progress.txt \
 
 === GOLDEN RULES (MUST FOLLOW) ===
 • TDD: Write failing test FIRST, then implement (RED→GREEN→REFACTOR)
@@ -82,13 +82,13 @@ for ((i=1; i<=$1; i++)); do
 === WORKFLOW ===
 1. Read CLAUDE.md for project guidelines and golden rules.
 2. Read SPEC.md for full specification details when needed.
-3. Find the highest-priority requirement in specs/prd-v2.json where passes=false and work ONLY on that.
+3. Find the highest-priority requirement in specs/prd-v3.json where passes=false and work ONLY on that.
 4. WRITE TESTS FIRST (TDD) - create _test.go or .test.tsx BEFORE implementation.
 5. Implement minimum code to make tests pass.
 6. For backend: run 'cd backend && go test ./...' to verify.
 7. For frontend: run 'cd frontend && npm test' to verify.
 8. Update specs/progress.txt with what you did.
-9. Update specs/prd-v2.json with passes=true for completed requirement.
+9. Update specs/prd-v3.json with passes=true for completed requirement.
 10. COMMIT: Run 'git add .' to stage ALL files (including new ones), then 'git commit -m "message"'.
 11. PUSH: Run 'git push' to push to repository.
 

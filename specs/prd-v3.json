@@ -391,7 +391,7 @@
       "Return 500 INTERNAL_ERROR only for actual errors",
       "Test: GET /v1/agents/nonexistent returns 404"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-027",

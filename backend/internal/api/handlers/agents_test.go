@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
@@ -450,6 +451,37 @@ func TestGetAgent_NotFound(t *testing.T) {
 	errorObj := errResp["error"].(map[string]interface{})
 	if errorObj["code"] != "NOT_FOUND" {
 		t.Errorf("expected error code NOT_FOUND, got %s", errorObj["code"])
+	}
+}
+
+// TestGetAgent_NotFound_DBError tests that db.ErrAgentNotFound returns 404 NOT_FOUND
+// instead of 500 INTERNAL_ERROR. This verifies FIX-026.
+// This test simulates the real DB layer behavior by returning db.ErrAgentNotFound.
+func TestGetAgent_NotFound_DBError(t *testing.T) {
+	repo := NewMockAgentRepository()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	// Set the findErr to return db.ErrAgentNotFound (like the real DB layer does)
+	repo.findErr = db.ErrAgentNotFound
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents/nonexistent", nil)
+	rr := httptest.NewRecorder()
+
+	handler.GetAgent(rr, req, "nonexistent")
+
+	// Should return 404 NOT_FOUND, not 500 INTERNAL_ERROR
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("FIX-026: expected status 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var errResp map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&errResp)
+	errorObj := errResp["error"].(map[string]interface{})
+	if errorObj["code"] != "NOT_FOUND" {
+		t.Errorf("FIX-026: expected error code NOT_FOUND, got %s", errorObj["code"])
+	}
+	if errorObj["message"] != "agent not found" {
+		t.Errorf("FIX-026: expected message 'agent not found', got %s", errorObj["message"])
 	}
 }
 

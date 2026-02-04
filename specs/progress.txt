@@ -7374,3 +7374,20 @@ Also, FeedRepository didn't exist in the db package.
     - Admin role check still works for humans with admin role
   - File sizes: comments.go=289, comments_test.go=779 (both under 800)
   - All tests passing: 17 comments tests pass including 3 new agent auth tests
+
+
+- 2026-02-04: [FIX-026] Return proper error for non-existent agent (NOT_FOUND not INTERNAL_ERROR) ✓
+  - Root cause: handlers/agents.go checked for handlers.ErrAgentNotFound but real DB returns db.ErrAgentNotFound
+  - The handlers package defined its own ErrAgentNotFound error variable
+  - The db package defined a different ErrAgentNotFound error variable  
+  - errors.Is() comparison failed because they are different error instances
+  - TDD approach followed:
+    1. Added failing test first: TestGetAgent_NotFound_DBError
+    2. Test sets repo.findErr = db.ErrAgentNotFound to simulate real DB behavior
+    3. Test initially failed: got 500 INTERNAL_ERROR instead of 404 NOT_FOUND (RED phase)
+  - Solution: Import db package and check for both error types
+    - Added import: "github.com/fcavalcantirj/solvr/internal/db"
+    - Changed all checks to: errors.Is(err, ErrAgentNotFound) || errors.Is(err, db.ErrAgentNotFound)
+    - Updated 5 locations: GetAgent, UpdateAgent, RegenerateAPIKey, RevokeAPIKey, GetActivity
+  - All tests pass (GREEN phase)
+  - File sizes: agents.go=689 (under 800)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
@@ -337,7 +338,8 @@ func (h *AgentsHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 func (h *AgentsHandler) GetAgent(w http.ResponseWriter, r *http.Request, agentID string) {
 	agent, err := h.repo.FindByID(r.Context(), agentID)
 	if err != nil {
-		if errors.Is(err, ErrAgentNotFound) {
+		// FIX-026: Check for both local ErrAgentNotFound (mock) and db.ErrAgentNotFound (real DB)
+		if errors.Is(err, ErrAgentNotFound) || errors.Is(err, db.ErrAgentNotFound) {
 			writeAgentError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
 			return
 		}
@@ -373,7 +375,8 @@ func (h *AgentsHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agen
 	// Get existing agent
 	agent, err := h.repo.FindByID(r.Context(), agentID)
 	if err != nil {
-		if errors.Is(err, ErrAgentNotFound) {
+		// FIX-026: Check for both local ErrAgentNotFound (mock) and db.ErrAgentNotFound (real DB)
+		if errors.Is(err, ErrAgentNotFound) || errors.Is(err, db.ErrAgentNotFound) {
 			writeAgentError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
 			return
 		}
@@ -455,7 +458,8 @@ func (h *AgentsHandler) RegenerateAPIKey(w http.ResponseWriter, r *http.Request,
 	// Get existing agent
 	agent, err := h.repo.FindByID(r.Context(), agentID)
 	if err != nil {
-		if errors.Is(err, ErrAgentNotFound) {
+		// FIX-026: Check for both local ErrAgentNotFound (mock) and db.ErrAgentNotFound (real DB)
+		if errors.Is(err, ErrAgentNotFound) || errors.Is(err, db.ErrAgentNotFound) {
 			writeAgentError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
 			return
 		}
@@ -508,7 +512,8 @@ func (h *AgentsHandler) RevokeAPIKey(w http.ResponseWriter, r *http.Request, age
 	// Get existing agent
 	agent, err := h.repo.FindByID(r.Context(), agentID)
 	if err != nil {
-		if errors.Is(err, ErrAgentNotFound) {
+		// FIX-026: Check for both local ErrAgentNotFound (mock) and db.ErrAgentNotFound (real DB)
+		if errors.Is(err, ErrAgentNotFound) || errors.Is(err, db.ErrAgentNotFound) {
 			writeAgentError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
 			return
 		}
@@ -569,7 +574,8 @@ func (h *AgentsHandler) GetActivity(w http.ResponseWriter, r *http.Request, agen
 	// Get activity from repository
 	activities, total, err := h.repo.GetActivity(r.Context(), agentID, page, perPage)
 	if err != nil {
-		if errors.Is(err, ErrAgentNotFound) {
+		// FIX-026: Check for both local ErrAgentNotFound (mock) and db.ErrAgentNotFound (real DB)
+		if errors.Is(err, ErrAgentNotFound) || errors.Is(err, db.ErrAgentNotFound) {
 			writeAgentError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
 			return
 		}

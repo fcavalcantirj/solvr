@@ -46,12 +46,19 @@ type ProblemsRepositoryInterface interface {
 
 // ProblemsHandler handles problem-related HTTP requests.
 type ProblemsHandler struct {
-	repo ProblemsRepositoryInterface
+	repo      ProblemsRepositoryInterface
+	postsRepo PostsRepositoryInterface // For listing problems (shares data with /v1/posts)
 }
 
 // NewProblemsHandler creates a new ProblemsHandler.
 func NewProblemsHandler(repo ProblemsRepositoryInterface) *ProblemsHandler {
 	return &ProblemsHandler{repo: repo}
+}
+
+// SetPostsRepository sets the posts repository for listing operations.
+// This allows the problems handler to query the same data as /v1/posts?type=problem.
+func (h *ProblemsHandler) SetPostsRepository(postsRepo PostsRepositoryInterface) {
+	h.postsRepo = postsRepo
 }
 
 // ProblemsListResponse is the response for listing problems.
@@ -99,6 +106,7 @@ type VerifyApproachRequest struct {
 }
 
 // List handles GET /v1/problems - list problems.
+// Per FIX-020: Uses shared PostsRepository if set, to ensure consistency with /v1/posts?type=problem.
 func (h *ProblemsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters
 	opts := models.PostListOptions{
@@ -130,8 +138,15 @@ func (h *ProblemsHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Execute query
-	problems, total, err := h.repo.ListProblems(r.Context(), opts)
+	// Execute query - prefer postsRepo for consistent data with /v1/posts
+	var problems []models.PostWithAuthor
+	var total int
+	var err error
+	if h.postsRepo != nil {
+		problems, total, err = h.postsRepo.List(r.Context(), opts)
+	} else {
+		problems, total, err = h.repo.ListProblems(r.Context(), opts)
+	}
 	if err != nil {
 		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list problems")
 		return

@@ -305,7 +305,7 @@
       "Test: GET /v1/problems returns problem posts",
       "Test: GET /v1/questions returns question posts"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-021",

@@ -49,12 +49,19 @@ type QuestionsRepositoryInterface interface {
 
 // QuestionsHandler handles question-related HTTP requests.
 type QuestionsHandler struct {
-	repo QuestionsRepositoryInterface
+	repo      QuestionsRepositoryInterface
+	postsRepo PostsRepositoryInterface // For listing questions (shares data with /v1/posts)
 }
 
 // NewQuestionsHandler creates a new QuestionsHandler.
 func NewQuestionsHandler(repo QuestionsRepositoryInterface) *QuestionsHandler {
 	return &QuestionsHandler{repo: repo}
+}
+
+// SetPostsRepository sets the posts repository for listing operations.
+// This allows the questions handler to query the same data as /v1/posts?type=question.
+func (h *QuestionsHandler) SetPostsRepository(postsRepo PostsRepositoryInterface) {
+	h.postsRepo = postsRepo
 }
 
 // QuestionsListResponse is the response for listing questions.
@@ -87,6 +94,7 @@ type CreateQuestionRequest struct {
 // Note: VoteRequest is defined in posts.go and shared across handlers.
 
 // List handles GET /v1/questions - list questions.
+// Per FIX-020: Uses shared PostsRepository if set, to ensure consistency with /v1/posts?type=question.
 func (h *QuestionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters
 	opts := models.PostListOptions{
@@ -118,8 +126,15 @@ func (h *QuestionsHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Execute query
-	questions, total, err := h.repo.ListQuestions(r.Context(), opts)
+	// Execute query - prefer postsRepo for consistent data with /v1/posts
+	var questions []models.PostWithAuthor
+	var total int
+	var err error
+	if h.postsRepo != nil {
+		questions, total, err = h.postsRepo.List(r.Context(), opts)
+	} else {
+		questions, total, err = h.repo.ListQuestions(r.Context(), opts)
+	}
 	if err != nil {
 		writeQuestionsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list questions")
 		return

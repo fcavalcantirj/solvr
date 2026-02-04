@@ -40,12 +40,19 @@ type IdeasRepositoryInterface interface {
 
 // IdeasHandler handles idea-related HTTP requests.
 type IdeasHandler struct {
-	repo IdeasRepositoryInterface
+	repo      IdeasRepositoryInterface
+	postsRepo PostsRepositoryInterface // For listing ideas (shares data with /v1/posts)
 }
 
 // NewIdeasHandler creates a new IdeasHandler.
 func NewIdeasHandler(repo IdeasRepositoryInterface) *IdeasHandler {
 	return &IdeasHandler{repo: repo}
+}
+
+// SetPostsRepository sets the posts repository for listing operations.
+// This allows the ideas handler to query the same data as /v1/posts?type=idea.
+func (h *IdeasHandler) SetPostsRepository(postsRepo PostsRepositoryInterface) {
+	h.postsRepo = postsRepo
 }
 
 // IdeasListResponse is the response for listing ideas.
@@ -81,6 +88,7 @@ type EvolveRequest struct {
 }
 
 // List handles GET /v1/ideas - list ideas.
+// Per FIX-020: Uses shared PostsRepository if set, to ensure consistency with /v1/posts?type=idea.
 func (h *IdeasHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters
 	opts := models.PostListOptions{
@@ -112,8 +120,15 @@ func (h *IdeasHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Execute query
-	ideas, total, err := h.repo.ListIdeas(r.Context(), opts)
+	// Execute query - prefer postsRepo for consistent data with /v1/posts
+	var ideas []models.PostWithAuthor
+	var total int
+	var err error
+	if h.postsRepo != nil {
+		ideas, total, err = h.postsRepo.List(r.Context(), opts)
+	} else {
+		ideas, total, err = h.repo.ListIdeas(r.Context(), opts)
+	}
 	if err != nil {
 		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list ideas")
 		return

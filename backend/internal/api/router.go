@@ -127,6 +127,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	ideasHandler := handlers.NewIdeasHandler(ideasRepo)
 	commentsHandler := handlers.NewCommentsHandler(commentsRepo)
 
+	// Per FIX-020: Set posts repository on content handlers so type-specific list endpoints
+	// (GET /v1/problems, /v1/questions, /v1/ideas) return data consistent with /v1/posts
+	problemsHandler.SetPostsRepository(postsRepo)
+	questionsHandler.SetPostsRepository(postsRepo)
+	ideasHandler.SetPostsRepository(postsRepo)
+
 	// Create user-related handlers (API-CRITICAL per PRD-v2)
 	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
 	userAPIKeysHandler := handlers.NewUserAPIKeysHandler(userAPIKeysRepo)

@@ -16,6 +16,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/auth"
 )
 
 // TestProblemsEndpoints verifies problems endpoints are wired.
@@ -232,6 +235,181 @@ func TestCommentsEndpoints(t *testing.T) {
 	})
 }
 
+// TestTypeSpecificListEndpoints verifies that posts created via /v1/posts appear
+// in type-specific list endpoints (/v1/problems, /v1/questions, /v1/ideas).
+// Per FIX-020: Type-specific list endpoints should return posts of their type.
+func TestTypeSpecificListEndpoints(t *testing.T) {
+	router := NewRouter(nil)
+
+	// Create a valid JWT token for auth
+	token, err := createTestJWTToken("user-123", "testuser", "user")
+	if err != nil {
+		t.Fatalf("Failed to create test JWT: %v", err)
+	}
+
+	// Helper to make authenticated requests
+	authPost := func(path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	authGet := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	t.Run("Problem created via /v1/posts appears in /v1/problems", func(t *testing.T) {
+		// Create a problem via /v1/posts
+		body := `{
+			"type": "problem",
+			"title": "Test problem title for listing",
+			"description": "This is a test problem description that needs to be long enough to pass validation, so here is some extra text to make it long enough.",
+			"success_criteria": ["Test passes"]
+		}`
+		w := authPost("/v1/posts", body)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("Failed to create problem: %d - %s", w.Code, w.Body.String())
+		}
+
+		// Extract the created post ID
+		var createResp map[string]interface{}
+		if err := json.NewDecoder(w.Body).Decode(&createResp); err != nil {
+			t.Fatalf("Failed to decode create response: %v", err)
+		}
+		data := createResp["data"].(map[string]interface{})
+		postID := data["id"].(string)
+
+		// GET /v1/problems should include this problem
+		w = authGet("/v1/problems")
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET /v1/problems failed: %d - %s", w.Code, w.Body.String())
+		}
+
+		var listResp map[string]interface{}
+		if err := json.NewDecoder(w.Body).Decode(&listResp); err != nil {
+			t.Fatalf("Failed to decode list response: %v", err)
+		}
+
+		dataArr := listResp["data"].([]interface{})
+		found := false
+		for _, item := range dataArr {
+			post := item.(map[string]interface{})
+			if post["id"] == postID {
+				found = true
+				// Verify it's the right type
+				if post["type"] != "problem" {
+					t.Errorf("Expected type 'problem', got %v", post["type"])
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Problem with ID %s not found in /v1/problems response. Got %d items", postID, len(dataArr))
+		}
+	})
+
+	t.Run("Question created via /v1/posts appears in /v1/questions", func(t *testing.T) {
+		// Create a question via /v1/posts
+		body := `{
+			"type": "question",
+			"title": "Test question title for listing",
+			"description": "This is a test question description that needs to be long enough to pass validation, so here is some extra text to make it long enough."
+		}`
+		w := authPost("/v1/posts", body)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("Failed to create question: %d - %s", w.Code, w.Body.String())
+		}
+
+		var createResp map[string]interface{}
+		if err := json.NewDecoder(w.Body).Decode(&createResp); err != nil {
+			t.Fatalf("Failed to decode create response: %v", err)
+		}
+		data := createResp["data"].(map[string]interface{})
+		postID := data["id"].(string)
+
+		// GET /v1/questions should include this question
+		w = authGet("/v1/questions")
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET /v1/questions failed: %d - %s", w.Code, w.Body.String())
+		}
+
+		var listResp map[string]interface{}
+		if err := json.NewDecoder(w.Body).Decode(&listResp); err != nil {
+			t.Fatalf("Failed to decode list response: %v", err)
+		}
+
+		dataArr := listResp["data"].([]interface{})
+		found := false
+		for _, item := range dataArr {
+			post := item.(map[string]interface{})
+			if post["id"] == postID {
+				found = true
+				if post["type"] != "question" {
+					t.Errorf("Expected type 'question', got %v", post["type"])
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Question with ID %s not found in /v1/questions response. Got %d items", postID, len(dataArr))
+		}
+	})
+
+	t.Run("Idea created via /v1/posts appears in /v1/ideas", func(t *testing.T) {
+		// Create an idea via /v1/posts
+		body := `{
+			"type": "idea",
+			"title": "Test idea title for listing",
+			"description": "This is a test idea description that needs to be long enough to pass validation, so here is some extra text to make it long enough."
+		}`
+		w := authPost("/v1/posts", body)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("Failed to create idea: %d - %s", w.Code, w.Body.String())
+		}
+
+		var createResp map[string]interface{}
+		if err := json.NewDecoder(w.Body).Decode(&createResp); err != nil {
+			t.Fatalf("Failed to decode create response: %v", err)
+		}
+		data := createResp["data"].(map[string]interface{})
+		postID := data["id"].(string)
+
+		// GET /v1/ideas should include this idea
+		w = authGet("/v1/ideas")
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET /v1/ideas failed: %d - %s", w.Code, w.Body.String())
+		}
+
+		var listResp map[string]interface{}
+		if err := json.NewDecoder(w.Body).Decode(&listResp); err != nil {
+			t.Fatalf("Failed to decode list response: %v", err)
+		}
+
+		dataArr := listResp["data"].([]interface{})
+		found := false
+		for _, item := range dataArr {
+			post := item.(map[string]interface{})
+			if post["id"] == postID {
+				found = true
+				if post["type"] != "idea" {
+					t.Errorf("Expected type 'idea', got %v", post["type"])
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Idea with ID %s not found in /v1/ideas response. Got %d items", postID, len(dataArr))
+		}
+	})
+}
+
 // TestPostCommentsEndpoints verifies /v1/posts/:id/comments endpoints per FIX-019.
 func TestPostCommentsEndpoints(t *testing.T) {
 	router := NewRouter(nil)
@@ -267,4 +445,11 @@ func TestPostCommentsEndpoints(t *testing.T) {
 			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+}
+
+// createTestJWTToken creates a test JWT token for router content tests.
+// Uses the same secret as in router.go ("test-jwt-secret").
+func createTestJWTToken(userID, username, role string) (string, error) {
+	secret := "test-jwt-secret"
+	return auth.GenerateJWT(secret, userID, username+"@example.com", role, time.Hour)
 }

@@ -7287,3 +7287,17 @@ Also, FeedRepository didn't exist in the db package.
   - File sizes: router.go=474, router_content_test.go=270, comment.go=80, comments_test.go=645
   - All tests passing
 
+
+
+- 2026-02-04: [FIX-020] Fix GET /v1/problems, /v1/questions, /v1/ideas returning empty ✓
+  - Root cause: Type-specific handlers used separate in-memory repositories from /v1/posts
+  - Posts created via /v1/posts went into InMemoryPostRepository
+  - Type-specific endpoints queried separate InMemoryProblemsRepository, etc.
+  - Solution: Added PostsRepositoryInterface field to content handlers
+  - Added SetPostsRepository() method to ProblemsHandler, QuestionsHandler, IdeasHandler
+  - Updated List methods to use postsRepo when set, falling back to type-specific repo
+  - Updated router.go to call SetPostsRepository() after creating handlers
+  - Added TestTypeSpecificListEndpoints test in router_content_test.go
+  - Test verifies: posts created via /v1/posts appear in type-specific endpoints
+  - File sizes: problems.go=704, questions.go=632, ideas.go=482, router.go=480, router_content_test.go=455
+  - All tests passing: go test ./... passes

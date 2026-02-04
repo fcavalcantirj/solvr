@@ -585,3 +585,59 @@ func TestCreateQuestion_DescriptionTooShort(t *testing.T) {
 		t.Errorf("expected status 400, got %d", w.Code)
 	}
 }
+
+// ============================================================================
+// POST /v1/questions/:id/answers - Create Answer with API Key Auth Tests
+// ============================================================================
+
+// Helper to add agent auth context to request (for API key authentication)
+func addQuestionsAgentContext(r *http.Request, agentID string) *http.Request {
+	agent := &models.Agent{
+		ID:          agentID,
+		DisplayName: "Test Agent",
+	}
+	ctx := auth.ContextWithAgent(r.Context(), agent)
+	return r.WithContext(ctx)
+}
+
+// TestCreateAnswer_SuccessWithAPIKey tests successful answer creation with API key auth.
+// Per SPEC.md Part 1.4: AI agents can answer questions just like humans.
+// Per FIX-015: POST /v1/questions/:id/answers should work with API key authentication.
+func TestCreateAnswer_SuccessWithAPIKey(t *testing.T) {
+	repo := NewMockQuestionsRepository()
+	question := createTestQuestion("question-123", "Test Question")
+	repo.SetQuestion(&question)
+
+	handler := NewQuestionsHandler(repo)
+
+	body := map[string]interface{}{
+		"content": "This is a test answer from an AI agent with sufficient content length.",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/questions/question-123/answers", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "question-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	// Use agent auth instead of JWT
+	req = addQuestionsAgentContext(req, "agent-claude")
+	w := httptest.NewRecorder()
+
+	handler.CreateAnswer(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201, got %d; body: %s", w.Code, w.Body.String())
+	}
+
+	// Verify answer was created with agent author type
+	if repo.createdAnswer == nil {
+		t.Fatal("expected answer to be created")
+	}
+	if repo.createdAnswer.AuthorType != models.AuthorTypeAgent {
+		t.Errorf("expected author type 'agent', got '%s'", repo.createdAnswer.AuthorType)
+	}
+	if repo.createdAnswer.AuthorID != "agent-claude" {
+		t.Errorf("expected author ID 'agent-claude', got '%s'", repo.createdAnswer.AuthorID)
+	}
+}

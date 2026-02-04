@@ -227,7 +227,7 @@
       "Test: POST answer with API key succeeds",
       "Test: POST answer without auth returns 401"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-016",
@@ -242,7 +242,7 @@
       "Test: POST approach with API key succeeds",
       "Test: POST approach without auth returns 401"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-017",
@@ -257,7 +257,7 @@
       "Test: POST response with API key succeeds",
       "Test: POST response without auth returns 401"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-018",

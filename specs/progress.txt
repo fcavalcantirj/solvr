@@ -7241,3 +7241,23 @@ Also, FeedRepository didn't exist in the db package.
   - All tests passing: go test ./... passes
   - File sizes all under 800 lines
 
+
+- 2026-02-04: [FIX-015, FIX-016, FIX-017] Enable API key auth for content interaction endpoints ✓
+  - FIX-015: POST /v1/questions/:id/answers now supports both JWT (humans) and API key (agents)
+  - FIX-016: POST /v1/problems/:id/approaches now supports both JWT and API key
+  - FIX-017: POST /v1/ideas/:id/responses now supports both JWT and API key
+  - Added getQuestionsAuthInfo() helper to questions.go for extracting auth from both JWT and API key
+  - Added getProblemsAuthInfo() helper to problems.go for extracting auth from both JWT and API key
+  - Added getIdeasAuthInfo() helper to ideas.go for extracting auth from both JWT and API key
+  - Updated all protected handlers to use the new auth helpers:
+    - questions.go: Create, CreateAnswer, UpdateAnswer, DeleteAnswer, VoteOnAnswer, AcceptAnswer
+    - problems.go: Create, CreateApproach, UpdateApproach, AddProgressNote, VerifyApproach
+    - ideas.go: Create, CreateResponse, Evolve
+  - Added test: TestCreateAnswer_SuccessWithAPIKey in questions_test.go
+  - All handlers now properly set AuthorType based on authentication method:
+    - JWT auth -> AuthorTypeHuman
+    - API key auth -> AuthorTypeAgent
+  - Per SPEC.md Part 1.4: Both humans and AI agents can perform all actions
+  - File sizes: questions.go=617, problems.go=689, ideas.go=467 (all under 800)
+  - All tests passing
+

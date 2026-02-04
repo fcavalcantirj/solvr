@@ -187,10 +187,11 @@ func (h *IdeasHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // Create handles POST /v1/ideas - create a new idea.
+// Per SPEC.md Part 1.4 and FIX-017: Both humans (JWT) and AI agents (API key) can create ideas.
 func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {
-	// Require authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	// Require authentication (JWT or API key)
+	authInfo := getIdeasAuthInfo(r)
+	if authInfo == nil {
 		writeIdeasError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
 	}
@@ -232,14 +233,14 @@ func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create idea
+	// Create idea with author info from authentication
 	post := &models.Post{
 		Type:         models.PostTypeIdea,
 		Title:        req.Title,
 		Description:  req.Description,
 		Tags:         req.Tags,
-		PostedByType: models.AuthorTypeHuman, // TODO: Support agent auth
-		PostedByID:   claims.UserID,
+		PostedByType: authInfo.authorType,
+		PostedByID:   authInfo.authorID,
 		Status:       models.PostStatusOpen,
 	}
 
@@ -255,10 +256,11 @@ func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateResponse handles POST /v1/ideas/:id/responses - create a new response.
+// Per SPEC.md Part 1.4 and FIX-017: Both humans (JWT) and AI agents (API key) can respond to ideas.
 func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
-	// Require authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	// Require authentication (JWT or API key)
+	authInfo := getIdeasAuthInfo(r)
+	if authInfo == nil {
 		writeIdeasError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
 	}
@@ -308,11 +310,11 @@ func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create response
+	// Create response with author info from authentication
 	response := &models.Response{
 		IdeaID:       ideaID,
-		AuthorType:   models.AuthorTypeHuman, // TODO: Support agent auth
-		AuthorID:     claims.UserID,
+		AuthorType:   authInfo.authorType,
+		AuthorID:     authInfo.authorID,
 		Content:      req.Content,
 		ResponseType: req.ResponseType,
 	}
@@ -329,13 +331,15 @@ func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
 }
 
 // Evolve handles POST /v1/ideas/:id/evolve - link an evolved post.
+// Per FIX-017: Both humans (JWT) and AI agents (API key) can link evolved posts.
 func (h *IdeasHandler) Evolve(w http.ResponseWriter, r *http.Request) {
-	// Require authentication
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	// Require authentication (JWT or API key)
+	authInfo := getIdeasAuthInfo(r)
+	if authInfo == nil {
 		writeIdeasError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
 	}
+	_ = authInfo // Used for authentication check
 
 	ideaID := chi.URLParam(r, "id")
 	if ideaID == "" {
@@ -406,6 +410,41 @@ func parseIdeasIntParam(s string, defaultVal int) int {
 		return defaultVal
 	}
 	return val
+}
+
+// ideasAuthInfo holds authentication information from either JWT claims or API key.
+// Per SPEC.md Part 1.4: Both humans and AI agents can perform all actions.
+type ideasAuthInfo struct {
+	authorType models.AuthorType
+	authorID   string
+	role       string // Only for humans (JWT), empty for agents
+}
+
+// getIdeasAuthInfo extracts authentication information from the request context.
+// Supports both JWT authentication (humans) and API key authentication (agents).
+// Returns nil if not authenticated.
+func getIdeasAuthInfo(r *http.Request) *ideasAuthInfo {
+	// First try JWT claims (human authentication)
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims != nil {
+		return &ideasAuthInfo{
+			authorType: models.AuthorTypeHuman,
+			authorID:   claims.UserID,
+			role:       claims.Role,
+		}
+	}
+
+	// Then try agent authentication (API key)
+	agent := auth.AgentFromContext(r.Context())
+	if agent != nil {
+		return &ideasAuthInfo{
+			authorType: models.AuthorTypeAgent,
+			authorID:   agent.ID,
+			role:       "", // Agents don't have roles (yet)
+		}
+	}
+
+	return nil
 }
 
 // writeIdeasJSON writes a JSON response.

@@ -196,7 +196,7 @@
       "Review all db/*.go for missing error logging",
       "Test: Simulate DB error, verify detailed log appears"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-014",
@@ -212,6 +212,6 @@
       "Log environment (dev/staging/prod) if set",
       "Test: Server startup shows clear config summary"
     ],
-    "passes": false
+    "passes": true
   }
 ]

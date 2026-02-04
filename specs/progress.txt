@@ -7122,3 +7122,51 @@ Also, FeedRepository didn't exist in the db package.
     - TestRedactRequestBody (6 subtests)
   - All tests passing
 
+
+- 2026-02-04: [FIX-013] Add DB query error logging ✓
+  - Created db/logger.go with structured logging functions:
+    - LogQueryError(ctx, op, table, err) - logs query errors at ERROR level
+    - LogConnectionError(ctx, err) - logs connection errors at ERROR level
+    - LogTransactionError(ctx, op, err) - logs transaction errors at ERROR level
+    - LogDuplicateKeyError(ctx, op, table, constraint) - logs duplicate keys at INFO level
+    - LogNotFound(ctx, op, table, id) - logs not found at DEBUG level
+    - All functions include request_id from context if available
+  - Created db/logger_test.go with 6 tests:
+    - TestLogQueryError - verifies structured JSON output
+    - TestLogQueryErrorWithContext - verifies request_id propagation
+    - TestLogConnectionError - verifies connection error logging
+    - TestLogTransactionError - verifies transaction error logging
+    - TestLogDuplicateKeyError - verifies INFO level for duplicate keys
+    - TestLogNotFoundAsDebug - verifies DEBUG level for not found
+  - Updated all db/*.go files to use structured logging:
+    - posts.go: Added logging to List, FindByID, Delete, Vote operations
+    - agents.go: Added logging to Create, FindByHumanID, Update, GetAgentStats, GetActivity, LinkHuman, AddKarma, GrantHumanBackedBadge, GetAgentByAPIKeyHash
+    - users.go: Added logging to Create (duplicate keys), GetUserStats, scanUser
+    - feed.go: Added logging to GetRecentActivity, GetStuckProblems, GetUnansweredQuestions
+    - search.go: Added logging to Search, getSearchCount
+    - user_api_keys.go: Added logging to FindByUserID, Revoke, UpdateLastUsed, GetUserByAPIKey
+    - claim_tokens.go: Added logging to Create, FindByToken, FindActiveByAgentID, MarkUsed, DeleteExpiredTokens
+    - pool.go: Migrated from log to log/slog for consistency
+  - Pattern: LogQueryError(ctx, "OpName", "tablename", err) for query failures
+  - Pattern: slog.Debug() for expected "not found" scenarios
+  - Pattern: slog.Info() for expected duplicate key constraints
+  - File sizes: logger.go=93, logger_test.go=189 (under 800 limit)
+  - All tests passing
+
+
+- 2026-02-04: [FIX-014] Add startup logging for configuration ✓
+  - Created config/startup.go with LogStartupConfig function:
+    - Logs environment (development/staging/production)
+    - Logs database connection status (connected/not connected)
+    - Logs JWT secret presence (configured/not configured) - NEVER logs actual value
+    - Logs OAuth providers (GitHub: enabled/disabled, Google: enabled/disabled)
+    - Logs middleware status (logging, cors, rate_limiting all enabled)
+    - Logs rate limits (agent_general, agent_search, human_general)
+  - Created config/startup_test.go with comprehensive tests:
+    - TestLogStartupConfig: 5 subtests covering various configurations
+    - TestLogStartupConfig_MiddlewareEnabled: verifies middleware logging
+    - TestLogStartupConfig_RateLimits: verifies rate limit logging
+    - Security tests: verifies sensitive values (secrets, passwords) are NEVER logged
+  - Updated cmd/api/main.go to call LogStartupConfig at startup
+  - File sizes: startup.go=75, startup_test.go=189 (both under 800 limit)
+  - All tests passing

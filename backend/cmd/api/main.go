@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -52,9 +53,12 @@ func main() {
 	// The previous call to api.MountAPIRoutes() was removed per FIX-001 because
 	// it added placeholder routes that overrode the real handlers.
 	// All routes are now consolidated in router.go.
-	if pool != nil && cfg != nil {
-		log.Println("API routes mounted (database available)")
-	}
+
+	// Log startup configuration (FIX-014)
+	// This provides visibility into what config the server started with
+	logger := slog.Default()
+	dbConnected := pool != nil
+	config.LogStartupConfig(logger, cfg, dbConnected)
 
 	// Start background cleanup job if database is available
 	// Per prd-v2.json: "Cron/scheduled job to delete expired tokens, Run every hour"

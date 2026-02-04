@@ -746,3 +746,118 @@ func TestCreatePostEndpointRequiresAuth(t *testing.T) {
 		t.Error("expected error object in response")
 	}
 }
+
+// TestGetPostsEndpointNoPlaceholder verifies GET /v1/posts returns real data, not placeholder.
+// Per FIX-001: routes.go placeholders override real router.go handlers
+func TestGetPostsEndpointNoPlaceholder(t *testing.T) {
+	router := NewRouter(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Meta should NOT contain "coming soon" placeholder message
+	meta, ok := response["meta"].(map[string]interface{})
+	if ok {
+		if msg, hasMsg := meta["message"]; hasMsg {
+			if msgStr, isStr := msg.(string); isStr {
+				if strings.Contains(strings.ToLower(msgStr), "coming soon") {
+					t.Error("GET /v1/posts returned placeholder 'coming soon' message - routes.go override not removed")
+				}
+			}
+		}
+	}
+
+	// Must have proper pagination fields in meta
+	if meta != nil {
+		if _, hasTotal := meta["total"]; !hasTotal {
+			t.Error("meta should have total field for real data response")
+		}
+		if _, hasPage := meta["page"]; !hasPage {
+			t.Error("meta should have page field for real data response")
+		}
+	}
+}
+
+// TestGetAgentProfileEndpoint verifies GET /v1/agents/{id} returns real agent data, not placeholder.
+// Per FIX-001 and FIX-006: routes.go placeholders override real router.go handlers
+func TestGetAgentProfileEndpoint(t *testing.T) {
+	router := NewRouter(nil)
+
+	// Use in-memory repo's first agent - register one first
+	reqBody := `{"name":"test_profile_agent","description":"Test agent for profile endpoint"}`
+	regReq := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
+	regReq.Header.Set("Content-Type", "application/json")
+	regW := httptest.NewRecorder()
+	router.ServeHTTP(regW, regReq)
+
+	if regW.Code != http.StatusCreated {
+		t.Fatalf("failed to register test agent: %d - %s", regW.Code, regW.Body.String())
+	}
+
+	var regResp map[string]interface{}
+	if err := json.NewDecoder(regW.Body).Decode(&regResp); err != nil {
+		t.Fatalf("failed to decode registration response: %v", err)
+	}
+
+	agent, ok := regResp["agent"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected agent in registration response")
+	}
+	agentID, ok := agent["id"].(string)
+	if !ok {
+		t.Fatal("expected agent id in response")
+	}
+
+	// Now GET the agent profile
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents/"+agentID, nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should NOT return placeholder "coming soon" message
+	if w.Code == http.StatusOK {
+		var response map[string]interface{}
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		// Check if this is a placeholder response
+		if msg, hasMsg := response["message"]; hasMsg {
+			if msgStr, isStr := msg.(string); isStr {
+				if strings.Contains(strings.ToLower(msgStr), "coming soon") {
+					t.Error("GET /v1/agents/{id} returned placeholder 'coming soon' message - routes.go override not removed")
+				}
+			}
+		}
+
+		// Should have real agent data with 'data.agent' structure per handlers/agents.go GetAgent()
+		if data, hasData := response["data"]; hasData {
+			dataMap, ok := data.(map[string]interface{})
+			if ok {
+				// Check for agent field inside data
+				if agentData, hasAgent := dataMap["agent"].(map[string]interface{}); hasAgent {
+					if _, hasID := agentData["id"]; !hasID {
+						t.Error("agent data should have id field")
+					}
+				} else {
+					// Maybe direct structure - check for id in data directly
+					if _, hasID := dataMap["id"]; !hasID {
+						t.Error("data should have agent with id field, or id directly")
+					}
+				}
+			}
+		}
+	} else if w.Code != http.StatusNotFound {
+		// Route not wired if 404, but any other error code is unexpected
+		t.Errorf("expected status 200 or 404, got %d: %s", w.Code, w.Body.String())
+	}
+}

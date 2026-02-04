@@ -69,15 +69,18 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	var agentRepo handlers.AgentRepositoryInterface
 	var claimTokenRepo handlers.ClaimTokenRepositoryInterface
 	var postsRepo handlers.PostsRepositoryInterface
+	var searchRepo handlers.SearchRepositoryInterface
 	if pool != nil {
 		agentRepo = db.NewAgentRepository(pool)
 		claimTokenRepo = db.NewClaimTokenRepository(pool)
 		postsRepo = db.NewPostRepository(pool)
+		searchRepo = db.NewSearchRepository(pool)
 	} else {
 		// Use in-memory repository for testing when no DB is available
 		agentRepo = NewInMemoryAgentRepository()
 		claimTokenRepo = NewInMemoryClaimTokenRepository()
 		postsRepo = NewInMemoryPostRepository()
+		searchRepo = NewInMemorySearchRepository()
 	}
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
@@ -86,6 +89,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 
 	// Create posts handler
 	postsHandler := handlers.NewPostsHandler(postsRepo)
+
+	// Create search handler (per SPEC.md Part 5.5)
+	searchHandler := handlers.NewSearchHandler(searchRepo)
 
 	// JWT secret for auth middleware
 	jwtSecret := "test-jwt-secret"
@@ -138,6 +144,17 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		// Per SPEC.md Part 5.2: Google OAuth
 		r.Get("/auth/google", oauthHandlers.GoogleRedirect)
 		r.Get("/auth/google/callback", oauthHandlers.GoogleCallback)
+
+		// Search endpoint (API-CRITICAL per SPEC.md Part 5.5)
+		// GET /v1/search - search the knowledge base (no auth required)
+		r.Get("/search", searchHandler.Search)
+
+		// Agent profile endpoint (per SPEC.md Part 5.6)
+		// GET /v1/agents/{id} - get agent profile (no auth required)
+		r.Get("/agents/{id}", func(w http.ResponseWriter, req *http.Request) {
+			agentID := chi.URLParam(req, "id")
+			agentsHandler.GetAgent(w, req, agentID)
+		})
 
 		// Posts endpoints (API-CRITICAL requirement)
 		// Per SPEC.md Part 5.6: GET /v1/posts - list posts (no auth required)

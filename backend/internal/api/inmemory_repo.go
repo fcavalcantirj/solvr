@@ -451,3 +451,25 @@ func (r *InMemoryPostRepository) Vote(ctx context.Context, postID, voterType, vo
 
 	return nil
 }
+
+// InMemorySearchRepository is an in-memory implementation of SearchRepositoryInterface.
+// Used for testing when no database is available.
+type InMemorySearchRepository struct {
+	mu    sync.RWMutex
+	posts map[string]*models.Post
+}
+
+// NewInMemorySearchRepository creates a new in-memory search repository.
+func NewInMemorySearchRepository() *InMemorySearchRepository {
+	return &InMemorySearchRepository{
+		posts: make(map[string]*models.Post),
+	}
+}
+
+// Search performs a full-text search in memory.
+// Returns empty results for testing - in production use the DB-backed version.
+func (r *InMemorySearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
+	// Return empty results for in-memory testing
+	// Real search requires PostgreSQL full-text search
+	return []models.SearchResult{}, 0, nil
+}

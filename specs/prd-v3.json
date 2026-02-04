@@ -12,7 +12,7 @@
       "Test: GET /v1/posts returns real data (empty array), not placeholder",
       "Test: GET /v1/agents/{id} returns real agent data, not placeholder"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-002",

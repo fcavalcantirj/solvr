@@ -48,14 +48,12 @@ func main() {
 	// Create router with database pool
 	router := api.NewRouter(pool)
 
-	// Mount API routes if database and config are available
+	// Note: API routes are now mounted directly in api.NewRouter() via mountV1Routes()
+	// The previous call to api.MountAPIRoutes() was removed per FIX-001 because
+	// it added placeholder routes that overrode the real handlers.
+	// All routes are now consolidated in router.go.
 	if pool != nil && cfg != nil {
-		jwtSecret := cfg.JWTSecret
-		if jwtSecret == "" {
-			jwtSecret = "dev-secret-change-in-production" // fallback for dev
-		}
-		api.MountAPIRoutes(router, pool, jwtSecret)
-		log.Println("API routes mounted")
+		log.Println("API routes mounted (database available)")
 	}
 
 	// Start background cleanup job if database is available

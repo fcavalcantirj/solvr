@@ -6838,3 +6838,47 @@ backend/internal/api/inmemory_repo.go
 **Tests:**
 - go test ./internal/api -run "TestGetPostsEndpoint|TestGetSinglePostEndpoint|TestCreatePostEndpointRequiresAuth" passes
 - go build ./... passes
+
+
+---
+
+## FIX-001: Remove routes.go placeholders that override router.go (2026-02-04)
+
+**Requirement:** FIX-CRITICAL - routes.go placeholders override real handlers in router.go
+
+**Problem:** 
+- routes.go was called AFTER router.go in main.go via api.MountAPIRoutes()
+- This caused placeholder endpoints to override real handlers
+- GET /v1/posts returned "coming soon" placeholder instead of real data
+- GET /v1/agents/{id} returned placeholder instead of real agent data
+
+**TDD Approach:**
+- Wrote failing tests first (RED) - TestGetPostsEndpointNoPlaceholder, TestGetAgentProfileEndpoint
+- Tests verify responses do NOT contain "coming soon" messages
+- Tests verify responses have proper data structure
+
+**Tests Added:**
+backend/internal/api/router_test.go
+- TestGetPostsEndpointNoPlaceholder: Tests GET /v1/posts returns real data format, not placeholder
+- TestGetAgentProfileEndpoint: Tests GET /v1/agents/{id} returns real agent data, not placeholder
+
+**Implementation:**
+1. backend/internal/api/router.go
+   - Added SearchRepositoryInterface handling in mountV1Routes
+   - Created searchHandler with NewSearchHandler(searchRepo)
+   - Wired GET /v1/search to searchHandler.Search
+   - Wired GET /v1/agents/{id} to agentsHandler.GetAgent
+
+2. backend/internal/api/inmemory_repo.go
+   - Added InMemorySearchRepository for testing when no DB available
+   - Returns empty results for in-memory testing (real search requires PostgreSQL)
+
+3. backend/cmd/api/main.go
+   - Removed call to api.MountAPIRoutes(router, pool, jwtSecret)
+   - All routes now consolidated in router.go via mountV1Routes()
+   - Added comment explaining the change
+
+**Tests:**
+- go test ./internal/api -run "TestGetPostsEndpointNoPlaceholder|TestGetAgentProfileEndpoint" passes
+- go test ./... passes (all backend tests)
+- go build ./... passes

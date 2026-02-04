@@ -7301,3 +7301,20 @@ Also, FeedRepository didn't exist in the db package.
   - Test verifies: posts created via /v1/posts appear in type-specific endpoints
   - File sizes: problems.go=704, questions.go=632, ideas.go=482, router.go=480, router_content_test.go=455
   - All tests passing: go test ./... passes
+
+
+- 2026-02-04: [FIX-021] Verified GET /v1/problems/:id/approaches already working ✓
+  - Route was already wired in router.go (line 239)
+  - Handler ProblemsHandler.ListApproaches exists and works correctly
+  - Test TestProblemsEndpoints already passes
+  - No changes needed - just marked as passes:true
+
+
+- 2026-02-04: [FIX-022] Wire GET /v1/questions/:id/answers (list answers) ✓
+  - Added AnswersListResponse struct for response format
+  - Added ListAnswers handler method to QuestionsHandler
+  - Added GET /v1/questions/{id}/answers route in router.go (public, no auth required)
+  - Added test case in TestQuestionsEndpoints for the new endpoint
+  - Returns 404 for non-existent question, 200 with list otherwise
+  - File sizes: questions.go=703, router.go=483, router_content_test.go=467 (all under 800)
+  - All tests passing: go test ./... passes

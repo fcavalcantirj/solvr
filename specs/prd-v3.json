@@ -319,7 +319,7 @@
       "Return approaches with author info and status",
       "Test: GET approaches for problem returns list"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-022",
@@ -333,6 +333,6 @@
       "Return answers with author info, votes, accepted status",
       "Test: GET answers for question returns list"
     ],
-    "passes": false
+    "passes": true
   }
 ]

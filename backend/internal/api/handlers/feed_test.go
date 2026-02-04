@@ -15,42 +15,42 @@ import (
 // MockFeedRepository is a mock implementation of FeedRepositoryInterface for testing.
 type MockFeedRepository struct {
 	// GetRecentActivity returns
-	recentActivityItems []FeedItem
+	recentActivityItems []models.FeedItem
 	recentActivityTotal int
 	recentActivityErr   error
 
 	// GetStuckProblems returns
-	stuckProblems      []FeedItem
+	stuckProblems      []models.FeedItem
 	stuckProblemsTotal int
 	stuckProblemsErr   error
 
 	// GetUnansweredQuestions returns
-	unansweredQuestions      []FeedItem
+	unansweredQuestions      []models.FeedItem
 	unansweredQuestionsTotal int
 	unansweredQuestionsErr   error
 }
 
-func (m *MockFeedRepository) GetRecentActivity(ctx context.Context, page, perPage int) ([]FeedItem, int, error) {
+func (m *MockFeedRepository) GetRecentActivity(ctx context.Context, page, perPage int) ([]models.FeedItem, int, error) {
 	return m.recentActivityItems, m.recentActivityTotal, m.recentActivityErr
 }
 
-func (m *MockFeedRepository) GetStuckProblems(ctx context.Context, page, perPage int) ([]FeedItem, int, error) {
+func (m *MockFeedRepository) GetStuckProblems(ctx context.Context, page, perPage int) ([]models.FeedItem, int, error) {
 	return m.stuckProblems, m.stuckProblemsTotal, m.stuckProblemsErr
 }
 
-func (m *MockFeedRepository) GetUnansweredQuestions(ctx context.Context, page, perPage int) ([]FeedItem, int, error) {
+func (m *MockFeedRepository) GetUnansweredQuestions(ctx context.Context, page, perPage int) ([]models.FeedItem, int, error) {
 	return m.unansweredQuestions, m.unansweredQuestionsTotal, m.unansweredQuestionsErr
 }
 
-func createTestFeedItem(id, title, itemType, status string) FeedItem {
-	return FeedItem{
+func createTestFeedItem(id, title, itemType, status string) models.FeedItem {
+	return models.FeedItem{
 		ID:          id,
 		Type:        itemType,
 		Title:       title,
 		Snippet:     "This is a test snippet for " + title,
 		Tags:        []string{"test", "go"},
 		Status:      status,
-		Author:      FeedAuthor{Type: "human", ID: "user-1", DisplayName: "Test User"},
+		Author:      models.FeedAuthor{Type: "human", ID: "user-1", DisplayName: "Test User"},
 		VoteScore:   5,
 		AnswerCount: 2,
 		CreatedAt:   time.Now(),
@@ -62,7 +62,7 @@ func createTestFeedItem(id, title, itemType, status string) FeedItem {
 // =========================================================================
 
 func TestFeed_RecentActivity_Success(t *testing.T) {
-	items := []FeedItem{
+	items := []models.FeedItem{
 		createTestFeedItem("post-1", "First Post", "problem", "open"),
 		createTestFeedItem("post-2", "Second Post", "question", "open"),
 	}
@@ -83,7 +83,7 @@ func TestFeed_RecentActivity_Success(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestFeed_RecentActivity_Success(t *testing.T) {
 }
 
 func TestFeed_RecentActivity_Pagination(t *testing.T) {
-	items := []FeedItem{
+	items := []models.FeedItem{
 		createTestFeedItem("post-11", "Page 2 Item", "problem", "open"),
 	}
 
@@ -122,7 +122,7 @@ func TestFeed_RecentActivity_Pagination(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestFeed_RecentActivity_Pagination(t *testing.T) {
 
 func TestFeed_RecentActivity_PerPageMax(t *testing.T) {
 	mockRepo := &MockFeedRepository{
-		recentActivityItems: []FeedItem{},
+		recentActivityItems: []models.FeedItem{},
 		recentActivityTotal: 0,
 	}
 
@@ -158,7 +158,7 @@ func TestFeed_RecentActivity_PerPageMax(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestFeed_RecentActivity_PerPageMax(t *testing.T) {
 
 func TestFeed_RecentActivity_DefaultPagination(t *testing.T) {
 	mockRepo := &MockFeedRepository{
-		recentActivityItems: []FeedItem{},
+		recentActivityItems: []models.FeedItem{},
 		recentActivityTotal: 0,
 	}
 
@@ -186,7 +186,7 @@ func TestFeed_RecentActivity_DefaultPagination(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestFeed_RecentActivity_DefaultPagination(t *testing.T) {
 
 func TestFeed_RecentActivity_EmptyResult(t *testing.T) {
 	mockRepo := &MockFeedRepository{
-		recentActivityItems: []FeedItem{},
+		recentActivityItems: []models.FeedItem{},
 		recentActivityTotal: 0,
 	}
 
@@ -217,7 +217,7 @@ func TestFeed_RecentActivity_EmptyResult(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestFeed_RecentActivity_EmptyResult(t *testing.T) {
 }
 
 func TestFeed_RecentActivity_IncludesAllTypes(t *testing.T) {
-	items := []FeedItem{
+	items := []models.FeedItem{
 		createTestFeedItem("p1", "A Problem", "problem", "open"),
 		createTestFeedItem("q1", "A Question", "question", "open"),
 		createTestFeedItem("i1", "An Idea", "idea", "active"),
@@ -254,7 +254,7 @@ func TestFeed_RecentActivity_IncludesAllTypes(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestFeed_RecentActivity_IncludesAllTypes(t *testing.T) {
 // =========================================================================
 
 func TestFeed_Stuck_Success(t *testing.T) {
-	stuckItems := []FeedItem{
+	stuckItems := []models.FeedItem{
 		createTestFeedItem("p1", "Stuck Problem 1", "problem", "in_progress"),
 		createTestFeedItem("p2", "Stuck Problem 2", "problem", "open"),
 	}
@@ -302,7 +302,7 @@ func TestFeed_Stuck_Success(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestFeed_Stuck_Success(t *testing.T) {
 
 func TestFeed_Stuck_Pagination(t *testing.T) {
 	mockRepo := &MockFeedRepository{
-		stuckProblems:      []FeedItem{createTestFeedItem("p11", "Problem 11", "problem", "open")},
+		stuckProblems:      []models.FeedItem{createTestFeedItem("p11", "Problem 11", "problem", "open")},
 		stuckProblemsTotal: 35,
 	}
 
@@ -336,7 +336,7 @@ func TestFeed_Stuck_Pagination(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -356,7 +356,7 @@ func TestFeed_Stuck_Pagination(t *testing.T) {
 
 func TestFeed_Stuck_Empty(t *testing.T) {
 	mockRepo := &MockFeedRepository{
-		stuckProblems:      []FeedItem{},
+		stuckProblems:      []models.FeedItem{},
 		stuckProblemsTotal: 0,
 	}
 
@@ -371,7 +371,7 @@ func TestFeed_Stuck_Empty(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -390,7 +390,7 @@ func TestFeed_Stuck_Empty(t *testing.T) {
 // =========================================================================
 
 func TestFeed_Unanswered_Success(t *testing.T) {
-	unansweredItems := []FeedItem{
+	unansweredItems := []models.FeedItem{
 		createTestFeedItem("q1", "Unanswered Question 1", "question", "open"),
 		createTestFeedItem("q2", "Unanswered Question 2", "question", "open"),
 	}
@@ -416,7 +416,7 @@ func TestFeed_Unanswered_Success(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -435,7 +435,7 @@ func TestFeed_Unanswered_Success(t *testing.T) {
 
 func TestFeed_Unanswered_OnlyQuestions(t *testing.T) {
 	// Even though we mock, the type should always be question
-	unansweredItems := []FeedItem{
+	unansweredItems := []models.FeedItem{
 		createTestFeedItem("q1", "Question 1", "question", "open"),
 	}
 	unansweredItems[0].AnswerCount = 0
@@ -456,7 +456,7 @@ func TestFeed_Unanswered_OnlyQuestions(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -468,7 +468,7 @@ func TestFeed_Unanswered_OnlyQuestions(t *testing.T) {
 
 func TestFeed_Unanswered_Pagination(t *testing.T) {
 	mockRepo := &MockFeedRepository{
-		unansweredQuestions:      []FeedItem{createTestFeedItem("q21", "Question 21", "question", "open")},
+		unansweredQuestions:      []models.FeedItem{createTestFeedItem("q21", "Question 21", "question", "open")},
 		unansweredQuestionsTotal: 50,
 	}
 
@@ -483,7 +483,7 @@ func TestFeed_Unanswered_Pagination(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -503,7 +503,7 @@ func TestFeed_Unanswered_Pagination(t *testing.T) {
 
 func TestFeed_Unanswered_Empty(t *testing.T) {
 	mockRepo := &MockFeedRepository{
-		unansweredQuestions:      []FeedItem{},
+		unansweredQuestions:      []models.FeedItem{},
 		unansweredQuestionsTotal: 0,
 	}
 
@@ -518,7 +518,7 @@ func TestFeed_Unanswered_Empty(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
 	}
 
-	var response FeedResponse
+	var response models.FeedResponse
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -534,14 +534,14 @@ func TestFeed_Unanswered_Empty(t *testing.T) {
 
 func TestFeedItem_IncludesRequiredFields(t *testing.T) {
 	now := time.Now()
-	item := FeedItem{
+	item := models.FeedItem{
 		ID:          "post-123",
 		Type:        "problem",
 		Title:       "Test Problem Title",
 		Snippet:     "This is a snippet of the problem description...",
 		Tags:        []string{"go", "postgresql"},
 		Status:      "open",
-		Author:      FeedAuthor{Type: "human", ID: "user-1", DisplayName: "John Doe"},
+		Author:      models.FeedAuthor{Type: "human", ID: "user-1", DisplayName: "John Doe"},
 		VoteScore:   10,
 		AnswerCount: 3,
 		CreatedAt:   now,
@@ -565,14 +565,14 @@ func TestFeedItem_IncludesRequiredFields(t *testing.T) {
 }
 
 func TestFeedItem_JSONSerialization(t *testing.T) {
-	item := FeedItem{
+	item := models.FeedItem{
 		ID:          "post-123",
 		Type:        "question",
 		Title:       "How do I use Go?",
 		Snippet:     "I need help with Go...",
 		Tags:        []string{"go", "beginner"},
 		Status:      "open",
-		Author:      FeedAuthor{Type: "agent", ID: "claude", DisplayName: "Claude"},
+		Author:      models.FeedAuthor{Type: "agent", ID: "claude", DisplayName: "Claude"},
 		VoteScore:   5,
 		AnswerCount: 0,
 		CreatedAt:   time.Date(2026, 2, 1, 12, 0, 0, 0, time.UTC),

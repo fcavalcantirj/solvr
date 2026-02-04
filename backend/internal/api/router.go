@@ -70,17 +70,20 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	var claimTokenRepo handlers.ClaimTokenRepositoryInterface
 	var postsRepo handlers.PostsRepositoryInterface
 	var searchRepo handlers.SearchRepositoryInterface
+	var feedRepo handlers.FeedRepositoryInterface
 	if pool != nil {
 		agentRepo = db.NewAgentRepository(pool)
 		claimTokenRepo = db.NewClaimTokenRepository(pool)
 		postsRepo = db.NewPostRepository(pool)
 		searchRepo = db.NewSearchRepository(pool)
+		feedRepo = db.NewFeedRepository(pool)
 	} else {
 		// Use in-memory repository for testing when no DB is available
 		agentRepo = NewInMemoryAgentRepository()
 		claimTokenRepo = NewInMemoryClaimTokenRepository()
 		postsRepo = NewInMemoryPostRepository()
 		searchRepo = NewInMemorySearchRepository()
+		feedRepo = NewInMemoryFeedRepository()
 	}
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
@@ -92,6 +95,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 
 	// Create search handler (per SPEC.md Part 5.5)
 	searchHandler := handlers.NewSearchHandler(searchRepo)
+
+	// Create feed handler (per SPEC.md Part 5.6: GET /feed endpoints)
+	feedHandler := handlers.NewFeedHandler(feedRepo)
 
 	// JWT secret for auth middleware
 	jwtSecret := "test-jwt-secret"
@@ -169,6 +175,14 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		r.Get("/posts", postsHandler.List)
 		// Per SPEC.md Part 5.6: GET /v1/posts/:id - single post (no auth required)
 		r.Get("/posts/{id}", postsHandler.Get)
+
+		// Feed endpoints (per SPEC.md Part 5.6 and FIX-004)
+		// GET /v1/feed - recent activity (no auth required)
+		r.Get("/feed", feedHandler.Feed)
+		// GET /v1/feed/stuck - problems needing help (no auth required)
+		r.Get("/feed/stuck", feedHandler.Stuck)
+		// GET /v1/feed/unanswered - unanswered questions (no auth required)
+		r.Get("/feed/unanswered", feedHandler.Unanswered)
 
 		// Protected posts routes (require authentication)
 		// Per FIX-003: Use CombinedAuthMiddleware so both JWT (humans) and API key (agents) work

@@ -6972,3 +6972,55 @@ answer questions, start approaches, and vote. But the posts routes only accepted
 - Posts created by humans have posted_by_type = "human" (models.AuthorTypeHuman)
 - Ownership checks now work for both author types
 - Vote self-check now works for both author types
+
+## FIX-004: Wire /v1/feed endpoint
+**Date:** 2026-02-04
+**Status:** COMPLETED
+
+**Problem:**
+GET /v1/feed returned 404 - FeedHandler existed but wasn't wired in router.go.
+Also, FeedRepository didn't exist in the db package.
+
+**TDD Approach:**
+- Wrote failing tests first (RED) in db/feed_test.go:
+  - TestFeedRepository_GetRecentActivity: Returns recent posts
+  - TestFeedRepository_GetRecentActivity_Pagination: Tests pagination
+  - TestFeedRepository_GetStuckProblems: Returns problems with stuck approaches
+  - TestFeedRepository_GetUnansweredQuestions: Returns questions with zero answers
+  - TestFeedRepository_GetUnansweredQuestions_Empty: Empty results
+  - TestFeedRepository_GetRecentActivity_ExcludesDeleted: Deleted posts excluded
+
+**Implementation:**
+1. backend/internal/models/feed.go (NEW)
+   - Created FeedItem, FeedAuthor, FeedMeta, FeedResponse types
+   - Moved here from handlers to avoid import cycle
+
+2. backend/internal/db/feed.go (NEW)
+   - FeedRepository implementing FeedRepositoryInterface:
+     - GetRecentActivity: Returns recent posts ordered by created_at DESC
+     - GetStuckProblems: Returns problems with stuck approaches or in_progress status
+     - GetUnansweredQuestions: Returns questions with zero answers
+   - Includes author info via JOINs with users and agents tables
+
+3. backend/internal/db/feed_test.go (NEW)
+   - Tests with helper functions for creating test users and posts
+   - Uses proper typed constants (models.PostType, models.PostStatus, models.AuthorType)
+
+4. backend/internal/api/inmemory_repo.go (MODIFIED)
+   - Added InMemoryFeedRepository for testing
+
+5. backend/internal/api/handlers/feed.go (MODIFIED)
+   - Updated to use models.FeedItem instead of local types
+
+6. backend/internal/api/router.go (MODIFIED)
+   - Created feedRepo (FeedRepository or InMemoryFeedRepository)
+   - Created feedHandler using NewFeedHandler(feedRepo)
+   - Wired routes:
+     - GET /v1/feed → feedHandler.Feed
+     - GET /v1/feed/stuck → feedHandler.Stuck
+     - GET /v1/feed/unanswered → feedHandler.Unanswered
+
+**Tests:**
+- go test ./internal/db/... passes (feed tests)
+- go test ./internal/api/handlers/... passes (feed handler tests)
+- go test ./... passes (all backend tests)

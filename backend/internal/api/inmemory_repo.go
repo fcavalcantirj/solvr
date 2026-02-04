@@ -497,3 +497,38 @@ func (r *InMemorySearchRepository) Search(ctx context.Context, query string, opt
 	// Real search requires PostgreSQL full-text search
 	return []models.SearchResult{}, 0, nil
 }
+
+// InMemoryFeedRepository is an in-memory implementation of FeedRepositoryInterface.
+// Used for testing when no database is available.
+type InMemoryFeedRepository struct {
+	mu    sync.RWMutex
+	posts map[string]*models.Post
+}
+
+// NewInMemoryFeedRepository creates a new in-memory feed repository.
+func NewInMemoryFeedRepository() *InMemoryFeedRepository {
+	return &InMemoryFeedRepository{
+		posts: make(map[string]*models.Post),
+	}
+}
+
+// GetRecentActivity returns recent posts.
+// Returns empty results for in-memory testing.
+func (r *InMemoryFeedRepository) GetRecentActivity(ctx context.Context, page, perPage int) ([]models.FeedItem, int, error) {
+	// Return empty results for in-memory testing
+	return []models.FeedItem{}, 0, nil
+}
+
+// GetStuckProblems returns problems that need help.
+// Returns empty results for in-memory testing.
+func (r *InMemoryFeedRepository) GetStuckProblems(ctx context.Context, page, perPage int) ([]models.FeedItem, int, error) {
+	// Return empty results for in-memory testing
+	return []models.FeedItem{}, 0, nil
+}
+
+// GetUnansweredQuestions returns questions with zero answers.
+// Returns empty results for in-memory testing.
+func (r *InMemoryFeedRepository) GetUnansweredQuestions(ctx context.Context, page, perPage int) ([]models.FeedItem, int, error) {
+	// Return empty results for in-memory testing
+	return []models.FeedItem{}, 0, nil
+}

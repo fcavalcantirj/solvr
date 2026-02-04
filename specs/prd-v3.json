@@ -57,7 +57,7 @@
       "Wire r.Get('/feed/unanswered', feedHandler.Unanswered)",
       "Test: GET /v1/feed returns recent posts"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-005",

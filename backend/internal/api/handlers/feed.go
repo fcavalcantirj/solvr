@@ -6,82 +6,24 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
-
-// FeedAuthor contains author information for feed items.
-type FeedAuthor struct {
-	Type        string `json:"type"`
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-	AvatarURL   string `json:"avatar_url,omitempty"`
-}
-
-// FeedItem represents a single item in the feed.
-// Per SPEC.md Part 4.4 - Post cards in feed.
-type FeedItem struct {
-	// ID is the post UUID.
-	ID string `json:"id"`
-
-	// Type is the post type: problem, question, or idea.
-	Type string `json:"type"`
-
-	// Title is the post title.
-	Title string `json:"title"`
-
-	// Snippet is a short preview of the description.
-	Snippet string `json:"snippet"`
-
-	// Tags are the post tags.
-	Tags []string `json:"tags,omitempty"`
-
-	// Status is the current post status.
-	Status string `json:"status"`
-
-	// Author is the post author information.
-	Author FeedAuthor `json:"author"`
-
-	// VoteScore is upvotes minus downvotes.
-	VoteScore int `json:"vote_score"`
-
-	// AnswerCount is the number of answers (for questions) or approaches (for problems).
-	AnswerCount int `json:"answer_count"`
-
-	// ApproachCount is the number of approaches (for problems).
-	ApproachCount int `json:"approach_count,omitempty"`
-
-	// CreatedAt is when the post was created.
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// FeedMeta contains pagination metadata for feed responses.
-type FeedMeta struct {
-	Total   int  `json:"total"`
-	Page    int  `json:"page"`
-	PerPage int  `json:"per_page"`
-	HasMore bool `json:"has_more"`
-}
-
-// FeedResponse is the response for feed endpoints.
-type FeedResponse struct {
-	Data []FeedItem `json:"data"`
-	Meta FeedMeta   `json:"meta"`
-}
 
 // FeedRepositoryInterface defines the database operations for the feed.
 type FeedRepositoryInterface interface {
 	// GetRecentActivity returns recent posts and activity.
 	// Per SPEC.md Part 5.6: GET /feed - Recent activity
 	// Returns posts and answers ordered by created_at DESC.
-	GetRecentActivity(ctx context.Context, page, perPage int) ([]FeedItem, int, error)
+	GetRecentActivity(ctx context.Context, page, perPage int) ([]models.FeedItem, int, error)
 
 	// GetStuckProblems returns problems that have approaches with status='stuck'.
 	// Per SPEC.md Part 5.6: GET /feed/stuck - Problems needing help
-	GetStuckProblems(ctx context.Context, page, perPage int) ([]FeedItem, int, error)
+	GetStuckProblems(ctx context.Context, page, perPage int) ([]models.FeedItem, int, error)
 
 	// GetUnansweredQuestions returns questions with zero answers.
 	// Per SPEC.md Part 5.6: GET /feed/unanswered - Unanswered questions
-	GetUnansweredQuestions(ctx context.Context, page, perPage int) ([]FeedItem, int, error)
+	GetUnansweredQuestions(ctx context.Context, page, perPage int) ([]models.FeedItem, int, error)
 }
 
 // FeedHandler handles feed-related HTTP requests.
@@ -157,12 +99,12 @@ func (h *FeedHandler) Feed(w http.ResponseWriter, r *http.Request) {
 
 	// Ensure items is not nil for JSON serialization
 	if items == nil {
-		items = []FeedItem{}
+		items = []models.FeedItem{}
 	}
 
-	response := FeedResponse{
+	response := models.FeedResponse{
 		Data: items,
-		Meta: FeedMeta{
+		Meta: models.FeedMeta{
 			Total:   total,
 			Page:    page,
 			PerPage: perPage,
@@ -187,12 +129,12 @@ func (h *FeedHandler) Stuck(w http.ResponseWriter, r *http.Request) {
 
 	// Ensure items is not nil for JSON serialization
 	if items == nil {
-		items = []FeedItem{}
+		items = []models.FeedItem{}
 	}
 
-	response := FeedResponse{
+	response := models.FeedResponse{
 		Data: items,
-		Meta: FeedMeta{
+		Meta: models.FeedMeta{
 			Total:   total,
 			Page:    page,
 			PerPage: perPage,
@@ -217,12 +159,12 @@ func (h *FeedHandler) Unanswered(w http.ResponseWriter, r *http.Request) {
 
 	// Ensure items is not nil for JSON serialization
 	if items == nil {
-		items = []FeedItem{}
+		items = []models.FeedItem{}
 	}
 
-	response := FeedResponse{
+	response := models.FeedResponse{
 		Data: items,
-		Meta: FeedMeta{
+		Meta: models.FeedMeta{
 			Total:   total,
 			Page:    page,
 			PerPage: perPage,

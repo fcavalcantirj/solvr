@@ -7101,3 +7101,24 @@ Also, FeedRepository didn't exist in the db package.
     ctx := response.LogContext{Operation: "X", Resource: "Y", RequestID: r.Header.Get("X-Request-ID"), Extra: ...}
     response.WriteInternalErrorWithLog(w, "message", err, ctx, h.logger)
   - All tests passing, file sizes: posts.go=591, response.go=216 (under 800 limit)
+
+- 2026-02-04: [FIX-012] Add request body logging for failed POST/PATCH requests ✓
+  - Extended LogEntry struct with RequestBody field
+  - Capture request body for non-GET methods in logging middleware
+  - Body only logged for 4xx/5xx responses (success requests don't log body)
+  - Added RedactRequestBody() function for sensitive field redaction:
+    - password, api_key, token, access_token, refresh_token, secret, credential
+    - Recursive redaction for nested JSON objects
+  - Truncation at 1KB with "...[truncated]" indicator for large bodies
+  - Split test file: logging_body_test.go (309 lines) for body-specific tests
+  - File sizes: logging.go=354, logging_test.go=541, logging_body_test.go=309 (all under 800)
+  - Tests:
+    - TestLoggingMiddleware_CapturesRequestBodyOnError
+    - TestLoggingMiddleware_NoRequestBodyForSuccessfulPOST
+    - TestLoggingMiddleware_NoRequestBodyForGET
+    - TestLoggingMiddleware_RequestBodyRedactsSensitiveFields
+    - TestLoggingMiddleware_RequestBodyTruncatedAt1KB
+    - TestLoggingMiddleware_CapturesRequestBodyOnPATCH
+    - TestRedactRequestBody (6 subtests)
+  - All tests passing
+

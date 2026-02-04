@@ -180,7 +180,7 @@
       "Limit body size in logs (max 1KB)",
       "Test: POST with invalid JSON shows the malformed body in logs"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-013",

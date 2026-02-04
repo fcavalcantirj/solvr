@@ -2,7 +2,9 @@
 package middleware
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -35,17 +37,18 @@ var jwtRegex = regexp.MustCompile(`^eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-
 
 // LogEntry represents a structured log entry for HTTP requests.
 type LogEntry struct {
-	Level      string  `json:"level"`
-	Timestamp  string  `json:"timestamp"`
-	Message    string  `json:"message"`
-	RequestID  string  `json:"request_id,omitempty"`
-	Method     string  `json:"method"`
-	Path       string  `json:"path"`
-	Status     int     `json:"status"`
-	DurationMS float64 `json:"duration_ms"`
-	RemoteAddr string  `json:"remote_addr,omitempty"`
-	Error      string  `json:"error,omitempty"`      // Error message for 4xx/5xx responses
-	ErrorCode  string  `json:"error_code,omitempty"` // Error code for 4xx/5xx responses
+	Level       string  `json:"level"`
+	Timestamp   string  `json:"timestamp"`
+	Message     string  `json:"message"`
+	RequestID   string  `json:"request_id,omitempty"`
+	Method      string  `json:"method"`
+	Path        string  `json:"path"`
+	Status      int     `json:"status"`
+	DurationMS  float64 `json:"duration_ms"`
+	RemoteAddr  string  `json:"remote_addr,omitempty"`
+	Error       string  `json:"error,omitempty"`        // Error message for 4xx/5xx responses
+	ErrorCode   string  `json:"error_code,omitempty"`   // Error code for 4xx/5xx responses
+	RequestBody string  `json:"request_body,omitempty"` // Request body for failed non-GET requests (redacted)
 }
 
 // responseWriter wraps http.ResponseWriter to capture the status code and body for error responses.
@@ -81,6 +84,17 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 func Logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+
+		// Capture request body for non-GET methods (for logging on error)
+		var requestBody string
+		if r.Method != http.MethodGet && r.Body != nil {
+			bodyBytes, err := io.ReadAll(r.Body)
+			if err == nil && len(bodyBytes) > 0 {
+				requestBody = string(bodyBytes)
+				// Restore the body so it can be read by handlers
+				r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			}
+		}
 
 		// Wrap response writer to capture status and body
 		wrapped := &responseWriter{
@@ -127,6 +141,11 @@ func Logging(next http.Handler) http.Handler {
 			if errMsg != "" {
 				entry.Error = errMsg
 			}
+		}
+
+		// Include request body for failed non-GET requests (redacted, truncated)
+		if wrapped.status >= 400 && requestBody != "" {
+			entry.RequestBody = prepareRequestBodyForLog(requestBody)
 		}
 
 		// Output JSON log
@@ -242,4 +261,94 @@ func RedactURLPath(path string) string {
 	// Rebuild the URL
 	u.RawQuery = query.Encode()
 	return u.String()
+}
+
+// sensitiveBodyFields lists JSON field names that contain secrets.
+// Values of these fields will be redacted in request body logs.
+var sensitiveBodyFields = []string{
+	"password",
+	"api_key",
+	"apikey",
+	"token",
+	"access_token",
+	"refresh_token",
+	"secret",
+	"credential",
+	"credentials",
+}
+
+// maxRequestBodyLogSize is the maximum size of request body to log (1KB).
+const maxRequestBodyLogSize = 1024
+
+// prepareRequestBodyForLog redacts sensitive fields and truncates the body for logging.
+func prepareRequestBodyForLog(body string) string {
+	// First redact sensitive fields
+	redacted := RedactRequestBody(body)
+
+	// Then truncate if needed
+	if len(redacted) > maxRequestBodyLogSize {
+		return redacted[:maxRequestBodyLogSize] + "...[truncated]"
+	}
+
+	return redacted
+}
+
+// RedactRequestBody redacts sensitive fields from a JSON request body.
+// Fields like password, api_key, token will have their values replaced with ***REDACTED***.
+func RedactRequestBody(body string) string {
+	if body == "" {
+		return body
+	}
+
+	// Try to parse as JSON
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(body), &data); err != nil {
+		// Not valid JSON, return as-is (or could apply simple regex redaction)
+		return body
+	}
+
+	// Recursively redact sensitive fields
+	redactMapValues(data)
+
+	// Re-serialize
+	result, err := json.Marshal(data)
+	if err != nil {
+		return body
+	}
+
+	return string(result)
+}
+
+// redactMapValues recursively redacts sensitive field values in a map.
+func redactMapValues(data map[string]interface{}) {
+	for key, value := range data {
+		// Check if this key is sensitive
+		if isSensitiveField(key) {
+			data[key] = "***REDACTED***"
+			continue
+		}
+
+		// Recursively handle nested maps
+		switch v := value.(type) {
+		case map[string]interface{}:
+			redactMapValues(v)
+		case []interface{}:
+			for _, item := range v {
+				if m, ok := item.(map[string]interface{}); ok {
+					redactMapValues(m)
+				}
+			}
+		}
+	}
+}
+
+// isSensitiveField checks if a field name is sensitive (case-insensitive).
+func isSensitiveField(fieldName string) bool {
+	lowerField := strings.ToLower(fieldName)
+	for _, sensitive := range sensitiveBodyFields {
+		if lowerField == sensitive {
+			return true
+		}
+	}
+	return false
 }

@@ -4,6 +4,7 @@ package response
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 )
 
@@ -152,4 +153,64 @@ func WriteRateLimited(w http.ResponseWriter, message string) {
 // WriteInternalError writes a 500 Internal Server Error response.
 func WriteInternalError(w http.ResponseWriter, message string) {
 	WriteError(w, http.StatusInternalServerError, ErrCodeInternalError, message)
+}
+
+// LogContext provides additional context for error logging.
+// Use this to pass request-specific information to error logs.
+type LogContext struct {
+	Operation string            // The operation that failed (e.g., "FindByID", "Create")
+	Resource  string            // The resource being operated on (e.g., "post", "agent")
+	RequestID string            // The request ID for correlation
+	Extra     map[string]string // Additional key-value pairs for context
+}
+
+// WriteInternalErrorWithLog writes a 500 response AND logs the actual error with context.
+// This ensures internal errors are visible in logs for debugging while still returning
+// a safe generic message to clients.
+//
+// Per FIX-011: Handlers should use this instead of WriteInternalError when they have
+// an error to log. The logged error includes:
+// - The error message (to client)
+// - The actual error (to logs)
+// - Operation context (to logs)
+// - Request ID for correlation (to logs)
+// - Any extra context (to logs)
+//
+// Example usage:
+//
+//	ctx := response.LogContext{
+//	    Operation: "FindByID",
+//	    Resource:  "post",
+//	    RequestID: r.Header.Get("X-Request-ID"),
+//	    Extra:     map[string]string{"postID": postID},
+//	}
+//	response.WriteInternalErrorWithLog(w, "failed to get post", err, ctx, logger)
+func WriteInternalErrorWithLog(w http.ResponseWriter, message string, err error, ctx LogContext, logger *slog.Logger) {
+	// Log the error with full context
+	if logger != nil {
+		attrs := []any{
+			"error", err.Error(),
+		}
+
+		// Add optional context fields
+		if ctx.Operation != "" {
+			attrs = append(attrs, "operation", ctx.Operation)
+		}
+		if ctx.Resource != "" {
+			attrs = append(attrs, "resource", ctx.Resource)
+		}
+		if ctx.RequestID != "" {
+			attrs = append(attrs, "request_id", ctx.RequestID)
+		}
+
+		// Add extra context
+		for k, v := range ctx.Extra {
+			attrs = append(attrs, k, v)
+		}
+
+		logger.Error(message, attrs...)
+	}
+
+	// Write the HTTP response (generic message to client)
+	WriteInternalError(w, message)
 }

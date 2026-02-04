@@ -165,7 +165,7 @@
       "Review all handlers/*.go for missing error logging",
       "Test: GET /posts/invalid logs the actual DB error"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-012",

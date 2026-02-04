@@ -7087,3 +7087,17 @@ Also, FeedRepository didn't exist in the db package.
     CapturesErrorFor4xx, HandlesNonJSONError
   - All middleware tests passing (40+ tests)
   - File size: 245 lines (under 800 limit)
+
+- 2026-02-04: [FIX-011] Log actual errors in handlers before returning 500 ✓
+  - Created WriteInternalErrorWithLog() in response package with LogContext struct
+  - Function logs error with slog.Error() before writing HTTP response
+  - LogContext includes: Operation, Resource, RequestID, and Extra map for context
+  - Added 4 tests for the new function: basic, minimal context, nil logger, extra fields
+  - Updated PostsHandler to use logger with slog:
+    - Added logger field and SetLogger() method to PostsHandler
+    - Updated List, Get, Create, Update, Delete, Vote methods to log errors
+    - Errors now include operation name, resource type, request ID, and IDs
+  - Pattern established for other handlers to follow:
+    ctx := response.LogContext{Operation: "X", Resource: "Y", RequestID: r.Header.Get("X-Request-ID"), Extra: ...}
+    response.WriteInternalErrorWithLog(w, "message", err, ctx, h.logger)
+  - All tests passing, file sizes: posts.go=591, response.go=216 (under 800 limit)

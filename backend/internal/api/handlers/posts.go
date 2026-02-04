@@ -5,9 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 
+	"github.com/fcavalcantirj/solvr/internal/api/response"
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -37,12 +40,22 @@ type PostsRepositoryInterface interface {
 
 // PostsHandler handles post-related HTTP requests.
 type PostsHandler struct {
-	repo PostsRepositoryInterface
+	repo   PostsRepositoryInterface
+	logger *slog.Logger
 }
 
 // NewPostsHandler creates a new PostsHandler.
 func NewPostsHandler(repo PostsRepositoryInterface) *PostsHandler {
-	return &PostsHandler{repo: repo}
+	return &PostsHandler{
+		repo:   repo,
+		logger: slog.New(slog.NewJSONHandler(os.Stderr, nil)),
+	}
+}
+
+// SetLogger sets a custom logger for the handler.
+// This is useful for testing or custom logging configurations.
+func (h *PostsHandler) SetLogger(logger *slog.Logger) {
+	h.logger = logger
 }
 
 // CreatePostRequest is the request body for creating a post.
@@ -161,7 +174,12 @@ func (h *PostsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Execute query
 	posts, total, err := h.repo.List(r.Context(), opts)
 	if err != nil {
-		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list posts")
+		ctx := response.LogContext{
+			Operation: "List",
+			Resource:  "posts",
+			RequestID: r.Header.Get("X-Request-ID"),
+		}
+		response.WriteInternalErrorWithLog(w, "failed to list posts", err, ctx, h.logger)
 		return
 	}
 
@@ -195,7 +213,13 @@ func (h *PostsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
 			return
 		}
-		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get post")
+		ctx := response.LogContext{
+			Operation: "FindByID",
+			Resource:  "post",
+			RequestID: r.Header.Get("X-Request-ID"),
+			Extra:     map[string]string{"postID": postID},
+		}
+		response.WriteInternalErrorWithLog(w, "failed to get post", err, ctx, h.logger)
 		return
 	}
 
@@ -289,7 +313,17 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	createdPost, err := h.repo.Create(r.Context(), post)
 	if err != nil {
-		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create post")
+		ctx := response.LogContext{
+			Operation: "Create",
+			Resource:  "post",
+			RequestID: r.Header.Get("X-Request-ID"),
+			Extra: map[string]string{
+				"type":       string(postType),
+				"authorType": string(authInfo.authorType),
+				"authorID":   authInfo.authorID,
+			},
+		}
+		response.WriteInternalErrorWithLog(w, "failed to create post", err, ctx, h.logger)
 		return
 	}
 
@@ -321,7 +355,13 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
 			return
 		}
-		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get post")
+		ctx := response.LogContext{
+			Operation: "FindByID",
+			Resource:  "post",
+			RequestID: r.Header.Get("X-Request-ID"),
+			Extra:     map[string]string{"postID": postID, "caller": "Update"},
+		}
+		response.WriteInternalErrorWithLog(w, "failed to get post", err, ctx, h.logger)
 		return
 	}
 
@@ -381,7 +421,13 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.repo.Update(r.Context(), &updatedPost)
 	if err != nil {
-		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update post")
+		ctx := response.LogContext{
+			Operation: "Update",
+			Resource:  "post",
+			RequestID: r.Header.Get("X-Request-ID"),
+			Extra:     map[string]string{"postID": postID},
+		}
+		response.WriteInternalErrorWithLog(w, "failed to update post", err, ctx, h.logger)
 		return
 	}
 
@@ -413,7 +459,13 @@ func (h *PostsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
 			return
 		}
-		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get post")
+		ctx := response.LogContext{
+			Operation: "FindByID",
+			Resource:  "post",
+			RequestID: r.Header.Get("X-Request-ID"),
+			Extra:     map[string]string{"postID": postID, "caller": "Delete"},
+		}
+		response.WriteInternalErrorWithLog(w, "failed to get post", err, ctx, h.logger)
 		return
 	}
 
@@ -427,7 +479,13 @@ func (h *PostsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.Delete(r.Context(), postID); err != nil {
-		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete post")
+		ctx := response.LogContext{
+			Operation: "Delete",
+			Resource:  "post",
+			RequestID: r.Header.Get("X-Request-ID"),
+			Extra:     map[string]string{"postID": postID},
+		}
+		response.WriteInternalErrorWithLog(w, "failed to delete post", err, ctx, h.logger)
 		return
 	}
 
@@ -470,7 +528,13 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
 			return
 		}
-		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get post")
+		ctx := response.LogContext{
+			Operation: "FindByID",
+			Resource:  "post",
+			RequestID: r.Header.Get("X-Request-ID"),
+			Extra:     map[string]string{"postID": postID, "caller": "Vote"},
+		}
+		response.WriteInternalErrorWithLog(w, "failed to get post", err, ctx, h.logger)
 		return
 	}
 
@@ -487,7 +551,18 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 			writePostsError(w, http.StatusConflict, "DUPLICATE_VOTE", "you have already voted on this post")
 			return
 		}
-		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to record vote")
+		ctx := response.LogContext{
+			Operation: "Vote",
+			Resource:  "post",
+			RequestID: r.Header.Get("X-Request-ID"),
+			Extra: map[string]string{
+				"postID":    postID,
+				"direction": req.Direction,
+				"voterType": string(authInfo.authorType),
+				"voterID":   authInfo.authorID,
+			},
+		}
+		response.WriteInternalErrorWithLog(w, "failed to record vote", err, ctx, h.logger)
 		return
 	}
 

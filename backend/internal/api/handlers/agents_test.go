@@ -454,9 +454,7 @@ func TestGetAgent_NotFound(t *testing.T) {
 	}
 }
 
-// TestGetAgent_NotFound_DBError tests that db.ErrAgentNotFound returns 404 NOT_FOUND
-// instead of 500 INTERNAL_ERROR. This verifies FIX-026.
-// This test simulates the real DB layer behavior by returning db.ErrAgentNotFound.
+// TestGetAgent_NotFound_DBError verifies FIX-026: db.ErrAgentNotFound returns 404.
 func TestGetAgent_NotFound_DBError(t *testing.T) {
 	repo := NewMockAgentRepository()
 	handler := NewAgentsHandler(repo, "test-jwt-secret")
@@ -800,6 +798,4 @@ func TestUpdateAgent_NeverReturnsAPIKey(t *testing.T) {
 }
 
 // Helper function for string pointers
-func strPtr(s string) *string {
-	return &s
-}
+func strPtr(s string) *string { return &s }

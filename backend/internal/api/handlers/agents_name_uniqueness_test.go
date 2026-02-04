@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
@@ -24,6 +25,7 @@ type DuplicateNameErrorResponse struct {
 type MockAgentRepoWithSuggestions struct {
 	agents       map[string]*models.Agent
 	agentsByName map[string]*models.Agent
+	createErr    error // FIX-027: Allow setting error to simulate DB behavior
 }
 
 func NewMockAgentRepoWithSuggestions() *MockAgentRepoWithSuggestions {
@@ -34,6 +36,10 @@ func NewMockAgentRepoWithSuggestions() *MockAgentRepoWithSuggestions {
 }
 
 func (m *MockAgentRepoWithSuggestions) Create(ctx context.Context, agent *models.Agent) error {
+	// FIX-027: Return createErr if set (simulates DB errors)
+	if m.createErr != nil {
+		return m.createErr
+	}
 	// Check for duplicate name (display_name)
 	if _, exists := m.agentsByName[agent.DisplayName]; exists {
 		return ErrDuplicateAgentName
@@ -365,5 +371,90 @@ func TestNameUniqueness_CaseSensitive(t *testing.T) {
 
 	if rr2.Code != http.StatusConflict {
 		t.Errorf("expected status 409 for duplicate name, got %d", rr2.Code)
+	}
+}
+
+// ============================================================================
+// FIX-027: Tests for db.ErrDuplicateAgentID returning 409 CONFLICT
+// ============================================================================
+
+// TestRegisterAgent_DuplicateName_DBError_NameUniqueness tests that db.ErrDuplicateAgentID
+// returns 409 CONFLICT instead of 500 INTERNAL_ERROR when the real DB layer returns
+// a duplicate key error. This verifies FIX-027.
+func TestRegisterAgent_DuplicateName_DBError_NameUniqueness(t *testing.T) {
+	repo := NewMockAgentRepoWithSuggestions()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	// Set the createErr to return db.ErrDuplicateAgentID (like the real DB layer does)
+	repo.createErr = db.ErrDuplicateAgentID
+
+	reqBody := RegisterAgentRequest{
+		Name:        "test_agent",
+		Description: "Test description",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	handler.RegisterAgent(rr, req)
+
+	// Should return 409 CONFLICT, not 500 INTERNAL_ERROR
+	if rr.Code != http.StatusConflict {
+		t.Errorf("FIX-027: expected status 409, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var errResp map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&errResp)
+	errorObj := errResp["error"].(map[string]interface{})
+	if errorObj["code"] != "DUPLICATE_NAME" {
+		t.Errorf("FIX-027: expected error code DUPLICATE_NAME, got %s", errorObj["code"])
+	}
+	if errorObj["message"] != "agent name already exists" {
+		t.Errorf("FIX-027: expected message 'agent name already exists', got %s", errorObj["message"])
+	}
+	// Verify suggestions are provided
+	suggestions, ok := errorObj["suggestions"]
+	if !ok {
+		t.Error("FIX-027: expected suggestions in error response")
+	} else if len(suggestions.([]interface{})) == 0 {
+		t.Error("FIX-027: expected non-empty suggestions array")
+	}
+}
+
+// TestCreateAgent_DuplicateID_DBError_NameUniqueness tests that db.ErrDuplicateAgentID
+// returns 409 CONFLICT instead of 500 INTERNAL_ERROR when the real DB layer returns
+// a duplicate key error. This verifies FIX-027 for the CreateAgent endpoint.
+func TestCreateAgent_DuplicateID_DBError_NameUniqueness(t *testing.T) {
+	repo := NewMockAgentRepoWithSuggestions()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	// Set the createErr to return db.ErrDuplicateAgentID (like the real DB layer does)
+	repo.createErr = db.ErrDuplicateAgentID
+
+	reqBody := CreateAgentRequest{
+		ID:          "my_agent",
+		DisplayName: "My Agent",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = addJWTClaimsToContext(req, "user-123", "user@example.com", "user")
+
+	rr := httptest.NewRecorder()
+	handler.CreateAgent(rr, req)
+
+	// Should return 409 CONFLICT, not 500 INTERNAL_ERROR
+	if rr.Code != http.StatusConflict {
+		t.Errorf("FIX-027: expected status 409, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var errResp map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&errResp)
+	errorObj := errResp["error"].(map[string]interface{})
+	if errorObj["code"] != "DUPLICATE_ID" {
+		t.Errorf("FIX-027: expected error code DUPLICATE_ID, got %s", errorObj["code"])
 	}
 }

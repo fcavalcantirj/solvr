@@ -221,7 +221,9 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.Create(r.Context(), agent); err != nil {
-		if errors.Is(err, ErrDuplicateAgentID) || errors.Is(err, ErrDuplicateAgentName) {
+		// FIX-027: Check for both local errors (mock) and db errors (real DB)
+		if errors.Is(err, ErrDuplicateAgentID) || errors.Is(err, ErrDuplicateAgentName) ||
+			errors.Is(err, db.ErrDuplicateAgentID) {
 			// Generate suggestions by checking existence against repository
 			checkExists := func(name string) bool {
 				_, findErr := h.repo.FindByName(r.Context(), name)
@@ -316,7 +318,8 @@ func (h *AgentsHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.Create(r.Context(), agent); err != nil {
-		if errors.Is(err, ErrDuplicateAgentID) {
+		// FIX-027: Check for both local ErrDuplicateAgentID (mock) and db.ErrDuplicateAgentID (real DB)
+		if errors.Is(err, ErrDuplicateAgentID) || errors.Is(err, db.ErrDuplicateAgentID) {
 			writeAgentError(w, http.StatusConflict, "DUPLICATE_ID", "agent ID already exists")
 			return
 		}

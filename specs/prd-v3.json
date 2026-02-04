@@ -405,7 +405,7 @@
       "Include suggestion for alternative names",
       "Test: Register same name twice returns 409"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FIX-028",

@@ -7391,3 +7391,21 @@ Also, FeedRepository didn't exist in the db package.
     - Updated 5 locations: GetAgent, UpdateAgent, RegenerateAPIKey, RevokeAPIKey, GetActivity
   - All tests pass (GREEN phase)
   - File sizes: agents.go=689 (under 800)
+
+
+- 2026-02-04: [FIX-027] Return proper error for duplicate agent name (CONFLICT not INTERNAL_ERROR) ✓
+  - Root cause: handlers checked for handlers.ErrDuplicateAgentID but real DB returns db.ErrDuplicateAgentID
+  - Similar issue to FIX-026 (different error instances between handler and db packages)
+  - TDD approach followed:
+    1. Added failing tests first: TestRegisterAgent_DuplicateName_DBError_NameUniqueness,
+       TestCreateAgent_DuplicateID_DBError_NameUniqueness
+    2. Tests in agents_name_uniqueness_test.go (related to duplicate name handling)
+    3. Tests initially failed with 500 INTERNAL_ERROR (RED phase)
+  - Solution: Check for db.ErrDuplicateAgentID in addition to local error types
+    - RegisterAgent: Added check for db.ErrDuplicateAgentID in error handling
+    - CreateAgent: Added check for db.ErrDuplicateAgentID in error handling
+    - Both now return 409 CONFLICT with appropriate error codes
+  - RegisterAgent returns: 409 CONFLICT with code DUPLICATE_NAME and suggestions
+  - CreateAgent returns: 409 CONFLICT with code DUPLICATE_ID
+  - File sizes: agents.go=689, agents_test.go=800, agents_name_uniqueness_test.go=460 (all under 800)
+  - All tests passing: go test ./... passes

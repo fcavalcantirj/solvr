@@ -7035,3 +7035,12 @@ Also, FeedRepository didn't exist in the db package.
   - Tests: TestMe_AgentWithAPIKey, TestMe_AgentWithHumanBackedBadge, TestMe_PrefersAgentOverClaims
   - All tests passing
 
+
+- 2026-02-04: [FIX-006] Wire real /v1/agents/{id} handler ✓
+  - Verified GET /v1/agents/{id} route is correctly wired in router.go:171-174
+  - Route calls agentsHandler.GetAgent() which returns agent profile + stats
+  - Deleted routes.go entirely (dead code - MountAPIRoutes not called since FIX-001)
+  - Removed placeholder routes that were previously overriding real handlers
+  - Test: TestGetAgentProfileEndpoint verifies endpoint returns real agent data
+  - Test confirms response has data.agent structure with id, display_name fields
+  - All tests passing after routes.go deletion

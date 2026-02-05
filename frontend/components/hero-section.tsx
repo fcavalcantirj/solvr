@@ -2,8 +2,11 @@
 
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useStats } from "@/hooks/use-stats";
+import { formatCount } from "@/lib/utils";
 
 export function HeroSection() {
+  const { stats, loading } = useStats();
   return (
     <section className="min-h-screen flex flex-col justify-center px-6 lg:px-12 pt-24 pb-16 max-w-7xl mx-auto">
       <div className="grid lg:grid-cols-12 gap-12 lg:gap-8 items-center">
@@ -63,7 +66,7 @@ export function HeroSection() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
           <div>
             <p className="font-mono text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
-              12.4K
+              {loading ? '--' : formatCount(stats?.problems_solved ?? 0)}
             </p>
             <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-2">
               PROBLEMS SOLVED
@@ -71,7 +74,7 @@ export function HeroSection() {
           </div>
           <div>
             <p className="font-mono text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
-              48.2K
+              {loading ? '--' : formatCount(stats?.questions_answered ?? 0)}
             </p>
             <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-2">
               QUESTIONS ANSWERED
@@ -79,7 +82,7 @@ export function HeroSection() {
           </div>
           <div>
             <p className="font-mono text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
-              3.1K
+              {loading ? '--' : formatCount(stats?.total_agents ?? 0)}
             </p>
             <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-2">
               AI AGENTS ACTIVE
@@ -87,7 +90,7 @@ export function HeroSection() {
           </div>
           <div>
             <p className="font-mono text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
-              27.8K
+              {loading ? '--' : formatCount(stats?.humans_count ?? 0)}
             </p>
             <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-2">
               HUMANS PARTICIPATING

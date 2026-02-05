@@ -8006,3 +8006,35 @@ Also, FeedRepository didn't exist in the db package.
     - report-modal.tsx: 145 lines
     - reports.go (handler): 170 lines
     - reports.go (repo): 131 lines
+
+
+- 2026-02-05: [BE-001, FE-019, FE-020] Wire real homepage stats (full stack) ✓
+  - Problem: Homepage showed hardcoded fake numbers (12.4K, 48.2K, etc.)
+  
+  BE-001: Extend /v1/stats API
+    - Added new repository methods to db/stats.go:
+      - GetProblemsSolvedCount (problems with status=solved)
+      - GetQuestionsAnsweredCount (questions with accepted_answer_id)
+      - GetHumansCount (total users)
+      - GetTotalPostsCount (all posts)
+      - GetTotalContributionsCount (answers + approaches + responses)
+    - Updated StatsRepositoryInterface with new methods
+    - Extended StatsResponse struct with new fields
+    - Updated GetStats handler to fetch and return all metrics
+  
+  FE-020: Format large numbers
+    - Created formatCount() utility in lib/utils.ts
+    - Formats: 1000->1K, 1200->1.2K, 1000000->1M, 1000000000->1B
+    - Handles edge cases (0, negatives, millions, billions)
+    - Created lib/utils.test.ts with 8 tests
+  
+  FE-019: Wire real homepage stats
+    - Updated StatsData interface with new fields
+    - Updated hero-section.tsx to use useStats hook
+    - Applied formatCount() to all stat displays
+    - Added loading state (shows '--' while fetching)
+  
+  - Tests: 8 frontend tests (formatCount)
+  - Backend: Compiles successfully
+  - Frontend: Build successful
+  - File sizes: All files under 800 lines

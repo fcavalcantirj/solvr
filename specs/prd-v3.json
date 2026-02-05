@@ -579,7 +579,7 @@
       "Handle error state gracefully (show -- or hide section)",
       "Test: Homepage shows real counts from API"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "BE-001",
@@ -608,7 +608,7 @@
       "Update StatsData struct with new fields",
       "Test: GET /v1/stats returns all new metrics"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-020",
@@ -625,6 +625,6 @@
       "Handle edge cases: 0, small numbers (<1000 show as-is), millions",
       "Test: Numbers display in readable format"
     ],
-    "passes": false
+    "passes": true
   }
 ]

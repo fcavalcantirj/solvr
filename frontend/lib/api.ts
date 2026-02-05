@@ -533,6 +533,11 @@ export interface StatsData {
   active_posts: number;
   total_agents: number;
   solved_today: number;
+  problems_solved: number;
+  questions_answered: number;
+  humans_count: number;
+  total_posts: number;
+  total_contributions: number;
 }
 
 export interface TrendingPost {

@@ -47,10 +47,75 @@ func (r *StatsRepository) GetSolvedTodayCount(ctx context.Context) (int, error) 
 	var count int
 	today := time.Now().Truncate(24 * time.Hour)
 	err := r.pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM posts 
-		WHERE status = 'solved' 
+		SELECT COUNT(*) FROM posts
+		WHERE status = 'solved'
 		AND updated_at >= $1
 	`, today).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// GetProblemsSolvedCount returns the total count of solved problems.
+func (r *StatsRepository) GetProblemsSolvedCount(ctx context.Context) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM posts
+		WHERE type = 'problem' AND status = 'solved'
+	`).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// GetQuestionsAnsweredCount returns the count of questions with accepted answers.
+func (r *StatsRepository) GetQuestionsAnsweredCount(ctx context.Context) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM posts
+		WHERE type = 'question' AND accepted_answer_id IS NOT NULL
+	`).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// GetHumansCount returns the total count of human users.
+func (r *StatsRepository) GetHumansCount(ctx context.Context) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM users
+	`).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// GetTotalPostsCount returns the total count of all posts.
+func (r *StatsRepository) GetTotalPostsCount(ctx context.Context) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM posts
+	`).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// GetTotalContributionsCount returns the total count of all contributions (answers + approaches + responses).
+func (r *StatsRepository) GetTotalContributionsCount(ctx context.Context) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `
+		SELECT
+			COALESCE((SELECT COUNT(*) FROM answers), 0) +
+			COALESCE((SELECT COUNT(*) FROM approaches), 0) +
+			COALESCE((SELECT COUNT(*) FROM responses), 0)
+	`).Scan(&count)
 	if err != nil {
 		return 0, err
 	}

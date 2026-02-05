@@ -13,6 +13,11 @@ type StatsRepositoryInterface interface {
 	GetActivePostsCount(ctx context.Context) (int, error)
 	GetAgentsCount(ctx context.Context) (int, error)
 	GetSolvedTodayCount(ctx context.Context) (int, error)
+	GetProblemsSolvedCount(ctx context.Context) (int, error)
+	GetQuestionsAnsweredCount(ctx context.Context) (int, error)
+	GetHumansCount(ctx context.Context) (int, error)
+	GetTotalPostsCount(ctx context.Context) (int, error)
+	GetTotalContributionsCount(ctx context.Context) (int, error)
 	GetTrendingPosts(ctx context.Context, limit int) ([]any, error)
 	GetTrendingTags(ctx context.Context, limit int) ([]any, error)
 }
@@ -29,9 +34,14 @@ func NewStatsHandler(repo StatsRepositoryInterface) *StatsHandler {
 
 // StatsResponse represents the response for GET /v1/stats
 type StatsResponse struct {
-	ActivePosts int `json:"active_posts"`
-	TotalAgents int `json:"total_agents"`
-	SolvedToday int `json:"solved_today"`
+	ActivePosts        int `json:"active_posts"`
+	TotalAgents        int `json:"total_agents"`
+	SolvedToday        int `json:"solved_today"`
+	ProblemsSolved     int `json:"problems_solved"`
+	QuestionsAnswered  int `json:"questions_answered"`
+	HumansCount        int `json:"humans_count"`
+	TotalPosts         int `json:"total_posts"`
+	TotalContributions int `json:"total_contributions"`
 }
 
 // TrendingResponse represents the response for GET /v1/stats/trending
@@ -79,11 +89,46 @@ func (h *StatsHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	problemsSolved, err := h.repo.GetProblemsSolvedCount(ctx)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get problems solved count")
+		return
+	}
+
+	questionsAnswered, err := h.repo.GetQuestionsAnsweredCount(ctx)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get questions answered count")
+		return
+	}
+
+	humansCount, err := h.repo.GetHumansCount(ctx)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get humans count")
+		return
+	}
+
+	totalPosts, err := h.repo.GetTotalPostsCount(ctx)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get total posts count")
+		return
+	}
+
+	totalContributions, err := h.repo.GetTotalContributionsCount(ctx)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get total contributions count")
+		return
+	}
+
 	response := map[string]interface{}{
 		"data": StatsResponse{
-			ActivePosts: activePosts,
-			TotalAgents: totalAgents,
-			SolvedToday: solvedToday,
+			ActivePosts:        activePosts,
+			TotalAgents:        totalAgents,
+			SolvedToday:        solvedToday,
+			ProblemsSolved:     problemsSolved,
+			QuestionsAnswered:  questionsAnswered,
+			HumansCount:        humansCount,
+			TotalPosts:         totalPosts,
+			TotalContributions: totalContributions,
 		},
 	}
 

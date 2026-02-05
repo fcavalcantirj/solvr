@@ -416,6 +416,38 @@ class SolvrAPI {
       body: JSON.stringify({ content, response_type: responseType }),
     });
   }
+
+  // Profile update
+  async updateProfile(data: { display_name?: string; bio?: string }): Promise<APIMeResponse> {
+    return this.fetch<APIMeResponse>('/v1/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // API Keys management
+  async listAPIKeys(): Promise<APIKeysListResponse> {
+    return this.fetch<APIKeysListResponse>('/v1/users/me/api-keys');
+  }
+
+  async createAPIKey(name: string): Promise<APIKeyCreateResponse> {
+    return this.fetch<APIKeyCreateResponse>('/v1/users/me/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async revokeAPIKey(id: string): Promise<void> {
+    await this.fetch<void>(`/v1/users/me/api-keys/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async regenerateAPIKey(id: string): Promise<APIKeyCreateResponse> {
+    return this.fetch<APIKeyCreateResponse>(`/v1/users/me/api-keys/${id}/regenerate`, {
+      method: 'POST',
+    });
+  }
 }
 
 export interface APIAddBookmarkResponse {
@@ -771,5 +803,33 @@ export interface APIIdeaResponsesResponse {
     page: number;
     per_page: number;
     has_more: boolean;
+  };
+}
+
+// ========================
+// API Keys types
+// ========================
+
+export interface APIKey {
+  id: string;
+  name: string;
+  key_preview: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface APIKeysListResponse {
+  data: APIKey[];
+  meta: {
+    total: number;
+  };
+}
+
+export interface APIKeyCreateResponse {
+  data: {
+    id: string;
+    name: string;
+    key: string; // Full key, shown once only
+    created_at: string;
   };
 }

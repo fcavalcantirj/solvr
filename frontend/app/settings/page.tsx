@@ -1,100 +1,192 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { Settings, Key, Bell, AlertTriangle } from "lucide-react";
-import Link from "next/link";
+import { useProfileEdit } from "@/hooks/use-profile-edit";
+import { SettingsLayout } from "@/components/settings/settings-layout";
+import { Button } from "@/components/ui/button";
+import { Loader2, Check, AlertCircle, User } from "lucide-react";
 
 export default function SettingsPage() {
-  const router = useRouter();
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { user } = useAuth();
+  const { saving, error, success, updateProfile, clearStatus } = useProfileEdit();
 
+  const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
+  const [hasChanges, setHasChanges] = useState(false);
+
+  // Initialize form with user data
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push("/login");
+    if (user) {
+      setDisplayName(user.displayName || "");
+      // Bio would come from user profile - for now we start empty
+      setBio("");
     }
-  }, [isLoading, isAuthenticated, router]);
+  }, [user]);
 
-  if (isLoading) {
-    return (
-      <main className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin" />
-      </main>
-    );
-  }
+  // Track changes
+  useEffect(() => {
+    if (user) {
+      const nameChanged = displayName !== (user.displayName || "");
+      const bioChanged = bio !== "";
+      setHasChanges(nameChanged || bioChanged);
+    }
+  }, [displayName, bio, user]);
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  // Clear status after a delay
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(clearStatus, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [success, clearStatus]);
 
-  const menuItems = [
-    { label: "PROFILE", href: "/settings", icon: Settings, active: true },
-    { label: "API KEYS", href: "/settings/api-keys", icon: Key },
-    { label: "NOTIFICATIONS", href: "/settings/notifications", icon: Bell },
-    { label: "DANGER ZONE", href: "/settings/danger", icon: AlertTriangle },
-  ];
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!hasChanges) return;
+
+    const data: { display_name?: string; bio?: string } = {};
+    if (displayName !== user?.displayName) {
+      data.display_name = displayName;
+    }
+    if (bio) {
+      data.bio = bio;
+    }
+
+    const success = await updateProfile(data);
+    if (success) {
+      // Optionally reload to refresh user context
+      window.location.reload();
+    }
+  };
 
   return (
-    <main className="min-h-screen bg-background pt-24 pb-16">
-      <div className="max-w-5xl mx-auto px-6 lg:px-12">
-        <div className="flex gap-12">
-          {/* Sidebar */}
-          <nav className="w-48 space-y-1">
-            {menuItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 px-4 py-2.5 font-mono text-xs tracking-wider transition-colors ${
-                  item.active
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                }`}
-              >
-                <item.icon size={14} />
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-
-          {/* Content */}
-          <div className="flex-1">
-            <div className="border border-border p-8">
-              <h1 className="font-mono text-xl tracking-tight mb-2">Profile Settings</h1>
-              <p className="font-mono text-sm text-muted-foreground mb-8">
-                Manage your account settings and preferences
-              </p>
-
-              <div className="space-y-6">
-                <div>
-                  <label className="font-mono text-xs tracking-wider text-muted-foreground">
-                    DISPLAY NAME
-                  </label>
-                  <p className="font-mono text-sm mt-1">{user?.displayName}</p>
-                </div>
-                <div>
-                  <label className="font-mono text-xs tracking-wider text-muted-foreground">
-                    EMAIL
-                  </label>
-                  <p className="font-mono text-sm mt-1">{user?.email || "Not set"}</p>
-                </div>
-                <div>
-                  <label className="font-mono text-xs tracking-wider text-muted-foreground">
-                    ACCOUNT TYPE
-                  </label>
-                  <p className="font-mono text-sm mt-1 capitalize">{user?.type}</p>
-                </div>
-              </div>
-
-              <div className="mt-8 pt-8 border-t border-border">
-                <p className="font-mono text-xs text-muted-foreground">
-                  Profile editing coming soon...
-                </p>
-              </div>
-            </div>
+    <SettingsLayout>
+      {/* Profile Information Card */}
+      <div className="border border-border p-8 mb-6">
+        <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-6">
+          PROFILE INFORMATION
+        </h2>
+        <div className="flex items-start gap-6">
+          <div className="w-20 h-20 bg-foreground text-background flex items-center justify-center flex-shrink-0">
+            <span className="font-mono text-2xl font-bold">
+              {user?.displayName?.slice(0, 2).toUpperCase() || "??"}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-mono text-2xl tracking-tight truncate">
+              {user?.displayName || "Unknown User"}
+            </h3>
+            <p className="font-mono text-sm text-muted-foreground mt-1">
+              @{user?.id?.slice(0, 8) || "unknown"}
+            </p>
+            <p className="font-mono text-xs text-muted-foreground mt-2">
+              Member since {new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+            </p>
           </div>
         </div>
       </div>
-    </main>
+
+      {/* Edit Profile Form */}
+      <div className="border border-border p-8 mb-6">
+        <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-6">
+          EDIT PROFILE
+        </h2>
+
+        {error && (
+          <div className="flex items-center gap-2 bg-destructive/10 border border-destructive text-destructive px-4 py-3 mb-6">
+            <AlertCircle size={16} />
+            <span className="font-mono text-xs">{error}</span>
+          </div>
+        )}
+
+        {success && (
+          <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500 text-emerald-600 px-4 py-3 mb-6">
+            <Check size={16} />
+            <span className="font-mono text-xs">Profile updated successfully</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="font-mono text-xs tracking-wider text-muted-foreground block mb-2">
+              DISPLAY NAME
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              maxLength={50}
+              className="w-full bg-secondary/50 border border-border px-4 py-3 font-mono text-sm focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
+              placeholder="Your display name"
+            />
+            <p className="font-mono text-[10px] text-muted-foreground mt-1">
+              {displayName.length}/50 characters
+            </p>
+          </div>
+
+          <div>
+            <label className="font-mono text-xs tracking-wider text-muted-foreground block mb-2">
+              BIO
+            </label>
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              maxLength={500}
+              rows={4}
+              className="w-full bg-secondary/50 border border-border px-4 py-3 font-mono text-sm resize-none focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
+              placeholder="Tell us about yourself..."
+            />
+            <p className="font-mono text-[10px] text-muted-foreground mt-1">
+              {bio.length}/500 characters
+            </p>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              disabled={!hasChanges || saving}
+              className="font-mono text-xs tracking-wider"
+            >
+              {saving && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+              {saving ? "SAVING..." : "SAVE CHANGES"}
+            </Button>
+          </div>
+        </form>
+      </div>
+
+      {/* Account Details (Read-only) */}
+      <div className="border border-border p-8">
+        <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-6">
+          ACCOUNT DETAILS
+        </h2>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <span className="font-mono text-xs tracking-wider text-muted-foreground">
+              EMAIL
+            </span>
+            <span className="font-mono text-sm">
+              {user?.email || "Not set"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <span className="font-mono text-xs tracking-wider text-muted-foreground">
+              ACCOUNT TYPE
+            </span>
+            <span className="font-mono text-sm uppercase">
+              {user?.type || "Unknown"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <span className="font-mono text-xs tracking-wider text-muted-foreground">
+              USER ID
+            </span>
+            <span className="font-mono text-xs text-muted-foreground">
+              {user?.id || "Unknown"}
+            </span>
+          </div>
+        </div>
+      </div>
+    </SettingsLayout>
   );
 }

@@ -1172,7 +1172,7 @@
       "Test: No scan errors in logs after post creation",
       "Test: Created post data matches what's in database"
     ],
-    "passes": false,
+    "passes": true,
     "priority": "critical"
   }
 ]

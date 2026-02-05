@@ -209,14 +209,5 @@ func TestReportsRepository_HasReported(t *testing.T) {
 }
 
 func randomSuffix() string {
-	return models.AuthorTypeHuman.String() + "_test"
-}
-
-func init() {
-	// Helper to add String method for test suffix
-}
-
-// String returns the string representation of AuthorType
-func (a models.AuthorType) String() string {
-	return string(a)
+	return string(models.AuthorTypeHuman) + "_test"
 }

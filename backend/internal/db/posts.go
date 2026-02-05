@@ -279,6 +279,7 @@ func (r *PostRepository) scanPostRows(rows pgx.Rows) (*models.Post, error) {
 // Create inserts a new post into the database.
 // Returns the created post with generated ID and timestamps.
 func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models.Post, error) {
+	// FIX-030: RETURNING must include view_count to match scanPost expectations
 	query := `
 		INSERT INTO posts (
 			type, title, description, tags,
@@ -291,7 +292,7 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
 		RETURNING id, type, title, description, tags,
 			posted_by_type, posted_by_id, status,
-			upvotes, downvotes, success_criteria, weight,
+			upvotes, downvotes, view_count, success_criteria, weight,
 			accepted_answer_id, evolved_into,
 			created_at, updated_at, deleted_at
 	`

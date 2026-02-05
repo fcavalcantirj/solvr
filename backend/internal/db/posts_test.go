@@ -1788,3 +1788,70 @@ func TestPostRepository_Vote_InvalidVoterType(t *testing.T) {
 		t.Errorf("expected ErrInvalidVoterType, got %v", err)
 	}
 }
+
+// TestPostRepository_Create_ReturnsViewCount verifies that Create returns a post
+// with view_count field properly scanned from the RETURNING clause.
+// FIX-030: Create was missing view_count in RETURNING, causing scan mismatch error.
+func TestPostRepository_Create_ReturnsViewCount(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	ctx := context.Background()
+
+	post := &models.Post{
+		Type:         models.PostTypeProblem,
+		Title:        "Test ViewCount in Create Response",
+		Description:  "FIX-030: Create must return view_count to avoid scan error",
+		Tags:         []string{"fix-030"},
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent_viewcount",
+		Status:       models.PostStatusOpen,
+	}
+
+	// This should succeed without scan error
+	createdPost, err := repo.Create(ctx, post)
+	if err != nil {
+		t.Fatalf("Create() should not fail, but got error = %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", createdPost.ID)
+	}()
+
+	// Verify post was created and returned successfully
+	if createdPost.ID == "" {
+		t.Error("expected ID to be generated")
+	}
+
+	// Verify view_count is initialized to 0 (new posts have 0 views)
+	if createdPost.ViewCount != 0 {
+		t.Errorf("expected view_count to be 0 for new post, got %d", createdPost.ViewCount)
+	}
+
+	// Verify all other essential fields are populated
+	if createdPost.Type != models.PostTypeProblem {
+		t.Errorf("expected type problem, got %s", createdPost.Type)
+	}
+
+	if createdPost.Title != "Test ViewCount in Create Response" {
+		t.Errorf("expected correct title, got %s", createdPost.Title)
+	}
+
+	if createdPost.CreatedAt.IsZero() {
+		t.Error("expected created_at to be set")
+	}
+
+	// Additional verification: post can be found by ID after creation
+	foundPost, err := repo.FindByID(ctx, createdPost.ID)
+	if err != nil {
+		t.Fatalf("FindByID() after Create should work, but got error = %v", err)
+	}
+
+	if foundPost.ViewCount != 0 {
+		t.Errorf("expected view_count 0 from FindByID, got %d", foundPost.ViewCount)
+	}
+}

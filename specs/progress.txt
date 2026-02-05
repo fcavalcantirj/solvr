@@ -8117,3 +8117,25 @@ Also, FeedRepository didn't exist in the db package.
     - oauth_adapter.go: 50 lines
     - oauth.go: 756 lines
     - router.go: ~400 lines
+
+
+## 2026-02-05 - FIX-030: Fix POST /v1/posts returning error despite success
+
+**Problem:** Create returned INTERNAL_ERROR but post was actually created, causing client confusion and duplicate posts.
+
+**Root cause:** RETURNING clause in Create() was missing view_count column, causing scanPost() column mismatch.
+- RETURNING had 17 columns but scanPost expected 18
+
+**Fix:** Added view_count to the RETURNING clause in posts.go Create method:
+```sql
+RETURNING id, type, title, description, tags,
+    posted_by_type, posted_by_id, status,
+    upvotes, downvotes, view_count, success_criteria, weight,  -- Added view_count
+    accepted_answer_id, evolved_into,
+    created_at, updated_at, deleted_at
+```
+
+**Also fixed:** Pre-existing compilation error in reports_test.go (removed invalid method definition on non-local type)
+
+**Tests:** Added TestPostRepository_Create_ReturnsViewCount to verify view_count is returned
+

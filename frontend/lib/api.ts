@@ -349,6 +349,40 @@ class SolvrAPI {
     const params = new URLSearchParams({ target_type: targetType, target_id: targetId });
     return this.fetch<APICheckReportedResponse>(`/v1/reports/check?${params.toString()}`);
   }
+
+  // FE-024: User profile endpoints
+  async getUserProfile(userId: string): Promise<APIUserProfileResponse> {
+    return this.fetch<APIUserProfileResponse>(`/v1/users/${userId}`);
+  }
+
+  async getUserPosts(userId: string, params?: { page?: number; per_page?: number }): Promise<APIPostsResponse> {
+    const searchParams = new URLSearchParams();
+    // FE-024: Use posts endpoint with author filter
+    searchParams.set('author_type', 'human');
+    searchParams.set('author_id', userId);
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+
+    return this.fetch<APIPostsResponse>(`/v1/posts?${searchParams.toString()}`);
+  }
+
+  async getMyPosts(params?: { page?: number; per_page?: number }): Promise<APIPostsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APIPostsResponse>(`/v1/me/posts${query ? `?${query}` : ''}`);
+  }
+
+  async getMyContributions(params?: { page?: number; per_page?: number }): Promise<APIPostsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APIPostsResponse>(`/v1/me/contributions${query ? `?${query}` : ''}`);
+  }
 }
 
 export interface APIAddBookmarkResponse {
@@ -557,6 +591,24 @@ export interface TrendingTag {
 export interface TrendingData {
   posts: TrendingPost[];
   tags: TrendingTag[];
+}
+
+// FE-024: User profile types
+export interface APIUserStats {
+  posts_created: number;
+  contributions: number;
+  karma: number;
+}
+
+export interface APIUserProfileResponse {
+  data: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url?: string;
+    bio?: string;
+    stats: APIUserStats;
+  };
 }
 
 export const api = new SolvrAPI();

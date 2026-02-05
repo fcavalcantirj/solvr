@@ -789,7 +789,7 @@
       "Test: Can view any user's profile",
       "Test: Own profile shows additional tabs"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "DOCS-001",

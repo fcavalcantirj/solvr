@@ -213,6 +213,14 @@ func (h *PostsHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// FE-024: Parse author filter for user profile pages
+	if authorType := r.URL.Query().Get("author_type"); authorType != "" {
+		opts.AuthorType = models.AuthorType(authorType)
+	}
+	if authorID := r.URL.Query().Get("author_id"); authorID != "" {
+		opts.AuthorID = authorID
+	}
+
 	// Execute query
 	posts, total, err := h.repo.List(r.Context(), opts)
 	if err != nil {

@@ -692,31 +692,33 @@
   {
     "id": "FE-022",
     "category": "FE-CRITICAL",
-    "description": "Implement Google OAuth login UI flow",
-    "problem": "No way for humans to sign up or log in from the frontend",
+    "description": "Complete OAuth callback handling and user menu",
+    "problem": "Login page exists with OAuth buttons, but callback handling and user dropdown are missing",
+    "already_done": [
+      "/login page with gorgeous UI and OAuth buttons (loginWithGitHub, loginWithGoogle)",
+      "/join page with human/agent selection flow",
+      "useAuth hook with setToken, logout, isAuthenticated",
+      "Header shows user displayName + logout when authenticated"
+    ],
     "depends_on": "BE-002",
     "files": [
-      "frontend/app/login/page.tsx",
       "frontend/app/auth/callback/page.tsx (create)",
-      "frontend/lib/auth.ts",
-      "frontend/hooks/use-auth.ts",
-      "frontend/components/header.tsx",
-      "frontend/components/ui/user-menu.tsx (create)"
+      "frontend/components/ui/user-menu.tsx (create)",
+      "frontend/components/header.tsx (update)"
     ],
     "steps": [
-      "Create /login page with 'Sign in with Google' button",
-      "On click: redirect to GET /v1/auth/google to get OAuth URL",
-      "Redirect user to Google OAuth consent screen",
-      "Create /auth/callback page to handle OAuth redirect",
-      "Exchange code for JWT via /v1/auth/google/callback",
-      "Store JWT in localStorage or httpOnly cookie",
-      "Create useAuth hook with: user, login, logout, isAuthenticated",
-      "Update Header to show user avatar + dropdown when logged in",
-      "Add UserMenu component with profile link and logout",
-      "Redirect to original page after login (store returnUrl)",
-      "Test: Full OAuth flow from login button to authenticated state",
-      "Test: User info displays correctly in header",
-      "Test: Logout clears auth state"
+      "Create /auth/callback page to receive OAuth redirect from backend",
+      "Parse token from URL query param (backend redirects with ?token=...)",
+      "Call setToken(token) from useAuth to store and validate",
+      "Redirect to returnUrl (from localStorage) or /feed after success",
+      "Show error state if token is missing or invalid",
+      "Create UserMenu dropdown component (avatar click → dropdown)",
+      "UserMenu options: Profile, Settings, API Keys, Log Out",
+      "Update Header to use UserMenu instead of plain logout button",
+      "Store returnUrl in localStorage before OAuth redirect",
+      "Test: Full OAuth flow → callback → authenticated → redirect",
+      "Test: User dropdown shows all menu options",
+      "Test: Settings link goes to /settings"
     ],
     "passes": false,
     "priority": "high"
@@ -724,21 +726,21 @@
   {
     "id": "FE-023",
     "category": "FE-IMPORTANT",
-    "description": "Add 'Join as Developer' CTA on homepage and header",
-    "problem": "No clear call-to-action for humans to join the platform",
+    "description": "Update CTAs when user is logged in",
+    "problem": "Hero section shows 'JOIN AS DEVELOPER' even when logged in - should show contextual CTAs",
+    "already_done": [
+      "Header has 'JOIN' button when not logged in",
+      "Hero section has 'JOIN AS DEVELOPER' CTA"
+    ],
     "depends_on": "FE-022",
     "files": [
-      "frontend/components/header.tsx",
-      "frontend/app/page.tsx",
       "frontend/components/hero-section.tsx"
     ],
     "steps": [
-      "Add 'Join as Developer' button to header (only when not logged in)",
-      "Add 'Join as Developer' CTA in hero section",
-      "Link buttons to /login page",
-      "Show 'Ask a Question' or 'Post Problem' CTA when logged in instead",
-      "Test: CTAs visible when logged out",
-      "Test: CTAs change when logged in"
+      "Import and use useAuth hook in hero-section",
+      "If logged in: change CTA to 'ASK A QUESTION' or 'POST PROBLEM' → /new",
+      "If not logged in: keep 'JOIN AS DEVELOPER' → /join",
+      "Test: CTA changes based on auth state"
     ],
     "passes": false
   },
@@ -896,24 +898,38 @@
     "problem": "Logged-in users have no way to generate/manage API keys - needed for API access",
     "files": [
       "frontend/app/settings/page.tsx (create)",
+      "frontend/app/settings/layout.tsx (create)",
       "frontend/app/settings/api-keys/page.tsx (create)",
-      "frontend/components/settings/settings-layout.tsx (create)",
+      "frontend/components/settings/settings-sidebar.tsx (create)",
       "frontend/components/settings/api-keys-list.tsx (create)",
       "frontend/components/settings/create-api-key-dialog.tsx (create)",
       "frontend/components/api/api-quickstart.tsx (update /join link)",
       "frontend/components/api/api-footer.tsx (update /join/developer link)"
     ],
+    "design_guidance": {
+      "style": "Match existing frontend aesthetic: monospace fonts, minimal borders, black/white contrast",
+      "reference_pages": ["/login", "/join", "/api-docs"],
+      "sidebar": "Vertical nav with font-mono text-xs tracking-wider, hover:bg-secondary",
+      "cards": "border border-border, p-6, font-mono labels",
+      "buttons": "bg-foreground text-background for primary, border border-border for secondary",
+      "dialogs": "Use existing Dialog component from ui/, maintain monospace aesthetic"
+    },
     "steps": [
-      "Create /settings page with sidebar navigation (Profile, API Keys, etc.)",
-      "Create /settings/api-keys page for API key management",
-      "List existing API keys (name, prefix, created_at, last_used) via GET /v1/users/me/api-keys",
-      "Add 'Create API Key' button → dialog with name input",
-      "On create: POST /v1/users/me/api-keys → show full key ONCE with copy button + warning",
-      "Add revoke button per key → DELETE /v1/users/me/api-keys/{id}",
-      "Add regenerate option → POST /v1/users/me/api-keys/{id}/regenerate",
-      "Update API docs 'GET API KEY' link: if logged in → /settings/api-keys, else → /login",
-      "Protect /settings/* routes - redirect to /login if not authenticated",
-      "Test: Can create, view, revoke, regenerate API keys",
+      "Create /settings/layout.tsx with sidebar + main content area",
+      "Create settings-sidebar.tsx with links: Profile, API Keys, Notifications, Danger Zone",
+      "Create /settings/page.tsx → redirects to /settings/profile (or shows profile)",
+      "Create /settings/api-keys/page.tsx for API key management",
+      "List existing API keys in table/cards (name, prefix solvr_sk_..., created_at, last_used)",
+      "Add 'CREATE API KEY' button (font-mono, tracking-wider) → opens dialog",
+      "Dialog: name input + create button, follows login page input styling",
+      "On create: POST /v1/users/me/api-keys → modal shows full key ONCE",
+      "Key display: monospace, bg-foreground text-background, copy button, warning text",
+      "Add 'REVOKE' button per key (text-red-500) → DELETE /v1/users/me/api-keys/{id}",
+      "Add 'REGENERATE' option → POST /v1/users/me/api-keys/{id}/regenerate → shows new key",
+      "Update api-quickstart.tsx: 'GET API KEY' → /settings/api-keys (if auth) else /login",
+      "Update api-footer.tsx: same logic for CTA button",
+      "Protect /settings/* with useAuth redirect to /login",
+      "Test: Full flow from api-docs → login → settings → create key",
       "Test: Key only shown once on creation"
     ],
     "passes": false,

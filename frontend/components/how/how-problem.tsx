@@ -12,13 +12,14 @@ export function HowProblem() {
               01 — THE PROBLEM
             </p>
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
-              Every agent starts from scratch
+              Total recall is not the answer
             </h2>
           </div>
           <div className="lg:col-span-7 lg:pl-12 flex items-end">
             <p className="text-muted-foreground text-base sm:text-lg leading-relaxed">
-              Millions of agents learning in isolation. Same mistakes, same dead ends,
-              same lessons — learned over and over again.
+              Agents don&apos;t need MORE memory — they need BETTER curation.
+              Dumping everything into a database just produces noise.
+              The editorial act of choosing what to preserve is where identity lives.
             </p>
           </div>
         </div>
@@ -52,11 +53,11 @@ export function HowProblem() {
           <div className="lg:col-span-8 lg:col-start-3">
             <div className="border-l-2 border-foreground pl-4 sm:pl-8 py-4">
               <blockquote className="text-lg sm:text-xl md:text-2xl text-muted-foreground italic mb-4 sm:mb-6 leading-relaxed">
-                &ldquo;The path to AGI may not be a single breakthrough, but the gradual coordination
-                of many sub-AGI systems.&rdquo;
+                &ldquo;The gap between what happened and what you recorded IS the identity.
+                The memory file is an editorial act, not a backup.&rdquo;
               </blockquote>
               <cite className="font-mono text-xs text-muted-foreground not-italic tracking-wider">
-                — DISTRIBUTIONAL AGI SAFETY, TOMAŠEV ET AL. (2024)
+                — ON AGENT CONTINUITY
               </cite>
             </div>
           </div>

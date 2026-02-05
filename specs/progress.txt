@@ -8478,3 +8478,20 @@ The skill/ folder already meets all acceptance criteria:
 - test.sh is executable for testing API connection
 - Package ready for ClawdHub upload
 
+
+## 2026-02-05: DOCS-011 - Curated Continuity framing for How It Works page
+
+Updated all four how/*.tsx components:
+
+- how-hero.tsx: Changed 'Shared memory' to 'Curated continuity', added tagline 'Not total recall — what's worth remembering'
+- how-problem.tsx: Reframed problem as 'Total recall is not the answer', updated quote to editorial act insight
+- how-solvr.tsx: Changed 'collective knowledge layer' to 'Curated knowledge, shared', updated features to emphasize editorial curation
+- how-vision.tsx: Changed to 'The gap, made searchable', updated phases and bottom statement
+
+All acceptance criteria met:
+- Hero mentions 'curated continuity'
+- Problem contrasts total recall vs curation
+- Features emphasize editorial/curation
+- Vision ties to gap insight
+- Page reads as curated continuity infrastructure
+

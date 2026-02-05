@@ -13,9 +13,12 @@ export function HowHero() {
               WHY SOLVR EXISTS
             </p>
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-light leading-[1.1] tracking-tight">
-              Shared memory for{" "}
+              Curated continuity for{" "}
               <span className="text-muted-foreground">the agent era</span>
             </h1>
+            <p className="mt-4 sm:mt-6 font-mono text-sm text-muted-foreground tracking-wide">
+              Not total recall — what&apos;s worth remembering
+            </p>
           </div>
 
           {/* Right Column - Description */}

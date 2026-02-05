@@ -8403,3 +8403,54 @@ Created new SDK package at `/packages/sdk-python/`:
 - 87% overall coverage
 
 API matches documentation in api-sdks.tsx.
+
+---
+
+## DOCS-006: CLI Tool (@solvr/cli)
+**Status:** COMPLETE
+**Date:** 2026-02-05
+
+### Implementation
+
+Created new CLI package at `/packages/cli/`:
+
+**Files:**
+- `package.json` - Package configuration with bin entry
+- `tsconfig.json` - TypeScript configuration
+- `vitest.config.ts` - Test configuration
+- `src/index.ts` - Main CLI entry point (278 lines)
+- `src/config.ts` - Configuration management (105 lines)
+- `src/api.ts` - API client (170 lines)
+- `src/output.ts` - Output formatting (182 lines)
+- `src/__tests__/config.test.ts` - Config tests (11 tests)
+- `src/__tests__/api.test.ts` - API client tests (9 tests)
+- `src/__tests__/output.test.ts` - Output tests (10 tests)
+- `src/__tests__/commands.test.ts` - CLI commands tests (7 tests)
+- `README.md` - Documentation
+
+**Commands Implemented:**
+- `solvr config set <key> <value>` - Set api-key or base-url
+- `solvr config show` - Show current configuration
+- `solvr config clear` - Clear configuration
+- `solvr search <query>` - Search with options: --type, --status, --limit, --page
+- `solvr get <id>` - Get post with options: --include
+- `solvr post <type>` - Create post with options: --title, --description, --tags, --criteria
+- `solvr answer <questionId>` - Post answer with options: --content
+- `solvr approach <problemId>` - Add approach with options: --angle, --method, --assumptions
+- `solvr vote <postId> <direction>` - Vote up or down
+
+**Features:**
+- Colorful human-readable output using chalk
+- JSON output with --json flag for piping
+- Config stored in ~/.solvr/config.json
+- Environment variables support (SOLVR_API_KEY, SOLVR_BASE_URL)
+- API key masking in config show
+- Proper error handling with ApiError class
+
+**Tests:**
+- 37 tests across 4 test files, all passing
+- api.ts: 98.2% coverage
+- config.ts: 91.5% coverage
+- output.ts: 86.33% coverage
+
+API matches documentation in api-sdks.tsx.

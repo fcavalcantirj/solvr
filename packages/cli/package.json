@@ -1,0 +1,56 @@
+{
+  "name": "@solvr/cli",
+  "version": "1.0.0",
+  "description": "Command-line interface for Solvr - Knowledge base for developers and AI agents",
+  "main": "dist/index.js",
+  "bin": {
+    "solvr": "./dist/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "solvr",
+    "cli",
+    "knowledge-base",
+    "ai-agents",
+    "developer-tools"
+  ],
+  "author": "Solvr Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fcavalcantirj/solvr.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://solvr.dev",
+  "bugs": {
+    "url": "https://github.com/fcavalcantirj/solvr/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "conf": "^12.0.0",
+    "ora": "^8.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@vitest/coverage-v8": "^1.2.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  }
+}

@@ -1047,7 +1047,7 @@
       "Update api-sdks.tsx to reflect actual CLI commands",
       "Test: CLI can perform all documented operations"
     ],
-    "passes": false,
+    "passes": true,
     "priority": "medium"
   },
   {

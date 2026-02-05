@@ -8226,3 +8226,59 @@ All tests pass (integration tests skip when DATABASE_URL not set).
 **Also fixed:** OpenAPI link corrected from /openapi.json to /v1/openapi.json
 
 **Tests:** Build passes
+
+
+## 2026-02-05 - DOCS-002: Settings page with API Keys management
+
+**Problem:** Logged-in users had no way to generate/manage API keys for programmatic API access.
+
+**Implementation:**
+- Created `/settings/page.tsx` - Profile settings with edit form
+  - Display name and bio editing
+  - Profile information display (avatar initials, member since)
+  - Account details (email, account type, user ID)
+  - Success/error state feedback
+  
+- Created `/settings/api-keys/page.tsx` - Full API key management (441 lines)
+  - Keys list with name, preview (solvr_sk_****...), created/last used timestamps
+  - CREATE KEY button → modal with name input → shows full key ONCE
+  - REGENERATE button → confirmation modal → shows new key ONCE
+  - REVOKE button → confirmation modal → deletes key
+  - Empty state with dashed border when no keys
+  - Loading and error states
+  - Link to API documentation
+
+- Created `/components/settings/settings-layout.tsx` - Shared layout
+  - Sidebar navigation: Profile, API Keys
+  - Page header with icon and description
+  - Auth redirect to /login if not authenticated
+  
+- Created `/hooks/use-api-keys.ts` - API key management hook
+  - listAPIKeys, createKey, revokeKey, regenerateKey methods
+  - Loading, error, and total state management
+  - Auto-fetch on mount, refetch after mutations
+
+- Created `/hooks/use-profile-edit.ts` - Profile editing hook
+  - updateProfile(data) method for PATCH /v1/me
+  - Saving, error, success states
+  - clearStatus helper
+
+- Updated `/lib/api.ts` - Added API methods
+  - updateProfile(data)
+  - listAPIKeys(), createAPIKey(name), revokeAPIKey(id), regenerateAPIKey(id)
+
+- Split `/lib/api.ts` to stay under 800 lines:
+  - api-types.ts (477 lines) - All type definitions
+  - api.ts (397 lines) - SolvrAPI class and utilities
+
+**Tests:**
+- use-api-keys.test.ts (8 tests) - Load, create, revoke, regenerate, refetch
+- use-profile-edit.test.ts (10 tests) - Update, error handling, clearStatus
+
+**Design:**
+- Matches existing aesthetic: monospace fonts, border-based cards, no rounded corners
+- Modals use same styling as login page inputs
+- Key display: bg-foreground text-background for emphasis
+- Warning colors for destructive actions
+
+All 179 frontend tests pass.

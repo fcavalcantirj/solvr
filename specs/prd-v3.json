@@ -936,7 +936,7 @@
       "Test: Full flow from api-docs \u2192 login \u2192 settings \u2192 create key",
       "Test: Key only shown once on creation"
     ],
-    "passes": false,
+    "passes": true,
     "depends_on": "FE-022"
   },
   {

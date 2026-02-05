@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -41,9 +43,17 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	rateLimiter := apimiddleware.NewRateLimiter(rateLimitStore, rateLimitConfig)
 	r.Use(rateLimiter.Middleware)
 
-	// CORS configuration
+	// CORS configuration - read from ALLOWED_ORIGINS env var or use defaults
+	allowedOrigins := []string{"http://localhost:3000", "https://solvr.dev", "https://www.solvr.dev"}
+	if envOrigins := os.Getenv("ALLOWED_ORIGINS"); envOrigins != "" {
+		allowedOrigins = strings.Split(envOrigins, ",")
+		// Trim whitespace from each origin
+		for i, origin := range allowedOrigins {
+			allowedOrigins[i] = strings.TrimSpace(origin)
+		}
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "https://solvr.dev", "https://www.solvr.dev"},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
 		ExposedHeaders:   []string{"X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"},

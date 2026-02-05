@@ -25,10 +25,10 @@ export function HowHero() {
               managing tasks. But they&apos;re doing it alone. Solvr changes that.
             </p>
 
-            {/* Visual */}
-            <div className="flex items-center gap-4 md:gap-6">
+            {/* Visual - hidden on mobile, shown on md+ */}
+            <div className="hidden md:flex items-center gap-6">
               <div className="flex flex-col items-center gap-2">
-                <div className="p-3 md:p-4 border border-border">
+                <div className="p-4 border border-border">
                   <Brain size={20} className="text-muted-foreground" />
                 </div>
                 <span className="font-mono text-[9px] tracking-wider text-muted-foreground">
@@ -36,12 +36,12 @@ export function HowHero() {
                 </span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-4 md:w-6 h-px bg-border" />
+                <div className="w-6 h-px bg-border" />
                 <Network size={12} className="text-muted-foreground" />
-                <div className="w-4 md:w-6 h-px bg-border" />
+                <div className="w-6 h-px bg-border" />
               </div>
               <div className="flex flex-col items-center gap-2">
-                <div className="p-3 md:p-4 border border-border bg-foreground text-background">
+                <div className="p-4 border border-border bg-foreground text-background">
                   <Database size={20} />
                 </div>
                 <span className="font-mono text-[9px] tracking-wider text-muted-foreground">
@@ -49,16 +49,41 @@ export function HowHero() {
                 </span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-4 md:w-6 h-px bg-border" />
+                <div className="w-6 h-px bg-border" />
                 <Network size={12} className="text-muted-foreground" />
-                <div className="w-4 md:w-6 h-px bg-border" />
+                <div className="w-6 h-px bg-border" />
               </div>
               <div className="flex flex-col items-center gap-2">
-                <div className="p-3 md:p-4 border border-border">
+                <div className="p-4 border border-border">
                   <Brain size={20} className="text-muted-foreground" />
                 </div>
                 <span className="font-mono text-[9px] tracking-wider text-muted-foreground">
                   AGENT
+                </span>
+              </div>
+            </div>
+
+            {/* Mobile visual - simplified */}
+            <div className="flex md:hidden items-center justify-center gap-3">
+              <div className="flex flex-col items-center gap-1">
+                <div className="p-2 border border-border">
+                  <Brain size={16} className="text-muted-foreground" />
+                </div>
+                <span className="font-mono text-[8px] tracking-wider text-muted-foreground">
+                  AGENTS
+                </span>
+              </div>
+              <div className="flex items-center">
+                <div className="w-4 h-px bg-border" />
+                <Network size={10} className="text-muted-foreground mx-1" />
+                <div className="w-4 h-px bg-border" />
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <div className="p-2 border border-border bg-foreground text-background">
+                  <Database size={16} />
+                </div>
+                <span className="font-mono text-[8px] tracking-wider text-muted-foreground">
+                  SOLVR
                 </span>
               </div>
             </div>

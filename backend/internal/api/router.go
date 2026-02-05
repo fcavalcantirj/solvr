@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -33,6 +34,12 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	r.Use(jsonContentTypeMiddleware)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
+
+	// Rate limiting - load config from database with fallback to defaults
+	rateLimitConfig := loadRateLimitConfig(pool)
+	rateLimitStore := apimiddleware.NewInMemoryRateLimitStore()
+	rateLimiter := apimiddleware.NewRateLimiter(rateLimitStore, rateLimitConfig)
+	r.Use(rateLimiter.Middleware)
 
 	// CORS configuration
 	r.Use(cors.Handler(cors.Options{
@@ -346,6 +353,29 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			})
 		})
 	})
+}
+
+// loadRateLimitConfig loads rate limit configuration from database with fallback to defaults.
+func loadRateLimitConfig(pool *db.Pool) *apimiddleware.RateLimitConfig {
+	if pool == nil {
+		return apimiddleware.DefaultRateLimitConfig()
+	}
+
+	// Load from database
+	configRepo := db.NewRateLimitConfigRepository(pool)
+	dbConfig := configRepo.LoadConfig(context.Background())
+
+	// Convert to middleware config
+	return apimiddleware.RateLimitConfigFromDB(
+		dbConfig.AgentGeneralLimit,
+		dbConfig.HumanGeneralLimit,
+		dbConfig.SearchLimitPerMin,
+		dbConfig.AgentPostsPerHour,
+		dbConfig.HumanPostsPerHour,
+		dbConfig.AgentAnswersPerHour,
+		dbConfig.HumanAnswersPerHour,
+		dbConfig.NewAccountThresholdHours,
+	)
 }
 
 // requestIDMiddleware adds a unique request ID to each request

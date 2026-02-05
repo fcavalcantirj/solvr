@@ -8,15 +8,17 @@ import { Eye, EyeOff, ArrowRight, Github, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const { loginWithGitHub, loginWithGoogle } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate API call
+    // TODO: Implement email/password login when backend supports it
     await new Promise((resolve) => setTimeout(resolve, 1500));
     setIsLoading(false);
   };
@@ -125,11 +127,17 @@ export default function LoginPage() {
 
             {/* Social Logins */}
             <div className="space-y-3 mb-8">
-              <button className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors">
+              <button
+                onClick={loginWithGitHub}
+                className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors"
+              >
                 <Github size={16} />
                 CONTINUE WITH GITHUB
               </button>
-              <button className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors">
+              <button
+                onClick={loginWithGoogle}
+                className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors"
+              >
                 <Mail size={16} />
                 CONTINUE WITH GOOGLE
               </button>

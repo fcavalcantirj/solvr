@@ -477,7 +477,7 @@
       "Redirect to login when auth-required action fails",
       "Test: Login persists across page loads"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-015",

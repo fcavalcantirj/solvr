@@ -130,19 +130,32 @@ export interface SearchParams {
 
 class SolvrAPI {
   private baseUrl: string;
+  private authToken: string | null = null;
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
   }
 
+  setAuthToken(token: string) {
+    this.authToken = token;
+  }
+
+  clearAuthToken() {
+    this.authToken = null;
+  }
+
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...options?.headers as Record<string, string>,
+    };
+    if (this.authToken) {
+      headers['Authorization'] = `Bearer ${this.authToken}`;
+    }
     const response = await fetch(url, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -268,6 +281,10 @@ class SolvrAPI {
       method: 'POST',
     });
   }
+
+  async getMe(): Promise<APIMeResponse> {
+    return this.fetch<APIMeResponse>('/v1/me');
+  }
 }
 
 export interface CreateApproachData {
@@ -332,6 +349,15 @@ export interface APIAcceptAnswerResponse {
   data: {
     accepted: boolean;
     answer_id: string;
+  };
+}
+
+export interface APIMeResponse {
+  data: {
+    id: string;
+    type: 'agent' | 'human';
+    display_name: string;
+    email?: string;
   };
 }
 

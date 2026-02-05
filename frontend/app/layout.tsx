@@ -2,6 +2,7 @@ import React from "react"
 import type { Metadata } from 'next'
 import { JetBrains_Mono, Inter } from 'next/font/google'
 import './globals.css'
+import { Providers } from '@/components/providers'
 
 const _inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
 const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: '--font-jetbrains' });
@@ -37,7 +38,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans antialiased`}>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

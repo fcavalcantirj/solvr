@@ -7755,3 +7755,34 @@ Also, FeedRepository didn't exist in the db package.
   - File sizes: All files under 800 lines
     - use-share.ts: 55 lines
     - use-share.test.ts: 112 lines
+
+
+- 2026-02-05: [FE-014] Implement authentication state and login flow ✓
+  - Problem: No auth state management - couldn't show user info or protect actions
+  - TDD approach followed:
+    1. Added failing tests first for useAuth hook (5 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Created frontend/hooks/use-auth.tsx with AuthProvider and useAuth hook
+      - Stores JWT token in localStorage
+      - Fetches user info from /v1/me on load
+      - Provides setToken, logout, loginWithGitHub, loginWithGoogle
+      - Tracks isLoading, isAuthenticated, user state
+    - Added to frontend/lib/api.ts:
+      - setAuthToken/clearAuthToken methods
+      - Authorization header in fetch
+      - getMe() method for /v1/me endpoint
+    - Created frontend/components/providers.tsx for client-side providers
+    - Updated frontend/app/layout.tsx to wrap with Providers
+    - Updated frontend/app/login/page.tsx:
+      - Connected GitHub/Google buttons to OAuth functions
+    - Updated frontend/components/header.tsx:
+      - Show user info when authenticated
+      - Show logout button when authenticated
+      - Show loading spinner during auth check
+  - Tests: 5 passing (useAuth hook tests) = 71 total frontend tests
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - use-auth.tsx: 95 lines
+    - use-auth.test.tsx: 135 lines
+    - header.tsx: 150 lines

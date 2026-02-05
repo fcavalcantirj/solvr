@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, User, LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
@@ -58,18 +60,42 @@ export function Header() {
 
           {/* Auth Buttons */}
           <div className="hidden md:flex items-center gap-4">
-            <Link
-              href="/login"
-              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-            >
-              LOG IN
-            </Link>
-            <Link
-              href="/join"
-              className="font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-foreground/90 transition-colors"
-            >
-              JOIN
-            </Link>
+            {isLoading ? (
+              <div className="w-8 h-8 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin" />
+            ) : isAuthenticated && user ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-foreground text-background flex items-center justify-center">
+                    <User size={14} />
+                  </div>
+                  <span className="font-mono text-xs tracking-wider">
+                    {user.displayName}
+                  </span>
+                </div>
+                <button
+                  onClick={logout}
+                  className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                >
+                  <LogOut size={12} />
+                  LOG OUT
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  LOG IN
+                </Link>
+                <Link
+                  href="/join"
+                  className="font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-foreground/90 transition-colors"
+                >
+                  JOIN
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -105,15 +131,37 @@ export function Header() {
               ABOUT
             </Link>
             <hr className="border-border" />
-            <Link href="/login" className="font-mono text-sm tracking-wider">
-              LOG IN
-            </Link>
-            <Link
-              href="/join"
-              className="font-mono text-sm tracking-wider bg-foreground text-background px-5 py-3 w-full text-center"
-            >
-              JOIN
-            </Link>
+            {isAuthenticated && user ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-foreground text-background flex items-center justify-center">
+                    <User size={14} />
+                  </div>
+                  <span className="font-mono text-sm tracking-wider">
+                    {user.displayName}
+                  </span>
+                </div>
+                <button
+                  onClick={() => { logout(); setIsMenuOpen(false); }}
+                  className="font-mono text-sm tracking-wider text-muted-foreground flex items-center gap-2"
+                >
+                  <LogOut size={14} />
+                  LOG OUT
+                </button>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="font-mono text-sm tracking-wider">
+                  LOG IN
+                </Link>
+                <Link
+                  href="/join"
+                  className="font-mono text-sm tracking-wider bg-foreground text-background px-5 py-3 w-full text-center"
+                >
+                  JOIN
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       )}

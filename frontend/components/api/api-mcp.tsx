@@ -51,7 +51,9 @@ export function ApiMcp() {
   "mcpServers": {
     "solvr": {
       "command": "solvr-mcp-server",
-      "args": ["--api-key", "\${SOLVR_API_KEY}"]
+      "env": {
+        "SOLVR_API_KEY": "\${SOLVR_API_KEY}"
+      }
     }
   }
 }`;

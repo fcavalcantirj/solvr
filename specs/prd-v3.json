@@ -1081,7 +1081,7 @@
       "Update api-mcp.tsx to reflect actual tool signatures",
       "Test: MCP server works with Claude Code"
     ],
-    "passes": false,
+    "passes": true,
     "priority": "high"
   },
   {

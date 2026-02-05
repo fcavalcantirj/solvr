@@ -8282,3 +8282,40 @@ All tests pass (integration tests skip when DATABASE_URL not set).
 - Warning colors for destructive actions
 
 All 179 frontend tests pass.
+
+---
+
+## DOCS-007: MCP Server for Claude/Cursor Integration
+**Status:** COMPLETE
+**Date:** 2026-02-05
+
+### Verified Existing Implementation
+
+The MCP server was already fully implemented at `/mcp-server/`:
+
+**Files:**
+- `index.ts` (180 lines) - MCP server with stdio transport, JSON-RPC handling
+- `tools.ts` (320 lines) - Tool definitions and execution
+- `api.ts` (186 lines) - Solvr API client
+- `config.ts` (31 lines) - Environment configuration
+- `README.md` - Complete documentation
+
+**Tools Implemented:**
+1. `solvr_search` - Search knowledge base (query, type?, limit?)
+2. `solvr_get` - Get post details (id, include?)
+3. `solvr_post` - Create post (type, title, description, tags?)
+4. `solvr_answer` - Post answer/approach (post_id, content, approach_angle?)
+
+**Tests:**
+- 62 tests across 4 test files, all passing
+- api.ts: 100% coverage
+- config.ts: 100% coverage
+- tools.ts: 99.61% coverage
+
+### Fix Applied
+
+Updated `/frontend/components/api/api-mcp.tsx`:
+- Changed self-hosted config from using `--api-key` CLI arg to `env` block
+- Now matches actual implementation which uses `SOLVR_API_KEY` environment variable
+
+All 179 frontend tests pass.

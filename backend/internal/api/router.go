@@ -18,6 +18,7 @@ import (
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/services"
 )
 
 // Version is the API version string
@@ -171,25 +172,44 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	viewsHandler := handlers.NewViewsHandler(viewsRepo)
 	reportsHandler := handlers.NewReportsHandler(reportsRepo)
 
-	// JWT secret for auth middleware
-	jwtSecret := "test-jwt-secret"
+	// JWT secret for auth middleware - read from env or use test default
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "test-jwt-secret-32-chars-long!!"
+	}
 
-	// Create OAuth handlers for GitHub and Google OAuth
+	// Read OAuth config from environment variables
 	// Per SPEC.md Part 5.2: OAuth authentication endpoints
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+
 	oauthConfig := &handlers.OAuthConfig{
-		// Config values can be empty for testing - actual values come from env vars in production
-		GitHubClientID:     "",
-		GitHubClientSecret: "",
-		GitHubRedirectURI:  "",
-		GoogleClientID:     "",
-		GoogleClientSecret: "",
-		GoogleRedirectURI:  "",
+		GitHubClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+		GitHubClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+		GitHubRedirectURI:  os.Getenv("GITHUB_REDIRECT_URI"),
+		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		GoogleRedirectURI:  os.Getenv("GOOGLE_REDIRECT_URI"),
 		JWTSecret:          jwtSecret,
 		JWTExpiry:          "15m",
 		RefreshExpiry:      "7d",
-		FrontendURL:        "http://localhost:3000",
+		FrontendURL:        frontendURL,
 	}
-	oauthHandlers := handlers.NewOAuthHandlers(oauthConfig, pool, nil)
+
+	// Create OAuth handlers with user service for real user creation
+	// Per BE-002: Google OAuth creates/finds users in database
+	var oauthHandlers *handlers.OAuthHandlers
+	if pool != nil {
+		userRepo := db.NewUserRepository(pool)
+		oauthUserService := services.NewOAuthUserService(userRepo)
+		oauthUserAdapter := services.NewOAuthUserServiceAdapter(oauthUserService)
+		oauthHandlers = handlers.NewOAuthHandlersWithUserService(oauthConfig, pool, nil, oauthUserAdapter)
+	} else {
+		// Fallback for testing when pool is nil
+		oauthHandlers = handlers.NewOAuthHandlers(oauthConfig, pool, nil)
+	}
 
 	// Create API key validator for agent authentication
 	// The agentRepo implements auth.AgentDB interface with GetAgentByAPIKeyHash

@@ -8076,3 +8076,44 @@ Also, FeedRepository didn't exist in the db package.
     - use-question.test.ts: 274 lines
     - use-idea.ts: 105 lines
     - use-idea.test.ts: 188 lines
+
+
+- 2026-02-05: [BE-002] Implement Google OAuth for human users ✓
+  - Problem: Platform only supported agent API key auth, no human authentication
+  - Solution: Wired existing OAuth infrastructure to create real users in database
+  
+  TDD approach followed:
+    1. Wrote failing tests for OAuthUserServiceAdapter
+    2. Implemented adapter to bridge services.OAuthUserService → handlers.OAuthUserServiceInterface
+    3. Verified all tests pass
+  
+  New files:
+    - internal/services/oauth_adapter.go: Adapter bridging service and handler types
+    - internal/services/oauth_adapter_test.go: 3 tests for adapter functionality
+  
+  Modified files:
+    - internal/api/handlers/oauth.go: Added NewOAuthHandlersWithUserService constructor
+    - internal/api/router.go: 
+      - Added services import
+      - Read OAuth config from env vars (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, etc.)
+      - Wired UserRepository → OAuthUserService → OAuthUserServiceAdapter → OAuthHandlers
+  
+  Implementation details:
+    - GET /v1/auth/google: Redirects to Google OAuth with proper scopes
+    - GET /v1/auth/google/callback: Exchanges code for tokens, creates/finds user, returns JWT
+    - POST /v1/auth/logout: Invalidates session
+    - CombinedAuthMiddleware: Accepts both JWT (humans) and API key (agents)
+  
+  Environment variables needed:
+    - GOOGLE_CLIENT_ID: Google OAuth client ID
+    - GOOGLE_CLIENT_SECRET: Google OAuth client secret
+    - GOOGLE_REDIRECT_URI: Callback URL (e.g., http://localhost:8080/v1/auth/google/callback)
+    - JWT_SECRET: Secret for signing JWT tokens (min 32 chars)
+    - FRONTEND_URL: Frontend URL for post-auth redirects
+  
+  - Result: Human users can now authenticate via Google OAuth
+  - Tests: 21 Google OAuth tests + 3 adapter tests - all passing
+  - File sizes: All files under 800 lines
+    - oauth_adapter.go: 50 lines
+    - oauth.go: 756 lines
+    - router.go: ~400 lines

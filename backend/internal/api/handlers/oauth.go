@@ -89,6 +89,24 @@ func NewOAuthHandlers(config *OAuthConfig, pool *db.Pool, tokenStore *auth.Refre
 	}
 }
 
+// NewOAuthHandlersWithUserService creates OAuthHandlers with user service for production.
+// Use this constructor when you want real user creation/lookup in the database.
+func NewOAuthHandlersWithUserService(
+	config *OAuthConfig,
+	pool *db.Pool,
+	tokenStore *auth.RefreshTokenStore,
+	userService OAuthUserServiceInterface,
+) *OAuthHandlers {
+	return &OAuthHandlers{
+		config:        config,
+		pool:          pool,
+		tokenStore:    tokenStore,
+		userService:   userService,
+		gitHubBaseURL: "https://github.com",
+		googleBaseURL: "https://oauth2.googleapis.com",
+	}
+}
+
 // NewOAuthHandlersWithDeps creates OAuthHandlers with all dependencies for testing.
 func NewOAuthHandlersWithDeps(
 	config *OAuthConfig,

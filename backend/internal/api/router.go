@@ -242,6 +242,17 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		// GET /v1/feed/unanswered - unanswered questions (no auth required)
 		r.Get("/feed/unanswered", feedHandler.Unanswered)
 
+		// Stats endpoints (for frontend dashboard)
+		var statsRepo handlers.StatsRepositoryInterface
+		if pool != nil {
+			statsRepo = db.NewStatsRepository(pool)
+		}
+		if statsRepo != nil {
+			statsHandler := handlers.NewStatsHandler(statsRepo)
+			r.Get("/stats", statsHandler.GetStats)
+			r.Get("/stats/trending", statsHandler.GetTrending)
+		}
+
 		// Problems endpoints (API-CRITICAL per PRD-v2)
 		// GET /v1/problems - list problems (no auth required)
 		r.Get("/problems", problemsHandler.List)

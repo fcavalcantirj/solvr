@@ -655,7 +655,7 @@
       "Test with posts that have no approaches/answers/responses",
       "Test: All detail pages load without errors"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "BE-002",

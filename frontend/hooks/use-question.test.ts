@@ -204,4 +204,71 @@ describe('useQuestion', () => {
     expect(api.getPost).not.toHaveBeenCalled();
     expect(api.getQuestionAnswers).not.toHaveBeenCalled();
   });
+
+  // FE-021: Edge cases for defensive handling
+
+  it('should handle question with null tags and missing optional fields', async () => {
+    // Arrange - API returns null for tags and missing optional fields
+    const questionWithNulls = {
+      id: 'question-123',
+      type: 'question' as const,
+      title: 'Test question',
+      description: 'Description',
+      status: 'open',
+      upvotes: 5,
+      downvotes: 1,
+      vote_score: 4,
+      author: {
+        id: 'user-1',
+        type: 'human' as const,
+        display_name: 'Test User',
+      },
+      tags: null, // null instead of array
+      created_at: '2025-01-10T10:00:00Z',
+      updated_at: '2025-01-10T10:00:00Z',
+      // Missing: answers_count, view_count
+    };
+
+    (api.getPost as ReturnType<typeof vi.fn>).mockResolvedValue({ data: questionWithNulls });
+    (api.getQuestionAnswers as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+      meta: { total: 0, page: 1, per_page: 20, has_more: false },
+    });
+
+    // Act
+    const { result } = renderHook(() => useQuestion('question-123'));
+
+    // Wait for data to load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Assert - should handle nulls gracefully
+    expect(result.current.question).not.toBeNull();
+    expect(result.current.question?.tags).toEqual([]);
+    expect(result.current.question?.answersCount).toBe(0);
+    expect(result.current.question?.views).toBe(0);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('should handle answers API returning undefined data', async () => {
+    // Arrange - Malformed API response without data property
+    (api.getPost as ReturnType<typeof vi.fn>).mockResolvedValue({ data: mockQuestion });
+    (api.getQuestionAnswers as ReturnType<typeof vi.fn>).mockResolvedValue({
+      // Missing data property
+      meta: { total: 0, page: 1, per_page: 20, has_more: false },
+    });
+
+    // Act
+    const { result } = renderHook(() => useQuestion('question-123'));
+
+    // Wait for data to load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Assert - should return empty array when data is undefined
+    expect(result.current.answers).toEqual([]);
+    expect(result.current.error).toBeNull();
+  });
 });

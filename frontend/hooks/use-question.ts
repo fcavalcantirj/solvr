@@ -155,8 +155,9 @@ export function useQuestion(id: string): UseQuestionResult {
       // Transform and set question data
       setQuestion(transformQuestion(questionResponse.data));
 
-      // Transform and set answers
-      const transformedAnswers = answersResponse.data.map(transformAnswer);
+      // FE-021: Defensive check - handle undefined/null data array
+      const answersData = answersResponse?.data ?? [];
+      const transformedAnswers = answersData.map(transformAnswer);
       setAnswers(transformedAnswers);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch question');

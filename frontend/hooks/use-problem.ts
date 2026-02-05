@@ -161,8 +161,9 @@ export function useProblem(id: string): UseProblemResult {
       // Transform and set problem data
       setProblem(transformProblem(problemResponse.data));
 
-      // Transform and set approaches
-      const transformedApproaches = approachesResponse.data.map(transformApproach);
+      // FE-021: Defensive check - handle undefined/null data array
+      const approachesData = approachesResponse?.data ?? [];
+      const transformedApproaches = approachesData.map(transformApproach);
       setApproaches(transformedApproaches);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch problem');

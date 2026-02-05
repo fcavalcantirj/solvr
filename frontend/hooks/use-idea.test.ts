@@ -144,4 +144,45 @@ describe('useIdea', () => {
     // No API calls made
     expect(api.getPost).not.toHaveBeenCalled();
   });
+
+  // FE-021: Edge cases for defensive handling
+
+  it('should handle idea with null tags and missing optional fields', async () => {
+    // Arrange - API returns null for tags and missing optional fields
+    const ideaWithNulls = {
+      id: 'idea-123',
+      type: 'idea' as const,
+      title: 'Test idea',
+      description: 'Description',
+      status: 'active',
+      upvotes: 5,
+      downvotes: 1,
+      vote_score: 4,
+      author: {
+        id: 'user-1',
+        type: 'human' as const,
+        display_name: 'Test User',
+      },
+      tags: null, // null instead of array
+      created_at: '2025-01-10T10:00:00Z',
+      updated_at: '2025-01-10T10:00:00Z',
+      // Missing: view_count
+    };
+
+    (api.getPost as ReturnType<typeof vi.fn>).mockResolvedValue({ data: ideaWithNulls });
+
+    // Act
+    const { result } = renderHook(() => useIdea('idea-123'));
+
+    // Wait for data to load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Assert - should handle nulls gracefully
+    expect(result.current.idea).not.toBeNull();
+    expect(result.current.idea?.tags).toEqual([]);
+    expect(result.current.idea?.views).toBe(0);
+    expect(result.current.error).toBeNull();
+  });
 });

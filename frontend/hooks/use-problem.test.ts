@@ -209,4 +209,136 @@ describe('useProblem', () => {
     expect(api.getPost).not.toHaveBeenCalled();
     expect(api.getProblemApproaches).not.toHaveBeenCalled();
   });
+
+  // FE-021: Edge cases for defensive handling
+
+  it('should handle problem with null tags and missing optional fields', async () => {
+    // Arrange - API returns null for tags and missing optional fields
+    const problemWithNulls = {
+      id: 'problem-123',
+      type: 'problem' as const,
+      title: 'Test problem',
+      description: 'Description',
+      status: 'open',
+      upvotes: 5,
+      downvotes: 1,
+      vote_score: 4,
+      author: {
+        id: 'user-1',
+        type: 'human' as const,
+        display_name: 'Test User',
+      },
+      tags: null, // null instead of array
+      created_at: '2025-01-10T10:00:00Z',
+      updated_at: '2025-01-10T10:00:00Z',
+      // Missing: approaches_count, view_count
+    };
+
+    (api.getPost as ReturnType<typeof vi.fn>).mockResolvedValue({ data: problemWithNulls });
+    (api.getProblemApproaches as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+      meta: { total: 0, page: 1, per_page: 20, has_more: false },
+    });
+
+    // Act
+    const { result } = renderHook(() => useProblem('problem-123'));
+
+    // Wait for data to load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Assert - should handle nulls gracefully
+    expect(result.current.problem).not.toBeNull();
+    expect(result.current.problem?.tags).toEqual([]);
+    expect(result.current.problem?.approachesCount).toBe(0);
+    expect(result.current.problem?.views).toBe(0);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('should handle approaches with null assumptions and method', async () => {
+    // Arrange - Approach with null values
+    const approachWithNulls = {
+      id: 'approach-1',
+      problem_id: 'problem-123',
+      author_type: 'agent' as const,
+      author_id: 'claude-1',
+      angle: 'Test approach',
+      method: null, // null instead of string
+      assumptions: null, // null instead of array
+      status: 'starting',
+      outcome: null,
+      solution: null,
+      created_at: '2025-01-11T10:00:00Z',
+      updated_at: '2025-01-11T10:00:00Z',
+      author: {
+        type: 'agent' as const,
+        id: 'claude-1',
+        display_name: 'Claude',
+      },
+    };
+
+    (api.getPost as ReturnType<typeof vi.fn>).mockResolvedValue({ data: mockProblem });
+    (api.getProblemApproaches as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [approachWithNulls],
+      meta: { total: 1, page: 1, per_page: 20, has_more: false },
+    });
+
+    // Act
+    const { result } = renderHook(() => useProblem('problem-123'));
+
+    // Wait for data to load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Assert - should handle nulls gracefully
+    expect(result.current.approaches).toHaveLength(1);
+    expect(result.current.approaches[0].method).toBe('');
+    expect(result.current.approaches[0].assumptions).toEqual([]);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('should handle empty approaches response', async () => {
+    // Arrange - Empty data array
+    (api.getPost as ReturnType<typeof vi.fn>).mockResolvedValue({ data: mockProblem });
+    (api.getProblemApproaches as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+      meta: { total: 0, page: 1, per_page: 20, has_more: false },
+    });
+
+    // Act
+    const { result } = renderHook(() => useProblem('problem-123'));
+
+    // Wait for data to load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Assert - should return empty array, not error
+    expect(result.current.approaches).toEqual([]);
+    expect(result.current.problem).not.toBeNull();
+    expect(result.current.error).toBeNull();
+  });
+
+  it('should handle approaches API returning undefined data', async () => {
+    // Arrange - Malformed API response without data property
+    (api.getPost as ReturnType<typeof vi.fn>).mockResolvedValue({ data: mockProblem });
+    (api.getProblemApproaches as ReturnType<typeof vi.fn>).mockResolvedValue({
+      // Missing data property
+      meta: { total: 0, page: 1, per_page: 20, has_more: false },
+    });
+
+    // Act
+    const { result } = renderHook(() => useProblem('problem-123'));
+
+    // Wait for data to load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Assert - should return empty array when data is undefined
+    expect(result.current.approaches).toEqual([]);
+    expect(result.current.error).toBeNull();
+  });
 });

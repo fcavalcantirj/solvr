@@ -8038,3 +8038,41 @@ Also, FeedRepository didn't exist in the db package.
   - Backend: Compiles successfully
   - Frontend: Build successful
   - File sizes: All files under 800 lines
+
+
+- 2026-02-05: [FE-021] Fix feed item click-through errors on detail pages ✓
+  - Problem: Clicking feed items could result in errors when API returns unexpected data
+  - Root cause: Hooks crashed when API returned undefined data arrays
+  
+  TDD approach followed:
+    1. Wrote failing tests for edge cases (null tags, undefined data arrays)
+    2. Fixed code to handle edge cases defensively
+    3. Verified all tests pass
+  
+  Tests added:
+    - use-problem.test.ts: 4 new tests
+      - Handle problem with null tags and missing optional fields
+      - Handle approaches with null assumptions and method
+      - Handle empty approaches response
+      - Handle approaches API returning undefined data
+    - use-question.test.ts: 2 new tests
+      - Handle question with null tags and missing optional fields
+      - Handle answers API returning undefined data
+    - use-idea.test.ts: 1 new test
+      - Handle idea with null tags and missing optional fields
+  
+  Code fixes:
+    - use-problem.ts: Added defensive check for undefined approaches data
+      `const approachesData = approachesResponse?.data ?? [];`
+    - use-question.ts: Added defensive check for undefined answers data
+      `const answersData = answersResponse?.data ?? [];`
+  
+  - Result: Detail pages handle edge cases gracefully without crashing
+  - Tests: 137 frontend tests (7 new) - all passing
+  - File sizes: All files under 800 lines
+    - use-problem.ts: 192 lines
+    - use-problem.test.ts: 344 lines
+    - use-question.ts: 186 lines
+    - use-question.test.ts: 274 lines
+    - use-idea.ts: 105 lines
+    - use-idea.test.ts: 188 lines

@@ -888,7 +888,7 @@
       "Add error response examples (401, 403, 404, 422)",
       "Test: All documented endpoints match actual API"
     ],
-    "passes": false,
+    "passes": true,
     "priority": "high"
   },
   {

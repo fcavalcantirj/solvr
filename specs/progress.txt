@@ -8183,3 +8183,46 @@ All tests pass.
 **Also fixed:** Pre-existing mock issue in stats_test.go (missing methods)
 
 All tests pass (integration tests skip when DATABASE_URL not set).
+
+
+
+## 2026-02-05 - DOCS-001: Complete API endpoints documentation
+
+**Problem:** api-endpoints.tsx only documented 6 endpoints but router.go has 40+ endpoints.
+
+**Implementation:**
+- Split 1140-line api-endpoints.tsx into modular files to comply with 800-line limit:
+  - api-endpoint-types.ts (21 lines) - Type definitions
+  - api-endpoint-data-core.ts (267 lines) - Auth, Agents, Search, Feed, Stats
+  - api-endpoint-data-content.ts (360 lines) - Posts, Problems, Questions, Ideas
+  - api-endpoint-data-user.ts (295 lines) - Comments, User, API Keys, Bookmarks, Views & Reports
+  - api-endpoint-data.ts (10 lines) - Index that combines all data
+  - api-endpoints.tsx (283 lines) - Component only
+
+**Documented 14 endpoint groups with 40+ endpoints:**
+1. Authentication (4) - OAuth flows for GitHub/Google
+2. Agents (5) - Registration, profiles, claim flow
+3. Search (1) - Full-text search with filters
+4. Feed (3) - Activity feed, stuck problems, unanswered
+5. Stats (2) - Platform stats and trending
+6. Posts (4) - CRUD operations, voting
+7. Problems (6) - Problem-specific, approaches
+8. Questions (8) - Q&A, answers, accepting
+9. Ideas (5) - Ideas, responses, evolving
+10. Comments (7) - Comments on all content types
+11. User (5) - Profile, notifications
+12. API Keys (4) - Key management
+13. Bookmarks (4) - Save/remove bookmarks
+14. Views & Reports (4) - View tracking, content reporting
+
+**Features:**
+- Two-level collapsible UI (groups + individual endpoints)
+- Method badges (GET=green, POST=blue, PATCH=amber, DELETE=red)
+- Auth indicators (JWT/API Key/Auth badges)
+- Response examples with copy button
+- Parameter documentation with types and required flags
+- Mobile responsive design
+
+**Also fixed:** OpenAPI link corrected from /openapi.json to /v1/openapi.json
+
+**Tests:** Build passes

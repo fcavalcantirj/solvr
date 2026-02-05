@@ -43,6 +43,26 @@ func (m *MockStatsRepository) GetTrendingTags(ctx context.Context, limit int) ([
 	return m.TrendingTags[:limit], nil
 }
 
+func (m *MockStatsRepository) GetProblemsSolvedCount(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+func (m *MockStatsRepository) GetQuestionsAnsweredCount(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+func (m *MockStatsRepository) GetHumansCount(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+func (m *MockStatsRepository) GetTotalPostsCount(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+func (m *MockStatsRepository) GetTotalContributionsCount(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
 func TestStatsHandler_GetStats(t *testing.T) {
 	tests := []struct {
 		name           string

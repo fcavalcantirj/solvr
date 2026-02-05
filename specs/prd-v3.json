@@ -765,7 +765,7 @@
       "Test: Can update own profile",
       "Test: Cannot update other user's profile"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-024",

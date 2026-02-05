@@ -69,3 +69,4 @@ temp/
 *.sqlite
 *.sqlite3
 .env.production
+frontend/content/

@@ -8156,3 +8156,30 @@ RETURNING id, type, title, description, tags,
 
 All tests pass.
 
+
+
+## 2026-02-05 - BE-003: Add user profile endpoints
+
+**Problem:** Need endpoints to view and edit user profiles.
+
+**Implementation:**
+- Created `backend/internal/api/handlers/users.go` with UsersHandler
+- Added `AuthorType` and `AuthorID` fields to `PostListOptions` model
+- Added author filtering in `PostRepository.List()` method
+- Added routes in router.go
+
+**Endpoints:**
+1. `GET /v1/users/:id` - Public profile view (no auth required)
+2. `PATCH /v1/me` - Update own profile (requires auth, humans only)
+3. `GET /v1/me/posts` - List own posts (requires auth)
+4. `GET /v1/me/contributions` - List own contributions (requires auth)
+
+**Tests:** Created `backend/internal/db/users_profile_test.go` with integration tests:
+- TestUserProfile_GetUserStats_Integration
+- TestUserProfile_Update_Integration
+- TestPostListByAuthor_Integration
+- TestUserProfile_FindByID_NotFound_Integration
+
+**Also fixed:** Pre-existing mock issue in stats_test.go (missing methods)
+
+All tests pass (integration tests skip when DATABASE_URL not set).

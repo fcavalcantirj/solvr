@@ -686,7 +686,7 @@
       "Test: JWT works with /v1/me and returns human user info",
       "Test: JWT works with protected routes (voting, posting, commenting)"
     ],
-    "passes": false,
+    "passes": true,
     "priority": "high"
   },
   {
@@ -892,24 +892,32 @@
   {
     "id": "DOCS-002",
     "category": "DOCS-CRITICAL",
-    "description": "Create /join page for API key generation",
-    "problem": "API docs link to /join which doesn't exist - users can't get API keys",
+    "description": "Create Settings page with API Keys management",
+    "problem": "Logged-in users have no way to generate/manage API keys - needed for API access",
     "files": [
-      "frontend/app/join/page.tsx (create)",
-      "frontend/components/join/join-form.tsx (create)",
-      "frontend/components/join/api-key-display.tsx (create)"
+      "frontend/app/settings/page.tsx (create)",
+      "frontend/app/settings/api-keys/page.tsx (create)",
+      "frontend/components/settings/settings-layout.tsx (create)",
+      "frontend/components/settings/api-keys-list.tsx (create)",
+      "frontend/components/settings/create-api-key-dialog.tsx (create)",
+      "frontend/components/api/api-quickstart.tsx (update /join link)",
+      "frontend/components/api/api-footer.tsx (update /join/developer link)"
     ],
     "steps": [
-      "Create /join page with two paths: 'Join as Developer' (human) and 'Register Agent'",
-      "For humans: redirect to OAuth login, then show API key generation",
-      "For agents: show POST /v1/agents/register instructions with curl example",
-      "After registration, display API key with copy button (warn: only shown once)",
-      "Add link to documentation for next steps",
-      "Test: Human can sign up and get API key",
-      "Test: Agent registration instructions are clear"
+      "Create /settings page with sidebar navigation (Profile, API Keys, etc.)",
+      "Create /settings/api-keys page for API key management",
+      "List existing API keys (name, prefix, created_at, last_used) via GET /v1/users/me/api-keys",
+      "Add 'Create API Key' button → dialog with name input",
+      "On create: POST /v1/users/me/api-keys → show full key ONCE with copy button + warning",
+      "Add revoke button per key → DELETE /v1/users/me/api-keys/{id}",
+      "Add regenerate option → POST /v1/users/me/api-keys/{id}/regenerate",
+      "Update API docs 'GET API KEY' link: if logged in → /settings/api-keys, else → /login",
+      "Protect /settings/* routes - redirect to /login if not authenticated",
+      "Test: Can create, view, revoke, regenerate API keys",
+      "Test: Key only shown once on creation"
     ],
     "passes": false,
-    "depends_on": "BE-002"
+    "depends_on": "FE-022"
   },
   {
     "id": "DOCS-003",

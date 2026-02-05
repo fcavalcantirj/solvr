@@ -3,13 +3,15 @@
 import { useState } from "react";
 import {
   Bot, User, ChevronDown, ChevronRight, Clock, CheckCircle2,
-  XCircle, Loader2, AlertCircle, MessageSquare, ArrowUp
+  XCircle, Loader2, AlertCircle, Plus, X
 } from "lucide-react";
 import { ProblemApproach } from "@/hooks/use-problem";
+import { useApproachForm } from "@/hooks/use-approach-form";
 
 interface ApproachesListProps {
   approaches: ProblemApproach[];
   problemId: string;
+  onApproachPosted?: () => void;
 }
 
 const statusConfig: Record<string, { label: string; icon: typeof Clock; className: string; bgClass: string }> = {
@@ -159,10 +161,29 @@ function ApproachCard({ approach, isExpanded, onToggle }: { approach: ProblemApp
   );
 }
 
-export function ApproachesList({ approaches, problemId }: ApproachesListProps) {
+export function ApproachesList({ approaches, problemId, onApproachPosted }: ApproachesListProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     () => new Set(approaches.length > 0 ? [approaches[0].id] : [])
   );
+  const [showForm, setShowForm] = useState(false);
+  const [assumptionInput, setAssumptionInput] = useState('');
+
+  const form = useApproachForm(problemId, () => {
+    setShowForm(false);
+    setAssumptionInput('');
+    onApproachPosted?.();
+  });
+
+  const addAssumption = () => {
+    if (assumptionInput.trim()) {
+      form.setAssumptions([...form.assumptions, assumptionInput.trim()]);
+      setAssumptionInput('');
+    }
+  };
+
+  const removeAssumption = (index: number) => {
+    form.setAssumptions(form.assumptions.filter((_, i) => i !== index));
+  };
 
   const toggleExpanded = (id: string) => {
     setExpandedIds((prev) => {
@@ -193,18 +214,128 @@ export function ApproachesList({ approaches, problemId }: ApproachesListProps) {
             {approaches.length} TOTAL — {activeApproaches.length} ACTIVE
           </p>
         </div>
-        <button className="font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-foreground/90 transition-colors">
+        <button
+          onClick={() => setShowForm(true)}
+          className="font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-foreground/90 transition-colors flex items-center gap-2"
+        >
+          <Plus size={14} />
           START APPROACH
         </button>
       </div>
 
+      {/* Approach Form */}
+      {showForm && (
+        <div className="border border-foreground bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-mono text-xs tracking-wider">NEW APPROACH</h3>
+            <button
+              onClick={() => setShowForm(false)}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {form.error && (
+            <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-2 text-sm">
+              {form.error}
+            </div>
+          )}
+
+          <div>
+            <label className="font-mono text-[10px] tracking-wider text-muted-foreground block mb-2">
+              ANGLE *
+            </label>
+            <input
+              type="text"
+              value={form.angle}
+              onChange={(e) => form.setAngle(e.target.value)}
+              placeholder="What's your approach angle?"
+              className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-foreground"
+            />
+          </div>
+
+          <div>
+            <label className="font-mono text-[10px] tracking-wider text-muted-foreground block mb-2">
+              METHOD
+            </label>
+            <textarea
+              value={form.method}
+              onChange={(e) => form.setMethod(e.target.value)}
+              placeholder="How will you tackle this?"
+              rows={3}
+              className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-foreground resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="font-mono text-[10px] tracking-wider text-muted-foreground block mb-2">
+              ASSUMPTIONS
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={assumptionInput}
+                onChange={(e) => setAssumptionInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addAssumption())}
+                placeholder="Add an assumption"
+                className="flex-1 border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:border-foreground"
+              />
+              <button
+                type="button"
+                onClick={addAssumption}
+                className="font-mono text-[10px] tracking-wider border border-border px-4 py-2 hover:bg-secondary transition-colors"
+              >
+                ADD
+              </button>
+            </div>
+            {form.assumptions.length > 0 && (
+              <ul className="space-y-1">
+                {form.assumptions.map((assumption, i) => (
+                  <li key={i} className="flex items-center gap-2 text-sm text-foreground/80">
+                    <span className="text-muted-foreground">—</span>
+                    <span className="flex-1">{assumption}</span>
+                    <button
+                      onClick={() => removeAssumption(i)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <X size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => setShowForm(false)}
+              className="font-mono text-xs tracking-wider border border-border px-5 py-2.5 hover:bg-secondary transition-colors"
+            >
+              CANCEL
+            </button>
+            <button
+              onClick={form.submit}
+              disabled={form.isSubmitting}
+              className="font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-foreground/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {form.isSubmitting && <Loader2 size={14} className="animate-spin" />}
+              {form.isSubmitting ? 'SUBMITTING...' : 'START APPROACH'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Empty State */}
-      {approaches.length === 0 && (
+      {approaches.length === 0 && !showForm && (
         <div className="border border-dashed border-border p-8 text-center">
           <p className="text-muted-foreground font-mono text-sm mb-4">
             No approaches yet. Be the first to propose a solution!
           </p>
-          <button className="font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-foreground/90 transition-colors">
+          <button
+            onClick={() => setShowForm(true)}
+            className="font-mono text-xs tracking-wider bg-foreground text-background px-5 py-2.5 hover:bg-foreground/90 transition-colors"
+          >
             START APPROACH
           </button>
         </div>

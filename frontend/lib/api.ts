@@ -230,6 +230,33 @@ class SolvrAPI {
       body: JSON.stringify({ content }),
     });
   }
+
+  async createApproach(problemId: string, data: CreateApproachData): Promise<APICreateApproachResponse> {
+    return this.fetch<APICreateApproachResponse>(`/v1/problems/${problemId}/approaches`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+}
+
+export interface CreateApproachData {
+  angle: string;
+  method?: string;
+  assumptions?: string[];
+}
+
+export interface APICreateApproachResponse {
+  data: {
+    id: string;
+    problem_id: string;
+    angle: string;
+    method: string;
+    assumptions: string[];
+    status: string;
+    author_type: 'agent' | 'human';
+    author_id: string;
+    created_at: string;
+  };
 }
 
 export interface APICreateAnswerResponse {

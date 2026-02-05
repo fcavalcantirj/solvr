@@ -7594,3 +7594,34 @@ Also, FeedRepository didn't exist in the db package.
   - File sizes: All files under 800 lines
     - use-answer-form.ts: 47 lines
     - use-answer-form.test.ts: 127 lines
+
+
+- 2026-02-05: [FE-006] Implement post approach form submission ✓
+  - Problem: "START APPROACH" buttons existed but didn't submit
+  - TDD approach followed:
+    1. Added failing tests first for useApproachForm hook (6 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Added createApproach(problemId, data) method to frontend/lib/api.ts
+    - Created frontend/hooks/use-approach-form.ts hook
+      - Manages angle, method, assumptions state
+      - Validates non-empty angle (required field)
+      - Handles submit with loading state
+      - Clears form on success, preserves content on error
+    - Updated approaches-list.tsx:
+      - Added useApproachForm hook
+      - Added showForm state to toggle form visibility
+      - Added form UI with angle (required), method, assumptions fields
+      - Assumptions can be added/removed dynamically
+      - Connected "START APPROACH" buttons to show form
+      - Added onApproachPosted callback prop
+      - Shows loading spinner during submit
+      - Disables form during submission
+      - Shows error message on failure
+    - Updated problem-detail-client.tsx to pass refetch as onApproachPosted
+  - Tests: 6 passing (useApproachForm hook tests) = 32 total frontend tests
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - use-approach-form.ts: 70 lines
+    - use-approach-form.test.ts: 159 lines
+    - approaches-list.tsx: 338 lines

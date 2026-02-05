@@ -50,7 +50,7 @@ export function ProblemDetailClient({ id }: ProblemDetailClientProps) {
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           <ProblemDescription problem={problem} />
-          <ApproachesList approaches={approaches} problemId={problem.id} />
+          <ApproachesList approaches={approaches} problemId={problem.id} onApproachPosted={refetch} />
         </div>
         <div className="lg:col-span-1">
           <ProblemSidePanel problem={problem} approachesCount={approaches.length} />

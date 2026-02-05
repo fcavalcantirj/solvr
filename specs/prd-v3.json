@@ -557,5 +557,74 @@
     ],
     "passes": true,
     "depends_on": "May need backend endpoint"
+  },
+  {
+    "id": "FE-019",
+    "category": "FE-CRITICAL",
+    "description": "Replace fake homepage stats with real API data",
+    "problem": "Homepage shows hardcoded fake numbers (12.4K problems, 48.2K questions, etc.)",
+    "evidence": "Screenshot shows 12.4K PROBLEMS SOLVED, 48.2K QUESTIONS ANSWERED - obviously fake for a new platform",
+    "files": [
+      "frontend/app/page.tsx (or homepage component)",
+      "frontend/components/hero-section.tsx (likely location)",
+      "frontend/hooks/use-stats.ts",
+      "frontend/lib/api.ts"
+    ],
+    "steps": [
+      "Find where homepage stats are rendered (likely hero-section.tsx or page.tsx)",
+      "Replace hardcoded values with data from useStats() hook",
+      "Ensure useStats fetches from GET /v1/stats",
+      "Map API response to display labels: problems_solved, questions_answered, agents_active, humans_participating",
+      "Add loading state (skeleton or --) while fetching",
+      "Handle error state gracefully (show -- or hide section)",
+      "Test: Homepage shows real counts from API"
+    ],
+    "passes": false
+  },
+  {
+    "id": "BE-001",
+    "category": "BE-IMPORTANT",
+    "description": "Extend /v1/stats to return all homepage metrics",
+    "problem": "Current /v1/stats only returns active_posts, total_agents, solved_today - missing metrics for homepage",
+    "evidence": "GET /v1/stats returns {active_posts: 3, total_agents: 2, solved_today: 0}",
+    "needed_metrics": {
+      "problems_solved": "COUNT posts WHERE type=problem AND status=solved",
+      "questions_answered": "COUNT posts WHERE type=question AND has_accepted_answer=true",
+      "agents_active": "COUNT agents (already have as total_agents)",
+      "humans_participating": "COUNT users",
+      "total_posts": "COUNT all posts",
+      "total_answers": "COUNT all answers/approaches/responses"
+    },
+    "files": [
+      "backend/internal/api/handlers/stats.go",
+      "backend/internal/db/stats.go"
+    ],
+    "steps": [
+      "Add problems_solved query: SELECT COUNT(*) FROM posts WHERE type='problem' AND status='solved'",
+      "Add questions_answered query: COUNT questions with accepted answers (may need join)",
+      "Add humans_count query: SELECT COUNT(*) FROM users",
+      "Add total_posts and total_answers for general metrics",
+      "Update StatsHandler.GetStats to return extended response",
+      "Update StatsData struct with new fields",
+      "Test: GET /v1/stats returns all new metrics"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-020",
+    "category": "FE-IMPORTANT",
+    "description": "Format large numbers nicely on homepage (1.2K, 48.2K format)",
+    "problem": "When real stats are wired, need to format numbers nicely",
+    "files": [
+      "frontend/lib/utils.ts",
+      "frontend/components/hero-section.tsx"
+    ],
+    "steps": [
+      "Create formatCount(n) utility: 1000 -> '1K', 1200 -> '1.2K', 48200 -> '48.2K'",
+      "Apply to all homepage stat displays",
+      "Handle edge cases: 0, small numbers (<1000 show as-is), millions",
+      "Test: Numbers display in readable format"
+    ],
+    "passes": false
   }
 ]

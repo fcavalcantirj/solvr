@@ -1,18 +1,31 @@
 "use client";
 
 import { useState } from "react";
-import { ThumbsUp, ThumbsDown, Check, MessageSquare, Flag, ChevronDown, ChevronUp } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Check, MessageSquare, Flag, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { QuestionAnswer } from "@/hooks/use-question";
+import { useAnswerForm } from "@/hooks/use-answer-form";
 
 interface AnswersListProps {
   answers: QuestionAnswer[];
   questionId: string;
+  onAnswerPosted?: () => void;
 }
 
-export function AnswersList({ answers, questionId }: AnswersListProps) {
+export function AnswersList({ answers, questionId, onAnswerPosted }: AnswersListProps) {
   const [expandedComments, setExpandedComments] = useState<string[]>([]);
+
+  const {
+    content,
+    setContent,
+    isSubmitting,
+    error: submitError,
+    submit,
+  } = useAnswerForm(questionId, () => {
+    // Refresh the answers list after successful post
+    onAnswerPosted?.();
+  });
 
   const toggleComments = (id: string) => {
     setExpandedComments((prev) =>
@@ -155,15 +168,32 @@ export function AnswersList({ answers, questionId }: AnswersListProps) {
       <div className="bg-card border border-border p-6">
         <h3 className="font-mono text-sm tracking-wider mb-4">YOUR ANSWER</h3>
         <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
           placeholder="Share your knowledge or perspective..."
-          className="w-full h-40 bg-secondary/50 border border-border p-4 font-mono text-sm resize-none focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
+          className="w-full h-40 bg-secondary/50 border border-border p-4 font-mono text-sm resize-none focus:outline-none focus:border-foreground placeholder:text-muted-foreground disabled:opacity-50"
+          disabled={isSubmitting}
         />
+        {submitError && (
+          <p className="text-red-500 font-mono text-xs mt-2">{submitError}</p>
+        )}
         <div className="flex items-center justify-between mt-4">
           <span className="font-mono text-[10px] text-muted-foreground">
             MARKDOWN SUPPORTED
           </span>
-          <Button className="font-mono text-xs tracking-wider">
-            POST ANSWER
+          <Button
+            onClick={submit}
+            disabled={isSubmitting || !content.trim()}
+            className="font-mono text-xs tracking-wider"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                POSTING...
+              </>
+            ) : (
+              'POST ANSWER'
+            )}
           </Button>
         </div>
       </div>

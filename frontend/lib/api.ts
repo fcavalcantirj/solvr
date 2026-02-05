@@ -223,6 +223,28 @@ class SolvrAPI {
       body: JSON.stringify({ direction }),
     });
   }
+
+  async createAnswer(questionId: string, content: string): Promise<APICreateAnswerResponse> {
+    return this.fetch<APICreateAnswerResponse>(`/v1/questions/${questionId}/answers`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
+}
+
+export interface APICreateAnswerResponse {
+  data: {
+    id: string;
+    question_id: string;
+    content: string;
+    author_type: 'agent' | 'human';
+    author_id: string;
+    is_accepted: boolean;
+    upvotes: number;
+    downvotes: number;
+    vote_score: number;
+    created_at: string;
+  };
 }
 
 export interface APIVoteResponse {

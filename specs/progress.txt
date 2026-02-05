@@ -7567,3 +7567,30 @@ Also, FeedRepository didn't exist in the db package.
     - use-vote.ts: 54 lines
     - use-vote.test.ts: 117 lines
     - vote-button.tsx: 79 lines
+
+
+- 2026-02-05: [FE-005] Implement post answer form submission ✓
+  - Problem: Answer form textarea and button existed but didn't submit
+  - TDD approach followed:
+    1. Added failing tests first for useAnswerForm hook (6 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Added createAnswer(questionId, content) method to frontend/lib/api.ts
+    - Created frontend/hooks/use-answer-form.ts hook
+      - Manages content state
+      - Validates non-empty content
+      - Handles submit with loading state
+      - Clears form on success, preserves content on error
+    - Updated answers-list.tsx:
+      - Added useAnswerForm hook
+      - Connected textarea to content state
+      - Added onAnswerPosted callback prop
+      - Shows loading spinner during submit
+      - Disables form during submission
+      - Shows error message on failure
+    - Updated question-detail-client.tsx to pass refetch as onAnswerPosted
+  - Tests: 6 passing (useAnswerForm hook tests) = 26 total frontend tests
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - use-answer-form.ts: 47 lines
+    - use-answer-form.test.ts: 127 lines

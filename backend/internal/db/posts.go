@@ -85,6 +85,13 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		argNum++
 	}
 
+	// Filter by author (BE-003: user profile endpoints)
+	if opts.AuthorType != "" && opts.AuthorID != "" {
+		conditions = append(conditions, fmt.Sprintf("p.posted_by_type = $%d AND p.posted_by_id = $%d", argNum, argNum+1))
+		args = append(args, opts.AuthorType, opts.AuthorID)
+		argNum += 2
+	}
+
 	whereClause := strings.Join(conditions, " AND ")
 
 	// Calculate pagination

@@ -4,7 +4,8 @@
 .env.*.local
 
 .claude/
-
+moltbook-drafts/
+skill-v2-draft.md
 
 # IDE/Editor
 .idea/

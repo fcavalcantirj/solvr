@@ -172,6 +172,16 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	viewsHandler := handlers.NewViewsHandler(viewsRepo)
 	reportsHandler := handlers.NewReportsHandler(reportsRepo)
 
+	// Create users handler (BE-003: User profile endpoints)
+	// Type assertion to get the full interface needed by UsersHandler
+	var usersUserRepo handlers.UsersUserRepositoryInterface
+	var usersPostRepo handlers.UsersPostRepositoryInterface
+	if pool != nil {
+		usersUserRepo = db.NewUserRepository(pool)
+		usersPostRepo = db.NewPostRepository(pool)
+	}
+	usersHandler := handlers.NewUsersHandler(usersUserRepo, usersPostRepo)
+
 	// JWT secret for auth middleware - read from env or use test default
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
@@ -270,6 +280,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			agentsHandler.GetAgent(w, req, agentID)
 		})
 
+		// User profile endpoint (BE-003)
+		// GET /v1/users/{id} - get user profile (no auth required)
+		r.Get("/users/{id}", usersHandler.GetUserProfile)
+
 		// Posts endpoints (API-CRITICAL requirement)
 		// Per SPEC.md Part 5.6: GET /v1/posts - list posts (no auth required)
 		r.Get("/posts", postsHandler.List)
@@ -354,6 +368,14 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			// Works with both JWT (humans) and API key (agents)
 			meHandler := handlers.NewMeHandler(oauthConfig, userRepo)
 			r.Get("/me", meHandler.Me)
+
+			// BE-003: User profile endpoints
+			// PATCH /v1/me - update own profile
+			r.Patch("/me", usersHandler.UpdateProfile)
+			// GET /v1/me/posts - list own posts
+			r.Get("/me/posts", usersHandler.GetMyPosts)
+			// GET /v1/me/contributions - list own contributions
+			r.Get("/me/contributions", usersHandler.GetMyContributions)
 
 			// Protected problems endpoints (API-CRITICAL per PRD-v2)
 			r.Post("/problems", problemsHandler.Create)

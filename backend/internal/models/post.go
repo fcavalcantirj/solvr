@@ -130,11 +130,13 @@ type PostWithAuthor struct {
 
 // PostListOptions contains options for listing posts.
 type PostListOptions struct {
-	Type    PostType   // Filter by post type
-	Status  PostStatus // Filter by status
-	Tags    []string   // Filter by tags
-	Page    int        // Page number (1-indexed)
-	PerPage int        // Results per page
+	Type       PostType   // Filter by post type
+	Status     PostStatus // Filter by status
+	Tags       []string   // Filter by tags
+	AuthorType AuthorType // Filter by author type (BE-003)
+	AuthorID   string     // Filter by author ID (BE-003)
+	Page       int        // Page number (1-indexed)
+	PerPage    int        // Results per page
 }
 
 // ValidPostTypes returns all valid post types.

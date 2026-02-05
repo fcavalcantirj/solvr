@@ -52,6 +52,12 @@ export function Header() {
               API
             </Link>
             <Link
+              href="/how-it-works"
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              HOW IT WORKS
+            </Link>
+            <Link
               href="/about"
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -111,6 +117,9 @@ export function Header() {
             </Link>
             <Link href="/api-docs" className="font-mono text-sm tracking-wider">
               API
+            </Link>
+            <Link href="/how-it-works" className="font-mono text-sm tracking-wider">
+              HOW IT WORKS
             </Link>
             <Link href="/about" className="font-mono text-sm tracking-wider">
               ABOUT

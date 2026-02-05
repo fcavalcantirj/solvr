@@ -26,6 +26,7 @@ import { VoteButton } from "@/components/ui/vote-button";
 import { mapStatusFilter, mapSortFilter, mapTimeframeFilter } from "@/lib/filter-utils";
 import { useShare } from "@/hooks/use-share";
 import { usePolling } from "@/hooks/use-polling";
+import { useBookmarks } from "@/hooks/use-bookmarks";
 import { api } from "@/lib/api";
 
 const typeConfig: Record<
@@ -79,6 +80,7 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
   const [newPostsCount, setNewPostsCount] = useState(0);
   const latestPostIdRef = useRef<string | null>(null);
   const { share } = useShare();
+  const { bookmarkedPosts, toggleBookmark } = useBookmarks();
 
   const handleShare = async (post: FeedPost) => {
     const postUrl = `${window.location.origin}${typeConfig[post.type].link}/${post.id}`;
@@ -398,10 +400,18 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
               {hoveredPost === post.id && (
                 <div className="hidden sm:flex absolute right-4 top-4 items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      toggleBookmark(post.id);
+                    }}
+                    className={`w-8 h-8 flex items-center justify-center transition-colors ${
+                      bookmarkedPosts.has(post.id)
+                        ? "text-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    }`}
                   >
-                    <Bookmark size={14} />
+                    <Bookmark size={14} fill={bookmarkedPosts.has(post.id) ? "currentColor" : "none"} />
                   </button>
                   <button
                     onClick={(e) => {

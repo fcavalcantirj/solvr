@@ -7880,3 +7880,35 @@ Also, FeedRepository didn't exist in the db package.
     - use-polling.ts: 54 lines
     - use-polling.test.ts: 110 lines
     - feed-list.tsx: 432 lines
+
+
+- 2026-02-05: [FE-011] Implement bookmark functionality (full stack) ✓
+  - Problem: Bookmark button existed but did nothing, no backend endpoint
+  - TDD approach followed:
+    1. Created backend tests for bookmark repository (5 tests)
+    2. Created frontend tests for useBookmarks hook (6 tests)
+  - Backend implementation:
+    - Created migration 000021_create_bookmarks (up/down)
+    - Created backend/internal/models/bookmark.go
+    - Created backend/internal/db/bookmarks.go repository
+    - Created backend/internal/db/bookmarks_test.go (5 tests)
+    - Created backend/internal/api/handlers/bookmarks.go handler
+    - Created backend/internal/api/inmemory_bookmarks_repo.go
+    - Updated router.go with bookmark routes:
+      - GET /v1/users/me/bookmarks - list bookmarks
+      - POST /v1/users/me/bookmarks - add bookmark
+      - GET /v1/users/me/bookmarks/:id - check if bookmarked
+      - DELETE /v1/users/me/bookmarks/:id - remove bookmark
+  - Frontend implementation:
+    - Created frontend/hooks/use-bookmarks.ts hook
+    - Created frontend/hooks/use-bookmarks.test.ts (6 tests)
+    - Added API methods to frontend/lib/api.ts:
+      - addBookmark, removeBookmark, isBookmarked, getBookmarks
+    - Updated feed-list.tsx:
+      - Wired bookmark button to toggleBookmark
+      - Show filled bookmark icon when bookmarked
+  - Result: Users can bookmark/unbookmark posts with visual feedback
+  - Tests: 6 frontend tests + 5 backend tests (requires DB to run)
+  - Frontend: 101 tests passing
+  - Backend: Compiles successfully
+  - File sizes: All files under 800 lines

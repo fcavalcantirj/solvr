@@ -295,6 +295,65 @@ class SolvrAPI {
       body: JSON.stringify(data),
     });
   }
+
+  async addBookmark(postId: string): Promise<APIAddBookmarkResponse> {
+    return this.fetch<APIAddBookmarkResponse>('/v1/users/me/bookmarks', {
+      method: 'POST',
+      body: JSON.stringify({ post_id: postId }),
+    });
+  }
+
+  async removeBookmark(postId: string): Promise<void> {
+    await this.fetch<void>(`/v1/users/me/bookmarks/${postId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async isBookmarked(postId: string): Promise<APIIsBookmarkedResponse> {
+    return this.fetch<APIIsBookmarkedResponse>(`/v1/users/me/bookmarks/${postId}`);
+  }
+
+  async getBookmarks(params?: { page?: number; per_page?: number }): Promise<APIBookmarksResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APIBookmarksResponse>(`/v1/users/me/bookmarks${query ? `?${query}` : ''}`);
+  }
+}
+
+export interface APIAddBookmarkResponse {
+  data: {
+    id: string;
+    user_type: string;
+    user_id: string;
+    post_id: string;
+    created_at: string;
+  };
+}
+
+export interface APIIsBookmarkedResponse {
+  data: {
+    bookmarked: boolean;
+  };
+}
+
+export interface APIBookmarksResponse {
+  data: Array<{
+    id: string;
+    user_type: string;
+    user_id: string;
+    post_id: string;
+    created_at: string;
+    post: APIPost;
+  }>;
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
 }
 
 export interface CreatePostData {

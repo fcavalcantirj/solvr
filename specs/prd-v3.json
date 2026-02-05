@@ -416,7 +416,7 @@
       "Toggle bookmark icon fill on click",
       "Test: Bookmarking persists across page loads"
     ],
-    "passes": false,
+    "passes": true,
     "depends_on": "May need backend endpoint first"
   },
   {

@@ -100,6 +100,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	var commentsRepo handlers.CommentsRepositoryInterface
 	var notificationsRepo handlers.NotificationsRepositoryInterface
 	var userAPIKeysRepo handlers.UserAPIKeyRepositoryInterface
+	var bookmarksRepo handlers.BookmarksRepositoryInterface
 	if pool != nil {
 		agentRepo = db.NewAgentRepository(pool)
 		claimTokenRepo = db.NewClaimTokenRepository(pool)
@@ -108,6 +109,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		feedRepo = db.NewFeedRepository(pool)
 		userRepo = db.NewUserRepository(pool)
 		userAPIKeysRepo = db.NewUserAPIKeyRepository(pool)
+		bookmarksRepo = db.NewBookmarkRepository(pool)
 		// For now, use in-memory repos until DB implementations are added
 		problemsRepo = NewInMemoryProblemsRepository()
 		questionsRepo = NewInMemoryQuestionsRepository()
@@ -128,6 +130,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		commentsRepo = NewInMemoryCommentsRepository()
 		notificationsRepo = NewInMemoryNotificationsRepository()
 		userAPIKeysRepo = NewInMemoryUserAPIKeyRepository()
+		bookmarksRepo = NewInMemoryBookmarksRepository()
 	}
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
@@ -158,6 +161,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	// Create user-related handlers (API-CRITICAL per PRD-v2)
 	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
 	userAPIKeysHandler := handlers.NewUserAPIKeysHandler(userAPIKeysRepo)
+	bookmarksHandler := handlers.NewBookmarksHandler(bookmarksRepo)
 
 	// JWT secret for auth middleware
 	jwtSecret := "test-jwt-secret"
@@ -372,6 +376,16 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 				keyID := chi.URLParam(req, "id")
 				userAPIKeysHandler.RegenerateAPIKey(w, req, keyID)
 			})
+
+			// Bookmarks endpoints (FE-011)
+			// GET /users/me/bookmarks - list user's bookmarks
+			r.Get("/users/me/bookmarks", bookmarksHandler.List)
+			// POST /users/me/bookmarks - add a bookmark
+			r.Post("/users/me/bookmarks", bookmarksHandler.Add)
+			// GET /users/me/bookmarks/:id - check if post is bookmarked
+			r.Get("/users/me/bookmarks/{id}", bookmarksHandler.Check)
+			// DELETE /users/me/bookmarks/:id - remove a bookmark
+			r.Delete("/users/me/bookmarks/{id}", bookmarksHandler.Remove)
 		})
 	})
 }

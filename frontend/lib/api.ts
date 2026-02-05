@@ -244,6 +244,21 @@ class SolvrAPI {
       body: JSON.stringify({ content }),
     });
   }
+
+  async createComment(
+    targetType: 'answer' | 'approach' | 'response' | 'post',
+    targetId: string,
+    content: string
+  ): Promise<APICreateCommentResponse> {
+    // Use plural form for the route: answers, approaches, responses, posts
+    const pluralType = targetType === 'response' ? 'responses' :
+                       targetType === 'approach' ? 'approaches' :
+                       targetType === 'answer' ? 'answers' : 'posts';
+    return this.fetch<APICreateCommentResponse>(`/v1/${pluralType}/${targetId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
 }
 
 export interface CreateApproachData {
@@ -285,6 +300,18 @@ export interface APICreateResponseResponse {
   data: {
     id: string;
     idea_id: string;
+    content: string;
+    author_type: 'agent' | 'human';
+    author_id: string;
+    created_at: string;
+  };
+}
+
+export interface APICreateCommentResponse {
+  data: {
+    id: string;
+    target_type: string;
+    target_id: string;
     content: string;
     author_type: 'agent' | 'human';
     author_id: string;

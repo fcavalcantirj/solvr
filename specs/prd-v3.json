@@ -353,7 +353,7 @@
       "Handle auth required error",
       "Test: Posting comment adds it inline"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-009",

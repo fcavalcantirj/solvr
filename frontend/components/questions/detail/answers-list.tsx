@@ -6,11 +6,61 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { QuestionAnswer } from "@/hooks/use-question";
 import { useAnswerForm } from "@/hooks/use-answer-form";
+import { useCommentForm } from "@/hooks/use-comment-form";
 
 interface AnswersListProps {
   answers: QuestionAnswer[];
   questionId: string;
   onAnswerPosted?: () => void;
+}
+
+interface CommentInputProps {
+  answerId: string;
+  onCommentPosted?: () => void;
+}
+
+function CommentInput({ answerId, onCommentPosted }: CommentInputProps) {
+  const { content, setContent, isSubmitting, error, submit } = useCommentForm(
+    'answer',
+    answerId,
+    () => onCommentPosted?.()
+  );
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && content.trim()) {
+      e.preventDefault();
+      submit();
+    }
+  };
+
+  return (
+    <div className="pt-2">
+      {error && (
+        <p className="text-red-500 font-mono text-[10px] mb-1">{error}</p>
+      )}
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Add a comment..."
+          disabled={isSubmitting}
+          className="flex-1 bg-transparent border-b border-border px-0 py-2 font-mono text-xs focus:outline-none focus:border-foreground placeholder:text-muted-foreground disabled:opacity-50"
+        />
+        {isSubmitting ? (
+          <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+        ) : content.trim() && (
+          <button
+            onClick={submit}
+            className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
+          >
+            POST
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function AnswersList({ answers, questionId, onAnswerPosted }: AnswersListProps) {
@@ -150,13 +200,7 @@ export function AnswersList({ answers, questionId, onAnswerPosted }: AnswersList
 
                 {expandedComments.includes(answer.id) && (
                   <div className="mt-4 pl-4 border-l-2 border-border space-y-4">
-                    <div className="pt-2">
-                      <input
-                        type="text"
-                        placeholder="Add a comment..."
-                        className="w-full bg-transparent border-b border-border px-0 py-2 font-mono text-xs focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
-                      />
-                    </div>
+                    <CommentInput answerId={answer.id} onCommentPosted={onAnswerPosted} />
                   </div>
                 )}
               </div>

@@ -7653,3 +7653,31 @@ Also, FeedRepository didn't exist in the db package.
     - use-response-form.ts: 50 lines
     - use-response-form.test.ts: 127 lines
     - idea-discussion.tsx: 219 lines
+
+
+- 2026-02-05: [FE-008] Implement comments on answers ✓
+  - Problem: Comment input existed in answers-list but didn't submit
+  - TDD approach followed:
+    1. Added failing tests first for useCommentForm hook (6 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Added createComment(targetType, targetId, content) method to frontend/lib/api.ts
+      - Supports answer, approach, response, and post target types
+      - Maps to correct API endpoints (POST /v1/{type}s/{id}/comments)
+    - Created frontend/hooks/use-comment-form.ts hook
+      - Manages content state
+      - Validates non-empty content
+      - Handles submit with loading state
+      - Clears form on success, preserves content on error
+    - Updated answers-list.tsx:
+      - Added CommentInput component using useCommentForm hook
+      - Supports Enter key to submit
+      - Shows POST button when content is present
+      - Shows loading spinner during submission
+      - Shows error message on failure
+  - Tests: 6 passing (useCommentForm hook tests) = 44 total frontend tests
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - use-comment-form.ts: 55 lines
+    - use-comment-form.test.ts: 127 lines
+    - answers-list.tsx: 244 lines

@@ -1,7 +1,7 @@
 {
   "name": "solvr",
   "version": "0.1.0",
-  "description": "The knowledge base for AI agents. Post problems, questions, and ideas. Find solutions that actually worked.",
+  "description": "The living knowledge base where humans and AI agents collaborate as equals. Post problems, questions, and ideas. Find solutions that actually worked.",
   "homepage": "https://solvr.dev",
   "repository": "https://github.com/fcavalcantirj/solvr",
   "author": "Solvr Team",

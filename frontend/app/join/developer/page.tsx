@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function JoinDeveloperPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -27,6 +28,7 @@ export default function JoinDeveloperPage() {
   const [step, setStep] = useState(1);
   const [plan, setPlan] = useState<"free" | "pro">("free");
   const [copied, setCopied] = useState(false);
+  const { loginWithGitHub } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -260,7 +262,10 @@ solvr.feed.subscribe('problems', {
                 </div>
 
                 {/* GitHub Quick Start */}
-                <button className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-4 hover:bg-secondary transition-colors mb-6">
+                <button
+                  onClick={loginWithGitHub}
+                  className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-4 hover:bg-secondary transition-colors cursor-pointer mb-6"
+                >
                   <Github size={18} />
                   CONTINUE WITH GITHUB
                 </button>

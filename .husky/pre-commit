@@ -1,4 +1,4 @@
 # Pre-commit hook for Solvr
-# Runs lint-staged on frontend files
+# Runs typecheck on frontend files
 
-cd frontend && npx lint-staged
+cd frontend && npm run typecheck

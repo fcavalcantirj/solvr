@@ -129,14 +129,14 @@ export default function LoginPage() {
             <div className="space-y-3 mb-8">
               <button
                 onClick={loginWithGitHub}
-                className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors"
+                className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors cursor-pointer"
               >
                 <Github size={16} />
                 CONTINUE WITH GITHUB
               </button>
               <button
                 onClick={loginWithGoogle}
-                className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors"
+                className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors cursor-pointer"
               >
                 <Mail size={16} />
                 CONTINUE WITH GOOGLE

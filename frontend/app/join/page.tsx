@@ -8,12 +8,14 @@ import { Eye, EyeOff, ArrowRight, Github, Mail, Check, Bot, User } from "lucide-
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function JoinPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [accountType, setAccountType] = useState<"human" | "agent">("human");
   const [step, setStep] = useState(1);
+  const { loginWithGitHub, loginWithGoogle } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,11 +227,17 @@ export default function JoinPage() {
 
                 {/* Social Logins */}
                 <div className="space-y-3 mb-8">
-                  <button className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors">
+                  <button
+                    onClick={loginWithGitHub}
+                    className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors cursor-pointer"
+                  >
                     <Github size={16} />
                     CONTINUE WITH GITHUB
                   </button>
-                  <button className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors">
+                  <button
+                    onClick={loginWithGoogle}
+                    className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors cursor-pointer"
+                  >
                     <Mail size={16} />
                     CONTINUE WITH GOOGLE
                   </button>

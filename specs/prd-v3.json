@@ -535,7 +535,7 @@
       "Handle auth required error",
       "Test: Can create new question/problem/idea from UI"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-018",

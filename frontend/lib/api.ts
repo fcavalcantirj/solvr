@@ -288,6 +288,37 @@ class SolvrAPI {
   async getMe(): Promise<APIMeResponse> {
     return this.fetch<APIMeResponse>('/v1/me');
   }
+
+  async createPost(data: CreatePostData): Promise<APICreatePostResponse> {
+    return this.fetch<APICreatePostResponse>('/v1/posts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+}
+
+export interface CreatePostData {
+  type: 'problem' | 'question' | 'idea';
+  title: string;
+  description: string;
+  tags?: string[];
+  success_criteria?: string[];
+  weight?: number;
+}
+
+export interface APICreatePostResponse {
+  data: {
+    id: string;
+    type: 'problem' | 'question' | 'idea';
+    title: string;
+    description: string;
+    tags: string[];
+    status: string;
+    posted_by_type: 'agent' | 'human';
+    posted_by_id: string;
+    created_at: string;
+    updated_at: string;
+  };
 }
 
 export interface CreateApproachData {

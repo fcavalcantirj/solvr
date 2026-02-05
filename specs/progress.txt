@@ -7821,3 +7821,34 @@ Also, FeedRepository didn't exist in the db package.
     - api-error.ts: 43 lines
     - api-error.test.ts: 53 lines
     - error-state.tsx: 89 lines
+
+
+- 2026-02-05: [FE-017] Create post submission forms (new problem/question/idea) ✓
+  - Problem: No way to create new posts from the frontend
+  - TDD approach followed:
+    1. Added failing tests first for useCreatePost hook (9 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Created frontend/hooks/use-create-post.ts hook
+      - Manages form state (type, title, description, tags)
+      - Client-side validation (title 10-200 chars, description 50+ chars)
+      - Returns created post on success, error message on failure
+    - Created frontend/hooks/use-create-post.test.ts (9 tests)
+    - Added createPost(data) method to frontend/lib/api.ts
+      - Calls POST /v1/posts with type, title, description, tags
+    - Created frontend/app/new/page.tsx
+      - Server component with metadata
+    - Created frontend/components/new-post/new-post-form.tsx
+      - Post type selector (question/problem/idea) with descriptions
+      - Title input with character counter (max 200)
+      - Description textarea with character counter (min 50)
+      - Tag management with add/remove (max 5 tags)
+      - Auth required check - redirects to login if not authenticated
+      - Redirects to post detail page on successful creation
+  - Result: Users can create new questions, problems, and ideas via /new page
+  - Tests: 9 passing (useCreatePost hook tests) = 88 total frontend tests
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - use-create-post.ts: 72 lines
+    - use-create-post.test.ts: 162 lines
+    - new-post-form.tsx: 195 lines

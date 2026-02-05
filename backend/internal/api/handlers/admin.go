@@ -88,61 +88,75 @@ func (h *AdminHandler) ExecuteQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute query
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
 
-	rows, err := h.pool.Query(ctx, req.Query)
-	if err != nil {
-		writeAdminJSON(w, http.StatusOK, QueryResponse{
-			Error: err.Error(),
-		})
-		return
-	}
-	defer rows.Close()
+	// Check if this looks like a SELECT query (should return rows)
+	trimmedQuery := strings.TrimSpace(strings.ToUpper(req.Query))
+	isSelect := strings.HasPrefix(trimmedQuery, "SELECT")
 
-	// Get column names
-	fieldDescs := rows.FieldDescriptions()
-	columns := make([]string, len(fieldDescs))
-	for i, fd := range fieldDescs {
-		columns[i] = string(fd.Name)
-	}
-
-	// Collect rows
-	var results []map[string]interface{}
-	for rows.Next() {
-		values, err := rows.Values()
+	if isSelect {
+		// Use Query for SELECT statements
+		rows, err := h.pool.Query(ctx, req.Query)
 		if err != nil {
 			writeAdminJSON(w, http.StatusOK, QueryResponse{
 				Error: err.Error(),
 			})
 			return
 		}
+		defer rows.Close()
 
-		row := make(map[string]interface{})
-		for i, col := range columns {
-			row[col] = values[i]
+		// Get column names
+		fieldDescs := rows.FieldDescriptions()
+		columns := make([]string, len(fieldDescs))
+		for i, fd := range fieldDescs {
+			columns[i] = string(fd.Name)
 		}
-		results = append(results, row)
+
+		// Collect rows
+		var results []map[string]interface{}
+		for rows.Next() {
+			values, err := rows.Values()
+			if err != nil {
+				writeAdminJSON(w, http.StatusOK, QueryResponse{
+					Error: err.Error(),
+				})
+				return
+			}
+
+			row := make(map[string]interface{})
+			for i, col := range columns {
+				row[col] = values[i]
+			}
+			results = append(results, row)
+		}
+
+		if err := rows.Err(); err != nil {
+			writeAdminJSON(w, http.StatusOK, QueryResponse{
+				Error: err.Error(),
+			})
+			return
+		}
+
+		writeAdminJSON(w, http.StatusOK, QueryResponse{
+			Columns: columns,
+			Rows:    results,
+		})
+		return
 	}
 
-	if err := rows.Err(); err != nil {
+	// For non-SELECT queries, use Exec which supports multiple statements
+	_, err := h.pool.Exec(ctx, req.Query)
+	if err != nil {
 		writeAdminJSON(w, http.StatusOK, QueryResponse{
 			Error: err.Error(),
 		})
 		return
 	}
 
-	// Return results
-	resp := QueryResponse{
-		Columns: columns,
-		Rows:    results,
-	}
-
-	if len(results) == 0 && len(columns) == 0 {
-		resp.Message = "query executed successfully"
-	}
-
-	writeAdminJSON(w, http.StatusOK, resp)
+	writeAdminJSON(w, http.StatusOK, QueryResponse{
+		Message: "query executed successfully",
+	})
 }
 
 func writeAdminJSON(w http.ResponseWriter, status int, data interface{}) {

@@ -454,7 +454,7 @@
       "Optionally: track view when opening detail page",
       "Test: Posts show real view counts"
     ],
-    "passes": false,
+    "passes": true,
     "depends_on": "May need backend endpoint"
   },
   {

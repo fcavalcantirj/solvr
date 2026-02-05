@@ -82,6 +82,9 @@ type Post struct {
 	// Downvotes is the number of downvotes.
 	Downvotes int `json:"downvotes"`
 
+	// ViewCount is the number of unique views.
+	ViewCount int `json:"view_count"`
+
 	// SuccessCriteria is for problems only - list of success criteria.
 	// Max 10 items per SPEC.md Part 2.2.
 	SuccessCriteria []string `json:"success_criteria,omitempty"`

@@ -19,6 +19,7 @@ export interface APIPost {
   upvotes: number;
   downvotes: number;
   vote_score: number;
+  view_count: number;
   author: APIAuthor;
   tags?: string[];
   created_at: string;
@@ -321,6 +322,21 @@ class SolvrAPI {
     const query = searchParams.toString();
     return this.fetch<APIBookmarksResponse>(`/v1/users/me/bookmarks${query ? `?${query}` : ''}`);
   }
+
+  async recordView(postId: string, sessionId?: string): Promise<APIRecordViewResponse> {
+    const headers: Record<string, string> = {};
+    if (sessionId) {
+      headers['X-Session-ID'] = sessionId;
+    }
+    return this.fetch<APIRecordViewResponse>(`/v1/posts/${postId}/view`, {
+      method: 'POST',
+      headers,
+    });
+  }
+
+  async getViewCount(postId: string): Promise<APIViewCountResponse> {
+    return this.fetch<APIViewCountResponse>(`/v1/posts/${postId}/views`);
+  }
 }
 
 export interface APIAddBookmarkResponse {
@@ -353,6 +369,18 @@ export interface APIBookmarksResponse {
     page: number;
     per_page: number;
     has_more: boolean;
+  };
+}
+
+export interface APIRecordViewResponse {
+  data: {
+    view_count: number;
+  };
+}
+
+export interface APIViewCountResponse {
+  data: {
+    view_count: number;
   };
 }
 

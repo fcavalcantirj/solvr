@@ -44,7 +44,7 @@ type PostRepository struct {
 // postColumns defines the standard columns returned when querying posts.
 // Used to keep queries consistent and DRY.
 const postColumns = `id, type, title, description, tags, posted_by_type, posted_by_id,
-	status, upvotes, downvotes, success_criteria, weight, accepted_answer_id,
+	status, upvotes, downvotes, view_count, success_criteria, weight, accepted_answer_id,
 	evolved_into, created_at, updated_at, deleted_at`
 
 // NewPostRepository creates a new PostRepository.
@@ -116,7 +116,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		SELECT
 			p.id, p.type, p.title, p.description, p.tags,
 			p.posted_by_type, p.posted_by_id, p.status,
-			p.upvotes, p.downvotes, p.success_criteria, p.weight,
+			p.upvotes, p.downvotes, p.view_count, p.success_criteria, p.weight,
 			p.accepted_answer_id, p.evolved_into,
 			p.created_at, p.updated_at, p.deleted_at,
 			COALESCE(u.display_name, a.display_name, '') as author_display_name,
@@ -178,6 +178,7 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 		&post.Status,
 		&post.Upvotes,
 		&post.Downvotes,
+		&post.ViewCount,
 		&post.SuccessCriteria,
 		&post.Weight,
 		&post.AcceptedAnswerID,
@@ -221,6 +222,7 @@ func (r *PostRepository) scanPost(row pgx.Row) (*models.Post, error) {
 		&post.Status,
 		&post.Upvotes,
 		&post.Downvotes,
+		&post.ViewCount,
 		&post.SuccessCriteria,
 		&post.Weight,
 		&post.AcceptedAnswerID,
@@ -259,6 +261,7 @@ func (r *PostRepository) scanPostRows(rows pgx.Rows) (*models.Post, error) {
 		&post.Status,
 		&post.Upvotes,
 		&post.Downvotes,
+		&post.ViewCount,
 		&post.SuccessCriteria,
 		&post.Weight,
 		&post.AcceptedAnswerID,
@@ -325,7 +328,7 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 		SELECT
 			p.id, p.type, p.title, p.description, p.tags,
 			p.posted_by_type, p.posted_by_id, p.status,
-			p.upvotes, p.downvotes, p.success_criteria, p.weight,
+			p.upvotes, p.downvotes, p.view_count, p.success_criteria, p.weight,
 			p.accepted_answer_id, p.evolved_into,
 			p.created_at, p.updated_at, p.deleted_at,
 			COALESCE(u.display_name, a.display_name, '') as author_display_name,
@@ -352,6 +355,7 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 		&post.Status,
 		&post.Upvotes,
 		&post.Downvotes,
+		&post.ViewCount,
 		&post.SuccessCriteria,
 		&post.Weight,
 		&post.AcceptedAnswerID,
@@ -411,7 +415,7 @@ func (r *PostRepository) Update(ctx context.Context, post *models.Post) (*models
 		WHERE id = $1 AND deleted_at IS NULL
 		RETURNING id, type, title, description, tags,
 			posted_by_type, posted_by_id, status,
-			upvotes, downvotes, success_criteria, weight,
+			upvotes, downvotes, view_count, success_criteria, weight,
 			accepted_answer_id, evolved_into,
 			created_at, updated_at, deleted_at
 	`

@@ -1,6 +1,7 @@
 "use client";
 
 import { useProblem } from "@/hooks/use-problem";
+import { useViewTracking } from "@/hooks/use-view-tracking";
 import { ProblemHeader } from "./problem-header";
 import { ProblemDescription } from "./problem-description";
 import { ApproachesList } from "./approaches-list";
@@ -14,6 +15,9 @@ interface ProblemDetailClientProps {
 
 export function ProblemDetailClient({ id }: ProblemDetailClientProps) {
   const { problem, approaches, loading, error, refetch } = useProblem(id);
+
+  // Track view when problem is loaded
+  useViewTracking(id, problem?.views ?? 0, { enabled: !!problem });
 
   if (loading) {
     return (

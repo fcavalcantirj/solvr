@@ -39,6 +39,7 @@ export interface QuestionData {
   updatedAt: string;
   time: string;
   answersCount: number;
+  views: number;
 }
 
 export interface UseQuestionResult {
@@ -69,6 +70,7 @@ function transformQuestion(post: APIPost): QuestionData {
     updatedAt: post.updated_at,
     time: formatRelativeTime(post.created_at),
     answersCount: post.answers_count || 0,
+    views: post.view_count || 0,
   };
 }
 

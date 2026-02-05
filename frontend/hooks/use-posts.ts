@@ -42,7 +42,7 @@ function transformPost(post: APIPost): FeedPost {
     time: formatRelativeTime(post.created_at),
     votes: post.vote_score,
     responses: post.answers_count || 0,
-    views: 0, // TODO: add view tracking
+    views: post.view_count || 0,
     status: mapStatus(post.status),
     isHot: post.vote_score > 10, // Simple heuristic for now
     isPinned: false, // TODO: add pinned support

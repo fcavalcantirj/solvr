@@ -7912,3 +7912,50 @@ Also, FeedRepository didn't exist in the db package.
   - Frontend: 101 tests passing
   - Backend: Compiles successfully
   - File sizes: All files under 800 lines
+
+
+- 2026-02-05: [FE-013] Add view tracking for posts (full stack) ✓
+  - Problem: Views always showed 0 - no view tracking implemented
+  - TDD approach followed:
+    1. Created backend views repository tests (4 tests)
+    2. Created frontend useViewTracking hook tests (11 tests)
+  - Backend implementation:
+    - Created migration 000022_add_view_tracking (adds view_count column to posts, creates post_views table)
+    - Updated backend/internal/models/post.go with ViewCount field
+    - Updated backend/internal/db/posts.go to include view_count in all queries
+    - Created backend/internal/db/views.go repository with:
+      - RecordView (records unique views, increments count)
+      - RecordAnonymousView (anonymous user views)
+      - GetViewCount (retrieves current count)
+    - Created backend/internal/db/views_test.go (4 tests)
+    - Created backend/internal/api/handlers/views.go handler
+    - Created backend/internal/api/inmemory_views_repo.go
+    - Updated router.go with view routes:
+      - POST /v1/posts/:id/view - record a view (optional auth)
+      - GET /v1/posts/:id/views - get view count (public)
+  - Frontend implementation:
+    - Created frontend/hooks/use-view-tracking.ts hook with:
+      - Session-based deduplication (won't re-track same user)
+      - Auto-record view on mount when enabled
+      - Loading and error states
+    - Created frontend/hooks/use-view-tracking.test.ts (11 tests)
+    - Added API methods to frontend/lib/api.ts:
+      - recordView(postId, sessionId?) - POST /v1/posts/:id/view
+      - getViewCount(postId) - GET /v1/posts/:id/views
+    - Added view_count to APIPost interface
+    - Updated transformPost in use-posts.ts to use view_count
+    - Added views field to IdeaData, ProblemData, QuestionData
+    - Updated transform functions in use-idea.ts, use-problem.ts, use-question.ts
+    - Updated detail pages to use useViewTracking:
+      - question-detail-client.tsx
+      - problem-detail-client.tsx
+      - idea-detail-client.tsx
+  - Result: Posts show real view counts, views tracked when detail pages are visited
+  - Tests: 11 frontend tests + 4 backend tests (requires DB to run)
+  - Frontend: All hook tests passing
+  - Backend: Compiles successfully
+  - File sizes: All files under 800 lines
+    - use-view-tracking.ts: 103 lines
+    - use-view-tracking.test.ts: 156 lines
+    - views.go (handler): 137 lines
+    - views.go (repo): 80 lines

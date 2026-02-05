@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS post_views;
+ALTER TABLE posts DROP COLUMN IF EXISTS view_count;

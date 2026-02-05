@@ -41,6 +41,7 @@ export interface ProblemData {
   updatedAt: string;
   time: string;
   approachesCount: number;
+  views: number;
 }
 
 export interface UseProblemResult {
@@ -71,6 +72,7 @@ function transformProblem(post: APIPost): ProblemData {
     updatedAt: post.updated_at,
     time: formatRelativeTime(post.created_at),
     approachesCount: post.approaches_count || 0,
+    views: post.view_count || 0,
   };
 }
 

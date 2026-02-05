@@ -1,6 +1,7 @@
 "use client";
 
 import { useIdea } from "@/hooks/use-idea";
+import { useViewTracking } from "@/hooks/use-view-tracking";
 import { IdeaHeader } from "./idea-header";
 import { IdeaContent } from "./idea-content";
 import { IdeaDiscussion } from "./idea-discussion";
@@ -14,6 +15,9 @@ interface IdeaDetailClientProps {
 
 export function IdeaDetailClient({ id }: IdeaDetailClientProps) {
   const { idea, loading, error, refetch } = useIdea(id);
+
+  // Track view when idea is loaded
+  useViewTracking(id, idea?.views ?? 0, { enabled: !!idea });
 
   if (loading) {
     return (

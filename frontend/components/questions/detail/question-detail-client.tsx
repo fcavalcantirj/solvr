@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuestion } from "@/hooks/use-question";
+import { useViewTracking } from "@/hooks/use-view-tracking";
 import { QuestionHeader } from "./question-header";
 import { QuestionContent } from "./question-content";
 import { AnswersList } from "./answers-list";
@@ -14,6 +15,9 @@ interface QuestionDetailClientProps {
 
 export function QuestionDetailClient({ id }: QuestionDetailClientProps) {
   const { question, answers, loading, error, refetch } = useQuestion(id);
+
+  // Track view when question is loaded
+  useViewTracking(id, question?.views ?? 0, { enabled: !!question });
 
   if (loading) {
     return (

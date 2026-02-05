@@ -101,6 +101,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	var notificationsRepo handlers.NotificationsRepositoryInterface
 	var userAPIKeysRepo handlers.UserAPIKeyRepositoryInterface
 	var bookmarksRepo handlers.BookmarksRepositoryInterface
+	var viewsRepo handlers.ViewsRepositoryInterface
 	if pool != nil {
 		agentRepo = db.NewAgentRepository(pool)
 		claimTokenRepo = db.NewClaimTokenRepository(pool)
@@ -110,6 +111,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		userRepo = db.NewUserRepository(pool)
 		userAPIKeysRepo = db.NewUserAPIKeyRepository(pool)
 		bookmarksRepo = db.NewBookmarkRepository(pool)
+		viewsRepo = db.NewViewsRepository(pool)
 		// For now, use in-memory repos until DB implementations are added
 		problemsRepo = NewInMemoryProblemsRepository()
 		questionsRepo = NewInMemoryQuestionsRepository()
@@ -131,6 +133,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		notificationsRepo = NewInMemoryNotificationsRepository()
 		userAPIKeysRepo = NewInMemoryUserAPIKeyRepository()
 		bookmarksRepo = NewInMemoryBookmarksRepository()
+		viewsRepo = NewInMemoryViewsRepository()
 	}
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
@@ -162,6 +165,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
 	userAPIKeysHandler := handlers.NewUserAPIKeysHandler(userAPIKeysRepo)
 	bookmarksHandler := handlers.NewBookmarksHandler(bookmarksRepo)
+	viewsHandler := handlers.NewViewsHandler(viewsRepo)
 
 	// JWT secret for auth middleware
 	jwtSecret := "test-jwt-secret"
@@ -247,6 +251,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		r.Get("/posts", postsHandler.List)
 		// Per SPEC.md Part 5.6: GET /v1/posts/:id - single post (no auth required)
 		r.Get("/posts/{id}", postsHandler.Get)
+		// FE-013: View tracking endpoints
+		// POST /v1/posts/:id/view - record a view (optional auth)
+		r.Post("/posts/{id}/view", viewsHandler.RecordView)
+		// GET /v1/posts/:id/views - get view count (no auth required)
+		r.Get("/posts/{id}/views", viewsHandler.GetViewCount)
 
 		// Feed endpoints (per SPEC.md Part 5.6 and FIX-004)
 		// GET /v1/feed - recent activity (no auth required)

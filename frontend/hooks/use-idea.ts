@@ -21,6 +21,7 @@ export interface IdeaData {
   createdAt: string;
   updatedAt: string;
   time: string;
+  views: number;
 }
 
 export interface UseIdeaResult {
@@ -49,6 +50,7 @@ function transformIdea(post: APIPost): IdeaData {
     createdAt: post.created_at,
     updatedAt: post.updated_at,
     time: formatRelativeTime(post.created_at),
+    views: post.view_count || 0,
   };
 }
 

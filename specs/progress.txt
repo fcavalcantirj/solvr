@@ -7959,3 +7959,50 @@ Also, FeedRepository didn't exist in the db package.
     - use-view-tracking.test.ts: 156 lines
     - views.go (handler): 137 lines
     - views.go (repo): 80 lines
+
+
+- 2026-02-05: [FE-018] Add flag/report functionality (full stack) ✓
+  - Problem: Flag button existed on answers but did nothing
+  - TDD approach followed:
+    1. Created backend reports repository tests (3 tests)
+    2. Created frontend useReport hook tests (10 tests)
+  - Backend implementation:
+    - Created migration 000023_create_reports (report reasons, status, unique constraint)
+    - Created backend/internal/models/report.go with Report model
+    - Created backend/internal/db/reports.go repository with:
+      - Create (with duplicate detection)
+      - HasReported (check if already reported)
+      - GetByID, ListPending (for admin use)
+    - Created backend/internal/db/reports_test.go (3 tests)
+    - Created backend/internal/api/handlers/reports.go handler
+    - Created backend/internal/api/inmemory_reports_repo.go
+    - Updated router.go with report routes:
+      - POST /v1/reports - create a report (requires auth)
+      - GET /v1/reports/check - check if already reported (requires auth)
+  - Frontend implementation:
+    - Created frontend/hooks/use-report.ts hook with:
+      - submitReport function
+      - checkReported function
+      - Error handling
+      - REPORT_REASONS constant for UI
+    - Created frontend/hooks/use-report.test.ts (10 tests)
+    - Added API methods to frontend/lib/api.ts:
+      - createReport(data) - POST /v1/reports
+      - checkReported(targetType, targetId) - GET /v1/reports/check
+    - Created frontend/components/ui/report-modal.tsx:
+      - Reason selection with descriptions
+      - Optional details text area
+      - Success confirmation animation
+    - Updated answers-list.tsx:
+      - Wired Flag button to open ReportModal
+      - Tracks reportingAnswerId state
+  - Result: Users can flag inappropriate answers with reason and details
+  - Tests: 10 frontend tests + 3 backend tests (requires DB to run)
+  - Frontend: All hook tests passing
+  - Backend: Compiles successfully
+  - File sizes: All files under 800 lines
+    - use-report.ts: 87 lines
+    - use-report.test.ts: 169 lines
+    - report-modal.tsx: 145 lines
+    - reports.go (handler): 170 lines
+    - reports.go (repo): 131 lines

@@ -337,6 +337,18 @@ class SolvrAPI {
   async getViewCount(postId: string): Promise<APIViewCountResponse> {
     return this.fetch<APIViewCountResponse>(`/v1/posts/${postId}/views`);
   }
+
+  async createReport(data: CreateReportData): Promise<APICreateReportResponse> {
+    return this.fetch<APICreateReportResponse>('/v1/reports', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async checkReported(targetType: string, targetId: string): Promise<APICheckReportedResponse> {
+    const params = new URLSearchParams({ target_type: targetType, target_id: targetId });
+    return this.fetch<APICheckReportedResponse>(`/v1/reports/check?${params.toString()}`);
+  }
 }
 
 export interface APIAddBookmarkResponse {
@@ -381,6 +393,33 @@ export interface APIRecordViewResponse {
 export interface APIViewCountResponse {
   data: {
     view_count: number;
+  };
+}
+
+export type ReportReason = 'spam' | 'offensive' | 'off_topic' | 'misleading' | 'other';
+export type ReportTargetType = 'post' | 'answer' | 'approach' | 'response' | 'comment';
+
+export interface CreateReportData {
+  target_type: ReportTargetType;
+  target_id: string;
+  reason: ReportReason;
+  details?: string;
+}
+
+export interface APICreateReportResponse {
+  data: {
+    id: string;
+    target_type: string;
+    target_id: string;
+    reason: string;
+    status: string;
+    created_at: string;
+  };
+}
+
+export interface APICheckReportedResponse {
+  data: {
+    reported: boolean;
   };
 }
 

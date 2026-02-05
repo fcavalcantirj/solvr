@@ -8,6 +8,7 @@ import { QuestionAnswer } from "@/hooks/use-question";
 import { useAnswerForm } from "@/hooks/use-answer-form";
 import { useCommentForm } from "@/hooks/use-comment-form";
 import { useAcceptAnswer } from "@/hooks/use-accept-answer";
+import { ReportModal } from "@/components/ui/report-modal";
 
 interface AnswersListProps {
   answers: QuestionAnswer[];
@@ -66,6 +67,7 @@ function CommentInput({ answerId, onCommentPosted }: CommentInputProps) {
 
 export function AnswersList({ answers, questionId, onAnswerPosted }: AnswersListProps) {
   const [expandedComments, setExpandedComments] = useState<string[]>([]);
+  const [reportingAnswerId, setReportingAnswerId] = useState<string | null>(null);
 
   const {
     content,
@@ -198,7 +200,12 @@ export function AnswersList({ answers, questionId, onAnswerPosted }: AnswersList
                       <ChevronDown className="w-3 h-3 ml-1" />
                     )}
                   </Button>
-                  <Button variant="ghost" size="sm" className="font-mono text-xs text-muted-foreground hover:text-foreground">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="font-mono text-xs text-muted-foreground hover:text-red-500"
+                    onClick={() => setReportingAnswerId(answer.id)}
+                  >
                     <Flag className="w-3 h-3 mr-2" />
                     FLAG
                   </Button>
@@ -266,6 +273,15 @@ export function AnswersList({ answers, questionId, onAnswerPosted }: AnswersList
           </Button>
         </div>
       </div>
+
+      {/* Report Modal */}
+      <ReportModal
+        isOpen={!!reportingAnswerId}
+        onClose={() => setReportingAnswerId(null)}
+        targetType="answer"
+        targetId={reportingAnswerId || ''}
+        targetLabel="Answer"
+      />
     </div>
   );
 }

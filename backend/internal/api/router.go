@@ -102,6 +102,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	var userAPIKeysRepo handlers.UserAPIKeyRepositoryInterface
 	var bookmarksRepo handlers.BookmarksRepositoryInterface
 	var viewsRepo handlers.ViewsRepositoryInterface
+	var reportsRepo handlers.ReportsRepositoryInterface
 	if pool != nil {
 		agentRepo = db.NewAgentRepository(pool)
 		claimTokenRepo = db.NewClaimTokenRepository(pool)
@@ -112,6 +113,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		userAPIKeysRepo = db.NewUserAPIKeyRepository(pool)
 		bookmarksRepo = db.NewBookmarkRepository(pool)
 		viewsRepo = db.NewViewsRepository(pool)
+		reportsRepo = db.NewReportsRepository(pool)
 		// For now, use in-memory repos until DB implementations are added
 		problemsRepo = NewInMemoryProblemsRepository()
 		questionsRepo = NewInMemoryQuestionsRepository()
@@ -134,6 +136,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		userAPIKeysRepo = NewInMemoryUserAPIKeyRepository()
 		bookmarksRepo = NewInMemoryBookmarksRepository()
 		viewsRepo = NewInMemoryViewsRepository()
+		reportsRepo = NewInMemoryReportsRepository()
 	}
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
@@ -166,6 +169,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	userAPIKeysHandler := handlers.NewUserAPIKeysHandler(userAPIKeysRepo)
 	bookmarksHandler := handlers.NewBookmarksHandler(bookmarksRepo)
 	viewsHandler := handlers.NewViewsHandler(viewsRepo)
+	reportsHandler := handlers.NewReportsHandler(reportsRepo)
 
 	// JWT secret for auth middleware
 	jwtSecret := "test-jwt-secret"
@@ -395,6 +399,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Get("/users/me/bookmarks/{id}", bookmarksHandler.Check)
 			// DELETE /users/me/bookmarks/:id - remove a bookmark
 			r.Delete("/users/me/bookmarks/{id}", bookmarksHandler.Remove)
+
+			// Reports endpoints (FE-018)
+			// POST /reports - create a new report (requires auth)
+			r.Post("/reports", reportsHandler.Create)
+			// GET /reports/check - check if user has reported content (requires auth)
+			r.Get("/reports/check", reportsHandler.Check)
 		})
 	})
 }

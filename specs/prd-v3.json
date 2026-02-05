@@ -555,7 +555,7 @@
       "Show confirmation feedback",
       "Test: Can report inappropriate content"
     ],
-    "passes": false,
+    "passes": true,
     "depends_on": "May need backend endpoint"
   }
 ]

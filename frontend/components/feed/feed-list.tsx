@@ -18,10 +18,12 @@ import {
   AlertCircle,
   Loader2,
   RefreshCw,
+  Check,
 } from "lucide-react";
 import { usePosts, useSearch, FeedPost, PostType } from "@/hooks/use-posts";
 import { VoteButton } from "@/components/ui/vote-button";
 import { mapStatusFilter, mapSortFilter, mapTimeframeFilter } from "@/lib/filter-utils";
+import { useShare } from "@/hooks/use-share";
 
 const typeConfig: Record<
   PostType,
@@ -67,6 +69,16 @@ interface FeedListProps {
 
 export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedListProps) {
   const [hoveredPost, setHoveredPost] = useState<string | null>(null);
+  const [sharedPostId, setSharedPostId] = useState<string | null>(null);
+  const { share } = useShare();
+
+  const handleShare = async (post: FeedPost) => {
+    const postUrl = `${window.location.origin}${typeConfig[post.type].link}/${post.id}`;
+    await share(post.title, postUrl);
+    setSharedPostId(post.id);
+    // Reset after 2 seconds
+    setTimeout(() => setSharedPostId(null), 2000);
+  };
 
   // Use search when there's a query, otherwise use posts
   const isSearching = Boolean(searchQuery?.trim());
@@ -320,10 +332,17 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
                     <Bookmark size={14} />
                   </button>
                   <button
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleShare(post);
+                    }}
+                    className={`w-8 h-8 flex items-center justify-center transition-colors ${
+                      sharedPostId === post.id
+                        ? "text-green-500"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    }`}
                   >
-                    <Share2 size={14} />
+                    {sharedPostId === post.id ? <Check size={14} /> : <Share2 size={14} />}
                   </button>
                   <button
                     onClick={(e) => e.stopPropagation()}

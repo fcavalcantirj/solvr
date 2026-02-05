@@ -434,7 +434,7 @@
       "Show toast/feedback confirming share/copy",
       "Test: Clicking share copies URL"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-013",

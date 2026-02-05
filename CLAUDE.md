@@ -134,6 +134,14 @@ npm run lint
 npm run typecheck
 ```
 
+**IMPORTANT: Use Vitest, NOT Jest**
+
+The frontend uses **Vitest** for testing. When writing tests:
+- Use `vi.mock()` not `jest.mock()`
+- Use `vi.fn()` not `jest.fn()`
+- Use `vi.mocked()` not `jest.Mocked`
+- Import from `'vitest'`: `import { describe, it, expect, vi, beforeEach } from 'vitest'`
+
 ### Database
 
 ```bash

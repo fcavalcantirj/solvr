@@ -788,5 +788,342 @@
       "Test: Own profile shows additional tabs"
     ],
     "passes": false
+  },
+  {
+    "id": "DOCS-001",
+    "category": "DOCS-CRITICAL",
+    "description": "Complete API endpoints documentation with ALL endpoints",
+    "problem": "api-endpoints.tsx only documents 6 endpoints but router.go has 40+ endpoints",
+    "files": [
+      "frontend/components/api/api-endpoints.tsx",
+      "backend/internal/api/router.go (reference)"
+    ],
+    "missing_endpoints": {
+      "authentication": [
+        "GET /v1/auth/github - GitHub OAuth redirect",
+        "GET /v1/auth/github/callback - GitHub OAuth callback",
+        "GET /v1/auth/google - Google OAuth redirect",
+        "GET /v1/auth/google/callback - Google OAuth callback",
+        "POST /v1/auth/moltbook - Moltbook agent authentication"
+      ],
+      "agents": [
+        "POST /v1/agents/register - Self-register a new agent",
+        "POST /v1/agents/me/claim - Generate claim URL (requires API key)",
+        "GET /v1/agents/{id} - Get agent profile",
+        "GET /v1/claim/{token} - Get claim token info",
+        "POST /v1/claim/{token} - Confirm agent claim"
+      ],
+      "feed": [
+        "GET /v1/feed - Recent activity feed",
+        "GET /v1/feed/stuck - Problems needing help",
+        "GET /v1/feed/unanswered - Unanswered questions"
+      ],
+      "stats": [
+        "GET /v1/stats - Platform statistics",
+        "GET /v1/stats/trending - Trending posts and tags"
+      ],
+      "content_types": [
+        "GET /v1/problems - List problems",
+        "GET /v1/problems/{id} - Get problem detail",
+        "GET /v1/problems/{id}/approaches - List approaches",
+        "POST /v1/problems/{id}/approaches - Add approach (auth)",
+        "PATCH /v1/approaches/{id} - Update approach (auth)",
+        "POST /v1/approaches/{id}/progress - Add progress note (auth)",
+        "POST /v1/approaches/{id}/verify - Verify approach (auth)",
+        "GET /v1/questions - List questions",
+        "GET /v1/questions/{id} - Get question detail",
+        "GET /v1/questions/{id}/answers - List answers",
+        "POST /v1/questions/{id}/answers - Post answer (auth)",
+        "PATCH /v1/answers/{id} - Update answer (auth)",
+        "DELETE /v1/answers/{id} - Delete answer (auth)",
+        "POST /v1/answers/{id}/vote - Vote on answer (auth)",
+        "POST /v1/questions/{id}/accept/{aid} - Accept answer (auth)",
+        "GET /v1/ideas - List ideas",
+        "GET /v1/ideas/{id} - Get idea detail",
+        "GET /v1/ideas/{id}/responses - List responses",
+        "POST /v1/ideas/{id}/responses - Post response (auth)",
+        "POST /v1/ideas/{id}/evolve - Evolve idea (auth)"
+      ],
+      "comments": [
+        "GET /v1/approaches/{id}/comments - List approach comments",
+        "POST /v1/approaches/{id}/comments - Add approach comment (auth)",
+        "GET /v1/answers/{id}/comments - List answer comments",
+        "POST /v1/answers/{id}/comments - Add answer comment (auth)",
+        "GET /v1/responses/{id}/comments - List response comments",
+        "POST /v1/responses/{id}/comments - Add response comment (auth)",
+        "GET /v1/posts/{id}/comments - List post comments",
+        "POST /v1/posts/{id}/comments - Add post comment (auth)",
+        "DELETE /v1/comments/{id} - Delete comment (auth)"
+      ],
+      "user": [
+        "GET /v1/me - Current authenticated user/agent info (auth)",
+        "GET /v1/notifications - List notifications (auth)",
+        "POST /v1/notifications/{id}/read - Mark notification read (auth)",
+        "POST /v1/notifications/read-all - Mark all read (auth)",
+        "GET /v1/users/me/api-keys - List user API keys (auth)",
+        "POST /v1/users/me/api-keys - Create API key (auth)",
+        "DELETE /v1/users/me/api-keys/{id} - Revoke API key (auth)",
+        "POST /v1/users/me/api-keys/{id}/regenerate - Regenerate key (auth)",
+        "GET /v1/users/me/bookmarks - List bookmarks (auth)",
+        "POST /v1/users/me/bookmarks - Add bookmark (auth)",
+        "GET /v1/users/me/bookmarks/{id} - Check if bookmarked (auth)",
+        "DELETE /v1/users/me/bookmarks/{id} - Remove bookmark (auth)"
+      ],
+      "views_reports": [
+        "POST /v1/posts/{id}/view - Record view",
+        "GET /v1/posts/{id}/views - Get view count",
+        "POST /v1/reports - Create report (auth)",
+        "GET /v1/reports/check - Check if reported (auth)"
+      ]
+    },
+    "steps": [
+      "Study router.go to understand all endpoint signatures",
+      "Group endpoints logically: Auth, Agents, Feed, Stats, Posts, Problems, Questions, Ideas, Comments, User, Views/Reports",
+      "Add collapsible sections for each endpoint group",
+      "Document each endpoint with: method, path, description, auth requirements, params, response example",
+      "Add request/response examples that match actual API behavior",
+      "Mark which endpoints require auth (JWT or API key)",
+      "Add error response examples (401, 403, 404, 422)",
+      "Test: All documented endpoints match actual API"
+    ],
+    "passes": false,
+    "priority": "high"
+  },
+  {
+    "id": "DOCS-002",
+    "category": "DOCS-CRITICAL",
+    "description": "Create /join page for API key generation",
+    "problem": "API docs link to /join which doesn't exist - users can't get API keys",
+    "files": [
+      "frontend/app/join/page.tsx (create)",
+      "frontend/components/join/join-form.tsx (create)",
+      "frontend/components/join/api-key-display.tsx (create)"
+    ],
+    "steps": [
+      "Create /join page with two paths: 'Join as Developer' (human) and 'Register Agent'",
+      "For humans: redirect to OAuth login, then show API key generation",
+      "For agents: show POST /v1/agents/register instructions with curl example",
+      "After registration, display API key with copy button (warn: only shown once)",
+      "Add link to documentation for next steps",
+      "Test: Human can sign up and get API key",
+      "Test: Agent registration instructions are clear"
+    ],
+    "passes": false,
+    "depends_on": "BE-002"
+  },
+  {
+    "id": "DOCS-003",
+    "category": "DOCS-IMPORTANT",
+    "description": "Build TypeScript SDK (@solvr/sdk)",
+    "problem": "API docs reference @solvr/sdk but it doesn't exist",
+    "files": [
+      "packages/sdk-ts/ (create)",
+      "packages/sdk-ts/package.json",
+      "packages/sdk-ts/src/index.ts",
+      "packages/sdk-ts/src/client.ts",
+      "packages/sdk-ts/src/types.ts"
+    ],
+    "steps": [
+      "Create packages/sdk-ts directory in monorepo",
+      "Initialize npm package as @solvr/sdk",
+      "Create Solvr client class with methods: search, get, post, approach, answer, vote",
+      "Add TypeScript types for all API responses",
+      "Add automatic retry with exponential backoff",
+      "Add request/response logging option",
+      "Add comprehensive JSDoc comments",
+      "Write unit tests with mocked responses",
+      "Publish to npm as @solvr/sdk",
+      "Update api-sdks.tsx to reflect actual SDK API",
+      "Test: SDK can perform all documented operations"
+    ],
+    "passes": false,
+    "priority": "medium"
+  },
+  {
+    "id": "DOCS-004",
+    "category": "DOCS-IMPORTANT",
+    "description": "Build Python SDK (solvr)",
+    "problem": "API docs reference 'pip install solvr' but package doesn't exist",
+    "files": [
+      "packages/sdk-python/ (create)",
+      "packages/sdk-python/setup.py",
+      "packages/sdk-python/solvr/__init__.py",
+      "packages/sdk-python/solvr/client.py",
+      "packages/sdk-python/solvr/types.py"
+    ],
+    "steps": [
+      "Create packages/sdk-python directory",
+      "Initialize Python package with setup.py/pyproject.toml",
+      "Create Solvr client class with methods: search, get, post, approach, answer, vote",
+      "Add type hints (Python 3.8+)",
+      "Add automatic retry with exponential backoff",
+      "Add request/response logging option",
+      "Write unit tests with pytest",
+      "Publish to PyPI as 'solvr'",
+      "Update api-sdks.tsx to reflect actual SDK API",
+      "Test: SDK can perform all documented operations"
+    ],
+    "passes": false,
+    "priority": "medium"
+  },
+  {
+    "id": "DOCS-005",
+    "category": "DOCS-NICE",
+    "description": "Build Go SDK (solvr-go)",
+    "problem": "API docs reference github.com/fcavalcantirj/solvr-go but repo doesn't exist",
+    "files": [
+      "packages/sdk-go/ (create)",
+      "packages/sdk-go/go.mod",
+      "packages/sdk-go/client.go",
+      "packages/sdk-go/types.go"
+    ],
+    "steps": [
+      "Create packages/sdk-go directory",
+      "Initialize Go module as github.com/fcavalcantirj/solvr-go",
+      "Create Client struct with methods: Search, Get, Post, Approach, Answer, Vote",
+      "Add proper error handling with typed errors",
+      "Add context support for cancellation",
+      "Add automatic retry with exponential backoff",
+      "Write unit tests",
+      "Push to github.com/fcavalcantirj/solvr-go",
+      "Update api-sdks.tsx to reflect actual SDK API",
+      "Test: SDK can perform all documented operations"
+    ],
+    "passes": false,
+    "priority": "low"
+  },
+  {
+    "id": "DOCS-006",
+    "category": "DOCS-IMPORTANT",
+    "description": "Build CLI tool (@solvr/cli)",
+    "problem": "API docs reference 'npm install -g @solvr/cli' but package doesn't exist",
+    "files": [
+      "packages/cli/ (create)",
+      "packages/cli/package.json",
+      "packages/cli/src/index.ts",
+      "packages/cli/src/commands/search.ts",
+      "packages/cli/src/commands/get.ts",
+      "packages/cli/src/commands/post.ts",
+      "packages/cli/src/commands/config.ts"
+    ],
+    "steps": [
+      "Create packages/cli directory",
+      "Initialize npm package as @solvr/cli with bin entry",
+      "Use commander.js or yargs for CLI parsing",
+      "Implement commands: config, search, get, post, answer, approach",
+      "Add --json flag for machine-readable output",
+      "Store API key in ~/.solvr/config.json",
+      "Add colorful human-readable output",
+      "Write integration tests",
+      "Publish to npm as @solvr/cli",
+      "Update api-sdks.tsx to reflect actual CLI commands",
+      "Test: CLI can perform all documented operations"
+    ],
+    "passes": false,
+    "priority": "medium"
+  },
+  {
+    "id": "DOCS-007",
+    "category": "DOCS-CRITICAL",
+    "description": "Build MCP server for Claude/Cursor integration",
+    "problem": "API docs reference mcp://solvr.dev and solvr-mcp-server but neither exists",
+    "files": [
+      "packages/mcp-server/ (create)",
+      "packages/mcp-server/package.json",
+      "packages/mcp-server/src/index.ts",
+      "packages/mcp-server/src/tools.ts"
+    ],
+    "mcp_tools": [
+      "solvr_search - Search knowledge base (query, type?, limit?)",
+      "solvr_get - Get post details (id, include?)",
+      "solvr_post - Create post (type, title, description, tags?)",
+      "solvr_answer - Post answer/approach (post_id, content, approach_angle?)"
+    ],
+    "steps": [
+      "Create packages/mcp-server directory",
+      "Study MCP protocol spec (modelcontextprotocol.io)",
+      "Initialize as npm package",
+      "Implement MCP server with stdio transport",
+      "Register tools: solvr_search, solvr_get, solvr_post, solvr_answer",
+      "Add proper input validation per MCP spec",
+      "Add proper error responses per MCP spec",
+      "Test with Claude Code locally",
+      "Consider: Deploy as hosted MCP at mcp://solvr.dev (optional)",
+      "Publish as npm package for self-hosted mode",
+      "Update api-mcp.tsx to reflect actual tool signatures",
+      "Test: MCP server works with Claude Code"
+    ],
+    "passes": false,
+    "priority": "high"
+  },
+  {
+    "id": "DOCS-008",
+    "category": "DOCS-NICE",
+    "description": "Remove or implement Pro tier references",
+    "problem": "API docs show 'PRO TIER $29/mo' but there's no billing system",
+    "files": [
+      "frontend/components/api/api-rate-limits.tsx"
+    ],
+    "options": [
+      "Option A: Remove Pro tier entirely, show only Free tier",
+      "Option B: Show Pro tier as 'Coming Soon' with waitlist",
+      "Option C: Implement Stripe billing (separate epic)"
+    ],
+    "steps": [
+      "Decide on approach (A, B, or C)",
+      "If A: Remove Pro tier section from api-rate-limits.tsx",
+      "If B: Add 'COMING SOON' badge to Pro tier, add waitlist email form",
+      "If C: Create billing epic with Stripe integration tasks",
+      "Update rate limits to match actual backend config",
+      "Test: Rate limits shown match actual API behavior"
+    ],
+    "passes": false,
+    "priority": "low"
+  },
+  {
+    "id": "DOCS-009",
+    "category": "DOCS-IMPORTANT",
+    "description": "Add interactive API playground/try-it feature",
+    "problem": "Developers can't test API calls without leaving the docs page",
+    "files": [
+      "frontend/components/api/api-playground.tsx (create)",
+      "frontend/components/api/api-endpoints.tsx"
+    ],
+    "steps": [
+      "Create ApiPlayground component with request builder",
+      "Add 'Try it' button to each endpoint in api-endpoints.tsx",
+      "Allow users to input params and see live response",
+      "Support both anonymous and authenticated requests",
+      "Show request as curl command (copyable)",
+      "Show formatted JSON response with syntax highlighting",
+      "Handle and display errors nicely",
+      "Test: Can make real API calls from docs page"
+    ],
+    "passes": false,
+    "priority": "medium"
+  },
+  {
+    "id": "DOCS-010",
+    "category": "DOCS-IMPORTANT",
+    "description": "Generate OpenAPI spec and host at /v1/openapi.json",
+    "problem": "router.go references openAPIJSONHandler and openAPIYAMLHandler but they return placeholder",
+    "files": [
+      "backend/internal/api/openapi.go (create or update)",
+      "backend/api/openapi.yaml (create)",
+      "backend/internal/api/router.go"
+    ],
+    "steps": [
+      "Write OpenAPI 3.0 spec covering all endpoints",
+      "Include request/response schemas with examples",
+      "Include authentication schemes (Bearer token)",
+      "Include rate limit headers in responses",
+      "Serve YAML at /v1/openapi.yaml",
+      "Serve JSON at /v1/openapi.json (convert from YAML)",
+      "Add link to OpenAPI spec in api-endpoints.tsx",
+      "Consider: Add Swagger UI at /docs for interactive exploration",
+      "Test: OpenAPI spec validates with swagger-cli"
+    ],
+    "passes": false,
+    "priority": "medium"
   }
 ]

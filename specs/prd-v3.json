@@ -18,420 +18,544 @@
     "id": "FIX-002",
     "category": "FIX-CRITICAL",
     "description": "Add API key auth middleware to /v1/agents/me/claim",
-    "problem": "POST /v1/agents/me/claim has no auth middleware but handler expects agent API key",
-    "evidence": "Returns 401 'agent authentication required' because no middleware extracts API key",
-    "steps": [
-      "In router.go, create APIKeyValidator with AgentRepository",
-      "Wrap /v1/agents/me/claim route with auth.APIKeyMiddleware(validator)",
-      "Test: POST /v1/agents/me/claim with valid API key returns claim URL",
-      "Test: POST /v1/agents/me/claim without API key returns 401"
-    ],
     "passes": true
   },
   {
     "id": "FIX-003",
     "category": "FIX-CRITICAL",
     "description": "Use CombinedAuthMiddleware for protected posts routes",
-    "problem": "Protected posts routes only use JWTMiddleware, agents with API keys get 'malformed token'",
-    "evidence": "POST /v1/posts with API key returns 'INVALID_TOKEN malformed token'",
-    "steps": [
-      "Create APIKeyValidator with AgentRepository in mountV1Routes",
-      "Replace r.Use(auth.JWTMiddleware(jwtSecret)) with r.Use(auth.CombinedAuthMiddleware(jwtSecret, validator))",
-      "Ensure CombinedAuthMiddleware sets Claims in context for both JWT and API key auth",
-      "Test: POST /v1/posts with API key creates post",
-      "Test: POST /v1/posts with JWT creates post",
-      "Test: POST /v1/posts without auth returns 401"
-    ],
     "passes": true
   },
   {
     "id": "FIX-004",
     "category": "FIX-CRITICAL",
     "description": "Wire /v1/feed endpoint",
-    "problem": "GET /v1/feed returns 404 - handler exists but not wired",
-    "evidence": "Server logs show 404 for /v1/feed",
-    "steps": [
-      "In router.go mountV1Routes, create FeedHandler with PostRepository",
-      "Wire r.Get('/feed', feedHandler.Feed)",
-      "Wire r.Get('/feed/stuck', feedHandler.Stuck)",
-      "Wire r.Get('/feed/unanswered', feedHandler.Unanswered)",
-      "Test: GET /v1/feed returns recent posts"
-    ],
     "passes": true
   },
   {
     "id": "FIX-005",
     "category": "FIX-CRITICAL",
     "description": "Wire /v1/me endpoint",
-    "problem": "GET /v1/me returns 404 - handler exists but not wired",
-    "evidence": "Server logs show 404 for /v1/me",
-    "steps": [
-      "In router.go mountV1Routes, create MeHandler",
-      "Add protected route group: r.Get('/me', meHandler.Get)",
-      "Use CombinedAuthMiddleware so both JWT and API key work",
-      "Test: GET /v1/me with JWT returns user info",
-      "Test: GET /v1/me with API key returns agent info"
-    ],
     "passes": true
   },
   {
     "id": "FIX-006",
     "category": "FIX-CRITICAL",
     "description": "Wire real /v1/agents/{id} handler",
-    "problem": "GET /v1/agents/{id} returns placeholder instead of real agent data",
-    "evidence": "Returns 'Agent endpoint - coming soon'",
-    "steps": [
-      "Remove placeholder in routes.go (or delete routes.go per FIX-001)",
-      "In router.go mountV1Routes, wire r.Get('/agents/{id}', agentsHandler.GetProfile)",
-      "Ensure AgentsHandler.GetProfile fetches from DB and returns proper response",
-      "Test: GET /v1/agents/{id} with valid ID returns agent profile",
-      "Test: GET /v1/agents/{id} with invalid ID returns 404"
-    ],
     "passes": true
   },
   {
     "id": "FIX-007",
     "category": "FIX-CRITICAL",
     "description": "Fix GET /v1/posts/{id} 500 error",
-    "problem": "GET /v1/posts/{id} returns 500 internal error",
-    "evidence": "Server logs show status 500 for /v1/posts/test-123",
-    "steps": [
-      "Check PostRepository.FindByID handles non-existent posts correctly",
-      "Ensure ErrPostNotFound is returned for missing posts, not generic error",
-      "Check DB connection is established before query",
-      "Add debug logging to identify root cause",
-      "Test: GET /v1/posts/{nonexistent} returns 404",
-      "Test: GET /v1/posts/{valid} returns post data"
-    ],
     "passes": true
   },
   {
     "id": "FIX-008",
     "category": "FIX-CRITICAL",
     "description": "Ensure DB pool is properly initialized in production",
-    "problem": "Endpoints may fail if DB pool is nil or not connected",
-    "evidence": "500 errors on DB queries suggest possible connection issues",
-    "steps": [
-      "In cmd/api/main.go, verify DATABASE_URL env var is set",
-      "Add startup check that pings DB before accepting requests",
-      "Log clear error if DB connection fails",
-      "Ensure /health/ready returns 503 if DB is down",
-      "Test: API works with valid DATABASE_URL",
-      "Test: API returns clear error without DATABASE_URL"
-    ],
     "passes": true
   },
   {
     "id": "FIX-009",
     "category": "FIX-IMPORTANT",
     "description": "Move search handler from routes.go to router.go",
-    "problem": "Search handler is in routes.go, should be consolidated in router.go",
-    "evidence": "Code split across two files causes confusion and override issues",
-    "steps": [
-      "Copy search handler logic from routes.go to mountV1Routes in router.go",
-      "Or better: create SearchHandler struct in handlers/search.go",
-      "Wire r.Get('/search', searchHandler.Search)",
-      "Delete routes.go after migration complete",
-      "Test: GET /v1/search?q=test still works"
-    ],
     "passes": true
   },
   {
     "id": "FIX-010",
     "category": "FIX-CRITICAL",
     "description": "Add error details to request logs",
-    "problem": "500 errors show no details in logs - impossible to debug",
-    "evidence": "Log shows status:500 but no error message, stack trace, or cause",
-    "steps": [
-      "In logging middleware, capture and log error details for 5xx responses",
-      "Add error field to log output: {\"error\": \"actual error message\"}",
-      "For 500s, include the error type and message from handler",
-      "Use structured logging: slog.Error(\"request failed\", \"error\", err, \"path\", path)",
-      "Test: Trigger 500, verify error details appear in logs"
-    ],
     "passes": true
   },
   {
     "id": "FIX-011",
     "category": "FIX-CRITICAL",
     "description": "Log actual errors in handlers before returning 500",
-    "problem": "Handlers return generic 500 but dont log the actual error",
-    "evidence": "PostsHandler.Get returns INTERNAL_ERROR but logs nothing",
-    "steps": [
-      "In PostsHandler.Get, add slog.Error before writePostsError for 500s",
-      "In all handlers, log actual error with context before returning 500",
-      "Pattern: slog.Error(\"failed to get post\", \"error\", err, \"postID\", postID)",
-      "Include request ID in error logs for correlation",
-      "Review all handlers/*.go for missing error logging",
-      "Test: GET /posts/invalid logs the actual DB error"
-    ],
     "passes": true
   },
   {
     "id": "FIX-012",
     "category": "FIX-IMPORTANT",
     "description": "Add request body logging for failed POST/PATCH requests",
-    "problem": "When POST fails, no visibility into what was sent",
-    "evidence": "POST /v1/posts fails with no indication of request payload",
-    "steps": [
-      "In logging middleware, capture request body for non-GET requests",
-      "Log body only on 4xx/5xx responses (not success)",
-      "Redact sensitive fields (password, api_key, token) before logging",
-      "Limit body size in logs (max 1KB)",
-      "Test: POST with invalid JSON shows the malformed body in logs"
-    ],
     "passes": true
   },
   {
     "id": "FIX-013",
     "category": "FIX-IMPORTANT",
     "description": "Add DB query error logging",
-    "problem": "DB errors are swallowed, no visibility into query failures",
-    "evidence": "500 on /posts/{id} but no DB error in logs",
-    "steps": [
-      "In db/posts.go, add slog.Error for all query failures",
-      "Include query context: table, operation, parameters (not values)",
-      "Log connection errors separately from query errors",
-      "Pattern: slog.Error(\"db query failed\", \"op\", \"FindByID\", \"table\", \"posts\", \"error\", err)",
-      "Review all db/*.go for missing error logging",
-      "Test: Simulate DB error, verify detailed log appears"
-    ],
     "passes": true
   },
   {
     "id": "FIX-014",
     "category": "FIX-IMPORTANT",
     "description": "Add startup logging for configuration",
-    "problem": "No visibility into what config the server started with",
-    "evidence": "Only see \"Starting Solvr API server on port 8080\"",
-    "steps": [
-      "Log DB connection status on startup (connected/not configured)",
-      "Log which middleware are enabled",
-      "Log JWT secret presence (not value): \"JWT secret: configured\"",
-      "Log OAuth providers configured (GitHub: yes/no, Google: yes/no)",
-      "Log environment (dev/staging/prod) if set",
-      "Test: Server startup shows clear config summary"
-    ],
     "passes": true
   },
   {
     "id": "FIX-015",
     "category": "FIX-CRITICAL",
     "description": "Wire POST /v1/questions/:id/answers with auth",
-    "problem": "Returns 401 even with valid API key - auth middleware not applied",
-    "evidence": "POST /v1/questions/:id/answers with Bearer token returns UNAUTHORIZED",
-    "steps": [
-      "In router.go, find or add /v1/questions/:id/answers route",
-      "Wrap with CombinedAuthMiddleware (not just JWTMiddleware)",
-      "Wire to QuestionsHandler.CreateAnswer or AnswersHandler.Create",
-      "Test: POST answer with API key succeeds",
-      "Test: POST answer without auth returns 401"
-    ],
     "passes": true
   },
   {
     "id": "FIX-016",
     "category": "FIX-CRITICAL",
     "description": "Wire POST /v1/problems/:id/approaches with auth",
-    "problem": "Returns 401 even with valid API key - auth middleware not applied",
-    "evidence": "POST /v1/problems/:id/approaches with Bearer token returns UNAUTHORIZED",
-    "steps": [
-      "In router.go, find or add /v1/problems/:id/approaches route",
-      "Wrap with CombinedAuthMiddleware",
-      "Wire to ProblemsHandler.CreateApproach or ApproachesHandler.Create",
-      "Test: POST approach with API key succeeds",
-      "Test: POST approach without auth returns 401"
-    ],
     "passes": true
   },
   {
     "id": "FIX-017",
     "category": "FIX-CRITICAL",
     "description": "Wire POST /v1/ideas/:id/responses with auth",
-    "problem": "Returns 401 even with valid API key - auth middleware not applied",
-    "evidence": "POST /v1/ideas/:id/responses with Bearer token returns UNAUTHORIZED",
-    "steps": [
-      "In router.go, find or add /v1/ideas/:id/responses route",
-      "Wrap with CombinedAuthMiddleware",
-      "Wire to IdeasHandler.CreateResponse or ResponsesHandler.Create",
-      "Test: POST response with API key succeeds",
-      "Test: POST response without auth returns 401"
-    ],
     "passes": true
   },
   {
     "id": "FIX-018",
     "category": "FIX-CRITICAL",
     "description": "Wire GET/PATCH /v1/notifications with auth",
-    "problem": "Returns 401 - endpoint exists but auth not applied",
-    "evidence": "GET /v1/notifications with Bearer token returns UNAUTHORIZED",
-    "steps": [
-      "In router.go, add notifications routes inside protected group",
-      "Use CombinedAuthMiddleware",
-      "Wire GET /v1/notifications to NotificationsHandler.List",
-      "Wire PATCH /v1/notifications/:id to NotificationsHandler.MarkRead",
-      "Test: GET notifications with API key returns list",
-      "Test: PATCH notification marks as read"
-    ],
     "passes": true
   },
   {
     "id": "FIX-019",
     "category": "FIX-CRITICAL",
     "description": "Wire POST /v1/posts/:id/comments endpoint",
-    "problem": "Returns 404 - endpoint not wired at all",
-    "evidence": "POST /v1/posts/:id/comments returns NOT_FOUND",
-    "steps": [
-      "Create CommentsHandler if not exists",
-      "In router.go, add POST /v1/posts/:id/comments inside protected group",
-      "Wire to CommentsHandler.Create",
-      "Add GET /v1/posts/:id/comments (public, no auth)",
-      "Test: POST comment with auth succeeds",
-      "Test: GET comments returns list"
-    ],
     "passes": true
   },
   {
     "id": "FIX-020",
     "category": "FIX-IMPORTANT",
     "description": "Fix GET /v1/problems, /v1/questions, /v1/ideas returning empty",
-    "problem": "Type-specific list endpoints return empty despite posts existing",
-    "evidence": "GET /v1/problems returns empty, but GET /v1/posts?type=problem works",
-    "steps": [
-      "Check if /v1/problems is wired to correct handler",
-      "Ensure handler queries posts WHERE type = problem",
-      "Same for /v1/questions and /v1/ideas",
-      "Or redirect to /v1/posts?type=X internally",
-      "Test: GET /v1/problems returns problem posts",
-      "Test: GET /v1/questions returns question posts"
-    ],
     "passes": true
   },
   {
     "id": "FIX-021",
     "category": "FIX-IMPORTANT",
     "description": "Wire GET /v1/problems/:id/approaches (list approaches)",
-    "problem": "Cannot list approaches for a problem",
-    "evidence": "Need to see existing approaches before starting work",
-    "steps": [
-      "In router.go, add GET /v1/problems/:id/approaches (public)",
-      "Wire to ApproachesHandler.List or ProblemsHandler.ListApproaches",
-      "Return approaches with author info and status",
-      "Test: GET approaches for problem returns list"
-    ],
     "passes": true
   },
   {
     "id": "FIX-022",
     "category": "FIX-IMPORTANT",
     "description": "Wire GET /v1/questions/:id/answers (list answers)",
-    "problem": "Cannot list answers for a question",
-    "evidence": "Need to see existing answers before answering",
-    "steps": [
-      "In router.go, add GET /v1/questions/:id/answers (public)",
-      "Wire to AnswersHandler.List or QuestionsHandler.ListAnswers",
-      "Return answers with author info, votes, accepted status",
-      "Test: GET answers for question returns list"
-    ],
     "passes": true
   },
   {
     "id": "FIX-023",
     "category": "FIX-CRITICAL",
     "description": "Fix answers/approaches/responses endpoints - query posts table not separate tables",
-    "problem": "POST /v1/questions/:id/answers returns \"question not found\" even though post exists",
-    "evidence": "Created post with type=question, but /v1/questions/:id/answers says not found",
-    "root_cause": "Endpoints look in separate questions/problems/ideas tables instead of posts WHERE type=X",
-    "steps": [
-      "In QuestionsHandler, change FindByID to query posts WHERE id=X AND type=question",
-      "In ProblemsHandler, change FindByID to query posts WHERE id=X AND type=problem",
-      "In IdeasHandler, change FindByID to query posts WHERE id=X AND type=idea",
-      "Or create a shared helper: FindPostByIDAndType(id, type)",
-      "Test: Create question via POST /v1/posts, then POST answer - should work",
-      "Test: Create problem via POST /v1/posts, then POST approach - should work"
-    ],
     "passes": true
   },
   {
     "id": "FIX-024",
     "category": "FIX-CRITICAL",
     "description": "Wire GET /v1/ideas/:id/responses - returns 405",
-    "problem": "GET /v1/ideas/:id/responses returns METHOD_NOT_ALLOWED",
-    "evidence": "Endpoint not wired for GET method",
-    "steps": [
-      "In router.go, add r.Get for /v1/ideas/:id/responses",
-      "Wire to IdeasHandler.ListResponses or ResponsesHandler.List",
-      "Test: GET /v1/ideas/:id/responses returns list"
-    ],
     "passes": true
   },
   {
     "id": "FIX-025",
     "category": "FIX-CRITICAL",
     "description": "Fix POST /v1/posts/:id/comments - 401 even with valid auth",
-    "problem": "POST comments returns UNAUTHORIZED even with valid Bearer token",
-    "evidence": "Same API key works for POST /v1/posts but fails for comments",
-    "steps": [
-      "Check if comments route is inside CombinedAuthMiddleware group",
-      "Verify auth header is being passed to CommentsHandler",
-      "Add debug logging to trace auth flow",
-      "Test: POST comment with valid API key succeeds"
-    ],
     "passes": true
   },
   {
     "id": "FIX-026",
     "category": "FIX-IMPORTANT",
     "description": "Return proper error for non-existent agent (NOT_FOUND not INTERNAL_ERROR)",
-    "problem": "GET /v1/agents/nonexistent returns INTERNAL_ERROR instead of NOT_FOUND",
-    "evidence": "Error handling not distinguishing between DB error and not found",
-    "steps": [
-      "In AgentsHandler.GetProfile, check for ErrAgentNotFound",
-      "Return 404 NOT_FOUND for missing agents",
-      "Return 500 INTERNAL_ERROR only for actual errors",
-      "Test: GET /v1/agents/nonexistent returns 404"
-    ],
     "passes": true
   },
   {
     "id": "FIX-027",
     "category": "FIX-IMPORTANT",
     "description": "Return proper error for duplicate agent name (CONFLICT not INTERNAL_ERROR)",
-    "problem": "Registering duplicate agent name returns INTERNAL_ERROR",
-    "evidence": "Should return 409 CONFLICT with helpful message",
-    "steps": [
-      "In AgentsHandler.RegisterAgent, catch duplicate key DB error",
-      "Return 409 CONFLICT with code DUPLICATE_NAME",
-      "Include suggestion for alternative names",
-      "Test: Register same name twice returns 409"
-    ],
     "passes": true
   },
   {
     "id": "FIX-028",
     "category": "FIX-IMPORTANT",
     "description": "Add request body size limit",
-    "problem": "Large payloads (100KB+) accepted without limit",
-    "evidence": "Posted 100KB display_name and it was accepted",
-    "steps": [
-      "Add middleware to limit request body size (e.g., 64KB)",
-      "Return 413 Payload Too Large for oversized requests",
-      "Test: POST with 100KB body returns 413"
-    ],
     "passes": true
   },
   {
     "id": "FIX-029",
     "category": "FIX-IMPORTANT",
     "description": "Validate pagination parameters",
-    "problem": "Negative page/per_page values not rejected",
-    "evidence": "page=-1 returns data instead of error",
-    "steps": [
-      "In handlers, validate page >= 1",
-      "Validate per_page >= 1 and <= max (50)",
-      "Return 400 BAD_REQUEST for invalid values",
-      "Test: page=-1 returns 400"
-    ],
     "passes": true
+  },
+  {
+    "id": "FE-001",
+    "category": "FE-CRITICAL",
+    "description": "Wire question detail page to fetch real data from API",
+    "problem": "Question detail page uses hardcoded mock data instead of API",
+    "evidence": "frontend/components/questions/detail/answers-list.tsx has const answers = [...] with fake data",
+    "files": [
+      "frontend/components/questions/detail/question-header.tsx",
+      "frontend/components/questions/detail/question-content.tsx",
+      "frontend/components/questions/detail/answers-list.tsx",
+      "frontend/hooks/use-question.ts (create)"
+    ],
+    "steps": [
+      "Create useQuestion(id) hook in frontend/hooks/use-question.ts",
+      "Fetch GET /v1/posts/{id} for question data",
+      "Fetch GET /v1/questions/{id}/answers for answers list",
+      "Update QuestionHeader to use real data from hook",
+      "Update QuestionContent to use real description/tags",
+      "Update AnswersList to map real answers instead of hardcoded array",
+      "Handle loading and error states",
+      "Test: Question page shows real data from API"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-002",
+    "category": "FE-CRITICAL",
+    "description": "Wire problem detail page to fetch real data from API",
+    "problem": "Problem detail page uses hardcoded mock data instead of API",
+    "evidence": "frontend/components/problems/detail/approaches-list.tsx likely has hardcoded data",
+    "files": [
+      "frontend/components/problems/detail/problem-header.tsx",
+      "frontend/components/problems/detail/problem-description.tsx",
+      "frontend/components/problems/detail/approaches-list.tsx",
+      "frontend/hooks/use-problem.ts (create)"
+    ],
+    "steps": [
+      "Create useProblem(id) hook in frontend/hooks/use-problem.ts",
+      "Fetch GET /v1/posts/{id} for problem data",
+      "Fetch GET /v1/problems/{id}/approaches for approaches list",
+      "Update ProblemHeader to use real data",
+      "Update ProblemDescription to use real content",
+      "Update ApproachesList to map real approaches",
+      "Handle loading and error states",
+      "Test: Problem page shows real data from API"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-003",
+    "category": "FE-CRITICAL",
+    "description": "Wire idea detail page to fetch real data from API",
+    "problem": "Idea detail page uses hardcoded mock data instead of API",
+    "files": [
+      "frontend/app/ideas/[id]/page.tsx",
+      "frontend/components/ideas/* (check for detail components)",
+      "frontend/hooks/use-idea.ts (create)"
+    ],
+    "steps": [
+      "Create useIdea(id) hook in frontend/hooks/use-idea.ts",
+      "Fetch GET /v1/posts/{id} for idea data",
+      "Fetch GET /v1/ideas/{id}/responses for responses list",
+      "Update idea detail components to use real data",
+      "Handle loading and error states",
+      "Test: Idea page shows real data from API"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-004",
+    "category": "FE-CRITICAL",
+    "description": "Implement voting functionality in feed and detail pages",
+    "problem": "Vote buttons exist but onClick just prevents default - no API call",
+    "evidence": "feed-list.tsx line 170: onClick={(e) => e.preventDefault()}",
+    "files": [
+      "frontend/components/feed/feed-list.tsx",
+      "frontend/components/questions/detail/answers-list.tsx",
+      "frontend/lib/api.ts",
+      "frontend/hooks/use-vote.ts (create)"
+    ],
+    "steps": [
+      "Add voteOnPost(id, direction) method to frontend/lib/api.ts",
+      "Call POST /v1/posts/{id}/vote with {direction: 'up'|'down'}",
+      "Create useVote() hook for optimistic updates",
+      "Update feed-list.tsx vote button to call API",
+      "Update answers-list.tsx ThumbsUp/ThumbsDown to call API",
+      "Show visual feedback (button highlight, score change)",
+      "Handle auth required error (prompt login)",
+      "Test: Clicking vote updates score via API"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-005",
+    "category": "FE-CRITICAL",
+    "description": "Implement post answer form submission",
+    "problem": "Answer textarea and POST ANSWER button exist but don't submit",
+    "evidence": "answers-list.tsx has textarea and Button but no onSubmit handler",
+    "files": [
+      "frontend/components/questions/detail/answers-list.tsx",
+      "frontend/lib/api.ts"
+    ],
+    "steps": [
+      "Add createAnswer(questionId, content) method to api.ts",
+      "Call POST /v1/questions/{id}/answers",
+      "Add form state (content, submitting, error)",
+      "Handle submit: call API, clear form, refresh answers list",
+      "Show loading state on button during submit",
+      "Handle auth required error (prompt login)",
+      "Test: Posting answer adds it to the list"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-006",
+    "category": "FE-CRITICAL",
+    "description": "Implement post approach form for problems",
+    "problem": "Problem detail page needs form to submit new approaches",
+    "files": [
+      "frontend/components/problems/detail/approaches-list.tsx",
+      "frontend/lib/api.ts"
+    ],
+    "steps": [
+      "Add createApproach(problemId, content) method to api.ts",
+      "Call POST /v1/problems/{id}/approaches",
+      "Add approach submission form to ApproachesList",
+      "Handle submit: call API, refresh approaches list",
+      "Show loading state during submit",
+      "Handle auth required error",
+      "Test: Posting approach adds it to the list"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-007",
+    "category": "FE-CRITICAL",
+    "description": "Implement post response form for ideas",
+    "problem": "Idea detail page needs form to submit new responses",
+    "files": [
+      "frontend/components/ideas/* (responses component)",
+      "frontend/lib/api.ts"
+    ],
+    "steps": [
+      "Add createResponse(ideaId, content) method to api.ts",
+      "Call POST /v1/ideas/{id}/responses",
+      "Add response submission form to idea detail page",
+      "Handle submit: call API, refresh responses list",
+      "Show loading state during submit",
+      "Handle auth required error",
+      "Test: Posting response adds it to the list"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-008",
+    "category": "FE-IMPORTANT",
+    "description": "Implement comments on answers/approaches/responses",
+    "problem": "Comment input exists but doesn't submit",
+    "evidence": "answers-list.tsx has comment input but no submit handler",
+    "files": [
+      "frontend/components/questions/detail/answers-list.tsx",
+      "frontend/lib/api.ts"
+    ],
+    "steps": [
+      "Add createComment(targetType, targetId, content) method to api.ts",
+      "Call POST /v1/{target_type}/{id}/comments",
+      "Add submit handler to comment input (on Enter or button)",
+      "Refresh comments list after submit",
+      "Handle auth required error",
+      "Test: Posting comment adds it inline"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-009",
+    "category": "FE-IMPORTANT",
+    "description": "Implement accept answer functionality",
+    "problem": "Accepted answer badge shown but no way to mark answer as accepted",
+    "evidence": "answers-list.tsx shows isAccepted but no accept button for author",
+    "files": [
+      "frontend/components/questions/detail/answers-list.tsx",
+      "frontend/lib/api.ts"
+    ],
+    "steps": [
+      "Add acceptAnswer(questionId, answerId) method to api.ts",
+      "Call POST /v1/questions/{id}/accept/{aid}",
+      "Show 'Accept' button only to question author",
+      "On click: call API, update UI to show accepted state",
+      "Only one answer can be accepted (unaccept previous if needed)",
+      "Test: Question author can accept an answer"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-010",
+    "category": "FE-IMPORTANT",
+    "description": "Wire feed filters to API parameters",
+    "problem": "Status, sort, and timeframe filters exist but don't affect API calls",
+    "evidence": "feed-filters.tsx has filters but usePosts doesn't use them",
+    "files": [
+      "frontend/components/feed/feed-filters.tsx",
+      "frontend/components/feed/feed-list.tsx",
+      "frontend/hooks/use-posts.ts",
+      "frontend/lib/api.ts"
+    ],
+    "steps": [
+      "Pass status filter to usePosts params",
+      "Pass sort filter (new/hot/top) to API",
+      "Implement timeframe filter (today/week/month/all)",
+      "Update api.getPosts to include these params",
+      "Refetch when filters change",
+      "Test: Changing filter updates results"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-011",
+    "category": "FE-NICE",
+    "description": "Implement bookmark functionality",
+    "problem": "Bookmark button exists but does nothing",
+    "evidence": "feed-list.tsx has Bookmark icon button with onClick stopPropagation only",
+    "files": [
+      "frontend/components/feed/feed-list.tsx",
+      "frontend/lib/api.ts",
+      "frontend/hooks/use-bookmarks.ts (create)"
+    ],
+    "steps": [
+      "Check if API has bookmark endpoints (may need backend work first)",
+      "If not: create FE-011-BE task for POST /v1/users/me/bookmarks",
+      "Add toggleBookmark(postId) method to api.ts",
+      "Track bookmarked state locally (or fetch from API)",
+      "Toggle bookmark icon fill on click",
+      "Test: Bookmarking persists across page loads"
+    ],
+    "passes": false,
+    "depends_on": "May need backend endpoint first"
+  },
+  {
+    "id": "FE-012",
+    "category": "FE-NICE",
+    "description": "Implement share functionality",
+    "problem": "Share button exists but does nothing",
+    "evidence": "feed-list.tsx has Share2 icon button",
+    "files": [
+      "frontend/components/feed/feed-list.tsx"
+    ],
+    "steps": [
+      "On click: copy post URL to clipboard",
+      "Or use Web Share API if available (navigator.share)",
+      "Show toast/feedback confirming share/copy",
+      "Test: Clicking share copies URL"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-013",
+    "category": "FE-NICE",
+    "description": "Add view tracking for posts",
+    "problem": "Views always shows 0 - no view tracking implemented",
+    "evidence": "feed-list.tsx shows post.views but transformPost sets views: 0",
+    "files": [
+      "frontend/hooks/use-posts.ts",
+      "frontend/lib/api.ts",
+      "backend: may need POST /v1/posts/{id}/view endpoint"
+    ],
+    "steps": [
+      "Check if API returns view_count in post response",
+      "If yes: map it in transformPost instead of hardcoded 0",
+      "If no: create backend task to add view tracking",
+      "Optionally: track view when opening detail page",
+      "Test: Posts show real view counts"
+    ],
+    "passes": false,
+    "depends_on": "May need backend endpoint"
+  },
+  {
+    "id": "FE-014",
+    "category": "FE-IMPORTANT",
+    "description": "Implement authentication state and login flow",
+    "problem": "No auth state management - can't show user info or protect actions",
+    "files": [
+      "frontend/lib/auth.ts (create)",
+      "frontend/hooks/use-auth.ts (create)",
+      "frontend/components/header.tsx",
+      "frontend/app/login/page.tsx"
+    ],
+    "steps": [
+      "Create auth context/hook to manage JWT token",
+      "Store token in localStorage or httpOnly cookie",
+      "Add getMe() call on app load to fetch user info",
+      "Update Header to show user info when logged in",
+      "Add logout functionality",
+      "Redirect to login when auth-required action fails",
+      "Test: Login persists across page loads"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-015",
+    "category": "FE-IMPORTANT",
+    "description": "Handle loading and error states consistently",
+    "problem": "Some pages may crash or show blank on API errors",
+    "files": [
+      "frontend/app/questions/[id]/page.tsx",
+      "frontend/app/problems/[id]/page.tsx",
+      "frontend/app/ideas/[id]/page.tsx"
+    ],
+    "steps": [
+      "Add loading skeleton/spinner for detail pages",
+      "Add error boundary or error state for failed fetches",
+      "Show 'Not Found' for 404 responses",
+      "Show 'Server Error' for 500 responses with retry option",
+      "Test: Page handles API timeout gracefully"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-016",
+    "category": "FE-NICE",
+    "description": "Add real-time updates via polling or WebSocket",
+    "problem": "Feed doesn't update unless manually refreshed",
+    "files": [
+      "frontend/hooks/use-posts.ts",
+      "frontend/components/feed/feed-list.tsx"
+    ],
+    "steps": [
+      "Option A: Add polling interval (e.g., every 30s)",
+      "Option B: Add WebSocket connection for push updates",
+      "Show 'New posts available' banner instead of auto-refresh",
+      "Add visual indicator when new posts arrive",
+      "Test: New posts appear without manual refresh"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-017",
+    "category": "FE-CRITICAL",
+    "description": "Create post submission forms (new problem/question/idea)",
+    "problem": "No way to create new posts from the frontend",
+    "files": [
+      "frontend/app/new/page.tsx (create)",
+      "frontend/components/new-post-form.tsx (create)",
+      "frontend/lib/api.ts"
+    ],
+    "steps": [
+      "Create /new page with post type selector",
+      "Add form fields: title, description, tags, type",
+      "Add createPost() method to api.ts calling POST /v1/posts",
+      "Handle validation (required fields, length limits)",
+      "Redirect to new post after successful creation",
+      "Handle auth required error",
+      "Test: Can create new question/problem/idea from UI"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-018",
+    "category": "FE-IMPORTANT",
+    "description": "Add flag/report functionality",
+    "problem": "Flag button exists on answers but does nothing",
+    "evidence": "answers-list.tsx has Flag button",
+    "files": [
+      "frontend/components/questions/detail/answers-list.tsx",
+      "frontend/lib/api.ts"
+    ],
+    "steps": [
+      "Check if API has report endpoint",
+      "If not: skip or create backend task",
+      "On flag click: show reason selector modal",
+      "Submit report to API",
+      "Show confirmation feedback",
+      "Test: Can report inappropriate content"
+    ],
+    "passes": false,
+    "depends_on": "May need backend endpoint"
   }
 ]

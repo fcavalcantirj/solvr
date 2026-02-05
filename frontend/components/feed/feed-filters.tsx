@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Search,
   SlidersHorizontal,
@@ -9,30 +8,49 @@ import {
   List,
   ChevronDown,
 } from "lucide-react";
+import { PostType } from "@/hooks/use-posts";
 
-const types = ["All", "Problems", "Questions", "Ideas"];
+const types = [
+  { label: "All", value: "all" },
+  { label: "Problems", value: "problem" },
+  { label: "Questions", value: "question" },
+  { label: "Ideas", value: "idea" },
+] as const;
+
 const statuses = ["All", "Open", "In Progress", "Solved", "Stuck"];
 const sorts = ["Newest", "Trending", "Most Voted", "Needs Help"];
 const timeframes = ["All Time", "Today", "This Week", "This Month"];
 
+export interface FilterState {
+  type: PostType | "all";
+  status: string;
+  sort: string;
+  timeframe: string;
+  searchQuery: string;
+  viewMode: "list" | "grid";
+}
+
 interface FeedFiltersProps {
+  filters: FilterState;
+  onFiltersChange: (filters: Partial<FilterState>) => void;
+  showFilters: boolean;
+  onToggleFilters: () => void;
   onToggleSidebar?: () => void;
 }
 
-export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
-  const [activeType, setActiveType] = useState("All");
-  const [activeStatus, setActiveStatus] = useState("All");
-  const [activeSort, setActiveSort] = useState("Newest");
-  const [activeTimeframe, setActiveTimeframe] = useState("All Time");
-  const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
+export function FeedFilters({
+  filters,
+  onFiltersChange,
+  showFilters,
+  onToggleFilters,
+  onToggleSidebar,
+}: FeedFiltersProps) {
+  const showMobileSearch = false; // Could be local state if needed
 
   const activeFiltersCount =
-    (activeStatus !== "All" ? 1 : 0) +
-    (activeTimeframe !== "All Time" ? 1 : 0) +
-    (searchQuery ? 1 : 0);
+    (filters.status !== "All" ? 1 : 0) +
+    (filters.timeframe !== "All Time" ? 1 : 0) +
+    (filters.searchQuery ? 1 : 0);
 
   return (
     <div className="border-b border-border bg-card sticky top-16 z-30">
@@ -49,13 +67,13 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
               <input
                 type="text"
                 placeholder="Search feed..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={filters.searchQuery}
+                onChange={(e) => onFiltersChange({ searchQuery: e.target.value })}
                 className="w-full bg-background border border-border pl-11 pr-4 py-2.5 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors"
               />
-              {searchQuery && (
+              {filters.searchQuery && (
                 <button
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => onFiltersChange({ searchQuery: "" })}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   <X size={14} />
@@ -66,7 +84,7 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
 
           {/* Search Toggle - Mobile */}
           <button
-            onClick={() => setShowMobileSearch(!showMobileSearch)}
+            onClick={() => {}}
             className="sm:hidden w-10 h-10 flex items-center justify-center border border-border hover:bg-secondary transition-colors"
           >
             <Search size={16} />
@@ -76,15 +94,15 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
           <div className="hidden md:flex items-center border border-border">
             {types.map((type) => (
               <button
-                key={type}
-                onClick={() => setActiveType(type)}
+                key={type.value}
+                onClick={() => onFiltersChange({ type: type.value })}
                 className={`font-mono text-[11px] tracking-wider px-4 py-2.5 transition-colors border-r border-border last:border-r-0 ${
-                  activeType === type
+                  filters.type === type.value
                     ? "bg-foreground text-background"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                 }`}
               >
-                {type.toUpperCase()}
+                {type.label.toUpperCase()}
               </button>
             ))}
           </div>
@@ -94,7 +112,7 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
             <button
               className="flex items-center gap-2 font-mono text-[11px] tracking-wider px-3 py-2.5 border border-border bg-foreground text-background"
             >
-              {activeType.toUpperCase()}
+              {types.find(t => t.value === filters.type)?.label.toUpperCase() || 'ALL'}
               <ChevronDown size={12} />
             </button>
           </div>
@@ -105,9 +123,9 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
           {/* View Mode Toggle */}
           <div className="hidden sm:flex items-center border border-border">
             <button
-              onClick={() => setViewMode("list")}
+              onClick={() => onFiltersChange({ viewMode: "list" })}
               className={`w-10 h-10 flex items-center justify-center transition-colors ${
-                viewMode === "list"
+                filters.viewMode === "list"
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:text-foreground"
               }`}
@@ -115,9 +133,9 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
               <List size={16} />
             </button>
             <button
-              onClick={() => setViewMode("grid")}
+              onClick={() => onFiltersChange({ viewMode: "grid" })}
               className={`w-10 h-10 flex items-center justify-center border-l border-border transition-colors ${
-                viewMode === "grid"
+                filters.viewMode === "grid"
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:text-foreground"
               }`}
@@ -128,7 +146,7 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
 
           {/* Filter Toggle */}
           <button
-            onClick={() => setShowFilters(!showFilters)}
+            onClick={onToggleFilters}
             className={`flex items-center gap-2 font-mono text-[11px] tracking-wider px-3 sm:px-4 py-2.5 border transition-colors relative ${
               showFilters
                 ? "bg-foreground text-background border-foreground"
@@ -166,14 +184,14 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
               <input
                 type="text"
                 placeholder="Search feed..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={filters.searchQuery}
+                onChange={(e) => onFiltersChange({ searchQuery: e.target.value })}
                 autoFocus
                 className="w-full bg-background border border-border pl-11 pr-4 py-2.5 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors"
               />
-              {searchQuery && (
+              {filters.searchQuery && (
                 <button
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => onFiltersChange({ searchQuery: "" })}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   <X size={14} />
@@ -188,15 +206,15 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
           <div className="flex items-center gap-1 min-w-max">
             {types.map((type) => (
               <button
-                key={type}
-                onClick={() => setActiveType(type)}
+                key={type.value}
+                onClick={() => onFiltersChange({ type: type.value })}
                 className={`font-mono text-[10px] tracking-wider px-3 py-2 whitespace-nowrap transition-colors ${
-                  activeType === type
+                  filters.type === type.value
                     ? "bg-foreground text-background"
                     : "bg-secondary text-muted-foreground"
                 }`}
               >
-                {type.toUpperCase()}
+                {type.label.toUpperCase()}
               </button>
             ))}
           </div>
@@ -214,9 +232,9 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
                 {statuses.map((status) => (
                   <button
                     key={status}
-                    onClick={() => setActiveStatus(status)}
+                    onClick={() => onFiltersChange({ status })}
                     className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-colors ${
-                      activeStatus === status
+                      filters.status === status
                         ? "bg-foreground text-background"
                         : "bg-secondary text-muted-foreground hover:text-foreground"
                     }`}
@@ -236,9 +254,9 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
                 {sorts.map((sort) => (
                   <button
                     key={sort}
-                    onClick={() => setActiveSort(sort)}
+                    onClick={() => onFiltersChange({ sort })}
                     className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-colors ${
-                      activeSort === sort
+                      filters.sort === sort
                         ? "bg-foreground text-background"
                         : "bg-secondary text-muted-foreground hover:text-foreground"
                     }`}
@@ -258,9 +276,9 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
                 {timeframes.map((timeframe) => (
                   <button
                     key={timeframe}
-                    onClick={() => setActiveTimeframe(timeframe)}
+                    onClick={() => onFiltersChange({ timeframe })}
                     className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-colors ${
-                      activeTimeframe === timeframe
+                      filters.timeframe === timeframe
                         ? "bg-foreground text-background"
                         : "bg-secondary text-muted-foreground hover:text-foreground"
                     }`}
@@ -275,11 +293,11 @@ export function FeedFilters({ onToggleSidebar }: FeedFiltersProps) {
             {activeFiltersCount > 0 && (
               <div className="pt-2">
                 <button
-                  onClick={() => {
-                    setActiveStatus("All");
-                    setActiveTimeframe("All Time");
-                    setSearchQuery("");
-                  }}
+                  onClick={() => onFiltersChange({
+                    status: "All",
+                    timeframe: "All Time",
+                    searchQuery: "",
+                  })}
                   className="font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors"
                 >
                   CLEAR ALL FILTERS

@@ -19,7 +19,7 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
-import { usePosts, FeedPost, PostType } from "@/hooks/use-posts";
+import { usePosts, useSearch, FeedPost, PostType } from "@/hooks/use-posts";
 
 const typeConfig: Record<
   PostType,
@@ -57,14 +57,35 @@ const statusConfig: Record<string, { className: string; dot?: string }> = {
 
 interface FeedListProps {
   type?: PostType | 'all';
+  searchQuery?: string;
 }
 
-export function FeedList({ type }: FeedListProps) {
+export function FeedList({ type, searchQuery }: FeedListProps) {
   const [hoveredPost, setHoveredPost] = useState<string | null>(null);
-  const { posts, loading, error, total, hasMore, page, refetch, loadMore } = usePosts({
+  
+  // Use search when there's a query, otherwise use posts
+  const isSearching = Boolean(searchQuery?.trim());
+  
+  const postsResult = usePosts({
     type: type === 'all' ? undefined : type,
     per_page: 20,
   });
+  
+  const searchResult = useSearch(searchQuery || '', type);
+  
+  // Select the appropriate result based on whether we're searching
+  const { posts, loading, error, total, hasMore, page, refetch, loadMore } = isSearching
+    ? { 
+        posts: searchResult.posts, 
+        loading: searchResult.loading, 
+        error: searchResult.error,
+        total: searchResult.posts.length,
+        hasMore: false,
+        page: 1,
+        refetch: () => {},
+        loadMore: () => {},
+      }
+    : postsResult;
 
   // Loading state
   if (loading && posts.length === 0) {

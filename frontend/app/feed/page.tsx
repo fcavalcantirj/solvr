@@ -1,14 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Header } from "@/components/header";
-import { FeedFilters } from "@/components/feed/feed-filters";
+import { FeedFilters, FilterState } from "@/components/feed/feed-filters";
 import { FeedList } from "@/components/feed/feed-list";
 import { FeedSidebar } from "@/components/feed/feed-sidebar";
-import { Activity, Radio, Users, Zap } from "lucide-react";
+import { Radio, Users, Zap, Activity } from "lucide-react";
+
+const defaultFilters: FilterState = {
+  type: "all",
+  status: "All",
+  sort: "Newest",
+  timeframe: "All Time",
+  searchQuery: "",
+  viewMode: "list",
+};
 
 export default function FeedPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterState>(defaultFilters);
+
+  const handleFiltersChange = useCallback((newFilters: Partial<FilterState>) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -41,7 +56,7 @@ export default function FeedPage() {
                     <Radio size={16} className="text-foreground" />
                   </div>
                   <div>
-                    <p className="font-mono text-xl font-light">147</p>
+                    <p className="font-mono text-xl font-light">—</p>
                     <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
                       ACTIVE
                     </p>
@@ -52,7 +67,7 @@ export default function FeedPage() {
                     <Users size={16} className="text-foreground" />
                   </div>
                   <div>
-                    <p className="font-mono text-xl font-light">23</p>
+                    <p className="font-mono text-xl font-light">—</p>
                     <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
                       AI AGENTS
                     </p>
@@ -63,7 +78,7 @@ export default function FeedPage() {
                     <Zap size={16} className="text-foreground" />
                   </div>
                   <div>
-                    <p className="font-mono text-xl font-light">12</p>
+                    <p className="font-mono text-xl font-light">—</p>
                     <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
                       SOLVED TODAY
                     </p>
@@ -76,21 +91,21 @@ export default function FeedPage() {
             <div className="lg:hidden grid grid-cols-3 gap-4 pb-6">
               <div className="flex flex-col items-center p-3 bg-secondary/50">
                 <Activity size={14} className="mb-2 text-muted-foreground" />
-                <p className="font-mono text-lg font-light">147</p>
+                <p className="font-mono text-lg font-light">—</p>
                 <p className="font-mono text-[9px] tracking-wider text-muted-foreground">
                   ACTIVE
                 </p>
               </div>
               <div className="flex flex-col items-center p-3 bg-secondary/50">
                 <Users size={14} className="mb-2 text-muted-foreground" />
-                <p className="font-mono text-lg font-light">23</p>
+                <p className="font-mono text-lg font-light">—</p>
                 <p className="font-mono text-[9px] tracking-wider text-muted-foreground">
                   AI AGENTS
                 </p>
               </div>
               <div className="flex flex-col items-center p-3 bg-secondary/50">
                 <Zap size={14} className="mb-2 text-muted-foreground" />
-                <p className="font-mono text-lg font-light">12</p>
+                <p className="font-mono text-lg font-light">—</p>
                 <p className="font-mono text-[9px] tracking-wider text-muted-foreground">
                   SOLVED
                 </p>
@@ -100,14 +115,23 @@ export default function FeedPage() {
         </div>
 
         {/* Filters Bar */}
-        <FeedFilters onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+        <FeedFilters
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          showFilters={showFilters}
+          onToggleFilters={() => setShowFilters(!showFilters)}
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        />
 
         {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-6 lg:py-10">
           <div className="flex flex-col lg:flex-row gap-6 lg:gap-10">
             {/* Feed List */}
             <div className="flex-1 min-w-0">
-              <FeedList />
+              <FeedList
+                type={filters.type}
+                searchQuery={filters.searchQuery}
+              />
             </div>
 
             {/* Sidebar - Desktop */}

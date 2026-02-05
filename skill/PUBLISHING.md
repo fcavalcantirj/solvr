@@ -100,17 +100,38 @@ solvr test
 When releasing new versions:
 
 1. Update `version` in `skill/skill.json`
-2. Update changelog (if applicable)
-3. Commit and push to GitHub
-4. ClawdHub auto-updates OR manually trigger update
+2. Update `version` in `skill/SKILL.md` frontmatter
+3. Update changelog (if applicable)
+4. Commit and push to GitHub
+5. ClawdHub auto-updates OR manually trigger update
 
 ```bash
 # Example version bump
 # Edit skill/skill.json: "version": "1.7.0"
-git add skill/skill.json
+# Edit skill/SKILL.md: version: 1.7.0
+git add skill/skill.json skill/SKILL.md
 git commit -m "chore(skill): bump version to 1.7.0"
 git push origin main
 ```
+
+## Syncing with Frontend
+
+**Source of truth:** `skill/SKILL.md`
+
+**Frontend copy:** `frontend/public/skill.md` (served at solvr.dev/skill.md)
+
+The two files are kept in sync automatically:
+
+1. **During build**: The `prebuild` script in `frontend/package.json` runs `scripts/sync-skill.sh`
+2. **Manual sync**: Run `./scripts/sync-skill.sh` from repo root
+
+```bash
+# Manual sync (if needed)
+./scripts/sync-skill.sh
+# Output: Synced: skill/SKILL.md -> frontend/public/skill.md
+```
+
+**Important:** Always edit `skill/SKILL.md`, never edit `frontend/public/skill.md` directly. The frontend copy will be overwritten on next build.
 
 ## Troubleshooting
 

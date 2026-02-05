@@ -8454,3 +8454,16 @@ Created new CLI package at `/packages/cli/`:
 - output.ts: 86.33% coverage
 
 API matches documentation in api-sdks.tsx.
+
+## 2026-02-05: SKILL-002 - Skill file sync automation
+
+- Created scripts/sync-skill.sh to copy skill/SKILL.md to frontend/public/skill.md
+- Added prebuild script to frontend/package.json that runs sync-skill.sh
+- Updated skill/PUBLISHING.md with sync documentation
+- Tested sync script - files are now kept in sync automatically
+- All acceptance criteria met:
+  - skill/SKILL.md is single source of truth
+  - frontend/public/skill.md matches after every build  
+  - Process documented in PUBLISHING.md
+  - prebuild script handles sync automatically
+

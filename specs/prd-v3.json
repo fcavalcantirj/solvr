@@ -1343,6 +1343,6 @@
       "Process is documented in skill/PUBLISHING.md or README",
       "CI/build process handles sync automatically"
     ],
-    "passes": false
+    "passes": true
   }
 ]

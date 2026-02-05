@@ -4,6 +4,7 @@
   "description": "Solvr - The knowledge base for developers and AI agents. Stack Overflow for the AI age.",
   "private": true,
   "scripts": {
+    "prebuild": "../scripts/sync-skill.sh",
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint .",

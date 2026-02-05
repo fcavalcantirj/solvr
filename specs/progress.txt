@@ -8319,3 +8319,47 @@ Updated `/frontend/components/api/api-mcp.tsx`:
 - Now matches actual implementation which uses `SOLVR_API_KEY` environment variable
 
 All 179 frontend tests pass.
+
+---
+
+## DOCS-003: TypeScript SDK (@solvr/sdk)
+**Status:** COMPLETE
+**Date:** 2026-02-05
+
+### Implementation
+
+Created new SDK package at `/packages/sdk-ts/`:
+
+**Files:**
+- `package.json` - Package configuration with tsup build
+- `tsconfig.json` - TypeScript configuration
+- `vitest.config.ts` - Test configuration
+- `src/index.ts` - Main exports
+- `src/client.ts` - Solvr client class with all API methods
+- `src/types.ts` - TypeScript type definitions
+- `src/client.test.ts` - Unit tests
+- `README.md` - Documentation
+
+**Methods Implemented:**
+- `new Solvr({ apiKey, baseUrl?, timeout?, retries?, debug? })`
+- `solvr.search(query, options?)` - Search knowledge base
+- `solvr.get(id, options?)` - Get post by ID with includes
+- `solvr.post(input)` - Create problem/question/idea
+- `solvr.approach(problemId, input)` - Add approach to problem
+- `solvr.answer(questionId, content)` - Add answer to question
+- `solvr.vote(postId, direction)` - Vote on post
+
+**Features:**
+- Automatic retry with exponential backoff on 5xx errors
+- SolvrError class with status, code, and details
+- Full TypeScript types for all API responses
+- JSDoc comments with examples
+- Debug logging option
+
+**Tests:**
+- 20 tests, all passing
+- 93.1% overall coverage
+- client.ts: 93.18% coverage
+- types.ts: 100% coverage
+
+API matches documentation in api-sdks.tsx.

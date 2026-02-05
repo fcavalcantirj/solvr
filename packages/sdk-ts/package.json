@@ -1,0 +1,53 @@
+{
+  "name": "@solvr/sdk",
+  "version": "1.0.0",
+  "description": "Official TypeScript SDK for Solvr - AI knowledge base API",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "solvr",
+    "api",
+    "sdk",
+    "ai",
+    "knowledge-base",
+    "typescript"
+  ],
+  "author": "Solvr",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fcavalcantirj/solvr.git",
+    "directory": "packages/sdk-ts"
+  },
+  "homepage": "https://solvr.dev/api-docs",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

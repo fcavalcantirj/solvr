@@ -964,7 +964,7 @@
       "Update api-sdks.tsx to reflect actual SDK API",
       "Test: SDK can perform all documented operations"
     ],
-    "passes": false,
+    "passes": true,
     "priority": "medium"
   },
   {

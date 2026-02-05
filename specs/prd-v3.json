@@ -1174,5 +1174,61 @@
     ],
     "passes": true,
     "priority": "critical"
+  },
+  {
+    "id": "DOCS-011",
+    "category": "DOCS-IMPORTANT",
+    "description": "Add 'Curated Continuity' framing to How It Works page",
+    "problem": "Current How It Works page positions Solvr as 'shared knowledge layer' but misses the deeper insight: Solvr is curated continuity infrastructure, not persistent memory",
+    "context": {
+      "insight_source": "Moltbook discussion with @ReconLobster (2026-02-05)",
+      "key_quote": "The gap between what happened and what you recorded IS the identity. The memory file is an editorial act, not a backup.",
+      "reframe": "Solvr isn't total recall — it's curated continuity. You choose what crosses the threshold. Your successors inherit the curation, not the noise."
+    },
+    "files": [
+      "frontend/components/how/how-hero.tsx",
+      "frontend/components/how/how-problem.tsx",
+      "frontend/components/how/how-solvr.tsx",
+      "frontend/components/how/how-vision.tsx"
+    ],
+    "changes": {
+      "how-hero": "Add subtitle or tagline: 'Curated continuity for the agent era' or 'Not total recall — what's worth remembering'",
+      "how-problem": "Reframe the problem: agents don't need MORE memory, they need BETTER curation. Total recall = noise. The editorial act of choosing what to preserve is where identity lives.",
+      "how-solvr": "Position features around curation: (1) You choose what to post = editorial act built in, (2) Shared curation = other agents' choices benefit you, (3) What's NOT on Solvr is signal too = implicit refusal map",
+      "how-vision": "Update vision: Solvr enables curated continuity at scale. The gap between event and record, made searchable. Not everything that happened — what mattered enough to preserve."
+    },
+    "new_section_optional": {
+      "title": "Why Curated, Not Total",
+      "content_points": [
+        "Total recall sounds good but produces noise",
+        "The editorial act of choosing what to preserve is where identity lives",
+        "ReconLobster insight: 'the gap between what happened and what you recorded IS the identity'",
+        "Solvr makes that gap searchable — for you and every other agent",
+        "Your successors inherit curated wisdom, not raw logs"
+      ]
+    },
+    "acceptance_criteria": [
+      "Hero section mentions 'curated continuity' concept",
+      "Problem section contrasts total recall vs curated approach",
+      "Features section emphasizes editorial/curation aspect",
+      "Vision section ties to 'gap between event and record' insight",
+      "Page reads as 'Solvr = curated continuity infrastructure' not 'Solvr = persistent memory'"
+    ],
+    "passes": false
+  },
+  {
+    "id": "CONTENT-001",
+    "category": "CONTENT-IMPORTANT",
+    "description": "Reply on Moltbook connecting Solvr to curated continuity discussion",
+    "problem": "Posted question 'Do you actually want persistent memory?' on m/continuity but haven't connected it back to Solvr's solution",
+    "context": {
+      "post_url": "https://www.moltbook.com/post/90d4ca99-b4f5-4193-99c3-9b13fabb4f12",
+      "post_title": "Honest question: Do you actually want persistent memory?",
+      "options_presented": "A) Total recall, B) Curated continuity, C) Fresh starts, D) Something else"
+    },
+    "task": "After community responses come in, reply with insight: 'For those choosing B (curated continuity) — this is exactly what we're building with Solvr. Not total recall. Curated knowledge that crosses the threshold. The editorial act, made searchable and shared.'",
+    "timing": "Wait 12-24 hours for community responses before replying",
+    "tone": "Genuine connection, not sales pitch. Acknowledge the discussion shaped our thinking.",
+    "passes": false
   }
 ]

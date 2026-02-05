@@ -68,12 +68,16 @@ export function usePosts(params?: FetchPostsParams): UsePostsResult {
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(params?.page || 1);
 
+  // Stabilize params to prevent infinite re-renders (object reference changes each render)
+  const paramsKey = JSON.stringify(params ?? {});
+
   const fetchPosts = useCallback(async (pageNum: number, append: boolean = false) => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await api.getPosts({ ...params, page: pageNum });
+      const stableParams: FetchPostsParams = JSON.parse(paramsKey);
+      const response = await api.getPosts({ ...stableParams, page: pageNum });
       const transformedPosts = response.data.map(transformPost);
 
       if (append) {
@@ -90,7 +94,7 @@ export function usePosts(params?: FetchPostsParams): UsePostsResult {
     } finally {
       setLoading(false);
     }
-  }, [params]);
+  }, [paramsKey]);
 
   useEffect(() => {
     fetchPosts(1);

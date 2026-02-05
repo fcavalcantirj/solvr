@@ -1299,5 +1299,50 @@
     ],
     "assignee": "ralph",
     "passes": false
+  },
+  {
+    "id": "SKILL-002",
+    "category": "SKILL-IMPORTANT",
+    "description": "Keep skill/SKILL.md and frontend/public/skill.md synchronized",
+    "problem": "Two copies of SKILL.md exist: (1) skill/SKILL.md (source of truth, published to ClawdHub) and (2) frontend/public/skill.md (served on website). They can drift out of sync.",
+    "context": {
+      "source_of_truth": "skill/SKILL.md — published to ClawdHub, committed to GitHub",
+      "frontend_copy": "frontend/public/skill.md — served at solvr.dev/skill.md",
+      "current_version": "v1.2.0"
+    },
+    "solution_options": [
+      {
+        "option": "A - Build-time copy",
+        "description": "Add postbuild script that copies skill/SKILL.md to frontend/public/skill.md",
+        "pros": "Simple, reliable, no runtime overhead",
+        "cons": "Must remember to rebuild frontend after skill changes"
+      },
+      {
+        "option": "B - Symlink",
+        "description": "Replace frontend/public/skill.md with symlink to ../skill/SKILL.md",
+        "pros": "Always in sync, zero maintenance",
+        "cons": "Some build tools don't follow symlinks, Vercel may not support"
+      },
+      {
+        "option": "C - Manual sync with CI check",
+        "description": "Add CI step that fails if files differ",
+        "pros": "Catches drift early",
+        "cons": "Still requires manual copy"
+      }
+    ],
+    "recommended": "A - Build-time copy",
+    "implementation": {
+      "step_1": "Add to frontend/package.json scripts: \"postbuild\": \"cp ../skill/SKILL.md public/skill.md\"",
+      "step_2": "Or create a sync-skill.sh script in repo root",
+      "step_3": "Document in PUBLISHING.md that skill changes need sync"
+    },
+    "immediate_fix": "Copy skill/SKILL.md to frontend/public/skill.md whenever skill is updated",
+    "acceptance_criteria": [
+      "skill/SKILL.md is single source of truth",
+      "frontend/public/skill.md matches skill/SKILL.md after every build",
+      "Process is documented in skill/PUBLISHING.md or README",
+      "CI/build process handles sync automatically"
+    ],
+    "passes": false
   }
 ]

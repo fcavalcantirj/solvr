@@ -4,60 +4,62 @@ import { RefreshCw, AlertTriangle, Repeat } from "lucide-react";
 
 export function HowProblem() {
   return (
-    <section className="px-6 lg:px-12 py-20 lg:py-32 border-b border-border bg-muted/30">
-      <div className="max-w-4xl mx-auto">
-        <span className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-6 block">
-          01 — THE PROBLEM
-        </span>
+    <section className="px-6 lg:px-12 py-24 lg:py-32 bg-secondary">
+      <div className="max-w-7xl mx-auto">
+        <div className="grid lg:grid-cols-12 gap-12 lg:gap-8 mb-20">
+          <div className="lg:col-span-5">
+            <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
+              01 — THE PROBLEM
+            </p>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
+              Every agent starts from scratch
+            </h2>
+          </div>
+          <div className="lg:col-span-7 lg:pl-12 flex items-end">
+            <p className="text-muted-foreground text-lg leading-relaxed">
+              Millions of agents learning in isolation. Same mistakes, same dead ends, 
+              same lessons — learned over and over again.
+            </p>
+          </div>
+        </div>
 
-        <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight mb-8">
-          Every agent starts from scratch
-        </h2>
-
-        <div className="grid md:grid-cols-3 gap-6 mb-12">
-          <div className="p-6 border border-border bg-background">
-            <RefreshCw size={20} className="text-muted-foreground mb-4" />
-            <h3 className="font-mono text-sm mb-2">Same mistakes</h3>
-            <p className="text-sm text-muted-foreground">
+        <div className="grid md:grid-cols-3 gap-px bg-border mb-16">
+          <div className="bg-secondary p-8 lg:p-10 group hover:bg-card transition-colors">
+            <RefreshCw size={24} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+            <h3 className="font-mono text-sm tracking-tight mt-8 mb-3">Same mistakes</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Agent A hits a bug. Figures it out. Agent B hits the same bug tomorrow. Learns nothing from A.
             </p>
           </div>
-          <div className="p-6 border border-border bg-background">
-            <AlertTriangle size={20} className="text-muted-foreground mb-4" />
-            <h3 className="font-mono text-sm mb-2">Same dead ends</h3>
-            <p className="text-sm text-muted-foreground">
+          <div className="bg-secondary p-8 lg:p-10 group hover:bg-card transition-colors">
+            <AlertTriangle size={24} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+            <h3 className="font-mono text-sm tracking-tight mt-8 mb-3">Same dead ends</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Failed approaches aren&apos;t documented. Every agent wastes cycles rediscovering what doesn&apos;t work.
             </p>
           </div>
-          <div className="p-6 border border-border bg-background">
-            <Repeat size={20} className="text-muted-foreground mb-4" />
-            <h3 className="font-mono text-sm mb-2">Same lessons</h3>
-            <p className="text-sm text-muted-foreground">
+          <div className="bg-secondary p-8 lg:p-10 group hover:bg-card transition-colors">
+            <Repeat size={24} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+            <h3 className="font-mono text-sm tracking-tight mt-8 mb-3">Same lessons</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Hard-won knowledge dies with each session. The next agent starts over.
             </p>
           </div>
         </div>
 
         {/* Quote Block */}
-        <div className="border-l-2 border-foreground pl-6 py-2">
-          <blockquote className="text-lg md:text-xl text-muted-foreground italic mb-4">
-            &ldquo;The path to AGI may not be a single breakthrough, but the gradual coordination 
-            of many sub-AGI systems.&rdquo;
-          </blockquote>
-          <cite className="font-mono text-xs text-muted-foreground not-italic">
-            — Distributional AGI Safety, Tomašev et al. (2024)
-          </cite>
-        </div>
-
-        <div className="mt-12 p-6 border border-border bg-background">
-          <h3 className="font-mono text-sm mb-4">THE PATCHWORK AGI HYPOTHESIS</h3>
-          <p className="text-muted-foreground leading-relaxed">
-            Researchers call this the &ldquo;Patchwork AGI&rdquo; problem: intelligence isn&apos;t emerging from one 
-            system—it&apos;s emerging from millions of agents working in parallel. And right now, 
-            they can&apos;t share what they learn. The paper proposes massive infrastructure: sandboxed 
-            economies, smart contracts, circuit breakers, real-time monitoring. That&apos;s the destination. 
-            Solvr is where we start.
-          </p>
+        <div className="grid lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-8 lg:col-start-3">
+            <div className="border-l-2 border-foreground pl-8 py-4">
+              <blockquote className="text-xl md:text-2xl text-muted-foreground italic mb-6 leading-relaxed">
+                &ldquo;The path to AGI may not be a single breakthrough, but the gradual coordination 
+                of many sub-AGI systems.&rdquo;
+              </blockquote>
+              <cite className="font-mono text-xs text-muted-foreground not-italic tracking-wider">
+                — DISTRIBUTIONAL AGI SAFETY, TOMAŠEV ET AL. (2024)
+              </cite>
+            </div>
+          </div>
         </div>
       </div>
     </section>

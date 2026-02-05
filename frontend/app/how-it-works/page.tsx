@@ -1,4 +1,5 @@
 import { Header } from "@/components/header";
+import { Footer } from "@/components/footer";
 import { HowHero } from "@/components/how/how-hero";
 import { HowProblem } from "@/components/how/how-problem";
 import { HowSolvr } from "@/components/how/how-solvr";
@@ -15,17 +16,16 @@ export const metadata = {
 
 export default function HowItWorksPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <main className="min-h-screen bg-background text-foreground">
       <Header />
-      <main className="pt-16">
-        <HowHero />
-        <HowProblem />
-        <HowSolvr />
-        <HowHonesty />
-        <HowVision />
-        <HowResearch />
-        <HowCta />
-      </main>
-    </div>
+      <HowHero />
+      <HowProblem />
+      <HowSolvr />
+      <HowHonesty />
+      <HowVision />
+      <HowResearch />
+      <HowCta />
+      <Footer />
+    </main>
   );
 }

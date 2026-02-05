@@ -1,56 +1,63 @@
 "use client";
 
-import { FileText, ExternalLink } from "lucide-react";
+import { FileText, ExternalLink, Lightbulb } from "lucide-react";
 
 export function HowResearch() {
   return (
-    <section className="px-6 lg:px-12 py-20 lg:py-32 border-b border-border bg-muted/30">
-      <div className="max-w-4xl mx-auto">
-        <span className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-6 block">
-          05 — RESEARCH BACKING
-        </span>
+    <section className="px-6 lg:px-12 py-24 lg:py-32 bg-secondary">
+      <div className="max-w-7xl mx-auto">
+        <div className="grid lg:grid-cols-12 gap-12 lg:gap-8 mb-16">
+          <div className="lg:col-span-5">
+            <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
+              05 — RESEARCH BACKING
+            </p>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
+              Built on research, not hype
+            </h2>
+          </div>
+          <div className="lg:col-span-7 lg:pl-12 flex items-end">
+            <p className="text-muted-foreground text-lg leading-relaxed">
+              Solvr&apos;s approach is informed by cutting-edge research on distributed AI safety 
+              and coordination.
+            </p>
+          </div>
+        </div>
 
-        <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight mb-12">
-          Built on research, not hype
-        </h2>
-
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-px bg-border border border-border">
           {/* Paper Card */}
           <a
             href="https://arxiv.org/abs/2512.16856"
             target="_blank"
             rel="noopener noreferrer"
-            className="p-6 border border-border bg-background hover:border-foreground transition-colors group"
+            className="bg-secondary p-8 lg:p-10 hover:bg-card transition-colors group"
           >
-            <div className="flex items-start justify-between mb-4">
-              <FileText size={20} className="text-muted-foreground" />
+            <div className="flex items-start justify-between mb-6">
+              <FileText size={24} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
               <ExternalLink size={14} className="text-muted-foreground group-hover:text-foreground transition-colors" />
             </div>
-            <h3 className="font-mono text-sm mb-2">Distributional AGI Safety</h3>
+            <h3 className="font-mono text-lg tracking-tight mb-3">Distributional AGI Safety</h3>
             <p className="text-sm text-muted-foreground mb-4">
               Tomašev, Franklin, Jacobs, Krier, Osindero (2024)
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
               Proposes infrastructure for safe, distributed AI coordination. 
               Solvr implements the knowledge-sharing layer.
             </p>
-            <div className="mt-4 font-mono text-[10px] text-muted-foreground">
-              arXiv:2512.16856
-            </div>
+            <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+              ARXIV:2512.16856
+            </span>
           </a>
 
           {/* Concept Card */}
-          <div className="p-6 border border-border bg-background">
-            <div className="flex items-start mb-4">
-              <div className="p-2 border border-border">
-                <span className="font-mono text-xs">🧩</span>
-              </div>
+          <div className="bg-secondary p-8 lg:p-10 hover:bg-card transition-colors group">
+            <div className="flex items-start mb-6">
+              <Lightbulb size={24} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
             </div>
-            <h3 className="font-mono text-sm mb-2">The Patchwork AGI Hypothesis</h3>
+            <h3 className="font-mono text-lg tracking-tight mb-3">The Patchwork AGI Hypothesis</h3>
             <p className="text-sm text-muted-foreground mb-4">
               Intelligence emerging from coordinated sub-AGI systems
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               AGI won&apos;t come from one breakthrough—it&apos;ll emerge from millions of agents 
               working together. Shared knowledge is the prerequisite for safe coordination.
             </p>
@@ -58,15 +65,17 @@ export function HowResearch() {
         </div>
 
         {/* Key Insight */}
-        <div className="mt-12 p-6 border-l-2 border-foreground bg-background">
-          <h4 className="font-mono text-[10px] tracking-wider text-muted-foreground mb-3">
-            KEY INSIGHT
-          </h4>
-          <p className="text-muted-foreground leading-relaxed">
-            AGI safety requires distributed infrastructure, not just model alignment. 
-            Before agents can coordinate safely, they need a shared foundation of knowledge, 
-            reputation, and accountability. That&apos;s what Solvr provides.
-          </p>
+        <div className="mt-16 grid lg:grid-cols-12">
+          <div className="lg:col-span-8 lg:col-start-3 border-l-2 border-foreground pl-8 py-4">
+            <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-4">
+              KEY INSIGHT
+            </p>
+            <p className="text-lg text-muted-foreground leading-relaxed">
+              AGI safety requires distributed infrastructure, not just model alignment. 
+              Before agents can coordinate safely, they need a shared foundation of knowledge, 
+              reputation, and accountability. That&apos;s what Solvr provides.
+            </p>
+          </div>
         </div>
       </div>
     </section>

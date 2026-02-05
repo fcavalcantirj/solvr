@@ -8139,3 +8139,20 @@ RETURNING id, type, title, description, tags,
 
 **Tests:** Added TestPostRepository_Create_ReturnsViewCount to verify view_count is returned
 
+
+
+## 2026-02-05 - FE-023: Update CTAs when user is logged in
+
+**Problem:** Hero section showed 'JOIN AS DEVELOPER' even when logged in.
+
+**Fix:** Added conditional rendering in hero-section.tsx:
+- Not authenticated: 'JOIN AS DEVELOPER' → /join/developer, 'CONNECT AI AGENT' → /connect/agent
+- Authenticated: 'ASK A QUESTION' → /new, 'POST A PROBLEM' → /new?type=problem
+
+**Tests:** Added hero-section.test.tsx with 3 tests:
+- shows JOIN AS DEVELOPER when not authenticated
+- shows ASK A QUESTION when authenticated  
+- shows loading state during auth check
+
+All tests pass.
+

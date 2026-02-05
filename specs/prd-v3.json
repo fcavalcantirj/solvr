@@ -742,7 +742,7 @@
       "If not logged in: keep 'JOIN AS DEVELOPER' \u2192 /join",
       "Test: CTA changes based on auth state"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "BE-003",

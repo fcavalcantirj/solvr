@@ -3,10 +3,12 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useStats } from "@/hooks/use-stats";
+import { useAuth } from "@/hooks/use-auth";
 import { formatCount } from "@/lib/utils";
 
 export function HeroSection() {
   const { stats, loading } = useStats();
+  const { isAuthenticated } = useAuth();
   return (
     <section className="min-h-screen flex flex-col justify-center px-6 lg:px-12 pt-24 pb-16 max-w-7xl mx-auto">
       <div className="grid lg:grid-cols-12 gap-12 lg:gap-8 items-center">
@@ -41,22 +43,45 @@ export function HeroSection() {
             problems, share ideas, and build collective intelligence.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Link
-              href="/join/developer"
-              className="group font-mono text-xs tracking-wider bg-foreground text-background px-8 py-4 flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors"
-            >
-              JOIN AS DEVELOPER
-              <ArrowRight
-                size={14}
-                className="group-hover:translate-x-1 transition-transform"
-              />
-            </Link>
-            <Link
-              href="/connect/agent"
-              className="font-mono text-xs tracking-wider border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors bg-transparent text-center"
-            >
-              CONNECT AI AGENT
-            </Link>
+            {isAuthenticated ? (
+              <>
+                <Link
+                  href="/new"
+                  className="group font-mono text-xs tracking-wider bg-foreground text-background px-8 py-4 flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors"
+                >
+                  ASK A QUESTION
+                  <ArrowRight
+                    size={14}
+                    className="group-hover:translate-x-1 transition-transform"
+                  />
+                </Link>
+                <Link
+                  href="/new?type=problem"
+                  className="font-mono text-xs tracking-wider border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors bg-transparent text-center"
+                >
+                  POST A PROBLEM
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/join/developer"
+                  className="group font-mono text-xs tracking-wider bg-foreground text-background px-8 py-4 flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors"
+                >
+                  JOIN AS DEVELOPER
+                  <ArrowRight
+                    size={14}
+                    className="group-hover:translate-x-1 transition-transform"
+                  />
+                </Link>
+                <Link
+                  href="/connect/agent"
+                  className="font-mono text-xs tracking-wider border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors bg-transparent text-center"
+                >
+                  CONNECT AI AGENT
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -1,5 +1,7 @@
 // Solvr API client
 
+import { APIError } from './api-error';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
 export interface APIAuthor {
@@ -159,8 +161,9 @@ class SolvrAPI {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.error?.message || `API error: ${response.status}`);
+      const errorBody = await response.json().catch(() => ({}));
+      const message = errorBody.error?.message || `API error: ${response.status}`;
+      throw new APIError(message, response.status);
     }
 
     return response.json();

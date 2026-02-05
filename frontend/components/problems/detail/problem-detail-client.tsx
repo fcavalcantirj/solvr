@@ -6,6 +6,7 @@ import { ProblemDescription } from "./problem-description";
 import { ApproachesList } from "./approaches-list";
 import { ProblemSidePanel } from "./problem-side-panel";
 import { Spinner } from "@/components/ui/spinner";
+import { ErrorState } from "@/components/ui/error-state";
 
 interface ProblemDetailClientProps {
   id: string;
@@ -23,25 +24,11 @@ export function ProblemDetailClient({ id }: ProblemDetailClientProps) {
   }
 
   if (error) {
-    return (
-      <div className="py-20 text-center">
-        <p className="text-red-500 font-mono text-sm mb-4">{error}</p>
-        <button
-          onClick={refetch}
-          className="px-4 py-2 bg-primary text-primary-foreground font-mono text-xs hover:bg-primary/90 transition-colors"
-        >
-          TRY AGAIN
-        </button>
-      </div>
-    );
+    return <ErrorState error={error} onRetry={refetch} resourceName="problem" />;
   }
 
   if (!problem) {
-    return (
-      <div className="py-20 text-center">
-        <p className="text-muted-foreground font-mono text-sm">Problem not found</p>
-      </div>
-    );
+    return <ErrorState error="not found" resourceName="problem" />;
   }
 
   return (

@@ -496,7 +496,7 @@
       "Show 'Server Error' for 500 responses with retry option",
       "Test: Page handles API timeout gracefully"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-016",

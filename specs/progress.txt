@@ -7786,3 +7786,38 @@ Also, FeedRepository didn't exist in the db package.
     - use-auth.tsx: 95 lines
     - use-auth.test.tsx: 135 lines
     - header.tsx: 150 lines
+
+
+- 2026-02-05: [FE-015] Handle loading and error states consistently ✓
+  - Problem: Some pages may crash or show blank on API errors
+  - TDD approach followed:
+    1. Added failing tests first for APIError class and helpers (8 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Created frontend/lib/api-error.ts:
+      - APIError class with statusCode property
+      - isNotFoundError(error) - checks for 404
+      - isServerError(error) - checks for 5xx
+      - getErrorMessage(error) - user-friendly message
+    - Created frontend/lib/api-error.test.ts (8 tests)
+    - Created frontend/components/ui/error-state.tsx:
+      - Consistent error display component
+      - Handles 404 (Not Found) with FileQuestion icon
+      - Handles 5xx (Server Error) with ServerCrash icon
+      - Handles generic errors with AlertCircle icon
+      - Shows retry button for retryable errors
+      - Accepts resourceName for contextual messages
+    - Updated frontend/lib/api.ts:
+      - Import and throw APIError with status code
+      - Now includes HTTP status in error responses
+    - Updated detail client components to use ErrorState:
+      - question-detail-client.tsx
+      - problem-detail-client.tsx
+      - idea-detail-client.tsx
+  - Result: All detail pages show consistent error states with appropriate icons and retry buttons
+  - Tests: 8 passing (api-error tests) = 79 total frontend tests
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - api-error.ts: 43 lines
+    - api-error.test.ts: 53 lines
+    - error-state.tsx: 89 lines

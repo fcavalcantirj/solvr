@@ -1,8 +1,11 @@
 import React from "react"
 import type { Metadata } from 'next'
 import { JetBrains_Mono, Inter } from 'next/font/google'
+import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
+
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-HS74SKKSQY'
 
 const _inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
 const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: '--font-jetbrains' });
@@ -40,6 +43,7 @@ export default function RootLayout({
       <body className={`font-sans antialiased`}>
         <Providers>{children}</Providers>
       </body>
+      <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />
     </html>
   )
 }

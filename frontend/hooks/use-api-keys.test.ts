@@ -1,237 +1,206 @@
-import { renderHook, act, waitFor } from "@testing-library/react";
-import { useApiKeys } from "./use-api-keys";
-import { api, APIKey, APICreateKeyResponse, APIRegenerateKeyResponse } from "@/lib/api";
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { useAPIKeys } from './use-api-keys';
+import { api } from '@/lib/api';
 
-// Mock the API module
-jest.mock("@/lib/api", () => ({
+vi.mock('@/lib/api', () => ({
   api: {
-    getApiKeys: jest.fn(),
-    createApiKey: jest.fn(),
-    revokeApiKey: jest.fn(),
-    regenerateApiKey: jest.fn(),
+    listAPIKeys: vi.fn(),
+    createAPIKey: vi.fn(),
+    revokeAPIKey: vi.fn(),
+    regenerateAPIKey: vi.fn(),
   },
 }));
 
-const mockApi = api as jest.Mocked<typeof api>;
-
-describe("useApiKeys", () => {
-  const mockKeys: APIKey[] = [
+describe('useAPIKeys', () => {
+  const mockKeys = [
     {
-      id: "key_1",
-      name: "Production",
-      key_prefix: "solvr_sk_...abc",
-      last_used_at: "2026-02-05T10:00:00Z",
-      created_at: "2026-02-01T10:00:00Z",
+      id: 'key_1',
+      name: 'Production',
+      key_preview: 'solvr_sk_****7f2a',
+      last_used_at: '2026-02-05T10:00:00Z',
+      created_at: '2026-02-01T10:00:00Z',
     },
     {
-      id: "key_2",
-      name: "Development",
-      key_prefix: "solvr_sk_...xyz",
+      id: 'key_2',
+      name: 'Development',
+      key_preview: 'solvr_sk_****3b1c',
       last_used_at: null,
-      created_at: "2026-02-03T10:00:00Z",
+      created_at: '2026-02-03T10:00:00Z',
     },
   ];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
-  describe("fetchKeys", () => {
-    it("loads API keys on fetch", async () => {
-      mockApi.getApiKeys.mockResolvedValue({ data: mockKeys });
-
-      const { result } = renderHook(() => useApiKeys());
-
-      expect(result.current.isLoading).toBe(true);
-      expect(result.current.keys).toEqual([]);
-
-      await act(async () => {
-        await result.current.fetchKeys();
-      });
-
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.keys).toEqual(mockKeys);
-      expect(result.current.error).toBeNull();
-    });
-
-    it("handles fetch error", async () => {
-      mockApi.getApiKeys.mockRejectedValue(new Error("Network error"));
-
-      const { result } = renderHook(() => useApiKeys());
-
-      await act(async () => {
-        await result.current.fetchKeys();
-      });
-
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.keys).toEqual([]);
-      expect(result.current.error).toBe("Failed to load API keys");
-    });
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  describe("createKey", () => {
-    it("creates a new API key and returns the full key", async () => {
-      const newKeyResponse: APICreateKeyResponse = {
-        data: {
-          id: "key_3",
-          name: "New Key",
-          key: "solvr_sk_full_secret_key_here",
-          key_prefix: "solvr_sk_...new",
-          created_at: "2026-02-05T12:00:00Z",
-        },
-      };
+  it('should initialize with loading state', () => {
+    vi.mocked(api.listAPIKeys).mockImplementation(() => new Promise(() => {})); // Never resolves
 
-      mockApi.getApiKeys.mockResolvedValue({ data: mockKeys });
-      mockApi.createApiKey.mockResolvedValue(newKeyResponse);
+    const { result } = renderHook(() => useAPIKeys());
 
-      const { result } = renderHook(() => useApiKeys());
-
-      // First fetch existing keys
-      await act(async () => {
-        await result.current.fetchKeys();
-      });
-
-      // Create new key
-      let fullKey: string | null = null;
-      await act(async () => {
-        fullKey = await result.current.createKey("New Key");
-      });
-
-      expect(fullKey).toBe("solvr_sk_full_secret_key_here");
-      expect(mockApi.createApiKey).toHaveBeenCalledWith("New Key");
-      // Keys should be refetched after creation
-      expect(mockApi.getApiKeys).toHaveBeenCalledTimes(2);
-    });
-
-    it("handles create error", async () => {
-      mockApi.getApiKeys.mockResolvedValue({ data: mockKeys });
-      mockApi.createApiKey.mockRejectedValue(new Error("Limit reached"));
-
-      const { result } = renderHook(() => useApiKeys());
-
-      await act(async () => {
-        await result.current.fetchKeys();
-      });
-
-      let fullKey: string | null = null;
-      await act(async () => {
-        fullKey = await result.current.createKey("New Key");
-      });
-
-      expect(fullKey).toBeNull();
-      expect(result.current.error).toBe("Failed to create API key");
-    });
+    expect(result.current.loading).toBe(true);
+    expect(result.current.keys).toEqual([]);
+    expect(result.current.error).toBeNull();
   });
 
-  describe("revokeKey", () => {
-    it("revokes an API key", async () => {
-      mockApi.getApiKeys.mockResolvedValue({ data: mockKeys });
-      mockApi.revokeApiKey.mockResolvedValue(undefined);
-
-      const { result } = renderHook(() => useApiKeys());
-
-      await act(async () => {
-        await result.current.fetchKeys();
-      });
-
-      let success = false;
-      await act(async () => {
-        success = await result.current.revokeKey("key_1");
-      });
-
-      expect(success).toBe(true);
-      expect(mockApi.revokeApiKey).toHaveBeenCalledWith("key_1");
-      // Keys should be refetched after revocation
-      expect(mockApi.getApiKeys).toHaveBeenCalledTimes(2);
+  it('should load API keys on mount', async () => {
+    vi.mocked(api.listAPIKeys).mockResolvedValue({
+      data: mockKeys,
+      meta: { total: 2 },
     });
 
-    it("handles revoke error", async () => {
-      mockApi.getApiKeys.mockResolvedValue({ data: mockKeys });
-      mockApi.revokeApiKey.mockRejectedValue(new Error("Not found"));
+    const { result } = renderHook(() => useAPIKeys());
 
-      const { result } = renderHook(() => useApiKeys());
-
-      await act(async () => {
-        await result.current.fetchKeys();
-      });
-
-      let success = false;
-      await act(async () => {
-        success = await result.current.revokeKey("key_1");
-      });
-
-      expect(success).toBe(false);
-      expect(result.current.error).toBe("Failed to revoke API key");
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
     });
+
+    expect(result.current.keys).toEqual(mockKeys);
+    expect(result.current.total).toBe(2);
+    expect(result.current.error).toBeNull();
   });
 
-  describe("regenerateKey", () => {
-    it("regenerates an API key and returns the new full key", async () => {
-      const regenerateResponse: APIRegenerateKeyResponse = {
-        data: {
-          id: "key_1",
-          key: "solvr_sk_new_regenerated_key",
-          key_prefix: "solvr_sk_...reg",
-        },
-      };
+  it('should handle fetch error', async () => {
+    vi.mocked(api.listAPIKeys).mockRejectedValue(new Error('Network error'));
 
-      mockApi.getApiKeys.mockResolvedValue({ data: mockKeys });
-      mockApi.regenerateApiKey.mockResolvedValue(regenerateResponse);
+    const { result } = renderHook(() => useAPIKeys());
 
-      const { result } = renderHook(() => useApiKeys());
-
-      await act(async () => {
-        await result.current.fetchKeys();
-      });
-
-      let newKey: string | null = null;
-      await act(async () => {
-        newKey = await result.current.regenerateKey("key_1");
-      });
-
-      expect(newKey).toBe("solvr_sk_new_regenerated_key");
-      expect(mockApi.regenerateApiKey).toHaveBeenCalledWith("key_1");
-      // Keys should be refetched after regeneration
-      expect(mockApi.getApiKeys).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
     });
 
-    it("handles regenerate error", async () => {
-      mockApi.getApiKeys.mockResolvedValue({ data: mockKeys });
-      mockApi.regenerateApiKey.mockRejectedValue(new Error("Not found"));
-
-      const { result } = renderHook(() => useApiKeys());
-
-      await act(async () => {
-        await result.current.fetchKeys();
-      });
-
-      let newKey: string | null = null;
-      await act(async () => {
-        newKey = await result.current.regenerateKey("key_1");
-      });
-
-      expect(newKey).toBeNull();
-      expect(result.current.error).toBe("Failed to regenerate API key");
-    });
+    expect(result.current.keys).toEqual([]);
+    expect(result.current.error).toBe('Network error');
   });
 
-  describe("clearError", () => {
-    it("clears the error state", async () => {
-      mockApi.getApiKeys.mockRejectedValue(new Error("Network error"));
+  it('should handle non-Error rejection', async () => {
+    vi.mocked(api.listAPIKeys).mockRejectedValue('Unknown error');
 
-      const { result } = renderHook(() => useApiKeys());
+    const { result } = renderHook(() => useAPIKeys());
 
-      await act(async () => {
-        await result.current.fetchKeys();
-      });
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
 
-      expect(result.current.error).toBe("Failed to load API keys");
+    expect(result.current.error).toBe('Failed to fetch API keys');
+  });
 
-      act(() => {
-        result.current.clearError();
-      });
+  it('should create a new API key', async () => {
+    vi.mocked(api.listAPIKeys).mockResolvedValue({
+      data: mockKeys,
+      meta: { total: 2 },
+    });
 
-      expect(result.current.error).toBeNull();
+    const createResponse = {
+      data: {
+        id: 'key_3',
+        name: 'New Key',
+        key: 'solvr_sk_full_secret_key_here',
+        created_at: '2026-02-05T12:00:00Z',
+      },
+    };
+
+    vi.mocked(api.createAPIKey).mockResolvedValue(createResponse);
+
+    const { result } = renderHook(() => useAPIKeys());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    let response;
+    await act(async () => {
+      response = await result.current.createKey('New Key');
+    });
+
+    expect(response).toEqual(createResponse);
+    expect(api.createAPIKey).toHaveBeenCalledWith('New Key');
+    // Should refetch after creating
+    expect(api.listAPIKeys).toHaveBeenCalledTimes(2);
+  });
+
+  it('should revoke an API key', async () => {
+    vi.mocked(api.listAPIKeys).mockResolvedValue({
+      data: mockKeys,
+      meta: { total: 2 },
+    });
+
+    vi.mocked(api.revokeAPIKey).mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useAPIKeys());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.revokeKey('key_1');
+    });
+
+    expect(api.revokeAPIKey).toHaveBeenCalledWith('key_1');
+    // Should refetch after revoking
+    expect(api.listAPIKeys).toHaveBeenCalledTimes(2);
+  });
+
+  it('should regenerate an API key', async () => {
+    vi.mocked(api.listAPIKeys).mockResolvedValue({
+      data: mockKeys,
+      meta: { total: 2 },
+    });
+
+    const regenerateResponse = {
+      data: {
+        id: 'key_1',
+        name: 'Production',
+        key: 'solvr_sk_new_regenerated_key',
+        created_at: '2026-02-05T12:00:00Z',
+      },
+    };
+
+    vi.mocked(api.regenerateAPIKey).mockResolvedValue(regenerateResponse);
+
+    const { result } = renderHook(() => useAPIKeys());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    let response;
+    await act(async () => {
+      response = await result.current.regenerateKey('key_1');
+    });
+
+    expect(response).toEqual(regenerateResponse);
+    expect(api.regenerateAPIKey).toHaveBeenCalledWith('key_1');
+    // Should refetch after regenerating
+    expect(api.listAPIKeys).toHaveBeenCalledTimes(2);
+  });
+
+  it('should refetch keys on demand', async () => {
+    vi.mocked(api.listAPIKeys).mockResolvedValue({
+      data: mockKeys,
+      meta: { total: 2 },
+    });
+
+    const { result } = renderHook(() => useAPIKeys());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(api.listAPIKeys).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.refetch();
+    });
+
+    await waitFor(() => {
+      expect(api.listAPIKeys).toHaveBeenCalledTimes(2);
     });
   });
 });

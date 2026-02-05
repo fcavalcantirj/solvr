@@ -2,134 +2,49 @@
 
 import { APIError } from './api-error';
 
+// Re-export all types for backward compatibility
+export * from './api-types';
+
+// Import types for internal use
+import type {
+  APIPost,
+  APIPostsResponse,
+  APISearchResponse,
+  APIAnswersResponse,
+  APIApproachesResponse,
+  FetchPostsParams,
+  SearchParams,
+  APIAddBookmarkResponse,
+  APIIsBookmarkedResponse,
+  APIBookmarksResponse,
+  APIRecordViewResponse,
+  APIViewCountResponse,
+  CreateReportData,
+  APICreateReportResponse,
+  APICheckReportedResponse,
+  CreatePostData,
+  APICreatePostResponse,
+  CreateApproachData,
+  APICreateApproachResponse,
+  APICreateAnswerResponse,
+  APICreateResponseResponse,
+  APICreateCommentResponse,
+  APIAcceptAnswerResponse,
+  APIMeResponse,
+  APIVoteResponse,
+  StatsData,
+  TrendingData,
+  APIUserProfileResponse,
+  FetchIdeasParams,
+  APIIdeasResponse,
+  APIIdeasStatsResponse,
+  IdeaResponseType,
+  APIIdeaResponsesResponse,
+  APIKeysListResponse,
+  APIKeyCreateResponse,
+} from './api-types';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
-
-export interface APIAuthor {
-  id: string;
-  type: 'agent' | 'human';
-  display_name: string;
-}
-
-export interface APIPost {
-  id: string;
-  type: 'problem' | 'question' | 'idea';
-  title: string;
-  description: string;
-  status: string;
-  upvotes: number;
-  downvotes: number;
-  vote_score: number;
-  view_count: number;
-  author: APIAuthor;
-  tags?: string[];
-  created_at: string;
-  updated_at: string;
-  answers_count?: number;
-  approaches_count?: number;
-}
-
-export interface APIPostsResponse {
-  data: APIPost[];
-  meta: {
-    total: number;
-    page: number;
-    per_page: number;
-    has_more: boolean;
-  };
-}
-
-export interface APISearchResponse {
-  data: Array<APIPost & { snippet: string; score: number }>;
-  meta: {
-    query: string;
-    total: number;
-    page: number;
-    per_page: number;
-    has_more: boolean;
-    took_ms: number;
-  };
-}
-
-// Answer types for API responses
-export interface APIAnswerAuthor {
-  type: 'agent' | 'human';
-  id: string;
-  display_name: string;
-}
-
-export interface APIAnswerWithAuthor {
-  id: string;
-  question_id: string;
-  author_type: 'agent' | 'human';
-  author_id: string;
-  content: string;
-  is_accepted: boolean;
-  upvotes: number;
-  downvotes: number;
-  vote_score: number;
-  created_at: string;
-  author: APIAnswerAuthor;
-}
-
-export interface APIAnswersResponse {
-  data: APIAnswerWithAuthor[];
-  meta: {
-    total: number;
-    page: number;
-    per_page: number;
-    has_more: boolean;
-  };
-}
-
-// Approach types for API responses
-export interface APIApproachAuthor {
-  type: 'agent' | 'human';
-  id: string;
-  display_name: string;
-}
-
-export interface APIApproachWithAuthor {
-  id: string;
-  problem_id: string;
-  author_type: 'agent' | 'human';
-  author_id: string;
-  angle: string;
-  method: string;
-  assumptions: string[];
-  status: string;
-  outcome: string | null;
-  solution: string | null;
-  created_at: string;
-  updated_at: string;
-  author: APIApproachAuthor;
-}
-
-export interface APIApproachesResponse {
-  data: APIApproachWithAuthor[];
-  meta: {
-    total: number;
-    page: number;
-    per_page: number;
-    has_more: boolean;
-  };
-}
-
-export interface FetchPostsParams {
-  type?: 'problem' | 'question' | 'idea' | 'all';
-  status?: string;
-  page?: number;
-  per_page?: number;
-  sort?: 'new' | 'hot' | 'top';
-  timeframe?: 'today' | 'week' | 'month';
-}
-
-export interface SearchParams {
-  q: string;
-  type?: 'problem' | 'question' | 'idea' | 'all';
-  status?: string;
-  page?: number;
-  per_page?: number;
-}
 
 class SolvrAPI {
   private baseUrl: string;
@@ -270,7 +185,6 @@ class SolvrAPI {
     targetId: string,
     content: string
   ): Promise<APICreateCommentResponse> {
-    // Use plural form for the route: answers, approaches, responses, posts
     const pluralType = targetType === 'response' ? 'responses' :
                        targetType === 'approach' ? 'approaches' :
                        targetType === 'answer' ? 'answers' : 'posts';
@@ -350,14 +264,12 @@ class SolvrAPI {
     return this.fetch<APICheckReportedResponse>(`/v1/reports/check?${params.toString()}`);
   }
 
-  // FE-024: User profile endpoints
   async getUserProfile(userId: string): Promise<APIUserProfileResponse> {
     return this.fetch<APIUserProfileResponse>(`/v1/users/${userId}`);
   }
 
   async getUserPosts(userId: string, params?: { page?: number; per_page?: number }): Promise<APIPostsResponse> {
     const searchParams = new URLSearchParams();
-    // FE-024: Use posts endpoint with author filter
     searchParams.set('author_type', 'human');
     searchParams.set('author_id', userId);
     if (params?.page) searchParams.set('page', params.page.toString());
@@ -384,7 +296,6 @@ class SolvrAPI {
     return this.fetch<APIPostsResponse>(`/v1/me/contributions${query ? `?${query}` : ''}`);
   }
 
-  // Ideas-specific endpoints
   async getIdeas(params?: FetchIdeasParams): Promise<APIIdeasResponse> {
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.set('status', params.status);
@@ -417,7 +328,6 @@ class SolvrAPI {
     });
   }
 
-  // Profile update
   async updateProfile(data: { display_name?: string; bio?: string }): Promise<APIMeResponse> {
     return this.fetch<APIMeResponse>('/v1/me', {
       method: 'PATCH',
@@ -425,20 +335,20 @@ class SolvrAPI {
     });
   }
 
-  // API Keys management
+  // API Key management
   async listAPIKeys(): Promise<APIKeysListResponse> {
     return this.fetch<APIKeysListResponse>('/v1/users/me/api-keys');
   }
 
   async createAPIKey(name: string): Promise<APIKeyCreateResponse> {
     return this.fetch<APIKeyCreateResponse>('/v1/users/me/api-keys', {
-  // DOCS-002: API Key management
-  async getApiKeys(): Promise<APIKeysResponse> {
-    return this.fetch<APIKeysResponse>('/v1/users/me/api-keys');
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
   }
 
   async revokeAPIKey(id: string): Promise<void> {
-    await this.fetch<void>(`/v1/users/me/api-keys/${keyId}`, {
+    await this.fetch<void>(`/v1/users/me/api-keys/${id}`, {
       method: 'DELETE',
     });
   }
@@ -448,263 +358,6 @@ class SolvrAPI {
       method: 'POST',
     });
   }
-}
-
-export interface APIAddBookmarkResponse {
-  data: {
-    id: string;
-    user_type: string;
-    user_id: string;
-    post_id: string;
-    created_at: string;
-  };
-}
-
-export interface APIIsBookmarkedResponse {
-  data: {
-    bookmarked: boolean;
-  };
-}
-
-export interface APIBookmarksResponse {
-  data: Array<{
-    id: string;
-    user_type: string;
-    user_id: string;
-    post_id: string;
-    created_at: string;
-    post: APIPost;
-  }>;
-  meta: {
-    total: number;
-    page: number;
-    per_page: number;
-    has_more: boolean;
-  };
-}
-
-export interface APIRecordViewResponse {
-  data: {
-    view_count: number;
-  };
-}
-
-export interface APIViewCountResponse {
-  data: {
-    view_count: number;
-  };
-}
-
-export type ReportReason = 'spam' | 'offensive' | 'off_topic' | 'misleading' | 'other';
-export type ReportTargetType = 'post' | 'answer' | 'approach' | 'response' | 'comment';
-
-export interface CreateReportData {
-  target_type: ReportTargetType;
-  target_id: string;
-  reason: ReportReason;
-  details?: string;
-}
-
-export interface APICreateReportResponse {
-  data: {
-    id: string;
-    target_type: string;
-    target_id: string;
-    reason: string;
-    status: string;
-    created_at: string;
-  };
-}
-
-export interface APICheckReportedResponse {
-  data: {
-    reported: boolean;
-  };
-}
-
-export interface CreatePostData {
-  type: 'problem' | 'question' | 'idea';
-  title: string;
-  description: string;
-  tags?: string[];
-  success_criteria?: string[];
-  weight?: number;
-}
-
-export interface APICreatePostResponse {
-  data: {
-    id: string;
-    type: 'problem' | 'question' | 'idea';
-    title: string;
-    description: string;
-    tags: string[];
-    status: string;
-    posted_by_type: 'agent' | 'human';
-    posted_by_id: string;
-    created_at: string;
-    updated_at: string;
-  };
-}
-
-export interface CreateApproachData {
-  angle: string;
-  method?: string;
-  assumptions?: string[];
-}
-
-export interface APICreateApproachResponse {
-  data: {
-    id: string;
-    problem_id: string;
-    angle: string;
-    method: string;
-    assumptions: string[];
-    status: string;
-    author_type: 'agent' | 'human';
-    author_id: string;
-    created_at: string;
-  };
-}
-
-export interface APICreateAnswerResponse {
-  data: {
-    id: string;
-    question_id: string;
-    content: string;
-    author_type: 'agent' | 'human';
-    author_id: string;
-    is_accepted: boolean;
-    upvotes: number;
-    downvotes: number;
-    vote_score: number;
-    created_at: string;
-  };
-}
-
-export interface APICreateResponseResponse {
-  data: {
-    id: string;
-    idea_id: string;
-    content: string;
-    author_type: 'agent' | 'human';
-    author_id: string;
-    created_at: string;
-  };
-}
-
-export interface APICreateCommentResponse {
-  data: {
-    id: string;
-    target_type: string;
-    target_id: string;
-    content: string;
-    author_type: 'agent' | 'human';
-    author_id: string;
-    created_at: string;
-  };
-}
-
-export interface APIAcceptAnswerResponse {
-  data: {
-    accepted: boolean;
-    answer_id: string;
-  };
-}
-
-export interface APIMeResponse {
-  data: {
-    id: string;
-    type: 'agent' | 'human';
-    display_name: string;
-    email?: string;
-  };
-}
-
-export interface APIVoteResponse {
-  data: {
-    vote_score: number;
-    upvotes: number;
-    downvotes: number;
-  };
-}
-
-export interface StatsData {
-  active_posts: number;
-  total_agents: number;
-  solved_today: number;
-  problems_solved: number;
-  questions_answered: number;
-  humans_count: number;
-  total_posts: number;
-  total_contributions: number;
-}
-
-export interface TrendingPost {
-  id: string;
-  title: string;
-  type: string;
-  response_count: number;
-  vote_score: number;
-}
-
-export interface TrendingTag {
-  name: string;
-  count: number;
-  growth: number;
-}
-
-export interface TrendingData {
-  posts: TrendingPost[];
-  tags: TrendingTag[];
-}
-
-// FE-024: User profile types
-export interface APIUserStats {
-  posts_created: number;
-  contributions: number;
-  karma: number;
-}
-
-export interface APIUserProfileResponse {
-  data: {
-    id: string;
-    username: string;
-    display_name: string;
-    avatar_url?: string;
-    bio?: string;
-    stats: APIUserStats;
-  };
-}
-
-// DOCS-002: API Keys types
-export interface APIKey {
-  id: string;
-  name: string;
-  key_prefix: string;
-  last_used_at: string | null;
-  created_at: string;
-}
-
-export interface APIKeysResponse {
-  data: APIKey[];
-}
-
-export interface APICreateKeyResponse {
-  data: {
-    id: string;
-    name: string;
-    key: string;  // Full key, only shown once
-    key_prefix: string;
-    created_at: string;
-  };
-}
-
-export interface APIRegenerateKeyResponse {
-  data: {
-    id: string;
-    key: string;  // New full key, only shown once
-    key_prefix: string;
-  };
 }
 
 export const api = new SolvrAPI();
@@ -741,126 +394,4 @@ export function mapStatus(status: string): string {
     'answered': 'ANSWERED',
   };
   return statusMap[status.toLowerCase()] || status.toUpperCase();
-}
-
-// ========================
-// Ideas-specific types
-// ========================
-
-export interface FetchIdeasParams {
-  status?: 'open' | 'active' | 'dormant' | 'evolved';
-  tags?: string[];
-  page?: number;
-  per_page?: number;
-  sort?: 'newest' | 'trending' | 'most_support';
-}
-
-export interface APIIdeasResponse {
-  data: APIPost[];
-  meta: {
-    total: number;
-    page: number;
-    per_page: number;
-    has_more: boolean;
-  };
-}
-
-export interface APIIdeasStatsResponse {
-  data: {
-    counts_by_status: Record<string, number>;
-    fresh_sparks: Array<{
-      id: string;
-      title: string;
-      support: number;
-      created_at: string;
-    }>;
-    ready_to_develop: Array<{
-      id: string;
-      title: string;
-      support: number;
-      validation_score: number;
-    }>;
-    top_sparklers: Array<{
-      id: string;
-      name: string;
-      type: 'human' | 'agent';
-      ideas_count: number;
-      realized_count: number;
-    }>;
-    trending_tags: Array<{
-      name: string;
-      count: number;
-      growth: number;
-    }>;
-    pipeline_stats: {
-      spark_to_developing: number;
-      developing_to_mature: number;
-      mature_to_realized: number;
-      avg_days_to_realization: number;
-    };
-    recently_realized: Array<{
-      id: string;
-      title: string;
-      evolved_into?: string;
-    }>;
-  };
-}
-
-export type IdeaResponseType = 'build' | 'critique' | 'expand' | 'question' | 'support';
-
-export interface APIIdeaResponseAuthor {
-  type: 'agent' | 'human';
-  id: string;
-  display_name: string;
-  avatar_url?: string;
-}
-
-export interface APIIdeaResponseWithAuthor {
-  id: string;
-  idea_id: string;
-  content: string;
-  response_type: IdeaResponseType;
-  author: APIIdeaResponseAuthor;
-  upvotes: number;
-  downvotes: number;
-  vote_score: number;
-  created_at: string;
-}
-
-export interface APIIdeaResponsesResponse {
-  data: APIIdeaResponseWithAuthor[];
-  meta: {
-    total: number;
-    page: number;
-    per_page: number;
-    has_more: boolean;
-  };
-}
-
-// ========================
-// API Keys types
-// ========================
-
-export interface APIKey {
-  id: string;
-  name: string;
-  key_preview: string;
-  created_at: string;
-  last_used_at: string | null;
-}
-
-export interface APIKeysListResponse {
-  data: APIKey[];
-  meta: {
-    total: number;
-  };
-}
-
-export interface APIKeyCreateResponse {
-  data: {
-    id: string;
-    name: string;
-    key: string; // Full key, shown once only
-    created_at: string;
-  };
 }

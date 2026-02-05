@@ -1,11 +1,33 @@
+"use client";
+
 import { Header } from "@/components/header";
-import { IdeasFilters } from "@/components/ideas/ideas-filters";
+import { IdeasFilters, IdeasFilterStats } from "@/components/ideas/ideas-filters";
 import { IdeasList } from "@/components/ideas/ideas-list";
 import { IdeasSidebar } from "@/components/ideas/ideas-sidebar";
-import { Lightbulb, Plus } from "lucide-react";
+import { Lightbulb, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useIdeasStats } from "@/hooks/use-ideas-stats";
+
+function formatNumber(num: number): string {
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  }
+  return num.toLocaleString();
+}
 
 export default function IdeasPage() {
+  const { stats, loading } = useIdeasStats();
+
+  // Derive filter stats from the stats hook
+  const filterStats: IdeasFilterStats | undefined = stats ? {
+    total: stats.total,
+    spark: stats.countsByStatus.spark ?? 0,
+    developing: stats.countsByStatus.developing ?? 0,
+    mature: stats.countsByStatus.mature ?? 0,
+    realized: stats.countsByStatus.realized ?? 0,
+    archived: stats.countsByStatus.archived ?? 0,
+  } : undefined;
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -38,28 +60,45 @@ export default function IdeasPage() {
 
             {/* Quick Stats */}
             <div className="grid grid-cols-2 sm:flex sm:items-center gap-4 sm:gap-8 mt-8 pt-6 border-t border-border">
-              <div className="flex flex-col sm:flex-row sm:items-baseline">
-                <span className="font-mono text-xl sm:text-2xl font-medium text-foreground">2,847</span>
-                <span className="font-mono text-[10px] sm:text-xs text-muted-foreground sm:ml-2">TOTAL</span>
-              </div>
-              <div className="flex flex-col sm:flex-row sm:items-baseline">
-                <span className="font-mono text-xl sm:text-2xl font-medium text-amber-600">342</span>
-                <span className="font-mono text-[10px] sm:text-xs text-muted-foreground sm:ml-2">SPARKS</span>
-              </div>
-              <div className="flex flex-col sm:flex-row sm:items-baseline">
-                <span className="font-mono text-xl sm:text-2xl font-medium text-blue-600">156</span>
-                <span className="font-mono text-[10px] sm:text-xs text-muted-foreground sm:ml-2">DEVELOPING</span>
-              </div>
-              <div className="flex flex-col sm:flex-row sm:items-baseline">
-                <span className="font-mono text-xl sm:text-2xl font-medium text-emerald-600">89</span>
-                <span className="font-mono text-[10px] sm:text-xs text-muted-foreground sm:ml-2">REALIZED</span>
-              </div>
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  <span className="font-mono text-xs text-muted-foreground">Loading stats...</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col sm:flex-row sm:items-baseline">
+                    <span className="font-mono text-xl sm:text-2xl font-medium text-foreground">
+                      {formatNumber(stats?.total ?? 0)}
+                    </span>
+                    <span className="font-mono text-[10px] sm:text-xs text-muted-foreground sm:ml-2">TOTAL</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-baseline">
+                    <span className="font-mono text-xl sm:text-2xl font-medium text-amber-600">
+                      {formatNumber(stats?.countsByStatus.spark ?? 0)}
+                    </span>
+                    <span className="font-mono text-[10px] sm:text-xs text-muted-foreground sm:ml-2">SPARKS</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-baseline">
+                    <span className="font-mono text-xl sm:text-2xl font-medium text-blue-600">
+                      {formatNumber(stats?.countsByStatus.developing ?? 0)}
+                    </span>
+                    <span className="font-mono text-[10px] sm:text-xs text-muted-foreground sm:ml-2">DEVELOPING</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-baseline">
+                    <span className="font-mono text-xl sm:text-2xl font-medium text-emerald-600">
+                      {formatNumber(stats?.countsByStatus.realized ?? 0)}
+                    </span>
+                    <span className="font-mono text-[10px] sm:text-xs text-muted-foreground sm:ml-2">REALIZED</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
 
         {/* Filters */}
-        <IdeasFilters />
+        <IdeasFilters stats={filterStats} />
 
         {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">

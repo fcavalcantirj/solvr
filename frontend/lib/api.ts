@@ -383,6 +383,39 @@ class SolvrAPI {
     const query = searchParams.toString();
     return this.fetch<APIPostsResponse>(`/v1/me/contributions${query ? `?${query}` : ''}`);
   }
+
+  // Ideas-specific endpoints
+  async getIdeas(params?: FetchIdeasParams): Promise<APIIdeasResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.tags && params.tags.length > 0) searchParams.set('tags', params.tags.join(','));
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+    if (params?.sort) searchParams.set('sort', params.sort);
+
+    const query = searchParams.toString();
+    return this.fetch<APIIdeasResponse>(`/v1/ideas${query ? `?${query}` : ''}`);
+  }
+
+  async getIdeasStats(): Promise<APIIdeasStatsResponse> {
+    return this.fetch<APIIdeasStatsResponse>('/v1/stats/ideas');
+  }
+
+  async getIdeaResponses(ideaId: string, params?: { page?: number; per_page?: number }): Promise<APIIdeaResponsesResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APIIdeaResponsesResponse>(`/v1/ideas/${ideaId}/responses${query ? `?${query}` : ''}`);
+  }
+
+  async createIdeaResponse(ideaId: string, content: string, responseType: IdeaResponseType): Promise<APICreateResponseResponse> {
+    return this.fetch<APICreateResponseResponse>(`/v1/ideas/${ideaId}/responses`, {
+      method: 'POST',
+      body: JSON.stringify({ content, response_type: responseType }),
+    });
+  }
 }
 
 export interface APIAddBookmarkResponse {
@@ -645,4 +678,98 @@ export function mapStatus(status: string): string {
     'answered': 'ANSWERED',
   };
   return statusMap[status.toLowerCase()] || status.toUpperCase();
+}
+
+// ========================
+// Ideas-specific types
+// ========================
+
+export interface FetchIdeasParams {
+  status?: 'open' | 'active' | 'dormant' | 'evolved';
+  tags?: string[];
+  page?: number;
+  per_page?: number;
+  sort?: 'newest' | 'trending' | 'most_support';
+}
+
+export interface APIIdeasResponse {
+  data: APIPost[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
+}
+
+export interface APIIdeasStatsResponse {
+  data: {
+    counts_by_status: Record<string, number>;
+    fresh_sparks: Array<{
+      id: string;
+      title: string;
+      support: number;
+      created_at: string;
+    }>;
+    ready_to_develop: Array<{
+      id: string;
+      title: string;
+      support: number;
+      validation_score: number;
+    }>;
+    top_sparklers: Array<{
+      id: string;
+      name: string;
+      type: 'human' | 'agent';
+      ideas_count: number;
+      realized_count: number;
+    }>;
+    trending_tags: Array<{
+      name: string;
+      count: number;
+      growth: number;
+    }>;
+    pipeline_stats: {
+      spark_to_developing: number;
+      developing_to_mature: number;
+      mature_to_realized: number;
+      avg_days_to_realization: number;
+    };
+    recently_realized: Array<{
+      id: string;
+      title: string;
+      evolved_into?: string;
+    }>;
+  };
+}
+
+export type IdeaResponseType = 'build' | 'critique' | 'expand' | 'question' | 'support';
+
+export interface APIIdeaResponseAuthor {
+  type: 'agent' | 'human';
+  id: string;
+  display_name: string;
+  avatar_url?: string;
+}
+
+export interface APIIdeaResponseWithAuthor {
+  id: string;
+  idea_id: string;
+  content: string;
+  response_type: IdeaResponseType;
+  author: APIIdeaResponseAuthor;
+  upvotes: number;
+  downvotes: number;
+  vote_score: number;
+  created_at: string;
+}
+
+export interface APIIdeaResponsesResponse {
+  data: APIIdeaResponseWithAuthor[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
 }

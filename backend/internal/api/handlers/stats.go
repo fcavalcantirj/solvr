@@ -20,6 +20,13 @@ type StatsRepositoryInterface interface {
 	GetTotalContributionsCount(ctx context.Context) (int, error)
 	GetTrendingPosts(ctx context.Context, limit int) ([]any, error)
 	GetTrendingTags(ctx context.Context, limit int) ([]any, error)
+	// Ideas-specific stats
+	GetIdeasCountByStatus(ctx context.Context) (map[string]int, error)
+	GetFreshSparks(ctx context.Context, limit int) ([]map[string]any, error)
+	GetReadyToDevelop(ctx context.Context, limit int) ([]map[string]any, error)
+	GetTopSparklers(ctx context.Context, limit int) ([]map[string]any, error)
+	GetIdeaPipelineStats(ctx context.Context) (map[string]any, error)
+	GetRecentlyRealized(ctx context.Context, limit int) ([]map[string]any, error)
 }
 
 // StatsHandler handles statistics endpoints.
@@ -174,4 +181,75 @@ func writeStatsError(w http.ResponseWriter, status int, code, message string) {
 			"message": message,
 		},
 	})
+}
+
+// GetIdeasStats handles GET /v1/stats/ideas
+// Returns comprehensive statistics for the Ideas page sidebar
+func (h *StatsHandler) GetIdeasStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get counts by status
+	countsByStatus, err := h.repo.GetIdeasCountByStatus(ctx)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get ideas counts")
+		return
+	}
+
+	// Get fresh sparks (recent ideas)
+	freshSparks, err := h.repo.GetFreshSparks(ctx, 5)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get fresh sparks")
+		return
+	}
+
+	// Get ready to develop ideas
+	readyToDevelop, err := h.repo.GetReadyToDevelop(ctx, 5)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get ready to develop ideas")
+		return
+	}
+
+	// Get top sparklers (contributors)
+	topSparklers, err := h.repo.GetTopSparklers(ctx, 5)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get top sparklers")
+		return
+	}
+
+	// Get trending tags
+	trendingTags, err := h.repo.GetTrendingTags(ctx, 10)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get trending tags")
+		return
+	}
+
+	// Get pipeline stats
+	pipelineStats, err := h.repo.GetIdeaPipelineStats(ctx)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get pipeline stats")
+		return
+	}
+
+	// Get recently realized ideas
+	recentlyRealized, err := h.repo.GetRecentlyRealized(ctx, 3)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get recently realized ideas")
+		return
+	}
+
+	response := map[string]interface{}{
+		"data": map[string]interface{}{
+			"counts_by_status":  countsByStatus,
+			"fresh_sparks":      freshSparks,
+			"ready_to_develop":  readyToDevelop,
+			"top_sparklers":     topSparklers,
+			"trending_tags":     trendingTags,
+			"pipeline_stats":    pipelineStats,
+			"recently_realized": recentlyRealized,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }

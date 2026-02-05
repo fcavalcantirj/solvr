@@ -118,7 +118,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		// For now, use in-memory repos until DB implementations are added
 		problemsRepo = NewInMemoryProblemsRepository()
 		questionsRepo = NewInMemoryQuestionsRepository()
-		ideasRepo = NewInMemoryIdeasRepository()
+		ideasRepo = db.NewIdeasRepository(pool)
 		commentsRepo = NewInMemoryCommentsRepository()
 		notificationsRepo = NewInMemoryNotificationsRepository()
 	} else {
@@ -312,6 +312,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			statsHandler := handlers.NewStatsHandler(statsRepo)
 			r.Get("/stats", statsHandler.GetStats)
 			r.Get("/stats/trending", statsHandler.GetTrending)
+			r.Get("/stats/ideas", statsHandler.GetIdeasStats)
 		}
 
 		// Problems endpoints (API-CRITICAL per PRD-v2)

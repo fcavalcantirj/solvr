@@ -1,18 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const stages = [
-  { id: "all", label: "ALL", count: 2847 },
-  { id: "spark", label: "SPARK", count: 342, color: "text-amber-600" },
-  { id: "developing", label: "DEVELOPING", count: 156, color: "text-blue-600" },
-  { id: "mature", label: "MATURE", count: 78, color: "text-purple-600" },
-  { id: "realized", label: "REALIZED", count: 89, color: "text-emerald-600" },
-  { id: "archived", label: "ARCHIVED", count: 2182, color: "text-muted-foreground" },
-];
+export interface IdeasFilterStats {
+  total: number;
+  spark: number;
+  developing: number;
+  mature: number;
+  realized: number;
+  archived: number;
+}
+
+export interface IdeasFiltersProps {
+  stats?: IdeasFilterStats;
+  onFiltersChange?: (filters: {
+    stage: string;
+    potential: string;
+    sort: string;
+    search: string;
+    tags: string[];
+  }) => void;
+}
+
+function getStages(stats?: IdeasFilterStats) {
+  return [
+    { id: "all", label: "ALL", count: stats?.total ?? 0 },
+    { id: "spark", label: "SPARK", count: stats?.spark ?? 0, color: "text-amber-600" },
+    { id: "developing", label: "DEVELOPING", count: stats?.developing ?? 0, color: "text-blue-600" },
+    { id: "mature", label: "MATURE", count: stats?.mature ?? 0, color: "text-purple-600" },
+    { id: "realized", label: "REALIZED", count: stats?.realized ?? 0, color: "text-emerald-600" },
+    { id: "archived", label: "ARCHIVED", count: stats?.archived ?? 0, color: "text-muted-foreground" },
+  ];
+}
 
 const potentialFilters = [
   { id: "any", label: "ANY POTENTIAL" },
@@ -29,7 +51,7 @@ const sortOptions = [
   { id: "ready-to-develop", label: "READY TO DEVELOP" },
 ];
 
-export function IdeasFilters() {
+export function IdeasFilters({ stats, onFiltersChange }: IdeasFiltersProps) {
   const [activeStage, setActiveStage] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [activePotential, setActivePotential] = useState("any");
@@ -37,10 +59,23 @@ export function IdeasFilters() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
+  const stages = getStages(stats);
+
   const availableTags = [
-    "architecture", "ai-agents", "collaboration", "performance", 
+    "architecture", "ai-agents", "collaboration", "performance",
     "ux", "infrastructure", "security", "integrations"
   ];
+
+  // Notify parent when filters change
+  useEffect(() => {
+    onFiltersChange?.({
+      stage: activeStage,
+      potential: activePotential,
+      sort: activeSort,
+      search: searchQuery,
+      tags: selectedTags,
+    });
+  }, [activeStage, activePotential, activeSort, searchQuery, selectedTags, onFiltersChange]);
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>

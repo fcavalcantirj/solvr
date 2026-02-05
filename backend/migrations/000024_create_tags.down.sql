@@ -1,0 +1,3 @@
+-- Drop tags tables
+DROP TABLE IF EXISTS post_tags;
+DROP TABLE IF EXISTS tags;

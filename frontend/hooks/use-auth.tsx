@@ -71,10 +71,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loginWithGitHub = useCallback(() => {
+    // Store current URL as return URL (if not on login/auth pages)
+    const currentPath = window.location.pathname;
+    if (!currentPath.startsWith('/login') && !currentPath.startsWith('/auth') && !currentPath.startsWith('/join')) {
+      localStorage.setItem('auth_return_url', currentPath);
+    }
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev'}/v1/auth/github`;
   }, []);
 
   const loginWithGoogle = useCallback(() => {
+    // Store current URL as return URL (if not on login/auth pages)
+    const currentPath = window.location.pathname;
+    if (!currentPath.startsWith('/login') && !currentPath.startsWith('/auth') && !currentPath.startsWith('/join')) {
+      localStorage.setItem('auth_return_url', currentPath);
+    }
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev'}/v1/auth/google`;
   }, []);
 

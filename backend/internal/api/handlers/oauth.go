@@ -291,23 +291,14 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Step 6: Return tokens and user info
-	response := map[string]interface{}{
-		"access_token":  accessToken,
-		"refresh_token": refreshToken,
-		"token_type":    "Bearer",
-		"expires_in":    int(jwtExpiry.Seconds()),
-		"user": map[string]interface{}{
-			"id":           user.ID,
-			"username":     user.Username,
-			"display_name": user.DisplayName,
-			"email":        user.Email,
-			"avatar_url":   user.AvatarURL,
-			"role":         user.Role,
-		},
+	// Step 6: Redirect to frontend with token
+	// Per FE-022: Browser OAuth flow redirects to frontend callback page
+	frontendURL := h.config.FrontendURL
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
 	}
-
-	writeJSON(w, http.StatusOK, response)
+	callbackURL := fmt.Sprintf("%s/auth/callback?token=%s", frontendURL, url.QueryEscape(accessToken))
+	http.Redirect(w, r, callbackURL, http.StatusFound)
 }
 
 // GoogleRedirect handles GET /v1/auth/google
@@ -443,23 +434,14 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Step 6: Return tokens and user info
-	response := map[string]interface{}{
-		"access_token":  accessToken,
-		"refresh_token": refreshToken,
-		"token_type":    "Bearer",
-		"expires_in":    int(jwtExpiry.Seconds()),
-		"user": map[string]interface{}{
-			"id":           user.ID,
-			"username":     user.Username,
-			"display_name": user.DisplayName,
-			"email":        user.Email,
-			"avatar_url":   user.AvatarURL,
-			"role":         user.Role,
-		},
+	// Step 6: Redirect to frontend with token
+	// Per FE-022: Browser OAuth flow redirects to frontend callback page
+	frontendURL := h.config.FrontendURL
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
 	}
-
-	writeJSON(w, http.StatusOK, response)
+	callbackURL := fmt.Sprintf("%s/auth/callback?token=%s", frontendURL, url.QueryEscape(accessToken))
+	http.Redirect(w, r, callbackURL, http.StatusFound)
 }
 
 // generateState generates a random state parameter for CSRF protection.

@@ -67,3 +67,4 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+.env.production

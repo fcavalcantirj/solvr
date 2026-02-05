@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -404,24 +405,18 @@ func TestGoogleCallback_CompleteFlow_NewUser(t *testing.T) {
 
 	handler.GoogleCallback(rec, req)
 
-	// Should return 200 with tokens
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d. Body: %s", http.StatusOK, rec.Code, rec.Body.String())
+	// Should redirect to frontend with token
+	if rec.Code != http.StatusFound {
+		t.Errorf("expected status %d, got %d. Body: %s", http.StatusFound, rec.Code, rec.Body.String())
 	}
 
-	var resp GoogleAuthSuccessResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v. Body: %s", err, rec.Body.String())
+	// Check redirect location contains token
+	location := rec.Header().Get("Location")
+	if location == "" {
+		t.Fatal("expected Location header to be set")
 	}
-
-	if resp.Data.AccessToken == "" {
-		t.Error("expected access_token to be set")
-	}
-	if resp.Data.RefreshToken == "" {
-		t.Error("expected refresh_token to be set")
-	}
-	if resp.Data.User.Email != "newgoogleuser@gmail.com" {
-		t.Errorf("expected user email newgoogleuser@gmail.com, got %s", resp.Data.User.Email)
+	if !strings.Contains(location, "/auth/callback?token=") {
+		t.Errorf("expected redirect to /auth/callback?token=..., got %s", location)
 	}
 }
 
@@ -477,17 +472,18 @@ func TestGoogleCallback_CompleteFlow_ExistingUser(t *testing.T) {
 
 	handler.GoogleCallback(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d. Body: %s", http.StatusOK, rec.Code, rec.Body.String())
+	// Should redirect to frontend with token
+	if rec.Code != http.StatusFound {
+		t.Errorf("expected status %d, got %d. Body: %s", http.StatusFound, rec.Code, rec.Body.String())
 	}
 
-	var resp GoogleAuthSuccessResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
+	// Check redirect location contains token
+	location := rec.Header().Get("Location")
+	if location == "" {
+		t.Fatal("expected Location header to be set")
 	}
-
-	if resp.Data.User.ID != "existing-user-id" {
-		t.Errorf("expected user ID existing-user-id, got %s", resp.Data.User.ID)
+	if !strings.Contains(location, "/auth/callback?token=") {
+		t.Errorf("expected redirect to /auth/callback?token=..., got %s", location)
 	}
 }
 

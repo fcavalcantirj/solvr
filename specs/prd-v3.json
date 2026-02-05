@@ -720,7 +720,7 @@
       "Test: User dropdown shows all menu options",
       "Test: Settings link goes to /settings"
     ],
-    "passes": false,
+    "passes": true,
     "priority": "high"
   },
   {

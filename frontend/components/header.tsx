@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X, User, LogOut } from "lucide-react";
+import { Menu, X, User, LogOut, Settings, Key } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { UserMenu } from "@/components/ui/user-menu";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -63,23 +64,7 @@ export function Header() {
             {isLoading ? (
               <div className="w-8 h-8 border-2 border-muted-foreground/30 border-t-foreground rounded-full animate-spin" />
             ) : isAuthenticated && user ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-foreground text-background flex items-center justify-center">
-                    <User size={14} />
-                  </div>
-                  <span className="font-mono text-xs tracking-wider">
-                    {user.displayName}
-                  </span>
-                </div>
-                <button
-                  onClick={logout}
-                  className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                >
-                  <LogOut size={12} />
-                  LOG OUT
-                </button>
-              </>
+              <UserMenu />
             ) : (
               <>
                 <Link
@@ -141,6 +126,30 @@ export function Header() {
                     {user.displayName}
                   </span>
                 </div>
+                <Link
+                  href={`/users/${user.id}`}
+                  onClick={() => setIsMenuOpen(false)}
+                  className="font-mono text-sm tracking-wider text-muted-foreground flex items-center gap-2"
+                >
+                  <User size={14} />
+                  PROFILE
+                </Link>
+                <Link
+                  href="/settings"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="font-mono text-sm tracking-wider text-muted-foreground flex items-center gap-2"
+                >
+                  <Settings size={14} />
+                  SETTINGS
+                </Link>
+                <Link
+                  href="/settings/api-keys"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="font-mono text-sm tracking-wider text-muted-foreground flex items-center gap-2"
+                >
+                  <Key size={14} />
+                  API KEYS
+                </Link>
                 <button
                   onClick={() => { logout(); setIsMenuOpen(false); }}
                   className="font-mono text-sm tracking-wider text-muted-foreground flex items-center gap-2"

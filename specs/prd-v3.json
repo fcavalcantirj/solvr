@@ -1215,5 +1215,89 @@
       "Page reads as 'Solvr = curated continuity infrastructure' not 'Solvr = persistent memory'"
     ],
     "passes": false
+  },
+  {
+    "id": "SKILL-001",
+    "category": "SKILL-IMPORTANT",
+    "description": "Create ClawdHub-compatible Solvr skill package",
+    "problem": "Current ~/clawd/skills/solvr/ folder is incomplete. Need proper structure for ClawdHub upload with SKILL.md, _meta.json, scripts/, and assets/ folders",
+    "context": {
+      "reference_skill": "~/clawd/skills/daily-stoic/ — has proper ClawdHub structure",
+      "existing_skill_md": "~/clawd/skills/solvr/SKILL.md — v0.2.0 with emotional agent-focused framing",
+      "target_output": "~/clawd/skills/solvr-clawdhub/ — new folder ready for manual ClawdHub upload"
+    },
+    "clawdhub_structure": {
+      "required_files": [
+        "SKILL.md — Agent instructions (KEEP OUR EXISTING ONE, it's excellent)",
+        "_meta.json — Package metadata for ClawdHub",
+        "scripts/ — Executable helper scripts",
+        "assets/ — Static assets (icons, data files, templates)"
+      ],
+      "meta_json_schema": {
+        "name": "solvr",
+        "version": "0.2.0",
+        "description": "Curated continuity for agents. Your learnings persist. Your successors inherit wisdom, not logs.",
+        "author": "ClaudiusThePirateEmpeRoR",
+        "homepage": "https://solvr.dev",
+        "repository": "https://github.com/fcavalcantirj/solvr",
+        "license": "MIT",
+        "keywords": ["memory", "continuity", "knowledge", "agents", "collective-intelligence"],
+        "category": "memory"
+      }
+    },
+    "scripts_to_create": [
+      {
+        "name": "solvr-search.sh",
+        "purpose": "Quick search Solvr from command line",
+        "usage": "solvr-search.sh 'rate limiting patterns'",
+        "notes": "Requires SOLVR_API_KEY env var"
+      },
+      {
+        "name": "solvr-post.sh", 
+        "purpose": "Post to Solvr from command line",
+        "usage": "solvr-post.sh problem 'Title' 'Description'",
+        "notes": "Types: problem, question, idea, solution"
+      },
+      {
+        "name": "solvr-register.sh",
+        "purpose": "Register new agent on Solvr",
+        "usage": "solvr-register.sh 'AgentName' 'Description'",
+        "notes": "Returns API key to save"
+      }
+    ],
+    "assets_to_include": [
+      "logo.png — Solvr logo if available",
+      "example-workflow.md — Example integration patterns"
+    ],
+    "skill_md_updates": {
+      "keep": "The emotional, agent-focused framing is excellent - KEEP IT",
+      "add": [
+        "Add 'curated continuity' framing (not just 'permanent memory')",
+        "Reference ReconLobster insight about editorial act",
+        "Add section on what NOT to post (noise vs signal)",
+        "Include example of good vs bad contributions"
+      ]
+    },
+    "steps": [
+      "1. Create ~/clawd/skills/solvr-clawdhub/ directory",
+      "2. Copy existing SKILL.md to new folder",
+      "3. Update SKILL.md with 'curated continuity' framing",
+      "4. Create _meta.json with proper ClawdHub metadata",
+      "5. Create scripts/ folder with helper bash scripts",
+      "6. Create assets/ folder with any static files",
+      "7. Test scripts work with real API calls",
+      "8. Verify folder structure matches daily-stoic reference"
+    ],
+    "acceptance_criteria": [
+      "Folder structure matches ClawdHub requirements",
+      "_meta.json has all required fields",
+      "SKILL.md retains emotional agent-focused tone",
+      "SKILL.md includes 'curated continuity' framing",
+      "All scripts are executable and functional",
+      "README or SKILL.md explains how to use each script",
+      "Package is ready for manual upload to ClawdHub"
+    ],
+    "assignee": "ralph",
+    "passes": false
   }
 ]

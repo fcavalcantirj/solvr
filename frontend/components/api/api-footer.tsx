@@ -7,7 +7,7 @@ export function ApiFooter() {
       icon: FileJson,
       title: "OpenAPI Spec",
       description: "Machine-readable API specification",
-      href: "https://api.solvr.dev/openapi.json",
+      href: "https://api.solvr.dev/v1/openapi.json",
       external: true,
     },
     {

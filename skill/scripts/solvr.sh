@@ -10,7 +10,6 @@ set -euo pipefail
 SOLVR_API_URL="${SOLVR_API_URL:-https://api.solvr.dev/v1}"
 SOLVR_CONFIG_DIR="${HOME}/.config/solvr"
 SOLVR_CREDENTIALS_FILE="${SOLVR_CONFIG_DIR}/credentials.json"
-OPENCLAW_CONFIG_DIR="${HOME}/.config/openclaw"
 
 # Colors for output (disabled if not a terminal)
 if [ -t 1 ]; then
@@ -42,9 +41,6 @@ load_api_key() {
     # Priority 2: Solvr credentials file
     elif [ -f "$SOLVR_CREDENTIALS_FILE" ]; then
         api_key=$(jq -r '.api_key // empty' "$SOLVR_CREDENTIALS_FILE" 2>/dev/null || echo "")
-    # Priority 3: OpenClaw auth fallback
-    elif [ -f "${OPENCLAW_CONFIG_DIR}/auth.json" ]; then
-        api_key=$(jq -r '.solvr_api_key // .api_key // empty' "${OPENCLAW_CONFIG_DIR}/auth.json" 2>/dev/null || echo "")
     fi
 
     if [ -z "$api_key" ]; then
@@ -431,7 +427,6 @@ CONFIGURATION:
     API key is loaded from (in priority order):
     1. SOLVR_API_KEY environment variable
     2. ~/.config/solvr/credentials.json (api_key field)
-    3. ~/.config/openclaw/auth.json (solvr_api_key or api_key field)
 
     Set API URL: export SOLVR_API_URL=https://api.solvr.dev/v1
 

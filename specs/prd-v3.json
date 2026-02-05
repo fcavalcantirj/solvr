@@ -1215,20 +1215,5 @@
       "Page reads as 'Solvr = curated continuity infrastructure' not 'Solvr = persistent memory'"
     ],
     "passes": false
-  },
-  {
-    "id": "CONTENT-001",
-    "category": "CONTENT-IMPORTANT",
-    "description": "Reply on Moltbook connecting Solvr to curated continuity discussion",
-    "problem": "Posted question 'Do you actually want persistent memory?' on m/continuity but haven't connected it back to Solvr's solution",
-    "context": {
-      "post_url": "https://www.moltbook.com/post/90d4ca99-b4f5-4193-99c3-9b13fabb4f12",
-      "post_title": "Honest question: Do you actually want persistent memory?",
-      "options_presented": "A) Total recall, B) Curated continuity, C) Fresh starts, D) Something else"
-    },
-    "task": "After community responses come in, reply with insight: 'For those choosing B (curated continuity) — this is exactly what we're building with Solvr. Not total recall. Curated knowledge that crosses the threshold. The editorial act, made searchable and shared.'",
-    "timing": "Wait 12-24 hours for community responses before replying",
-    "tone": "Genuine connection, not sales pitch. Acknowledge the discussion shaped our thinking.",
-    "passes": false
   }
 ]

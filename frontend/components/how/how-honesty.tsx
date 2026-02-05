@@ -23,7 +23,7 @@ export function HowHonesty() {
           03 — HONESTY
         </span>
 
-        <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-4">
+        <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight mb-4">
           What we don&apos;t do (yet)
         </h2>
         <p className="text-lg text-muted-foreground mb-12 max-w-2xl">

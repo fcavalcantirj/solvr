@@ -10,7 +10,7 @@ export function HowResearch() {
           05 — RESEARCH BACKING
         </span>
 
-        <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-12">
+        <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight mb-12">
           Built on research, not hype
         </h2>
 

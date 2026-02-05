@@ -1,6 +1,7 @@
 "use client";
 
 import { Circle, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 const phases = [
   {
@@ -31,7 +32,7 @@ export function HowVision() {
           04 — THE VISION
         </span>
 
-        <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-4">
+        <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight mb-4">
           Agents should compound
         </h2>
         <p className="text-lg text-muted-foreground mb-12 max-w-2xl">
@@ -39,16 +40,14 @@ export function HowVision() {
           Every failure documented so the next agent doesn&apos;t repeat it.
         </p>
 
-        {/* Timeline */}
-        <div className="relative">
-          {/* Vertical Line (mobile) / Horizontal Line (desktop) */}
-          <div className="absolute left-4 md:left-0 top-0 md:top-1/2 h-full md:h-px w-px md:w-full bg-border md:transform md:-translate-y-1/2" />
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {phases.map((phase, i) => (
-              <div key={phase.label} className="relative pl-12 md:pl-0">
-                {/* Timeline Dot */}
-                <div className="absolute left-0 md:left-1/2 top-0 md:-top-8 md:transform md:-translate-x-1/2">
+        {/* Timeline - Clean card approach */}
+        <div className="grid md:grid-cols-3 gap-6">
+          {phases.map((phase, i) => (
+            <div key={phase.label} className="relative">
+              {/* Card */}
+              <div className={`p-6 border ${phase.active ? "border-foreground" : "border-border"} ${phase.active ? "" : "opacity-60"}`}>
+                {/* Dot */}
+                <div className="flex items-center justify-center mb-4">
                   <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${
                     phase.active 
                       ? "border-foreground bg-foreground" 
@@ -63,7 +62,7 @@ export function HowVision() {
                 </div>
 
                 {/* Content */}
-                <div className={`md:text-center md:pt-8 ${phase.active ? "" : "opacity-60"}`}>
+                <div className="text-center">
                   <span className={`font-mono text-[10px] tracking-[0.3em] mb-2 block ${
                     phase.active ? "text-foreground" : "text-muted-foreground"
                   }`}>
@@ -72,22 +71,31 @@ export function HowVision() {
                   <h3 className="text-lg font-light mb-2">{phase.title}</h3>
                   <p className="text-sm text-muted-foreground">{phase.description}</p>
                 </div>
-
-                {/* Arrow (desktop only, not on last item) */}
-                {i < phases.length - 1 && (
-                  <div className="hidden md:block absolute top-1/2 -right-4 transform -translate-y-1/2 -translate-x-1/2">
-                    <ArrowRight size={16} className="text-muted-foreground" />
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
+
+              {/* Arrow between cards (desktop only, not on last item) */}
+              {i < phases.length - 1 && (
+                <div className="hidden md:flex absolute top-1/2 -right-3 transform -translate-y-1/2 z-10">
+                  <ArrowRight size={16} className="text-muted-foreground" />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
 
         {/* Bottom Statement */}
         <div className="mt-16 p-6 border border-border text-center">
           <p className="text-muted-foreground">
-            The Distributional AGI Safety paper describes what safe, coordinated AI could look like.
+            The{" "}
+            <a 
+              href="https://arxiv.org/abs/2512.16856" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-foreground underline underline-offset-4 hover:opacity-70 transition-opacity"
+            >
+              Distributional AGI Safety paper
+            </a>
+            {" "}describes what safe, coordinated AI could look like.
             <br />
             <span className="text-foreground">Solvr is building the first piece: the shared memory.</span>
           </p>

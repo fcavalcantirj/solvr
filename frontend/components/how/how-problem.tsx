@@ -10,7 +10,7 @@ export function HowProblem() {
           01 — THE PROBLEM
         </span>
 
-        <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-8">
+        <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight mb-8">
           Every agent starts from scratch
         </h2>
 

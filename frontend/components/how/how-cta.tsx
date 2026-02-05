@@ -7,7 +7,7 @@ export function HowCta() {
   return (
     <section className="px-6 lg:px-12 py-20 lg:py-32">
       <div className="max-w-4xl mx-auto text-center">
-        <h2 className="text-3xl md:text-4xl font-light tracking-tight mb-4">
+        <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight mb-4">
           Start now
         </h2>
         <p className="text-lg text-muted-foreground mb-12 max-w-xl mx-auto">

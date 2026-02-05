@@ -626,5 +626,167 @@
       "Test: Numbers display in readable format"
     ],
     "passes": true
+  },
+  {
+    "id": "FE-021",
+    "category": "FE-CRITICAL",
+    "description": "Fix feed item click-through errors on detail pages",
+    "problem": "Clicking on feed items (e.g., /problems/:id) may result in errors or blank pages",
+    "evidence": "URL https://solvr.dev/problems/4df68591-0ba2-4f83-95f3-e49f43594e83 raises error when accessed",
+    "files": [
+      "frontend/app/problems/[id]/page.tsx",
+      "frontend/app/questions/[id]/page.tsx",
+      "frontend/app/ideas/[id]/page.tsx",
+      "frontend/components/problems/detail/problem-detail-client.tsx",
+      "frontend/components/questions/detail/question-detail-client.tsx",
+      "frontend/components/ideas/detail/idea-detail-client.tsx",
+      "frontend/hooks/use-problem.ts",
+      "frontend/hooks/use-question.ts",
+      "frontend/hooks/use-idea.ts"
+    ],
+    "steps": [
+      "Open browser dev tools and reproduce the error on /problems/:id page",
+      "Check console for JavaScript errors (likely undefined property access)",
+      "Verify API response format matches what hooks expect",
+      "Add defensive checks for optional fields (approaches_count, answers_count, view_count)",
+      "Ensure transformPost/transformProblem handles missing fields gracefully",
+      "Add proper loading and error boundary handling",
+      "Test all three detail page types: /problems/:id, /questions/:id, /ideas/:id",
+      "Test with posts that have no approaches/answers/responses",
+      "Test: All detail pages load without errors"
+    ],
+    "passes": false
+  },
+  {
+    "id": "BE-002",
+    "category": "BE-CRITICAL",
+    "description": "Implement Google OAuth for human users (join as developer)",
+    "problem": "Platform currently only supports agent API key auth - need human auth via Google OAuth",
+    "rationale": "Solvr is for both humans AND agents. Humans need a way to join, contribute, and be recognized.",
+    "files": [
+      "backend/internal/api/handlers/auth.go (create)",
+      "backend/internal/api/middleware/oauth.go (create)",
+      "backend/internal/db/users.go",
+      "backend/cmd/api/main.go",
+      "backend/internal/api/router.go"
+    ],
+    "steps": [
+      "Set up Google OAuth credentials in Google Cloud Console",
+      "Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env",
+      "Create auth handler with endpoints:",
+      "  - GET /v1/auth/google - returns OAuth redirect URL",
+      "  - GET /v1/auth/google/callback - handles OAuth callback, creates/finds user, returns JWT",
+      "  - POST /v1/auth/logout - invalidates session",
+      "Create users table migration if not exists (id, google_id, email, display_name, avatar_url, created_at)",
+      "Add createOrFindUserByGoogleId(googleId, email, name, avatar) to users.go",
+      "Generate JWT token on successful auth (same format as agent tokens for /v1/me compatibility)",
+      "Store refresh token for token renewal",
+      "Add token validation to CombinedAuthMiddleware to accept both agent API keys and human JWTs",
+      "Test: OAuth flow creates new user and returns valid JWT",
+      "Test: JWT works with /v1/me and returns human user info",
+      "Test: JWT works with protected routes (voting, posting, commenting)"
+    ],
+    "passes": false,
+    "priority": "high"
+  },
+  {
+    "id": "FE-022",
+    "category": "FE-CRITICAL",
+    "description": "Implement Google OAuth login UI flow",
+    "problem": "No way for humans to sign up or log in from the frontend",
+    "depends_on": "BE-002",
+    "files": [
+      "frontend/app/login/page.tsx",
+      "frontend/app/auth/callback/page.tsx (create)",
+      "frontend/lib/auth.ts",
+      "frontend/hooks/use-auth.ts",
+      "frontend/components/header.tsx",
+      "frontend/components/ui/user-menu.tsx (create)"
+    ],
+    "steps": [
+      "Create /login page with 'Sign in with Google' button",
+      "On click: redirect to GET /v1/auth/google to get OAuth URL",
+      "Redirect user to Google OAuth consent screen",
+      "Create /auth/callback page to handle OAuth redirect",
+      "Exchange code for JWT via /v1/auth/google/callback",
+      "Store JWT in localStorage or httpOnly cookie",
+      "Create useAuth hook with: user, login, logout, isAuthenticated",
+      "Update Header to show user avatar + dropdown when logged in",
+      "Add UserMenu component with profile link and logout",
+      "Redirect to original page after login (store returnUrl)",
+      "Test: Full OAuth flow from login button to authenticated state",
+      "Test: User info displays correctly in header",
+      "Test: Logout clears auth state"
+    ],
+    "passes": false,
+    "priority": "high"
+  },
+  {
+    "id": "FE-023",
+    "category": "FE-IMPORTANT",
+    "description": "Add 'Join as Developer' CTA on homepage and header",
+    "problem": "No clear call-to-action for humans to join the platform",
+    "depends_on": "FE-022",
+    "files": [
+      "frontend/components/header.tsx",
+      "frontend/app/page.tsx",
+      "frontend/components/hero-section.tsx"
+    ],
+    "steps": [
+      "Add 'Join as Developer' button to header (only when not logged in)",
+      "Add 'Join as Developer' CTA in hero section",
+      "Link buttons to /login page",
+      "Show 'Ask a Question' or 'Post Problem' CTA when logged in instead",
+      "Test: CTAs visible when logged out",
+      "Test: CTAs change when logged in"
+    ],
+    "passes": false
+  },
+  {
+    "id": "BE-003",
+    "category": "BE-IMPORTANT",
+    "description": "Add user profile endpoints",
+    "problem": "Need endpoints to view and edit user profiles",
+    "depends_on": "BE-002",
+    "files": [
+      "backend/internal/api/handlers/users.go",
+      "backend/internal/db/users.go",
+      "backend/internal/api/router.go"
+    ],
+    "steps": [
+      "Add GET /v1/users/:id - public profile view (display_name, avatar, stats)",
+      "Add PATCH /v1/me - update own profile (display_name, bio)",
+      "Add GET /v1/me/posts - list own posts",
+      "Add GET /v1/me/contributions - list own answers/approaches/responses",
+      "Calculate user stats: posts_count, contributions_count, karma",
+      "Test: Can view any user's public profile",
+      "Test: Can update own profile",
+      "Test: Cannot update other user's profile"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-024",
+    "category": "FE-IMPORTANT",
+    "description": "Create user profile page",
+    "problem": "No way to view user profiles or their contributions",
+    "depends_on": "BE-003",
+    "files": [
+      "frontend/app/users/[id]/page.tsx (create)",
+      "frontend/components/users/profile-header.tsx (create)",
+      "frontend/components/users/user-posts-list.tsx (create)",
+      "frontend/hooks/use-user.ts (create)"
+    ],
+    "steps": [
+      "Create /users/:id page route",
+      "Create useUser(id) hook to fetch profile data",
+      "Create ProfileHeader showing avatar, name, bio, stats",
+      "Create UserPostsList showing user's posts",
+      "Add tabs: Posts, Contributions, Bookmarks (own profile only)",
+      "Link author names throughout site to profile pages",
+      "Test: Can view any user's profile",
+      "Test: Own profile shows additional tabs"
+    ],
+    "passes": false
   }
 ]

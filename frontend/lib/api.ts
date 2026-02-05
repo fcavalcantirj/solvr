@@ -432,13 +432,13 @@ class SolvrAPI {
 
   async createAPIKey(name: string): Promise<APIKeyCreateResponse> {
     return this.fetch<APIKeyCreateResponse>('/v1/users/me/api-keys', {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    });
+  // DOCS-002: API Key management
+  async getApiKeys(): Promise<APIKeysResponse> {
+    return this.fetch<APIKeysResponse>('/v1/users/me/api-keys');
   }
 
   async revokeAPIKey(id: string): Promise<void> {
-    await this.fetch<void>(`/v1/users/me/api-keys/${id}`, {
+    await this.fetch<void>(`/v1/users/me/api-keys/${keyId}`, {
       method: 'DELETE',
     });
   }
@@ -673,6 +673,37 @@ export interface APIUserProfileResponse {
     avatar_url?: string;
     bio?: string;
     stats: APIUserStats;
+  };
+}
+
+// DOCS-002: API Keys types
+export interface APIKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export interface APIKeysResponse {
+  data: APIKey[];
+}
+
+export interface APICreateKeyResponse {
+  data: {
+    id: string;
+    name: string;
+    key: string;  // Full key, only shown once
+    key_prefix: string;
+    created_at: string;
+  };
+}
+
+export interface APIRegenerateKeyResponse {
+  data: {
+    id: string;
+    key: string;  // New full key, only shown once
+    key_prefix: string;
   };
 }
 

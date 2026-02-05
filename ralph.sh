@@ -74,6 +74,7 @@ for ((i=1; i<=$1; i++)); do
   claude --dangerously-skip-permissions --no-session-persistence -p --output-format json "@CLAUDE.md @SPEC.md @specs/prd-v3.json @specs/progress.txt \
 
 === GOLDEN RULES (MUST FOLLOW) ===
+• NO MOCKS, NO STUBS - real implementation only
 • TDD: Write failing test FIRST, then implement (RED→GREEN→REFACTOR)
 • 80% test coverage minimum - no exceptions
 • 800 lines max per file - split if needed

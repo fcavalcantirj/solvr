@@ -7681,3 +7681,30 @@ Also, FeedRepository didn't exist in the db package.
     - use-comment-form.ts: 55 lines
     - use-comment-form.test.ts: 127 lines
     - answers-list.tsx: 244 lines
+
+
+- 2026-02-05: [FE-009] Implement accept answer functionality ✓
+  - Problem: No way to mark an answer as accepted from frontend
+  - TDD approach followed:
+    1. Added failing tests first for useAcceptAnswer hook (4 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Added acceptAnswer(questionId, answerId) method to frontend/lib/api.ts
+      - Calls POST /v1/questions/{id}/accept/{aid}
+    - Created frontend/hooks/use-accept-answer.ts hook
+      - Manages isAccepting state
+      - Handles accept with loading state
+      - Shows error message on failure
+    - Updated answers-list.tsx:
+      - Added useAcceptAnswer hook
+      - Added ACCEPT button for non-accepted answers
+      - Shows loading spinner during accept operation
+      - Shows error message on failure
+      - Refreshes list after successful accept
+  - Note: API handles authorization (only question author can accept)
+  - Tests: 4 passing (useAcceptAnswer hook tests) = 48 total frontend tests
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - use-accept-answer.ts: 38 lines
+    - use-accept-answer.test.ts: 95 lines
+    - answers-list.tsx: 263 lines

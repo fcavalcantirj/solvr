@@ -373,7 +373,7 @@
       "Only one answer can be accepted (unaccept previous if needed)",
       "Test: Question author can accept an answer"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-010",

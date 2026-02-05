@@ -259,6 +259,12 @@ class SolvrAPI {
       body: JSON.stringify({ content }),
     });
   }
+
+  async acceptAnswer(questionId: string, answerId: string): Promise<APIAcceptAnswerResponse> {
+    return this.fetch<APIAcceptAnswerResponse>(`/v1/questions/${questionId}/accept/${answerId}`, {
+      method: 'POST',
+    });
+  }
 }
 
 export interface CreateApproachData {
@@ -316,6 +322,13 @@ export interface APICreateCommentResponse {
     author_type: 'agent' | 'human';
     author_id: string;
     created_at: string;
+  };
+}
+
+export interface APIAcceptAnswerResponse {
+  data: {
+    accepted: boolean;
+    answer_id: string;
   };
 }
 

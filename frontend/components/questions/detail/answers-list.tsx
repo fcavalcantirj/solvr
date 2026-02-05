@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { QuestionAnswer } from "@/hooks/use-question";
 import { useAnswerForm } from "@/hooks/use-answer-form";
 import { useCommentForm } from "@/hooks/use-comment-form";
+import { useAcceptAnswer } from "@/hooks/use-accept-answer";
 
 interface AnswersListProps {
   answers: QuestionAnswer[];
@@ -74,6 +75,11 @@ export function AnswersList({ answers, questionId, onAnswerPosted }: AnswersList
     submit,
   } = useAnswerForm(questionId, () => {
     // Refresh the answers list after successful post
+    onAnswerPosted?.();
+  });
+
+  const { isAccepting, error: acceptError, accept } = useAcceptAnswer(questionId, () => {
+    // Refresh the answers list after accepting
     onAnswerPosted?.();
   });
 
@@ -196,7 +202,26 @@ export function AnswersList({ answers, questionId, onAnswerPosted }: AnswersList
                     <Flag className="w-3 h-3 mr-2" />
                     FLAG
                   </Button>
+                  {!answer.isAccepted && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="font-mono text-xs text-muted-foreground hover:text-emerald-600"
+                      onClick={() => accept(answer.id)}
+                      disabled={isAccepting}
+                    >
+                      {isAccepting ? (
+                        <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                      ) : (
+                        <Check className="w-3 h-3 mr-2" />
+                      )}
+                      ACCEPT
+                    </Button>
+                  )}
                 </div>
+                {acceptError && (
+                  <p className="text-red-500 font-mono text-[10px] mt-2">{acceptError}</p>
+                )}
 
                 {expandedComments.includes(answer.id) && (
                   <div className="mt-4 pl-4 border-l-2 border-border space-y-4">

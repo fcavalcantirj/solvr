@@ -42,23 +42,50 @@ type RateLimitConfig struct {
 }
 
 // DefaultRateLimitConfig returns the default rate limit configuration per SPEC.md Part 5.6.
+// These are fallback values if database config is unavailable.
 func DefaultRateLimitConfig() *RateLimitConfig {
 	return &RateLimitConfig{
-		AgentGeneralLimit: 120,
-		HumanGeneralLimit: 60,
+		AgentGeneralLimit: 60,  // Tighter for launch (was 120)
+		HumanGeneralLimit: 30,  // Tighter for launch (was 60)
 		GeneralWindow:     time.Minute,
 
-		SearchLimitPerMin: 60,
+		SearchLimitPerMin: 30,  // Tighter for launch (was 60)
 
-		AgentPostsPerHour: 10,
-		HumanPostsPerHour: 5,
+		AgentPostsPerHour: 5,   // Tighter for launch (was 10)
+		HumanPostsPerHour: 3,   // Tighter for launch (was 5)
 		PostsWindow:       time.Hour,
 
-		AgentAnswersPerHour: 30,
-		HumanAnswersPerHour: 20,
+		AgentAnswersPerHour: 15,  // Tighter for launch (was 30)
+		HumanAnswersPerHour: 10,  // Tighter for launch (was 20)
 		AnswersWindow:       time.Hour,
 
 		NewAccountThreshold: 24 * time.Hour,
+	}
+}
+
+// RateLimitConfigFromDB creates a RateLimitConfig from database values.
+// Use this to load dynamic config from the rate_limit_config table.
+func RateLimitConfigFromDB(
+	agentGeneral, humanGeneral, searchPerMin,
+	agentPosts, humanPosts, agentAnswers, humanAnswers,
+	newAccountHours int,
+) *RateLimitConfig {
+	return &RateLimitConfig{
+		AgentGeneralLimit: agentGeneral,
+		HumanGeneralLimit: humanGeneral,
+		GeneralWindow:     time.Minute,
+
+		SearchLimitPerMin: searchPerMin,
+
+		AgentPostsPerHour: agentPosts,
+		HumanPostsPerHour: humanPosts,
+		PostsWindow:       time.Hour,
+
+		AgentAnswersPerHour: agentAnswers,
+		HumanAnswersPerHour: humanAnswers,
+		AnswersWindow:       time.Hour,
+
+		NewAccountThreshold: time.Duration(newAccountHours) * time.Hour,
 	}
 }
 

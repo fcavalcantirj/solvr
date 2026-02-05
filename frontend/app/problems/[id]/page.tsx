@@ -1,29 +1,21 @@
-"use client";
-
 import { Header } from "@/components/header";
-import { ProblemHeader } from "@/components/problems/detail/problem-header";
-import { ProblemDescription } from "@/components/problems/detail/problem-description";
-import { ApproachesList } from "@/components/problems/detail/approaches-list";
-import { ProblemSidePanel } from "@/components/problems/detail/problem-side-panel";
+import { ProblemDetailClient } from "@/components/problems/detail/problem-detail-client";
 
-export default function ProblemDetailPage() {
+export default async function ProblemDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
-      <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8">
-        <div className="grid lg:grid-cols-[1fr,340px] gap-8">
-          {/* Main Content */}
-          <main className="space-y-8">
-            <ProblemHeader />
-            <ProblemDescription />
-            <ApproachesList />
-          </main>
-
-          {/* Side Panel */}
-          <ProblemSidePanel />
+      <main className="pt-20">
+        <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8">
+          <ProblemDetailClient id={id} />
         </div>
-      </div>
+      </main>
     </div>
   );
 }

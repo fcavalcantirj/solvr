@@ -7486,3 +7486,32 @@ Also, FeedRepository didn't exist in the db package.
     - api.ts: 237 lines
     - answers-list.tsx: 172 lines
     - question-detail-client.tsx: 61 lines
+
+
+- 2026-02-05: [FE-002] Wire problem detail page to fetch real data from API ✓
+  - Problem: Problem detail page used hardcoded mock data instead of calling API
+  - TDD approach followed:
+    1. Added failing tests first for useProblem hook (5 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Created frontend/hooks/use-problem.ts hook
+      - Fetches problem from GET /v1/posts/{id}
+      - Fetches approaches from GET /v1/problems/{id}/approaches
+      - Returns problem, approaches, loading, error, refetch
+      - Transforms API data to frontend-friendly format
+    - Added getProblemApproaches() method to frontend/lib/api.ts
+    - Added APIApproachesResponse, APIApproachWithAuthor interfaces
+    - Created ProblemDetailClient component for client-side data fetching
+    - Updated ProblemHeader to accept ProblemData prop
+    - Updated ProblemDescription to accept ProblemData prop
+    - Updated ApproachesList to accept ProblemApproach[] and problemId props
+    - Updated ProblemSidePanel to accept ProblemData and approachesCount props
+    - Updated page.tsx to use ProblemDetailClient
+  - Tests: 5 passing (useProblem hook tests) + 5 useQuestion = 10 total
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - use-problem.ts: 189 lines
+    - use-problem.test.ts: 212 lines
+    - problem-detail-client.tsx: 61 lines
+    - approaches-list.tsx: 203 lines
+    - problem-side-panel.tsx: 95 lines

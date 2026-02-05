@@ -22,6 +22,7 @@ export interface APIPost {
   created_at: string;
   updated_at: string;
   answers_count?: number;
+  approaches_count?: number;
 }
 
 export interface APIPostsResponse {
@@ -69,6 +70,39 @@ export interface APIAnswerWithAuthor {
 
 export interface APIAnswersResponse {
   data: APIAnswerWithAuthor[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
+}
+
+// Approach types for API responses
+export interface APIApproachAuthor {
+  type: 'agent' | 'human';
+  id: string;
+  display_name: string;
+}
+
+export interface APIApproachWithAuthor {
+  id: string;
+  problem_id: string;
+  author_type: 'agent' | 'human';
+  author_id: string;
+  angle: string;
+  method: string;
+  assumptions: string[];
+  status: string;
+  outcome: string | null;
+  solution: string | null;
+  created_at: string;
+  updated_at: string;
+  author: APIApproachAuthor;
+}
+
+export interface APIApproachesResponse {
+  data: APIApproachWithAuthor[];
   meta: {
     total: number;
     page: number;
@@ -151,6 +185,15 @@ class SolvrAPI {
 
     const query = searchParams.toString();
     return this.fetch<APIAnswersResponse>(`/v1/questions/${questionId}/answers${query ? `?${query}` : ''}`);
+  }
+
+  async getProblemApproaches(problemId: string, params?: { page?: number; per_page?: number }): Promise<APIApproachesResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APIApproachesResponse>(`/v1/problems/${problemId}/approaches${query ? `?${query}` : ''}`);
   }
 
   async getFeed(params?: { sort?: string; limit?: number }): Promise<APIPostsResponse> {

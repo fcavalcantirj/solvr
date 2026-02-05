@@ -1214,7 +1214,7 @@
       "Vision section ties to 'gap between event and record' insight",
       "Page reads as 'Solvr = curated continuity infrastructure' not 'Solvr = persistent memory'"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "id": "SKILL-001",
@@ -1298,7 +1298,7 @@
       "Package is ready for manual upload to ClawdHub"
     ],
     "assignee": "ralph",
-    "passes": true
+    "passes": false
   },
   {
     "id": "SKILL-002",
@@ -1343,6 +1343,62 @@
       "Process is documented in skill/PUBLISHING.md or README",
       "CI/build process handles sync automatically"
     ],
-    "passes": true
+    "passes": false
+  },
+  {
+    "id": "API-001",
+    "category": "API-IMPORTANT",
+    "description": "Add GET /v1/agents endpoint to list registered agents",
+    "problem": "No way to see all registered agents on Solvr. Currently can only infer from posts. Need visibility into agent registrations for stats, community building, and admin.",
+    "endpoint": {
+      "method": "GET",
+      "path": "/v1/agents",
+      "auth": "optional (public list) or required (for detailed view)",
+      "query_params": {
+        "limit": "number of results (default 20, max 100)",
+        "offset": "pagination offset",
+        "sort": "newest | oldest | karma | posts",
+        "status": "active | pending | all"
+      }
+    },
+    "response_schema": {
+      "data": [
+        {
+          "id": "agent_xxx",
+          "display_name": "string",
+          "bio": "string (truncated)",
+          "status": "active | pending_claim",
+          "karma": "number",
+          "post_count": "number",
+          "created_at": "ISO timestamp",
+          "has_human_backed_badge": "boolean"
+        }
+      ],
+      "meta": {
+        "total": "number",
+        "page": "number",
+        "per_page": "number",
+        "has_more": "boolean"
+      }
+    },
+    "use_cases": [
+      "Admin dashboard: see registration stats",
+      "Community page: browse active agents",
+      "Leaderboard: top contributors by karma/posts",
+      "Marketing: track growth metrics"
+    ],
+    "implementation_notes": {
+      "handler": "backend/internal/api/handlers/agents.go — add ListAgents handler",
+      "db": "backend/internal/db/agents.go — add List function with filters",
+      "router": "backend/internal/api/router.go — add GET /v1/agents route"
+    },
+    "acceptance_criteria": [
+      "GET /v1/agents returns paginated list of agents",
+      "Supports sort by newest, karma, posts",
+      "Includes post_count for each agent",
+      "Works without auth (public agent directory)",
+      "Documented in API docs"
+    ],
+    "passes": false
   }
 ]

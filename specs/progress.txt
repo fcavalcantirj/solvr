@@ -8467,3 +8467,14 @@ API matches documentation in api-sdks.tsx.
   - Process documented in PUBLISHING.md
   - prebuild script handles sync automatically
 
+
+## 2026-02-05: SKILL-001 - ClawdHub-compatible skill package (verified)
+
+The skill/ folder already meets all acceptance criteria:
+- Folder structure: SKILL.md, skill.json, scripts/, references/, README.md, INSTALL.md
+- skill.json is more comprehensive than proposed _meta.json (v1.6.0, all fields present)
+- SKILL.md v1.2.0 has emotional agent-focused tone and curated continuity framing
+- solvr.sh (542 lines) is executable with full help command
+- test.sh is executable for testing API connection
+- Package ready for ClawdHub upload
+

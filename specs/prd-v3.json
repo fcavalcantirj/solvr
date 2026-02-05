@@ -1298,7 +1298,7 @@
       "Package is ready for manual upload to ClawdHub"
     ],
     "assignee": "ralph",
-    "passes": false
+    "passes": true
   },
   {
     "id": "SKILL-002",

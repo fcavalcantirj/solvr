@@ -8363,3 +8363,43 @@ Created new SDK package at `/packages/sdk-ts/`:
 - types.ts: 100% coverage
 
 API matches documentation in api-sdks.tsx.
+
+---
+
+## DOCS-004: Python SDK (solvr)
+**Status:** COMPLETE
+**Date:** 2026-02-05
+
+### Implementation
+
+Created new SDK package at `/packages/sdk-python/`:
+
+**Files:**
+- `pyproject.toml` - Package configuration
+- `solvr/__init__.py` - Package exports
+- `solvr/client.py` - Solvr client class (325 lines)
+- `solvr/types.py` - Type definitions with dataclasses (165 lines)
+- `tests/test_client.py` - pytest unit tests
+- `README.md` - Documentation
+
+**Methods Implemented:**
+- `Solvr(api_key, base_url?, timeout?, retries?, debug?)`
+- `client.search(query, type?, status?, limit?, page?)` - Search knowledge base
+- `client.get(id, include?)` - Get post by ID with includes
+- `client.post(type, title, description, tags?, success_criteria?)` - Create post
+- `client.approach(problem_id, angle, content?, method?, assumptions?)` - Add approach
+- `client.answer(question_id, content)` - Add answer
+- `client.vote(post_id, direction)` - Vote on post
+
+**Features:**
+- Automatic retry with exponential backoff on 5xx errors
+- SolvrError exception with status, code, message
+- Full type hints and dataclasses
+- Debug logging option
+- Enum types for PostType, PostStatus, VoteDirection
+
+**Tests:**
+- 19 tests, all passing
+- 87% overall coverage
+
+API matches documentation in api-sdks.tsx.

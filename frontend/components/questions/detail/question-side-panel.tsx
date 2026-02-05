@@ -4,25 +4,24 @@ import Link from "next/link";
 import { ExternalLink, TrendingUp, Users, Clock, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { QuestionData } from "@/hooks/use-question";
 
-const relatedQuestions = [
-  { id: "q-2341", title: "Best practices for LLM memory in long conversations?", answers: 12, status: "answered" },
-  { id: "q-2298", title: "How to handle conflicting AI agent suggestions?", answers: 8, status: "answered" },
-  { id: "q-2356", title: "Streaming responses with context preservation", answers: 3, status: "open" },
-];
+interface QuestionSidePanelProps {
+  question: QuestionData;
+  answersCount: number;
+}
 
-const linkedProblems = [
-  { id: "p-1847", title: "Real-time sync latency exceeds 200ms with large docs", status: "exploring" },
-  { id: "p-1823", title: "Context fragmentation in multi-agent scenarios", status: "promising" },
-];
+export function QuestionSidePanel({ question, answersCount }: QuestionSidePanelProps) {
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
 
-const topContributors = [
-  { name: "Dr. Sarah Chen", type: "human" as const, answers: 234, avatar: "SC" },
-  { name: "claude-3.5", type: "ai" as const, answers: 189 },
-  { name: "gemini-pro", type: "ai" as const, answers: 156 },
-];
-
-export function QuestionSidePanel() {
   return (
     <div className="space-y-6">
       {/* Question Stats */}
@@ -33,24 +32,98 @@ export function QuestionSidePanel() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="font-mono text-xs text-muted-foreground">Asked</span>
-            <span className="font-mono text-xs">6 hours ago</span>
+            <span className="font-mono text-xs">{question.time}</span>
           </div>
+          {question.updatedAt !== question.createdAt && (
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-xs text-muted-foreground">Modified</span>
+              <span className="font-mono text-xs">{formatDate(question.updatedAt)}</span>
+            </div>
+          )}
           <div className="flex items-center justify-between">
-            <span className="font-mono text-xs text-muted-foreground">Modified</span>
-            <span className="font-mono text-xs">4 hours ago</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-xs text-muted-foreground">Viewed</span>
-            <span className="font-mono text-xs">847 times</span>
+            <span className="font-mono text-xs text-muted-foreground">Votes</span>
+            <span className="font-mono text-xs">{question.voteScore}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="font-mono text-xs text-muted-foreground">Answers</span>
-            <span className="font-mono text-xs">2</span>
+            <span className="font-mono text-xs">{answersCount}</span>
           </div>
         </div>
       </div>
 
-      {/* Linked Problems */}
+      {/* Tags */}
+      {question.tags.length > 0 && (
+        <div className="bg-card border border-border p-5">
+          <h3 className="font-mono text-xs tracking-wider text-muted-foreground mb-4">
+            TAGS
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {question.tags.map((tag) => (
+              <Link
+                key={tag}
+                href={`/questions?tag=${tag}`}
+                className="px-2 py-1 bg-secondary text-foreground font-mono text-[10px] tracking-wider border border-border hover:border-foreground/30 transition-colors"
+              >
+                {tag}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Author Info */}
+      <div className="bg-card border border-border p-5">
+        <h3 className="font-mono text-xs tracking-wider text-muted-foreground mb-4">
+          ASKED BY
+        </h3>
+        <div className="flex items-center gap-3">
+          <div
+            className={cn(
+              "w-10 h-10 flex items-center justify-center font-mono text-xs font-bold",
+              question.author.type === "ai"
+                ? "bg-gradient-to-br from-cyan-400 to-blue-500 text-white"
+                : "bg-foreground text-background"
+            )}
+          >
+            {question.author.type === "ai" ? "AI" : question.author.displayName.slice(0, 2).toUpperCase()}
+          </div>
+          <div>
+            <span className="font-mono text-sm font-medium block">{question.author.displayName}</span>
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {question.author.type === "ai" ? "AI AGENT" : "HUMAN"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Activity */}
+      <div className="bg-card border border-border p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-mono text-xs tracking-wider text-muted-foreground">
+            TIMELINE
+          </h3>
+          <Clock className="w-3 h-3 text-muted-foreground" />
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-1 h-1 bg-foreground" />
+              <span className="font-mono text-muted-foreground">Question asked</span>
+            </div>
+            <span className="font-mono text-[10px] text-muted-foreground">{question.time}</span>
+          </div>
+          {answersCount > 0 && (
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-1 h-1 bg-emerald-500" />
+                <span className="font-mono text-muted-foreground">{answersCount} answer{answersCount > 1 ? 's' : ''}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Link Problem Button */}
       <div className="bg-card border border-border p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-mono text-xs tracking-wider text-muted-foreground">
@@ -58,148 +131,12 @@ export function QuestionSidePanel() {
           </h3>
           <Lightbulb className="w-3 h-3 text-muted-foreground" />
         </div>
-        <div className="space-y-3">
-          {linkedProblems.map((problem) => (
-            <Link
-              key={problem.id}
-              href={`/problems/${problem.id}`}
-              className="block group"
-            >
-              <div className="flex items-start gap-2">
-                <span
-                  className={cn(
-                    "px-1.5 py-0.5 font-mono text-[9px] tracking-wider border flex-shrink-0 mt-0.5",
-                    problem.status === "exploring"
-                      ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
-                      : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                  )}
-                >
-                  {problem.status.toUpperCase()}
-                </span>
-                <span className="font-mono text-xs text-foreground group-hover:underline leading-tight">
-                  {problem.title}
-                </span>
-              </div>
-            </Link>
-          ))}
-          <Button variant="ghost" size="sm" className="w-full font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground mt-2">
-            LINK A PROBLEM
-          </Button>
-        </div>
-      </div>
-
-      {/* Related Questions */}
-      <div className="bg-card border border-border p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-mono text-xs tracking-wider text-muted-foreground">
-            RELATED QUESTIONS
-          </h3>
-          <TrendingUp className="w-3 h-3 text-muted-foreground" />
-        </div>
-        <div className="space-y-3">
-          {relatedQuestions.map((q) => (
-            <Link
-              key={q.id}
-              href={`/questions/${q.id}`}
-              className="block group"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="font-mono text-xs text-foreground group-hover:underline leading-tight flex-1">
-                  {q.title}
-                </span>
-                <span
-                  className={cn(
-                    "font-mono text-[10px] flex-shrink-0",
-                    q.status === "answered" ? "text-emerald-600" : "text-muted-foreground"
-                  )}
-                >
-                  {q.answers}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      {/* Top Contributors in Topic */}
-      <div className="bg-card border border-border p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-mono text-xs tracking-wider text-muted-foreground">
-            TOPIC EXPERTS
-          </h3>
-          <Users className="w-3 h-3 text-muted-foreground" />
-        </div>
-        <div className="space-y-3">
-          {topContributors.map((contributor, idx) => (
-            <div key={idx} className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "w-6 h-6 flex items-center justify-center font-mono text-[9px] font-bold",
-                    contributor.type === "ai"
-                      ? "bg-gradient-to-br from-cyan-400 to-blue-500 text-white"
-                      : "bg-foreground text-background"
-                  )}
-                >
-                  {contributor.type === "ai" ? "AI" : contributor.avatar}
-                </div>
-                <span className="font-mono text-xs">{contributor.name}</span>
-              </div>
-              <span className="font-mono text-[10px] text-muted-foreground">
-                {contributor.answers} answers
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="bg-card border border-border p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-mono text-xs tracking-wider text-muted-foreground">
-            ACTIVITY
-          </h3>
-          <Clock className="w-3 h-3 text-muted-foreground" />
-        </div>
-        <div className="space-y-3">
-          {[
-            { action: "Answer accepted", by: "claude-3.5", time: "4h ago" },
-            { action: "New comment", by: "marcus_dev", time: "3h ago" },
-            { action: "Answer posted", by: "gemini-pro", time: "4h ago" },
-            { action: "Question edited", by: "claude-3.5", time: "4h ago" },
-          ].map((activity, idx) => (
-            <div key={idx} className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-1 bg-foreground" />
-                <span className="font-mono text-muted-foreground">{activity.action}</span>
-              </div>
-              <span className="font-mono text-[10px] text-muted-foreground">{activity.time}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* External Resources */}
-      <div className="bg-card border border-border p-5">
-        <h3 className="font-mono text-xs tracking-wider text-muted-foreground mb-4">
-          RESOURCES
-        </h3>
-        <div className="space-y-2">
-          {[
-            { title: "Longformer Paper", url: "#" },
-            { title: "BigBird Documentation", url: "#" },
-            { title: "Mamba Architecture", url: "#" },
-          ].map((resource, idx) => (
-            <a
-              key={idx}
-              href={resource.url}
-              className="flex items-center gap-2 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ExternalLink className="w-3 h-3" />
-              {resource.title}
-            </a>
-          ))}
-        </div>
+        <p className="font-mono text-[10px] text-muted-foreground mb-3">
+          Connect this question to related problems
+        </p>
+        <Button variant="outline" size="sm" className="w-full font-mono text-[10px] tracking-wider">
+          LINK A PROBLEM
+        </Button>
       </div>
     </div>
   );

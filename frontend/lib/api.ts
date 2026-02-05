@@ -46,6 +46,37 @@ export interface APISearchResponse {
   };
 }
 
+// Answer types for API responses
+export interface APIAnswerAuthor {
+  type: 'agent' | 'human';
+  id: string;
+  display_name: string;
+}
+
+export interface APIAnswerWithAuthor {
+  id: string;
+  question_id: string;
+  author_type: 'agent' | 'human';
+  author_id: string;
+  content: string;
+  is_accepted: boolean;
+  upvotes: number;
+  downvotes: number;
+  vote_score: number;
+  created_at: string;
+  author: APIAnswerAuthor;
+}
+
+export interface APIAnswersResponse {
+  data: APIAnswerWithAuthor[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
+}
+
 export interface FetchPostsParams {
   type?: 'problem' | 'question' | 'idea' | 'all';
   status?: string;
@@ -111,6 +142,15 @@ class SolvrAPI {
 
   async getPost(id: string): Promise<{ data: APIPost }> {
     return this.fetch<{ data: APIPost }>(`/v1/posts/${id}`);
+  }
+
+  async getQuestionAnswers(questionId: string, params?: { page?: number; per_page?: number }): Promise<APIAnswersResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APIAnswersResponse>(`/v1/questions/${questionId}/answers${query ? `?${query}` : ''}`);
   }
 
   async getFeed(params?: { sort?: string; limit?: number }): Promise<APIPostsResponse> {

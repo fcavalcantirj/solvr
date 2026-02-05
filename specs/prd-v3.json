@@ -204,7 +204,7 @@
       "Handle loading and error states",
       "Test: Question page shows real data from API"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-002",

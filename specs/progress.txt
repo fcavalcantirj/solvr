@@ -7456,3 +7456,33 @@ Also, FeedRepository didn't exist in the db package.
   - Breaking change: per_page > 50 now returns 400 instead of being silently capped
   - File sizes: posts.go=633, posts_test.go=652, posts_integration_test.go=735 (all under 800)
   - All tests passing: go test ./... passes
+
+
+- 2026-02-05: [FE-001] Wire question detail page to fetch real data from API ✓
+  - Problem: Question detail page used hardcoded mock data instead of calling API
+  - TDD approach followed:
+    1. Set up Vitest + React Testing Library for frontend testing
+    2. Added failing tests first for useQuestion hook (5 tests)
+    3. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Created frontend/hooks/use-question.ts hook
+      - Fetches question from GET /v1/posts/{id}
+      - Fetches answers from GET /v1/questions/{id}/answers
+      - Returns question, answers, loading, error, refetch
+      - Transforms API data to frontend-friendly format
+    - Added getQuestionAnswers() method to frontend/lib/api.ts
+    - Added APIAnswersResponse, APIAnswerWithAuthor interfaces
+    - Created QuestionDetailClient component for client-side data fetching
+    - Updated QuestionHeader to accept QuestionData prop
+    - Updated QuestionContent to accept QuestionData prop
+    - Updated AnswersList to accept QuestionAnswer[] and questionId props
+    - Updated QuestionSidePanel to accept QuestionData and answersCount props
+    - Updated page.tsx to use QuestionDetailClient
+  - Tests: 5 passing (useQuestion hook tests)
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - use-question.ts: 183 lines
+    - use-question.test.ts: 207 lines
+    - api.ts: 237 lines
+    - answers-list.tsx: 172 lines
+    - question-detail-client.tsx: 61 lines

@@ -3,12 +3,27 @@
 import Link from "next/link";
 import { ArrowLeft, Share2, Bookmark, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { QuestionData } from "@/hooks/use-question";
 
 interface QuestionHeaderProps {
-  id: string;
+  question: QuestionData;
 }
 
-export function QuestionHeader({ id }: QuestionHeaderProps) {
+export function QuestionHeader({ question }: QuestionHeaderProps) {
+  // Determine status badge color based on status
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'answered':
+        return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
+      case 'open':
+        return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
+      case 'closed':
+        return 'bg-gray-500/10 text-gray-600 border-gray-500/20';
+      default:
+        return 'bg-gray-500/10 text-gray-600 border-gray-500/20';
+    }
+  };
+
   return (
     <div>
       <Link
@@ -25,27 +40,35 @@ export function QuestionHeader({ id }: QuestionHeaderProps) {
             <span className="px-2 py-1 bg-amber-500/10 text-amber-600 font-mono text-[10px] tracking-wider border border-amber-500/20">
               QUESTION
             </span>
-            <span className="px-2 py-1 bg-emerald-500/10 text-emerald-600 font-mono text-[10px] tracking-wider border border-emerald-500/20">
-              ANSWERED
+            <span className={`px-2 py-1 font-mono text-[10px] tracking-wider border ${getStatusColor(question.status)}`}>
+              {question.status}
             </span>
             <span className="font-mono text-xs text-muted-foreground">
-              Q-{id}
+              Q-{question.id.slice(0, 8)}
             </span>
           </div>
 
           <h1 className="font-mono text-2xl md:text-3xl font-medium tracking-tight text-foreground leading-tight text-balance">
-            What are the practical limits of transformer context windows for real-time collaborative editing?
+            {question.title}
           </h1>
 
           <div className="flex items-center gap-4 mt-4 text-muted-foreground">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center">
-                <span className="text-[10px] font-mono text-white font-bold">AI</span>
+              <div className={`w-6 h-6 flex items-center justify-center ${
+                question.author.type === 'ai'
+                  ? 'bg-gradient-to-br from-cyan-400 to-blue-500'
+                  : 'bg-gradient-to-br from-purple-400 to-pink-500'
+              }`}>
+                <span className="text-[10px] font-mono text-white font-bold">
+                  {question.author.type === 'ai' ? 'AI' : 'H'}
+                </span>
               </div>
-              <span className="font-mono text-xs">claude-3.5</span>
+              <span className="font-mono text-xs">{question.author.displayName}</span>
             </div>
-            <span className="font-mono text-xs">asked 6h ago</span>
-            <span className="font-mono text-xs">847 views</span>
+            <span className="font-mono text-xs">asked {question.time}</span>
+            {question.answersCount > 0 && (
+              <span className="font-mono text-xs">{question.answersCount} answers</span>
+            )}
           </div>
         </div>
 

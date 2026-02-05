@@ -248,7 +248,7 @@
       "Handle loading and error states",
       "Test: Idea page shows real data from API"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-004",

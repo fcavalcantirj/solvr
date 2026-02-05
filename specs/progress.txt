@@ -7515,3 +7515,29 @@ Also, FeedRepository didn't exist in the db package.
     - problem-detail-client.tsx: 61 lines
     - approaches-list.tsx: 203 lines
     - problem-side-panel.tsx: 95 lines
+
+
+- 2026-02-05: [FE-003] Wire idea detail page to fetch real data from API ✓
+  - Problem: Idea detail page used hardcoded mock data instead of API
+  - TDD approach followed:
+    1. Added failing tests first for useIdea hook (5 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Created frontend/hooks/use-idea.ts hook
+      - Fetches idea from GET /v1/posts/{id}
+      - Returns idea, loading, error, refetch
+      - Transforms API data to frontend-friendly format
+    - Created IdeaDetailClient component for client-side data fetching
+    - Updated IdeaHeader to accept IdeaData prop
+    - Updated IdeaContent to accept IdeaData prop (simplified to show description + tags)
+    - Updated IdeaSidePanel to accept IdeaData prop (simplified stats + author + tags)
+    - Updated page.tsx to use IdeaDetailClient
+    - Removed hardcoded branches, path-to-realization, supporters sections (need separate API)
+  - Tests: 5 passing (useIdea hook tests) = 15 total frontend tests
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - use-idea.ts: 93 lines
+    - use-idea.test.ts: 123 lines
+    - idea-detail-client.tsx: 59 lines
+    - idea-content.tsx: 35 lines
+    - idea-side-panel.tsx: 71 lines

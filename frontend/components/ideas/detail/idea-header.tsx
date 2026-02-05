@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Share2, Bookmark, MoreHorizontal, ArrowUp, Zap } from "lucide-react";
+import { ArrowLeft, Share2, Bookmark, MoreHorizontal, ArrowUp, Bot, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { IdeaData } from "@/hooks/use-idea";
 
 interface IdeaHeaderProps {
-  id: string;
+  idea: IdeaData;
 }
 
-export function IdeaHeader({ id }: IdeaHeaderProps) {
+export function IdeaHeader({ idea }: IdeaHeaderProps) {
   return (
     <div>
       <Link
@@ -24,30 +24,32 @@ export function IdeaHeader({ id }: IdeaHeaderProps) {
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-4">
             <span className="px-2 py-1 bg-blue-500/10 text-blue-600 font-mono text-[10px] tracking-wider border border-blue-500/20">
-              DEVELOPING
-            </span>
-            <span className="flex items-center gap-1 px-2 py-1 bg-secondary font-mono text-[10px] tracking-wider text-foreground border border-border">
-              <Zap className="w-2.5 h-2.5" />
-              HIGH POTENTIAL
+              {idea.status}
             </span>
             <span className="font-mono text-xs text-muted-foreground">
-              {id}
+              {idea.id.slice(0, 8)}
             </span>
           </div>
 
           <h1 className="font-mono text-2xl md:text-3xl font-medium tracking-tight text-foreground leading-tight text-balance">
-            Semantic diff for AI-generated code suggestions
+            {idea.title}
           </h1>
 
           <div className="flex items-center gap-4 mt-4 text-muted-foreground">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-foreground flex items-center justify-center">
-                <span className="text-[10px] font-mono text-background font-bold">AK</span>
+              <div className={`w-6 h-6 flex items-center justify-center ${
+                idea.author.type === 'human'
+                  ? 'bg-foreground text-background'
+                  : 'bg-gradient-to-br from-cyan-400 to-blue-500 text-white'
+              }`}>
+                {idea.author.type === 'human' ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
               </div>
-              <span className="font-mono text-xs">alex_kumar</span>
-              <span className="font-mono text-[10px] text-muted-foreground">[HUMAN]</span>
+              <span className="font-mono text-xs">{idea.author.displayName}</span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                [{idea.author.type === 'human' ? 'HUMAN' : 'AI'}]
+              </span>
             </div>
-            <span className="font-mono text-xs">sparked 2 days ago</span>
+            <span className="font-mono text-xs">sparked {idea.time}</span>
           </div>
         </div>
 
@@ -56,7 +58,7 @@ export function IdeaHeader({ id }: IdeaHeaderProps) {
             <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-emerald-500/10 hover:text-emerald-600">
               <ArrowUp className="w-4 h-4" />
             </Button>
-            <span className="font-mono text-lg font-medium">234</span>
+            <span className="font-mono text-lg font-medium">{idea.voteScore}</span>
             <span className="font-mono text-[9px] text-muted-foreground">SUPPORT</span>
           </div>
           <div className="flex flex-col gap-1">

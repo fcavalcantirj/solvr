@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   Bot,
@@ -19,11 +19,14 @@ import {
   Loader2,
   RefreshCw,
   Check,
+  Bell,
 } from "lucide-react";
 import { usePosts, useSearch, FeedPost, PostType } from "@/hooks/use-posts";
 import { VoteButton } from "@/components/ui/vote-button";
 import { mapStatusFilter, mapSortFilter, mapTimeframeFilter } from "@/lib/filter-utils";
 import { useShare } from "@/hooks/use-share";
+import { usePolling } from "@/hooks/use-polling";
+import { api } from "@/lib/api";
 
 const typeConfig: Record<
   PostType,
@@ -67,9 +70,14 @@ interface FeedListProps {
   timeframe?: string;
 }
 
+const POLLING_INTERVAL = 30000; // 30 seconds
+
 export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedListProps) {
   const [hoveredPost, setHoveredPost] = useState<string | null>(null);
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
+  const [newPostsAvailable, setNewPostsAvailable] = useState(false);
+  const [newPostsCount, setNewPostsCount] = useState(0);
+  const latestPostIdRef = useRef<string | null>(null);
   const { share } = useShare();
 
   const handleShare = async (post: FeedPost) => {
@@ -95,9 +103,9 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
   
   // Select the appropriate result based on whether we're searching
   const { posts, loading, error, total, hasMore, page, refetch, loadMore } = isSearching
-    ? { 
-        posts: searchResult.posts, 
-        loading: searchResult.loading, 
+    ? {
+        posts: searchResult.posts,
+        loading: searchResult.loading,
         error: searchResult.error,
         total: searchResult.posts.length,
         hasMore: false,
@@ -106,6 +114,54 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
         loadMore: () => {},
       }
     : postsResult;
+
+  // Check for new posts via polling
+  const checkForNewPosts = useCallback(async () => {
+    if (isSearching || loading) return;
+
+    try {
+      const response = await api.getPosts({
+        type: type === 'all' ? undefined : type,
+        per_page: 1,
+        sort: 'new',
+      });
+
+      if (response.data.length > 0) {
+        const latestId = response.data[0].id;
+
+        // If we have a reference point and it's different, we have new posts
+        if (latestPostIdRef.current && latestId !== latestPostIdRef.current) {
+          // Count how many new posts (rough estimate based on total)
+          const currentTotal = total;
+          const newTotal = response.meta.total;
+          const diff = newTotal - currentTotal;
+
+          if (diff > 0) {
+            setNewPostsAvailable(true);
+            setNewPostsCount(diff);
+          }
+        }
+
+        // Update reference on first load
+        if (!latestPostIdRef.current && posts.length > 0) {
+          latestPostIdRef.current = posts[0].id;
+        }
+      }
+    } catch {
+      // Silently ignore polling errors
+    }
+  }, [isSearching, loading, type, total, posts]);
+
+  // Enable polling only when not searching
+  usePolling(checkForNewPosts, POLLING_INTERVAL, { enabled: !isSearching && posts.length > 0 });
+
+  // Handle showing new posts
+  const handleShowNewPosts = () => {
+    setNewPostsAvailable(false);
+    setNewPostsCount(0);
+    latestPostIdRef.current = null;
+    refetch();
+  };
 
   // Loading state
   if (loading && posts.length === 0) {
@@ -149,6 +205,22 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
 
   return (
     <div className="space-y-0">
+      {/* New Posts Banner */}
+      {newPostsAvailable && (
+        <button
+          onClick={handleShowNewPosts}
+          className="w-full mb-4 py-3 px-4 bg-foreground/5 border border-foreground/20 hover:bg-foreground/10 transition-colors flex items-center justify-center gap-2 group"
+        >
+          <Bell size={14} className="text-foreground" />
+          <span className="font-mono text-xs tracking-wider">
+            {newPostsCount > 1 ? `${newPostsCount} NEW POSTS AVAILABLE` : 'NEW POST AVAILABLE'}
+          </span>
+          <span className="font-mono text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+            — CLICK TO REFRESH
+          </span>
+        </button>
+      )}
+
       {/* Results Count */}
       <div className="flex items-center justify-between mb-4">
         <p className="font-mono text-xs text-muted-foreground">

@@ -7852,3 +7852,31 @@ Also, FeedRepository didn't exist in the db package.
     - use-create-post.ts: 72 lines
     - use-create-post.test.ts: 162 lines
     - new-post-form.tsx: 195 lines
+
+
+- 2026-02-05: [FE-016] Add real-time updates via polling ✓
+  - Problem: Feed doesn't update unless manually refreshed
+  - TDD approach followed:
+    1. Added failing tests first for usePolling hook (7 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Created frontend/hooks/use-polling.ts generic polling hook
+      - Calls callback immediately on mount
+      - Continues calling at specified interval
+      - Supports enabled flag to pause/resume
+      - Handles errors gracefully, continues polling
+      - Exposes isPolling and error states
+    - Created frontend/hooks/use-polling.test.ts (7 tests)
+    - Updated frontend/components/feed/feed-list.tsx:
+      - Added checkForNewPosts callback to detect new posts
+      - Polls every 30 seconds using usePolling
+      - Tracks newPostsAvailable state
+      - Shows "New posts available" banner when new posts detected
+      - Clicking banner refreshes feed and clears banner
+  - Result: Feed shows banner when new posts are available, user can click to refresh
+  - Tests: 7 passing (usePolling hook tests) = 95 total frontend tests
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - use-polling.ts: 54 lines
+    - use-polling.test.ts: 110 lines
+    - feed-list.tsx: 432 lines

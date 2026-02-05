@@ -514,7 +514,7 @@
       "Add visual indicator when new posts arrive",
       "Test: New posts appear without manual refresh"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-017",

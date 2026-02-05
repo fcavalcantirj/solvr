@@ -9,6 +9,11 @@
 - **Database:** PostgreSQL
 - **Full spec:** `SPEC.md` (~2800 lines, 19 parts)
 
+### Production URLs
+- **Frontend:** https://solvr.dev
+- **API:** https://api.solvr.dev
+- **Google OAuth callback:** https://api.solvr.dev/v1/auth/google/callback
+
 ---
 
 ## Golden Rules

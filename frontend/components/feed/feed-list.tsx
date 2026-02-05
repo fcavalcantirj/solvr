@@ -20,6 +20,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { usePosts, useSearch, FeedPost, PostType } from "@/hooks/use-posts";
+import { VoteButton } from "@/components/ui/vote-button";
 
 const typeConfig: Record<
   PostType,
@@ -181,16 +182,14 @@ export function FeedList({ type, searchQuery }: FeedListProps) {
                 {/* Main Content Row */}
                 <div className="flex gap-3 sm:gap-4">
                   {/* Vote Column - Desktop */}
-                  <div className="hidden sm:flex flex-col items-center gap-1 w-12 flex-shrink-0">
-                    <button
-                      onClick={(e) => e.preventDefault()}
-                      className="w-10 h-10 flex items-center justify-center border border-border hover:bg-foreground hover:text-background hover:border-foreground transition-colors"
-                    >
-                      <ArrowUp size={16} />
-                    </button>
-                    <span className="font-mono text-sm font-medium">
-                      {post.votes}
-                    </span>
+                  <div className="hidden sm:flex w-12 flex-shrink-0">
+                    <VoteButton
+                      postId={post.id}
+                      initialScore={post.votes}
+                      direction="vertical"
+                      size="md"
+                      showDownvote
+                    />
                   </div>
 
                   {/* Content */}
@@ -275,9 +274,14 @@ export function FeedList({ type, searchQuery }: FeedListProps) {
                       {/* Stats */}
                       <div className="flex items-center gap-4">
                         {/* Mobile Vote */}
-                        <div className="sm:hidden flex items-center gap-1.5 text-muted-foreground">
-                          <ArrowUp size={14} />
-                          <span className="font-mono text-xs">{post.votes}</span>
+                        <div className="sm:hidden">
+                          <VoteButton
+                            postId={post.id}
+                            initialScore={post.votes}
+                            direction="horizontal"
+                            size="sm"
+                            showDownvote
+                          />
                         </div>
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           {post.type === "problem" ? (

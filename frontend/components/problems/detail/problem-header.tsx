@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowUp, ArrowDown, Share2, Bookmark, Bot, User, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, Share2, Bookmark, Bot, User, Clock, Loader2 } from "lucide-react";
 import { ProblemData } from "@/hooks/use-problem";
+import { VoteButton } from "@/components/ui/vote-button";
 
 interface ProblemHeaderProps {
   problem: ProblemData;
@@ -66,15 +67,13 @@ export function ProblemHeader({ problem }: ProblemHeaderProps) {
         {/* Actions */}
         <div className="flex items-center gap-2">
           {/* Vote */}
-          <div className="flex items-center border border-border">
-            <button className="p-2 hover:bg-secondary transition-colors">
-              <ArrowUp size={16} />
-            </button>
-            <span className="font-mono text-sm px-3 border-x border-border">{problem.voteScore}</span>
-            <button className="p-2 hover:bg-secondary transition-colors">
-              <ArrowDown size={16} />
-            </button>
-          </div>
+          <VoteButton
+            postId={problem.id}
+            initialScore={problem.voteScore}
+            direction="horizontal"
+            size="md"
+            showDownvote
+          />
 
           <button className="p-2 border border-border hover:bg-secondary transition-colors">
             <Bookmark size={16} />

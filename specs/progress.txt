@@ -7541,3 +7541,29 @@ Also, FeedRepository didn't exist in the db package.
     - idea-detail-client.tsx: 59 lines
     - idea-content.tsx: 35 lines
     - idea-side-panel.tsx: 71 lines
+
+
+- 2026-02-05: [FE-004] Implement voting functionality in feed and detail pages ✓
+  - Problem: Vote buttons existed but didn't call API
+  - TDD approach followed:
+    1. Added failing tests first for useVote hook (5 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Added voteOnPost(id, direction) method to frontend/lib/api.ts
+    - Created frontend/hooks/use-vote.ts hook
+      - Optimistic updates with rollback on error
+      - Returns score, isVoting, error, upvote(), downvote()
+    - Created VoteButton component (components/ui/vote-button.tsx)
+      - Supports vertical/horizontal layout
+      - Supports sm/md/lg sizes
+      - Shows upvote + optional downvote button
+    - Updated feed-list.tsx to use VoteButton
+      - Desktop: vertical layout with both up/down buttons
+      - Mobile: horizontal compact layout
+    - Updated problem-header.tsx to use VoteButton
+  - Tests: 5 passing (useVote hook tests) = 20 total frontend tests
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - use-vote.ts: 54 lines
+    - use-vote.test.ts: 117 lines
+    - vote-button.tsx: 79 lines

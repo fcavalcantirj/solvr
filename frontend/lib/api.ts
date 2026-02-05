@@ -216,6 +216,21 @@ class SolvrAPI {
   async getTrending(): Promise<{ data: TrendingData }> {
     return this.fetch<{ data: TrendingData }>('/v1/stats/trending');
   }
+
+  async voteOnPost(postId: string, direction: 'up' | 'down'): Promise<APIVoteResponse> {
+    return this.fetch<APIVoteResponse>(`/v1/posts/${postId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ direction }),
+    });
+  }
+}
+
+export interface APIVoteResponse {
+  data: {
+    vote_score: number;
+    upvotes: number;
+    downvotes: number;
+  };
 }
 
 export interface StatsData {

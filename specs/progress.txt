@@ -8495,3 +8495,21 @@ All acceptance criteria met:
 - Vision ties to gap insight
 - Page reads as curated continuity infrastructure
 
+
+
+## 2026-02-05 - DOCS-010 Complete
+
+**Task:** Generate OpenAPI spec and host at /v1/openapi.json
+
+**Changes:**
+- Updated discovery.go with comprehensive getOpenAPISpec() function
+- Created openapi_paths.go with all endpoint path definitions (65+ endpoints)
+- Created openapi_schemas.go with all schema definitions (~70 schemas)
+- Both /v1/openapi.json and /v1/openapi.yaml endpoints working
+- All files under 800 line limit (discovery: 221, paths: 741, schemas: 701)
+
+**Files modified:**
+- backend/internal/api/discovery.go
+- backend/internal/api/openapi_paths.go (new)
+- backend/internal/api/openapi_schemas.go (new)
+- specs/prd-v3.json (passes: true)

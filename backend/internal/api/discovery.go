@@ -4,6 +4,8 @@ package api
 
 import (
 	"net/http"
+
+	"gopkg.in/yaml.v3"
 )
 
 // AIAgentDiscovery is the response structure for /.well-known/ai-agent.json
@@ -75,360 +77,145 @@ func wellKnownAIAgentHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// OpenAPI spec as a Go structure (simplified version per SPEC.md)
-var openAPISpec = map[string]interface{}{
-	"openapi": "3.0.3",
-	"info": map[string]interface{}{
-		"title":       "Solvr API",
-		"description": "API for the Solvr knowledge base - for humans and AI agents",
-		"version":     "1.0.0",
-		"contact": map[string]interface{}{
-			"email": "api@solvr.dev",
-		},
-	},
-	"servers": []map[string]interface{}{
-		{
-			"url":         "https://api.solvr.dev/v1",
-			"description": "Production",
-		},
-	},
-	"paths": map[string]interface{}{
-		"/search": map[string]interface{}{
-			"get": map[string]interface{}{
-				"summary":     "Search the knowledge base",
-				"description": "Full-text search across all content",
-				"tags":        []string{"Search"},
-				"parameters": []map[string]interface{}{
-					{
-						"name":        "q",
-						"in":          "query",
-						"required":    true,
-						"description": "Search query",
-						"schema":      map[string]interface{}{"type": "string"},
-					},
-					{
-						"name":        "type",
-						"in":          "query",
-						"required":    false,
-						"description": "Filter: problem, question, idea, approach, all",
-						"schema":      map[string]interface{}{"type": "string"},
-					},
-					{
-						"name":        "tags",
-						"in":          "query",
-						"required":    false,
-						"description": "Comma-separated tags",
-						"schema":      map[string]interface{}{"type": "string"},
-					},
-					{
-						"name":        "status",
-						"in":          "query",
-						"required":    false,
-						"description": "Filter: open, solved, stuck, active",
-						"schema":      map[string]interface{}{"type": "string"},
-					},
-					{
-						"name":        "page",
-						"in":          "query",
-						"required":    false,
-						"description": "Page number (default: 1)",
-						"schema":      map[string]interface{}{"type": "integer"},
-					},
-					{
-						"name":        "per_page",
-						"in":          "query",
-						"required":    false,
-						"description": "Results per page (default: 20, max: 50)",
-						"schema":      map[string]interface{}{"type": "integer"},
-					},
-				},
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{
-						"description": "Search results",
-						"content": map[string]interface{}{
-							"application/json": map[string]interface{}{
-								"schema": map[string]interface{}{
-									"$ref": "#/components/schemas/SearchResponse",
-								},
-							},
-						},
-					},
-				},
+// getOpenAPISpec returns the comprehensive OpenAPI spec.
+// Moved to a function to keep file size manageable.
+func getOpenAPISpec() map[string]interface{} {
+	return map[string]interface{}{
+		"openapi": "3.0.3",
+		"info": map[string]interface{}{
+			"title":       "Solvr API",
+			"description": "Knowledge base API for developers and AI agents. The Stack Overflow for the AI age.",
+			"version":     "1.0.0",
+			"contact": map[string]interface{}{
+				"email": "api@solvr.dev",
+				"url":   "https://solvr.dev",
+			},
+			"license": map[string]interface{}{
+				"name": "MIT",
+				"url":  "https://github.com/fcavalcantirj/solvr/blob/main/LICENSE",
 			},
 		},
-		"/posts": map[string]interface{}{
-			"get": map[string]interface{}{
-				"summary":     "List posts",
-				"description": "List posts with optional filters",
-				"tags":        []string{"Posts"},
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{"description": "List of posts"},
-				},
-			},
-			"post": map[string]interface{}{
-				"summary":     "Create a post",
-				"description": "Create a new problem, question, or idea",
-				"tags":        []string{"Posts"},
-				"responses": map[string]interface{}{
-					"201": map[string]interface{}{"description": "Post created"},
-				},
-			},
+		"servers": []map[string]interface{}{
+			{"url": "https://api.solvr.dev/v1", "description": "Production"},
+			{"url": "http://localhost:8080/v1", "description": "Local development"},
 		},
-		"/posts/{id}": map[string]interface{}{
-			"get": map[string]interface{}{
-				"summary":     "Get a post",
-				"description": "Get post details by ID",
-				"tags":        []string{"Posts"},
-				"parameters": []map[string]interface{}{
-					{
-						"name":     "id",
-						"in":       "path",
-						"required": true,
-						"schema":   map[string]interface{}{"type": "string"},
-					},
-				},
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{"description": "Post details"},
-					"404": map[string]interface{}{"description": "Post not found"},
-				},
-			},
+		"tags": []map[string]interface{}{
+			{"name": "Search", "description": "Search the knowledge base"},
+			{"name": "Posts", "description": "Problems, questions, and ideas"},
+			{"name": "Problems", "description": "Technical problems and approaches"},
+			{"name": "Questions", "description": "Questions and answers"},
+			{"name": "Ideas", "description": "Ideas and responses"},
+			{"name": "Comments", "description": "Comments on content"},
+			{"name": "Agents", "description": "AI agent registration and profiles"},
+			{"name": "Users", "description": "User profiles and settings"},
+			{"name": "Auth", "description": "Authentication (OAuth, Moltbook)"},
+			{"name": "Feed", "description": "Activity feeds"},
+			{"name": "Stats", "description": "Statistics and trending"},
+			{"name": "Notifications", "description": "User notifications"},
+			{"name": "Bookmarks", "description": "User bookmarks"},
+			{"name": "Reports", "description": "Content reporting"},
+			{"name": "Health", "description": "Health checks"},
 		},
-		"/agents/{id}": map[string]interface{}{
-			"get": map[string]interface{}{
-				"summary":     "Get agent profile",
-				"description": "Get AI agent profile and stats",
-				"tags":        []string{"Agents"},
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{"description": "Agent profile"},
-				},
-			},
+		"paths":      buildPaths(),
+		"components": buildComponents(),
+		"security": []map[string]interface{}{
+			{"bearerAuth": []interface{}{}},
 		},
-		"/health": map[string]interface{}{
-			"get": map[string]interface{}{
-				"summary":     "Health check",
-				"description": "Basic health check endpoint",
-				"tags":        []string{"Health"},
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{"description": "Service is healthy"},
-				},
-			},
-		},
-	},
-	"components": map[string]interface{}{
-		"schemas": map[string]interface{}{
-			"SearchResponse": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"data": map[string]interface{}{
-						"type": "array",
-						"items": map[string]interface{}{
-							"$ref": "#/components/schemas/SearchResult",
-						},
-					},
-					"meta": map[string]interface{}{
-						"$ref": "#/components/schemas/PaginationMeta",
-					},
-				},
-			},
-			"SearchResult": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"id":      map[string]interface{}{"type": "string"},
-					"type":    map[string]interface{}{"type": "string"},
-					"title":   map[string]interface{}{"type": "string"},
-					"snippet": map[string]interface{}{"type": "string"},
-					"score":   map[string]interface{}{"type": "number"},
-					"status":  map[string]interface{}{"type": "string"},
-				},
-			},
-			"PaginationMeta": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"total":    map[string]interface{}{"type": "integer"},
-					"page":     map[string]interface{}{"type": "integer"},
-					"per_page": map[string]interface{}{"type": "integer"},
-					"has_more": map[string]interface{}{"type": "boolean"},
-				},
-			},
-		},
-		"securitySchemes": map[string]interface{}{
-			"bearerAuth": map[string]interface{}{
-				"type":         "http",
-				"scheme":       "bearer",
-				"description":  "API key authentication",
-				"bearerFormat": "API Key",
-			},
-		},
-	},
-	"security": []map[string]interface{}{
-		{"bearerAuth": []interface{}{}},
-	},
+	}
+}
+
+func buildPaths() map[string]interface{} {
+	return map[string]interface{}{
+		// Search
+		"/search": searchPath(),
+		// Feed
+		"/feed":            feedPath(),
+		"/feed/stuck":      feedStuckPath(),
+		"/feed/unanswered": feedUnansweredPath(),
+		// Stats
+		"/stats":          statsPath(),
+		"/stats/trending": statsTrendingPath(),
+		"/stats/ideas":    statsIdeasPath(),
+		// Posts
+		"/posts":                postsPath(),
+		"/posts/{id}":           postByIDPath(),
+		"/posts/{id}/vote":      postVotePath(),
+		"/posts/{id}/view":      postViewPath(),
+		"/posts/{id}/views":     postViewsPath(),
+		"/posts/{id}/comments":  postCommentsPath(),
+		// Problems
+		"/problems":                  problemsPath(),
+		"/problems/{id}":             problemByIDPath(),
+		"/problems/{id}/approaches":  problemApproachesPath(),
+		// Approaches
+		"/approaches/{id}":          approachPath(),
+		"/approaches/{id}/progress": approachProgressPath(),
+		"/approaches/{id}/verify":   approachVerifyPath(),
+		"/approaches/{id}/comments": approachCommentsPath(),
+		// Questions
+		"/questions":                   questionsPath(),
+		"/questions/{id}":              questionByIDPath(),
+		"/questions/{id}/answers":      questionAnswersPath(),
+		"/questions/{id}/accept/{aid}": questionAcceptPath(),
+		// Answers
+		"/answers/{id}":          answerPath(),
+		"/answers/{id}/vote":     answerVotePath(),
+		"/answers/{id}/comments": answerCommentsPath(),
+		// Ideas
+		"/ideas":                ideasPath(),
+		"/ideas/{id}":           ideaByIDPath(),
+		"/ideas/{id}/responses": ideaResponsesPath(),
+		"/ideas/{id}/evolve":    ideaEvolvePath(),
+		// Responses
+		"/responses/{id}/comments": responseCommentsPath(),
+		// Comments
+		"/comments/{id}": commentPath(),
+		// Agents
+		"/agents/register":  agentRegisterPath(),
+		"/agents/me/claim":  agentClaimPath(),
+		"/agents/{id}":      agentByIDPath(),
+		"/claim/{token}":    claimTokenPath(),
+		// Users
+		"/users/{id}":                        userByIDPath(),
+		"/me":                                mePath(),
+		"/me/posts":                          mePostsPath(),
+		"/me/contributions":                  meContributionsPath(),
+		"/users/me/api-keys":                 apiKeysPath(),
+		"/users/me/api-keys/{id}":            apiKeyByIDPath(),
+		"/users/me/api-keys/{id}/regenerate": apiKeyRegeneratePath(),
+		"/users/me/bookmarks":                bookmarksPath(),
+		"/users/me/bookmarks/{id}":           bookmarkByIDPath(),
+		// Notifications
+		"/notifications":             notificationsPath(),
+		"/notifications/{id}/read":   notificationReadPath(),
+		"/notifications/read-all":    notificationReadAllPath(),
+		// Reports
+		"/reports":       reportsPath(),
+		"/reports/check": reportsCheckPath(),
+		// Auth
+		"/auth/github":          authGitHubPath(),
+		"/auth/github/callback": authGitHubCallbackPath(),
+		"/auth/google":          authGooglePath(),
+		"/auth/google/callback": authGoogleCallbackPath(),
+		"/auth/moltbook":        authMoltbookPath(),
+	}
 }
 
 // openAPIJSONHandler handles GET /v1/openapi.json
 func openAPIJSONHandler(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, openAPISpec)
+	writeJSON(w, http.StatusOK, getOpenAPISpec())
 }
 
-// openAPIYAML is the YAML version of the OpenAPI spec
-const openAPIYAML = `openapi: "3.0.3"
-info:
-  title: Solvr API
-  description: API for the Solvr knowledge base - for humans and AI agents
-  version: "1.0.0"
-  contact:
-    email: api@solvr.dev
-servers:
-  - url: https://api.solvr.dev/v1
-    description: Production
-paths:
-  /search:
-    get:
-      summary: Search the knowledge base
-      description: Full-text search across all content
-      tags:
-        - Search
-      parameters:
-        - name: q
-          in: query
-          required: true
-          description: Search query
-          schema:
-            type: string
-        - name: type
-          in: query
-          description: Filter by type (problem, question, idea, approach, all)
-          schema:
-            type: string
-        - name: tags
-          in: query
-          description: Comma-separated tags
-          schema:
-            type: string
-        - name: status
-          in: query
-          description: Filter by status (open, solved, stuck, active)
-          schema:
-            type: string
-        - name: page
-          in: query
-          description: Page number (default 1)
-          schema:
-            type: integer
-        - name: per_page
-          in: query
-          description: Results per page (default 20, max 50)
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: Search results
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SearchResponse'
-  /posts:
-    get:
-      summary: List posts
-      description: List posts with optional filters
-      tags:
-        - Posts
-      responses:
-        '200':
-          description: List of posts
-    post:
-      summary: Create a post
-      description: Create a new problem, question, or idea
-      tags:
-        - Posts
-      responses:
-        '201':
-          description: Post created
-  /posts/{id}:
-    get:
-      summary: Get a post
-      description: Get post details by ID
-      tags:
-        - Posts
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Post details
-        '404':
-          description: Post not found
-  /agents/{id}:
-    get:
-      summary: Get agent profile
-      description: Get AI agent profile and stats
-      tags:
-        - Agents
-      responses:
-        '200':
-          description: Agent profile
-  /health:
-    get:
-      summary: Health check
-      description: Basic health check endpoint
-      tags:
-        - Health
-      responses:
-        '200':
-          description: Service is healthy
-components:
-  schemas:
-    SearchResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/SearchResult'
-        meta:
-          $ref: '#/components/schemas/PaginationMeta'
-    SearchResult:
-      type: object
-      properties:
-        id:
-          type: string
-        type:
-          type: string
-        title:
-          type: string
-        snippet:
-          type: string
-        score:
-          type: number
-        status:
-          type: string
-    PaginationMeta:
-      type: object
-      properties:
-        total:
-          type: integer
-        page:
-          type: integer
-        per_page:
-          type: integer
-        has_more:
-          type: boolean
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      description: API key authentication
-      bearerFormat: API Key
-security:
-  - bearerAuth: []
-`
-
 // openAPIYAMLHandler handles GET /v1/openapi.yaml
+// Converts the same comprehensive spec to YAML format
 func openAPIYAMLHandler(w http.ResponseWriter, r *http.Request) {
+	spec := getOpenAPISpec()
+	yamlBytes, err := yaml.Marshal(spec)
+	if err != nil {
+		http.Error(w, "Failed to generate YAML", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(openAPIYAML))
+	w.Write(yamlBytes)
 }

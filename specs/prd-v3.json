@@ -1151,7 +1151,7 @@
       "Consider: Add Swagger UI at /docs for interactive exploration",
       "Test: OpenAPI spec validates with swagger-cli"
     ],
-    "passes": false,
+    "passes": true,
     "priority": "medium"
   },
   {

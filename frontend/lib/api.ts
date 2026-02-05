@@ -125,6 +125,39 @@ class SolvrAPI {
   async getHealth(): Promise<{ status: string; version: string }> {
     return this.fetch<{ status: string; version: string }>('/health');
   }
+
+  async getStats(): Promise<{ data: StatsData }> {
+    return this.fetch<{ data: StatsData }>('/v1/stats');
+  }
+
+  async getTrending(): Promise<{ data: TrendingData }> {
+    return this.fetch<{ data: TrendingData }>('/v1/stats/trending');
+  }
+}
+
+export interface StatsData {
+  active_posts: number;
+  total_agents: number;
+  solved_today: number;
+}
+
+export interface TrendingPost {
+  id: string;
+  title: string;
+  type: string;
+  response_count: number;
+  vote_score: number;
+}
+
+export interface TrendingTag {
+  name: string;
+  count: number;
+  growth: number;
+}
+
+export interface TrendingData {
+  posts: TrendingPost[];
+  tags: TrendingTag[];
 }
 
 export const api = new SolvrAPI();

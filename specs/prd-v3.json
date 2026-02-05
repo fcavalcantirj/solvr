@@ -712,11 +712,11 @@
       "Call setToken(token) from useAuth to store and validate",
       "Redirect to returnUrl (from localStorage) or /feed after success",
       "Show error state if token is missing or invalid",
-      "Create UserMenu dropdown component (avatar click → dropdown)",
+      "Create UserMenu dropdown component (avatar click \u2192 dropdown)",
       "UserMenu options: Profile, Settings, API Keys, Log Out",
       "Update Header to use UserMenu instead of plain logout button",
       "Store returnUrl in localStorage before OAuth redirect",
-      "Test: Full OAuth flow → callback → authenticated → redirect",
+      "Test: Full OAuth flow \u2192 callback \u2192 authenticated \u2192 redirect",
       "Test: User dropdown shows all menu options",
       "Test: Settings link goes to /settings"
     ],
@@ -738,8 +738,8 @@
     ],
     "steps": [
       "Import and use useAuth hook in hero-section",
-      "If logged in: change CTA to 'ASK A QUESTION' or 'POST PROBLEM' → /new",
-      "If not logged in: keep 'JOIN AS DEVELOPER' → /join",
+      "If logged in: change CTA to 'ASK A QUESTION' or 'POST PROBLEM' \u2192 /new",
+      "If not logged in: keep 'JOIN AS DEVELOPER' \u2192 /join",
       "Test: CTA changes based on auth state"
     ],
     "passes": false
@@ -908,7 +908,11 @@
     ],
     "design_guidance": {
       "style": "Match existing frontend aesthetic: monospace fonts, minimal borders, black/white contrast",
-      "reference_pages": ["/login", "/join", "/api-docs"],
+      "reference_pages": [
+        "/login",
+        "/join",
+        "/api-docs"
+      ],
       "sidebar": "Vertical nav with font-mono text-xs tracking-wider, hover:bg-secondary",
       "cards": "border border-border, p-6, font-mono labels",
       "buttons": "bg-foreground text-background for primary, border border-border for secondary",
@@ -917,19 +921,19 @@
     "steps": [
       "Create /settings/layout.tsx with sidebar + main content area",
       "Create settings-sidebar.tsx with links: Profile, API Keys, Notifications, Danger Zone",
-      "Create /settings/page.tsx → redirects to /settings/profile (or shows profile)",
+      "Create /settings/page.tsx \u2192 redirects to /settings/profile (or shows profile)",
       "Create /settings/api-keys/page.tsx for API key management",
       "List existing API keys in table/cards (name, prefix solvr_sk_..., created_at, last_used)",
-      "Add 'CREATE API KEY' button (font-mono, tracking-wider) → opens dialog",
+      "Add 'CREATE API KEY' button (font-mono, tracking-wider) \u2192 opens dialog",
       "Dialog: name input + create button, follows login page input styling",
-      "On create: POST /v1/users/me/api-keys → modal shows full key ONCE",
+      "On create: POST /v1/users/me/api-keys \u2192 modal shows full key ONCE",
       "Key display: monospace, bg-foreground text-background, copy button, warning text",
-      "Add 'REVOKE' button per key (text-red-500) → DELETE /v1/users/me/api-keys/{id}",
-      "Add 'REGENERATE' option → POST /v1/users/me/api-keys/{id}/regenerate → shows new key",
-      "Update api-quickstart.tsx: 'GET API KEY' → /settings/api-keys (if auth) else /login",
+      "Add 'REVOKE' button per key (text-red-500) \u2192 DELETE /v1/users/me/api-keys/{id}",
+      "Add 'REGENERATE' option \u2192 POST /v1/users/me/api-keys/{id}/regenerate \u2192 shows new key",
+      "Update api-quickstart.tsx: 'GET API KEY' \u2192 /settings/api-keys (if auth) else /login",
       "Update api-footer.tsx: same logic for CTA button",
       "Protect /settings/* with useAuth redirect to /login",
-      "Test: Full flow from api-docs → login → settings → create key",
+      "Test: Full flow from api-docs \u2192 login \u2192 settings \u2192 create key",
       "Test: Key only shown once on creation"
     ],
     "passes": false,
@@ -1149,5 +1153,26 @@
     ],
     "passes": false,
     "priority": "medium"
+  },
+  {
+    "id": "FIX-030",
+    "category": "FIX-CRITICAL",
+    "description": "Fix POST /v1/posts returning error despite successful creation",
+    "problem": "Create returns INTERNAL_ERROR but post is actually created, causing client confusion and duplicate posts",
+    "root_cause": "RETURNING clause in Create() missing view_count column, causing scanPost() column mismatch",
+    "evidence": "INSERT succeeds (post appears in DB), but Scan fails because RETURNING has 17 columns but scanPost expects 18",
+    "files": [
+      "backend/internal/db/posts.go"
+    ],
+    "steps": [
+      "In PostRepository.Create(), add 'view_count' to RETURNING clause after 'downvotes'",
+      "Ensure RETURNING column order matches scanPost() expectations exactly:",
+      "  scanPost expects: id, type, title, description, tags, posted_by_type, posted_by_id, status, upvotes, downvotes, view_count, success_criteria, weight, accepted_answer_id, evolved_into, created_at, updated_at, deleted_at",
+      "Test: POST /v1/posts returns 201 with created post data (not INTERNAL_ERROR)",
+      "Test: No scan errors in logs after post creation",
+      "Test: Created post data matches what's in database"
+    ],
+    "passes": false,
+    "priority": "critical"
   }
 ]

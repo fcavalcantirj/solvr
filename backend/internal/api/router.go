@@ -53,6 +53,10 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	r.Get("/health/live", healthLiveHandler)
 	r.Get("/health/ready", healthReadyHandler(pool))
 
+	// Admin endpoints (requires X-Admin-API-Key header)
+	adminHandler := handlers.NewAdminHandler(pool)
+	r.Post("/admin/query", adminHandler.ExecuteQuery)
+
 	// Discovery endpoints (SPEC.md Part 18.3)
 	r.Get("/.well-known/ai-agent.json", wellKnownAIAgentHandler)
 	r.Get("/v1/openapi.json", openAPIJSONHandler)

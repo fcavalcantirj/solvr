@@ -133,6 +133,9 @@ export default function FeedPage() {
               <FeedList
                 type={filters.type}
                 searchQuery={filters.searchQuery}
+                status={filters.status}
+                sort={filters.sort}
+                timeframe={filters.timeframe}
               />
             </div>
 

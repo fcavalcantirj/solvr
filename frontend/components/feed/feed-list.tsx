@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { usePosts, useSearch, FeedPost, PostType } from "@/hooks/use-posts";
 import { VoteButton } from "@/components/ui/vote-button";
+import { mapStatusFilter, mapSortFilter, mapTimeframeFilter } from "@/lib/filter-utils";
 
 const typeConfig: Record<
   PostType,
@@ -59,17 +60,23 @@ const statusConfig: Record<string, { className: string; dot?: string }> = {
 interface FeedListProps {
   type?: PostType | 'all';
   searchQuery?: string;
+  status?: string;
+  sort?: string;
+  timeframe?: string;
 }
 
-export function FeedList({ type, searchQuery }: FeedListProps) {
+export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedListProps) {
   const [hoveredPost, setHoveredPost] = useState<string | null>(null);
-  
+
   // Use search when there's a query, otherwise use posts
   const isSearching = Boolean(searchQuery?.trim());
-  
+
   const postsResult = usePosts({
     type: type === 'all' ? undefined : type,
     per_page: 20,
+    status: status ? mapStatusFilter(status) : undefined,
+    sort: sort ? mapSortFilter(sort) : undefined,
+    timeframe: timeframe ? mapTimeframeFilter(timeframe) as 'today' | 'week' | 'month' | undefined : undefined,
   });
   
   const searchResult = useSearch(searchQuery || '', type);

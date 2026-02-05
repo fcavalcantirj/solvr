@@ -7708,3 +7708,26 @@ Also, FeedRepository didn't exist in the db package.
     - use-accept-answer.ts: 38 lines
     - use-accept-answer.test.ts: 95 lines
     - answers-list.tsx: 263 lines
+
+
+- 2026-02-05: [FE-010] Wire feed filters to API parameters ✓
+  - Problem: Status, sort, and timeframe filters existed but didn't affect API calls
+  - TDD approach followed:
+    1. Added failing tests first for filter mapping utilities (13 tests)
+    2. Tests initially failed with "module not found" (RED phase)
+  - Implementation:
+    - Created frontend/lib/filter-utils.ts with mapping functions:
+      - mapStatusFilter: Maps UI status to API status (All → undefined, Open → open, etc.)
+      - mapSortFilter: Maps UI sort to API sort (Newest → new, Trending → hot, etc.)
+      - mapTimeframeFilter: Maps UI timeframe to API timeframe (Today → today, etc.)
+    - Updated FetchPostsParams in api.ts to include timeframe
+    - Updated api.getPosts to pass sort and timeframe to URL params
+    - Updated FeedListProps to accept status, sort, timeframe
+    - Updated FeedList to map UI filter values and pass to usePosts
+    - Updated app/feed/page.tsx to pass all filter props to FeedList
+  - Result: Changing filters now updates API calls and results
+  - Tests: 13 passing (filter-utils tests) = 61 total frontend tests
+  - TypeScript: All types pass
+  - File sizes: All files under 800 lines
+    - filter-utils.ts: 42 lines
+    - filter-utils.test.ts: 57 lines

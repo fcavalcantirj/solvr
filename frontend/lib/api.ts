@@ -117,6 +117,7 @@ export interface FetchPostsParams {
   page?: number;
   per_page?: number;
   sort?: 'new' | 'hot' | 'top';
+  timeframe?: 'today' | 'week' | 'month';
 }
 
 export interface SearchParams {
@@ -158,6 +159,8 @@ class SolvrAPI {
     if (params?.status) searchParams.set('status', params.status);
     if (params?.page) searchParams.set('page', params.page.toString());
     if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+    if (params?.sort) searchParams.set('sort', params.sort);
+    if (params?.timeframe) searchParams.set('timeframe', params.timeframe);
 
     const query = searchParams.toString();
     return this.fetch<APIPostsResponse>(`/v1/posts${query ? `?${query}` : ''}`);

@@ -395,7 +395,7 @@
       "Refetch when filters change",
       "Test: Changing filter updates results"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-011",

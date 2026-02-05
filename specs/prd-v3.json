@@ -333,7 +333,7 @@
       "Handle auth required error",
       "Test: Posting response adds it to the list"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-008",

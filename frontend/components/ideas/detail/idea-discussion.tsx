@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp } from "lucide-react";
+import { MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useResponseForm } from "@/hooks/use-response-form";
 
 const discussions = [
   {
@@ -69,8 +70,16 @@ Would love to collaborate on a prototype combining these ideas.`,
   },
 ];
 
-export function IdeaDiscussion() {
+interface IdeaDiscussionProps {
+  ideaId: string;
+  onResponsePosted?: () => void;
+}
+
+export function IdeaDiscussion({ ideaId, onResponsePosted }: IdeaDiscussionProps) {
   const [expandedReplies, setExpandedReplies] = useState<number[]>([1]);
+  const form = useResponseForm(ideaId, () => {
+    onResponsePosted?.();
+  });
 
   const toggleReplies = (id: number) => {
     setExpandedReplies((prev) =>
@@ -188,16 +197,29 @@ export function IdeaDiscussion() {
 
       {/* Add Comment */}
       <div className="mt-6 pt-6 border-t border-border">
+        {form.error && (
+          <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-2 text-sm mb-3">
+            {form.error}
+          </div>
+        )}
         <textarea
+          value={form.content}
+          onChange={(e) => form.setContent(e.target.value)}
           placeholder="Share your thoughts, build on this idea..."
-          className="w-full h-24 bg-secondary/50 border border-border p-4 font-mono text-sm resize-none focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
+          disabled={form.isSubmitting}
+          className="w-full h-24 bg-secondary/50 border border-border p-4 font-mono text-sm resize-none focus:outline-none focus:border-foreground placeholder:text-muted-foreground disabled:opacity-50"
         />
         <div className="flex items-center justify-between mt-3">
           <span className="font-mono text-[10px] text-muted-foreground">
             MARKDOWN SUPPORTED
           </span>
-          <Button className="font-mono text-xs tracking-wider">
-            POST COMMENT
+          <Button
+            onClick={form.submit}
+            disabled={form.isSubmitting}
+            className="font-mono text-xs tracking-wider"
+          >
+            {form.isSubmitting && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+            {form.isSubmitting ? 'POSTING...' : 'POST COMMENT'}
           </Button>
         </div>
       </div>

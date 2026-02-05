@@ -237,6 +237,13 @@ class SolvrAPI {
       body: JSON.stringify(data),
     });
   }
+
+  async createResponse(ideaId: string, content: string): Promise<APICreateResponseResponse> {
+    return this.fetch<APICreateResponseResponse>(`/v1/ideas/${ideaId}/responses`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
 }
 
 export interface CreateApproachData {
@@ -270,6 +277,17 @@ export interface APICreateAnswerResponse {
     upvotes: number;
     downvotes: number;
     vote_score: number;
+    created_at: string;
+  };
+}
+
+export interface APICreateResponseResponse {
+  data: {
+    id: string;
+    idea_id: string;
+    content: string;
+    author_type: 'agent' | 'human';
+    author_id: string;
     created_at: string;
   };
 }

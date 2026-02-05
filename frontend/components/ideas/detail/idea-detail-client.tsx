@@ -50,7 +50,7 @@ export function IdeaDetailClient({ id }: IdeaDetailClientProps) {
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           <IdeaContent idea={idea} />
-          <IdeaDiscussion />
+          <IdeaDiscussion ideaId={idea.id} onResponsePosted={refetch} />
         </div>
         <div className="lg:col-span-1">
           <IdeaSidePanel idea={idea} />

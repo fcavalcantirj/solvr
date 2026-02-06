@@ -3,11 +3,103 @@ package db
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// Unit tests for helper functions (no database required)
+
+func TestIsInvalidUUIDError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "generic error",
+			err:      errors.New("some error"),
+			expected: false,
+		},
+		{
+			name: "invalid UUID error (22P02)",
+			err: &pgconn.PgError{
+				Code:    "22P02",
+				Message: "invalid input syntax for type uuid",
+			},
+			expected: true,
+		},
+		{
+			name: "other pg error",
+			err: &pgconn.PgError{
+				Code:    "23505",
+				Message: "unique constraint violation",
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isInvalidUUIDError(tt.err)
+			if result != tt.expected {
+				t.Errorf("isInvalidUUIDError() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsTableNotFoundError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "generic error",
+			err:      errors.New("some error"),
+			expected: false,
+		},
+		{
+			name: "table not found error (42P01)",
+			err: &pgconn.PgError{
+				Code:    "42P01",
+				Message: "relation \"responses\" does not exist",
+			},
+			expected: true,
+		},
+		{
+			name: "other pg error",
+			err: &pgconn.PgError{
+				Code:    "23505",
+				Message: "unique constraint violation",
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isTableNotFoundError(tt.err)
+			if result != tt.expected {
+				t.Errorf("isTableNotFoundError() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
 
 // Note: These tests require a running PostgreSQL database.
 // Set DATABASE_URL environment variable to run integration tests.

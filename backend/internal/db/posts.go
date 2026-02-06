@@ -35,6 +35,18 @@ func isInvalidUUIDError(err error) bool {
 	return false
 }
 
+// isTableNotFoundError checks if an error is a PostgreSQL "relation does not exist" error.
+// PostgreSQL error code 42P01 = undefined_table.
+// Used for graceful degradation when optional tables haven't been created yet.
+func isTableNotFoundError(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		// 42P01 = undefined_table (relation does not exist)
+		return pgErr.Code == "42P01"
+	}
+	return false
+}
+
 // PostRepository handles database operations for posts.
 // Per SPEC.md Part 6: posts table.
 type PostRepository struct {

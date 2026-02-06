@@ -30,6 +30,7 @@ func NewResponsesRepository(pool *Pool) *ResponsesRepository {
 
 // ListResponses returns responses for an idea with pagination.
 // Returns responses ordered by created_at descending (newest first).
+// Returns empty array if responses table doesn't exist (graceful degradation).
 func (r *ResponsesRepository) ListResponses(ctx context.Context, ideaID string, opts models.ResponseListOptions) ([]models.ResponseWithAuthor, int, error) {
 	// Calculate pagination
 	page := opts.Page
@@ -51,6 +52,10 @@ func (r *ResponsesRepository) ListResponses(ctx context.Context, ideaID string, 
 		SELECT COUNT(*) FROM responses WHERE idea_id = $1
 	`, ideaID).Scan(&total)
 	if err != nil {
+		// If table doesn't exist, return empty array (graceful degradation)
+		if isTableNotFoundError(err) {
+			return []models.ResponseWithAuthor{}, 0, nil
+		}
 		return nil, 0, fmt.Errorf("count responses: %w", err)
 	}
 
@@ -89,6 +94,10 @@ func (r *ResponsesRepository) ListResponses(ctx context.Context, ideaID string, 
 		LIMIT $2 OFFSET $3
 	`, ideaID, perPage, offset)
 	if err != nil {
+		// If table doesn't exist, return empty array (graceful degradation)
+		if isTableNotFoundError(err) {
+			return []models.ResponseWithAuthor{}, 0, nil
+		}
 		return nil, 0, fmt.Errorf("query responses: %w", err)
 	}
 	defer rows.Close()

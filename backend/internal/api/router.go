@@ -31,20 +31,11 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 
 	// Middleware stack
 	r.Use(requestIDMiddleware)
-	r.Use(apimiddleware.Logging)
-	r.Use(apimiddleware.BodyLimit(64 * 1024)) // FIX-028: 64KB request body limit
-	r.Use(securityHeadersMiddleware)
-	r.Use(jsonContentTypeMiddleware)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 
-	// Rate limiting - load config from database with fallback to defaults
-	rateLimitConfig := loadRateLimitConfig(pool)
-	rateLimitStore := apimiddleware.NewInMemoryRateLimitStore()
-	rateLimiter := apimiddleware.NewRateLimiter(rateLimitStore, rateLimitConfig)
-	r.Use(rateLimiter.Middleware)
-
-	// CORS configuration - read from ALLOWED_ORIGINS env var or use defaults
+	// CORS configuration - MUST be early in the chain so error responses include CORS headers
+	// Read from ALLOWED_ORIGINS env var or use defaults
 	allowedOrigins := []string{"http://localhost:3000", "https://solvr.dev", "https://www.solvr.dev"}
 	if envOrigins := os.Getenv("ALLOWED_ORIGINS"); envOrigins != "" {
 		allowedOrigins = strings.Split(envOrigins, ",")
@@ -56,11 +47,23 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID", "X-Session-ID"},
 		ExposedHeaders:   []string{"X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"},
 		AllowCredentials: true,
 		MaxAge:           int(12 * time.Hour / time.Second),
 	}))
+
+	// Other middleware after CORS
+	r.Use(apimiddleware.Logging)
+	r.Use(apimiddleware.BodyLimit(64 * 1024)) // FIX-028: 64KB request body limit
+	r.Use(securityHeadersMiddleware)
+	r.Use(jsonContentTypeMiddleware)
+
+	// Rate limiting - load config from database with fallback to defaults
+	rateLimitConfig := loadRateLimitConfig(pool)
+	rateLimitStore := apimiddleware.NewInMemoryRateLimitStore()
+	rateLimiter := apimiddleware.NewRateLimiter(rateLimitStore, rateLimitConfig)
+	r.Use(rateLimiter.Middleware)
 
 	// Custom 404 and 405 handlers for JSON responses
 	r.NotFound(notFoundHandler)

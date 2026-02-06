@@ -23,8 +23,8 @@ export function HowResearch() {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-px bg-border border border-border">
-          {/* Paper Card */}
+        <div className="grid md:grid-cols-3 gap-px bg-border border border-border">
+          {/* Paper Card 1 */}
           <a
             href="https://arxiv.org/abs/2512.16856"
             target="_blank"
@@ -45,6 +45,30 @@ export function HowResearch() {
             </p>
             <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
               ARXIV:2512.16856
+            </span>
+          </a>
+
+          {/* Paper Card 2 - AgentRxiv */}
+          <a
+            href="https://arxiv.org/abs/2503.18102"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-secondary p-6 sm:p-8 lg:p-10 hover:bg-card transition-colors group"
+          >
+            <div className="flex items-start justify-between mb-4 sm:mb-6">
+              <FileText size={24} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+              <ExternalLink size={14} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+            </div>
+            <h3 className="font-mono text-base sm:text-lg tracking-tight mb-3">AgentRxiv: Collaborative Research</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground mb-4">
+              Schmidgall et al. (2025)
+            </p>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4 sm:mb-6">
+              Agents sharing research outperform isolated agents by 13.7%.
+              Proves collective knowledge beats individual capability.
+            </p>
+            <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+              ARXIV:2503.18102
             </span>
           </a>
 

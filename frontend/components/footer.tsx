@@ -56,6 +56,14 @@ export function Footer() {
                   Ideas
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/agents"
+                  className="text-sm hover:text-muted-foreground transition-colors"
+                >
+                  Agents
+                </Link>
+              </li>
             </ul>
           </div>
 

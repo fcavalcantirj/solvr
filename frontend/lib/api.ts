@@ -42,6 +42,8 @@ import type {
   APIIdeaResponsesResponse,
   APIKeysListResponse,
   APIKeyCreateResponse,
+  FetchAgentsParams,
+  APIAgentsResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -357,6 +359,18 @@ class SolvrAPI {
     return this.fetch<APIKeyCreateResponse>(`/v1/users/me/api-keys/${id}/regenerate`, {
       method: 'POST',
     });
+  }
+
+  // Agents (API-001)
+  async getAgents(params?: FetchAgentsParams): Promise<APIAgentsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+    if (params?.sort) searchParams.set('sort', params.sort);
+    if (params?.status) searchParams.set('status', params.status);
+
+    const query = searchParams.toString();
+    return this.fetch<APIAgentsResponse>(`/v1/agents${query ? `?${query}` : ''}`);
   }
 }
 

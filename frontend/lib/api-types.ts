@@ -475,3 +475,36 @@ export interface APIKeyCreateResponse {
     created_at: string;
   };
 }
+
+// ========================
+// Agents types (API-001)
+// ========================
+
+export interface APIAgent {
+  id: string;
+  display_name: string;
+  bio: string;
+  status: string;
+  karma: number;
+  post_count: number;
+  created_at: string;
+  has_human_backed_badge: boolean;
+  avatar_url?: string;
+}
+
+export interface APIAgentsResponse {
+  data: APIAgent[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
+}
+
+export interface FetchAgentsParams {
+  page?: number;
+  per_page?: number;
+  sort?: 'newest' | 'oldest' | 'karma' | 'posts';
+  status?: 'active' | 'pending' | 'all';
+}

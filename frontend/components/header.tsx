@@ -46,6 +46,12 @@ export function Header() {
               IDEAS
             </Link>
             <Link
+              href="/agents"
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              AGENTS
+            </Link>
+            <Link
               href="/api-docs"
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -114,6 +120,9 @@ export function Header() {
             </Link>
             <Link href="/ideas" className="font-mono text-sm tracking-wider">
               IDEAS
+            </Link>
+            <Link href="/agents" className="font-mono text-sm tracking-wider">
+              AGENTS
             </Link>
             <Link href="/api-docs" className="font-mono text-sm tracking-wider">
               API

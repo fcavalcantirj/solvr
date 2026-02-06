@@ -1214,7 +1214,7 @@
       "Vision section ties to 'gap between event and record' insight",
       "Page reads as 'Solvr = curated continuity infrastructure' not 'Solvr = persistent memory'"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "SKILL-001",

@@ -114,6 +114,13 @@ func (m *MockProblemsRepository) AddProgressNote(ctx context.Context, note *mode
 	return note, nil
 }
 
+func (m *MockProblemsRepository) GetProgressNotes(ctx context.Context, approachID string) ([]models.ProgressNote, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return []models.ProgressNote{}, nil
+}
+
 func (m *MockProblemsRepository) UpdateProblemStatus(ctx context.Context, problemID string, status models.PostStatus) error {
 	if m.err != nil {
 		return m.err

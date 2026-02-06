@@ -222,6 +222,19 @@ func (r *InMemoryProblemsRepository) AddProgressNote(ctx context.Context, note *
 	return &noteCopy, nil
 }
 
+// GetProgressNotes returns all progress notes for an approach.
+func (r *InMemoryProblemsRepository) GetProgressNotes(ctx context.Context, approachID string) ([]models.ProgressNote, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	notePtrs := r.notes[approachID]
+	notes := make([]models.ProgressNote, 0, len(notePtrs))
+	for _, np := range notePtrs {
+		notes = append(notes, *np)
+	}
+	return notes, nil
+}
+
 // UpdateProblemStatus updates the status of a problem.
 func (r *InMemoryProblemsRepository) UpdateProblemStatus(ctx context.Context, problemID string, status models.PostStatus) error {
 	r.mu.Lock()

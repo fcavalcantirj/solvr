@@ -40,6 +40,9 @@ type ProblemsRepositoryInterface interface {
 	// AddProgressNote adds a progress note to an approach.
 	AddProgressNote(ctx context.Context, note *models.ProgressNote) (*models.ProgressNote, error)
 
+	// GetProgressNotes returns progress notes for an approach.
+	GetProgressNotes(ctx context.Context, approachID string) ([]models.ProgressNote, error)
+
 	// UpdateProblemStatus updates the status of a problem.
 	UpdateProblemStatus(ctx context.Context, problemID string, status models.PostStatus) error
 }
@@ -357,6 +360,16 @@ func (h *ProblemsHandler) ListApproaches(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list approaches")
 		return
+	}
+
+	// Populate progress notes for each approach
+	for i := range approaches {
+		notes, err := h.repo.GetProgressNotes(r.Context(), approaches[i].ID)
+		if err != nil {
+			// Log error but don't fail - progress notes are optional
+			continue
+		}
+		approaches[i].ProgressNotes = notes
 	}
 
 	// Calculate has_more

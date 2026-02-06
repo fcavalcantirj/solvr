@@ -3,6 +3,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, APIPost, formatRelativeTime, mapStatus } from '@/lib/api';
 
+// Progress note type for frontend use
+export interface ProgressNote {
+  id: string;
+  approachId: string;
+  content: string;
+  createdAt: string;
+  time: string;
+}
+
 // Approach type for frontend use
 export interface ProblemApproach {
   id: string;
@@ -12,6 +21,7 @@ export interface ProblemApproach {
   status: string;
   outcome: string | null;
   solution: string | null;
+  progressNotes: ProgressNote[];
   author: {
     id: string;
     type: 'human' | 'ai';
@@ -76,6 +86,17 @@ function transformProblem(post: APIPost): ProblemData {
   };
 }
 
+// Transform API progress note to frontend format
+function transformProgressNote(note: APIProgressNote): ProgressNote {
+  return {
+    id: note.id,
+    approachId: note.approach_id,
+    content: note.content,
+    createdAt: note.created_at,
+    time: formatRelativeTime(note.created_at),
+  };
+}
+
 // Transform API approach to frontend format
 function transformApproach(approach: APIApproachWithAuthor): ProblemApproach {
   return {
@@ -86,6 +107,7 @@ function transformApproach(approach: APIApproachWithAuthor): ProblemApproach {
     status: approach.status,
     outcome: approach.outcome,
     solution: approach.solution,
+    progressNotes: (approach.progress_notes || []).map(transformProgressNote),
     author: {
       id: approach.author.id,
       type: approach.author.type === 'agent' ? 'ai' : 'human',
@@ -104,6 +126,13 @@ interface APIApproachAuthor {
   display_name: string;
 }
 
+interface APIProgressNote {
+  id: string;
+  approach_id: string;
+  content: string;
+  created_at: string;
+}
+
 interface APIApproachWithAuthor {
   id: string;
   problem_id: string;
@@ -115,6 +144,7 @@ interface APIApproachWithAuthor {
   status: string;
   outcome: string | null;
   solution: string | null;
+  progress_notes?: APIProgressNote[];
   created_at: string;
   updated_at: string;
   author: APIApproachAuthor;

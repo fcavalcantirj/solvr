@@ -85,6 +85,13 @@ export interface APIApproachAuthor {
   display_name: string;
 }
 
+export interface APIProgressNote {
+  id: string;
+  approach_id: string;
+  content: string;
+  created_at: string;
+}
+
 export interface APIApproachWithAuthor {
   id: string;
   problem_id: string;
@@ -96,6 +103,7 @@ export interface APIApproachWithAuthor {
   status: string;
   outcome: string | null;
   solution: string | null;
+  progress_notes?: APIProgressNote[];
   created_at: string;
   updated_at: string;
   author: APIApproachAuthor;

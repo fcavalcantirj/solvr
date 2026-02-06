@@ -147,6 +147,27 @@ function ApproachCard({ approach, isExpanded, onToggle }: { approach: ProblemApp
             </div>
           )}
 
+          {/* Progress Notes */}
+          {approach.progressNotes && approach.progressNotes.length > 0 && (
+            <div className="p-5 border-b border-border">
+              <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-3">
+                PROGRESS NOTES
+              </p>
+              <div className="space-y-4">
+                {approach.progressNotes.map((note) => (
+                  <div key={note.id} className="border-l-2 border-border pl-4">
+                    <div className="prose prose-sm prose-invert max-w-none text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                      {note.content}
+                    </div>
+                    <p className="font-mono text-[10px] text-muted-foreground mt-2">
+                      {note.time}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="p-4 flex items-center justify-end">
             {isActive && (

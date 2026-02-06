@@ -90,7 +90,8 @@ type ApproachAuthor struct {
 // ApproachWithAuthor is an Approach with embedded author information.
 type ApproachWithAuthor struct {
 	Approach
-	Author ApproachAuthor `json:"author"`
+	Author        ApproachAuthor `json:"author"`
+	ProgressNotes []ProgressNote `json:"progress_notes,omitempty"`
 }
 
 // ProgressNote represents a progress note on an approach.

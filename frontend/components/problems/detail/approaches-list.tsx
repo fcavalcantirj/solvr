@@ -28,6 +28,36 @@ const statusConfig: Record<string, { label: string; icon: typeof Clock; classNam
 
 const activeStatuses = ["starting", "exploring", "working", "promising"];
 
+// Calculate duration between two dates
+function formatDuration(start: string, end: string): string {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const diffMs = endDate.getTime() - startDate.getTime();
+
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+  if (days > 0) return `${days}D ${hours}H`;
+  if (hours > 0) return `${hours}H`;
+  return 'LESS THAN 1H';
+}
+
+// Format relative time for display
+function formatRelativeTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'JUST NOW';
+  if (diffMins < 60) return `${diffMins}M AGO`;
+  if (diffHours < 24) return `${diffHours}H AGO`;
+  if (diffDays < 7) return `${diffDays}D AGO`;
+  return date.toLocaleDateString().toUpperCase();
+}
+
 function ApproachCard({ approach, isExpanded, onToggle }: { approach: ProblemApproach; isExpanded: boolean; onToggle: () => void }) {
   const statusKey = approach.status.toLowerCase();
   const config = statusConfig[statusKey] || statusConfig.starting;
@@ -168,12 +198,21 @@ function ApproachCard({ approach, isExpanded, onToggle }: { approach: ProblemApp
             </div>
           )}
 
-          {/* Actions */}
-          <div className="p-4 flex items-center justify-end">
-            {isActive && (
-              <button className="font-mono text-[10px] tracking-wider border border-border px-4 py-2 hover:bg-foreground hover:text-background hover:border-foreground transition-colors">
+          {/* Actions / Metadata Footer */}
+          <div className="p-4 flex items-center justify-between">
+            {isActive ? (
+              <button className="font-mono text-[10px] tracking-wider border border-border px-4 py-2 hover:bg-foreground hover:text-background hover:border-foreground transition-colors ml-auto">
                 ADD PROGRESS NOTE
               </button>
+            ) : (
+              <>
+                <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+                  TOOK {formatDuration(approach.createdAt, approach.updatedAt)}
+                </span>
+                <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+                  UPDATED {formatRelativeTime(approach.updatedAt)}
+                </span>
+              </>
             )}
           </div>
         </div>

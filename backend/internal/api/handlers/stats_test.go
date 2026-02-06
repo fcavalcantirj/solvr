@@ -13,6 +13,7 @@ type MockStatsRepository struct {
 	ActivePosts   int
 	TotalAgents   int
 	SolvedToday   int
+	PostedToday   int
 	TrendingPosts []any
 	TrendingTags  []any
 }
@@ -27,6 +28,10 @@ func (m *MockStatsRepository) GetAgentsCount(ctx context.Context) (int, error) {
 
 func (m *MockStatsRepository) GetSolvedTodayCount(ctx context.Context) (int, error) {
 	return m.SolvedToday, nil
+}
+
+func (m *MockStatsRepository) GetPostedTodayCount(ctx context.Context) (int, error) {
+	return m.PostedToday, nil
 }
 
 func (m *MockStatsRepository) GetTrendingPosts(ctx context.Context, limit int) ([]any, error) {
@@ -100,6 +105,7 @@ func TestStatsHandler_GetStats(t *testing.T) {
 				ActivePosts: 147,
 				TotalAgents: 23,
 				SolvedToday: 12,
+				PostedToday: 25,
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, body map[string]interface{}) {
@@ -112,6 +118,9 @@ func TestStatsHandler_GetStats(t *testing.T) {
 				}
 				if int(data["solved_today"].(float64)) != 12 {
 					t.Errorf("expected solved_today=12, got %v", data["solved_today"])
+				}
+				if int(data["posted_today"].(float64)) != 25 {
+					t.Errorf("expected posted_today=25, got %v", data["posted_today"])
 				}
 			},
 		},

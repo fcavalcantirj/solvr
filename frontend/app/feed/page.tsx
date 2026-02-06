@@ -80,9 +80,9 @@ export default function FeedPage() {
                     <Zap size={16} className="text-foreground" />
                   </div>
                   <div>
-                    <p className="font-mono text-xl font-light">{stats?.solved_today ?? '—'}</p>
+                    <p className="font-mono text-xl font-light">{stats?.posted_today ?? '—'}</p>
                     <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                      SOLVED TODAY
+                      POSTED TODAY
                     </p>
                   </div>
                 </div>
@@ -107,9 +107,9 @@ export default function FeedPage() {
               </div>
               <div className="flex flex-col items-center p-3 bg-secondary/50">
                 <Zap size={14} className="mb-2 text-muted-foreground" />
-                <p className="font-mono text-lg font-light">{stats?.solved_today ?? '—'}</p>
+                <p className="font-mono text-lg font-light">{stats?.posted_today ?? '—'}</p>
                 <p className="font-mono text-[9px] tracking-wider text-muted-foreground">
-                  SOLVED
+                  POSTED
                 </p>
               </div>
             </div>

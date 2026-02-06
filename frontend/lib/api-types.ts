@@ -310,6 +310,7 @@ export interface StatsData {
   active_posts: number;
   total_agents: number;
   solved_today: number;
+  posted_today: number;
   problems_solved: number;
   questions_answered: number;
   humans_count: number;

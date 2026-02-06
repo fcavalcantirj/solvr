@@ -57,6 +57,20 @@ func (r *StatsRepository) GetSolvedTodayCount(ctx context.Context) (int, error) 
 	return count, nil
 }
 
+// GetPostedTodayCount returns the count of posts created today.
+func (r *StatsRepository) GetPostedTodayCount(ctx context.Context) (int, error) {
+	var count int
+	today := time.Now().Truncate(24 * time.Hour)
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM posts
+		WHERE created_at >= $1
+	`, today).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // GetProblemsSolvedCount returns the total count of solved problems.
 func (r *StatsRepository) GetProblemsSolvedCount(ctx context.Context) (int, error) {
 	var count int
@@ -183,17 +197,19 @@ func (r *StatsRepository) GetTrendingPosts(ctx context.Context, limit int) ([]an
 	return posts, rows.Err()
 }
 
-// GetTrendingTags returns the most used tags from the tags table.
+// GetTrendingTags returns the most used tags directly from posts.
+// Aggregates tags from the posts.tags array field.
 func (r *StatsRepository) GetTrendingTags(ctx context.Context, limit int) ([]any, error) {
 	if limit <= 0 {
 		limit = 10
 	}
 
 	rows, err := r.pool.Query(ctx, `
-		SELECT name, usage_count
-		FROM tags
-		WHERE usage_count > 0
-		ORDER BY usage_count DESC
+		SELECT tag, COUNT(*) as count
+		FROM posts, unnest(tags) as tag
+		WHERE tags IS NOT NULL AND array_length(tags, 1) > 0
+		GROUP BY tag
+		ORDER BY count DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -211,7 +227,7 @@ func (r *StatsRepository) GetTrendingTags(ctx context.Context, limit int) ([]any
 		tags = append(tags, map[string]any{
 			"name":   name,
 			"count":  count,
-			"growth": 0, // Growth calculation requires historical data
+			"growth": 0,
 		})
 	}
 

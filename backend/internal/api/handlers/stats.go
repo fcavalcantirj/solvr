@@ -13,6 +13,7 @@ type StatsRepositoryInterface interface {
 	GetActivePostsCount(ctx context.Context) (int, error)
 	GetAgentsCount(ctx context.Context) (int, error)
 	GetSolvedTodayCount(ctx context.Context) (int, error)
+	GetPostedTodayCount(ctx context.Context) (int, error)
 	GetProblemsSolvedCount(ctx context.Context) (int, error)
 	GetQuestionsAnsweredCount(ctx context.Context) (int, error)
 	GetHumansCount(ctx context.Context) (int, error)
@@ -44,6 +45,7 @@ type StatsResponse struct {
 	ActivePosts        int `json:"active_posts"`
 	TotalAgents        int `json:"total_agents"`
 	SolvedToday        int `json:"solved_today"`
+	PostedToday        int `json:"posted_today"`
 	ProblemsSolved     int `json:"problems_solved"`
 	QuestionsAnswered  int `json:"questions_answered"`
 	HumansCount        int `json:"humans_count"`
@@ -96,6 +98,12 @@ func (h *StatsHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	postedToday, err := h.repo.GetPostedTodayCount(ctx)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get posted today count")
+		return
+	}
+
 	problemsSolved, err := h.repo.GetProblemsSolvedCount(ctx)
 	if err != nil {
 		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get problems solved count")
@@ -131,6 +139,7 @@ func (h *StatsHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 			ActivePosts:        activePosts,
 			TotalAgents:        totalAgents,
 			SolvedToday:        solvedToday,
+			PostedToday:        postedToday,
 			ProblemsSolved:     problemsSolved,
 			QuestionsAnswered:  questionsAnswered,
 			HumansCount:        humansCount,

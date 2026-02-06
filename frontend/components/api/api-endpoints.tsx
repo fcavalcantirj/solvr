@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check, ChevronDown, Lock, ChevronRight } from "lucide-react";
+import { Copy, Check, ChevronDown, Lock, ChevronRight, Play } from "lucide-react";
 import { EndpointGroup, Endpoint } from "./api-endpoint-types";
 import { endpointGroups } from "./api-endpoint-data";
+import { ApiPlayground } from "./api-playground";
 
 export function ApiEndpoints() {
   const [expandedGroup, setExpandedGroup] = useState<string | null>("Search");
   const [expandedEndpoint, setExpandedEndpoint] = useState<string | null>(null);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
+  const [playgroundEndpoint, setPlaygroundEndpoint] = useState<Endpoint | null>(null);
 
   const copyResponse = (response: string, path: string) => {
     navigator.clipboard.writeText(response);
@@ -74,11 +76,21 @@ export function ApiEndpoints() {
               onToggleGroup={() => setExpandedGroup(expandedGroup === group.name ? null : group.name)}
               onToggleEndpoint={(key) => setExpandedEndpoint(expandedEndpoint === key ? null : key)}
               onCopyResponse={copyResponse}
+              onTryIt={setPlaygroundEndpoint}
               getMethodColor={getMethodColor}
               getAuthLabel={getAuthLabel}
             />
           ))}
         </div>
+
+        {/* API Playground Modal */}
+        {playgroundEndpoint && (
+          <ApiPlayground
+            endpoint={playgroundEndpoint}
+            isOpen={!!playgroundEndpoint}
+            onClose={() => setPlaygroundEndpoint(null)}
+          />
+        )}
       </div>
     </section>
   );
@@ -92,6 +104,7 @@ interface EndpointGroupCardProps {
   onToggleGroup: () => void;
   onToggleEndpoint: (key: string) => void;
   onCopyResponse: (response: string, path: string) => void;
+  onTryIt: (endpoint: Endpoint) => void;
   getMethodColor: (method: string) => string;
   getAuthLabel: (auth?: string) => string | null;
 }
@@ -104,6 +117,7 @@ function EndpointGroupCard({
   onToggleGroup,
   onToggleEndpoint,
   onCopyResponse,
+  onTryIt,
   getMethodColor,
   getAuthLabel,
 }: EndpointGroupCardProps) {
@@ -145,6 +159,7 @@ function EndpointGroupCard({
                 copiedPath={copiedPath}
                 onToggle={() => onToggleEndpoint(endpointKey)}
                 onCopyResponse={onCopyResponse}
+                onTryIt={() => onTryIt(endpoint)}
                 getMethodColor={getMethodColor}
                 getAuthLabel={getAuthLabel}
               />
@@ -164,6 +179,7 @@ interface EndpointCardProps {
   copiedPath: string | null;
   onToggle: () => void;
   onCopyResponse: (response: string, path: string) => void;
+  onTryIt: () => void;
   getMethodColor: (method: string) => string;
   getAuthLabel: (auth?: string) => string | null;
 }
@@ -175,6 +191,7 @@ function EndpointCard({
   copiedPath,
   onToggle,
   onCopyResponse,
+  onTryIt,
   getMethodColor,
   getAuthLabel,
 }: EndpointCardProps) {
@@ -274,6 +291,20 @@ function EndpointCard({
                   </pre>
                 </div>
               </div>
+            </div>
+
+            {/* Try it button */}
+            <div className="mt-4 pt-4 border-t border-border">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTryIt();
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-foreground text-background font-mono text-xs hover:bg-foreground/90 transition-colors"
+              >
+                <Play size={14} />
+                Try it
+              </button>
             </div>
           </div>
         </div>

@@ -1127,7 +1127,7 @@
       "Handle and display errors nicely",
       "Test: Can make real API calls from docs page"
     ],
-    "passes": false,
+    "passes": true,
     "priority": "medium"
   },
   {

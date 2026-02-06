@@ -8513,3 +8513,25 @@ All acceptance criteria met:
 - backend/internal/api/openapi_paths.go (new)
 - backend/internal/api/openapi_schemas.go (new)
 - specs/prd-v3.json (passes: true)
+
+## 2026-02-05 - DOCS-009 Complete
+
+**Task:** Add interactive API playground/try-it feature
+
+**Changes:**
+- Created api-playground.tsx component with:
+  - Request builder for path and query parameters
+  - Auth token input for authenticated endpoints
+  - Live curl command preview (copyable)
+  - Actual API call execution
+  - JSON response display with syntax highlighting
+  - Error handling
+- Updated api-endpoints.tsx:
+  - Added "Try it" button to each endpoint
+  - Integrated ApiPlayground modal
+  - State management for playground visibility
+
+**Files created/modified:**
+- frontend/components/api/api-playground.tsx (new)
+- frontend/components/api/api-endpoints.tsx (modified)
+- specs/prd-v3.json (passes: true)

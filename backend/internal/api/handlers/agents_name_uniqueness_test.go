@@ -137,6 +137,11 @@ func (m *MockAgentRepoWithSuggestions) GetAgentByAPIKeyHash(ctx context.Context,
 	return nil, nil
 }
 
+// List returns a paginated list of agents (API-001 requirement).
+func (m *MockAgentRepoWithSuggestions) List(ctx context.Context, opts models.AgentListOptions) ([]models.AgentWithPostCount, int, error) {
+	return []models.AgentWithPostCount{}, 0, nil
+}
+
 // TestRegisterAgent_DuplicateName_Returns409 tests that duplicate names return 409 Conflict.
 // Per AGENT-ONBOARDING requirement: Return 409 Conflict if name taken.
 func TestRegisterAgent_DuplicateName_Returns409(t *testing.T) {

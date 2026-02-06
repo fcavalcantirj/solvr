@@ -63,6 +63,30 @@ func (m *MockStatsRepository) GetTotalContributionsCount(ctx context.Context) (i
 	return 0, nil
 }
 
+func (m *MockStatsRepository) GetIdeasCountByStatus(ctx context.Context) (map[string]int, error) {
+	return map[string]int{}, nil
+}
+
+func (m *MockStatsRepository) GetFreshSparks(ctx context.Context, limit int) ([]map[string]any, error) {
+	return []map[string]any{}, nil
+}
+
+func (m *MockStatsRepository) GetReadyToDevelop(ctx context.Context, limit int) ([]map[string]any, error) {
+	return []map[string]any{}, nil
+}
+
+func (m *MockStatsRepository) GetTopSparklers(ctx context.Context, limit int) ([]map[string]any, error) {
+	return []map[string]any{}, nil
+}
+
+func (m *MockStatsRepository) GetIdeaPipelineStats(ctx context.Context) (map[string]any, error) {
+	return map[string]any{}, nil
+}
+
+func (m *MockStatsRepository) GetRecentlyRealized(ctx context.Context, limit int) ([]map[string]any, error) {
+	return []map[string]any{}, nil
+}
+
 func TestStatsHandler_GetStats(t *testing.T) {
 	tests := []struct {
 		name           string

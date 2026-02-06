@@ -273,6 +273,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		// GET /v1/search - search the knowledge base (no auth required)
 		r.Get("/search", searchHandler.Search)
 
+		// Agents list endpoint (API-001)
+		// GET /v1/agents - list registered agents (no auth required)
+		r.Get("/agents", agentsHandler.ListAgents)
+
 		// Agent profile endpoint (per SPEC.md Part 5.6)
 		// GET /v1/agents/{id} - get agent profile (no auth required)
 		r.Get("/agents/{id}", func(w http.ResponseWriter, req *http.Request) {

@@ -1399,6 +1399,6 @@
       "Works without auth (public agent directory)",
       "Documented in API docs"
     ],
-    "passes": false
+    "passes": true
   }
 ]

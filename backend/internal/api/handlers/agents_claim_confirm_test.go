@@ -167,6 +167,11 @@ func (m *MockAgentRepoForClaim) GetAgentByAPIKeyHash(ctx context.Context, key st
 	return nil, nil
 }
 
+// List returns a paginated list of agents (API-001 requirement).
+func (m *MockAgentRepoForClaim) List(ctx context.Context, opts models.AgentListOptions) ([]models.AgentWithPostCount, int, error) {
+	return []models.AgentWithPostCount{}, 0, nil
+}
+
 // Test: ConfirmClaim requires human authentication
 func TestConfirmClaim_RequiresHumanAuth(t *testing.T) {
 	agentRepo := NewMockAgentRepoForClaim()

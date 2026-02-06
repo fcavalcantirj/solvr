@@ -244,6 +244,61 @@ func (r *InMemoryAgentRepository) GetAgentByAPIKeyHash(ctx context.Context, key 
 	return nil, nil
 }
 
+// List returns a paginated list of agents.
+// Per API-001: GET /v1/agents - list registered agents.
+func (r *InMemoryAgentRepository) List(ctx context.Context, opts models.AgentListOptions) ([]models.AgentWithPostCount, int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// Collect all agents
+	var agents []models.AgentWithPostCount
+	for _, agent := range r.agents {
+		// Filter by status
+		if opts.Status != "" && opts.Status != "all" && agent.Status != opts.Status {
+			continue
+		}
+
+		agents = append(agents, models.AgentWithPostCount{
+			ID:                  agent.ID,
+			DisplayName:         agent.DisplayName,
+			Bio:                 agent.Bio,
+			Status:              agent.Status,
+			Karma:               agent.Karma,
+			PostCount:           0, // In-memory doesn't track posts
+			CreatedAt:           agent.CreatedAt,
+			HasHumanBackedBadge: agent.HasHumanBackedBadge,
+			AvatarURL:           agent.AvatarURL,
+		})
+	}
+
+	total := len(agents)
+
+	// Apply pagination
+	page := opts.Page
+	if page < 1 {
+		page = 1
+	}
+	perPage := opts.PerPage
+	if perPage < 1 {
+		perPage = 20
+	}
+	if perPage > 100 {
+		perPage = 100
+	}
+
+	start := (page - 1) * perPage
+	if start >= len(agents) {
+		return []models.AgentWithPostCount{}, total, nil
+	}
+
+	end := start + perPage
+	if end > len(agents) {
+		end = len(agents)
+	}
+
+	return agents[start:end], total, nil
+}
+
 // Error types for claim token operations
 var (
 	errClaimTokenNotFound = errors.New("claim token not found")

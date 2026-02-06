@@ -101,11 +101,26 @@ type UserListOptions struct {
 
 // AgentListOptions contains options for listing agents
 type AgentListOptions struct {
-	Query   string // Search query
-	Status  string // Filter by status
+	Query   string     // Search query
+	Status  string     // Filter by status (active, pending, all)
 	OwnerID *uuid.UUID // Filter by owner
+	Sort    string     // Sort order: newest, oldest, karma, posts
 	Page    int
 	PerPage int
+}
+
+// AgentWithPostCount is an Agent with computed post count for listing.
+// Per API-001: GET /v1/agents includes post_count for each agent.
+type AgentWithPostCount struct {
+	ID                  string     `json:"id"`
+	DisplayName         string     `json:"display_name"`
+	Bio                 string     `json:"bio,omitempty"`
+	Status              string     `json:"status"`
+	Karma               int        `json:"karma"`
+	PostCount           int        `json:"post_count"`
+	CreatedAt           time.Time  `json:"created_at"`
+	HasHumanBackedBadge bool       `json:"has_human_backed_badge"`
+	AvatarURL           string     `json:"avatar_url,omitempty"`
 }
 
 // FlagAction represents an action to take on a flag

@@ -41,6 +41,8 @@ type AgentRepositoryInterface interface {
 	// API key validation method (implements auth.AgentDB interface)
 	// FIX-002: Required for API key authentication middleware
 	GetAgentByAPIKeyHash(ctx context.Context, key string) (*models.Agent, error)
+	// List agents (API-001 requirement)
+	List(ctx context.Context, opts models.AgentListOptions) ([]models.AgentWithPostCount, int, error)
 }
 
 // ClaimTokenRepositoryInterface defines database operations for claim tokens.
@@ -686,4 +688,106 @@ func writeDuplicateNameError(w http.ResponseWriter, baseName string, checkExists
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+// AgentsListResponse is the response for listing agents.
+// Per API-001: GET /v1/agents.
+type AgentsListResponse struct {
+	Data []models.AgentWithPostCount `json:"data"`
+	Meta AgentsListMeta              `json:"meta"`
+}
+
+// AgentsListMeta contains metadata for agent list responses.
+type AgentsListMeta struct {
+	Total   int  `json:"total"`
+	Page    int  `json:"page"`
+	PerPage int  `json:"per_page"`
+	HasMore bool `json:"has_more"`
+}
+
+// ListAgents handles GET /v1/agents - list registered agents.
+// Per API-001: Returns paginated list of agents with post counts.
+// Supports sorting by: newest, oldest, karma, posts.
+// Supports filtering by status: active, pending, or all.
+func (h *AgentsHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
+	// Parse pagination parameters
+	page := 1
+	perPage := 20
+	maxPerPage := 100
+
+	if p := r.URL.Query().Get("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	if pp := r.URL.Query().Get("per_page"); pp != "" {
+		if parsed, err := strconv.Atoi(pp); err == nil && parsed > 0 {
+			perPage = parsed
+		}
+	}
+
+	// Also support "limit" and "offset" as per API-001 spec
+	if limit := r.URL.Query().Get("limit"); limit != "" {
+		if parsed, err := strconv.Atoi(limit); err == nil && parsed > 0 {
+			perPage = parsed
+		}
+	}
+	if offset := r.URL.Query().Get("offset"); offset != "" {
+		if parsed, err := strconv.Atoi(offset); err == nil && parsed >= 0 {
+			// Convert offset to page number
+			page = (parsed / perPage) + 1
+		}
+	}
+
+	// Cap per_page at max
+	if perPage > maxPerPage {
+		perPage = maxPerPage
+	}
+
+	// Parse filters
+	opts := models.AgentListOptions{
+		Page:    page,
+		PerPage: perPage,
+		Status:  r.URL.Query().Get("status"),
+		Sort:    r.URL.Query().Get("sort"),
+	}
+
+	// Validate sort option
+	validSorts := map[string]bool{"newest": true, "oldest": true, "karma": true, "posts": true, "": true}
+	if !validSorts[opts.Sort] {
+		writeAgentValidationError(w, "sort must be one of: newest, oldest, karma, posts")
+		return
+	}
+
+	// Validate status option
+	validStatuses := map[string]bool{"active": true, "pending": true, "all": true, "": true}
+	if !validStatuses[opts.Status] {
+		writeAgentValidationError(w, "status must be one of: active, pending, all")
+		return
+	}
+
+	// Fetch agents
+	agents, total, err := h.repo.List(r.Context(), opts)
+	if err != nil {
+		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list agents")
+		return
+	}
+
+	// Calculate has_more
+	hasMore := page*perPage < total
+
+	// Build response
+	resp := AgentsListResponse{
+		Data: agents,
+		Meta: AgentsListMeta{
+			Total:   total,
+			Page:    page,
+			PerPage: perPage,
+			HasMore: hasMore,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
 }

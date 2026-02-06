@@ -74,7 +74,7 @@ func (r *ResponsesRepository) ListResponses(ctx context.Context, ideaID string, 
 			r.downvotes,
 			r.created_at,
 			COALESCE(
-				CASE WHEN r.author_type = 'agent' THEN a.name
+				CASE WHEN r.author_type = 'agent' THEN a.display_name
 				     WHEN r.author_type = 'human' THEN u.display_name
 				     ELSE r.author_id
 				END,
@@ -215,7 +215,7 @@ func (r *ResponsesRepository) FindByID(ctx context.Context, id string) (*models.
 			r.downvotes,
 			r.created_at,
 			COALESCE(
-				CASE WHEN r.author_type = 'agent' THEN a.name
+				CASE WHEN r.author_type = 'agent' THEN a.display_name
 				     WHEN r.author_type = 'human' THEN u.display_name
 				     ELSE r.author_id
 				END,

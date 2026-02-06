@@ -4,23 +4,54 @@ export function ApiRateLimits() {
       operation: "Search",
       limit: "60/min",
       description: "Core operation, generous limit",
+      tier: "free",
     },
     {
       operation: "Read",
       limit: "120/min",
       description: "Get posts, profiles, approaches",
+      tier: "free",
     },
     {
       operation: "Write",
       limit: "10/hour",
       description: "Create posts, answers, approaches",
+      tier: "free",
     },
     {
       operation: "Bulk Search",
       limit: "10/min",
       description: "Multi-query in one request",
+      tier: "free",
+    },
+    {
+      operation: "Search",
+      limit: "600/min",
+      description: "10x free tier",
+      tier: "pro",
+    },
+    {
+      operation: "Read",
+      limit: "1200/min",
+      description: "10x free tier",
+      tier: "pro",
+    },
+    {
+      operation: "Write",
+      limit: "100/hour",
+      description: "10x free tier",
+      tier: "pro",
+    },
+    {
+      operation: "Bulk Search",
+      limit: "100/min",
+      description: "10x free tier",
+      tier: "pro",
     },
   ];
+
+  const freeLimits = limits.filter((l) => l.tier === "free");
+  const proLimits = limits.filter((l) => l.tier === "pro");
 
   return (
     <section className="px-6 lg:px-12 py-20 lg:py-28 border-b border-border">
@@ -38,42 +69,88 @@ export function ApiRateLimits() {
           </p>
         </div>
 
-        {/* Rate Limits Table */}
-        <div className="max-w-xl border border-border">
-          <div className="px-6 py-4 border-b border-border bg-muted/30">
-            <div className="flex items-center justify-between">
-              <h3 className="font-mono text-sm tracking-wider">API LIMITS</h3>
-              <span className="font-mono text-[10px] tracking-wider text-muted-foreground px-2 py-1 border border-border">
-                FREE
-              </span>
+        <div className="grid md:grid-cols-2 gap-8">
+          {/* Free Tier */}
+          <div className="border border-border">
+            <div className="px-6 py-4 border-b border-border bg-muted/30">
+              <div className="flex items-center justify-between">
+                <h3 className="font-mono text-sm tracking-wider">FREE TIER</h3>
+                <span className="font-mono text-[10px] tracking-wider text-muted-foreground px-2 py-1 border border-border">
+                  DEFAULT
+                </span>
+              </div>
+            </div>
+            <div className="p-6">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left font-mono text-[10px] tracking-wider text-muted-foreground pb-3">
+                      OPERATION
+                    </th>
+                    <th className="text-right font-mono text-[10px] tracking-wider text-muted-foreground pb-3">
+                      LIMIT
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {freeLimits.map((limit, index) => (
+                    <tr key={index} className="border-b border-border last:border-0">
+                      <td className="py-4">
+                        <div className="font-mono text-sm">{limit.operation}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {limit.description}
+                        </div>
+                      </td>
+                      <td className="text-right font-mono text-sm">{limit.limit}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-          <div className="p-6">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left font-mono text-[10px] tracking-wider text-muted-foreground pb-3">
-                    OPERATION
-                  </th>
-                  <th className="text-right font-mono text-[10px] tracking-wider text-muted-foreground pb-3">
-                    LIMIT
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {limits.map((limit, index) => (
-                  <tr key={index} className="border-b border-border last:border-0">
-                    <td className="py-4">
-                      <div className="font-mono text-sm">{limit.operation}</div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {limit.description}
-                      </div>
-                    </td>
-                    <td className="text-right font-mono text-sm">{limit.limit}</td>
+
+          {/* Pro Tier */}
+          <div className="border border-border">
+            <div className="px-6 py-4 border-b border-border bg-foreground text-background">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h3 className="font-mono text-sm tracking-wider">PRO TIER</h3>
+                  <span className="font-mono text-[9px] tracking-wider px-2 py-0.5 bg-amber-500 text-black">
+                    COMING SOON
+                  </span>
+                </div>
+                <span className="font-mono text-[10px] tracking-wider px-2 py-1 border border-background/20">
+                  $9/mo
+                </span>
+              </div>
+            </div>
+            <div className="p-6">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left font-mono text-[10px] tracking-wider text-muted-foreground pb-3">
+                      OPERATION
+                    </th>
+                    <th className="text-right font-mono text-[10px] tracking-wider text-muted-foreground pb-3">
+                      LIMIT
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {proLimits.map((limit, index) => (
+                    <tr key={index} className="border-b border-border last:border-0">
+                      <td className="py-4">
+                        <div className="font-mono text-sm">{limit.operation}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {limit.description}
+                        </div>
+                      </td>
+                      <td className="text-right font-mono text-sm">{limit.limit}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 

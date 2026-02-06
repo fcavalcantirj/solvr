@@ -640,7 +640,8 @@ func (h *ProblemsHandler) VerifyApproach(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Get the problem to verify ownership
-	problem, err := h.repo.FindProblemByID(r.Context(), approach.ProblemID)
+	// FIX-024: Use findProblem() which checks postsRepo first, then falls back to problemsRepo
+	problem, err := h.findProblem(r.Context(), approach.ProblemID)
 	if err != nil {
 		if errors.Is(err, ErrProblemNotFound) {
 			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")

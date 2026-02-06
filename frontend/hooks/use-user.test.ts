@@ -251,4 +251,34 @@ describe('useUser', () => {
     expect(result.current.posts).toEqual([]);
     expect(result.current.error).toBeNull();
   });
+
+  it('should handle stats with undefined property values', async () => {
+    // Arrange - API returns stats object but with undefined/null values
+    const profileWithPartialStats = {
+      ...mockUserProfile,
+      stats: {
+        posts_created: undefined,
+        contributions: null,
+        karma: undefined,
+      },
+    };
+    (api.getUserProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ data: profileWithPartialStats });
+    (api.getUserPosts as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+      meta: { total: 0, page: 1, per_page: 20, has_more: false },
+    });
+
+    // Act
+    const { result } = renderHook(() => useUser('user-123'));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Assert - should default undefined/null values to 0
+    expect(result.current.user?.stats.postsCreated).toBe(0);
+    expect(result.current.user?.stats.contributions).toBe(0);
+    expect(result.current.user?.stats.karma).toBe(0);
+    expect(result.current.error).toBeNull();
+  });
 });

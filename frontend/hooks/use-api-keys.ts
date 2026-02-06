@@ -25,8 +25,8 @@ export function useAPIKeys(): UseAPIKeysResult {
       setLoading(true);
       setError(null);
       const response = await api.listAPIKeys();
-      setKeys(response.data);
-      setTotal(response.meta.total);
+      setKeys(response.data ?? []);
+      setTotal(response.meta?.total ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch API keys');
     } finally {

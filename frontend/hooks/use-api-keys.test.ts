@@ -203,4 +203,40 @@ describe('useAPIKeys', () => {
       expect(api.listAPIKeys).toHaveBeenCalledTimes(2);
     });
   });
+
+  it('should handle response without meta field', async () => {
+    // API might return response without meta field
+    vi.mocked(api.listAPIKeys).mockResolvedValue({
+      data: mockKeys,
+      // No meta field
+    } as never);
+
+    const { result } = renderHook(() => useAPIKeys());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Should not crash, keys should be loaded
+    expect(result.current.keys).toEqual(mockKeys);
+    expect(result.current.total).toBe(0); // Default to 0
+    expect(result.current.error).toBeNull();
+  });
+
+  it('should handle response with empty data array', async () => {
+    vi.mocked(api.listAPIKeys).mockResolvedValue({
+      data: [],
+      meta: { total: 0 },
+    });
+
+    const { result } = renderHook(() => useAPIKeys());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.keys).toEqual([]);
+    expect(result.current.total).toBe(0);
+    expect(result.current.error).toBeNull();
+  });
 });

@@ -51,7 +51,7 @@ function transformUser(data: {
   display_name: string;
   avatar_url?: string;
   bio?: string;
-  stats: { posts_created: number; contributions: number; karma: number } | null;
+  stats: { posts_created?: number | null; contributions?: number | null; karma?: number | null } | null;
 }): UserData {
   const stats = data.stats || { posts_created: 0, contributions: 0, karma: 0 };
   return {
@@ -61,9 +61,9 @@ function transformUser(data: {
     avatarUrl: data.avatar_url,
     bio: data.bio,
     stats: {
-      postsCreated: stats.posts_created,
-      contributions: stats.contributions,
-      karma: stats.karma,
+      postsCreated: stats.posts_created ?? 0,
+      contributions: stats.contributions ?? 0,
+      karma: stats.karma ?? 0,
     },
   };
 }

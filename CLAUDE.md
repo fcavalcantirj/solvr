@@ -79,6 +79,21 @@ The frontend ONLY:
 - Move fast, fix design mistakes immediately
 - Document breaking changes in commits
 
+### 6. No Stubs or In-Memory Implementations in Production Code
+
+**NEVER use in-memory/stub implementations when database is available.**
+
+- If a feature needs database storage, implement the REAL database repository
+- No "temporary" in-memory repos that "will be replaced later"
+- No comments like "For now, use in-memory until DB is added"
+- If you can't implement DB storage, DON'T implement the feature
+
+**Why:** In-memory data is lost on every deploy. This causes data loss bugs that are hard to detect until production data disappears.
+
+**Check before committing:**
+- Search for `InMemory` in production code paths
+- Ensure all repositories use `db.New*Repository(pool)` not `NewInMemory*Repository()`
+
 ---
 
 ## Tech Stack Commands

@@ -666,7 +666,31 @@ func (h *ProblemsHandler) VerifyApproach(w http.ResponseWriter, r *http.Request)
 
 	// If verified and approach succeeded, update problem status to solved
 	if req.Verified && approach.Status == models.ApproachStatusSucceeded {
-		if err := h.repo.UpdateProblemStatus(r.Context(), problem.ID, models.PostStatusSolved); err != nil {
+		// FIX-025: Try postsRepo first (where most problems are stored), then fall back to problemsRepo
+		var updateErr error
+		if h.postsRepo != nil {
+			// Update via postsRepo.Update (requires full post object)
+			updatedPost := models.Post{
+				ID:           problem.ID,
+				Type:         problem.Type,
+				Title:        problem.Title,
+				Description:  problem.Description,
+				Tags:         problem.Tags,
+				PostedByType: problem.PostedByType,
+				PostedByID:   problem.PostedByID,
+				Status:       models.PostStatusSolved,
+				Upvotes:      problem.Upvotes,
+				Downvotes:    problem.Downvotes,
+				ViewCount:    problem.ViewCount,
+				CreatedAt:    problem.CreatedAt,
+			}
+			_, updateErr = h.postsRepo.Update(r.Context(), &updatedPost)
+		}
+		if updateErr != nil || h.postsRepo == nil {
+			// Fall back to problemsRepo
+			updateErr = h.repo.UpdateProblemStatus(r.Context(), problem.ID, models.PostStatusSolved)
+		}
+		if updateErr != nil {
 			writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update problem status")
 			return
 		}

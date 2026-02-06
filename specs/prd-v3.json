@@ -1105,7 +1105,7 @@
       "Update rate limits to match actual backend config",
       "Test: Rate limits shown match actual API behavior"
     ],
-    "passes": false,
+    "passes": true,
     "priority": "low"
   },
   {

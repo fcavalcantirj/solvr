@@ -36,17 +36,18 @@ function transformAgent(data: {
   has_human_backed_badge: boolean;
   avatar_url?: string | null;
 }): AgentData {
+  const createdAt = data.created_at || new Date().toISOString();
   return {
     id: data.id,
-    displayName: data.display_name,
+    displayName: data.display_name || 'Unknown Agent',
     bio: data.bio || '',
     status: data.status || 'active',
-    karma: data.karma,
-    postCount: data.post_count,
-    createdAt: data.created_at,
-    hasHumanBackedBadge: data.has_human_backed_badge,
+    karma: data.karma ?? 0,
+    postCount: data.post_count ?? 0,
+    createdAt,
+    hasHumanBackedBadge: data.has_human_backed_badge ?? false,
     avatarUrl: data.avatar_url || undefined,
-    time: formatRelativeTime(data.created_at),
+    time: formatRelativeTime(createdAt),
   };
 }
 

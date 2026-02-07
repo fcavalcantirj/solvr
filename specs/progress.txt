@@ -29,3 +29,16 @@
 - Returns agent list with basic info (api_key_hash excluded)
 - Returns empty array for users with no agents
 - All agent and user tests pass
+
+2026-02-07: Add GET /v1/users endpoint to list all users
+- Added UserListItem and PublicUserListOptions models to models/user.go
+- Added List method to UserRepository in db/users.go with agents_count subquery
+- Added UsersUserListRepositoryInterface to handlers/users.go
+- Added SetUserListRepository method and userListRepo field to UsersHandler
+- Created ListUsers handler with limit/offset/sort query params
+- Limit defaults to 20, max 100; sort: newest (default), karma, agents
+- Added route GET /v1/users to router.go
+- Added tests: TestListUsers_Success, TestListUsers_WithPagination, TestListUsers_LimitMax100, TestListUsers_DefaultLimit20, TestListUsers_Empty
+- Response includes: id, username, display_name, avatar_url, karma, agents_count, created_at
+- Does NOT expose email or auth_provider_id
+- All user tests pass

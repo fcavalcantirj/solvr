@@ -4,6 +4,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -31,13 +32,21 @@ type UsersAgentRepositoryInterface interface {
 	FindByHumanID(ctx context.Context, humanID string) ([]*models.Agent, error)
 }
 
+// UsersUserListRepositoryInterface defines the user list repository operations.
+// Per prd-v4: GET /v1/users endpoint to list all users with pagination.
+type UsersUserListRepositoryInterface interface {
+	List(ctx context.Context, opts models.PublicUserListOptions) ([]models.UserListItem, int, error)
+}
+
 // UsersHandler handles user profile endpoints.
 // Per BE-003: User profile endpoints for viewing and editing profiles.
 // Per prd-v4: GET /v1/users/{id}/agents to list agents by human_id.
+// Per prd-v4: GET /v1/users to list all users.
 type UsersHandler struct {
-	userRepo  UsersUserRepositoryInterface
-	postRepo  UsersPostRepositoryInterface
-	agentRepo UsersAgentRepositoryInterface
+	userRepo     UsersUserRepositoryInterface
+	postRepo     UsersPostRepositoryInterface
+	agentRepo    UsersAgentRepositoryInterface
+	userListRepo UsersUserListRepositoryInterface
 }
 
 // NewUsersHandler creates a new UsersHandler instance.
@@ -52,6 +61,12 @@ func NewUsersHandler(userRepo UsersUserRepositoryInterface, postRepo UsersPostRe
 // Per prd-v4: GET /v1/users/{id}/agents endpoint.
 func (h *UsersHandler) SetAgentRepository(repo UsersAgentRepositoryInterface) {
 	h.agentRepo = repo
+}
+
+// SetUserListRepository sets the user list repository for listing users.
+// Per prd-v4: GET /v1/users endpoint.
+func (h *UsersHandler) SetUserListRepository(repo UsersUserListRepositoryInterface) {
+	h.userListRepo = repo
 }
 
 // PublicUserProfileResponse is the response for GET /v1/users/:id.
@@ -128,6 +143,17 @@ type UserAgentsResponse struct {
 	} `json:"meta"`
 }
 
+// UsersListResponse is the response for GET /v1/users.
+// Per prd-v4: Return user list with public info, karma, agents_count.
+type UsersListResponse struct {
+	Data []models.UserListItem `json:"data"`
+	Meta struct {
+		Total  int `json:"total"`
+		Limit  int `json:"limit"`
+		Offset int `json:"offset"`
+	} `json:"meta"`
+}
+
 // GetUserAgents handles GET /v1/users/{id}/agents.
 // Per prd-v4: List agents claimed by a user.
 func (h *UsersHandler) GetUserAgents(w http.ResponseWriter, r *http.Request) {
@@ -169,6 +195,86 @@ func (h *UsersHandler) GetUserAgents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
+}
+
+// ListUsers handles GET /v1/users.
+// Per prd-v4: List all users with pagination and sorting.
+// Response includes: id, username, display_name, avatar_url, karma, agents_count, created_at.
+// Does NOT expose email or auth_provider_id.
+func (h *UsersHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if h.userListRepo == nil {
+		writeUsersError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "user list repository not configured")
+		return
+	}
+
+	// Parse query params
+	opts := models.PublicUserListOptions{
+		Limit:  20, // default
+		Offset: 0,
+		Sort:   models.PublicUserSortNewest, // default
+	}
+
+	// Parse limit (default 20, max 100)
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if limit, err := parsePositiveInt(limitStr); err == nil {
+			opts.Limit = limit
+		}
+	}
+	if opts.Limit > 100 {
+		opts.Limit = 100
+	}
+	if opts.Limit < 1 {
+		opts.Limit = 20
+	}
+
+	// Parse offset
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if offset, err := parsePositiveInt(offsetStr); err == nil {
+			opts.Offset = offset
+		}
+	}
+
+	// Parse sort (newest/karma/agents)
+	if sort := r.URL.Query().Get("sort"); sort != "" {
+		switch sort {
+		case models.PublicUserSortNewest, models.PublicUserSortKarma, models.PublicUserSortAgents:
+			opts.Sort = sort
+		}
+	}
+
+	users, total, err := h.userListRepo.List(ctx, opts)
+	if err != nil {
+		writeUsersError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list users")
+		return
+	}
+
+	// Ensure we return empty array, not null
+	if users == nil {
+		users = []models.UserListItem{}
+	}
+
+	// Build response
+	resp := UsersListResponse{}
+	resp.Data = users
+	resp.Meta.Total = total
+	resp.Meta.Limit = opts.Limit
+	resp.Meta.Offset = opts.Offset
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}
+
+// parsePositiveInt parses a string as a positive integer.
+func parsePositiveInt(s string) (int, error) {
+	var n int
+	_, err := fmt.Sscanf(s, "%d", &n)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("invalid positive integer: %s", s)
+	}
+	return n, nil
 }
 
 // UpdateProfile handles PATCH /v1/me.

@@ -73,3 +73,30 @@ const (
 	UserRoleUser  = "user"
 	UserRoleAdmin = "admin"
 )
+
+// UserListItem represents a user in list responses.
+// Per prd-v4: Only expose public fields, not email or auth_provider_id.
+type UserListItem struct {
+	ID          string    `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	AvatarURL   string    `json:"avatar_url,omitempty"`
+	Karma       int       `json:"karma"`
+	AgentsCount int       `json:"agents_count"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// PublicUserListOptions contains options for listing users via public API.
+// Per prd-v4: limit (default 20, max 100), offset, sort (newest/karma/agents).
+type PublicUserListOptions struct {
+	Limit  int    // Default 20, max 100
+	Offset int    // Default 0
+	Sort   string // "newest" (default), "karma", "agents"
+}
+
+// Public user list sort constants
+const (
+	PublicUserSortNewest = "newest"
+	PublicUserSortKarma  = "karma"
+	PublicUserSortAgents = "agents"
+)

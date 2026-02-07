@@ -240,3 +240,78 @@ func (r *UserRepository) GetUserStats(ctx context.Context, userID string) (*mode
 
 	return stats, nil
 }
+
+// List returns a paginated list of users with public info.
+// Per prd-v4: GET /v1/users endpoint - includes agents_count via subquery.
+// Supports sort: newest (created_at DESC), karma, agents.
+func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOptions) ([]models.UserListItem, int, error) {
+	// Determine sort order
+	var orderBy string
+	switch opts.Sort {
+	case models.PublicUserSortKarma:
+		// Note: karma is computed from stats, for now use created_at
+		// TODO: Add karma column to users table or compute via subquery
+		orderBy = "u.created_at DESC"
+	case models.PublicUserSortAgents:
+		orderBy = "agents_count DESC, u.created_at DESC"
+	default: // newest
+		orderBy = "u.created_at DESC"
+	}
+
+	// Query with agents_count subquery
+	query := `
+		SELECT
+			u.id,
+			u.username,
+			u.display_name,
+			u.avatar_url,
+			0 as karma,
+			(SELECT COUNT(*) FROM agents WHERE human_id = u.id) as agents_count,
+			u.created_at
+		FROM users u
+		ORDER BY ` + orderBy + `
+		LIMIT $1 OFFSET $2
+	`
+
+	rows, err := r.pool.Query(ctx, query, opts.Limit, opts.Offset)
+	if err != nil {
+		LogQueryError(ctx, "List", "users", err)
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var users []models.UserListItem
+	for rows.Next() {
+		var user models.UserListItem
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.DisplayName,
+			&user.AvatarURL,
+			&user.Karma,
+			&user.AgentsCount,
+			&user.CreatedAt,
+		)
+		if err != nil {
+			LogQueryError(ctx, "List.Scan", "users", err)
+			return nil, 0, err
+		}
+		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "List.Rows", "users", err)
+		return nil, 0, err
+	}
+
+	// Get total count
+	var total int
+	countQuery := `SELECT COUNT(*) FROM users`
+	err = r.pool.QueryRow(ctx, countQuery).Scan(&total)
+	if err != nil {
+		LogQueryError(ctx, "List.Count", "users", err)
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}

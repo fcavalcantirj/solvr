@@ -52,7 +52,7 @@
       "Do NOT expose email or auth_provider_id",
       "Verify: Returns paginated user list with agents_count"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

@@ -179,13 +179,17 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	// Type assertion to get the full interface needed by UsersHandler
 	var usersUserRepo handlers.UsersUserRepositoryInterface
 	var usersPostRepo handlers.UsersPostRepositoryInterface
+	var usersListRepo handlers.UsersUserListRepositoryInterface
 	if pool != nil {
 		usersUserRepo = db.NewUserRepository(pool)
 		usersPostRepo = db.NewPostRepository(pool)
+		usersListRepo = db.NewUserRepository(pool)
 	}
 	usersHandler := handlers.NewUsersHandler(usersUserRepo, usersPostRepo)
 	// Per prd-v4: Set agent repository for GET /v1/users/{id}/agents endpoint
 	usersHandler.SetAgentRepository(agentRepo)
+	// Per prd-v4: Set user list repository for GET /v1/users endpoint
+	usersHandler.SetUserListRepository(usersListRepo)
 
 	// JWT secret for auth middleware - read from env or use test default
 	jwtSecret := os.Getenv("JWT_SECRET")
@@ -300,6 +304,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			agentID := chi.URLParam(req, "id")
 			agentsHandler.GetActivity(w, req, agentID)
 		})
+
+		// Per prd-v4: GET /v1/users - list all users (no auth required)
+		r.Get("/users", usersHandler.ListUsers)
 
 		// User profile endpoint (BE-003)
 		// GET /v1/users/{id} - get user profile (no auth required)

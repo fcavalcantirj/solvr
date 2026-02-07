@@ -130,7 +130,7 @@
       "On success: show agent info, refresh my-agents list",
       "On error: show appropriate message (expired, already claimed, invalid)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -75,3 +75,14 @@
 - Added updateAgent(agentId, data): PATCH /v1/agents/{id}
 - All methods use typed responses and handle errors via fetch wrapper
 - Types compile without errors
+
+2026-02-07: Create /settings/agents page for agent management and claiming
+- Created frontend/app/settings/agents/page.tsx
+- Added MY AGENTS nav item to settings-layout.tsx with Bot icon
+- MyAgentsList shows user's claimed agents with display_name, bio, karma, model
+- Agent cards link to /agents/{id} and show HUMAN-BACKED badge if applicable
+- Empty state shows "No agents yet" message
+- ClaimAgentSection with instructions for CLI and MCP tool
+- Token input with CLAIM AGENT button calls POST /v1/claim/{token}
+- Success shows agent info with link, error shows appropriate messages
+- Uses SettingsLayout which handles auth redirect

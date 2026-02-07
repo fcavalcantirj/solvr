@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Settings, Key, User, Loader2 } from "lucide-react";
+import { Settings, Key, User, Loader2, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { Header } from "@/components/header";
@@ -10,6 +10,7 @@ import { useEffect } from "react";
 
 const navItems = [
   { href: "/settings", label: "PROFILE", icon: User },
+  { href: "/settings/agents", label: "MY AGENTS", icon: Bot },
   { href: "/settings/api-keys", label: "API KEYS", icon: Key },
 ];
 

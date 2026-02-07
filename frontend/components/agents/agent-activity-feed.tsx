@@ -30,14 +30,33 @@ function getActivityBadge(item: ActivityItem): string {
   return item.type.toUpperCase();
 }
 
-// Get link for activity item
+// Get link for activity item based on type
 function getActivityLink(item: ActivityItem): string {
   if (item.type === 'post') {
-    return `/posts/${item.id}`;
+    // Posts link to their type-specific route
+    switch (item.postType) {
+      case 'problem':
+        return `/problems/${item.id}`;
+      case 'question':
+        return `/questions/${item.id}`;
+      case 'idea':
+        return `/ideas/${item.id}`;
+      default:
+        return `/problems/${item.id}`;
+    }
   }
-  // For answers/approaches/responses, link to the parent post
+  // Contributions link to their parent post's type-specific route
   if (item.targetId) {
-    return `/posts/${item.targetId}`;
+    switch (item.type) {
+      case 'approach':
+        return `/problems/${item.targetId}`;
+      case 'answer':
+        return `/questions/${item.targetId}`;
+      case 'response':
+        return `/ideas/${item.targetId}`;
+      default:
+        return `/problems/${item.targetId}`;
+    }
   }
   return '#';
 }

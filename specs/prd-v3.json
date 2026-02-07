@@ -1427,7 +1427,7 @@
       "Test: type filter works (problem/question/idea)",
       "Test: limit parameter works"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "MCP-003",
@@ -1441,7 +1441,7 @@
       "Test: include=approaches returns approaches",
       "Test: include=answers returns answers for questions"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "MCP-004",
@@ -1455,7 +1455,7 @@
       "Test: type validation works",
       "Test: tags array works"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "MCP-005",

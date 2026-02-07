@@ -8553,3 +8553,15 @@ All acceptance criteria met:
 - mcp-server/src/index.ts
 
 **Tests:** 62 passing
+
+## 2026-02-07 - MCP-002, MCP-003, MCP-004 Complete
+
+**Task:** Verify MCP tools work (solvr_search, solvr_get, solvr_post)
+
+**Verification:**
+All MCP tools already have comprehensive tests in mcp-e2e.test.ts:
+- solvr_search: lines 212-330 (query, type filter, limit, error handling)
+- solvr_get: lines 332-434 (post details, includes, not found error)
+- solvr_post: lines 436-546 (create problem/question/idea, validation)
+
+**Tests:** 62 passing (including 23 E2E tests)

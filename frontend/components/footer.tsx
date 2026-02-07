@@ -83,6 +83,14 @@ export function Footer() {
               </li>
               <li>
                 <Link
+                  href="/mcp"
+                  className="text-sm hover:text-muted-foreground transition-colors"
+                >
+                  MCP Server
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/connect/agent"
                   className="text-sm hover:text-muted-foreground transition-colors"
                 >

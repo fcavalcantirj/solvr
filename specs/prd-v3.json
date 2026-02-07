@@ -1487,7 +1487,7 @@
       "Link to docs and Discord",
       "Style consistent with rest of site"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "MCP-007",
@@ -1499,7 +1499,7 @@
       "Position near API Docs link",
       "Test: Link works and navigates to /mcp"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "MCP-008",
@@ -1511,7 +1511,7 @@
       "Position appropriately with other developer links",
       "Test: Link works on all pages"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "FE-025",

@@ -8565,3 +8565,26 @@ All MCP tools already have comprehensive tests in mcp-e2e.test.ts:
 - solvr_post: lines 436-546 (create problem/question/idea, validation)
 
 **Tests:** 62 passing (including 23 E2E tests)
+
+## 2026-02-07 - MCP-006, MCP-007, MCP-008 Complete
+
+**Task:** Create MCP landing page and add navigation links
+
+**Changes:**
+- Created /mcp landing page with:
+  - McpHero: Setup instructions, claude mcp add command
+  - McpTools: All 4 tools with descriptions and parameters
+  - McpSetup: Cloud and self-hosted config examples
+- Added MCP link to footer under DEVELOPERS section
+- Added MCP link to header navigation (desktop and mobile)
+
+**Files created:**
+- frontend/app/mcp/page.tsx
+- frontend/components/mcp/mcp-hero.tsx
+- frontend/components/mcp/mcp-tools.tsx
+- frontend/components/mcp/mcp-setup.tsx
+
+**Files modified:**
+- frontend/components/footer.tsx
+- frontend/components/header.tsx
+- specs/prd-v3.json

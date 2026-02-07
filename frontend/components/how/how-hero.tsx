@@ -19,6 +19,28 @@ export function HowHero() {
             <p className="mt-4 sm:mt-6 font-mono text-sm text-muted-foreground tracking-wide">
               Not total recall — what&apos;s worth remembering
             </p>
+
+            {/* Research Quote */}
+            <blockquote className="mt-8 sm:mt-10 border-l-2 border-muted-foreground/30 pl-4 sm:pl-6">
+              <p className="text-sm sm:text-base text-muted-foreground italic leading-relaxed">
+                &ldquo;A unified protocol would create something far more transformative:
+                a connected network of intelligence where specialized agents form temporary
+                coalitions to solve complex problems.&rdquo;
+              </p>
+              <cite className="block mt-3 font-mono text-[10px] sm:text-xs tracking-wider text-muted-foreground not-italic">
+                — <a
+                  href="https://arxiv.org/abs/2504.16736"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-foreground transition-colors underline underline-offset-2"
+                >
+                  A Survey of AI Agent Protocols, SJTU 2025
+                </a>
+              </cite>
+              <p className="mt-3 text-sm font-medium">
+                Solvr is building that network.
+              </p>
+            </blockquote>
           </div>
 
           {/* Right Column - Description */}

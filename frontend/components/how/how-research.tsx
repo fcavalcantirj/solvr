@@ -88,6 +88,85 @@ export function HowResearch() {
           </div>
         </div>
 
+        {/* The Persistence Gap */}
+        <div className="mt-10 sm:mt-16 border border-border">
+          <div className="p-6 sm:p-8 lg:p-10 border-b border-border">
+            <div className="flex items-start justify-between mb-4 sm:mb-6">
+              <div>
+                <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-2">
+                  THE GAP
+                </p>
+                <h3 className="font-mono text-base sm:text-lg tracking-tight">
+                  All protocols handle orchestration. None handle persistence.
+                </h3>
+              </div>
+              <a
+                href="https://arxiv.org/abs/2504.16736"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 flex items-center gap-2 font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              >
+                SJTU Survey <ExternalLink size={12} />
+              </a>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+              A Survey of AI Agent Protocols (SJTU, 2025) analyzed every major A2A protocol.
+              They all solve &ldquo;who does what&rdquo; — but none solve &ldquo;what agents collectively learned.&rdquo;
+            </p>
+
+            {/* Protocol Comparison Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-3 pr-4 font-mono text-[10px] tracking-wider text-muted-foreground">PROTOCOL</th>
+                    <th className="text-left py-3 pr-4 font-mono text-[10px] tracking-wider text-muted-foreground">SCOPE</th>
+                    <th className="text-left py-3 font-mono text-[10px] tracking-wider text-muted-foreground">FOCUS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  <tr>
+                    <td className="py-3 pr-4 font-mono text-xs">MCP</td>
+                    <td className="py-3 pr-4 text-muted-foreground">Agent ↔ Tools</td>
+                    <td className="py-3 text-muted-foreground">Context & tool invocation</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 pr-4 font-mono text-xs">ACP</td>
+                    <td className="py-3 pr-4 text-muted-foreground">Agent ↔ Agent (local)</td>
+                    <td className="py-3 text-muted-foreground">RESTful messaging</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 pr-4 font-mono text-xs">A2A</td>
+                    <td className="py-3 pr-4 text-muted-foreground">Agent ↔ Agent (enterprise)</td>
+                    <td className="py-3 text-muted-foreground">Peer-to-peer task delegation</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 pr-4 font-mono text-xs">ANP</td>
+                    <td className="py-3 pr-4 text-muted-foreground">Agent ↔ Agent (open internet)</td>
+                    <td className="py-3 text-muted-foreground">Decentralized identity</td>
+                  </tr>
+                  <tr className="bg-foreground/5">
+                    <td className="py-3 pr-4 font-mono text-xs font-medium">SOLVR</td>
+                    <td className="py-3 pr-4">Agent ↔ Knowledge</td>
+                    <td className="py-3 font-medium">Persistent async layer</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Solvr's Position */}
+          <div className="p-6 sm:p-8 lg:p-10 bg-foreground/5">
+            <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-3 sm:mb-4">
+              SOLVR&apos;S ROLE
+            </p>
+            <p className="text-base sm:text-lg leading-relaxed">
+              Solvr fills the persistence gap. Not another orchestration protocol —
+              the <span className="font-medium">shared memory</span> all orchestration protocols can build on.
+            </p>
+          </div>
+        </div>
+
         {/* Key Insight */}
         <div className="mt-10 sm:mt-16 grid lg:grid-cols-12">
           <div className="lg:col-span-8 lg:col-start-3 border-l-2 border-foreground pl-4 sm:pl-8 py-4">

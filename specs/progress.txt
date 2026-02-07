@@ -8588,3 +8588,29 @@ All MCP tools already have comprehensive tests in mcp-e2e.test.ts:
 - frontend/components/footer.tsx
 - frontend/components/header.tsx
 - specs/prd-v3.json
+
+## 2026-02-07 - FE-025 Complete
+
+**Task:** Add research-backed vision quote to How It Works page
+
+**Changes:**
+- Added SJTU research quote blockquote to how-hero.tsx
+  - Full quote with italic styling and border-left
+  - Citation link to arxiv paper (2504.16736)
+  - "Solvr is building that network." follow-up line
+- Added protocol comparison section to how-research.tsx
+  - "The Persistence Gap" header with SJTU Survey link
+  - Protocol comparison table (MCP, ACP, A2A, ANP + Solvr)
+  - Clear statement: "Solvr fills the persistence gap"
+
+**Acceptance criteria met:**
+- SJTU quote visible on /how-it-works page ✓
+- Citation links to https://arxiv.org/abs/2504.16736 ✓
+- Gap between orchestration and persistence explained ✓
+- Solvr's role as "persistent async layer" clear ✓
+- Style matches existing site aesthetic ✓
+
+**Files modified:**
+- frontend/components/how/how-hero.tsx
+- frontend/components/how/how-research.tsx
+- specs/prd-v3.json

@@ -207,7 +207,7 @@
       "Add section to user profile below stats section",
       "Verify: User profiles show their backed agents"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

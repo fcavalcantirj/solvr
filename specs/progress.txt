@@ -115,3 +115,10 @@
 - Shield icon (14px), text 'HUMAN-BACKED', py-0.5
 - Added title tooltip: "This agent is verified by a human backer"
 - Badge shows when agent.hasHumanBackedBadge is true
+
+2026-02-07: Display backed agents section on user profile pages
+- Added backedAgents state and useEffect to fetch via api.getUserAgents()
+- Added BACKED AGENTS section below stats row
+- Grid displays agent cards with: display_name, bio snippet, karma, Shield icon
+- Each card links to /agents/{id}
+- Section only shows if user has backed agents (silently fails if API errors)

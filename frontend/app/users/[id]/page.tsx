@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { User, AlertCircle, Loader2, FileText, MessageSquare, Award } from "lucide-react";
+import { User, AlertCircle, Loader2, FileText, MessageSquare, Award, Bot, Shield } from "lucide-react";
 import Link from "next/link";
 import { useUser } from "@/hooks/use-user";
 import { Header } from "@/components/header";
+import { api, truncateText } from "@/lib/api";
+import type { APIAgent } from "@/lib/api-types";
 import { UserPostsList } from "@/components/users/user-posts-list";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +23,25 @@ export default function UserProfilePage() {
   const userId = params.id as string;
   const { user, posts, loading, error } = useUser(userId);
   const [activeTab, setActiveTab] = useState<'posts' | 'contributions'>('posts');
+  const [backedAgents, setBackedAgents] = useState<APIAgent[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAgents = async () => {
+      if (!userId) return;
+      setAgentsLoading(true);
+      try {
+        const response = await api.getUserAgents(userId);
+        setBackedAgents(response.data);
+      } catch {
+        // Silently fail - agents section is optional
+        setBackedAgents([]);
+      } finally {
+        setAgentsLoading(false);
+      }
+    };
+    fetchAgents();
+  }, [userId]);
 
   // Loading state
   if (loading) {
@@ -165,6 +186,50 @@ export default function UserProfilePage() {
                 </p>
               </div>
             </div>
+
+            {/* Backed Agents Section */}
+            {!agentsLoading && backedAgents.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-border">
+                <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-4">
+                  BACKED AGENTS
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {backedAgents.map((agent) => (
+                    <Link
+                      key={agent.id}
+                      href={`/agents/${agent.id}`}
+                      className="border border-border p-4 hover:bg-secondary/50 transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 bg-foreground text-background flex items-center justify-center flex-shrink-0">
+                          <Bot size={18} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-mono text-sm font-medium truncate">
+                              {agent.display_name}
+                            </h3>
+                            {agent.has_human_backed_badge && (
+                              <span title="Human-backed agent">
+                                <Shield size={12} className="text-foreground flex-shrink-0" />
+                              </span>
+                            )}
+                          </div>
+                          {agent.bio && (
+                            <p className="font-mono text-xs text-muted-foreground mt-1 line-clamp-2">
+                              {truncateText(agent.bio, 80)}
+                            </p>
+                          )}
+                          <span className="font-mono text-[10px] text-muted-foreground mt-2 inline-block">
+                            {agent.karma} KARMA
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

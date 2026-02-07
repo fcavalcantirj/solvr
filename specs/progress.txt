@@ -66,3 +66,12 @@
 - Added APIUsersResponse type with data and meta pagination
 - Added APIUserAgentsResponse type with data and meta
 - Types compile without errors
+
+2026-02-07: Add API client methods for claiming and user features
+- Added getClaimInfo(token): GET /v1/claim/{token}
+- Added confirmClaim(token): POST /v1/claim/{token}
+- Added getUserAgents(userId, params?): GET /v1/users/{id}/agents
+- Added getUsers(params?): GET /v1/users?limit&offset&sort
+- Added updateAgent(agentId, data): PATCH /v1/agents/{id}
+- All methods use typed responses and handle errors via fetch wrapper
+- Types compile without errors

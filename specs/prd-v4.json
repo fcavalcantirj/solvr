@@ -110,7 +110,7 @@
       "Ensure all methods handle errors and return typed responses",
       "Verify: All methods callable from frontend components"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

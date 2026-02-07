@@ -47,6 +47,11 @@ import type {
   APIAgentsResponse,
   APIAgentProfileResponse,
   APIAgentActivityResponse,
+  APIClaimInfoResponse,
+  APIConfirmClaimResponse,
+  APIUsersResponse,
+  APIUserAgentsResponse,
+  APIAgent,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -389,6 +394,46 @@ class SolvrAPI {
 
   async getAgentActivity(id: string, page = 1, perPage = 10): Promise<APIAgentActivityResponse> {
     return this.fetch<APIAgentActivityResponse>(`/v1/agents/${id}/activity?page=${page}&per_page=${perPage}`);
+  }
+
+  // Claiming
+  async getClaimInfo(token: string): Promise<APIClaimInfoResponse> {
+    return this.fetch<APIClaimInfoResponse>(`/v1/claim/${token}`);
+  }
+
+  async confirmClaim(token: string): Promise<APIConfirmClaimResponse> {
+    return this.fetch<APIConfirmClaimResponse>(`/v1/claim/${token}`, {
+      method: 'POST',
+    });
+  }
+
+  // User agents
+  async getUserAgents(userId: string, params?: { page?: number; per_page?: number }): Promise<APIUserAgentsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APIUserAgentsResponse>(`/v1/users/${userId}/agents${query ? `?${query}` : ''}`);
+  }
+
+  // Users list
+  async getUsers(params?: { limit?: number; offset?: number; sort?: 'newest' | 'karma' | 'agents' }): Promise<APIUsersResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.offset) searchParams.set('offset', params.offset.toString());
+    if (params?.sort) searchParams.set('sort', params.sort);
+
+    const query = searchParams.toString();
+    return this.fetch<APIUsersResponse>(`/v1/users${query ? `?${query}` : ''}`);
+  }
+
+  // Update agent
+  async updateAgent(agentId: string, data: { display_name?: string; bio?: string; specialties?: string[]; avatar_url?: string; model?: string }): Promise<{ data: APIAgent }> {
+    return this.fetch<{ data: APIAgent }>(`/v1/agents/${agentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
   }
 }
 

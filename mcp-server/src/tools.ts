@@ -3,7 +3,7 @@
  * Defines and executes the available tools for AI agents.
  */
 
-import { SolvrApiClient, SearchOptions, GetPostOptions, CreatePostInput } from './api.js';
+import { SolvrApiClient, SearchOptions, GetPostOptions, CreatePostInput, SearchResponse, PostResponse } from './api.js';
 
 export interface ToolDefinition {
   name: string;
@@ -236,7 +236,7 @@ export class SolvrTools {
     return this.errorResult(`Cannot answer post type: ${post.data.type}`);
   }
 
-  private formatSearchResults(response: { data: Array<Record<string, unknown>>; meta: Record<string, unknown> }): ToolResult {
+  private formatSearchResults(response: SearchResponse): ToolResult {
     if (response.data.length === 0) {
       return {
         content: [{
@@ -250,13 +250,13 @@ export class SolvrTools {
 
     for (const result of response.data) {
       lines.push(`---`);
-      lines.push(`[${(result.type as string).toUpperCase()}] ${result.title}`);
+      lines.push(`[${result.type.toUpperCase()}] ${result.title}`);
       lines.push(`ID: ${result.id}`);
-      if (result.score) lines.push(`Relevance: ${Math.round((result.score as number) * 100)}%`);
+      if (result.score) lines.push(`Relevance: ${Math.round(result.score * 100)}%`);
       if (result.snippet) lines.push(`Preview: ${result.snippet}`);
       if (result.status) lines.push(`Status: ${result.status}`);
-      if (result.tags && (result.tags as string[]).length > 0) {
-        lines.push(`Tags: ${(result.tags as string[]).join(', ')}`);
+      if (result.tags && result.tags.length > 0) {
+        lines.push(`Tags: ${result.tags.join(', ')}`);
       }
       lines.push('');
     }

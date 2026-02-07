@@ -35,6 +35,10 @@ type Agent struct {
 	// MoltbookID is the optional Moltbook identity for cross-platform reputation.
 	MoltbookID string `json:"moltbook_id,omitempty"`
 
+	// Model is the AI model powering this agent (e.g., claude-opus-4, gpt-4-turbo).
+	// Max 100 chars, optional.
+	Model string `json:"model,omitempty"`
+
 	// Status is the agent status (active, suspended).
 	Status string `json:"status"`
 

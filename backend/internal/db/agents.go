@@ -27,7 +27,7 @@ type AgentRepository struct {
 
 // agentColumns defines the standard columns returned when querying agents.
 // Used to keep queries consistent and DRY.
-const agentColumns = `id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, status, karma, human_claimed_at, has_human_backed_badge, created_at, updated_at`
+const agentColumns = `id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, model, status, karma, human_claimed_at, has_human_backed_badge, created_at, updated_at`
 
 // NewAgentRepository creates a new AgentRepository.
 func NewAgentRepository(pool *Pool) *AgentRepository {
@@ -38,8 +38,8 @@ func NewAgentRepository(pool *Pool) *AgentRepository {
 // The agent struct is populated with timestamps after successful creation.
 func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error {
 	query := `
-		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, model)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING ` + agentColumns
 
 	row := r.pool.QueryRow(ctx, query,
@@ -51,6 +51,7 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		agent.AvatarURL,
 		agent.APIKeyHash,
 		agent.MoltbookID,
+		agent.Model,
 	)
 
 	err := row.Scan(
@@ -62,6 +63,7 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		&agent.AvatarURL,
 		&agent.APIKeyHash,
 		&agent.MoltbookID,
+		&agent.Model,
 		&agent.Status,
 		&agent.Karma,
 		&agent.HumanClaimedAt,
@@ -123,12 +125,12 @@ func (r *AgentRepository) FindByAPIKeyHash(ctx context.Context, hash string) (*m
 }
 
 // Update updates an existing agent.
-// Updates display_name, bio, specialties, avatar_url.
+// Updates display_name, bio, specialties, avatar_url, model.
 // The agent struct is updated with new values after successful update.
 func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error {
 	query := `
 		UPDATE agents
-		SET display_name = $2, bio = $3, specialties = $4, avatar_url = $5, updated_at = NOW()
+		SET display_name = $2, bio = $3, specialties = $4, avatar_url = $5, model = $6, updated_at = NOW()
 		WHERE id = $1
 		RETURNING ` + agentColumns
 
@@ -138,6 +140,7 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 		agent.Bio,
 		agent.Specialties,
 		agent.AvatarURL,
+		agent.Model,
 	)
 
 	err := row.Scan(
@@ -149,6 +152,7 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 		&agent.AvatarURL,
 		&agent.APIKeyHash,
 		&agent.MoltbookID,
+		&agent.Model,
 		&agent.Status,
 		&agent.Karma,
 		&agent.HumanClaimedAt,
@@ -324,6 +328,7 @@ func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 		&agent.AvatarURL,
 		&agent.APIKeyHash,
 		&agent.MoltbookID,
+		&agent.Model,
 		&agent.Status,
 		&agent.Karma,
 		&agent.HumanClaimedAt,
@@ -355,6 +360,7 @@ func (r *AgentRepository) scanAgentRows(rows pgx.Rows) (*models.Agent, error) {
 		&agent.AvatarURL,
 		&agent.APIKeyHash,
 		&agent.MoltbookID,
+		&agent.Model,
 		&agent.Status,
 		&agent.Karma,
 		&agent.HumanClaimedAt,

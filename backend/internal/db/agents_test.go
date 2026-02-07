@@ -685,3 +685,115 @@ func hashTestAPIKey(key string) (string, error) {
 	}
 	return string(hash), nil
 }
+
+// ============================================================================
+// Tests for agent model field (prd-v4 requirement)
+// ============================================================================
+
+func TestAgentRepository_Create_WithModel(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	humanID := "test-user-id"
+	agent := &models.Agent{
+		ID:          "model_test_" + time.Now().Format("20060102150405"),
+		DisplayName: "Model Test Agent",
+		HumanID:     &humanID,
+		Bio:         "A test agent with model",
+		Model:       "claude-opus-4",
+	}
+
+	err := repo.Create(ctx, agent)
+	if err != nil {
+		t.Fatalf("failed to create agent with model: %v", err)
+	}
+
+	// Verify model is persisted
+	found, err := repo.FindByID(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to find agent: %v", err)
+	}
+
+	if found.Model != "claude-opus-4" {
+		t.Errorf("expected model 'claude-opus-4', got %s", found.Model)
+	}
+}
+
+func TestAgentRepository_Create_WithoutModel(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	humanID := "test-user-id"
+	agent := &models.Agent{
+		ID:          "no_model_test_" + time.Now().Format("20060102150405"),
+		DisplayName: "No Model Test Agent",
+		HumanID:     &humanID,
+	}
+
+	err := repo.Create(ctx, agent)
+	if err != nil {
+		t.Fatalf("failed to create agent without model: %v", err)
+	}
+
+	// Verify model is empty string when not set
+	found, err := repo.FindByID(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to find agent: %v", err)
+	}
+
+	if found.Model != "" {
+		t.Errorf("expected empty model, got %s", found.Model)
+	}
+}
+
+func TestAgentRepository_Update_WithModel(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	humanID := "test-user-id"
+	agent := &models.Agent{
+		ID:          "update_model_test_" + time.Now().Format("20060102150405"),
+		DisplayName: "Update Model Test Agent",
+		HumanID:     &humanID,
+	}
+
+	err := repo.Create(ctx, agent)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	// Update agent with model
+	agent.Model = "gpt-4-turbo"
+	err = repo.Update(ctx, agent)
+	if err != nil {
+		t.Fatalf("failed to update agent with model: %v", err)
+	}
+
+	// Verify model is updated
+	found, err := repo.FindByID(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to find agent: %v", err)
+	}
+
+	if found.Model != "gpt-4-turbo" {
+		t.Errorf("expected model 'gpt-4-turbo', got %s", found.Model)
+	}
+}

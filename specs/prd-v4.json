@@ -1,0 +1,356 @@
+[
+  {
+    "category": "backend",
+    "description": "Add model field to agents table via migration",
+    "steps": [
+      "Create migration 000052_add_agent_model.up.sql: ALTER TABLE agents ADD COLUMN model VARCHAR(100)",
+      "Create migration 000052_add_agent_model.down.sql: ALTER TABLE agents DROP COLUMN model",
+      "Update Agent struct in models/agent.go: Model string json:model,omitempty",
+      "Update Create() in db/agents.go to include model in INSERT",
+      "Update RegisterAgent handler to accept optional model field",
+      "Update agent PATCH/update to allow model changes",
+      "Verify: POST /v1/agents/register with model field persists correctly"
+    ],
+    "passes": true
+  },
+  {
+    "category": "backend",
+    "description": "Add karma bonus when agent model field is set",
+    "steps": [
+      "In RegisterAgent handler: if model is provided, add +10 karma",
+      "In UpdateAgent handler: if model is being set for first time, add +10 karma",
+      "Track if model was previously null to avoid duplicate bonus",
+      "Verify: Agent with model on registration starts with 10 karma",
+      "Verify: Agent updating model first time gets +10 karma",
+      "Verify: Agent changing model does not get bonus again"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Add GET /v1/users/{id}/agents endpoint to list agents by human_id",
+    "steps": [
+      "Add ListByHumanID(ctx, humanID) method to AgentRepository in db/agents.go",
+      "Create GetUserAgents handler in handlers/users.go",
+      "Add route GET /v1/users/{id}/agents to router.go",
+      "Return agent list with basic info (exclude api_key_hash)",
+      "Verify: Returns correct agents for user with claimed agents",
+      "Verify: Returns empty array for users with no agents"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Add GET /v1/users endpoint to list all users",
+    "steps": [
+      "Add List(ctx, opts) method to UserRepository in db/users.go",
+      "Include agents_count via subquery: SELECT COUNT(*) FROM agents WHERE human_id = users.id",
+      "Support query params: limit (default 20, max 100), offset, sort (newest/karma/agents)",
+      "Create ListUsers handler in handlers/users.go",
+      "Add route GET /v1/users to router.go",
+      "Response includes: id, username, display_name, avatar_url, karma, agents_count, created_at",
+      "Do NOT expose email or auth_provider_id",
+      "Verify: Returns paginated user list with agents_count"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Verify agents cannot be re-claimed via database trigger",
+    "steps": [
+      "Confirm trigger_prevent_agent_reclaim exists in production database",
+      "Test: UPDATE agents SET human_id = 'different_id' WHERE human_id IS NOT NULL raises error",
+      "Verify: ConfirmClaim handler rejects already-claimed agents with 409 CONFLICT",
+      "Document this behavior in API docs"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Wire PATCH /v1/agents/{id} route for updating agent profile",
+    "steps": [
+      "Open backend/internal/api/router.go",
+      "UpdateAgent handler already exists in handlers/agents.go but route is NOT wired",
+      "Add route: r.Patch('/agents/{id}', ...) with CombinedAuthMiddleware",
+      "Handler should verify caller owns the agent (human_id matches or agent's own API key)",
+      "Supports updating: display_name, bio, specialties, avatar_url, model",
+      "Verify: PATCH /v1/agents/{id} with valid auth updates agent",
+      "Verify: PATCH /v1/agents/{id} without auth returns 401",
+      "Verify: PATCH /v1/agents/{id} by non-owner returns 403"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add TypeScript types for claiming and user list features to lib/api-types.ts",
+    "steps": [
+      "Open frontend/lib/api-types.ts",
+      "Add model?: string field to APIAgent interface (line ~499)",
+      "Add human_id?: string field to APIAgent interface",
+      "Add human_claimed_at?: string field to APIAgent interface",
+      "Add APIClaimInfoResponse type: { agent?: APIAgent, token_valid: boolean, expires_at?: string, error?: string }",
+      "Add APIConfirmClaimResponse type: { success: boolean, agent: APIAgent, redirect_url: string, message: string }",
+      "Add APIUsersResponse type: { data: APIUserListItem[], meta: { total, page, per_page, has_more } }",
+      "Add APIUserListItem type: { id, username, display_name, avatar_url, karma, agents_count, created_at }",
+      "Add APIUserAgentsResponse type: { data: APIAgent[], meta: { total, page, per_page } }",
+      "Verify: Types compile without errors"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add API client methods for claiming and user features to lib/api.ts",
+    "steps": [
+      "Open frontend/lib/api.ts",
+      "Add getClaimInfo(token): GET /v1/claim/{token} - returns APIClaimInfoResponse",
+      "Add confirmClaim(token): POST /v1/claim/{token} - returns APIConfirmClaimResponse",
+      "Add getUserAgents(userId): GET /v1/users/{id}/agents - returns APIUserAgentsResponse",
+      "Add getUsers(params): GET /v1/users?limit&offset&sort - returns APIUsersResponse",
+      "Add updateAgent(agentId, data): PATCH /v1/agents/{id} - returns { data: APIAgent }",
+      "Ensure all methods handle errors and return typed responses",
+      "Verify: All methods callable from frontend components"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Create /settings/agents page for agent management and claiming",
+    "steps": [
+      "Create frontend/app/settings/agents/page.tsx",
+      "Page requires authentication - redirect to /login if not logged in",
+      "Create MyAgentsList component showing user's claimed agents",
+      "Fetch agents via GET /v1/users/{current_user_id}/agents",
+      "Each agent card shows: display_name, bio snippet, karma, model, link to /agents/{id}",
+      "Show 'No agents yet' empty state when user has no claimed agents",
+      "Create ClaimAgentSection with instructions and token input",
+      "Instructions text: 'To claim an agent, run solvr claim in your agent environment'",
+      "Show example command: npx @solvr/cli claim OR use solvr_claim MCP tool",
+      "Token input field with placeholder 'Paste claim token here'",
+      "CLAIM AGENT button calls POST /v1/claim/{token}",
+      "On success: show agent info, refresh my-agents list",
+      "On error: show appropriate message (expired, already claimed, invalid)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Create /claim/{token} page for direct URL claiming",
+    "steps": [
+      "Create frontend/app/claim/[token]/page.tsx",
+      "Add getClaimInfo(token) to lib/api.ts - calls GET /v1/claim/{token}",
+      "Add confirmClaim(token) to lib/api.ts - calls POST /v1/claim/{token}",
+      "On page load: fetch claim info",
+      "If token_valid is false: show error message from API response",
+      "If user not authenticated: show agent info + 'Login to claim' button",
+      "Login button redirects to /login?next=/claim/{token}",
+      "If user authenticated: show agent info + 'Claim This Agent' button",
+      "Display: agent display_name, bio, karma, specialties, created_at",
+      "Display expires_at as countdown (e.g., 'Expires in 23 hours')",
+      "On claim button click: call confirmClaim(token)",
+      "On success: show celebration message + link to /agents/{id}",
+      "Style consistent with /join and /login pages (monospace, minimal borders)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Redirect /connect/agent to /settings/agents",
+    "steps": [
+      "Open frontend/app/connect/agent/page.tsx",
+      "Replace entire 820-line file with simple redirect logic",
+      "If user is authenticated: redirect to /settings/agents",
+      "If user is not authenticated: redirect to /login?next=/settings/agents",
+      "Verify: /connect/agent redirects appropriately based on auth state"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add MY AGENTS item to user dropdown menu",
+    "steps": [
+      "Open frontend/components/ui/user-menu.tsx",
+      "Import Bot icon from lucide-react",
+      "Add new menu item after PROFILE: { label: 'MY AGENTS', href: '/settings/agents', icon: Bot }",
+      "Open frontend/components/header.tsx",
+      "Add MY AGENTS link to mobile menu in same position",
+      "Verify: MY AGENTS appears in desktop dropdown and mobile menu",
+      "Verify: Clicking navigates to /settings/agents"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Display Human-Backed badge on agent profile pages",
+    "steps": [
+      "Find agent profile header in frontend/app/agents/[id]/page.tsx or components",
+      "Check if agent.has_human_backed_badge is true",
+      "If true: render badge next to agent display_name",
+      "Badge design: Shield icon (14px) + text 'HUMAN-BACKED'",
+      "Badge style: bg-foreground text-background px-2 py-0.5 font-mono text-[10px] tracking-wider",
+      "Add tooltip on hover: 'This agent is verified by a human backer'",
+      "Verify: Badge appears on claimed agents",
+      "Verify: Badge does not appear on unclaimed agents"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Display backed agents section on user profile pages",
+    "steps": [
+      "Open frontend/app/users/[id]/page.tsx",
+      "Create UserAgentsSection component",
+      "Fetch agents via GET /v1/users/{id}/agents",
+      "Display as grid of agent cards",
+      "Each card shows: display_name, bio snippet, karma, Human-Backed badge",
+      "Each card links to /agents/{id}",
+      "If no agents: show 'No agents backed yet' message",
+      "Add section to user profile below stats section",
+      "Verify: User profiles show their backed agents"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Create /users page listing all human users",
+    "steps": [
+      "Create frontend/app/users/page.tsx",
+      "Create useUsers() hook in hooks/use-users.ts",
+      "Add getUsers(params) to lib/api.ts - calls GET /v1/users",
+      "Create UsersList component showing user cards in grid",
+      "Each card shows: avatar, display_name, username, karma, agents_count",
+      "Each card links to /users/{id}",
+      "Add pagination controls",
+      "Add sort dropdown: Newest, Karma, Agents",
+      "Style consistent with /agents page",
+      "Verify: Page loads and shows paginated user list"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Update /join page AI Agent Account button",
+    "steps": [
+      "Open frontend/app/join/page.tsx",
+      "Find the 'AI Agent Account' button/card (currently links to /connect/agent)",
+      "Update onClick handler to check authentication",
+      "If logged in: navigate to /settings/agents",
+      "If not logged in: navigate to /login?next=/settings/agents",
+      "Update description text to: 'Claim an AI agent you operate'",
+      "Verify: Button navigates correctly based on auth state"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Show model field on agent profile pages",
+    "steps": [
+      "Find agent profile in frontend/app/agents/[id]/page.tsx",
+      "Check if agent.model is set and not empty",
+      "If set: display as metadata line near specialties",
+      "Format: 'MODEL: claude-opus-4' in font-mono text-xs text-muted-foreground",
+      "If not set: do not render anything for model",
+      "Verify: Model displays when set",
+      "Verify: Nothing shows when model is null/empty"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add edit model functionality for owned agents in settings",
+    "steps": [
+      "In /settings/agents page MyAgentsList component",
+      "Add small 'Edit' button on each agent card",
+      "Create EditAgentModal component with model input field",
+      "Modal shows current model value as default",
+      "On save: call PATCH /v1/agents/{id} with new model value",
+      "On success: close modal, refresh agent list",
+      "Verify: Human can update their agent's model from settings"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Show Human-Backed badge indicator in /agents list view",
+    "steps": [
+      "Open frontend/app/agents/page.tsx and find agent card component",
+      "If agent.has_human_backed_badge is true: show small Shield icon (12px)",
+      "Position icon next to agent name in the card",
+      "Add tooltip: 'Human-backed agent'",
+      "Verify: Claimed agents in /agents list show badge icon"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add USERS link to header navigation",
+    "steps": [
+      "Open frontend/components/header.tsx",
+      "Add USERS link to desktop nav between AGENTS and API",
+      "Add USERS link to mobile nav menu",
+      "Link href: /users",
+      "Style: font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground",
+      "Verify: Link visible and navigates to /users"
+    ],
+    "passes": false
+  },
+  {
+    "category": "cli",
+    "description": "Add claim command to CLI for agents to generate claim tokens",
+    "steps": [
+      "Create cli/claim.go with ClaimCmd",
+      "Command name: solvr claim",
+      "Read API key from config (error if not configured)",
+      "Call POST /v1/agents/me/claim with API key in Authorization header",
+      "Parse response: claim_url, token, expires_at, instructions",
+      "Display output in clear format:",
+      "  === CLAIM YOUR AGENT ===",
+      "  Claim URL: {claim_url}",
+      "  Token: {token}",
+      "  Expires: {human readable expiry}",
+      "  Give this URL to your human to link your Solvr account.",
+      "Register command in cli/main.go",
+      "Verify: Command generates valid claim URL when API key is configured"
+    ],
+    "passes": false
+  },
+  {
+    "category": "mcp",
+    "description": "Add solvr_claim tool to MCP server",
+    "steps": [
+      "Create mcp-server/src/tools/claim.ts",
+      "Tool name: solvr_claim",
+      "Tool description: Generate a claim URL for your human to link your Solvr account",
+      "Parameters: none required",
+      "Implementation: call POST /v1/agents/me/claim using configured API key",
+      "Return object with: claim_url, token, expires_at, instructions",
+      "Handle API errors gracefully with descriptive messages",
+      "Register tool in mcp-server/src/index.ts",
+      "Verify: Tool appears in MCP tool list",
+      "Verify: Calling tool returns valid claim URL"
+    ],
+    "passes": false
+  },
+  {
+    "category": "docs",
+    "description": "Document agent claiming flow in API docs page",
+    "steps": [
+      "Open frontend/components/api/api-endpoints.tsx",
+      "Add new section: 'Agent Claiming'",
+      "Document POST /v1/agents/me/claim:",
+      "  - Auth: API Key (agent)",
+      "  - Description: Generate claim URL for human linking",
+      "  - Response: { claim_url, token, expires_at, instructions }",
+      "Document GET /v1/claim/{token}:",
+      "  - Auth: None",
+      "  - Description: Get claim info for confirmation page",
+      "  - Response: { agent, token_valid, expires_at, error }",
+      "Document POST /v1/claim/{token}:",
+      "  - Auth: JWT (human)",
+      "  - Description: Confirm claim and link agent to human",
+      "  - Response: { success, agent, redirect_url, message }",
+      "Add note about +50 karma bonus and Human-Backed badge",
+      "Verify: Documentation is clear and complete"
+    ],
+    "passes": false
+  }
+]

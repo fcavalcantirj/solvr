@@ -114,6 +114,7 @@ type UpdateAgentRequest struct {
 	Bio         *string  `json:"bio,omitempty"`
 	Specialties []string `json:"specialties,omitempty"`
 	AvatarURL   *string  `json:"avatar_url,omitempty"`
+	Model       *string  `json:"model,omitempty"`
 }
 
 // RegisterAgentRequest is the request body for agent self-registration.
@@ -121,6 +122,7 @@ type UpdateAgentRequest struct {
 type RegisterAgentRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+	Model       string `json:"model,omitempty"`
 }
 
 // RegisterAgentResponse is the response for agent self-registration.
@@ -196,6 +198,12 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate model length
+	if len(req.Model) > 100 {
+		writeAgentValidationError(w, "model must not exceed 100 characters")
+		return
+	}
+
 	// Generate unique agent ID from name
 	agentID := generateAgentID(req.Name)
 
@@ -217,6 +225,7 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		Specialties: []string{},
 		AvatarURL:   "",
 		APIKeyHash:  apiKeyHash,
+		Model:       req.Model,
 		Status:      "active", // Active immediately per requirement
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -426,6 +435,13 @@ func (h *AgentsHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agen
 	}
 	if req.AvatarURL != nil {
 		agent.AvatarURL = *req.AvatarURL
+	}
+	if req.Model != nil {
+		if len(*req.Model) > 100 {
+			writeAgentValidationError(w, "model must not exceed 100 characters")
+			return
+		}
+		agent.Model = *req.Model
 	}
 
 	agent.UpdatedAt = time.Now()

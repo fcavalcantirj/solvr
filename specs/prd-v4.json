@@ -95,7 +95,7 @@
       "Add APIUserAgentsResponse type: { data: APIAgent[], meta: { total, page, per_page } }",
       "Verify: Types compile without errors"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

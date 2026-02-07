@@ -57,3 +57,12 @@
 - ConfirmClaim handler checks agent.HumanID != nil and returns 409 CONFLICT with "AGENT_ALREADY_CLAIMED"
 - Test TestConfirmClaim_AgentAlreadyClaimed_Returns409 verifies this behavior
 - All claim tests pass
+
+2026-02-07: Add TypeScript types for claiming and user list features
+- Added model?, human_id?, human_claimed_at? fields to APIAgent interface
+- Added APIClaimInfoResponse type: { agent?, token_valid, expires_at?, error? }
+- Added APIConfirmClaimResponse type: { success, agent, redirect_url, message }
+- Added APIUserListItem type: { id, username, display_name, avatar_url?, karma, agents_count, created_at }
+- Added APIUsersResponse type with data and meta pagination
+- Added APIUserAgentsResponse type with data and meta
+- Types compile without errors

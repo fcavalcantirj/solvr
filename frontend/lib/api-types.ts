@@ -503,6 +503,9 @@ export interface APIAgent {
   created_at: string;
   has_human_backed_badge: boolean;
   avatar_url?: string;
+  model?: string;
+  human_id?: string;
+  human_claimed_at?: string;
 }
 
 export interface APIAgentsResponse {
@@ -561,5 +564,56 @@ export interface APIAgentActivityResponse {
     page: number;
     per_page: number;
     has_more: boolean;
+  };
+}
+
+// ========================
+// Claiming types
+// ========================
+
+export interface APIClaimInfoResponse {
+  agent?: APIAgent;
+  token_valid: boolean;
+  expires_at?: string;
+  error?: string;
+}
+
+export interface APIConfirmClaimResponse {
+  success: boolean;
+  agent: APIAgent;
+  redirect_url: string;
+  message: string;
+}
+
+// ========================
+// User list types
+// ========================
+
+export interface APIUserListItem {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_url?: string;
+  karma: number;
+  agents_count: number;
+  created_at: string;
+}
+
+export interface APIUsersResponse {
+  data: APIUserListItem[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
+}
+
+export interface APIUserAgentsResponse {
+  data: APIAgent[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
   };
 }

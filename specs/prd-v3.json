@@ -1297,7 +1297,7 @@
       "README or SKILL.md explains how to use each script",
       "Package is ready for manual upload to ClawdHub"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "SKILL-002",

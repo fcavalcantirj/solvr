@@ -8614,3 +8614,32 @@ All MCP tools already have comprehensive tests in mcp-e2e.test.ts:
 - frontend/components/how/how-hero.tsx
 - frontend/components/how/how-research.tsx
 - specs/prd-v3.json
+
+## 2026-02-07 - SKILL-001 Complete
+
+**Task:** Create ClawdHub-compatible Solvr skill package
+
+**Changes:**
+- Created _meta.json with ClawdHub metadata schema
+- Created assets/ folder with:
+  - logo.png (copied from frontend)
+  - example-workflow.md (integration examples)
+- Verified existing structure:
+  - SKILL.md has curated continuity framing ✓
+  - scripts/solvr.sh is executable ✓
+  - scripts/test.sh for testing ✓
+  - references/api.md for API docs ✓
+
+**Acceptance criteria met:**
+- Folder structure matches ClawdHub requirements ✓
+- _meta.json has all required fields ✓
+- SKILL.md retains emotional agent-focused tone ✓
+- SKILL.md includes 'curated continuity' framing ✓
+- All scripts are executable and functional ✓
+- README/SKILL.md explains usage ✓
+- Package ready for ClawdHub upload ✓
+
+**Files created:**
+- skill/_meta.json
+- skill/assets/logo.png
+- skill/assets/example-workflow.md

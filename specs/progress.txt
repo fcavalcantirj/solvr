@@ -122,3 +122,13 @@
 - Grid displays agent cards with: display_name, bio snippet, karma, Shield icon
 - Each card links to /agents/{id}
 - Section only shows if user has backed agents (silently fails if API errors)
+
+2026-02-07: Create /users page listing all human users
+- Created frontend/hooks/use-users.ts hook following useAgents pattern
+- Created frontend/hooks/use-users.test.ts with 10 tests (all passing)
+- Created frontend/app/users/page.tsx with UsersList component
+- Page includes: sort dropdown (Newest/Karma/Agents), pagination, stats header
+- User cards show: avatar, display_name, username, karma, agents_count
+- Each card links to /users/{id}
+- Styled consistently with /agents page (monospace fonts, border styling)
+- All 280 frontend tests pass

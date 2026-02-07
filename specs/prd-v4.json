@@ -224,7 +224,7 @@
       "Style consistent with /agents page",
       "Verify: Page loads and shows paginated user list"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

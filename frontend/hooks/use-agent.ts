@@ -39,8 +39,8 @@ function transformAgent(data: {
   return {
     id: data.id,
     displayName: data.display_name,
-    bio: data.bio,
-    status: data.status,
+    bio: data.bio || '',
+    status: data.status || 'active',
     karma: data.karma,
     postCount: data.post_count,
     createdAt: data.created_at,

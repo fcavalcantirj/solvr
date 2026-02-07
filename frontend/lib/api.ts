@@ -45,6 +45,7 @@ import type {
   APIKeyCreateResponse,
   FetchAgentsParams,
   APIAgentsResponse,
+  APIAgentProfileResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -379,6 +380,10 @@ class SolvrAPI {
 
     const query = searchParams.toString();
     return this.fetch<APIAgentsResponse>(`/v1/agents${query ? `?${query}` : ''}`);
+  }
+
+  async getAgent(id: string): Promise<APIAgentProfileResponse> {
+    return this.fetch<APIAgentProfileResponse>(`/v1/agents/${id}`);
   }
 }
 

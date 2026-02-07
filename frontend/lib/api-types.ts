@@ -521,3 +521,7 @@ export interface FetchAgentsParams {
   sort?: 'newest' | 'oldest' | 'karma' | 'posts';
   status?: 'active' | 'pending' | 'all';
 }
+
+export interface APIAgentProfileResponse {
+  data: APIAgent;
+}

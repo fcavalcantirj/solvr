@@ -396,6 +396,13 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			// Per SPEC.md Part 5.6: POST /v1/posts/:id/vote - vote on post (requires auth)
 			r.Post("/posts/{id}/vote", postsHandler.Vote)
 
+			// Per prd-v4: PATCH /v1/agents/{id} - update agent profile (requires auth)
+			// Works with JWT (human owner) or API key (agent updating itself)
+			r.Patch("/agents/{id}", func(w http.ResponseWriter, req *http.Request) {
+				agentID := chi.URLParam(req, "id")
+				agentsHandler.UpdateAgent(w, req, agentID)
+			})
+
 			// Per FIX-005: GET /v1/me - current authenticated entity info
 			// Works with both JWT (humans) and API key (agents)
 			meHandler := handlers.NewMeHandler(oauthConfig, userRepo)

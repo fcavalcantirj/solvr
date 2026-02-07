@@ -42,3 +42,11 @@
 - Response includes: id, username, display_name, avatar_url, karma, agents_count, created_at
 - Does NOT expose email or auth_provider_id
 - All user tests pass
+
+2026-02-07: Wire PATCH /v1/agents/{id} route for updating agent profile
+- Updated UpdateAgent handler to support both JWT and API key auth
+- Human owner can update via JWT (human_id must match)
+- Agent can update itself via API key (agentID must match)
+- Added route PATCH /v1/agents/{id} to router.go with CombinedAuthMiddleware
+- Added tests: TestUpdateAgent_WithAPIKey, TestUpdateAgent_APIKey_WrongAgent
+- All agent tests pass

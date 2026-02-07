@@ -78,7 +78,7 @@
       "Verify: PATCH /v1/agents/{id} without auth returns 401",
       "Verify: PATCH /v1/agents/{id} by non-owner returns 403"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

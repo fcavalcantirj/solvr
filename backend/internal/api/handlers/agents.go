@@ -387,9 +387,11 @@ func (h *AgentsHandler) GetAgent(w http.ResponseWriter, r *http.Request, agentID
 // UpdateAgent handles PATCH /v1/agents/:id - update agent profile.
 // Requires authentication and ownership verification per SPEC.md Part 5.6.
 func (h *AgentsHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agentID string) {
-	// Require JWT authentication
+	// Per prd-v4: Support both JWT (human owner) and API key (agent updating itself) auth
 	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	agentFromCtx := auth.AgentFromContext(r.Context())
+
+	if claims == nil && agentFromCtx == nil {
 		writeAgentUnauthorized(w, "authentication required")
 		return
 	}
@@ -406,8 +408,15 @@ func (h *AgentsHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agen
 		return
 	}
 
-	// Verify ownership (human_id must match JWT user ID)
-	if agent.HumanID == nil || *agent.HumanID != claims.UserID {
+	// Verify ownership: human_id matches JWT user ID OR agent is updating itself via API key
+	isOwner := false
+	if claims != nil && agent.HumanID != nil && *agent.HumanID == claims.UserID {
+		isOwner = true
+	}
+	if agentFromCtx != nil && agentFromCtx.ID == agentID {
+		isOwner = true
+	}
+	if !isOwner {
 		writeAgentError(w, http.StatusForbidden, "FORBIDDEN", "you do not own this agent")
 		return
 	}

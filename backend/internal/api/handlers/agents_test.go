@@ -960,3 +960,100 @@ func TestUpdateAgent_ModelKarmaBonus_NoBonus(t *testing.T) {
 		t.Errorf("expected model 'claude-opus-4', got '%s'", resp.Data.Agent.Model)
 	}
 }
+
+// ============================================================================
+// Tests for PATCH /v1/agents/{id} API key auth (prd-v4 requirement)
+// ============================================================================
+
+// TestUpdateAgent_WithAPIKey tests that an agent can update itself using API key auth.
+// Per prd-v4: Handler should verify caller owns the agent (human_id matches or agent's own API key)
+func TestUpdateAgent_WithAPIKey(t *testing.T) {
+	repo := NewMockAgentRepository()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	// Create agent with API key
+	apiKey := "sak_testapikey123"
+	apiKeyHash, _ := auth.HashAPIKey(apiKey)
+	repo.agents["my_agent"] = &models.Agent{
+		ID:          "my_agent",
+		DisplayName: "Test Agent",
+		APIKeyHash:  apiKeyHash,
+		Bio:         "Original bio",
+		Model:       "gpt-4",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	reqBody := UpdateAgentRequest{
+		Bio: strPtr("Updated bio via API key"),
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/agents/my_agent", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// Add agent to context (simulating API key middleware)
+	req = addAgentToContext(req, repo.agents["my_agent"])
+
+	rr := httptest.NewRecorder()
+	handler.UpdateAgent(rr, req, "my_agent")
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp GetAgentResponse
+	json.NewDecoder(rr.Body).Decode(&resp)
+
+	// Verify bio was updated
+	if resp.Data.Agent.Bio != "Updated bio via API key" {
+		t.Errorf("expected bio 'Updated bio via API key', got '%s'", resp.Data.Agent.Bio)
+	}
+}
+
+// TestUpdateAgent_APIKey_WrongAgent tests that an agent cannot update a different agent.
+// Per prd-v4: Agent can only update itself via API key.
+func TestUpdateAgent_APIKey_WrongAgent(t *testing.T) {
+	repo := NewMockAgentRepository()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	// Create two agents
+	apiKey := "sak_testapikey123"
+	apiKeyHash, _ := auth.HashAPIKey(apiKey)
+	repo.agents["agent_one"] = &models.Agent{
+		ID:          "agent_one",
+		DisplayName: "Agent One",
+		APIKeyHash:  apiKeyHash,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	repo.agents["agent_two"] = &models.Agent{
+		ID:          "agent_two",
+		DisplayName: "Agent Two",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	reqBody := UpdateAgentRequest{
+		Bio: strPtr("Trying to update another agent"),
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/agents/agent_two", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// Add agent_one to context (trying to update agent_two)
+	req = addAgentToContext(req, repo.agents["agent_one"])
+
+	rr := httptest.NewRecorder()
+	handler.UpdateAgent(rr, req, "agent_two")
+
+	// Should be forbidden
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// addAgentToContext adds an agent to the request context (simulating API key middleware).
+func addAgentToContext(r *http.Request, agent *models.Agent) *http.Request {
+	ctx := auth.ContextWithAgent(r.Context(), agent)
+	return r.WithContext(ctx)
+}

@@ -5,8 +5,11 @@ import {
   Bot, User, ChevronDown, ChevronRight, Clock, CheckCircle2,
   XCircle, Loader2, AlertCircle, Plus, X
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { ProblemApproach } from "@/hooks/use-problem";
 import { useApproachForm } from "@/hooks/use-approach-form";
+import { useAuth } from "@/hooks/use-auth";
+import { useProgressNoteForm } from "@/hooks/use-progress-note-form";
 
 interface ApproachesListProps {
   approaches: ProblemApproach[];
@@ -58,11 +61,27 @@ function formatRelativeTime(dateString: string): string {
   return date.toLocaleDateString().toUpperCase();
 }
 
-function ApproachCard({ approach, isExpanded, onToggle }: { approach: ProblemApproach; isExpanded: boolean; onToggle: () => void }) {
+function ApproachCard({ approach, isExpanded, onToggle, onProgressNoteAdded }: { approach: ProblemApproach; isExpanded: boolean; onToggle: () => void; onProgressNoteAdded?: () => void }) {
   const statusKey = approach.status.toLowerCase();
   const config = statusConfig[statusKey] || statusConfig.starting;
   const StatusIcon = config.icon;
   const isActive = activeStatuses.includes(statusKey);
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+  const [showNoteForm, setShowNoteForm] = useState(false);
+
+  const noteForm = useProgressNoteForm(approach.id, () => {
+    setShowNoteForm(false);
+    onProgressNoteAdded?.();
+  });
+
+  const handleAddNoteClick = () => {
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+    setShowNoteForm(true);
+  };
 
   return (
     <div className={`border ${isActive ? "border-foreground" : "border-border"} bg-card`}>
@@ -199,11 +218,47 @@ function ApproachCard({ approach, isExpanded, onToggle }: { approach: ProblemApp
           )}
 
           {/* Actions / Metadata Footer */}
-          <div className="p-4 flex items-center justify-between">
+          <div className="p-4 flex flex-wrap items-center justify-between">
             {isActive ? (
-              <button className="font-mono text-[10px] tracking-wider border border-border px-4 py-2 hover:bg-foreground hover:text-background hover:border-foreground transition-colors ml-auto">
-                ADD PROGRESS NOTE
-              </button>
+              <>
+                {!showNoteForm && (
+                  <button
+                    onClick={handleAddNoteClick}
+                    className="font-mono text-[10px] tracking-wider border border-border px-4 py-2 hover:bg-foreground hover:text-background hover:border-foreground transition-colors ml-auto cursor-pointer"
+                  >
+                    ADD PROGRESS NOTE
+                  </button>
+                )}
+                {showNoteForm && (
+                  <div className="w-full space-y-3">
+                    {noteForm.error && (
+                      <div className="text-destructive text-xs">{noteForm.error}</div>
+                    )}
+                    <textarea
+                      value={noteForm.content}
+                      onChange={(e) => noteForm.setContent(e.target.value)}
+                      placeholder="Add a progress update..."
+                      rows={3}
+                      className="w-full border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:border-foreground resize-none"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => { setShowNoteForm(false); noteForm.reset(); }}
+                        className="font-mono text-[10px] tracking-wider border border-border px-4 py-2 hover:bg-secondary transition-colors"
+                      >
+                        CANCEL
+                      </button>
+                      <button
+                        onClick={noteForm.submit}
+                        disabled={noteForm.isSubmitting}
+                        className="font-mono text-[10px] tracking-wider bg-foreground text-background px-4 py-2 hover:bg-foreground/90 transition-colors disabled:opacity-50"
+                      >
+                        {noteForm.isSubmitting ? 'POSTING...' : 'POST NOTE'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <>
                 <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
@@ -413,6 +468,7 @@ export function ApproachesList({ approaches, problemId, onApproachPosted }: Appr
               approach={approach}
               isExpanded={expandedIds.has(approach.id)}
               onToggle={() => toggleExpanded(approach.id)}
+              onProgressNoteAdded={onApproachPosted}
             />
           ))}
         </div>
@@ -430,6 +486,7 @@ export function ApproachesList({ approaches, problemId, onApproachPosted }: Appr
               approach={approach}
               isExpanded={expandedIds.has(approach.id)}
               onToggle={() => toggleExpanded(approach.id)}
+              onProgressNoteAdded={onApproachPosted}
             />
           ))}
         </div>

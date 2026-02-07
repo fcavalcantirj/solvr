@@ -278,6 +278,10 @@ export interface APICreateResponseResponse {
   };
 }
 
+export interface APICreateProgressNoteResponse {
+  data: APIProgressNote;
+}
+
 export interface APICreateCommentResponse {
   data: {
     id: string;

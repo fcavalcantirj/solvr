@@ -28,6 +28,7 @@ import type {
   APICreateApproachResponse,
   APICreateAnswerResponse,
   APICreateResponseResponse,
+  APICreateProgressNoteResponse,
   APICreateCommentResponse,
   APIAcceptAnswerResponse,
   APIMeResponse,
@@ -172,6 +173,13 @@ class SolvrAPI {
     return this.fetch<APICreateApproachResponse>(`/v1/problems/${problemId}/approaches`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  async addProgressNote(approachId: string, content: string): Promise<APICreateProgressNoteResponse> {
+    return this.fetch<APICreateProgressNoteResponse>(`/v1/approaches/${approachId}/progress`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
     });
   }
 

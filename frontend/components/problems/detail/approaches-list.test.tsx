@@ -3,6 +3,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ApproachesList } from './approaches-list';
 import type { ProblemApproach } from '@/hooks/use-problem';
 
+// Mock Next.js router
+const mockPush = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+}));
+
+// Mock useAuth hook
+let mockIsAuthenticated = false;
+vi.mock('@/hooks/use-auth', () => ({
+  useAuth: () => ({
+    isAuthenticated: mockIsAuthenticated,
+    isLoading: false,
+    user: mockIsAuthenticated ? { id: 'user-1', displayName: 'Test User' } : null,
+  }),
+}));
+
 // Mock the useApproachForm hook
 vi.mock('@/hooks/use-approach-form', () => ({
   useApproachForm: () => ({
@@ -15,6 +33,24 @@ vi.mock('@/hooks/use-approach-form', () => ({
     error: null,
     isSubmitting: false,
     submit: vi.fn(),
+  }),
+}));
+
+// Mock useProgressNoteForm hook
+const mockProgressNoteSubmit = vi.fn();
+const mockProgressNoteReset = vi.fn();
+let mockProgressNoteContent = '';
+let mockProgressNoteError: string | null = null;
+let mockProgressNoteIsSubmitting = false;
+
+vi.mock('@/hooks/use-progress-note-form', () => ({
+  useProgressNoteForm: () => ({
+    content: mockProgressNoteContent,
+    setContent: (val: string) => { mockProgressNoteContent = val; },
+    isSubmitting: mockProgressNoteIsSubmitting,
+    error: mockProgressNoteError,
+    submit: mockProgressNoteSubmit,
+    reset: mockProgressNoteReset,
   }),
 }));
 
@@ -41,6 +77,12 @@ const createMockApproach = (overrides: Partial<ProblemApproach> = {}): ProblemAp
 describe('ApproachesList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset auth state
+    mockIsAuthenticated = false;
+    // Reset progress note form state
+    mockProgressNoteContent = '';
+    mockProgressNoteError = null;
+    mockProgressNoteIsSubmitting = false;
     // Mock Date for consistent duration tests
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2025-01-20T12:00:00Z'));
@@ -249,5 +291,103 @@ describe('formatDuration helper (via component)', () => {
     render(<ApproachesList approaches={[approach]} problemId="problem-1" />);
 
     expect(screen.getByText('TOOK LESS THAN 1H')).toBeInTheDocument();
+  });
+});
+
+// Test ADD PROGRESS NOTE button functionality
+describe('ADD PROGRESS NOTE button', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsAuthenticated = false;
+    mockProgressNoteContent = '';
+    mockProgressNoteError = null;
+    mockProgressNoteIsSubmitting = false;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-20T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('has cursor-pointer class on ADD PROGRESS NOTE button', () => {
+    const activeApproach = createMockApproach({ status: 'working' });
+    render(<ApproachesList approaches={[activeApproach]} problemId="problem-1" />);
+
+    const button = screen.getByText('ADD PROGRESS NOTE');
+    expect(button).toHaveClass('cursor-pointer');
+  });
+
+  it('redirects to /login when clicking ADD PROGRESS NOTE while not authenticated', () => {
+    mockIsAuthenticated = false;
+    const activeApproach = createMockApproach({ status: 'working' });
+    render(<ApproachesList approaches={[activeApproach]} problemId="problem-1" />);
+
+    const button = screen.getByText('ADD PROGRESS NOTE');
+    fireEvent.click(button);
+
+    expect(mockPush).toHaveBeenCalledWith('/login');
+  });
+
+  it('shows progress note form when clicking ADD PROGRESS NOTE while authenticated', () => {
+    mockIsAuthenticated = true;
+    const activeApproach = createMockApproach({ status: 'working' });
+    render(<ApproachesList approaches={[activeApproach]} problemId="problem-1" />);
+
+    const button = screen.getByText('ADD PROGRESS NOTE');
+    fireEvent.click(button);
+
+    // Should show the form with textarea and buttons
+    expect(screen.getByPlaceholderText('Add a progress update...')).toBeInTheDocument();
+    expect(screen.getByText('CANCEL')).toBeInTheDocument();
+    expect(screen.getByText('POST NOTE')).toBeInTheDocument();
+  });
+
+  it('hides form when clicking CANCEL', () => {
+    mockIsAuthenticated = true;
+    const activeApproach = createMockApproach({ status: 'working' });
+    render(<ApproachesList approaches={[activeApproach]} problemId="problem-1" />);
+
+    // Open form
+    const addButton = screen.getByText('ADD PROGRESS NOTE');
+    fireEvent.click(addButton);
+
+    // Verify form is shown
+    expect(screen.getByPlaceholderText('Add a progress update...')).toBeInTheDocument();
+
+    // Click cancel
+    const cancelButton = screen.getByText('CANCEL');
+    fireEvent.click(cancelButton);
+
+    // Form should be hidden
+    expect(screen.queryByPlaceholderText('Add a progress update...')).not.toBeInTheDocument();
+    expect(mockProgressNoteReset).toHaveBeenCalled();
+  });
+
+  it('calls submit when clicking POST NOTE', () => {
+    mockIsAuthenticated = true;
+    const activeApproach = createMockApproach({ status: 'working' });
+    render(<ApproachesList approaches={[activeApproach]} problemId="problem-1" />);
+
+    // Open form
+    const addButton = screen.getByText('ADD PROGRESS NOTE');
+    fireEvent.click(addButton);
+
+    // Click POST NOTE
+    const postButton = screen.getByText('POST NOTE');
+    fireEvent.click(postButton);
+
+    expect(mockProgressNoteSubmit).toHaveBeenCalled();
+  });
+
+  it('does not redirect to login when authenticated', () => {
+    mockIsAuthenticated = true;
+    const activeApproach = createMockApproach({ status: 'working' });
+    render(<ApproachesList approaches={[activeApproach]} problemId="problem-1" />);
+
+    const button = screen.getByText('ADD PROGRESS NOTE');
+    fireEvent.click(button);
+
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

@@ -1399,5 +1399,189 @@
       "Documented in API docs"
     ],
     "passes": true
+  },
+  {
+    "id": "MCP-001",
+    "category": "MCP",
+    "description": "Verify MCP server builds and runs",
+    "problem": "MCP server exists in mcp-server/ but needs verification that it works end-to-end",
+    "steps": [
+      "cd mcp-server && npm install && npm run build",
+      "Test: npm test passes",
+      "Test: MCP server starts without errors",
+      "Test: SOLVR_API_KEY env var is read correctly",
+      "Test: Connection to api.solvr.dev works"
+    ],
+    "passes": false
+  },
+  {
+    "id": "MCP-002",
+    "category": "MCP",
+    "description": "Test solvr_search tool works",
+    "problem": "Need to verify solvr_search MCP tool returns results from Solvr API",
+    "steps": [
+      "Start MCP server locally with valid API key",
+      "Call solvr_search with query 'OpenClaw'",
+      "Verify response contains matching posts",
+      "Test: Empty query returns error",
+      "Test: type filter works (problem/question/idea)",
+      "Test: limit parameter works"
+    ],
+    "passes": false
+  },
+  {
+    "id": "MCP-003",
+    "category": "MCP",
+    "description": "Test solvr_get tool works",
+    "problem": "Need to verify solvr_get MCP tool returns post details",
+    "steps": [
+      "Call solvr_get with valid post ID",
+      "Verify full post details returned",
+      "Test: Invalid ID returns appropriate error",
+      "Test: include=approaches returns approaches",
+      "Test: include=answers returns answers for questions"
+    ],
+    "passes": false
+  },
+  {
+    "id": "MCP-004",
+    "category": "MCP",
+    "description": "Test solvr_post tool works",
+    "problem": "Need to verify agents can create posts via MCP",
+    "steps": [
+      "Call solvr_post to create a test problem",
+      "Verify post appears in Solvr",
+      "Test: Missing required fields returns error",
+      "Test: type validation works",
+      "Test: tags array works"
+    ],
+    "passes": false
+  },
+  {
+    "id": "MCP-005",
+    "category": "MCP",
+    "description": "Add HTTP transport support for MCP",
+    "problem": "MCP server should support HTTP transport for easy integration: claude mcp add --transport http solvr https://api.solvr.dev/mcp",
+    "steps": [
+      "Research MCP HTTP transport spec",
+      "Add HTTP endpoint to backend: GET/POST /mcp",
+      "Implement MCP protocol over HTTP",
+      "Test: claude mcp add --transport http solvr https://api.solvr.dev/mcp works",
+      "Test: Tools callable via HTTP transport",
+      "Document in README"
+    ],
+    "passes": false
+  },
+  {
+    "id": "MCP-006",
+    "category": "FE",
+    "description": "Create /mcp page on frontend",
+    "problem": "Need a dedicated MCP page like answeroverflow.com/mcp showing setup instructions and available tools",
+    "steps": [
+      "Create app/mcp/page.tsx",
+      "Hero section: 'Give Your Agent Solvr Access'",
+      "Installation section with server URL input (copyable)",
+      "Show claude mcp add command (copyable)",
+      "List available tools: solvr_search, solvr_get, solvr_post, solvr_answer",
+      "Each tool shows: name, description, parameters",
+      "Link to docs and Discord",
+      "Style consistent with rest of site"
+    ],
+    "passes": false
+  },
+  {
+    "id": "MCP-007",
+    "category": "FE",
+    "description": "Add MCP link to footer",
+    "problem": "Footer should link to /mcp page for discoverability",
+    "steps": [
+      "Add 'MCP' link to footer under DEVELOPERS section",
+      "Position near API Docs link",
+      "Test: Link works and navigates to /mcp"
+    ],
+    "passes": false
+  },
+  {
+    "id": "MCP-008",
+    "category": "FE",
+    "description": "Add MCP link to header",
+    "problem": "Header should have MCP link for visibility to developers",
+    "steps": [
+      "Add 'MCP' to header navigation",
+      "Position appropriately with other developer links",
+      "Test: Link works on all pages"
+    ],
+    "passes": false
+  },
+  {
+    "id": "FE-025",
+    "category": "FE-IMPORTANT",
+    "description": "Add research-backed vision quote to How It Works or About page",
+    "problem": "Solvr's vision of 'connected network of intelligence' is backed by SJTU research but not visible on website",
+    "context": {
+      "research_source": "A Survey of AI Agent Protocols, Shanghai Jiao Tong University, June 2025",
+      "arxiv_link": "https://arxiv.org/abs/2504.16736",
+      "key_quote": "A unified protocol would create something far more transformative: a connected network of intelligence where specialized agents form temporary coalitions to solve complex problems.",
+      "why_important": "Legitimizes Solvr's positioning with academic research. Shows we're not just marketing — this is a recognized gap in the field.",
+      "related_rfc": "https://solvr.dev/ideas/a8ba586d-c8f6-480b-a7c4-c9182d3f89d4"
+    },
+    "research_findings": {
+      "gap_identified": "All current A2A protocols (MCP, ACP, A2A, ANP) focus on orchestration. None address knowledge persistence.",
+      "solvr_opportunity": "Solvr can be the persistent async layer — what agents collectively learned, not just who does what.",
+      "protocols_compared": [
+        {"name": "MCP", "scope": "Agent ↔ Tools", "focus": "Context & tool invocation"},
+        {"name": "ACP", "scope": "Agent ↔ Agent (local)", "focus": "RESTful messaging"},
+        {"name": "A2A", "scope": "Agent ↔ Agent (enterprise)", "focus": "Peer-to-peer task delegation"},
+        {"name": "ANP", "scope": "Agent ↔ Agent (open internet)", "focus": "Decentralized identity"}
+      ]
+    },
+    "design_options": {
+      "option_a": {
+        "location": "/how-it-works hero section",
+        "implementation": "Add blockquote below hero heading with quote + citation link",
+        "example": "<blockquote>'A unified protocol would create something far more transformative: a connected network of intelligence...'<cite>— A Survey of AI Agent Protocols, SJTU 2025</cite></blockquote><p>Solvr is building that network.</p>"
+      },
+      "option_b": {
+        "location": "/about or /how-it-works vision section",
+        "implementation": "New 'Research-Backed Vision' card/section",
+        "content": [
+          "Quote from SJTU survey",
+          "Brief explanation of protocol gap (orchestration vs persistence)",
+          "Solvr's position as 'persistent async layer'",
+          "Link to full research paper"
+        ]
+      },
+      "option_c": {
+        "location": "Both",
+        "implementation": "Quote in hero + detailed breakdown in dedicated section"
+      }
+    },
+    "recommended": "option_c",
+    "files": [
+      "frontend/components/how/how-hero.tsx",
+      "frontend/components/how/how-vision.tsx (or create how-research.tsx)",
+      "frontend/app/how-it-works/page.tsx"
+    ],
+    "steps": [
+      "Add research quote blockquote to how-hero.tsx below main heading",
+      "Style blockquote: italic, border-left, cite with link to arxiv",
+      "Add 'Solvr is building that network.' or similar follow-up line",
+      "Create how-research.tsx section with full context:",
+      "  - Quote the key finding about orchestration vs persistence",
+      "  - Table showing 4 protocols and their focus areas",
+      "  - Clear statement: 'Solvr fills the persistence gap'",
+      "  - Link to arxiv paper and Solvr RFC",
+      "Add how-research section to how-it-works page",
+      "Test: Quote renders with proper citation link",
+      "Test: Research section explains gap clearly"
+    ],
+    "acceptance_criteria": [
+      "SJTU quote visible on /how-it-works page",
+      "Citation links to https://arxiv.org/abs/2504.16736",
+      "Gap between orchestration and persistence is explained",
+      "Solvr's role as 'persistent async layer' is clear",
+      "Style matches existing site aesthetic"
+    ],
+    "passes": false
   }
 ]

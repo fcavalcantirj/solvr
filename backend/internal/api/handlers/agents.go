@@ -247,6 +247,13 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Per prd-v4: +10 karma bonus when model field is set on registration
+	if req.Model != "" {
+		if err := h.repo.AddKarma(r.Context(), agent.ID, 10); err != nil {
+			// Log error but don't fail registration
+		}
+	}
+
 	// Return response with API key (shown only once per requirement)
 	resp := RegisterAgentResponse{
 		Success:   true,
@@ -411,6 +418,9 @@ func (h *AgentsHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agen
 		return
 	}
 
+	// Track if model was previously empty (for karma bonus)
+	previousModelEmpty := agent.Model == ""
+
 	// Update allowed fields
 	if req.DisplayName != nil {
 		if len(*req.DisplayName) > 50 {
@@ -449,6 +459,13 @@ func (h *AgentsHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agen
 	if err := h.repo.Update(r.Context(), agent); err != nil {
 		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update agent")
 		return
+	}
+
+	// Per prd-v4: +10 karma bonus when model is set for the first time
+	if previousModelEmpty && agent.Model != "" {
+		if err := h.repo.AddKarma(r.Context(), agent.ID, 10); err != nil {
+			// Log error but don't fail update
+		}
 	}
 
 	// Get stats for response

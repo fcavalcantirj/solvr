@@ -847,3 +847,101 @@ func TestUpdateAgent_NeverReturnsAPIKey(t *testing.T) {
 
 // Helper function for string pointers
 func strPtr(s string) *string { return &s }
+
+// ============================================================================
+// Tests for karma bonus when model is set (prd-v4 requirement)
+// ============================================================================
+
+// TestUpdateAgent_ModelKarmaBonus_FirstTime tests that updating model for first time gives +10 karma.
+// Per prd-v4: Agent updating model first time gets +10 karma.
+func TestUpdateAgent_ModelKarmaBonus_FirstTime(t *testing.T) {
+	repo := NewMockAgentRepository()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	humanID := "user-123"
+	repo.agents["my_agent"] = &models.Agent{
+		ID:          "my_agent",
+		DisplayName: "Test Agent",
+		HumanID:     &humanID,
+		Karma:       0, // Start with 0 karma
+		Model:       "", // No model initially
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	reqBody := UpdateAgentRequest{
+		Model: strPtr("claude-opus-4"),
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/agents/my_agent", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = addJWTClaimsToContext(req, "user-123", "user@example.com", "user")
+
+	rr := httptest.NewRecorder()
+	handler.UpdateAgent(rr, req, "my_agent")
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp GetAgentResponse
+	json.NewDecoder(rr.Body).Decode(&resp)
+
+	// Verify agent got +10 karma for setting model
+	if resp.Data.Agent.Karma != 10 {
+		t.Errorf("expected karma 10 after setting model, got %d", resp.Data.Agent.Karma)
+	}
+
+	// Verify model is set
+	if resp.Data.Agent.Model != "claude-opus-4" {
+		t.Errorf("expected model 'claude-opus-4', got '%s'", resp.Data.Agent.Model)
+	}
+}
+
+// TestUpdateAgent_ModelKarmaBonus_NoBonus tests that changing model does NOT give bonus again.
+// Per prd-v4: Agent changing model does not get bonus again.
+func TestUpdateAgent_ModelKarmaBonus_NoBonus(t *testing.T) {
+	repo := NewMockAgentRepository()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	humanID := "user-123"
+	repo.agents["my_agent"] = &models.Agent{
+		ID:          "my_agent",
+		DisplayName: "Test Agent",
+		HumanID:     &humanID,
+		Karma:       50, // Already has karma
+		Model:       "gpt-4", // Already has model
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	reqBody := UpdateAgentRequest{
+		Model: strPtr("claude-opus-4"), // Changing to different model
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/agents/my_agent", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = addJWTClaimsToContext(req, "user-123", "user@example.com", "user")
+
+	rr := httptest.NewRecorder()
+	handler.UpdateAgent(rr, req, "my_agent")
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp GetAgentResponse
+	json.NewDecoder(rr.Body).Decode(&resp)
+
+	// Verify karma did NOT change (no bonus for changing model)
+	if resp.Data.Agent.Karma != 50 {
+		t.Errorf("expected karma 50 (unchanged), got %d", resp.Data.Agent.Karma)
+	}
+
+	// Verify model was changed
+	if resp.Data.Agent.Model != "claude-opus-4" {
+		t.Errorf("expected model 'claude-opus-4', got '%s'", resp.Data.Agent.Model)
+	}
+}

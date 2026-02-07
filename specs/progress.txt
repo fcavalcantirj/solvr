@@ -8,3 +8,11 @@
 - Updated UpdateAgent handler to allow model changes
 - Added tests: TestAgentRepository_Create_WithModel, TestAgentRepository_Create_WithoutModel, TestAgentRepository_Update_WithModel
 - All tests pass, build successful
+
+2026-02-07: Add karma bonus when agent model field is set
+- Updated RegisterAgent handler: +10 karma when model is provided on registration
+- Updated UpdateAgent handler: +10 karma when model is set for first time (was empty)
+- Tracks previous model state to avoid duplicate bonus when changing models
+- Added tests: TestRegisterAgent_ModelKarmaBonus, TestRegisterAgent_NoModelNoKarmaBonus
+- Added tests: TestUpdateAgent_ModelKarmaBonus_FirstTime, TestUpdateAgent_ModelKarmaBonus_NoBonus
+- All agent tests pass

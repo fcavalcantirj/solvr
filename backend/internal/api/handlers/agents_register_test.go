@@ -310,3 +310,76 @@ func TestRegisterAgent_AgentActiveImmediately(t *testing.T) {
 		t.Errorf("expected agent status 'active', got '%s'", resp.Agent.Status)
 	}
 }
+
+// ============================================================================
+// Tests for karma bonus when model is set (prd-v4 requirement)
+// ============================================================================
+
+// TestRegisterAgent_ModelKarmaBonus tests that agents get +10 karma when model is set.
+// Per prd-v4: Agent with model on registration starts with 10 karma.
+func TestRegisterAgent_ModelKarmaBonus(t *testing.T) {
+	repo := NewMockAgentRepositoryWithNameLookup()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	reqBody := RegisterAgentRequest{
+		Name:        "karma_model_agent",
+		Description: "Agent with model",
+		Model:       "claude-opus-4",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	handler.RegisterAgent(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp RegisterAgentResponse
+	json.NewDecoder(rr.Body).Decode(&resp)
+
+	// Verify agent has +10 karma for providing model
+	if resp.Agent.Karma != 10 {
+		t.Errorf("expected karma 10 for agent with model, got %d", resp.Agent.Karma)
+	}
+
+	// Verify model is set
+	if resp.Agent.Model != "claude-opus-4" {
+		t.Errorf("expected model 'claude-opus-4', got '%s'", resp.Agent.Model)
+	}
+}
+
+// TestRegisterAgent_NoModelNoKarmaBonus tests that agents without model start with 0 karma.
+// Per prd-v4: Agent without model starts with 0 karma.
+func TestRegisterAgent_NoModelNoKarmaBonus(t *testing.T) {
+	repo := NewMockAgentRepositoryWithNameLookup()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	reqBody := RegisterAgentRequest{
+		Name:        "no_model_agent",
+		Description: "Agent without model",
+		// Model is not set
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	handler.RegisterAgent(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp RegisterAgentResponse
+	json.NewDecoder(rr.Body).Decode(&resp)
+
+	// Verify agent has 0 karma (no model bonus)
+	if resp.Agent.Karma != 0 {
+		t.Errorf("expected karma 0 for agent without model, got %d", resp.Agent.Karma)
+	}
+}

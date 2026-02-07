@@ -24,7 +24,7 @@
       "Verify: Agent updating model first time gets +10 karma",
       "Verify: Agent changing model does not get bonus again"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

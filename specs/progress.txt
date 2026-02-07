@@ -86,3 +86,14 @@
 - Token input with CLAIM AGENT button calls POST /v1/claim/{token}
 - Success shows agent info with link, error shows appropriate messages
 - Uses SettingsLayout which handles auth redirect
+
+2026-02-07: Create /claim/[token] page for direct URL claiming
+- Created frontend/app/claim/[token]/page.tsx
+- Fetches claim info via GET /v1/claim/{token} on page load
+- Shows error state for invalid/expired tokens
+- Unauthenticated: shows agent info + "Login to claim" button (redirects to /login?next=/claim/{token})
+- Authenticated: shows agent info + "Claim This Agent" button
+- Displays: display_name, bio, karma, post_count, created_at
+- Shows expires_at countdown (e.g., "Expires in 23h 45m")
+- Success state: shows celebration with HUMAN-BACKED badge earned + link to /agents/{id}
+- Error handling for expired, already_claimed, invalid tokens

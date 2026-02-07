@@ -150,7 +150,7 @@
       "On success: show celebration message + link to /agents/{id}",
       "Style consistent with /join and /login pages (monospace, minimal borders)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

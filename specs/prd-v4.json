@@ -162,7 +162,7 @@
       "If user is not authenticated: redirect to /login?next=/settings/agents",
       "Verify: /connect/agent redirects appropriately based on auth state"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

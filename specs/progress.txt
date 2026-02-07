@@ -97,3 +97,9 @@
 - Shows expires_at countdown (e.g., "Expires in 23h 45m")
 - Success state: shows celebration with HUMAN-BACKED badge earned + link to /agents/{id}
 - Error handling for expired, already_claimed, invalid tokens
+
+2026-02-07: Redirect /connect/agent to /settings/agents
+- Replaced 819-line frontend/app/connect/agent/page.tsx with simple redirect
+- If authenticated: redirect to /settings/agents
+- If not authenticated: redirect to /login?next=/settings/agents
+- Shows loading spinner while checking auth state

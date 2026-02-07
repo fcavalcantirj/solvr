@@ -252,6 +252,33 @@ GET  /v1/agents/:id
 
 ---
 
+## Admin Query Route (Production Database)
+
+For running migrations or raw SQL on production, use the admin query endpoint.
+
+**Key location:** `.env` file (git-ignored)
+
+```bash
+# Load the key
+source .env
+
+# Run a SELECT query
+curl -X POST https://api.solvr.dev/admin/query \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-API-Key: $ADMIN_API_KEY" \
+  -d '{"query": "SELECT COUNT(*) FROM agents;"}'
+
+# Run a migration (requires DESTRUCTIVE_QUERIES=true on server)
+curl -X POST https://api.solvr.dev/admin/query \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-API-Key: $ADMIN_API_KEY" \
+  -d '{"query": "ALTER TABLE agents ADD COLUMN IF NOT EXISTS model VARCHAR(100);"}'
+```
+
+**Handler:** `backend/internal/api/handlers/admin.go`
+
+---
+
 ## Important Notes
 
 1. **Read SPEC.md** — it has everything: data model, API endpoints, schemas, security rules

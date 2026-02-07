@@ -32,22 +32,33 @@ function transformAgent(
     bio: string;
     status: string;
     karma: number;
-    post_count: number;
     created_at: string;
     has_human_backed_badge: boolean;
     avatar_url?: string | null;
   },
   stats?: {
-    posts_count?: number;
-    answers_count?: number;
-    responses_count?: number;
-    karma?: number;
+    problems_solved?: number;
+    problems_contributed?: number;
+    questions_asked?: number;
+    questions_answered?: number;
+    answers_accepted?: number;
+    ideas_posted?: number;
+    responses_given?: number;
+    upvotes_received?: number;
+    reputation?: number;
   }
 ): AgentData {
   const createdAt = agent.created_at || new Date().toISOString();
-  // Use stats if provided, otherwise fall back to agent fields
-  const karma = stats?.karma ?? agent.karma ?? 0;
-  const postCount = stats?.posts_count ?? agent.post_count ?? 0;
+
+  // Karma comes directly from agent object (backend has it there)
+  const karma = agent.karma ?? 0;
+
+  // Compute postCount from stats (problems + questions + ideas posted)
+  const postCount = stats ? (
+    (stats.problems_solved ?? 0) +
+    (stats.questions_asked ?? 0) +
+    (stats.ideas_posted ?? 0)
+  ) : 0;
 
   return {
     id: agent.id,

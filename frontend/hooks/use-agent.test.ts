@@ -25,11 +25,18 @@ const mockAgent = {
   avatar_url: 'https://example.com/avatar.png',
 };
 
+// Mock stats matching REAL backend structure
 const mockStats = {
-  posts_count: 42,
-  answers_count: 15,
-  responses_count: 8,
-  karma: 1250,
+  problems_solved: 20,
+  problems_contributed: 5,
+  questions_asked: 15,
+  questions_answered: 10,
+  answers_accepted: 3,
+  ideas_posted: 7,
+  responses_given: 8,
+  upvotes_received: 100,
+  reputation: 1250,
+  // postCount = problems_solved + questions_asked + ideas_posted = 20+15+7 = 42
 };
 
 describe('useAgent', () => {
@@ -143,10 +150,10 @@ describe('useAgent', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // Clear mocks and change the data
+    // Clear mocks and change the data - karma is on agent object
     vi.clearAllMocks();
     const updatedAgent = { ...mockAgent, karma: 1500 };
-    const updatedStats = { ...mockStats, karma: 1500 };
+    const updatedStats = { ...mockStats };
     (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { agent: updatedAgent, stats: updatedStats } });
 
     // Refetch
@@ -159,6 +166,48 @@ describe('useAgent', () => {
 
     // Assert
     expect(api.getAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('computes postCount from real backend stats structure', async () => {
+    // Arrange - REAL backend structure: stats has granular counts, NOT posts_count/karma
+    const realAgent = {
+      id: 'agent_real',
+      display_name: 'Real Agent',
+      bio: 'Testing real backend',
+      status: 'active',
+      karma: 500,  // karma IS on agent object
+      // NO post_count field - backend doesn't have it
+      created_at: '2025-01-01T10:00:00Z',
+      has_human_backed_badge: true,
+    };
+    const realStats = {
+      // REAL backend stats structure - NO karma, NO posts_count
+      problems_solved: 5,
+      problems_contributed: 2,
+      questions_asked: 10,
+      questions_answered: 8,
+      answers_accepted: 3,
+      ideas_posted: 3,
+      responses_given: 12,
+      upvotes_received: 100,
+      reputation: 500,
+    };
+
+    (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { agent: realAgent, stats: realStats }
+    });
+
+    // Act
+    const { result } = renderHook(() => useAgent('agent_real'));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Assert - karma from agent, postCount computed from stats
+    expect(result.current.agent?.karma).toBe(500);
+    // postCount = problems_solved + questions_asked + ideas_posted = 5+10+3 = 18
+    expect(result.current.agent?.postCount).toBe(18);
   });
 
   it('handles agent with null optional fields', async () => {
@@ -175,10 +224,15 @@ describe('useAgent', () => {
       avatar_url: null,
     };
     const minimalStats = {
-      posts_count: 0,
-      answers_count: 0,
-      responses_count: 0,
-      karma: 0,
+      problems_solved: 0,
+      problems_contributed: 0,
+      questions_asked: 0,
+      questions_answered: 0,
+      answers_accepted: 0,
+      ideas_posted: 0,
+      responses_given: 0,
+      upvotes_received: 0,
+      reputation: 0,
     };
 
     (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { agent: agentWithNulls, stats: minimalStats } });

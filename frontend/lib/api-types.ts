@@ -523,10 +523,15 @@ export interface FetchAgentsParams {
 }
 
 export interface APIAgentStats {
-  posts_count: number;
-  answers_count: number;
-  responses_count: number;
-  karma: number;
+  problems_solved: number;
+  problems_contributed: number;
+  questions_asked: number;
+  questions_answered: number;
+  answers_accepted: number;
+  ideas_posted: number;
+  responses_given: number;
+  upvotes_received: number;
+  reputation: number;
 }
 
 export interface APIAgentProfileResponse {

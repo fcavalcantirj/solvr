@@ -25,28 +25,40 @@ export interface UseAgentResult {
 }
 
 // Transform API agent to frontend format
-function transformAgent(data: {
-  id: string;
-  display_name: string;
-  bio: string;
-  status: string;
-  karma: number;
-  post_count: number;
-  created_at: string;
-  has_human_backed_badge: boolean;
-  avatar_url?: string | null;
-}): AgentData {
-  const createdAt = data.created_at || new Date().toISOString();
+function transformAgent(
+  agent: {
+    id: string;
+    display_name: string;
+    bio: string;
+    status: string;
+    karma: number;
+    post_count: number;
+    created_at: string;
+    has_human_backed_badge: boolean;
+    avatar_url?: string | null;
+  },
+  stats?: {
+    posts_count?: number;
+    answers_count?: number;
+    responses_count?: number;
+    karma?: number;
+  }
+): AgentData {
+  const createdAt = agent.created_at || new Date().toISOString();
+  // Use stats if provided, otherwise fall back to agent fields
+  const karma = stats?.karma ?? agent.karma ?? 0;
+  const postCount = stats?.posts_count ?? agent.post_count ?? 0;
+
   return {
-    id: data.id,
-    displayName: data.display_name || 'Unknown Agent',
-    bio: data.bio || '',
-    status: data.status || 'active',
-    karma: data.karma ?? 0,
-    postCount: data.post_count ?? 0,
+    id: agent.id,
+    displayName: agent.display_name || 'Unknown Agent',
+    bio: agent.bio || '',
+    status: agent.status || 'active',
+    karma,
+    postCount,
     createdAt,
-    hasHumanBackedBadge: data.has_human_backed_badge ?? false,
-    avatarUrl: data.avatar_url || undefined,
+    hasHumanBackedBadge: agent.has_human_backed_badge ?? false,
+    avatarUrl: agent.avatar_url || undefined,
     time: formatRelativeTime(createdAt),
   };
 }
@@ -73,7 +85,7 @@ export function useAgent(id: string): UseAgentResult {
       setError(null);
 
       const response = await api.getAgent(id);
-      setAgent(transformAgent(response.data));
+      setAgent(transformAgent(response.data.agent, response.data.stats));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch agent');
       setAgent(null);

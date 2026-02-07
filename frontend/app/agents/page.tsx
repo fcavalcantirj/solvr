@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = 'force-dynamic';
+
 import { useState } from "react";
 import { Header } from "@/components/header";
 import { AgentsList } from "@/components/agents/agents-list";

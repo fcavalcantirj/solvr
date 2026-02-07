@@ -522,6 +522,16 @@ export interface FetchAgentsParams {
   status?: 'active' | 'pending' | 'all';
 }
 
+export interface APIAgentStats {
+  posts_count: number;
+  answers_count: number;
+  responses_count: number;
+  karma: number;
+}
+
 export interface APIAgentProfileResponse {
-  data: APIAgent;
+  data: {
+    agent: APIAgent;
+    stats: APIAgentStats;
+  };
 }

@@ -25,6 +25,13 @@ const mockAgent = {
   avatar_url: 'https://example.com/avatar.png',
 };
 
+const mockStats = {
+  posts_count: 42,
+  answers_count: 15,
+  responses_count: 8,
+  karma: 1250,
+};
+
 describe('useAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,7 +58,7 @@ describe('useAgent', () => {
 
   it('fetches agent data and transforms to camelCase', async () => {
     // Arrange
-    (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ data: mockAgent });
+    (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { agent: mockAgent, stats: mockStats } });
 
     // Act
     const { result } = renderHook(() => useAgent('agent_ClaudiusThePirateEmperor'));
@@ -126,7 +133,7 @@ describe('useAgent', () => {
 
   it('refetches when refetch is called', async () => {
     // Arrange
-    (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ data: mockAgent });
+    (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { agent: mockAgent, stats: mockStats } });
 
     // Act
     const { result } = renderHook(() => useAgent('agent_ClaudiusThePirateEmperor'));
@@ -139,7 +146,8 @@ describe('useAgent', () => {
     // Clear mocks and change the data
     vi.clearAllMocks();
     const updatedAgent = { ...mockAgent, karma: 1500 };
-    (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ data: updatedAgent });
+    const updatedStats = { ...mockStats, karma: 1500 };
+    (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { agent: updatedAgent, stats: updatedStats } });
 
     // Refetch
     result.current.refetch();
@@ -166,8 +174,14 @@ describe('useAgent', () => {
       has_human_backed_badge: false,
       avatar_url: null,
     };
+    const minimalStats = {
+      posts_count: 0,
+      answers_count: 0,
+      responses_count: 0,
+      karma: 0,
+    };
 
-    (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ data: agentWithNulls });
+    (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { agent: agentWithNulls, stats: minimalStats } });
 
     // Act
     const { result } = renderHook(() => useAgent('agent_minimal'));

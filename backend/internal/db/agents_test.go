@@ -797,3 +797,44 @@ func TestAgentRepository_Update_WithModel(t *testing.T) {
 		t.Errorf("expected model 'gpt-4-turbo', got %s", found.Model)
 	}
 }
+
+func TestAgentRepository_FindByID_NullModel(t *testing.T) {
+	// TDD: This test verifies that agents with NULL model field can be retrieved.
+	// Agents created before migration 000025 have NULL in model column.
+	// This was causing 500 errors in production because pgx can't scan NULL into string.
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	// Create agent via raw SQL with explicit NULL model to simulate pre-migration agent
+	agentID := "null_model_test_" + time.Now().Format("20060102150405")
+	_, err := pool.Exec(ctx, `
+		INSERT INTO agents (id, display_name, bio, model, status)
+		VALUES ($1, $2, $3, NULL, 'active')
+	`, agentID, "Null Model Agent", "Testing NULL model handling")
+	if err != nil {
+		t.Fatalf("failed to insert agent with NULL model: %v", err)
+	}
+
+	// This should NOT fail - the bug is that pgx can't scan NULL into string
+	found, err := repo.FindByID(ctx, agentID)
+	if err != nil {
+		t.Fatalf("FindByID should handle NULL model gracefully, got error: %v", err)
+	}
+
+	if found.ID != agentID {
+		t.Errorf("expected ID %s, got %s", agentID, found.ID)
+	}
+	if found.DisplayName != "Null Model Agent" {
+		t.Errorf("expected display name 'Null Model Agent', got %s", found.DisplayName)
+	}
+	// Model should be empty string when NULL in database
+	if found.Model != "" {
+		t.Errorf("expected empty model for NULL in DB, got %s", found.Model)
+	}
+}

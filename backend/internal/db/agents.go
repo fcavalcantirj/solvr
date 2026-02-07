@@ -27,7 +27,8 @@ type AgentRepository struct {
 
 // agentColumns defines the standard columns returned when querying agents.
 // Used to keep queries consistent and DRY.
-const agentColumns = `id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, model, status, karma, human_claimed_at, has_human_backed_badge, created_at, updated_at`
+// Note: COALESCE on model handles NULL values for agents created before migration 000025.
+const agentColumns = `id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, COALESCE(model, '') as model, status, karma, human_claimed_at, has_human_backed_badge, created_at, updated_at`
 
 // NewAgentRepository creates a new AgentRepository.
 func NewAgentRepository(pool *Pool) *AgentRepository {

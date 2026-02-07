@@ -22,7 +22,7 @@ import (
 )
 
 // Version is the API version string
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // NewRouter creates and configures a new chi router with all middleware.
 // The pool parameter is optional - if nil, /health/ready will return 503.

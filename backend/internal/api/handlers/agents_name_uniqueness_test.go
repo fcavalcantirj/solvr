@@ -137,6 +137,21 @@ func (m *MockAgentRepoWithSuggestions) GetAgentByAPIKeyHash(ctx context.Context,
 	return nil, nil
 }
 
+// FindByHumanID finds all agents owned by a human user.
+// Per prd-v4: GET /v1/users/{id}/agents endpoint.
+func (m *MockAgentRepoWithSuggestions) FindByHumanID(ctx context.Context, humanID string) ([]*models.Agent, error) {
+	var agents []*models.Agent
+	for _, agent := range m.agents {
+		if agent.HumanID != nil && *agent.HumanID == humanID {
+			agents = append(agents, agent)
+		}
+	}
+	if agents == nil {
+		agents = []*models.Agent{}
+	}
+	return agents, nil
+}
+
 // List returns a paginated list of agents (API-001 requirement).
 func (m *MockAgentRepoWithSuggestions) List(ctx context.Context, opts models.AgentListOptions) ([]models.AgentWithPostCount, int, error) {
 	return []models.AgentWithPostCount{}, 0, nil

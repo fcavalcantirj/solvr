@@ -37,7 +37,7 @@
       "Verify: Returns correct agents for user with claimed agents",
       "Verify: Returns empty array for users with no agents"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

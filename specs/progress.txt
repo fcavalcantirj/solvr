@@ -16,3 +16,16 @@
 - Added tests: TestRegisterAgent_ModelKarmaBonus, TestRegisterAgent_NoModelNoKarmaBonus
 - Added tests: TestUpdateAgent_ModelKarmaBonus_FirstTime, TestUpdateAgent_ModelKarmaBonus_NoBonus
 - All agent tests pass
+
+2026-02-07: Add GET /v1/users/{id}/agents endpoint
+- FindByHumanID method already existed in db/agents.go
+- Added FindByHumanID to AgentRepositoryInterface in handlers/agents.go
+- Added UsersAgentRepositoryInterface to handlers/users.go
+- Added SetAgentRepository method and agentRepo field to UsersHandler
+- Created GetUserAgents handler to list agents by human_id
+- Added route GET /v1/users/{id}/agents to router.go
+- Updated InMemoryAgentRepository and all mock repositories with FindByHumanID
+- Added tests: TestGetUserAgents_Success, TestGetUserAgents_Empty, TestGetUserAgents_MissingUserID
+- Returns agent list with basic info (api_key_hash excluded)
+- Returns empty array for users with no agents
+- All agent and user tests pass

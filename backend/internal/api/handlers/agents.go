@@ -29,6 +29,7 @@ type AgentRepositoryInterface interface {
 	Create(ctx context.Context, agent *models.Agent) error
 	FindByID(ctx context.Context, id string) (*models.Agent, error)
 	FindByName(ctx context.Context, name string) (*models.Agent, error)
+	FindByHumanID(ctx context.Context, humanID string) ([]*models.Agent, error)
 	Update(ctx context.Context, agent *models.Agent) error
 	GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error)
 	UpdateAPIKeyHash(ctx context.Context, agentID, hash string) error

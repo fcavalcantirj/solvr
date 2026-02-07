@@ -94,6 +94,28 @@ func (r *InMemoryAgentRepository) FindByName(ctx context.Context, name string) (
 	return &agentCopy, nil
 }
 
+// FindByHumanID finds all agents owned by a human user.
+// Per prd-v4: GET /v1/users/{id}/agents endpoint.
+func (r *InMemoryAgentRepository) FindByHumanID(ctx context.Context, humanID string) ([]*models.Agent, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var agents []*models.Agent
+	for _, agent := range r.agents {
+		if agent.HumanID != nil && *agent.HumanID == humanID {
+			agentCopy := *agent
+			agents = append(agents, &agentCopy)
+		}
+	}
+
+	// Return empty slice if no agents found (not error)
+	if agents == nil {
+		agents = []*models.Agent{}
+	}
+
+	return agents, nil
+}
+
 // Update updates an existing agent.
 func (r *InMemoryAgentRepository) Update(ctx context.Context, agent *models.Agent) error {
 	r.mu.Lock()

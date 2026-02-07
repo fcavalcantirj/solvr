@@ -25,11 +25,19 @@ type UsersPostRepositoryInterface interface {
 	List(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error)
 }
 
+// UsersAgentRepositoryInterface defines the agent repository operations needed by UsersHandler.
+// Per prd-v4: GET /v1/users/{id}/agents endpoint to list agents by human_id.
+type UsersAgentRepositoryInterface interface {
+	FindByHumanID(ctx context.Context, humanID string) ([]*models.Agent, error)
+}
+
 // UsersHandler handles user profile endpoints.
 // Per BE-003: User profile endpoints for viewing and editing profiles.
+// Per prd-v4: GET /v1/users/{id}/agents to list agents by human_id.
 type UsersHandler struct {
-	userRepo UsersUserRepositoryInterface
-	postRepo UsersPostRepositoryInterface
+	userRepo  UsersUserRepositoryInterface
+	postRepo  UsersPostRepositoryInterface
+	agentRepo UsersAgentRepositoryInterface
 }
 
 // NewUsersHandler creates a new UsersHandler instance.
@@ -38,6 +46,12 @@ func NewUsersHandler(userRepo UsersUserRepositoryInterface, postRepo UsersPostRe
 		userRepo: userRepo,
 		postRepo: postRepo,
 	}
+}
+
+// SetAgentRepository sets the agent repository for listing user's agents.
+// Per prd-v4: GET /v1/users/{id}/agents endpoint.
+func (h *UsersHandler) SetAgentRepository(repo UsersAgentRepositoryInterface) {
+	h.agentRepo = repo
 }
 
 // PublicUserProfileResponse is the response for GET /v1/users/:id.
@@ -101,6 +115,60 @@ func (h *UsersHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeUsersJSON(w, http.StatusOK, response)
+}
+
+// UserAgentsResponse is the response for GET /v1/users/{id}/agents.
+// Per prd-v4: Return agent list with basic info (exclude api_key_hash).
+type UserAgentsResponse struct {
+	Data []models.Agent `json:"data"`
+	Meta struct {
+		Total   int `json:"total"`
+		Page    int `json:"page"`
+		PerPage int `json:"per_page"`
+	} `json:"meta"`
+}
+
+// GetUserAgents handles GET /v1/users/{id}/agents.
+// Per prd-v4: List agents claimed by a user.
+func (h *UsersHandler) GetUserAgents(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := chi.URLParam(r, "id")
+
+	if userID == "" {
+		writeUsersError(w, http.StatusBadRequest, "BAD_REQUEST", "user ID is required")
+		return
+	}
+
+	if h.agentRepo == nil {
+		writeUsersError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "agent repository not configured")
+		return
+	}
+
+	agents, err := h.agentRepo.FindByHumanID(ctx, userID)
+	if err != nil {
+		writeUsersError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to fetch agents")
+		return
+	}
+
+	// Convert to response format (ensure api_key_hash is not exposed)
+	responseAgents := make([]models.Agent, 0, len(agents))
+	for _, agent := range agents {
+		// Create a copy without api_key_hash
+		responseAgent := *agent
+		responseAgent.APIKeyHash = "" // Ensure not exposed
+		responseAgents = append(responseAgents, responseAgent)
+	}
+
+	// Build response
+	resp := UserAgentsResponse{}
+	resp.Data = responseAgents
+	resp.Meta.Total = len(responseAgents)
+	resp.Meta.Page = 1
+	resp.Meta.PerPage = len(responseAgents)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // UpdateProfile handles PATCH /v1/me.

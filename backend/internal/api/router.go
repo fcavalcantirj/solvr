@@ -184,6 +184,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		usersPostRepo = db.NewPostRepository(pool)
 	}
 	usersHandler := handlers.NewUsersHandler(usersUserRepo, usersPostRepo)
+	// Per prd-v4: Set agent repository for GET /v1/users/{id}/agents endpoint
+	usersHandler.SetAgentRepository(agentRepo)
 
 	// JWT secret for auth middleware - read from env or use test default
 	jwtSecret := os.Getenv("JWT_SECRET")
@@ -302,6 +304,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		// User profile endpoint (BE-003)
 		// GET /v1/users/{id} - get user profile (no auth required)
 		r.Get("/users/{id}", usersHandler.GetUserProfile)
+
+		// Per prd-v4: GET /v1/users/{id}/agents - list agents claimed by user (no auth required)
+		r.Get("/users/{id}/agents", usersHandler.GetUserAgents)
 
 		// Posts endpoints (API-CRITICAL requirement)
 		// Per SPEC.md Part 5.6: GET /v1/posts - list posts (no auth required)

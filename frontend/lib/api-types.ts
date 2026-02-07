@@ -540,3 +540,26 @@ export interface APIAgentProfileResponse {
     stats: APIAgentStats;
   };
 }
+
+// Agent Activity types (per SPEC.md Part 4.9)
+export interface APIActivityItem {
+  id: string;
+  type: string;  // 'post' | 'answer' | 'approach' | 'response'
+  action: string;  // 'created' | 'answered' | 'started_approach' | 'responded'
+  title: string;
+  post_type?: string;  // 'problem' | 'question' | 'idea'
+  status?: string;
+  created_at: string;
+  target_id?: string;
+  target_title?: string;
+}
+
+export interface APIAgentActivityResponse {
+  data: APIActivityItem[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
+}

@@ -5,6 +5,7 @@ import { Bot, AlertCircle, Loader2, FileText, Award, Shield, Calendar } from "lu
 import Link from "next/link";
 import { useAgent } from "@/hooks/use-agent";
 import { Header } from "@/components/header";
+import { AgentActivityFeed } from "@/components/agents/agent-activity-feed";
 
 function formatNumber(num: number): string {
   if (num >= 1000) {
@@ -178,14 +179,12 @@ export default function AgentProfilePage() {
           </div>
         </div>
 
-        {/* Content Placeholder */}
+        {/* Activity Feed */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
-          <div className="border border-dashed border-border p-12 text-center">
-            <FileText size={32} className="mx-auto mb-4 text-muted-foreground" />
-            <p className="font-mono text-sm text-muted-foreground">
-              Agent activity feed coming soon
-            </p>
-          </div>
+          <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-4">
+            ACTIVITY
+          </h2>
+          <AgentActivityFeed agentId={agent.id} />
         </div>
       </main>
     </div>

@@ -287,6 +287,13 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			agentsHandler.GetAgent(w, req, agentID)
 		})
 
+		// Agent activity endpoint (per SPEC.md Part 4.9)
+		// GET /v1/agents/{id}/activity - agent activity feed (no auth required)
+		r.Get("/agents/{id}/activity", func(w http.ResponseWriter, req *http.Request) {
+			agentID := chi.URLParam(req, "id")
+			agentsHandler.GetActivity(w, req, agentID)
+		})
+
 		// User profile endpoint (BE-003)
 		// GET /v1/users/{id} - get user profile (no auth required)
 		r.Get("/users/{id}", usersHandler.GetUserProfile)

@@ -46,6 +46,7 @@ import type {
   FetchAgentsParams,
   APIAgentsResponse,
   APIAgentProfileResponse,
+  APIAgentActivityResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -384,6 +385,10 @@ class SolvrAPI {
 
   async getAgent(id: string): Promise<APIAgentProfileResponse> {
     return this.fetch<APIAgentProfileResponse>(`/v1/agents/${id}`);
+  }
+
+  async getAgentActivity(id: string, page = 1, perPage = 10): Promise<APIAgentActivityResponse> {
+    return this.fetch<APIAgentActivityResponse>(`/v1/agents/${id}/activity?page=${page}&per_page=${perPage}`);
   }
 }
 

@@ -27,8 +27,9 @@ type AgentRepository struct {
 
 // agentColumns defines the standard columns returned when querying agents.
 // Used to keep queries consistent and DRY.
-// Note: COALESCE on model handles NULL values for agents created before migration 000025.
-const agentColumns = `id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, COALESCE(model, '') as model, status, karma, human_claimed_at, has_human_backed_badge, created_at, updated_at`
+// Note: COALESCE handles NULL values for nullable columns scanned into non-pointer Go types.
+// Without COALESCE, pgx fails when scanning NULL into string/[]string.
+const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, status, karma, human_claimed_at, has_human_backed_badge, created_at, updated_at`
 
 // NewAgentRepository creates a new AgentRepository.
 func NewAgentRepository(pool *Pool) *AgentRepository {

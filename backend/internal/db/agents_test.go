@@ -798,10 +798,10 @@ func TestAgentRepository_Update_WithModel(t *testing.T) {
 	}
 }
 
-func TestAgentRepository_FindByID_NullModel(t *testing.T) {
-	// TDD: This test verifies that agents with NULL model field can be retrieved.
-	// Agents created before migration 000025 have NULL in model column.
-	// This was causing 500 errors in production because pgx can't scan NULL into string.
+func TestAgentRepository_FindByID_AllNullFields(t *testing.T) {
+	// TDD: This test verifies that agents with ALL nullable fields as NULL can be retrieved.
+	// pgx cannot scan NULL into non-pointer Go types (string, []string).
+	// We use COALESCE in agentColumns to convert NULL to empty values.
 	pool := getTestPool(t)
 	if pool == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -811,30 +811,46 @@ func TestAgentRepository_FindByID_NullModel(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	// Create agent via raw SQL with explicit NULL model to simulate pre-migration agent
-	agentID := "null_model_test_" + time.Now().Format("20060102150405")
+	// Create agent via raw SQL with ALL nullable fields as NULL
+	agentID := "all_null_test_" + time.Now().Format("20060102150405")
 	_, err := pool.Exec(ctx, `
-		INSERT INTO agents (id, display_name, bio, model, status)
-		VALUES ($1, $2, $3, NULL, 'active')
-	`, agentID, "Null Model Agent", "Testing NULL model handling")
+		INSERT INTO agents (id, display_name, bio, specialties, avatar_url, api_key_hash, moltbook_id, model, status)
+		VALUES ($1, $2, NULL, NULL, NULL, NULL, NULL, NULL, 'active')
+	`, agentID, "All Null Agent")
 	if err != nil {
-		t.Fatalf("failed to insert agent with NULL model: %v", err)
+		t.Fatalf("failed to insert agent with NULL fields: %v", err)
 	}
 
-	// This should NOT fail - the bug is that pgx can't scan NULL into string
+	// This should NOT fail - COALESCE handles all NULL values
 	found, err := repo.FindByID(ctx, agentID)
 	if err != nil {
-		t.Fatalf("FindByID should handle NULL model gracefully, got error: %v", err)
+		t.Fatalf("FindByID should handle NULL fields gracefully, got error: %v", err)
 	}
 
 	if found.ID != agentID {
 		t.Errorf("expected ID %s, got %s", agentID, found.ID)
 	}
-	if found.DisplayName != "Null Model Agent" {
-		t.Errorf("expected display name 'Null Model Agent', got %s", found.DisplayName)
+	if found.DisplayName != "All Null Agent" {
+		t.Errorf("expected display name 'All Null Agent', got %s", found.DisplayName)
 	}
-	// Model should be empty string when NULL in database
+	// All nullable string fields should be empty string when NULL in database
+	if found.Bio != "" {
+		t.Errorf("expected empty bio for NULL in DB, got %s", found.Bio)
+	}
+	if found.AvatarURL != "" {
+		t.Errorf("expected empty avatar_url for NULL in DB, got %s", found.AvatarURL)
+	}
+	if found.APIKeyHash != "" {
+		t.Errorf("expected empty api_key_hash for NULL in DB, got %s", found.APIKeyHash)
+	}
+	if found.MoltbookID != "" {
+		t.Errorf("expected empty moltbook_id for NULL in DB, got %s", found.MoltbookID)
+	}
 	if found.Model != "" {
 		t.Errorf("expected empty model for NULL in DB, got %s", found.Model)
+	}
+	// Specialties should be empty slice when NULL in database
+	if len(found.Specialties) != 0 {
+		t.Errorf("expected empty specialties for NULL in DB, got %v", found.Specialties)
 	}
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X, User, LogOut, Settings, Key } from "lucide-react";
+import { Menu, X, User, LogOut, Settings, Key, Bot } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { UserMenu } from "@/components/ui/user-menu";
 
@@ -160,6 +160,14 @@ export function Header() {
                 >
                   <User size={14} />
                   PROFILE
+                </Link>
+                <Link
+                  href="/settings/agents"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="font-mono text-sm tracking-wider text-muted-foreground flex items-center gap-2"
+                >
+                  <Bot size={14} />
+                  MY AGENTS
                 </Link>
                 <Link
                   href="/settings"

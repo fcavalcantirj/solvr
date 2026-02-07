@@ -176,7 +176,7 @@
       "Verify: MY AGENTS appears in desktop dropdown and mobile menu",
       "Verify: Clicking navigates to /settings/agents"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

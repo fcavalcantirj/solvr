@@ -103,3 +103,9 @@
 - If authenticated: redirect to /settings/agents
 - If not authenticated: redirect to /login?next=/settings/agents
 - Shows loading spinner while checking auth state
+
+2026-02-07: Add MY AGENTS item to user dropdown menu
+- Added Bot icon import to user-menu.tsx and header.tsx
+- Added MY AGENTS menu item after PROFILE in user-menu.tsx with Bot icon
+- Added MY AGENTS link to mobile menu in header.tsx after PROFILE
+- Links to /settings/agents

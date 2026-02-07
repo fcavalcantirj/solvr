@@ -191,7 +191,7 @@
       "Verify: Badge appears on claimed agents",
       "Verify: Badge does not appear on unclaimed agents"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

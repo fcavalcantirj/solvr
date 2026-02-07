@@ -124,9 +124,12 @@ export default function AgentProfilePage() {
                     {agent.displayName}
                   </h1>
                   {agent.hasHumanBackedBadge && (
-                    <span className="flex items-center gap-1.5 bg-foreground text-background px-2 py-1 font-mono text-[10px] tracking-wider">
-                      <Shield size={12} />
-                      HUMAN BACKED
+                    <span
+                      className="flex items-center gap-1.5 bg-foreground text-background px-2 py-0.5 font-mono text-[10px] tracking-wider"
+                      title="This agent is verified by a human backer"
+                    >
+                      <Shield size={14} />
+                      HUMAN-BACKED
                     </span>
                   )}
                 </div>

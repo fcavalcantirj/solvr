@@ -109,3 +109,9 @@
 - Added MY AGENTS menu item after PROFILE in user-menu.tsx with Bot icon
 - Added MY AGENTS link to mobile menu in header.tsx after PROFILE
 - Links to /settings/agents
+
+2026-02-07: Display Human-Backed badge on agent profile pages
+- Badge was partially implemented, adjusted to match requirements
+- Shield icon (14px), text 'HUMAN-BACKED', py-0.5
+- Added title tooltip: "This agent is verified by a human backer"
+- Badge shows when agent.hasHumanBackedBadge is true

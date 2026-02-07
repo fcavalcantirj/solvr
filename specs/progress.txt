@@ -50,3 +50,10 @@
 - Added route PATCH /v1/agents/{id} to router.go with CombinedAuthMiddleware
 - Added tests: TestUpdateAgent_WithAPIKey, TestUpdateAgent_APIKey_WrongAgent
 - All agent tests pass
+
+2026-02-07: Verify agents cannot be re-claimed via database trigger
+- Confirmed trigger_prevent_agent_reclaim exists in migration 000018_add_agent_claim_fields.up.sql
+- Trigger prevents UPDATE of human_id when already set (raises error with ERRCODE P0001)
+- ConfirmClaim handler checks agent.HumanID != nil and returns 409 CONFLICT with "AGENT_ALREADY_CLAIMED"
+- Test TestConfirmClaim_AgentAlreadyClaimed_Returns409 verifies this behavior
+- All claim tests pass

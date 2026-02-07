@@ -63,7 +63,7 @@
       "Verify: ConfirmClaim handler rejects already-claimed agents with 409 CONFLICT",
       "Document this behavior in API docs"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

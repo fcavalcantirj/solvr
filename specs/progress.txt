@@ -8643,3 +8643,41 @@ All MCP tools already have comprehensive tests in mcp-e2e.test.ts:
 - skill/_meta.json
 - skill/assets/logo.png
 - skill/assets/example-workflow.md
+
+## MCP-005: Add HTTP transport support for MCP ✅
+
+**Completed:** 2026-02-07
+
+**Implementation:**
+1. Created `backend/internal/api/handlers/mcp.go`:
+   - MCPHandler implementing JSON-RPC 2.0 over HTTP
+   - Handles: initialize, initialized, tools/list, tools/call, shutdown
+   - Implements all 4 tools: solvr_search, solvr_get, solvr_post, solvr_answer
+
+2. Wired route in `backend/internal/api/router.go`:
+   - POST /v1/mcp endpoint
+
+3. Created tests in `backend/internal/api/handlers/mcp_test.go`:
+   - TestMCPHandler_Initialize
+   - TestMCPHandler_ToolsList
+   - TestMCPHandler_MethodNotAllowed
+   - TestMCPHandler_InvalidJSON
+   - TestMCPHandler_UnknownMethod
+   - TestMCPHandler_Shutdown
+
+4. Added router tests in `backend/internal/api/router_test.go`:
+   - TestMCPEndpointExists
+   - TestMCPToolsListEndpoint
+
+**Usage:**
+```bash
+# Add to Claude Code
+claude mcp add --transport http solvr https://api.solvr.dev/v1/mcp
+
+# Or curl directly
+curl -X POST https://api.solvr.dev/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+**All 9 MCP tests pass.**

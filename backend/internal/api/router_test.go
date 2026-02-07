@@ -1038,3 +1038,89 @@ func TestMeEndpointWithAPIKey(t *testing.T) {
 		t.Error("expected display_name in response")
 	}
 }
+
+// TestMCPEndpointExists verifies POST /v1/mcp endpoint is wired.
+// Per MCP-005: Add HTTP transport support for MCP
+func TestMCPEndpointExists(t *testing.T) {
+	router := NewRouter(nil)
+
+	// POST /v1/mcp with initialize method should return 200 OK
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/mcp", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should NOT return 404 - endpoint should be wired
+	if w.Code == http.StatusNotFound {
+		t.Errorf("POST /v1/mcp returned 404 - endpoint not wired (MCP-005)")
+	}
+
+	// Should return 200 OK
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should be valid JSON-RPC 2.0 response
+	if response["jsonrpc"] != "2.0" {
+		t.Errorf("expected jsonrpc 2.0, got %v", response["jsonrpc"])
+	}
+
+	// Should have result (not error)
+	if response["error"] != nil {
+		t.Errorf("unexpected error: %v", response["error"])
+	}
+
+	result, ok := response["result"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected result to be map, got %T", response["result"])
+	}
+
+	// Should return server info
+	if result["name"] != "solvr" {
+		t.Errorf("expected server name 'solvr', got %v", result["name"])
+	}
+}
+
+// TestMCPToolsListEndpoint verifies POST /v1/mcp tools/list returns 4 tools.
+// Per MCP-005: MCP over HTTP should expose all 4 tools
+func TestMCPToolsListEndpoint(t *testing.T) {
+	router := NewRouter(nil)
+
+	reqBody := `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/mcp", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	result, ok := response["result"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected result to be map, got %T", response["result"])
+	}
+
+	tools, ok := result["tools"].([]interface{})
+	if !ok {
+		t.Fatalf("expected tools to be array, got %T", result["tools"])
+	}
+
+	// Should have 4 tools: solvr_search, solvr_get, solvr_post, solvr_answer
+	if len(tools) != 4 {
+		t.Errorf("expected 4 tools, got %d", len(tools))
+	}
+}

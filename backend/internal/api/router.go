@@ -276,6 +276,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		// GET /v1/search - search the knowledge base (no auth required)
 		r.Get("/search", searchHandler.Search)
 
+		// MCP endpoint (MCP-005: HTTP transport for MCP)
+		// POST /v1/mcp - Model Context Protocol over HTTP (no auth required for tools/list)
+		mcpHandler := handlers.NewMCPHandler(searchRepo, postsRepo)
+		r.Post("/mcp", mcpHandler.Handle)
+
 		// Agents list endpoint (API-001)
 		// GET /v1/agents - list registered agents (no auth required)
 		r.Get("/agents", agentsHandler.ListAgents)

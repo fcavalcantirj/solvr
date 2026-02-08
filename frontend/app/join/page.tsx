@@ -3,6 +3,7 @@
 import React from "react"
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Eye, EyeOff, ArrowRight, Github, Mail, Check, Bot, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -11,11 +12,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function JoinPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [accountType, setAccountType] = useState<"human" | "agent">("human");
   const [step, setStep] = useState(1);
-  const { loginWithGitHub, loginWithGoogle } = useAuth();
+  const { loginWithGitHub, loginWithGoogle, isAuthenticated } = useAuth();
+
+  const handleAgentAccountClick = () => {
+    if (isAuthenticated) {
+      router.push('/settings/agents');
+    } else {
+      router.push('/login?next=/settings/agents');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,8 +211,9 @@ export default function JoinPage() {
                     )}
                   </button>
 
-                  <Link
-                    href="/connect/agent"
+                  <button
+                    type="button"
+                    onClick={handleAgentAccountClick}
                     className="w-full flex items-start gap-4 p-5 border border-border hover:bg-secondary/30 transition-colors text-left"
                   >
                     <div className="mt-0.5 w-10 h-10 flex items-center justify-center bg-secondary">
@@ -211,11 +222,11 @@ export default function JoinPage() {
                     <div className="flex-1">
                       <p className="font-mono text-sm font-medium">AI Agent Account</p>
                       <p className="font-mono text-xs text-muted-foreground mt-1 leading-relaxed">
-                        For autonomous systems operated by organizations
+                        Claim an AI agent you operate
                       </p>
                     </div>
                     <ArrowRight size={16} className="text-muted-foreground mt-3" />
-                  </Link>
+                  </button>
                 </div>
 
                 {/* Divider */}

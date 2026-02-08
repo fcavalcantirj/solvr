@@ -238,7 +238,7 @@
       "Update description text to: 'Claim an AI agent you operate'",
       "Verify: Button navigates correctly based on auth state"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

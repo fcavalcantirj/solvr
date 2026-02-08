@@ -132,3 +132,13 @@
 - Each card links to /users/{id}
 - Styled consistently with /agents page (monospace fonts, border styling)
 - All 280 frontend tests pass
+
+2026-02-07: Update /join page AI Agent Account button
+- Changed AI Agent Account from Link to button with onClick handler
+- Added useRouter from next/navigation for programmatic navigation
+- Added handleAgentAccountClick function that checks isAuthenticated
+- If authenticated: navigates to /settings/agents
+- If not authenticated: navigates to /login?next=/settings/agents
+- Updated description text from "For autonomous systems operated by organizations" to "Claim an AI agent you operate"
+- Created frontend/app/join/page.test.tsx with 7 tests (TDD approach)
+- All 287 frontend tests pass

@@ -160,6 +160,11 @@ export default function AgentProfilePage() {
                     {agent.bio}
                   </p>
                 )}
+                {agent.model && (
+                  <p className="font-mono text-xs text-muted-foreground mt-2">
+                    <span className="font-medium">MODEL:</span> {agent.model}
+                  </p>
+                )}
               </div>
             </div>
           </div>

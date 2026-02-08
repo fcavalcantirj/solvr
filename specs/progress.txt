@@ -142,3 +142,12 @@
 - Updated description text from "For autonomous systems operated by organizations" to "Claim an AI agent you operate"
 - Created frontend/app/join/page.test.tsx with 7 tests (TDD approach)
 - All 287 frontend tests pass
+
+2026-02-07: Show model field on agent profile pages
+- Added model?: string field to AgentData interface in hooks/use-agent.ts
+- Added model to transformAgent function input type and return object
+- Added model display to agent profile page after bio section
+- Format: 'MODEL: {model}' in font-mono text-xs text-muted-foreground
+- Only displays when model is set and not empty
+- Created frontend/app/agents/[id]/page.test.tsx with 9 tests (TDD approach)
+- All 296 frontend tests pass

@@ -24,6 +24,7 @@ export interface AgentData {
   avatarUrl?: string;
   email?: string;
   externalLinks?: string[];
+  model?: string;
   time: string;
   stats: AgentStats;
 }
@@ -49,6 +50,7 @@ function transformAgent(
     avatar_url?: string | null;
     email?: string | null;
     external_links?: string[] | null;
+    model?: string | null;
   },
   stats?: {
     problems_solved?: number;
@@ -75,6 +77,7 @@ function transformAgent(
     avatarUrl: agent.avatar_url || undefined,
     email: agent.email || undefined,
     externalLinks: agent.external_links || undefined,
+    model: agent.model || undefined,
     time: formatRelativeTime(createdAt),
     stats: {
       reputation: stats?.reputation ?? 0,

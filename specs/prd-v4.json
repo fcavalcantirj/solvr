@@ -252,7 +252,7 @@
       "Verify: Model displays when set",
       "Verify: Nothing shows when model is null/empty"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -118,9 +118,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		bookmarksRepo = db.NewBookmarkRepository(pool)
 		viewsRepo = db.NewViewsRepository(pool)
 		reportsRepo = db.NewReportsRepository(pool)
-		// Database-backed repository - approaches persist across restarts
+		// Database-backed repositories - persist across restarts
 		problemsRepo = db.NewProblemsRepository(pool)
-		questionsRepo = NewInMemoryQuestionsRepository()
+		questionsRepo = db.NewQuestionsRepository(pool)
 		ideasRepo = db.NewIdeasRepository(pool)
 		commentsRepo = NewInMemoryCommentsRepository()
 		notificationsRepo = NewInMemoryNotificationsRepository()

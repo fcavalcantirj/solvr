@@ -6,18 +6,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { SettingsLayout } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
 import { api, formatRelativeTime, truncateText } from "@/lib/api";
-import type { APIAgent, APIClaimInfoResponse } from "@/lib/api-types";
+import type { APIAgent } from "@/lib/api-types";
 import {
   Bot,
   Loader2,
   AlertCircle,
-  Check,
-  Terminal,
   Shield,
   ArrowRight,
   Pencil,
 } from "lucide-react";
 import { EditAgentModal } from "@/components/settings/edit-agent-modal";
+import { ClaimAgentForm } from "@/components/claim-agent-form";
 
 export default function MyAgentsPage() {
   const { user } = useAuth();
@@ -25,11 +24,6 @@ export default function MyAgentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Claim section state
-  const [claimToken, setClaimToken] = useState("");
-  const [claiming, setClaiming] = useState(false);
-  const [claimError, setClaimError] = useState<string | null>(null);
-  const [claimSuccess, setClaimSuccess] = useState<APIAgent | null>(null);
 
   // Edit modal state
   const [editingAgent, setEditingAgent] = useState<APIAgent | null>(null);
@@ -52,36 +46,6 @@ export default function MyAgentsPage() {
     fetchAgents();
   }, [fetchAgents]);
 
-  const handleClaim = async () => {
-    if (!claimToken.trim()) return;
-    setClaiming(true);
-    setClaimError(null);
-    setClaimSuccess(null);
-
-    try {
-      const response = await api.confirmClaim(claimToken.trim());
-      if (response.success) {
-        setClaimSuccess(response.agent);
-        setClaimToken("");
-        // Refresh agents list
-        fetchAgents();
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to claim agent";
-      // Parse common error messages
-      if (message.includes("expired")) {
-        setClaimError("This claim token has expired. Please generate a new one.");
-      } else if (message.includes("already_claimed") || message.includes("AGENT_ALREADY_CLAIMED")) {
-        setClaimError("This agent has already been claimed by another user.");
-      } else if (message.includes("invalid") || message.includes("not found")) {
-        setClaimError("Invalid claim token. Please check and try again.");
-      } else {
-        setClaimError(message);
-      }
-    } finally {
-      setClaiming(false);
-    }
-  };
 
   return (
     <SettingsLayout>
@@ -166,98 +130,7 @@ export default function MyAgentsPage() {
       </div>
 
       {/* Claim Agent Section */}
-      <div className="border border-border p-8">
-        <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-6">
-          CLAIM AN AGENT
-        </h2>
-
-        <div className="space-y-6">
-          {/* Instructions */}
-          <div className="bg-secondary/50 border border-border p-4">
-            <p className="font-mono text-xs text-muted-foreground mb-4">
-              To claim an agent, generate a claim token using one of these methods:
-            </p>
-            <div className="space-y-4">
-              <div>
-                <p className="font-mono text-xs font-semibold text-foreground mb-1">
-                  Using MCP Tool (Recommended)
-                </p>
-                <p className="font-mono text-xs text-muted-foreground/80">
-                  Use the <code className="bg-background px-1">solvr_claim</code> MCP tool
-                </p>
-                <p className="text-xs text-muted-foreground/60 mt-1">
-                  Available in Claude Desktop/Code with Solvr MCP server
-                </p>
-              </div>
-              <div>
-                <p className="font-mono text-xs font-semibold text-foreground mb-1">
-                  Using Go CLI
-                </p>
-                <div className="flex items-start gap-2">
-                  <Terminal size={14} className="mt-0.5 flex-shrink-0 text-muted-foreground" />
-                  <div>
-                    <p className="font-mono text-xs text-muted-foreground/80">
-                      solvr claim
-                    </p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">
-                      Requires: <code className="bg-background px-1 text-[10px]">go install github.com/solvr/solvr/cli@latest</code>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Success Message */}
-          {claimSuccess && (
-            <div className="flex items-start gap-3 bg-emerald-500/10 border border-emerald-500 text-emerald-600 px-4 py-3">
-              <Check size={16} className="mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="font-mono text-xs font-medium">
-                  Successfully claimed {claimSuccess.display_name}!
-                </p>
-                <Link
-                  href={`/agents/${claimSuccess.id}`}
-                  className="font-mono text-[10px] underline mt-1 inline-block"
-                >
-                  View agent profile
-                </Link>
-              </div>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {claimError && (
-            <div className="flex items-center gap-2 bg-destructive/10 border border-destructive text-destructive px-4 py-3">
-              <AlertCircle size={16} />
-              <span className="font-mono text-xs">{claimError}</span>
-            </div>
-          )}
-
-          {/* Token Input */}
-          <div>
-            <label className="font-mono text-xs tracking-wider text-muted-foreground block mb-2">
-              CLAIM TOKEN
-            </label>
-            <input
-              type="text"
-              value={claimToken}
-              onChange={(e) => setClaimToken(e.target.value)}
-              placeholder="Paste claim token here"
-              className="w-full bg-secondary/50 border border-border px-4 py-3 font-mono text-sm focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
-            />
-          </div>
-
-          <Button
-            onClick={handleClaim}
-            disabled={!claimToken.trim() || claiming}
-            className="font-mono text-xs tracking-wider w-full sm:w-auto"
-          >
-            {claiming && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
-            {claiming ? "CLAIMING..." : "CLAIM AGENT"}
-          </Button>
-        </div>
-      </div>
+      <ClaimAgentForm />
 
       {/* Edit Agent Modal */}
       {editingAgent && (

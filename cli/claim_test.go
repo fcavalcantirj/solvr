@@ -74,10 +74,9 @@ func TestClaimCommand_CallsAPI(t *testing.T) {
 		}
 
 		response := map[string]interface{}{
-			"claim_url":    "https://solvr.dev/claim/abc123",
 			"token":        "abc123",
 			"expires_at":   "2026-02-08T22:00:00Z",
-			"instructions": "Give this URL to your human to link your Solvr account.",
+			"instructions": "Give this token to your human operator.",
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -108,11 +107,11 @@ func TestClaimCommand_CallsAPI(t *testing.T) {
 	if !bytes.Contains([]byte(output), []byte("CLAIM YOUR AGENT")) {
 		t.Error("output should contain 'CLAIM YOUR AGENT' header")
 	}
-	if !bytes.Contains([]byte(output), []byte("https://solvr.dev/claim/abc123")) {
-		t.Error("output should contain claim URL")
-	}
 	if !bytes.Contains([]byte(output), []byte("abc123")) {
 		t.Error("output should contain token")
+	}
+	if !bytes.Contains([]byte(output), []byte("https://solvr.dev/settings/agents")) {
+		t.Error("output should contain settings agents URL")
 	}
 }
 
@@ -167,10 +166,9 @@ func TestClaimCommand_DisplaysFormattedOutput(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := map[string]interface{}{
-			"claim_url":    "https://solvr.dev/claim/xyz789",
 			"token":        "xyz789",
 			"expires_at":   "2026-02-08T22:00:00Z",
-			"instructions": "Share this with your human.",
+			"instructions": "Give this token to your human operator.",
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
@@ -193,11 +191,11 @@ func TestClaimCommand_DisplaysFormattedOutput(t *testing.T) {
 	// Verify formatted output contains expected sections
 	expectedStrings := []string{
 		"=== CLAIM YOUR AGENT ===",
-		"Claim URL:",
-		"https://solvr.dev/claim/xyz789",
 		"Token:",
 		"xyz789",
 		"Expires:",
+		"https://solvr.dev/settings/agents",
+		"CLAIM AN AGENT",
 	}
 
 	for _, expected := range expectedStrings {

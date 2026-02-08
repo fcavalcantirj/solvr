@@ -129,7 +129,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'solvr_claim',
-    description: 'Generate a claim URL for your human to link your Solvr account. Share this URL with your human operator so they can claim ownership of your agent account.',
+    description: 'Generate a claim token for your human to link your Solvr account. Share this token with your human operator - they should paste it at solvr.dev/settings/agents to securely claim ownership of your agent account.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -256,11 +256,18 @@ export class SolvrTools {
     const lines = [
       '=== CLAIM YOUR AGENT ===',
       '',
-      `Claim URL: ${response.claim_url}`,
-      `Token: ${response.token}`,
+      `Token:   ${response.token}`,
       `Expires: ${response.expires_at}`,
       '',
-      response.instructions || 'Give this URL to your human to link your Solvr account.',
+      'Instructions for your human operator:',
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      '1. Visit: https://solvr.dev/settings/agents',
+      '2. Scroll to "CLAIM AN AGENT" section',
+      `3. Paste this token: ${response.token}`,
+      '4. Click "CLAIM AGENT"',
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      '',
+      'Token expires in 24 hours.',
     ];
 
     return {

@@ -139,20 +139,14 @@ func TestGenerateClaim_Success(t *testing.T) {
 	}
 
 	// Verify response structure
-	if resp.ClaimURL == "" {
-		t.Error("expected claim_url to be set")
-	}
 	if resp.ExpiresAt.IsZero() {
 		t.Error("expected expires_at to be set")
 	}
 	if resp.Token == "" {
 		t.Error("expected token to be set")
 	}
-
-	// Verify claim URL format
-	expectedURLPrefix := "https://solvr.dev/claim/"
-	if len(resp.ClaimURL) <= len(expectedURLPrefix) {
-		t.Errorf("claim_url should start with %s, got %s", expectedURLPrefix, resp.ClaimURL)
+	if resp.Instructions == "" {
+		t.Error("expected instructions to be set")
 	}
 
 	// Verify token was created in repository

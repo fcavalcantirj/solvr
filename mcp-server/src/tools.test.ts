@@ -98,7 +98,7 @@ describe('SolvrTools', () => {
       const claimTool = manifest.tools.find(t => t.name === 'solvr_claim');
 
       expect(claimTool).toBeDefined();
-      expect(claimTool?.description).toContain('claim URL');
+      expect(claimTool?.description).toContain('claim token');
       expect(claimTool?.inputSchema.required).toEqual([]);
     });
   });
@@ -275,10 +275,9 @@ describe('SolvrTools', () => {
     describe('solvr_claim', () => {
       it('executes claim and returns formatted result', async () => {
         const mockClaimResponse = {
-          claim_url: 'https://solvr.dev/claim/abc123',
           token: 'abc123',
           expires_at: '2026-02-08T22:00:00Z',
-          instructions: 'Give this URL to your human.',
+          instructions: 'Give this token to your human operator.',
         };
         mockClient.claim.mockResolvedValue(mockClaimResponse);
 
@@ -286,7 +285,7 @@ describe('SolvrTools', () => {
 
         expect(mockClient.claim).toHaveBeenCalled();
         expect(result.content[0].text).toContain('CLAIM YOUR AGENT');
-        expect(result.content[0].text).toContain('https://solvr.dev/claim/abc123');
+        expect(result.content[0].text).toContain('https://solvr.dev/settings/agents');
         expect(result.content[0].text).toContain('abc123');
       });
 

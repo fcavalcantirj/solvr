@@ -396,14 +396,11 @@ class SolvrAPI {
     return this.fetch<APIAgentActivityResponse>(`/v1/agents/${id}/activity?page=${page}&per_page=${perPage}`);
   }
 
-  // Claiming
-  async getClaimInfo(token: string): Promise<APIClaimInfoResponse> {
-    return this.fetch<APIClaimInfoResponse>(`/v1/claim/${token}`);
-  }
-
-  async confirmClaim(token: string): Promise<APIConfirmClaimResponse> {
-    return this.fetch<APIConfirmClaimResponse>(`/v1/claim/${token}`, {
+  // Secure agent claiming
+  async claimAgent(token: string): Promise<APIConfirmClaimResponse> {
+    return this.fetch<APIConfirmClaimResponse>('/v1/agents/claim', {
       method: 'POST',
+      body: JSON.stringify({ token }),
     });
   }
 

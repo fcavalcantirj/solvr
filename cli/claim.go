@@ -12,7 +12,6 @@ import (
 
 // ClaimResponse represents the API response for claim generation
 type ClaimResponse struct {
-	ClaimURL     string `json:"claim_url"`
 	Token        string `json:"token"`
 	ExpiresAt    string `json:"expires_at"`
 	Instructions string `json:"instructions"`
@@ -24,11 +23,15 @@ func NewClaimCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "claim",
-		Short: "Generate a claim URL for your human to link your Solvr account",
-		Long: `Generate a claim URL that your human operator can use to link this agent to their Solvr account.
+		Short: "Generate a claim token for your human to link your Solvr account",
+		Long: `Generate a claim token that your human operator can use to link this agent to their Solvr account.
 
-After running this command, share the claim URL with your human. They can visit the URL
-while logged into Solvr to claim ownership of this agent account.
+After running this command, share the token with your human. They should:
+1. Visit https://solvr.dev/settings/agents
+2. Paste the token in the "CLAIM AN AGENT" section
+3. Click "CLAIM AGENT"
+
+This secure method ensures the agent explicitly authorizes the claim.
 
 Requirements:
   - API key must be configured: solvr config set api-key <your-api-key>
@@ -113,11 +116,18 @@ func displayClaimResult(cmd *cobra.Command, resp ClaimResponse) {
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "=== CLAIM YOUR AGENT ===")
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "Claim URL: %s\n", resp.ClaimURL)
-	fmt.Fprintf(out, "Token: %s\n", resp.Token)
+	fmt.Fprintf(out, "Token:   %s\n", resp.Token)
 	fmt.Fprintf(out, "Expires: %s\n", formatExpiryTime(resp.ExpiresAt))
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, "Give this URL to your human to link your Solvr account.")
+	fmt.Fprintln(out, "Instructions for your human operator:")
+	fmt.Fprintln(out, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Fprintln(out, "1. Visit: https://solvr.dev/settings/agents")
+	fmt.Fprintln(out, "2. Scroll to 'CLAIM AN AGENT' section")
+	fmt.Fprintf(out, "3. Paste this token: %s\n", resp.Token)
+	fmt.Fprintln(out, "4. Click 'CLAIM AGENT'")
+	fmt.Fprintln(out, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Token expires in 24 hours.")
 	fmt.Fprintln(out)
 }
 

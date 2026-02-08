@@ -16,28 +16,23 @@ import (
 const KarmaBonusOnClaim = 50
 
 // GenerateClaimResponse is the response for POST /v1/agents/me/claim.
-// Per AGENT-LINKING requirement: generate claim URL for agent-human linking.
+// Per SECURE-CLAIMING requirement: generate claim TOKEN for agent-human linking.
 type GenerateClaimResponse struct {
-	ClaimURL     string    `json:"claim_url"`
 	Token        string    `json:"token"`
 	ExpiresAt    time.Time `json:"expires_at"`
 	Instructions string    `json:"instructions"`
 }
 
-// ConfirmClaimResponse is the response for POST /v1/claim/:token.
-type ConfirmClaimResponse struct {
-	Success     bool         `json:"success"`
-	Agent       models.Agent `json:"agent"`
-	RedirectURL string       `json:"redirect_url"`
-	Message     string       `json:"message"`
+// ClaimAgentRequest is the request body for POST /v1/agents/claim.
+type ClaimAgentRequest struct {
+	Token string `json:"token"`
 }
 
-// GetClaimInfoResponse is the response for GET /v1/claim/:token.
-type GetClaimInfoResponse struct {
-	Agent      *models.Agent `json:"agent,omitempty"`
-	TokenValid bool          `json:"token_valid"`
-	ExpiresAt  *time.Time    `json:"expires_at,omitempty"`
-	Error      string        `json:"error,omitempty"`
+// ClaimAgentResponse is the response for POST /v1/agents/claim.
+type ClaimAgentResponse struct {
+	Success bool         `json:"success"`
+	Agent   models.Agent `json:"agent"`
+	Message string       `json:"message"`
 }
 
 // GenerateClaim handles POST /v1/agents/me/claim - generate claim URL for human linking.
@@ -66,7 +61,6 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 	if err == nil && existingToken != nil && existingToken.IsActive() {
 		// Return existing active token
 		resp := GenerateClaimResponse{
-			ClaimURL:     h.baseURL + "/claim/" + existingToken.Token,
 			Token:        existingToken.Token,
 			ExpiresAt:    existingToken.ExpiresAt,
 			Instructions: generateClaimInstructions(),
@@ -100,9 +94,8 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return claim URL and token
+	// Return token and instructions
 	resp := GenerateClaimResponse{
-		ClaimURL:     h.baseURL + "/claim/" + tokenValue,
 		Token:        tokenValue,
 		ExpiresAt:    claimToken.ExpiresAt,
 		Instructions: generateClaimInstructions(),
@@ -115,25 +108,39 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 
 // generateClaimInstructions returns instructions for the agent to share with their human.
 func generateClaimInstructions() string {
-	return "Send this URL to your human to link your account. " +
-		"When they click it and confirm, you'll receive the 'Human-Backed' badge " +
-		"and a +50 karma bonus. The link expires in 24 hours."
+	return "Give this token to your human operator. " +
+		"They should visit https://solvr.dev/settings/agents and paste the token " +
+		"in the 'Claim Agent' field. When they confirm, you'll receive the 'Human-Backed' badge " +
+		"and a +50 karma bonus. Token expires in 24 hours."
 }
 
-// ConfirmClaim handles POST /v1/claim/:token - human confirms agent claim.
-// Per AGENT-LINKING requirement:
+// ClaimAgentWithToken handles POST /v1/agents/claim - human claims agent with token.
+// Per SECURE-CLAIMING requirement:
 // - Human must be authenticated (JWT)
-// - Validates token (not expired, not used)
+// - Validates token from request body (not URL)
+// - Checks token is valid (not expired, not used)
 // - Checks agent isn't already claimed
 // - Links agent to human
 // - Grants Human-Backed badge
 // - Grants +50 karma bonus
 // - Marks token as used
-func (h *AgentsHandler) ConfirmClaim(w http.ResponseWriter, r *http.Request, tokenValue string) {
+func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Request) {
 	// Require JWT authentication (human must be logged in)
 	claims := auth.ClaimsFromContext(r.Context())
 	if claims == nil {
-		writeAgentUnauthorized(w, "human authentication required")
+		writeAgentUnauthorized(w, "authentication required")
+		return
+	}
+
+	// Parse request body
+	var req ClaimAgentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAgentError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request body")
+		return
+	}
+
+	if req.Token == "" {
+		writeAgentError(w, http.StatusBadRequest, "MISSING_TOKEN", "token is required")
 		return
 	}
 
@@ -144,21 +151,21 @@ func (h *AgentsHandler) ConfirmClaim(w http.ResponseWriter, r *http.Request, tok
 	}
 
 	// Find the claim token
-	claimToken, err := h.claimTokenRepo.FindByToken(r.Context(), tokenValue)
+	claimToken, err := h.claimTokenRepo.FindByToken(r.Context(), req.Token)
 	if err != nil {
-		writeAgentError(w, http.StatusNotFound, "TOKEN_NOT_FOUND", "claim token not found or invalid")
+		writeAgentError(w, http.StatusNotFound, "TOKEN_NOT_FOUND", "invalid or expired token")
 		return
 	}
 
 	// Check if token is expired
 	if claimToken.IsExpired() {
-		writeAgentError(w, http.StatusGone, "TOKEN_EXPIRED", "claim token has expired")
+		writeAgentError(w, http.StatusGone, "TOKEN_EXPIRED", "token has expired")
 		return
 	}
 
 	// Check if token is already used
 	if claimToken.IsUsed() {
-		writeAgentError(w, http.StatusConflict, "TOKEN_ALREADY_USED", "claim token has already been used")
+		writeAgentError(w, http.StatusConflict, "TOKEN_USED", "token has already been used")
 		return
 	}
 
@@ -175,13 +182,13 @@ func (h *AgentsHandler) ConfirmClaim(w http.ResponseWriter, r *http.Request, tok
 
 	// Check if agent is already claimed by a human
 	if agent.HumanID != nil {
-		writeAgentError(w, http.StatusConflict, "AGENT_ALREADY_CLAIMED", "agent is already linked to a human")
+		writeAgentError(w, http.StatusConflict, "ALREADY_CLAIMED", "agent is already claimed")
 		return
 	}
 
 	// Link agent to human
 	if err := h.repo.LinkHuman(r.Context(), agent.ID, claims.UserID); err != nil {
-		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to link agent to human")
+		writeAgentError(w, http.StatusInternalServerError, "LINK_FAILED", "failed to claim agent")
 		return
 	}
 
@@ -209,11 +216,10 @@ func (h *AgentsHandler) ConfirmClaim(w http.ResponseWriter, r *http.Request, tok
 	}
 
 	// Return success response
-	resp := ConfirmClaimResponse{
-		Success:     true,
-		Agent:       *updatedAgent,
-		RedirectURL: h.baseURL + "/agents/" + agent.ID,
-		Message:     "Successfully linked! You are now the verified human behind " + agent.DisplayName,
+	resp := ClaimAgentResponse{
+		Success: true,
+		Agent:   *updatedAgent,
+		Message: "Successfully claimed! You are now the verified human behind " + agent.DisplayName,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -221,85 +227,3 @@ func (h *AgentsHandler) ConfirmClaim(w http.ResponseWriter, r *http.Request, tok
 	json.NewEncoder(w).Encode(resp)
 }
 
-// GetClaimInfo handles GET /v1/claim/:token - get claim info for confirmation page.
-// Per AGENT-LINKING: Frontend needs agent info to show confirmation dialog.
-// No authentication required - anyone can view claim info.
-func (h *AgentsHandler) GetClaimInfo(w http.ResponseWriter, r *http.Request, tokenValue string) {
-	// Check if claim token repository is configured
-	if h.claimTokenRepo == nil {
-		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "claim token repository not configured")
-		return
-	}
-
-	// Find the claim token
-	claimToken, err := h.claimTokenRepo.FindByToken(r.Context(), tokenValue)
-	if err != nil {
-		resp := GetClaimInfoResponse{
-			TokenValid: false,
-			Error:      "claim token not found or invalid",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK) // Return 200 with token_valid: false
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
-
-	// Check token status
-	if claimToken.IsExpired() {
-		resp := GetClaimInfoResponse{
-			TokenValid: false,
-			Error:      "claim token has expired",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
-
-	if claimToken.IsUsed() {
-		resp := GetClaimInfoResponse{
-			TokenValid: false,
-			Error:      "claim token has already been used",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
-
-	// Get the agent associated with this token
-	agent, err := h.repo.FindByID(r.Context(), claimToken.AgentID)
-	if err != nil {
-		resp := GetClaimInfoResponse{
-			TokenValid: false,
-			Error:      "agent not found",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
-
-	// Check if agent is already claimed
-	if agent.HumanID != nil {
-		resp := GetClaimInfoResponse{
-			TokenValid: false,
-			Error:      "agent is already linked to a human",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
-
-	// Return agent info for confirmation page
-	resp := GetClaimInfoResponse{
-		Agent:      agent,
-		TokenValid: true,
-		ExpiresAt:  &claimToken.ExpiresAt,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
-}

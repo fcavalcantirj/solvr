@@ -96,7 +96,6 @@ export interface ApproachResponse {
 }
 
 export interface ClaimResponse {
-  claim_url: string;
   token: string;
   expires_at: string;
   instructions: string;

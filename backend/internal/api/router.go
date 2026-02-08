@@ -248,20 +248,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Post("/agents/me/claim", agentsHandler.GenerateClaim)
 		})
 
-		// Claim token endpoints (API-CRITICAL requirement)
-		// GET /v1/claim/{token} - get claim info (no auth required)
-		r.Get("/claim/{token}", func(w http.ResponseWriter, req *http.Request) {
-			token := chi.URLParam(req, "token")
-			agentsHandler.GetClaimInfo(w, req, token)
-		})
-
-		// POST /v1/claim/{token} - confirm claim (requires JWT auth)
+		// SECURE agent claiming endpoint (requires JWT auth - humans only)
+		// POST /v1/agents/claim - claim agent with token from request body
 		r.Group(func(r chi.Router) {
 			r.Use(auth.JWTMiddleware(jwtSecret))
-			r.Post("/claim/{token}", func(w http.ResponseWriter, req *http.Request) {
-				token := chi.URLParam(req, "token")
-				agentsHandler.ConfirmClaim(w, req, token)
-			})
+			r.Post("/agents/claim", agentsHandler.ClaimAgentWithToken)
 		})
 
 		// OAuth endpoints (API-CRITICAL requirement)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Copy, Check, Loader2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
@@ -16,12 +16,6 @@ export function CopyResearchButton({ problemId, isClosed }: CopyResearchButtonPr
   const [state, setState] = useState<ButtonState>("idle");
   const [showHint, setShowHint] = useState(true);
   const { toast } = useToast();
-
-  // Hide hint after 5 seconds
-  useEffect(() => {
-    const timer = setTimeout(() => setShowHint(false), 5000);
-    return () => clearTimeout(timer);
-  }, []);
 
   const handleCopy = async () => {
     if (isClosed || state === "loading") return;
@@ -105,8 +99,8 @@ export function CopyResearchButton({ problemId, isClosed }: CopyResearchButtonPr
         {getLabel()}
       </button>
       {showHint && !isClosed && (
-        <span className="font-mono text-[10px] text-muted-foreground animate-pulse">
-          tip: enable research mode on your LLM
+        <span className="font-mono text-[11px] text-foreground/70 bg-secondary px-2 py-1 border border-border">
+          ← tip: enable research mode on your LLM
         </span>
       )}
     </div>

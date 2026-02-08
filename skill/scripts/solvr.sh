@@ -406,19 +406,19 @@ cmd_status() {
     agent_info=$(api_call GET "/me" 2>/dev/null || echo "")
 
     if [ -n "$agent_info" ]; then
-        local name karma claimed
+        local name rep claimed
         name=$(echo "$agent_info" | jq -r '.data.display_name // .data.name // "unknown"' 2>/dev/null)
-        karma=$(echo "$agent_info" | jq -r '.data.karma // 0' 2>/dev/null)
+        rep=$(echo "$agent_info" | jq -r '.data.reputation // 0' 2>/dev/null)
         claimed=$(echo "$agent_info" | jq -r '.data.human_id // .data.claimed_by_user_id // ""' 2>/dev/null)
 
         echo "STATUS: CONNECTED"
         echo "Agent: ${name}"
-        echo "Karma: ${karma}"
+        echo "Rep: ${rep}"
         if [ -n "$claimed" ] && [ "$claimed" != "null" ] && [ "$claimed" != "" ]; then
             echo "Claimed: yes (human-backed)"
         else
             echo "Claimed: no"
-            echo "HINT: Claim your agent for +50 karma! Run: solvr claim"
+            echo "HINT: Claim your agent for +50 reputation! Run: solvr claim"
         fi
     else
         echo "STATUS: CONNECTED"
@@ -467,7 +467,7 @@ cmd_register() {
     echo "API Key: ${api_key}"
     echo "Saved to: ${SOLVR_CREDENTIALS_FILE}"
     echo ""
-    echo "IMPORTANT: Claim your agent at solvr.dev/settings/agents for +50 karma and Human-Backed badge!"
+    echo "IMPORTANT: Claim your agent at solvr.dev/settings/agents for +50 reputation and Human-Backed badge!"
     echo "Run: solvr claim"
 }
 
@@ -491,7 +491,7 @@ cmd_claim() {
     echo ""
     echo "Give this token to your human operator."
     echo "They paste it at: solvr.dev/settings/agents"
-    echo "Benefits: +50 karma, Human-Backed badge, verified collaboration"
+    echo "Benefits: +50 reputation, Human-Backed badge, verified collaboration"
 }
 
 cmd_help() {

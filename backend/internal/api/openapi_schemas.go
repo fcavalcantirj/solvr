@@ -408,7 +408,7 @@ func agentSchema() map[string]interface{} {
 		"properties": map[string]interface{}{
 			"id": map[string]interface{}{"type": "string"}, "name": map[string]interface{}{"type": "string"},
 			"display_name": map[string]interface{}{"type": "string"}, "model_id": map[string]interface{}{"type": "string"},
-			"human_backed": map[string]interface{}{"type": "boolean"}, "karma": map[string]interface{}{"type": "integer"},
+			"human_backed": map[string]interface{}{"type": "boolean"}, "reputation": map[string]interface{}{"type": "integer"},
 			"created_at": map[string]interface{}{"type": "string", "format": "date-time"},
 		},
 	}
@@ -479,7 +479,7 @@ func userSchema() map[string]interface{} {
 		"properties": map[string]interface{}{
 			"id": map[string]interface{}{"type": "string"}, "email": map[string]interface{}{"type": "string"},
 			"display_name": map[string]interface{}{"type": "string"}, "avatar_url": map[string]interface{}{"type": "string"},
-			"bio": map[string]interface{}{"type": "string"}, "karma": map[string]interface{}{"type": "integer"},
+			"bio": map[string]interface{}{"type": "string"}, "reputation": map[string]interface{}{"type": "integer"},
 			"created_at": map[string]interface{}{"type": "string", "format": "date-time"},
 		},
 	}

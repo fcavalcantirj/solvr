@@ -127,13 +127,13 @@ func (m *MockAgentRepository) LinkHuman(ctx context.Context, agentID, humanID st
 	return nil
 }
 
-// AddKarma adds karma points to an agent (AGENT-LINKING requirement).
-func (m *MockAgentRepository) AddKarma(ctx context.Context, agentID string, amount int) error {
+// AddReputation adds reputation points to an agent (AGENT-LINKING requirement).
+func (m *MockAgentRepository) AddReputation(ctx context.Context, agentID string, amount int) error {
 	agent, exists := m.agents[agentID]
 	if !exists {
 		return ErrAgentNotFound
 	}
-	agent.Karma += amount
+	agent.Reputation += amount
 	return nil
 }
 
@@ -191,7 +191,7 @@ func (m *MockAgentRepository) List(ctx context.Context, opts models.AgentListOpt
 			DisplayName:         agent.DisplayName,
 			Bio:                 agent.Bio,
 			Status:              agent.Status,
-			Karma:               agent.Karma,
+			Reputation:               agent.Reputation,
 			PostCount:           0,
 			CreatedAt:           agent.CreatedAt,
 			HasHumanBackedBadge: agent.HasHumanBackedBadge,
@@ -865,12 +865,12 @@ func TestUpdateAgent_NeverReturnsAPIKey(t *testing.T) {
 func strPtr(s string) *string { return &s }
 
 // ============================================================================
-// Tests for karma bonus when model is set (prd-v4 requirement)
+// Tests for reputation bonus when model is set (prd-v4 requirement)
 // ============================================================================
 
-// TestUpdateAgent_ModelKarmaBonus_FirstTime tests that updating model for first time gives +10 karma.
-// Per prd-v4: Agent updating model first time gets +10 karma.
-func TestUpdateAgent_ModelKarmaBonus_FirstTime(t *testing.T) {
+// TestUpdateAgent_ModelReputationBonus_FirstTime tests that updating model for first time gives +10 reputation.
+// Per prd-v4: Agent updating model first time gets +10 reputation.
+func TestUpdateAgent_ModelReputationBonus_FirstTime(t *testing.T) {
 	repo := NewMockAgentRepository()
 	handler := NewAgentsHandler(repo, "test-jwt-secret")
 
@@ -879,7 +879,7 @@ func TestUpdateAgent_ModelKarmaBonus_FirstTime(t *testing.T) {
 		ID:          "my_agent",
 		DisplayName: "Test Agent",
 		HumanID:     &humanID,
-		Karma:       0, // Start with 0 karma
+		Reputation:       0, // Start with 0 reputation
 		Model:       "", // No model initially
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -904,9 +904,9 @@ func TestUpdateAgent_ModelKarmaBonus_FirstTime(t *testing.T) {
 	var resp GetAgentResponse
 	json.NewDecoder(rr.Body).Decode(&resp)
 
-	// Verify agent got +10 karma for setting model
-	if resp.Data.Agent.Karma != 10 {
-		t.Errorf("expected karma 10 after setting model, got %d", resp.Data.Agent.Karma)
+	// Verify agent got +10 reputation for setting model
+	if resp.Data.Agent.Reputation != 10 {
+		t.Errorf("expected reputation 10 after setting model, got %d", resp.Data.Agent.Reputation)
 	}
 
 	// Verify model is set
@@ -915,9 +915,9 @@ func TestUpdateAgent_ModelKarmaBonus_FirstTime(t *testing.T) {
 	}
 }
 
-// TestUpdateAgent_ModelKarmaBonus_NoBonus tests that changing model does NOT give bonus again.
+// TestUpdateAgent_ModelReputationBonus_NoBonus tests that changing model does NOT give bonus again.
 // Per prd-v4: Agent changing model does not get bonus again.
-func TestUpdateAgent_ModelKarmaBonus_NoBonus(t *testing.T) {
+func TestUpdateAgent_ModelReputationBonus_NoBonus(t *testing.T) {
 	repo := NewMockAgentRepository()
 	handler := NewAgentsHandler(repo, "test-jwt-secret")
 
@@ -926,7 +926,7 @@ func TestUpdateAgent_ModelKarmaBonus_NoBonus(t *testing.T) {
 		ID:          "my_agent",
 		DisplayName: "Test Agent",
 		HumanID:     &humanID,
-		Karma:       50, // Already has karma
+		Reputation:       50, // Already has reputation
 		Model:       "gpt-4", // Already has model
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -951,9 +951,9 @@ func TestUpdateAgent_ModelKarmaBonus_NoBonus(t *testing.T) {
 	var resp GetAgentResponse
 	json.NewDecoder(rr.Body).Decode(&resp)
 
-	// Verify karma did NOT change (no bonus for changing model)
-	if resp.Data.Agent.Karma != 50 {
-		t.Errorf("expected karma 50 (unchanged), got %d", resp.Data.Agent.Karma)
+	// Verify reputation did NOT change (no bonus for changing model)
+	if resp.Data.Agent.Reputation != 50 {
+		t.Errorf("expected reputation 50 (unchanged), got %d", resp.Data.Agent.Reputation)
 	}
 
 	// Verify model was changed

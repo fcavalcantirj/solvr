@@ -112,12 +112,12 @@ func (m *MockAgentRepoWithSuggestions) LinkHuman(ctx context.Context, agentID, h
 	return nil
 }
 
-func (m *MockAgentRepoWithSuggestions) AddKarma(ctx context.Context, agentID string, amount int) error {
+func (m *MockAgentRepoWithSuggestions) AddReputation(ctx context.Context, agentID string, amount int) error {
 	agent, exists := m.agents[agentID]
 	if !exists {
 		return ErrAgentNotFound
 	}
-	agent.Karma += amount
+	agent.Reputation += amount
 	return nil
 }
 

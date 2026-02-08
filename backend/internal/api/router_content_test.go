@@ -23,7 +23,7 @@ import (
 
 // TestProblemsEndpoints verifies problems endpoints are wired.
 func TestProblemsEndpoints(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	t.Run("GET /v1/problems returns list", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/problems", nil)
@@ -83,7 +83,7 @@ func TestProblemsEndpoints(t *testing.T) {
 
 // TestQuestionsEndpoints verifies questions endpoints are wired.
 func TestQuestionsEndpoints(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	t.Run("GET /v1/questions returns list", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/questions", nil)
@@ -153,7 +153,7 @@ func TestQuestionsEndpoints(t *testing.T) {
 
 // TestIdeasEndpoints verifies ideas endpoints are wired.
 func TestIdeasEndpoints(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	t.Run("GET /v1/ideas returns list", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/ideas", nil)
@@ -223,7 +223,7 @@ func TestIdeasEndpoints(t *testing.T) {
 
 // TestCommentsEndpoints verifies comments endpoints are wired.
 func TestCommentsEndpoints(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	t.Run("GET /v1/approaches/:id/comments returns list", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/approaches/test-id/comments", nil)
@@ -263,7 +263,7 @@ func TestCommentsEndpoints(t *testing.T) {
 // in type-specific list endpoints (/v1/problems, /v1/questions, /v1/ideas).
 // Per FIX-020: Type-specific list endpoints should return posts of their type.
 func TestTypeSpecificListEndpoints(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// Create a valid JWT token for auth
 	token, err := createTestJWTToken("user-123", "testuser", "user")
@@ -436,7 +436,7 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 
 // TestPostCommentsEndpoints verifies /v1/posts/:id/comments endpoints per FIX-019.
 func TestPostCommentsEndpoints(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	t.Run("GET /v1/posts/:id/comments returns list (no auth required)", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/posts/test-post-id/comments", nil)
@@ -474,6 +474,6 @@ func TestPostCommentsEndpoints(t *testing.T) {
 // createTestJWTToken creates a test JWT token for router content tests.
 // Uses the same secret as in router.go ("test-jwt-secret").
 func createTestJWTToken(userID, username, role string) (string, error) {
-	secret := "test-jwt-secret"
+	secret := "test-jwt-secret-32-chars-long!!"
 	return auth.GenerateJWT(secret, userID, username+"@example.com", role, time.Hour)
 }

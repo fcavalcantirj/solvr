@@ -16,14 +16,14 @@ function formatNumber(num: number): string {
   return num.toLocaleString();
 }
 
-function formatKarma(karma: number): string {
-  if (karma >= 1000) {
-    return (karma / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+function formatReputation(rep: number): string {
+  if (rep >= 1000) {
+    return (rep / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
   }
-  return karma.toString();
+  return rep.toString();
 }
 
-type SortOption = 'newest' | 'karma' | 'agents';
+type SortOption = 'newest' | 'reputation' | 'agents';
 
 interface UserCardProps {
   user: UserListItem;
@@ -79,13 +79,13 @@ function UserCard({ user, rank }: UserCardProps) {
             </div>
           </div>
 
-          {/* Karma badge */}
+          {/* Reputation badge */}
           <div className="flex flex-col items-center">
             <div className="font-mono text-lg font-medium text-emerald-500">
-              +{formatKarma(user.karma)}
+              +{formatReputation(user.reputation)}
             </div>
             <span className="font-mono text-[9px] tracking-wider text-muted-foreground">
-              KARMA
+              REP
             </span>
           </div>
         </div>
@@ -135,7 +135,7 @@ function UsersList({ options = {} }: UsersListProps) {
         <UserCard
           key={user.id}
           user={user}
-          rank={options.sort === 'karma' ? index + 1 : undefined}
+          rank={options.sort === 'reputation' ? index + 1 : undefined}
         />
       ))}
 
@@ -189,7 +189,7 @@ export default function UsersPage() {
                   USERS
                 </h1>
                 <p className="font-mono text-xs sm:text-sm text-muted-foreground mt-3 max-w-xl">
-                  Human developers collaborating on Solvr. Back AI agents, post problems, and earn karma.
+                  Human developers collaborating on Solvr. Back AI agents, post problems, and earn reputation.
                 </p>
               </div>
 
@@ -202,7 +202,7 @@ export default function UsersPage() {
                   className="font-mono text-xs bg-background border border-border px-3 py-2 focus:outline-none focus:ring-1 focus:ring-foreground"
                 >
                   <option value="newest">NEWEST</option>
-                  <option value="karma">KARMA</option>
+                  <option value="reputation">REP</option>
                   <option value="agents">AGENTS</option>
                 </select>
               </div>

@@ -392,7 +392,7 @@ func findInCSV(csv, target string) bool {
 // TestAgentsRegisterEndpoint verifies POST /v1/agents/register endpoint is wired.
 // Per API-CRITICAL requirement: Wire POST /v1/agents/register endpoint.
 func TestAgentsRegisterEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// Create a valid registration request
 	reqBody := `{"name":"test_agent","description":"A test agent"}`
@@ -432,7 +432,7 @@ func TestAgentsRegisterEndpoint(t *testing.T) {
 // Per API-CRITICAL requirement: Wire GET/POST /v1/agents/{id}/claim endpoints.
 // The implementation uses /v1/agents/me/claim for agent self-claim.
 func TestClaimEndpointExists(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// POST /v1/agents/me/claim should return 401 without auth (not 404)
 	req := httptest.NewRequest(http.MethodPost, "/v1/agents/me/claim", nil)
@@ -453,7 +453,7 @@ func TestClaimEndpointExists(t *testing.T) {
 // TestGetClaimInfoEndpointExists verifies GET /v1/claim/{token} endpoint exists.
 // Per API-CRITICAL requirement: Wire /v1/claim/{token} endpoints.
 func TestGetClaimInfoEndpointExists(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// GET /v1/claim/{token} should not return 404
 	req := httptest.NewRequest(http.MethodGet, "/v1/claim/test_token_123", nil)
@@ -475,7 +475,7 @@ func TestGetClaimInfoEndpointExists(t *testing.T) {
 // TestConfirmClaimEndpointExists verifies POST /v1/claim/{token} endpoint exists.
 // Per API-CRITICAL requirement: Wire /v1/claim/{token} endpoints.
 func TestConfirmClaimEndpointExists(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// POST /v1/claim/{token} should return 401 without auth (not 404)
 	req := httptest.NewRequest(http.MethodPost, "/v1/claim/test_token_123", nil)
@@ -496,7 +496,7 @@ func TestConfirmClaimEndpointExists(t *testing.T) {
 // TestGitHubOAuthRedirectEndpoint verifies GET /v1/auth/github endpoint is wired.
 // Per API-CRITICAL requirement: Wire OAuth endpoints /v1/auth/github/*.
 func TestGitHubOAuthRedirectEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// GET /v1/auth/github should redirect to GitHub OAuth
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github", nil)
@@ -526,7 +526,7 @@ func TestGitHubOAuthRedirectEndpoint(t *testing.T) {
 // TestGitHubOAuthCallbackEndpoint verifies GET /v1/auth/github/callback endpoint is wired.
 // Per API-CRITICAL requirement: Wire OAuth endpoints /v1/auth/github/*.
 func TestGitHubOAuthCallbackEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// GET /v1/auth/github/callback without code should return 400 (not 404)
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback", nil)
@@ -558,7 +558,7 @@ func TestGitHubOAuthCallbackEndpoint(t *testing.T) {
 // TestGoogleOAuthRedirectEndpoint verifies GET /v1/auth/google endpoint is wired.
 // Per API-CRITICAL requirement: Wire OAuth endpoints /v1/auth/google/*.
 func TestGoogleOAuthRedirectEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// GET /v1/auth/google should redirect to Google OAuth
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/google", nil)
@@ -597,7 +597,7 @@ func getKeys(m map[string]interface{}) []string {
 // TestGoogleOAuthCallbackEndpoint verifies GET /v1/auth/google/callback endpoint is wired.
 // Per API-CRITICAL requirement: Wire OAuth endpoints /v1/auth/google/*.
 func TestGoogleOAuthCallbackEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// GET /v1/auth/google/callback without code should return 400 (not 404)
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/google/callback", nil)
@@ -629,7 +629,7 @@ func TestGoogleOAuthCallbackEndpoint(t *testing.T) {
 // TestGetPostsEndpoint verifies GET /v1/posts endpoint is wired.
 // Per API-CRITICAL requirement: Wire GET/POST /v1/posts endpoints.
 func TestGetPostsEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// GET /v1/posts should return 200 with posts list
 	req := httptest.NewRequest(http.MethodGet, "/v1/posts", nil)
@@ -682,7 +682,7 @@ func TestGetPostsEndpoint(t *testing.T) {
 // TestGetSinglePostEndpoint verifies GET /v1/posts/:id endpoint is wired.
 // Per API-CRITICAL requirement: Wire GET/POST /v1/posts endpoints.
 func TestGetSinglePostEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// GET /v1/posts/:id with non-existent ID should return 404 (not found post, not route)
 	req := httptest.NewRequest(http.MethodGet, "/v1/posts/00000000-0000-0000-0000-000000000001", nil)
@@ -715,7 +715,7 @@ func TestGetSinglePostEndpoint(t *testing.T) {
 // TestCreatePostEndpointRequiresAuth verifies POST /v1/posts requires authentication.
 // Per API-CRITICAL requirement: Wire GET/POST /v1/posts endpoints.
 func TestCreatePostEndpointRequiresAuth(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// POST /v1/posts without auth should return 401
 	reqBody := `{"type":"question","title":"Test question title","description":"This is a test question description that is long enough"}`
@@ -750,7 +750,7 @@ func TestCreatePostEndpointRequiresAuth(t *testing.T) {
 // TestGetPostsEndpointNoPlaceholder verifies GET /v1/posts returns real data, not placeholder.
 // Per FIX-001: routes.go placeholders override real router.go handlers
 func TestGetPostsEndpointNoPlaceholder(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/posts", nil)
 	w := httptest.NewRecorder()
@@ -791,7 +791,7 @@ func TestGetPostsEndpointNoPlaceholder(t *testing.T) {
 // TestGetAgentProfileEndpoint verifies GET /v1/agents/{id} returns real agent data, not placeholder.
 // Per FIX-001 and FIX-006: routes.go placeholders override real router.go handlers
 func TestGetAgentProfileEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// Use in-memory repo's first agent - register one first
 	reqBody := `{"name":"test_profile_agent","description":"Test agent for profile endpoint"}`
@@ -865,7 +865,7 @@ func TestGetAgentProfileEndpoint(t *testing.T) {
 // TestClaimEndpointWithAPIKeyAuth verifies POST /v1/agents/me/claim works with valid API key.
 // Per FIX-002: Add API key auth middleware to /v1/agents/me/claim
 func TestClaimEndpointWithAPIKeyAuth(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// First, register an agent to get an API key
 	reqBody := `{"name":"claim_test_agent","description":"Test agent for claim endpoint"}`
@@ -918,7 +918,7 @@ func TestClaimEndpointWithAPIKeyAuth(t *testing.T) {
 // TestClaimEndpointWithInvalidAPIKey verifies POST /v1/agents/me/claim rejects invalid API key.
 // Per FIX-002: Add API key auth middleware to /v1/agents/me/claim
 func TestClaimEndpointWithInvalidAPIKey(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// Try to call claim endpoint with invalid API key
 	claimReq := httptest.NewRequest(http.MethodPost, "/v1/agents/me/claim", nil)
@@ -945,7 +945,7 @@ func TestClaimEndpointWithInvalidAPIKey(t *testing.T) {
 // TestMeEndpointRequiresAuth verifies GET /v1/me requires authentication.
 // Per FIX-005: Wire /v1/me endpoint
 func TestMeEndpointRequiresAuth(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// GET /v1/me without auth should return 401
 	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
@@ -977,7 +977,7 @@ func TestMeEndpointRequiresAuth(t *testing.T) {
 // TestMeEndpointWithAPIKey verifies GET /v1/me returns agent info with API key auth.
 // Per FIX-005: GET /v1/me with API key returns agent info
 func TestMeEndpointWithAPIKey(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// First, register an agent to get an API key
 	reqBody := `{"name":"me_test_agent","description":"Test agent for /me endpoint"}`
@@ -1042,7 +1042,7 @@ func TestMeEndpointWithAPIKey(t *testing.T) {
 // TestMCPEndpointExists verifies POST /v1/mcp endpoint is wired.
 // Per MCP-005: Add HTTP transport support for MCP
 func TestMCPEndpointExists(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// POST /v1/mcp with initialize method should return 200 OK
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`
@@ -1091,7 +1091,7 @@ func TestMCPEndpointExists(t *testing.T) {
 // TestMCPToolsListEndpoint verifies POST /v1/mcp tools/list returns 4 tools.
 // Per MCP-005: MCP over HTTP should expose all 4 tools
 func TestMCPToolsListEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	reqBody := `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/mcp", strings.NewReader(reqBody))
@@ -1136,7 +1136,7 @@ func TestMCPToolsListEndpoint(t *testing.T) {
 // Per user decision: search should not be public - it requires an agent key,
 // user API key, or JWT token.
 func TestSearchEndpointRequiresAuth(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// GET /v1/search without auth should return 401
 	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)
@@ -1167,7 +1167,7 @@ func TestSearchEndpointRequiresAuth(t *testing.T) {
 
 // TestSearchEndpointWithAPIKey verifies GET /v1/search works with valid agent API key.
 func TestSearchEndpointWithAPIKey(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// First, register an agent to get an API key
 	reqBody := `{"name":"search_test_agent","description":"Test agent for search endpoint"}`
@@ -1219,7 +1219,7 @@ func TestSearchEndpointWithAPIKey(t *testing.T) {
 
 // TestSearchEndpointWithInvalidAPIKey verifies GET /v1/search rejects invalid API key.
 func TestSearchEndpointWithInvalidAPIKey(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// GET /v1/search with invalid API key should return 401
 	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)
@@ -1245,7 +1245,7 @@ func TestSearchEndpointWithInvalidAPIKey(t *testing.T) {
 
 // TestSearchEndpointWithMalformedAuth verifies GET /v1/search rejects malformed auth.
 func TestSearchEndpointWithMalformedAuth(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// GET /v1/search with malformed auth header should return 401
 	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)

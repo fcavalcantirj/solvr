@@ -97,7 +97,7 @@ export function CopyResearchButton({ problemId, isClosed }: CopyResearchButtonPr
                 : "bg-foreground text-background hover:opacity-80 hover:shadow-none border-2 border-foreground shadow-[2px_2px_0_0_hsl(var(--foreground))]"
           }
         `}
-        title={isClosed ? "Cannot copy closed problems" : "Copy problem details for LLM research"}
+        title={isClosed ? "Problem already resolved" : "Copy problem details for LLM research"}
       >
         {getIcon()}
         {getLabel()}

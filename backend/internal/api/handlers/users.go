@@ -144,7 +144,7 @@ type UserAgentsResponse struct {
 }
 
 // UsersListResponse is the response for GET /v1/users.
-// Per prd-v4: Return user list with public info, karma, agents_count.
+// Per prd-v4: Return user list with public info, reputation, agents_count.
 type UsersListResponse struct {
 	Data []models.UserListItem `json:"data"`
 	Meta struct {
@@ -199,7 +199,7 @@ func (h *UsersHandler) GetUserAgents(w http.ResponseWriter, r *http.Request) {
 
 // ListUsers handles GET /v1/users.
 // Per prd-v4: List all users with pagination and sorting.
-// Response includes: id, username, display_name, avatar_url, karma, agents_count, created_at.
+// Response includes: id, username, display_name, avatar_url, reputation, agents_count, created_at.
 // Does NOT expose email or auth_provider_id.
 func (h *UsersHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -236,10 +236,10 @@ func (h *UsersHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Parse sort (newest/karma/agents)
+	// Parse sort (newest/reputation/agents)
 	if sort := r.URL.Query().Get("sort"); sort != "" {
 		switch sort {
-		case models.PublicUserSortNewest, models.PublicUserSortKarma, models.PublicUserSortAgents:
+		case models.PublicUserSortNewest, models.PublicUserSortReputation, models.PublicUserSortAgents:
 			opts.Sort = sort
 		}
 	}

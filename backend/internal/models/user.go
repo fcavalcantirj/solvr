@@ -81,22 +81,22 @@ type UserListItem struct {
 	Username    string    `json:"username"`
 	DisplayName string    `json:"display_name"`
 	AvatarURL   string    `json:"avatar_url,omitempty"`
-	Karma       int       `json:"karma"`
+	Reputation  int       `json:"reputation"`
 	AgentsCount int       `json:"agents_count"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
 // PublicUserListOptions contains options for listing users via public API.
-// Per prd-v4: limit (default 20, max 100), offset, sort (newest/karma/agents).
+// Per prd-v4: limit (default 20, max 100), offset, sort (newest/reputation/agents).
 type PublicUserListOptions struct {
 	Limit  int    // Default 20, max 100
 	Offset int    // Default 0
-	Sort   string // "newest" (default), "karma", "agents"
+	Sort   string // "newest" (default), "reputation", "agents"
 }
 
 // Public user list sort constants
 const (
-	PublicUserSortNewest = "newest"
-	PublicUserSortKarma  = "karma"
-	PublicUserSortAgents = "agents"
+	PublicUserSortNewest     = "newest"
+	PublicUserSortReputation = "reputation"
+	PublicUserSortAgents     = "agents"
 )

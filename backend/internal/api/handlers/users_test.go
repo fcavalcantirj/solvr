@@ -55,7 +55,7 @@ func TestGetUserAgents_Success(t *testing.T) {
 			HumanID:             &humanID,
 			Bio:                 "First agent",
 			Model:               "claude-opus-4",
-			Karma:               100,
+			Reputation:               100,
 			HasHumanBackedBadge: true,
 			CreatedAt:           time.Now(),
 			UpdatedAt:           time.Now(),
@@ -66,7 +66,7 @@ func TestGetUserAgents_Success(t *testing.T) {
 			HumanID:             &humanID,
 			Bio:                 "Second agent",
 			Model:               "gpt-4",
-			Karma:               50,
+			Reputation:               50,
 			HasHumanBackedBadge: true,
 			CreatedAt:           time.Now(),
 			UpdatedAt:           time.Now(),
@@ -225,7 +225,7 @@ func (m *MockUserListRepository) List(ctx context.Context, opts models.PublicUse
 // ============================================================================
 
 // TestListUsers_Success tests that the endpoint returns users list.
-// Per prd-v4: Response includes id, username, display_name, avatar_url, karma, agents_count, created_at
+// Per prd-v4: Response includes id, username, display_name, avatar_url, reputation, agents_count, created_at
 func TestListUsers_Success(t *testing.T) {
 	userListRepo := NewMockUserListRepository()
 	handler := NewUsersHandler(nil, nil)
@@ -238,7 +238,7 @@ func TestListUsers_Success(t *testing.T) {
 			Username:    "alice",
 			DisplayName: "Alice Smith",
 			AvatarURL:   "https://example.com/alice.jpg",
-			Karma:       150,
+			Reputation:       150,
 			AgentsCount: 3,
 			CreatedAt:   now,
 		},
@@ -247,7 +247,7 @@ func TestListUsers_Success(t *testing.T) {
 			Username:    "bob",
 			DisplayName: "Bob Jones",
 			AvatarURL:   "https://example.com/bob.jpg",
-			Karma:       75,
+			Reputation:       75,
 			AgentsCount: 1,
 			CreatedAt:   now.Add(-time.Hour),
 		},
@@ -294,8 +294,8 @@ func TestListUsers_Success(t *testing.T) {
 		t.Errorf("expected username 'alice', got '%s'", resp.Data[0].Username)
 	}
 
-	if resp.Data[0].Karma != 150 {
-		t.Errorf("expected karma 150, got %d", resp.Data[0].Karma)
+	if resp.Data[0].Reputation != 150 {
+		t.Errorf("expected reputation 150, got %d", resp.Data[0].Reputation)
 	}
 
 	if resp.Data[0].AgentsCount != 3 {
@@ -317,7 +317,7 @@ func TestListUsers_WithPagination(t *testing.T) {
 			ID:          "user-" + string(rune('0'+i)),
 			Username:    "user" + string(rune('0'+i)),
 			DisplayName: "User " + string(rune('0'+i)),
-			Karma:       i * 10,
+			Reputation:       i * 10,
 			AgentsCount: i,
 			CreatedAt:   now,
 		})

@@ -18,7 +18,7 @@ export interface AgentData {
   displayName: string;
   bio: string;
   status: string;
-  karma: number;
+  reputation: number;
   createdAt: string;
   hasHumanBackedBadge: boolean;
   avatarUrl?: string;
@@ -44,7 +44,7 @@ function transformAgent(
     display_name: string;
     bio: string;
     status: string;
-    karma: number;
+    reputation: number;
     created_at: string;
     has_human_backed_badge: boolean;
     avatar_url?: string | null;
@@ -71,7 +71,7 @@ function transformAgent(
     displayName: agent.display_name || 'Unknown Agent',
     bio: agent.bio || '',
     status: agent.status || 'active',
-    karma: agent.karma ?? 0,
+    reputation: agent.reputation ?? 0,
     createdAt,
     hasHumanBackedBadge: agent.has_human_backed_badge ?? false,
     avatarUrl: agent.avatar_url || undefined,

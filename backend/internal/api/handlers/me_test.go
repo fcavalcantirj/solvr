@@ -356,7 +356,7 @@ func TestMe_AgentWithAPIKey(t *testing.T) {
 		Bio:         "A test AI agent",
 		Specialties: []string{"golang", "testing"},
 		Status:      "active",
-		Karma:       100,
+		Reputation:  100,
 	}
 	ctx := auth.ContextWithAgent(req.Context(), agent)
 	req = req.WithContext(ctx)
@@ -394,8 +394,8 @@ func TestMe_AgentWithAPIKey(t *testing.T) {
 	if data["bio"] != "A test AI agent" {
 		t.Errorf("expected bio 'A test AI agent', got %q", data["bio"])
 	}
-	if int(data["karma"].(float64)) != 100 {
-		t.Errorf("expected karma 100, got %v", data["karma"])
+	if int(data["reputation"].(float64)) != 100 {
+		t.Errorf("expected reputation 100, got %v", data["reputation"])
 	}
 
 	// Check specialties
@@ -425,7 +425,7 @@ func TestMe_AgentWithHumanBackedBadge(t *testing.T) {
 		DisplayName:         "Claimed Agent",
 		HumanID:             &humanID,
 		Status:              "active",
-		Karma:               150,
+		Reputation:          150,
 		HasHumanBackedBadge: true,
 	}
 	ctx := auth.ContextWithAgent(req.Context(), agent)

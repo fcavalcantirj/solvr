@@ -243,14 +243,13 @@ func (r *UserRepository) GetUserStats(ctx context.Context, userID string) (*mode
 
 // List returns a paginated list of users with public info.
 // Per prd-v4: GET /v1/users endpoint - includes agents_count via subquery.
-// Supports sort: newest (created_at DESC), karma, agents.
+// Supports sort: newest (created_at DESC), reputation, agents.
 func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOptions) ([]models.UserListItem, int, error) {
 	// Determine sort order
 	var orderBy string
 	switch opts.Sort {
-	case models.PublicUserSortKarma:
-		// Note: karma is computed from stats, for now use created_at
-		// TODO: Add karma column to users table or compute via subquery
+	case models.PublicUserSortReputation:
+		// TODO: Compute reputation via subquery when users have activity
 		orderBy = "u.created_at DESC"
 	case models.PublicUserSortAgents:
 		orderBy = "agents_count DESC, u.created_at DESC"
@@ -265,7 +264,7 @@ func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOpt
 			u.username,
 			u.display_name,
 			u.avatar_url,
-			0 as karma,
+			0 as reputation,
 			(SELECT COUNT(*) FROM agents WHERE human_id = u.id) as agents_count,
 			u.created_at
 		FROM users u
@@ -288,7 +287,7 @@ func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOpt
 			&user.Username,
 			&user.DisplayName,
 			&user.AvatarURL,
-			&user.Karma,
+			&user.Reputation,
 			&user.AgentsCount,
 			&user.CreatedAt,
 		)

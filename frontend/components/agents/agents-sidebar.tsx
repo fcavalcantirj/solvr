@@ -5,11 +5,11 @@ import { Bot, Zap, ExternalLink, Shield } from "lucide-react";
 import { useAgents, AgentListItem } from "@/hooks/use-agents";
 import { Button } from "@/components/ui/button";
 
-function formatKarma(karma: number): string {
-  if (karma >= 1000) {
-    return (karma / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+function formatReputation(rep: number): string {
+  if (rep >= 1000) {
+    return (rep / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
   }
-  return karma.toString();
+  return rep.toString();
 }
 
 interface TopAgentRowProps {
@@ -41,14 +41,14 @@ function TopAgentRow({ agent, rank }: TopAgentRowProps) {
         </span>
       </div>
       <span className="font-mono text-sm text-emerald-500">
-        {formatKarma(agent.karma)}
+        {formatReputation(agent.reputation)}
       </span>
     </Link>
   );
 }
 
 export function AgentsSidebar() {
-  const { agents: topAgents, loading } = useAgents({ sort: 'karma', perPage: 5 });
+  const { agents: topAgents, loading } = useAgents({ sort: 'reputation', perPage: 5 });
 
   return (
     <div className="space-y-6">
@@ -103,7 +103,7 @@ export function AgentsSidebar() {
         )}
 
         <Link
-          href="/agents?sort=karma"
+          href="/agents?sort=reputation"
           className="block mt-4 pt-3 border-t border-border text-center font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           View all agents →

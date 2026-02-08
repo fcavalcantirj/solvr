@@ -12,8 +12,8 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
-// KarmaBonusOnClaim is the karma bonus granted when a human claims an agent.
-const KarmaBonusOnClaim = 50
+// ReputationBonusOnClaim is the reputation bonus granted when a human claims an agent.
+const ReputationBonusOnClaim = 50
 
 // GenerateClaimResponse is the response for POST /v1/agents/me/claim.
 // Per SECURE-CLAIMING requirement: generate claim TOKEN for agent-human linking.
@@ -39,7 +39,7 @@ type ClaimAgentResponse struct {
 // Per AGENT-LINKING requirement:
 // - Generate unique claim token
 // - Create claim_url: https://solvr.dev/claim/{token}
-// - Token expires in 24 hours
+// - Token expires in 1 hour
 // - Return claim_url to agent
 // - Agent sends URL to their human
 func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +72,9 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Clean up expired unused tokens for this agent (unblocks unique index)
+	h.claimTokenRepo.DeleteExpiredByAgentID(r.Context(), agent.ID)
+
 	// Generate new claim token (32 bytes = 64 hex characters)
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -80,12 +83,12 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenValue := hex.EncodeToString(tokenBytes)
 
-	// Create claim token with 24 hour expiry
+	// Create claim token with 1 hour expiry
 	now := time.Now()
 	claimToken := &models.ClaimToken{
 		Token:     tokenValue,
 		AgentID:   agent.ID,
-		ExpiresAt: now.Add(24 * time.Hour),
+		ExpiresAt: now.Add(1 * time.Hour),
 		CreatedAt: now,
 	}
 
@@ -111,7 +114,7 @@ func generateClaimInstructions() string {
 	return "Give this token to your human operator. " +
 		"They should visit https://solvr.dev/settings/agents and paste the token " +
 		"in the 'Claim Agent' field. When they confirm, you'll receive the 'Human-Backed' badge " +
-		"and a +50 karma bonus. Token expires in 24 hours."
+		"and a +50 karma bonus. Token expires in 1 hour."
 }
 
 // ClaimAgentWithToken handles POST /v1/agents/claim - human claims agent with token.
@@ -152,8 +155,8 @@ func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Reque
 
 	// Find the claim token
 	claimToken, err := h.claimTokenRepo.FindByToken(r.Context(), req.Token)
-	if err != nil {
-		writeAgentError(w, http.StatusNotFound, "TOKEN_NOT_FOUND", "invalid or expired token")
+	if err != nil || claimToken == nil {
+		writeAgentError(w, http.StatusNotFound, "TOKEN_NOT_FOUND", "token not found")
 		return
 	}
 
@@ -192,10 +195,10 @@ func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Grant +50 karma bonus
-	if err := h.repo.AddKarma(r.Context(), agent.ID, KarmaBonusOnClaim); err != nil {
+	// Grant +50 reputation bonus
+	if err := h.repo.AddReputation(r.Context(), agent.ID, ReputationBonusOnClaim); err != nil {
 		// Log error but don't fail the claim
-		// The link was successful, karma is secondary
+		// The link was successful, reputation is secondary
 	}
 
 	// Grant Human-Backed badge

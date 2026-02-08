@@ -178,11 +178,11 @@ export default function UserProfilePage() {
                 <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
                   <Award size={14} className="text-muted-foreground" />
                   <span className="font-mono text-[10px] sm:text-xs tracking-wider text-muted-foreground">
-                    KARMA
+                    REP
                   </span>
                 </div>
                 <p className="font-mono text-2xl sm:text-3xl font-medium">
-                  {formatNumber(user.stats.karma)}
+                  {formatNumber(user.stats.reputation)}
                 </p>
               </div>
             </div>
@@ -221,7 +221,7 @@ export default function UserProfilePage() {
                             </p>
                           )}
                           <span className="font-mono text-[10px] text-muted-foreground mt-2 inline-block">
-                            {agent.karma} KARMA
+                            {agent.reputation} REP
                           </span>
                         </div>
                       </div>

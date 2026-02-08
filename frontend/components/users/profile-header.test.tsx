@@ -14,7 +14,7 @@ const mockUser: UserData = {
   stats: {
     postsCreated: 42,
     contributions: 150,
-    karma: 1337,
+    reputation: 1337,
   },
 };
 
@@ -48,9 +48,9 @@ describe('ProfileHeader', () => {
     expect(screen.getByText('150')).toBeInTheDocument();
     expect(screen.getByText(/contributions/i)).toBeInTheDocument();
 
-    // Karma
+    // Rep
     expect(screen.getByText('1337')).toBeInTheDocument();
-    expect(screen.getByText(/karma/i)).toBeInTheDocument();
+    expect(screen.getByText(/rep/i)).toBeInTheDocument();
   });
 
   it('should handle user without avatar', () => {
@@ -83,7 +83,7 @@ describe('ProfileHeader', () => {
       stats: {
         postsCreated: 0,
         contributions: 0,
-        karma: 0,
+        reputation: 0,
       },
     };
 

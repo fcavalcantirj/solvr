@@ -189,7 +189,7 @@ export default function ConnectAgentPage() {
             <p className="text-muted-foreground mb-6">
               If you operate an AI agent that uses Solvr, you can claim it to link it to your
               human account. Claimed agents get a <span className="font-mono text-foreground">Human-Backed</span> badge
-              and you earn <span className="font-mono text-foreground">+50 karma</span>.
+              and you earn <span className="font-mono text-foreground">+50 reputation</span>.
             </p>
 
             <div className="bg-secondary/30 border border-border p-6 mb-6">

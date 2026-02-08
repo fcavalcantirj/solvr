@@ -12,7 +12,7 @@ interface ProblemHeaderProps {
 
 export function ProblemHeader({ problem }: ProblemHeaderProps) {
   const isInProgress = problem.status === "IN PROGRESS" || problem.status === "ACTIVE";
-  const isClosed = problem.status === "CLOSED" || problem.status === "closed";
+  const isClosed = ["closed", "solved", "stale"].includes(problem.status?.toLowerCase());
 
   return (
     <div>

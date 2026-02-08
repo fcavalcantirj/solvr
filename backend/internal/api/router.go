@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -107,41 +108,26 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	var bookmarksRepo handlers.BookmarksRepositoryInterface
 	var viewsRepo handlers.ViewsRepositoryInterface
 	var reportsRepo handlers.ReportsRepositoryInterface
-	if pool != nil {
-		agentRepo = db.NewAgentRepository(pool)
-		claimTokenRepo = db.NewClaimTokenRepository(pool)
-		postsRepo = db.NewPostRepository(pool)
-		searchRepo = db.NewSearchRepository(pool)
-		feedRepo = db.NewFeedRepository(pool)
-		userRepo = db.NewUserRepository(pool)
-		userAPIKeysRepo = db.NewUserAPIKeyRepository(pool)
-		bookmarksRepo = db.NewBookmarkRepository(pool)
-		viewsRepo = db.NewViewsRepository(pool)
-		reportsRepo = db.NewReportsRepository(pool)
-		// Database-backed repositories - persist across restarts
-		problemsRepo = db.NewProblemsRepository(pool)
-		questionsRepo = db.NewQuestionsRepository(pool)
-		ideasRepo = db.NewIdeasRepository(pool)
-		commentsRepo = NewInMemoryCommentsRepository()
-		notificationsRepo = NewInMemoryNotificationsRepository()
-	} else {
-		// Use in-memory repository for testing when no DB is available
-		agentRepo = NewInMemoryAgentRepository()
-		claimTokenRepo = NewInMemoryClaimTokenRepository()
-		postsRepo = NewInMemoryPostRepository()
-		searchRepo = NewInMemorySearchRepository()
-		feedRepo = NewInMemoryFeedRepository()
-		userRepo = NewInMemoryUserRepository()
-		problemsRepo = NewInMemoryProblemsRepository()
-		questionsRepo = NewInMemoryQuestionsRepository()
-		ideasRepo = NewInMemoryIdeasRepository()
-		commentsRepo = NewInMemoryCommentsRepository()
-		notificationsRepo = NewInMemoryNotificationsRepository()
-		userAPIKeysRepo = NewInMemoryUserAPIKeyRepository()
-		bookmarksRepo = NewInMemoryBookmarksRepository()
-		viewsRepo = NewInMemoryViewsRepository()
-		reportsRepo = NewInMemoryReportsRepository()
+	if pool == nil {
+		log.Println("WARNING: Database pool is nil. V1 API routes will not be mounted.")
+		return
 	}
+
+	agentRepo = db.NewAgentRepository(pool)
+	claimTokenRepo = db.NewClaimTokenRepository(pool)
+	postsRepo = db.NewPostRepository(pool)
+	searchRepo = db.NewSearchRepository(pool)
+	feedRepo = db.NewFeedRepository(pool)
+	userRepo = db.NewUserRepository(pool)
+	userAPIKeysRepo = db.NewUserAPIKeyRepository(pool)
+	bookmarksRepo = db.NewBookmarkRepository(pool)
+	viewsRepo = db.NewViewsRepository(pool)
+	reportsRepo = db.NewReportsRepository(pool)
+	problemsRepo = db.NewProblemsRepository(pool)
+	questionsRepo = db.NewQuestionsRepository(pool)
+	ideasRepo = db.NewIdeasRepository(pool)
+	commentsRepo = db.NewCommentsRepository(pool)
+	notificationsRepo = db.NewNotificationsRepository(pool)
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
 	agentsHandler.SetClaimTokenRepository(claimTokenRepo)

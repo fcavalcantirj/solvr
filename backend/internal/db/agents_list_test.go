@@ -63,13 +63,13 @@ func TestAgentRepository_List_WithAgents(t *testing.T) {
 		ID:          "list_agent1_" + timestamp,
 		DisplayName: "List Test Agent 1",
 		Bio:         "First test agent for listing",
-		Karma:       100,
+		Reputation:  100,
 	}
 	agent2 := &models.Agent{
 		ID:          "list_agent2_" + timestamp,
 		DisplayName: "List Test Agent 2",
 		Bio:         "Second test agent for listing",
-		Karma:       50,
+		Reputation:  50,
 	}
 
 	err := repo.Create(ctx, agent1)
@@ -135,7 +135,7 @@ func TestAgentRepository_List_WithAgents(t *testing.T) {
 	}
 }
 
-func TestAgentRepository_List_SortByKarma(t *testing.T) {
+func TestAgentRepository_List_SortByReputation(t *testing.T) {
 	pool := getTestPool(t)
 	if pool == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -145,36 +145,36 @@ func TestAgentRepository_List_SortByKarma(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	// Create agents with different karma
+	// Create agents with different reputation
 	timestamp := time.Now().Format("20060102150405")
 
-	lowKarma := &models.Agent{
-		ID:          "karma_low_" + timestamp,
-		DisplayName: "Low Karma Agent",
+	lowRep := &models.Agent{
+		ID:          "rep_low_" + timestamp,
+		DisplayName: "Low Reputation Agent",
 	}
-	highKarma := &models.Agent{
-		ID:          "karma_high_" + timestamp,
-		DisplayName: "High Karma Agent",
+	highRep := &models.Agent{
+		ID:          "rep_high_" + timestamp,
+		DisplayName: "High Reputation Agent",
 	}
 
-	err := repo.Create(ctx, lowKarma)
+	err := repo.Create(ctx, lowRep)
 	if err != nil {
-		t.Fatalf("failed to create low karma agent: %v", err)
+		t.Fatalf("failed to create low reputation agent: %v", err)
 	}
-	err = repo.Create(ctx, highKarma)
+	err = repo.Create(ctx, highRep)
 	if err != nil {
-		t.Fatalf("failed to create high karma agent: %v", err)
+		t.Fatalf("failed to create high reputation agent: %v", err)
 	}
 
-	// Add karma to differentiate
-	repo.AddKarma(ctx, highKarma.ID, 200)
-	repo.AddKarma(ctx, lowKarma.ID, 10)
+	// Add reputation to differentiate
+	repo.AddReputation(ctx, highRep.ID, 200)
+	repo.AddReputation(ctx, lowRep.ID, 10)
 
-	// List sorted by karma descending
+	// List sorted by reputation descending
 	opts := models.AgentListOptions{
 		Page:    1,
 		PerPage: 100,
-		Sort:    "karma",
+		Sort:    "reputation",
 	}
 
 	agents, _, err := repo.List(ctx, opts)
@@ -185,10 +185,10 @@ func TestAgentRepository_List_SortByKarma(t *testing.T) {
 	// Find positions of our test agents
 	var highPos, lowPos int = -1, -1
 	for i, a := range agents {
-		if a.ID == highKarma.ID {
+		if a.ID == highRep.ID {
 			highPos = i
 		}
-		if a.ID == lowKarma.ID {
+		if a.ID == lowRep.ID {
 			lowPos = i
 		}
 	}
@@ -197,9 +197,9 @@ func TestAgentRepository_List_SortByKarma(t *testing.T) {
 		t.Fatal("test agents not found in results")
 	}
 
-	// High karma should come before low karma
+	// High reputation should come before low reputation
 	if highPos >= lowPos {
-		t.Errorf("expected high karma agent (pos %d) before low karma agent (pos %d)", highPos, lowPos)
+		t.Errorf("expected high reputation agent (pos %d) before low reputation agent (pos %d)", highPos, lowPos)
 	}
 }
 

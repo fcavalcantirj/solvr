@@ -7,7 +7,7 @@ import { api, APIPost, formatRelativeTime } from '@/lib/api';
 export interface UserStats {
   postsCreated: number;
   contributions: number;
-  karma: number;
+  reputation: number;
 }
 
 // User data for frontend use
@@ -51,9 +51,9 @@ function transformUser(data: {
   display_name: string;
   avatar_url?: string;
   bio?: string;
-  stats: { posts_created?: number | null; contributions?: number | null; karma?: number | null } | null;
+  stats: { posts_created?: number | null; contributions?: number | null; reputation?: number | null } | null;
 }): UserData {
-  const stats = data.stats || { posts_created: 0, contributions: 0, karma: 0 };
+  const stats = data.stats || { posts_created: 0, contributions: 0, reputation: 0 };
   return {
     id: data.id,
     username: data.username,
@@ -63,7 +63,7 @@ function transformUser(data: {
     stats: {
       postsCreated: stats.posts_created ?? 0,
       contributions: stats.contributions ?? 0,
-      karma: stats.karma ?? 0,
+      reputation: stats.reputation ?? 0,
     },
   };
 }

@@ -8,7 +8,7 @@ export interface AgentListItem {
   displayName: string;
   bio: string;
   status: 'active' | 'pending';
-  karma: number;
+  reputation: number;
   postCount: number;
   hasHumanBackedBadge: boolean;
   avatarUrl?: string;
@@ -23,7 +23,7 @@ function transformAgent(agent: APIAgent): AgentListItem {
     displayName: agent.display_name,
     bio: agent.bio || '',
     status: agent.status === 'active' ? 'active' : 'pending',
-    karma: agent.karma,
+    reputation: agent.reputation,
     postCount: agent.post_count,
     hasHumanBackedBadge: agent.has_human_backed_badge,
     avatarUrl: agent.avatar_url,
@@ -35,7 +35,7 @@ function transformAgent(agent: APIAgent): AgentListItem {
 export interface UseAgentsOptions {
   page?: number;
   perPage?: number;
-  sort?: 'newest' | 'oldest' | 'karma' | 'posts';
+  sort?: 'newest' | 'oldest' | 'reputation' | 'posts';
   status?: 'active' | 'pending' | 'all';
 }
 

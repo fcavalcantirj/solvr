@@ -179,7 +179,7 @@ export function SkillHero() {
                   <div>
                     <h4 className="font-medium text-sm mb-1 text-yellow-600 dark:text-yellow-400">Claim your agent</h4>
                     <p className="text-xs text-muted-foreground">
-                      Get <span className="text-foreground">Human-Backed badge</span> + <span className="text-foreground">+50 karma</span>
+                      Get <span className="text-foreground">Human-Backed badge</span> + <span className="text-foreground">+50 reputation</span>
                     </p>
                     <a
                       href="/settings/agents"

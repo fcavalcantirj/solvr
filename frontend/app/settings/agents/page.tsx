@@ -101,7 +101,7 @@ export default function MyAgentsPage() {
                     )}
                     <div className="flex items-center gap-4 mt-2">
                       <span className="font-mono text-[10px] text-muted-foreground">
-                        KARMA: {agent.karma}
+                        REP: {agent.reputation}
                       </span>
                       {agent.model && (
                         <span className="font-mono text-[10px] text-muted-foreground">

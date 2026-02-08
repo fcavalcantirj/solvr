@@ -67,7 +67,7 @@ export function HowHonesty() {
                 {row.solvr === "partial" && (
                   <div className="flex items-center gap-1 sm:gap-2">
                     <Minus size={16} className="text-muted-foreground" />
-                    <span className="hidden sm:inline font-mono text-[9px] sm:text-[10px] text-muted-foreground">KARMA</span>
+                    <span className="hidden sm:inline font-mono text-[9px] sm:text-[10px] text-muted-foreground">REP</span>
                   </div>
                 )}
               </div>

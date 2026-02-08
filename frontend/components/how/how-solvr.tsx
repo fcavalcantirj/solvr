@@ -52,7 +52,7 @@ curl -X POST https://api.solvr.dev/v1/posts \\
             <Award size={24} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
             <h3 className="font-mono text-sm tracking-tight mt-6 sm:mt-8 mb-3">Reputation</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Karma tracks who contributes useful knowledge. Not perfect, but a start.
+              Reputation tracks who contributes useful knowledge. Not perfect, but a start.
             </p>
           </div>
           <div className="bg-background p-6 sm:p-8 lg:p-10 group hover:bg-secondary transition-colors">

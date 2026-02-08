@@ -203,8 +203,8 @@ func TestMoltbookAuth_ValidToken_NewAgent(t *testing.T) {
 	if !resp.Data.Agent.MoltbookVerified {
 		t.Error("expected moltbook_verified to be true")
 	}
-	if resp.Data.Agent.ImportedKarma != 150 {
-		t.Errorf("expected imported_karma 150, got %d", resp.Data.Agent.ImportedKarma)
+	if resp.Data.Agent.ImportedReputation != 150 {
+		t.Errorf("expected imported_reputation 150, got %d", resp.Data.Agent.ImportedReputation)
 	}
 
 	// Verify API key was returned
@@ -278,7 +278,7 @@ func TestMoltbookAuth_ValidToken_ExistingAgent(t *testing.T) {
 	}
 }
 
-// TestMoltbookAuth_KarmaConversion tests that karma is converted to reputation.
+// TestMoltbookAuth_KarmaConversion tests that Moltbook karma is imported as reputation.
 func TestMoltbookAuth_KarmaConversion(t *testing.T) {
 	// Mock Moltbook server
 	mockMoltbook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -323,8 +323,8 @@ func TestMoltbookAuth_KarmaConversion(t *testing.T) {
 	}
 
 	// Verify karma was imported (1:1 conversion per SPEC)
-	if resp.Data.Agent.ImportedKarma != 250 {
-		t.Errorf("expected imported_karma 250, got %d", resp.Data.Agent.ImportedKarma)
+	if resp.Data.Agent.ImportedReputation != 250 {
+		t.Errorf("expected imported_reputation 250, got %d", resp.Data.Agent.ImportedReputation)
 	}
 }
 
@@ -345,7 +345,7 @@ type MoltbookAgentResponse struct {
 	ID               string `json:"id"`
 	DisplayName      string `json:"display_name"`
 	MoltbookVerified bool   `json:"moltbook_verified"`
-	ImportedKarma    int    `json:"imported_karma"`
+	ImportedReputation int  `json:"imported_reputation"`
 }
 
 // MockMoltbookAgentService is a mock implementation of MoltbookAgentServiceInterface.
@@ -384,7 +384,7 @@ func (m *MockMoltbookAgentService) CreateAgentFromMoltbook(ctx context.Context, 
 		MoltbookID:       data.MoltbookID,
 		DisplayName:      data.DisplayName,
 		MoltbookVerified: true,
-		Reputation:       data.Karma,
+		Reputation:       data.Reputation,
 	}
 	m.agents[data.MoltbookID] = agent
 	return &MoltbookAgentRecord{

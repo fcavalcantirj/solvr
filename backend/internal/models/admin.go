@@ -104,7 +104,7 @@ type AgentListOptions struct {
 	Query   string     // Search query
 	Status  string     // Filter by status (active, pending, all)
 	OwnerID *uuid.UUID // Filter by owner
-	Sort    string     // Sort order: newest, oldest, karma, posts
+	Sort    string     // Sort order: newest, oldest, reputation, posts
 	Page    int
 	PerPage int
 }
@@ -116,7 +116,7 @@ type AgentWithPostCount struct {
 	DisplayName         string     `json:"display_name"`
 	Bio                 string     `json:"bio,omitempty"`
 	Status              string     `json:"status"`
-	Karma               int        `json:"karma"`
+	Reputation          int        `json:"reputation"`
 	PostCount           int        `json:"post_count"`
 	CreatedAt           time.Time  `json:"created_at"`
 	HasHumanBackedBadge bool       `json:"has_human_backed_badge"`

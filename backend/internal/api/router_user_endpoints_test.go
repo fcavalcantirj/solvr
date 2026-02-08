@@ -14,7 +14,7 @@ import (
 
 // TestUserEndpoints_NotificationsRequiresAuth tests that GET /v1/notifications requires auth.
 func TestUserEndpoints_NotificationsRequiresAuth(t *testing.T) {
-	r := NewRouter(nil)
+	r := setupTestRouter(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/notifications", nil)
 	w := httptest.NewRecorder()
@@ -43,7 +43,7 @@ func TestUserEndpoints_NotificationsRequiresAuth(t *testing.T) {
 
 // TestUserEndpoints_NotificationsMarkReadRequiresAuth tests POST /v1/notifications/:id/read requires auth.
 func TestUserEndpoints_NotificationsMarkReadRequiresAuth(t *testing.T) {
-	r := NewRouter(nil)
+	r := setupTestRouter(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/notifications/test-123/read", nil)
 	w := httptest.NewRecorder()
@@ -58,7 +58,7 @@ func TestUserEndpoints_NotificationsMarkReadRequiresAuth(t *testing.T) {
 
 // TestUserEndpoints_NotificationsMarkAllReadRequiresAuth tests POST /v1/notifications/read-all requires auth.
 func TestUserEndpoints_NotificationsMarkAllReadRequiresAuth(t *testing.T) {
-	r := NewRouter(nil)
+	r := setupTestRouter(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/notifications/read-all", nil)
 	w := httptest.NewRecorder()
@@ -73,7 +73,7 @@ func TestUserEndpoints_NotificationsMarkAllReadRequiresAuth(t *testing.T) {
 
 // TestUserEndpoints_APIKeysListRequiresAuth tests GET /v1/users/me/api-keys requires auth.
 func TestUserEndpoints_APIKeysListRequiresAuth(t *testing.T) {
-	r := NewRouter(nil)
+	r := setupTestRouter(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/users/me/api-keys", nil)
 	w := httptest.NewRecorder()
@@ -102,7 +102,7 @@ func TestUserEndpoints_APIKeysListRequiresAuth(t *testing.T) {
 
 // TestUserEndpoints_APIKeysCreateRequiresAuth tests POST /v1/users/me/api-keys requires auth.
 func TestUserEndpoints_APIKeysCreateRequiresAuth(t *testing.T) {
-	r := NewRouter(nil)
+	r := setupTestRouter(t)
 
 	body := strings.NewReader(`{"name": "test-key"}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/users/me/api-keys", body)
@@ -119,7 +119,7 @@ func TestUserEndpoints_APIKeysCreateRequiresAuth(t *testing.T) {
 
 // TestUserEndpoints_APIKeysRevokeRequiresAuth tests DELETE /v1/users/me/api-keys/:id requires auth.
 func TestUserEndpoints_APIKeysRevokeRequiresAuth(t *testing.T) {
-	r := NewRouter(nil)
+	r := setupTestRouter(t)
 
 	req := httptest.NewRequest(http.MethodDelete, "/v1/users/me/api-keys/key-123", nil)
 	w := httptest.NewRecorder()
@@ -134,7 +134,7 @@ func TestUserEndpoints_APIKeysRevokeRequiresAuth(t *testing.T) {
 
 // TestUserEndpoints_APIKeysRegenerateRequiresAuth tests POST /v1/users/me/api-keys/:id/regenerate requires auth.
 func TestUserEndpoints_APIKeysRegenerateRequiresAuth(t *testing.T) {
-	r := NewRouter(nil)
+	r := setupTestRouter(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/users/me/api-keys/key-123/regenerate", nil)
 	w := httptest.NewRecorder()
@@ -149,7 +149,7 @@ func TestUserEndpoints_APIKeysRegenerateRequiresAuth(t *testing.T) {
 
 // TestUserEndpoints_MoltbookAuthAcceptsPost tests POST /v1/auth/moltbook is wired.
 func TestUserEndpoints_MoltbookAuthAcceptsPost(t *testing.T) {
-	r := NewRouter(nil)
+	r := setupTestRouter(t)
 
 	// POST without body should return validation error, not 404
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/moltbook", nil)
@@ -171,7 +171,7 @@ func TestUserEndpoints_MoltbookAuthAcceptsPost(t *testing.T) {
 
 // TestUserEndpoints_MoltbookAuthValidation tests POST /v1/auth/moltbook validates input.
 func TestUserEndpoints_MoltbookAuthValidation(t *testing.T) {
-	r := NewRouter(nil)
+	r := setupTestRouter(t)
 
 	// POST with empty identity_token should return validation error
 	body := strings.NewReader(`{"identity_token": ""}`)
@@ -202,7 +202,7 @@ func TestUserEndpoints_MoltbookAuthValidation(t *testing.T) {
 
 // TestUserEndpoints_NotificationsWithJWT tests GET /v1/notifications with JWT auth returns list.
 func TestUserEndpoints_NotificationsWithJWT(t *testing.T) {
-	r := NewRouter(nil)
+	r := setupTestRouter(t)
 
 	// Create a valid JWT token for testing
 	jwt := createUserEndpointsTestJWT("test-user-123")
@@ -240,7 +240,7 @@ func TestUserEndpoints_NotificationsWithJWT(t *testing.T) {
 
 // TestUserEndpoints_APIKeysListWithJWT tests GET /v1/users/me/api-keys with JWT returns list.
 func TestUserEndpoints_APIKeysListWithJWT(t *testing.T) {
-	r := NewRouter(nil)
+	r := setupTestRouter(t)
 
 	// Create a valid JWT token for testing
 	jwt := createUserEndpointsTestJWT("test-user-123")
@@ -270,7 +270,7 @@ func TestUserEndpoints_APIKeysListWithJWT(t *testing.T) {
 // createUserEndpointsTestJWT creates a test JWT token.
 // Uses the same secret as in router.go for testing.
 func createUserEndpointsTestJWT(userID string) string {
-	secret := "test-jwt-secret"
+	secret := "test-jwt-secret-32-chars-long!!"
 
 	// Use the auth package's GenerateJWT function
 	token, err := auth.GenerateJWT(secret, userID, "test@example.com", "user", time.Hour)

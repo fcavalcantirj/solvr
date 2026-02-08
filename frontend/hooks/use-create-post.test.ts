@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useCreatePost } from './use-create-post';
-import { api } from '@/lib/api';
+import { api, APICreatePostResponse } from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -108,11 +108,15 @@ describe('useCreatePost', () => {
   it('should submit valid form and return created post', async () => {
     const mockPost = {
       id: 'post-123',
-      type: 'question',
+      type: 'question' as const,
       title: 'A valid question title here',
       description: 'A description that is long enough to meet the minimum requirement of 50 characters.',
       tags: ['go', 'testing'],
       status: 'open',
+      posted_by_type: 'human' as const,
+      posted_by_id: 'user-1',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
     };
 
     vi.mocked(api.createPost).mockResolvedValue({ data: mockPost });
@@ -170,7 +174,7 @@ describe('useCreatePost', () => {
       resolvePromise = resolve;
     });
 
-    vi.mocked(api.createPost).mockReturnValue(promise as Promise<{ data: unknown }>);
+    vi.mocked(api.createPost).mockReturnValue(promise as Promise<APICreatePostResponse>);
 
     const { result } = renderHook(() => useCreatePost());
 

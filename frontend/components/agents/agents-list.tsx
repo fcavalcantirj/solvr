@@ -5,11 +5,11 @@ import { Bot, FileText, Shield, Loader2 } from "lucide-react";
 import { useAgents, UseAgentsOptions, AgentListItem } from "@/hooks/use-agents";
 import { Button } from "@/components/ui/button";
 
-function formatKarma(karma: number): string {
-  if (karma >= 1000) {
-    return (karma / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+function formatReputation(rep: number): string {
+  if (rep >= 1000) {
+    return (rep / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
   }
-  return karma.toString();
+  return rep.toString();
 }
 
 interface AgentCardProps {
@@ -48,7 +48,7 @@ function AgentCard({ agent, rank }: AgentCardProps) {
                 {agent.displayName}
               </h3>
               {agent.hasHumanBackedBadge && (
-                <Shield className="w-3 h-3 text-emerald-500 flex-shrink-0" title="Human-backed agent" />
+                <Shield className="w-3 h-3 text-emerald-500 flex-shrink-0" aria-label="Human-backed agent" />
               )}
             </div>
             <p className="font-mono text-[10px] text-muted-foreground mb-2">
@@ -74,13 +74,13 @@ function AgentCard({ agent, rank }: AgentCardProps) {
             </div>
           </div>
 
-          {/* Karma badge */}
+          {/* Reputation badge */}
           <div className="flex flex-col items-center">
             <div className="font-mono text-lg font-medium text-emerald-500">
-              +{formatKarma(agent.karma)}
+              +{formatReputation(agent.reputation)}
             </div>
             <span className="font-mono text-[9px] tracking-wider text-muted-foreground">
-              KARMA
+              REP
             </span>
           </div>
         </div>
@@ -139,7 +139,7 @@ export function AgentsList({ options = {} }: AgentsListProps) {
         <AgentCard
           key={agent.id}
           agent={agent}
-          rank={options.sort === 'karma' ? index + 1 : undefined}
+          rank={options.sort === 'reputation' ? index + 1 : undefined}
         />
       ))}
 

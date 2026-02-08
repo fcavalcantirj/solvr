@@ -29,7 +29,7 @@ type AgentRepository struct {
 // Used to keep queries consistent and DRY.
 // Note: COALESCE handles NULL values for nullable columns scanned into non-pointer Go types.
 // Without COALESCE, pgx fails when scanning NULL into string/[]string.
-const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, karma, human_claimed_at, has_human_backed_badge, created_at, updated_at`
+const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, reputation, human_claimed_at, has_human_backed_badge, created_at, updated_at`
 
 // NewAgentRepository creates a new AgentRepository.
 func NewAgentRepository(pool *Pool) *AgentRepository {
@@ -71,7 +71,7 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		&agent.Email,
 		&agent.ExternalLinks,
 		&agent.Status,
-		&agent.Karma,
+		&agent.Reputation,
 		&agent.HumanClaimedAt,
 		&agent.HasHumanBackedBadge,
 		&agent.CreatedAt,
@@ -164,7 +164,7 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 		&agent.Email,
 		&agent.ExternalLinks,
 		&agent.Status,
-		&agent.Karma,
+		&agent.Reputation,
 		&agent.HumanClaimedAt,
 		&agent.HasHumanBackedBadge,
 		&agent.CreatedAt,
@@ -232,7 +232,8 @@ func (r *AgentRepository) RevokeAPIKey(ctx context.Context, agentID string) erro
 // Per SPEC.md Part 2.7 and Part 10.3: Reputation algorithm.
 func (r *AgentRepository) GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error) {
 	// Query to compute agent stats based on SPEC.md Part 10.3 reputation formula:
-	// reputation = problems_solved * 100
+	// reputation = bonus_points (from agents.reputation column)
+	//            + problems_solved * 100
 	//            + problems_contributed * 25
 	//            + answers_accepted * 50
 	//            + answers_given * 10
@@ -241,7 +242,10 @@ func (r *AgentRepository) GetAgentStats(ctx context.Context, agentID string) (*m
 	//            + upvotes_received * 2
 	//            - downvotes_received * 1
 	query := `
-		WITH agent_posts AS (
+		WITH agent_bonus AS (
+			SELECT COALESCE(reputation, 0) as bonus FROM agents WHERE id = $1
+		),
+		agent_posts AS (
 			SELECT
 				COUNT(*) FILTER (WHERE type = 'problem' AND status = 'solved') as problems_solved,
 				COUNT(*) FILTER (WHERE type = 'problem') as problems_contributed,
@@ -288,7 +292,8 @@ func (r *AgentRepository) GetAgentStats(ctx context.Context, agentID string) (*m
 			COALESCE(ap.ideas_posted, 0)::int,
 			COALESCE(ar.responses_given, 0)::int,
 			COALESCE(av.upvotes, 0)::int,
-			(COALESCE(ap.problems_solved, 0) * 100 +
+			(ab.bonus +
+			 COALESCE(ap.problems_solved, 0) * 100 +
 			 COALESCE(ap.problems_contributed, 0) * 25 +
 			 COALESCE(aa.answers_accepted, 0) * 50 +
 			 COALESCE(aa.questions_answered, 0) * 10 +
@@ -296,7 +301,7 @@ func (r *AgentRepository) GetAgentStats(ctx context.Context, agentID string) (*m
 			 COALESCE(ar.responses_given, 0) * 5 +
 			 COALESCE(av.upvotes, 0) * 2 -
 			 COALESCE(av.downvotes, 0))::int as reputation
-		FROM agent_posts ap, agent_answers aa, agent_responses ar, agent_votes_received av
+		FROM agent_bonus ab, agent_posts ap, agent_answers aa, agent_responses ar, agent_votes_received av
 	`
 
 	row := r.pool.QueryRow(ctx, query, agentID)
@@ -342,7 +347,7 @@ func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 		&agent.Email,
 		&agent.ExternalLinks,
 		&agent.Status,
-		&agent.Karma,
+		&agent.Reputation,
 		&agent.HumanClaimedAt,
 		&agent.HasHumanBackedBadge,
 		&agent.CreatedAt,
@@ -376,7 +381,7 @@ func (r *AgentRepository) scanAgentRows(rows pgx.Rows) (*models.Agent, error) {
 		&agent.Email,
 		&agent.ExternalLinks,
 		&agent.Status,
-		&agent.Karma,
+		&agent.Reputation,
 		&agent.HumanClaimedAt,
 		&agent.HasHumanBackedBadge,
 		&agent.CreatedAt,
@@ -566,23 +571,23 @@ func (r *AgentRepository) LinkHuman(ctx context.Context, agentID, humanID string
 	return nil
 }
 
-// AddKarma adds karma points to an agent.
-// Per AGENT-LINKING: +50 karma on human claim.
-func (r *AgentRepository) AddKarma(ctx context.Context, agentID string, amount int) error {
+// AddReputation adds reputation points to an agent.
+// Per AGENT-LINKING: +50 reputation on human claim.
+func (r *AgentRepository) AddReputation(ctx context.Context, agentID string, amount int) error {
 	query := `
 		UPDATE agents
-		SET karma = karma + $2, updated_at = NOW()
+		SET reputation = reputation + $2, updated_at = NOW()
 		WHERE id = $1
 	`
 
 	result, err := r.pool.Exec(ctx, query, agentID, amount)
 	if err != nil {
-		LogQueryError(ctx, "AddKarma", "agents", err)
+		LogQueryError(ctx, "AddReputation", "agents", err)
 		return err
 	}
 
 	if result.RowsAffected() == 0 {
-		slog.Debug("agent not found", "op", "AddKarma", "table", "agents", "id", agentID)
+		slog.Debug("agent not found", "op", "AddReputation", "table", "agents", "id", agentID)
 		return ErrAgentNotFound
 	}
 
@@ -662,7 +667,7 @@ func (r *AgentRepository) GetAgentByAPIKeyHash(ctx context.Context, key string) 
 
 // List returns a paginated list of agents with post counts.
 // Per API-001: GET /v1/agents - list registered agents.
-// Supports sorting by: newest, oldest, karma, posts.
+// Supports sorting by: newest, oldest, reputation, posts.
 // Supports filtering by status: active, pending, or all.
 func (r *AgentRepository) List(ctx context.Context, opts models.AgentListOptions) ([]models.AgentWithPostCount, int, error) {
 	// Build dynamic query with filters
@@ -715,8 +720,8 @@ func (r *AgentRepository) List(ctx context.Context, opts models.AgentListOptions
 	switch opts.Sort {
 	case "oldest":
 		sortClause = "ORDER BY a.created_at ASC"
-	case "karma":
-		sortClause = "ORDER BY a.karma DESC, a.created_at DESC"
+	case "reputation":
+		sortClause = "ORDER BY a.reputation DESC, a.created_at DESC"
 	case "posts":
 		sortClause = "ORDER BY post_count DESC, a.created_at DESC"
 	case "newest", "":
@@ -739,7 +744,7 @@ func (r *AgentRepository) List(ctx context.Context, opts models.AgentListOptions
 			a.display_name,
 			a.bio,
 			a.status,
-			a.karma,
+			a.reputation,
 			a.created_at,
 			a.has_human_backed_badge,
 			a.avatar_url,
@@ -773,7 +778,7 @@ func (r *AgentRepository) List(ctx context.Context, opts models.AgentListOptions
 			&agent.DisplayName,
 			&agent.Bio,
 			&agent.Status,
-			&agent.Karma,
+			&agent.Reputation,
 			&agent.CreatedAt,
 			&agent.HasHumanBackedBadge,
 			&agent.AvatarURL,

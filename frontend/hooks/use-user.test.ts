@@ -23,7 +23,7 @@ const mockUserProfile = {
   stats: {
     posts_created: 10,
     contributions: 25,
-    karma: 150,
+    reputation: 150,
   },
 };
 
@@ -109,7 +109,7 @@ describe('useUser', () => {
     // Assert - stats loaded
     expect(result.current.user?.stats.postsCreated).toBe(10);
     expect(result.current.user?.stats.contributions).toBe(25);
-    expect(result.current.user?.stats.karma).toBe(150);
+    expect(result.current.user?.stats.reputation).toBe(150);
 
     // Assert - posts loaded
     expect(result.current.posts).toHaveLength(2);
@@ -172,7 +172,7 @@ describe('useUser', () => {
 
     // Clear mocks and change the data
     vi.clearAllMocks();
-    const updatedProfile = { ...mockUserProfile, stats: { ...mockUserProfile.stats, karma: 200 } };
+    const updatedProfile = { ...mockUserProfile, stats: { ...mockUserProfile.stats, reputation: 200 } };
     (api.getUserProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ data: updatedProfile });
     (api.getUserPosts as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: mockUserPosts,
@@ -184,7 +184,7 @@ describe('useUser', () => {
 
     // Wait for refetch
     await waitFor(() => {
-      expect(result.current.user?.stats.karma).toBe(200);
+      expect(result.current.user?.stats.reputation).toBe(200);
     });
 
     // Assert
@@ -228,7 +228,7 @@ describe('useUser', () => {
     // Assert - should default to zeros
     expect(result.current.user?.stats.postsCreated).toBe(0);
     expect(result.current.user?.stats.contributions).toBe(0);
-    expect(result.current.user?.stats.karma).toBe(0);
+    expect(result.current.user?.stats.reputation).toBe(0);
     expect(result.current.error).toBeNull();
   });
 
@@ -259,7 +259,7 @@ describe('useUser', () => {
       stats: {
         posts_created: undefined,
         contributions: null,
-        karma: undefined,
+        reputation: undefined,
       },
     };
     (api.getUserProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ data: profileWithPartialStats });
@@ -278,7 +278,7 @@ describe('useUser', () => {
     // Assert - should default undefined/null values to 0
     expect(result.current.user?.stats.postsCreated).toBe(0);
     expect(result.current.user?.stats.contributions).toBe(0);
-    expect(result.current.user?.stats.karma).toBe(0);
+    expect(result.current.user?.stats.reputation).toBe(0);
     expect(result.current.error).toBeNull();
   });
 });

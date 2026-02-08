@@ -8,7 +8,7 @@ export interface UserListItem {
   username: string;
   displayName: string;
   avatarUrl?: string;
-  karma: number;
+  reputation: number;
   agentsCount: number;
   createdAt: string;
   initials: string;
@@ -21,7 +21,7 @@ function transformUser(user: APIUserListItem): UserListItem {
     username: user.username,
     displayName: user.display_name,
     avatarUrl: user.avatar_url || undefined,
-    karma: user.karma,
+    reputation: user.reputation,
     agentsCount: user.agents_count,
     createdAt: formatRelativeTime(user.created_at),
     initials: user.display_name.slice(0, 2).toUpperCase(),
@@ -31,7 +31,7 @@ function transformUser(user: APIUserListItem): UserListItem {
 export interface UseUsersOptions {
   limit?: number;
   offset?: number;
-  sort?: 'newest' | 'karma' | 'agents';
+  sort?: 'newest' | 'reputation' | 'agents';
 }
 
 export interface UseUsersResult {

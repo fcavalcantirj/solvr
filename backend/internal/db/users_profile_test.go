@@ -11,7 +11,7 @@ import (
 )
 
 // TestUserProfile_GetUserStats_Integration tests user stats computation with real database.
-// Per BE-003: Calculate user stats: posts_count, contributions_count, karma.
+// Per BE-003: Calculate user stats: posts_count, contributions_count, reputation.
 func TestUserProfile_GetUserStats_Integration(t *testing.T) {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {

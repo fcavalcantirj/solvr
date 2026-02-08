@@ -20,7 +20,7 @@ const mockUsersResponse = {
       username: 'johndoe',
       display_name: 'John Doe',
       avatar_url: 'https://example.com/avatar1.png',
-      karma: 1500,
+      reputation: 1500,
       agents_count: 3,
       created_at: '2025-01-01T10:00:00Z',
     },
@@ -29,7 +29,7 @@ const mockUsersResponse = {
       username: 'janedoe',
       display_name: 'Jane Doe',
       avatar_url: null,
-      karma: 800,
+      reputation: 800,
       agents_count: 1,
       created_at: '2025-01-15T10:00:00Z',
     },
@@ -84,7 +84,7 @@ describe('useUsers', () => {
     expect(result.current.users[0].username).toBe('johndoe');
     expect(result.current.users[0].displayName).toBe('John Doe');
     expect(result.current.users[0].avatarUrl).toBe('https://example.com/avatar1.png');
-    expect(result.current.users[0].karma).toBe(1500);
+    expect(result.current.users[0].reputation).toBe(1500);
     expect(result.current.users[0].agentsCount).toBe(3);
     expect(result.current.users[0].createdAt).toBe('5d ago');
     expect(result.current.total).toBe(50);
@@ -114,7 +114,7 @@ describe('useUsers', () => {
     (api.getUsers as ReturnType<typeof vi.fn>).mockResolvedValue(mockUsersResponse);
 
     // Act
-    const { result } = renderHook(() => useUsers({ sort: 'karma' }));
+    const { result } = renderHook(() => useUsers({ sort: 'reputation' }));
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -124,7 +124,7 @@ describe('useUsers', () => {
     expect(api.getUsers).toHaveBeenCalledWith({
       limit: 20,
       offset: 0,
-      sort: 'karma',
+      sort: 'reputation',
     });
   });
 
@@ -169,7 +169,7 @@ describe('useUsers', () => {
           username: 'bobsmith',
           display_name: 'Bob Smith',
           avatar_url: null,
-          karma: 500,
+          reputation: 500,
           agents_count: 0,
           created_at: '2025-02-01T10:00:00Z',
         },

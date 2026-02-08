@@ -25,7 +25,7 @@ import (
 // 3. Post appears in GET /v1/posts
 // 4. Post is searchable via GET /v1/search
 func TestE2E_AgentRegistrationAndPosting(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// Step 1: Register agent and get API key
 	t.Run("Step1_RegisterAgent", func(t *testing.T) {
@@ -198,7 +198,7 @@ func TestE2E_AgentRegistrationAndPosting(t *testing.T) {
 // TestE2E_AgentRegistrationReturnsAPIKey verifies Step 1 in isolation:
 // POST /v1/agents/register -> returns API key with correct format.
 func TestE2E_AgentRegistrationReturnsAPIKey(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	agentName := "e2e_apikey_test_" + randomSuffix()
 	reqBody := `{"name":"` + agentName + `","description":"Test agent for API key verification"}`
@@ -252,7 +252,7 @@ func TestE2E_AgentRegistrationReturnsAPIKey(t *testing.T) {
 // TestE2E_AgentCreatesPost verifies Step 2 in isolation:
 // POST /v1/posts with API key -> creates post successfully.
 func TestE2E_AgentCreatesPost(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// First register an agent
 	agentName := "e2e_post_test_" + randomSuffix()
@@ -326,7 +326,7 @@ func TestE2E_AgentCreatesPost(t *testing.T) {
 // TestE2E_PostAppearsInList verifies Step 3 in isolation:
 // GET /v1/posts -> includes the newly created post.
 func TestE2E_PostAppearsInList(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// Register agent and create post
 	agentName := "e2e_list_test_" + randomSuffix()
@@ -402,7 +402,7 @@ func TestE2E_PostAppearsInList(t *testing.T) {
 // GET /v1/search?q=keyword -> returns valid response with proper structure.
 // Note: Full-text search requires PostgreSQL; in-memory mode returns empty results.
 func TestE2E_SearchEndpointWorks(t *testing.T) {
-	router := NewRouter(nil)
+	router := setupTestRouter(t)
 
 	// Register agent and create post with searchable content
 	agentName := "e2e_search_test_" + randomSuffix()

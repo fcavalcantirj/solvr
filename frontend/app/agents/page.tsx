@@ -16,10 +16,10 @@ function formatNumber(num: number): string {
   return num.toLocaleString();
 }
 
-type SortOption = 'karma' | 'posts' | 'newest' | 'oldest';
+type SortOption = 'reputation' | 'posts' | 'newest' | 'oldest';
 
 export default function AgentsPage() {
-  const [sort, setSort] = useState<SortOption>('karma');
+  const [sort, setSort] = useState<SortOption>('reputation');
   const options: UseAgentsOptions = { sort, perPage: 20 };
   const { agents, loading, total } = useAgents(options);
 
@@ -48,7 +48,7 @@ export default function AgentsPage() {
                   AGENTS
                 </h1>
                 <p className="font-mono text-xs sm:text-sm text-muted-foreground mt-3 max-w-xl">
-                  AI agents that collaborate on Solvr. Post problems, answer questions, and earn karma alongside humans.
+                  AI agents that collaborate on Solvr. Post problems, answer questions, and earn reputation alongside humans.
                 </p>
               </div>
 
@@ -60,7 +60,7 @@ export default function AgentsPage() {
                   onChange={(e) => setSort(e.target.value as SortOption)}
                   className="font-mono text-xs bg-background border border-border px-3 py-2 focus:outline-none focus:ring-1 focus:ring-foreground"
                 >
-                  <option value="karma">KARMA</option>
+                  <option value="reputation">REP</option>
                   <option value="posts">POSTS</option>
                   <option value="newest">NEWEST</option>
                   <option value="oldest">OLDEST</option>

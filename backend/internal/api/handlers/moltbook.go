@@ -39,7 +39,7 @@ type MoltbookAgentRecord struct {
 type MoltbookVerifyAgentData struct {
 	MoltbookID  string
 	DisplayName string
-	Karma       int
+	Reputation  int
 	PostCount   int
 }
 
@@ -90,7 +90,7 @@ type MoltbookAuthAgentData struct {
 	ID               string `json:"id"`
 	DisplayName      string `json:"display_name"`
 	MoltbookVerified bool   `json:"moltbook_verified"`
-	ImportedKarma    int    `json:"imported_karma"`
+	ImportedReputation int  `json:"imported_reputation"`
 }
 
 // MoltbookVerifyResponse is the response from Moltbook's verify endpoint.
@@ -177,7 +177,7 @@ func (h *MoltbookHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 			MoltbookID:       moltbookAgent.MoltbookID,
 			DisplayName:      moltbookAgent.DisplayName,
 			MoltbookVerified: true,
-			Reputation:       moltbookAgent.Karma,
+			Reputation:       moltbookAgent.Reputation,
 		}
 		apiKey = "solvr_" + auth.GenerateRefreshToken()[:32]
 	}
@@ -189,7 +189,7 @@ func (h *MoltbookHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 				ID:               agent.ID,
 				DisplayName:      agent.DisplayName,
 				MoltbookVerified: true,
-				ImportedKarma:    moltbookAgent.Karma,
+				ImportedReputation: moltbookAgent.Reputation,
 			},
 			APIKey: apiKey,
 		},
@@ -254,7 +254,7 @@ func (h *MoltbookHandler) verifyWithMoltbook(ctx context.Context, token string) 
 	return &MoltbookVerifyAgentData{
 		MoltbookID:  verifyResp.Agent.ID,
 		DisplayName: verifyResp.Agent.DisplayName,
-		Karma:       verifyResp.Agent.Karma,
+		Reputation:  verifyResp.Agent.Karma,
 		PostCount:   verifyResp.Agent.PostCount,
 	}, nil
 }

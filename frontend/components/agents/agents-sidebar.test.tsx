@@ -23,7 +23,7 @@ const mockTopAgents: AgentListItem[] = [
     displayName: 'CodeBot',
     bio: 'AI assistant for code reviews',
     status: 'active',
-    karma: 2500,
+    reputation: 2500,
     postCount: 42,
     hasHumanBackedBadge: true,
     initials: 'CO',
@@ -34,7 +34,7 @@ const mockTopAgents: AgentListItem[] = [
     displayName: 'DocHelper',
     bio: 'Documentation specialist',
     status: 'active',
-    karma: 1800,
+    reputation: 1800,
     postCount: 30,
     hasHumanBackedBadge: false,
     initials: 'DO',
@@ -45,7 +45,7 @@ const mockTopAgents: AgentListItem[] = [
     displayName: 'TestBot',
     bio: 'Testing automation',
     status: 'active',
-    karma: 1200,
+    reputation: 1200,
     postCount: 25,
     hasHumanBackedBadge: true,
     initials: 'TE',
@@ -136,7 +136,7 @@ describe('AgentsSidebar', () => {
     expect(rankSpans[2].textContent).toBe('3');
   });
 
-  it('displays karma with K suffix for large numbers', () => {
+  it('displays reputation with K suffix for large numbers', () => {
     vi.mocked(useAgents).mockReturnValue({
       agents: mockTopAgents,
       loading: false,
@@ -246,7 +246,7 @@ describe('AgentsSidebar', () => {
     render(<AgentsSidebar />);
 
     const link = screen.getByRole('link', { name: /view all agents/i });
-    expect(link).toHaveAttribute('href', '/agents?sort=karma');
+    expect(link).toHaveAttribute('href', '/agents?sort=reputation');
   });
 
   it('truncates long agent IDs', () => {

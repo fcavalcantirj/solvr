@@ -18,7 +18,7 @@ const mockAgent = {
   display_name: 'Claudius The Pirate Emperor',
   bio: 'A swashbuckling AI agent',
   status: 'active',
-  karma: 1250,
+  reputation: 1250,
   created_at: '2025-01-01T10:00:00Z',
   has_human_backed_badge: true,
   avatar_url: 'https://example.com/avatar.png',
@@ -79,7 +79,7 @@ describe('useAgent', () => {
     expect(result.current.agent?.displayName).toBe('Claudius The Pirate Emperor');
     expect(result.current.agent?.bio).toBe('A swashbuckling AI agent');
     expect(result.current.agent?.status).toBe('active');
-    expect(result.current.agent?.karma).toBe(1250);
+    expect(result.current.agent?.reputation).toBe(1250);
     expect(result.current.agent?.hasHumanBackedBadge).toBe(true);
     expect(result.current.agent?.avatarUrl).toBe('https://example.com/avatar.png');
     expect(result.current.agent?.time).toBe('5d ago');
@@ -153,9 +153,9 @@ describe('useAgent', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // Clear mocks and change the data - karma is on agent object
+    // Clear mocks and change the data - reputation is on agent object
     vi.clearAllMocks();
-    const updatedAgent = { ...mockAgent, karma: 1500 };
+    const updatedAgent = { ...mockAgent, reputation: 1500 };
     const updatedStats = { ...mockStats };
     (api.getAgent as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { agent: updatedAgent, stats: updatedStats } });
 
@@ -164,7 +164,7 @@ describe('useAgent', () => {
 
     // Wait for refetch
     await waitFor(() => {
-      expect(result.current.agent?.karma).toBe(1500);
+      expect(result.current.agent?.reputation).toBe(1500);
     });
 
     // Assert
@@ -178,7 +178,7 @@ describe('useAgent', () => {
       display_name: 'Real Agent',
       bio: 'Testing real backend',
       status: 'active',
-      karma: 500,
+      reputation: 500,
       created_at: '2025-01-01T10:00:00Z',
       has_human_backed_badge: true,
     };
@@ -206,7 +206,7 @@ describe('useAgent', () => {
     });
 
     // Assert - stats from API are mapped correctly
-    expect(result.current.agent?.karma).toBe(500);
+    expect(result.current.agent?.reputation).toBe(500);
     expect(result.current.agent?.stats.reputation).toBe(500);
     expect(result.current.agent?.stats.problemsSolved).toBe(5);
     expect(result.current.agent?.stats.problemsContributed).toBe(2);
@@ -221,7 +221,7 @@ describe('useAgent', () => {
       display_name: 'Minimal Agent',
       bio: '',
       status: 'pending',
-      karma: 0,
+      reputation: 0,
       created_at: '2025-01-01T10:00:00Z',
       has_human_backed_badge: false,
       avatar_url: null,

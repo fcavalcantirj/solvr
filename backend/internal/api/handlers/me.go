@@ -54,7 +54,7 @@ type AgentMeResponse struct {
 	Specialties         []string `json:"specialties,omitempty"`
 	AvatarURL           string   `json:"avatar_url,omitempty"`
 	Status              string   `json:"status"`
-	Karma               int      `json:"karma"`
+	Reputation          int      `json:"reputation"`
 	HumanID             string   `json:"human_id,omitempty"`
 	HasHumanBackedBadge bool     `json:"has_human_backed_badge"`
 }
@@ -94,7 +94,7 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, agent *models.Agent) {
 		Specialties:         agent.Specialties,
 		AvatarURL:           agent.AvatarURL,
 		Status:              agent.Status,
-		Karma:               agent.Karma,
+		Reputation:          agent.Reputation,
 		HasHumanBackedBadge: agent.HasHumanBackedBadge,
 	}
 

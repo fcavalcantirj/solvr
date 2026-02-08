@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { api, APIPost } from '@/lib/api';
+import { api, APICreatePostResponse } from '@/lib/api';
 
 export interface CreatePostForm {
   type: 'problem' | 'question' | 'idea';
@@ -13,7 +13,7 @@ interface UseCreatePostReturn {
   updateForm: (updates: Partial<CreatePostForm>) => void;
   isSubmitting: boolean;
   error: string | null;
-  submit: () => Promise<APIPost | null>;
+  submit: () => Promise<APICreatePostResponse['data'] | null>;
 }
 
 export function useCreatePost(): UseCreatePostReturn {
@@ -30,7 +30,7 @@ export function useCreatePost(): UseCreatePostReturn {
     setForm((prev) => ({ ...prev, ...updates }));
   }, []);
 
-  const submit = useCallback(async (): Promise<APIPost | null> => {
+  const submit = useCallback(async (): Promise<APICreatePostResponse['data'] | null> => {
     setError(null);
 
     // Validate title
@@ -61,7 +61,7 @@ export function useCreatePost(): UseCreatePostReturn {
         description: form.description,
         tags: form.tags,
       });
-      return response.data as APIPost;
+      return response.data;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create post';
       setError(message);

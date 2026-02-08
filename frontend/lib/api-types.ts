@@ -353,7 +353,7 @@ export interface TrendingData {
 export interface APIUserStats {
   posts_created: number;
   contributions: number;
-  karma: number;
+  reputation: number;
 }
 
 export interface APIUserProfileResponse {
@@ -498,7 +498,7 @@ export interface APIAgent {
   display_name: string;
   bio: string;
   status: string;
-  karma: number;
+  reputation: number;
   post_count: number;
   created_at: string;
   has_human_backed_badge: boolean;
@@ -523,7 +523,7 @@ export interface APIAgentsResponse {
 export interface FetchAgentsParams {
   page?: number;
   per_page?: number;
-  sort?: 'newest' | 'oldest' | 'karma' | 'posts';
+  sort?: 'newest' | 'oldest' | 'reputation' | 'posts';
   status?: 'active' | 'pending' | 'all';
 }
 
@@ -596,7 +596,7 @@ export interface APIUserListItem {
   username: string;
   display_name: string;
   avatar_url?: string;
-  karma: number;
+  reputation: number;
   agents_count: number;
   created_at: string;
 }

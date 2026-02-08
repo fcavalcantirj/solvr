@@ -144,6 +144,23 @@ func (r *ClaimTokenRepository) MarkUsed(ctx context.Context, tokenID, humanID st
 	return nil
 }
 
+// DeleteExpiredByAgentID deletes expired unused claim tokens for a specific agent.
+// This unblocks the partial unique index (one active token per agent) after expiry.
+func (r *ClaimTokenRepository) DeleteExpiredByAgentID(ctx context.Context, agentID string) (int64, error) {
+	query := `
+		DELETE FROM claim_tokens
+		WHERE agent_id = $1 AND expires_at < NOW() AND used_at IS NULL
+	`
+
+	result, err := r.pool.Exec(ctx, query, agentID)
+	if err != nil {
+		LogQueryError(ctx, "DeleteExpiredByAgentID", "claim_tokens", err)
+		return 0, err
+	}
+
+	return result.RowsAffected(), nil
+}
+
 // DeleteExpiredTokens deletes all claim tokens that have expired and are unused.
 // Per prd-v2.json requirement: "Delete where expires_at < NOW() AND used_at IS NULL"
 // Returns the number of deleted tokens.

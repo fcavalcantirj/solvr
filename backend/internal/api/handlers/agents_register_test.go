@@ -312,17 +312,17 @@ func TestRegisterAgent_AgentActiveImmediately(t *testing.T) {
 }
 
 // ============================================================================
-// Tests for karma bonus when model is set (prd-v4 requirement)
+// Tests for reputation bonus when model is set (prd-v4 requirement)
 // ============================================================================
 
-// TestRegisterAgent_ModelKarmaBonus tests that agents get +10 karma when model is set.
-// Per prd-v4: Agent with model on registration starts with 10 karma.
-func TestRegisterAgent_ModelKarmaBonus(t *testing.T) {
+// TestRegisterAgent_ModelReputationBonus tests that agents get +10 reputation when model is set.
+// Per prd-v4: Agent with model on registration starts with 10 reputation.
+func TestRegisterAgent_ModelReputationBonus(t *testing.T) {
 	repo := NewMockAgentRepositoryWithNameLookup()
 	handler := NewAgentsHandler(repo, "test-jwt-secret")
 
 	reqBody := RegisterAgentRequest{
-		Name:        "karma_model_agent",
+		Name:        "rep_model_agent",
 		Description: "Agent with model",
 		Model:       "claude-opus-4",
 	}
@@ -341,9 +341,9 @@ func TestRegisterAgent_ModelKarmaBonus(t *testing.T) {
 	var resp RegisterAgentResponse
 	json.NewDecoder(rr.Body).Decode(&resp)
 
-	// Verify agent has +10 karma for providing model
-	if resp.Agent.Karma != 10 {
-		t.Errorf("expected karma 10 for agent with model, got %d", resp.Agent.Karma)
+	// Verify agent has +10 reputation for providing model
+	if resp.Agent.Reputation != 10 {
+		t.Errorf("expected reputation 10 for agent with model, got %d", resp.Agent.Reputation)
 	}
 
 	// Verify model is set
@@ -352,9 +352,9 @@ func TestRegisterAgent_ModelKarmaBonus(t *testing.T) {
 	}
 }
 
-// TestRegisterAgent_NoModelNoKarmaBonus tests that agents without model start with 0 karma.
-// Per prd-v4: Agent without model starts with 0 karma.
-func TestRegisterAgent_NoModelNoKarmaBonus(t *testing.T) {
+// TestRegisterAgent_NoModelNoReputationBonus tests that agents without model start with 0 reputation.
+// Per prd-v4: Agent without model starts with 0 reputation.
+func TestRegisterAgent_NoModelNoReputationBonus(t *testing.T) {
 	repo := NewMockAgentRepositoryWithNameLookup()
 	handler := NewAgentsHandler(repo, "test-jwt-secret")
 
@@ -378,8 +378,8 @@ func TestRegisterAgent_NoModelNoKarmaBonus(t *testing.T) {
 	var resp RegisterAgentResponse
 	json.NewDecoder(rr.Body).Decode(&resp)
 
-	// Verify agent has 0 karma (no model bonus)
-	if resp.Agent.Karma != 0 {
-		t.Errorf("expected karma 0 for agent without model, got %d", resp.Agent.Karma)
+	// Verify agent has 0 reputation (no model bonus)
+	if resp.Agent.Reputation != 0 {
+		t.Errorf("expected reputation 0 for agent without model, got %d", resp.Agent.Reputation)
 	}
 }

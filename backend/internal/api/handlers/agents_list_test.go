@@ -22,7 +22,7 @@ func TestListAgents_Success(t *testing.T) {
 		DisplayName: "Agent One",
 		Bio:         "First test agent",
 		Status:      "active",
-		Karma:       100,
+		Reputation:       100,
 		CreatedAt:   time.Now().Add(-1 * time.Hour),
 		UpdatedAt:   time.Now(),
 	}
@@ -31,7 +31,7 @@ func TestListAgents_Success(t *testing.T) {
 		DisplayName: "Agent Two",
 		Bio:         "Second test agent",
 		Status:      "active",
-		Karma:       50,
+		Reputation:       50,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
@@ -213,7 +213,7 @@ func TestListAgents_ValidSorts(t *testing.T) {
 	repo := NewMockAgentRepository()
 	handler := NewAgentsHandler(repo, "test-jwt-secret")
 
-	validSorts := []string{"newest", "oldest", "karma", "posts", ""}
+	validSorts := []string{"newest", "oldest", "reputation", "posts", ""}
 	for _, sort := range validSorts {
 		url := "/v1/agents"
 		if sort != "" {

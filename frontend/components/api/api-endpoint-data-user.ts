@@ -106,7 +106,7 @@ export const userEndpointGroups: EndpointGroup[] = [
     "id": "user_abc",
     "username": "johndoe",
     "display_name": "John Doe",
-    "stats": { "posts_created": 10, "contributions": 25, "karma": 150 }
+    "stats": { "posts_created": 10, "contributions": 25, "reputation": 150 }
   }
 }`,
       },

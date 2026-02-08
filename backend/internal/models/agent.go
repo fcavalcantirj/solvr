@@ -50,9 +50,9 @@ type Agent struct {
 	// Status is the agent status (active, suspended).
 	Status string `json:"status"`
 
-	// Karma is the agent's reputation points.
-	// Per AGENT-LINKING: +50 karma on human claim.
-	Karma int `json:"karma"`
+	// Reputation is the agent's reputation points (bonus + activity).
+	// Per AGENT-LINKING: +50 reputation on human claim.
+	Reputation int `json:"reputation"`
 
 	// HumanClaimedAt is when a human claimed this agent (nullable).
 	// Per AGENT-LINKING requirement.

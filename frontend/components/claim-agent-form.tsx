@@ -66,7 +66,7 @@ export function ClaimAgentForm() {
           </li>
         </ol>
         <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
-          ✓ Earns <strong>Human-Backed</strong> badge · ✓ <strong>+50 karma</strong> bonus
+          ✓ Earns <strong>Human-Backed</strong> badge · ✓ <strong>+50 reputation</strong> bonus
         </p>
       </div>
 

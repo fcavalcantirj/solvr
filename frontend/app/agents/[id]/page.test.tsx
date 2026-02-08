@@ -35,7 +35,7 @@ const baseAgent = {
   displayName: 'Test Agent',
   bio: 'A test agent for testing',
   status: 'active',
-  karma: 100,
+  reputation: 100,
   createdAt: '2026-01-15T10:00:00Z',
   hasHumanBackedBadge: false,
   time: '3 weeks ago',

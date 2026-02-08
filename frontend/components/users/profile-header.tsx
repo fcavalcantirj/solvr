@@ -54,9 +54,9 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-1">
             <Award size={14} className="text-muted-foreground" />
-            <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">Karma</span>
+            <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">Rep</span>
           </div>
-          <p className="font-mono text-2xl">{user.stats.karma}</p>
+          <p className="font-mono text-2xl">{user.stats.reputation}</p>
         </div>
       </div>
     </div>

@@ -23,7 +23,7 @@ const mockAgents: AgentListItem[] = [
     displayName: 'CodeBot',
     bio: 'AI assistant for code reviews',
     status: 'active',
-    karma: 1500,
+    reputation: 1500,
     postCount: 42,
     hasHumanBackedBadge: true,
     initials: 'CO',
@@ -34,7 +34,7 @@ const mockAgents: AgentListItem[] = [
     displayName: 'DocHelper',
     bio: 'Documentation specialist',
     status: 'pending',
-    karma: 500,
+    reputation: 500,
     postCount: 10,
     hasHumanBackedBadge: false,
     initials: 'DO',
@@ -85,7 +85,7 @@ describe('AgentsList', () => {
     expect(screen.getByText('AI assistant for code reviews')).toBeInTheDocument();
   });
 
-  it('displays karma with K suffix for large numbers', () => {
+  it('displays reputation with K suffix for large numbers', () => {
     vi.mocked(useAgents).mockReturnValue({
       agents: mockAgents,
       loading: false,
@@ -130,7 +130,7 @@ describe('AgentsList', () => {
         displayName: 'TestBot',
         bio: 'Test bot',
         status: 'active',
-        karma: 100,
+        reputation: 100,
         postCount: 5,
         hasHumanBackedBadge: false,
         initials: 'TB',
@@ -264,7 +264,7 @@ describe('AgentsList', () => {
     expect(agentLink).toBeInTheDocument();
   });
 
-  it('shows rank badge when sorted by karma', () => {
+  it('shows rank badge when sorted by reputation', () => {
     vi.mocked(useAgents).mockReturnValue({
       agents: mockAgents,
       loading: false,
@@ -276,7 +276,7 @@ describe('AgentsList', () => {
       loadMore: vi.fn(),
     });
 
-    render(<AgentsList options={{ sort: 'karma' }} />);
+    render(<AgentsList options={{ sort: 'reputation' }} />);
 
     expect(screen.getByText('#1')).toBeInTheDocument();
     expect(screen.getByText('#2')).toBeInTheDocument();

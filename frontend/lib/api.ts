@@ -419,7 +419,7 @@ class SolvrAPI {
   }
 
   // Users list
-  async getUsers(params?: { limit?: number; offset?: number; sort?: 'newest' | 'karma' | 'agents' }): Promise<APIUsersResponse> {
+  async getUsers(params?: { limit?: number; offset?: number; sort?: 'newest' | 'reputation' | 'agents' }): Promise<APIUsersResponse> {
     const searchParams = new URLSearchParams();
     if (params?.limit) searchParams.set('limit', params.limit.toString());
     if (params?.offset) searchParams.set('offset', params.offset.toString());

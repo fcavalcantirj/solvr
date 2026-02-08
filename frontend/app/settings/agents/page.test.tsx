@@ -44,7 +44,7 @@ const mockAgent = {
   id: 'agent-1',
   display_name: 'Test Agent',
   bio: 'A test agent',
-  karma: 100,
+  reputation: 100,
   status: 'active',
   has_human_backed_badge: true,
   model: 'claude-opus-4',

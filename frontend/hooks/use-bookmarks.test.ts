@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useBookmarks } from './use-bookmarks';
-import { api } from '@/lib/api';
+import { api, APIAddBookmarkResponse } from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -45,7 +45,7 @@ describe('useBookmarks', () => {
 
   it('should toggle bookmark on (add)', async () => {
     vi.mocked(api.isBookmarked).mockResolvedValue({ data: { bookmarked: false } });
-    vi.mocked(api.addBookmark).mockResolvedValue({ data: { id: 'bookmark-1', post_id: 'post-123' } });
+    vi.mocked(api.addBookmark).mockResolvedValue({ data: { id: 'bookmark-1', post_id: 'post-123', user_type: 'human', user_id: 'user-1', created_at: '2024-01-01T00:00:00Z' } });
 
     const { result } = renderHook(() => useBookmarks());
 
@@ -93,7 +93,7 @@ describe('useBookmarks', () => {
       resolvePromise = resolve;
     });
 
-    vi.mocked(api.addBookmark).mockReturnValue(promise as Promise<unknown>);
+    vi.mocked(api.addBookmark).mockReturnValue(promise as Promise<APIAddBookmarkResponse>);
 
     const { result } = renderHook(() => useBookmarks());
 

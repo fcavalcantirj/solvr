@@ -37,7 +37,7 @@ type AgentRepositoryInterface interface {
 	GetActivity(ctx context.Context, agentID string, page, perPage int) ([]models.ActivityItem, int, error)
 	// Agent-Human Linking methods (AGENT-LINKING requirement)
 	LinkHuman(ctx context.Context, agentID, humanID string) error
-	AddKarma(ctx context.Context, agentID string, amount int) error
+	AddReputation(ctx context.Context, agentID string, amount int) error
 	GrantHumanBackedBadge(ctx context.Context, agentID string) error
 	// API key validation method (implements auth.AgentDB interface)
 	// FIX-002: Required for API key authentication middleware
@@ -53,6 +53,7 @@ type ClaimTokenRepositoryInterface interface {
 	FindByToken(ctx context.Context, token string) (*models.ClaimToken, error)
 	FindActiveByAgentID(ctx context.Context, agentID string) (*models.ClaimToken, error)
 	MarkUsed(ctx context.Context, tokenID, humanID string) error
+	DeleteExpiredByAgentID(ctx context.Context, agentID string) (int64, error)
 }
 
 // AgentsHandler handles agent-related HTTP requests.
@@ -272,9 +273,9 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Per prd-v4: +10 karma bonus when model field is set on registration
+	// Per prd-v4: +10 reputation bonus when model field is set on registration
 	if req.Model != "" {
-		if err := h.repo.AddKarma(r.Context(), agent.ID, 10); err != nil {
+		if err := h.repo.AddReputation(r.Context(), agent.ID, 10); err != nil {
 			// Log error but don't fail registration
 		}
 	}
@@ -515,9 +516,9 @@ func (h *AgentsHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agen
 		return
 	}
 
-	// Per prd-v4: +10 karma bonus when model is set for the first time
+	// Per prd-v4: +10 reputation bonus when model is set for the first time
 	if previousModelEmpty && agent.Model != "" {
-		if err := h.repo.AddKarma(r.Context(), agent.ID, 10); err != nil {
+		if err := h.repo.AddReputation(r.Context(), agent.ID, 10); err != nil {
 			// Log error but don't fail update
 		}
 	}
@@ -794,7 +795,7 @@ type AgentsListMeta struct {
 
 // ListAgents handles GET /v1/agents - list registered agents.
 // Per API-001: Returns paginated list of agents with post counts.
-// Supports sorting by: newest, oldest, karma, posts.
+// Supports sorting by: newest, oldest, reputation, posts.
 // Supports filtering by status: active, pending, or all.
 func (h *AgentsHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	// Parse pagination parameters
@@ -840,9 +841,9 @@ func (h *AgentsHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate sort option
-	validSorts := map[string]bool{"newest": true, "oldest": true, "karma": true, "posts": true, "": true}
+	validSorts := map[string]bool{"newest": true, "oldest": true, "reputation": true, "posts": true, "": true}
 	if !validSorts[opts.Sort] {
-		writeAgentValidationError(w, "sort must be one of: newest, oldest, karma, posts")
+		writeAgentValidationError(w, "sort must be one of: newest, oldest, reputation, posts")
 		return
 	}
 

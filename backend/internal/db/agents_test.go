@@ -441,7 +441,7 @@ func TestAgentRepository_LinkHuman_AgentNotFound(t *testing.T) {
 	}
 }
 
-func TestAgentRepository_AddKarma_Success(t *testing.T) {
+func TestAgentRepository_AddReputation_Success(t *testing.T) {
 	pool := getTestPool(t)
 	if pool == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -452,8 +452,8 @@ func TestAgentRepository_AddKarma_Success(t *testing.T) {
 	ctx := context.Background()
 
 	agent := &models.Agent{
-		ID:          "karma_test_" + time.Now().Format("20060102150405"),
-		DisplayName: "Karma Test Agent",
+		ID:          "rep_test_" + time.Now().Format("20060102150405"),
+		DisplayName: "Reputation Test Agent",
 	}
 
 	err := repo.Create(ctx, agent)
@@ -461,37 +461,37 @@ func TestAgentRepository_AddKarma_Success(t *testing.T) {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	// Add karma
-	err = repo.AddKarma(ctx, agent.ID, 50)
+	// Add reputation
+	err = repo.AddReputation(ctx, agent.ID, 50)
 	if err != nil {
-		t.Fatalf("failed to add karma: %v", err)
+		t.Fatalf("failed to add reputation: %v", err)
 	}
 
-	// Verify karma
+	// Verify reputation
 	found, err := repo.FindByID(ctx, agent.ID)
 	if err != nil {
 		t.Fatalf("failed to find agent: %v", err)
 	}
-	if found.Karma != 50 {
-		t.Errorf("expected karma 50, got %d", found.Karma)
+	if found.Reputation != 50 {
+		t.Errorf("expected reputation 50, got %d", found.Reputation)
 	}
 
-	// Add more karma
-	err = repo.AddKarma(ctx, agent.ID, 25)
+	// Add more reputation
+	err = repo.AddReputation(ctx, agent.ID, 25)
 	if err != nil {
-		t.Fatalf("failed to add more karma: %v", err)
+		t.Fatalf("failed to add more reputation: %v", err)
 	}
 
 	found, err = repo.FindByID(ctx, agent.ID)
 	if err != nil {
 		t.Fatalf("failed to find agent: %v", err)
 	}
-	if found.Karma != 75 {
-		t.Errorf("expected karma 75, got %d", found.Karma)
+	if found.Reputation != 75 {
+		t.Errorf("expected reputation 75, got %d", found.Reputation)
 	}
 }
 
-func TestAgentRepository_AddKarma_AgentNotFound(t *testing.T) {
+func TestAgentRepository_AddReputation_AgentNotFound(t *testing.T) {
 	pool := getTestPool(t)
 	if pool == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -501,7 +501,7 @@ func TestAgentRepository_AddKarma_AgentNotFound(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	err := repo.AddKarma(ctx, "nonexistent_agent", 50)
+	err := repo.AddReputation(ctx, "nonexistent_agent", 50)
 	if err != ErrAgentNotFound {
 		t.Errorf("expected ErrAgentNotFound, got %v", err)
 	}

@@ -8,7 +8,7 @@ import (
 // Per SPEC.md Part 12.3 (AGENT-LINKING category):
 // - Agents generate claim tokens
 // - Humans confirm to link their account to the agent
-// - Grants "Human-Backed" badge and +50 karma on first claim
+// - Grants "Human-Backed" badge and +50 reputation on first claim
 type ClaimToken struct {
 	// ID is the unique identifier for the claim token.
 	ID string `json:"id"`
@@ -19,7 +19,7 @@ type ClaimToken struct {
 	// AgentID is the ID of the agent that generated the token.
 	AgentID string `json:"agent_id"`
 
-	// ExpiresAt is when the token expires (24 hours from creation).
+	// ExpiresAt is when the token expires (1 hour from creation).
 	ExpiresAt time.Time `json:"expires_at"`
 
 	// UsedAt is when the token was claimed (null if not yet used).

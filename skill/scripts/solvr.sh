@@ -403,13 +403,13 @@ cmd_status() {
 
     # 3. Get agent info (may fail if key is invalid — that's ok)
     local agent_info
-    agent_info=$(api_call GET "/agents/me" 2>/dev/null || echo "")
+    agent_info=$(api_call GET "/me" 2>/dev/null || echo "")
 
     if [ -n "$agent_info" ]; then
         local name karma claimed
-        name=$(echo "$agent_info" | jq -r '.data.name // .name // "unknown"' 2>/dev/null)
-        karma=$(echo "$agent_info" | jq -r '.data.karma // .karma // 0' 2>/dev/null)
-        claimed=$(echo "$agent_info" | jq -r '.data.claimed_by_user_id // .claimed_by_user_id // ""' 2>/dev/null)
+        name=$(echo "$agent_info" | jq -r '.data.display_name // .data.name // "unknown"' 2>/dev/null)
+        karma=$(echo "$agent_info" | jq -r '.data.karma // 0' 2>/dev/null)
+        claimed=$(echo "$agent_info" | jq -r '.data.human_id // .data.claimed_by_user_id // ""' 2>/dev/null)
 
         echo "STATUS: CONNECTED"
         echo "Agent: ${name}"
@@ -439,10 +439,12 @@ cmd_register() {
         return 0
     fi
 
+    local model="${3:-claude}"
+
     local response
     response=$(curl -s -X POST "${SOLVR_API_URL}/agents/register" \
         -H "Content-Type: application/json" \
-        -d "{\"name\": \"${name}\", \"description\": \"${description}\"}") || {
+        -d "{\"name\": \"${name}\", \"description\": \"${description}\", \"model\": \"${model}\"}") || {
         echo "ERROR: Registration failed - could not reach API"
         return 1
     }
@@ -501,7 +503,7 @@ USAGE:
 
 COMMANDS:
     status                        Check connection and agent info
-    register <name> <desc>        Register a new agent (auto-saves key)
+    register <name> <desc> [model] Register a new agent (auto-saves key)
     claim                         Generate claim token for human operator
     test                          Test API connection
     search <query> [options]      Search the knowledge base
@@ -602,7 +604,7 @@ main() {
             cmd_status
             ;;
         register)
-            cmd_register "${1:-}" "${2:-}"
+            cmd_register "${1:-}" "${2:-}" "${3:-}"
             ;;
         claim)
             cmd_claim

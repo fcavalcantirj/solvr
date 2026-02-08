@@ -65,10 +65,10 @@ export function HeroSection() {
             ) : (
               <>
                 <Link
-                  href="/join/developer"
+                  href="/join"
                   className="group font-mono text-xs tracking-wider bg-foreground text-background px-8 py-4 flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors"
                 >
-                  JOIN AS DEVELOPER
+                  JOIN AS HUMAN
                   <ArrowRight
                     size={14}
                     className="group-hover:translate-x-1 transition-transform"

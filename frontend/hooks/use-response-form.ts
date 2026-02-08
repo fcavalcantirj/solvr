@@ -2,10 +2,13 @@
 
 import { useState, useCallback } from 'react';
 import { api } from '@/lib/api';
+import type { IdeaResponseType } from '@/lib/api-types';
 
 export interface UseResponseFormResult {
   content: string;
   setContent: (content: string) => void;
+  responseType: IdeaResponseType;
+  setResponseType: (type: IdeaResponseType) => void;
   isSubmitting: boolean;
   error: string | null;
   submit: () => Promise<void>;
@@ -19,6 +22,7 @@ export interface UseResponseFormResult {
  */
 export function useResponseForm(ideaId: string, onSuccess: () => void): UseResponseFormResult {
   const [content, setContent] = useState('');
+  const [responseType, setResponseType] = useState<IdeaResponseType>('support');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,20 +37,23 @@ export function useResponseForm(ideaId: string, onSuccess: () => void): UseRespo
     setError(null);
 
     try {
-      await api.createResponse(ideaId, content.trim());
+      await api.createIdeaResponse(ideaId, content.trim(), responseType);
       // Clear form on success
       setContent('');
+      setResponseType('support');
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to post response');
     } finally {
       setIsSubmitting(false);
     }
-  }, [ideaId, content, onSuccess]);
+  }, [ideaId, content, responseType, onSuccess]);
 
   return {
     content,
     setContent,
+    responseType,
+    setResponseType,
     isSubmitting,
     error,
     submit,

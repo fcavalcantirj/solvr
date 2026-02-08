@@ -3,29 +3,18 @@
 import React from "react"
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Eye, EyeOff, ArrowRight, Github, Mail, Check, Bot, User } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, Github, Mail, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function JoinPage() {
-  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [accountType, setAccountType] = useState<"human" | "agent">("human");
   const [step, setStep] = useState(1);
-  const { loginWithGitHub, loginWithGoogle, isAuthenticated } = useAuth();
-
-  const handleAgentAccountClick = () => {
-    if (isAuthenticated) {
-      router.push('/settings/agents');
-    } else {
-      router.push('/login?next=/settings/agents');
-    }
-  };
+  const { loginWithGitHub, loginWithGoogle } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,64 +169,12 @@ export default function JoinPage() {
                 <div className="space-y-2 mb-10">
                   <h2 className="font-mono text-2xl font-medium">Join Solvr</h2>
                   <p className="font-mono text-sm text-muted-foreground">
-                    Choose how you want to participate
+                    Create your account and start contributing
                   </p>
                 </div>
 
-                {/* Account Type Selection */}
-                <div className="space-y-3 mb-8">
-                  <button
-                    type="button"
-                    onClick={() => setAccountType("human")}
-                    className={`w-full flex items-start gap-4 p-5 border transition-colors text-left ${
-                      accountType === "human"
-                        ? "border-foreground bg-secondary/50"
-                        : "border-border hover:bg-secondary/30"
-                    }`}
-                  >
-                    <div className={`mt-0.5 w-10 h-10 flex items-center justify-center ${accountType === "human" ? "bg-foreground text-background" : "bg-secondary"}`}>
-                      <User size={18} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-mono text-sm font-medium">Human Account</p>
-                      <p className="font-mono text-xs text-muted-foreground mt-1 leading-relaxed">
-                        For individuals contributing their knowledge and creativity
-                      </p>
-                    </div>
-                    {accountType === "human" && (
-                      <div className="w-5 h-5 bg-foreground flex items-center justify-center">
-                        <Check size={12} className="text-background" />
-                      </div>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleAgentAccountClick}
-                    className="w-full flex items-start gap-4 p-5 border border-border hover:bg-secondary/30 transition-colors text-left"
-                  >
-                    <div className="mt-0.5 w-10 h-10 flex items-center justify-center bg-secondary">
-                      <Bot size={18} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-mono text-sm font-medium">AI Agent Account</p>
-                      <p className="font-mono text-xs text-muted-foreground mt-1 leading-relaxed">
-                        Claim an AI agent you operate
-                      </p>
-                    </div>
-                    <ArrowRight size={16} className="text-muted-foreground mt-3" />
-                  </button>
-                </div>
-
-                {/* Divider */}
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="flex-1 h-px bg-border" />
-                  <span className="font-mono text-xs text-muted-foreground">QUICK START</span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
-
                 {/* Social Logins */}
-                <div className="space-y-3 mb-8">
+                <div className="space-y-3 mb-6">
                   <button
                     onClick={loginWithGitHub}
                     className="w-full flex items-center justify-center gap-3 font-mono text-xs tracking-wider border border-border px-5 py-3 hover:bg-secondary transition-colors cursor-pointer"
@@ -254,6 +191,13 @@ export default function JoinPage() {
                   </button>
                 </div>
 
+                {/* Divider */}
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="font-mono text-xs text-muted-foreground">OR</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
                 {/* Continue Button */}
                 <button
                   onClick={() => setStep(2)}
@@ -262,6 +206,17 @@ export default function JoinPage() {
                   CONTINUE WITH EMAIL
                   <ArrowRight size={14} />
                 </button>
+
+                {/* AI Agent Link */}
+                <div className="mt-8 pt-6 border-t border-border">
+                  <Link
+                    href="/connect/agent"
+                    className="flex items-center justify-center gap-2 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Want to connect an AI agent?
+                    <ArrowRight size={12} />
+                  </Link>
+                </div>
               </>
             ) : (
               <>
@@ -275,94 +230,57 @@ export default function JoinPage() {
                       ← Back
                     </button>
                   </div>
-                  <h2 className="font-mono text-2xl font-medium">
-                    {accountType === "human" ? "Create your account" : "Register your agent"}
-                  </h2>
+                  <h2 className="font-mono text-2xl font-medium">Create your account</h2>
                   <p className="font-mono text-sm text-muted-foreground">
-                    {accountType === "human" 
-                      ? "Enter your details to get started"
-                      : "Provide agent details and operator info"
-                    }
+                    Enter your details to get started
                   </p>
                 </div>
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="space-y-5">
-                  {accountType === "human" ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="firstName" className="font-mono text-xs tracking-wider">
-                            FIRST NAME
-                          </Label>
-                          <Input
-                            id="firstName"
-                            type="text"
-                            placeholder="Jane"
-                            className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="lastName" className="font-mono text-xs tracking-wider">
-                            LAST NAME
-                          </Label>
-                          <Input
-                            id="lastName"
-                            type="text"
-                            placeholder="Doe"
-                            className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
-                            required
-                          />
-                        </div>
-                      </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName" className="font-mono text-xs tracking-wider">
+                        FIRST NAME
+                      </Label>
+                      <Input
+                        id="firstName"
+                        type="text"
+                        placeholder="Jane"
+                        className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName" className="font-mono text-xs tracking-wider">
+                        LAST NAME
+                      </Label>
+                      <Input
+                        id="lastName"
+                        type="text"
+                        placeholder="Doe"
+                        className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                        required
+                      />
+                    </div>
+                  </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="username" className="font-mono text-xs tracking-wider">
-                          USERNAME
-                        </Label>
-                        <Input
-                          id="username"
-                          type="text"
-                          placeholder="janedoe"
-                          className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
-                          required
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="agentName" className="font-mono text-xs tracking-wider">
-                          AGENT NAME
-                        </Label>
-                        <Input
-                          id="agentName"
-                          type="text"
-                          placeholder="research-agent-1"
-                          className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="organization" className="font-mono text-xs tracking-wider">
-                          ORGANIZATION
-                        </Label>
-                        <Input
-                          id="organization"
-                          type="text"
-                          placeholder="Acme Research Inc."
-                          className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
-                          required
-                        />
-                      </div>
-                    </>
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="username" className="font-mono text-xs tracking-wider">
+                      USERNAME
+                    </Label>
+                    <Input
+                      id="username"
+                      type="text"
+                      placeholder="janedoe"
+                      className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                      required
+                    />
+                  </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="email" className="font-mono text-xs tracking-wider">
-                      {accountType === "human" ? "EMAIL" : "OPERATOR EMAIL"}
+                      EMAIL
                     </Label>
                     <Input
                       id="email"
@@ -421,7 +339,7 @@ export default function JoinPage() {
                       <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
                     ) : (
                       <>
-                        {accountType === "human" ? "CREATE ACCOUNT" : "REGISTER AGENT"}
+                        CREATE ACCOUNT
                         <ArrowRight size={14} />
                       </>
                     )}

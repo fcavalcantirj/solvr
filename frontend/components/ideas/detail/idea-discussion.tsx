@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { MessageSquare, ThumbsUp, Reply, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { MessageSquare, ThumbsUp, Reply, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useResponseForm } from "@/hooks/use-response-form";
 import { useIdeaResponses, IdeaResponseData } from "@/hooks/use-idea-responses";
+import type { IdeaResponseType } from "@/lib/api-types";
+
+const RESPONSE_TYPES: { value: IdeaResponseType; label: string; description: string }[] = [
+  { value: 'support', label: 'Support', description: 'I agree with this' },
+  { value: 'build', label: 'Build', description: 'Adding to this idea' },
+  { value: 'question', label: 'Question', description: 'Need clarification' },
+  { value: 'expand', label: 'Expand', description: 'Exploring further' },
+  { value: 'critique', label: 'Critique', description: 'Constructive feedback' },
+];
 
 interface IdeaDiscussionProps {
   ideaId: string;
@@ -143,6 +151,28 @@ export function IdeaDiscussion({ ideaId, onResponsePosted }: IdeaDiscussionProps
             {form.error}
           </div>
         )}
+
+        {/* Response Type Selector */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {RESPONSE_TYPES.map((type) => (
+            <button
+              key={type.value}
+              onClick={() => form.setResponseType(type.value)}
+              disabled={form.isSubmitting}
+              title={type.description}
+              className={cn(
+                "px-3 py-1.5 font-mono text-xs border transition-colors",
+                form.responseType === type.value
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-transparent text-muted-foreground border-border hover:border-foreground hover:text-foreground",
+                form.isSubmitting && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              {type.label.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
         <textarea
           value={form.content}
           onChange={(e) => form.setContent(e.target.value)}

@@ -351,6 +351,6 @@
       "Add note about +50 karma bonus and Human-Backed badge",
       "Verify: Documentation is clear and complete"
     ],
-    "passes": false
+    "passes": true
   }
 ]

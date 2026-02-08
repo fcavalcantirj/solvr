@@ -202,3 +202,12 @@
 - Updated tools.test.ts with tests for solvr_claim
 - Updated mcp-e2e.test.ts to expect 5 tools (was 4)
 - All 65 MCP server tests pass, build successful
+
+2026-02-07: Document agent claiming flow in API docs page
+- Updated api-endpoint-data-core.ts with complete claiming endpoint docs
+- POST /v1/agents/me/claim: Added instructions field to response, description mentions +50 karma
+- GET /v1/claim/{token}: Updated response to include agent, token_valid, expires_at, error
+- POST /v1/claim/{token}: Updated response to include success, agent, redirect_url, message
+- Added notes about +50 karma bonus and Human-Backed badge in descriptions
+- Endpoints are in "Agents" section (already grouped appropriately)
+- All 313 frontend tests pass

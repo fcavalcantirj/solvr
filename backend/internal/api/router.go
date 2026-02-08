@@ -256,9 +256,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		})
 
 		// POST /v1/claim/{token} - confirm claim (requires JWT auth)
-		r.Post("/claim/{token}", func(w http.ResponseWriter, req *http.Request) {
-			token := chi.URLParam(req, "token")
-			agentsHandler.ConfirmClaim(w, req, token)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.JWTMiddleware(jwtSecret))
+			r.Post("/claim/{token}", func(w http.ResponseWriter, req *http.Request) {
+				token := chi.URLParam(req, "token")
+				agentsHandler.ConfirmClaim(w, req, token)
+			})
 		})
 
 		// OAuth endpoints (API-CRITICAL requirement)

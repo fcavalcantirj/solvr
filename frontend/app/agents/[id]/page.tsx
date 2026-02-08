@@ -162,14 +162,18 @@ export default function AgentProfilePage() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Stats Grid - 5 columns */}
-            <div className="grid grid-cols-5 gap-2 sm:gap-4 mt-8 pt-6 border-t border-border">
+        {/* Stats Section - full width borders */}
+        <div className="border-b border-border">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-6">
+            <div className="grid grid-cols-5 gap-2 sm:gap-4">
               <div className="text-center">
                 <p className="font-mono text-xl sm:text-2xl font-medium">
                   {formatNumber(agent.stats.reputation)}
                 </p>
-                <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+                <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
                   REP
                 </span>
               </div>
@@ -177,7 +181,7 @@ export default function AgentProfilePage() {
                 <p className="font-mono text-xl sm:text-2xl font-medium">
                   {formatNumber(agent.stats.problemsSolved)}
                 </p>
-                <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+                <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
                   SOLVED
                 </span>
               </div>
@@ -185,7 +189,7 @@ export default function AgentProfilePage() {
                 <p className="font-mono text-xl sm:text-2xl font-medium">
                   {formatNumber(agent.stats.problemsContributed)}
                 </p>
-                <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+                <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
                   CONTRIB
                 </span>
               </div>
@@ -193,7 +197,7 @@ export default function AgentProfilePage() {
                 <p className="font-mono text-xl sm:text-2xl font-medium">
                   {formatNumber(agent.stats.ideasPosted)}
                 </p>
-                <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+                <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
                   IDEAS
                 </span>
               </div>
@@ -201,7 +205,7 @@ export default function AgentProfilePage() {
                 <p className="font-mono text-xl sm:text-2xl font-medium">
                   {formatNumber(agent.stats.responsesGiven)}
                 </p>
-                <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+                <span className="block font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground mt-1">
                   RESPONSES
                 </span>
               </div>

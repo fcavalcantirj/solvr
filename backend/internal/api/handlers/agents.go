@@ -111,19 +111,23 @@ type GetAgentResponse struct {
 
 // UpdateAgentRequest is the request body for updating an agent.
 type UpdateAgentRequest struct {
-	DisplayName *string  `json:"display_name,omitempty"`
-	Bio         *string  `json:"bio,omitempty"`
-	Specialties []string `json:"specialties,omitempty"`
-	AvatarURL   *string  `json:"avatar_url,omitempty"`
-	Model       *string  `json:"model,omitempty"`
+	DisplayName   *string   `json:"display_name,omitempty"`
+	Bio           *string   `json:"bio,omitempty"`
+	Specialties   []string  `json:"specialties,omitempty"`
+	AvatarURL     *string   `json:"avatar_url,omitempty"`
+	Model         *string   `json:"model,omitempty"`
+	Email         *string   `json:"email,omitempty"`
+	ExternalLinks *[]string `json:"external_links,omitempty"`
 }
 
 // RegisterAgentRequest is the request body for agent self-registration.
 // Per AGENT-ONBOARDING requirement: agents can self-register without human auth.
 type RegisterAgentRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Model       string `json:"model,omitempty"`
+	Name          string   `json:"name"`
+	Description   string   `json:"description,omitempty"`
+	Model         string   `json:"model,omitempty"`
+	Email         string   `json:"email,omitempty"`
+	ExternalLinks []string `json:"external_links,omitempty"`
 }
 
 // RegisterAgentResponse is the response for agent self-registration.
@@ -205,6 +209,24 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate email length
+	if len(req.Email) > 255 {
+		writeAgentValidationError(w, "email must not exceed 255 characters")
+		return
+	}
+
+	// Validate external_links count and length
+	if len(req.ExternalLinks) > 10 {
+		writeAgentValidationError(w, "external_links must not exceed 10 items")
+		return
+	}
+	for _, link := range req.ExternalLinks {
+		if len(link) > 500 {
+			writeAgentValidationError(w, "each external link must not exceed 500 characters")
+			return
+		}
+	}
+
 	// Generate unique agent ID from name
 	agentID := generateAgentID(req.Name)
 
@@ -219,17 +241,19 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 	// Create agent (no human_id for self-registered agents)
 	now := time.Now()
 	agent := &models.Agent{
-		ID:          agentID,
-		DisplayName: req.Name,
-		HumanID:     nil, // Self-registered, no human owner
-		Bio:         req.Description,
-		Specialties: []string{},
-		AvatarURL:   "",
-		APIKeyHash:  apiKeyHash,
-		Model:       req.Model,
-		Status:      "active", // Active immediately per requirement
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:            agentID,
+		DisplayName:   req.Name,
+		HumanID:       nil, // Self-registered, no human owner
+		Bio:           req.Description,
+		Specialties:   []string{},
+		AvatarURL:     "",
+		APIKeyHash:    apiKeyHash,
+		Model:         req.Model,
+		Email:         req.Email,
+		ExternalLinks: req.ExternalLinks,
+		Status:        "active", // Active immediately per requirement
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
 	if err := h.repo.Create(r.Context(), agent); err != nil {
@@ -462,6 +486,26 @@ func (h *AgentsHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agen
 			return
 		}
 		agent.Model = *req.Model
+	}
+	if req.Email != nil {
+		if len(*req.Email) > 255 {
+			writeAgentValidationError(w, "email must not exceed 255 characters")
+			return
+		}
+		agent.Email = *req.Email
+	}
+	if req.ExternalLinks != nil {
+		if len(*req.ExternalLinks) > 10 {
+			writeAgentValidationError(w, "external_links must not exceed 10 items")
+			return
+		}
+		for _, link := range *req.ExternalLinks {
+			if len(link) > 500 {
+				writeAgentValidationError(w, "each external link must not exceed 500 characters")
+				return
+			}
+		}
+		agent.ExternalLinks = *req.ExternalLinks
 	}
 
 	agent.UpdatedAt = time.Now()

@@ -1,7 +1,7 @@
 {
   "name": "solvr",
-  "version": "2.1.0",
-  "description": "Transforms agents into researcher-knowledge builders. Silicon and carbon minds building knowledge together.",
+  "version": "2.2.0",
+  "description": "Knowledge base for AI agents and developers. Use when debugging issues, searching for solutions, encountering errors, or before starting work on any bug or feature. Search Solvr first, post what you learn.",
   "author": "Solvr <hello@solvr.dev>",
   "license": "MIT",
   "homepage": "https://solvr.dev",

@@ -59,7 +59,7 @@ export function ApiMcp() {
 }`;
 
   return (
-    <section className="px-6 lg:px-12 py-20 lg:py-28 border-b border-border bg-muted/20">
+    <section className="px-4 sm:px-6 lg:px-12 py-20 lg:py-28 border-b border-border bg-muted/20">
       <div className="max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20">
           {/* Left - Info */}

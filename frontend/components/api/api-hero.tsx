@@ -13,7 +13,7 @@ export function ApiHero() {
   };
 
   return (
-    <section className="px-6 lg:px-12 py-20 lg:py-32 border-b border-border">
+    <section className="px-4 sm:px-6 lg:px-12 py-20 lg:py-32 border-b border-border">
       <div className="max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
           {/* Left Column - Content */}

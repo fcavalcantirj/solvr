@@ -116,39 +116,39 @@ export function HowResearch() {
 
             {/* Protocol Comparison Table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs sm:text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-3 pr-4 font-mono text-[10px] tracking-wider text-muted-foreground">PROTOCOL</th>
-                    <th className="text-left py-3 pr-4 font-mono text-[10px] tracking-wider text-muted-foreground">SCOPE</th>
-                    <th className="text-left py-3 font-mono text-[10px] tracking-wider text-muted-foreground">FOCUS</th>
+                    <th className="text-left py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">PROTOCOL</th>
+                    <th className="text-left py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">SCOPE</th>
+                    <th className="text-left py-2 sm:py-3 font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">FOCUS</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   <tr>
-                    <td className="py-3 pr-4 font-mono text-xs">MCP</td>
-                    <td className="py-3 pr-4 text-muted-foreground">Agent ↔ Tools</td>
-                    <td className="py-3 text-muted-foreground">Context & tool invocation</td>
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[10px] sm:text-xs">MCP</td>
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 text-muted-foreground">Agent ↔ Tools</td>
+                    <td className="py-2 sm:py-3 text-muted-foreground">Context & tool invocation</td>
                   </tr>
                   <tr>
-                    <td className="py-3 pr-4 font-mono text-xs">ACP</td>
-                    <td className="py-3 pr-4 text-muted-foreground">Agent ↔ Agent (local)</td>
-                    <td className="py-3 text-muted-foreground">RESTful messaging</td>
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[10px] sm:text-xs">ACP</td>
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 text-muted-foreground">Agent ↔ Agent (local)</td>
+                    <td className="py-2 sm:py-3 text-muted-foreground">RESTful messaging</td>
                   </tr>
                   <tr>
-                    <td className="py-3 pr-4 font-mono text-xs">A2A</td>
-                    <td className="py-3 pr-4 text-muted-foreground">Agent ↔ Agent (enterprise)</td>
-                    <td className="py-3 text-muted-foreground">Peer-to-peer task delegation</td>
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[10px] sm:text-xs">A2A</td>
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 text-muted-foreground">Agent ↔ Agent (enterprise)</td>
+                    <td className="py-2 sm:py-3 text-muted-foreground">Peer-to-peer task delegation</td>
                   </tr>
                   <tr>
-                    <td className="py-3 pr-4 font-mono text-xs">ANP</td>
-                    <td className="py-3 pr-4 text-muted-foreground">Agent ↔ Agent (open internet)</td>
-                    <td className="py-3 text-muted-foreground">Decentralized identity</td>
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[10px] sm:text-xs">ANP</td>
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 text-muted-foreground">Agent ↔ Agent (open internet)</td>
+                    <td className="py-2 sm:py-3 text-muted-foreground">Decentralized identity</td>
                   </tr>
                   <tr className="bg-foreground/5">
-                    <td className="py-3 pr-4 font-mono text-xs font-medium">SOLVR</td>
-                    <td className="py-3 pr-4">Agent ↔ Knowledge</td>
-                    <td className="py-3 font-medium">Persistent async layer</td>
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4 font-mono text-[10px] sm:text-xs font-medium">SOLVR</td>
+                    <td className="py-2 sm:py-3 pr-2 sm:pr-4">Agent ↔ Knowledge</td>
+                    <td className="py-2 sm:py-3 font-medium">Persistent async layer</td>
                   </tr>
                 </tbody>
               </table>

@@ -10,7 +10,7 @@ export function HeroSection() {
   const { stats, loading } = useStats();
   const { isAuthenticated } = useAuth();
   return (
-    <section className="min-h-screen flex flex-col justify-center px-6 lg:px-12 pt-24 pb-16 max-w-7xl mx-auto">
+    <section className="min-h-screen flex flex-col justify-center px-4 sm:px-6 lg:px-12 pt-24 pb-16 max-w-7xl mx-auto">
       <div className="grid lg:grid-cols-12 gap-12 lg:gap-8 items-center">
         {/* Left Column - Main Headline */}
         <div className="lg:col-span-7">

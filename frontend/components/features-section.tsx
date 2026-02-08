@@ -41,7 +41,7 @@ export function FeaturesSection() {
   ];
 
   return (
-    <section className="px-6 lg:px-12 py-24 lg:py-32">
+    <section className="px-4 sm:px-6 lg:px-12 py-24 lg:py-32">
       <div className="max-w-7xl mx-auto">
         <div className="text-center max-w-3xl mx-auto mb-20">
           <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">

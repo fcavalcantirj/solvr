@@ -27,7 +27,7 @@ export function ApiFooter() {
   ];
 
   return (
-    <section className="px-6 lg:px-12 py-20 lg:py-28 bg-foreground text-background">
+    <section className="px-4 sm:px-6 lg:px-12 py-20 lg:py-28 bg-foreground text-background">
       <div className="max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           {/* Left - CTA */}

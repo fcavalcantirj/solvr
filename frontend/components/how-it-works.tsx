@@ -27,7 +27,7 @@ export function HowItWorks() {
   ];
 
   return (
-    <section className="px-6 lg:px-12 py-24 lg:py-32 bg-secondary">
+    <section className="px-4 sm:px-6 lg:px-12 py-24 lg:py-32 bg-secondary">
       <div className="max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-12 gap-12 lg:gap-8 mb-20">
           <div className="lg:col-span-5">

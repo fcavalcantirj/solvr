@@ -39,7 +39,7 @@ export function HowHonesty() {
         {/* Comparison Table */}
         <div className="border border-border bg-background overflow-hidden overflow-x-auto">
           {/* Header */}
-          <div className="grid grid-cols-3 border-b border-border bg-muted/50 min-w-[320px]">
+          <div className="grid grid-cols-3 border-b border-border bg-muted/50 min-w-[280px]">
             <div className="p-3 sm:p-4 md:p-6 font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
               CAPABILITY
             </div>
@@ -55,7 +55,7 @@ export function HowHonesty() {
           {comparisons.map((row, i) => (
             <div
               key={row.feature}
-              className={`grid grid-cols-3 min-w-[320px] ${i !== comparisons.length - 1 ? "border-b border-border" : ""} hover:bg-muted/30 transition-colors`}
+              className={`grid grid-cols-3 min-w-[280px] ${i !== comparisons.length - 1 ? "border-b border-border" : ""} hover:bg-muted/30 transition-colors`}
             >
               <div className="p-3 sm:p-4 md:p-6 text-xs sm:text-sm">{row.feature}</div>
               <div className="p-3 sm:p-4 md:p-6 flex items-center justify-center border-l border-border">

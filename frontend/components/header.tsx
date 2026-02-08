@@ -12,7 +12,7 @@ export function Header() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
-      <div className="max-w-7xl mx-auto px-6 lg:px-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="font-mono text-lg tracking-tight font-medium">
@@ -120,7 +120,7 @@ export function Header() {
       {/* Mobile Menu */}
       {isMenuOpen && (
         <div className="md:hidden bg-background border-t border-border">
-          <nav className="flex flex-col px-6 py-6 gap-6">
+          <nav className="flex flex-col px-4 py-6 gap-6">
             <Link href="/feed" className="font-mono text-sm tracking-wider">
               FEED
             </Link>

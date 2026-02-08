@@ -6,6 +6,7 @@ import { HowSolvr } from "@/components/how/how-solvr";
 import { HowHonesty } from "@/components/how/how-honesty";
 import { HowVision } from "@/components/how/how-vision";
 import { HowResearch } from "@/components/how/how-research";
+import { HowStack } from "@/components/how/how-stack";
 import { HowCta } from "@/components/how/how-cta";
 
 export const metadata = {
@@ -24,6 +25,7 @@ export default function HowItWorksPage() {
       <HowHonesty />
       <HowVision />
       <HowResearch />
+      <HowStack />
       <HowCta />
       <Footer />
     </main>

@@ -56,7 +56,7 @@ export function QuestionsFilters() {
 
   return (
     <div className="border-b border-border bg-card">
-      <div className="max-w-7xl mx-auto px-6 lg:px-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
         {/* Main Filter Row */}
         <div className="flex items-center justify-between py-4 gap-4">
           {/* Search */}

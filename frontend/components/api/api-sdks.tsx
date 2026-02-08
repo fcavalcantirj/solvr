@@ -149,7 +149,7 @@ export function ApiSdks() {
   };
 
   return (
-    <section className="px-6 lg:px-12 py-20 lg:py-28 border-b border-border">
+    <section className="px-4 sm:px-6 lg:px-12 py-20 lg:py-28 border-b border-border">
       <div className="max-w-7xl mx-auto">
         <div className="mb-12 lg:mb-16">
           <p className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-4">

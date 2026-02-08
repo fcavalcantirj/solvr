@@ -493,3 +493,136 @@ func TestRequireRole(t *testing.T) {
 		}
 	})
 }
+
+// TestUnifiedAuthMiddleware tests the middleware that accepts all three auth types:
+// 1. User API keys (solvr_sk_...)
+// 2. Agent API keys (solvr_...)
+// 3. JWT tokens
+func TestUnifiedAuthMiddleware(t *testing.T) {
+	secret := "test-secret-key-for-testing-purposes-only"
+
+	// Create mock database for agents
+	agentDB := NewMockAgentDB()
+	testAgentAPIKey := "solvr_testkey123456789012345678901234567890"
+	_, err := agentDB.AddTestAgent("test_agent", "Test Agent", testAgentAPIKey)
+	if err != nil {
+		t.Fatalf("failed to add test agent: %v", err)
+	}
+	agentValidator := NewAPIKeyValidator(agentDB)
+
+	// Create mock database for user API keys
+	userDB := NewMockUserAPIKeyDB()
+	testUserID := "user-456"
+	testUserKeyID := "key-789"
+	testUserAPIKey := "solvr_sk_userkey123456789012345678901234567890"
+	userDB.AddTestUser(testUserID, "testuser", "test@example.com")
+	_, err = userDB.AddTestUserAPIKey(testUserKeyID, testUserID, "Test User Key", testUserAPIKey)
+	if err != nil {
+		t.Fatalf("failed to add test user API key: %v", err)
+	}
+	userValidator := NewUserAPIKeyValidator(userDB)
+
+	// Generate valid JWT
+	validJWT, _ := GenerateJWT(secret, "jwt-user-123", "jwt@example.com", "user", 15*time.Minute)
+
+	tests := []struct {
+		name           string
+		authHeader     string
+		wantStatusCode int
+		wantClaims     bool
+		wantAgent      bool
+		expectUserID   string // Expected user ID in claims
+		expectAgentID  string // Expected agent ID
+	}{
+		{
+			name:           "valid JWT authentication",
+			authHeader:     "Bearer " + validJWT,
+			wantStatusCode: http.StatusOK,
+			wantClaims:     true,
+			wantAgent:      false,
+			expectUserID:   "jwt-user-123",
+		},
+		{
+			name:           "valid agent API key authentication",
+			authHeader:     "Bearer " + testAgentAPIKey,
+			wantStatusCode: http.StatusOK,
+			wantClaims:     false,
+			wantAgent:      true,
+			expectAgentID:  "test_agent",
+		},
+		{
+			name:           "valid user API key authentication",
+			authHeader:     "Bearer " + testUserAPIKey,
+			wantStatusCode: http.StatusOK,
+			wantClaims:     true,  // User API keys should populate claims
+			wantAgent:      false,
+			expectUserID:   testUserID,
+		},
+		{
+			name:           "missing authorization header",
+			authHeader:     "",
+			wantStatusCode: http.StatusUnauthorized,
+			wantClaims:     false,
+			wantAgent:      false,
+		},
+		{
+			name:           "invalid token",
+			authHeader:     "Bearer invalid_token",
+			wantStatusCode: http.StatusUnauthorized,
+			wantClaims:     false,
+			wantAgent:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotClaims *Claims
+			var gotAgent *models.Agent
+			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotClaims = ClaimsFromContext(r.Context())
+				gotAgent = AgentFromContext(r.Context())
+				w.WriteHeader(http.StatusOK)
+			})
+
+			middleware := UnifiedAuthMiddleware(secret, agentValidator, userValidator)(nextHandler)
+
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantStatusCode {
+				t.Errorf("status code = %v, want %v", rr.Code, tt.wantStatusCode)
+			}
+
+			if tt.wantClaims && gotClaims == nil {
+				t.Error("expected claims in context but got nil")
+			}
+			if !tt.wantClaims && gotClaims != nil {
+				t.Error("expected no claims but got some")
+			}
+
+			if tt.wantAgent && gotAgent == nil {
+				t.Error("expected agent in context but got nil")
+			}
+			if !tt.wantAgent && gotAgent != nil {
+				t.Error("expected no agent but got some")
+			}
+
+			// Verify specific identities
+			if tt.expectUserID != "" && gotClaims != nil {
+				if gotClaims.UserID != tt.expectUserID {
+					t.Errorf("claims.UserID = %v, want %v", gotClaims.UserID, tt.expectUserID)
+				}
+			}
+			if tt.expectAgentID != "" && gotAgent != nil {
+				if gotAgent.ID != tt.expectAgentID {
+					t.Errorf("agent.ID = %v, want %v", gotAgent.ID, tt.expectAgentID)
+				}
+			}
+		})
+	}
+}

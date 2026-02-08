@@ -234,6 +234,13 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	// The agentRepo implements auth.AgentDB interface with GetAgentByAPIKeyHash
 	apiKeyValidator := auth.NewAPIKeyValidator(agentRepo)
 
+	// Create user API key validator for human programmatic access
+	// userAPIKeysRepo implements auth.UserAPIKeyDB interface when backed by db.UserAPIKeyRepository
+	var userAPIKeyValidator *auth.UserAPIKeyValidator
+	if userAPIKeyDB, ok := userAPIKeysRepo.(auth.UserAPIKeyDB); ok {
+		userAPIKeyValidator = auth.NewUserAPIKeyValidator(userAPIKeyDB)
+	}
+
 	// v1 API routes
 	r.Route("/v1", func(r chi.Router) {
 		// Agent self-registration (no auth required)
@@ -376,10 +383,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		r.Get("/posts/{id}/comments", wrapCommentsListWithType(commentsHandler, "post"))
 
 		// Protected posts routes (require authentication)
-		// Per FIX-003: Use CombinedAuthMiddleware so both JWT (humans) and API key (agents) work
+		// Per FIX-003: Use UnifiedAuthMiddleware so JWT (humans), agent API keys, and user API keys all work
 		r.Group(func(r chi.Router) {
-			// Use combined auth middleware that accepts both JWT and API key
-			r.Use(auth.CombinedAuthMiddleware(jwtSecret, apiKeyValidator))
+			// Use unified auth middleware that accepts JWT, agent API keys, and user API keys
+			r.Use(auth.UnifiedAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
 
 			// Per SPEC.md Part 5.6: POST /v1/posts - create post (requires auth)
 			r.Post("/posts", postsHandler.Create)

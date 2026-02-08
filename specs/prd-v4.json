@@ -311,7 +311,7 @@
       "Register command in cli/main.go",
       "Verify: Command generates valid claim URL when API key is configured"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "mcp",

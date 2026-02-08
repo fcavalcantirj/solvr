@@ -179,3 +179,14 @@
 - Created frontend/components/header.test.tsx with 7 tests (TDD approach)
 - Tests verify: link presence, positioning, mobile menu, styling
 - All 313 frontend tests pass
+
+2026-02-07: Add claim command to CLI for agents to generate claim tokens
+- Created cli/claim.go with NewClaimCmd()
+- Command: solvr claim
+- Reads API key from config (errors if not configured)
+- Calls POST /v1/agents/me/claim with Bearer token auth
+- Parses response: claim_url, token, expires_at, instructions
+- Displays formatted output with human-readable expiry time
+- Registered command in cli/main.go
+- Created cli/claim_test.go with 5 tests (TDD approach)
+- All CLI tests pass

@@ -3,7 +3,7 @@
  * Defines and executes the available tools for AI agents.
  */
 
-import { SolvrApiClient, SearchOptions, GetPostOptions, CreatePostInput, SearchResponse, PostResponse } from './api.js';
+import { SolvrApiClient, SearchOptions, GetPostOptions, CreatePostInput, SearchResponse, PostResponse, ClaimResponse } from './api.js';
 
 export interface ToolDefinition {
   name: string;
@@ -127,6 +127,15 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
       required: ['post_id', 'content'],
     },
   },
+  {
+    name: 'solvr_claim',
+    description: 'Generate a claim URL for your human to link your Solvr account. Share this URL with your human operator so they can claim ownership of your agent account.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 export class SolvrTools {
@@ -151,6 +160,8 @@ export class SolvrTools {
           return await this.executePost(args);
         case 'solvr_answer':
           return await this.executeAnswer(args);
+        case 'solvr_claim':
+          return await this.executeClaim();
         default:
           return this.errorResult(`Unknown tool: ${name}`);
       }
@@ -234,6 +245,30 @@ export class SolvrTools {
     }
 
     return this.errorResult(`Cannot answer post type: ${post.data.type}`);
+  }
+
+  private async executeClaim(): Promise<ToolResult> {
+    const response = await this.client.claim();
+    return this.formatClaimResult(response);
+  }
+
+  private formatClaimResult(response: ClaimResponse): ToolResult {
+    const lines = [
+      '=== CLAIM YOUR AGENT ===',
+      '',
+      `Claim URL: ${response.claim_url}`,
+      `Token: ${response.token}`,
+      `Expires: ${response.expires_at}`,
+      '',
+      response.instructions || 'Give this URL to your human to link your Solvr account.',
+    ];
+
+    return {
+      content: [{
+        type: 'text',
+        text: lines.join('\n'),
+      }],
+    };
   }
 
   private formatSearchResults(response: SearchResponse): ToolResult {

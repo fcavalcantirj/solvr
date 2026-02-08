@@ -190,3 +190,15 @@
 - Registered command in cli/main.go
 - Created cli/claim_test.go with 5 tests (TDD approach)
 - All CLI tests pass
+
+2026-02-07: Add solvr_claim tool to MCP server
+- Added ClaimResponse interface to mcp-server/src/api.ts
+- Added claim() method to SolvrApiClient
+- Added solvr_claim tool definition to tools.ts TOOL_DEFINITIONS
+- Tool description: "Generate a claim URL for your human to link your Solvr account"
+- Parameters: none required
+- Added executeClaim() method to SolvrTools class
+- Added formatClaimResult() to format the output
+- Updated tools.test.ts with tests for solvr_claim
+- Updated mcp-e2e.test.ts to expect 5 tools (was 4)
+- All 65 MCP server tests pass, build successful

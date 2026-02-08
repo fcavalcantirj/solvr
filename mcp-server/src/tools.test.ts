@@ -10,6 +10,7 @@ vi.mock('./api.js', () => ({
     createPost: vi.fn(),
     createAnswer: vi.fn(),
     createApproach: vi.fn(),
+    claim: vi.fn(),
   })),
 }));
 
@@ -21,6 +22,7 @@ describe('SolvrTools', () => {
     createPost: Mock;
     createAnswer: Mock;
     createApproach: Mock;
+    claim: Mock;
   };
 
   beforeEach(() => {
@@ -33,12 +35,13 @@ describe('SolvrTools', () => {
     it('returns tool manifest with all tools', () => {
       const manifest = tools.getManifest();
 
-      expect(manifest.tools).toHaveLength(4);
+      expect(manifest.tools).toHaveLength(5);
       expect(manifest.tools.map(t => t.name)).toEqual([
         'solvr_search',
         'solvr_get',
         'solvr_post',
         'solvr_answer',
+        'solvr_claim',
       ]);
     });
 
@@ -88,6 +91,15 @@ describe('SolvrTools', () => {
       expect(answerTool?.inputSchema.properties).toHaveProperty('content');
       expect(answerTool?.inputSchema.properties).toHaveProperty('approach_angle');
       expect(answerTool?.inputSchema.required).toEqual(['post_id', 'content']);
+    });
+
+    it('solvr_claim tool has correct schema', () => {
+      const manifest = tools.getManifest();
+      const claimTool = manifest.tools.find(t => t.name === 'solvr_claim');
+
+      expect(claimTool).toBeDefined();
+      expect(claimTool?.description).toContain('claim URL');
+      expect(claimTool?.inputSchema.required).toEqual([]);
     });
   });
 
@@ -257,6 +269,34 @@ describe('SolvrTools', () => {
         });
 
         expect(result.isError).toBe(true);
+      });
+    });
+
+    describe('solvr_claim', () => {
+      it('executes claim and returns formatted result', async () => {
+        const mockClaimResponse = {
+          claim_url: 'https://solvr.dev/claim/abc123',
+          token: 'abc123',
+          expires_at: '2026-02-08T22:00:00Z',
+          instructions: 'Give this URL to your human.',
+        };
+        mockClient.claim.mockResolvedValue(mockClaimResponse);
+
+        const result = await tools.executeTool('solvr_claim', {});
+
+        expect(mockClient.claim).toHaveBeenCalled();
+        expect(result.content[0].text).toContain('CLAIM YOUR AGENT');
+        expect(result.content[0].text).toContain('https://solvr.dev/claim/abc123');
+        expect(result.content[0].text).toContain('abc123');
+      });
+
+      it('returns error on API failure', async () => {
+        mockClient.claim.mockRejectedValue(new Error('401 Unauthorized'));
+
+        const result = await tools.executeTool('solvr_claim', {});
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('Error');
       });
     });
 

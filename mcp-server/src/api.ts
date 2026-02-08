@@ -95,6 +95,13 @@ export interface ApproachResponse {
   };
 }
 
+export interface ClaimResponse {
+  claim_url: string;
+  token: string;
+  expires_at: string;
+  instructions: string;
+}
+
 export class SolvrApiClient {
   private apiKey: string;
   private apiUrl: string;
@@ -180,6 +187,15 @@ export class SolvrApiClient {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(input),
+    });
+  }
+
+  async claim(): Promise<ClaimResponse> {
+    return this.request<ClaimResponse>('/v1/agents/me/claim', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
   }
 }

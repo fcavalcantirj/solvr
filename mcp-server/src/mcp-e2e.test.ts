@@ -176,13 +176,14 @@ describe('MCP Server E2E Tests', () => {
       expect(response.result).toBeDefined();
 
       const result = response.result as { tools: Array<{ name: string }> };
-      expect(result.tools).toHaveLength(4);
+      expect(result.tools).toHaveLength(5);
 
       const toolNames = result.tools.map((t) => t.name);
       expect(toolNames).toContain('solvr_search');
       expect(toolNames).toContain('solvr_get');
       expect(toolNames).toContain('solvr_post');
       expect(toolNames).toContain('solvr_answer');
+      expect(toolNames).toContain('solvr_claim');
     });
 
     it('each tool has proper schema definition', async () => {

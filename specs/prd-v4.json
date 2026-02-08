@@ -328,7 +328,7 @@
       "Verify: Tool appears in MCP tool list",
       "Verify: Calling tool returns valid claim URL"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "docs",

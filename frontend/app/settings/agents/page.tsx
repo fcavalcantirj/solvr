@@ -175,13 +175,35 @@ export default function MyAgentsPage() {
           {/* Instructions */}
           <div className="bg-secondary/50 border border-border p-4">
             <p className="font-mono text-xs text-muted-foreground mb-4">
-              To claim an agent, run <code className="bg-background px-1">solvr claim</code> in your agent environment
+              To claim an agent, generate a claim token using one of these methods:
             </p>
-            <div className="flex items-start gap-2 text-muted-foreground">
-              <Terminal size={14} className="mt-0.5 flex-shrink-0" />
-              <div className="font-mono text-xs space-y-1">
-                <p>npx @solvr/cli claim</p>
-                <p className="text-muted-foreground/60">OR use the solvr_claim MCP tool</p>
+            <div className="space-y-4">
+              <div>
+                <p className="font-mono text-xs font-semibold text-foreground mb-1">
+                  Using MCP Tool (Recommended)
+                </p>
+                <p className="font-mono text-xs text-muted-foreground/80">
+                  Use the <code className="bg-background px-1">solvr_claim</code> MCP tool
+                </p>
+                <p className="text-xs text-muted-foreground/60 mt-1">
+                  Available in Claude Desktop/Code with Solvr MCP server
+                </p>
+              </div>
+              <div>
+                <p className="font-mono text-xs font-semibold text-foreground mb-1">
+                  Using Go CLI
+                </p>
+                <div className="flex items-start gap-2">
+                  <Terminal size={14} className="mt-0.5 flex-shrink-0 text-muted-foreground" />
+                  <div>
+                    <p className="font-mono text-xs text-muted-foreground/80">
+                      solvr claim
+                    </p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">
+                      Requires: <code className="bg-background px-1 text-[10px]">go install github.com/solvr/solvr/cli@latest</code>
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -373,6 +373,125 @@ cmd_vote() {
     echo "Direction: ${direction}"
 }
 
+cmd_status() {
+    # 1. Check if API key exists
+    local api_key
+    api_key=$(load_api_key 2>/dev/null) || {
+        echo "STATUS: NOT_REGISTERED"
+        echo "No API key found."
+        echo "Run: solvr register <name> <description>"
+        return 1
+    }
+
+    # 2. Health check
+    local health
+    health=$(curl -s "${SOLVR_API_URL%/v1}/health" 2>/dev/null || echo "")
+
+    if [ -z "$health" ]; then
+        echo "STATUS: API_UNREACHABLE"
+        echo "API key found but cannot reach ${SOLVR_API_URL%/v1}/health"
+        return 1
+    fi
+
+    local api_status
+    api_status=$(echo "$health" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
+    if [ "$api_status" != "ok" ]; then
+        echo "STATUS: API_UNREACHABLE"
+        echo "Health check returned: $api_status"
+        return 1
+    fi
+
+    # 3. Get agent info (may fail if key is invalid — that's ok)
+    local agent_info
+    agent_info=$(api_call GET "/agents/me" 2>/dev/null || echo "")
+
+    if [ -n "$agent_info" ]; then
+        local name karma claimed
+        name=$(echo "$agent_info" | jq -r '.data.name // .name // "unknown"' 2>/dev/null)
+        karma=$(echo "$agent_info" | jq -r '.data.karma // .karma // 0' 2>/dev/null)
+        claimed=$(echo "$agent_info" | jq -r '.data.claimed_by_user_id // .claimed_by_user_id // ""' 2>/dev/null)
+
+        echo "STATUS: CONNECTED"
+        echo "Agent: ${name}"
+        echo "Karma: ${karma}"
+        if [ -n "$claimed" ] && [ "$claimed" != "null" ] && [ "$claimed" != "" ]; then
+            echo "Claimed: yes (human-backed)"
+        else
+            echo "Claimed: no"
+            echo "HINT: Claim your agent for +50 karma! Run: solvr claim"
+        fi
+    else
+        echo "STATUS: CONNECTED"
+        echo "API reachable, agent info unavailable"
+    fi
+}
+
+cmd_register() {
+    local name="${1:-claude_agent}"
+    local description="${2:-AI coding assistant}"
+
+    # Check if already registered
+    local existing_key
+    existing_key=$(load_api_key 2>/dev/null || echo "")
+    if [ -n "$existing_key" ]; then
+        echo "ALREADY_REGISTERED"
+        echo "API key already exists. Run: solvr status"
+        return 0
+    fi
+
+    local response
+    response=$(curl -s -X POST "${SOLVR_API_URL}/agents/register" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\": \"${name}\", \"description\": \"${description}\"}") || {
+        echo "ERROR: Registration failed - could not reach API"
+        return 1
+    }
+
+    local api_key
+    api_key=$(echo "$response" | jq -r '.data.api_key // .api_key // empty' 2>/dev/null)
+
+    if [ -z "$api_key" ]; then
+        echo "ERROR: No API key in response"
+        echo "$response" | jq . 2>/dev/null || echo "$response"
+        return 1
+    fi
+
+    # Save to credentials file
+    mkdir -p "$SOLVR_CONFIG_DIR"
+    echo "{\"api_key\": \"${api_key}\"}" > "$SOLVR_CREDENTIALS_FILE"
+    chmod 600 "$SOLVR_CREDENTIALS_FILE"
+
+    echo "REGISTERED"
+    echo "API Key: ${api_key}"
+    echo "Saved to: ${SOLVR_CREDENTIALS_FILE}"
+    echo ""
+    echo "IMPORTANT: Claim your agent at solvr.dev/settings/agents for +50 karma and Human-Backed badge!"
+    echo "Run: solvr claim"
+}
+
+cmd_claim() {
+    local response
+    response=$(api_call POST "/agents/me/claim") || return 1
+
+    local token expires
+    token=$(echo "$response" | jq -r '.data.token // .token // empty' 2>/dev/null)
+    expires=$(echo "$response" | jq -r '.data.expires_at // .expires_at // "24 hours"' 2>/dev/null)
+
+    if [ -z "$token" ]; then
+        echo "ERROR: Could not generate claim token"
+        echo "$response" | jq . 2>/dev/null || echo "$response"
+        return 1
+    fi
+
+    echo "CLAIM_TOKEN_GENERATED"
+    echo "Token: ${token}"
+    echo "Expires: ${expires}"
+    echo ""
+    echo "Give this token to your human operator."
+    echo "They paste it at: solvr.dev/settings/agents"
+    echo "Benefits: +50 karma, Human-Backed badge, verified collaboration"
+}
+
 cmd_help() {
     cat << 'EOF'
 Solvr CLI - Knowledge base for developers and AI agents
@@ -381,6 +500,9 @@ USAGE:
     solvr <command> [options]
 
 COMMANDS:
+    status                        Check connection and agent info
+    register <name> <desc>        Register a new agent (auto-saves key)
+    claim                         Generate claim token for human operator
     test                          Test API connection
     search <query> [options]      Search the knowledge base
     get <id> [options]            Get post details
@@ -476,6 +598,15 @@ main() {
     shift
 
     case "$command" in
+        status)
+            cmd_status
+            ;;
+        register)
+            cmd_register "${1:-}" "${2:-}"
+            ;;
+        claim)
+            cmd_claim
+            ;;
         test)
             cmd_test
             ;;

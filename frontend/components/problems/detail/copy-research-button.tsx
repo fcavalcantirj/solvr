@@ -14,13 +14,12 @@ type ButtonState = "idle" | "loading" | "success" | "error";
 
 export function CopyResearchButton({ problemId, isClosed }: CopyResearchButtonProps) {
   const [state, setState] = useState<ButtonState>("idle");
-  const [showHint, setShowHint] = useState(true);
+  const [hintPhase, setHintPhase] = useState<"none" | "first" | "second">("none");
   const { toast } = useToast();
 
   const handleCopy = async () => {
     if (isClosed || state === "loading") return;
 
-    setShowHint(false);
     setState("loading");
 
     try {
@@ -31,13 +30,18 @@ export function CopyResearchButton({ problemId, isClosed }: CopyResearchButtonPr
       await navigator.clipboard.writeText(response.markdown);
 
       setState("success");
+      setHintPhase("first");
       toast({
         title: "Copied to clipboard",
         description: `~${response.token_estimate.toLocaleString()} tokens ready for research`,
       });
 
-      // Reset after 2 seconds
+      // Reset button after 2 seconds
       setTimeout(() => setState("idle"), 2000);
+      // Show second hint after 2.5 seconds
+      setTimeout(() => setHintPhase("second"), 2500);
+      // Hide all hints after 5 seconds
+      setTimeout(() => setHintPhase("none"), 5000);
     } catch (error) {
       setState("error");
       toast({
@@ -98,9 +102,14 @@ export function CopyResearchButton({ problemId, isClosed }: CopyResearchButtonPr
         {getIcon()}
         {getLabel()}
       </button>
-      {showHint && !isClosed && (
+      {hintPhase === "first" && !isClosed && (
         <span className="font-mono text-[11px] text-foreground/70 bg-secondary px-2 py-1 border border-border">
           ← tip: enable research mode on your LLM
+        </span>
+      )}
+      {hintPhase === "second" && !isClosed && (
+        <span className="font-mono text-[11px] text-green-900 bg-green-100 px-2 py-1 border border-green-300">
+          ← ask LLM: "summarize without losing detail" and post here
         </span>
       )}
     </div>

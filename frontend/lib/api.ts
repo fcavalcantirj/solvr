@@ -141,6 +141,10 @@ class SolvrAPI {
     return this.fetch<APIApproachesResponse>(`/v1/problems/${problemId}/approaches${query ? `?${query}` : ''}`);
   }
 
+  async exportProblem(problemId: string): Promise<{ markdown: string; token_estimate: number }> {
+    return this.fetch<{ markdown: string; token_estimate: number }>(`/v1/problems/${problemId}/export`);
+  }
+
   async getFeed(params?: { sort?: string; limit?: number }): Promise<APIPostsResponse> {
     const searchParams = new URLSearchParams();
     if (params?.sort) searchParams.set('sort', params.sort);

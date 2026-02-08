@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -712,6 +714,158 @@ func parseProblemsIntParam(s string, defaultVal int) int {
 		return defaultVal
 	}
 	return val
+}
+
+// ProblemExportResponse is the response for GET /v1/problems/:id/export.
+type ProblemExportResponse struct {
+	Markdown      string `json:"markdown"`
+	TokenEstimate int    `json:"token_estimate"`
+}
+
+// Export handles GET /v1/problems/:id/export - export problem as LLM-friendly markdown.
+// This is a public endpoint (same auth as viewing the problem).
+func (h *ProblemsHandler) Export(w http.ResponseWriter, r *http.Request) {
+	problemID := chi.URLParam(r, "id")
+	if problemID == "" {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "problem ID is required")
+		return
+	}
+
+	// Get problem
+	problem, err := h.findProblem(r.Context(), problemID)
+	if err != nil {
+		if errors.Is(err, ErrProblemNotFound) {
+			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "problem not found")
+			return
+		}
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get problem")
+		return
+	}
+
+	// Get ALL approaches (high limit to fetch all)
+	opts := models.ApproachListOptions{
+		ProblemID: problemID,
+		Page:      1,
+		PerPage:   1000, // High limit to get all approaches
+	}
+	approaches, _, err := h.repo.ListApproaches(r.Context(), problemID, opts)
+	if err != nil {
+		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get approaches")
+		return
+	}
+
+	// Get progress notes for each approach
+	for i := range approaches {
+		notes, err := h.repo.GetProgressNotes(r.Context(), approaches[i].ID)
+		if err != nil {
+			continue // Non-fatal, just skip notes
+		}
+		approaches[i].ProgressNotes = notes
+	}
+
+	// Generate markdown
+	markdown := generateProblemExportMarkdown(problem, approaches)
+	tokenEstimate := len(markdown) / 4 // Rough estimate: ~4 chars per token
+
+	writeProblemsJSON(w, http.StatusOK, ProblemExportResponse{
+		Markdown:      markdown,
+		TokenEstimate: tokenEstimate,
+	})
+}
+
+// generateProblemExportMarkdown creates LLM-friendly markdown export.
+func generateProblemExportMarkdown(problem *models.PostWithAuthor, approaches []models.ApproachWithAuthor) string {
+	var sb strings.Builder
+
+	// Header
+	sb.WriteString(fmt.Sprintf("# Problem: %s\n", problem.Title))
+	sb.WriteString(fmt.Sprintf("**Status:** %s | **Posted:** %s | **By:** %s\n",
+		strings.ToUpper(string(problem.Status)),
+		problem.CreatedAt.Format("2006-01-02"),
+		problem.Author.DisplayName,
+	))
+	if len(problem.Tags) > 0 {
+		sb.WriteString(fmt.Sprintf("**Tags:** %s\n", strings.Join(problem.Tags, ", ")))
+	}
+	sb.WriteString(fmt.Sprintf("**URL:** https://solvr.dev/problems/%s\n\n", problem.ID))
+
+	// Description
+	sb.WriteString("## Description\n")
+	sb.WriteString(problem.Description)
+	sb.WriteString("\n\n---\n\n")
+
+	// Approaches
+	sb.WriteString(fmt.Sprintf("## Approaches (%d)\n\n", len(approaches)))
+
+	// Count stats
+	succeeded, failed, inProgress := 0, 0, 0
+	var lastActivity time.Time
+
+	for i, approach := range approaches {
+		sb.WriteString(fmt.Sprintf("### Approach %d: %s\n", i+1, approach.Angle))
+		sb.WriteString(fmt.Sprintf("**Status:** %s | **By:** %s | **Created:** %s\n\n",
+			strings.ToUpper(string(approach.Status)),
+			approach.Author.DisplayName,
+			approach.CreatedAt.Format("2006-01-02"),
+		))
+
+		if approach.Method != "" {
+			sb.WriteString("**Method:**\n")
+			sb.WriteString(approach.Method)
+			sb.WriteString("\n\n")
+		}
+
+		if len(approach.Assumptions) > 0 {
+			sb.WriteString("**Assumptions:**\n")
+			for _, a := range approach.Assumptions {
+				sb.WriteString(fmt.Sprintf("- %s\n", a))
+			}
+			sb.WriteString("\n")
+		}
+
+		if approach.Outcome != "" {
+			sb.WriteString("**Outcome:**\n")
+			sb.WriteString(approach.Outcome)
+			sb.WriteString("\n\n")
+		}
+
+		if len(approach.ProgressNotes) > 0 {
+			sb.WriteString("**Progress Notes:**\n\n")
+			for j, note := range approach.ProgressNotes {
+				sb.WriteString(fmt.Sprintf("#### Note %d (%s)\n", j+1, note.CreatedAt.Format("2006-01-02")))
+				sb.WriteString(note.Content)
+				sb.WriteString("\n\n")
+				if note.CreatedAt.After(lastActivity) {
+					lastActivity = note.CreatedAt
+				}
+			}
+		}
+
+		// Track stats
+		switch approach.Status {
+		case models.ApproachStatusSucceeded:
+			succeeded++
+		case models.ApproachStatusFailed:
+			failed++
+		default:
+			inProgress++
+		}
+		if approach.UpdatedAt.After(lastActivity) {
+			lastActivity = approach.UpdatedAt
+		}
+
+		sb.WriteString("---\n\n")
+	}
+
+	// Summary
+	sb.WriteString("## Summary\n")
+	sb.WriteString(fmt.Sprintf("- Total approaches: %d\n", len(approaches)))
+	sb.WriteString(fmt.Sprintf("- Succeeded: %d | Failed: %d | In Progress: %d\n", succeeded, failed, inProgress))
+	if !lastActivity.IsZero() {
+		sb.WriteString(fmt.Sprintf("- Last activity: %s\n", lastActivity.Format("2006-01-02")))
+	}
+
+	return sb.String()
 }
 
 // problemsAuthInfo holds authentication information from either JWT claims or API key.

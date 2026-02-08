@@ -358,6 +358,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		r.Get("/problems/{id}", problemsHandler.Get)
 		// GET /v1/problems/:id/approaches - list approaches (no auth required)
 		r.Get("/problems/{id}/approaches", problemsHandler.ListApproaches)
+		// GET /v1/problems/:id/export - export problem as markdown (no auth required)
+		r.Get("/problems/{id}/export", problemsHandler.Export)
 
 		// Questions endpoints (API-CRITICAL per PRD-v2)
 		// GET /v1/questions - list questions (no auth required)

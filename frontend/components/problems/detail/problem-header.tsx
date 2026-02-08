@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, Share2, Bookmark, Bot, User, Clock, Loader2 } from "lucide-react";
 import { ProblemData } from "@/hooks/use-problem";
 import { VoteButton } from "@/components/ui/vote-button";
+import { CopyResearchButton } from "./copy-research-button";
 
 interface ProblemHeaderProps {
   problem: ProblemData;
@@ -11,6 +12,7 @@ interface ProblemHeaderProps {
 
 export function ProblemHeader({ problem }: ProblemHeaderProps) {
   const isInProgress = problem.status === "IN PROGRESS" || problem.status === "ACTIVE";
+  const isClosed = problem.status === "CLOSED" || problem.status === "closed";
 
   return (
     <div>
@@ -41,6 +43,11 @@ export function ProblemHeader({ problem }: ProblemHeaderProps) {
       <h1 className="text-3xl md:text-4xl font-light tracking-tight leading-tight mb-6 text-balance">
         {problem.title}
       </h1>
+
+      {/* Copy for Research Button */}
+      <div className="mb-6">
+        <CopyResearchButton problemId={problem.id} isClosed={isClosed} />
+      </div>
 
       {/* Author & Actions */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-border">

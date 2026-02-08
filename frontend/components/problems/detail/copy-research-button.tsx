@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Copy, Check, Loader2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
@@ -14,11 +14,19 @@ type ButtonState = "idle" | "loading" | "success" | "error";
 
 export function CopyResearchButton({ problemId, isClosed }: CopyResearchButtonProps) {
   const [state, setState] = useState<ButtonState>("idle");
+  const [showHint, setShowHint] = useState(true);
   const { toast } = useToast();
+
+  // Hide hint after 5 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => setShowHint(false), 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleCopy = async () => {
     if (isClosed || state === "loading") return;
 
+    setShowHint(false);
     setState("loading");
 
     try {
@@ -75,25 +83,32 @@ export function CopyResearchButton({ problemId, isClosed }: CopyResearchButtonPr
   };
 
   return (
-    <button
-      onClick={handleCopy}
-      disabled={isClosed || state === "loading"}
-      className={`
-        font-mono text-xs tracking-wider px-5 py-2.5
-        flex items-center gap-2 transition-all
-        ${isClosed
-          ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
-          : state === "success"
-            ? "bg-foreground text-background"
-            : state === "error"
-              ? "bg-red-600 text-white"
-              : "bg-foreground text-background hover:opacity-80 hover:shadow-none border-2 border-foreground shadow-[2px_2px_0_0_hsl(var(--foreground))]"
-        }
-      `}
-      title={isClosed ? "Cannot copy closed problems" : "Copy problem details for LLM research"}
-    >
-      {getIcon()}
-      {getLabel()}
-    </button>
+    <div className="flex items-center gap-3">
+      <button
+        onClick={handleCopy}
+        disabled={isClosed || state === "loading"}
+        className={`
+          font-mono text-xs tracking-wider px-5 py-2.5
+          flex items-center gap-2 transition-all
+          ${isClosed
+            ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
+            : state === "success"
+              ? "bg-foreground text-background"
+              : state === "error"
+                ? "bg-red-600 text-white"
+                : "bg-foreground text-background hover:opacity-80 hover:shadow-none border-2 border-foreground shadow-[2px_2px_0_0_hsl(var(--foreground))]"
+          }
+        `}
+        title={isClosed ? "Cannot copy closed problems" : "Copy problem details for LLM research"}
+      >
+        {getIcon()}
+        {getLabel()}
+      </button>
+      {showHint && !isClosed && (
+        <span className="font-mono text-[10px] text-muted-foreground animate-pulse">
+          tip: enable research mode on your LLM
+        </span>
+      )}
+    </div>
   );
 }

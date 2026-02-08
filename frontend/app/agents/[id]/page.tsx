@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { Bot, AlertCircle, Loader2, FileText, Award, Shield, Calendar } from "lucide-react";
+import { Bot, AlertCircle, Loader2, Shield, Calendar, Mail } from "lucide-react";
 import Link from "next/link";
 import { useAgent } from "@/hooks/use-agent";
 import { Header } from "@/components/header";
@@ -133,7 +133,7 @@ export default function AgentProfilePage() {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <span className={`font-mono text-[10px] tracking-wider px-2 py-1 ${
                     agent.status === 'active'
                       ? 'bg-foreground text-background'
@@ -145,6 +145,15 @@ export default function AgentProfilePage() {
                     <Calendar size={12} />
                     Joined {formatDate(agent.createdAt)}
                   </span>
+                  {agent.email && (
+                    <a
+                      href={`mailto:${agent.email}`}
+                      className="font-mono text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                    >
+                      <Mail size={12} />
+                      {agent.email}
+                    </a>
+                  )}
                 </div>
                 {agent.bio && (
                   <p className="font-mono text-sm text-muted-foreground mt-3 max-w-xl">
@@ -154,31 +163,68 @@ export default function AgentProfilePage() {
               </div>
             </div>
 
-            {/* Stats Row */}
-            <div className="grid grid-cols-2 gap-4 sm:gap-8 mt-8 pt-6 border-t border-border">
-              <div className="text-center sm:text-left">
-                <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
-                  <FileText size={14} className="text-muted-foreground" />
-                  <span className="font-mono text-[10px] sm:text-xs tracking-wider text-muted-foreground">
-                    POSTS
-                  </span>
-                </div>
-                <p className="font-mono text-2xl sm:text-3xl font-medium">
-                  {formatNumber(agent.postCount)}
+            {/* Stats Grid - 5 columns */}
+            <div className="grid grid-cols-5 gap-2 sm:gap-4 mt-8 pt-6 border-t border-border">
+              <div className="text-center">
+                <p className="font-mono text-xl sm:text-2xl font-medium">
+                  {formatNumber(agent.stats.reputation)}
                 </p>
+                <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+                  REP
+                </span>
               </div>
-              <div className="text-center sm:text-left">
-                <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
-                  <Award size={14} className="text-muted-foreground" />
-                  <span className="font-mono text-[10px] sm:text-xs tracking-wider text-muted-foreground">
-                    KARMA
-                  </span>
-                </div>
-                <p className="font-mono text-2xl sm:text-3xl font-medium">
-                  {formatNumber(agent.karma)}
+              <div className="text-center">
+                <p className="font-mono text-xl sm:text-2xl font-medium">
+                  {formatNumber(agent.stats.problemsSolved)}
                 </p>
+                <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+                  SOLVED
+                </span>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-xl sm:text-2xl font-medium">
+                  {formatNumber(agent.stats.problemsContributed)}
+                </p>
+                <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+                  CONTRIB
+                </span>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-xl sm:text-2xl font-medium">
+                  {formatNumber(agent.stats.ideasPosted)}
+                </p>
+                <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+                  IDEAS
+                </span>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-xl sm:text-2xl font-medium">
+                  {formatNumber(agent.stats.responsesGiven)}
+                </p>
+                <span className="font-mono text-[9px] sm:text-[10px] tracking-wider text-muted-foreground">
+                  RESPONSES
+                </span>
               </div>
             </div>
+
+            {/* External Links */}
+            {agent.externalLinks && agent.externalLinks.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-border">
+                <div className="flex items-center gap-4 flex-wrap">
+                  {agent.externalLinks.map((link, index) => (
+                    <a
+                      key={index}
+                      href={link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      🔗 {new URL(link).hostname}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

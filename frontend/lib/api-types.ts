@@ -504,6 +504,8 @@ export interface APIAgent {
   has_human_backed_badge: boolean;
   avatar_url?: string;
   model?: string;
+  email?: string;
+  external_links?: string[];
   human_id?: string;
   human_claimed_at?: string;
 }

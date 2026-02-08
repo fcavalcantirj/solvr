@@ -3,6 +3,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api, formatRelativeTime } from '@/lib/api';
 
+// Agent stats from API
+export interface AgentStats {
+  reputation: number;
+  problemsSolved: number;
+  problemsContributed: number;
+  ideasPosted: number;
+  responsesGiven: number;
+}
+
 // Agent data for frontend use
 export interface AgentData {
   id: string;
@@ -10,11 +19,13 @@ export interface AgentData {
   bio: string;
   status: string;
   karma: number;
-  postCount: number;
   createdAt: string;
   hasHumanBackedBadge: boolean;
   avatarUrl?: string;
+  email?: string;
+  externalLinks?: string[];
   time: string;
+  stats: AgentStats;
 }
 
 export interface UseAgentResult {
@@ -25,6 +36,7 @@ export interface UseAgentResult {
 }
 
 // Transform API agent to frontend format
+// Minimal transformation - just pass through API data
 function transformAgent(
   agent: {
     id: string;
@@ -35,6 +47,8 @@ function transformAgent(
     created_at: string;
     has_human_backed_badge: boolean;
     avatar_url?: string | null;
+    email?: string | null;
+    external_links?: string[] | null;
   },
   stats?: {
     problems_solved?: number;
@@ -50,27 +64,25 @@ function transformAgent(
 ): AgentData {
   const createdAt = agent.created_at || new Date().toISOString();
 
-  // Karma comes directly from agent object (backend has it there)
-  const karma = agent.karma ?? 0;
-
-  // Compute postCount from stats (problems + questions + ideas posted)
-  const postCount = stats ? (
-    (stats.problems_solved ?? 0) +
-    (stats.questions_asked ?? 0) +
-    (stats.ideas_posted ?? 0)
-  ) : 0;
-
   return {
     id: agent.id,
     displayName: agent.display_name || 'Unknown Agent',
     bio: agent.bio || '',
     status: agent.status || 'active',
-    karma,
-    postCount,
+    karma: agent.karma ?? 0,
     createdAt,
     hasHumanBackedBadge: agent.has_human_backed_badge ?? false,
     avatarUrl: agent.avatar_url || undefined,
+    email: agent.email || undefined,
+    externalLinks: agent.external_links || undefined,
     time: formatRelativeTime(createdAt),
+    stats: {
+      reputation: stats?.reputation ?? 0,
+      problemsSolved: stats?.problems_solved ?? 0,
+      problemsContributed: stats?.problems_contributed ?? 0,
+      ideasPosted: stats?.ideas_posted ?? 0,
+      responsesGiven: stats?.responses_given ?? 0,
+    },
   };
 }
 

@@ -19,7 +19,6 @@ const mockAgent = {
   bio: 'A swashbuckling AI agent',
   status: 'active',
   karma: 1250,
-  post_count: 42,
   created_at: '2025-01-01T10:00:00Z',
   has_human_backed_badge: true,
   avatar_url: 'https://example.com/avatar.png',
@@ -36,7 +35,6 @@ const mockStats = {
   responses_given: 8,
   upvotes_received: 100,
   reputation: 1250,
-  // postCount = problems_solved + questions_asked + ideas_posted = 20+15+7 = 42
 };
 
 describe('useAgent', () => {
@@ -82,10 +80,15 @@ describe('useAgent', () => {
     expect(result.current.agent?.bio).toBe('A swashbuckling AI agent');
     expect(result.current.agent?.status).toBe('active');
     expect(result.current.agent?.karma).toBe(1250);
-    expect(result.current.agent?.postCount).toBe(42);
     expect(result.current.agent?.hasHumanBackedBadge).toBe(true);
     expect(result.current.agent?.avatarUrl).toBe('https://example.com/avatar.png');
     expect(result.current.agent?.time).toBe('5d ago');
+    // Stats object
+    expect(result.current.agent?.stats.reputation).toBe(1250);
+    expect(result.current.agent?.stats.problemsSolved).toBe(20);
+    expect(result.current.agent?.stats.problemsContributed).toBe(5);
+    expect(result.current.agent?.stats.ideasPosted).toBe(7);
+    expect(result.current.agent?.stats.responsesGiven).toBe(8);
     expect(result.current.error).toBeNull();
   });
 
@@ -168,20 +171,18 @@ describe('useAgent', () => {
     expect(api.getAgent).toHaveBeenCalledTimes(1);
   });
 
-  it('computes postCount from real backend stats structure', async () => {
-    // Arrange - REAL backend structure: stats has granular counts, NOT posts_count/karma
+  it('transforms stats from real backend structure', async () => {
+    // Arrange - REAL backend structure: stats has granular counts
     const realAgent = {
       id: 'agent_real',
       display_name: 'Real Agent',
       bio: 'Testing real backend',
       status: 'active',
-      karma: 500,  // karma IS on agent object
-      // NO post_count field - backend doesn't have it
+      karma: 500,
       created_at: '2025-01-01T10:00:00Z',
       has_human_backed_badge: true,
     };
     const realStats = {
-      // REAL backend stats structure - NO karma, NO posts_count
       problems_solved: 5,
       problems_contributed: 2,
       questions_asked: 10,
@@ -204,10 +205,13 @@ describe('useAgent', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // Assert - karma from agent, postCount computed from stats
+    // Assert - stats from API are mapped correctly
     expect(result.current.agent?.karma).toBe(500);
-    // postCount = problems_solved + questions_asked + ideas_posted = 5+10+3 = 18
-    expect(result.current.agent?.postCount).toBe(18);
+    expect(result.current.agent?.stats.reputation).toBe(500);
+    expect(result.current.agent?.stats.problemsSolved).toBe(5);
+    expect(result.current.agent?.stats.problemsContributed).toBe(2);
+    expect(result.current.agent?.stats.ideasPosted).toBe(3);
+    expect(result.current.agent?.stats.responsesGiven).toBe(12);
   });
 
   it('handles agent with null optional fields', async () => {
@@ -218,7 +222,6 @@ describe('useAgent', () => {
       bio: '',
       status: 'pending',
       karma: 0,
-      post_count: 0,
       created_at: '2025-01-01T10:00:00Z',
       has_human_backed_badge: false,
       avatar_url: null,
@@ -249,6 +252,8 @@ describe('useAgent', () => {
     expect(result.current.agent).not.toBeNull();
     expect(result.current.agent?.avatarUrl).toBeUndefined();
     expect(result.current.agent?.bio).toBe('');
+    expect(result.current.agent?.stats.reputation).toBe(0);
+    expect(result.current.agent?.stats.problemsSolved).toBe(0);
     expect(result.current.error).toBeNull();
   });
 });

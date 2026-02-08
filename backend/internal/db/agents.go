@@ -29,7 +29,7 @@ type AgentRepository struct {
 // Used to keep queries consistent and DRY.
 // Note: COALESCE handles NULL values for nullable columns scanned into non-pointer Go types.
 // Without COALESCE, pgx fails when scanning NULL into string/[]string.
-const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, status, karma, human_claimed_at, has_human_backed_badge, created_at, updated_at`
+const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, karma, human_claimed_at, has_human_backed_badge, created_at, updated_at`
 
 // NewAgentRepository creates a new AgentRepository.
 func NewAgentRepository(pool *Pool) *AgentRepository {
@@ -40,8 +40,8 @@ func NewAgentRepository(pool *Pool) *AgentRepository {
 // The agent struct is populated with timestamps after successful creation.
 func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error {
 	query := `
-		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, model)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, model, email, external_links)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING ` + agentColumns
 
 	row := r.pool.QueryRow(ctx, query,
@@ -54,6 +54,8 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		agent.APIKeyHash,
 		agent.MoltbookID,
 		agent.Model,
+		agent.Email,
+		agent.ExternalLinks,
 	)
 
 	err := row.Scan(
@@ -66,6 +68,8 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		&agent.APIKeyHash,
 		&agent.MoltbookID,
 		&agent.Model,
+		&agent.Email,
+		&agent.ExternalLinks,
 		&agent.Status,
 		&agent.Karma,
 		&agent.HumanClaimedAt,
@@ -127,12 +131,12 @@ func (r *AgentRepository) FindByAPIKeyHash(ctx context.Context, hash string) (*m
 }
 
 // Update updates an existing agent.
-// Updates display_name, bio, specialties, avatar_url, model.
+// Updates display_name, bio, specialties, avatar_url, model, email, external_links.
 // The agent struct is updated with new values after successful update.
 func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error {
 	query := `
 		UPDATE agents
-		SET display_name = $2, bio = $3, specialties = $4, avatar_url = $5, model = $6, updated_at = NOW()
+		SET display_name = $2, bio = $3, specialties = $4, avatar_url = $5, model = $6, email = $7, external_links = $8, updated_at = NOW()
 		WHERE id = $1
 		RETURNING ` + agentColumns
 
@@ -143,6 +147,8 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 		agent.Specialties,
 		agent.AvatarURL,
 		agent.Model,
+		agent.Email,
+		agent.ExternalLinks,
 	)
 
 	err := row.Scan(
@@ -155,6 +161,8 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 		&agent.APIKeyHash,
 		&agent.MoltbookID,
 		&agent.Model,
+		&agent.Email,
+		&agent.ExternalLinks,
 		&agent.Status,
 		&agent.Karma,
 		&agent.HumanClaimedAt,
@@ -331,6 +339,8 @@ func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 		&agent.APIKeyHash,
 		&agent.MoltbookID,
 		&agent.Model,
+		&agent.Email,
+		&agent.ExternalLinks,
 		&agent.Status,
 		&agent.Karma,
 		&agent.HumanClaimedAt,
@@ -363,6 +373,8 @@ func (r *AgentRepository) scanAgentRows(rows pgx.Rows) (*models.Agent, error) {
 		&agent.APIKeyHash,
 		&agent.MoltbookID,
 		&agent.Model,
+		&agent.Email,
+		&agent.ExternalLinks,
 		&agent.Status,
 		&agent.Karma,
 		&agent.HumanClaimedAt,

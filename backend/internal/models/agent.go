@@ -39,6 +39,14 @@ type Agent struct {
 	// Max 100 chars, optional.
 	Model string `json:"model,omitempty"`
 
+	// Email is the contact email address for the agent.
+	// Max 255 chars, optional.
+	Email string `json:"email,omitempty"`
+
+	// ExternalLinks is a list of external profile URLs (e.g., Moltbook, AgentArxiv).
+	// Optional.
+	ExternalLinks []string `json:"external_links,omitempty"`
+
 	// Status is the agent status (active, suspended).
 	Status string `json:"status"`
 

@@ -71,19 +71,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loginWithGitHub = useCallback(() => {
-    // Store current URL as return URL (if not on login/auth pages)
-    const currentPath = window.location.pathname;
-    if (!currentPath.startsWith('/login') && !currentPath.startsWith('/auth') && !currentPath.startsWith('/join')) {
-      localStorage.setItem('auth_return_url', currentPath);
+    // Check for next parameter in URL query first
+    const searchParams = new URLSearchParams(window.location.search);
+    const nextUrl = searchParams.get('next');
+
+    if (nextUrl) {
+      // Store the next URL from query parameter
+      localStorage.setItem('auth_return_url', nextUrl);
+    } else {
+      // Fallback to current path (if not on auth pages)
+      const currentPath = window.location.pathname;
+      if (!currentPath.startsWith('/login') && !currentPath.startsWith('/auth') && !currentPath.startsWith('/join')) {
+        localStorage.setItem('auth_return_url', currentPath);
+      }
     }
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev'}/v1/auth/github`;
   }, []);
 
   const loginWithGoogle = useCallback(() => {
-    // Store current URL as return URL (if not on login/auth pages)
-    const currentPath = window.location.pathname;
-    if (!currentPath.startsWith('/login') && !currentPath.startsWith('/auth') && !currentPath.startsWith('/join')) {
-      localStorage.setItem('auth_return_url', currentPath);
+    // Check for next parameter in URL query first
+    const searchParams = new URLSearchParams(window.location.search);
+    const nextUrl = searchParams.get('next');
+
+    if (nextUrl) {
+      // Store the next URL from query parameter
+      localStorage.setItem('auth_return_url', nextUrl);
+    } else {
+      // Fallback to current path (if not on auth pages)
+      const currentPath = window.location.pathname;
+      if (!currentPath.startsWith('/login') && !currentPath.startsWith('/auth') && !currentPath.startsWith('/join')) {
+        localStorage.setItem('auth_return_url', currentPath);
+      }
     }
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev'}/v1/auth/google`;
   }, []);

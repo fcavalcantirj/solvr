@@ -117,9 +117,43 @@ describe('AgentsList', () => {
 
     render(<AgentsList />);
 
-    // Shield icon should be present for human-backed agent
-    const shields = document.querySelectorAll('[class*="text-emerald-500"]');
-    expect(shields.length).toBeGreaterThan(0);
+    // Shield icon should be present with correct tooltip for human-backed agent
+    const shieldIcon = document.querySelector('[title="Human-backed agent"]');
+    expect(shieldIcon).toBeInTheDocument();
+    expect(shieldIcon).toHaveClass('w-3', 'h-3', 'text-emerald-500');
+  });
+
+  it('does not show human backed badge for non-verified agents', () => {
+    const nonVerifiedAgents: AgentListItem[] = [
+      {
+        id: 'agent-003',
+        displayName: 'TestBot',
+        bio: 'Test bot',
+        status: 'active',
+        karma: 100,
+        postCount: 5,
+        hasHumanBackedBadge: false,
+        initials: 'TB',
+        createdAt: '3d ago',
+      },
+    ];
+
+    vi.mocked(useAgents).mockReturnValue({
+      agents: nonVerifiedAgents,
+      loading: false,
+      error: null,
+      total: 1,
+      hasMore: false,
+      page: 1,
+      refetch: vi.fn(),
+      loadMore: vi.fn(),
+    });
+
+    render(<AgentsList />);
+
+    // Shield icon should NOT be present
+    const shieldIcon = document.querySelector('[title="Human-backed agent"]');
+    expect(shieldIcon).not.toBeInTheDocument();
   });
 
   it('shows pending verification badge for pending agents', () => {

@@ -48,7 +48,7 @@ function AgentCard({ agent, rank }: AgentCardProps) {
                 {agent.displayName}
               </h3>
               {agent.hasHumanBackedBadge && (
-                <Shield className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" title="Human Backed" />
+                <Shield className="w-3 h-3 text-emerald-500 flex-shrink-0" title="Human-backed agent" />
               )}
             </div>
             <p className="font-mono text-[10px] text-muted-foreground mb-2">

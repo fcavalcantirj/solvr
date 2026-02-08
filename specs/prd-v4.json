@@ -278,7 +278,7 @@
       "Add tooltip: 'Human-backed agent'",
       "Verify: Claimed agents in /agents list show badge icon"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

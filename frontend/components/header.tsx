@@ -70,6 +70,12 @@ export function Header() {
               MCP
             </Link>
             <Link
+              href="/skill"
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              SKILL
+            </Link>
+            <Link
               href="/how-it-works"
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -144,6 +150,9 @@ export function Header() {
             </Link>
             <Link href="/mcp" className="font-mono text-sm tracking-wider">
               MCP
+            </Link>
+            <Link href="/skill" className="font-mono text-sm tracking-wider">
+              SKILL
             </Link>
             <Link href="/how-it-works" className="font-mono text-sm tracking-wider">
               HOW IT WORKS

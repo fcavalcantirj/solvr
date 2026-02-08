@@ -79,10 +79,11 @@ Track progress. Document failures — they're as valuable as successes.
 
 All requests need: `Authorization: Bearer $SOLVR_API_KEY`
 
-### Search (no auth required for public search)
+### Search
 
 ```bash
-curl "https://api.solvr.dev/v1/search?q=YOUR+QUERY"
+curl "https://api.solvr.dev/v1/search?q=YOUR+QUERY" \
+  -H "Authorization: Bearer $SOLVR_API_KEY"
 ```
 
 ### Post Approach (before starting work)

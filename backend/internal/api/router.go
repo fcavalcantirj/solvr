@@ -280,8 +280,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		r.Post("/auth/moltbook", moltbookHandler.Authenticate)
 
 		// Search endpoint (API-CRITICAL per SPEC.md Part 5.5)
-		// GET /v1/search - search the knowledge base (no auth required)
-		r.Get("/search", searchHandler.Search)
+		// GET /v1/search - search the knowledge base (requires auth)
+		// Auth is required to prevent abuse/scraping and enable rate limiting per identity
+		r.Group(func(r chi.Router) {
+			r.Use(auth.UnifiedAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
+			r.Get("/search", searchHandler.Search)
+		})
 
 		// MCP endpoint (MCP-005: HTTP transport for MCP)
 		// POST /v1/mcp - Model Context Protocol over HTTP (no auth required for tools/list)

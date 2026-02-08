@@ -1124,3 +1124,137 @@ func TestMCPToolsListEndpoint(t *testing.T) {
 		t.Errorf("expected 4 tools, got %d", len(tools))
 	}
 }
+
+// =============================================================================
+// Search API Auth Tests (Router Level)
+//
+// These tests verify that the search endpoint REQUIRES authentication.
+// Auth is enforced at the router level via UnifiedAuthMiddleware.
+// =============================================================================
+
+// TestSearchEndpointRequiresAuth verifies GET /v1/search requires authentication.
+// Per user decision: search should not be public - it requires an agent key,
+// user API key, or JWT token.
+func TestSearchEndpointRequiresAuth(t *testing.T) {
+	router := NewRouter(nil)
+
+	// GET /v1/search without auth should return 401
+	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should NOT return 404 - endpoint should be wired
+	if w.Code == http.StatusNotFound {
+		t.Errorf("GET /v1/search returned 404 - endpoint not wired")
+	}
+
+	// Should return 401 Unauthorized (not 200)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 (unauthorized), got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify error response is JSON
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should have error object
+	if response["error"] == nil {
+		t.Error("expected error object in response")
+	}
+}
+
+// TestSearchEndpointWithAPIKey verifies GET /v1/search works with valid agent API key.
+func TestSearchEndpointWithAPIKey(t *testing.T) {
+	router := NewRouter(nil)
+
+	// First, register an agent to get an API key
+	reqBody := `{"name":"search_test_agent","description":"Test agent for search endpoint"}`
+	regReq := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
+	regReq.Header.Set("Content-Type", "application/json")
+	regW := httptest.NewRecorder()
+	router.ServeHTTP(regW, regReq)
+
+	if regW.Code != http.StatusCreated {
+		t.Fatalf("failed to register test agent: %d - %s", regW.Code, regW.Body.String())
+	}
+
+	var regResp map[string]interface{}
+	if err := json.NewDecoder(regW.Body).Decode(&regResp); err != nil {
+		t.Fatalf("failed to decode registration response: %v", err)
+	}
+
+	apiKey, ok := regResp["api_key"].(string)
+	if !ok || apiKey == "" {
+		t.Fatal("expected api_key in registration response")
+	}
+
+	// Now test GET /v1/search with valid API key
+	searchReq := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)
+	searchReq.Header.Set("Authorization", "Bearer "+apiKey)
+	searchW := httptest.NewRecorder()
+	router.ServeHTTP(searchW, searchReq)
+
+	// Should return 200 OK
+	if searchW.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", searchW.Code, searchW.Body.String())
+	}
+
+	var searchResp map[string]interface{}
+	if err := json.NewDecoder(searchW.Body).Decode(&searchResp); err != nil {
+		t.Fatalf("failed to decode search response: %v", err)
+	}
+
+	// Should have data array
+	if searchResp["data"] == nil {
+		t.Error("expected data in response")
+	}
+
+	// Should have meta object
+	if searchResp["meta"] == nil {
+		t.Error("expected meta in response")
+	}
+}
+
+// TestSearchEndpointWithInvalidAPIKey verifies GET /v1/search rejects invalid API key.
+func TestSearchEndpointWithInvalidAPIKey(t *testing.T) {
+	router := NewRouter(nil)
+
+	// GET /v1/search with invalid API key should return 401
+	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)
+	req.Header.Set("Authorization", "Bearer solvr_invalid_api_key_12345678901234567890")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should return 401 Unauthorized
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var errResp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+
+	// Should have error object
+	if errResp["error"] == nil {
+		t.Error("expected error object in response")
+	}
+}
+
+// TestSearchEndpointWithMalformedAuth verifies GET /v1/search rejects malformed auth.
+func TestSearchEndpointWithMalformedAuth(t *testing.T) {
+	router := NewRouter(nil)
+
+	// GET /v1/search with malformed auth header should return 401
+	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)
+	req.Header.Set("Authorization", "NotBearer something")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should return 401 Unauthorized
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d: %s", w.Code, w.Body.String())
+	}
+}

@@ -12,7 +12,7 @@ export function Header() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-16">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="font-mono text-lg tracking-tight font-medium">
@@ -20,7 +20,7 @@ export function Header() {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-10">
+          <nav className="hidden md:flex items-center gap-6">
             <Link
               href="/feed"
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"

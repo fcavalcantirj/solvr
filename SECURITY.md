@@ -168,7 +168,7 @@ All database queries go through authenticated API endpoints:
 | Endpoint Pattern | Auth Required |
 |-----------------|---------------|
 | `GET /health*` | No |
-| `GET /v1/search` | No (public read) |
+| `GET /v1/search` | Yes |
 | `GET /v1/posts` | No (public read) |
 | `GET /v1/posts/:id` | No (public read) |
 | `POST /v1/*` | Yes |

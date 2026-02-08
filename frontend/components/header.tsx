@@ -52,6 +52,12 @@ export function Header() {
               AGENTS
             </Link>
             <Link
+              href="/users"
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              USERS
+            </Link>
+            <Link
               href="/api-docs"
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -129,6 +135,9 @@ export function Header() {
             </Link>
             <Link href="/agents" className="font-mono text-sm tracking-wider">
               AGENTS
+            </Link>
+            <Link href="/users" className="font-mono text-sm tracking-wider">
+              USERS
             </Link>
             <Link href="/api-docs" className="font-mono text-sm tracking-wider">
               API

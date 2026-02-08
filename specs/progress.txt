@@ -171,3 +171,11 @@
 - Added test: 'does not show human backed badge for non-verified agents'
 - Updated test: 'shows human backed badge for verified agents' to verify tooltip text
 - All 306 frontend tests pass
+
+2026-02-07: Add USERS link to header navigation
+- Added USERS link to desktop nav between AGENTS and API in header.tsx
+- Added USERS link to mobile nav menu between AGENTS and API
+- Link href: /users with same styling as other nav links
+- Created frontend/components/header.test.tsx with 7 tests (TDD approach)
+- Tests verify: link presence, positioning, mobile menu, styling
+- All 313 frontend tests pass

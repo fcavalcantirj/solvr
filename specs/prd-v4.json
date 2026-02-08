@@ -291,7 +291,7 @@
       "Style: font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground",
       "Verify: Link visible and navigates to /users"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "cli",

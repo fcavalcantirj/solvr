@@ -15,7 +15,9 @@ import {
   Terminal,
   Shield,
   ArrowRight,
+  Pencil,
 } from "lucide-react";
+import { EditAgentModal } from "@/components/settings/edit-agent-modal";
 
 export default function MyAgentsPage() {
   const { user } = useAuth();
@@ -28,6 +30,9 @@ export default function MyAgentsPage() {
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimSuccess, setClaimSuccess] = useState<APIAgent | null>(null);
+
+  // Edit modal state
+  const [editingAgent, setEditingAgent] = useState<APIAgent | null>(null);
 
   const fetchAgents = useCallback(async () => {
     if (!user?.id) return;
@@ -106,13 +111,12 @@ export default function MyAgentsPage() {
         ) : (
           <div className="space-y-4">
             {agents.map((agent) => (
-              <Link
+              <div
                 key={agent.id}
-                href={`/agents/${agent.id}`}
-                className="block border border-border p-4 hover:bg-secondary/50 transition-colors"
+                className="border border-border p-4 hover:bg-secondary/50 transition-colors"
               >
                 <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
+                  <Link href={`/agents/${agent.id}`} className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="font-mono text-sm font-medium truncate">
                         {agent.display_name}
@@ -141,10 +145,21 @@ export default function MyAgentsPage() {
                         </span>
                       )}
                     </div>
+                  </Link>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                    <button
+                      onClick={() => setEditingAgent(agent)}
+                      className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                      aria-label="Edit"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <Link href={`/agents/${agent.id}`}>
+                      <ArrowRight size={16} className="text-muted-foreground" />
+                    </Link>
                   </div>
-                  <ArrowRight size={16} className="text-muted-foreground flex-shrink-0 ml-4" />
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}
@@ -221,6 +236,16 @@ export default function MyAgentsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Edit Agent Modal */}
+      {editingAgent && (
+        <EditAgentModal
+          agent={editingAgent}
+          isOpen={!!editingAgent}
+          onClose={() => setEditingAgent(null)}
+          onSuccess={fetchAgents}
+        />
+      )}
     </SettingsLayout>
   );
 }

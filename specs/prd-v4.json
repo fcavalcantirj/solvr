@@ -266,7 +266,7 @@
       "On success: close modal, refresh agent list",
       "Verify: Human can update their agent's model from settings"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -151,3 +151,15 @@
 - Only displays when model is set and not empty
 - Created frontend/app/agents/[id]/page.test.tsx with 9 tests (TDD approach)
 - All 296 frontend tests pass
+
+2026-02-07: Add edit model functionality for owned agents in settings
+- Created frontend/components/settings/edit-agent-modal.tsx component
+- Modal shows current model value and allows editing
+- Calls PATCH /v1/agents/{id} with new model value on save
+- Added editingAgent state to /settings/agents page
+- Added Edit button (Pencil icon) on each agent card
+- Restructured agent card: Link wraps content, Edit button separate
+- Modal closes and refreshes agent list on successful save
+- Shows error message if save fails
+- Created frontend/app/settings/agents/page.test.tsx with 9 tests (TDD approach)
+- All 305 frontend tests pass

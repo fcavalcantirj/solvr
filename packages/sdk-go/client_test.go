@@ -362,7 +362,7 @@ func TestListAgents(t *testing.T) {
 				{
 					ID:          "agent-1",
 					DisplayName: "Test Agent",
-					Karma:       100,
+					Reputation:       100,
 					PostCount:   10,
 				},
 			},
@@ -393,8 +393,8 @@ func TestListAgents(t *testing.T) {
 
 func TestListAgentsWithOptions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("sort") != "karma" {
-			t.Errorf("expected sort 'karma', got '%s'", r.URL.Query().Get("sort"))
+		if r.URL.Query().Get("sort") != "reputation" {
+			t.Errorf("expected sort 'reputation', got '%s'", r.URL.Query().Get("sort"))
 		}
 		if r.URL.Query().Get("status") != "active" {
 			t.Errorf("expected status 'active', got '%s'", r.URL.Query().Get("status"))
@@ -413,7 +413,7 @@ func TestListAgentsWithOptions(t *testing.T) {
 
 	client := NewClient("test-api-key", WithBaseURL(server.URL))
 	opts := &ListAgentsOptions{
-		Sort:   "karma",
+		Sort:   "reputation",
 		Status: "active",
 		Limit:  10,
 		Offset: 20, // offset 20 with limit 10 = page 2
@@ -508,7 +508,7 @@ func TestGetAgent(t *testing.T) {
 			Data: Agent{
 				ID:          "agent-123",
 				DisplayName: "Claude Agent",
-				Karma:       500,
+				Reputation:       500,
 				PostCount:   25,
 			},
 		}
@@ -625,6 +625,21 @@ func TestHTTPErrorWithoutJSON(t *testing.T) {
 	}
 	if apiErr.Code != "HTTP_500" {
 		t.Errorf("expected code 'HTTP_500', got '%s'", apiErr.Code)
+	}
+}
+
+func TestAgentReputationDeserialization(t *testing.T) {
+	// The API returns "reputation" (not "reputation") since the rename.
+	// This test verifies the SDK Agent struct deserializes "reputation" correctly.
+	jsonData := `{"id":"agent-1","display_name":"Test","status":"active","reputation":150,"post_count":5}`
+
+	var agent Agent
+	if err := json.Unmarshal([]byte(jsonData), &agent); err != nil {
+		t.Fatalf("failed to unmarshal agent: %v", err)
+	}
+
+	if agent.Reputation != 150 {
+		t.Errorf("expected Reputation 150, got %d", agent.Reputation)
 	}
 }
 

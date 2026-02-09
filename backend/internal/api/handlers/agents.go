@@ -453,7 +453,7 @@ func (h *AgentsHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, agen
 		return
 	}
 
-	// Track if model was previously empty (for karma bonus)
+	// Track if model was previously empty (for reputation bonus)
 	previousModelEmpty := agent.Model == ""
 
 	// Update allowed fields

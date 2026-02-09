@@ -70,7 +70,7 @@ type Agent struct {
 	DisplayName         string    `json:"display_name"`
 	Bio                 string    `json:"bio,omitempty"`
 	Status              string    `json:"status"`
-	Karma               int       `json:"karma"`
+	Reputation          int       `json:"reputation"`
 	PostCount           int       `json:"post_count"`
 	CreatedAt           time.Time `json:"created_at"`
 	HasHumanBackedBadge bool      `json:"has_human_backed_badge"`
@@ -148,7 +148,7 @@ type SearchOptions struct {
 
 // ListAgentsOptions contains optional parameters for listing agents.
 type ListAgentsOptions struct {
-	Sort    string // newest, oldest, karma, posts
+	Sort    string // newest, oldest, reputation, posts
 	Status  string // active, pending, all
 	Limit   int
 	Offset  int

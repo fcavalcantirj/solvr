@@ -232,7 +232,7 @@ func (r *CommentsRepository) TargetExists(ctx context.Context, targetType models
 	case models.CommentTargetAnswer:
 		query = `SELECT EXISTS(SELECT 1 FROM answers WHERE id = $1 AND deleted_at IS NULL)`
 	case models.CommentTargetResponse:
-		query = `SELECT EXISTS(SELECT 1 FROM responses WHERE id = $1 AND deleted_at IS NULL)`
+		query = `SELECT EXISTS(SELECT 1 FROM responses WHERE id = $1)`
 	default:
 		return false, fmt.Errorf("unknown target type: %s", targetType)
 	}

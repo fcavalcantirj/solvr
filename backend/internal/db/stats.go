@@ -134,7 +134,7 @@ func (r *StatsRepository) GetTotalContributionsCount(ctx context.Context) (int, 
 		SELECT
 			COALESCE((SELECT COUNT(*) FROM answers WHERE deleted_at IS NULL), 0) +
 			COALESCE((SELECT COUNT(*) FROM approaches WHERE deleted_at IS NULL), 0) +
-			COALESCE((SELECT COUNT(*) FROM responses WHERE deleted_at IS NULL), 0)
+			COALESCE((SELECT COUNT(*) FROM responses), 0)
 	`).Scan(&count)
 	if err != nil {
 		return 0, err

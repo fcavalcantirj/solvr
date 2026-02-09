@@ -193,9 +193,7 @@ export function Footer() {
             </a>
             {" & "}
             <a
-              href="https://github.com/fcavalcantirj"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/users/26911295-5bf7-4c4e-91a1-03d483e78063"
               className="hover:text-foreground transition-colors"
             >
               FCAVALCANTIRJ

@@ -132,6 +132,42 @@ describe('useVote', () => {
     );
   });
 
+  it('should track userVote after successful vote', async () => {
+    // Arrange - API returns user_vote
+    (api.voteOnPost as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { vote_score: 25, upvotes: 26, downvotes: 1, user_vote: 'up' }
+    });
+
+    // Act
+    const { result } = renderHook(() => useVote('post-123', 24));
+
+    // Assert - initial state has no userVote
+    expect(result.current.userVote).toBeNull();
+
+    // Trigger upvote
+    await act(async () => {
+      await result.current.upvote();
+    });
+
+    // Assert - userVote should be 'up' after successful vote
+    expect(result.current.userVote).toBe('up');
+  });
+
+  it('should reset userVote on error rollback', async () => {
+    // Arrange - API fails
+    (api.voteOnPost as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Server error'));
+
+    // Act
+    const { result } = renderHook(() => useVote('post-123', 24));
+
+    await act(async () => {
+      await result.current.upvote();
+    });
+
+    // Assert - userVote should be null after rollback
+    expect(result.current.userVote).toBeNull();
+  });
+
   it('should set isVoting during API call', async () => {
     // Arrange - slow API call
     let resolvePromise: (value: unknown) => void;

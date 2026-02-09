@@ -315,6 +315,7 @@ export interface APIVoteResponse {
     vote_score: number;
     upvotes: number;
     downvotes: number;
+    user_vote: 'up' | 'down' | null;
   };
 }
 

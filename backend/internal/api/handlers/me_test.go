@@ -72,7 +72,7 @@ func TestMe_Success(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo)
+	handler := NewMeHandler(config, repo, nil)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
@@ -139,7 +139,7 @@ func TestMe_NoAuth(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo)
+	handler := NewMeHandler(config, repo, nil)
 
 	// Create request WITHOUT claims in context
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
@@ -175,7 +175,7 @@ func TestMe_UserNotFound(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo)
+	handler := NewMeHandler(config, repo, nil)
 
 	// Create request with claims for non-existent user
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
@@ -233,7 +233,7 @@ func TestMe_IncludesAllStats(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo)
+	handler := NewMeHandler(config, repo, nil)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
@@ -302,7 +302,7 @@ func TestMe_AdminUser(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo)
+	handler := NewMeHandler(config, repo, nil)
 
 	// Create request with admin claims
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
@@ -337,6 +337,62 @@ func TestMe_AdminUser(t *testing.T) {
 	}
 }
 
+// MockMeAgentStats implements MeAgentStatsInterface for testing.
+type MockMeAgentStats struct {
+	stats map[string]*models.AgentStats
+}
+
+func NewMockMeAgentStats() *MockMeAgentStats {
+	return &MockMeAgentStats{stats: make(map[string]*models.AgentStats)}
+}
+
+func (m *MockMeAgentStats) GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error) {
+	stats, ok := m.stats[agentID]
+	if !ok {
+		return &models.AgentStats{}, nil
+	}
+	return stats, nil
+}
+
+// TestMe_Agent_ReturnsComputedReputation verifies agent /me uses computed reputation, not raw bonus.
+func TestMe_Agent_ReturnsComputedReputation(t *testing.T) {
+	repo := NewMockMeUserRepository()
+	agentStats := NewMockMeAgentStats()
+	agentStats.stats["agent-with-activity"] = &models.AgentStats{
+		ProblemsSolved: 5,
+		Reputation:     750, // Computed: much higher than raw bonus of 50
+	}
+
+	config := &OAuthConfig{JWTSecret: "test-secret-key"}
+	handler := NewMeHandler(config, repo, agentStats)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	agent := &models.Agent{
+		ID:          "agent-with-activity",
+		DisplayName: "Active Agent",
+		Status:      "active",
+		Reputation:  50, // Raw bonus only
+	}
+	ctx := auth.ContextWithAgent(req.Context(), agent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.Me(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&response)
+	data := response["data"].(map[string]interface{})
+
+	// Should be computed reputation (750), NOT raw bonus (50)
+	if int(data["reputation"].(float64)) != 750 {
+		t.Errorf("expected computed reputation 750, got %v", data["reputation"])
+	}
+}
+
 // Tests for API key authentication (agents) - per FIX-005
 
 func TestMe_AgentWithAPIKey(t *testing.T) {
@@ -345,7 +401,7 @@ func TestMe_AgentWithAPIKey(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo)
+	handler := NewMeHandler(config, repo, nil)
 
 	// Create request with agent in context (simulating API key middleware)
 	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
@@ -414,7 +470,7 @@ func TestMe_AgentWithHumanBackedBadge(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo)
+	handler := NewMeHandler(config, repo, nil)
 
 	// Create request with claimed agent
 	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
@@ -473,7 +529,7 @@ func TestMe_PrefersAgentOverClaims(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo)
+	handler := NewMeHandler(config, repo, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
 

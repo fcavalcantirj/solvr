@@ -398,7 +398,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 
 			// Per FIX-005: GET /v1/me - current authenticated entity info
 			// Works with both JWT (humans) and API key (agents)
-			meHandler := handlers.NewMeHandler(oauthConfig, userRepo)
+			meHandler := handlers.NewMeHandler(oauthConfig, userRepo, agentRepo)
 			r.Get("/me", meHandler.Me)
 
 			// BE-003: User profile endpoints

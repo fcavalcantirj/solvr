@@ -98,6 +98,9 @@ func TestVote_ResponseIncludesScores(t *testing.T) {
 	if _, ok := data["downvotes"]; !ok {
 		t.Error("expected downvotes in response data")
 	}
+	if data["user_vote"] != "up" {
+		t.Errorf("expected user_vote 'up', got %v", data["user_vote"])
+	}
 }
 
 // TestVote_Downvote tests successful downvote.

@@ -625,6 +625,7 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 				"vote_score": 0,
 				"upvotes":    0,
 				"downvotes":  0,
+				"user_vote":  req.Direction,
 			},
 		})
 		return
@@ -635,6 +636,7 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 			"vote_score": updatedPost.VoteScore,
 			"upvotes":    updatedPost.Upvotes,
 			"downvotes":  updatedPost.Downvotes,
+			"user_vote":  req.Direction,
 		},
 	})
 }

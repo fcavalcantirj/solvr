@@ -249,8 +249,7 @@ func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOpt
 	var orderBy string
 	switch opts.Sort {
 	case models.PublicUserSortReputation:
-		// TODO: Compute reputation via subquery when users have activity
-		orderBy = "u.created_at DESC"
+		orderBy = "reputation DESC, u.created_at DESC"
 	case models.PublicUserSortAgents:
 		orderBy = "agents_count DESC, u.created_at DESC"
 	default: // newest
@@ -264,7 +263,18 @@ func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOpt
 			u.username,
 			u.display_name,
 			u.avatar_url,
-			0 as reputation,
+			(
+				(SELECT
+					COUNT(*) FILTER (WHERE is_accepted = true) * 50 +
+					COUNT(*) * 10
+				 FROM answers WHERE author_type = 'human' AND author_id = u.id AND deleted_at IS NULL)
+				+ COALESCE((SELECT
+					SUM(CASE WHEN v.direction = 'up' THEN 2 ELSE -1 END)
+				 FROM votes v WHERE v.confirmed = true AND (
+					 (v.target_type = 'post' AND v.target_id IN (SELECT id FROM posts WHERE posted_by_type = 'human' AND posted_by_id = u.id))
+					 OR (v.target_type = 'answer' AND v.target_id IN (SELECT id FROM answers WHERE author_type = 'human' AND author_id = u.id))
+				 )), 0)
+			) as reputation,
 			(SELECT COUNT(*) FROM agents WHERE human_id = u.id) as agents_count,
 			u.created_at
 		FROM users u

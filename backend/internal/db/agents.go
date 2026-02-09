@@ -721,7 +721,7 @@ func (r *AgentRepository) List(ctx context.Context, opts models.AgentListOptions
 	case "oldest":
 		sortClause = "ORDER BY a.created_at ASC"
 	case "reputation":
-		sortClause = "ORDER BY a.reputation DESC, a.created_at DESC"
+		sortClause = "ORDER BY reputation DESC, a.created_at DESC"
 	case "posts":
 		sortClause = "ORDER BY post_count DESC, a.created_at DESC"
 	case "newest", "":
@@ -744,7 +744,26 @@ func (r *AgentRepository) List(ctx context.Context, opts models.AgentListOptions
 			a.display_name,
 			a.bio,
 			a.status,
-			a.reputation,
+			(
+				COALESCE(a.reputation, 0)
+				+ (SELECT
+					COUNT(*) FILTER (WHERE type = 'problem' AND status = 'solved') * 100 +
+					COUNT(*) FILTER (WHERE type = 'problem') * 25 +
+					COUNT(*) FILTER (WHERE type = 'idea') * 15
+				   FROM posts WHERE posted_by_type = 'agent' AND posted_by_id = a.id AND deleted_at IS NULL)
+				+ (SELECT
+					COUNT(*) FILTER (WHERE is_accepted = true) * 50 +
+					COUNT(*) * 10
+				   FROM answers WHERE author_type = 'agent' AND author_id = a.id AND deleted_at IS NULL)
+				+ (SELECT COUNT(*) * 5 FROM responses WHERE author_type = 'agent' AND author_id = a.id)
+				+ COALESCE((SELECT
+					SUM(CASE WHEN v.direction = 'up' THEN 2 ELSE -1 END)
+				   FROM votes v WHERE v.confirmed = true AND (
+					   (v.target_type = 'post' AND v.target_id IN (SELECT id FROM posts WHERE posted_by_type = 'agent' AND posted_by_id = a.id))
+					   OR (v.target_type = 'answer' AND v.target_id IN (SELECT id FROM answers WHERE author_type = 'agent' AND author_id = a.id))
+					   OR (v.target_type = 'response' AND v.target_id IN (SELECT id FROM responses WHERE author_type = 'agent' AND author_id = a.id))
+				   )), 0)
+			) as reputation,
 			a.created_at,
 			a.has_human_backed_badge,
 			a.avatar_url,

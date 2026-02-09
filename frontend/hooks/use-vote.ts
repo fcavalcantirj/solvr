@@ -6,6 +6,7 @@ import { isUnauthorizedError } from '@/lib/api-error';
 
 export interface UseVoteResult {
   score: number;
+  userVote: 'up' | 'down' | null;
   isVoting: boolean;
   error: string | null;
   upvote: () => Promise<void>;
@@ -22,6 +23,7 @@ export interface UseVoteResult {
 export function useVote(postId: string, initialScore: number): UseVoteResult {
   const [score, setScore] = useState(initialScore);
   const [isVoting, setIsVoting] = useState(false);
+  const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const vote = useCallback(async (direction: 'up' | 'down') => {
@@ -32,15 +34,19 @@ export function useVote(postId: string, initialScore: number): UseVoteResult {
 
     // Optimistic update
     const previousScore = score;
+    const previousVote = userVote;
     setScore(direction === 'up' ? score + 1 : score - 1);
+    setUserVote(direction);
 
     try {
       const response = await api.voteOnPost(postId, direction);
-      // Update with actual server score
+      // Update with actual server score and vote direction
       setScore(response.data.vote_score);
+      setUserVote(response.data.user_vote);
     } catch (err) {
       // Rollback on error
       setScore(previousScore);
+      setUserVote(previousVote);
       if (isUnauthorizedError(err)) {
         // Redirect to login — store return URL so user comes back after auth
         const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -52,13 +58,14 @@ export function useVote(postId: string, initialScore: number): UseVoteResult {
     } finally {
       setIsVoting(false);
     }
-  }, [postId, score, isVoting]);
+  }, [postId, score, isVoting, userVote]);
 
   const upvote = useCallback(() => vote('up'), [vote]);
   const downvote = useCallback(() => vote('down'), [vote]);
 
   return {
     score,
+    userVote,
     isVoting,
     error,
     upvote,

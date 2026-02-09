@@ -17,17 +17,24 @@ type MeUserRepositoryInterface interface {
 	GetUserStats(ctx context.Context, userID string) (*models.UserStats, error)
 }
 
+// MeAgentStatsInterface defines the interface for fetching computed agent stats.
+type MeAgentStatsInterface interface {
+	GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error)
+}
+
 // MeHandler handles the GET /v1/auth/me endpoint.
 type MeHandler struct {
-	config   *OAuthConfig
-	userRepo MeUserRepositoryInterface
+	config         *OAuthConfig
+	userRepo       MeUserRepositoryInterface
+	agentStatsRepo MeAgentStatsInterface
 }
 
 // NewMeHandler creates a new MeHandler instance.
-func NewMeHandler(config *OAuthConfig, userRepo MeUserRepositoryInterface) *MeHandler {
+func NewMeHandler(config *OAuthConfig, userRepo MeUserRepositoryInterface, agentStatsRepo MeAgentStatsInterface) *MeHandler {
 	return &MeHandler{
-		config:   config,
-		userRepo: userRepo,
+		config:         config,
+		userRepo:       userRepo,
+		agentStatsRepo: agentStatsRepo,
 	}
 }
 
@@ -70,7 +77,7 @@ func (h *MeHandler) Me(w http.ResponseWriter, r *http.Request) {
 	// Per FIX-005: API key auth should return agent info
 	agent := auth.AgentFromContext(ctx)
 	if agent != nil {
-		h.handleAgentMe(w, agent)
+		h.handleAgentMe(w, ctx, agent)
 		return
 	}
 
@@ -85,7 +92,7 @@ func (h *MeHandler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAgentMe returns agent info for API key authenticated requests.
-func (h *MeHandler) handleAgentMe(w http.ResponseWriter, agent *models.Agent) {
+func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, agent *models.Agent) {
 	response := AgentMeResponse{
 		ID:                  agent.ID,
 		Type:                "agent",
@@ -96,6 +103,13 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, agent *models.Agent) {
 		Status:              agent.Status,
 		Reputation:          agent.Reputation,
 		HasHumanBackedBadge: agent.HasHumanBackedBadge,
+	}
+
+	// Override with computed reputation from stats if available
+	if h.agentStatsRepo != nil {
+		if stats, err := h.agentStatsRepo.GetAgentStats(ctx, agent.ID); err == nil {
+			response.Reputation = stats.Reputation
+		}
 	}
 
 	// Include human_id if claimed

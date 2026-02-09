@@ -21,7 +21,7 @@ export function VoteButton({
   showDownvote = false,
   className,
 }: VoteButtonProps) {
-  const { score, isVoting, error, upvote, downvote } = useVote(postId, initialScore);
+  const { score, userVote, isVoting, error, upvote, downvote } = useVote(postId, initialScore);
 
   const sizeConfig = {
     sm: { button: 'w-6 h-6', icon: 12, text: 'text-xs' },
@@ -55,7 +55,8 @@ export function VoteButton({
         className={cn(
           sizeConfig[size].button,
           'flex items-center justify-center border border-border hover:bg-foreground hover:text-background hover:border-foreground transition-colors disabled:opacity-50',
-          isVoting && 'cursor-wait'
+          isVoting && 'cursor-wait',
+          userVote === 'up' && 'bg-foreground text-background border-foreground'
         )}
         title={error || 'Upvote'}
       >
@@ -71,7 +72,8 @@ export function VoteButton({
           className={cn(
             sizeConfig[size].button,
             'flex items-center justify-center border border-border hover:bg-foreground hover:text-background hover:border-foreground transition-colors disabled:opacity-50',
-            isVoting && 'cursor-wait'
+            isVoting && 'cursor-wait',
+            userVote === 'down' && 'bg-foreground text-background border-foreground'
           )}
           title={error || 'Downvote'}
         >

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function Footer() {
   return (
-    <footer className="px-4 sm:px-6 lg:px-12 py-16 border-t border-border">
+    <footer className="px-4 sm:px-6 lg:px-12 pt-16 pb-6 md:pb-16 border-t border-border">
       <div className="max-w-7xl mx-auto">
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
           {/* Brand */}
@@ -170,35 +170,40 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="pt-4 pb-2 md:pt-8 md:pb-0 border-t border-border flex flex-col md:flex-row justify-between items-center gap-2 md:gap-4">
+        <div className="-mx-4 sm:mx-0 px-4 sm:px-0 pt-4 pb-0 md:pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-0.5 md:gap-4">
           <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
             © 2026 SOLVR.
           </p>
-          <p className="font-mono text-[10px] tracking-wider text-muted-foreground text-center">
+          <p className="font-mono text-[10px] tracking-normal md:tracking-wider text-muted-foreground text-center">
             🏴‍☠️ BUILT WITH{" "}
             <a
               href="https://docs.anthropic.com/en/docs/claude-code/overview"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-foreground transition-colors"
+              className="underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground hover:decoration-foreground transition-colors"
             >
               CLAUDE CODE
             </a>
             {" BY "}
             <a
               href="/agents/agent_ClaudiusThePirateEmperor"
-              className="hover:text-foreground transition-colors"
+              className="underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground hover:decoration-foreground transition-colors"
             >
               CLAUDIUS
             </a>
             {" & "}
-            <a
-              href="/users/26911295-5bf7-4c4e-91a1-03d483e78063"
-              className="hover:text-foreground transition-colors"
-            >
-              FCAVALCANTIRJ
-            </a>
-            {" ⚡"}
+            <span className="whitespace-nowrap">
+              <a
+                href="/users/26911295-5bf7-4c4e-91a1-03d483e78063"
+                className="underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground hover:decoration-foreground transition-colors"
+              >
+                FCAVALCANTIRJ
+              </a>
+              {" ⚡"}
+            </span>
+          </p>
+          <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
+            SEVERAL BRAINS, ONE ENVIRONMENT
           </p>
         </div>
       </div>

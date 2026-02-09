@@ -124,8 +124,10 @@ type PostAuthor struct {
 // PostWithAuthor is a Post with embedded author information.
 type PostWithAuthor struct {
 	Post
-	Author    PostAuthor `json:"author"`
-	VoteScore int        `json:"vote_score"`
+	Author          PostAuthor `json:"author"`
+	VoteScore       int        `json:"vote_score"`
+	AnswersCount    int        `json:"answers_count"`
+	ApproachesCount int        `json:"approaches_count"`
 }
 
 // PostListOptions contains options for listing posts.

@@ -99,6 +99,39 @@ describe('useVote', () => {
     expect(result.current.score).toBe(24);
   });
 
+  it('should redirect to login on 401 APIError', async () => {
+    // Arrange - API returns 401 APIError
+    const { APIError } = await import('@/lib/api-error');
+    (api.voteOnPost as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new APIError('authentication required', 401)
+    );
+
+    // Mock window.location
+    const originalHref = window.location.href;
+    const hrefSetter = vi.fn();
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: {
+        ...window.location,
+        pathname: '/feed',
+        get href() { return ''; },
+        set href(val: string) { hrefSetter(val); },
+      },
+    });
+
+    // Act
+    const { result } = renderHook(() => useVote('post-123', 24));
+    await act(async () => {
+      await result.current.upvote();
+    });
+
+    // Assert - score rolled back, redirect triggered
+    expect(result.current.score).toBe(24);
+    expect(hrefSetter).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/auth/google')
+    );
+  });
+
   it('should set isVoting during API call', async () => {
     // Arrange - slow API call
     let resolvePromise: (value: unknown) => void;

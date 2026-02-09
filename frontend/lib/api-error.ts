@@ -19,6 +19,13 @@ export function isNotFoundError(error: unknown): boolean {
 }
 
 /**
+ * Check if an error is a 401 Unauthorized error.
+ */
+export function isUnauthorizedError(error: unknown): boolean {
+  return error instanceof APIError && error.statusCode === 401;
+}
+
+/**
  * Check if an error is a server error (5xx).
  */
 export function isServerError(error: unknown): boolean {

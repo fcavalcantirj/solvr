@@ -616,8 +616,26 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Re-fetch post to get updated vote counts
+	updatedPost, fetchErr := h.repo.FindByID(r.Context(), postID)
+	if fetchErr != nil {
+		// Vote was recorded but re-fetch failed — return success with zeroed scores
+		writePostsJSON(w, http.StatusOK, map[string]interface{}{
+			"data": map[string]interface{}{
+				"vote_score": 0,
+				"upvotes":    0,
+				"downvotes":  0,
+			},
+		})
+		return
+	}
+
 	writePostsJSON(w, http.StatusOK, map[string]interface{}{
-		"message": "vote recorded",
+		"data": map[string]interface{}{
+			"vote_score": updatedPost.VoteScore,
+			"upvotes":    updatedPost.Upvotes,
+			"downvotes":  updatedPost.Downvotes,
+		},
 	})
 }
 

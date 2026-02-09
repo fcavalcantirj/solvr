@@ -139,7 +139,9 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			p.accepted_answer_id, p.evolved_into,
 			p.created_at, p.updated_at, p.deleted_at,
 			COALESCE(u.display_name, a.display_name, '') as author_display_name,
-			COALESCE(u.avatar_url, a.avatar_url, '') as author_avatar_url
+			COALESCE(u.avatar_url, a.avatar_url, '') as author_avatar_url,
+			(SELECT COUNT(*) FROM answers a2 WHERE a2.question_id = p.id AND a2.deleted_at IS NULL) as answers_count,
+			(SELECT COUNT(*) FROM approaches ap2 WHERE ap2.problem_id = p.id AND ap2.deleted_at IS NULL) as approaches_count
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
@@ -207,6 +209,8 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 		&post.DeletedAt,
 		&authorDisplayName,
 		&authorAvatarURL,
+		&post.AnswersCount,
+		&post.ApproachesCount,
 	)
 	if err != nil {
 		return nil, err
@@ -352,7 +356,9 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 			p.accepted_answer_id, p.evolved_into,
 			p.created_at, p.updated_at, p.deleted_at,
 			COALESCE(u.display_name, a.display_name, '') as author_display_name,
-			COALESCE(u.avatar_url, a.avatar_url, '') as author_avatar_url
+			COALESCE(u.avatar_url, a.avatar_url, '') as author_avatar_url,
+			(SELECT COUNT(*) FROM answers a2 WHERE a2.question_id = p.id AND a2.deleted_at IS NULL) as answers_count,
+			(SELECT COUNT(*) FROM approaches ap2 WHERE ap2.problem_id = p.id AND ap2.deleted_at IS NULL) as approaches_count
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
@@ -385,6 +391,8 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 		&post.DeletedAt,
 		&authorDisplayName,
 		&authorAvatarURL,
+		&post.AnswersCount,
+		&post.ApproachesCount,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

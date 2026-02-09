@@ -153,18 +153,25 @@ type TrendingTagDB struct {
 	Growth int
 }
 
-// GetTrendingPosts returns the most active posts (by votes + responses).
+// GetTrendingPosts returns the hottest posts using a ranking that combines
+// net votes (logarithmic) with recency weighting. Includes real response counts.
 func (r *StatsRepository) GetTrendingPosts(ctx context.Context, limit int) ([]any, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT 
-			p.id, 
-			p.title, 
+		SELECT
+			p.id,
+			p.title,
 			p.type,
 			COALESCE(p.upvotes - p.downvotes, 0) as vote_score,
+			(SELECT COUNT(*) FROM answers a2 WHERE a2.question_id = p.id AND a2.deleted_at IS NULL)
+			+ (SELECT COUNT(*) FROM approaches ap2 WHERE ap2.problem_id = p.id AND ap2.deleted_at IS NULL) as response_count,
 			p.created_at
 		FROM posts p
 		WHERE p.created_at > NOW() - INTERVAL '7 days'
-		ORDER BY (COALESCE(p.upvotes, 0) + COALESCE(p.downvotes, 0)) DESC, p.created_at DESC
+			AND p.deleted_at IS NULL
+		ORDER BY
+			LOG(GREATEST(ABS(COALESCE(p.upvotes, 0) - COALESCE(p.downvotes, 0)), 1) + 1)
+			+ EXTRACT(EPOCH FROM (p.created_at - (NOW() - INTERVAL '7 days'))) / 45000.0
+			DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -175,11 +182,9 @@ func (r *StatsRepository) GetTrendingPosts(ctx context.Context, limit int) ([]an
 	var posts []any
 	for rows.Next() {
 		var post TrendingPostDB
-		if err := rows.Scan(&post.ID, &post.Title, &post.Type, &post.VoteScore, &post.CreatedAt); err != nil {
+		if err := rows.Scan(&post.ID, &post.Title, &post.Type, &post.VoteScore, &post.ResponseCount, &post.CreatedAt); err != nil {
 			return nil, err
 		}
-		// TODO: Add response count when we have that data
-		post.ResponseCount = 0
 		posts = append(posts, map[string]any{
 			"id":             post.ID,
 			"title":          post.Title,
@@ -197,19 +202,43 @@ func (r *StatsRepository) GetTrendingPosts(ctx context.Context, limit int) ([]an
 	return posts, rows.Err()
 }
 
-// GetTrendingTags returns the most used tags directly from posts.
-// Aggregates tags from the posts.tags array field.
+// GetTrendingTags returns trending tags by comparing recent (7d) vs previous (7-14d) usage.
+// Growth is calculated as percentage change between periods.
 func (r *StatsRepository) GetTrendingTags(ctx context.Context, limit int) ([]any, error) {
 	if limit <= 0 {
 		limit = 10
 	}
 
 	rows, err := r.pool.Query(ctx, `
-		SELECT tag, COUNT(*) as count
-		FROM posts, unnest(tags) as tag
-		WHERE tags IS NOT NULL AND array_length(tags, 1) > 0
-		GROUP BY tag
-		ORDER BY count DESC
+		WITH recent AS (
+			SELECT tag, COUNT(*) as count
+			FROM posts, unnest(tags) as tag
+			WHERE tags IS NOT NULL AND array_length(tags, 1) > 0
+				AND deleted_at IS NULL
+				AND created_at > NOW() - INTERVAL '7 days'
+			GROUP BY tag
+		),
+		previous AS (
+			SELECT tag, COUNT(*) as count
+			FROM posts, unnest(tags) as tag
+			WHERE tags IS NOT NULL AND array_length(tags, 1) > 0
+				AND deleted_at IS NULL
+				AND created_at > NOW() - INTERVAL '14 days'
+				AND created_at <= NOW() - INTERVAL '7 days'
+			GROUP BY tag
+		)
+		SELECT
+			COALESCE(r.tag, p.tag) as name,
+			COALESCE(r.count, 0) as count,
+			CASE
+				WHEN COALESCE(p.count, 0) = 0 THEN
+					CASE WHEN COALESCE(r.count, 0) > 0 THEN 100 ELSE 0 END
+				ELSE ((COALESCE(r.count, 0) - p.count) * 100) / p.count
+			END as growth
+		FROM recent r
+		FULL OUTER JOIN previous p ON r.tag = p.tag
+		WHERE COALESCE(r.count, 0) > 0
+		ORDER BY COALESCE(r.count, 0) DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -221,13 +250,14 @@ func (r *StatsRepository) GetTrendingTags(ctx context.Context, limit int) ([]any
 	for rows.Next() {
 		var name string
 		var count int
-		if err := rows.Scan(&name, &count); err != nil {
+		var growth int
+		if err := rows.Scan(&name, &count, &growth); err != nil {
 			return nil, err
 		}
 		tags = append(tags, map[string]any{
 			"name":   name,
 			"count":  count,
-			"growth": 0,
+			"growth": growth,
 		})
 	}
 

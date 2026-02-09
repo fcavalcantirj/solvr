@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { api } from '@/lib/api';
+import { isUnauthorizedError } from '@/lib/api-error';
 
 export interface UseVoteResult {
   score: number;
@@ -40,6 +41,13 @@ export function useVote(postId: string, initialScore: number): UseVoteResult {
     } catch (err) {
       // Rollback on error
       setScore(previousScore);
+      if (isUnauthorizedError(err)) {
+        // Redirect to login — store return URL so user comes back after auth
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
+        localStorage.setItem('auth_return_url', window.location.pathname);
+        window.location.href = `${API_BASE_URL}/v1/auth/google`;
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to vote');
     } finally {
       setIsVoting(false);

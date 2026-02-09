@@ -313,6 +313,54 @@ func TestListPosts_PerPageMax(t *testing.T) {
 	}
 }
 
+// TestListPosts_IncludesResponseCounts verifies answers_count and approaches_count in List response.
+func TestListPosts_IncludesResponseCounts(t *testing.T) {
+	repo := NewMockPostsRepository()
+	post := createTestPost("post-1", "Test Post", models.PostTypeProblem)
+	post.AnswersCount = 5
+	post.ApproachesCount = 3
+	repo.SetPosts([]models.PostWithAuthor{post}, 1)
+
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	data, ok := resp["data"].([]interface{})
+	if !ok || len(data) == 0 {
+		t.Fatal("expected non-empty data array in response")
+	}
+
+	first := data[0].(map[string]interface{})
+
+	answersCount, ok := first["answers_count"]
+	if !ok {
+		t.Fatal("expected answers_count field in response")
+	}
+	if int(answersCount.(float64)) != 5 {
+		t.Errorf("expected answers_count=5, got %v", answersCount)
+	}
+
+	approachesCount, ok := first["approaches_count"]
+	if !ok {
+		t.Fatal("expected approaches_count field in response")
+	}
+	if int(approachesCount.(float64)) != 3 {
+		t.Errorf("expected approaches_count=3, got %v", approachesCount)
+	}
+}
+
 // ============================================================================
 // GET /v1/posts/:id - Get Single Post Tests
 // ============================================================================

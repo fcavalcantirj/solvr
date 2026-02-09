@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
@@ -98,6 +99,12 @@ func (h *UsersHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate UUID format to prevent DB errors (e.g. /v1/users/me matching {id})
+	if _, err := uuid.Parse(userID); err != nil {
+		writeUsersError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid user ID format")
+		return
+	}
+
 	user, err := h.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		if err == db.ErrNotFound {
@@ -162,6 +169,12 @@ func (h *UsersHandler) GetUserAgents(w http.ResponseWriter, r *http.Request) {
 
 	if userID == "" {
 		writeUsersError(w, http.StatusBadRequest, "BAD_REQUEST", "user ID is required")
+		return
+	}
+
+	// Validate UUID format to prevent DB errors
+	if _, err := uuid.Parse(userID); err != nil {
+		writeUsersError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid user ID format")
 		return
 	}
 

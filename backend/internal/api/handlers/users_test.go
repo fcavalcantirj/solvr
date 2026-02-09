@@ -17,6 +17,40 @@ import (
 // Mock repositories for users handler tests
 // ============================================================================
 
+// MockUsersUserRepository implements the user repository interface for testing.
+type MockUsersUserRepository struct {
+	users map[string]*models.User
+	stats map[string]*models.UserStats
+}
+
+func NewMockUsersUserRepository() *MockUsersUserRepository {
+	return &MockUsersUserRepository{
+		users: make(map[string]*models.User),
+		stats: make(map[string]*models.UserStats),
+	}
+}
+
+func (m *MockUsersUserRepository) FindByID(ctx context.Context, id string) (*models.User, error) {
+	user, ok := m.users[id]
+	if !ok {
+		return nil, nil
+	}
+	return user, nil
+}
+
+func (m *MockUsersUserRepository) Update(ctx context.Context, user *models.User) (*models.User, error) {
+	m.users[user.ID] = user
+	return user, nil
+}
+
+func (m *MockUsersUserRepository) GetUserStats(ctx context.Context, userID string) (*models.UserStats, error) {
+	stats, ok := m.stats[userID]
+	if !ok {
+		return &models.UserStats{}, nil
+	}
+	return stats, nil
+}
+
 // MockUsersAgentRepository implements the agent repository interface for testing.
 type MockUsersAgentRepository struct {
 	agents map[string][]*models.Agent // humanID -> agents
@@ -47,7 +81,7 @@ func TestGetUserAgents_Success(t *testing.T) {
 	handler := NewUsersHandler(nil, nil)
 	handler.SetAgentRepository(agentRepo)
 
-	humanID := "user-123"
+	humanID := "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 	agentRepo.agents[humanID] = []*models.Agent{
 		{
 			ID:                  "agent_one",
@@ -73,7 +107,7 @@ func TestGetUserAgents_Success(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/users/user-123/agents", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/"+humanID+"/agents", nil)
 	rr := httptest.NewRecorder()
 
 	// Set up chi context with URL param
@@ -129,10 +163,10 @@ func TestGetUserAgents_Empty(t *testing.T) {
 	handler := NewUsersHandler(nil, nil)
 	handler.SetAgentRepository(agentRepo)
 
-	humanID := "user-no-agents"
+	humanID := "b2c3d4e5-f6a7-8901-bcde-f12345678901"
 	// No agents added for this user
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/users/user-no-agents/agents", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/"+humanID+"/agents", nil)
 	rr := httptest.NewRecorder()
 
 	// Set up chi context with URL param
@@ -470,5 +504,81 @@ func TestListUsers_Empty(t *testing.T) {
 
 	if resp.Meta.Total != 0 {
 		t.Errorf("expected total 0, got %d", resp.Meta.Total)
+	}
+}
+
+// ============================================================================
+// Tests for GET /v1/users/{id} UUID validation
+// ============================================================================
+
+// TestGetUserProfile_InvalidUUID tests that non-UUID IDs return 400 BAD_REQUEST.
+// Regression test: /v1/users/me was returning 500 because "me" is not a valid UUID.
+func TestGetUserProfile_InvalidUUID(t *testing.T) {
+	userRepo := NewMockUsersUserRepository()
+	handler := NewUsersHandler(userRepo, nil)
+
+	tests := []struct {
+		name string
+		id   string
+	}{
+		{"literal me", "me"},
+		{"random string", "not-a-uuid"},
+		{"partial uuid", "8ec0e613-d4ec"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/v1/users/invalid", nil)
+			rr := httptest.NewRecorder()
+
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", tt.id)
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+			handler.GetUserProfile(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Errorf("expected status 400 for id=%q, got %d: %s", tt.id, rr.Code, rr.Body.String())
+			}
+
+			var resp struct {
+				Error struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			if resp.Error.Code != "BAD_REQUEST" {
+				t.Errorf("expected BAD_REQUEST code, got %s", resp.Error.Code)
+			}
+		})
+	}
+}
+
+// TestGetUserProfile_ValidUUID tests that valid UUID IDs work correctly.
+func TestGetUserProfile_ValidUUID(t *testing.T) {
+	userRepo := NewMockUsersUserRepository()
+	handler := NewUsersHandler(userRepo, nil)
+
+	validID := "8ec0e613-d4ec-489b-a6ab-b62e4a1600ec"
+	userRepo.users[validID] = &models.User{
+		ID:          validID,
+		Username:    "testuser",
+		DisplayName: "Test User",
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/"+validID, nil)
+	rr := httptest.NewRecorder()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", validID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	handler.GetUserProfile(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200 for valid UUID, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

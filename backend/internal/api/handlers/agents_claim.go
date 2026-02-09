@@ -114,7 +114,7 @@ func generateClaimInstructions() string {
 	return "Give this token to your human operator. " +
 		"They should visit https://solvr.dev/settings/agents and paste the token " +
 		"in the 'Claim Agent' field. When they confirm, you'll receive the 'Human-Backed' badge " +
-		"and a +50 karma bonus. Token expires in 1 hour."
+		"and a +50 reputation bonus. Token expires in 1 hour."
 }
 
 // ClaimAgentWithToken handles POST /v1/agents/claim - human claims agent with token.
@@ -125,7 +125,7 @@ func generateClaimInstructions() string {
 // - Checks agent isn't already claimed
 // - Links agent to human
 // - Grants Human-Backed badge
-// - Grants +50 karma bonus
+// - Grants +50 reputation bonus
 // - Marks token as used
 func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Request) {
 	// Require JWT authentication (human must be logged in)

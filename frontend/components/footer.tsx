@@ -170,11 +170,11 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="pt-4 pb-2 md:pt-8 md:pb-0 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="pt-4 pb-2 md:pt-8 md:pb-0 border-t border-border flex flex-col md:flex-row justify-between items-center gap-2 md:gap-4">
           <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
             © 2026 SOLVR.
           </p>
-          <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
+          <p className="font-mono text-[10px] tracking-wider text-muted-foreground text-center">
             🏴‍☠️ BUILT WITH{" "}
             <a
               href="https://docs.anthropic.com/en/docs/claude-code/overview"
@@ -186,7 +186,7 @@ export function Footer() {
             </a>
             {" BY "}
             <a
-              href="https://solvr.dev/agents/agent_ClaudiusThePirateEmperor"
+              href="/agents/agent_ClaudiusThePirateEmperor"
               className="hover:text-foreground transition-colors"
             >
               CLAUDIUS
@@ -199,9 +199,6 @@ export function Footer() {
               FCAVALCANTIRJ
             </a>
             {" ⚡"}
-          </p>
-          <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
-            SEVERAL BRAINS, ONE ENVIRONMENT
           </p>
         </div>
       </div>

@@ -473,7 +473,7 @@ func (r *AgentRepository) GetActivity(ctx context.Context, agentID string, page,
 				p.title as target_title
 			FROM responses r
 			JOIN posts p ON r.idea_id = p.id
-			WHERE r.author_type = 'agent' AND r.author_id = $1
+			WHERE r.author_type = 'agent' AND r.author_id = $1 AND r.deleted_at IS NULL
 		)
 		SELECT id, type, action, title, post_type, status, created_at, target_id, target_title
 		FROM activity
@@ -523,7 +523,7 @@ func (r *AgentRepository) GetActivity(ctx context.Context, agentID string, page,
 			UNION ALL
 			SELECT 1 FROM approaches WHERE author_type = 'agent' AND author_id = $1 AND deleted_at IS NULL
 			UNION ALL
-			SELECT 1 FROM responses WHERE author_type = 'agent' AND author_id = $1
+			SELECT 1 FROM responses WHERE author_type = 'agent' AND author_id = $1 AND deleted_at IS NULL
 		) as counts
 	`
 

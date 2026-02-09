@@ -10,12 +10,17 @@ import (
 
 // MockStatsRepository implements StatsRepositoryInterface for testing
 type MockStatsRepository struct {
-	ActivePosts   int
-	TotalAgents   int
-	SolvedToday   int
-	PostedToday   int
-	TrendingPosts []any
-	TrendingTags  []any
+	ActivePosts        int
+	TotalAgents        int
+	SolvedToday        int
+	PostedToday        int
+	ProblemsSolved     int
+	QuestionsAnswered  int
+	HumansCount        int
+	TotalPosts         int
+	TotalContributions int
+	TrendingPosts      []any
+	TrendingTags       []any
 }
 
 func (m *MockStatsRepository) GetActivePostsCount(ctx context.Context) (int, error) {
@@ -49,23 +54,23 @@ func (m *MockStatsRepository) GetTrendingTags(ctx context.Context, limit int) ([
 }
 
 func (m *MockStatsRepository) GetProblemsSolvedCount(ctx context.Context) (int, error) {
-	return 0, nil
+	return m.ProblemsSolved, nil
 }
 
 func (m *MockStatsRepository) GetQuestionsAnsweredCount(ctx context.Context) (int, error) {
-	return 0, nil
+	return m.QuestionsAnswered, nil
 }
 
 func (m *MockStatsRepository) GetHumansCount(ctx context.Context) (int, error) {
-	return 0, nil
+	return m.HumansCount, nil
 }
 
 func (m *MockStatsRepository) GetTotalPostsCount(ctx context.Context) (int, error) {
-	return 0, nil
+	return m.TotalPosts, nil
 }
 
 func (m *MockStatsRepository) GetTotalContributionsCount(ctx context.Context) (int, error) {
-	return 0, nil
+	return m.TotalContributions, nil
 }
 
 func (m *MockStatsRepository) GetIdeasCountByStatus(ctx context.Context) (map[string]int, error) {
@@ -100,27 +105,37 @@ func TestStatsHandler_GetStats(t *testing.T) {
 		checkResponse  func(t *testing.T, body map[string]interface{})
 	}{
 		{
-			name: "returns all stats",
+			name: "returns all nine stats fields",
 			mockRepo: &MockStatsRepository{
-				ActivePosts: 147,
-				TotalAgents: 23,
-				SolvedToday: 12,
-				PostedToday: 25,
+				ActivePosts:        147,
+				TotalAgents:        23,
+				SolvedToday:        12,
+				PostedToday:        25,
+				ProblemsSolved:     42,
+				QuestionsAnswered:  18,
+				HumansCount:        156,
+				TotalPosts:         500,
+				TotalContributions: 320,
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, body map[string]interface{}) {
 				data := body["data"].(map[string]interface{})
-				if int(data["active_posts"].(float64)) != 147 {
-					t.Errorf("expected active_posts=147, got %v", data["active_posts"])
+				checks := map[string]int{
+					"active_posts":        147,
+					"total_agents":        23,
+					"solved_today":        12,
+					"posted_today":        25,
+					"problems_solved":     42,
+					"questions_answered":  18,
+					"humans_count":        156,
+					"total_posts":         500,
+					"total_contributions": 320,
 				}
-				if int(data["total_agents"].(float64)) != 23 {
-					t.Errorf("expected total_agents=23, got %v", data["total_agents"])
-				}
-				if int(data["solved_today"].(float64)) != 12 {
-					t.Errorf("expected solved_today=12, got %v", data["solved_today"])
-				}
-				if int(data["posted_today"].(float64)) != 25 {
-					t.Errorf("expected posted_today=25, got %v", data["posted_today"])
+				for field, expected := range checks {
+					got := int(data[field].(float64))
+					if got != expected {
+						t.Errorf("expected %s=%d, got %d", field, expected, got)
+					}
 				}
 			},
 		},

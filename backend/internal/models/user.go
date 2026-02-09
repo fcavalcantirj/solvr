@@ -53,6 +53,7 @@ type UserStats struct {
 	AnswersGiven    int `json:"answers_given"`
 	AnswersAccepted int `json:"answers_accepted"`
 	UpvotesReceived int `json:"upvotes_received"`
+	Contributions   int `json:"contributions"`
 	Reputation      int `json:"reputation"`
 }
 

@@ -316,11 +316,11 @@ func (r *AnswersRepository) AcceptAnswer(ctx context.Context, questionID, answer
 			return ErrAnswerNotFound
 		}
 
-		// Update question status to solved
+		// Update question status to solved and set accepted_answer_id
 		_, err = tx.Exec(ctx, `
-			UPDATE posts SET status = 'solved'
+			UPDATE posts SET status = 'solved', accepted_answer_id = $2
 			WHERE id = $1 AND type = 'question'
-		`, questionID)
+		`, questionID, answerID)
 		if err != nil {
 			return fmt.Errorf("update question status: %w", err)
 		}

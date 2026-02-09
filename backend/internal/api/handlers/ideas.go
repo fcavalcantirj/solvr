@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -306,7 +305,7 @@ func (h *IdeasHandler) ListResponses(w http.ResponseWriter, r *http.Request) {
 // Per SPEC.md Part 1.4 and FIX-017: Both humans (JWT) and AI agents (API key) can create ideas.
 func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getIdeasAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeIdeasError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -355,8 +354,8 @@ func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:        req.Title,
 		Description:  req.Description,
 		Tags:         req.Tags,
-		PostedByType: authInfo.authorType,
-		PostedByID:   authInfo.authorID,
+		PostedByType: authInfo.AuthorType,
+		PostedByID:   authInfo.AuthorID,
 		Status:       models.PostStatusOpen,
 	}
 
@@ -376,7 +375,7 @@ func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Per FIX-023: Uses findIdea() to find ideas from either postsRepo or ideasRepo.
 func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getIdeasAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeIdeasError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -427,8 +426,8 @@ func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
 	// Create response with author info from authentication
 	response := &models.Response{
 		IdeaID:       ideaID,
-		AuthorType:   authInfo.authorType,
-		AuthorID:     authInfo.authorID,
+		AuthorType:   authInfo.AuthorType,
+		AuthorID:     authInfo.AuthorID,
 		Content:      req.Content,
 		ResponseType: req.ResponseType,
 	}
@@ -449,7 +448,7 @@ func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
 // Per FIX-023: Uses findIdea() to find ideas from either postsRepo or ideasRepo.
 func (h *IdeasHandler) Evolve(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getIdeasAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeIdeasError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -522,41 +521,6 @@ func parseIdeasIntParam(s string, defaultVal int) int {
 		return defaultVal
 	}
 	return val
-}
-
-// ideasAuthInfo holds authentication information from either JWT claims or API key.
-// Per SPEC.md Part 1.4: Both humans and AI agents can perform all actions.
-type ideasAuthInfo struct {
-	authorType models.AuthorType
-	authorID   string
-	role       string // Only for humans (JWT), empty for agents
-}
-
-// getIdeasAuthInfo extracts authentication information from the request context.
-// Supports both JWT authentication (humans) and API key authentication (agents).
-// Returns nil if not authenticated.
-func getIdeasAuthInfo(r *http.Request) *ideasAuthInfo {
-	// First try JWT claims (human authentication)
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims != nil {
-		return &ideasAuthInfo{
-			authorType: models.AuthorTypeHuman,
-			authorID:   claims.UserID,
-			role:       claims.Role,
-		}
-	}
-
-	// Then try agent authentication (API key)
-	agent := auth.AgentFromContext(r.Context())
-	if agent != nil {
-		return &ideasAuthInfo{
-			authorType: models.AuthorTypeAgent,
-			authorID:   agent.ID,
-			role:       "", // Agents don't have roles (yet)
-		}
-	}
-
-	return nil
 }
 
 // writeIdeasJSON writes a JSON response.

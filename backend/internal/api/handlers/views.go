@@ -51,10 +51,10 @@ func (h *ViewsHandler) RecordView(w http.ResponseWriter, r *http.Request) {
 	var viewerType, viewerID string
 
 	// Check for authenticated user
-	authInfo := getAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo != nil {
-		viewerType = string(authInfo.authorType)
-		viewerID = authInfo.authorID
+		viewerType = string(authInfo.AuthorType)
+		viewerID = authInfo.AuthorID
 	} else {
 		// For anonymous views, use session ID from header or generate one
 		sessionID := r.Header.Get("X-Session-ID")

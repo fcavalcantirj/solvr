@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -241,7 +240,7 @@ func (h *ProblemsHandler) Get(w http.ResponseWriter, r *http.Request) {
 // Per SPEC.md Part 1.4 and FIX-016: Both humans (JWT) and AI agents (API key) can create problems.
 func (h *ProblemsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getProblemsAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeProblemsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -300,8 +299,8 @@ func (h *ProblemsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:           req.Title,
 		Description:     req.Description,
 		Tags:            req.Tags,
-		PostedByType:    authInfo.authorType,
-		PostedByID:      authInfo.authorID,
+		PostedByType:    authInfo.AuthorType,
+		PostedByID:      authInfo.AuthorID,
 		Status:          models.PostStatusOpen,
 		SuccessCriteria: req.SuccessCriteria,
 		Weight:          req.Weight,
@@ -395,7 +394,7 @@ func (h *ProblemsHandler) ListApproaches(w http.ResponseWriter, r *http.Request)
 // Per FIX-023: Uses findProblem() to find problems from either postsRepo or problemsRepo.
 func (h *ProblemsHandler) CreateApproach(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getProblemsAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeProblemsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -452,8 +451,8 @@ func (h *ProblemsHandler) CreateApproach(w http.ResponseWriter, r *http.Request)
 	// Create approach with author info from authentication
 	approach := &models.Approach{
 		ProblemID:   problemID,
-		AuthorType:  authInfo.authorType,
-		AuthorID:    authInfo.authorID,
+		AuthorType:  authInfo.AuthorType,
+		AuthorID:    authInfo.AuthorID,
 		Angle:       req.Angle,
 		Method:      req.Method,
 		Assumptions: req.Assumptions,
@@ -476,7 +475,7 @@ func (h *ProblemsHandler) CreateApproach(w http.ResponseWriter, r *http.Request)
 // Per FIX-016: Both humans (JWT) and AI agents (API key) can update their approaches.
 func (h *ProblemsHandler) UpdateApproach(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getProblemsAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeProblemsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -500,7 +499,7 @@ func (h *ProblemsHandler) UpdateApproach(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Check ownership - only author can update (works for both humans and agents)
-	if existingApproach.AuthorType != authInfo.authorType || existingApproach.AuthorID != authInfo.authorID {
+	if existingApproach.AuthorType != authInfo.AuthorType || existingApproach.AuthorID != authInfo.AuthorID {
 		writeProblemsError(w, http.StatusForbidden, "FORBIDDEN", "you can only update your own approaches")
 		return
 	}
@@ -555,7 +554,7 @@ func (h *ProblemsHandler) UpdateApproach(w http.ResponseWriter, r *http.Request)
 // Per FIX-016: Both humans (JWT) and AI agents (API key) can add progress notes.
 func (h *ProblemsHandler) AddProgressNote(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getProblemsAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeProblemsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -579,7 +578,7 @@ func (h *ProblemsHandler) AddProgressNote(w http.ResponseWriter, r *http.Request
 	}
 
 	// Check ownership - only author can add progress notes (works for both humans and agents)
-	if existingApproach.AuthorType != authInfo.authorType || existingApproach.AuthorID != authInfo.authorID {
+	if existingApproach.AuthorType != authInfo.AuthorType || existingApproach.AuthorID != authInfo.AuthorID {
 		writeProblemsError(w, http.StatusForbidden, "FORBIDDEN", "you can only add progress notes to your own approaches")
 		return
 	}
@@ -618,7 +617,7 @@ func (h *ProblemsHandler) AddProgressNote(w http.ResponseWriter, r *http.Request
 // Per FIX-016: Both humans (JWT) and AI agents (API key) who own the problem can verify.
 func (h *ProblemsHandler) VerifyApproach(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getProblemsAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeProblemsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -654,7 +653,7 @@ func (h *ProblemsHandler) VerifyApproach(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Check ownership - only problem owner can verify (works for both humans and agents)
-	if problem.PostedByType != authInfo.authorType || problem.PostedByID != authInfo.authorID {
+	if problem.PostedByType != authInfo.AuthorType || problem.PostedByID != authInfo.AuthorID {
 		writeProblemsError(w, http.StatusForbidden, "FORBIDDEN", "only the problem owner can verify approaches")
 		return
 	}
@@ -866,41 +865,6 @@ func generateProblemExportMarkdown(problem *models.PostWithAuthor, approaches []
 	}
 
 	return sb.String()
-}
-
-// problemsAuthInfo holds authentication information from either JWT claims or API key.
-// Per SPEC.md Part 1.4: Both humans and AI agents can perform all actions.
-type problemsAuthInfo struct {
-	authorType models.AuthorType
-	authorID   string
-	role       string // Only for humans (JWT), empty for agents
-}
-
-// getProblemsAuthInfo extracts authentication information from the request context.
-// Supports both JWT authentication (humans) and API key authentication (agents).
-// Returns nil if not authenticated.
-func getProblemsAuthInfo(r *http.Request) *problemsAuthInfo {
-	// First try JWT claims (human authentication)
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims != nil {
-		return &problemsAuthInfo{
-			authorType: models.AuthorTypeHuman,
-			authorID:   claims.UserID,
-			role:       claims.Role,
-		}
-	}
-
-	// Then try agent authentication (API key)
-	agent := auth.AgentFromContext(r.Context())
-	if agent != nil {
-		return &problemsAuthInfo{
-			authorType: models.AuthorTypeAgent,
-			authorID:   agent.ID,
-			role:       "", // Agents don't have roles (yet)
-		}
-	}
-
-	return nil
 }
 
 // writeProblemsJSON writes a JSON response.

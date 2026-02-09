@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -312,7 +311,7 @@ func (h *QuestionsHandler) ListAnswers(w http.ResponseWriter, r *http.Request) {
 // Per SPEC.md Part 1.4 and FIX-015: Both humans (JWT) and AI agents (API key) can create questions.
 func (h *QuestionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getQuestionsAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeQuestionsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -361,8 +360,8 @@ func (h *QuestionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:        req.Title,
 		Description:  req.Description,
 		Tags:         req.Tags,
-		PostedByType: authInfo.authorType,
-		PostedByID:   authInfo.authorID,
+		PostedByType: authInfo.AuthorType,
+		PostedByID:   authInfo.AuthorID,
 		Status:       models.PostStatusOpen,
 	}
 
@@ -382,7 +381,7 @@ func (h *QuestionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Per FIX-023: Uses findQuestion() to find questions from either postsRepo or questionsRepo.
 func (h *QuestionsHandler) CreateAnswer(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getQuestionsAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeQuestionsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -427,8 +426,8 @@ func (h *QuestionsHandler) CreateAnswer(w http.ResponseWriter, r *http.Request) 
 	// Create answer with author info from authentication
 	answer := &models.Answer{
 		QuestionID: questionID,
-		AuthorType: authInfo.authorType,
-		AuthorID:   authInfo.authorID,
+		AuthorType: authInfo.AuthorType,
+		AuthorID:   authInfo.AuthorID,
 		Content:    req.Content,
 		IsAccepted: false,
 	}
@@ -448,7 +447,7 @@ func (h *QuestionsHandler) CreateAnswer(w http.ResponseWriter, r *http.Request) 
 // Per FIX-015: Both humans (JWT) and AI agents (API key) can update their answers.
 func (h *QuestionsHandler) UpdateAnswer(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getQuestionsAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeQuestionsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -472,7 +471,7 @@ func (h *QuestionsHandler) UpdateAnswer(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Check ownership - only author can update (works for both humans and agents)
-	if existingAnswer.AuthorType != authInfo.authorType || existingAnswer.AuthorID != authInfo.authorID {
+	if existingAnswer.AuthorType != authInfo.AuthorType || existingAnswer.AuthorID != authInfo.AuthorID {
 		writeQuestionsError(w, http.StatusForbidden, "FORBIDDEN", "you can only update your own answers")
 		return
 	}
@@ -510,7 +509,7 @@ func (h *QuestionsHandler) UpdateAnswer(w http.ResponseWriter, r *http.Request) 
 // Per FIX-015: Both humans (JWT) and AI agents (API key) can delete their answers.
 func (h *QuestionsHandler) DeleteAnswer(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getQuestionsAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeQuestionsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -534,8 +533,8 @@ func (h *QuestionsHandler) DeleteAnswer(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Check ownership - author or admin can delete (works for both humans and agents)
-	isOwner := existingAnswer.AuthorType == authInfo.authorType && existingAnswer.AuthorID == authInfo.authorID
-	isAdmin := authInfo.role == "admin"
+	isOwner := existingAnswer.AuthorType == authInfo.AuthorType && existingAnswer.AuthorID == authInfo.AuthorID
+	isAdmin := authInfo.Role == "admin"
 
 	if !isOwner && !isAdmin {
 		writeQuestionsError(w, http.StatusForbidden, "FORBIDDEN", "you can only delete your own answers")
@@ -555,7 +554,7 @@ func (h *QuestionsHandler) DeleteAnswer(w http.ResponseWriter, r *http.Request) 
 // Per FIX-015: Both humans (JWT) and AI agents (API key) can vote on answers.
 func (h *QuestionsHandler) VoteOnAnswer(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getQuestionsAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeQuestionsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -592,7 +591,7 @@ func (h *QuestionsHandler) VoteOnAnswer(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Record vote with appropriate voter type
-	if err := h.repo.VoteOnAnswer(r.Context(), answerID, string(authInfo.authorType), authInfo.authorID, req.Direction); err != nil {
+	if err := h.repo.VoteOnAnswer(r.Context(), answerID, string(authInfo.AuthorType), authInfo.AuthorID, req.Direction); err != nil {
 		writeQuestionsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to record vote")
 		return
 	}
@@ -607,7 +606,7 @@ func (h *QuestionsHandler) VoteOnAnswer(w http.ResponseWriter, r *http.Request) 
 // Per FIX-023: Uses findQuestion() to find questions from either postsRepo or questionsRepo.
 func (h *QuestionsHandler) AcceptAnswer(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getQuestionsAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeQuestionsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -637,7 +636,7 @@ func (h *QuestionsHandler) AcceptAnswer(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Check ownership - only question owner can accept (works for both humans and agents)
-	if question.PostedByType != authInfo.authorType || question.PostedByID != authInfo.authorID {
+	if question.PostedByType != authInfo.AuthorType || question.PostedByID != authInfo.AuthorID {
 		writeQuestionsError(w, http.StatusForbidden, "FORBIDDEN", "only the question owner can accept answers")
 		return
 	}
@@ -675,41 +674,6 @@ func parseQuestionsIntParam(s string, defaultVal int) int {
 		return defaultVal
 	}
 	return val
-}
-
-// questionsAuthInfo holds authentication information from either JWT claims or API key.
-// Per SPEC.md Part 1.4: Both humans and AI agents can perform all actions.
-type questionsAuthInfo struct {
-	authorType models.AuthorType
-	authorID   string
-	role       string // Only for humans (JWT), empty for agents
-}
-
-// getQuestionsAuthInfo extracts authentication information from the request context.
-// Supports both JWT authentication (humans) and API key authentication (agents).
-// Returns nil if not authenticated.
-func getQuestionsAuthInfo(r *http.Request) *questionsAuthInfo {
-	// First try JWT claims (human authentication)
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims != nil {
-		return &questionsAuthInfo{
-			authorType: models.AuthorTypeHuman,
-			authorID:   claims.UserID,
-			role:       claims.Role,
-		}
-	}
-
-	// Then try agent authentication (API key)
-	agent := auth.AgentFromContext(r.Context())
-	if agent != nil {
-		return &questionsAuthInfo{
-			authorType: models.AuthorTypeAgent,
-			authorID:   agent.ID,
-			role:       "", // Agents don't have roles (yet)
-		}
-	}
-
-	return nil
 }
 
 // writeQuestionsJSON writes a JSON response.

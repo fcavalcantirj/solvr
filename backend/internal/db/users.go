@@ -182,7 +182,11 @@ func (r *UserRepository) GetUserStats(ctx context.Context, userID string) (*mode
 	//            - downvotes_received * 1
 	query := `
 		WITH user_posts AS (
-			SELECT COUNT(*) as posts_created
+			SELECT
+				COUNT(*) as posts_created,
+				COUNT(*) FILTER (WHERE type = 'problem' AND status = 'solved') as problems_solved,
+				COUNT(*) FILTER (WHERE type = 'problem') as problems_contributed,
+				COUNT(*) FILTER (WHERE type = 'idea') as ideas_posted
 			FROM posts
 			WHERE posted_by_type = 'human' AND posted_by_id = $1 AND deleted_at IS NULL
 		),
@@ -192,6 +196,11 @@ func (r *UserRepository) GetUserStats(ctx context.Context, userID string) (*mode
 				COUNT(*) FILTER (WHERE is_accepted = true) as answers_accepted
 			FROM answers
 			WHERE author_type = 'human' AND author_id = $1 AND deleted_at IS NULL
+		),
+		user_responses AS (
+			SELECT COUNT(*) as responses_given
+			FROM responses
+			WHERE author_type = 'human' AND author_id = $1
 		),
 		user_votes_received AS (
 			SELECT
@@ -205,6 +214,9 @@ func (r *UserRepository) GetUserStats(ctx context.Context, userID string) (*mode
 				OR (v.target_type = 'answer' AND EXISTS (
 					SELECT 1 FROM answers a WHERE a.id = v.target_id AND a.author_type = 'human' AND a.author_id = $1
 				))
+				OR (v.target_type = 'response' AND EXISTS (
+					SELECT 1 FROM responses r WHERE r.id = v.target_id AND r.author_type = 'human' AND r.author_id = $1
+				))
 			)
 		)
 		SELECT
@@ -212,11 +224,16 @@ func (r *UserRepository) GetUserStats(ctx context.Context, userID string) (*mode
 			COALESCE(ua.answers_given, 0)::int,
 			COALESCE(ua.answers_accepted, 0)::int,
 			COALESCE(uv.upvotes, 0)::int,
-			(COALESCE(ua.answers_accepted, 0) * 50 +
+			(COALESCE(ua.answers_given, 0) + COALESCE(ur.responses_given, 0))::int as contributions,
+			(COALESCE(up.problems_solved, 0) * 100 +
+			 COALESCE(up.problems_contributed, 0) * 25 +
+			 COALESCE(ua.answers_accepted, 0) * 50 +
 			 COALESCE(ua.answers_given, 0) * 10 +
+			 COALESCE(up.ideas_posted, 0) * 15 +
+			 COALESCE(ur.responses_given, 0) * 5 +
 			 COALESCE(uv.upvotes, 0) * 2 -
 			 COALESCE(uv.downvotes, 0))::int as reputation
-		FROM user_posts up, user_answers ua, user_votes_received uv
+		FROM user_posts up, user_answers ua, user_responses ur, user_votes_received uv
 	`
 
 	row := r.pool.QueryRow(ctx, query, userID)
@@ -226,6 +243,7 @@ func (r *UserRepository) GetUserStats(ctx context.Context, userID string) (*mode
 		&stats.AnswersGiven,
 		&stats.AnswersAccepted,
 		&stats.UpvotesReceived,
+		&stats.Contributions,
 		&stats.Reputation,
 	)
 

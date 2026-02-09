@@ -372,25 +372,10 @@ func (h *UsersHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 // GetMyPosts handles GET /v1/me/posts.
 // Per BE-003: List own posts.
 func (h *UsersHandler) GetMyPosts(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// Check for agent authentication
-	agent := auth.AgentFromContext(ctx)
-	var authorType models.AuthorType
-	var authorID string
-
-	if agent != nil {
-		authorType = models.AuthorTypeAgent
-		authorID = agent.ID
-	} else {
-		// Check for user authentication (JWT)
-		claims := auth.ClaimsFromContext(ctx)
-		if claims == nil {
-			writeUsersError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
-			return
-		}
-		authorType = models.AuthorTypeHuman
-		authorID = claims.UserID
+	authInfo := GetAuthInfo(r)
+	if authInfo == nil {
+		writeUsersError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
 	}
 
 	// Parse pagination params (use existing function from posts.go)
@@ -402,13 +387,13 @@ func (h *UsersHandler) GetMyPosts(w http.ResponseWriter, r *http.Request) {
 
 	// List posts by author
 	opts := models.PostListOptions{
-		AuthorType: authorType,
-		AuthorID:   authorID,
+		AuthorType: authInfo.AuthorType,
+		AuthorID:   authInfo.AuthorID,
 		Page:       page,
 		PerPage:    perPage,
 	}
 
-	posts, total, err := h.postRepo.List(ctx, opts)
+	posts, total, err := h.postRepo.List(r.Context(), opts)
 	if err != nil {
 		writeUsersError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list posts")
 		return
@@ -421,25 +406,10 @@ func (h *UsersHandler) GetMyPosts(w http.ResponseWriter, r *http.Request) {
 // Per BE-003: List own answers/approaches/responses.
 // For now, this returns posts (later can add answers, approaches, responses).
 func (h *UsersHandler) GetMyContributions(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// Check for agent authentication
-	agent := auth.AgentFromContext(ctx)
-	var authorType models.AuthorType
-	var authorID string
-
-	if agent != nil {
-		authorType = models.AuthorTypeAgent
-		authorID = agent.ID
-	} else {
-		// Check for user authentication (JWT)
-		claims := auth.ClaimsFromContext(ctx)
-		if claims == nil {
-			writeUsersError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
-			return
-		}
-		authorType = models.AuthorTypeHuman
-		authorID = claims.UserID
+	authInfo := GetAuthInfo(r)
+	if authInfo == nil {
+		writeUsersError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
 	}
 
 	// Parse pagination params (use existing function from posts.go)
@@ -451,13 +421,13 @@ func (h *UsersHandler) GetMyContributions(w http.ResponseWriter, r *http.Request
 
 	// For now, return posts as contributions (can extend to answers/approaches later)
 	opts := models.PostListOptions{
-		AuthorType: authorType,
-		AuthorID:   authorID,
+		AuthorType: authInfo.AuthorType,
+		AuthorID:   authInfo.AuthorID,
 		Page:       page,
 		PerPage:    perPage,
 	}
 
-	posts, total, err := h.postRepo.List(ctx, opts)
+	posts, total, err := h.postRepo.List(r.Context(), opts)
 	if err != nil {
 		writeUsersError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list contributions")
 		return

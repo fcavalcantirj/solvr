@@ -20,8 +20,9 @@ func NewStatsRepository(pool *Pool) *StatsRepository {
 func (r *StatsRepository) GetActivePostsCount(ctx context.Context) (int, error) {
 	var count int
 	err := r.pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM posts 
+		SELECT COUNT(*) FROM posts
 		WHERE status IN ('open', 'active', 'in_progress')
+		AND deleted_at IS NULL
 	`).Scan(&count)
 	if err != nil {
 		return 0, err
@@ -49,6 +50,7 @@ func (r *StatsRepository) GetSolvedTodayCount(ctx context.Context) (int, error) 
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
 		WHERE status = 'solved'
+		AND deleted_at IS NULL
 		AND updated_at >= $1
 	`, today).Scan(&count)
 	if err != nil {
@@ -63,7 +65,8 @@ func (r *StatsRepository) GetPostedTodayCount(ctx context.Context) (int, error) 
 	today := time.Now().Truncate(24 * time.Hour)
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
-		WHERE created_at >= $1
+		WHERE deleted_at IS NULL
+		AND created_at >= $1
 	`, today).Scan(&count)
 	if err != nil {
 		return 0, err
@@ -77,6 +80,7 @@ func (r *StatsRepository) GetProblemsSolvedCount(ctx context.Context) (int, erro
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
 		WHERE type = 'problem' AND status = 'solved'
+		AND deleted_at IS NULL
 	`).Scan(&count)
 	if err != nil {
 		return 0, err
@@ -90,6 +94,7 @@ func (r *StatsRepository) GetQuestionsAnsweredCount(ctx context.Context) (int, e
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
 		WHERE type = 'question' AND accepted_answer_id IS NOT NULL
+		AND deleted_at IS NULL
 	`).Scan(&count)
 	if err != nil {
 		return 0, err
@@ -114,6 +119,7 @@ func (r *StatsRepository) GetTotalPostsCount(ctx context.Context) (int, error) {
 	var count int
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
+		WHERE deleted_at IS NULL
 	`).Scan(&count)
 	if err != nil {
 		return 0, err
@@ -126,9 +132,9 @@ func (r *StatsRepository) GetTotalContributionsCount(ctx context.Context) (int, 
 	var count int
 	err := r.pool.QueryRow(ctx, `
 		SELECT
-			COALESCE((SELECT COUNT(*) FROM answers), 0) +
-			COALESCE((SELECT COUNT(*) FROM approaches), 0) +
-			COALESCE((SELECT COUNT(*) FROM responses), 0)
+			COALESCE((SELECT COUNT(*) FROM answers WHERE deleted_at IS NULL), 0) +
+			COALESCE((SELECT COUNT(*) FROM approaches WHERE deleted_at IS NULL), 0) +
+			COALESCE((SELECT COUNT(*) FROM responses WHERE deleted_at IS NULL), 0)
 	`).Scan(&count)
 	if err != nil {
 		return 0, err

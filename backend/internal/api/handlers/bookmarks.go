@@ -60,7 +60,7 @@ type BookmarksListResponse struct {
 
 // Add handles POST /v1/users/me/bookmarks - add a bookmark.
 func (h *BookmarksHandler) Add(w http.ResponseWriter, r *http.Request) {
-	authInfo := getAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeBookmarksError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -77,7 +77,7 @@ func (h *BookmarksHandler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bookmark, err := h.repo.Add(r.Context(), string(authInfo.authorType), authInfo.authorID, req.PostID)
+	bookmark, err := h.repo.Add(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, req.PostID)
 	if err != nil {
 		if errors.Is(err, db.ErrBookmarkExists) {
 			writeBookmarksError(w, http.StatusConflict, "BOOKMARK_EXISTS", "post is already bookmarked")
@@ -99,7 +99,7 @@ func (h *BookmarksHandler) Add(w http.ResponseWriter, r *http.Request) {
 
 // Remove handles DELETE /v1/users/me/bookmarks/:id - remove a bookmark.
 func (h *BookmarksHandler) Remove(w http.ResponseWriter, r *http.Request) {
-	authInfo := getAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeBookmarksError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -111,7 +111,7 @@ func (h *BookmarksHandler) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.repo.Remove(r.Context(), string(authInfo.authorType), authInfo.authorID, postID)
+	err := h.repo.Remove(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, postID)
 	if err != nil {
 		if errors.Is(err, db.ErrBookmarkNotFound) {
 			writeBookmarksError(w, http.StatusNotFound, "NOT_FOUND", "bookmark not found")
@@ -131,7 +131,7 @@ func (h *BookmarksHandler) Remove(w http.ResponseWriter, r *http.Request) {
 
 // List handles GET /v1/users/me/bookmarks - list user's bookmarks.
 func (h *BookmarksHandler) List(w http.ResponseWriter, r *http.Request) {
-	authInfo := getAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeBookmarksError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -143,7 +143,7 @@ func (h *BookmarksHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bookmarks, total, err := h.repo.ListByUser(r.Context(), string(authInfo.authorType), authInfo.authorID, page, perPage)
+	bookmarks, total, err := h.repo.ListByUser(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, page, perPage)
 	if err != nil {
 		ctx := response.LogContext{
 			Operation: "ListByUser",
@@ -168,7 +168,7 @@ func (h *BookmarksHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Check handles GET /v1/users/me/bookmarks/:id - check if post is bookmarked.
 func (h *BookmarksHandler) Check(w http.ResponseWriter, r *http.Request) {
-	authInfo := getAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeBookmarksError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -180,7 +180,7 @@ func (h *BookmarksHandler) Check(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isBookmarked, err := h.repo.IsBookmarked(r.Context(), string(authInfo.authorType), authInfo.authorID, postID)
+	isBookmarked, err := h.repo.IsBookmarked(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, postID)
 	if err != nil {
 		ctx := response.LogContext{
 			Operation: "IsBookmarked",

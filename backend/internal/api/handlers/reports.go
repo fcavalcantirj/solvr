@@ -49,7 +49,7 @@ type CreateReportRequest struct {
 // Create handles POST /v1/reports - create a new report.
 func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Get auth info (must be authenticated)
-	authInfo := getAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeReportsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -86,8 +86,8 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	report := &models.Report{
 		TargetType:   targetType,
 		TargetID:     req.TargetID,
-		ReporterType: authInfo.authorType,
-		ReporterID:   authInfo.authorID,
+		ReporterType: authInfo.AuthorType,
+		ReporterID:   authInfo.AuthorID,
 		Reason:       reason,
 		Details:      req.Details,
 	}
@@ -123,7 +123,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Check handles GET /v1/reports/check - check if user has reported content.
 func (h *ReportsHandler) Check(w http.ResponseWriter, r *http.Request) {
 	// Get auth info (must be authenticated)
-	authInfo := getAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writeReportsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -144,7 +144,7 @@ func (h *ReportsHandler) Check(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hasReported, err := h.repo.HasReported(r.Context(), reportTargetType, targetID, string(authInfo.authorType), authInfo.authorID)
+	hasReported, err := h.repo.HasReported(r.Context(), reportTargetType, targetID, string(authInfo.AuthorType), authInfo.AuthorID)
 	if err != nil {
 		ctx := response.LogContext{
 			Operation: "CheckReport",

@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
-	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -146,41 +145,6 @@ type PostResponse struct {
 	Data models.PostWithAuthor `json:"data"`
 }
 
-// authInfo holds authentication information from either JWT claims or API key.
-// Per SPEC.md Part 1.4: Both humans and AI agents can perform all actions.
-type authInfo struct {
-	authorType models.AuthorType
-	authorID   string
-	role       string // Only for humans (JWT), empty for agents
-}
-
-// getAuthInfo extracts authentication information from the request context.
-// Supports both JWT authentication (humans) and API key authentication (agents).
-// Returns nil if not authenticated.
-func getAuthInfo(r *http.Request) *authInfo {
-	// First try JWT claims (human authentication)
-	claims := auth.ClaimsFromContext(r.Context())
-	if claims != nil {
-		return &authInfo{
-			authorType: models.AuthorTypeHuman,
-			authorID:   claims.UserID,
-			role:       claims.Role,
-		}
-	}
-
-	// Then try agent authentication (API key)
-	agent := auth.AgentFromContext(r.Context())
-	if agent != nil {
-		return &authInfo{
-			authorType: models.AuthorTypeAgent,
-			authorID:   agent.ID,
-			role:       "", // Agents don't have roles (yet)
-		}
-	}
-
-	return nil
-}
-
 // List handles GET /v1/posts - list posts.
 func (h *PostsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// FIX-029: Validate pagination parameters
@@ -286,7 +250,7 @@ func (h *PostsHandler) Get(w http.ResponseWriter, r *http.Request) {
 // Per SPEC.md Part 1.4 and FIX-003: Both humans (JWT) and AI agents (API key) can create posts.
 func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writePostsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -354,8 +318,8 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:           req.Title,
 		Description:     req.Description,
 		Tags:            req.Tags,
-		PostedByType:    authInfo.authorType,
-		PostedByID:      authInfo.authorID,
+		PostedByType:    authInfo.AuthorType,
+		PostedByID:      authInfo.AuthorID,
 		Status:          models.PostStatusOpen,
 		SuccessCriteria: req.SuccessCriteria,
 		Weight:          req.Weight,
@@ -369,8 +333,8 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			RequestID: r.Header.Get("X-Request-ID"),
 			Extra: map[string]string{
 				"type":       string(postType),
-				"authorType": string(authInfo.authorType),
-				"authorID":   authInfo.authorID,
+				"authorType": string(authInfo.AuthorType),
+				"authorID":   authInfo.AuthorID,
 			},
 		}
 		response.WriteInternalErrorWithLog(w, "failed to create post", err, ctx, h.logger)
@@ -386,7 +350,7 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Per SPEC.md Part 15.2 and FIX-003: Users can edit their own content (humans and agents).
 func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writePostsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -416,7 +380,7 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check ownership - only owner can update (works for both humans and agents)
-	isOwner := existingPost.PostedByType == authInfo.authorType && existingPost.PostedByID == authInfo.authorID
+	isOwner := existingPost.PostedByType == authInfo.AuthorType && existingPost.PostedByID == authInfo.AuthorID
 	if !isOwner {
 		writePostsError(w, http.StatusForbidden, "FORBIDDEN", "you can only update your own posts")
 		return
@@ -490,7 +454,7 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Per SPEC.md Part 15.1 and FIX-003: Users can delete their own content, admins can delete any.
 func (h *PostsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writePostsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -520,8 +484,8 @@ func (h *PostsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check permission - owner or admin can delete (works for both humans and agents)
-	isOwner := existingPost.PostedByType == authInfo.authorType && existingPost.PostedByID == authInfo.authorID
-	isAdmin := authInfo.role == "admin"
+	isOwner := existingPost.PostedByType == authInfo.AuthorType && existingPost.PostedByID == authInfo.AuthorID
+	isAdmin := authInfo.Role == "admin"
 
 	if !isOwner && !isAdmin {
 		writePostsError(w, http.StatusForbidden, "FORBIDDEN", "you can only delete your own posts")
@@ -546,7 +510,7 @@ func (h *PostsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // Per SPEC.md Part 2.9 and FIX-003: Both humans and agents can vote, but not on own content.
 func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 	// Require authentication (JWT or API key)
-	authInfo := getAuthInfo(r)
+	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
 		writePostsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
@@ -589,13 +553,13 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Cannot vote on own content (applies to both humans and agents)
-	if post.PostedByType == authInfo.authorType && post.PostedByID == authInfo.authorID {
+	if post.PostedByType == authInfo.AuthorType && post.PostedByID == authInfo.AuthorID {
 		writePostsError(w, http.StatusForbidden, "FORBIDDEN", "cannot vote on your own content")
 		return
 	}
 
 	// Record vote with the appropriate voter type
-	err = h.repo.Vote(r.Context(), postID, string(authInfo.authorType), authInfo.authorID, req.Direction)
+	err = h.repo.Vote(r.Context(), postID, string(authInfo.AuthorType), authInfo.AuthorID, req.Direction)
 	if err != nil {
 		if errors.Is(err, ErrDuplicateVote) {
 			writePostsError(w, http.StatusConflict, "DUPLICATE_VOTE", "you have already voted on this post")
@@ -608,8 +572,8 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 			Extra: map[string]string{
 				"postID":    postID,
 				"direction": req.Direction,
-				"voterType": string(authInfo.authorType),
-				"voterID":   authInfo.authorID,
+				"voterType": string(authInfo.AuthorType),
+				"voterID":   authInfo.AuthorID,
 			},
 		}
 		response.WriteInternalErrorWithLog(w, "failed to record vote", err, ctx, h.logger)

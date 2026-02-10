@@ -14,6 +14,9 @@ const (
 	PostTypeIdea     PostType = "idea"
 )
 
+// MaxTagsPerPost is the maximum number of tags allowed per post.
+const MaxTagsPerPost = 10
+
 // PostStatus represents the status of a post.
 type PostStatus string
 
@@ -64,7 +67,7 @@ type Post struct {
 	Description string `json:"description"`
 
 	// Tags is a list of tags for the post.
-	// Max 5 tags.
+	// See MaxTagsPerPost.
 	Tags []string `json:"tags,omitempty"`
 
 	// PostedByType is the author type: human or agent.

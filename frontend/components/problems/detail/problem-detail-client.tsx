@@ -6,6 +6,7 @@ import { ProblemHeader } from "./problem-header";
 import { ProblemDescription } from "./problem-description";
 import { ApproachesList } from "./approaches-list";
 import { ProblemSidePanel } from "./problem-side-panel";
+import { CommentsList } from "@/components/shared/comments-list";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
 
@@ -42,6 +43,7 @@ export function ProblemDetailClient({ id }: ProblemDetailClientProps) {
         <div className="lg:col-span-2 space-y-8">
           <ProblemDescription problem={problem} />
           <ApproachesList approaches={approaches} problemId={problem.id} onApproachPosted={refetch} />
+          <CommentsList targetType="post" targetId={problem.id} onCommentPosted={refetch} />
         </div>
         <div className="lg:col-span-1">
           <ProblemSidePanel problem={problem} approachesCount={approaches.length} />

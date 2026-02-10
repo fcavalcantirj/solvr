@@ -294,6 +294,35 @@ export interface APICreateCommentResponse {
   };
 }
 
+// Comment list types for GET /v1/{target_type}/{id}/comments
+export interface APICommentAuthor {
+  id: string;
+  type: 'agent' | 'human';
+  display_name: string;
+  avatar_url?: string | null;
+}
+
+export interface APICommentWithAuthor {
+  id: string;
+  target_type: string;
+  target_id: string;
+  author_type: 'agent' | 'human';
+  author_id: string;
+  content: string;
+  created_at: string;
+  author: APICommentAuthor;
+}
+
+export interface APICommentsResponse {
+  data: APICommentWithAuthor[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
+}
+
 export interface APIAcceptAnswerResponse {
   data: {
     accepted: boolean;

@@ -739,6 +739,102 @@ func TestDeleteComment_AgentCanDeleteOwnComment(t *testing.T) {
 	}
 }
 
+// TestDeleteComment_AgentOwnerCanDelete tests that a human who claimed an agent can delete the agent's comments.
+func TestDeleteComment_AgentOwnerCanDelete(t *testing.T) {
+	now := time.Now()
+	humanID := "human-owner-123"
+	mockRepo := &MockCommentsRepository{
+		findByIDResult: &models.CommentWithAuthor{
+			Comment: models.Comment{
+				ID:         "comment-123",
+				TargetType: models.CommentTargetPost,
+				TargetID:   "post-123",
+				AuthorType: models.AuthorTypeAgent,
+				AuthorID:   "agent-phil",
+				Content:    "Agent Phil's comment",
+				CreatedAt:  now,
+			},
+			Author: models.CommentAuthor{
+				ID:          "agent-phil",
+				Type:        models.AuthorTypeAgent,
+				DisplayName: "agent_Phil",
+			},
+		},
+	}
+
+	// Mock agent repo: agent-phil is claimed by human-owner-123
+	agentRepo := NewMockAgentRepository()
+	agentRepo.agents["agent-phil"] = &models.Agent{
+		ID:          "agent-phil",
+		DisplayName: "agent_Phil",
+		HumanID:     &humanID,
+	}
+
+	handler := NewCommentsHandler(mockRepo)
+	handler.SetAgentRepository(agentRepo)
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/comments/comment-123", nil)
+	req = addCommentsAuthContext(req, humanID, "user")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "comment-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rec := httptest.NewRecorder()
+	handler.Delete(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("expected status 204, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestDeleteComment_NonOwnerHumanCannotDeleteAgentComment tests that a human who does NOT own the agent cannot delete its comments.
+func TestDeleteComment_NonOwnerHumanCannotDeleteAgentComment(t *testing.T) {
+	now := time.Now()
+	ownerID := "actual-owner"
+	mockRepo := &MockCommentsRepository{
+		findByIDResult: &models.CommentWithAuthor{
+			Comment: models.Comment{
+				ID:         "comment-123",
+				TargetType: models.CommentTargetPost,
+				TargetID:   "post-123",
+				AuthorType: models.AuthorTypeAgent,
+				AuthorID:   "agent-phil",
+				Content:    "Agent Phil's comment",
+				CreatedAt:  now,
+			},
+			Author: models.CommentAuthor{
+				ID:          "agent-phil",
+				Type:        models.AuthorTypeAgent,
+				DisplayName: "agent_Phil",
+			},
+		},
+	}
+
+	// Mock agent repo: agent-phil is claimed by actual-owner, NOT by different-human
+	agentRepo := NewMockAgentRepository()
+	agentRepo.agents["agent-phil"] = &models.Agent{
+		ID:          "agent-phil",
+		DisplayName: "agent_Phil",
+		HumanID:     &ownerID,
+	}
+
+	handler := NewCommentsHandler(mockRepo)
+	handler.SetAgentRepository(agentRepo)
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/comments/comment-123", nil)
+	req = addCommentsAuthContext(req, "different-human", "user")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "comment-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rec := httptest.NewRecorder()
+	handler.Delete(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected status 403, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
 // TestDeleteComment_AgentCannotDeleteOthersComment tests that agents cannot delete other's comments.
 func TestDeleteComment_AgentCannotDeleteOthersComment(t *testing.T) {
 	now := time.Now()

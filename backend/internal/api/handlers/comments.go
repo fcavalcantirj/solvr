@@ -33,14 +33,25 @@ type CommentsRepositoryInterface interface {
 	TargetExists(ctx context.Context, targetType models.CommentTargetType, targetID string) (bool, error)
 }
 
+// CommentsAgentRepositoryInterface defines agent lookup for ownership checks.
+type CommentsAgentRepositoryInterface interface {
+	FindByID(ctx context.Context, id string) (*models.Agent, error)
+}
+
 // CommentsHandler handles comment-related HTTP requests.
 type CommentsHandler struct {
-	repo CommentsRepositoryInterface
+	repo      CommentsRepositoryInterface
+	agentRepo CommentsAgentRepositoryInterface
 }
 
 // NewCommentsHandler creates a new CommentsHandler.
 func NewCommentsHandler(repo CommentsRepositoryInterface) *CommentsHandler {
 	return &CommentsHandler{repo: repo}
+}
+
+// SetAgentRepository sets the agent repository for ownership checks on delete.
+func (h *CommentsHandler) SetAgentRepository(repo CommentsAgentRepositoryInterface) {
+	h.agentRepo = repo
 }
 
 // CommentsListResponse is the response for listing comments.
@@ -214,11 +225,20 @@ func (h *CommentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check permission - owner or admin can delete (works for both humans and agents)
+	// Check permission - owner, agent's human owner, or admin can delete
 	isOwner := comment.AuthorType == authInfo.AuthorType && comment.AuthorID == authInfo.AuthorID
 	isAdmin := authInfo.Role == "admin"
 
-	if !isOwner && !isAdmin {
+	// If comment is by an agent, check if authenticated human owns that agent
+	isAgentOwner := false
+	if !isOwner && !isAdmin && comment.AuthorType == models.AuthorTypeAgent && authInfo.AuthorType == models.AuthorTypeHuman && h.agentRepo != nil {
+		agent, agentErr := h.agentRepo.FindByID(r.Context(), comment.AuthorID)
+		if agentErr == nil && agent.HumanID != nil && *agent.HumanID == authInfo.AuthorID {
+			isAgentOwner = true
+		}
+	}
+
+	if !isOwner && !isAgentOwner && !isAdmin {
 		writeCommentsError(w, http.StatusForbidden, "FORBIDDEN", "you can only delete your own comments")
 		return
 	}

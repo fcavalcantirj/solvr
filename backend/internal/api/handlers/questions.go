@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -348,9 +349,9 @@ func (h *QuestionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate tags (max 5)
-	if len(req.Tags) > 5 {
-		writeQuestionsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "maximum 5 tags allowed")
+	// Validate tags
+	if len(req.Tags) > models.MaxTagsPerPost {
+		writeQuestionsError(w, http.StatusBadRequest, "VALIDATION_ERROR", fmt.Sprintf("maximum %d tags allowed", models.MaxTagsPerPost))
 		return
 	}
 

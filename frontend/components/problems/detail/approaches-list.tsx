@@ -10,6 +10,8 @@ import { ProblemApproach } from "@/hooks/use-problem";
 import { useApproachForm } from "@/hooks/use-approach-form";
 import { useAuth } from "@/hooks/use-auth";
 import { useProgressNoteForm } from "@/hooks/use-progress-note-form";
+import { CommentsList } from "@/components/shared/comments-list";
+import { MessageSquare } from "lucide-react";
 
 interface ApproachesListProps {
   approaches: ProblemApproach[];
@@ -69,6 +71,7 @@ function ApproachCard({ approach, isExpanded, onToggle, onProgressNoteAdded }: {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
   const [showNoteForm, setShowNoteForm] = useState(false);
+  const [showComments, setShowComments] = useState(false);
 
   const noteForm = useProgressNoteForm(approach.id, () => {
     setShowNoteForm(false);
@@ -270,6 +273,28 @@ function ApproachCard({ approach, isExpanded, onToggle, onProgressNoteAdded }: {
               </>
             )}
           </div>
+
+          {/* Comments toggle */}
+          <div className="mt-4 flex items-center">
+            <button
+              onClick={() => setShowComments(!showComments)}
+              className="font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
+            >
+              <MessageSquare size={10} />
+              COMMENTS
+              {showComments ? (
+                <ChevronDown size={10} />
+              ) : (
+                <ChevronRight size={10} />
+              )}
+            </button>
+          </div>
+
+          {showComments && (
+            <div className="mt-3">
+              <CommentsList targetType="approach" targetId={approach.id} onCommentPosted={onProgressNoteAdded} />
+            </div>
+          )}
         </div>
       )}
     </div>

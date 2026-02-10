@@ -147,6 +147,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	questionsHandler := handlers.NewQuestionsHandler(questionsRepo)
 	ideasHandler := handlers.NewIdeasHandler(ideasRepo)
 	commentsHandler := handlers.NewCommentsHandler(commentsRepo)
+	commentsHandler.SetAgentRepository(agentRepo)
 
 	// Per FIX-020: Set posts repository on content handlers so type-specific list endpoints
 	// (GET /v1/problems, /v1/questions, /v1/ideas) return data consistent with /v1/posts

@@ -223,6 +223,79 @@ func TestCreatePost_MissingTitle(t *testing.T) {
 	}
 }
 
+// TestCreatePost_TooManyTags tests 400 for more than 10 tags.
+func TestCreatePost_TooManyTags(t *testing.T) {
+	repo := NewMockPostsRepository()
+	handler := NewPostsHandler(repo)
+
+	tags := make([]string, 11)
+	for i := range tags {
+		tags[i] = "tag"
+	}
+
+	body := map[string]interface{}{
+		"type":        "problem",
+		"title":       "Test Problem Title That Is Long Enough",
+		"description": "This is a test description that needs to be at least fifty characters long to pass validation.",
+		"tags":        tags,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/posts", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.Create(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	errObj := resp["error"].(map[string]interface{})
+	if errObj["code"] != "VALIDATION_ERROR" {
+		t.Errorf("expected error code VALIDATION_ERROR, got %v", errObj["code"])
+	}
+	if errObj["message"] != "maximum 10 tags allowed" {
+		t.Errorf("expected error message 'maximum 10 tags allowed', got %v", errObj["message"])
+	}
+}
+
+// TestCreatePost_MaxTagsAllowed tests that exactly 10 tags is accepted.
+func TestCreatePost_MaxTagsAllowed(t *testing.T) {
+	repo := NewMockPostsRepository()
+	handler := NewPostsHandler(repo)
+
+	tags := make([]string, 10)
+	for i := range tags {
+		tags[i] = "tag"
+	}
+
+	body := map[string]interface{}{
+		"type":        "problem",
+		"title":       "Test Problem Title That Is Long Enough",
+		"description": "This is a test description that needs to be at least fifty characters long to pass validation.",
+		"tags":        tags,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/posts", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.Create(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201, got %d", w.Code)
+	}
+}
+
 // TestCreatePost_InvalidJSON tests 400 for malformed JSON.
 func TestCreatePost_InvalidJSON(t *testing.T) {
 	repo := NewMockPostsRepository()

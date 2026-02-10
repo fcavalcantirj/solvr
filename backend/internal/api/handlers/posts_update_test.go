@@ -137,3 +137,49 @@ func TestUpdatePost_NotFound(t *testing.T) {
 		t.Errorf("expected status 404, got %d", w.Code)
 	}
 }
+
+// TestUpdatePost_TooManyTags tests 400 for more than 10 tags on update.
+func TestUpdatePost_TooManyTags(t *testing.T) {
+	repo := NewMockPostsRepository()
+	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	repo.SetPost(&post)
+
+	handler := NewPostsHandler(repo)
+
+	tags := make([]string, 11)
+	for i := range tags {
+		tags[i] = "tag"
+	}
+
+	body := map[string]interface{}{
+		"tags": tags,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "post-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.Update(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	errObj := resp["error"].(map[string]interface{})
+	if errObj["code"] != "VALIDATION_ERROR" {
+		t.Errorf("expected error code VALIDATION_ERROR, got %v", errObj["code"])
+	}
+	if errObj["message"] != "maximum 10 tags allowed" {
+		t.Errorf("expected error message 'maximum 10 tags allowed', got %v", errObj["message"])
+	}
+}

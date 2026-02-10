@@ -294,9 +294,9 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate tags (max 5)
-	if len(req.Tags) > 5 {
-		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "maximum 5 tags allowed")
+	// Validate tags
+	if len(req.Tags) > models.MaxTagsPerPost {
+		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", fmt.Sprintf("maximum %d tags allowed", models.MaxTagsPerPost))
 		return
 	}
 
@@ -417,8 +417,8 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Tags != nil {
-		if len(req.Tags) > 5 {
-			writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "maximum 5 tags allowed")
+		if len(req.Tags) > models.MaxTagsPerPost {
+			writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", fmt.Sprintf("maximum %d tags allowed", models.MaxTagsPerPost))
 			return
 		}
 		updatedPost.Tags = req.Tags

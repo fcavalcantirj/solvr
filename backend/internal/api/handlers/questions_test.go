@@ -563,6 +563,48 @@ func TestCreateQuestion_TitleTooShort(t *testing.T) {
 	}
 }
 
+// TestCreateQuestion_TooManyTags tests 400 for more than 10 tags.
+func TestCreateQuestion_TooManyTags(t *testing.T) {
+	repo := NewMockQuestionsRepository()
+	handler := NewQuestionsHandler(repo)
+
+	tags := make([]string, 11)
+	for i := range tags {
+		tags[i] = "tag"
+	}
+
+	body := map[string]interface{}{
+		"title":       "Test Question Title That Is Long Enough",
+		"description": "This is a test description that needs to be at least fifty characters long to pass validation.",
+		"tags":        tags,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/questions", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = addQuestionsAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.Create(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	errObj := resp["error"].(map[string]interface{})
+	if errObj["code"] != "VALIDATION_ERROR" {
+		t.Errorf("expected error code VALIDATION_ERROR, got %v", errObj["code"])
+	}
+	if errObj["message"] != "maximum 10 tags allowed" {
+		t.Errorf("expected error message 'maximum 10 tags allowed', got %v", errObj["message"])
+	}
+}
+
 // TestCreateQuestion_DescriptionTooShort tests validation for short description.
 func TestCreateQuestion_DescriptionTooShort(t *testing.T) {
 	repo := NewMockQuestionsRepository()

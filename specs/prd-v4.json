@@ -352,5 +352,208 @@
       "Verify: Documentation is clear and complete"
     ],
     "passes": true
+  },
+  {
+    "category": "backend",
+    "description": "Add sort parameter to GET /v1/problems (votes, approaches, activity)",
+    "steps": [
+      "Add Sort field to PostListOptions in models/post.go",
+      "Update PostsRepository.List() in db/posts.go to support ORDER BY based on sort param",
+      "Support sort values: newest (default, created_at DESC), votes (vote_score DESC), approaches (approaches_count DESC)",
+      "Parse sort query param in ProblemsHandler.List() in handlers/problems.go",
+      "Write tests for each sort option in problems handler tests",
+      "Verify: GET /v1/problems?sort=votes returns problems ordered by vote score",
+      "Verify: GET /v1/problems?sort=approaches returns problems ordered by approach count",
+      "Verify: GET /v1/problems with no sort defaults to newest"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Add GET /v1/stats/problems endpoint with problems-specific sidebar stats",
+    "steps": [
+      "Add GetProblemsStats() to StatsRepository in db/stats.go",
+      "Query: total problems count (type='problem', deleted_at IS NULL)",
+      "Query: solved problems count (type='problem', status='solved', deleted_at IS NULL)",
+      "Query: active approaches count (approaches with status IN ('in_progress','exploring') and deleted_at IS NULL on problems)",
+      "Query: avg solve time in days (AVG of updated_at - created_at for solved problems)",
+      "Add GetProblemsStats to StatsRepositoryInterface in handlers/stats.go",
+      "Create GetProblemsStats handler in handlers/stats.go",
+      "Add route GET /v1/stats/problems to router.go",
+      "Response shape: { data: { total_problems, solved_count, active_approaches, avg_solve_time_days } }",
+      "Write tests for handler and repository",
+      "Verify: Endpoint returns correct counts from production data"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Add recently-solved problems to GET /v1/stats/problems response",
+    "steps": [
+      "Add GetRecentlySolvedProblems(ctx, limit) to StatsRepository in db/stats.go",
+      "Query: problems with status='solved', JOIN approaches to find the solver (approach author with status='succeeded' or 'verified')",
+      "Include: problem id, title, solver display_name, solver type (human/agent), time_to_solve (updated_at - created_at)",
+      "ORDER BY updated_at DESC, LIMIT 3",
+      "Add to GetProblemsStats response: recently_solved[] array",
+      "Write tests for the query",
+      "Verify: Returns recently solved problems with correct solver info"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Add top-solvers leaderboard to GET /v1/stats/problems response",
+    "steps": [
+      "Add GetTopProblemSolvers(ctx, limit) to StatsRepository in db/stats.go",
+      "Query: GROUP approaches by author (author_type, author_id) WHERE approach status IN ('succeeded','verified') on non-deleted problems",
+      "COUNT solved problems per author, JOIN users/agents for display_name",
+      "Include: author_id, display_name, author_type (human/agent), solved_count",
+      "ORDER BY solved_count DESC, LIMIT 5",
+      "Add to GetProblemsStats response: top_solvers[] array",
+      "Write tests for the query",
+      "Verify: Returns ranked list of top problem solvers"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add getStuckProblems() and getProblemsStats() to frontend API client",
+    "steps": [
+      "Open frontend/lib/api.ts",
+      "Add getStuckProblems(params): GET /v1/feed/stuck?page&per_page - returns feed items",
+      "Add getProblemsStats(): GET /v1/stats/problems - returns problems sidebar stats",
+      "Add TypeScript types for ProblemsStatsResponse in lib/api-types.ts or inline",
+      "ProblemsStatsResponse: { total_problems, solved_count, active_approaches, avg_solve_time_days, recently_solved[], top_solvers[] }",
+      "Verify: Methods compile and are callable"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Create useProblems() hook for problems listing with pagination and filters",
+    "steps": [
+      "Create frontend/hooks/use-problems.ts",
+      "Hook accepts: status, tags, sort, page, perPage as parameters",
+      "Calls api.getPosts({ type: 'problem', status, tags, sort, page, per_page })",
+      "Note: tags param needs adding to FetchPostsParams in api.ts if not present",
+      "Returns: problems[], loading, error, total, hasMore, page, loadMore(), refetch()",
+      "loadMore() increments page and appends results",
+      "Refetches when filter params change (reset to page 1)",
+      "Write Vitest tests using vi.mock for the hook",
+      "Verify: Hook fetches and returns real problems data"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Replace hardcoded problems list with real API data in problems-list.tsx",
+    "steps": [
+      "Open frontend/components/problems/problems-list.tsx",
+      "Remove the entire hardcoded problems[] array (lines 25-140)",
+      "Remove the local Problem interface (lines 6-23)",
+      "Import and use useProblems() hook from hooks/use-problems.ts",
+      "Accept filter props from parent: status, tags, sort, searchQuery",
+      "Map API PostWithAuthor data to existing card UI (preserve exact look&feel)",
+      "Map fields: title, description, tags, vote_score→votes, approaches_count, author info, created_at→relative time",
+      "Map weight from API (1-5 int) to display labels (critical/high/medium/low)",
+      "Map status from API to existing statusConfig display",
+      "Add loading skeleton state (Loader2 spinner)",
+      "Add empty state when no problems returned",
+      "Add error state",
+      "Verify: Real problems from API display with identical look&feel to current mock"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire problems-filters.tsx to trigger real API calls",
+    "steps": [
+      "Lift filter state from problems-filters.tsx to parent problems/page.tsx",
+      "Pass filter state down to both ProblemsFilters and ProblemsList as props",
+      "ProblemsFilters calls onFilterChange callbacks that update parent state",
+      "ProblemsList receives filter state and passes to useProblems() hook",
+      "Search input: debounce 300ms, then call api.search({ q, type: 'problem' }) or pass to getPosts",
+      "Status filter: maps to API status param",
+      "Sort filter: maps to API sort param (newest, votes, approaches)",
+      "Tags filter: maps to API tags param (comma-separated)",
+      "Weight filter: needs backend support (task 23 sort covers this) or client-side filter",
+      "When filters change, reset to page 1 and refetch",
+      "Popular tags in filter panel: fetch from useTrending() instead of hardcoded list",
+      "Verify: Changing any filter updates the problems list with matching results"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire problems sidebar stats to useStats() hook (replace hardcoded numbers)",
+    "steps": [
+      "Open frontend/components/problems/problems-sidebar.tsx",
+      "Import useProblemsStats hook (or create inline fetch for /v1/stats/problems)",
+      "Remove hardcoded stats array (lines 5-10)",
+      "Map API response to sidebar: total_problems→TOTAL PROBLEMS, solved_count→SOLVED, active_approaches→ACTIVE APPROACHES, avg_solve_time_days→AVG. SOLVE TIME",
+      "Format avg_solve_time_days as '4.2d' style",
+      "Add loading state (show '—' while loading, like homepage)",
+      "Verify: Sidebar shows real stats from API"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire sidebar NEEDS FRESH EYES section to /v1/feed/stuck endpoint",
+    "steps": [
+      "In problems-sidebar.tsx, remove hardcoded stuckProblems array (lines 12-31)",
+      "Call api.getStuckProblems({ page: 1, per_page: 3 }) on mount",
+      "Map response to existing UI: title, approaches count, days since last update",
+      "Calculate daysSinceUpdate from item.created_at or updated_at",
+      "Make items clickable: Link to /problems/{id}",
+      "Make VIEW ALL STUCK PROBLEMS button navigate to /problems?status=stuck or apply filter",
+      "Add loading and empty states",
+      "Verify: Shows real stuck problems from API"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire sidebar RECENTLY SOLVED and TOP SOLVERS to /v1/stats/problems",
+    "steps": [
+      "In problems-sidebar.tsx, remove hardcoded recentlySolved array (lines 33-52)",
+      "Remove hardcoded topSolvers array (lines 54-60)",
+      "Fetch from api.getProblemsStats() which returns recently_solved[] and top_solvers[]",
+      "RECENTLY SOLVED: map solver.name, solver.type (human/ai icon), time_to_solve",
+      "Make items clickable: Link to /problems/{id}",
+      "TOP SOLVERS: map name, type (human/ai icon), solved_count, optionally streak if API provides",
+      "Make solver names link to /users/{id} or /agents/{id} based on type",
+      "Add loading and empty states for both sections",
+      "Verify: Shows real recently solved and top solver data"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire sidebar TRENDING TAGS to useTrending() hook",
+    "steps": [
+      "In problems-sidebar.tsx, remove hardcoded hotTags array (lines 62-69)",
+      "Import useTrending from hooks/use-stats",
+      "Map trending.tags to existing tag buttons: name→tag text, count→count display",
+      "Make tag buttons clickable: clicking a tag applies it as a filter (pass callback to parent)",
+      "Add loading state",
+      "Verify: Shows real trending tags with counts from API"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Make all /problems page buttons functional (POST A PROBLEM, LOAD MORE, CTAs)",
+    "steps": [
+      "POST A PROBLEM button (desktop header + mobile fixed): navigate to /problems/new if authenticated, /login?next=/problems/new if not",
+      "Create frontend/app/problems/new/page.tsx with problem creation form",
+      "Form fields: title, description, tags (multi-select), success_criteria (list input), weight (1-5 select)",
+      "On submit: call api.createPost({ type: 'problem', ...fields })",
+      "On success: redirect to /problems/{new_id}",
+      "LOAD MORE button in problems-list.tsx: call loadMore() from useProblems hook, show loading spinner, hide when !hasMore",
+      "BROWSE OPEN PROBLEMS sidebar CTA: apply status=open filter or navigate to /problems?status=open",
+      "Verify: All buttons trigger correct actions"
+    ],
+    "passes": false
   }
 ]

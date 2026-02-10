@@ -277,9 +277,9 @@ func (h *ProblemsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate tags (max 5)
-	if len(req.Tags) > 5 {
-		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "maximum 5 tags allowed")
+	// Validate tags
+	if len(req.Tags) > models.MaxTagsPerPost {
+		writeProblemsError(w, http.StatusBadRequest, "VALIDATION_ERROR", fmt.Sprintf("maximum %d tags allowed", models.MaxTagsPerPost))
 		return
 	}
 

@@ -30,6 +30,7 @@ import type {
   APICreateResponseResponse,
   APICreateProgressNoteResponse,
   APICreateCommentResponse,
+  APICommentsResponse,
   APIAcceptAnswerResponse,
   APIMeResponse,
   APIVoteResponse,
@@ -213,6 +214,27 @@ class SolvrAPI {
       method: 'POST',
       body: JSON.stringify({ content }),
     });
+  }
+
+  async getComments(
+    targetType: 'answer' | 'approach' | 'response' | 'post',
+    targetId: string,
+    params?: { page?: number; per_page?: number }
+  ): Promise<APICommentsResponse> {
+    const pluralType = targetType === 'response' ? 'responses' :
+                       targetType === 'approach' ? 'approaches' :
+                       targetType === 'answer' ? 'answers' : 'posts';
+
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APICommentsResponse>(`/v1/${pluralType}/${targetId}/comments${query ? `?${query}` : ''}`);
+  }
+
+  async deleteComment(commentId: string): Promise<void> {
+    await this.fetch<void>(`/v1/comments/${commentId}`, { method: 'DELETE' });
   }
 
   async acceptAnswer(questionId: string, answerId: string): Promise<APIAcceptAnswerResponse> {

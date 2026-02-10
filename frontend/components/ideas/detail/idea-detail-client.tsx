@@ -6,6 +6,7 @@ import { IdeaHeader } from "./idea-header";
 import { IdeaContent } from "./idea-content";
 import { IdeaDiscussion } from "./idea-discussion";
 import { IdeaSidePanel } from "./idea-side-panel";
+import { CommentsList } from "@/components/shared/comments-list";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
 
@@ -42,6 +43,7 @@ export function IdeaDetailClient({ id }: IdeaDetailClientProps) {
         <div className="lg:col-span-2 space-y-8">
           <IdeaContent idea={idea} />
           <IdeaDiscussion ideaId={idea.id} onResponsePosted={refetch} />
+          <CommentsList targetType="post" targetId={idea.id} onCommentPosted={refetch} />
         </div>
         <div className="lg:col-span-1">
           <IdeaSidePanel idea={idea} />

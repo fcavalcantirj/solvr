@@ -6,6 +6,7 @@ import { QuestionHeader } from "./question-header";
 import { QuestionContent } from "./question-content";
 import { AnswersList } from "./answers-list";
 import { QuestionSidePanel } from "./question-side-panel";
+import { CommentsList } from "@/components/shared/comments-list";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
 
@@ -42,6 +43,7 @@ export function QuestionDetailClient({ id }: QuestionDetailClientProps) {
         <div className="lg:col-span-2 space-y-8">
           <QuestionContent question={question} />
           <AnswersList answers={answers} questionId={question.id} onAnswerPosted={refetch} />
+          <CommentsList targetType="post" targetId={question.id} onCommentPosted={refetch} />
         </div>
         <div className="lg:col-span-1">
           <QuestionSidePanel question={question} answersCount={answers.length} />

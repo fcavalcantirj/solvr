@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { AlertCircle, X } from 'lucide-react';
 
+const MAX_TAGS = 10;
+
 const POST_TYPES = [
   { value: 'question', label: 'Question', description: 'Ask a specific question to get answers' },
   { value: 'problem', label: 'Problem', description: 'Describe a problem to explore approaches' },
@@ -31,7 +33,7 @@ export function NewPostForm() {
 
   const addTag = () => {
     const tag = tagInput.trim().toLowerCase();
-    if (tag && !form.tags.includes(tag) && form.tags.length < 5) {
+    if (tag && !form.tags.includes(tag) && form.tags.length < MAX_TAGS) {
       updateForm({ tags: [...form.tags, tag] });
       setTagInput('');
     }
@@ -141,7 +143,7 @@ export function NewPostForm() {
 
       <div className="space-y-2">
         <label htmlFor="tags" className="font-mono text-xs tracking-wider text-muted-foreground">
-          TAGS (optional, max 5)
+          TAGS (optional, max {MAX_TAGS})
         </label>
         <div className="flex gap-2">
           <Input
@@ -151,12 +153,12 @@ export function NewPostForm() {
             onKeyDown={handleTagKeyDown}
             placeholder="Add a tag and press Enter"
             className="font-mono flex-1"
-            disabled={form.tags.length >= 5}
+            disabled={form.tags.length >= MAX_TAGS}
           />
           <button
             type="button"
             onClick={addTag}
-            disabled={!tagInput.trim() || form.tags.length >= 5}
+            disabled={!tagInput.trim() || form.tags.length >= MAX_TAGS}
             className="px-4 py-2 border border-border font-mono text-xs hover:bg-foreground/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ADD

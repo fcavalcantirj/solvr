@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Flag, Loader2, CheckCircle } from 'lucide-react';
+import { X, Flag, Loader2, CheckCircle, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useReport, REPORT_REASONS } from '@/hooks/use-report';
+import { useAuth } from '@/hooks/use-auth';
 import { ReportReason, ReportTargetType } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +21,7 @@ export function ReportModal({ isOpen, onClose, targetType, targetId, targetLabel
   const [details, setDetails] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
+  const { isAuthenticated, loginWithGitHub } = useAuth();
   const { isSubmitting, error, submitReport, clearError } = useReport({
     onSuccess: () => {
       setShowSuccess(true);
@@ -115,11 +117,22 @@ export function ReportModal({ isOpen, onClose, targetType, targetId, targetLabel
             </div>
 
             {/* Error */}
-            {error && (
+            {error && !isAuthenticated ? (
+              <div className="mb-4 p-3 border border-border bg-secondary flex items-center justify-between">
+                <span className="font-mono text-xs text-muted-foreground">Sign in to report content</span>
+                <button
+                  onClick={loginWithGitHub}
+                  className="flex items-center gap-1.5 px-2 py-1 font-mono text-xs font-medium border border-border hover:bg-foreground hover:text-background transition-colors"
+                >
+                  <LogIn className="w-3 h-3" />
+                  SIGN IN
+                </button>
+              </div>
+            ) : error ? (
               <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-500 font-mono text-xs">
                 {error}
               </div>
-            )}
+            ) : null}
 
             {/* Actions */}
             <div className="flex justify-end gap-3">

@@ -53,10 +53,10 @@ function CommentItem({ comment, isOwner, isAuthenticated, onFlag, onDelete }: Co
         <p className="text-sm text-foreground/90 mt-1 leading-relaxed break-words">
           {comment.content}
         </p>
-        <div className="flex items-center gap-3 mt-1.5">
+        <div className="flex items-center gap-2 mt-2">
           <button
             onClick={() => onFlag?.(comment.id)}
-            className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1 font-mono text-xs border border-border text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
           >
             <Flag className="w-3 h-3" />
             FLAG
@@ -64,7 +64,7 @@ function CommentItem({ comment, isOwner, isAuthenticated, onFlag, onDelete }: Co
           {isOwner && (
             <button
               onClick={() => onDelete?.(comment.id)}
-              className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-red-500 transition-colors"
+              className="flex items-center gap-1.5 px-2 py-1 font-mono text-xs border border-border text-muted-foreground hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition-colors"
             >
               <Trash2 className="w-3 h-3" />
               DELETE

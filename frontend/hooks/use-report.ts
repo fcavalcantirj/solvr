@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { api, ReportReason, ReportTargetType } from '@/lib/api';
+import { isUnauthorizedError } from '@/lib/api-error';
 
 interface UseReportOptions {
   onSuccess?: () => void;
@@ -45,6 +46,12 @@ export function useReport(options: UseReportOptions = {}): UseReportReturn {
         onSuccess?.();
         return true;
       } catch (err) {
+        if (isUnauthorizedError(err)) {
+          const msg = 'Sign in to report content';
+          setError(msg);
+          onError?.(msg);
+          return false;
+        }
         const errorMessage = err instanceof Error ? err.message : 'Failed to submit report';
         setError(errorMessage);
         onError?.(errorMessage);

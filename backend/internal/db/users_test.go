@@ -4,6 +4,7 @@ package db
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -346,6 +347,93 @@ func TestUserRepository_DuplicateEmail(t *testing.T) {
 	_, err = repo.Create(ctx, user2)
 	if !errors.Is(err, ErrDuplicateEmail) {
 		t.Errorf("Create() error = %v, want ErrDuplicateEmail", err)
+	}
+}
+
+// TestUserRepository_List tests listing users with reputation and agents_count subqueries.
+// This is an integration test that requires a real PostgreSQL database.
+func TestUserRepository_List(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	repo := NewUserRepository(pool)
+
+	// Create 2 test users with unique suffixes (username max 30 chars)
+	suffix := time.Now().Format("150405.000")
+	user1 := &models.User{
+		Username:       "lu1_" + suffix,
+		DisplayName:    "List User 1",
+		Email:          "listuser1_" + suffix + "@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "github_list1_" + suffix,
+		Role:           models.UserRoleUser,
+	}
+	user2 := &models.User{
+		Username:       "lu2_" + suffix,
+		DisplayName:    "List User 2",
+		Email:          "listuser2_" + suffix + "@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "github_list2_" + suffix,
+		Role:           models.UserRoleUser,
+	}
+
+	created1, err := repo.Create(ctx, user1)
+	if err != nil {
+		t.Fatalf("Create(user1) error = %v", err)
+	}
+	created2, err := repo.Create(ctx, user2)
+	if err != nil {
+		t.Fatalf("Create(user2) error = %v", err)
+	}
+
+	// Clean up after test
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1 OR id = $2", created1.ID, created2.ID)
+	}()
+
+	// List users — this triggers the query with reputation/agents_count subqueries
+	users, total, err := repo.List(ctx, models.PublicUserListOptions{
+		Limit: 100,
+		Sort:  models.PublicUserSortNewest,
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	if total < 2 {
+		t.Errorf("List() total = %d, want >= 2", total)
+	}
+	if len(users) < 2 {
+		t.Errorf("List() returned %d users, want >= 2", len(users))
+	}
+
+	// Verify our created users are in the list
+	found1, found2 := false, false
+	for _, u := range users {
+		if u.ID == created1.ID {
+			found1 = true
+			if u.Username != created1.Username {
+				t.Errorf("List() user1 Username = %q, want %q", u.Username, created1.Username)
+			}
+		}
+		if u.ID == created2.ID {
+			found2 = true
+		}
+	}
+	if !found1 {
+		t.Error("List() did not return user1")
+	}
+	if !found2 {
+		t.Error("List() did not return user2")
 	}
 }
 

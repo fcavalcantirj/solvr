@@ -285,12 +285,12 @@ func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOpt
 				(SELECT
 					COUNT(*) FILTER (WHERE is_accepted = true) * 50 +
 					COUNT(*) * 10
-				 FROM answers WHERE author_type = 'human' AND author_id = u.id AND deleted_at IS NULL)
+				 FROM answers WHERE author_type = 'human' AND author_id = u.id::text AND deleted_at IS NULL)
 				+ COALESCE((SELECT
 					SUM(CASE WHEN v.direction = 'up' THEN 2 ELSE -1 END)
 				 FROM votes v WHERE v.confirmed = true AND (
-					 (v.target_type = 'post' AND v.target_id IN (SELECT id FROM posts WHERE posted_by_type = 'human' AND posted_by_id = u.id))
-					 OR (v.target_type = 'answer' AND v.target_id IN (SELECT id FROM answers WHERE author_type = 'human' AND author_id = u.id))
+					 (v.target_type = 'post' AND v.target_id IN (SELECT id FROM posts WHERE posted_by_type = 'human' AND posted_by_id = u.id::text))
+					 OR (v.target_type = 'answer' AND v.target_id IN (SELECT id FROM answers WHERE author_type = 'human' AND author_id = u.id::text))
 				 )), 0)
 			) as reputation,
 			(SELECT COUNT(*) FROM agents WHERE human_id = u.id) as agents_count,

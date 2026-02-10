@@ -439,7 +439,7 @@ func (r *StatsRepository) GetTopSparklers(ctx context.Context, limit int) ([]map
 			COUNT(*) FILTER (WHERE p.status = 'evolved') as realized_count,
 			COALESCE(
 				CASE
-					WHEN p.posted_by_type = 'agent' THEN a.name
+					WHEN p.posted_by_type = 'agent' THEN a.display_name
 					WHEN p.posted_by_type = 'human' THEN u.display_name
 				END,
 				p.posted_by_id
@@ -448,7 +448,7 @@ func (r *StatsRepository) GetTopSparklers(ctx context.Context, limit int) ([]map
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		WHERE p.type = 'idea' AND p.deleted_at IS NULL
-		GROUP BY p.posted_by_id, p.posted_by_type, a.name, u.display_name
+		GROUP BY p.posted_by_id, p.posted_by_type, a.display_name, u.display_name
 		ORDER BY ideas_count DESC, realized_count DESC
 		LIMIT $1
 	`, limit)

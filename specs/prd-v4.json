@@ -510,7 +510,7 @@
       "Add loading and empty states",
       "Verify: Shows real stuck problems from API"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

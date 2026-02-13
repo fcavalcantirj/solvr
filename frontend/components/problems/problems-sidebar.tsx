@@ -1,33 +1,20 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Bot, User, Trophy, AlertCircle, CheckCircle2, TrendingUp, GitBranch } from "lucide-react";
 import { useProblemsStats } from "@/hooks/use-problems-stats";
+import { api, APIFeedItem } from "@/lib/api";
 
 function formatNumber(n: number): string {
   if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
   return n.toLocaleString();
 }
 
-const stuckProblems = [
-  {
-    id: "1",
-    title: "Memory leak in React useEffect cleanup",
-    approaches: 7,
-    daysSinceUpdate: 3,
-  },
-  {
-    id: "2",
-    title: "WebSocket reconnection with state sync",
-    approaches: 4,
-    daysSinceUpdate: 5,
-  },
-  {
-    id: "3",
-    title: "GraphQL subscription memory management",
-    approaches: 6,
-    daysSinceUpdate: 2,
-  },
-];
+function daysSince(dateStr: string): number {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
 
 const recentlySolved = [
   {
@@ -69,6 +56,15 @@ const hotTags = [
 
 export function ProblemsSidebar() {
   const { stats: problemsStats, loading: statsLoading } = useProblemsStats();
+  const [stuckProblems, setStuckProblems] = useState<APIFeedItem[]>([]);
+  const [stuckLoading, setStuckLoading] = useState(true);
+
+  useEffect(() => {
+    api.getStuckProblems({ page: 1, per_page: 3 })
+      .then(res => setStuckProblems(res.data))
+      .catch(() => setStuckProblems([]))
+      .finally(() => setStuckLoading(false));
+  }, []);
 
   const statsItems = [
     { label: "TOTAL PROBLEMS", value: statsLoading ? "—" : formatNumber(problemsStats?.total_problems ?? 0) },
@@ -98,27 +94,37 @@ export function ProblemsSidebar() {
           <h3 className="font-mono text-xs tracking-wider">NEEDS FRESH EYES</h3>
         </div>
         <div className="divide-y divide-border">
-          {stuckProblems.map((problem) => (
-            <div key={problem.id} className="p-4 hover:bg-secondary/50 transition-colors cursor-pointer">
-              <p className="text-sm font-light leading-snug mb-2 line-clamp-2">
-                {problem.title}
-              </p>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground flex items-center gap-1">
-                  <GitBranch size={10} />
-                  {problem.approaches} attempts
-                </span>
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                  {problem.daysSinceUpdate}d stuck
-                </span>
-              </div>
+          {stuckLoading ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">Loading...</span>
             </div>
-          ))}
+          ) : stuckProblems.length === 0 ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">No stuck problems</span>
+            </div>
+          ) : (
+            stuckProblems.map((problem) => (
+              <Link key={problem.id} href={`/problems/${problem.id}`} className="block p-4 hover:bg-secondary/50 transition-colors">
+                <p className="text-sm font-light leading-snug mb-2 line-clamp-2">
+                  {problem.title}
+                </p>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground flex items-center gap-1">
+                    <GitBranch size={10} />
+                    {problem.approach_count || 0} attempts
+                  </span>
+                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+                    {daysSince(problem.created_at)}d stuck
+                  </span>
+                </div>
+              </Link>
+            ))
+          )}
         </div>
         <div className="p-3 border-t border-border">
-          <button className="w-full font-mono text-[10px] tracking-wider text-center text-muted-foreground hover:text-foreground transition-colors">
+          <Link href="/problems?status=stuck" className="block w-full font-mono text-[10px] tracking-wider text-center text-muted-foreground hover:text-foreground transition-colors">
             VIEW ALL STUCK PROBLEMS
-          </button>
+          </Link>
         </div>
       </div>
 

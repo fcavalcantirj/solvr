@@ -356,3 +356,12 @@
 - Shows "—" while loading (consistent with homepage pattern)
 - Formats numbers with formatNumber() helper (1k+ shorthand)
 - All 364 frontend tests pass
+
+2026-02-12: Wire sidebar NEEDS FRESH EYES section to /v1/feed/stuck endpoint
+- Removed hardcoded stuckProblems array from problems-sidebar.tsx
+- Fetches stuck problems via api.getStuckProblems({ page: 1, per_page: 3 }) on mount
+- Items link to /problems/{id} using Next.js Link
+- Shows approach_count and daysSince(created_at) for each item
+- VIEW ALL STUCK PROBLEMS links to /problems?status=stuck
+- Added loading and empty states
+- All 364 frontend tests pass

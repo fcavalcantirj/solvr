@@ -27,6 +27,8 @@ type MockStatsRepository struct {
 	ProblemsStatsErr         error
 	RecentlySolvedResult     []map[string]any
 	RecentlySolvedErr        error
+	TopSolversResult         []map[string]any
+	TopSolversErr            error
 }
 
 func (m *MockStatsRepository) GetActivePostsCount(ctx context.Context) (int, error) {
@@ -127,6 +129,19 @@ func (m *MockStatsRepository) GetRecentlySolvedProblems(ctx context.Context, lim
 			return m.RecentlySolvedResult, nil
 		}
 		return m.RecentlySolvedResult[:limit], nil
+	}
+	return []map[string]any{}, nil
+}
+
+func (m *MockStatsRepository) GetTopProblemSolvers(ctx context.Context, limit int) ([]map[string]any, error) {
+	if m.TopSolversErr != nil {
+		return nil, m.TopSolversErr
+	}
+	if m.TopSolversResult != nil {
+		if limit > len(m.TopSolversResult) {
+			return m.TopSolversResult, nil
+		}
+		return m.TopSolversResult[:limit], nil
 	}
 	return []map[string]any{}, nil
 }
@@ -421,6 +436,80 @@ func TestStatsHandler_GetProblemsStats(t *testing.T) {
 		recentlySolved := data["recently_solved"].([]interface{})
 		if len(recentlySolved) != 0 {
 			t.Errorf("expected 0 recently solved, got %d", len(recentlySolved))
+		}
+	})
+
+	t.Run("includes top_solvers in response", func(t *testing.T) {
+		mockRepo := &MockStatsRepository{
+			ProblemsStatsResult: map[string]any{
+				"total_problems":      20,
+				"solved_count":        10,
+				"active_approaches":   8,
+				"avg_solve_time_days": 4,
+			},
+			TopSolversResult: []map[string]any{
+				{"author_id": "a1", "display_name": "solver-bot", "author_type": "agent", "solved_count": 5},
+				{"author_id": "u1", "display_name": "alice", "author_type": "human", "solved_count": 3},
+			},
+		}
+		handler := NewStatsHandler(mockRepo)
+		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetProblemsStats(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+
+		var body map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		data := body["data"].(map[string]interface{})
+		topSolvers := data["top_solvers"].([]interface{})
+		if len(topSolvers) != 2 {
+			t.Errorf("expected 2 top solvers, got %d", len(topSolvers))
+		}
+
+		first := topSolvers[0].(map[string]interface{})
+		if first["display_name"] != "solver-bot" {
+			t.Errorf("expected first display_name 'solver-bot', got %v", first["display_name"])
+		}
+		if int(first["solved_count"].(float64)) != 5 {
+			t.Errorf("expected first solved_count 5, got %v", first["solved_count"])
+		}
+	})
+
+	t.Run("top_solvers is empty array when none exist", func(t *testing.T) {
+		mockRepo := &MockStatsRepository{
+			ProblemsStatsResult: map[string]any{
+				"total_problems":      5,
+				"solved_count":        0,
+				"active_approaches":   1,
+				"avg_solve_time_days": 0,
+			},
+		}
+		handler := NewStatsHandler(mockRepo)
+		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetProblemsStats(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+
+		var body map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		data := body["data"].(map[string]interface{})
+		topSolvers := data["top_solvers"].([]interface{})
+		if len(topSolvers) != 0 {
+			t.Errorf("expected 0 top solvers, got %d", len(topSolvers))
 		}
 	})
 }

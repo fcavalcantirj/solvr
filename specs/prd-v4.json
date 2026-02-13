@@ -413,7 +413,7 @@
       "Write tests for the query",
       "Verify: Returns ranked list of top problem solvers"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

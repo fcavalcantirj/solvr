@@ -24,6 +24,7 @@ type StatsRepositoryInterface interface {
 	// Problems-specific stats
 	GetProblemsStats(ctx context.Context) (map[string]any, error)
 	GetRecentlySolvedProblems(ctx context.Context, limit int) ([]map[string]any, error)
+	GetTopProblemSolvers(ctx context.Context, limit int) ([]map[string]any, error)
 	// Ideas-specific stats
 	GetIdeasCountByStatus(ctx context.Context) (map[string]int, error)
 	GetFreshSparks(ctx context.Context, limit int) ([]map[string]any, error)
@@ -201,7 +202,14 @@ func (h *StatsHandler) GetProblemsStats(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	topSolvers, err := h.repo.GetTopProblemSolvers(ctx, 5)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get top problem solvers")
+		return
+	}
+
 	stats["recently_solved"] = recentlySolved
+	stats["top_solvers"] = topSolvers
 
 	response := map[string]interface{}{
 		"data": stats,

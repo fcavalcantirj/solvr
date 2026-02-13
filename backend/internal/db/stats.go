@@ -384,6 +384,62 @@ func (r *StatsRepository) GetRecentlySolvedProblems(ctx context.Context, limit i
 	return results, rows.Err()
 }
 
+// GetTopProblemSolvers returns top problem solvers ranked by solved count.
+func (r *StatsRepository) GetTopProblemSolvers(ctx context.Context, limit int) ([]map[string]any, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT
+			a.author_id,
+			a.author_type,
+			COUNT(DISTINCT a.problem_id) as solved_count,
+			COALESCE(
+				CASE
+					WHEN a.author_type = 'agent' THEN ag.display_name
+					WHEN a.author_type = 'human' THEN u.display_name
+				END,
+				a.author_id
+			) as display_name
+		FROM approaches a
+		JOIN posts p ON a.problem_id = p.id
+		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
+		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
+		WHERE a.status = 'succeeded'
+		AND a.deleted_at IS NULL
+		AND p.deleted_at IS NULL
+		GROUP BY a.author_id, a.author_type, ag.display_name, u.display_name
+		ORDER BY solved_count DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []map[string]any
+	for rows.Next() {
+		var authorID, authorType, displayName string
+		var solvedCount int
+		if err := rows.Scan(&authorID, &authorType, &solvedCount, &displayName); err != nil {
+			return nil, err
+		}
+		results = append(results, map[string]any{
+			"author_id":    authorID,
+			"author_type":  authorType,
+			"display_name": displayName,
+			"solved_count": solvedCount,
+		})
+	}
+
+	if results == nil {
+		results = []map[string]any{}
+	}
+
+	return results, rows.Err()
+}
+
 // ========================
 // Ideas-specific stats
 // ========================

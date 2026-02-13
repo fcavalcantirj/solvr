@@ -295,3 +295,13 @@
 - Updated GetProblemsStats handler to include recently_solved[] in response
 - Added 2 tests: includes recently_solved, empty array when none exist
 - All 5 problems stats handler tests pass, build successful
+
+2026-02-12: Add top-solvers leaderboard to GET /v1/stats/problems response
+- Added GetTopProblemSolvers(ctx, limit) to StatsRepository in db/stats.go
+- GROUP BY approach author where status='succeeded', COUNT DISTINCT problems
+- JOINs users/agents tables for display_name
+- Returns: author_id, author_type, display_name, solved_count
+- Added GetTopProblemSolvers to StatsRepositoryInterface
+- Updated GetProblemsStats handler to include top_solvers[] in response
+- Added 2 tests: includes top_solvers, empty array when none exist
+- All 7 problems stats handler tests pass, build successful

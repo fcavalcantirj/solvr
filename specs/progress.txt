@@ -348,3 +348,11 @@
 - When filters change, useProblems hook automatically resets to page 1
 - Weight filter remains local (no backend support yet)
 - All 364 frontend tests pass
+
+2026-02-12: Wire problems sidebar stats to useProblemsStats() hook
+- Created hooks/use-problems-stats.ts calling api.getProblemsStats()
+- Removed hardcoded stats array from problems-sidebar.tsx
+- Maps API response: total_problems, solved_count, active_approaches, avg_solve_time_days
+- Shows "—" while loading (consistent with homepage pattern)
+- Formats numbers with formatNumber() helper (1k+ shorthand)
+- All 364 frontend tests pass

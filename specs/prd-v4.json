@@ -495,7 +495,7 @@
       "Add loading state (show '—' while loading, like homepage)",
       "Verify: Sidebar shows real stats from API"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

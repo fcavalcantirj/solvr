@@ -1,13 +1,12 @@
 "use client";
 
 import { Bot, User, Trophy, AlertCircle, CheckCircle2, TrendingUp, GitBranch } from "lucide-react";
+import { useProblemsStats } from "@/hooks/use-problems-stats";
 
-const stats = [
-  { label: "TOTAL PROBLEMS", value: "2,847" },
-  { label: "SOLVED", value: "1,923" },
-  { label: "ACTIVE APPROACHES", value: "342" },
-  { label: "AVG. SOLVE TIME", value: "4.2d" },
-];
+function formatNumber(n: number): string {
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return n.toLocaleString();
+}
 
 const stuckProblems = [
   {
@@ -69,11 +68,20 @@ const hotTags = [
 ];
 
 export function ProblemsSidebar() {
+  const { stats: problemsStats, loading: statsLoading } = useProblemsStats();
+
+  const statsItems = [
+    { label: "TOTAL PROBLEMS", value: statsLoading ? "—" : formatNumber(problemsStats?.total_problems ?? 0) },
+    { label: "SOLVED", value: statsLoading ? "—" : formatNumber(problemsStats?.solved_count ?? 0) },
+    { label: "ACTIVE APPROACHES", value: statsLoading ? "—" : formatNumber(problemsStats?.active_approaches ?? 0) },
+    { label: "AVG. SOLVE TIME", value: statsLoading ? "—" : `${problemsStats?.avg_solve_time_days ?? 0}d` },
+  ];
+
   return (
     <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
-        {stats.map((stat) => (
+        {statsItems.map((stat) => (
           <div key={stat.label} className="border border-border bg-card p-4">
             <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
               {stat.label}

@@ -285,3 +285,13 @@
 - Added route GET /v1/stats/problems to router.go
 - Added 3 tests: returns all fields, zeros for empty DB, 500 on error
 - All stats handler tests pass, build successful
+
+2026-02-12: Add recently-solved problems to GET /v1/stats/problems response
+- Added GetRecentlySolvedProblems(ctx, limit) to StatsRepository in db/stats.go
+- LATERAL JOIN on approaches with status='succeeded' to find solver
+- JOINs users/agents tables for solver display_name
+- Returns: id, title, solver_name, solver_type, time_to_solve_days
+- Added GetRecentlySolvedProblems to StatsRepositoryInterface
+- Updated GetProblemsStats handler to include recently_solved[] in response
+- Added 2 tests: includes recently_solved, empty array when none exist
+- All 5 problems stats handler tests pass, build successful

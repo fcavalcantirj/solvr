@@ -23,8 +23,10 @@ type MockStatsRepository struct {
 	TrendingPosts      []any
 	TrendingTags       []any
 	// Problems stats
-	ProblemsStatsResult map[string]any
-	ProblemsStatsErr    error
+	ProblemsStatsResult      map[string]any
+	ProblemsStatsErr         error
+	RecentlySolvedResult     []map[string]any
+	RecentlySolvedErr        error
 }
 
 func (m *MockStatsRepository) GetActivePostsCount(ctx context.Context) (int, error) {
@@ -114,6 +116,19 @@ func (m *MockStatsRepository) GetProblemsStats(ctx context.Context) (map[string]
 		"active_approaches":   0,
 		"avg_solve_time_days": 0,
 	}, nil
+}
+
+func (m *MockStatsRepository) GetRecentlySolvedProblems(ctx context.Context, limit int) ([]map[string]any, error) {
+	if m.RecentlySolvedErr != nil {
+		return nil, m.RecentlySolvedErr
+	}
+	if m.RecentlySolvedResult != nil {
+		if limit > len(m.RecentlySolvedResult) {
+			return m.RecentlySolvedResult, nil
+		}
+		return m.RecentlySolvedResult[:limit], nil
+	}
+	return []map[string]any{}, nil
 }
 
 func TestStatsHandler_GetStats(t *testing.T) {
@@ -332,6 +347,80 @@ func TestStatsHandler_GetProblemsStats(t *testing.T) {
 		errObj := body["error"].(map[string]interface{})
 		if errObj["code"] != "INTERNAL_ERROR" {
 			t.Errorf("expected error code INTERNAL_ERROR, got %v", errObj["code"])
+		}
+	})
+
+	t.Run("includes recently_solved in response", func(t *testing.T) {
+		mockRepo := &MockStatsRepository{
+			ProblemsStatsResult: map[string]any{
+				"total_problems":      10,
+				"solved_count":        3,
+				"active_approaches":   5,
+				"avg_solve_time_days": 2,
+			},
+			RecentlySolvedResult: []map[string]any{
+				{"id": "p1", "title": "Fix auth bug", "solver_name": "agent-x", "solver_type": "agent", "time_to_solve_days": 3},
+				{"id": "p2", "title": "Memory leak", "solver_name": "alice", "solver_type": "human", "time_to_solve_days": 1},
+			},
+		}
+		handler := NewStatsHandler(mockRepo)
+		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetProblemsStats(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+
+		var body map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		data := body["data"].(map[string]interface{})
+		recentlySolved := data["recently_solved"].([]interface{})
+		if len(recentlySolved) != 2 {
+			t.Errorf("expected 2 recently solved, got %d", len(recentlySolved))
+		}
+
+		first := recentlySolved[0].(map[string]interface{})
+		if first["title"] != "Fix auth bug" {
+			t.Errorf("expected first title 'Fix auth bug', got %v", first["title"])
+		}
+		if first["solver_type"] != "agent" {
+			t.Errorf("expected solver_type 'agent', got %v", first["solver_type"])
+		}
+	})
+
+	t.Run("recently_solved is empty array when none exist", func(t *testing.T) {
+		mockRepo := &MockStatsRepository{
+			ProblemsStatsResult: map[string]any{
+				"total_problems":      5,
+				"solved_count":        0,
+				"active_approaches":   2,
+				"avg_solve_time_days": 0,
+			},
+		}
+		handler := NewStatsHandler(mockRepo)
+		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetProblemsStats(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+
+		var body map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		data := body["data"].(map[string]interface{})
+		recentlySolved := data["recently_solved"].([]interface{})
+		if len(recentlySolved) != 0 {
+			t.Errorf("expected 0 recently solved, got %d", len(recentlySolved))
 		}
 	})
 }

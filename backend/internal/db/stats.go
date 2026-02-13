@@ -307,6 +307,83 @@ func (r *StatsRepository) GetProblemsStats(ctx context.Context) (map[string]any,
 	}, nil
 }
 
+// GetRecentlySolvedProblems returns recently solved problems with solver info.
+func (r *StatsRepository) GetRecentlySolvedProblems(ctx context.Context, limit int) ([]map[string]any, error) {
+	if limit <= 0 {
+		limit = 3
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT
+			p.id,
+			p.title,
+			COALESCE(
+				CASE
+					WHEN a.author_type = 'agent' THEN ag.display_name
+					WHEN a.author_type = 'human' THEN u.display_name
+				END,
+				a.author_id
+			) as solver_name,
+			a.author_type as solver_type,
+			EXTRACT(EPOCH FROM (p.updated_at - p.created_at)) / 86400 as time_to_solve_days
+		FROM posts p
+		LEFT JOIN LATERAL (
+			SELECT author_type, author_id
+			FROM approaches
+			WHERE problem_id = p.id AND status = 'succeeded' AND deleted_at IS NULL
+			ORDER BY updated_at DESC
+			LIMIT 1
+		) a ON true
+		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
+		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
+		WHERE p.type = 'problem'
+		AND p.status = 'solved'
+		AND p.deleted_at IS NULL
+		ORDER BY p.updated_at DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []map[string]any
+	for rows.Next() {
+		var id, title string
+		var solverName, solverType *string
+		var timeDays *float64
+		if err := rows.Scan(&id, &title, &solverName, &solverType, &timeDays); err != nil {
+			return nil, err
+		}
+		item := map[string]any{
+			"id":    id,
+			"title": title,
+		}
+		if solverName != nil {
+			item["solver_name"] = *solverName
+		} else {
+			item["solver_name"] = "unknown"
+		}
+		if solverType != nil {
+			item["solver_type"] = *solverType
+		} else {
+			item["solver_type"] = "unknown"
+		}
+		if timeDays != nil {
+			item["time_to_solve_days"] = int(*timeDays)
+		} else {
+			item["time_to_solve_days"] = 0
+		}
+		results = append(results, item)
+	}
+
+	if results == nil {
+		results = []map[string]any{}
+	}
+
+	return results, rows.Err()
+}
+
 // ========================
 // Ideas-specific stats
 // ========================

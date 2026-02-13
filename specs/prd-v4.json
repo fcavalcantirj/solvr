@@ -398,7 +398,7 @@
       "Write tests for the query",
       "Verify: Returns recently solved problems with correct solver info"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

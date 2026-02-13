@@ -23,6 +23,7 @@ type StatsRepositoryInterface interface {
 	GetTrendingTags(ctx context.Context, limit int) ([]any, error)
 	// Problems-specific stats
 	GetProblemsStats(ctx context.Context) (map[string]any, error)
+	GetRecentlySolvedProblems(ctx context.Context, limit int) ([]map[string]any, error)
 	// Ideas-specific stats
 	GetIdeasCountByStatus(ctx context.Context) (map[string]int, error)
 	GetFreshSparks(ctx context.Context, limit int) ([]map[string]any, error)
@@ -193,6 +194,14 @@ func (h *StatsHandler) GetProblemsStats(w http.ResponseWriter, r *http.Request) 
 		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get problems stats")
 		return
 	}
+
+	recentlySolved, err := h.repo.GetRecentlySolvedProblems(ctx, 3)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get recently solved problems")
+		return
+	}
+
+	stats["recently_solved"] = recentlySolved
 
 	response := map[string]interface{}{
 		"data": stats,

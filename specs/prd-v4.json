@@ -462,7 +462,7 @@
       "Add error state",
       "Verify: Real problems from API display with identical look&feel to current mock"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

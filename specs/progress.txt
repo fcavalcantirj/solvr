@@ -323,3 +323,16 @@
 - loadMore() appends results, filter changes reset to page 1
 - Created hooks/use-problems.test.ts with 7 tests (TDD approach)
 - All 7 useProblems tests pass
+
+2026-02-12: Replace hardcoded problems list with real API data in problems-list.tsx
+- Removed hardcoded Problem interface and problems[] array (140 lines of mock data)
+- Imported useProblems() hook and ProblemListItem type
+- Component accepts optional props: status, tags, sort
+- Added loading spinner state (Loader2 animation)
+- Added error state ("Failed to load problems")
+- Added empty state ("No problems found")
+- Maps API weight (1-5) to display labels (critical/high/medium/low)
+- Maps status to existing statusConfig (open/in_progress/stuck/solved/closed/stale)
+- Load More button calls loadMore() with loading state
+- Extracted ProblemCard as separate function for cleaner code
+- All 364 frontend tests pass

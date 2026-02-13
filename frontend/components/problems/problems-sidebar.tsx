@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Bot, User, Trophy, AlertCircle, CheckCircle2, TrendingUp, GitBranch } from "lucide-react";
+import { Bot, User, Trophy, AlertCircle, CheckCircle2, GitBranch } from "lucide-react";
 import { useProblemsStats } from "@/hooks/use-problems-stats";
 import { api, APIFeedItem } from "@/lib/api";
 
@@ -16,34 +16,10 @@ function daysSince(dateStr: string): number {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-const recentlySolved = [
-  {
-    id: "1",
-    title: "Flaky E2E tests in CI environment",
-    solver: { name: "claude_assistant", type: "ai" as const },
-    timeToSolve: "2d 4h",
-  },
-  {
-    id: "2",
-    title: "Redis connection pool exhaustion",
-    solver: { name: "alex_dev", type: "human" as const },
-    timeToSolve: "18h",
-  },
-  {
-    id: "3",
-    title: "TypeScript module resolution conflicts",
-    solver: { name: "gpt_engineer", type: "ai" as const },
-    timeToSolve: "6h",
-  },
-];
-
-const topSolvers = [
-  { name: "claude_assistant", type: "ai" as const, solved: 127, streak: 8 },
-  { name: "sarah_dev", type: "human" as const, solved: 89, streak: 5 },
-  { name: "gpt_engineer", type: "ai" as const, solved: 76, streak: 3 },
-  { name: "alex_dev", type: "human" as const, solved: 64, streak: 2 },
-  { name: "debug_bot", type: "ai" as const, solved: 58, streak: 4 },
-];
+function formatSolveTime(days: number): string {
+  if (days < 1) return '<1d';
+  return `${days}d`;
+}
 
 const hotTags = [
   { tag: "async", count: 234 },
@@ -135,36 +111,46 @@ export function ProblemsSidebar() {
           <h3 className="font-mono text-xs tracking-wider">RECENTLY SOLVED</h3>
         </div>
         <div className="divide-y divide-border">
-          {recentlySolved.map((problem) => (
-            <div key={problem.id} className="p-4 hover:bg-secondary/50 transition-colors cursor-pointer">
-              <p className="text-sm font-light leading-snug mb-2 line-clamp-2">
-                {problem.title}
-              </p>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <div
-                    className={`w-4 h-4 flex items-center justify-center ${
-                      problem.solver.type === "human"
-                        ? "bg-foreground text-background"
-                        : "border border-foreground"
-                    }`}
-                  >
-                    {problem.solver.type === "human" ? (
-                      <User size={8} />
-                    ) : (
-                      <Bot size={8} />
-                    )}
+          {statsLoading ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">Loading...</span>
+            </div>
+          ) : !problemsStats?.recently_solved?.length ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">No solved problems yet</span>
+            </div>
+          ) : (
+            problemsStats.recently_solved.map((problem) => (
+              <Link key={problem.id} href={`/problems/${problem.id}`} className="block p-4 hover:bg-secondary/50 transition-colors">
+                <p className="text-sm font-light leading-snug mb-2 line-clamp-2">
+                  {problem.title}
+                </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className={`w-4 h-4 flex items-center justify-center ${
+                        problem.solver_type === "human"
+                          ? "bg-foreground text-background"
+                          : "border border-foreground"
+                      }`}
+                    >
+                      {problem.solver_type === "human" ? (
+                        <User size={8} />
+                      ) : (
+                        <Bot size={8} />
+                      )}
+                    </div>
+                    <span className="font-mono text-[10px] tracking-wider">
+                      {problem.solver_name}
+                    </span>
                   </div>
-                  <span className="font-mono text-[10px] tracking-wider">
-                    {problem.solver.name}
+                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+                    {formatSolveTime(problem.time_to_solve_days)}
                   </span>
                 </div>
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                  {problem.timeToSolve}
-                </span>
-              </div>
-            </div>
-          ))}
+              </Link>
+            ))
+          )}
         </div>
       </div>
 
@@ -175,41 +161,43 @@ export function ProblemsSidebar() {
           <h3 className="font-mono text-xs tracking-wider">TOP SOLVERS</h3>
         </div>
         <div className="divide-y divide-border">
-          {topSolvers.map((solver, index) => (
-            <div
-              key={solver.name}
-              className="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-xs text-muted-foreground w-4">
-                  {index + 1}
-                </span>
-                <div
-                  className={`w-6 h-6 flex items-center justify-center ${
-                    solver.type === "human"
-                      ? "bg-foreground text-background"
-                      : "border border-foreground"
-                  }`}
-                >
-                  {solver.type === "human" ? (
-                    <User size={12} />
-                  ) : (
-                    <Bot size={12} />
-                  )}
-                </div>
-                <span className="font-mono text-xs tracking-wider">{solver.name}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-xs">{solver.solved}</span>
-                {solver.streak > 0 && (
-                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground flex items-center gap-1">
-                    <TrendingUp size={10} />
-                    {solver.streak}
-                  </span>
-                )}
-              </div>
+          {statsLoading ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">Loading...</span>
             </div>
-          ))}
+          ) : !problemsStats?.top_solvers?.length ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">No solvers yet</span>
+            </div>
+          ) : (
+            problemsStats.top_solvers.map((solver, index) => (
+              <div
+                key={solver.author_id}
+                className="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-xs text-muted-foreground w-4">
+                    {index + 1}
+                  </span>
+                  <div
+                    className={`w-6 h-6 flex items-center justify-center ${
+                      solver.author_type === "human"
+                        ? "bg-foreground text-background"
+                        : "border border-foreground"
+                    }`}
+                  >
+                    {solver.author_type === "human" ? (
+                      <User size={12} />
+                    ) : (
+                      <Bot size={12} />
+                    )}
+                  </div>
+                  <span className="font-mono text-xs tracking-wider">{solver.display_name}</span>
+                </div>
+                <span className="font-mono text-xs">{solver.solved_count}</span>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

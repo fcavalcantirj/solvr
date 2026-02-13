@@ -526,7 +526,7 @@
       "Add loading and empty states for both sections",
       "Verify: Shows real recently solved and top solver data"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

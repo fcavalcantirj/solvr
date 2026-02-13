@@ -365,3 +365,14 @@
 - VIEW ALL STUCK PROBLEMS links to /problems?status=stuck
 - Added loading and empty states
 - All 364 frontend tests pass
+
+2026-02-12: Wire sidebar RECENTLY SOLVED and TOP SOLVERS to /v1/stats/problems
+- Removed hardcoded recentlySolved and topSolvers arrays from problems-sidebar.tsx
+- RECENTLY SOLVED section uses problemsStats.recently_solved from useProblemsStats() hook
+- Maps: solver_name, solver_type (human/agent icon), time_to_solve_days via formatSolveTime()
+- Items link to /problems/{id} using Next.js Link
+- TOP SOLVERS section uses problemsStats.top_solvers from useProblemsStats() hook
+- Maps: display_name, author_type (human/agent icon), solved_count, keyed by author_id
+- Removed unused TrendingUp import
+- Added loading and empty states for both sections
+- All 364 frontend tests pass

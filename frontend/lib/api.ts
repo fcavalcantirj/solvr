@@ -54,6 +54,8 @@ import type {
   APIUserAgentsResponse,
   APIAgent,
   APISitemapResponse,
+  APISitemapCountsResponse,
+  SitemapUrlsParams,
   APIProblemsStatsResponse,
   APIFeedResponse,
   FetchProblemsParams,
@@ -463,8 +465,17 @@ class SolvrAPI {
     });
   }
 
-  async getSitemapUrls(): Promise<APISitemapResponse> {
-    return this.fetch<APISitemapResponse>('/v1/sitemap/urls');
+  async getSitemapUrls(params?: SitemapUrlsParams): Promise<APISitemapResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.type) searchParams.set('type', params.type);
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+    const qs = searchParams.toString();
+    return this.fetch<APISitemapResponse>(`/v1/sitemap/urls${qs ? `?${qs}` : ''}`);
+  }
+
+  async getSitemapCounts(): Promise<APISitemapCountsResponse> {
+    return this.fetch<APISitemapCountsResponse>('/v1/sitemap/counts');
   }
 
   async getProblems(params?: FetchProblemsParams): Promise<APIPostsResponse> {

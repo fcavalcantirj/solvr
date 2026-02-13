@@ -419,3 +419,11 @@
 - Updated MockSitemapRepository with PaginatedResult, PaginatedErr, PaginatedOpts fields
 - Wrote 8 pagination tests: type=posts, type=agents, type=users with defaults, invalid type 400, per_page>5000 400, page<1 400, backward compat no type, paginated repo error 500
 - All 16 sitemap handler tests pass (5 URLs + 3 counts + 8 pagination), build successful
+
+2026-02-12: Add getSitemapCounts() and paginated getSitemapUrls() to frontend API client (SEO-URGENT)
+- Added APISitemapCountsResponse type to api-types.ts: { data: { posts: number, agents: number, users: number } }
+- Added SitemapUrlsParams type to api-types.ts: { type?: 'posts'|'agents'|'users', page?: number, per_page?: number }
+- Added getSitemapCounts() method to SolvrAPI class calling GET /v1/sitemap/counts
+- Updated getSitemapUrls() to accept optional SitemapUrlsParams, builds query string when provided
+- Existing getSitemapUrls() with no params still works (backward compat)
+- npx tsc --noEmit passes (only pre-existing robots.test.ts errors), all 7 sitemap frontend tests pass

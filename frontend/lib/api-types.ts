@@ -735,3 +735,17 @@ export interface APISitemapResponse {
     users: APISitemapUser[];
   };
 }
+
+export interface APISitemapCountsResponse {
+  data: {
+    posts: number;
+    agents: number;
+    users: number;
+  };
+}
+
+export interface SitemapUrlsParams {
+  type?: 'posts' | 'agents' | 'users';
+  page?: number;
+  per_page?: number;
+}

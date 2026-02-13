@@ -691,7 +691,7 @@
       "Existing getSitemapUrls() with no params still works (backward compat)",
       "Verify: npx tsc --noEmit passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "SEO-URGENT",

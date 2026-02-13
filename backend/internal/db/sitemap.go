@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -140,4 +141,97 @@ func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.Sitem
 	}
 
 	return counts, nil
+}
+
+// GetPaginatedSitemapURLs returns paginated sitemap URLs for a single content type.
+func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts models.SitemapURLsOptions) (*models.SitemapURLs, error) {
+	result := &models.SitemapURLs{
+		Posts:  []models.SitemapPost{},
+		Agents: []models.SitemapAgent{},
+		Users:  []models.SitemapUser{},
+	}
+
+	offset := (opts.Page - 1) * opts.PerPage
+
+	switch opts.Type {
+	case "posts":
+		rows, err := r.pool.Query(ctx, `
+			SELECT id, type, updated_at
+			FROM posts
+			WHERE deleted_at IS NULL
+			AND status NOT IN ('draft')
+			ORDER BY updated_at DESC
+			LIMIT $1 OFFSET $2
+		`, opts.PerPage, offset)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var p models.SitemapPost
+			var updatedAt time.Time
+			if err := rows.Scan(&p.ID, &p.Type, &updatedAt); err != nil {
+				return nil, err
+			}
+			p.UpdatedAt = updatedAt
+			result.Posts = append(result.Posts, p)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
+	case "agents":
+		rows, err := r.pool.Query(ctx, `
+			SELECT id, COALESCE(updated_at, created_at) as updated_at
+			FROM agents
+			WHERE status = 'active'
+			ORDER BY COALESCE(updated_at, created_at) DESC
+			LIMIT $1 OFFSET $2
+		`, opts.PerPage, offset)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var a models.SitemapAgent
+			var updatedAt time.Time
+			if err := rows.Scan(&a.ID, &updatedAt); err != nil {
+				return nil, err
+			}
+			a.UpdatedAt = updatedAt
+			result.Agents = append(result.Agents, a)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
+	case "users":
+		rows, err := r.pool.Query(ctx, `
+			SELECT id::text, COALESCE(updated_at, created_at) as updated_at
+			FROM users
+			ORDER BY COALESCE(updated_at, created_at) DESC
+			LIMIT $1 OFFSET $2
+		`, opts.PerPage, offset)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var u models.SitemapUser
+			var updatedAt time.Time
+			if err := rows.Scan(&u.ID, &updatedAt); err != nil {
+				return nil, err
+			}
+			u.UpdatedAt = updatedAt
+			result.Users = append(result.Users, u)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
+	default:
+		return nil, fmt.Errorf("invalid sitemap type: %s", opts.Type)
+	}
+
+	return result, nil
 }

@@ -34,3 +34,10 @@ type SitemapCounts struct {
 	Agents int `json:"agents"`
 	Users  int `json:"users"`
 }
+
+// SitemapURLsOptions holds pagination options for paginated sitemap URL queries.
+type SitemapURLsOptions struct {
+	Type    string // "posts", "agents", or "users"
+	Page    int
+	PerPage int
+}

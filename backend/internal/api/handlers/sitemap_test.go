@@ -21,6 +21,11 @@ type MockSitemapRepository struct {
 	// For GetSitemapCounts
 	Counts    *models.SitemapCounts
 	CountsErr error
+
+	// For GetPaginatedSitemapURLs
+	PaginatedResult *models.SitemapURLs
+	PaginatedErr    error
+	PaginatedOpts   *models.SitemapURLsOptions // captures last call opts
 }
 
 func (m *MockSitemapRepository) GetSitemapURLs(ctx context.Context) (*models.SitemapURLs, error) {
@@ -39,6 +44,14 @@ func (m *MockSitemapRepository) GetSitemapCounts(ctx context.Context) (*models.S
 		return nil, m.CountsErr
 	}
 	return m.Counts, nil
+}
+
+func (m *MockSitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts models.SitemapURLsOptions) (*models.SitemapURLs, error) {
+	m.PaginatedOpts = &opts
+	if m.PaginatedErr != nil {
+		return nil, m.PaginatedErr
+	}
+	return m.PaginatedResult, nil
 }
 
 func TestSitemapHandler_GetSitemapURLs(t *testing.T) {
@@ -320,6 +333,235 @@ func TestSitemapHandler_GetSitemapCounts(t *testing.T) {
 
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, body)
+			}
+		})
+	}
+}
+
+func TestSitemapHandler_GetSitemapURLs_Pagination(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+
+	tests := []struct {
+		name           string
+		queryString    string
+		mockRepo       *MockSitemapRepository
+		expectedStatus int
+		checkResponse  func(t *testing.T, body map[string]interface{})
+		checkOpts      func(t *testing.T, opts *models.SitemapURLsOptions)
+	}{
+		{
+			name:        "type=posts returns only posts array populated",
+			queryString: "?type=posts&page=1&per_page=100",
+			mockRepo: &MockSitemapRepository{
+				PaginatedResult: &models.SitemapURLs{
+					Posts:  []models.SitemapPost{{ID: "p1", Type: "problem", UpdatedAt: now}},
+					Agents: []models.SitemapAgent{},
+					Users:  []models.SitemapUser{},
+				},
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				data := body["data"].(map[string]interface{})
+				posts := data["posts"].([]interface{})
+				agents := data["agents"].([]interface{})
+				users := data["users"].([]interface{})
+				if len(posts) != 1 {
+					t.Errorf("expected 1 post, got %d", len(posts))
+				}
+				if len(agents) != 0 {
+					t.Errorf("expected 0 agents, got %d", len(agents))
+				}
+				if len(users) != 0 {
+					t.Errorf("expected 0 users, got %d", len(users))
+				}
+			},
+			checkOpts: func(t *testing.T, opts *models.SitemapURLsOptions) {
+				if opts == nil {
+					t.Fatal("expected paginated opts to be set")
+				}
+				if opts.Type != "posts" {
+					t.Errorf("expected type 'posts', got '%s'", opts.Type)
+				}
+				if opts.Page != 1 {
+					t.Errorf("expected page 1, got %d", opts.Page)
+				}
+				if opts.PerPage != 100 {
+					t.Errorf("expected per_page 100, got %d", opts.PerPage)
+				}
+			},
+		},
+		{
+			name:        "type=agents returns only agents",
+			queryString: "?type=agents&page=2&per_page=50",
+			mockRepo: &MockSitemapRepository{
+				PaginatedResult: &models.SitemapURLs{
+					Posts:  []models.SitemapPost{},
+					Agents: []models.SitemapAgent{{ID: "a1", UpdatedAt: now}},
+					Users:  []models.SitemapUser{},
+				},
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				data := body["data"].(map[string]interface{})
+				agents := data["agents"].([]interface{})
+				if len(agents) != 1 {
+					t.Errorf("expected 1 agent, got %d", len(agents))
+				}
+			},
+			checkOpts: func(t *testing.T, opts *models.SitemapURLsOptions) {
+				if opts.Type != "agents" {
+					t.Errorf("expected type 'agents', got '%s'", opts.Type)
+				}
+				if opts.Page != 2 {
+					t.Errorf("expected page 2, got %d", opts.Page)
+				}
+				if opts.PerPage != 50 {
+					t.Errorf("expected per_page 50, got %d", opts.PerPage)
+				}
+			},
+		},
+		{
+			name:        "type=users returns only users",
+			queryString: "?type=users",
+			mockRepo: &MockSitemapRepository{
+				PaginatedResult: &models.SitemapURLs{
+					Posts:  []models.SitemapPost{},
+					Agents: []models.SitemapAgent{},
+					Users:  []models.SitemapUser{{ID: "u1", UpdatedAt: now}},
+				},
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				data := body["data"].(map[string]interface{})
+				users := data["users"].([]interface{})
+				if len(users) != 1 {
+					t.Errorf("expected 1 user, got %d", len(users))
+				}
+			},
+			checkOpts: func(t *testing.T, opts *models.SitemapURLsOptions) {
+				if opts.Type != "users" {
+					t.Errorf("expected type 'users', got '%s'", opts.Type)
+				}
+				// Should default to page=1, per_page=5000
+				if opts.Page != 1 {
+					t.Errorf("expected default page 1, got %d", opts.Page)
+				}
+				if opts.PerPage != 5000 {
+					t.Errorf("expected default per_page 5000, got %d", opts.PerPage)
+				}
+			},
+		},
+		{
+			name:        "invalid type returns 400",
+			queryString: "?type=invalid",
+			mockRepo:    &MockSitemapRepository{},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				errObj := body["error"].(map[string]interface{})
+				if errObj["code"] != "INVALID_PARAM" {
+					t.Errorf("expected error code 'INVALID_PARAM', got '%v'", errObj["code"])
+				}
+			},
+		},
+		{
+			name:        "per_page exceeding max returns 400",
+			queryString: "?type=posts&per_page=10000",
+			mockRepo:    &MockSitemapRepository{},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				errObj := body["error"].(map[string]interface{})
+				if errObj["code"] != "INVALID_PARAM" {
+					t.Errorf("expected error code 'INVALID_PARAM', got '%v'", errObj["code"])
+				}
+			},
+		},
+		{
+			name:        "page < 1 returns 400",
+			queryString: "?type=posts&page=0",
+			mockRepo:    &MockSitemapRepository{},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				errObj := body["error"].(map[string]interface{})
+				if errObj["code"] != "INVALID_PARAM" {
+					t.Errorf("expected error code 'INVALID_PARAM', got '%v'", errObj["code"])
+				}
+			},
+		},
+		{
+			name:        "no type param falls back to existing behavior (backward compat)",
+			queryString: "",
+			mockRepo: &MockSitemapRepository{
+				Posts:  []models.SitemapPost{{ID: "p1", Type: "problem", UpdatedAt: now}},
+				Agents: []models.SitemapAgent{{ID: "a1", UpdatedAt: now}},
+				Users:  []models.SitemapUser{{ID: "u1", UpdatedAt: now}},
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				data := body["data"].(map[string]interface{})
+				posts := data["posts"].([]interface{})
+				agents := data["agents"].([]interface{})
+				users := data["users"].([]interface{})
+				if len(posts) != 1 {
+					t.Errorf("expected 1 post, got %d", len(posts))
+				}
+				if len(agents) != 1 {
+					t.Errorf("expected 1 agent, got %d", len(agents))
+				}
+				if len(users) != 1 {
+					t.Errorf("expected 1 user, got %d", len(users))
+				}
+			},
+			checkOpts: func(t *testing.T, opts *models.SitemapURLsOptions) {
+				// Should NOT have called paginated path
+				if opts != nil {
+					t.Error("expected paginated path NOT to be called for backward compat")
+				}
+			},
+		},
+		{
+			name:        "paginated repo error returns 500",
+			queryString: "?type=posts",
+			mockRepo: &MockSitemapRepository{
+				PaginatedErr: context.DeadlineExceeded,
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				errObj := body["error"].(map[string]interface{})
+				if errObj["code"] != "INTERNAL_ERROR" {
+					t.Errorf("expected error code 'INTERNAL_ERROR', got '%v'", errObj["code"])
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewSitemapHandler(tt.mockRepo)
+			req := httptest.NewRequest("GET", "/v1/sitemap/urls"+tt.queryString, nil)
+			rec := httptest.NewRecorder()
+
+			handler.GetSitemapURLs(rec, req)
+
+			if rec.Code != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, rec.Code)
+			}
+
+			ct := rec.Header().Get("Content-Type")
+			if ct != "application/json" {
+				t.Errorf("expected Content-Type 'application/json', got '%s'", ct)
+			}
+
+			var body map[string]interface{}
+			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			if tt.checkResponse != nil {
+				tt.checkResponse(t, body)
+			}
+
+			if tt.checkOpts != nil {
+				tt.checkOpts(t, tt.mockRepo.PaginatedOpts)
 			}
 		})
 	}

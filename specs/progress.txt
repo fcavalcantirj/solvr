@@ -406,3 +406,16 @@
 - Updated MockSitemapRepository in sitemap_test.go to implement GetSitemapCounts
 - Wrote 3 tests: correct counts, empty DB zeros, repo error 500
 - All 8 sitemap handler tests pass, build successful
+
+2026-02-12: Add pagination to GET /v1/sitemap/urls (SEO-URGENT)
+- Added SitemapURLsOptions struct to models/sitemap.go (Type, Page, PerPage)
+- Added GetPaginatedSitemapURLs(ctx, opts) to SitemapRepository in db/sitemap.go with LIMIT/OFFSET
+- Queries: switch on type (posts/agents/users), same WHERE filters as unpaginated, adds LIMIT $1 OFFSET $2
+- Added GetPaginatedSitemapURLs to SitemapRepositoryInterface in handlers/sitemap.go
+- Defined SitemapMaxPerPage=5000 and SitemapDefaultPerPage=5000 constants
+- Updated GetSitemapURLs handler: if type param present, parse type/page/per_page and use paginated path; if absent, backward compat
+- Validates type (posts/agents/users → 400), per_page (1-5000 → 400), page (>=1 → 400)
+- Extracted writeSitemapError() and writeSitemapURLsResponse() helpers to reduce duplication
+- Updated MockSitemapRepository with PaginatedResult, PaginatedErr, PaginatedOpts fields
+- Wrote 8 pagination tests: type=posts, type=agents, type=users with defaults, invalid type 400, per_page>5000 400, page<1 400, backward compat no type, paginated repo error 500
+- All 16 sitemap handler tests pass (5 URLs + 3 counts + 8 pagination), build successful

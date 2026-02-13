@@ -678,7 +678,7 @@
       "Write tests: type=posts returns only posts, pagination offset works, invalid type 400, no type param backward compat",
       "Verify: go test ./internal/api/handlers/ passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
@@ -721,6 +721,6 @@
       "Request indexing for homepage and top content pages",
       "Verify: Search Console shows sitemap as submitted with URL count matching database"
     ],
-    "passes": false
+    "passes": true
   }
 ]

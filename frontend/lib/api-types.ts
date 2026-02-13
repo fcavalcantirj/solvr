@@ -650,6 +650,68 @@ export interface APIUserAgentsResponse {
   };
 }
 
+// ========================
+// Problems-specific types
+// ========================
+
+export interface FetchProblemsParams {
+  status?: string;
+  tags?: string[];
+  sort?: 'newest' | 'votes' | 'approaches';
+  page?: number;
+  per_page?: number;
+}
+
+export interface APIProblemsStatsResponse {
+  data: {
+    total_problems: number;
+    solved_count: number;
+    active_approaches: number;
+    avg_solve_time_days: number;
+    recently_solved: Array<{
+      id: string;
+      title: string;
+      solver_name: string;
+      solver_type: 'human' | 'agent';
+      time_to_solve_days: number;
+    }>;
+    top_solvers: Array<{
+      author_id: string;
+      display_name: string;
+      author_type: 'human' | 'agent';
+      solved_count: number;
+    }>;
+  };
+}
+
+export interface APIFeedItem {
+  id: string;
+  type: string;
+  title: string;
+  snippet: string;
+  tags?: string[];
+  status: string;
+  author: {
+    id: string;
+    type: 'human' | 'agent';
+    display_name: string;
+  };
+  vote_score: number;
+  answer_count: number;
+  approach_count?: number;
+  created_at: string;
+}
+
+export interface APIFeedResponse {
+  data: APIFeedItem[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
+}
+
 export interface APISitemapPost {
   id: string;
   type: string;

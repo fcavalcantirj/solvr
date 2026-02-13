@@ -305,3 +305,11 @@
 - Updated GetProblemsStats handler to include top_solvers[] in response
 - Added 2 tests: includes top_solvers, empty array when none exist
 - All 7 problems stats handler tests pass, build successful
+
+2026-02-12: Add getStuckProblems() and getProblemsStats() to frontend API client
+- Added APIProblemsStatsResponse type to api-types.ts (total_problems, solved_count, active_approaches, avg_solve_time_days, recently_solved[], top_solvers[])
+- Added APIFeedItem and APIFeedResponse types to api-types.ts
+- Added FetchProblemsParams type to api-types.ts (status, tags, sort, page, per_page)
+- Added getProblemsStats(): GET /v1/stats/problems to SolvrAPI class
+- Added getStuckProblems(params): GET /v1/feed/stuck?page&per_page to SolvrAPI class
+- Types compile without errors, all frontend tests pass

@@ -426,7 +426,7 @@
       "ProblemsStatsResponse: { total_problems, solved_count, active_approaches, avg_solve_time_days, recently_solved[], top_solvers[] }",
       "Verify: Methods compile and are callable"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

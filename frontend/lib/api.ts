@@ -54,6 +54,8 @@ import type {
   APIUserAgentsResponse,
   APIAgent,
   APISitemapResponse,
+  APIProblemsStatsResponse,
+  APIFeedResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -462,6 +464,19 @@ class SolvrAPI {
 
   async getSitemapUrls(): Promise<APISitemapResponse> {
     return this.fetch<APISitemapResponse>('/v1/sitemap/urls');
+  }
+
+  async getProblemsStats(): Promise<APIProblemsStatsResponse> {
+    return this.fetch<APIProblemsStatsResponse>('/v1/stats/problems');
+  }
+
+  async getStuckProblems(params?: { page?: number; per_page?: number }): Promise<APIFeedResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APIFeedResponse>(`/v1/feed/stuck${query ? `?${query}` : ''}`);
   }
 }
 

@@ -156,6 +156,36 @@ describe('sitemap', () => {
     expect(result[0]?.priority).toBe(0.5);
   });
 
+  it('returns empty array for ID beyond total sitemaps', async () => {
+    vi.mocked(api.getSitemapCounts).mockResolvedValue({
+      data: { posts: 100, agents: 50, users: 30 },
+    });
+
+    // posts: ceil(100/5000)=1, agents: ceil(50/5000)=1, users: ceil(30/5000)=1
+    // total sitemaps: 1 static + 1 + 1 + 1 = 4 (ids 0-3)
+    // id=4 is out of range
+    const result = await sitemap({ id: 4 });
+
+    expect(result).toEqual([]);
+  });
+
+  it('skips zero-count types in ID offset calculation', async () => {
+    // posts=0 means no post sitemaps, agents should start at id=1
+    vi.mocked(api.getSitemapCounts).mockResolvedValue({
+      data: { posts: 0, agents: 5000, users: 0 },
+    });
+    vi.mocked(api.getSitemapUrls).mockResolvedValue({
+      data: { posts: [], agents: [{ id: 'a1', updated_at: '2026-02-01T00:00:00Z' }], users: [] },
+    });
+
+    // posts: ceil(0/5000)=0 pages, so agents start at id=1 (not id=2)
+    const result = await sitemap({ id: 1 });
+
+    expect(api.getSitemapUrls).toHaveBeenCalledWith({ type: 'agents', page: 1, per_page: 5000 });
+    const urls = result.map((entry) => entry.url);
+    expect(urls).toContain('https://solvr.dev/agents/a1');
+  });
+
   it('returns empty array on API error for dynamic sitemaps', async () => {
     vi.mocked(api.getSitemapCounts).mockRejectedValue(new Error('API unavailable'));
 

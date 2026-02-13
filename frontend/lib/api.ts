@@ -56,6 +56,7 @@ import type {
   APISitemapResponse,
   APIProblemsStatsResponse,
   APIFeedResponse,
+  FetchProblemsParams,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -464,6 +465,18 @@ class SolvrAPI {
 
   async getSitemapUrls(): Promise<APISitemapResponse> {
     return this.fetch<APISitemapResponse>('/v1/sitemap/urls');
+  }
+
+  async getProblems(params?: FetchProblemsParams): Promise<APIPostsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.tags && params.tags.length > 0) searchParams.set('tags', params.tags.join(','));
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+    if (params?.sort) searchParams.set('sort', params.sort);
+
+    const query = searchParams.toString();
+    return this.fetch<APIPostsResponse>(`/v1/problems${query ? `?${query}` : ''}`);
   }
 
   async getProblemsStats(): Promise<APIProblemsStatsResponse> {

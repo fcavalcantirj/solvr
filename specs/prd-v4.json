@@ -442,7 +442,7 @@
       "Write Vitest tests using vi.mock for the hook",
       "Verify: Hook fetches and returns real problems data"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

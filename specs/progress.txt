@@ -313,3 +313,13 @@
 - Added getProblemsStats(): GET /v1/stats/problems to SolvrAPI class
 - Added getStuckProblems(params): GET /v1/feed/stuck?page&per_page to SolvrAPI class
 - Types compile without errors, all frontend tests pass
+
+2026-02-12: Create useProblems() hook for problems listing with pagination and filters
+- Created hooks/use-problems.ts following useIdeas pattern
+- Added getProblems(params) method to SolvrAPI class (calls GET /v1/problems)
+- Hook accepts: status, tags, sort, page, perPage
+- Returns: problems[], loading, error, total, hasMore, page, loadMore(), refetch()
+- ProblemListItem type with transformed camelCase fields
+- loadMore() appends results, filter changes reset to page 1
+- Created hooks/use-problems.test.ts with 7 tests (TDD approach)
+- All 7 useProblems tests pass

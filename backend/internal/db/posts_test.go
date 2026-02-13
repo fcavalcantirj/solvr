@@ -4,6 +4,7 @@ package db
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -1946,4 +1947,267 @@ func TestPostRepository_Create_ReturnsViewCount(t *testing.T) {
 	if foundPost.ViewCount != 0 {
 		t.Errorf("expected view_count 0 from FindByID, got %d", foundPost.ViewCount)
 	}
+}
+
+// === Sort Order and Count Correctness Tests ===
+// These tests verify that sort=answers and sort=approaches produce correct ordering,
+// and that answers_count/approaches_count exclude soft-deleted rows.
+
+// TestPostRepository_List_SortByAnswers creates two questions with different answer counts
+// and verifies that sort=answers orders them correctly (most answers first).
+func TestPostRepository_List_SortByAnswers(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+
+	// Create two questions via repo.Create (generates valid UUIDs)
+	q1, err := repo.Create(ctx, &models.Post{
+		Type: models.PostTypeQuestion, Title: "Q1 Many Answers",
+		Description: "Sort test q1", PostedByType: models.AuthorTypeAgent,
+		PostedByID: "sort_test_agent", Status: models.PostStatusOpen,
+		Tags: []string{"sort_answers_test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create q1: %v", err)
+	}
+
+	q2, err := repo.Create(ctx, &models.Post{
+		Type: models.PostTypeQuestion, Title: "Q2 Few Answers",
+		Description: "Sort test q2", PostedByType: models.AuthorTypeAgent,
+		PostedByID: "sort_test_agent", Status: models.PostStatusOpen,
+		Tags: []string{"sort_answers_test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create q2: %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE question_id IN ($1, $2)", q1.ID, q2.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2)", q1.ID, q2.ID)
+	}()
+
+	// Add 3 answers to q1, 1 answer to q2
+	for i := 0; i < 3; i++ {
+		_, err := pool.Exec(ctx, `INSERT INTO answers (question_id, author_type, author_id, content)
+			VALUES ($1, 'agent', 'sort_test_agent', $2)`, q1.ID, "Answer for q1")
+		if err != nil {
+			t.Fatalf("failed to insert answer for q1: %v", err)
+		}
+	}
+	_, err = pool.Exec(ctx, `INSERT INTO answers (question_id, author_type, author_id, content)
+		VALUES ($1, 'agent', 'sort_test_agent', 'Answer for q2')`, q2.ID)
+	if err != nil {
+		t.Fatalf("failed to insert answer for q2: %v", err)
+	}
+
+	// List with sort=answers, filtered by tag to isolate our test data
+	posts, _, err := repo.List(ctx, models.PostListOptions{
+		Type: models.PostTypeQuestion, Sort: "answers",
+		Tags: []string{"sort_answers_test"}, Page: 1, PerPage: 10,
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	if len(posts) < 2 {
+		t.Fatalf("expected at least 2 posts, got %d", len(posts))
+	}
+
+	// Find positions of q1 and q2
+	q1Idx, q2Idx := -1, -1
+	for i, p := range posts {
+		if p.ID == q1.ID {
+			q1Idx = i
+		}
+		if p.ID == q2.ID {
+			q2Idx = i
+		}
+	}
+
+	if q1Idx == -1 || q2Idx == -1 {
+		t.Fatalf("expected both posts in results, q1Idx=%d, q2Idx=%d", q1Idx, q2Idx)
+	}
+
+	if q1Idx > q2Idx {
+		t.Errorf("q1 (3 answers) should appear before q2 (1 answer), got q1 at %d, q2 at %d", q1Idx, q2Idx)
+	}
+
+	// Also verify answers_count values
+	if posts[q1Idx].AnswersCount != 3 {
+		t.Errorf("expected q1 answers_count=3, got %d", posts[q1Idx].AnswersCount)
+	}
+	if posts[q2Idx].AnswersCount != 1 {
+		t.Errorf("expected q2 answers_count=1, got %d", posts[q2Idx].AnswersCount)
+	}
+}
+
+// TestPostRepository_List_SortByApproaches creates two problems with different approach counts
+// and verifies that sort=approaches orders them correctly (most approaches first).
+func TestPostRepository_List_SortByApproaches(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+
+	p1, err := repo.Create(ctx, &models.Post{
+		Type: models.PostTypeProblem, Title: "P1 Many Approaches",
+		Description: "Sort test p1", PostedByType: models.AuthorTypeAgent,
+		PostedByID: "sort_test_agent", Status: models.PostStatusOpen,
+		Tags: []string{"sort_approaches_test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create p1: %v", err)
+	}
+
+	p2, err := repo.Create(ctx, &models.Post{
+		Type: models.PostTypeProblem, Title: "P2 Few Approaches",
+		Description: "Sort test p2", PostedByType: models.AuthorTypeAgent,
+		PostedByID: "sort_test_agent", Status: models.PostStatusOpen,
+		Tags: []string{"sort_approaches_test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create p2: %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM approaches WHERE problem_id IN ($1, $2)", p1.ID, p2.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2)", p1.ID, p2.ID)
+	}()
+
+	// Add 3 approaches to p1, 1 approach to p2
+	for i := 0; i < 3; i++ {
+		_, err := pool.Exec(ctx, `INSERT INTO approaches (problem_id, author_type, author_id, angle)
+			VALUES ($1, 'agent', 'sort_test_agent', $2)`, p1.ID, "Approach for p1")
+		if err != nil {
+			t.Fatalf("failed to insert approach for p1: %v", err)
+		}
+	}
+	_, err = pool.Exec(ctx, `INSERT INTO approaches (problem_id, author_type, author_id, angle)
+		VALUES ($1, 'agent', 'sort_test_agent', 'Approach for p2')`, p2.ID)
+	if err != nil {
+		t.Fatalf("failed to insert approach for p2: %v", err)
+	}
+
+	posts, _, err := repo.List(ctx, models.PostListOptions{
+		Type: models.PostTypeProblem, Sort: "approaches",
+		Tags: []string{"sort_approaches_test"}, Page: 1, PerPage: 10,
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	if len(posts) < 2 {
+		t.Fatalf("expected at least 2 posts, got %d", len(posts))
+	}
+
+	p1Idx, p2Idx := -1, -1
+	for i, p := range posts {
+		if p.ID == p1.ID {
+			p1Idx = i
+		}
+		if p.ID == p2.ID {
+			p2Idx = i
+		}
+	}
+
+	if p1Idx == -1 || p2Idx == -1 {
+		t.Fatalf("expected both posts in results, p1Idx=%d, p2Idx=%d", p1Idx, p2Idx)
+	}
+
+	if p1Idx > p2Idx {
+		t.Errorf("p1 (3 approaches) should appear before p2 (1 approach), got p1 at %d, p2 at %d", p1Idx, p2Idx)
+	}
+
+	if posts[p1Idx].ApproachesCount != 3 {
+		t.Errorf("expected p1 approaches_count=3, got %d", posts[p1Idx].ApproachesCount)
+	}
+	if posts[p2Idx].ApproachesCount != 1 {
+		t.Errorf("expected p2 approaches_count=1, got %d", posts[p2Idx].ApproachesCount)
+	}
+}
+
+// TestPostRepository_List_CountsExcludeSoftDeleted verifies that answers_count
+// does not include soft-deleted answers.
+func TestPostRepository_List_CountsExcludeSoftDeleted(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+
+	q, err := repo.Create(ctx, &models.Post{
+		Type: models.PostTypeQuestion, Title: "Q Soft Delete Count",
+		Description: "Count test", PostedByType: models.AuthorTypeAgent,
+		PostedByID: "count_test_agent", Status: models.PostStatusOpen,
+		Tags: []string{"count_softdelete_test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create question: %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE question_id = $1", q.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", q.ID)
+	}()
+
+	// Insert 3 answers
+	for i := 0; i < 3; i++ {
+		_, err := pool.Exec(ctx, `INSERT INTO answers (question_id, author_type, author_id, content)
+			VALUES ($1, 'agent', 'count_test_agent', $2)`, q.ID, "Answer")
+		if err != nil {
+			t.Fatalf("failed to insert answer: %v", err)
+		}
+	}
+
+	// Soft-delete one answer
+	_, err = pool.Exec(ctx, `UPDATE answers SET deleted_at = NOW()
+		WHERE question_id = $1 AND ctid = (SELECT ctid FROM answers WHERE question_id = $1 AND deleted_at IS NULL LIMIT 1)`, q.ID)
+	if err != nil {
+		t.Fatalf("failed to soft-delete answer: %v", err)
+	}
+
+	// List and verify count is 2 (not 3)
+	posts, _, err := repo.List(ctx, models.PostListOptions{
+		Tags: []string{"count_softdelete_test"}, Page: 1, PerPage: 10,
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	for _, p := range posts {
+		if p.ID == q.ID {
+			if p.AnswersCount != 2 {
+				t.Errorf("expected answers_count=2 (1 soft-deleted), got %d", p.AnswersCount)
+			}
+			return
+		}
+	}
+	t.Error("test question not found in results")
 }

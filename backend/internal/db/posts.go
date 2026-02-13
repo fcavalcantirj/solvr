@@ -135,13 +135,13 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	case "votes":
 		orderClause = "(p.upvotes - p.downvotes) DESC, p.created_at DESC"
 	case "approaches":
-		orderClause = "(SELECT COUNT(*) FROM approaches ap3 WHERE ap3.problem_id = p.id AND ap3.deleted_at IS NULL) DESC, p.created_at DESC"
+		orderClause = "COALESCE(app_cnt.cnt, 0) DESC, p.created_at DESC"
 	case "answers":
-		orderClause = "(SELECT COUNT(*) FROM answers a3 WHERE a3.question_id = p.id AND a3.deleted_at IS NULL) DESC, p.created_at DESC"
+		orderClause = "COALESCE(ans_cnt.cnt, 0) DESC, p.created_at DESC"
 	}
 
-	// Main query with LEFT JOINs for author information
-	// Posts can have author as either human (users table) or agent (agents table)
+	// Main query with LEFT JOINs for author information and pre-aggregated counts.
+	// Uses LEFT JOIN subqueries instead of correlated subqueries to avoid per-row execution.
 	query := fmt.Sprintf(`
 		SELECT
 			p.id, p.type, p.title, p.description, p.tags,
@@ -149,13 +149,23 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			p.upvotes, p.downvotes, p.view_count, p.success_criteria, p.weight,
 			p.accepted_answer_id, p.evolved_into,
 			p.created_at, p.updated_at, p.deleted_at,
-			COALESCE(u.display_name, a.display_name, '') as author_display_name,
-			COALESCE(u.avatar_url, a.avatar_url, '') as author_avatar_url,
-			(SELECT COUNT(*) FROM answers a2 WHERE a2.question_id = p.id AND a2.deleted_at IS NULL) as answers_count,
-			(SELECT COUNT(*) FROM approaches ap2 WHERE ap2.problem_id = p.id AND ap2.deleted_at IS NULL) as approaches_count
+			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
+			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
+			COALESCE(ans_cnt.cnt, 0) as answers_count,
+			COALESCE(app_cnt.cnt, 0) as approaches_count
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
-		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
+		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
+		LEFT JOIN (
+			SELECT question_id, COUNT(*) as cnt
+			FROM answers WHERE deleted_at IS NULL
+			GROUP BY question_id
+		) ans_cnt ON ans_cnt.question_id = p.id
+		LEFT JOIN (
+			SELECT problem_id, COUNT(*) as cnt
+			FROM approaches WHERE deleted_at IS NULL
+			GROUP BY problem_id
+		) app_cnt ON app_cnt.problem_id = p.id
 		WHERE %s
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d

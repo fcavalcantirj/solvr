@@ -247,3 +247,11 @@
 - Added twitter defaults: { card: 'summary_large_image', site: '@solvrdev' }
 - Added keywords for SEO
 - Updated title to use template: { default: '...', template: '%s | Solvr' }
+
+2026-02-12: Add generateMetadata to post detail pages (SEO-URGENT)
+- Added generateMetadata to /problems/[id]/page.tsx with title, description, OG, Twitter
+- Added generateMetadata to /questions/[id]/page.tsx with same pattern
+- Added generateMetadata to /ideas/[id]/page.tsx with same pattern
+- Description truncated to 160 chars for meta tags
+- Graceful fallback on API error returns default metadata per type
+- Created tests: problems (4), questions (2), ideas (2) - all passing

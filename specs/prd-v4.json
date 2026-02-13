@@ -630,7 +630,7 @@
       "Write Vitest tests for each: mock API, verify title/description/OG returned",
       "Verify: view-source on any post page shows correct title and meta description from actual content"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "SEO-URGENT",

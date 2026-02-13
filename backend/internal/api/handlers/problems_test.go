@@ -329,6 +329,92 @@ func TestListProblems_Pagination(t *testing.T) {
 	}
 }
 
+// TestListProblems_SortByVotes tests sorting by vote score.
+func TestListProblems_SortByVotes(t *testing.T) {
+	repo := NewMockProblemsRepository()
+	repo.SetPosts([]models.PostWithAuthor{}, 0)
+
+	handler := NewProblemsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/problems?sort=votes", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	if repo.listOpts.Sort != "votes" {
+		t.Errorf("expected sort 'votes', got '%s'", repo.listOpts.Sort)
+	}
+}
+
+// TestListProblems_SortByApproaches tests sorting by approach count.
+func TestListProblems_SortByApproaches(t *testing.T) {
+	repo := NewMockProblemsRepository()
+	repo.SetPosts([]models.PostWithAuthor{}, 0)
+
+	handler := NewProblemsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/problems?sort=approaches", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	if repo.listOpts.Sort != "approaches" {
+		t.Errorf("expected sort 'approaches', got '%s'", repo.listOpts.Sort)
+	}
+}
+
+// TestListProblems_DefaultSortNewest tests that no sort param defaults to newest.
+func TestListProblems_DefaultSortNewest(t *testing.T) {
+	repo := NewMockProblemsRepository()
+	repo.SetPosts([]models.PostWithAuthor{}, 0)
+
+	handler := NewProblemsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/problems", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	// Default sort should be empty (repo interprets as newest)
+	if repo.listOpts.Sort != "" {
+		t.Errorf("expected empty sort (default newest), got '%s'", repo.listOpts.Sort)
+	}
+}
+
+// TestListProblems_InvalidSortIgnored tests that invalid sort values are ignored.
+func TestListProblems_InvalidSortIgnored(t *testing.T) {
+	repo := NewMockProblemsRepository()
+	repo.SetPosts([]models.PostWithAuthor{}, 0)
+
+	handler := NewProblemsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/problems?sort=invalid", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	// Invalid sort should be ignored (empty = default newest)
+	if repo.listOpts.Sort != "" {
+		t.Errorf("expected empty sort for invalid value, got '%s'", repo.listOpts.Sort)
+	}
+}
+
 // ============================================================================
 // GET /v1/problems/:id - Get Single Problem Tests
 // ============================================================================

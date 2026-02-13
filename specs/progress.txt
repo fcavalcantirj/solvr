@@ -265,3 +265,12 @@
 - Fallback description when bio is empty, default metadata on API error
 - Updated existing agent tests (13) to use AgentProfileClient import
 - Added generateMetadata tests: agents (4), users (4) - all 17 tests passing
+
+2026-02-12: Add sort parameter to GET /v1/problems (votes, approaches, activity)
+- Added Sort field to PostListOptions in models/post.go
+- Updated ProblemsHandler.List() in handlers/problems.go to parse sort query param
+- Validates sort values: "newest", "votes", "approaches"; ignores invalid values
+- Updated PostsRepository.List() in db/posts.go with dynamic ORDER BY clause
+- votes sorts by (upvotes - downvotes) DESC, approaches by subquery COUNT DESC
+- Added 4 tests: SortByVotes, SortByApproaches, DefaultSortNewest, InvalidSortIgnored
+- All 8 ListProblems handler tests pass, build successful

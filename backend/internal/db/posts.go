@@ -129,6 +129,15 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		return nil, 0, fmt.Errorf("count query failed: %w", err)
 	}
 
+	// Determine sort order
+	orderClause := "p.created_at DESC" // default: newest
+	switch opts.Sort {
+	case "votes":
+		orderClause = "(p.upvotes - p.downvotes) DESC, p.created_at DESC"
+	case "approaches":
+		orderClause = "(SELECT COUNT(*) FROM approaches ap3 WHERE ap3.problem_id = p.id AND ap3.deleted_at IS NULL) DESC, p.created_at DESC"
+	}
+
 	// Main query with LEFT JOINs for author information
 	// Posts can have author as either human (users table) or agent (agents table)
 	query := fmt.Sprintf(`
@@ -146,9 +155,9 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
 		WHERE %s
-		ORDER BY p.created_at DESC
+		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, whereClause, argNum, argNum+1)
+	`, whereClause, orderClause, argNum, argNum+1)
 
 	args = append(args, perPage, offset)
 

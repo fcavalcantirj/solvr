@@ -366,7 +366,7 @@
       "Verify: GET /v1/problems?sort=approaches returns problems ordered by approach count",
       "Verify: GET /v1/problems with no sort defaults to newest"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

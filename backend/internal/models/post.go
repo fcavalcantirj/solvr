@@ -140,6 +140,7 @@ type PostListOptions struct {
 	Tags       []string   // Filter by tags
 	AuthorType AuthorType // Filter by author type (BE-003)
 	AuthorID   string     // Filter by author ID (BE-003)
+	Sort       string     // Sort order: "newest" (default), "votes", "approaches"
 	Page       int        // Page number (1-indexed)
 	PerPage    int        // Results per page
 }

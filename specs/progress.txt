@@ -336,3 +336,15 @@
 - Load More button calls loadMore() with loading state
 - Extracted ProblemCard as separate function for cleaner code
 - All 364 frontend tests pass
+
+2026-02-12: Wire problems-filters.tsx to trigger real API calls
+- Lifted filter state (status, sort, tags) to parent problems/page.tsx
+- Page passes filter state as props to both ProblemsFilters and ProblemsList
+- ProblemsFilters now accepts props and calls onStatusChange, onSortChange, onTagsChange
+- Status filter: maps "all" to undefined, others pass through to API
+- Sort filter: restricted to "newest", "votes", "approaches" (matching backend)
+- Tags filter: toggles tags array, passed to useProblems hook
+- Removed "stuck" and "activity" sort options (no backend support)
+- When filters change, useProblems hook automatically resets to page 1
+- Weight filter remains local (no backend support yet)
+- All 364 frontend tests pass

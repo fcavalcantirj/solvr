@@ -481,7 +481,7 @@
       "Popular tags in filter panel: fetch from useTrending() instead of hardcoded list",
       "Verify: Changing any filter updates the problems list with matching results"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

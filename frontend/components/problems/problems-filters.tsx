@@ -23,8 +23,6 @@ const sorts = [
   { key: "newest", label: "NEWEST" },
   { key: "votes", label: "MOST VOTED" },
   { key: "approaches", label: "MOST APPROACHES" },
-  { key: "stuck", label: "NEEDS HELP" },
-  { key: "activity", label: "RECENT ACTIVITY" },
 ];
 
 const popularTags = [
@@ -38,32 +36,59 @@ const popularTags = [
   "concurrency",
 ];
 
-export function ProblemsFilters() {
+interface ProblemsFiltersProps {
+  status?: string;
+  sort: 'newest' | 'votes' | 'approaches';
+  tags: string[];
+  onStatusChange: (status: string | undefined) => void;
+  onSortChange: (sort: 'newest' | 'votes' | 'approaches') => void;
+  onTagsChange: (tags: string[]) => void;
+}
+
+export function ProblemsFilters({
+  status,
+  sort,
+  tags,
+  onStatusChange,
+  onSortChange,
+  onTagsChange,
+}: ProblemsFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
-  const [activeStatus, setActiveStatus] = useState("all");
   const [activeWeight, setActiveWeight] = useState("all");
-  const [activeSort, setActiveSort] = useState("newest");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const activeStatus = status || "all";
+
+  const handleStatusChange = (key: string) => {
+    onStatusChange(key === "all" ? undefined : key);
+  };
+
+  const handleSortChange = (key: string) => {
+    if (key === "newest" || key === "votes" || key === "approaches") {
+      onSortChange(key);
+    }
+  };
+
   const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
+    if (tags.includes(tag)) {
+      onTagsChange(tags.filter((t) => t !== tag));
+    } else {
+      onTagsChange([...tags, tag]);
+    }
   };
 
   const clearFilters = () => {
-    setActiveStatus("all");
+    onStatusChange(undefined);
     setActiveWeight("all");
-    setActiveSort("newest");
-    setSelectedTags([]);
+    onSortChange("newest");
+    onTagsChange([]);
     setSearchQuery("");
   };
 
   const hasActiveFilters =
     activeStatus !== "all" ||
     activeWeight !== "all" ||
-    selectedTags.length > 0 ||
+    tags.length > 0 ||
     searchQuery !== "";
 
   return (
@@ -90,17 +115,17 @@ export function ProblemsFilters() {
 
           {/* Status Pills - Desktop */}
           <div className="hidden lg:flex items-center gap-1">
-            {statuses.map((status) => (
+            {statuses.map((s) => (
               <button
-                key={status.key}
-                onClick={() => setActiveStatus(status.key)}
+                key={s.key}
+                onClick={() => handleStatusChange(s.key)}
                 className={`font-mono text-[10px] tracking-wider px-3 py-2 transition-colors ${
-                  activeStatus === status.key
+                  activeStatus === s.key
                     ? "bg-foreground text-background"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {status.label}
+                {s.label}
               </button>
             ))}
           </div>
@@ -121,17 +146,17 @@ export function ProblemsFilters() {
 
         {/* Status Pills - Mobile */}
         <div className="lg:hidden flex items-center gap-1 pb-4 overflow-x-auto scrollbar-hide">
-          {statuses.map((status) => (
+          {statuses.map((s) => (
             <button
-              key={status.key}
-              onClick={() => setActiveStatus(status.key)}
+              key={s.key}
+              onClick={() => handleStatusChange(s.key)}
               className={`font-mono text-[10px] tracking-wider px-3 py-2 whitespace-nowrap transition-colors ${
-                activeStatus === status.key
+                activeStatus === s.key
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {status.label}
+              {s.label}
             </button>
           ))}
         </div>
@@ -167,17 +192,17 @@ export function ProblemsFilters() {
                 SORT
               </span>
               <div className="flex flex-wrap items-center gap-1">
-                {sorts.map((sort) => (
+                {sorts.map((s) => (
                   <button
-                    key={sort.key}
-                    onClick={() => setActiveSort(sort.key)}
+                    key={s.key}
+                    onClick={() => handleSortChange(s.key)}
                     className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-colors ${
-                      activeSort === sort.key
+                      sort === s.key
                         ? "bg-foreground text-background"
                         : "bg-secondary text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    {sort.label}
+                    {s.label}
                   </button>
                 ))}
               </div>
@@ -194,7 +219,7 @@ export function ProblemsFilters() {
                     key={tag}
                     onClick={() => toggleTag(tag)}
                     className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-colors ${
-                      selectedTags.includes(tag)
+                      tags.includes(tag)
                         ? "bg-foreground text-background"
                         : "bg-secondary text-muted-foreground hover:text-foreground"
                     }`}
@@ -215,7 +240,7 @@ export function ProblemsFilters() {
                       <X
                         size={10}
                         className="cursor-pointer"
-                        onClick={() => setActiveStatus("all")}
+                        onClick={() => handleStatusChange("all")}
                       />
                     </span>
                   )}
@@ -229,7 +254,7 @@ export function ProblemsFilters() {
                       />
                     </span>
                   )}
-                  {selectedTags.map((tag) => (
+                  {tags.map((tag) => (
                     <span
                       key={tag}
                       className="font-mono text-[10px] tracking-wider bg-foreground text-background px-2 py-1 flex items-center gap-1.5"

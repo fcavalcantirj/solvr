@@ -274,3 +274,14 @@
 - votes sorts by (upvotes - downvotes) DESC, approaches by subquery COUNT DESC
 - Added 4 tests: SortByVotes, SortByApproaches, DefaultSortNewest, InvalidSortIgnored
 - All 8 ListProblems handler tests pass, build successful
+
+2026-02-12: Add GET /v1/stats/problems endpoint with problems-specific sidebar stats
+- Added GetProblemsStats() to StatsRepository in db/stats.go
+- Single query returns: total_problems, solved_count, active_approaches, avg_solve_time_days
+- Active approaches counted where status IN ('starting', 'working') on non-deleted problems
+- Avg solve time: AVG(updated_at - created_at) in days for solved problems
+- Added GetProblemsStats to StatsRepositoryInterface in handlers/stats.go
+- Created GetProblemsStats handler in handlers/stats.go
+- Added route GET /v1/stats/problems to router.go
+- Added 3 tests: returns all fields, zeros for empty DB, 500 on error
+- All stats handler tests pass, build successful

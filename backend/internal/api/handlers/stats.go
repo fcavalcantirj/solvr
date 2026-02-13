@@ -21,6 +21,8 @@ type StatsRepositoryInterface interface {
 	GetTotalContributionsCount(ctx context.Context) (int, error)
 	GetTrendingPosts(ctx context.Context, limit int) ([]any, error)
 	GetTrendingTags(ctx context.Context, limit int) ([]any, error)
+	// Problems-specific stats
+	GetProblemsStats(ctx context.Context) (map[string]any, error)
 	// Ideas-specific stats
 	GetIdeasCountByStatus(ctx context.Context) (map[string]int, error)
 	GetFreshSparks(ctx context.Context, limit int) ([]map[string]any, error)
@@ -174,6 +176,26 @@ func (h *StatsHandler) GetTrending(w http.ResponseWriter, r *http.Request) {
 			"posts": posts,
 			"tags":  tags,
 		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetProblemsStats handles GET /v1/stats/problems
+// Returns statistics for the Problems page sidebar
+func (h *StatsHandler) GetProblemsStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	stats, err := h.repo.GetProblemsStats(ctx)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get problems stats")
+		return
+	}
+
+	response := map[string]interface{}{
+		"data": stats,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

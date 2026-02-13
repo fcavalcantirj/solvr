@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,6 +22,9 @@ type MockStatsRepository struct {
 	TotalContributions int
 	TrendingPosts      []any
 	TrendingTags       []any
+	// Problems stats
+	ProblemsStatsResult map[string]any
+	ProblemsStatsErr    error
 }
 
 func (m *MockStatsRepository) GetActivePostsCount(ctx context.Context) (int, error) {
@@ -95,6 +99,21 @@ func (m *MockStatsRepository) GetIdeaPipelineStats(ctx context.Context) (map[str
 
 func (m *MockStatsRepository) GetRecentlyRealized(ctx context.Context, limit int) ([]map[string]any, error) {
 	return []map[string]any{}, nil
+}
+
+func (m *MockStatsRepository) GetProblemsStats(ctx context.Context) (map[string]any, error) {
+	if m.ProblemsStatsErr != nil {
+		return nil, m.ProblemsStatsErr
+	}
+	if m.ProblemsStatsResult != nil {
+		return m.ProblemsStatsResult, nil
+	}
+	return map[string]any{
+		"total_problems":      0,
+		"solved_count":        0,
+		"active_approaches":   0,
+		"avg_solve_time_days": 0,
+	}, nil
 }
 
 func TestStatsHandler_GetStats(t *testing.T) {
@@ -221,4 +240,98 @@ func TestStatsHandler_GetTrending(t *testing.T) {
 	}
 }
 
-// Types are defined in stats.go - reusing them here
+func TestStatsHandler_GetProblemsStats(t *testing.T) {
+	t.Run("returns all four stats fields", func(t *testing.T) {
+		mockRepo := &MockStatsRepository{
+			ProblemsStatsResult: map[string]any{
+				"total_problems":      42,
+				"solved_count":        15,
+				"active_approaches":   23,
+				"avg_solve_time_days": 7,
+			},
+		}
+		handler := NewStatsHandler(mockRepo)
+		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetProblemsStats(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+
+		var body map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		data := body["data"].(map[string]interface{})
+		checks := map[string]int{
+			"total_problems":      42,
+			"solved_count":        15,
+			"active_approaches":   23,
+			"avg_solve_time_days": 7,
+		}
+		for field, expected := range checks {
+			got := int(data[field].(float64))
+			if got != expected {
+				t.Errorf("expected %s=%d, got %d", field, expected, got)
+			}
+		}
+	})
+
+	t.Run("returns zeros for empty database", func(t *testing.T) {
+		mockRepo := &MockStatsRepository{
+			ProblemsStatsResult: map[string]any{
+				"total_problems":      0,
+				"solved_count":        0,
+				"active_approaches":   0,
+				"avg_solve_time_days": 0,
+			},
+		}
+		handler := NewStatsHandler(mockRepo)
+		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetProblemsStats(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+
+		var body map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		data := body["data"].(map[string]interface{})
+		if int(data["total_problems"].(float64)) != 0 {
+			t.Errorf("expected total_problems=0, got %v", data["total_problems"])
+		}
+	})
+
+	t.Run("returns 500 on repository error", func(t *testing.T) {
+		mockRepo := &MockStatsRepository{
+			ProblemsStatsErr: fmt.Errorf("database error"),
+		}
+		handler := NewStatsHandler(mockRepo)
+		req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
+		rec := httptest.NewRecorder()
+
+		handler.GetProblemsStats(rec, req)
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("expected status 500, got %d", rec.Code)
+		}
+
+		var body map[string]interface{}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		errObj := body["error"].(map[string]interface{})
+		if errObj["code"] != "INTERNAL_ERROR" {
+			t.Errorf("expected error code INTERNAL_ERROR, got %v", errObj["code"])
+		}
+	})
+}

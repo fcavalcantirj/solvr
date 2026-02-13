@@ -384,7 +384,7 @@
       "Write tests for handler and repository",
       "Verify: Endpoint returns correct counts from production data"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

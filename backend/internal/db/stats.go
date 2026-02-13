@@ -275,6 +275,39 @@ func (r *StatsRepository) GetTrendingTags(ctx context.Context, limit int) ([]any
 }
 
 // ========================
+// Problems-specific stats
+// ========================
+
+// GetProblemsStats returns aggregate statistics for the problems page sidebar.
+func (r *StatsRepository) GetProblemsStats(ctx context.Context) (map[string]any, error) {
+	var totalProblems, solvedCount, activeApproaches, avgSolveTimeDays int
+
+	err := r.pool.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM posts WHERE type = 'problem' AND deleted_at IS NULL),
+			(SELECT COUNT(*) FROM posts WHERE type = 'problem' AND status = 'solved' AND deleted_at IS NULL),
+			(SELECT COUNT(*) FROM approaches a
+				JOIN posts p ON a.problem_id = p.id
+				WHERE a.status IN ('starting', 'working')
+				AND a.deleted_at IS NULL
+				AND p.deleted_at IS NULL),
+			COALESCE((SELECT AVG(EXTRACT(EPOCH FROM (p.updated_at - p.created_at)) / 86400)::INT
+				FROM posts p
+				WHERE p.type = 'problem' AND p.status = 'solved' AND p.deleted_at IS NULL), 0)
+	`).Scan(&totalProblems, &solvedCount, &activeApproaches, &avgSolveTimeDays)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]any{
+		"total_problems":      totalProblems,
+		"solved_count":        solvedCount,
+		"active_approaches":   activeApproaches,
+		"avg_solve_time_days": avgSolveTimeDays,
+	}, nil
+}
+
+// ========================
 // Ideas-specific stats
 // ========================
 

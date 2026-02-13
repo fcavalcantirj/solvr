@@ -336,6 +336,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Get("/stats", statsHandler.GetStats)
 			r.Get("/stats/trending", statsHandler.GetTrending)
 			r.Get("/stats/ideas", statsHandler.GetIdeasStats)
+			r.Get("/stats/problems", statsHandler.GetProblemsStats)
 		}
 
 		// Sitemap endpoint (SEO-URGENT, no auth required)

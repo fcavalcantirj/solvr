@@ -427,3 +427,15 @@
 - Updated getSitemapUrls() to accept optional SitemapUrlsParams, builds query string when provided
 - Existing getSitemapUrls() with no params still works (backward compat)
 - npx tsc --noEmit passes (only pre-existing robots.test.ts errors), all 7 sitemap frontend tests pass
+
+2026-02-12: Replace single sitemap with sitemap index using generateSitemaps() (SEO-URGENT)
+- Rewrote frontend/app/sitemap.ts: exports generateSitemaps() + default sitemap({ id })
+- generateSitemaps() calls api.getSitemapCounts(), calculates: 1 static + ceil(posts/5000) + ceil(agents/5000) + ceil(users/5000)
+- Falls back to [{ id: 0 }] on API error
+- sitemap({ id: 0 }) returns 11 static pages (unchanged priorities/frequencies), no API calls
+- sitemap({ id: 1..N }) fetches posts paginated, maps to /problems/{id}, /questions/{id}, /ideas/{id}
+- sitemap({ id: N+1..M }) fetches agents, maps to /agents/{id}
+- sitemap({ id: M+1..K }) fetches users, maps to /users/{id}
+- On API error in sitemap({ id }), returns empty array (graceful degradation)
+- Rewrote sitemap.test.ts: 11 tests (3 generateSitemaps + 8 sitemap) covering count calculation, static pages, posts/agents/users ranges, error fallback, lastModified
+- All 11 sitemap tests pass, 368 total frontend tests pass (10 pre-existing failures unrelated)

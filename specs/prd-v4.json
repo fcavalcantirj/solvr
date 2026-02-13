@@ -709,7 +709,7 @@
       "robots.ts needs no change (still points to /sitemap.xml which Next.js auto-generates as sitemap index)",
       "Verify: npx vitest run passes, /sitemap.xml is a sitemap index, /sitemap/0.xml has static pages"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "SEO-URGENT",

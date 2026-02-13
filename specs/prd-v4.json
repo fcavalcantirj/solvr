@@ -585,7 +585,7 @@
       "Write Vitest test: verify robots() returns correct rules, sitemap URL, and disallow paths",
       "Verify: curl https://solvr.dev/robots.txt shows correct output"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "SEO-URGENT",

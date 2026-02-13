@@ -221,3 +221,12 @@
 - Created handlers/sitemap_test.go with 5 tests (TDD approach)
 - Tests: returns all content, empty arrays, 500 on error, draft filtering, content types
 - All sitemap tests pass, build successful
+
+2026-02-12: Create robots.ts with crawl rules and sitemap reference (SEO-URGENT)
+- Created frontend/app/robots.ts exporting MetadataRoute.Robots
+- Rules: Allow / for all user-agents
+- Disallow: /settings/, /auth/, /login, /join, /new, /admin/
+- Sitemap: https://solvr.dev/sitemap.xml
+- Host: https://solvr.dev
+- Created frontend/app/robots.test.ts with 4 tests (TDD approach)
+- All robots tests pass

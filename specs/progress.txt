@@ -396,3 +396,13 @@
 - Converted BROWSE OPEN PROBLEMS CTA to Link href="/problems?status=open"
 - LOAD MORE button was already functional (wired in previous task)
 - All 364 frontend tests pass
+
+2026-02-12: Add GET /v1/sitemap/counts endpoint (SEO-URGENT)
+- Added SitemapCounts struct to models/sitemap.go with Posts, Agents, Users int fields
+- Added GetSitemapCounts(ctx) to SitemapRepository in db/sitemap.go with 3 COUNT queries (same WHERE filters as GetSitemapURLs)
+- Added GetSitemapCounts to SitemapRepositoryInterface in handlers/sitemap.go
+- Added GetSitemapCounts handler returning { data: { posts: N, agents: N, users: N } }
+- Added route GET /v1/sitemap/counts to router.go inside existing sitemap block
+- Updated MockSitemapRepository in sitemap_test.go to implement GetSitemapCounts
+- Wrote 3 tests: correct counts, empty DB zeros, repo error 500
+- All 8 sitemap handler tests pass, build successful

@@ -27,3 +27,10 @@ type SitemapURLs struct {
 	Agents []SitemapAgent `json:"agents"`
 	Users  []SitemapUser  `json:"users"`
 }
+
+// SitemapCounts holds counts of indexable content per type.
+type SitemapCounts struct {
+	Posts  int `json:"posts"`
+	Agents int `json:"agents"`
+	Users  int `json:"users"`
+}

@@ -649,6 +649,69 @@
     "passes": true
   },
   {
+    "category": "backend",
+    "description": "Add GET /v1/sitemap/counts endpoint returning indexable content counts per type",
+    "steps": [
+      "Add SitemapCounts struct to models/sitemap.go with Posts, Agents, Users int fields",
+      "Add GetSitemapCounts(ctx) to SitemapRepository in db/sitemap.go with 3 COUNT queries (same WHERE filters as existing)",
+      "Add GetSitemapCounts to SitemapRepositoryInterface in handlers/sitemap.go",
+      "Add GetSitemapCounts handler returning { data: { posts: N, agents: N, users: N } }",
+      "Add route GET /v1/sitemap/counts to router.go inside the existing sitemap block",
+      "Update MockSitemapRepository in sitemap_test.go to implement GetSitemapCounts",
+      "Write tests: correct counts, empty DB zeros, repo error 500",
+      "Verify: go test ./internal/api/handlers/ passes"
+    ],
+    "passes": true
+  },
+  {
+    "category": "backend",
+    "description": "Add pagination to GET /v1/sitemap/urls with type, page, per_page query params",
+    "steps": [
+      "Add SitemapURLsOptions struct to models/sitemap.go (Type string, Page int, PerPage int)",
+      "Add GetPaginatedSitemapURLs(ctx, opts) to SitemapRepository in db/sitemap.go with LIMIT/OFFSET queries",
+      "Add GetPaginatedSitemapURLs to SitemapRepositoryInterface",
+      "Define SitemapMaxPerPage=5000 and SitemapDefaultPerPage=5000 constants in handlers/sitemap.go",
+      "Update GetSitemapURLs handler: if type param present, parse type/page/per_page and use paginated path; if absent, fall back to existing behavior (backward compat)",
+      "Validate type is posts/agents/users (400 on invalid), per_page <= 5000, page >= 1",
+      "Response shape stays identical: { data: { posts: [], agents: [], users: [] } } with only relevant array populated",
+      "Update MockSitemapRepository in sitemap_test.go to implement GetPaginatedSitemapURLs",
+      "Write tests: type=posts returns only posts, pagination offset works, invalid type 400, no type param backward compat",
+      "Verify: go test ./internal/api/handlers/ passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add getSitemapCounts() and paginated getSitemapUrls() params to API client",
+    "steps": [
+      "Add APISitemapCountsResponse type to api-types.ts: { data: { posts: number, agents: number, users: number } }",
+      "Add getSitemapCounts() method to SolvrAPI class calling GET /v1/sitemap/counts",
+      "Update getSitemapUrls() to accept optional { type?: string, page?: number, per_page?: number }",
+      "Build query string from params, append to /v1/sitemap/urls when provided",
+      "Existing getSitemapUrls() with no params still works (backward compat)",
+      "Verify: npx tsc --noEmit passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "SEO-URGENT",
+    "description": "Replace single sitemap with sitemap index using generateSitemaps() for scalable SEO",
+    "steps": [
+      "Rewrite frontend/app/sitemap.ts to export generateSitemaps() and default sitemap({ id })",
+      "generateSitemaps() calls api.getSitemapCounts(), calculates: 1 static + ceil(posts/5000) + ceil(agents/5000) + ceil(users/5000) sitemaps",
+      "generateSitemaps() falls back to [{ id: 0 }] on API error",
+      "sitemap({ id: 0 }) returns the 11 static pages (unchanged priorities/frequencies)",
+      "sitemap({ id: 1..N }) calls api.getSitemapUrls({ type: 'posts', page, per_page: 5000 }) and maps to /problems/{id}, /questions/{id}, /ideas/{id}",
+      "sitemap({ id: N+1..M }) fetches agents, maps to /agents/{id}",
+      "sitemap({ id: M+1..K }) fetches users, maps to /users/{id}",
+      "On API error in sitemap({ id }), return empty array (graceful degradation)",
+      "Update sitemap.test.ts: test generateSitemaps count calculation, test sitemap(0) static, test sitemap(1) posts, test fallback on error",
+      "robots.ts needs no change (still points to /sitemap.xml which Next.js auto-generates as sitemap index)",
+      "Verify: npx vitest run passes, /sitemap.xml is a sitemap index, /sitemap/0.xml has static pages"
+    ],
+    "passes": false
+  },
+  {
     "category": "SEO-URGENT",
     "description": "Add Google Search Console verification and submit sitemap",
     "steps": [

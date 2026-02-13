@@ -345,6 +345,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			sitemapRepo := db.NewSitemapRepository(pool)
 			sitemapHandler := handlers.NewSitemapHandler(sitemapRepo)
 			r.Get("/sitemap/urls", sitemapHandler.GetSitemapURLs)
+			r.Get("/sitemap/counts", sitemapHandler.GetSitemapCounts)
 		}
 
 		// Problems endpoints (API-CRITICAL per PRD-v2)

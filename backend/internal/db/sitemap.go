@@ -103,3 +103,41 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 
 	return result, nil
 }
+
+// GetSitemapCounts returns counts of indexable content per type.
+// Uses the same WHERE filters as GetSitemapURLs.
+func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.SitemapCounts, error) {
+	counts := &models.SitemapCounts{}
+
+	// Count non-draft, non-deleted posts
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM posts
+		WHERE deleted_at IS NULL
+		AND status NOT IN ('draft')
+	`).Scan(&counts.Posts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Count active agents
+	err = r.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM agents
+		WHERE status = 'active'
+	`).Scan(&counts.Agents)
+	if err != nil {
+		return nil, err
+	}
+
+	// Count all users
+	err = r.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM users
+	`).Scan(&counts.Users)
+	if err != nil {
+		return nil, err
+	}
+
+	return counts, nil
+}

@@ -17,6 +17,10 @@ type MockSitemapRepository struct {
 	Agents []models.SitemapAgent
 	Users  []models.SitemapUser
 	Err    error
+
+	// For GetSitemapCounts
+	Counts    *models.SitemapCounts
+	CountsErr error
 }
 
 func (m *MockSitemapRepository) GetSitemapURLs(ctx context.Context) (*models.SitemapURLs, error) {
@@ -28,6 +32,13 @@ func (m *MockSitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sit
 		Agents: m.Agents,
 		Users:  m.Users,
 	}, nil
+}
+
+func (m *MockSitemapRepository) GetSitemapCounts(ctx context.Context) (*models.SitemapCounts, error) {
+	if m.CountsErr != nil {
+		return nil, m.CountsErr
+	}
+	return m.Counts, nil
 }
 
 func TestSitemapHandler_GetSitemapURLs(t *testing.T) {
@@ -200,6 +211,103 @@ func TestSitemapHandler_GetSitemapURLs(t *testing.T) {
 			}
 
 			// Check Content-Type
+			ct := rec.Header().Get("Content-Type")
+			if ct != "application/json" {
+				t.Errorf("expected Content-Type 'application/json', got '%s'", ct)
+			}
+
+			var body map[string]interface{}
+			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			if tt.checkResponse != nil {
+				tt.checkResponse(t, body)
+			}
+		})
+	}
+}
+
+func TestSitemapHandler_GetSitemapCounts(t *testing.T) {
+	tests := []struct {
+		name           string
+		mockRepo       *MockSitemapRepository
+		expectedStatus int
+		checkResponse  func(t *testing.T, body map[string]interface{})
+	}{
+		{
+			name: "returns correct counts",
+			mockRepo: &MockSitemapRepository{
+				Counts: &models.SitemapCounts{
+					Posts:  42,
+					Agents: 15,
+					Users:  8,
+				},
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				data := body["data"].(map[string]interface{})
+				if int(data["posts"].(float64)) != 42 {
+					t.Errorf("expected posts=42, got %v", data["posts"])
+				}
+				if int(data["agents"].(float64)) != 15 {
+					t.Errorf("expected agents=15, got %v", data["agents"])
+				}
+				if int(data["users"].(float64)) != 8 {
+					t.Errorf("expected users=8, got %v", data["users"])
+				}
+			},
+		},
+		{
+			name: "returns zeros for empty database",
+			mockRepo: &MockSitemapRepository{
+				Counts: &models.SitemapCounts{
+					Posts:  0,
+					Agents: 0,
+					Users:  0,
+				},
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				data := body["data"].(map[string]interface{})
+				if int(data["posts"].(float64)) != 0 {
+					t.Errorf("expected posts=0, got %v", data["posts"])
+				}
+				if int(data["agents"].(float64)) != 0 {
+					t.Errorf("expected agents=0, got %v", data["agents"])
+				}
+				if int(data["users"].(float64)) != 0 {
+					t.Errorf("expected users=0, got %v", data["users"])
+				}
+			},
+		},
+		{
+			name: "returns 500 on repository error",
+			mockRepo: &MockSitemapRepository{
+				CountsErr: context.DeadlineExceeded,
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				errObj := body["error"].(map[string]interface{})
+				if errObj["code"] != "INTERNAL_ERROR" {
+					t.Errorf("expected error code 'INTERNAL_ERROR', got '%v'", errObj["code"])
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewSitemapHandler(tt.mockRepo)
+			req := httptest.NewRequest("GET", "/v1/sitemap/counts", nil)
+			rec := httptest.NewRecorder()
+
+			handler.GetSitemapCounts(rec, req)
+
+			if rec.Code != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, rec.Code)
+			}
+
 			ct := rec.Header().Get("Content-Type")
 			if ct != "application/json" {
 				t.Errorf("expected Content-Type 'application/json', got '%s'", ct)

@@ -255,3 +255,13 @@
 - Description truncated to 160 chars for meta tags
 - Graceful fallback on API error returns default metadata per type
 - Created tests: problems (4), questions (2), ideas (2) - all passing
+
+2026-02-12: Add generateMetadata to /agents/[id] and /users/[id] (SEO-URGENT)
+- Refactored /agents/[id]: split "use client" page.tsx into server page.tsx + client agent-profile-client.tsx
+- Refactored /users/[id]: split "use client" page.tsx into server page.tsx + client user-profile-client.tsx
+- Agent page: generateMetadata uses api.getAgent(id), returns display_name as title, bio as description
+- User page: generateMetadata uses api.getUserProfile(id), returns display_name as title, bio as description
+- Both include openGraph (type: 'profile') and twitter metadata
+- Fallback description when bio is empty, default metadata on API error
+- Updated existing agent tests (13) to use AgentProfileClient import
+- Added generateMetadata tests: agents (4), users (4) - all 17 tests passing

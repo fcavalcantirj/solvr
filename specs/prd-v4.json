@@ -646,7 +646,7 @@
       "Write Vitest tests for both: mock API, verify metadata returned",
       "Verify: view-source on agent/user profile shows correct title and description"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "SEO-URGENT",

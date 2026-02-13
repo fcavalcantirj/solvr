@@ -16,9 +16,9 @@ interface UseCreatePostReturn {
   submit: () => Promise<APICreatePostResponse['data'] | null>;
 }
 
-export function useCreatePost(): UseCreatePostReturn {
+export function useCreatePost(defaultType?: 'problem' | 'question' | 'idea'): UseCreatePostReturn {
   const [form, setForm] = useState<CreatePostForm>({
-    type: 'question',
+    type: defaultType || 'question',
     title: '',
     description: '',
     tags: [],

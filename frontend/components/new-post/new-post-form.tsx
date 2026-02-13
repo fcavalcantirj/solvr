@@ -16,10 +16,14 @@ const POST_TYPES = [
   { value: 'idea', label: 'Idea', description: 'Share an idea for discussion and feedback' },
 ] as const;
 
-export function NewPostForm() {
+interface NewPostFormProps {
+  defaultType?: 'problem' | 'question' | 'idea';
+}
+
+export function NewPostForm({ defaultType }: NewPostFormProps = {}) {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const { form, updateForm, isSubmitting, error, submit } = useCreatePost();
+  const { form, updateForm, isSubmitting, error, submit } = useCreatePost(defaultType);
   const [tagInput, setTagInput] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {

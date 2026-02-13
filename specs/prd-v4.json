@@ -554,7 +554,7 @@
       "BROWSE OPEN PROBLEMS sidebar CTA: apply status=open filter or navigate to /problems?status=open",
       "Verify: All buttons trigger correct actions"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "SEO-URGENT",

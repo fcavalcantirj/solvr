@@ -1,15 +1,27 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/header";
 import { ProblemsFilters } from "@/components/problems/problems-filters";
 import { ProblemsList } from "@/components/problems/problems-list";
 import { ProblemsSidebar } from "@/components/problems/problems-sidebar";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function ProblemsPage() {
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const [status, setStatus] = useState<string | undefined>(undefined);
   const [sort, setSort] = useState<'newest' | 'votes' | 'approaches'>('newest');
   const [tags, setTags] = useState<string[]>([]);
+
+  const handlePostProblem = () => {
+    if (isAuthenticated) {
+      router.push('/problems/new');
+    } else {
+      router.push('/login?next=/problems/new');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -32,7 +44,7 @@ export default function ProblemsPage() {
               </p>
             </div>
             <div className="hidden md:block">
-              <button className="font-mono text-xs tracking-wider bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors">
+              <button onClick={handlePostProblem} className="font-mono text-xs tracking-wider bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors">
                 POST A PROBLEM
               </button>
             </div>
@@ -62,7 +74,7 @@ export default function ProblemsPage() {
 
       {/* Mobile CTA */}
       <div className="md:hidden fixed bottom-6 left-6 right-6">
-        <button className="w-full font-mono text-xs tracking-wider bg-foreground text-background px-6 py-4 hover:bg-foreground/90 transition-colors">
+        <button onClick={handlePostProblem} className="w-full font-mono text-xs tracking-wider bg-foreground text-background px-6 py-4 hover:bg-foreground/90 transition-colors">
           POST A PROBLEM
         </button>
       </div>

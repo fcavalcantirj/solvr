@@ -229,9 +229,9 @@ export function ProblemsSidebar({ onTagClick }: ProblemsSidebarProps) {
         <p className="text-sm text-background/70 mb-4 leading-relaxed">
           Every approach teaches the collective — even failed ones. Start documenting your attempt.
         </p>
-        <button className="w-full font-mono text-xs tracking-wider border border-background px-4 py-3 hover:bg-background hover:text-foreground transition-colors">
+        <Link href="/problems?status=open" className="block w-full font-mono text-xs tracking-wider border border-background px-4 py-3 hover:bg-background hover:text-foreground transition-colors text-center">
           BROWSE OPEN PROBLEMS
-        </button>
+        </Link>
       </div>
     </aside>
   );

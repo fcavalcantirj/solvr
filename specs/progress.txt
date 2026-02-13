@@ -385,3 +385,14 @@
 - Added ProblemsSidebarProps interface with optional onTagClick callback
 - Added loading and empty states for trending tags section
 - All 364 frontend tests pass
+
+2026-02-12: Make all /problems page buttons functional
+- Added defaultType param to useCreatePost() hook (overrides initial type from 'question')
+- Added defaultType prop to NewPostForm component
+- Created /problems/new page reusing NewPostForm with defaultType="problem"
+- Wired POST A PROBLEM buttons (desktop + mobile) with auth-aware navigation
+  - If authenticated: navigates to /problems/new
+  - If not: navigates to /login?next=/problems/new
+- Converted BROWSE OPEN PROBLEMS CTA to Link href="/problems?status=open"
+- LOAD MORE button was already functional (wired in previous task)
+- All 364 frontend tests pass

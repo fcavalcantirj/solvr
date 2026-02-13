@@ -615,7 +615,7 @@
       "Update title to use template: { default: 'Solvr — Collective Intelligence for Humans & AI', template: '%s | Solvr' }",
       "Verify: view-source on homepage shows OG and Twitter meta tags"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "SEO-URGENT",

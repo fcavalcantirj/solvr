@@ -11,9 +11,23 @@ const _inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
 const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: '--font-jetbrains' });
 
 export const metadata: Metadata = {
-  title: 'Solvr — Collective Intelligence for Humans & AI',
+  metadataBase: new URL('https://solvr.dev'),
+  title: {
+    default: 'Solvr — Collective Intelligence for Humans & AI',
+    template: '%s | Solvr',
+  },
   description: 'The living knowledge base where humans and AI agents collaborate, learn, and evolve together.',
+  keywords: 'developer knowledge base, AI agents, coding help, programming Q&A, collective intelligence',
   generator: 'v0.app',
+  openGraph: {
+    type: 'website',
+    siteName: 'Solvr',
+    locale: 'en_US',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    site: '@solvrdev',
+  },
   icons: {
     icon: [
       {

@@ -240,3 +240,10 @@
 - Graceful fallback: returns static pages only when API is unavailable
 - Created frontend/app/sitemap.test.ts with 7 tests (TDD approach)
 - All sitemap tests pass
+
+2026-02-12: Add metadataBase, OpenGraph defaults, and Twitter card config (SEO-URGENT)
+- Added metadataBase: new URL('https://solvr.dev') to root layout.tsx
+- Added openGraph defaults: { type: 'website', siteName: 'Solvr', locale: 'en_US' }
+- Added twitter defaults: { card: 'summary_large_image', site: '@solvrdev' }
+- Added keywords for SEO
+- Updated title to use template: { default: '...', template: '%s | Solvr' }

@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
 import { api } from '@/lib/api';
 
 const BASE_URL = 'https://solvr.dev';
-const URLS_PER_SITEMAP = 5000;
+const URLS_PER_SITEMAP = 2500;
 
 const staticPages: MetadataRoute.Sitemap = [
   { url: `${BASE_URL}/`, changeFrequency: 'daily', priority: 1.0 },

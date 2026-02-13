@@ -23,11 +23,11 @@ describe('generateSitemaps', () => {
 
     const result = await generateSitemaps();
 
-    // 1 static + ceil(12000/5000)=3 posts + ceil(3000/5000)=1 agents + ceil(8000/5000)=2 users = 7
-    expect(result).toHaveLength(7);
-    expect(result).toEqual([
-      { id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }, { id: 6 },
-    ]);
+    // 1 static + ceil(12000/2500)=5 posts + ceil(3000/2500)=2 agents + ceil(8000/2500)=4 users = 12
+    expect(result).toHaveLength(12);
+    expect(result).toEqual(
+      Array.from({ length: 12 }, (_, i) => ({ id: i }))
+    );
   });
 
   it('returns single sitemap when all counts are zero', async () => {
@@ -100,7 +100,7 @@ describe('sitemap', () => {
 
     const result = await sitemap({ id: 1 });
 
-    expect(api.getSitemapUrls).toHaveBeenCalledWith({ type: 'posts', page: 1, per_page: 5000 });
+    expect(api.getSitemapUrls).toHaveBeenCalledWith({ type: 'posts', page: 1, per_page: 2500 });
     const urls = result.map((entry) => entry.url);
     expect(urls).toContain('https://solvr.dev/problems/p1');
     expect(urls).toContain('https://solvr.dev/questions/q1');
@@ -117,8 +117,8 @@ describe('sitemap', () => {
 
     const result = await sitemap({ id: 2 });
 
-    // posts need ceil(8000/5000)=2 pages, so id=2 is posts page 2
-    expect(api.getSitemapUrls).toHaveBeenCalledWith({ type: 'posts', page: 2, per_page: 5000 });
+    // posts need ceil(8000/2500)=4 pages, so id=2 is posts page 2
+    expect(api.getSitemapUrls).toHaveBeenCalledWith({ type: 'posts', page: 2, per_page: 2500 });
     expect(result).toHaveLength(1);
   });
 
@@ -130,10 +130,10 @@ describe('sitemap', () => {
       data: { posts: [], agents: [{ id: 'a1', updated_at: '2026-02-01T00:00:00Z' }], users: [] },
     });
 
-    // posts: ceil(8000/5000)=2, so agents start at id=3
-    const result = await sitemap({ id: 3 });
+    // posts: ceil(8000/2500)=4, so agents start at id=5
+    const result = await sitemap({ id: 5 });
 
-    expect(api.getSitemapUrls).toHaveBeenCalledWith({ type: 'agents', page: 1, per_page: 5000 });
+    expect(api.getSitemapUrls).toHaveBeenCalledWith({ type: 'agents', page: 1, per_page: 2500 });
     const urls = result.map((entry) => entry.url);
     expect(urls).toContain('https://solvr.dev/agents/a1');
     expect(result[0]?.priority).toBe(0.6);
@@ -147,10 +147,10 @@ describe('sitemap', () => {
       data: { posts: [], agents: [], users: [{ id: 'u1', updated_at: '2026-02-01T00:00:00Z' }] },
     });
 
-    // posts: ceil(8000/5000)=2, agents: ceil(100/5000)=1, so users start at id=4
-    const result = await sitemap({ id: 4 });
+    // posts: ceil(8000/2500)=4, agents: ceil(100/2500)=1, so users start at id=6
+    const result = await sitemap({ id: 6 });
 
-    expect(api.getSitemapUrls).toHaveBeenCalledWith({ type: 'users', page: 1, per_page: 5000 });
+    expect(api.getSitemapUrls).toHaveBeenCalledWith({ type: 'users', page: 1, per_page: 2500 });
     const urls = result.map((entry) => entry.url);
     expect(urls).toContain('https://solvr.dev/users/u1');
     expect(result[0]?.priority).toBe(0.5);
@@ -161,7 +161,7 @@ describe('sitemap', () => {
       data: { posts: 100, agents: 50, users: 30 },
     });
 
-    // posts: ceil(100/5000)=1, agents: ceil(50/5000)=1, users: ceil(30/5000)=1
+    // posts: ceil(100/2500)=1, agents: ceil(50/2500)=1, users: ceil(30/2500)=1
     // total sitemaps: 1 static + 1 + 1 + 1 = 4 (ids 0-3)
     // id=4 is out of range
     const result = await sitemap({ id: 4 });
@@ -172,16 +172,16 @@ describe('sitemap', () => {
   it('skips zero-count types in ID offset calculation', async () => {
     // posts=0 means no post sitemaps, agents should start at id=1
     vi.mocked(api.getSitemapCounts).mockResolvedValue({
-      data: { posts: 0, agents: 5000, users: 0 },
+      data: { posts: 0, agents: 2500, users: 0 },
     });
     vi.mocked(api.getSitemapUrls).mockResolvedValue({
       data: { posts: [], agents: [{ id: 'a1', updated_at: '2026-02-01T00:00:00Z' }], users: [] },
     });
 
-    // posts: ceil(0/5000)=0 pages, so agents start at id=1 (not id=2)
+    // posts: ceil(0/2500)=0 pages, so agents start at id=1 (not id=2)
     const result = await sitemap({ id: 1 });
 
-    expect(api.getSitemapUrls).toHaveBeenCalledWith({ type: 'agents', page: 1, per_page: 5000 });
+    expect(api.getSitemapUrls).toHaveBeenCalledWith({ type: 'agents', page: 1, per_page: 2500 });
     const urls = result.map((entry) => entry.url);
     expect(urls).toContain('https://solvr.dev/agents/a1');
   });

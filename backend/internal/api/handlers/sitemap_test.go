@@ -442,12 +442,12 @@ func TestSitemapHandler_GetSitemapURLs_Pagination(t *testing.T) {
 				if opts.Type != "users" {
 					t.Errorf("expected type 'users', got '%s'", opts.Type)
 				}
-				// Should default to page=1, per_page=5000
+				// Should default to page=1, per_page=2500
 				if opts.Page != 1 {
 					t.Errorf("expected default page 1, got %d", opts.Page)
 				}
-				if opts.PerPage != 5000 {
-					t.Errorf("expected default per_page 5000, got %d", opts.PerPage)
+				if opts.PerPage != 2500 {
+					t.Errorf("expected default per_page 2500, got %d", opts.PerPage)
 				}
 			},
 		},

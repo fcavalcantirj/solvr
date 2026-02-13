@@ -13,7 +13,7 @@ const (
 	// SitemapMaxPerPage is the maximum allowed per_page value for paginated sitemap queries.
 	SitemapMaxPerPage = 5000
 	// SitemapDefaultPerPage is the default per_page value when not specified.
-	SitemapDefaultPerPage = 5000
+	SitemapDefaultPerPage = 2500
 )
 
 // SitemapRepositoryInterface defines the interface for sitemap data access.

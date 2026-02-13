@@ -338,6 +338,14 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Get("/stats/ideas", statsHandler.GetIdeasStats)
 		}
 
+		// Sitemap endpoint (SEO-URGENT, no auth required)
+		// GET /v1/sitemap/urls - returns all indexable content for sitemap generation
+		if pool != nil {
+			sitemapRepo := db.NewSitemapRepository(pool)
+			sitemapHandler := handlers.NewSitemapHandler(sitemapRepo)
+			r.Get("/sitemap/urls", sitemapHandler.GetSitemapURLs)
+		}
+
 		// Problems endpoints (API-CRITICAL per PRD-v2)
 		// GET /v1/problems - list problems (no auth required)
 		r.Get("/problems", problemsHandler.List)

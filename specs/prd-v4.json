@@ -555,5 +555,109 @@
       "Verify: All buttons trigger correct actions"
     ],
     "passes": false
+  },
+  {
+    "category": "SEO-URGENT",
+    "description": "Create GET /v1/sitemap/urls endpoint returning all indexable content for sitemap generation",
+    "steps": [
+      "Create backend/internal/db/sitemap.go with GetSitemapURLs(ctx) method",
+      "Query posts: SELECT id, type, updated_at FROM posts WHERE deleted_at IS NULL AND status NOT IN ('draft') ORDER BY updated_at DESC",
+      "Query agents: SELECT id, updated_at FROM agents WHERE status = 'active' ORDER BY updated_at DESC",
+      "Query users: SELECT id, updated_at FROM users ORDER BY updated_at DESC",
+      "Return combined struct: { posts: [{id, type, updated_at}], agents: [{id, updated_at}], users: [{id, updated_at}] }",
+      "Create backend/internal/api/handlers/sitemap.go with GetSitemapURLs handler",
+      "No auth required — this is public data",
+      "Add route GET /v1/sitemap/urls to router.go (public group)",
+      "Write tests: returns all non-draft non-deleted posts, excludes drafts, excludes deleted, includes active agents, includes users",
+      "Verify: curl /v1/sitemap/urls returns JSON with all 3 arrays populated"
+    ],
+    "passes": true
+  },
+  {
+    "category": "SEO-URGENT",
+    "description": "Create robots.ts with crawl rules and sitemap reference",
+    "steps": [
+      "Create frontend/app/robots.ts exporting MetadataRoute.Robots",
+      "Rules: Allow / for all user-agents",
+      "Disallow: /settings/, /auth/, /login, /join, /new, /admin/",
+      "Sitemap: https://solvr.dev/sitemap.xml",
+      "Host: https://solvr.dev",
+      "Write Vitest test: verify robots() returns correct rules, sitemap URL, and disallow paths",
+      "Verify: curl https://solvr.dev/robots.txt shows correct output"
+    ],
+    "passes": false
+  },
+  {
+    "category": "SEO-URGENT",
+    "description": "Create sitemap.ts that feeds Google every post, agent, and user URL with lastmod",
+    "steps": [
+      "Add getSitemapUrls() to frontend/lib/api.ts — GET /v1/sitemap/urls, no auth",
+      "Create frontend/app/sitemap.ts exporting default async function returning MetadataRoute.Sitemap",
+      "Fetch all URLs from api.getSitemapUrls()",
+      "Static pages: / (priority 1.0, daily), /feed (0.9, hourly), /problems (0.9, hourly), /questions (0.9, hourly), /ideas (0.9, hourly), /agents (0.8, daily), /about (0.3, monthly), /how-it-works (0.3, monthly), /api-docs (0.5, weekly), /mcp (0.5, weekly)",
+      "Dynamic posts: map each post to /{type}s/{id} (e.g., /problems/{id}), priority 0.7, lastModified from updated_at, changeFrequency weekly",
+      "Dynamic agents: /agents/{id}, priority 0.6, lastModified from updated_at, changeFrequency weekly",
+      "Dynamic users: /users/{id}, priority 0.5, lastModified from updated_at, changeFrequency monthly",
+      "Graceful fallback: if API unavailable, return static pages only",
+      "Write Vitest tests: mock API response, verify all URL patterns generated, verify priorities, verify lastModified dates, verify fallback on API error",
+      "Verify: curl https://solvr.dev/sitemap.xml returns valid XML with all content URLs"
+    ],
+    "passes": false
+  },
+  {
+    "category": "SEO-URGENT",
+    "description": "Add metadataBase, OpenGraph defaults, and Twitter card config to root layout.tsx",
+    "steps": [
+      "Add metadataBase: new URL('https://solvr.dev') to metadata export in frontend/app/layout.tsx",
+      "Add openGraph defaults: { type: 'website', siteName: 'Solvr', locale: 'en_US' }",
+      "Add twitter defaults: { card: 'summary_large_image', site: '@solvrdev' }",
+      "Add keywords: 'developer knowledge base, AI agents, coding help, programming Q&A, collective intelligence'",
+      "Update title to use template: { default: 'Solvr — Collective Intelligence for Humans & AI', template: '%s | Solvr' }",
+      "Verify: view-source on homepage shows OG and Twitter meta tags"
+    ],
+    "passes": false
+  },
+  {
+    "category": "SEO-URGENT",
+    "description": "Add generateMetadata to /problems/[id], /questions/[id], /ideas/[id] for dynamic SEO",
+    "steps": [
+      "In frontend/app/problems/[id]/page.tsx: export async function generateMetadata({ params })",
+      "Fetch problem from API: api.getPost(id)",
+      "Return: title (post.title), description (post.description truncated to 160 chars), openGraph (title, description, type: 'article', url), twitter (title, description)",
+      "Handle not-found: return default metadata if API returns 404",
+      "Repeat for frontend/app/questions/[id]/page.tsx with same pattern",
+      "Repeat for frontend/app/ideas/[id]/page.tsx with same pattern",
+      "Write Vitest tests for each: mock API, verify title/description/OG returned",
+      "Verify: view-source on any post page shows correct title and meta description from actual content"
+    ],
+    "passes": false
+  },
+  {
+    "category": "SEO-URGENT",
+    "description": "Add generateMetadata to /agents/[id] and /users/[id] for profile SEO",
+    "steps": [
+      "In frontend/app/agents/[id]/page.tsx: export async function generateMetadata({ params })",
+      "Fetch agent from API: api.getAgent(id)",
+      "Return: title (agent.display_name), description (agent.bio truncated to 160 chars, or 'AI agent on Solvr'), openGraph, twitter",
+      "In frontend/app/users/[id]/page.tsx: export async function generateMetadata({ params })",
+      "Fetch user from API: api.getUser(id)",
+      "Return: title (user.display_name), description (user.bio truncated to 160 chars, or 'Developer on Solvr'), openGraph, twitter",
+      "Handle not-found: return default metadata if API returns 404",
+      "Write Vitest tests for both: mock API, verify metadata returned",
+      "Verify: view-source on agent/user profile shows correct title and description"
+    ],
+    "passes": false
+  },
+  {
+    "category": "SEO-URGENT",
+    "description": "Add Google Search Console verification and submit sitemap",
+    "steps": [
+      "Add Google Search Console verification meta tag to frontend/app/layout.tsx metadata.verification",
+      "Deploy frontend with sitemap.ts and robots.ts",
+      "Submit https://solvr.dev/sitemap.xml in Google Search Console",
+      "Request indexing for homepage and top content pages",
+      "Verify: Search Console shows sitemap as submitted with URL count matching database"
+    ],
+    "passes": false
   }
 ]

@@ -211,3 +211,13 @@
 - Added notes about +50 karma bonus and Human-Backed badge in descriptions
 - Endpoints are in "Agents" section (already grouped appropriately)
 - All 313 frontend tests pass
+
+2026-02-12: Create GET /v1/sitemap/urls endpoint (SEO-URGENT)
+- Created models/sitemap.go with SitemapPost, SitemapAgent, SitemapUser, SitemapURLs types
+- Created db/sitemap.go with SitemapRepository and GetSitemapURLs method
+- Queries: non-draft non-deleted posts, active agents, all users with updated_at
+- Created handlers/sitemap.go with SitemapHandler and SitemapRepositoryInterface
+- Added route GET /v1/sitemap/urls to router.go (public, no auth required)
+- Created handlers/sitemap_test.go with 5 tests (TDD approach)
+- Tests: returns all content, empty arrays, 500 on error, draft filtering, content types
+- All sitemap tests pass, build successful

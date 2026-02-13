@@ -649,3 +649,27 @@ export interface APIUserAgentsResponse {
     per_page: number;
   };
 }
+
+export interface APISitemapPost {
+  id: string;
+  type: string;
+  updated_at: string;
+}
+
+export interface APISitemapAgent {
+  id: string;
+  updated_at: string;
+}
+
+export interface APISitemapUser {
+  id: string;
+  updated_at: string;
+}
+
+export interface APISitemapResponse {
+  data: {
+    posts: APISitemapPost[];
+    agents: APISitemapAgent[];
+    users: APISitemapUser[];
+  };
+}

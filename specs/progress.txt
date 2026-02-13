@@ -230,3 +230,13 @@
 - Host: https://solvr.dev
 - Created frontend/app/robots.test.ts with 4 tests (TDD approach)
 - All robots tests pass
+
+2026-02-12: Create sitemap.ts with dynamic URLs from API (SEO-URGENT)
+- Added APISitemapPost, APISitemapAgent, APISitemapUser, APISitemapResponse types to api-types.ts
+- Added getSitemapUrls() method to SolvrAPI class in api.ts
+- Created frontend/app/sitemap.ts with static + dynamic URLs from API
+- Static pages: /, /feed, /problems, /questions, /ideas, /agents, /users, /about, /how-it-works, /api-docs, /mcp
+- Dynamic: posts mapped to /{type}s/{id}, agents to /agents/{id}, users to /users/{id}
+- Graceful fallback: returns static pages only when API is unavailable
+- Created frontend/app/sitemap.test.ts with 7 tests (TDD approach)
+- All sitemap tests pass

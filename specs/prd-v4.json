@@ -602,7 +602,7 @@
       "Write Vitest tests: mock API response, verify all URL patterns generated, verify priorities, verify lastModified dates, verify fallback on API error",
       "Verify: curl https://solvr.dev/sitemap.xml returns valid XML with all content URLs"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "SEO-URGENT",

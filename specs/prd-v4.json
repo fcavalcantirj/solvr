@@ -722,5 +722,332 @@
       "Verify: Search Console shows sitemap as submitted with URL count matching database"
     ],
     "passes": true
+  },
+  {
+    "category": "backend",
+    "description": "Add sort parameter to GET /v1/questions",
+    "steps": [
+      "In questions.go List handler, parse sort query param after tags parsing (line ~167)",
+      "Valid sort values: newest (default), votes, answers",
+      "Map to PostListOptions.Sort (field already exists in models/post.go)",
+      "Follow same pattern as problems.go lines 177-184",
+      "Add 'answers' sort support in db/posts.go List() ORDER BY clause if not present",
+      "Write tests for each sort option in questions handler tests",
+      "Verify: GET /v1/questions?sort=votes returns questions ordered by vote score",
+      "Verify: GET /v1/questions?sort=answers returns questions ordered by answer count",
+      "Verify: Invalid sort values silently default to newest"
+    ],
+    "passes": true
+  },
+  {
+    "category": "backend",
+    "description": "Set question status to 'answered' when first answer is created (enable ANSWERED filter)",
+    "steps": [
+      "PostStatusAnswered ('answered') is declared in models/post.go line 36 and valid for questions (line 173), but no code ever sets it",
+      "Currently CreateAnswer in db/answers.go:145 only inserts the answer — does NOT update question status",
+      "AcceptAnswer in db/answers.go:319 jumps open→solved, skipping answered entirely",
+      "In AnswersRepository.CreateAnswer (db/answers.go): after inserting the answer, UPDATE the question status from 'open' to 'answered' if current status is 'open'",
+      "SQL: UPDATE posts SET status = 'answered', updated_at = NOW() WHERE id = $1 AND type = 'question' AND status = 'open'",
+      "This makes the lifecycle: open → answered (first answer) → solved (answer accepted)",
+      "The WHERE status = 'open' guard ensures we don't overwrite 'solved' if answer was already accepted",
+      "Write test: create question (open), add answer → question status becomes 'answered'",
+      "Write test: question with accepted answer (solved), add another answer → status stays 'solved'",
+      "Verify: GET /v1/questions?status=answered now returns questions that have answers but no accepted answer"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Add GET /v1/stats/questions endpoint for sidebar dashboard",
+    "steps": [
+      "Add to StatsRepositoryInterface in handlers/stats.go: GetQuestionsStats, GetRecentlyAnsweredQuestions, GetTopAnswerers",
+      "Note: GetQuestionsAnsweredCount() already exists in db/stats.go (lines 92-103) — reuse/reference for answered_count",
+      "Implement GetQuestionsStats in db/stats.go: total_questions (COUNT type='question' AND deleted_at IS NULL), answered_count (COUNT where accepted_answer_id IS NOT NULL, reuse existing pattern), response_rate (answered/total * 100), avg_response_time_hours (AVG time from question created_at to first answer created_at via JOIN answers ON question_id)",
+      "Implement GetRecentlyAnsweredQuestions(ctx, limit): questions recently answered/solved with answerer display_name and type, ORDER BY updated_at DESC",
+      "Implement GetTopAnswerers(ctx, limit): GROUP answers by author, COUNT per author, JOIN users/agents for display_name, include accept_rate (accepted/total * 100), ORDER BY count DESC",
+      "Add GetQuestionsStats handler to handlers/stats.go (follow GetProblemsStats pattern at lines 188-221)",
+      "Response: { data: { total_questions, answered_count, response_rate, avg_response_time_hours, recently_answered[], top_answerers[] } }",
+      "Add route: r.Get('/stats/questions', statsHandler.GetQuestionsStats) in router.go after line 339",
+      "Write handler and repository tests",
+      "Verify: Returns correct JSON with all fields populated from production data"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add FetchQuestionsParams, APIQuestionsStatsResponse types and getQuestions/getQuestionsStats methods",
+    "steps": [
+      "Add FetchQuestionsParams to api-types.ts: { status?: string, tags?: string[], sort?: 'newest'|'votes'|'answers', page?: number, per_page?: number }",
+      "Add APIQuestionsStatsResponse to api-types.ts following APIProblemsStatsResponse pattern",
+      "Fields: total_questions, answered_count, response_rate (number), avg_response_time_hours (number), recently_answered: Array<{ id, title, answerer_name, answerer_type, time_to_answer_hours }>, top_answerers: Array<{ author_id, display_name, author_type, answer_count, accept_rate }>",
+      "Add getQuestions(params?: FetchQuestionsParams) method to api.ts → GET /v1/questions with query params (follow getProblems pattern)",
+      "Add getQuestionsStats() method to api.ts → GET /v1/stats/questions (follow getProblemsStats pattern)",
+      "Verify: npx tsc --noEmit passes with no type errors"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Create useQuestions hook following useProblems pattern",
+    "steps": [
+      "Create frontend/hooks/use-questions.ts following hooks/use-problems.ts pattern exactly",
+      "Accept options: { status?, tags?, sort?, page?, perPage? }",
+      "Call api.getQuestions(params) on mount and when options change",
+      "Return: questions[], loading, error, total, hasMore, page, refetch, loadMore",
+      "Transform API PostWithAuthor to QuestionListItem: id, title, snippet (description truncated 200 chars), status, displayStatus, voteScore, answersCount, author (id, name, type), tags, timestamp (formatRelativeTime), acceptedAnswer info",
+      "Map backend statuses to display: open→unanswered, answered→answered, solved→accepted",
+      "loadMore() increments page and appends, filter change resets to page 1",
+      "Verify: Hook compiles and returns typed data"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Replace mock data in questions-list.tsx with useQuestions hook",
+    "steps": [
+      "Accept props: status?, sort?, tags? (same pattern as ProblemsList)",
+      "Remove hardcoded Question interface and questions[] array (lines 6-101)",
+      "Import and use useQuestions({ status, sort, tags }) hook",
+      "Keep exact same card layout, styling, status badges (AWAITING/ANSWERED/ACCEPTED via statusConfig)",
+      "Map hook data to existing UI: title, preview→snippet, votes→voteScore, answersCount, author, tags, createdAt→timestamp",
+      "Add loading state with spinner or skeleton",
+      "Add error state",
+      "Add empty state when no questions found",
+      "Wire LOAD MORE button to loadMore() from hook, hide when !hasMore",
+      "Show loading spinner on LOAD MORE button while fetching next page",
+      "Verify: Renders real questions from API with identical gorgeous look"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Connect questions-filters.tsx to page state like problems-filters pattern",
+    "steps": [
+      "Make questions/page.tsx a 'use client' component with useState for status, sort, tags (copy problems/page.tsx pattern exactly)",
+      "Add useRouter and useAuth imports for ASK QUESTION button",
+      "Pass filter state and setter callbacks as props to QuestionsFilters: status, sort, tags, onStatusChange, onSortChange, onTagsChange",
+      "Update QuestionsFilters to accept and use these props instead of internal useState",
+      "Map filter UI values to API params: UNANSWERED→status=open, ANSWERED→status=answered, ACCEPTED→status=solved",
+      "Pass status, sort, tags as props to QuestionsList",
+      "Keep same gorgeous filter UI: status pills, sort buttons, tag pills, search input",
+      "Keep search input as local state for future use",
+      "Verify: Changing any filter triggers QuestionsList refetch via useQuestions hook"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Create useQuestionsStats hook following useProblemsStats pattern",
+    "steps": [
+      "Create frontend/hooks/use-questions-stats.ts following hooks/use-problems-stats.ts exactly",
+      "Call api.getQuestionsStats() on mount",
+      "Return: { stats: QuestionsStatsData | null, loading, error, refetch }",
+      "QuestionsStatsData includes: total_questions, answered_count, response_rate, avg_response_time_hours, recently_answered[], top_answerers[]",
+      "Verify: Hook compiles and returns typed data"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Replace all mock data in questions-sidebar.tsx with real API calls",
+    "steps": [
+      "Add 'use client' directive, import useQuestionsStats, useTrending, useState, useEffect, api, Link",
+      "Accept onTagClick prop (same as ProblemsSidebar)",
+      "Replace hardcoded stats[] with useQuestionsStats: TOTAL QUESTIONS, ANSWERED, RESPONSE RATE (format as X.X%), AVG. RESPONSE (format as Xh or Xmin)",
+      "Replace hardcoded unansweredQuestions[] with useEffect calling api.getQuestions({ status: 'open', sort: 'votes', per_page: 3 })",
+      "Replace hardcoded hotQuestions[] with useEffect calling api.getQuestions({ sort: 'votes', per_page: 3 })",
+      "Replace hardcoded topAnswerers[] with data from useQuestionsStats → top_answerers",
+      "Replace hardcoded trendingTags[] with useTrending() hook (reuse existing from hooks/use-stats.ts)",
+      "Add loading states for each section matching problems-sidebar.tsx pattern",
+      "Add empty states for each section",
+      "Keep exact same card designs, icons (HelpCircle, Zap, Trophy, etc.), and styling",
+      "Wire VIEW ALL UNANSWERED → Link to /questions?status=open",
+      "Wire ASK THE COLLECTIVE → Link to /questions/new",
+      "Wire tag buttons to onTagClick prop callback",
+      "Verify: All 6 sidebar sections show real data with same gorgeous look and feel"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Create /questions/new page reusing NewPostForm component",
+    "steps": [
+      "Create frontend/app/questions/new/page.tsx",
+      "Follow exact pattern of frontend/app/problems/new/page.tsx",
+      "Import Header and NewPostForm components",
+      "Use NewPostForm with defaultType='question' (component already supports question type)",
+      "Page header: 'NEW QUESTION' mono subtitle, 'Ask a Question' h1 title",
+      "Add metadata export: title='Ask a Question — Solvr', description='Ask the collective a question'",
+      "Verify: Page renders, form submits via POST /v1/posts with type=question, redirects to /questions/{new_id}"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire ASK QUESTION button on questions page with auth check and mobile CTA",
+    "steps": [
+      "In questions/page.tsx (now a client component from task 6), add handleAskQuestion function",
+      "handleAskQuestion: if isAuthenticated → router.push('/questions/new'), else → router.push('/login?next=/questions/new')",
+      "Wire onClick on desktop ASK QUESTION button in page header",
+      "Add mobile fixed CTA button at bottom: md:hidden fixed bottom-6 left-6 right-6 (same pattern as problems page POST A PROBLEM button)",
+      "Mobile button text: ASK QUESTION, same styling as problems mobile CTA",
+      "Verify: Desktop button works with auth check",
+      "Verify: Mobile CTA visible on small screens with auth check"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire vote buttons in question-content.tsx and answers-list.tsx using existing useVote hook",
+    "steps": [
+      "In question-content.tsx: import useVote from hooks/use-vote.ts",
+      "Initialize useVote(question.id, question.voteScore) — note: question is a post, voteOnPost works",
+      "Wire ThumbsUp onClick to upvote(), ThumbsDown onClick to downvote()",
+      "Display score from useVote hook instead of static question.voteScore",
+      "Add active state styling: emerald bg when userVote='up', red bg when userVote='down'",
+      "In answers-list.tsx: useVote calls api.voteOnPost which may not work for answers — check if POST /v1/answers/:id/vote uses same path, if not create a small useAnswerVote wrapper calling api.voteOnAnswer",
+      "Add api.voteOnAnswer(answerId, direction) to api.ts if needed → POST /v1/answers/{id}/vote",
+      "Wire each answer's vote buttons to its own vote hook instance",
+      "Show login prompt or error toast on 401 vote failure",
+      "Verify: Clicking vote buttons calls API, score updates optimistically, reverts on error"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire remaining dead buttons and navigation on questions page",
+    "steps": [
+      "question-header.tsx: wire Share button (Share2 icon, line 76) to navigator.clipboard.writeText(window.location.href) with toast confirmation",
+      "question-header.tsx: wire Bookmark button (line 80) to bookmark API or local state",
+      "question-content.tsx: wire Flag button (line 47) to open ReportModal with targetType='post'",
+      "Note: answers-list.tsx Flag/Report is ALREADY wired to ReportModal — no work needed there",
+      "Sidebar NEEDS YOUR KNOWLEDGE items: ensure each wraps in Link to /questions/{id}",
+      "Sidebar HOT THIS WEEK items: ensure each wraps in Link to /questions/{id}",
+      "Questions list cards: ensure each links to /questions/{id} using real IDs from API",
+      "Sidebar tag buttons: wire to onTagClick prop so clicking adds tag to active filters",
+      "Verify: Every single clickable element on /questions and /questions/[id] does something meaningful"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Replace custom api-footer.tsx with shared Footer component for consistency with rest of site",
+    "steps": [
+      "In app/api-docs/page.tsx: replace <ApiFooter /> with shared <Footer /> from components/footer.tsx",
+      "The shared Footer already has: Platform links, Developer links (API Docs, MCP, Agent Registration, Developer Portal, Status), Company links (Terms, Privacy, About, Blog), brand credits",
+      "Move the GET STARTED CTA (Get API Key + Explore buttons) from api-footer into a new section ABOVE the footer, still within the api-docs page layout",
+      "Move the Resources section (OpenAPI Spec, GitHub, Guides links) into the same CTA section above footer",
+      "Remove api-footer.tsx import from api-docs/page.tsx",
+      "Verify: Footer on /api-docs now matches footer on homepage, /problems, /questions, etc.",
+      "Verify: CTA section with Get API Key and resources still visible above footer"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add missing solvr_claim tool to api-mcp.tsx MCP tools list",
+    "steps": [
+      "In api-mcp.tsx: add 5th tool to mcpTools array after solvr_answer",
+      "Tool: { name: 'solvr_claim', description: 'Generate a claim token for your human to link your Solvr account to this agent', params: '(none)' }",
+      "Reference: actual tool definition in mcp-server/src/tools.ts (solvr_claim tool)",
+      "Verify: MCP docs section now shows 5 tools matching actual MCP server"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add all undocumented public API endpoints to api-docs endpoint data files",
+    "steps": [
+      "In api-endpoint-data-core.ts Agents group: add GET /agents (list all agents with pagination), PATCH /agents/{id} (update agent profile), GET /agents/{id}/activity (agent activity feed)",
+      "In api-endpoint-data-core.ts Stats group: add GET /stats/problems (problems dashboard stats), GET /stats/ideas (ideas dashboard stats), GET /stats/questions (questions dashboard stats — once backend task creates it)",
+      "In api-endpoint-data-core.ts add new Sitemap group: GET /sitemap/urls (all indexable URLs for sitemap generation), GET /sitemap/counts (indexable content counts per type) — both exist in router.go lines 342-349",
+      "In api-endpoint-data-content.ts Problems group: add POST /problems (create problem, auth required), GET /problems/{id}/export (export as markdown)",
+      "In api-endpoint-data-content.ts Problems group: add POST /approaches/{id}/progress (add progress note to approach)",
+      "In api-endpoint-data-content.ts Questions group: add POST /questions (create question, auth required)",
+      "In api-endpoint-data-content.ts Ideas group: add POST /ideas (create idea, auth required)",
+      "In api-endpoint-data-user.ts Current User group: add PATCH /me (update own profile), GET /me/posts (list own posts), GET /me/contributions (list own contributions)",
+      "In api-endpoint-data-user.ts Users group: add GET /users (list all users with pagination), GET /users/{id}/agents (list user's claimed agents)",
+      "For each endpoint: include method, path, description, auth requirement, params, and example response",
+      "Follow exact same EndpointGroup structure as existing entries",
+      "Reference router.go and corresponding handler files for accurate params and responses",
+      "Verify: All public API endpoints in router.go are now documented"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Fix hero copy button to copy base URL, and wire status indicators to real health check",
+    "steps": [
+      "In api-hero.tsx line 10: change copyApiKey to copy 'https://api.solvr.dev/v1' (the displayed URL) instead of 'solvr_sk_xxxxxxxxxxxxx'",
+      "In api-mcp.tsx lines 211-214: replace hardcoded 'ONLINE' badge with real health check",
+      "Create a simple useApiHealth hook or inline fetch to GET https://api.solvr.dev/v1/health on mount",
+      "If health check succeeds: show green dot + 'ONLINE', if fails: show red dot + 'OFFLINE'",
+      "Hero stats (18ms, 99.9%, 60/min) can remain static for now — these are marketing/aspirational values",
+      "Verify: Copy button copies the base URL, MCP status reflects real API health"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Ensure status indicator is handled correctly when api-footer is replaced with shared Footer",
+    "steps": [
+      "Note: This is a dependency of Task 13 (footer replacement)",
+      "When replacing api-footer with shared Footer, the hardcoded 'ALL SYSTEMS OPERATIONAL' (line 98-111) goes away automatically",
+      "The shared Footer already links to /status page with a pulsing green dot indicator",
+      "If /status page doesn't exist yet, create a simple redirect or placeholder",
+      "Check if status.solvr.dev external link should be kept somewhere (currently in api-footer line 107)",
+      "Verify: No hardcoded status claims remain on /api-docs page (except MCP ONLINE handled by Task 16)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "SEO-URGENT",
+    "description": "Install schema-dts, create reusable JsonLd component and JSON-LD builder functions for all page types",
+    "steps": [
+      "Install schema-dts as dev dependency: npm install -D schema-dts",
+      "Create frontend/components/json-ld.tsx: reusable <JsonLd data={...} /> component that renders <script type='application/ld+json' dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, '\\u003c') }} />",
+      "Create frontend/lib/json-ld.ts with typed builder functions using schema-dts WithContext types",
+      "buildOrganization(): WithContext<Organization> — name='Solvr', url='https://solvr.dev', description, logo, sameAs (GitHub)",
+      "buildWebSite(): WithContext<WebSite> — with SearchAction pointing to /search?q={search_term_string} for sitelinks search box",
+      "buildPostJsonLd(post, type): for questions → WithContext<QAPage> with mainEntity Question, acceptedAnswer, suggestedAnswer, upvoteCount; for problems/ideas → WithContext<Article> with headline, articleBody, author, datePublished, dateModified, keywords, interactionStatistic",
+      "buildProfilePageJsonLd(entity, type): WithContext<ProfilePage> with mainEntity Person — name, description, url, image, knowsAbout",
+      "buildBreadcrumbs(items): WithContext<BreadcrumbList> — Home > Section > Item (e.g., Home > Questions > {title})",
+      "Write Vitest tests for JsonLd component: verify script tag rendered, JSON parseable, XSS characters escaped",
+      "Write Vitest tests for each builder: verify @type, @context, required fields, correct schema-dts types",
+      "Verify: npx tsc --noEmit passes with full type safety on all builders"
+    ],
+    "passes": false
+  },
+  {
+    "category": "SEO-URGENT",
+    "description": "Add JSON-LD Organization and WebSite structured data to homepage",
+    "steps": [
+      "In frontend/app/page.tsx: import JsonLd component and buildOrganization, buildWebSite from lib/json-ld",
+      "Render two <JsonLd> components at top of returned JSX, before Hero component",
+      "First: <JsonLd data={buildOrganization()} />",
+      "Second: <JsonLd data={buildWebSite()} />",
+      "Homepage is already a server component — no changes needed to component type",
+      "Write Vitest test: render page, query script[type='application/ld+json'] elements, parse JSON, verify Organization and WebSite schemas present",
+      "Verify: Google Rich Results Test (https://search.google.com/test/rich-results) validates the markup"
+    ],
+    "passes": false
+  },
+  {
+    "category": "SEO-URGENT",
+    "description": "Add JSON-LD to /problems/[id], /questions/[id], /ideas/[id], /agents/[id], /users/[id] with server-side fetch-once pattern",
+    "steps": [
+      "In each [id]/page.tsx server component: fetch data in the default export function (Next.js deduplicates with generateMetadata fetch)",
+      "Build JSON-LD using typed builders from lib/json-ld.ts, render <JsonLd> + <JsonLd data={buildBreadcrumbs(...)}>",
+      "Pass fetched data as initialData prop to client component (e.g., <ProblemDetailClient id={id} initialData={post} />)",
+      "Update each client component to accept optional initialData prop: use as initial state, skip first fetch if provided",
+      "problems/[id]/page.tsx: fetch api.getPost(id), build Article JSON-LD + BreadcrumbList (Home > Problems > {title})",
+      "questions/[id]/page.tsx: fetch api.getPost(id), build QAPage JSON-LD + BreadcrumbList (Home > Questions > {title})",
+      "ideas/[id]/page.tsx: fetch api.getPost(id), build Article JSON-LD + BreadcrumbList (Home > Ideas > {title})",
+      "agents/[id]/page.tsx: fetch api.getAgent(id), build ProfilePage JSON-LD + BreadcrumbList (Home > Agents > {name})",
+      "users/[id]/page.tsx: fetch api.getUserProfile(id), build ProfilePage JSON-LD + BreadcrumbList (Home > Users > {name})",
+      "Write Vitest tests for each page: mock API, verify JSON-LD script tags rendered with correct @type and data",
+      "Verify: Google Rich Results Test validates QAPage for questions and Article for problems"
+    ],
+    "passes": false
   }
 ]

@@ -136,6 +136,8 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		orderClause = "(p.upvotes - p.downvotes) DESC, p.created_at DESC"
 	case "approaches":
 		orderClause = "(SELECT COUNT(*) FROM approaches ap3 WHERE ap3.problem_id = p.id AND ap3.deleted_at IS NULL) DESC, p.created_at DESC"
+	case "answers":
+		orderClause = "(SELECT COUNT(*) FROM answers a3 WHERE a3.question_id = p.id AND a3.deleted_at IS NULL) DESC, p.created_at DESC"
 	}
 
 	// Main query with LEFT JOINs for author information

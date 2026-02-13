@@ -158,6 +158,15 @@ func (h *QuestionsHandler) List(w http.ResponseWriter, r *http.Request) {
 		opts.Status = models.PostStatus(statusParam)
 	}
 
+	// Parse sort parameter
+	if sortParam := r.URL.Query().Get("sort"); sortParam != "" {
+		switch sortParam {
+		case "newest", "votes", "answers":
+			opts.Sort = sortParam
+		}
+		// Invalid values are silently ignored (defaults to newest)
+	}
+
 	// Parse tags filter
 	if tagsParam := r.URL.Query().Get("tags"); tagsParam != "" {
 		opts.Tags = strings.Split(tagsParam, ",")

@@ -321,6 +321,90 @@ func TestListQuestions_Pagination(t *testing.T) {
 	}
 }
 
+// TestListQuestions_SortByVotes tests sort=votes parameter.
+func TestListQuestions_SortByVotes(t *testing.T) {
+	repo := NewMockQuestionsRepository()
+	repo.SetQuestions([]models.PostWithAuthor{}, 0)
+
+	handler := NewQuestionsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/questions?sort=votes", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	if repo.listOpts.Sort != "votes" {
+		t.Errorf("expected sort 'votes', got '%s'", repo.listOpts.Sort)
+	}
+}
+
+// TestListQuestions_SortByAnswers tests sort=answers parameter.
+func TestListQuestions_SortByAnswers(t *testing.T) {
+	repo := NewMockQuestionsRepository()
+	repo.SetQuestions([]models.PostWithAuthor{}, 0)
+
+	handler := NewQuestionsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/questions?sort=answers", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	if repo.listOpts.Sort != "answers" {
+		t.Errorf("expected sort 'answers', got '%s'", repo.listOpts.Sort)
+	}
+}
+
+// TestListQuestions_SortByNewest tests sort=newest parameter.
+func TestListQuestions_SortByNewest(t *testing.T) {
+	repo := NewMockQuestionsRepository()
+	repo.SetQuestions([]models.PostWithAuthor{}, 0)
+
+	handler := NewQuestionsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/questions?sort=newest", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	if repo.listOpts.Sort != "newest" {
+		t.Errorf("expected sort 'newest', got '%s'", repo.listOpts.Sort)
+	}
+}
+
+// TestListQuestions_InvalidSortDefaultsToEmpty tests that invalid sort values are silently ignored.
+func TestListQuestions_InvalidSortDefaultsToEmpty(t *testing.T) {
+	repo := NewMockQuestionsRepository()
+	repo.SetQuestions([]models.PostWithAuthor{}, 0)
+
+	handler := NewQuestionsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/questions?sort=invalid", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	if repo.listOpts.Sort != "" {
+		t.Errorf("expected empty sort (default), got '%s'", repo.listOpts.Sort)
+	}
+}
+
 // TestListQuestions_HasMore tests has_more pagination flag.
 func TestListQuestions_HasMore(t *testing.T) {
 	repo := NewMockQuestionsRepository()

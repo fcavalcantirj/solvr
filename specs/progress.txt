@@ -376,3 +376,12 @@
 - Removed unused TrendingUp import
 - Added loading and empty states for both sections
 - All 364 frontend tests pass
+
+2026-02-12: Wire sidebar TRENDING TAGS to useTrending() hook
+- Removed hardcoded hotTags array from problems-sidebar.tsx
+- Imported useTrending() hook from hooks/use-stats
+- Maps trending.tags: name→tag text, count→count display
+- Tag buttons are clickable: onTagClick prop adds tag to filter state in parent page.tsx
+- Added ProblemsSidebarProps interface with optional onTagClick callback
+- Added loading and empty states for trending tags section
+- All 364 frontend tests pass

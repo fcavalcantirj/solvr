@@ -539,7 +539,7 @@
       "Add loading state",
       "Verify: Shows real trending tags with counts from API"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

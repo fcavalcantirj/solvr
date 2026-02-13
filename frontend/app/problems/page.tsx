@@ -54,7 +54,9 @@ export default function ProblemsPage() {
       <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8">
         <div className="grid lg:grid-cols-[1fr,320px] gap-8">
           <ProblemsList status={status} sort={sort} tags={tags} />
-          <ProblemsSidebar />
+          <ProblemsSidebar onTagClick={(tag) => {
+            if (!tags.includes(tag)) setTags([...tags, tag]);
+          }} />
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Bot, User, Trophy, AlertCircle, CheckCircle2, GitBranch } from "lucide-react";
 import { useProblemsStats } from "@/hooks/use-problems-stats";
+import { useTrending } from "@/hooks/use-stats";
 import { api, APIFeedItem } from "@/lib/api";
 
 function formatNumber(n: number): string {
@@ -21,17 +22,13 @@ function formatSolveTime(days: number): string {
   return `${days}d`;
 }
 
-const hotTags = [
-  { tag: "async", count: 234 },
-  { tag: "memory", count: 189 },
-  { tag: "react", count: 167 },
-  { tag: "typescript", count: 145 },
-  { tag: "performance", count: 132 },
-  { tag: "database", count: 98 },
-];
+interface ProblemsSidebarProps {
+  onTagClick?: (tag: string) => void;
+}
 
-export function ProblemsSidebar() {
+export function ProblemsSidebar({ onTagClick }: ProblemsSidebarProps) {
   const { stats: problemsStats, loading: statsLoading } = useProblemsStats();
+  const { trending, loading: trendingLoading } = useTrending();
   const [stuckProblems, setStuckProblems] = useState<APIFeedItem[]>([]);
   const [stuckLoading, setStuckLoading] = useState(true);
 
@@ -201,21 +198,28 @@ export function ProblemsSidebar() {
         </div>
       </div>
 
-      {/* Hot Tags */}
+      {/* Trending Tags */}
       <div className="border border-border bg-card">
         <div className="p-4 border-b border-border">
           <h3 className="font-mono text-xs tracking-wider">TRENDING TAGS</h3>
         </div>
         <div className="p-4 flex flex-wrap gap-2">
-          {hotTags.map((item) => (
-            <button
-              key={item.tag}
-              className="font-mono text-[10px] tracking-wider bg-secondary text-foreground px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors flex items-center gap-2"
-            >
-              {item.tag}
-              <span className="text-muted-foreground">{item.count}</span>
-            </button>
-          ))}
+          {trendingLoading ? (
+            <span className="font-mono text-[10px] text-muted-foreground">Loading...</span>
+          ) : !trending?.tags?.length ? (
+            <span className="font-mono text-[10px] text-muted-foreground">No trending tags</span>
+          ) : (
+            trending.tags.map((item) => (
+              <button
+                key={item.name}
+                onClick={() => onTagClick?.(item.name)}
+                className="font-mono text-[10px] tracking-wider bg-secondary text-foreground px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors flex items-center gap-2"
+              >
+                {item.name}
+                <span className="text-muted-foreground">{item.count}</span>
+              </button>
+            ))
+          )}
         </div>
       </div>
 

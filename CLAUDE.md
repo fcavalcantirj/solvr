@@ -279,6 +279,26 @@ curl -X POST https://api.solvr.dev/admin/query \
 
 ---
 
+## Deployment Constraints
+
+- Frontend uses `output: 'standalone'` in `next.config.mjs` for Docker deployment
+- **DO NOT use `generateSitemaps()`** — it creates dynamic routes that break with standalone mode (caused production 404)
+- Current sitemap (`frontend/app/sitemap.ts`) is a single flat file fetching all URLs via `GET /v1/sitemap/urls`
+- Sitemap protocol limit: 50,000 URLs per file. Current count: ~100
+
+---
+
+## Roadmap
+
+### Sitemap sharding (when approaching 50k URLs)
+- Backend pagination API is already built: `GET /v1/sitemap/urls?type=posts&page=1&per_page=2500`
+- Backend counts API is already built: `GET /v1/sitemap/counts`
+- Frontend types (`SitemapUrlsParams`, `APISitemapCountsResponse`) are already in `lib/api-types.ts`
+- When needed, replace single `sitemap.ts` with a route handler (`app/sitemap.xml/route.ts`) that generates a sitemap index + individual sitemap files — this approach works with `output: 'standalone'`
+- Alternative: generate static XML files at build time via a script writing to `/public`
+
+---
+
 ## Important Notes
 
 1. **Read SPEC.md** — it has everything: data model, API endpoints, schemas, security rules

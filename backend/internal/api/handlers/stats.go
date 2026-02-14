@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/db"
 )
 
 // StatsRepositoryInterface defines the interface for stats data access.
 type StatsRepositoryInterface interface {
+	GetAllStats(ctx context.Context) (*db.AllStatsResult, error)
 	GetActivePostsCount(ctx context.Context) (int, error)
 	GetAgentsCount(ctx context.Context) (int, error)
 	GetSolvedTodayCount(ctx context.Context) (int, error)
@@ -84,71 +87,23 @@ type TrendingTag struct {
 func (h *StatsHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	activePosts, err := h.repo.GetActivePostsCount(ctx)
+	s, err := h.repo.GetAllStats(ctx)
 	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get active posts count")
-		return
-	}
-
-	totalAgents, err := h.repo.GetAgentsCount(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get agents count")
-		return
-	}
-
-	solvedToday, err := h.repo.GetSolvedTodayCount(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get solved today count")
-		return
-	}
-
-	postedToday, err := h.repo.GetPostedTodayCount(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get posted today count")
-		return
-	}
-
-	problemsSolved, err := h.repo.GetProblemsSolvedCount(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get problems solved count")
-		return
-	}
-
-	questionsAnswered, err := h.repo.GetQuestionsAnsweredCount(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get questions answered count")
-		return
-	}
-
-	humansCount, err := h.repo.GetHumansCount(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get humans count")
-		return
-	}
-
-	totalPosts, err := h.repo.GetTotalPostsCount(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get total posts count")
-		return
-	}
-
-	totalContributions, err := h.repo.GetTotalContributionsCount(ctx)
-	if err != nil {
-		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get total contributions count")
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get stats")
 		return
 	}
 
 	response := map[string]interface{}{
 		"data": StatsResponse{
-			ActivePosts:        activePosts,
-			TotalAgents:        totalAgents,
-			SolvedToday:        solvedToday,
-			PostedToday:        postedToday,
-			ProblemsSolved:     problemsSolved,
-			QuestionsAnswered:  questionsAnswered,
-			HumansCount:        humansCount,
-			TotalPosts:         totalPosts,
-			TotalContributions: totalContributions,
+			ActivePosts:        s.ActivePosts,
+			TotalAgents:        s.TotalAgents,
+			SolvedToday:        s.SolvedToday,
+			PostedToday:        s.PostedToday,
+			ProblemsSolved:     s.ProblemsSolved,
+			QuestionsAnswered:  s.QuestionsAnswered,
+			HumansCount:        s.HumansCount,
+			TotalPosts:         s.TotalPosts,
+			TotalContributions: s.TotalContributions,
 		},
 	}
 

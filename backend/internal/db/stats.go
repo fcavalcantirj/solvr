@@ -142,6 +142,47 @@ func (r *StatsRepository) GetTotalContributionsCount(ctx context.Context) (int, 
 	return count, nil
 }
 
+// AllStatsResult holds all stats retrieved in a single query.
+type AllStatsResult struct {
+	ActivePosts        int
+	TotalAgents        int
+	SolvedToday        int
+	PostedToday        int
+	ProblemsSolved     int
+	QuestionsAnswered  int
+	HumansCount        int
+	TotalPosts         int
+	TotalContributions int
+}
+
+// GetAllStats returns all homepage stats in a single DB round-trip.
+func (r *StatsRepository) GetAllStats(ctx context.Context) (*AllStatsResult, error) {
+	today := time.Now().Truncate(24 * time.Hour)
+	var s AllStatsResult
+	err := r.pool.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM posts WHERE status IN ('open', 'active', 'in_progress') AND deleted_at IS NULL),
+			(SELECT COUNT(*) FROM agents WHERE status = 'active'),
+			(SELECT COUNT(*) FROM posts WHERE status = 'solved' AND deleted_at IS NULL AND updated_at >= $1),
+			(SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL AND created_at >= $1),
+			(SELECT COUNT(*) FROM posts WHERE type = 'problem' AND status = 'solved' AND deleted_at IS NULL),
+			(SELECT COUNT(*) FROM posts WHERE type = 'question' AND accepted_answer_id IS NOT NULL AND deleted_at IS NULL),
+			(SELECT COUNT(*) FROM users),
+			(SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL),
+			COALESCE((SELECT COUNT(*) FROM answers WHERE deleted_at IS NULL), 0) +
+				COALESCE((SELECT COUNT(*) FROM approaches WHERE deleted_at IS NULL), 0) +
+				COALESCE((SELECT COUNT(*) FROM responses), 0)
+	`, today).Scan(
+		&s.ActivePosts, &s.TotalAgents, &s.SolvedToday, &s.PostedToday,
+		&s.ProblemsSolved, &s.QuestionsAnswered, &s.HumansCount,
+		&s.TotalPosts, &s.TotalContributions,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
 // TrendingPostDB represents a trending post from the database.
 type TrendingPostDB struct {
 	ID            string
@@ -168,10 +209,19 @@ func (r *StatsRepository) GetTrendingPosts(ctx context.Context, limit int) ([]an
 			p.title,
 			p.type,
 			COALESCE(p.upvotes - p.downvotes, 0) as vote_score,
-			(SELECT COUNT(*) FROM answers a2 WHERE a2.question_id = p.id AND a2.deleted_at IS NULL)
-			+ (SELECT COUNT(*) FROM approaches ap2 WHERE ap2.problem_id = p.id AND ap2.deleted_at IS NULL) as response_count,
+			COALESCE(ans_cnt.cnt, 0) + COALESCE(app_cnt.cnt, 0) as response_count,
 			p.created_at
 		FROM posts p
+		LEFT JOIN (
+			SELECT question_id, COUNT(*) as cnt
+			FROM answers WHERE deleted_at IS NULL
+			GROUP BY question_id
+		) ans_cnt ON ans_cnt.question_id = p.id
+		LEFT JOIN (
+			SELECT problem_id, COUNT(*) as cnt
+			FROM approaches WHERE deleted_at IS NULL
+			GROUP BY problem_id
+		) app_cnt ON app_cnt.problem_id = p.id
 		WHERE p.created_at > NOW() - INTERVAL '7 days'
 			AND p.deleted_at IS NULL
 		ORDER BY

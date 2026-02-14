@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/fcavalcantirj/solvr/internal/db"
 )
 
 // MockStatsRepository implements StatsRepositoryInterface for testing
@@ -29,6 +31,20 @@ type MockStatsRepository struct {
 	RecentlySolvedErr        error
 	TopSolversResult         []map[string]any
 	TopSolversErr            error
+}
+
+func (m *MockStatsRepository) GetAllStats(ctx context.Context) (*db.AllStatsResult, error) {
+	return &db.AllStatsResult{
+		ActivePosts:        m.ActivePosts,
+		TotalAgents:        m.TotalAgents,
+		SolvedToday:        m.SolvedToday,
+		PostedToday:        m.PostedToday,
+		ProblemsSolved:     m.ProblemsSolved,
+		QuestionsAnswered:  m.QuestionsAnswered,
+		HumansCount:        m.HumansCount,
+		TotalPosts:         m.TotalPosts,
+		TotalContributions: m.TotalContributions,
+	}, nil
 }
 
 func (m *MockStatsRepository) GetActivePostsCount(ctx context.Context) (int, error) {

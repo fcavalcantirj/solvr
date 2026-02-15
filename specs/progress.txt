@@ -798,3 +798,28 @@
 - Created feed-list.test.tsx with 7 tests (TDD approach):
   - Tests: More button renders on hover, clicking opens dropdown, dropdown has Report, Report opens ReportModal with correct target, dropdown closes on outside click, dropdown closes after Report selection, More button prevents navigation
 - All 7 new tests pass, 491 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Add ListByAuthor methods to answers, approaches, and responses repositories
+- Added AnswerWithContext model type to models/answer.go (embeds AnswerWithAuthor + QuestionTitle)
+- Added ApproachWithContext model type to models/approach.go (embeds ApproachWithAuthor + ProblemTitle)
+- Added ResponseWithContext model type to models/response.go (embeds ResponseWithAuthor + IdeaTitle)
+- Implemented ListByAuthor(ctx, authorType, authorID, page, perPage) on AnswersRepository
+  - SELECT answers with JOIN posts for question_title, JOIN agents/users for author info
+  - WHERE author_type + author_id, deleted_at IS NULL, ORDER BY created_at DESC, LIMIT/OFFSET
+- Implemented ListByAuthor(ctx, authorType, authorID, page, perPage) on ApproachesRepository
+  - Same pattern with JOIN posts for problem_title, includes assumptions/differs_from arrays
+- Implemented ListByAuthor(ctx, authorType, authorID, page, perPage) on ResponsesRepository
+  - Same pattern with JOIN posts for idea_title, includes response_type
+- All three methods: pagination (default page=1, perPage=20, max 50), total count, graceful table-not-found
+- Created answers_by_author_test.go with 3 integration tests (TDD approach):
+  - TestListAnswersByAuthor: verifies answer returned with question_title, author info
+  - TestListAnswersByAuthor_Empty: verifies empty array for non-existent author
+  - TestListAnswersByAuthor_Pagination: verifies page/perPage validation
+- Created approaches_by_author_test.go with 2 integration tests:
+  - TestListApproachesByAuthor: verifies approach returned with problem_title, angle, author info
+  - TestListApproachesByAuthor_Empty: verifies empty array for non-existent author
+- Created responses_by_author_test.go with 2 integration tests:
+  - TestListResponsesByAuthor: verifies response returned with idea_title, response_type, author info
+  - TestListResponsesByAuthor_Empty: verifies empty array for non-existent author
+- File sizes: answers.go 470 lines, approaches.go 465 lines, responses.go 353 lines (all under 800)
+- All backend tests pass (db package: 0.019s), pre-existing GitHub OAuth failures unrelated

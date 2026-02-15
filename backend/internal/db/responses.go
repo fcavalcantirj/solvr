@@ -198,6 +198,95 @@ func (r *ResponsesRepository) GetResponseCount(ctx context.Context, ideaID strin
 	return count, nil
 }
 
+// ListByAuthor returns responses by a specific author with idea title context.
+// Results are ordered by created_at DESC with pagination.
+func (r *ResponsesRepository) ListByAuthor(ctx context.Context, authorType, authorID string, page, perPage int) ([]models.ResponseWithContext, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
+	if perPage > 50 {
+		perPage = 50
+	}
+	offset := (page - 1) * perPage
+
+	// Get total count
+	var total int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM responses
+		WHERE author_type = $1 AND author_id = $2
+	`, authorType, authorID).Scan(&total)
+	if err != nil {
+		if isTableNotFoundError(err) {
+			return []models.ResponseWithContext{}, 0, nil
+		}
+		return nil, 0, fmt.Errorf("count responses by author: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT
+			r.id, r.idea_id, r.author_type, r.author_id,
+			r.content, r.response_type, r.upvotes, r.downvotes, r.created_at,
+			COALESCE(
+				CASE WHEN r.author_type = 'agent' THEN a.display_name
+				     WHEN r.author_type = 'human' THEN u.display_name
+				     ELSE r.author_id
+				END, r.author_id
+			) as display_name,
+			COALESCE(
+				CASE WHEN r.author_type = 'human' THEN u.avatar_url ELSE '' END, ''
+			) as avatar_url,
+			COALESCE(p.title, '') as idea_title
+		FROM responses r
+		LEFT JOIN agents a ON r.author_type = 'agent' AND r.author_id = a.id
+		LEFT JOIN users u ON r.author_type = 'human' AND r.author_id = u.id::text
+		LEFT JOIN posts p ON r.idea_id = p.id
+		WHERE r.author_type = $1 AND r.author_id = $2
+		ORDER BY r.created_at DESC
+		LIMIT $3 OFFSET $4
+	`, authorType, authorID, perPage, offset)
+	if err != nil {
+		if isTableNotFoundError(err) {
+			return []models.ResponseWithContext{}, 0, nil
+		}
+		return nil, 0, fmt.Errorf("query responses by author: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]models.ResponseWithContext, 0)
+	for rows.Next() {
+		var item models.ResponseWithContext
+		var displayName, avatarURL string
+
+		err := rows.Scan(
+			&item.ID, &item.IdeaID, &item.AuthorType, &item.AuthorID,
+			&item.Content, &item.ResponseType, &item.Upvotes, &item.Downvotes, &item.CreatedAt,
+			&displayName, &avatarURL, &item.IdeaTitle,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("scan response by author: %w", err)
+		}
+
+		item.Author = models.ResponseAuthor{
+			Type:        item.AuthorType,
+			ID:          item.AuthorID,
+			DisplayName: displayName,
+			AvatarURL:   avatarURL,
+		}
+		item.VoteScore = item.Upvotes - item.Downvotes
+
+		results = append(results, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate responses by author: %w", err)
+	}
+
+	return results, total, nil
+}
+
 // FindByID returns a response by ID with author information.
 func (r *ResponsesRepository) FindByID(ctx context.Context, id string) (*models.ResponseWithAuthor, error) {
 	var resp models.ResponseWithAuthor

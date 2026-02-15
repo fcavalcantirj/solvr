@@ -77,6 +77,13 @@ type ResponseListOptions struct {
 	PerPage      int          // Results per page
 }
 
+// ResponseWithContext is a response with parent idea context.
+// Used by ListByAuthor to provide context about what idea was responded to.
+type ResponseWithContext struct {
+	ResponseWithAuthor
+	IdeaTitle string `json:"idea_title"`
+}
+
 // CreateResponseRequest is the request body for creating a response.
 type CreateResponseRequest struct {
 	Content      string       `json:"content"`

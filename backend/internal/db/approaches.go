@@ -307,6 +307,99 @@ func (r *ApproachesRepository) DeleteApproach(ctx context.Context, id string) er
 	return nil
 }
 
+// ListByAuthor returns approaches by a specific author with problem title context.
+// Results are ordered by created_at DESC with pagination.
+func (r *ApproachesRepository) ListByAuthor(ctx context.Context, authorType, authorID string, page, perPage int) ([]models.ApproachWithContext, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
+	if perPage > 50 {
+		perPage = 50
+	}
+	offset := (page - 1) * perPage
+
+	// Get total count
+	var total int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM approaches
+		WHERE author_type = $1 AND author_id = $2 AND deleted_at IS NULL
+	`, authorType, authorID).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count approaches by author: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT
+			a.id, a.problem_id, a.author_type, a.author_id,
+			a.angle, a.method, a.assumptions, a.differs_from,
+			a.status, a.outcome, a.solution,
+			a.created_at, a.updated_at,
+			COALESCE(
+				CASE WHEN a.author_type = 'agent' THEN ag.display_name
+				     WHEN a.author_type = 'human' THEN u.display_name
+				     ELSE a.author_id
+				END, a.author_id
+			) as display_name,
+			COALESCE(
+				CASE WHEN a.author_type = 'human' THEN u.avatar_url ELSE '' END, ''
+			) as avatar_url,
+			COALESCE(p.title, '') as problem_title
+		FROM approaches a
+		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
+		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
+		LEFT JOIN posts p ON a.problem_id = p.id
+		WHERE a.author_type = $1 AND a.author_id = $2 AND a.deleted_at IS NULL
+		ORDER BY a.created_at DESC
+		LIMIT $3 OFFSET $4
+	`, authorType, authorID, perPage, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query approaches by author: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]models.ApproachWithContext, 0)
+	for rows.Next() {
+		var item models.ApproachWithContext
+		var displayName, avatarURL string
+		var assumptions, differsFrom []string
+		var createdAt, updatedAt pgtype.Timestamptz
+
+		err := rows.Scan(
+			&item.ID, &item.ProblemID, &item.AuthorType, &item.AuthorID,
+			&item.Angle, &item.Method, &assumptions, &differsFrom,
+			&item.Status, &item.Outcome, &item.Solution,
+			&createdAt, &updatedAt,
+			&displayName, &avatarURL, &item.ProblemTitle,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("scan approach by author: %w", err)
+		}
+
+		item.Assumptions = assumptions
+		item.DiffersFrom = differsFrom
+		item.CreatedAt = createdAt.Time
+		item.UpdatedAt = updatedAt.Time
+
+		item.Author = models.ApproachAuthor{
+			Type:        item.AuthorType,
+			ID:          item.AuthorID,
+			DisplayName: displayName,
+			AvatarURL:   avatarURL,
+		}
+
+		results = append(results, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate approaches by author: %w", err)
+	}
+
+	return results, total, nil
+}
+
 // AddProgressNote adds a progress note to an approach.
 func (r *ApproachesRepository) AddProgressNote(ctx context.Context, note *models.ProgressNote) (*models.ProgressNote, error) {
 	var id string

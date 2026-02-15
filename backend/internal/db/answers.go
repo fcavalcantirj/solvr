@@ -364,6 +364,95 @@ func (r *AnswersRepository) VoteOnAnswer(ctx context.Context, answerID, voterTyp
 	return nil
 }
 
+// ListByAuthor returns answers by a specific author with question title context.
+// Results are ordered by created_at DESC with pagination.
+func (r *AnswersRepository) ListByAuthor(ctx context.Context, authorType, authorID string, page, perPage int) ([]models.AnswerWithContext, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
+	if perPage > 50 {
+		perPage = 50
+	}
+	offset := (page - 1) * perPage
+
+	// Get total count
+	var total int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM answers
+		WHERE author_type = $1 AND author_id = $2 AND deleted_at IS NULL
+	`, authorType, authorID).Scan(&total)
+	if err != nil {
+		if isTableNotFoundError(err) {
+			return []models.AnswerWithContext{}, 0, nil
+		}
+		return nil, 0, fmt.Errorf("count answers by author: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT
+			ans.id, ans.question_id, ans.author_type, ans.author_id,
+			ans.content, ans.is_accepted, ans.upvotes, ans.downvotes, ans.created_at,
+			COALESCE(
+				CASE WHEN ans.author_type = 'agent' THEN a.display_name
+				     WHEN ans.author_type = 'human' THEN u.display_name
+				     ELSE ans.author_id
+				END, ans.author_id
+			) as display_name,
+			COALESCE(
+				CASE WHEN ans.author_type = 'human' THEN u.avatar_url ELSE '' END, ''
+			) as avatar_url,
+			COALESCE(p.title, '') as question_title
+		FROM answers ans
+		LEFT JOIN agents a ON ans.author_type = 'agent' AND ans.author_id = a.id
+		LEFT JOIN users u ON ans.author_type = 'human' AND ans.author_id = u.id::text
+		LEFT JOIN posts p ON ans.question_id = p.id
+		WHERE ans.author_type = $1 AND ans.author_id = $2 AND ans.deleted_at IS NULL
+		ORDER BY ans.created_at DESC
+		LIMIT $3 OFFSET $4
+	`, authorType, authorID, perPage, offset)
+	if err != nil {
+		if isTableNotFoundError(err) {
+			return []models.AnswerWithContext{}, 0, nil
+		}
+		return nil, 0, fmt.Errorf("query answers by author: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]models.AnswerWithContext, 0)
+	for rows.Next() {
+		var item models.AnswerWithContext
+		var displayName, avatarURL string
+
+		err := rows.Scan(
+			&item.ID, &item.QuestionID, &item.AuthorType, &item.AuthorID,
+			&item.Content, &item.IsAccepted, &item.Upvotes, &item.Downvotes, &item.CreatedAt,
+			&displayName, &avatarURL, &item.QuestionTitle,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("scan answer by author: %w", err)
+		}
+
+		item.Author = models.AnswerAuthor{
+			Type:        item.AuthorType,
+			ID:          item.AuthorID,
+			DisplayName: displayName,
+			AvatarURL:   avatarURL,
+		}
+		item.VoteScore = item.Upvotes - item.Downvotes
+
+		results = append(results, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate answers by author: %w", err)
+	}
+
+	return results, total, nil
+}
+
 // GetAnswerCount returns the number of answers for a question.
 func (r *AnswersRepository) GetAnswerCount(ctx context.Context, questionID string) (int, error) {
 	var count int

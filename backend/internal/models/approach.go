@@ -118,6 +118,13 @@ type ApproachListOptions struct {
 	PerPage   int            // Results per page
 }
 
+// ApproachWithContext is an approach with parent problem context.
+// Used by ListByAuthor to provide context about what problem was approached.
+type ApproachWithContext struct {
+	ApproachWithAuthor
+	ProblemTitle string `json:"problem_title"`
+}
+
 // CreateApproachRequest is the request body for creating an approach.
 type CreateApproachRequest struct {
 	Angle       string   `json:"angle"`

@@ -72,6 +72,13 @@ type CreateAnswerRequest struct {
 	Content string `json:"content"`
 }
 
+// AnswerWithContext is an answer with parent question context.
+// Used by ListByAuthor to provide context about what question was answered.
+type AnswerWithContext struct {
+	AnswerWithAuthor
+	QuestionTitle string `json:"question_title"`
+}
+
 // UpdateAnswerRequest is the request body for updating an answer.
 type UpdateAnswerRequest struct {
 	Content *string `json:"content,omitempty"`

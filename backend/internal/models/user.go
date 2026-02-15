@@ -27,6 +27,11 @@ type User struct {
 	// AuthProviderID is the ID from the OAuth provider.
 	AuthProviderID string `json:"auth_provider_id"`
 
+	// PasswordHash is the bcrypt hash of the user's password.
+	// Only set for email/password authentication.
+	// CRITICAL: json:"-" prevents this from being serialized in API responses.
+	PasswordHash string `json:"-"`
+
 	// AvatarURL is an optional URL to the user's avatar.
 	AvatarURL string `json:"avatar_url,omitempty"`
 
@@ -67,6 +72,7 @@ type UserWithStats struct {
 const (
 	AuthProviderGitHub = "github"
 	AuthProviderGoogle = "google"
+	AuthProviderEmail  = "email" // For email/password authentication
 )
 
 // UserRole constants

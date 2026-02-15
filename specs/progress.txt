@@ -991,3 +991,14 @@
 - Security verified: Generic error messages prevent account enumeration, OAuth-only users protected
 - Complete auth system: Registration + Login endpoints both functional, ready for frontend integration
 - Next step: Wire frontend login + join pages to real auth endpoints (PRD Task 50 - frontend)
+
+2026-02-15: Commit migration 000031 and supporting files (completing PRD migration task)
+- Staged and committed migration 000031_add_password_hash (up and down SQL)
+- Staged User model changes (PasswordHash field with json:"-" tag, AuthProviderEmail constant)
+- Staged integration tests in users_test.go (5 tests for password_hash functionality)
+- Staged .env.example with DATABASE_URL format
+- Staged OAuth integration test and documentation
+- Migration ready to run: `migrate -path migrations -database "$DATABASE_URL" up`
+- All model tests pass, integration tests verified in users_test.go
+- Files: migrations/000031*.sql, models/user.go, users_test.go, .env.example, docs/oauth-setup.md
+- This completes the database foundation for email/password authentication

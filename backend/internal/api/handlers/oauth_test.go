@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -535,24 +536,32 @@ func TestGitHubCallback_CompleteFlow_NewUser(t *testing.T) {
 
 	handler.GitHubCallback(rec, req)
 
-	// Should return 200 with tokens
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d. Body: %s", http.StatusOK, rec.Code, rec.Body.String())
+	// Should redirect to frontend with token
+	if rec.Code != http.StatusFound {
+		t.Errorf("expected status %d, got %d. Body: %s", http.StatusFound, rec.Code, rec.Body.String())
 	}
 
-	var resp AuthSuccessResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v. Body: %s", err, rec.Body.String())
+	// Verify redirect URL
+	location := rec.Header().Get("Location")
+	if location == "" {
+		t.Fatal("expected Location header to be set")
 	}
 
-	if resp.Data.AccessToken == "" {
-		t.Error("expected access_token to be set")
+	// Parse redirect URL
+	redirectURL, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("failed to parse redirect URL: %v", err)
 	}
-	if resp.Data.RefreshToken == "" {
-		t.Error("expected refresh_token to be set")
+
+	// Verify redirect goes to frontend
+	if !strings.HasPrefix(location, "http://localhost:3000/auth/callback") {
+		t.Errorf("expected redirect to frontend callback, got %s", location)
 	}
-	if resp.Data.User.Email != "newuser@example.com" {
-		t.Errorf("expected user email newuser@example.com, got %s", resp.Data.User.Email)
+
+	// Verify token is present in URL
+	token := redirectURL.Query().Get("token")
+	if token == "" {
+		t.Error("expected token parameter in redirect URL")
 	}
 }
 
@@ -613,17 +622,32 @@ func TestGitHubCallback_CompleteFlow_ExistingUser(t *testing.T) {
 
 	handler.GitHubCallback(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d. Body: %s", http.StatusOK, rec.Code, rec.Body.String())
+	// Should redirect to frontend with token
+	if rec.Code != http.StatusFound {
+		t.Errorf("expected status %d, got %d. Body: %s", http.StatusFound, rec.Code, rec.Body.String())
 	}
 
-	var resp AuthSuccessResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
+	// Verify redirect URL
+	location := rec.Header().Get("Location")
+	if location == "" {
+		t.Fatal("expected Location header to be set")
 	}
 
-	if resp.Data.User.ID != "existing-user-id" {
-		t.Errorf("expected user ID existing-user-id, got %s", resp.Data.User.ID)
+	// Parse redirect URL
+	redirectURL, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("failed to parse redirect URL: %v", err)
+	}
+
+	// Verify redirect goes to frontend
+	if !strings.HasPrefix(location, "http://localhost:3000/auth/callback") {
+		t.Errorf("expected redirect to frontend callback, got %s", location)
+	}
+
+	// Verify token is present in URL
+	token := redirectURL.Query().Get("token")
+	if token == "" {
+		t.Error("expected token parameter in redirect URL")
 	}
 }
 

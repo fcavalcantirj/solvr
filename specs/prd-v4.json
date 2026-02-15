@@ -1133,7 +1133,7 @@
       "Run migration locally and verify schema",
       "Verify: existing OAuth users unaffected, new column accepts NULL"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

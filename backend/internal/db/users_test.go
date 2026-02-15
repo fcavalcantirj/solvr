@@ -3,8 +3,10 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -434,6 +436,217 @@ func TestUserRepository_List(t *testing.T) {
 	}
 	if !found2 {
 		t.Error("List() did not return user2")
+	}
+}
+
+// TestUserRepository_CreateEmailUser_WithPasswordHash tests creating a user with email/password auth.
+// This test validates that the password_hash column exists and can store bcrypt hashes.
+func TestUserRepository_CreateEmailUser_WithPasswordHash(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDB(t, pool)
+
+	repo := NewUserRepository(pool)
+	ctx := context.Background()
+
+	// Create a user with email/password authentication
+	// Note: In production, this would use bcrypt.GenerateFromPassword()
+	// For testing, we use a pre-generated bcrypt hash of "testpassword123"
+	bcryptHash := "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+
+	user := &models.User{
+		Username:     "emailuser",
+		DisplayName:  "Email User",
+		Email:        "email@example.com",
+		AuthProvider: "email", // New auth provider type
+		PasswordHash: bcryptHash,
+		Role:         models.UserRoleUser,
+	}
+
+	created, err := repo.Create(ctx, user)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if created.ID == "" {
+		t.Error("Create() did not set ID")
+	}
+	if created.PasswordHash != bcryptHash {
+		t.Errorf("Create() PasswordHash = %q, want %q", created.PasswordHash, bcryptHash)
+	}
+	if created.AuthProvider != "email" {
+		t.Errorf("Create() AuthProvider = %q, want %q", created.AuthProvider, "email")
+	}
+
+	// Cleanup
+	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", created.ID)
+}
+
+// TestUserRepository_CreateOAuthUser_Unaffected tests that OAuth users still work without password_hash.
+func TestUserRepository_CreateOAuthUser_Unaffected(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDB(t, pool)
+
+	repo := NewUserRepository(pool)
+	ctx := context.Background()
+
+	// Create a traditional OAuth user (no password)
+	user := &models.User{
+		Username:       "oauthuser",
+		DisplayName:    "OAuth User",
+		Email:          "oauth@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "github123",
+		Role:           models.UserRoleUser,
+		// PasswordHash intentionally left empty
+	}
+
+	created, err := repo.Create(ctx, user)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if created.ID == "" {
+		t.Error("Create() did not set ID")
+	}
+	if created.PasswordHash != "" {
+		t.Errorf("Create() PasswordHash should be empty for OAuth user, got %q", created.PasswordHash)
+	}
+	if created.AuthProvider != models.AuthProviderGitHub {
+		t.Errorf("Create() AuthProvider = %q, want %q", created.AuthProvider, models.AuthProviderGitHub)
+	}
+	if created.AuthProviderID != "github123" {
+		t.Errorf("Create() AuthProviderID = %q, want %q", created.AuthProviderID, "github123")
+	}
+
+	// Cleanup
+	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", created.ID)
+}
+
+// TestUserRepository_FindByEmail_ReturnsPasswordHash tests that queries include password_hash.
+func TestUserRepository_FindByEmail_ReturnsPasswordHash(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDB(t, pool)
+
+	repo := NewUserRepository(pool)
+	ctx := context.Background()
+
+	bcryptHash := "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+
+	// Create email/password user
+	user := &models.User{
+		Username:     "findtest",
+		DisplayName:  "Find Test",
+		Email:        "findtest@example.com",
+		AuthProvider: "email",
+		PasswordHash: bcryptHash,
+		Role:         models.UserRoleUser,
+	}
+
+	created, err := repo.Create(ctx, user)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", created.ID)
+	}()
+
+	// Find by email and verify password_hash is returned
+	found, err := repo.FindByEmail(ctx, "findtest@example.com")
+	if err != nil {
+		t.Fatalf("FindByEmail() error = %v", err)
+	}
+
+	if found.PasswordHash != bcryptHash {
+		t.Errorf("FindByEmail() PasswordHash = %q, want %q", found.PasswordHash, bcryptHash)
+	}
+}
+
+// TestUserRepository_MixedAuthFields tests that users can have both OAuth and password (future-proofing).
+func TestUserRepository_MixedAuthFields(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDB(t, pool)
+
+	repo := NewUserRepository(pool)
+	ctx := context.Background()
+
+	bcryptHash := "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+
+	// Create user with BOTH OAuth and password
+	// This allows OAuth users to add password backup authentication later
+	user := &models.User{
+		Username:       "mixeduser",
+		DisplayName:    "Mixed Auth User",
+		Email:          "mixed@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "github456",
+		PasswordHash:   bcryptHash,
+		Role:           models.UserRoleUser,
+	}
+
+	created, err := repo.Create(ctx, user)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if created.PasswordHash != bcryptHash {
+		t.Errorf("Create() PasswordHash = %q, want %q", created.PasswordHash, bcryptHash)
+	}
+	if created.AuthProvider != models.AuthProviderGitHub {
+		t.Errorf("Create() AuthProvider = %q, want %q", created.AuthProvider, models.AuthProviderGitHub)
+	}
+
+	// Cleanup
+	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", created.ID)
+}
+
+// TestUser_JSONSerializationSecurity verifies that password_hash is NEVER serialized to JSON.
+// This is a critical security test - password hashes must never leak via API responses.
+func TestUser_JSONSerializationSecurity(t *testing.T) {
+	user := &models.User{
+		ID:           "test-id",
+		Username:     "testuser",
+		DisplayName:  "Test User",
+		Email:        "test@example.com",
+		AuthProvider: models.AuthProviderEmail,
+		PasswordHash: "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+		Role:         models.UserRoleUser,
+		Status:       "active",
+	}
+
+	// Marshal to JSON
+	jsonBytes, err := json.Marshal(user)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	jsonStr := string(jsonBytes)
+
+	// Verify password_hash is NOT in JSON output
+	if strings.Contains(jsonStr, "password_hash") {
+		t.Errorf("JSON output contains 'password_hash' field - SECURITY VIOLATION!\nJSON: %s", jsonStr)
+	}
+	if strings.Contains(jsonStr, user.PasswordHash) {
+		t.Errorf("JSON output contains password hash value - SECURITY VIOLATION!\nJSON: %s", jsonStr)
+	}
+
+	// Verify other fields ARE present (sanity check)
+	if !strings.Contains(jsonStr, user.Username) {
+		t.Error("JSON output missing username - serialization broken")
+	}
+	if !strings.Contains(jsonStr, user.Email) {
+		t.Error("JSON output missing email - serialization broken")
 	}
 }
 

@@ -530,18 +530,9 @@ export default function StatusPage() {
       {/* Recent Incidents */}
       <section className="py-16 px-4 sm:px-6 lg:px-12">
         <div className="max-w-5xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="font-mono text-xs tracking-[0.3em] text-muted-foreground">
-              RECENT INCIDENTS
-            </h2>
-            <Link
-              href="#"
-              className="font-mono text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              View all incidents
-              <ArrowUpRight size={12} />
-            </Link>
-          </div>
+          <h2 className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-8">
+            RECENT INCIDENTS
+          </h2>
 
           <div className="space-y-4">
             {recentIncidents.map((incident) => (
@@ -556,32 +547,6 @@ export default function StatusPage() {
               <p className="text-xs text-muted-foreground">All systems have been operating normally</p>
             </div>
           )}
-        </div>
-      </section>
-
-      {/* Subscribe Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-12 bg-foreground text-background">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-3">
-                Stay informed
-              </h2>
-              <p className="text-background/70 text-sm max-w-md">
-                Get notified about scheduled maintenance and service disruptions via email or webhook.
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="email"
-                placeholder="your@email.com"
-                className="px-4 py-3 bg-background/10 border border-background/20 font-mono text-sm text-background placeholder:text-background/50 focus:outline-none focus:border-background/40 w-full sm:w-64"
-              />
-              <button className="px-6 py-3 bg-background text-foreground font-mono text-xs tracking-wider hover:bg-background/90 transition-colors whitespace-nowrap">
-                SUBSCRIBE
-              </button>
-            </div>
-          </div>
         </div>
       </section>
 

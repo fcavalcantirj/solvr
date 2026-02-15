@@ -1205,7 +1205,7 @@
       "Status page (lines 563-586): remove the entire subscribe section — input + button with no form wrapper or handler",
       "Verify: no email collection forms remain on pages without backend support"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
@@ -1215,7 +1215,7 @@
       "Blog page line 301: remove 'LOAD MORE POSTS' button — all posts rendered client-side from static array, nothing more to load",
       "Verify: no href='#' links remain, no dead buttons remain"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

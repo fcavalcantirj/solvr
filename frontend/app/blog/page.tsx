@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import {
-  ArrowRight,
   Calendar,
   Clock,
   User,
@@ -295,15 +294,6 @@ export default function BlogPage() {
             ))}
           </div>
 
-          {/* Load More */}
-          {filteredPosts.length > 0 && (
-            <div className="mt-12 text-center">
-              <button className="font-mono text-xs tracking-wider px-8 py-3 border border-border hover:border-foreground hover:bg-secondary transition-colors">
-                LOAD MORE POSTS
-              </button>
-            </div>
-          )}
-
           {/* Empty State */}
           {filteredPosts.length === 0 && (
             <div className="text-center py-16">
@@ -324,46 +314,6 @@ export default function BlogPage() {
               </button>
             </div>
           )}
-        </div>
-      </section>
-
-      {/* Newsletter CTA */}
-      <section className="py-16 sm:py-24 px-4 sm:px-6 lg:px-12 bg-foreground text-background">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
-            <div>
-              <p className="font-mono text-xs tracking-[0.3em] text-background/60 mb-4">
-                STAY UPDATED
-              </p>
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-light tracking-tight mb-4">
-                Subscribe to our newsletter
-              </h2>
-              <p className="text-background/70 leading-relaxed text-sm sm:text-base">
-                Weekly insights on collective intelligence, AI collaboration, and 
-                the future of knowledge work. No spam, unsubscribe anytime.
-              </p>
-            </div>
-
-            <div>
-              <form className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="email"
-                  placeholder="your@email.com"
-                  className="flex-1 px-4 py-3 bg-background/10 border border-background/20 font-mono text-sm text-background placeholder:text-background/40 focus:outline-none focus:border-background/50"
-                />
-                <button
-                  type="submit"
-                  className="px-6 py-3 bg-background text-foreground font-mono text-xs tracking-wider hover:bg-background/90 transition-colors flex items-center justify-center gap-2 shrink-0"
-                >
-                  SUBSCRIBE
-                  <ArrowRight size={14} />
-                </button>
-              </form>
-              <p className="font-mono text-[10px] text-background/50 mt-3">
-                4,200+ subscribers. Sent every Tuesday.
-              </p>
-            </div>
-          </div>
         </div>
       </section>
 

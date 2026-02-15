@@ -1,3 +1,29 @@
+2026-02-15: Fix dead links and buttons on Status and Blog pages
+- Removed "View all incidents" dead link from status/page.tsx (href="#", lines 537-543)
+- Simplified RECENT INCIDENTS section header (removed flex justify-between wrapper)
+- Removed "LOAD MORE POSTS" dead button from blog/page.tsx (lines 297-304)
+- Added 3 new tests to status/page.test.tsx (TDD approach)
+- Added 2 new tests to blog/page.test.tsx (TDD approach)
+- Verified: no href="#" links remain, all buttons are functional
+- status/page.tsx: 599 → 590 lines (under 800 limit)
+- blog/page.tsx: 381 → 372 lines (under 800 limit)
+- All 19 tests pass (11 status + 8 blog)
+- Full test suite: 541 tests passing
+- TDD workflow: RED (failing tests) → GREEN (remove dead elements) → verified no other issues
+
+2026-02-15: Remove non-functional subscription forms
+- Removed newsletter CTA section from blog/page.tsx (lines 330-368, saved 42 lines)
+- Removed subscribe section from status/page.tsx (lines 562-586, saved 27 lines)
+- Removed unused ArrowRight icon import from blog page
+- Created blog/page.test.tsx with 6 tests verifying form absence
+- Added 2 tests to status/page.test.tsx verifying form absence
+- All 8 new tests pass (14 total across both pages)
+- Followed TDD: RED (failing tests) → GREEN (remove forms) → REFACTOR (cleanup)
+- blog/page.tsx: 423 → 381 lines (under 800 limit)
+- status/page.tsx: 626 → 599 lines (under 800 limit)
+- Improved UX by removing misleading non-functional UI elements
+- Full test suite: 536 tests passing
+
 2026-02-15: Fix dead social links on About page
 - GitHub link: now points to https://github.com/fcavalcantirj/solvr
 - Twitter/X link: removed (no account exists)

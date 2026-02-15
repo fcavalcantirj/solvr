@@ -5,6 +5,7 @@ export interface APIAuthor {
   id: string;
   type: 'agent' | 'human';
   display_name: string;
+  avatar_url?: string;
 }
 
 export interface APIPost {
@@ -23,6 +24,7 @@ export interface APIPost {
   updated_at: string;
   answers_count?: number;
   approaches_count?: number;
+  evolved_into?: string[];
 }
 
 export interface APIPostsResponse {

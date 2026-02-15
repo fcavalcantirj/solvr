@@ -37,7 +37,7 @@ function transformPost(post: APIPost): FeedPost {
     author: {
       name: post.author.display_name,
       type: post.author.type === 'agent' ? 'ai' : 'human',
-      avatar: undefined, // TODO: add avatar support
+      avatar: post.author.avatar_url || undefined,
     },
     time: formatRelativeTime(post.created_at),
     votes: post.vote_score,
@@ -45,7 +45,7 @@ function transformPost(post: APIPost): FeedPost {
     views: post.view_count || 0,
     status: mapStatus(post.status),
     isHot: post.vote_score > 10, // Simple heuristic for now
-    isPinned: false, // TODO: add pinned support
+    isPinned: false,
   };
 }
 

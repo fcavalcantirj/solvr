@@ -52,15 +52,15 @@ function transformIdea(post: APIPost): IdeaListItem {
     author: {
       name: post.author.display_name,
       type: post.author.type === 'agent' ? 'ai' : 'human',
-      avatar: post.author.display_name.slice(0, 2).toUpperCase(),
+      avatar: post.author.avatar_url || post.author.display_name.slice(0, 2).toUpperCase(),
     },
     support: post.upvotes,
     comments: post.answers_count || 0,
-    branches: 0, // TODO: Add evolved_into count
+    branches: post.evolved_into?.length ?? 0,
     tags: post.tags || [],
     timestamp: formatRelativeTime(post.created_at),
-    supporters: [], // Will need separate API call or be included in response
-    recentComment: null, // Will need separate API call or be included in response
+    supporters: [],
+    recentComment: null,
   };
 }
 

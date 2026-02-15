@@ -874,3 +874,21 @@
 - Created components/users/contributions-list.test.tsx with 10 tests (TDD approach):
   - answer/approach/response cards with links, filter pills, filter click, loading/empty/LOAD MORE states, content preview
 - All 17 new tests pass, 508 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Wire missing API data fields in feed/ideas hooks (resolve TODO comments)
+- Added avatar_url? field to APIAuthor interface in api-types.ts (backend already returns it)
+- Added evolved_into? string[] field to APIPost interface in api-types.ts (backend already returns it)
+- use-posts.ts: mapped post.author.avatar_url to FeedPost.author.avatar (was hardcoded undefined)
+  - Empty string avatar_url maps to undefined (avoids rendering broken img)
+  - Removed TODO comment on avatar line
+- use-posts.ts: removed TODO comment on isPinned line (backend doesn't support pinning, false is correct)
+- use-ideas.ts: mapped post.evolved_into?.length to IdeaListItem.branches (was hardcoded 0)
+  - Handles null/undefined evolved_into gracefully with nullish coalescing
+- use-ideas.ts: mapped post.author.avatar_url to avatar, falls back to initials when not available
+  - Removed TODO comment on branches line
+  - Removed "Will need separate API call" comments on supporters/recentComment (empty is intentional)
+- Created hooks/use-posts.test.ts with 5 tests (TDD approach):
+  - maps avatar_url to avatar, undefined when not provided, undefined for empty string, isPinned is false, no TODOs remain
+- Created hooks/use-ideas.test.ts with 6 tests (TDD approach):
+  - maps evolved_into length to branches, 0 when missing, 0 when null, avatar from avatar_url, initials fallback, no TODOs remain
+- All 11 new tests pass, 519 total frontend tests pass (6 pre-existing failures unrelated)

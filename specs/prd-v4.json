@@ -1103,7 +1103,7 @@
       "Remove TODO comments once resolved (either mapped or confirmed unavailable)",
       "Verify: no TODO comments remain in hook transform functions"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

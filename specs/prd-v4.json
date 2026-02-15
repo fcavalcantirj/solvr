@@ -695,7 +695,7 @@
       "Show loading spinner on LOAD MORE button while fetching next page",
       "Verify: Renders real questions from API with identical gorgeous look"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

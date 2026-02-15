@@ -517,3 +517,12 @@
 - Returns: questions[], loading, error, total, hasMore, page, refetch, loadMore
 - loadMore() increments page and appends; filter change resets to page 1
 - TypeScript compiles clean
+
+2026-02-15: Replace mock data in questions-list.tsx with useQuestions hook
+- Removed hardcoded Question interface and mock questions[] array (96 lines of mock data)
+- Imported and used useQuestions hook with optional status/tags/sort props
+- Added loading spinner state, error state, and empty state (follows ProblemsList pattern)
+- Wired LOAD MORE button to loadMore(), hidden when !hasMore, shows "LOADING..." while fetching
+- Extracted QuestionCard component for cleaner separation
+- Status badges: open→AWAITING, answered→ANSWERED, solved→ACCEPTED
+- TypeScript compiles clean

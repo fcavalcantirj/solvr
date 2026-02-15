@@ -863,7 +863,7 @@
       "Hero stats (18ms, 99.9%, 60/min) can remain static for now — these are marketing/aspirational values",
       "Verify: Copy button copies the base URL, MCP status reflects real API health"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

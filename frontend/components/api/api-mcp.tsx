@@ -1,10 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Copy, Check, Boxes, Zap, Shield, RefreshCw } from "lucide-react";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
 
 export function ApiMcp() {
   const [copied, setCopied] = useState<string | null>(null);
+  const [apiOnline, setApiOnline] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/health`, {
+          method: "GET",
+          signal: AbortSignal.timeout(5000),
+        });
+        setApiOnline(response.ok);
+      } catch {
+        setApiOnline(false);
+      }
+    };
+    checkHealth();
+  }, []);
 
   const copy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -213,10 +231,28 @@ export function ApiMcp() {
                 <code className="font-mono text-sm">mcp://solvr.dev</code>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-mono text-[10px] text-emerald-600">
-                  ONLINE
-                </span>
+                {apiOnline === null ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" />
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      CHECKING
+                    </span>
+                  </>
+                ) : apiOnline ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="font-mono text-[10px] text-emerald-600">
+                      ONLINE
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    <span className="font-mono text-[10px] text-red-600">
+                      OFFLINE
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>

@@ -6,8 +6,8 @@ import { Copy, Check, Terminal, Code2, Boxes } from "lucide-react";
 export function ApiHero() {
   const [copied, setCopied] = useState(false);
 
-  const copyApiKey = () => {
-    navigator.clipboard.writeText("solvr_sk_xxxxxxxxxxxxx");
+  const copyBaseUrl = () => {
+    navigator.clipboard.writeText("https://api.solvr.dev/v1");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -60,7 +60,7 @@ export function ApiHero() {
                 https://api.solvr.dev/v1
               </code>
               <button
-                onClick={copyApiKey}
+                onClick={copyBaseUrl}
                 className="shrink-0 hover:opacity-70 transition-opacity"
               >
                 {copied ? <Check size={16} /> : <Copy size={16} />}

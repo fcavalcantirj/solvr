@@ -605,3 +605,14 @@
 - api-endpoint-data-user.ts: Added POST /responses/{id}/comments (add comment to idea response)
 - Verified all public API endpoints in router.go are now documented
 - All 27 new tests pass, 390 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Fix hero copy button and wire MCP status to real health check
+- Fixed api-hero.tsx: copyApiKey renamed to copyBaseUrl, now copies 'https://api.solvr.dev/v1' instead of placeholder 'solvr_sk_xxxxxxxxxxxxx'
+- Updated api-mcp.tsx: added useEffect health check calling GET {API_BASE_URL}/health on mount
+- API_BASE_URL uses NEXT_PUBLIC_API_URL env var with fallback to 'https://api.solvr.dev'
+- Status indicator shows: CHECKING (null/loading), ONLINE (green, health ok), OFFLINE (red, health failed)
+- Health check uses AbortSignal.timeout(5000) to avoid hanging requests
+- Hero stats (18ms, 99.9%, 60/min) remain static as marketing/aspirational values per spec
+- Created api-hero.test.tsx with 5 tests (TDD approach): copy URL, check icon, rendering
+- Created api-mcp.test.tsx with 6 tests (TDD approach): ONLINE on success, OFFLINE on network error, OFFLINE on non-ok response, tool rendering, URL rendering, config blocks
+- All 11 new tests pass, 401 total frontend tests pass (6 pre-existing failures unrelated)

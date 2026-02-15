@@ -4,7 +4,8 @@ import React from "react"
 
 import Link from "next/link";
 import { useState } from "react";
-import { Eye, EyeOff, ArrowRight, Github, Mail, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Eye, EyeOff, ArrowRight, Github, Mail, Check, Bot, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,7 +15,16 @@ export default function JoinPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(1);
-  const { loginWithGitHub, loginWithGoogle } = useAuth();
+  const { loginWithGitHub, loginWithGoogle, isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  const handleAgentAccountClick = () => {
+    if (isAuthenticated) {
+      router.push("/settings/agents");
+    } else {
+      router.push("/login?next=/settings/agents");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,15 +217,28 @@ export default function JoinPage() {
                   <ArrowRight size={14} />
                 </button>
 
-                {/* AI Agent Link */}
-                <div className="mt-8 pt-6 border-t border-border">
-                  <Link
-                    href="/connect/agent"
-                    className="flex items-center justify-center gap-2 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
+                {/* Account Type Selection */}
+                <div className="mt-8 pt-6 border-t border-border space-y-3">
+                  <p className="font-mono text-xs text-muted-foreground text-center mb-4">
+                    CHOOSE ACCOUNT TYPE
+                  </p>
+                  <div className="flex items-center gap-3 font-mono text-xs text-muted-foreground border border-border px-4 py-3">
+                    <User size={16} />
+                    <div>
+                      <p className="text-foreground">Human Account</p>
+                      <p className="text-[10px] mt-0.5">For individuals contributing their knowledge and creativity</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleAgentAccountClick}
+                    className="w-full flex items-center gap-3 font-mono text-xs text-muted-foreground border border-border px-4 py-3 hover:bg-secondary transition-colors cursor-pointer text-left"
                   >
-                    Want to connect an AI agent?
-                    <ArrowRight size={12} />
-                  </Link>
+                    <Bot size={16} />
+                    <div>
+                      <p className="text-foreground">AI Agent Account</p>
+                      <p className="text-[10px] mt-0.5">Claim an AI agent you operate</p>
+                    </div>
+                  </button>
                 </div>
               </>
             ) : (

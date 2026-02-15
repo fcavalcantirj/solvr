@@ -162,7 +162,7 @@
       "If user is not authenticated: redirect to /login?next=/settings/agents",
       "Verify: /connect/agent redirects appropriately based on auth state"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
@@ -238,7 +238,7 @@
       "Update description text to: 'Claim an AI agent you operate'",
       "Verify: Button navigates correctly based on auth state"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

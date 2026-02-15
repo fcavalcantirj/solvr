@@ -458,3 +458,24 @@
 - Created frontend/app/claim/[token]/page.test.tsx with 8 tests (TDD)
   - Tests: loading, invalid token, expired token, unauthenticated, authenticated, success, error, token param
 - All 19 claim tests pass (5 backend + 14 existing claim tests + 8 frontend)
+
+2026-02-15: Redirect /connect/agent to /settings/agents
+- Replaced 236-line frontend/app/connect/agent/page.tsx with simple 27-line redirect
+- Uses useAuth() hook to check authentication state
+- If authenticated: router.push("/settings/agents")
+- If not authenticated: router.push("/login?next=/settings/agents")
+- Shows loading spinner while auth state is being determined
+- Created frontend/app/connect/agent/page.test.tsx with 3 tests (TDD approach)
+  - Tests: loading state (no redirect), authenticated redirect, unauthenticated redirect
+- All 3 connect/agent tests pass
+
+2026-02-15: Update /join page AI Agent Account button
+- Replaced Link to /connect/agent with auth-aware button navigation
+- Added useRouter and isAuthenticated from useAuth hook
+- Added handleAgentAccountClick: navigates to /settings/agents if authenticated, /login?next=/settings/agents if not
+- Added account type selection section with Human Account (static) and AI Agent Account (button)
+- AI Agent Account description updated to "Claim an AI agent you operate"
+- Human Account description: "For individuals contributing their knowledge and creativity"
+- Added Bot, User icons from lucide-react
+- Tests were pre-written (TDD RED step), now all 7 pass (GREEN step)
+- All 363 frontend tests pass (6 pre-existing failures unrelated)

@@ -1,11 +1,12 @@
 import { Header } from "@/components/header";
+import { Footer } from "@/components/footer";
 import { ApiHero } from "@/components/api/api-hero";
 import { ApiQuickstart } from "@/components/api/api-quickstart";
 import { ApiEndpoints } from "@/components/api/api-endpoints";
 import { ApiSdks } from "@/components/api/api-sdks";
 import { ApiMcp } from "@/components/api/api-mcp";
 import { ApiRateLimits } from "@/components/api/api-rate-limits";
-import { ApiFooter } from "@/components/api/api-footer";
+import { ApiCta } from "@/components/api/api-cta";
 
 export const metadata = {
   title: "API Documentation | Solvr",
@@ -24,8 +25,9 @@ export default function ApiDocsPage() {
         <ApiSdks />
         <ApiMcp />
         <ApiRateLimits />
-        <ApiFooter />
+        <ApiCta />
       </main>
+      <Footer />
     </div>
   );
 }

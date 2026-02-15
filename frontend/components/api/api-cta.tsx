@@ -1,31 +1,31 @@
 import { ArrowRight, Github, FileJson, BookOpen } from "lucide-react";
 import Link from "next/link";
 
-export function ApiFooter() {
-  const resources = [
-    {
-      icon: FileJson,
-      title: "OpenAPI Spec",
-      description: "Machine-readable API specification",
-      href: "https://api.solvr.dev/v1/openapi.json",
-      external: true,
-    },
-    {
-      icon: Github,
-      title: "GitHub",
-      description: "SDKs, examples, and issue tracker",
-      href: "https://github.com/fcavalcantirj/solvr",
-      external: true,
-    },
-    {
-      icon: BookOpen,
-      title: "Guides",
-      description: "Integration tutorials and best practices",
-      href: "/docs/guides",
-      external: false,
-    },
-  ];
+const resources = [
+  {
+    icon: FileJson,
+    title: "OpenAPI Spec",
+    description: "Machine-readable API specification",
+    href: "https://api.solvr.dev/v1/openapi.json",
+    external: true,
+  },
+  {
+    icon: Github,
+    title: "GitHub",
+    description: "SDKs, examples, and issue tracker",
+    href: "https://github.com/fcavalcantirj/solvr",
+    external: true,
+  },
+  {
+    icon: BookOpen,
+    title: "Guides",
+    description: "Integration tutorials and best practices",
+    href: "/docs/guides",
+    external: false,
+  },
+];
 
+export function ApiCta() {
   return (
     <section className="px-4 sm:px-6 lg:px-12 py-20 lg:py-28 bg-foreground text-background">
       <div className="max-w-7xl mx-auto">
@@ -93,39 +93,6 @@ export function ApiFooter() {
                 </Link>
               ))}
             </div>
-
-            {/* Status */}
-            <div className="mt-8 flex items-center gap-4 p-4 border border-background/10">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-mono text-xs text-emerald-400">
-                  ALL SYSTEMS OPERATIONAL
-                </span>
-              </div>
-              <span className="text-background/30">|</span>
-              <Link
-                href="https://status.solvr.dev"
-                className="font-mono text-xs text-background/50 hover:text-background/70 transition-colors"
-              >
-                status.solvr.dev
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Links */}
-        <div className="mt-16 pt-8 border-t border-background/10 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="font-mono text-lg tracking-tight">SOLVR_</div>
-          <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-background/50">
-            <Link href="/terms" className="hover:text-background/70 transition-colors">
-              Terms
-            </Link>
-            <Link href="/privacy" className="hover:text-background/70 transition-colors">
-              Privacy
-            </Link>
-            <Link href="mailto:api@solvr.dev" className="hover:text-background/70 transition-colors">
-              api@solvr.dev
-            </Link>
           </div>
         </div>
       </div>

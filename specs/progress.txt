@@ -577,3 +577,11 @@
 - answers-list.tsx: Flag button already wired to ReportModal (no work needed)
 - Sidebar links, tag clicks, and list cards already functional from previous rewrites
 - TypeScript compiles clean
+
+2026-02-15: Replace custom api-footer.tsx with shared Footer component
+- Extracted CTA section (GET STARTED + Resources) into new components/api/api-cta.tsx
+- Removed status indicator from CTA (handled separately by task 17)
+- Updated api-docs/page.tsx: replaced <ApiFooter /> with <ApiCta /> + <Footer />
+- Footer now matches /problems, /questions, /ideas, etc. (same shared component)
+- Deleted unused components/api/api-footer.tsx
+- TypeScript compiles clean

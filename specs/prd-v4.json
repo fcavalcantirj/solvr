@@ -819,7 +819,7 @@
       "Verify: Footer on /api-docs now matches footer on homepage, /problems, /questions, etc.",
       "Verify: CTA section with Get API Key and resources still visible above footer"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -479,3 +479,13 @@
 - Added Bot, User icons from lucide-react
 - Tests were pre-written (TDD RED step), now all 7 pass (GREEN step)
 - All 363 frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Set question status to 'answered' when first answer is created
+- Modified CreateAnswer in db/answers.go to update question status after inserting answer
+- SQL: UPDATE posts SET status = 'answered', updated_at = NOW() WHERE id = $1 AND type = 'question' AND status = 'open'
+- WHERE status = 'open' guard prevents overwriting 'solved' or other statuses
+- Lifecycle: open → answered (first answer) → solved (answer accepted)
+- Added integration test: TestCreateAnswer_SetsQuestionStatusToAnswered
+- Added integration test: TestCreateAnswer_DoesNotOverwriteSolvedStatus
+- All handler tests pass, build successful
+- DB integration tests compile and skip correctly without DATABASE_URL

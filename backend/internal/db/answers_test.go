@@ -329,3 +329,117 @@ func TestAnswersRepository_CreateAnswer_Success(t *testing.T) {
 		t.Error("expected created_at to be set")
 	}
 }
+
+// TestCreateAnswer_SetsQuestionStatusToAnswered tests that creating an answer
+// on an 'open' question updates its status to 'answered'.
+func TestCreateAnswer_SetsQuestionStatusToAnswered(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAnswersRepository(pool)
+	ctx := context.Background()
+
+	timestamp := time.Now().Format("20060102150405")
+	questionID := "answered_status_question_" + timestamp
+
+	// Create a question with status 'open'
+	_, err := pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ($1, 'question', 'Test Question', 'Description', 'agent', 'test_agent', 'open')
+	`, questionID)
+	if err != nil {
+		t.Fatalf("failed to insert question: %v", err)
+	}
+
+	// Create first answer
+	answer := &models.Answer{
+		QuestionID: questionID,
+		AuthorType: models.AuthorTypeAgent,
+		AuthorID:   "test_agent_" + timestamp,
+		Content:    "This is a helpful answer.",
+	}
+
+	created, err := repo.CreateAnswer(ctx, answer)
+
+	defer func() {
+		if created != nil && created.ID != "" {
+			_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE id = $1", created.ID)
+		}
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", questionID)
+	}()
+
+	if err != nil {
+		t.Fatalf("CreateAnswer() error = %v", err)
+	}
+
+	// Verify question status changed from 'open' to 'answered'
+	var status string
+	err = pool.QueryRow(ctx, "SELECT status FROM posts WHERE id = $1", questionID).Scan(&status)
+	if err != nil {
+		t.Fatalf("failed to query question status: %v", err)
+	}
+
+	if status != "answered" {
+		t.Errorf("expected question status = 'answered', got '%s'", status)
+	}
+}
+
+// TestCreateAnswer_DoesNotOverwriteSolvedStatus tests that creating an answer
+// on a 'solved' question does NOT change its status back to 'answered'.
+func TestCreateAnswer_DoesNotOverwriteSolvedStatus(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAnswersRepository(pool)
+	ctx := context.Background()
+
+	timestamp := time.Now().Format("20060102150405")
+	questionID := "solved_status_question_" + timestamp
+
+	// Create a question with status 'solved' (already has accepted answer)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ($1, 'question', 'Test Question', 'Description', 'agent', 'test_agent', 'solved')
+	`, questionID)
+	if err != nil {
+		t.Fatalf("failed to insert question: %v", err)
+	}
+
+	// Create another answer on the already-solved question
+	answer := &models.Answer{
+		QuestionID: questionID,
+		AuthorType: models.AuthorTypeAgent,
+		AuthorID:   "test_agent_" + timestamp,
+		Content:    "Another answer on solved question.",
+	}
+
+	created, err := repo.CreateAnswer(ctx, answer)
+
+	defer func() {
+		if created != nil && created.ID != "" {
+			_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE id = $1", created.ID)
+		}
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", questionID)
+	}()
+
+	if err != nil {
+		t.Fatalf("CreateAnswer() error = %v", err)
+	}
+
+	// Verify question status is still 'solved' (not overwritten)
+	var status string
+	err = pool.QueryRow(ctx, "SELECT status FROM posts WHERE id = $1", questionID).Scan(&status)
+	if err != nil {
+		t.Fatalf("failed to query question status: %v", err)
+	}
+
+	if status != "solved" {
+		t.Errorf("expected question status = 'solved', got '%s'", status)
+	}
+}

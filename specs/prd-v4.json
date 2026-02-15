@@ -632,7 +632,7 @@
       "Write test: question with accepted answer (solved), add another answer → status stays 'solved'",
       "Verify: GET /v1/questions?status=answered now returns questions that have answers but no accepted answer"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

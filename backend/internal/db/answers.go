@@ -177,6 +177,16 @@ func (r *AnswersRepository) CreateAnswer(ctx context.Context, answer *models.Ans
 		return nil, fmt.Errorf("insert answer: %w", err)
 	}
 
+	// Update question status from 'open' to 'answered' when first answer is created.
+	// The WHERE status = 'open' guard ensures we don't overwrite 'solved' or other statuses.
+	_, err = r.pool.Exec(ctx, `
+		UPDATE posts SET status = 'answered', updated_at = NOW()
+		WHERE id = $1 AND type = 'question' AND status = 'open'
+	`, answer.QuestionID)
+	if err != nil {
+		return nil, fmt.Errorf("update question status to answered: %w", err)
+	}
+
 	return answer, nil
 }
 

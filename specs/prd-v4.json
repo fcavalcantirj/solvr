@@ -981,7 +981,7 @@
       "Add mobile fixed CTA button at bottom (matching problems/questions mobile CTA pattern)",
       "Verify: button navigates correctly, form submits, redirects to /ideas/{new_id}"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

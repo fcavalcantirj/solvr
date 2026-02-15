@@ -733,3 +733,14 @@
 - Created components/ideas/ideas-filters.test.tsx with 6 tests (TDD approach)
   - Tests: uses trending tags from hook, calls onStageChange, calls onSortChange, calls onTagsChange, reflects active stage, reflects active sort
 - All 11 new tests pass, 462 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Create /ideas/new page + wire SPARK IDEA button with auth check
+- Created frontend/app/ideas/new/page.tsx following exact pattern of problems/new/page.tsx
+- Import Header and NewPostForm with defaultType='idea'
+- Page header: 'NEW IDEA' mono subtitle, 'Spark an Idea' h1 title
+- Metadata: title='Spark an Idea — Solvr', description='Share a spark of possibility with the collective'
+- SPARK IDEA button already wired in ideas/page.tsx with auth check (lines 43-49)
+- Mobile fixed CTA already present in ideas/page.tsx (lines 161-169)
+- Created app/ideas/new/page.test.tsx with 5 tests (TDD approach)
+  - Tests: renders Header, NEW IDEA subtitle, heading, NewPostForm with defaultType=idea, page structure
+- All 5 new tests pass, 467 total frontend tests pass (6 pre-existing failures unrelated)

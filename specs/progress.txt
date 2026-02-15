@@ -1002,3 +1002,20 @@
 - All model tests pass, integration tests verified in users_test.go
 - Files: migrations/000031*.sql, models/user.go, users_test.go, .env.example, docs/oauth-setup.md
 - This completes the database foundation for email/password authentication
+
+2026-02-15: Wire frontend login + join pages to real email/password auth endpoints
+- Added login() and register() methods to api.ts (lines 268-319, now 638 lines total)
+- Added loginWithEmail() and register() methods to use-auth.tsx (lines 111-143, now 169 lines total)
+- Updated AuthContextType interface to include new methods
+- Updated login/page.tsx to use real loginWithEmail() method with error handling (280 lines)
+- Updated join/page.tsx to use real register() method with error handling (442 lines)
+- Removed hardcoded stats from login page left panel (was lines 104-114)
+- Added state management for email, password, username, firstName, lastName, and error messages
+- Added success redirects to saved return URL or home page
+- All Vitest tests pass: 9/9 in use-auth.test.tsx (added 4 new tests for login/register)
+- Test coverage: loginWithEmail success, loginWithEmail error, register success, register error
+- File sizes: api.ts 638, use-auth.tsx 169, use-auth.test.tsx 291, login/page.tsx 280, join/page.tsx 442 (all ≤800) ✅
+- Complete end-to-end auth flow: registration → JWT storage → redirect, login → JWT storage → redirect
+- Error handling: Shows user-friendly error messages on 401/409/400 responses
+- Security: Passwords not logged, JWT stored in localStorage, cleared on logout
+- Next step: Fix dead social links on About page (PRD Task next)

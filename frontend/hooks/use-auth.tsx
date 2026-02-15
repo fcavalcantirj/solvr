@@ -18,6 +18,8 @@ interface AuthContextType {
   logout: () => void;
   loginWithGitHub: () => void;
   loginWithGoogle: () => void;
+  loginWithEmail: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, password: string, username: string, displayName: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -106,6 +108,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev'}/v1/auth/google`;
   }, []);
 
+  const loginWithEmail = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await api.login(email, password);
+      await setToken(response.access_token);
+      return { success: true };
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
+      return {
+        success: false,
+        error: err.message || 'Login failed. Please try again.',
+      };
+    }
+  }, [setToken]);
+
+  const register = useCallback(async (
+    email: string,
+    password: string,
+    username: string,
+    displayName: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await api.register(email, password, username, displayName);
+      await setToken(response.access_token);
+      return { success: true };
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
+      return {
+        success: false,
+        error: err.message || 'Registration failed. Please try again.',
+      };
+    }
+  }, [setToken]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -116,6 +151,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         loginWithGitHub,
         loginWithGoogle,
+        loginWithEmail,
+        register,
       }}
     >
       {children}

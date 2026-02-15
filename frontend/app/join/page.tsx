@@ -15,7 +15,13 @@ export default function JoinPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(1);
-  const { loginWithGitHub, loginWithGoogle, isAuthenticated } = useAuth();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const { loginWithGitHub, loginWithGoogle, isAuthenticated, register } = useAuth();
   const router = useRouter();
 
   const handleAgentAccountClick = () => {
@@ -33,8 +39,20 @@ export default function JoinPage() {
       return;
     }
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsLoading(false);
+    setError("");
+
+    const displayName = `${firstName} ${lastName}`.trim();
+    const result = await register(email, password, username, displayName);
+
+    if (result.success) {
+      // Redirect to home or saved return URL
+      const returnUrl = localStorage.getItem('auth_return_url') || '/';
+      localStorage.removeItem('auth_return_url');
+      router.push(returnUrl);
+    } else {
+      setError(result.error || "Registration failed. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -261,6 +279,12 @@ export default function JoinPage() {
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="space-y-5">
+                  {error && (
+                    <div className="bg-destructive/10 border border-destructive/20 text-destructive font-mono text-xs p-3">
+                      {error}
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="firstName" className="font-mono text-xs tracking-wider">
@@ -271,6 +295,8 @@ export default function JoinPage() {
                         type="text"
                         placeholder="Jane"
                         className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
                         required
                       />
                     </div>
@@ -283,6 +309,8 @@ export default function JoinPage() {
                         type="text"
                         placeholder="Doe"
                         className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
                         required
                       />
                     </div>
@@ -297,6 +325,8 @@ export default function JoinPage() {
                       type="text"
                       placeholder="janedoe"
                       className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
                       required
                     />
                   </div>
@@ -310,6 +340,8 @@ export default function JoinPage() {
                       type="email"
                       placeholder="you@example.com"
                       className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       required
                     />
                   </div>
@@ -322,8 +354,10 @@ export default function JoinPage() {
                       <Input
                         id="password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="Min. 12 characters"
+                        placeholder="Min. 8 characters"
                         className="font-mono text-sm h-12 px-4 pr-12 border-border focus:border-foreground focus:ring-0 rounded-none"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                         required
                       />
                       <button

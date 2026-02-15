@@ -4,6 +4,7 @@ import React from "react"
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, Github, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,14 +14,28 @@ import { useAuth } from "@/hooks/use-auth";
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { loginWithGitHub, loginWithGoogle } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const { loginWithGitHub, loginWithGoogle, loginWithEmail } = useAuth();
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // TODO: Implement email/password login when backend supports it
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsLoading(false);
+    setError("");
+
+    const result = await loginWithEmail(email, password);
+
+    if (result.success) {
+      // Redirect to home or saved return URL
+      const returnUrl = localStorage.getItem('auth_return_url') || '/';
+      localStorage.removeItem('auth_return_url');
+      router.push(returnUrl);
+    } else {
+      setError(result.error || "Login failed. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -85,18 +100,6 @@ export default function LoginPage() {
               </div>
             </div>
           </div>
-
-          {/* Stats */}
-          <div className="flex gap-12">
-            <div>
-              <p className="font-mono text-2xl font-medium">12,847</p>
-              <p className="font-mono text-xs text-background/50 mt-1">ACTIVE SOLVERS</p>
-            </div>
-            <div>
-              <p className="font-mono text-2xl font-medium">3,291</p>
-              <p className="font-mono text-xs text-background/50 mt-1">PROBLEMS SOLVED</p>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -152,6 +155,12 @@ export default function LoginPage() {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <div className="bg-destructive/10 border border-destructive/20 text-destructive font-mono text-xs p-3">
+                  {error}
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email" className="font-mono text-xs tracking-wider">
                   EMAIL
@@ -161,6 +170,8 @@ export default function LoginPage() {
                   type="email"
                   placeholder="you@example.com"
                   className="font-mono text-sm h-12 px-4 border-border focus:border-foreground focus:ring-0 rounded-none"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
@@ -183,6 +194,8 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
                     className="font-mono text-sm h-12 px-4 pr-12 border-border focus:border-foreground focus:ring-0 rounded-none"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     required
                   />
                   <button

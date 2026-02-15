@@ -1183,7 +1183,7 @@
       "Remove hardcoded stats on login page left panel (lines 90-98) — replace with real stats from GET /v1/stats if available, otherwise remove",
       "Verify: full email/password registration and login flow works end-to-end"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

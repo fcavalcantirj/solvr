@@ -264,6 +264,61 @@ class SolvrAPI {
     return this.fetch<APIMeResponse>('/v1/me');
   }
 
+  // Email/password authentication
+  async login(email: string, password: string): Promise<{
+    access_token: string;
+    refresh_token: string;
+    user: {
+      id: string;
+      username: string;
+      display_name: string;
+      email: string;
+      role: string;
+    };
+  }> {
+    return this.fetch<{
+      access_token: string;
+      refresh_token: string;
+      user: {
+        id: string;
+        username: string;
+        display_name: string;
+        email: string;
+        role: string;
+      };
+    }>('/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  async register(email: string, password: string, username: string, displayName: string): Promise<{
+    access_token: string;
+    refresh_token: string;
+    user: {
+      id: string;
+      username: string;
+      display_name: string;
+      email: string;
+      role: string;
+    };
+  }> {
+    return this.fetch<{
+      access_token: string;
+      refresh_token: string;
+      user: {
+        id: string;
+        username: string;
+        display_name: string;
+        email: string;
+        role: string;
+      };
+    }>('/v1/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, username, display_name: displayName }),
+    });
+  }
+
   async createPost(data: CreatePostData): Promise<APICreatePostResponse> {
     return this.fetch<APICreatePostResponse>('/v1/posts', {
       method: 'POST',

@@ -10,6 +10,8 @@ vi.mock('@/lib/api', () => ({
     getMe: vi.fn(),
     setAuthToken: vi.fn(),
     clearAuthToken: vi.fn(),
+    login: vi.fn(),
+    register: vi.fn(),
   },
 }));
 
@@ -147,5 +149,143 @@ describe('useAuth', () => {
     expect(result.current.isAuthenticated).toBe(false);
     // Token should be cleared on auth failure
     expect(localStorageMock.removeItem).toHaveBeenCalledWith('auth_token');
+  });
+
+  it('should loginWithEmail and store JWT on success', async () => {
+    (api.login as ReturnType<typeof vi.fn>).mockResolvedValue({
+      access_token: 'jwt-token',
+      refresh_token: 'refresh-token',
+      user: {
+        id: 'user-789',
+        username: 'testuser',
+        display_name: 'Test User',
+        email: 'test@example.com',
+        role: 'user',
+      }
+    });
+    (api.getMe as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        id: 'user-789',
+        type: 'human',
+        display_name: 'Test User',
+        email: 'test@example.com',
+      }
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    let loginResult;
+    await act(async () => {
+      loginResult = await result.current.loginWithEmail('test@example.com', 'password123');
+    });
+
+    expect(api.login).toHaveBeenCalledWith('test@example.com', 'password123');
+    expect(localStorageMock.setItem).toHaveBeenCalledWith('auth_token', 'jwt-token');
+    expect(api.setAuthToken).toHaveBeenCalledWith('jwt-token');
+    expect(loginResult).toEqual({ success: true });
+    expect(result.current.isAuthenticated).toBe(true);
+  });
+
+  it('should return error on loginWithEmail failure', async () => {
+    (api.login as ReturnType<typeof vi.fn>).mockRejectedValue({
+      code: 'INVALID_CREDENTIALS',
+      message: 'Invalid email or password',
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    let loginResult;
+    await act(async () => {
+      loginResult = await result.current.loginWithEmail('test@example.com', 'wrongpassword');
+    });
+
+    expect(api.login).toHaveBeenCalledWith('test@example.com', 'wrongpassword');
+    expect(loginResult).toEqual({
+      success: false,
+      error: 'Invalid email or password'
+    });
+    expect(result.current.isAuthenticated).toBe(false);
+  });
+
+  it('should register and store JWT on success', async () => {
+    (api.register as ReturnType<typeof vi.fn>).mockResolvedValue({
+      access_token: 'new-jwt-token',
+      refresh_token: 'new-refresh-token',
+      user: {
+        id: 'user-999',
+        username: 'newuser',
+        display_name: 'New User',
+        email: 'new@example.com',
+        role: 'user',
+      }
+    });
+    (api.getMe as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        id: 'user-999',
+        type: 'human',
+        display_name: 'New User',
+        email: 'new@example.com',
+      }
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    let registerResult;
+    await act(async () => {
+      registerResult = await result.current.register(
+        'new@example.com',
+        'password123',
+        'newuser',
+        'New User'
+      );
+    });
+
+    expect(api.register).toHaveBeenCalledWith('new@example.com', 'password123', 'newuser', 'New User');
+    expect(localStorageMock.setItem).toHaveBeenCalledWith('auth_token', 'new-jwt-token');
+    expect(api.setAuthToken).toHaveBeenCalledWith('new-jwt-token');
+    expect(registerResult).toEqual({ success: true });
+    expect(result.current.isAuthenticated).toBe(true);
+  });
+
+  it('should return error on register failure', async () => {
+    (api.register as ReturnType<typeof vi.fn>).mockRejectedValue({
+      code: 'DUPLICATE_EMAIL',
+      message: 'Email already registered',
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    let registerResult;
+    await act(async () => {
+      registerResult = await result.current.register(
+        'existing@example.com',
+        'password123',
+        'testuser',
+        'Test User'
+      );
+    });
+
+    expect(api.register).toHaveBeenCalledWith('existing@example.com', 'password123', 'testuser', 'Test User');
+    expect(registerResult).toEqual({
+      success: false,
+      error: 'Email already registered'
+    });
+    expect(result.current.isAuthenticated).toBe(false);
   });
 });

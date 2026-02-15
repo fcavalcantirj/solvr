@@ -1013,7 +1013,7 @@
       "Wire More button: dropdown menu with Report option → opens ReportModal with targetType='post' and targetId={idea.id}",
       "Verify: all three buttons functional, matching problem-header interaction pattern"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

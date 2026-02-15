@@ -1,7 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { IdeaHeader } from './idea-header';
 import { IdeaData } from '@/hooks/use-idea';
+
+// Mock useShare hook
+const mockShare = vi.fn();
+let mockShared = false;
+vi.mock('@/hooks/use-share', () => ({
+  useShare: () => ({
+    share: mockShare,
+    shared: mockShared,
+    isSharing: false,
+    error: null,
+  }),
+}));
+
+// Mock useBookmarks hook
+const mockToggleBookmark = vi.fn();
+let mockBookmarkedPosts = new Set<string>();
+vi.mock('@/hooks/use-bookmarks', () => ({
+  useBookmarks: () => ({
+    bookmarkedPosts: mockBookmarkedPosts,
+    isLoading: false,
+    error: null,
+    toggleBookmark: mockToggleBookmark,
+    checkBookmarked: vi.fn(),
+  }),
+}));
 
 // Mock VoteButton
 vi.mock('@/components/ui/vote-button', () => ({
@@ -22,6 +47,22 @@ vi.mock('@/components/ui/vote-button', () => ({
       VoteButton
     </div>
   ),
+}));
+
+// Mock ReportModal
+const mockOnClose = vi.fn();
+vi.mock('@/components/ui/report-modal', () => ({
+  ReportModal: ({ isOpen, onClose, targetType, targetId }: {
+    isOpen: boolean;
+    onClose: () => void;
+    targetType: string;
+    targetId: string;
+  }) => isOpen ? (
+    <div data-testid="report-modal" data-target-type={targetType} data-target-id={targetId}>
+      <button onClick={onClose}>Close</button>
+      ReportModal
+    </div>
+  ) : null,
 }));
 
 // Mock next/link
@@ -54,6 +95,12 @@ const mockIdea: IdeaData = {
 describe('IdeaHeader', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockShared = false;
+    mockBookmarkedPosts = new Set<string>();
+    Object.defineProperty(window, 'location', {
+      value: { origin: 'https://solvr.dev', href: 'https://solvr.dev/ideas/idea-xyz789' },
+      writable: true,
+    });
   });
 
   it('renders VoteButton with correct postId, initialScore, direction, size, and showDownvote', () => {
@@ -70,7 +117,6 @@ describe('IdeaHeader', () => {
   it('clicking VoteButton triggers vote (VoteButton component rendered with useVote)', () => {
     render(<IdeaHeader idea={mockIdea} />);
 
-    // VoteButton is rendered (which internally uses useVote hook)
     const voteButton = screen.getByTestId('vote-button-idea-xyz789');
     expect(voteButton).toBeDefined();
     expect(voteButton.textContent).toBe('VoteButton');
@@ -78,30 +124,94 @@ describe('IdeaHeader', () => {
 
   it('does not render static ArrowUp button with SUPPORT label', () => {
     render(<IdeaHeader idea={mockIdea} />);
-
-    // The old static SUPPORT label should not exist
     expect(screen.queryByText('SUPPORT')).toBeNull();
   });
 
   it('renders idea title and status', () => {
     render(<IdeaHeader idea={mockIdea} />);
-
     expect(screen.getByText('AI agents should share debugging patterns')).toBeDefined();
     expect(screen.getByText('ACTIVE')).toBeDefined();
   });
 
   it('renders Share and Watch buttons alongside VoteButton', () => {
     render(<IdeaHeader idea={mockIdea} />);
-
-    expect(screen.getByText('SHARE')).toBeDefined();
-    expect(screen.getByText('WATCH')).toBeDefined();
+    expect(screen.getByTestId('share-button')).toBeDefined();
+    expect(screen.getByTestId('bookmark-button')).toBeDefined();
     expect(screen.getByText('VoteButton')).toBeDefined();
   });
 
   it('renders author info correctly', () => {
     render(<IdeaHeader idea={mockIdea} />);
-
     expect(screen.getByText('claudius')).toBeDefined();
     expect(screen.getByText('[AI]')).toBeDefined();
+  });
+
+  // New tests for Share/Watch/More functionality
+
+  it('clicking Share copies URL to clipboard', async () => {
+    render(<IdeaHeader idea={mockIdea} />);
+
+    const shareButton = screen.getByTestId('share-button');
+    fireEvent.click(shareButton);
+
+    expect(mockShare).toHaveBeenCalledWith(
+      'AI agents should share debugging patterns',
+      `https://solvr.dev/ideas/${mockIdea.id}`
+    );
+  });
+
+  it('shows Check icon feedback when share succeeds', () => {
+    mockShared = true;
+    render(<IdeaHeader idea={mockIdea} />);
+
+    const shareButton = screen.getByTestId('share-button');
+    expect(shareButton.querySelector('svg')).toBeTruthy();
+    expect(shareButton.classList.toString()).toContain('text-emerald');
+  });
+
+  it('clicking Watch calls bookmark API and toggles filled icon state', async () => {
+    render(<IdeaHeader idea={mockIdea} />);
+
+    const bookmarkButton = screen.getByTestId('bookmark-button');
+    fireEvent.click(bookmarkButton);
+
+    expect(mockToggleBookmark).toHaveBeenCalledWith(mockIdea.id);
+  });
+
+  it('shows filled Bookmark icon when bookmarked', () => {
+    mockBookmarkedPosts = new Set([mockIdea.id]);
+    render(<IdeaHeader idea={mockIdea} />);
+
+    const bookmarkButton = screen.getByTestId('bookmark-button');
+    const svg = bookmarkButton.querySelector('svg');
+    expect(svg).toBeTruthy();
+    expect(bookmarkButton.classList.toString()).toContain('text-foreground');
+  });
+
+  it('clicking More opens dropdown with Report option', () => {
+    render(<IdeaHeader idea={mockIdea} />);
+
+    const moreButton = screen.getByTestId('more-button');
+    fireEvent.click(moreButton);
+
+    expect(screen.getByText('REPORT')).toBeDefined();
+  });
+
+  it('clicking Report in dropdown opens ReportModal', () => {
+    render(<IdeaHeader idea={mockIdea} />);
+
+    // Open dropdown
+    const moreButton = screen.getByTestId('more-button');
+    fireEvent.click(moreButton);
+
+    // Click Report
+    const reportButton = screen.getByText('REPORT');
+    fireEvent.click(reportButton);
+
+    // ReportModal should be open
+    const modal = screen.getByTestId('report-modal');
+    expect(modal).toBeDefined();
+    expect(modal.getAttribute('data-target-type')).toBe('post');
+    expect(modal.getAttribute('data-target-id')).toBe('idea-xyz789');
   });
 });

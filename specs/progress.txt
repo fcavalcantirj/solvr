@@ -757,3 +757,17 @@
 - Created problem-header.test.tsx with 6 tests (TDD approach):
   - Tests: Share copies URL, Check icon on share success, Bookmark toggles state, filled icon when bookmarked, title/status render, VoteButton props
 - All 6 new tests pass, 473 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Wire Share/Watch/More buttons on idea detail header with Report dropdown
+- Imported useShare from @/hooks/use-share — calls navigator.share() or clipboard.writeText()
+- Imported useBookmarks from @/hooks/use-bookmarks — calls api.addBookmark()/removeBookmark()
+- Imported ReportModal from @/components/ui/report-modal — calls POST /v1/reports
+- Removed dead Button components (SHARE/WATCH) and replaced with functional native buttons
+- Share button: calls share(idea.title, url) with Check icon + emerald-500 feedback for 2s
+- Watch button: calls toggleBookmark(idea.id) with filled Bookmark icon when active
+- More button: opens dropdown menu with REPORT option → opens ReportModal with targetType='post' targetId={idea.id}
+- Dropdown positioned absolute right-0 top-full, styled bg-card border shadow-md
+- Added useState for showDropdown and showReportModal state management
+- Updated idea-header.test.tsx with 12 tests (6 existing + 6 new TDD approach):
+  - Tests: Share copies URL, Check icon on success, Watch toggles bookmark, filled icon when bookmarked, More opens dropdown, Report opens ReportModal
+- All 12 tests pass, 479 total frontend tests pass (6 pre-existing failures unrelated)

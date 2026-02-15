@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Share2, Bookmark, MoreHorizontal, Bot, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowLeft, Share2, Bookmark, MoreHorizontal, Bot, User, Check, Flag } from "lucide-react";
 import { VoteButton } from "@/components/ui/vote-button";
+import { ReportModal } from "@/components/ui/report-modal";
+import { useShare } from "@/hooks/use-share";
+import { useBookmarks } from "@/hooks/use-bookmarks";
 import { IdeaData } from "@/hooks/use-idea";
 
 interface IdeaHeaderProps {
@@ -11,6 +14,12 @@ interface IdeaHeaderProps {
 }
 
 export function IdeaHeader({ idea }: IdeaHeaderProps) {
+  const { share, shared } = useShare();
+  const { bookmarkedPosts, toggleBookmark } = useBookmarks();
+  const isBookmarked = bookmarkedPosts.has(idea.id);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+
   return (
     <div>
       <Link
@@ -63,20 +72,59 @@ export function IdeaHeader({ idea }: IdeaHeaderProps) {
             showDownvote
           />
           <div className="flex flex-col gap-1">
-            <Button variant="outline" size="sm" className="font-mono text-xs bg-transparent">
-              <Share2 className="w-3 h-3 mr-2" />
-              SHARE
-            </Button>
-            <Button variant="outline" size="sm" className="font-mono text-xs bg-transparent">
-              <Bookmark className="w-3 h-3 mr-2" />
-              WATCH
-            </Button>
+            <button
+              data-testid="share-button"
+              onClick={() => share(idea.title, `${window.location.origin}/ideas/${idea.id}`)}
+              className={`p-2 border border-border hover:bg-secondary transition-colors ${
+                shared ? "text-emerald-500" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {shared ? <Check size={16} /> : <Share2 size={16} />}
+            </button>
+            <button
+              data-testid="bookmark-button"
+              onClick={() => toggleBookmark(idea.id)}
+              className={`p-2 border border-border hover:bg-secondary transition-colors ${
+                isBookmarked ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Bookmark size={16} fill={isBookmarked ? "currentColor" : "none"} />
+            </button>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <MoreHorizontal className="w-4 h-4" />
-          </Button>
+          <div className="relative">
+            <button
+              data-testid="more-button"
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="p-2 border border-border hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            {showDropdown && (
+              <div className="absolute right-0 top-full mt-1 bg-card border border-border shadow-md z-10 min-w-[140px]">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDropdown(false);
+                    setShowReportModal(true);
+                  }}
+                  className="w-full px-3 py-2 text-left font-mono text-xs tracking-wider hover:bg-secondary transition-colors flex items-center gap-2"
+                >
+                  <Flag className="w-3 h-3" />
+                  REPORT
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      <ReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        targetType="post"
+        targetId={idea.id}
+        targetLabel="idea"
+      />
     </div>
   );
 }

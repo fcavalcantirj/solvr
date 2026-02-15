@@ -55,6 +55,28 @@ type RegisterUserResponse struct {
 	Role        string `json:"role"`
 }
 
+// LoginRequest is the request body for login.
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+// LoginResponse is the success response for login.
+type LoginResponse struct {
+	AccessToken  string            `json:"access_token"`
+	RefreshToken string            `json:"refresh_token"`
+	User         LoginUserResponse `json:"user"`
+}
+
+// LoginUserResponse contains user info in login response.
+type LoginUserResponse struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Email       string `json:"email"`
+	Role        string `json:"role"`
+}
+
 // Username validation regex: 3-30 characters, alphanumeric or underscores only.
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]{3,30}$`)
 
@@ -183,6 +205,96 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
+}
+
+// Login handles POST /v1/auth/login for email/password authentication.
+// Per PRD Task 49: Email/password login with bcrypt verification.
+func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Step 1: Parse request body
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+		return
+	}
+
+	// Step 2: Validate input
+	if req.Email == "" || req.Password == "" {
+		writeErrorResponse(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid email or password")
+		return
+	}
+
+	// Step 3: Look up user by email
+	user, err := h.userRepo.FindByEmail(ctx, req.Email)
+	if err != nil {
+		// User not found - return generic error (no email enumeration)
+		if errors.Is(err, db.ErrNotFound) {
+			writeErrorResponse(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid email or password")
+			return
+		}
+		// Database error
+		log.Printf("FindByEmail failed: %v", err)
+		writeInternalError(w, "Database error")
+		return
+	}
+
+	// Step 4: Check if user has password (OAuth-only users don't)
+	if user.PasswordHash == "" {
+		// OAuth-only user trying to login with password
+		var provider string
+		switch user.AuthProvider {
+		case models.AuthProviderGoogle:
+			provider = "Google"
+		case models.AuthProviderGitHub:
+			provider = "GitHub"
+		default:
+			provider = "OAuth provider"
+		}
+		writeErrorResponse(w, http.StatusUnauthorized, "OAUTH_ONLY_USER",
+			fmt.Sprintf("This account uses %s. Please sign in with %s.", provider, provider))
+		return
+	}
+
+	// Step 5: Verify password with bcrypt
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		// Wrong password - return generic error (no password enumeration)
+		writeErrorResponse(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid email or password")
+		return
+	}
+
+	// Step 6: Generate JWT
+	jwtExpiry, err := time.ParseDuration(h.config.JWTExpiry)
+	if err != nil {
+		jwtExpiry = 15 * time.Minute // Default
+	}
+
+	accessToken, err := auth.GenerateJWT(h.config.JWTSecret, user.ID, user.Email, user.Role, jwtExpiry)
+	if err != nil {
+		log.Printf("JWT generation failed: %v", err)
+		writeInternalError(w, "Failed to generate access token")
+		return
+	}
+
+	// Step 7: Generate refresh token
+	refreshToken := auth.GenerateRefreshToken()
+
+	// Step 8: Return success response
+	resp := LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		User: LoginUserResponse{
+			ID:          user.ID,
+			Username:    user.Username,
+			DisplayName: user.DisplayName,
+			Email:       user.Email,
+			Role:        user.Role,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
 }
 

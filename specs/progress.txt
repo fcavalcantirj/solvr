@@ -969,3 +969,25 @@
 - Security verified: PasswordHash never in JSON, bcrypt format ($2a$/$2b$), JWT validates correctly
 - Integration ready: Migration 000031 exists, endpoint ready for production deployment
 - Next step: Implement POST /v1/auth/login endpoint (PRD Task 49)
+
+2026-02-15: Implement POST /v1/auth/login endpoint (email/password login)
+- Added Login handler to handlers/auth.go (now 345 lines, +112 from register-only)
+- Added LoginRequest and LoginResponse types for API contract
+- Wired route POST /v1/auth/login in router.go (line 276, now 681 lines)
+- Login flow: parse { email, password }, lookup user, verify bcrypt hash, generate JWT + refresh token
+- Security: No email enumeration (same "Invalid email or password" for wrong password vs non-existent email)
+- OAuth-only user handling: Returns 401 OAUTH_ONLY_USER with "This account uses Google. Please sign in with Google."
+- Error handling: 400 invalid request, 401 invalid credentials / OAuth-only user, 500 server errors
+- 4 unit tests in auth_test.go (now 687 lines) written first (TDD RED), all passing (TDD GREEN)
+  - TestLogin_ValidCredentials: Correct credentials return 200, JWT, refresh token, user info
+  - TestLogin_WrongPassword: Wrong password returns 401 INVALID_CREDENTIALS
+  - TestLogin_NonExistentEmail: Non-existent email returns 401 INVALID_CREDENTIALS (no enumeration)
+  - TestLogin_OAuthOnlyUser: OAuth user without password_hash returns 401 with provider-specific message
+- Password verification: bcrypt.CompareHashAndPassword() for secure comparison
+- JWT generation: reuses auth.GenerateJWT() with same expiry as OAuth flow (15m default)
+- Refresh token: reuses auth.GenerateRefreshToken() for consistency
+- File sizes: auth.go 345, auth_test.go 687, router.go 681 (all ≤800 lines) ✅
+- Test results: All 10 auth tests pass (6 register + 4 login), no regressions
+- Security verified: Generic error messages prevent account enumeration, OAuth-only users protected
+- Complete auth system: Registration + Login endpoints both functional, ready for frontend integration
+- Next step: Wire frontend login + join pages to real auth endpoints (PRD Task 50 - frontend)

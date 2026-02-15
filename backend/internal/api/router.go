@@ -270,9 +270,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		r.Get("/auth/google", oauthHandlers.GoogleRedirect)
 		r.Get("/auth/google/callback", oauthHandlers.GoogleCallback)
 
-		// Email/password authentication (API-CRITICAL per PRD Task 48)
+		// Email/password authentication (API-CRITICAL per PRD Task 48 & 49)
 		authHandler := handlers.NewAuthHandlers(oauthConfig, authUserRepo)
 		r.Post("/auth/register", authHandler.Register)
+		r.Post("/auth/login", authHandler.Login)
 
 		// Moltbook OAuth (API-CRITICAL per PRD-v2)
 		// Per SPEC.md Part 5.2: POST /auth/moltbook for agent authentication via Moltbook

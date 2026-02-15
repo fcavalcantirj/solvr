@@ -1164,7 +1164,7 @@
       "Wire route: r.Post('/auth/login', authHandler.Login) in router.go",
       "Verify: all tests pass, login works with valid credentials, rejects invalid"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

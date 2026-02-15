@@ -1072,7 +1072,7 @@
       "Update GET /v1/me/contributions to use same logic with authenticated user's ID instead of returning posts",
       "Verify: all tests pass, endpoint returns real contribution data"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

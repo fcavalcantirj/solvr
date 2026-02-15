@@ -823,3 +823,32 @@
   - TestListResponsesByAuthor_Empty: verifies empty array for non-existent author
 - File sizes: answers.go 470 lines, approaches.go 465 lines, responses.go 353 lines (all under 800)
 - All backend tests pass (db package: 0.019s), pre-existing GitHub OAuth failures unrelated
+
+2026-02-15: Create GET /v1/users/{id}/contributions endpoint
+- Created models/contribution.go with ContributionItem unified type + TruncateContent helper
+- Created handlers/users_contributions.go with:
+  - ContribAnswersRepositoryInterface, ContribApproachesRepositoryInterface, ContribResponsesRepositoryInterface
+  - SetContributionRepositories() to inject repos
+  - GetUserContributions handler: parse {id}, validate UUID, look up user, fetch from repos, merge, sort by created_at DESC
+  - fetchContributions() shared logic: fetches from 3 repos, converts to ContributionItem, sorts, paginates
+  - Supports ?type=answers|approaches|responses filter
+  - Returns unified response: { data: [{ type, id, parent_id, parent_title, parent_type, content_preview, status, created_at }], meta: { total, page, per_page, has_more } }
+- Updated handlers/users.go:
+  - Added answersRepo, approachesRepo, responsesRepo fields to UsersHandler struct
+  - Rewrote GetMyContributions to use fetchContributions (same logic as public endpoint)
+- Wired in router.go:
+  - r.Get("/users/{id}/contributions", usersHandler.GetUserContributions) (public, no auth)
+  - SetContributionRepositories with real db repos
+- Created users_contributions_test.go with 10 tests:
+  - TestGetUserContributions_AllTypes: mixed answers+approaches+responses sorted by created_at DESC
+  - TestGetUserContributions_FilterAnswers: ?type=answers returns only answers
+  - TestGetUserContributions_FilterApproaches: ?type=approaches returns only approaches
+  - TestGetUserContributions_FilterResponses: ?type=responses returns only responses
+  - TestGetUserContributions_Pagination: page/per_page with has_more
+  - TestGetUserContributions_InvalidUserID: non-UUID returns 400
+  - TestGetUserContributions_UserNotFound: unknown user returns 404
+  - TestGetUserContributions_Empty: empty array, not null
+  - TestGetMyContributions_ReturnsContributions: /me/contributions with JWT auth
+  - TestGetMyContributions_Unauthenticated: 401 without auth
+- File sizes: users.go 476, users_contributions.go 215, users_contributions_test.go 648, router.go 674 (all under 800)
+- All 10 new tests pass, pre-existing OAuth/ratelimit failures unrelated

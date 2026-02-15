@@ -43,11 +43,15 @@ type UsersUserListRepositoryInterface interface {
 // Per BE-003: User profile endpoints for viewing and editing profiles.
 // Per prd-v4: GET /v1/users/{id}/agents to list agents by human_id.
 // Per prd-v4: GET /v1/users to list all users.
+// Per prd-v4: GET /v1/users/{id}/contributions to list user contributions.
 type UsersHandler struct {
-	userRepo     UsersUserRepositoryInterface
-	postRepo     UsersPostRepositoryInterface
-	agentRepo    UsersAgentRepositoryInterface
-	userListRepo UsersUserListRepositoryInterface
+	userRepo       UsersUserRepositoryInterface
+	postRepo       UsersPostRepositoryInterface
+	agentRepo      UsersAgentRepositoryInterface
+	userListRepo   UsersUserListRepositoryInterface
+	answersRepo    ContribAnswersRepositoryInterface
+	approachesRepo ContribApproachesRepositoryInterface
+	responsesRepo  ContribResponsesRepositoryInterface
 }
 
 // NewUsersHandler creates a new UsersHandler instance.
@@ -403,8 +407,8 @@ func (h *UsersHandler) GetMyPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetMyContributions handles GET /v1/me/contributions.
-// Per BE-003: List own answers/approaches/responses.
-// For now, this returns posts (later can add answers, approaches, responses).
+// Per prd-v4: Returns answers, approaches, and responses for the authenticated user.
+// Uses the same logic as GetUserContributions but with the authenticated user's identity.
 func (h *UsersHandler) GetMyContributions(w http.ResponseWriter, r *http.Request) {
 	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
@@ -412,28 +416,31 @@ func (h *UsersHandler) GetMyContributions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Parse pagination params (use existing function from posts.go)
+	// Parse pagination params
 	page, perPage, err := parsePaginationParams(r)
 	if err != nil {
 		writeUsersError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 		return
 	}
 
-	// For now, return posts as contributions (can extend to answers/approaches later)
-	opts := models.PostListOptions{
-		AuthorType: authInfo.AuthorType,
-		AuthorID:   authInfo.AuthorID,
-		Page:       page,
-		PerPage:    perPage,
+	// Parse type filter
+	typeFilter := r.URL.Query().Get("type")
+
+	items, total := h.fetchContributions(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, typeFilter, page, perPage)
+
+	resp := ContributionsResponse{
+		Data: items,
+		Meta: ContributionsMeta{
+			Total:   total,
+			Page:    page,
+			PerPage: perPage,
+			HasMore: total > page*perPage,
+		},
 	}
 
-	posts, total, err := h.postRepo.List(r.Context(), opts)
-	if err != nil {
-		writeUsersError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list contributions")
-		return
-	}
-
-	writeUsersListJSON(w, http.StatusOK, posts, total, page, perPage)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // Helper functions

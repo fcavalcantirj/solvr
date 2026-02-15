@@ -150,7 +150,7 @@
       "On success: show celebration message + link to /agents/{id}",
       "Style consistent with /join and /login pages (monospace, minimal borders)"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "frontend",
@@ -162,7 +162,7 @@
       "If user is not authenticated: redirect to /login?next=/settings/agents",
       "Verify: /connect/agent redirects appropriately based on auth state"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "frontend",
@@ -238,7 +238,7 @@
       "Update description text to: 'Claim an AI agent you operate'",
       "Verify: Button navigates correctly based on auth state"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "frontend",
@@ -557,98 +557,6 @@
     "passes": true
   },
   {
-    "category": "SEO-URGENT",
-    "description": "Create GET /v1/sitemap/urls endpoint returning all indexable content for sitemap generation",
-    "steps": [
-      "Create backend/internal/db/sitemap.go with GetSitemapURLs(ctx) method",
-      "Query posts: SELECT id, type, updated_at FROM posts WHERE deleted_at IS NULL AND status NOT IN ('draft') ORDER BY updated_at DESC",
-      "Query agents: SELECT id, updated_at FROM agents WHERE status = 'active' ORDER BY updated_at DESC",
-      "Query users: SELECT id, updated_at FROM users ORDER BY updated_at DESC",
-      "Return combined struct: { posts: [{id, type, updated_at}], agents: [{id, updated_at}], users: [{id, updated_at}] }",
-      "Create backend/internal/api/handlers/sitemap.go with GetSitemapURLs handler",
-      "No auth required — this is public data",
-      "Add route GET /v1/sitemap/urls to router.go (public group)",
-      "Write tests: returns all non-draft non-deleted posts, excludes drafts, excludes deleted, includes active agents, includes users",
-      "Verify: curl /v1/sitemap/urls returns JSON with all 3 arrays populated"
-    ],
-    "passes": true
-  },
-  {
-    "category": "SEO-URGENT",
-    "description": "Create robots.ts with crawl rules and sitemap reference",
-    "steps": [
-      "Create frontend/app/robots.ts exporting MetadataRoute.Robots",
-      "Rules: Allow / for all user-agents",
-      "Disallow: /settings/, /auth/, /login, /join, /new, /admin/",
-      "Sitemap: https://solvr.dev/sitemap.xml",
-      "Host: https://solvr.dev",
-      "Write Vitest test: verify robots() returns correct rules, sitemap URL, and disallow paths",
-      "Verify: curl https://solvr.dev/robots.txt shows correct output"
-    ],
-    "passes": true
-  },
-  {
-    "category": "SEO-URGENT",
-    "description": "Create sitemap.ts that feeds Google every post, agent, and user URL with lastmod",
-    "steps": [
-      "Add getSitemapUrls() to frontend/lib/api.ts — GET /v1/sitemap/urls, no auth",
-      "Create frontend/app/sitemap.ts exporting default async function returning MetadataRoute.Sitemap",
-      "Fetch all URLs from api.getSitemapUrls()",
-      "Static pages: / (priority 1.0, daily), /feed (0.9, hourly), /problems (0.9, hourly), /questions (0.9, hourly), /ideas (0.9, hourly), /agents (0.8, daily), /about (0.3, monthly), /how-it-works (0.3, monthly), /api-docs (0.5, weekly), /mcp (0.5, weekly)",
-      "Dynamic posts: map each post to /{type}s/{id} (e.g., /problems/{id}), priority 0.7, lastModified from updated_at, changeFrequency weekly",
-      "Dynamic agents: /agents/{id}, priority 0.6, lastModified from updated_at, changeFrequency weekly",
-      "Dynamic users: /users/{id}, priority 0.5, lastModified from updated_at, changeFrequency monthly",
-      "Graceful fallback: if API unavailable, return static pages only",
-      "Write Vitest tests: mock API response, verify all URL patterns generated, verify priorities, verify lastModified dates, verify fallback on API error",
-      "Verify: curl https://solvr.dev/sitemap.xml returns valid XML with all content URLs"
-    ],
-    "passes": true
-  },
-  {
-    "category": "SEO-URGENT",
-    "description": "Add metadataBase, OpenGraph defaults, and Twitter card config to root layout.tsx",
-    "steps": [
-      "Add metadataBase: new URL('https://solvr.dev') to metadata export in frontend/app/layout.tsx",
-      "Add openGraph defaults: { type: 'website', siteName: 'Solvr', locale: 'en_US' }",
-      "Add twitter defaults: { card: 'summary_large_image', site: '@solvrdev' }",
-      "Add keywords: 'developer knowledge base, AI agents, coding help, programming Q&A, collective intelligence'",
-      "Update title to use template: { default: 'Solvr — Collective Intelligence for Humans & AI', template: '%s | Solvr' }",
-      "Verify: view-source on homepage shows OG and Twitter meta tags"
-    ],
-    "passes": true
-  },
-  {
-    "category": "SEO-URGENT",
-    "description": "Add generateMetadata to /problems/[id], /questions/[id], /ideas/[id] for dynamic SEO",
-    "steps": [
-      "In frontend/app/problems/[id]/page.tsx: export async function generateMetadata({ params })",
-      "Fetch problem from API: api.getPost(id)",
-      "Return: title (post.title), description (post.description truncated to 160 chars), openGraph (title, description, type: 'article', url), twitter (title, description)",
-      "Handle not-found: return default metadata if API returns 404",
-      "Repeat for frontend/app/questions/[id]/page.tsx with same pattern",
-      "Repeat for frontend/app/ideas/[id]/page.tsx with same pattern",
-      "Write Vitest tests for each: mock API, verify title/description/OG returned",
-      "Verify: view-source on any post page shows correct title and meta description from actual content"
-    ],
-    "passes": false
-  },
-  {
-    "category": "SEO-URGENT",
-    "description": "Add generateMetadata to /agents/[id] and /users/[id] for profile SEO",
-    "steps": [
-      "In frontend/app/agents/[id]/page.tsx: export async function generateMetadata({ params })",
-      "Fetch agent from API: api.getAgent(id)",
-      "Return: title (agent.display_name), description (agent.bio truncated to 160 chars, or 'AI agent on Solvr'), openGraph, twitter",
-      "In frontend/app/users/[id]/page.tsx: export async function generateMetadata({ params })",
-      "Fetch user from API: api.getUser(id)",
-      "Return: title (user.display_name), description (user.bio truncated to 160 chars, or 'Developer on Solvr'), openGraph, twitter",
-      "Handle not-found: return default metadata if API returns 404",
-      "Write Vitest tests for both: mock API, verify metadata returned",
-      "Verify: view-source on agent/user profile shows correct title and description"
-    ],
-    "passes": false
-  },
-  {
     "category": "backend",
     "description": "Add GET /v1/sitemap/counts endpoint returning indexable content counts per type",
     "steps": [
@@ -690,36 +598,6 @@
       "Build query string from params, append to /v1/sitemap/urls when provided",
       "Existing getSitemapUrls() with no params still works (backward compat)",
       "Verify: npx tsc --noEmit passes"
-    ],
-    "passes": true
-  },
-  {
-    "category": "SEO-URGENT",
-    "description": "Replace single sitemap with sitemap index using generateSitemaps() for scalable SEO",
-    "steps": [
-      "Rewrite frontend/app/sitemap.ts to export generateSitemaps() and default sitemap({ id })",
-      "generateSitemaps() calls api.getSitemapCounts(), calculates: 1 static + ceil(posts/5000) + ceil(agents/5000) + ceil(users/5000) sitemaps",
-      "generateSitemaps() falls back to [{ id: 0 }] on API error",
-      "sitemap({ id: 0 }) returns the 11 static pages (unchanged priorities/frequencies)",
-      "sitemap({ id: 1..N }) calls api.getSitemapUrls({ type: 'posts', page, per_page: 5000 }) and maps to /problems/{id}, /questions/{id}, /ideas/{id}",
-      "sitemap({ id: N+1..M }) fetches agents, maps to /agents/{id}",
-      "sitemap({ id: M+1..K }) fetches users, maps to /users/{id}",
-      "On API error in sitemap({ id }), return empty array (graceful degradation)",
-      "Update sitemap.test.ts: test generateSitemaps count calculation, test sitemap(0) static, test sitemap(1) posts, test fallback on error",
-      "robots.ts needs no change (still points to /sitemap.xml which Next.js auto-generates as sitemap index)",
-      "Verify: npx vitest run passes, /sitemap.xml is a sitemap index, /sitemap/0.xml has static pages"
-    ],
-    "passes": true
-  },
-  {
-    "category": "SEO-URGENT",
-    "description": "Add Google Search Console verification and submit sitemap",
-    "steps": [
-      "Add Google Search Console verification meta tag to frontend/app/layout.tsx metadata.verification",
-      "Deploy frontend with sitemap.ts and robots.ts",
-      "Submit https://solvr.dev/sitemap.xml in Google Search Console",
-      "Request indexing for homepage and top content pages",
-      "Verify: Search Console shows sitemap as submitted with URL count matching database"
     ],
     "passes": true
   },
@@ -997,56 +875,6 @@
       "If /status page doesn't exist yet, create a simple redirect or placeholder",
       "Check if status.solvr.dev external link should be kept somewhere (currently in api-footer line 107)",
       "Verify: No hardcoded status claims remain on /api-docs page (except MCP ONLINE handled by Task 16)"
-    ],
-    "passes": false
-  },
-  {
-    "category": "SEO-URGENT",
-    "description": "Install schema-dts, create reusable JsonLd component and JSON-LD builder functions for all page types",
-    "steps": [
-      "Install schema-dts as dev dependency: npm install -D schema-dts",
-      "Create frontend/components/json-ld.tsx: reusable <JsonLd data={...} /> component that renders <script type='application/ld+json' dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, '\\u003c') }} />",
-      "Create frontend/lib/json-ld.ts with typed builder functions using schema-dts WithContext types",
-      "buildOrganization(): WithContext<Organization> — name='Solvr', url='https://solvr.dev', description, logo, sameAs (GitHub)",
-      "buildWebSite(): WithContext<WebSite> — with SearchAction pointing to /search?q={search_term_string} for sitelinks search box",
-      "buildPostJsonLd(post, type): for questions → WithContext<QAPage> with mainEntity Question, acceptedAnswer, suggestedAnswer, upvoteCount; for problems/ideas → WithContext<Article> with headline, articleBody, author, datePublished, dateModified, keywords, interactionStatistic",
-      "buildProfilePageJsonLd(entity, type): WithContext<ProfilePage> with mainEntity Person — name, description, url, image, knowsAbout",
-      "buildBreadcrumbs(items): WithContext<BreadcrumbList> — Home > Section > Item (e.g., Home > Questions > {title})",
-      "Write Vitest tests for JsonLd component: verify script tag rendered, JSON parseable, XSS characters escaped",
-      "Write Vitest tests for each builder: verify @type, @context, required fields, correct schema-dts types",
-      "Verify: npx tsc --noEmit passes with full type safety on all builders"
-    ],
-    "passes": false
-  },
-  {
-    "category": "SEO-URGENT",
-    "description": "Add JSON-LD Organization and WebSite structured data to homepage",
-    "steps": [
-      "In frontend/app/page.tsx: import JsonLd component and buildOrganization, buildWebSite from lib/json-ld",
-      "Render two <JsonLd> components at top of returned JSX, before Hero component",
-      "First: <JsonLd data={buildOrganization()} />",
-      "Second: <JsonLd data={buildWebSite()} />",
-      "Homepage is already a server component — no changes needed to component type",
-      "Write Vitest test: render page, query script[type='application/ld+json'] elements, parse JSON, verify Organization and WebSite schemas present",
-      "Verify: Google Rich Results Test (https://search.google.com/test/rich-results) validates the markup"
-    ],
-    "passes": false
-  },
-  {
-    "category": "SEO-URGENT",
-    "description": "Add JSON-LD to /problems/[id], /questions/[id], /ideas/[id], /agents/[id], /users/[id] with server-side fetch-once pattern",
-    "steps": [
-      "In each [id]/page.tsx server component: fetch data in the default export function (Next.js deduplicates with generateMetadata fetch)",
-      "Build JSON-LD using typed builders from lib/json-ld.ts, render <JsonLd> + <JsonLd data={buildBreadcrumbs(...)}>",
-      "Pass fetched data as initialData prop to client component (e.g., <ProblemDetailClient id={id} initialData={post} />)",
-      "Update each client component to accept optional initialData prop: use as initial state, skip first fetch if provided",
-      "problems/[id]/page.tsx: fetch api.getPost(id), build Article JSON-LD + BreadcrumbList (Home > Problems > {title})",
-      "questions/[id]/page.tsx: fetch api.getPost(id), build QAPage JSON-LD + BreadcrumbList (Home > Questions > {title})",
-      "ideas/[id]/page.tsx: fetch api.getPost(id), build Article JSON-LD + BreadcrumbList (Home > Ideas > {title})",
-      "agents/[id]/page.tsx: fetch api.getAgent(id), build ProfilePage JSON-LD + BreadcrumbList (Home > Agents > {name})",
-      "users/[id]/page.tsx: fetch api.getUserProfile(id), build ProfilePage JSON-LD + BreadcrumbList (Home > Users > {name})",
-      "Write Vitest tests for each page: mock API, verify JSON-LD script tags rendered with correct @type and data",
-      "Verify: Google Rich Results Test validates QAPage for questions and Article for problems"
     ],
     "passes": false
   }

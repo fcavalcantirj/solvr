@@ -876,6 +876,6 @@
       "Check if status.solvr.dev external link should be kept somewhere (currently in api-footer line 107)",
       "Verify: No hardcoded status claims remain on /api-docs page (except MCP ONLINE handled by Task 16)"
     ],
-    "passes": false
+    "passes": true
   }
 ]

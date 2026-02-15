@@ -616,3 +616,18 @@
 - Created api-hero.test.tsx with 5 tests (TDD approach): copy URL, check icon, rendering
 - Created api-mcp.test.tsx with 6 tests (TDD approach): ONLINE on success, OFFLINE on network error, OFFLINE on non-ok response, tool rendering, URL rendering, config blocks
 - All 11 new tests pass, 401 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Ensure status indicator is handled correctly when api-footer is replaced with shared Footer
+- Verified: api-footer.tsx was already deleted (Task 13 replaced it with shared Footer)
+- Verified: No hardcoded 'ALL SYSTEMS OPERATIONAL' text remains on /api-docs page
+- Verified: Shared Footer links to /status page with pulsing green dot indicator (footer.tsx lines 110-119)
+- Verified: /status page exists at app/status/page.tsx with full service status dashboard
+- Verified: No status.solvr.dev external link references remain in codebase
+- Verified: MCP ONLINE status indicator wired to real health check (handled by Task 16 in api-mcp.tsx)
+- Created app/api-docs/page.test.tsx with 4 tests (TDD approach):
+  - No hardcoded ALL SYSTEMS OPERATIONAL, uses shared Footer, /status link present, no status.solvr.dev refs
+- Created components/footer.test.tsx with 7 tests (TDD approach):
+  - Brand rendering, platform/developer/company links, /status link with green indicator, no hardcoded status text, copyright
+- Created app/status/page.test.tsx with 6 tests (TDD approach):
+  - System status header, All Systems Operational, service categories, shared Footer, recent incidents, programmatic access
+- All 17 new tests pass, 418 total frontend tests pass (6 pre-existing failures unrelated)

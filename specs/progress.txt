@@ -508,3 +508,12 @@
 - Added getQuestions(params?) method to api.ts (follows getProblems pattern)
 - Added getQuestionsStats() method to api.ts (follows getProblemsStats pattern)
 - TypeScript compiles clean (npx tsc --noEmit passes)
+
+2026-02-15: Create useQuestions hook following useProblems pattern
+- Created hooks/use-questions.ts following hooks/use-problems.ts pattern exactly
+- QuestionListItem interface: id, title, snippet, status, displayStatus, voteScore, answersCount, author, tags, timestamp
+- mapQuestionStatus: open→Unanswered, answered→Answered, solved→Accepted
+- UseQuestionsOptions: status, tags, sort (newest|votes|answers), page, perPage
+- Returns: questions[], loading, error, total, hasMore, page, refetch, loadMore
+- loadMore() increments page and appends; filter change resets to page 1
+- TypeScript compiles clean

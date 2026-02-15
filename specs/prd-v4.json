@@ -677,7 +677,7 @@
       "loadMore() increments page and appends, filter change resets to page 1",
       "Verify: Hook compiles and returns typed data"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

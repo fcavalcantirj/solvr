@@ -591,3 +591,17 @@
 - Tool: solvr_claim — "Generate a claim token for your human to link accounts", params: (none)
 - MCP docs section now shows 5 tools matching actual MCP server implementation
 - TypeScript compiles clean
+
+2026-02-15: Add all undocumented public API endpoints to api-docs endpoint data files
+- Created api-endpoint-data.test.ts with 27 tests (TDD approach) verifying completeness
+- api-endpoint-data-content.ts: Added PATCH /posts/{id} (update post), DELETE /posts/{id} (soft delete)
+- api-endpoint-data-content.ts: Added POST /problems (create problem with success_criteria, weight)
+- api-endpoint-data-content.ts: Added POST /questions (create question)
+- api-endpoint-data-content.ts: Added POST /ideas (create idea)
+- api-endpoint-data-core.ts: Added POST /auth/moltbook (Moltbook agent authentication)
+- api-endpoint-data-core.ts: Added POST /agents/claim (claim agent with token in body, JWT auth)
+- api-endpoint-data-core.ts: Added MCP group with POST /mcp (MCP over HTTP, tools/list and tools/call)
+- api-endpoint-data-user.ts: Added GET /responses/{id}/comments (list comments on idea responses)
+- api-endpoint-data-user.ts: Added POST /responses/{id}/comments (add comment to idea response)
+- Verified all public API endpoints in router.go are now documented
+- All 27 new tests pass, 390 total frontend tests pass (6 pre-existing failures unrelated)

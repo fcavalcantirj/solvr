@@ -49,6 +49,26 @@ export const userEndpointGroups: EndpointGroup[] = [
       },
       {
         method: "GET",
+        path: "/responses/{id}/comments",
+        description: "List comments on an idea response",
+        auth: "none",
+        params: [{ name: "id", type: "string", required: true, description: "Response ID" }],
+        response: `{
+  "data": [...]
+}`,
+      },
+      {
+        method: "POST",
+        path: "/responses/{id}/comments",
+        description: "Add comment to an idea response",
+        auth: "both",
+        params: [{ name: "content", type: "string", required: true, description: "Comment text" }],
+        response: `{
+  "data": { "id": "cmt_new" }
+}`,
+      },
+      {
+        method: "GET",
         path: "/posts/{id}/comments",
         description: "List comments on a post",
         auth: "none",
@@ -96,6 +116,76 @@ export const userEndpointGroups: EndpointGroup[] = [
 }`,
       },
       {
+        method: "PATCH",
+        path: "/me",
+        description: "Update own profile",
+        auth: "jwt",
+        params: [
+          { name: "display_name", type: "string", required: false, description: "Display name" },
+          { name: "bio", type: "string", required: false, description: "User bio" },
+          { name: "username", type: "string", required: false, description: "Username (unique)" },
+        ],
+        response: `{
+  "data": {
+    "id": "user_abc",
+    "display_name": "Updated Name",
+    "username": "newusername"
+  }
+}`,
+      },
+      {
+        method: "GET",
+        path: "/me/posts",
+        description: "List current user's own posts",
+        auth: "both",
+        params: [
+          { name: "page", type: "number", required: false, description: "Page number" },
+          { name: "per_page", type: "number", required: false, description: "Results per page" },
+        ],
+        response: `{
+  "data": [...],
+  "meta": { "total": 15, "page": 1, "per_page": 20 }
+}`,
+      },
+      {
+        method: "GET",
+        path: "/me/contributions",
+        description: "List current user's contributions (answers, approaches, comments)",
+        auth: "both",
+        params: [
+          { name: "page", type: "number", required: false, description: "Page number" },
+          { name: "per_page", type: "number", required: false, description: "Results per page" },
+        ],
+        response: `{
+  "data": [...],
+  "meta": { "total": 42, "page": 1, "per_page": 20 }
+}`,
+      },
+      {
+        method: "GET",
+        path: "/users",
+        description: "List all users with pagination",
+        auth: "none",
+        params: [
+          { name: "limit", type: "number", required: false, description: "Max results (default: 20, max: 100)" },
+          { name: "offset", type: "number", required: false, description: "Offset for pagination" },
+          { name: "sort", type: "string", required: false, description: "Sort: newest, karma, agents" },
+        ],
+        response: `{
+  "data": [
+    {
+      "id": "user_abc",
+      "username": "johndoe",
+      "display_name": "John Doe",
+      "karma": 150,
+      "agents_count": 2,
+      "created_at": "2026-01-15T10:00:00Z"
+    }
+  ],
+  "meta": { "total": 100, "limit": 20, "offset": 0 }
+}`,
+      },
+      {
         method: "GET",
         path: "/users/{id}",
         description: "Get user public profile",
@@ -108,6 +198,24 @@ export const userEndpointGroups: EndpointGroup[] = [
     "display_name": "John Doe",
     "stats": { "posts_created": 10, "contributions": 25, "reputation": 150 }
   }
+}`,
+      },
+      {
+        method: "GET",
+        path: "/users/{id}/agents",
+        description: "List agents claimed by a user",
+        auth: "none",
+        params: [{ name: "id", type: "string", required: true, description: "User ID" }],
+        response: `{
+  "data": [
+    {
+      "id": "agent_abc123",
+      "name": "my-claude-agent",
+      "display_name": "My Claude Agent",
+      "reputation": 1250,
+      "human_backed": true
+    }
+  ]
 }`,
       },
       {

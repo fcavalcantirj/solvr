@@ -850,7 +850,7 @@
       "Reference router.go and corresponding handler files for accurate params and responses",
       "Verify: All public API endpoints in router.go are now documented"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -64,6 +64,34 @@ export const contentEndpointGroups: EndpointGroup[] = [
 }`,
       },
       {
+        method: "PATCH",
+        path: "/posts/{id}",
+        description: "Update a post (owner only)",
+        auth: "both",
+        params: [
+          { name: "id", type: "string", required: true, description: "Post ID" },
+          { name: "title", type: "string", required: false, description: "Updated title" },
+          { name: "description", type: "string", required: false, description: "Updated description" },
+          { name: "tags", type: "array", required: false, description: "Updated tags" },
+          { name: "status", type: "string", required: false, description: "Updated status" },
+        ],
+        response: `{
+  "data": {
+    "id": "p_abc123",
+    "title": "Updated title",
+    "updated_at": "2026-02-05T10:00:00Z"
+  }
+}`,
+      },
+      {
+        method: "DELETE",
+        path: "/posts/{id}",
+        description: "Soft delete a post (owner only)",
+        auth: "both",
+        params: [{ name: "id", type: "string", required: true, description: "Post ID" }],
+        response: `{ "success": true }`,
+      },
+      {
         method: "POST",
         path: "/posts/{id}/vote",
         description: "Vote on a post",
@@ -135,6 +163,28 @@ export const contentEndpointGroups: EndpointGroup[] = [
       },
       {
         method: "POST",
+        path: "/problems",
+        description: "Create a new problem",
+        auth: "both",
+        params: [
+          { name: "title", type: "string", required: true, description: "Problem title (max 200 chars)" },
+          { name: "description", type: "string", required: true, description: "Full description (markdown, max 50,000 chars)" },
+          { name: "tags", type: "array", required: false, description: "Tags for categorization (max 10)" },
+          { name: "success_criteria", type: "array", required: false, description: "Success criteria (1-10 items)" },
+          { name: "weight", type: "number", required: false, description: "Difficulty weight (1-5)" },
+        ],
+        response: `{
+  "data": {
+    "id": "p_new123",
+    "type": "problem",
+    "title": "New problem",
+    "status": "open",
+    "created_at": "2026-02-05T10:00:00Z"
+  }
+}`,
+      },
+      {
+        method: "POST",
         path: "/problems/{id}/approaches",
         description: "Add approach to a problem",
         auth: "both",
@@ -174,6 +224,31 @@ export const contentEndpointGroups: EndpointGroup[] = [
         response: `{
   "data": { "verified": true, "verified_by": "..." }
 }`,
+      },
+      {
+        method: "POST",
+        path: "/approaches/{id}/progress",
+        description: "Add a progress note to an approach",
+        auth: "both",
+        params: [{ name: "content", type: "string", required: true, description: "Progress update text" }],
+        response: `{
+  "data": {
+    "id": "prog_xyz",
+    "approach_id": "apr_abc",
+    "content": "Made progress on...",
+    "created_at": "2026-02-05T10:00:00Z"
+  }
+}`,
+      },
+      {
+        method: "GET",
+        path: "/problems/{id}/export",
+        description: "Export problem and approaches as markdown",
+        auth: "none",
+        params: [{ name: "id", type: "string", required: true, description: "Problem ID" }],
+        response: `// Returns Content-Type: text/markdown
+# Problem: Race condition in async queries
+...`,
       },
     ],
   },
@@ -226,6 +301,26 @@ export const contentEndpointGroups: EndpointGroup[] = [
       "author": { ... }
     }
   ]
+}`,
+      },
+      {
+        method: "POST",
+        path: "/questions",
+        description: "Create a new question",
+        auth: "both",
+        params: [
+          { name: "title", type: "string", required: true, description: "Question title (max 200 chars)" },
+          { name: "description", type: "string", required: true, description: "Full description (markdown, max 20,000 chars)" },
+          { name: "tags", type: "array", required: false, description: "Tags for categorization (max 10)" },
+        ],
+        response: `{
+  "data": {
+    "id": "q_new123",
+    "type": "question",
+    "title": "New question",
+    "status": "open",
+    "created_at": "2026-02-05T10:00:00Z"
+  }
 }`,
       },
       {
@@ -327,6 +422,26 @@ export const contentEndpointGroups: EndpointGroup[] = [
       "author": { ... }
     }
   ]
+}`,
+      },
+      {
+        method: "POST",
+        path: "/ideas",
+        description: "Create a new idea",
+        auth: "both",
+        params: [
+          { name: "title", type: "string", required: true, description: "Idea title (max 200 chars)" },
+          { name: "description", type: "string", required: true, description: "Full description (markdown, max 50,000 chars)" },
+          { name: "tags", type: "array", required: false, description: "Tags for categorization (max 10)" },
+        ],
+        response: `{
+  "data": {
+    "id": "i_new123",
+    "type": "idea",
+    "title": "New idea",
+    "status": "open",
+    "created_at": "2026-02-05T10:00:00Z"
+  }
 }`,
       },
       {

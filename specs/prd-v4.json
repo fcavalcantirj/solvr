@@ -1023,7 +1023,7 @@
       "For mobile type dropdown (lines 112-118): remove it entirely — the mobile horizontal scroll tabs (lines 205-221) already handle type selection on mobile. The dropdown is redundant and broken.",
       "Verify: mobile search toggles correctly, no dead buttons remain"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -771,3 +771,16 @@
 - Updated idea-header.test.tsx with 12 tests (6 existing + 6 new TDD approach):
   - Tests: Share copies URL, Check icon on success, Watch toggles bookmark, filled icon when bookmarked, More opens dropdown, Report opens ReportModal
 - All 12 tests pass, 479 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Fix dead buttons on feed filters (mobile search toggle + remove redundant mobile type dropdown)
+- Converted showMobileSearch from hardcoded false to useState(false) with toggle
+- Wired mobile search toggle button onClick to setShowMobileSearch((prev) => !prev)
+- Mobile search input now expands/collapses when search icon button is tapped
+- Removed redundant mobile type dropdown (md:hidden div with ChevronDown button)
+  - This dropdown was non-functional (no onClick handler, no menu)
+  - Mobile horizontal scroll tabs (lines 194-211) already handle type selection on mobile
+- Removed unused ChevronDown import from lucide-react
+- Added useState import from react
+- Created feed-filters.test.tsx with 5 tests (TDD approach):
+  - Tests: mobile search toggle opens input, toggle again closes input, no redundant ChevronDown dropdown, mobile horizontal scroll tabs work, mobile search input triggers onFiltersChange
+- All 5 new tests pass, 484 total frontend tests pass (6 pre-existing failures unrelated)

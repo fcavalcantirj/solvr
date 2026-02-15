@@ -1,12 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import {
   Search,
   SlidersHorizontal,
   X,
   LayoutGrid,
   List,
-  ChevronDown,
 } from "lucide-react";
 import { PostType } from "@/hooks/use-posts";
 
@@ -45,7 +45,7 @@ export function FeedFilters({
   onToggleFilters,
   onToggleSidebar,
 }: FeedFiltersProps) {
-  const showMobileSearch = false; // Could be local state if needed
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
 
   const activeFiltersCount =
     (filters.status !== "All" ? 1 : 0) +
@@ -84,7 +84,7 @@ export function FeedFilters({
 
           {/* Search Toggle - Mobile */}
           <button
-            onClick={() => {}}
+            onClick={() => setShowMobileSearch((prev) => !prev)}
             className="sm:hidden w-10 h-10 flex items-center justify-center border border-border hover:bg-secondary transition-colors"
           >
             <Search size={16} />
@@ -105,16 +105,6 @@ export function FeedFilters({
                 {type.label.toUpperCase()}
               </button>
             ))}
-          </div>
-
-          {/* Type Dropdown - Mobile */}
-          <div className="md:hidden relative">
-            <button
-              className="flex items-center gap-2 font-mono text-[11px] tracking-wider px-3 py-2.5 border border-border bg-foreground text-background"
-            >
-              {types.find(t => t.value === filters.type)?.label.toUpperCase() || 'ALL'}
-              <ChevronDown size={12} />
-            </button>
           </div>
 
           {/* Spacer */}

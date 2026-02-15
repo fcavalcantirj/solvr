@@ -439,3 +439,22 @@
 - On API error in sitemap({ id }), returns empty array (graceful degradation)
 - Rewrote sitemap.test.ts: 11 tests (3 generateSitemaps + 8 sitemap) covering count calculation, static pages, posts/agents/users ranges, error fallback, lastModified
 - All 11 sitemap tests pass, 368 total frontend tests pass (10 pre-existing failures unrelated)
+
+2026-02-15: Create /claim/{token} page for direct URL claiming
+- Added GET /v1/claim/{token} backend endpoint (public, no auth required)
+  - Returns ClaimInfoResponse: agent info, token_valid, expires_at, error
+  - Validates token exists, not expired, not used; clears sensitive fields (api_key_hash)
+  - Route added to router.go in public endpoints section
+- Created backend/internal/api/handlers/agents_claim_info_test.go with 5 tests (TDD)
+  - Tests: ValidToken, TokenNotFound, ExpiredToken, UsedToken, NoClaimRepo
+  - Split from agents_claim_test.go to stay under 800 line limit
+- Added getClaimInfo(token) method to frontend/lib/api.ts (GET /v1/claim/{token})
+- Created frontend/app/claim/[token]/page.tsx with full claim flow:
+  - Loading state, invalid/expired token state, agent info display
+  - Auth-aware: shows "Log in to claim" or "Claim this agent" button
+  - Login redirects to /login?next=/claim/{token} for return flow
+  - Success state with celebration, Human-Backed badge, link to agent profile
+  - Styled consistent with /login and /join pages (monospace, minimal borders)
+- Created frontend/app/claim/[token]/page.test.tsx with 8 tests (TDD)
+  - Tests: loading, invalid token, expired token, unauthenticated, authenticated, success, error, token param
+- All 19 claim tests pass (5 backend + 14 existing claim tests + 8 frontend)

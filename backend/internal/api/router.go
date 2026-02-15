@@ -249,6 +249,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Post("/agents/claim", agentsHandler.ClaimAgentWithToken)
 		})
 
+		// Public claim info endpoint (no auth required)
+		// GET /v1/claim/{token} - get claim token info for confirmation page
+		r.Get("/claim/{token}", agentsHandler.GetClaimInfo)
+
 		// OAuth endpoints (API-CRITICAL requirement)
 		// Per SPEC.md Part 5.2: GitHub OAuth
 		r.Get("/auth/github", oauthHandlers.GitHubRedirect)

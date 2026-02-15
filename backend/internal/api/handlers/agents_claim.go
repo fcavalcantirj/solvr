@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
@@ -33,6 +35,15 @@ type ClaimAgentResponse struct {
 	Success bool         `json:"success"`
 	Agent   models.Agent `json:"agent"`
 	Message string       `json:"message"`
+}
+
+// ClaimInfoResponse is the response for GET /v1/claim/{token}.
+// Returns claim token validity and associated agent info (public, no auth required).
+type ClaimInfoResponse struct {
+	Agent      *models.Agent `json:"agent,omitempty"`
+	TokenValid bool          `json:"token_valid"`
+	ExpiresAt  string        `json:"expires_at,omitempty"`
+	Error      string        `json:"error,omitempty"`
 }
 
 // GenerateClaim handles POST /v1/agents/me/claim - generate claim URL for human linking.
@@ -230,3 +241,79 @@ func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(resp)
 }
 
+// GetClaimInfo handles GET /v1/claim/{token} - get claim token info for confirmation page.
+// Public endpoint (no auth required) so the page can show agent info before login.
+func (h *AgentsHandler) GetClaimInfo(w http.ResponseWriter, r *http.Request) {
+	tokenValue := chi.URLParam(r, "token")
+	if tokenValue == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(ClaimInfoResponse{
+			TokenValid: false,
+			Error:      "token is required",
+		})
+		return
+	}
+
+	if h.claimTokenRepo == nil {
+		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "claim token repository not configured")
+		return
+	}
+
+	// Find the claim token
+	claimToken, err := h.claimTokenRepo.FindByToken(r.Context(), tokenValue)
+	if err != nil || claimToken == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(ClaimInfoResponse{
+			TokenValid: false,
+			Error:      "invalid or unknown token",
+		})
+		return
+	}
+
+	// Check if token is expired
+	if claimToken.IsExpired() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(ClaimInfoResponse{
+			TokenValid: false,
+			Error:      "token has expired",
+		})
+		return
+	}
+
+	// Check if token is already used
+	if claimToken.IsUsed() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(ClaimInfoResponse{
+			TokenValid: false,
+			Error:      "token has already been used",
+		})
+		return
+	}
+
+	// Get the agent associated with this token
+	agent, err := h.repo.FindByID(r.Context(), claimToken.AgentID)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(ClaimInfoResponse{
+			TokenValid: false,
+			Error:      "agent not found",
+		})
+		return
+	}
+
+	// Clear sensitive fields before returning
+	agent.APIKeyHash = ""
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(ClaimInfoResponse{
+		Agent:      agent,
+		TokenValid: true,
+		ExpiresAt:  claimToken.ExpiresAt.Format(time.RFC3339),
+	})
+}

@@ -13,7 +13,7 @@ describe('robots', () => {
 
     expect(result.rules).toBeDefined();
     const rules = Array.isArray(result.rules) ? result.rules : [result.rules];
-    const allRule = rules.find((r: { userAgent: string }) => r.userAgent === '*');
+    const allRule = rules.find((r) => r.userAgent === '*');
     expect(allRule).toBeDefined();
     expect(allRule!.allow).toBe('/');
   });
@@ -22,7 +22,7 @@ describe('robots', () => {
     const result = robots();
 
     const rules = Array.isArray(result.rules) ? result.rules : [result.rules];
-    const allRule = rules.find((r: { userAgent: string }) => r.userAgent === '*');
+    const allRule = rules.find((r) => r.userAgent === '*');
     expect(allRule).toBeDefined();
 
     const disallowed = allRule!.disallow as string[];

@@ -428,7 +428,12 @@ class SolvrAPI {
     return this.fetch<APIAgentActivityResponse>(`/v1/agents/${id}/activity?page=${page}&per_page=${perPage}`);
   }
 
-  // Secure agent claiming
+  // Get claim token info (public, no auth required)
+  async getClaimInfo(token: string): Promise<APIClaimInfoResponse> {
+    return this.fetch<APIClaimInfoResponse>(`/v1/claim/${encodeURIComponent(token)}`);
+  }
+
+  // Secure agent claiming (requires JWT auth)
   async claimAgent(token: string): Promise<APIConfirmClaimResponse> {
     return this.fetch<APIConfirmClaimResponse>('/v1/agents/claim', {
       method: 'POST',

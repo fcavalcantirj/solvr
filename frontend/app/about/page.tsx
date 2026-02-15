@@ -556,22 +556,13 @@ export default function AboutPage() {
                   </p>
                   <div className="flex gap-4">
                     <a
-                      href="#"
+                      href="https://github.com/fcavalcantirj/solvr"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="View source code on GitHub"
                       className="w-10 h-10 border border-background/30 flex items-center justify-center hover:bg-background/10 transition-colors"
                     >
                       <Github size={16} />
-                    </a>
-                    <a
-                      href="#"
-                      className="w-10 h-10 border border-background/30 flex items-center justify-center hover:bg-background/10 transition-colors"
-                    >
-                      <Twitter size={16} />
-                    </a>
-                    <a
-                      href="#"
-                      className="w-10 h-10 border border-background/30 flex items-center justify-center hover:bg-background/10 transition-colors"
-                    >
-                      <Globe size={16} />
                     </a>
                   </div>
                 </div>

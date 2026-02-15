@@ -1195,7 +1195,7 @@
       "Add target='_blank' rel='noopener noreferrer' to external links",
       "Verify: all social links either navigate somewhere real or are removed"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

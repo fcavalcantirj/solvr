@@ -213,11 +213,13 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	// Create OAuth handlers with user service for real user creation
 	// Per BE-002: Google OAuth creates/finds users in database
 	var oauthHandlers *handlers.OAuthHandlers
+	var authUserRepo handlers.UserRepositoryForAuth
 	if pool != nil {
-		userRepo := db.NewUserRepository(pool)
-		oauthUserService := services.NewOAuthUserService(userRepo)
+		userRepoForOAuth := db.NewUserRepository(pool)
+		oauthUserService := services.NewOAuthUserService(userRepoForOAuth)
 		oauthUserAdapter := services.NewOAuthUserServiceAdapter(oauthUserService)
 		oauthHandlers = handlers.NewOAuthHandlersWithUserService(oauthConfig, pool, nil, oauthUserAdapter)
+		authUserRepo = db.NewUserRepository(pool)
 	} else {
 		// Fallback for testing when pool is nil
 		oauthHandlers = handlers.NewOAuthHandlers(oauthConfig, pool, nil)
@@ -267,6 +269,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		// Per SPEC.md Part 5.2: Google OAuth
 		r.Get("/auth/google", oauthHandlers.GoogleRedirect)
 		r.Get("/auth/google/callback", oauthHandlers.GoogleCallback)
+
+		// Email/password authentication (API-CRITICAL per PRD Task 48)
+		authHandler := handlers.NewAuthHandlers(oauthConfig, authUserRepo)
+		r.Post("/auth/register", authHandler.Register)
 
 		// Moltbook OAuth (API-CRITICAL per PRD-v2)
 		// Per SPEC.md Part 5.2: POST /auth/moltbook for agent authentication via Moltbook

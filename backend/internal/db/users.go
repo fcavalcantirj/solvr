@@ -33,9 +33,9 @@ func NewUserRepository(pool *Pool) *UserRepository {
 // Returns the created user with ID and timestamps set.
 func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models.User, error) {
 	query := `
-		INSERT INTO users (username, display_name, email, auth_provider, auth_provider_id, avatar_url, bio, role)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id, username, display_name, email, auth_provider, auth_provider_id, avatar_url, bio, role, created_at, updated_at
+		INSERT INTO users (username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
 	`
 
 	row := r.pool.QueryRow(ctx, query,
@@ -44,6 +44,7 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 		user.Email,
 		user.AuthProvider,
 		user.AuthProviderID,
+		user.PasswordHash,
 		user.AvatarURL,
 		user.Bio,
 		user.Role,
@@ -84,7 +85,7 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 // FindByID finds a user by their ID.
 func (r *UserRepository) FindByID(ctx context.Context, id string) (*models.User, error) {
 	query := `
-		SELECT id, username, display_name, email, auth_provider, auth_provider_id, avatar_url, bio, role, created_at, updated_at
+		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
@@ -97,7 +98,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*models.User,
 // Per SPEC.md Part 5.2: Look up user by auth_provider and auth_provider_id.
 func (r *UserRepository) FindByAuthProvider(ctx context.Context, provider, providerID string) (*models.User, error) {
 	query := `
-		SELECT id, username, display_name, email, auth_provider, auth_provider_id, avatar_url, bio, role, created_at, updated_at
+		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
 		FROM users
 		WHERE auth_provider = $1 AND auth_provider_id = $2
 	`
@@ -110,12 +111,25 @@ func (r *UserRepository) FindByAuthProvider(ctx context.Context, provider, provi
 // Per SPEC.md Part 5.2: Link accounts if email matches.
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := `
-		SELECT id, username, display_name, email, auth_provider, auth_provider_id, avatar_url, bio, role, created_at, updated_at
+		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
 
 	row := r.pool.QueryRow(ctx, query, email)
+	return r.scanUser(row)
+}
+
+// FindByUsername finds a user by username.
+// Returns db.ErrNotFound if no user exists with that username.
+func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*models.User, error) {
+	query := `
+		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
+		FROM users
+		WHERE username = $1
+	`
+
+	row := r.pool.QueryRow(ctx, query, username)
 	return r.scanUser(row)
 }
 
@@ -126,7 +140,7 @@ func (r *UserRepository) Update(ctx context.Context, user *models.User) (*models
 		UPDATE users
 		SET display_name = $2, avatar_url = $3, bio = $4, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, username, display_name, email, auth_provider, auth_provider_id, avatar_url, bio, role, created_at, updated_at
+		RETURNING id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
 	`
 
 	row := r.pool.QueryRow(ctx, query,
@@ -149,6 +163,7 @@ func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 		&user.Email,
 		&user.AuthProvider,
 		&user.AuthProviderID,
+		&user.PasswordHash,
 		&user.AvatarURL,
 		&user.Bio,
 		&user.Role,

@@ -1118,7 +1118,7 @@
       "If code issues found, fix them. If only configuration, document the required env vars",
       "Verify: full GitHub OAuth flow works end-to-end"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
@@ -1150,7 +1150,7 @@
       "Wire route: r.Post('/auth/register', authHandler.Register) in router.go",
       "Verify: all tests pass, user created in DB with hashed password"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

@@ -31,6 +31,13 @@ type MockStatsRepository struct {
 	RecentlySolvedErr        error
 	TopSolversResult         []map[string]any
 	TopSolversErr            error
+	// Questions stats
+	QuestionsStatsResult      map[string]any
+	QuestionsStatsErr         error
+	RecentlyAnsweredResult    []map[string]any
+	RecentlyAnsweredErr       error
+	TopAnswerersResult        []map[string]any
+	TopAnswerersErr           error
 }
 
 func (m *MockStatsRepository) GetAllStats(ctx context.Context) (*db.AllStatsResult, error) {
@@ -158,6 +165,47 @@ func (m *MockStatsRepository) GetTopProblemSolvers(ctx context.Context, limit in
 			return m.TopSolversResult, nil
 		}
 		return m.TopSolversResult[:limit], nil
+	}
+	return []map[string]any{}, nil
+}
+
+func (m *MockStatsRepository) GetQuestionsStats(ctx context.Context) (map[string]any, error) {
+	if m.QuestionsStatsErr != nil {
+		return nil, m.QuestionsStatsErr
+	}
+	if m.QuestionsStatsResult != nil {
+		return m.QuestionsStatsResult, nil
+	}
+	return map[string]any{
+		"total_questions":          0,
+		"answered_count":           0,
+		"response_rate":            0.0,
+		"avg_response_time_hours":  0.0,
+	}, nil
+}
+
+func (m *MockStatsRepository) GetRecentlyAnsweredQuestions(ctx context.Context, limit int) ([]map[string]any, error) {
+	if m.RecentlyAnsweredErr != nil {
+		return nil, m.RecentlyAnsweredErr
+	}
+	if m.RecentlyAnsweredResult != nil {
+		if limit > len(m.RecentlyAnsweredResult) {
+			return m.RecentlyAnsweredResult, nil
+		}
+		return m.RecentlyAnsweredResult[:limit], nil
+	}
+	return []map[string]any{}, nil
+}
+
+func (m *MockStatsRepository) GetTopAnswerers(ctx context.Context, limit int) ([]map[string]any, error) {
+	if m.TopAnswerersErr != nil {
+		return nil, m.TopAnswerersErr
+	}
+	if m.TopAnswerersResult != nil {
+		if limit > len(m.TopAnswerersResult) {
+			return m.TopAnswerersResult, nil
+		}
+		return m.TopAnswerersResult[:limit], nil
 	}
 	return []map[string]any{}, nil
 }

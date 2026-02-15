@@ -489,3 +489,15 @@
 - Added integration test: TestCreateAnswer_DoesNotOverwriteSolvedStatus
 - All handler tests pass, build successful
 - DB integration tests compile and skip correctly without DATABASE_URL
+
+2026-02-15: Add GET /v1/stats/questions endpoint for sidebar dashboard
+- Added 3 methods to StatsRepositoryInterface: GetQuestionsStats, GetRecentlyAnsweredQuestions, GetTopAnswerers
+- Created db/stats_questions.go (178 lines) with all 3 repository methods
+- GetQuestionsStats: total_questions, answered_count, response_rate, avg_response_time_hours
+- GetRecentlyAnsweredQuestions: recently answered questions with answerer info via JOINs
+- GetTopAnswerers: GROUP BY answer author with accept_rate calculation
+- Added GetQuestionsStats handler to handlers/stats.go (follows GetProblemsStats pattern)
+- Added route: r.Get("/stats/questions", statsHandler.GetQuestionsStats)
+- Created stats_questions_test.go with 7 handler tests (all pass)
+- stats_test.go reduced from 820 to 579 lines by splitting questions tests to separate file
+- Response: { data: { total_questions, answered_count, response_rate, avg_response_time_hours, recently_answered[], top_answerers[] } }

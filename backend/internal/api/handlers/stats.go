@@ -28,6 +28,10 @@ type StatsRepositoryInterface interface {
 	GetProblemsStats(ctx context.Context) (map[string]any, error)
 	GetRecentlySolvedProblems(ctx context.Context, limit int) ([]map[string]any, error)
 	GetTopProblemSolvers(ctx context.Context, limit int) ([]map[string]any, error)
+	// Questions-specific stats
+	GetQuestionsStats(ctx context.Context) (map[string]any, error)
+	GetRecentlyAnsweredQuestions(ctx context.Context, limit int) ([]map[string]any, error)
+	GetTopAnswerers(ctx context.Context, limit int) ([]map[string]any, error)
 	// Ideas-specific stats
 	GetIdeasCountByStatus(ctx context.Context) (map[string]int, error)
 	GetFreshSparks(ctx context.Context, limit int) ([]map[string]any, error)
@@ -165,6 +169,41 @@ func (h *StatsHandler) GetProblemsStats(w http.ResponseWriter, r *http.Request) 
 
 	stats["recently_solved"] = recentlySolved
 	stats["top_solvers"] = topSolvers
+
+	response := map[string]interface{}{
+		"data": stats,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetQuestionsStats handles GET /v1/stats/questions
+// Returns statistics for the Questions page sidebar
+func (h *StatsHandler) GetQuestionsStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	stats, err := h.repo.GetQuestionsStats(ctx)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get questions stats")
+		return
+	}
+
+	recentlyAnswered, err := h.repo.GetRecentlyAnsweredQuestions(ctx, 3)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get recently answered questions")
+		return
+	}
+
+	topAnswerers, err := h.repo.GetTopAnswerers(ctx, 5)
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get top answerers")
+		return
+	}
+
+	stats["recently_answered"] = recentlyAnswered
+	stats["top_answerers"] = topAnswerers
 
 	response := map[string]interface{}{
 		"data": stats,

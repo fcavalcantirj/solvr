@@ -649,7 +649,7 @@
       "Write handler and repository tests",
       "Verify: Returns correct JSON with all fields populated from production data"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

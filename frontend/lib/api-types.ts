@@ -784,3 +784,34 @@ export interface SitemapUrlsParams {
   page?: number;
   per_page?: number;
 }
+
+// ========================
+// Contributions types
+// ========================
+
+export interface APIContribution {
+  type: 'answer' | 'approach' | 'response';
+  id: string;
+  parent_id: string;
+  parent_title: string;
+  parent_type: 'question' | 'problem' | 'idea';
+  content_preview: string;
+  status: string;
+  created_at: string;
+}
+
+export interface APIContributionsResponse {
+  data: APIContribution[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
+}
+
+export interface FetchContributionsParams {
+  type?: 'answers' | 'approaches' | 'responses';
+  page?: number;
+  per_page?: number;
+}

@@ -852,3 +852,25 @@
   - TestGetMyContributions_Unauthenticated: 401 without auth
 - File sizes: users.go 476, users_contributions.go 215, users_contributions_test.go 648, router.go 674 (all under 800)
 - All 10 new tests pass, pre-existing OAuth/ratelimit failures unrelated
+
+2026-02-15: Wire user profile Contributions tab to real API data
+- Added APIContribution, APIContributionsResponse, FetchContributionsParams types to api-types.ts
+- Added getUserContributions(userId, params) method to api.ts → GET /v1/users/{id}/contributions
+- Created hooks/use-contributions.ts hook following use-problems.ts pattern
+  - ContributionItem interface: type, id, parentId, parentTitle, parentType, contentPreview, status, timestamp
+  - Supports type filter (answers/approaches/responses), pagination with loadMore
+  - Returns: contributions[], loading, error, total, hasMore, loadMore
+- Created components/users/contributions-list.tsx component
+  - Type filter pills at top: ALL | ANSWERS | APPROACHES | RESPONSES
+  - Answer cards: "Answered:" prefix, link to /questions/{parent_id}
+  - Approach cards: "Approach for:" prefix, link to /problems/{parent_id}
+  - Response cards: "Response to:" prefix, link to /ideas/{parent_id}
+  - Each card: content preview, relative timestamp, type badge, status badge
+  - Loading, empty, and error states
+  - LOAD MORE button with pagination
+- Wired ContributionsList into users/[id]/page.tsx replacing "coming soon" placeholder
+- Created hooks/use-contributions.test.ts with 7 tests (TDD approach):
+  - fetches from API, transforms answers/approaches/responses, type filter, pagination, error handling
+- Created components/users/contributions-list.test.tsx with 10 tests (TDD approach):
+  - answer/approach/response cards with links, filter pills, filter click, loading/empty/LOAD MORE states, content preview
+- All 17 new tests pass, 508 total frontend tests pass (6 pre-existing failures unrelated)

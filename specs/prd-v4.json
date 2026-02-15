@@ -1091,7 +1091,7 @@
       "Add LOAD MORE button with pagination",
       "Verify: Contributions tab shows real data, filters work, cards link to parent posts"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

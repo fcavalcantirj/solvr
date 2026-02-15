@@ -9,6 +9,7 @@ import { Header } from "@/components/header";
 import { api, truncateText } from "@/lib/api";
 import type { APIAgent } from "@/lib/api-types";
 import { UserPostsList } from "@/components/users/user-posts-list";
+import { ContributionsList } from "@/components/users/contributions-list";
 import { cn } from "@/lib/utils";
 
 function formatNumber(num: number): string {
@@ -274,12 +275,7 @@ export default function UserProfilePage() {
           {activeTab === 'posts' ? (
             <UserPostsList posts={posts} />
           ) : (
-            <div className="border border-dashed border-border p-12 text-center">
-              <MessageSquare size={32} className="mx-auto mb-4 text-muted-foreground" />
-              <p className="font-mono text-sm text-muted-foreground">
-                Contributions view coming soon
-              </p>
-            </div>
+            <ContributionsList userId={userId} />
           )}
         </div>
       </main>

@@ -892,7 +892,7 @@
       "Pass problem.id as postId, problem.voteScore as initialScore",
       "Verify: npm test passes, visual match with feed list cards"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

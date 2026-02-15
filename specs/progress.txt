@@ -631,3 +631,19 @@
 - Created app/status/page.test.tsx with 6 tests (TDD approach):
   - System status header, All Systems Operational, service categories, shared Footer, recent incidents, programmatic access
 - All 17 new tests pass, 418 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Add functional VoteButton to problems list cards (left column layout matching feed)
+- Imported VoteButton component in problems-list.tsx
+- Removed static ArrowUp icon + voteScore span from card header
+- Restructured ProblemCard: wrapped content in flex row with left vote column (matching feed-list.tsx layout)
+- Desktop: VoteButton direction="vertical" size="sm" showDownvote in hidden sm:flex w-12 left column
+- Mobile: VoteButton direction="horizontal" size="sm" showDownvote in sm:hidden div within footer stats
+- Removed unused ArrowUp import from lucide-react
+- Created problems-list.test.tsx with 6 tests (TDD approach):
+  - VoteButton renders with correct postId and initialScore
+  - VoteButton has showDownvote={true}
+  - Desktop VoteButton has vertical direction and sm size
+  - Mobile VoteButton has horizontal direction and sm size
+  - No static ArrowUp icon for vote score
+  - VoteButton renders for each problem in the list
+- All 6 new tests pass, 424 total frontend tests pass (6 pre-existing failures unrelated)

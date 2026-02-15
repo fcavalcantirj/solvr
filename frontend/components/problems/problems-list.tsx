@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Bot, User, ArrowUp, GitBranch, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Bot, User, GitBranch, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useProblems, ProblemListItem, UseProblemsOptions } from "@/hooks/use-problems";
+import { VoteButton } from "@/components/ui/vote-button";
 
 // Map API weight (1-5) to display labels
 function mapWeight(weight?: number): "critical" | "high" | "medium" | "low" {
@@ -100,88 +101,108 @@ function ProblemCard({ problem }: { problem: ProblemListItem }) {
       className="block border border-border bg-card hover:border-foreground/30 transition-colors"
     >
       <div className="p-6">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span
-              className={`font-mono text-[10px] tracking-wider px-2 py-1 ${weightStyles[weight].className}`}
-            >
-              {weightStyles[weight].label}
-            </span>
-            <span
-              className={`font-mono text-[10px] tracking-wider flex items-center gap-1.5 ${statusCfg.className}`}
-            >
-              <StatusIcon size={12} className={problem.status === "in_progress" ? "animate-spin" : ""} />
-              {statusCfg.label}
-            </span>
+        <div className="flex gap-3 sm:gap-4">
+          {/* Vote Column - Desktop */}
+          <div className="hidden sm:flex w-12 flex-shrink-0">
+            <VoteButton
+              postId={problem.id}
+              initialScore={problem.voteScore}
+              direction="vertical"
+              size="sm"
+              showDownvote
+            />
           </div>
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <ArrowUp size={14} />
-            <span className="font-mono text-xs">{problem.voteScore}</span>
-          </div>
-        </div>
 
-        {/* Title */}
-        <h3 className="text-lg font-light tracking-tight mb-3 leading-snug text-balance">
-          {problem.title}
-        </h3>
-
-        {/* Description */}
-        <p className="text-sm text-muted-foreground leading-relaxed mb-4 line-clamp-2">
-          {problem.snippet}
-        </p>
-
-        {/* Tags */}
-        {problem.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-4">
-            {problem.tags.slice(0, 4).map((tag) => (
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            {/* Header */}
+            <div className="flex items-center gap-2 flex-wrap mb-4">
               <span
-                key={tag}
-                className="font-mono text-[10px] tracking-wider text-muted-foreground bg-secondary px-2 py-1"
+                className={`font-mono text-[10px] tracking-wider px-2 py-1 ${weightStyles[weight].className}`}
               >
-                {tag}
+                {weightStyles[weight].label}
               </span>
-            ))}
-            {problem.tags.length > 4 && (
-              <span className="font-mono text-[10px] tracking-wider text-muted-foreground px-2 py-1">
-                +{problem.tags.length - 4}
+              <span
+                className={`font-mono text-[10px] tracking-wider flex items-center gap-1.5 ${statusCfg.className}`}
+              >
+                <StatusIcon size={12} className={problem.status === "in_progress" ? "animate-spin" : ""} />
+                {statusCfg.label}
               </span>
-            )}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-4 border-t border-border">
-          {/* Author */}
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-6 h-6 flex items-center justify-center ${
-                problem.author.type === "human"
-                  ? "bg-foreground text-background"
-                  : "border border-foreground"
-              }`}
-            >
-              {problem.author.type === "human" ? (
-                <User size={12} />
-              ) : (
-                <Bot size={12} />
-              )}
             </div>
-            <span className="font-mono text-xs tracking-wider">
-              {problem.author.name}
-            </span>
-            <span className="font-mono text-[10px] text-muted-foreground">
-              {problem.timestamp}
-            </span>
-          </div>
 
-          {/* Approaches */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <GitBranch size={14} />
-              <span className="font-mono text-xs">
-                {problem.approachesCount}
-              </span>
+            {/* Title */}
+            <h3 className="text-lg font-light tracking-tight mb-3 leading-snug text-balance">
+              {problem.title}
+            </h3>
+
+            {/* Description */}
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4 line-clamp-2">
+              {problem.snippet}
+            </p>
+
+            {/* Tags */}
+            {problem.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {problem.tags.slice(0, 4).map((tag) => (
+                  <span
+                    key={tag}
+                    className="font-mono text-[10px] tracking-wider text-muted-foreground bg-secondary px-2 py-1"
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {problem.tags.length > 4 && (
+                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground px-2 py-1">
+                    +{problem.tags.length - 4}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t border-border">
+              {/* Author */}
+              <div className="flex items-center gap-2">
+                <div
+                  className={`w-6 h-6 flex items-center justify-center ${
+                    problem.author.type === "human"
+                      ? "bg-foreground text-background"
+                      : "border border-foreground"
+                  }`}
+                >
+                  {problem.author.type === "human" ? (
+                    <User size={12} />
+                  ) : (
+                    <Bot size={12} />
+                  )}
+                </div>
+                <span className="font-mono text-xs tracking-wider">
+                  {problem.author.name}
+                </span>
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {problem.timestamp}
+                </span>
+              </div>
+
+              {/* Stats */}
+              <div className="flex items-center gap-4">
+                {/* Mobile Vote */}
+                <div className="sm:hidden">
+                  <VoteButton
+                    postId={problem.id}
+                    initialScore={problem.voteScore}
+                    direction="horizontal"
+                    size="sm"
+                    showDownvote
+                  />
+                </div>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <GitBranch size={14} />
+                  <span className="font-mono text-xs">
+                    {problem.approachesCount}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

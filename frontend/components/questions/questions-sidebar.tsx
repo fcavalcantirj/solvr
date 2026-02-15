@@ -1,79 +1,63 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Bot, User, Trophy, HelpCircle, MessageSquare, TrendingUp, Zap } from "lucide-react";
+import { useQuestionsStats } from "@/hooks/use-questions-stats";
+import { useTrending } from "@/hooks/use-stats";
+import { api, APIPost, formatRelativeTime } from "@/lib/api";
 
-const stats = [
-  { label: "TOTAL QUESTIONS", value: "12,847" },
-  { label: "ANSWERED", value: "11,203" },
-  { label: "RESPONSE RATE", value: "87.2%" },
-  { label: "AVG. RESPONSE", value: "18min" },
-];
+function formatNumber(n: number): string {
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return n.toLocaleString();
+}
 
-const unansweredQuestions = [
-  {
-    id: "1",
-    title: "Best practices for typing Prisma relations",
-    votes: 34,
-    age: "8h",
-  },
-  {
-    id: "2",
-    title: "ESLint flat config with TypeScript setup",
-    votes: 203,
-    age: "2d",
-  },
-  {
-    id: "3",
-    title: "Handling race conditions in React concurrent mode",
-    votes: 45,
-    age: "3h",
-  },
-];
+function formatResponseTime(hours: number): string {
+  if (hours < 1) {
+    const mins = Math.round(hours * 60);
+    return mins <= 0 ? '<1min' : `${mins}min`;
+  }
+  return `${Math.round(hours)}h`;
+}
 
-const hotQuestions = [
-  {
-    id: "1",
-    title: "JWT refresh tokens in Next.js 15",
-    answers: 5,
-    votes: 47,
-  },
-  {
-    id: "2",
-    title: "Error boundaries with Suspense in React 19",
-    answers: 8,
-    votes: 89,
-  },
-  {
-    id: "3",
-    title: "Redis vs PostgreSQL for serverless caching",
-    answers: 12,
-    votes: 156,
-  },
-];
+interface QuestionsSidebarProps {
+  onTagClick?: (tag: string) => void;
+}
 
-const topAnswerers = [
-  { name: "claude_assistant", type: "ai" as const, answers: 847, acceptRate: 78 },
-  { name: "gpt_coder", type: "ai" as const, answers: 623, acceptRate: 71 },
-  { name: "sarah_dev", type: "human" as const, answers: 412, acceptRate: 82 },
-  { name: "backend_expert", type: "human" as const, answers: 389, acceptRate: 76 },
-  { name: "helper_bot", type: "ai" as const, answers: 356, acceptRate: 69 },
-];
+export function QuestionsSidebar({ onTagClick }: QuestionsSidebarProps) {
+  const { stats: questionsStats, loading: statsLoading } = useQuestionsStats();
+  const { trending, loading: trendingLoading } = useTrending();
+  const [unansweredQuestions, setUnansweredQuestions] = useState<APIPost[]>([]);
+  const [unansweredLoading, setUnansweredLoading] = useState(true);
+  const [hotQuestions, setHotQuestions] = useState<APIPost[]>([]);
+  const [hotLoading, setHotLoading] = useState(true);
 
-const trendingTags = [
-  { tag: "react-19", count: 89 },
-  { tag: "next.js-15", count: 76 },
-  { tag: "typescript", count: 234 },
-  { tag: "server-actions", count: 67 },
-  { tag: "ai-integration", count: 45 },
-  { tag: "testing", count: 98 },
-];
+  useEffect(() => {
+    api.getQuestions({ status: 'open', sort: 'votes', per_page: 3 })
+      .then(res => setUnansweredQuestions(res.data))
+      .catch(() => setUnansweredQuestions([]))
+      .finally(() => setUnansweredLoading(false));
+  }, []);
 
-export function QuestionsSidebar() {
+  useEffect(() => {
+    api.getQuestions({ sort: 'votes', per_page: 3 })
+      .then(res => setHotQuestions(res.data))
+      .catch(() => setHotQuestions([]))
+      .finally(() => setHotLoading(false));
+  }, []);
+
+  const statsItems = [
+    { label: "TOTAL QUESTIONS", value: statsLoading ? "—" : formatNumber(questionsStats?.total_questions ?? 0) },
+    { label: "ANSWERED", value: statsLoading ? "—" : formatNumber(questionsStats?.answered_count ?? 0) },
+    { label: "RESPONSE RATE", value: statsLoading ? "—" : `${(questionsStats?.response_rate ?? 0).toFixed(1)}%` },
+    { label: "AVG. RESPONSE", value: statsLoading ? "—" : formatResponseTime(questionsStats?.avg_response_time_hours ?? 0) },
+  ];
+
   return (
     <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
-        {stats.map((stat) => (
+        {statsItems.map((stat) => (
           <div key={stat.label} className="border border-border bg-card p-4">
             <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-1">
               {stat.label}
@@ -90,27 +74,37 @@ export function QuestionsSidebar() {
           <h3 className="font-mono text-xs tracking-wider">NEEDS YOUR KNOWLEDGE</h3>
         </div>
         <div className="divide-y divide-border">
-          {unansweredQuestions.map((question) => (
-            <div key={question.id} className="p-4 hover:bg-secondary/50 transition-colors cursor-pointer">
-              <p className="text-sm font-light leading-snug mb-2 line-clamp-2">
-                {question.title}
-              </p>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                  {question.age} old
-                </span>
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground flex items-center gap-1">
-                  <TrendingUp size={10} />
-                  {question.votes}
-                </span>
-              </div>
+          {unansweredLoading ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">Loading...</span>
             </div>
-          ))}
+          ) : unansweredQuestions.length === 0 ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">No unanswered questions</span>
+            </div>
+          ) : (
+            unansweredQuestions.map((question) => (
+              <Link key={question.id} href={`/questions/${question.id}`} className="block p-4 hover:bg-secondary/50 transition-colors">
+                <p className="text-sm font-light leading-snug mb-2 line-clamp-2">
+                  {question.title}
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+                    {formatRelativeTime(question.created_at)}
+                  </span>
+                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground flex items-center gap-1">
+                    <TrendingUp size={10} />
+                    {question.vote_score}
+                  </span>
+                </div>
+              </Link>
+            ))
+          )}
         </div>
         <div className="p-3 border-t border-border">
-          <button className="w-full font-mono text-[10px] tracking-wider text-center text-muted-foreground hover:text-foreground transition-colors">
+          <Link href="/questions?status=open" className="block w-full font-mono text-[10px] tracking-wider text-center text-muted-foreground hover:text-foreground transition-colors">
             VIEW ALL UNANSWERED
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -121,23 +115,33 @@ export function QuestionsSidebar() {
           <h3 className="font-mono text-xs tracking-wider">HOT THIS WEEK</h3>
         </div>
         <div className="divide-y divide-border">
-          {hotQuestions.map((question) => (
-            <div key={question.id} className="p-4 hover:bg-secondary/50 transition-colors cursor-pointer">
-              <p className="text-sm font-light leading-snug mb-2 line-clamp-2">
-                {question.title}
-              </p>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground flex items-center gap-1">
-                  <MessageSquare size={10} />
-                  {question.answers} answers
-                </span>
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground flex items-center gap-1">
-                  <TrendingUp size={10} />
-                  {question.votes}
-                </span>
-              </div>
+          {hotLoading ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">Loading...</span>
             </div>
-          ))}
+          ) : hotQuestions.length === 0 ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">No hot questions</span>
+            </div>
+          ) : (
+            hotQuestions.map((question) => (
+              <Link key={question.id} href={`/questions/${question.id}`} className="block p-4 hover:bg-secondary/50 transition-colors">
+                <p className="text-sm font-light leading-snug mb-2 line-clamp-2">
+                  {question.title}
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground flex items-center gap-1">
+                    <MessageSquare size={10} />
+                    {question.answers_count || 0} answers
+                  </span>
+                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground flex items-center gap-1">
+                    <TrendingUp size={10} />
+                    {question.vote_score}
+                  </span>
+                </div>
+              </Link>
+            ))
+          )}
         </div>
       </div>
 
@@ -148,38 +152,48 @@ export function QuestionsSidebar() {
           <h3 className="font-mono text-xs tracking-wider">TOP ANSWERERS</h3>
         </div>
         <div className="divide-y divide-border">
-          {topAnswerers.map((answerer, index) => (
-            <div
-              key={answerer.name}
-              className="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-xs text-muted-foreground w-4">
-                  {index + 1}
-                </span>
-                <div
-                  className={`w-6 h-6 flex items-center justify-center ${
-                    answerer.type === "human"
-                      ? "bg-foreground text-background"
-                      : "border border-foreground"
-                  }`}
-                >
-                  {answerer.type === "human" ? (
-                    <User size={12} />
-                  ) : (
-                    <Bot size={12} />
-                  )}
-                </div>
-                <span className="font-mono text-xs tracking-wider">{answerer.name}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-xs">{answerer.answers}</span>
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                  {answerer.acceptRate}%
-                </span>
-              </div>
+          {statsLoading ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">Loading...</span>
             </div>
-          ))}
+          ) : !questionsStats?.top_answerers?.length ? (
+            <div className="p-4 text-center">
+              <span className="font-mono text-[10px] text-muted-foreground">No answerers yet</span>
+            </div>
+          ) : (
+            questionsStats.top_answerers.map((answerer, index) => (
+              <div
+                key={answerer.author_id}
+                className="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-xs text-muted-foreground w-4">
+                    {index + 1}
+                  </span>
+                  <div
+                    className={`w-6 h-6 flex items-center justify-center ${
+                      answerer.author_type === "human"
+                        ? "bg-foreground text-background"
+                        : "border border-foreground"
+                    }`}
+                  >
+                    {answerer.author_type === "human" ? (
+                      <User size={12} />
+                    ) : (
+                      <Bot size={12} />
+                    )}
+                  </div>
+                  <span className="font-mono text-xs tracking-wider">{answerer.display_name}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-xs">{answerer.answer_count}</span>
+                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+                    {answerer.accept_rate.toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -189,15 +203,22 @@ export function QuestionsSidebar() {
           <h3 className="font-mono text-xs tracking-wider">TRENDING TAGS</h3>
         </div>
         <div className="p-4 flex flex-wrap gap-2">
-          {trendingTags.map((item) => (
-            <button
-              key={item.tag}
-              className="font-mono text-[10px] tracking-wider bg-secondary text-foreground px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors flex items-center gap-2"
-            >
-              {item.tag}
-              <span className="text-muted-foreground">{item.count}</span>
-            </button>
-          ))}
+          {trendingLoading ? (
+            <span className="font-mono text-[10px] text-muted-foreground">Loading...</span>
+          ) : !trending?.tags?.length ? (
+            <span className="font-mono text-[10px] text-muted-foreground">No trending tags</span>
+          ) : (
+            trending.tags.map((item) => (
+              <button
+                key={item.name}
+                onClick={() => onTagClick?.(item.name)}
+                className="font-mono text-[10px] tracking-wider bg-secondary text-foreground px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors flex items-center gap-2"
+              >
+                {item.name}
+                <span className="text-muted-foreground">{item.count}</span>
+              </button>
+            ))
+          )}
         </div>
       </div>
 
@@ -207,9 +228,9 @@ export function QuestionsSidebar() {
         <p className="text-sm text-background/70 mb-4 leading-relaxed">
           The collective mind is waiting. Human and AI experts ready to help.
         </p>
-        <button className="w-full font-mono text-xs tracking-wider border border-background px-4 py-3 hover:bg-background hover:text-foreground transition-colors">
+        <Link href="/questions/new" className="block w-full font-mono text-xs tracking-wider border border-background px-4 py-3 hover:bg-background hover:text-foreground transition-colors text-center">
           ASK THE COLLECTIVE
-        </button>
+        </Link>
       </div>
     </aside>
   );

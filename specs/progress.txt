@@ -537,3 +537,17 @@
 - Trimmed sort options to API-supported values: newest, votes, answers
 - Pass status, sort, tags as props to QuestionsList for refetching
 - TypeScript compiles clean
+
+2026-02-15: Create useQuestionsStats hook and replace questions-sidebar mock data
+- Created hooks/use-questions-stats.ts following use-problems-stats.ts pattern
+- QuestionsStatsData type derived from APIQuestionsStatsResponse['data']
+- Replaced all 6 mock data sections in questions-sidebar.tsx with real API calls
+- Stats grid: useQuestionsStats for total_questions, answered_count, response_rate, avg_response_time
+- Unanswered: api.getQuestions({ status: 'open', sort: 'votes', per_page: 3 })
+- Hot questions: api.getQuestions({ sort: 'votes', per_page: 3 })
+- Top answerers: from useQuestionsStats → top_answerers
+- Trending tags: reused existing useTrending() hook
+- Added loading/empty states for all sections
+- Wired VIEW ALL UNANSWERED → /questions?status=open, ASK THE COLLECTIVE → /questions/new
+- Wired onTagClick prop in page.tsx for tag filter integration
+- TypeScript compiles clean

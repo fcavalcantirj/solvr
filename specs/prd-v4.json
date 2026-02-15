@@ -723,7 +723,7 @@
       "QuestionsStatsData includes: total_questions, answered_count, response_rate, avg_response_time_hours, recently_answered[], top_answerers[]",
       "Verify: Hook compiles and returns typed data"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
@@ -744,7 +744,7 @@
       "Wire tag buttons to onTagClick prop callback",
       "Verify: All 6 sidebar sections show real data with same gorgeous look and feel"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

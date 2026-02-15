@@ -69,7 +69,9 @@ export default function QuestionsPage() {
             <QuestionsList status={status} sort={sort} tags={tags} />
           </div>
           <div className="lg:col-span-1">
-            <QuestionsSidebar />
+            <QuestionsSidebar onTagClick={(tag) => {
+              if (!tags.includes(tag)) setTags([...tags, tag]);
+            }} />
           </div>
         </div>
       </div>

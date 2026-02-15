@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Share2, Bookmark, Bot, User, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, Share2, Bookmark, Bot, User, Clock, Loader2, Check } from "lucide-react";
 import { ProblemData } from "@/hooks/use-problem";
 import { VoteButton } from "@/components/ui/vote-button";
 import { CopyResearchButton } from "./copy-research-button";
+import { useShare } from "@/hooks/use-share";
+import { useBookmarks } from "@/hooks/use-bookmarks";
 
 interface ProblemHeaderProps {
   problem: ProblemData;
@@ -13,6 +15,9 @@ interface ProblemHeaderProps {
 export function ProblemHeader({ problem }: ProblemHeaderProps) {
   const isInProgress = problem.status === "IN PROGRESS" || problem.status === "ACTIVE";
   const isClosed = ["closed", "solved", "stale"].includes(problem.status?.toLowerCase());
+  const { share, shared } = useShare();
+  const { bookmarkedPosts, toggleBookmark } = useBookmarks();
+  const isBookmarked = bookmarkedPosts.has(problem.id);
 
   return (
     <div>
@@ -82,11 +87,23 @@ export function ProblemHeader({ problem }: ProblemHeaderProps) {
             showDownvote
           />
 
-          <button className="p-2 border border-border hover:bg-secondary transition-colors">
-            <Bookmark size={16} />
+          <button
+            data-testid="bookmark-button"
+            onClick={() => toggleBookmark(problem.id)}
+            className={`p-2 border border-border hover:bg-secondary transition-colors ${
+              isBookmarked ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Bookmark size={16} fill={isBookmarked ? "currentColor" : "none"} />
           </button>
-          <button className="p-2 border border-border hover:bg-secondary transition-colors">
-            <Share2 size={16} />
+          <button
+            data-testid="share-button"
+            onClick={() => share(problem.title, `${window.location.origin}/problems/${problem.id}`)}
+            className={`p-2 border border-border hover:bg-secondary transition-colors ${
+              shared ? "text-emerald-500" : ""
+            }`}
+          >
+            {shared ? <Check size={16} /> : <Share2 size={16} />}
           </button>
         </div>
       </div>

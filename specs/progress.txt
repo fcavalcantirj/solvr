@@ -744,3 +744,16 @@
 - Created app/ideas/new/page.test.tsx with 5 tests (TDD approach)
   - Tests: renders Header, NEW IDEA subtitle, heading, NewPostForm with defaultType=idea, page structure
 - All 5 new tests pass, 467 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Wire dead Bookmark/Share buttons on problem detail header
+- Imported useShare hook from @/hooks/use-share and useBookmarks hook from @/hooks/use-bookmarks
+- Imported Check icon from lucide-react for share success feedback
+- Share button: calls share(problem.title, url) with full URL constructed from window.location.origin
+- Share button shows Check icon with emerald-500 color for 2 seconds after successful share (matching feed-list pattern)
+- Bookmark button: calls toggleBookmark(problem.id) on click
+- Bookmark button shows filled icon (fill="currentColor") when bookmarked, text-foreground styling
+- Bookmark button shows outline icon when not bookmarked, text-muted-foreground styling
+- Both buttons match the interaction patterns used in feed-list.tsx
+- Created problem-header.test.tsx with 6 tests (TDD approach):
+  - Tests: Share copies URL, Check icon on share success, Bookmark toggles state, filled icon when bookmarked, title/status render, VoteButton props
+- All 6 new tests pass, 473 total frontend tests pass (6 pre-existing failures unrelated)

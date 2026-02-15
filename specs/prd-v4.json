@@ -995,7 +995,7 @@
       "Wire Bookmark button to toggleBookmark(problem.id) with filled icon state (like feed)",
       "Verify: both buttons functional, matching feed card interaction pattern"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

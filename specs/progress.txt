@@ -680,3 +680,23 @@
   - No non-functional ArrowUp button in stats section
   - VoteButton renders for each idea in the list
 - All 6 new tests pass, 436 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Standardize question detail page: move vote from content body to header using VoteButton
+- Removed manual ThumbsUp/ThumbsDown vote buttons and useVote hook from question-content.tsx
+- Removed ThumbsUp, ThumbsDown imports and vote column layout from question-content.tsx
+- Content now renders description, tags, and Flag button without vote UI
+- Added VoteButton import and component to question-header.tsx
+- VoteButton props: postId={question.id}, initialScore={question.voteScore}, direction="horizontal", size="md", showDownvote
+- Positioned in actions area alongside Share, Save, and More buttons (matching problem-header.tsx pattern)
+- Created question-header.test.tsx with 4 tests (TDD approach):
+  - VoteButton renders with correct postId, initialScore, direction, size, showDownvote
+  - Question title and status render correctly
+  - Author info renders correctly
+  - Share, Save, and VoteButton all present in actions area
+- Created question-content.test.tsx with 5 tests (TDD approach):
+  - No ThumbsUp/ThumbsDown vote buttons rendered
+  - useVote hook is not called
+  - Description content renders
+  - Tags render
+  - Flag button renders
+- All 9 new tests pass, 445 total frontend tests pass (6 pre-existing failures unrelated)

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Share2, Bookmark, MoreHorizontal, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { VoteButton } from "@/components/ui/vote-button";
 import { QuestionData } from "@/hooks/use-question";
 
 interface QuestionHeaderProps {
@@ -90,6 +91,13 @@ export function QuestionHeader({ question }: QuestionHeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          <VoteButton
+            postId={question.id}
+            initialScore={question.voteScore}
+            direction="horizontal"
+            size="md"
+            showDownvote
+          />
           <Button variant="outline" size="sm" className="font-mono text-xs bg-transparent" onClick={handleShare}>
             {copied ? (
               <>

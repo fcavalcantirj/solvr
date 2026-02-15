@@ -937,7 +937,7 @@
       "Add VoteButton to header actions area matching problem-header.tsx lines 77-83: postId={question.id} initialScore={question.voteScore} direction='horizontal' size='md' showDownvote",
       "Verify: npm test passes, question detail header vote matches problem detail header"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

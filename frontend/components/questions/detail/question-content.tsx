@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { ThumbsUp, ThumbsDown, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuestionData } from "@/hooks/use-question";
 import { useVote } from "@/hooks/use-vote";
+import { ReportModal } from "@/components/ui/report-modal";
 
 interface QuestionContentProps {
   question: QuestionData;
@@ -11,6 +13,7 @@ interface QuestionContentProps {
 
 export function QuestionContent({ question }: QuestionContentProps) {
   const { score, userVote, upvote, downvote } = useVote(question.id, question.voteScore);
+  const [showReport, setShowReport] = useState(false);
 
   return (
     <div className="bg-card border border-border p-8">
@@ -65,7 +68,12 @@ export function QuestionContent({ question }: QuestionContentProps) {
 
           <div className="flex items-center justify-between pt-4">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" className="font-mono text-xs text-muted-foreground hover:text-foreground">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="font-mono text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setShowReport(true)}
+              >
                 <Flag className="w-3 h-3 mr-2" />
                 FLAG
               </Button>
@@ -79,6 +87,13 @@ export function QuestionContent({ question }: QuestionContentProps) {
           </div>
         </div>
       </div>
+      <ReportModal
+        isOpen={showReport}
+        onClose={() => setShowReport(false)}
+        targetType="post"
+        targetId={question.id}
+        targetLabel="Question"
+      />
     </div>
   );
 }

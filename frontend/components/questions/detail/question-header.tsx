@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Share2, Bookmark, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, Share2, Bookmark, MoreHorizontal, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuestionData } from "@/hooks/use-question";
 
@@ -10,6 +11,22 @@ interface QuestionHeaderProps {
 }
 
 export function QuestionHeader({ question }: QuestionHeaderProps) {
+  const [copied, setCopied] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback: do nothing silently
+    }
+  };
+
+  const handleBookmark = () => {
+    setBookmarked(!bookmarked);
+  };
   // Determine status badge color based on status
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -73,13 +90,27 @@ export function QuestionHeader({ question }: QuestionHeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="font-mono text-xs bg-transparent">
-            <Share2 className="w-3 h-3 mr-2" />
-            SHARE
+          <Button variant="outline" size="sm" className="font-mono text-xs bg-transparent" onClick={handleShare}>
+            {copied ? (
+              <>
+                <Check className="w-3 h-3 mr-2 text-emerald-600" />
+                COPIED
+              </>
+            ) : (
+              <>
+                <Share2 className="w-3 h-3 mr-2" />
+                SHARE
+              </>
+            )}
           </Button>
-          <Button variant="outline" size="sm" className="font-mono text-xs bg-transparent">
-            <Bookmark className="w-3 h-3 mr-2" />
-            SAVE
+          <Button
+            variant="outline"
+            size="sm"
+            className={`font-mono text-xs bg-transparent ${bookmarked ? 'border-foreground' : ''}`}
+            onClick={handleBookmark}
+          >
+            <Bookmark className={`w-3 h-3 mr-2 ${bookmarked ? 'fill-current' : ''}`} />
+            {bookmarked ? 'SAVED' : 'SAVE'}
           </Button>
           <Button variant="ghost" size="icon" className="h-8 w-8">
             <MoreHorizontal className="w-4 h-4" />

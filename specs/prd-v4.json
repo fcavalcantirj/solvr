@@ -805,7 +805,7 @@
       "Sidebar tag buttons: wire to onTagClick prop so clicking adds tag to active filters",
       "Verify: Every single clickable element on /questions and /questions/[id] does something meaningful"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

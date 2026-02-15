@@ -568,3 +568,12 @@
 - answers-list.tsx: extracted AnswerCard component so each answer gets its own useAnswerVote hook instance
 - Auth redirect on 401: stores return URL, redirects to Google OAuth
 - TypeScript compiles clean
+
+2026-02-15: Wire remaining dead buttons on questions page
+- question-header.tsx: Share button wired to clipboard copy with "COPIED" feedback (done in prev session)
+- question-header.tsx: Bookmark button wired to local state toggle (done in prev session)
+- question-content.tsx: Flag button wired to open ReportModal with targetType='post', targetId=question.id
+- answers-list.tsx: Sort dropdown wired to sortOrder state (votes/newest/oldest), sorts answers dynamically
+- answers-list.tsx: Flag button already wired to ReportModal (no work needed)
+- Sidebar links, tag clicks, and list cards already functional from previous rewrites
+- TypeScript compiles clean

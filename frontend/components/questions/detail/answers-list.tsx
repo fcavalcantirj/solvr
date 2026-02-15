@@ -17,9 +17,12 @@ interface AnswersListProps {
   onAnswerPosted?: () => void;
 }
 
+type AnswerSortOrder = 'votes' | 'newest' | 'oldest';
+
 export function AnswersList({ answers, questionId, onAnswerPosted }: AnswersListProps) {
   const [expandedComments, setExpandedComments] = useState<string[]>([]);
   const [reportingAnswerId, setReportingAnswerId] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<AnswerSortOrder>('votes');
 
   const {
     content,
@@ -43,11 +46,18 @@ export function AnswersList({ answers, questionId, onAnswerPosted }: AnswersList
     );
   };
 
-  // Sort answers: accepted first, then by vote score
+  // Sort answers: accepted first, then by selected sort order
   const sortedAnswers = [...answers].sort((a, b) => {
     if (a.isAccepted && !b.isAccepted) return -1;
     if (!a.isAccepted && b.isAccepted) return 1;
-    return b.voteScore - a.voteScore;
+    switch (sortOrder) {
+      case 'newest':
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case 'oldest':
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      default:
+        return b.voteScore - a.voteScore;
+    }
   });
 
   return (
@@ -56,10 +66,14 @@ export function AnswersList({ answers, questionId, onAnswerPosted }: AnswersList
         <h2 className="font-mono text-lg tracking-tight">
           <span className="text-foreground">{answers.length} ANSWERS</span>
         </h2>
-        <select className="bg-transparent border border-border px-3 py-1.5 font-mono text-xs focus:outline-none focus:border-foreground">
-          <option>HIGHEST VOTED</option>
-          <option>NEWEST</option>
-          <option>OLDEST</option>
+        <select
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value as AnswerSortOrder)}
+          className="bg-transparent border border-border px-3 py-1.5 font-mono text-xs focus:outline-none focus:border-foreground"
+        >
+          <option value="votes">HIGHEST VOTED</option>
+          <option value="newest">NEWEST</option>
+          <option value="oldest">OLDEST</option>
         </select>
       </div>
 

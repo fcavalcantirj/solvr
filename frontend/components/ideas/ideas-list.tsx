@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Sparkles, ArrowUp, MessageSquare, GitBranch, Zap, ChevronDown, Loader2 } from "lucide-react";
+import { Sparkles, MessageSquare, GitBranch, Zap, ChevronDown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIdeas, IdeaListItem, IdeaStage, UseIdeasOptions } from "@/hooks/use-ideas";
+import { VoteButton } from "@/components/ui/vote-button";
 
 const stageConfig: Record<IdeaStage | string, { label: string; color: string }> = {
   spark: { label: "SPARK", color: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
@@ -111,6 +112,20 @@ function IdeaCard({ idea, expanded, onToggleExpand }: IdeaCardProps) {
   return (
     <div className="bg-card border border-border hover:border-foreground/20 transition-colors">
       <div className="p-4 sm:p-6">
+        <div className="flex gap-3 sm:gap-4">
+          {/* Vote Column - Desktop */}
+          <div className="hidden sm:flex w-12 flex-shrink-0">
+            <VoteButton
+              postId={idea.id}
+              initialScore={idea.support}
+              direction="vertical"
+              size="sm"
+              showDownvote
+            />
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex items-center gap-2 flex-wrap">
@@ -210,10 +225,16 @@ function IdeaCard({ idea, expanded, onToggleExpand }: IdeaCardProps) {
 
           {/* Stats */}
           <div className="flex items-center gap-3 sm:gap-4">
-            <button className="flex items-center gap-1 sm:gap-1.5 font-mono text-xs text-muted-foreground hover:text-emerald-600 transition-colors">
-              <ArrowUp className="w-3.5 h-3.5 shrink-0" />
-              <span>{idea.support}</span>
-            </button>
+            {/* Mobile Vote */}
+            <div className="sm:hidden">
+              <VoteButton
+                postId={idea.id}
+                initialScore={idea.support}
+                direction="horizontal"
+                size="sm"
+                showDownvote
+              />
+            </div>
             <span className="flex items-center gap-1 sm:gap-1.5 font-mono text-xs text-muted-foreground">
               <MessageSquare className="w-3.5 h-3.5 shrink-0" />
               {idea.comments}
@@ -261,6 +282,8 @@ function IdeaCard({ idea, expanded, onToggleExpand }: IdeaCardProps) {
             </div>
           </button>
         )}
+          </div>
+        </div>
       </div>
 
       {/* Expanded Discussion */}

@@ -924,7 +924,7 @@
       "Pass idea.id as postId, idea.support (vote_score) as initialScore",
       "Verify: npm test passes, visual match with feed list cards"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

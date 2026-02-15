@@ -908,7 +908,7 @@
       "Pass question.id as postId, question.voteScore as initialScore",
       "Verify: npm test passes, visual match with feed list cards"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

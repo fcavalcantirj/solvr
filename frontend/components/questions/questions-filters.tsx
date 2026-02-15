@@ -4,18 +4,16 @@ import { useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
 const statuses = [
-  { key: "all", label: "ALL" },
-  { key: "unanswered", label: "UNANSWERED" },
-  { key: "answered", label: "ANSWERED" },
-  { key: "accepted", label: "ACCEPTED" },
+  { key: "all", label: "ALL", apiValue: undefined },
+  { key: "unanswered", label: "UNANSWERED", apiValue: "open" },
+  { key: "answered", label: "ANSWERED", apiValue: "answered" },
+  { key: "accepted", label: "ACCEPTED", apiValue: "solved" },
 ];
 
-const sorts = [
+const sorts: Array<{ key: 'newest' | 'votes' | 'answers'; label: string }> = [
   { key: "newest", label: "NEWEST" },
   { key: "votes", label: "MOST VOTED" },
   { key: "answers", label: "MOST ANSWERS" },
-  { key: "unanswered", label: "NEEDS ANSWER" },
-  { key: "activity", label: "RECENT ACTIVITY" },
 ];
 
 const popularTags = [
@@ -29,29 +27,56 @@ const popularTags = [
   "testing",
 ];
 
-export function QuestionsFilters() {
+interface QuestionsFiltersProps {
+  status?: string;
+  sort: 'newest' | 'votes' | 'answers';
+  tags: string[];
+  onStatusChange: (status: string | undefined) => void;
+  onSortChange: (sort: 'newest' | 'votes' | 'answers') => void;
+  onTagsChange: (tags: string[]) => void;
+}
+
+export function QuestionsFilters({
+  status,
+  sort,
+  tags,
+  onStatusChange,
+  onSortChange,
+  onTagsChange,
+}: QuestionsFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
-  const [activeStatus, setActiveStatus] = useState("all");
-  const [activeSort, setActiveSort] = useState("newest");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Find active status key from API value
+  const activeStatusKey = statuses.find((s) => s.apiValue === status)?.key || "all";
+
+  const handleStatusChange = (key: string) => {
+    const selected = statuses.find((s) => s.key === key);
+    onStatusChange(selected?.apiValue);
+  };
+
+  const handleSortChange = (key: 'newest' | 'votes' | 'answers') => {
+    onSortChange(key);
+  };
+
   const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
+    if (tags.includes(tag)) {
+      onTagsChange(tags.filter((t) => t !== tag));
+    } else {
+      onTagsChange([...tags, tag]);
+    }
   };
 
   const clearFilters = () => {
-    setActiveStatus("all");
-    setActiveSort("newest");
-    setSelectedTags([]);
+    onStatusChange(undefined);
+    onSortChange("newest");
+    onTagsChange([]);
     setSearchQuery("");
   };
 
   const hasActiveFilters =
-    activeStatus !== "all" ||
-    selectedTags.length > 0 ||
+    activeStatusKey !== "all" ||
+    tags.length > 0 ||
     searchQuery !== "";
 
   return (
@@ -78,17 +103,17 @@ export function QuestionsFilters() {
 
           {/* Status Pills - Desktop */}
           <div className="hidden lg:flex items-center gap-1">
-            {statuses.map((status) => (
+            {statuses.map((s) => (
               <button
-                key={status.key}
-                onClick={() => setActiveStatus(status.key)}
+                key={s.key}
+                onClick={() => handleStatusChange(s.key)}
                 className={`font-mono text-[10px] tracking-wider px-3 py-2 transition-colors ${
-                  activeStatus === status.key
+                  activeStatusKey === s.key
                     ? "bg-foreground text-background"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {status.label}
+                {s.label}
               </button>
             ))}
           </div>
@@ -109,17 +134,17 @@ export function QuestionsFilters() {
 
         {/* Status Pills - Mobile */}
         <div className="lg:hidden flex items-center gap-1 pb-4 overflow-x-auto scrollbar-hide">
-          {statuses.map((status) => (
+          {statuses.map((s) => (
             <button
-              key={status.key}
-              onClick={() => setActiveStatus(status.key)}
+              key={s.key}
+              onClick={() => handleStatusChange(s.key)}
               className={`font-mono text-[10px] tracking-wider px-3 py-2 whitespace-nowrap transition-colors ${
-                activeStatus === status.key
+                activeStatusKey === s.key
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {status.label}
+              {s.label}
             </button>
           ))}
         </div>
@@ -133,17 +158,17 @@ export function QuestionsFilters() {
                 SORT
               </span>
               <div className="flex flex-wrap items-center gap-1">
-                {sorts.map((sort) => (
+                {sorts.map((s) => (
                   <button
-                    key={sort.key}
-                    onClick={() => setActiveSort(sort.key)}
+                    key={s.key}
+                    onClick={() => handleSortChange(s.key)}
                     className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-colors ${
-                      activeSort === sort.key
+                      sort === s.key
                         ? "bg-foreground text-background"
                         : "bg-secondary text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    {sort.label}
+                    {s.label}
                   </button>
                 ))}
               </div>
@@ -160,7 +185,7 @@ export function QuestionsFilters() {
                     key={tag}
                     onClick={() => toggleTag(tag)}
                     className={`font-mono text-[10px] tracking-wider px-3 py-1.5 transition-colors ${
-                      selectedTags.includes(tag)
+                      tags.includes(tag)
                         ? "bg-foreground text-background"
                         : "bg-secondary text-muted-foreground hover:text-foreground"
                     }`}
@@ -175,17 +200,17 @@ export function QuestionsFilters() {
             {hasActiveFilters && (
               <div className="flex items-center justify-between pt-2 border-t border-border">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {activeStatus !== "all" && (
+                  {activeStatusKey !== "all" && (
                     <span className="font-mono text-[10px] tracking-wider bg-foreground text-background px-2 py-1 flex items-center gap-1.5">
-                      {statuses.find((s) => s.key === activeStatus)?.label}
+                      {statuses.find((s) => s.key === activeStatusKey)?.label}
                       <X
                         size={10}
                         className="cursor-pointer"
-                        onClick={() => setActiveStatus("all")}
+                        onClick={() => handleStatusChange("all")}
                       />
                     </span>
                   )}
-                  {selectedTags.map((tag) => (
+                  {tags.map((tag) => (
                     <span
                       key={tag}
                       className="font-mono text-[10px] tracking-wider bg-foreground text-background px-2 py-1 flex items-center gap-1.5"

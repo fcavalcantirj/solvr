@@ -526,3 +526,14 @@
 - Extracted QuestionCard component for cleaner separation
 - Status badges: open→AWAITING, answered→ANSWERED, solved→ACCEPTED
 - TypeScript compiles clean
+
+2026-02-15: Connect questions-filters.tsx to page state like problems-filters pattern
+- Made questions/page.tsx a 'use client' component with useState for status, sort, tags
+- Added useRouter and useAuth for auth-aware ASK QUESTION button
+- Removed export const metadata (incompatible with 'use client')
+- Updated QuestionsFilters to accept props: status, sort, tags, onStatusChange, onSortChange, onTagsChange
+- Mapped UI statuses to API params: UNANSWERED→open, ANSWERED→answered, ACCEPTED→solved
+- Removed internal state from QuestionsFilters (now uses lifted state from page)
+- Trimmed sort options to API-supported values: newest, votes, answers
+- Pass status, sort, tags as props to QuestionsList for refetching
+- TypeScript compiles clean

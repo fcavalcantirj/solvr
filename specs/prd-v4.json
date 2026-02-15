@@ -711,7 +711,7 @@
       "Keep search input as local state for future use",
       "Verify: Changing any filter triggers QuestionsList refetch via useQuestions hook"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

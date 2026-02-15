@@ -830,7 +830,7 @@
       "Reference: actual tool definition in mcp-server/src/tools.ts (solvr_claim tool)",
       "Verify: MCP docs section now shows 5 tools matching actual MCP server"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

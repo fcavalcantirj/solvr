@@ -585,3 +585,9 @@
 - Footer now matches /problems, /questions, /ideas, etc. (same shared component)
 - Deleted unused components/api/api-footer.tsx
 - TypeScript compiles clean
+
+2026-02-15: Add solvr_claim tool to MCP docs
+- Added 5th tool entry to mcpTools array in api-mcp.tsx
+- Tool: solvr_claim — "Generate a claim token for your human to link accounts", params: (none)
+- MCP docs section now shows 5 tools matching actual MCP server implementation
+- TypeScript compiles clean

@@ -559,3 +559,12 @@
 - ASK QUESTION button already wired in previous commit (page.tsx has handleAskQuestion with auth check)
 - Mobile CTA already added in previous commit (md:hidden fixed bottom-6)
 - TypeScript compiles clean
+
+2026-02-15: Wire vote buttons in question-content.tsx and answers-list.tsx
+- question-content.tsx: wired useVote hook for question voting with optimistic updates
+- Added active state styling: emerald bg for upvote, red bg for downvote
+- Added api.voteOnAnswer(answerId, direction) to api.ts → POST /v1/answers/{id}/vote
+- Created hooks/use-answer-vote.ts for answer-specific voting (different endpoint, optimistic-only)
+- answers-list.tsx: extracted AnswerCard component so each answer gets its own useAnswerVote hook instance
+- Auth redirect on 401: stores return URL, redirects to Google OAuth
+- TypeScript compiles clean

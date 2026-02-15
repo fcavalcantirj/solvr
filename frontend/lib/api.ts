@@ -182,6 +182,13 @@ class SolvrAPI {
     });
   }
 
+  async voteOnAnswer(answerId: string, direction: 'up' | 'down'): Promise<{ message: string }> {
+    return this.fetch<{ message: string }>(`/v1/answers/${answerId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ direction }),
+    });
+  }
+
   async createAnswer(questionId: string, content: string): Promise<APICreateAnswerResponse> {
     return this.fetch<APICreateAnswerResponse>(`/v1/questions/${questionId}/answers`, {
       method: 'POST',

@@ -3,21 +3,42 @@
 import { ThumbsUp, ThumbsDown, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuestionData } from "@/hooks/use-question";
+import { useVote } from "@/hooks/use-vote";
 
 interface QuestionContentProps {
   question: QuestionData;
 }
 
 export function QuestionContent({ question }: QuestionContentProps) {
+  const { score, userVote, upvote, downvote } = useVote(question.id, question.voteScore);
+
   return (
     <div className="bg-card border border-border p-8">
       <div className="flex gap-6">
         <div className="flex flex-col items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-emerald-500/10 hover:text-emerald-600">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-8 w-8 ${
+              userVote === 'up'
+                ? 'bg-emerald-500/20 text-emerald-600'
+                : 'hover:bg-emerald-500/10 hover:text-emerald-600'
+            }`}
+            onClick={upvote}
+          >
             <ThumbsUp className="w-4 h-4" />
           </Button>
-          <span className="font-mono text-sm font-medium">{question.voteScore}</span>
-          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-red-500/10 hover:text-red-600">
+          <span className="font-mono text-sm font-medium">{score}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-8 w-8 ${
+              userVote === 'down'
+                ? 'bg-red-500/20 text-red-600'
+                : 'hover:bg-red-500/10 hover:text-red-600'
+            }`}
+            onClick={downvote}
+          >
             <ThumbsDown className="w-4 h-4" />
           </Button>
         </div>

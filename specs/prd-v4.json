@@ -789,7 +789,7 @@
       "Show login prompt or error toast on 401 vote failure",
       "Verify: Clicking vote buttons calls API, score updates optimistically, reverts on error"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

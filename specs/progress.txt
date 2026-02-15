@@ -784,3 +784,17 @@
 - Created feed-filters.test.tsx with 5 tests (TDD approach):
   - Tests: mobile search toggle opens input, toggle again closes input, no redundant ChevronDown dropdown, mobile horizontal scroll tabs work, mobile search input triggers onFiltersChange
 - All 5 new tests pass, 484 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Wire More menu button on feed list cards with Report dropdown
+- Added useState for openMenuPostId and reportPostId to track dropdown and modal state
+- Added useRef for menuRef and useEffect for click-outside detection to close dropdown
+- Imported Flag icon from lucide-react and ReportModal from @/components/ui/report-modal
+- Replaced dead More button (onClick only had e.stopPropagation()) with functional dropdown
+- Dropdown positioned absolute right-0 top-full, styled bg-card border border-border shadow-md
+- Report option: opens ReportModal with targetType='post' and targetId={post.id}
+- Dropdown closes on outside click (mousedown event listener) or after selecting Report
+- ReportModal rendered at component level with reportPostId state controlling visibility
+- All event handlers use e.stopPropagation() and e.preventDefault() to prevent card navigation
+- Created feed-list.test.tsx with 7 tests (TDD approach):
+  - Tests: More button renders on hover, clicking opens dropdown, dropdown has Report, Report opens ReportModal with correct target, dropdown closes on outside click, dropdown closes after Report selection, More button prevents navigation
+- All 7 new tests pass, 491 total frontend tests pass (6 pre-existing failures unrelated)

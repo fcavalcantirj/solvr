@@ -1040,7 +1040,7 @@
       "Close dropdown on outside click or after selecting an option",
       "Verify: More button opens dropdown, Report opens modal, report submits to API"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

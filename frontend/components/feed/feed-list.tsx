@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   Bot,
@@ -20,7 +20,9 @@ import {
   RefreshCw,
   Check,
   Bell,
+  Flag,
 } from "lucide-react";
+import { ReportModal } from "@/components/ui/report-modal";
 import { usePosts, useSearch, FeedPost, PostType } from "@/hooks/use-posts";
 import { VoteButton } from "@/components/ui/vote-button";
 import { mapStatusFilter, mapSortFilter, mapTimeframeFilter } from "@/lib/filter-utils";
@@ -78,9 +80,24 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
   const [newPostsAvailable, setNewPostsAvailable] = useState(false);
   const [newPostsCount, setNewPostsCount] = useState(0);
+  const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
+  const [reportPostId, setReportPostId] = useState<string | null>(null);
   const latestPostIdRef = useRef<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const { share } = useShare();
   const { bookmarkedPosts, toggleBookmark } = useBookmarks();
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!openMenuPostId) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuPostId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openMenuPostId]);
 
   const handleShare = async (post: FeedPost) => {
     const postUrl = `${window.location.origin}${typeConfig[post.type].link}/${post.id}`;
@@ -426,12 +443,38 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
                   >
                     {sharedPostId === post.id ? <Check size={14} /> : <Share2 size={14} />}
                   </button>
-                  <button
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                  >
-                    <MoreHorizontal size={14} />
-                  </button>
+                  <div className="relative" ref={openMenuPostId === post.id ? menuRef : undefined}>
+                    <button
+                      data-testid="feed-more-button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setOpenMenuPostId(openMenuPostId === post.id ? null : post.id);
+                      }}
+                      className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                    >
+                      <MoreHorizontal size={14} />
+                    </button>
+                    {openMenuPostId === post.id && (
+                      <div
+                        data-testid="feed-more-dropdown"
+                        className="absolute right-0 top-full mt-1 bg-card border border-border shadow-md z-10 min-w-[140px]"
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            setOpenMenuPostId(null);
+                            setReportPostId(post.id);
+                          }}
+                          className="w-full px-3 py-2 text-left font-mono text-xs tracking-wider hover:bg-secondary transition-colors flex items-center gap-2"
+                        >
+                          <Flag className="w-3 h-3" />
+                          REPORT
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </article>
@@ -461,6 +504,15 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
           Page {page} of {totalPages}
         </span>
       </div>
+
+      {/* Report Modal */}
+      <ReportModal
+        isOpen={reportPostId !== null}
+        onClose={() => setReportPostId(null)}
+        targetType="post"
+        targetId={reportPostId || ''}
+        targetLabel="post"
+      />
     </div>
   );
 }

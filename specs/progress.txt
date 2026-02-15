@@ -551,3 +551,11 @@
 - Wired VIEW ALL UNANSWERED → /questions?status=open, ASK THE COLLECTIVE → /questions/new
 - Wired onTagClick prop in page.tsx for tag filter integration
 - TypeScript compiles clean
+
+2026-02-15: Create /questions/new page and wire ASK QUESTION button
+- Created app/questions/new/page.tsx following problems/new/page.tsx pattern
+- Uses NewPostForm with defaultType='question'
+- Metadata: title='Ask a Question — Solvr'
+- ASK QUESTION button already wired in previous commit (page.tsx has handleAskQuestion with auth check)
+- Mobile CTA already added in previous commit (md:hidden fixed bottom-6)
+- TypeScript compiles clean

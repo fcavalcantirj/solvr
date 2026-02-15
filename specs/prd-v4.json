@@ -758,7 +758,7 @@
       "Add metadata export: title='Ask a Question — Solvr', description='Ask the collective a question'",
       "Verify: Page renders, form submits via POST /v1/posts with type=question, redirects to /questions/{new_id}"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
@@ -772,7 +772,7 @@
       "Verify: Desktop button works with auth check",
       "Verify: Mobile CTA visible on small screens with auth check"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -877,5 +877,356 @@
       "Verify: No hardcoded status claims remain on /api-docs page (except MCP ONLINE handled by Task 16)"
     ],
     "passes": true
+  },
+  {
+    "category": "frontend",
+    "description": "Add functional VoteButton to problems list cards (left column layout matching feed)",
+    "steps": [
+      "Write Vitest test: ProblemCard renders VoteButton with correct postId and initialScore props",
+      "Write Vitest test: VoteButton has showDownvote={true}",
+      "Open frontend/components/problems/problems-list.tsx",
+      "Import VoteButton from @/components/ui/vote-button",
+      "Restructure ProblemCard: wrap card content in flex row, add left column <div className='hidden sm:flex w-12 flex-shrink-0'> with VoteButton direction='vertical' size='sm' showDownvote={true}",
+      "Add mobile VoteButton in card footer: <div className='sm:hidden'> with VoteButton direction='horizontal' size='sm' showDownvote={true}",
+      "Remove static ArrowUp icon + voteScore span from card header (lines 118-121)",
+      "Pass problem.id as postId, problem.voteScore as initialScore",
+      "Verify: npm test passes, visual match with feed list cards"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add functional VoteButton to questions list cards (left column layout matching feed)",
+    "steps": [
+      "Write Vitest test: QuestionCard renders VoteButton with correct postId and initialScore props",
+      "Write Vitest test: VoteButton has showDownvote={true}",
+      "Open frontend/components/questions/questions-list.tsx",
+      "Import VoteButton from @/components/ui/vote-button",
+      "Restructure QuestionCard: wrap card content in flex row, add left column with VoteButton direction='vertical' size='sm' showDownvote={true}",
+      "Add mobile VoteButton in card footer with VoteButton direction='horizontal' size='sm' showDownvote={true}",
+      "Remove static ArrowUp icon + voteScore span from card header (lines 91-94)",
+      "Pass question.id as postId, question.voteScore as initialScore",
+      "Verify: npm test passes, visual match with feed list cards"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add functional VoteButton to ideas list cards (left column layout matching feed)",
+    "steps": [
+      "Write Vitest test: IdeaCard renders VoteButton with correct postId and initialScore props",
+      "Write Vitest test: VoteButton has showDownvote={true}",
+      "Open frontend/components/ideas/ideas-list.tsx",
+      "Import VoteButton from @/components/ui/vote-button",
+      "Restructure IdeaCard: wrap card content in flex row, add left column with VoteButton direction='vertical' size='sm' showDownvote={true}",
+      "Add mobile VoteButton in card footer with VoteButton direction='horizontal' size='sm' showDownvote={true}",
+      "Remove non-functional ArrowUp button from stats section (lines 213-216)",
+      "Pass idea.id as postId, idea.support (vote_score) as initialScore",
+      "Verify: npm test passes, visual match with feed list cards"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Standardize question detail page: move vote from content body to header using VoteButton component",
+    "steps": [
+      "Write Vitest test: question-header renders VoteButton with postId, initialScore, direction='horizontal', showDownvote",
+      "Write Vitest test: question-content does NOT render ThumbsUp/ThumbsDown vote buttons",
+      "In question-content.tsx: remove useVote hook import and usage, remove ThumbsUp/ThumbsDown vote buttons and score display (lines 14-46)",
+      "In question-header.tsx: import VoteButton from @/components/ui/vote-button",
+      "Add VoteButton to header actions area matching problem-header.tsx lines 77-83: postId={question.id} initialScore={question.voteScore} direction='horizontal' size='md' showDownvote",
+      "Verify: npm test passes, question detail header vote matches problem detail header"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Fix broken idea detail voting: replace static display with functional VoteButton in header",
+    "steps": [
+      "Write Vitest test: idea-header renders VoteButton with postId, initialScore, direction='horizontal', showDownvote",
+      "Write Vitest test: clicking VoteButton triggers vote (useVote hook called via VoteButton)",
+      "In idea-header.tsx: import VoteButton from @/components/ui/vote-button",
+      "Replace static vote display block (lines 57-63: non-functional Button + ArrowUp + SUPPORT label) with VoteButton",
+      "Props: postId={idea.id} initialScore={idea.voteScore} direction='horizontal' size='md' showDownvote",
+      "Keep Share and Watch buttons next to VoteButton for consistency with problem-header layout",
+      "Verify: npm test passes, idea detail header vote matches problem detail header"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire ideas filters to list (matching problems/questions pattern)",
+    "steps": [
+      "Write Vitest test: changing stage filter updates IdeasList with matching status param",
+      "Write Vitest test: changing sort filter updates IdeasList with matching sort param",
+      "In ideas/page.tsx: add useState for stage, sort, tags (same pattern as problems/page.tsx)",
+      "Pass onFiltersChange callback to <IdeasFilters> that updates page state",
+      "Pass filter state as options prop to <IdeasList options={{ status, sort, tags }}>",
+      "In ideas-filters.tsx: replace hardcoded availableTags array (line 64-67) with useTrending() hook data",
+      "Map filter values to API params: stage spark→status open, developing→active, etc. (matching use-ideas.ts mapStatusToStage in reverse)",
+      "Verify: changing any filter updates the ideas list"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Create /ideas/new page + wire SPARK IDEA button with auth check",
+    "steps": [
+      "Create frontend/app/ideas/new/page.tsx following exact pattern of problems/new/page.tsx",
+      "Import Header and NewPostForm with defaultType='idea'",
+      "Page header: 'NEW IDEA' mono subtitle, 'Spark an Idea' h1 title",
+      "Add metadata: title='Spark an Idea — Solvr'",
+      "In ideas/page.tsx: import useRouter and useAuth",
+      "Wire SPARK IDEA button: if authenticated → /ideas/new, else → /login?next=/ideas/new",
+      "Add mobile fixed CTA button at bottom (matching problems/questions mobile CTA pattern)",
+      "Verify: button navigates correctly, form submits, redirects to /ideas/{new_id}"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire dead Bookmark/Share buttons on problem detail header",
+    "steps": [
+      "Write Vitest test: clicking Share copies URL to clipboard",
+      "Write Vitest test: clicking Bookmark toggles bookmark state",
+      "Import useShare hook from @/hooks/use-share (already used in feed-list.tsx)",
+      "Import useBookmarks hook from @/hooks/use-bookmarks (already used in feed-list.tsx)",
+      "Wire Share button to share(problem.title, url) with visual feedback (Check icon after click, like feed)",
+      "Wire Bookmark button to toggleBookmark(problem.id) with filled icon state (like feed)",
+      "Verify: both buttons functional, matching feed card interaction pattern"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire Share/Watch/More buttons on idea detail header with Report dropdown",
+    "steps": [
+      "Write Vitest test: clicking Share copies URL to clipboard and shows Check icon feedback",
+      "Write Vitest test: clicking Watch calls bookmark API and toggles filled icon state",
+      "Write Vitest test: clicking More opens dropdown with Report option",
+      "Write Vitest test: clicking Report in dropdown opens ReportModal",
+      "Import useShare from @/hooks/use-share — calls navigator.share() or navigator.clipboard.writeText()",
+      "Import useBookmarks from @/hooks/use-bookmarks — calls api.addBookmark()/api.removeBookmark()",
+      "Import ReportModal from @/components/ui/report-modal — calls POST /v1/reports",
+      "Wire Share button: share(idea.title, window.location.href), show Check icon for 2s after copy",
+      "Wire Watch button: toggleBookmark(idea.id), filled Bookmark icon when active",
+      "Wire More button: dropdown menu with Report option → opens ReportModal with targetType='post' and targetId={idea.id}",
+      "Verify: all three buttons functional, matching problem-header interaction pattern"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Fix dead buttons on feed filters (mobile search toggle + remove redundant mobile type dropdown)",
+    "steps": [
+      "Wire mobile search toggle: convert showMobileSearch from hardcoded false (line 48) to useState(false), toggle on click",
+      "For mobile type dropdown (lines 112-118): remove it entirely — the mobile horizontal scroll tabs (lines 205-221) already handle type selection on mobile. The dropdown is redundant and broken.",
+      "Verify: mobile search toggles correctly, no dead buttons remain"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire More menu button on feed list cards with Report dropdown",
+    "steps": [
+      "Write Vitest test: clicking More button opens dropdown menu",
+      "Write Vitest test: clicking Report in dropdown opens ReportModal",
+      "Write Vitest test: dropdown closes when clicking outside",
+      "Create a small FeedCardMenu component (or inline) with a dropdown containing Report option",
+      "Import ReportModal from @/components/ui/report-modal",
+      "Wire More button: on click, toggle dropdown visibility (keep e.stopPropagation() to prevent card navigation)",
+      "Report option: opens ReportModal with targetType='post' and targetId={post.id}",
+      "Dropdown positioned top-right, styled with bg-card border border-border shadow-md (matching existing dropdown patterns)",
+      "Close dropdown on outside click or after selecting an option",
+      "Verify: More button opens dropdown, Report opens modal, report submits to API"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Add ListByAuthor methods to answers, approaches, and responses repositories",
+    "steps": [
+      "Write integration test: ListAnswersByAuthor returns answers for a specific author, empty for non-author",
+      "Write integration test: ListApproachesByAuthor returns approaches for a specific author",
+      "Write integration test: ListResponsesByAuthor returns responses for a specific author",
+      "Add ListByAuthor(ctx, authorType, authorID, page, perPage) to AnswersRepository: SELECT a.*, p.title AS question_title FROM answers a JOIN posts p ON a.question_id = p.id WHERE a.author_type = $1 AND a.author_id = $2 AND a.deleted_at IS NULL ORDER BY a.created_at DESC LIMIT $3 OFFSET $4",
+      "Add ListByAuthor(ctx, authorType, authorID, page, perPage) to ApproachesRepository with same pattern (JOIN posts for problem_title)",
+      "Add ListByAuthor(ctx, authorType, authorID, page, perPage) to responses repo (check if db/responses.go exists, create if needed) with same pattern (JOIN posts for idea_title)",
+      "Add corresponding model types: AnswerWithContext, ApproachWithContext, ResponseWithContext in models/",
+      "Verify: all integration tests pass"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Create GET /v1/users/{id}/contributions endpoint returning answers + approaches + responses",
+    "steps": [
+      "Write test: GET /v1/users/{id}/contributions returns answers + approaches + responses mixed, sorted by created_at DESC",
+      "Write test: GET /v1/users/{id}/contributions with ?type=answers returns only answers",
+      "Write test: GET /v1/users/{id}/contributions with ?type=approaches returns only approaches",
+      "Write test: GET /v1/users/{id}/contributions with ?type=responses returns only responses",
+      "Write test: pagination works correctly (page, per_page params)",
+      "Create GetUserContributions handler in handlers/users.go: parse {id}, optional type query, pagination; look up user for author_type/author_id; call ListByAuthor methods; merge by created_at DESC",
+      "Return unified response: { data: [{ type, id, parent_id, parent_title, parent_type, content_preview, status, created_at }], meta: { total, page, per_page, has_more } }",
+      "Wire route: r.Get('/users/{id}/contributions', usersHandler.GetUserContributions) in router.go",
+      "Update GET /v1/me/contributions to use same logic with authenticated user's ID instead of returning posts",
+      "Verify: all tests pass, endpoint returns real contribution data"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire user profile Contributions tab to real API data",
+    "steps": [
+      "Write Vitest test: useContributions hook fetches from GET /v1/users/{id}/contributions",
+      "Write Vitest test: Contributions tab renders answer cards with 'Answered: [question title]'",
+      "Write Vitest test: Contributions tab renders approach cards with 'Approach for: [problem title]'",
+      "Write Vitest test: Contributions tab renders response cards with 'Response to: [idea title]'",
+      "In api.ts: add getUserContributions(userId, params?) → GET /v1/users/{id}/contributions",
+      "In api-types.ts: add APIContribution type: { type, id, parent_id, parent_title, parent_type, content_preview, status, created_at }",
+      "Create hooks/use-contributions.ts: fetches contributions, supports pagination, returns { contributions, loading, error, hasMore, loadMore }",
+      "In users/[id]/page.tsx: replace placeholder (lines 277-282) with contribution cards — answer cards link to /questions/{parent_id}, approach cards link to /problems/{parent_id}, response cards link to /ideas/{parent_id}",
+      "Each card: relative timestamp, content preview (first 200 chars), status/type badge",
+      "Add type filter pills at top: ALL | ANSWERS | APPROACHES | RESPONSES",
+      "Add LOAD MORE button with pagination",
+      "Verify: Contributions tab shows real data, filters work, cards link to parent posts"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire missing API data fields in feed/ideas hooks (resolve TODO comments)",
+    "steps": [
+      "In use-posts.ts: map avatar from post.author.avatar_url if present in API response (check APIPost.author type in api-types.ts)",
+      "In use-posts.ts: check if API returns is_pinned field; if yes map it, if no leave as false (backend may not support pinning yet)",
+      "In use-ideas.ts: check if API returns evolved_into or branch count; if yes map to branches, if no leave as 0",
+      "Remove TODO comments once resolved (either mapped or confirmed unavailable)",
+      "Verify: no TODO comments remain in hook transform functions"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Fix GitHub OAuth (verify configuration and env vars, code is fully implemented)",
+    "steps": [
+      "Write integration test: GitHub OAuth redirect returns 302 with correct authorize URL",
+      "Write integration test: GitHub callback with invalid code returns error gracefully",
+      "Verify GitHub OAuth app exists at github.com/settings/developers with correct callback URL (https://api.solvr.dev/v1/auth/github/callback)",
+      "Verify env vars GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_REDIRECT_URI are set in production",
+      "Test locally: hit /v1/auth/github → should redirect to GitHub authorize page",
+      "Test callback: complete GitHub OAuth flow → should redirect to frontend with JWT",
+      "If code issues found, fix them. If only configuration, document the required env vars",
+      "Verify: full GitHub OAuth flow works end-to-end"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Add password_hash column to users table via migration (support email/password auth)",
+    "steps": [
+      "Create migration 000031_add_password_hash.up.sql: ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)",
+      "In same migration: ALTER TABLE users ALTER COLUMN auth_provider DROP NOT NULL",
+      "In same migration: ALTER TABLE users ALTER COLUMN auth_provider_id DROP NOT NULL",
+      "Create migration 000031_add_password_hash.down.sql with reverse operations",
+      "Update User struct in models/user.go: add PasswordHash string json:\"-\" (never serialized to JSON)",
+      "Add constant AuthProviderEmail = 'email' to models/user.go",
+      "Run migration locally and verify schema",
+      "Verify: existing OAuth users unaffected, new column accepts NULL"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Implement POST /v1/auth/register endpoint (email/password registration with bcrypt)",
+    "steps": [
+      "Write test: POST /v1/auth/register with valid email+password+username creates user and returns JWT",
+      "Write test: POST /v1/auth/register with duplicate email returns 409 Conflict",
+      "Write test: POST /v1/auth/register with weak password returns 400 (min 8 chars)",
+      "Write test: POST /v1/auth/register with invalid email format returns 400",
+      "Write test: POST /v1/auth/register with duplicate username returns 409",
+      "Add FindByUsername(ctx, username) method to UserRepository in db/users.go — SELECT ... FROM users WHERE username = $1 (uses existing idx_users_username index). This method does NOT exist yet.",
+      "Create handlers/auth.go with Register handler: parse body { email, password, username, display_name }, validate email format + password strength (min 8 chars) + username format (alphanumeric + underscores, 3-30 chars), check email uniqueness via FindByEmail() (db/users.go:111), check username uniqueness via FindByUsername() (new method), hash password with bcrypt.GenerateFromPassword, create user with auth_provider='email', generate JWT + refresh token (same pattern as oauth.go lines 409-434)",
+      "Add CreateUserWithPassword(ctx, user) to UserRepository in db/users.go — INSERT including password_hash column",
+      "Wire route: r.Post('/auth/register', authHandler.Register) in router.go",
+      "Verify: all tests pass, user created in DB with hashed password"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Implement POST /v1/auth/login endpoint (email/password login with bcrypt verification)",
+    "steps": [
+      "Write test: POST /v1/auth/login with correct email+password returns JWT",
+      "Write test: POST /v1/auth/login with wrong password returns 401",
+      "Write test: POST /v1/auth/login with non-existent email returns 401 (same error, no email enumeration)",
+      "Write test: POST /v1/auth/login with OAuth-only user (no password_hash) returns 401 with message 'Use Google/GitHub to sign in'",
+      "Add Login handler to handlers/auth.go: parse body { email, password }, look up user by email, compare bcrypt hash, generate JWT + refresh token",
+      "Wire route: r.Post('/auth/login', authHandler.Login) in router.go",
+      "Verify: all tests pass, login works with valid credentials, rejects invalid"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Wire frontend login + join pages to real email/password auth endpoints",
+    "steps": [
+      "Write Vitest test: loginWithEmail calls POST /v1/auth/login and stores JWT on success",
+      "Write Vitest test: register calls POST /v1/auth/register and stores JWT on success",
+      "Write Vitest test: login form shows error on 401 response",
+      "Write Vitest test: register form shows error on 409 response",
+      "In api.ts: add login(email, password) → POST /v1/auth/login, returns { token, refresh_token, user }",
+      "In api.ts: add register(email, password, username, displayName) → POST /v1/auth/register, returns { token, refresh_token, user }",
+      "In use-auth.tsx: add loginWithEmail(email, password) method — calls api.login(), stores token via setToken(), returns success/error",
+      "In use-auth.tsx: add register(email, password, username, displayName) method — calls api.register(), stores token, returns success/error",
+      "In login/page.tsx: replace fake handleSubmit with real loginWithEmail() call, show error state on failure",
+      "In join/page.tsx: replace fake handleSubmit with real register() call, show error state on failure, redirect on success",
+      "Remove hardcoded stats on login page left panel (lines 90-98) — replace with real stats from GET /v1/stats if available, otherwise remove",
+      "Verify: full email/password registration and login flow works end-to-end"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Fix dead social links on About page (href='#' → real URLs or remove)",
+    "steps": [
+      "GitHub link (line 559): point to https://github.com/fcavalcantirj/solvr (the real repo)",
+      "Twitter/X link (line 565): point to real Twitter/X account if it exists, otherwise remove the button",
+      "Globe link (line 571): point to https://solvr.dev or remove if redundant (already on the site)",
+      "Add target='_blank' rel='noopener noreferrer' to external links",
+      "Verify: all social links either navigate somewhere real or are removed"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Remove non-functional subscription forms on Blog and Status pages",
+    "steps": [
+      "Blog page (lines 348-361): remove the entire newsletter section — includes fake '4,200+ subscribers' copy and form with no onSubmit handler",
+      "Status page (lines 563-586): remove the entire subscribe section — input + button with no form wrapper or handler",
+      "Verify: no email collection forms remain on pages without backend support"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Fix dead links and buttons on Status and Blog pages",
+    "steps": [
+      "Status page line 538: change 'View all incidents' Link href='#' to anchor scroll (href='#incidents' + add id='incidents' to section) — or remove link if all incidents already visible",
+      "Blog page line 301: remove 'LOAD MORE POSTS' button — all posts rendered client-side from static array, nothing more to load",
+      "Verify: no href='#' links remain, no dead buttons remain"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Remove 'MORE GUIDES COMING SOON' placeholder and unlinked guide cards from guides page",
+    "steps": [
+      "Remove 'MORE GUIDES COMING SOON' text (line 264)",
+      "Remove the 4 unlinked guide cards — only show guides that have actual content pages",
+      "Keep the 2 working guides with their existing styling",
+      "When more guides are written in the future, re-add their cards",
+      "Verify: guides page only shows guides with real content, no placeholder text"
+    ],
+    "passes": false
   }
 ]

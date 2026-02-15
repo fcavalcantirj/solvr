@@ -700,3 +700,18 @@
   - Tags render
   - Flag button renders
 - All 9 new tests pass, 445 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Fix broken idea detail voting: replace static display with functional VoteButton in header
+- Replaced static non-functional vote display block (ArrowUp + voteScore + SUPPORT label) with VoteButton component
+- Removed unused ArrowUp import from lucide-react
+- Added VoteButton import from @/components/ui/vote-button
+- VoteButton props: postId={idea.id}, initialScore={idea.voteScore}, direction="horizontal", size="md", showDownvote
+- Kept Share and Watch buttons next to VoteButton for consistency with problem-header layout
+- Created idea-header.test.tsx with 6 tests (TDD approach):
+  - VoteButton renders with correct postId, initialScore, direction, size, showDownvote
+  - VoteButton component is rendered (uses useVote hook internally)
+  - No static ArrowUp button with SUPPORT label remains
+  - Idea title and status render correctly
+  - Share and Watch buttons alongside VoteButton
+  - Author info renders correctly
+- All 6 new tests pass, 451 total frontend tests pass (6 pre-existing failures unrelated)

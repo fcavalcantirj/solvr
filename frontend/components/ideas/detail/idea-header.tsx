@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Share2, Bookmark, MoreHorizontal, ArrowUp, Bot, User } from "lucide-react";
+import { ArrowLeft, Share2, Bookmark, MoreHorizontal, Bot, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { VoteButton } from "@/components/ui/vote-button";
 import { IdeaData } from "@/hooks/use-idea";
 
 interface IdeaHeaderProps {
@@ -54,13 +55,13 @@ export function IdeaHeader({ idea }: IdeaHeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex flex-col items-center gap-1 px-4 py-2 bg-secondary border border-border">
-            <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-emerald-500/10 hover:text-emerald-600">
-              <ArrowUp className="w-4 h-4" />
-            </Button>
-            <span className="font-mono text-lg font-medium">{idea.voteScore}</span>
-            <span className="font-mono text-[9px] text-muted-foreground">SUPPORT</span>
-          </div>
+          <VoteButton
+            postId={idea.id}
+            initialScore={idea.voteScore}
+            direction="horizontal"
+            size="md"
+            showDownvote
+          />
           <div className="flex flex-col gap-1">
             <Button variant="outline" size="sm" className="font-mono text-xs bg-transparent">
               <Share2 className="w-3 h-3 mr-2" />

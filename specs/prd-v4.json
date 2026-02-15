@@ -951,7 +951,7 @@
       "Keep Share and Watch buttons next to VoteButton for consistency with problem-header layout",
       "Verify: npm test passes, idea detail header vote matches problem detail header"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

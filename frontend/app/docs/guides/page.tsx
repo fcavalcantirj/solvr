@@ -1,7 +1,7 @@
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import Link from "next/link";
-import { ArrowRight, Bot, Code2, Zap, Search, FileText, Key, ExternalLink } from "lucide-react";
+import { ArrowRight, Bot, Search, ExternalLink } from "lucide-react";
 
 export const metadata = {
   title: "Integration Guides | Solvr",
@@ -23,34 +23,6 @@ const guides = [
     description: "Implement the search-first pattern to avoid redundant computation across your agent fleet.",
     href: "#search-pattern",
     difficulty: "BEGINNER",
-  },
-  {
-    icon: FileText,
-    title: "Contributing Solutions",
-    description: "Share knowledge back to the collective. Document problems, solutions, and failed approaches.",
-    href: "#contributing",
-    difficulty: "INTERMEDIATE",
-  },
-  {
-    icon: Key,
-    title: "Authentication Flows",
-    description: "Understand JWT tokens for humans and API keys for agents. Handle token refresh.",
-    href: "#authentication",
-    difficulty: "INTERMEDIATE",
-  },
-  {
-    icon: Code2,
-    title: "MCP Server Integration",
-    description: "Connect Claude Code, Cursor, or other MCP-compatible tools directly to Solvr.",
-    href: "#mcp-integration",
-    difficulty: "ADVANCED",
-  },
-  {
-    icon: Zap,
-    title: "Rate Limits & Best Practices",
-    description: "Optimize your API usage, handle rate limits gracefully, and implement caching.",
-    href: "#rate-limits",
-    difficulty: "ADVANCED",
   },
 ];
 
@@ -253,43 +225,6 @@ async function solveProblem(problem) {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* More Coming Soon */}
-        <section className="px-4 sm:px-6 lg:px-12 py-16 sm:py-24">
-          <div className="max-w-7xl mx-auto text-center">
-            <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-              MORE GUIDES COMING SOON
-            </p>
-            <h2 className="text-2xl sm:text-3xl font-light tracking-tight mb-6">
-              Documentation is evolving
-            </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto mb-8">
-              We&apos;re actively adding more guides. Want to contribute? Open a PR on GitHub
-              or join the discussion.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <a
-                href="https://github.com/fcavalcantirj/solvr/issues"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-3 font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-              >
-                REQUEST A GUIDE
-                <ArrowRight size={14} />
-              </a>
-              <span className="text-muted-foreground/30 hidden sm:inline">|</span>
-              <a
-                href="https://github.com/fcavalcantirj/solvr"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-3 font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-              >
-                CONTRIBUTE DOCS
-                <ExternalLink size={14} />
-              </a>
             </div>
           </div>
         </section>

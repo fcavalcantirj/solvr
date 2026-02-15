@@ -1,3 +1,15 @@
+2026-02-15: Remove placeholder guides and 'MORE GUIDES COMING SOON' text
+- Removed 4 unlinked guide cards (Contributing Solutions, Authentication Flows, MCP Server Integration, Rate Limits & Best Practices)
+- Removed "MORE GUIDES COMING SOON" placeholder section (lines 261-295, saved 35 lines)
+- Cleaned up unused icon imports (FileText, Key, Code2, Zap)
+- Created page.test.tsx with 14 tests using TDD approach
+- All 14 tests pass: verified only 2 guides render, no placeholder text, correct links
+- Followed TDD workflow: RED (failing tests) → GREEN (implementation) → verified
+- page.tsx: 300 → 235 lines (well under 800 limit)
+- Full test suite: 555/561 tests passing (6 pre-existing failures, no regressions)
+- Improved UX by removing confusing placeholder guides that lead nowhere
+- guides array reduced from 6 items to 2 items (only guides with actual content)
+
 2026-02-15: Fix dead links and buttons on Status and Blog pages
 - Removed "View all incidents" dead link from status/page.tsx (href="#", lines 537-543)
 - Simplified RECENT INCIDENTS section header (removed flex justify-between wrapper)

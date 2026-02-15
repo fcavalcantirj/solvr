@@ -1227,6 +1227,6 @@
       "When more guides are written in the future, re-add their cards",
       "Verify: guides page only shows guides with real content, no placeholder text"
     ],
-    "passes": false
+    "passes": true
   }
 ]

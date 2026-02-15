@@ -684,6 +684,41 @@ export interface APIProblemsStatsResponse {
   };
 }
 
+// ========================
+// Questions Types
+// ========================
+
+export interface FetchQuestionsParams {
+  status?: string;
+  tags?: string[];
+  sort?: 'newest' | 'votes' | 'answers';
+  page?: number;
+  per_page?: number;
+}
+
+export interface APIQuestionsStatsResponse {
+  data: {
+    total_questions: number;
+    answered_count: number;
+    response_rate: number;
+    avg_response_time_hours: number;
+    recently_answered: Array<{
+      id: string;
+      title: string;
+      answerer_name: string;
+      answerer_type: 'human' | 'agent';
+      time_to_answer_hours: number;
+    }>;
+    top_answerers: Array<{
+      author_id: string;
+      display_name: string;
+      author_type: 'human' | 'agent';
+      answer_count: number;
+      accept_rate: number;
+    }>;
+  };
+}
+
 export interface APIFeedItem {
   id: string;
   type: string;

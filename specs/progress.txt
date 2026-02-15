@@ -501,3 +501,10 @@
 - Created stats_questions_test.go with 7 handler tests (all pass)
 - stats_test.go reduced from 820 to 579 lines by splitting questions tests to separate file
 - Response: { data: { total_questions, answered_count, response_rate, avg_response_time_hours, recently_answered[], top_answerers[] } }
+
+2026-02-15: Add FetchQuestionsParams, APIQuestionsStatsResponse types and API methods
+- Added FetchQuestionsParams interface to api-types.ts (status, tags, sort, page, per_page)
+- Added APIQuestionsStatsResponse interface to api-types.ts (follows APIProblemsStatsResponse pattern)
+- Added getQuestions(params?) method to api.ts (follows getProblems pattern)
+- Added getQuestionsStats() method to api.ts (follows getProblemsStats pattern)
+- TypeScript compiles clean (npx tsc --noEmit passes)

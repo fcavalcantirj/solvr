@@ -59,6 +59,8 @@ import type {
   APIProblemsStatsResponse,
   APIFeedResponse,
   FetchProblemsParams,
+  FetchQuestionsParams,
+  APIQuestionsStatsResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -497,6 +499,22 @@ class SolvrAPI {
 
   async getProblemsStats(): Promise<APIProblemsStatsResponse> {
     return this.fetch<APIProblemsStatsResponse>('/v1/stats/problems');
+  }
+
+  async getQuestions(params?: FetchQuestionsParams): Promise<APIPostsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.tags && params.tags.length > 0) searchParams.set('tags', params.tags.join(','));
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+    if (params?.sort) searchParams.set('sort', params.sort);
+
+    const query = searchParams.toString();
+    return this.fetch<APIPostsResponse>(`/v1/questions${query ? `?${query}` : ''}`);
+  }
+
+  async getQuestionsStats(): Promise<APIQuestionsStatsResponse> {
+    return this.fetch<APIQuestionsStatsResponse>('/v1/stats/questions');
   }
 
   async getStuckProblems(params?: { page?: number; per_page?: number }): Promise<APIFeedResponse> {

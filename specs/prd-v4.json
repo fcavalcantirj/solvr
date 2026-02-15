@@ -966,7 +966,7 @@
       "Map filter values to API params: stage spark→status open, developing→active, etc. (matching use-ideas.ts mapStatusToStage in reverse)",
       "Verify: changing any filter updates the ideas list"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

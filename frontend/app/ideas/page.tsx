@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/header";
 import { IdeasFilters, IdeasFilterStats } from "@/components/ideas/ideas-filters";
 import { IdeasList } from "@/components/ideas/ideas-list";
@@ -7,6 +9,7 @@ import { IdeasSidebar } from "@/components/ideas/ideas-sidebar";
 import { Lightbulb, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIdeasStats } from "@/hooks/use-ideas-stats";
+import { useAuth } from "@/hooks/use-auth";
 
 function formatNumber(num: number): string {
   if (num >= 1000) {
@@ -15,8 +18,35 @@ function formatNumber(num: number): string {
   return num.toLocaleString();
 }
 
+// Map frontend stage names to API status values
+function mapStageToStatus(stage: string): string | undefined {
+  const stageMap: Record<string, string> = {
+    spark: 'open',
+    developing: 'active',
+    mature: 'dormant',
+    realized: 'evolved',
+  };
+  if (stage === 'all') return undefined;
+  return stageMap[stage] || stage;
+}
+
 export default function IdeasPage() {
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const { stats, loading } = useIdeasStats();
+
+  // Lifted filter state (same pattern as problems/page.tsx and questions/page.tsx)
+  const [stage, setStage] = useState<string>('all');
+  const [sort, setSort] = useState<string>('newest');
+  const [tags, setTags] = useState<string[]>([]);
+
+  const handleSparkIdea = () => {
+    if (isAuthenticated) {
+      router.push('/ideas/new');
+    } else {
+      router.push('/login?next=/ideas/new');
+    }
+  };
 
   // Derive filter stats from the stats hook
   const filterStats: IdeasFilterStats | undefined = stats ? {
@@ -27,6 +57,9 @@ export default function IdeasPage() {
     realized: stats.countsByStatus.realized ?? 0,
     archived: stats.countsByStatus.archived ?? 0,
   } : undefined;
+
+  // Map stage to API status for IdeasList
+  const apiStatus = mapStageToStatus(stage);
 
   return (
     <div className="min-h-screen bg-background">
@@ -52,7 +85,10 @@ export default function IdeasPage() {
                   Seeds of possibility. Sparks before the fire. The raw, unpolished thoughts that could become breakthroughs.
                 </p>
               </div>
-              <Button className="font-mono text-xs tracking-wider w-full sm:w-auto shrink-0">
+              <Button
+                className="font-mono text-xs tracking-wider w-full sm:w-auto shrink-0 hidden md:flex"
+                onClick={handleSparkIdea}
+              >
                 <Plus className="w-3 h-3 mr-2" />
                 SPARK IDEA
               </Button>
@@ -98,13 +134,21 @@ export default function IdeasPage() {
         </div>
 
         {/* Filters */}
-        <IdeasFilters stats={filterStats} />
+        <IdeasFilters
+          stats={filterStats}
+          stage={stage}
+          sort={sort}
+          tags={tags}
+          onStageChange={setStage}
+          onSortChange={setSort}
+          onTagsChange={setTags}
+        />
 
         {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2">
-              <IdeasList />
+              <IdeasList options={{ status: apiStatus, sort: sort as 'newest' | 'trending' | 'most_support', tags }} />
             </div>
             <div className="lg:col-span-1">
               <IdeasSidebar />
@@ -112,6 +156,17 @@ export default function IdeasPage() {
           </div>
         </div>
       </main>
+
+      {/* Mobile CTA */}
+      <div className="md:hidden fixed bottom-6 left-6 right-6">
+        <Button
+          className="w-full font-mono text-xs tracking-wider"
+          onClick={handleSparkIdea}
+        >
+          <Plus className="w-3 h-3 mr-2" />
+          SPARK IDEA
+        </Button>
+      </div>
     </div>
   );
 }

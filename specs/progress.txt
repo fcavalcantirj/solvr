@@ -715,3 +715,21 @@
   - Share and Watch buttons alongside VoteButton
   - Author info renders correctly
 - All 6 new tests pass, 451 total frontend tests pass (6 pre-existing failures unrelated)
+
+2026-02-15: Wire ideas filters to list (matching problems/questions pattern)
+- Lifted filter state (stage, sort, tags) from IdeasFilters to parent ideas/page.tsx
+- Added useState for stage, sort, tags in page.tsx (same pattern as problems/page.tsx)
+- Added useRouter and useAuth for SPARK IDEA button auth-aware navigation
+- Updated IdeasFilters props: accepts stage, sort, tags, onStageChange, onSortChange, onTagsChange
+- Removed internal state from IdeasFilters (now uses lifted state from parent)
+- Replaced hardcoded availableTags array with useTrending() hook from hooks/use-stats
+- Tags section shows trending tags with loading/empty states
+- Trimmed sort options to API-compatible values: newest, votes (mapped to "MOST SUPPORT" label)
+- Map stage values to API status: spark→open, developing→active, mature→dormant, realized→evolved
+- Pass mapped status, sort, tags as options to IdeasList for refetching via useIdeas hook
+- Added SPARK IDEA button with auth check (desktop + mobile CTA)
+- Created app/ideas/page.test.tsx with 5 tests (TDD approach)
+  - Tests: passes filter state to filters, passes options to list, stage change maps to status, sort change, tags change
+- Created components/ideas/ideas-filters.test.tsx with 6 tests (TDD approach)
+  - Tests: uses trending tags from hook, calls onStageChange, calls onSortChange, calls onTagsChange, reflects active stage, reflects active sort
+- All 11 new tests pass, 462 total frontend tests pass (6 pre-existing failures unrelated)

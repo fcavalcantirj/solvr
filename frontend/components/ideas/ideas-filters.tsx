@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { useState } from "react";
+import { Search, SlidersHorizontal, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useTrending } from "@/hooks/use-stats";
 
 export interface IdeasFilterStats {
   total: number;
@@ -16,13 +17,12 @@ export interface IdeasFilterStats {
 
 export interface IdeasFiltersProps {
   stats?: IdeasFilterStats;
-  onFiltersChange?: (filters: {
-    stage: string;
-    potential: string;
-    sort: string;
-    search: string;
-    tags: string[];
-  }) => void;
+  stage: string;
+  sort: string;
+  tags: string[];
+  onStageChange: (stage: string) => void;
+  onSortChange: (sort: string) => void;
+  onTagsChange: (tags: string[]) => void;
 }
 
 function getStages(stats?: IdeasFilterStats) {
@@ -43,44 +43,37 @@ const potentialFilters = [
   { id: "needs-validation", label: "NEEDS VALIDATION" },
 ];
 
+// Sort options mapped to API-compatible values
+// "newest" and "votes" map directly to backend sort params
+// "trending" is a frontend concept (no backend sort) - defaults to newest
 const sortOptions = [
-  { id: "trending", label: "TRENDING" },
   { id: "newest", label: "NEWEST" },
-  { id: "most-support", label: "MOST SUPPORT" },
-  { id: "most-discussed", label: "MOST DISCUSSED" },
-  { id: "ready-to-develop", label: "READY TO DEVELOP" },
+  { id: "votes", label: "MOST SUPPORT" },
 ];
 
-export function IdeasFilters({ stats, onFiltersChange }: IdeasFiltersProps) {
-  const [activeStage, setActiveStage] = useState("all");
+export function IdeasFilters({
+  stats,
+  stage,
+  sort,
+  tags,
+  onStageChange,
+  onSortChange,
+  onTagsChange,
+}: IdeasFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [activePotential, setActivePotential] = useState("any");
-  const [activeSort, setActiveSort] = useState("trending");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  const { trending, loading: trendingLoading } = useTrending();
 
   const stages = getStages(stats);
 
-  const availableTags = [
-    "architecture", "ai-agents", "collaboration", "performance",
-    "ux", "infrastructure", "security", "integrations"
-  ];
-
-  // Notify parent when filters change
-  useEffect(() => {
-    onFiltersChange?.({
-      stage: activeStage,
-      potential: activePotential,
-      sort: activeSort,
-      search: searchQuery,
-      tags: selectedTags,
-    });
-  }, [activeStage, activePotential, activeSort, searchQuery, selectedTags, onFiltersChange]);
-
   const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
+    if (tags.includes(tag)) {
+      onTagsChange(tags.filter((t) => t !== tag));
+    } else {
+      onTagsChange([...tags, tag]);
+    }
   };
 
   return (
@@ -88,25 +81,25 @@ export function IdeasFilters({ stats, onFiltersChange }: IdeasFiltersProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         {/* Stage Tabs */}
         <div className="flex items-center gap-1 py-4 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-          {stages.map((stage) => (
+          {stages.map((s) => (
             <button
-              key={stage.id}
-              onClick={() => setActiveStage(stage.id)}
+              key={s.id}
+              onClick={() => onStageChange(s.id)}
               className={cn(
                 "px-4 py-2 font-mono text-xs tracking-wider transition-colors whitespace-nowrap",
-                activeStage === stage.id
+                stage === s.id
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}
             >
-              {stage.label}
+              {s.label}
               <span
                 className={cn(
                   "ml-2",
-                  activeStage === stage.id ? "text-background/70" : stage.color || "text-muted-foreground"
+                  stage === s.id ? "text-background/70" : s.color || "text-muted-foreground"
                 )}
               >
-                {stage.count}
+                {s.count}
               </span>
             </button>
           ))}
@@ -173,10 +166,10 @@ export function IdeasFilters({ stats, onFiltersChange }: IdeasFiltersProps) {
                 {sortOptions.map((option) => (
                   <button
                     key={option.id}
-                    onClick={() => setActiveSort(option.id)}
+                    onClick={() => onSortChange(option.id)}
                     className={cn(
                       "px-3 py-1.5 font-mono text-[10px] tracking-wider border transition-colors",
-                      activeSort === option.id
+                      sort === option.id
                         ? "bg-foreground text-background border-foreground"
                         : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/50"
                     )}
@@ -193,21 +186,30 @@ export function IdeasFilters({ stats, onFiltersChange }: IdeasFiltersProps) {
                 TAGS
               </span>
               <div className="flex flex-wrap gap-2">
-                {availableTags.map((tag) => (
-                  <button
-                    key={tag}
-                    onClick={() => toggleTag(tag)}
-                    className={cn(
-                      "px-3 py-1.5 font-mono text-[10px] tracking-wider border transition-colors",
-                      selectedTags.includes(tag)
-                        ? "bg-foreground text-background border-foreground"
-                        : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/50"
-                    )}
-                  >
-                    {tag}
-                    {selectedTags.includes(tag) && <X className="w-2 h-2 ml-1 inline" />}
-                  </button>
-                ))}
+                {trendingLoading ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                    <span className="font-mono text-[10px] text-muted-foreground">Loading tags...</span>
+                  </div>
+                ) : trending?.tags && trending.tags.length > 0 ? (
+                  trending.tags.map((tag) => (
+                    <button
+                      key={tag.name}
+                      onClick={() => toggleTag(tag.name)}
+                      className={cn(
+                        "px-3 py-1.5 font-mono text-[10px] tracking-wider border transition-colors",
+                        tags.includes(tag.name)
+                          ? "bg-foreground text-background border-foreground"
+                          : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/50"
+                      )}
+                    >
+                      {tag.name}
+                      {tags.includes(tag.name) && <X className="w-2 h-2 ml-1 inline" />}
+                    </button>
+                  ))
+                ) : (
+                  <span className="font-mono text-[10px] text-muted-foreground">No trending tags</span>
+                )}
               </div>
             </div>
           </div>

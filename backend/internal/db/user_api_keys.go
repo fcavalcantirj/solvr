@@ -206,7 +206,7 @@ func (r *UserAPIKeyRepository) GetUserByAPIKey(ctx context.Context, plainKey str
 	query := `
 		SELECT k.id, k.user_id, k.name, k.key_hash, k.last_used_at, k.revoked_at, k.created_at, k.updated_at,
 		       u.id, u.username, u.display_name, u.email, u.auth_provider, u.auth_provider_id,
-		       u.avatar_url, u.bio, u.role, u.status, u.created_at, u.updated_at
+		       u.avatar_url, u.bio, u.role, u.created_at, u.updated_at
 		FROM user_api_keys k
 		JOIN users u ON k.user_id = u.id
 		WHERE k.revoked_at IS NULL
@@ -241,7 +241,6 @@ func (r *UserAPIKeyRepository) GetUserByAPIKey(ctx context.Context, plainKey str
 			&user.AvatarURL,
 			&user.Bio,
 			&user.Role,
-			&user.Status,
 			&user.CreatedAt,
 			&user.UpdatedAt,
 		)

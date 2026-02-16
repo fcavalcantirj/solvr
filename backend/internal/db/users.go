@@ -52,19 +52,32 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 	)
 
 	created := &models.User{}
+
+	// Use sql.NullString for nullable fields
+	var passwordHash, avatarURL, bio, authProvider, authProviderID, role sql.NullString
+
 	err := row.Scan(
 		&created.ID,
 		&created.Username,
 		&created.DisplayName,
 		&created.Email,
-		&created.AuthProvider,
-		&created.AuthProviderID,
-		&created.AvatarURL,
-		&created.Bio,
-		&created.Role,
+		&authProvider,
+		&authProviderID,
+		&passwordHash,
+		&avatarURL,
+		&bio,
+		&role,
 		&created.CreatedAt,
 		&created.UpdatedAt,
 	)
+
+	// Convert nullable fields to strings (empty if NULL)
+	created.AuthProvider = authProvider.String
+	created.AuthProviderID = authProviderID.String
+	created.PasswordHash = passwordHash.String
+	created.AvatarURL = avatarURL.String
+	created.Bio = bio.String
+	created.Role = role.String
 
 	if err != nil {
 		// Check for unique constraint violations

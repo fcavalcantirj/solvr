@@ -29,8 +29,8 @@ func TestRateLimiter_PerAPIKey_IndependentLimits(t *testing.T) {
 	rl := NewRateLimiter(store, DefaultRateLimitConfig())
 	handler := rl.Middleware(okHandler())
 
-	// Exhaust limit for API key 1 (60 requests for human)
-	for i := 0; i < 60; i++ {
+	// Exhaust limit for API key 1 (30 requests for human, launch limit)
+	for i := 0; i < 30; i++ {
 		req := httptest.NewRequest("GET", "/v1/posts", nil)
 		req = addAPIKeyToContext(req, "user-123", "api-key-1")
 		rec := httptest.NewRecorder()
@@ -184,7 +184,7 @@ func TestRateLimiter_PerAPIKey_FallbackToUser(t *testing.T) {
 	handler := rl.Middleware(okHandler())
 
 	// Use regular user claims without API key context
-	for i := 0; i < 60; i++ {
+	for i := 0; i < 30; i++ {  // Launch limit for humans: 30
 		req := httptest.NewRequest("GET", "/v1/posts", nil)
 		req = addClaimsToContext(req, "user-123", "test@example.com", "user")
 		rec := httptest.NewRecorder()
@@ -194,7 +194,7 @@ func TestRateLimiter_PerAPIKey_FallbackToUser(t *testing.T) {
 		}
 	}
 
-	// 61st should be rate limited (human limit is 60)
+	// 31st should be rate limited (human launch limit is 30)
 	req := httptest.NewRequest("GET", "/v1/posts", nil)
 	req = addClaimsToContext(req, "user-123", "test@example.com", "user")
 	rec := httptest.NewRecorder()

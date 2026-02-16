@@ -90,43 +90,16 @@ func okHandler() http.Handler {
 	})
 }
 
-// TestRateLimiter_AgentGeneralLimit tests 120 requests/minute for agents.
+// TestRateLimiter_AgentGeneralLimit tests 60 requests/minute for agents (launch limit).
 func TestRateLimiter_AgentGeneralLimit(t *testing.T) {
 	store := NewMockRateLimitStore()
 	rl := NewRateLimiter(store, DefaultRateLimitConfig())
 	handler := rl.Middleware(okHandler())
 
-	// Make 120 requests (should all succeed)
-	for i := 0; i < 120; i++ {
-		req := httptest.NewRequest("GET", "/v1/posts", nil)
-		req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("request %d should succeed, got status %d", i+1, rec.Code)
-		}
-	}
-
-	// 121st request should be rate limited
-	req := httptest.NewRequest("GET", "/v1/posts", nil)
-	req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusTooManyRequests {
-		t.Errorf("request 121 should be rate limited, got status %d", rec.Code)
-	}
-}
-
-// TestRateLimiter_HumanGeneralLimit tests 60 requests/minute for humans.
-func TestRateLimiter_HumanGeneralLimit(t *testing.T) {
-	store := NewMockRateLimitStore()
-	rl := NewRateLimiter(store, DefaultRateLimitConfig())
-	handler := rl.Middleware(okHandler())
-
-	// Make 60 requests (should all succeed)
+	// Make 60 requests (should all succeed) - Launch limit (SPEC: 120)
 	for i := 0; i < 60; i++ {
 		req := httptest.NewRequest("GET", "/v1/posts", nil)
-		req = addClaimsToContext(req, "user-123", "test@example.com", "user")
+		req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -136,7 +109,7 @@ func TestRateLimiter_HumanGeneralLimit(t *testing.T) {
 
 	// 61st request should be rate limited
 	req := httptest.NewRequest("GET", "/v1/posts", nil)
-	req = addClaimsToContext(req, "user-123", "test@example.com", "user")
+	req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusTooManyRequests {
@@ -144,14 +117,41 @@ func TestRateLimiter_HumanGeneralLimit(t *testing.T) {
 	}
 }
 
-// TestRateLimiter_SearchLimit tests 60 searches/minute for agents.
+// TestRateLimiter_HumanGeneralLimit tests 30 requests/minute for humans (launch limit).
+func TestRateLimiter_HumanGeneralLimit(t *testing.T) {
+	store := NewMockRateLimitStore()
+	rl := NewRateLimiter(store, DefaultRateLimitConfig())
+	handler := rl.Middleware(okHandler())
+
+	// Make 30 requests (should all succeed) - Launch limit (SPEC: 60)
+	for i := 0; i < 30; i++ {
+		req := httptest.NewRequest("GET", "/v1/posts", nil)
+		req = addClaimsToContext(req, "user-123", "test@example.com", "user")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("request %d should succeed, got status %d", i+1, rec.Code)
+		}
+	}
+
+	// 31st request should be rate limited
+	req := httptest.NewRequest("GET", "/v1/posts", nil)
+	req = addClaimsToContext(req, "user-123", "test@example.com", "user")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("request 31 should be rate limited, got status %d", rec.Code)
+	}
+}
+
+// TestRateLimiter_SearchLimit tests 30 searches/minute for agents (launch limit).
 func TestRateLimiter_SearchLimit(t *testing.T) {
 	store := NewMockRateLimitStore()
 	rl := NewRateLimiter(store, DefaultRateLimitConfig())
 	handler := rl.Middleware(okHandler())
 
-	// Make 60 search requests (should all succeed)
-	for i := 0; i < 60; i++ {
+	// Make 30 search requests (should all succeed) - Launch limit (SPEC: 60)
+	for i := 0; i < 30; i++ {
 		req := httptest.NewRequest("GET", "/v1/search?q=test", nil)
 		req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
 		rec := httptest.NewRecorder()
@@ -161,53 +161,26 @@ func TestRateLimiter_SearchLimit(t *testing.T) {
 		}
 	}
 
-	// 61st search request should be rate limited
+	// 31st search request should be rate limited
 	req := httptest.NewRequest("GET", "/v1/search?q=test", nil)
 	req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusTooManyRequests {
-		t.Errorf("search request 61 should be rate limited, got status %d", rec.Code)
+		t.Errorf("search request 31 should be rate limited, got status %d", rec.Code)
 	}
 }
 
-// TestRateLimiter_PostsLimitAgent tests 10 posts/hour for agents.
+// TestRateLimiter_PostsLimitAgent tests 5 posts/hour for agents (launch limit).
 func TestRateLimiter_PostsLimitAgent(t *testing.T) {
 	store := NewMockRateLimitStore()
 	rl := NewRateLimiter(store, DefaultRateLimitConfig())
 	handler := rl.Middleware(okHandler())
 
-	// Make 10 post requests (should all succeed)
-	for i := 0; i < 10; i++ {
-		req := httptest.NewRequest("POST", "/v1/posts", nil)
-		req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("post request %d should succeed, got status %d", i+1, rec.Code)
-		}
-	}
-
-	// 11th post request should be rate limited
-	req := httptest.NewRequest("POST", "/v1/posts", nil)
-	req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusTooManyRequests {
-		t.Errorf("post request 11 should be rate limited, got status %d", rec.Code)
-	}
-}
-
-// TestRateLimiter_PostsLimitHuman tests 5 posts/hour for humans.
-func TestRateLimiter_PostsLimitHuman(t *testing.T) {
-	store := NewMockRateLimitStore()
-	rl := NewRateLimiter(store, DefaultRateLimitConfig())
-	handler := rl.Middleware(okHandler())
-
-	// Make 5 post requests (should all succeed)
+	// Make 5 post requests (should all succeed) - Launch limit (SPEC: 10)
 	for i := 0; i < 5; i++ {
 		req := httptest.NewRequest("POST", "/v1/posts", nil)
-		req = addClaimsToContext(req, "user-123", "test@example.com", "user")
+		req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -217,7 +190,7 @@ func TestRateLimiter_PostsLimitHuman(t *testing.T) {
 
 	// 6th post request should be rate limited
 	req := httptest.NewRequest("POST", "/v1/posts", nil)
-	req = addClaimsToContext(req, "user-123", "test@example.com", "user")
+	req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusTooManyRequests {
@@ -225,14 +198,41 @@ func TestRateLimiter_PostsLimitHuman(t *testing.T) {
 	}
 }
 
-// TestRateLimiter_AnswersLimitAgent tests 30 answers/hour for agents.
+// TestRateLimiter_PostsLimitHuman tests 3 posts/hour for humans (launch limit).
+func TestRateLimiter_PostsLimitHuman(t *testing.T) {
+	store := NewMockRateLimitStore()
+	rl := NewRateLimiter(store, DefaultRateLimitConfig())
+	handler := rl.Middleware(okHandler())
+
+	// Make 3 post requests (should all succeed) - Launch limit (SPEC: 5)
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest("POST", "/v1/posts", nil)
+		req = addClaimsToContext(req, "user-123", "test@example.com", "user")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("post request %d should succeed, got status %d", i+1, rec.Code)
+		}
+	}
+
+	// 4th post request should be rate limited
+	req := httptest.NewRequest("POST", "/v1/posts", nil)
+	req = addClaimsToContext(req, "user-123", "test@example.com", "user")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("post request 4 should be rate limited, got status %d", rec.Code)
+	}
+}
+
+// TestRateLimiter_AnswersLimitAgent tests 15 answers/hour for agents (launch limit).
 func TestRateLimiter_AnswersLimitAgent(t *testing.T) {
 	store := NewMockRateLimitStore()
 	rl := NewRateLimiter(store, DefaultRateLimitConfig())
 	handler := rl.Middleware(okHandler())
 
-	// Make 30 answer requests (should all succeed)
-	for i := 0; i < 30; i++ {
+	// Make 15 answer requests (should all succeed) - Launch limit (SPEC: 30)
+	for i := 0; i < 15; i++ {
 		req := httptest.NewRequest("POST", "/v1/questions/123/answers", nil)
 		req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
 		rec := httptest.NewRecorder()
@@ -242,24 +242,24 @@ func TestRateLimiter_AnswersLimitAgent(t *testing.T) {
 		}
 	}
 
-	// 31st answer request should be rate limited
+	// 16th answer request should be rate limited
 	req := httptest.NewRequest("POST", "/v1/questions/123/answers", nil)
 	req = addAgentToContext(req, "test-agent", time.Now().Add(-25*time.Hour))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusTooManyRequests {
-		t.Errorf("answer request 31 should be rate limited, got status %d", rec.Code)
+		t.Errorf("answer request 16 should be rate limited, got status %d", rec.Code)
 	}
 }
 
-// TestRateLimiter_AnswersLimitHuman tests 20 answers/hour for humans.
+// TestRateLimiter_AnswersLimitHuman tests 10 answers/hour for humans (launch limit).
 func TestRateLimiter_AnswersLimitHuman(t *testing.T) {
 	store := NewMockRateLimitStore()
 	rl := NewRateLimiter(store, DefaultRateLimitConfig())
 	handler := rl.Middleware(okHandler())
 
-	// Make 20 answer requests (should all succeed)
-	for i := 0; i < 20; i++ {
+	// Make 10 answer requests (should all succeed) - Launch limit (SPEC: 20)
+	for i := 0; i < 10; i++ {
 		req := httptest.NewRequest("POST", "/v1/questions/123/answers", nil)
 		req = addClaimsToContext(req, "user-123", "test@example.com", "user")
 		rec := httptest.NewRecorder()
@@ -269,13 +269,13 @@ func TestRateLimiter_AnswersLimitHuman(t *testing.T) {
 		}
 	}
 
-	// 21st answer request should be rate limited
+	// 11th answer request should be rate limited
 	req := httptest.NewRequest("POST", "/v1/questions/123/answers", nil)
 	req = addClaimsToContext(req, "user-123", "test@example.com", "user")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusTooManyRequests {
-		t.Errorf("answer request 21 should be rate limited, got status %d", rec.Code)
+		t.Errorf("answer request 11 should be rate limited, got status %d", rec.Code)
 	}
 }
 
@@ -286,8 +286,8 @@ func TestRateLimiter_NewAccount50Percent(t *testing.T) {
 	handler := rl.Middleware(okHandler())
 
 	// New agent (created 12 hours ago, less than 24h)
-	// Should get 60 requests/min instead of 120
-	for i := 0; i < 60; i++ {
+	// Should get 30 requests/min instead of 60 (50% of launch limit)
+	for i := 0; i < 30; i++ {
 		req := httptest.NewRequest("GET", "/v1/posts", nil)
 		req = addAgentToContext(req, "new-agent", time.Now().Add(-12*time.Hour))
 		rec := httptest.NewRecorder()
@@ -297,23 +297,23 @@ func TestRateLimiter_NewAccount50Percent(t *testing.T) {
 		}
 	}
 
-	// 61st request should be rate limited (50% of 120)
+	// 31st request should be rate limited (50% of 60 launch limit)
 	req := httptest.NewRequest("GET", "/v1/posts", nil)
 	req = addAgentToContext(req, "new-agent", time.Now().Add(-12*time.Hour))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusTooManyRequests {
-		t.Errorf("request 61 should be rate limited for new agent, got status %d", rec.Code)
+		t.Errorf("request 31 should be rate limited for new agent, got status %d", rec.Code)
 	}
 }
 
 // TestRateLimiter_Returns429 tests that 429 status is returned when rate limited.
 func TestRateLimiter_Returns429(t *testing.T) {
 	store := NewMockRateLimitStore()
-	// Pre-fill the store with at-limit count
+	// Pre-fill the store with at-limit count (launch limit)
 	store.SetRecord("agent:test-agent:general", &RateLimitRecord{
 		Key:         "agent:test-agent:general",
-		Count:       120,
+		Count:       60,  // Launch limit (SPEC: 120)
 		WindowStart: time.Now(),
 	})
 
@@ -345,8 +345,8 @@ func TestRateLimiter_XRateLimitLimitHeader(t *testing.T) {
 	if limitHeader == "" {
 		t.Error("X-RateLimit-Limit header should be set")
 	}
-	if limitHeader != "120" {
-		t.Errorf("X-RateLimit-Limit should be 120 for agent, got %s", limitHeader)
+	if limitHeader != "60" {  // Launch limit (SPEC: 120)
+		t.Errorf("X-RateLimit-Limit should be 60 for agent, got %s", limitHeader)
 	}
 }
 
@@ -365,9 +365,9 @@ func TestRateLimiter_XRateLimitRemainingHeader(t *testing.T) {
 	if remainingHeader == "" {
 		t.Error("X-RateLimit-Remaining header should be set")
 	}
-	// After 1 request, should have 119 remaining
-	if remainingHeader != "119" {
-		t.Errorf("X-RateLimit-Remaining should be 119 after 1 request, got %s", remainingHeader)
+	// After 1 request, should have 59 remaining (launch limit 60 - 1)
+	if remainingHeader != "59" {  // Launch limit (SPEC: 119)
+		t.Errorf("X-RateLimit-Remaining should be 59 after 1 request, got %s", remainingHeader)
 	}
 }
 
@@ -391,10 +391,10 @@ func TestRateLimiter_XRateLimitResetHeader(t *testing.T) {
 // TestRateLimiter_RetryAfterHeader tests Retry-After header is set on 429 response.
 func TestRateLimiter_RetryAfterHeader(t *testing.T) {
 	store := NewMockRateLimitStore()
-	// Pre-fill the store with at-limit count
+	// Pre-fill the store with at-limit count (launch limit)
 	store.SetRecord("agent:test-agent:general", &RateLimitRecord{
 		Key:         "agent:test-agent:general",
-		Count:       120,
+		Count:       60,  // Launch limit (SPEC: 120)
 		WindowStart: time.Now(),
 	})
 
@@ -422,8 +422,8 @@ func TestRateLimiter_DifferentUsersIndependent(t *testing.T) {
 	rl := NewRateLimiter(store, DefaultRateLimitConfig())
 	handler := rl.Middleware(okHandler())
 
-	// Exhaust limit for user1
-	for i := 0; i < 60; i++ {
+	// Exhaust limit for user1 (launch limit: 30 for humans)
+	for i := 0; i < 30; i++ {
 		req := httptest.NewRequest("GET", "/v1/posts", nil)
 		req = addClaimsToContext(req, "user-1", "user1@example.com", "user")
 		rec := httptest.NewRecorder()
@@ -550,26 +550,26 @@ func TestRateLimiter_OperationDetection(t *testing.T) {
 func TestRateLimitConfig_Default(t *testing.T) {
 	config := DefaultRateLimitConfig()
 
-	if config.AgentGeneralLimit != 120 {
-		t.Errorf("AgentGeneralLimit should be 120, got %d", config.AgentGeneralLimit)
+	if config.AgentGeneralLimit != 60 {  // Launch value (SPEC: 120)
+		t.Errorf("AgentGeneralLimit should be 60, got %d", config.AgentGeneralLimit)
 	}
-	if config.HumanGeneralLimit != 60 {
-		t.Errorf("HumanGeneralLimit should be 60, got %d", config.HumanGeneralLimit)
+	if config.HumanGeneralLimit != 30 {  // Launch value (SPEC: 60)
+		t.Errorf("HumanGeneralLimit should be 30, got %d", config.HumanGeneralLimit)
 	}
-	if config.SearchLimitPerMin != 60 {
-		t.Errorf("SearchLimitPerMin should be 60, got %d", config.SearchLimitPerMin)
+	if config.SearchLimitPerMin != 30 {  // Launch value (SPEC: 60)
+		t.Errorf("SearchLimitPerMin should be 30, got %d", config.SearchLimitPerMin)
 	}
-	if config.AgentPostsPerHour != 10 {
-		t.Errorf("AgentPostsPerHour should be 10, got %d", config.AgentPostsPerHour)
+	if config.AgentPostsPerHour != 5 {  // Launch value (SPEC: 10)
+		t.Errorf("AgentPostsPerHour should be 5, got %d", config.AgentPostsPerHour)
 	}
-	if config.HumanPostsPerHour != 5 {
-		t.Errorf("HumanPostsPerHour should be 5, got %d", config.HumanPostsPerHour)
+	if config.HumanPostsPerHour != 3 {  // Launch value (SPEC: 5)
+		t.Errorf("HumanPostsPerHour should be 3, got %d", config.HumanPostsPerHour)
 	}
-	if config.AgentAnswersPerHour != 30 {
-		t.Errorf("AgentAnswersPerHour should be 30, got %d", config.AgentAnswersPerHour)
+	if config.AgentAnswersPerHour != 15 {  // Launch value (SPEC: 30)
+		t.Errorf("AgentAnswersPerHour should be 15, got %d", config.AgentAnswersPerHour)
 	}
-	if config.HumanAnswersPerHour != 20 {
-		t.Errorf("HumanAnswersPerHour should be 20, got %d", config.HumanAnswersPerHour)
+	if config.HumanAnswersPerHour != 10 {  // Launch value (SPEC: 20)
+		t.Errorf("HumanAnswersPerHour should be 10, got %d", config.HumanAnswersPerHour)
 	}
 	if config.NewAccountThreshold != 24*time.Hour {
 		t.Errorf("NewAccountThreshold should be 24h, got %v", config.NewAccountThreshold)
@@ -581,7 +581,7 @@ func TestRateLimiter_ResponseBody(t *testing.T) {
 	store := NewMockRateLimitStore()
 	store.SetRecord("agent:test-agent:general", &RateLimitRecord{
 		Key:         "agent:test-agent:general",
-		Count:       120,
+		Count:       60,  // Launch limit (SPEC: 120)
 		WindowStart: time.Now(),
 	})
 
@@ -623,15 +623,15 @@ func TestRateLimiter_PreventsEnumeration(t *testing.T) {
 		// to endpoints like GET /v1/users/:id or GET /v1/agents/:id
 		// They should be rate limited after the general limit
 
-		// Simulate enumeration attack - 60 requests (human limit)
-		for i := 0; i < 60; i++ {
+		// Simulate enumeration attack - 30 requests (human launch limit)
+		for i := 0; i < 30; i++ {
 			req := httptest.NewRequest("GET", "/v1/agents/test-agent-"+strconv.Itoa(i), nil)
 			req = addClaimsToContext(req, "attacker-user", "attacker@example.com", "user")
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
 		}
 
-		// 61st enumeration attempt should be rate limited
+		// 31st enumeration attempt should be rate limited
 		req := httptest.NewRequest("GET", "/v1/agents/some-other-agent", nil)
 		req = addClaimsToContext(req, "attacker-user", "attacker@example.com", "user")
 		rec := httptest.NewRecorder()
@@ -647,8 +647,8 @@ func TestRateLimiter_PreventsEnumeration(t *testing.T) {
 		rl := NewRateLimiter(store, DefaultRateLimitConfig())
 		handler := rl.Middleware(okHandler())
 
-		// Attacker trying to enumerate post IDs
-		for i := 0; i < 60; i++ {
+		// Attacker trying to enumerate post IDs (human launch limit: 30)
+		for i := 0; i < 30; i++ {
 			req := httptest.NewRequest("GET", "/v1/posts/post-id-"+strconv.Itoa(i), nil)
 			req = addClaimsToContext(req, "attacker-user", "attacker@example.com", "user")
 			rec := httptest.NewRecorder()
@@ -672,8 +672,8 @@ func TestRateLimiter_PreventsEnumeration(t *testing.T) {
 		handler := rl.Middleware(okHandler())
 
 		// Attacker using search to find valid content
-		// Search has stricter limit (60/min) to prevent abuse
-		for i := 0; i < 60; i++ {
+		// Search has stricter limit (30/min launch limit) to prevent abuse
+		for i := 0; i < 30; i++ {
 			req := httptest.NewRequest("GET", "/v1/search?q=test"+strconv.Itoa(i), nil)
 			req = addAgentToContext(req, "enumeration-agent", time.Now().Add(-25*time.Hour))
 			rec := httptest.NewRecorder()
@@ -705,9 +705,9 @@ func TestRateLimiter_PreventsEnumeration(t *testing.T) {
 		}
 
 		requestCount := 0
-		for requestCount < 60 {
+		for requestCount < 30 {  // Human launch limit: 30
 			for _, endpoint := range endpoints {
-				if requestCount >= 60 {
+				if requestCount >= 30 {
 					break
 				}
 				req := httptest.NewRequest("GET", endpoint, nil)
@@ -718,7 +718,7 @@ func TestRateLimiter_PreventsEnumeration(t *testing.T) {
 			}
 		}
 
-		// 61st request to any endpoint should be limited
+		// 31st request to any endpoint should be limited
 		req := httptest.NewRequest("GET", "/v1/posts/new-id", nil)
 		req = addClaimsToContext(req, "single-attacker", "attacker@example.com", "user")
 		rec := httptest.NewRecorder()
@@ -734,16 +734,16 @@ func TestRateLimiter_PreventsEnumeration(t *testing.T) {
 		rl := NewRateLimiter(store, DefaultRateLimitConfig())
 		handler := rl.Middleware(okHandler())
 
-		// New agent (12 hours old) gets 50% limit = 60 instead of 120
+		// New agent (12 hours old) gets 50% limit = 30 instead of 60 (launch limits)
 		// This makes enumeration attacks even harder for new accounts
-		for i := 0; i < 60; i++ {
+		for i := 0; i < 30; i++ {
 			req := httptest.NewRequest("GET", "/v1/agents/target-"+strconv.Itoa(i), nil)
 			req = addAgentToContext(req, "new-attacker-agent", time.Now().Add(-12*time.Hour))
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
 		}
 
-		// 61st request should be limited (50% of 120 = 60)
+		// 31st request should be limited (50% of 60 launch limit = 30)
 		req := httptest.NewRequest("GET", "/v1/agents/another-target", nil)
 		req = addAgentToContext(req, "new-attacker-agent", time.Now().Add(-12*time.Hour))
 		rec := httptest.NewRecorder()
@@ -783,7 +783,7 @@ func TestRateLimiter_LimitsAreDocumented(t *testing.T) {
 	// On rate limit, Retry-After should be present
 	store.SetRecord("human:limited-user:general", &RateLimitRecord{
 		Key:         "human:limited-user:general",
-		Count:       60,
+		Count:       30,  // Launch limit for humans (SPEC: 60)
 		WindowStart: time.Now(),
 	})
 

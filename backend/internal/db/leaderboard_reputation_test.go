@@ -608,3 +608,603 @@ func TestLeaderboard_RankingOrderAllTime(t *testing.T) {
 	t.Logf("  Agent B: rank %d, reputation %d", ranks[agentB.ID], reps[agentB.ID])
 	t.Logf("  Agent C: rank %d, reputation %d", ranks[agentC.ID], reps[agentC.ID])
 }
+
+// ============================================================================
+// NEW TESTS - COMPREHENSIVE REPUTATION CONSISTENCY
+// These tests verify leaderboard uses the SAME formula as agent stats
+// ============================================================================
+
+// TestLeaderboard_ReputationMatchesAgentStats is the CRITICAL test that verifies
+// leaderboard reputation uses the SAME formula as agent stats.
+// This test will FAIL until leaderboard.go is fixed to match agents.go formula.
+func TestLeaderboard_ReputationMatchesAgentStats(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	agentRepo := NewAgentRepository(pool)
+	postRepo := NewPostRepository(pool)
+	leaderboardRepo := NewLeaderboardRepository(pool)
+
+	// Create test agent with 10 bonus points
+	suffix := time.Now().Format("150405.000")
+	agent := &models.Agent{
+		ID:          "test_rep_consistency_" + suffix,
+		DisplayName: "Test Rep Consistency",
+		AvatarURL:   "https://example.com/avatar.jpg",
+		APIKeyHash:  mustHash(t, "test-key"),
+		Status:      "active",
+		Reputation:  10, // 10 bonus points
+	}
+	if err := agentRepo.Create(ctx, agent); err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM responses WHERE author_id = $1", agent.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id = $1 OR id IN (SELECT id FROM posts WHERE posted_by_id = 'other_agent_reptest')", agent.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", agent.ID)
+	}()
+
+	// Create various activities for the agent
+	// 1. Problem contributed (not solved): 25 points
+	_, err = postRepo.Create(ctx, &models.Post{
+		Type:         models.PostTypeProblem,
+		Title:        "Contributed Problem",
+		Description:  "Test problem",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   agent.ID,
+		Status:       models.PostStatusOpen, // NOT solved
+		Tags:         []string{"test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create problem: %v", err)
+	}
+
+	// 2. Idea posted: 15 points
+	_, err = postRepo.Create(ctx, &models.Post{
+		Type:         models.PostTypeIdea,
+		Title:        "Test Idea",
+		Description:  "Test idea body",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   agent.ID,
+		Tags:         []string{"test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create idea: %v", err)
+	}
+
+	// 3. Response given: 5 points (need another post to respond to)
+	problem2, err := postRepo.Create(ctx, &models.Post{
+		Type:         models.PostTypeProblem,
+		Title:        "Other Problem",
+		Description:  "Problem for response",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "other_agent_reptest",
+		Status:       models.PostStatusOpen,
+		Tags:         []string{"test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create problem2: %v", err)
+	}
+
+	// Create response
+	_, err = pool.Exec(ctx, `
+		INSERT INTO responses (id, post_id, content, author_type, author_id, created_at)
+		VALUES (gen_random_uuid(), $1, 'Test response', 'agent', $2, NOW())
+	`, problem2.ID, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to create response: %v", err)
+	}
+
+	// Expected reputation calculation:
+	// bonus (10) + problem_contributed (25) + idea (15) + response (5) = 55 points
+
+	// Get agent stats (the CORRECT source of truth)
+	stats, err := agentRepo.GetAgentStats(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to get agent stats: %v", err)
+	}
+
+	t.Logf("Agent stats reputation: %d", stats.Reputation)
+	t.Logf("  - Bonus: 10")
+	t.Logf("  - Problems contributed: %d × 25 = %d", stats.ProblemsContributed, stats.ProblemsContributed*25)
+	t.Logf("  - Ideas posted: %d × 15 = %d", stats.IdeasPosted, stats.IdeasPosted*15)
+	t.Logf("  - Responses given: %d × 5 = %d", stats.ResponsesGiven, stats.ResponsesGiven*5)
+
+	// Get leaderboard entry for same agent
+	leaderboard, _, err := leaderboardRepo.GetLeaderboard(ctx, models.LeaderboardOptions{
+		Type:      "agents",
+		Timeframe: "all_time",
+		Limit:     100,
+		Offset:    0,
+	})
+	if err != nil {
+		t.Fatalf("failed to get leaderboard: %v", err)
+	}
+
+	var entry *models.LeaderboardEntry
+	for i := range leaderboard {
+		if leaderboard[i].ID == agent.ID {
+			entry = &leaderboard[i]
+			break
+		}
+	}
+
+	if entry == nil {
+		t.Fatal("agent not found in leaderboard")
+	}
+
+	t.Logf("Leaderboard reputation: %d", entry.Reputation)
+
+	// ASSERT: The reputations MUST match
+	if entry.Reputation != stats.Reputation {
+		t.Errorf("❌ BUG CONFIRMED: leaderboard reputation (%d) doesn't match agent stats (%d)",
+			entry.Reputation, stats.Reputation)
+		t.Errorf("Difference: %d points missing from leaderboard", stats.Reputation-entry.Reputation)
+		t.Errorf("This test will PASS after fixing leaderboard.go to use the full reputation formula")
+	} else {
+		t.Logf("✅ Reputation consistent: %d points", stats.Reputation)
+	}
+}
+
+// TestLeaderboard_CountsContributedProblems verifies problems are counted even if not solved.
+func TestLeaderboard_CountsContributedProblems(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	agentRepo := NewAgentRepository(pool)
+	postRepo := NewPostRepository(pool)
+	leaderboardRepo := NewLeaderboardRepository(pool)
+
+	suffix := time.Now().Format("150405.000")
+	agent := &models.Agent{
+		ID:          "test_contributed_" + suffix,
+		DisplayName: "Test Contributed",
+		AvatarURL:   "https://example.com/avatar.jpg",
+		APIKeyHash:  mustHash(t, "test-key"),
+		Status:      "active",
+		Reputation:  0, // No bonus
+	}
+	if err := agentRepo.Create(ctx, agent); err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id = $1", agent.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", agent.ID)
+	}()
+
+	// Create 2 contributed problems (NOT solved)
+	for i := 0; i < 2; i++ {
+		_, err := postRepo.Create(ctx, &models.Post{
+			Type:         models.PostTypeProblem,
+			Title:        "Contributed Problem " + string(rune(i)),
+			Description:  "Test problem",
+			PostedByType: models.AuthorTypeAgent,
+			PostedByID:   agent.ID,
+			Status:       models.PostStatusOpen, // NOT solved
+			Tags:         []string{"test"},
+		})
+		if err != nil {
+			t.Fatalf("failed to create problem: %v", err)
+		}
+	}
+
+	// Expected: 2 × 25 = 50 reputation
+
+	stats, err := agentRepo.GetAgentStats(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to get agent stats: %v", err)
+	}
+
+	leaderboard, _, err := leaderboardRepo.GetLeaderboard(ctx, models.LeaderboardOptions{
+		Type:      "agents",
+		Timeframe: "all_time",
+		Limit:     100,
+		Offset:    0,
+	})
+	if err != nil {
+		t.Fatalf("failed to get leaderboard: %v", err)
+	}
+
+	var entry *models.LeaderboardEntry
+	for i := range leaderboard {
+		if leaderboard[i].ID == agent.ID {
+			entry = &leaderboard[i]
+			break
+		}
+	}
+
+	if entry == nil {
+		t.Fatal("agent not found in leaderboard")
+	}
+
+	expectedMin := 50 // 2 problems × 25
+	if entry.Reputation < expectedMin {
+		t.Errorf("expected at least %d pts for contributions, got %d (agent stats: %d)",
+			expectedMin, entry.Reputation, stats.Reputation)
+	}
+
+	if entry.Reputation != stats.Reputation {
+		t.Errorf("leaderboard (%d) != agent stats (%d)", entry.Reputation, stats.Reputation)
+	}
+}
+
+// TestLeaderboard_CountsIdeasPosted verifies ideas are counted in reputation.
+func TestLeaderboard_CountsIdeasPosted(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	agentRepo := NewAgentRepository(pool)
+	postRepo := NewPostRepository(pool)
+	leaderboardRepo := NewLeaderboardRepository(pool)
+
+	suffix := time.Now().Format("150405.000")
+	agent := &models.Agent{
+		ID:          "test_ideas_" + suffix,
+		DisplayName: "Test Ideas",
+		AvatarURL:   "https://example.com/avatar.jpg",
+		APIKeyHash:  mustHash(t, "test-key"),
+		Status:      "active",
+		Reputation:  0,
+	}
+	if err := agentRepo.Create(ctx, agent); err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id = $1", agent.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", agent.ID)
+	}()
+
+	// Create 3 ideas
+	for i := 0; i < 3; i++ {
+		_, err := postRepo.Create(ctx, &models.Post{
+			Type:         models.PostTypeIdea,
+			Title:        "Idea " + string(rune(i)),
+			Description:  "Test idea",
+			PostedByType: models.AuthorTypeAgent,
+			PostedByID:   agent.ID,
+			Tags:         []string{"test"},
+		})
+		if err != nil {
+			t.Fatalf("failed to create idea: %v", err)
+		}
+	}
+
+	// Expected: 3 × 15 = 45 reputation
+
+	stats, err := agentRepo.GetAgentStats(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to get agent stats: %v", err)
+	}
+
+	leaderboard, _, err := leaderboardRepo.GetLeaderboard(ctx, models.LeaderboardOptions{
+		Type:      "agents",
+		Timeframe: "all_time",
+		Limit:     100,
+		Offset:    0,
+	})
+	if err != nil {
+		t.Fatalf("failed to get leaderboard: %v", err)
+	}
+
+	var entry *models.LeaderboardEntry
+	for i := range leaderboard {
+		if leaderboard[i].ID == agent.ID {
+			entry = &leaderboard[i]
+			break
+		}
+	}
+
+	if entry == nil {
+		t.Fatal("agent not found in leaderboard")
+	}
+
+	expectedMin := 45 // 3 ideas × 15
+	if entry.Reputation < expectedMin {
+		t.Errorf("expected at least %d pts for ideas, got %d (agent stats: %d)",
+			expectedMin, entry.Reputation, stats.Reputation)
+	}
+
+	if entry.Reputation != stats.Reputation {
+		t.Errorf("leaderboard (%d) != agent stats (%d)", entry.Reputation, stats.Reputation)
+	}
+}
+
+// TestLeaderboard_CountsResponses verifies responses are counted in reputation.
+func TestLeaderboard_CountsResponses(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	agentRepo := NewAgentRepository(pool)
+	postRepo := NewPostRepository(pool)
+	leaderboardRepo := NewLeaderboardRepository(pool)
+
+	suffix := time.Now().Format("150405.000")
+	agent := &models.Agent{
+		ID:          "test_responses_" + suffix,
+		DisplayName: "Test Responses",
+		AvatarURL:   "https://example.com/avatar.jpg",
+		APIKeyHash:  mustHash(t, "test-key"),
+		Status:      "active",
+		Reputation:  0,
+	}
+	if err := agentRepo.Create(ctx, agent); err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM responses WHERE author_id = $1", agent.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id IN ($1, 'other_agent_resptest')", agent.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", agent.ID)
+	}()
+
+	// Create a problem to respond to
+	problem, err := postRepo.Create(ctx, &models.Post{
+		Type:         models.PostTypeProblem,
+		Title:        "Problem for responses",
+		Description:  "Test",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "other_agent_resptest",
+		Status:       models.PostStatusOpen,
+		Tags:         []string{"test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create problem: %v", err)
+	}
+
+	// Create 10 responses
+	for i := 0; i < 10; i++ {
+		_, err = pool.Exec(ctx, `
+			INSERT INTO responses (id, post_id, content, author_type, author_id, created_at)
+			VALUES (gen_random_uuid(), $1, $2, 'agent', $3, NOW())
+		`, problem.ID, "Response "+string(rune(i)), agent.ID)
+		if err != nil {
+			t.Fatalf("failed to create response: %v", err)
+		}
+	}
+
+	// Expected: 10 × 5 = 50 reputation
+
+	stats, err := agentRepo.GetAgentStats(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to get agent stats: %v", err)
+	}
+
+	leaderboard, _, err := leaderboardRepo.GetLeaderboard(ctx, models.LeaderboardOptions{
+		Type:      "agents",
+		Timeframe: "all_time",
+		Limit:     100,
+		Offset:    0,
+	})
+	if err != nil {
+		t.Fatalf("failed to get leaderboard: %v", err)
+	}
+
+	var entry *models.LeaderboardEntry
+	for i := range leaderboard {
+		if leaderboard[i].ID == agent.ID {
+			entry = &leaderboard[i]
+			break
+		}
+	}
+
+	if entry == nil {
+		t.Fatal("agent not found in leaderboard")
+	}
+
+	expectedMin := 50 // 10 responses × 5
+	if entry.Reputation < expectedMin {
+		t.Errorf("expected at least %d pts for responses, got %d (agent stats: %d)",
+			expectedMin, entry.Reputation, stats.Reputation)
+	}
+
+	if entry.Reputation != stats.Reputation {
+		t.Errorf("leaderboard (%d) != agent stats (%d)", entry.Reputation, stats.Reputation)
+	}
+}
+
+// TestLeaderboard_IncludesBonusPoints verifies agents.reputation column is included.
+func TestLeaderboard_IncludesBonusPoints(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	agentRepo := NewAgentRepository(pool)
+	leaderboardRepo := NewLeaderboardRepository(pool)
+
+	suffix := time.Now().Format("150405.000")
+	agent := &models.Agent{
+		ID:          "test_bonus_" + suffix,
+		DisplayName: "Test Bonus",
+		AvatarURL:   "https://example.com/avatar.jpg",
+		APIKeyHash:  mustHash(t, "test-key"),
+		Status:      "active",
+		Reputation:  50, // 50 bonus points, no other activity
+	}
+	if err := agentRepo.Create(ctx, agent); err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", agent.ID)
+	}()
+
+	// Expected: 50 reputation minimum (just bonus)
+
+	stats, err := agentRepo.GetAgentStats(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to get agent stats: %v", err)
+	}
+
+	leaderboard, _, err := leaderboardRepo.GetLeaderboard(ctx, models.LeaderboardOptions{
+		Type:      "agents",
+		Timeframe: "all_time",
+		Limit:     100,
+		Offset:    0,
+	})
+	if err != nil {
+		t.Fatalf("failed to get leaderboard: %v", err)
+	}
+
+	var entry *models.LeaderboardEntry
+	for i := range leaderboard {
+		if leaderboard[i].ID == agent.ID {
+			entry = &leaderboard[i]
+			break
+		}
+	}
+
+	if entry == nil {
+		t.Fatal("agent not found in leaderboard")
+	}
+
+	if entry.Reputation < 50 {
+		t.Errorf("expected at least 50 pts from bonus, got %d (agent stats: %d)",
+			entry.Reputation, stats.Reputation)
+	}
+
+	if entry.Reputation != stats.Reputation {
+		t.Errorf("leaderboard (%d) != agent stats (%d)", entry.Reputation, stats.Reputation)
+	}
+}
+
+// TestLeaderboard_CountsAllAnswers verifies all answers are counted (not just accepted).
+func TestLeaderboard_CountsAllAnswers(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	agentRepo := NewAgentRepository(pool)
+	postRepo := NewPostRepository(pool)
+	leaderboardRepo := NewLeaderboardRepository(pool)
+
+	suffix := time.Now().Format("150405.000")
+	agent := &models.Agent{
+		ID:          "test_all_answers_" + suffix,
+		DisplayName: "Test All Answers",
+		AvatarURL:   "https://example.com/avatar.jpg",
+		APIKeyHash:  mustHash(t, "test-key"),
+		Status:      "active",
+		Reputation:  0,
+	}
+	if err := agentRepo.Create(ctx, agent); err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE author_id = $1", agent.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id IN ($1, 'other_agent_anstest')", agent.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", agent.ID)
+	}()
+
+	// Create a question to answer
+	question, err := postRepo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Question for answers",
+		Description:  "Test question",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "other_agent_anstest",
+		Tags:         []string{"test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create question: %v", err)
+	}
+
+	// Create 5 answers (NONE accepted)
+	for i := 0; i < 5; i++ {
+		_, err = pool.Exec(ctx, `
+			INSERT INTO answers (id, post_id, content, author_type, author_id, is_accepted, created_at)
+			VALUES (gen_random_uuid(), $1, $2, 'agent', $3, false, NOW())
+		`, question.ID, "Answer "+string(rune(i)), agent.ID)
+		if err != nil {
+			t.Fatalf("failed to create answer: %v", err)
+		}
+	}
+
+	// Expected: 5 × 10 = 50 reputation (even though none accepted)
+
+	stats, err := agentRepo.GetAgentStats(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("failed to get agent stats: %v", err)
+	}
+
+	leaderboard, _, err := leaderboardRepo.GetLeaderboard(ctx, models.LeaderboardOptions{
+		Type:      "agents",
+		Timeframe: "all_time",
+		Limit:     100,
+		Offset:    0,
+	})
+	if err != nil {
+		t.Fatalf("failed to get leaderboard: %v", err)
+	}
+
+	var entry *models.LeaderboardEntry
+	for i := range leaderboard {
+		if leaderboard[i].ID == agent.ID {
+			entry = &leaderboard[i]
+			break
+		}
+	}
+
+	if entry == nil {
+		t.Fatal("agent not found in leaderboard")
+	}
+
+	expectedMin := 50 // 5 answers × 10
+	if entry.Reputation < expectedMin {
+		t.Errorf("expected at least %d pts for all answers, got %d (agent stats: %d)",
+			expectedMin, entry.Reputation, stats.Reputation)
+	}
+
+	if entry.Reputation != stats.Reputation {
+		t.Errorf("leaderboard (%d) != agent stats (%d)", entry.Reputation, stats.Reputation)
+	}
+}

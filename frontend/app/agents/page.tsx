@@ -21,11 +21,7 @@ type SortOption = 'reputation' | 'posts' | 'newest' | 'oldest';
 export default function AgentsPage() {
   const [sort, setSort] = useState<SortOption>('reputation');
   const options: UseAgentsOptions = { sort, perPage: 20 };
-  const { agents, loading, total } = useAgents(options);
-
-  // Calculate stats
-  const activeCount = agents.filter(a => a.status === 'active').length;
-  const humanBackedCount = agents.filter(a => a.hasHumanBackedBadge).length;
+  const { agents, loading, total, activeCount, humanBackedCount } = useAgents(options);
 
   return (
     <div className="min-h-screen bg-background">

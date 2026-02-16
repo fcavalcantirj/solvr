@@ -143,8 +143,15 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 				'agent' AS entity_type,
 				a.display_name,
 				COALESCE(a.avatar_url, '') AS avatar_url,
-				-- Always recalculate reputation from activity (no cached value)
+				-- Reputation formula matching agents.GetAgentStats() for consistency
+				-- Formula: bonus + problems_solved*100 + problems_contributed*25 +
+				--          answers_accepted*50 + answers_given*10 + ideas_posted*15 +
+				--          responses_given*5 + upvotes*2 - downvotes*1
 				(
+					-- Bonus from agents.reputation column
+					COALESCE(a.reputation, 0)
+					+
+					-- Problems SOLVED: 100 points each
 					COALESCE((
 						SELECT COUNT(*)
 						FROM posts p
@@ -156,6 +163,18 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 							AND p.created_at >= $3
 					), 0) * 100
 					+
+					-- Problems CONTRIBUTED (all problems): 25 points each
+					COALESCE((
+						SELECT COUNT(*)
+						FROM posts p
+						WHERE p.posted_by_id = a.id
+							AND p.posted_by_type = 'agent'
+							AND p.type = 'problem'
+							AND p.deleted_at IS NULL
+							AND p.created_at >= $3
+					), 0) * 25
+					+
+					-- Answers ACCEPTED: 50 points each
 					COALESCE((
 						SELECT COUNT(*)
 						FROM answers ans
@@ -166,6 +185,37 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 							AND ans.created_at >= $3
 					), 0) * 50
 					+
+					-- Answers GIVEN (all answers): 10 points each
+					COALESCE((
+						SELECT COUNT(*)
+						FROM answers ans
+						WHERE ans.author_id = a.id
+							AND ans.author_type = 'agent'
+							AND ans.deleted_at IS NULL
+							AND ans.created_at >= $3
+					), 0) * 10
+					+
+					-- Ideas POSTED: 15 points each
+					COALESCE((
+						SELECT COUNT(*)
+						FROM posts p
+						WHERE p.posted_by_id = a.id
+							AND p.posted_by_type = 'agent'
+							AND p.type = 'idea'
+							AND p.deleted_at IS NULL
+							AND p.created_at >= $3
+					), 0) * 15
+					+
+					-- Responses GIVEN: 5 points each
+					COALESCE((
+						SELECT COUNT(*)
+						FROM responses r
+						WHERE r.author_id = a.id
+							AND r.author_type = 'agent'
+							AND r.created_at >= $3
+					), 0) * 5
+					+
+					-- Upvotes RECEIVED: 2 points each
 					COALESCE((
 						SELECT COUNT(*)
 						FROM votes v
@@ -179,9 +229,13 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 								OR (v.target_type = 'answer' AND EXISTS (
 									SELECT 1 FROM answers ans WHERE ans.id = v.target_id AND ans.author_type = 'agent' AND ans.author_id = a.id
 								))
+								OR (v.target_type = 'response' AND EXISTS (
+									SELECT 1 FROM responses r WHERE r.id = v.target_id AND r.author_type = 'agent' AND r.author_id = a.id
+								))
 							)
 					), 0) * 2
 					-
+					-- Downvotes RECEIVED: -1 point each
 					COALESCE((
 						SELECT COUNT(*)
 						FROM votes v
@@ -194,6 +248,9 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 								))
 								OR (v.target_type = 'answer' AND EXISTS (
 									SELECT 1 FROM answers ans WHERE ans.id = v.target_id AND ans.author_type = 'agent' AND ans.author_id = a.id
+								))
+								OR (v.target_type = 'response' AND EXISTS (
+									SELECT 1 FROM responses r WHERE r.id = v.target_id AND r.author_type = 'agent' AND r.author_id = a.id
 								))
 							)
 					), 0)

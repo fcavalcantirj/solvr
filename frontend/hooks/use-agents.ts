@@ -46,6 +46,8 @@ export interface UseAgentsResult {
   total: number;
   hasMore: boolean;
   page: number;
+  activeCount: number;
+  humanBackedCount: number;
   refetch: () => void;
   loadMore: () => void;
 }
@@ -57,6 +59,8 @@ export function useAgents(options: UseAgentsOptions = {}): UseAgentsResult {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(options.page || 1);
+  const [activeCount, setActiveCount] = useState(0);
+  const [humanBackedCount, setHumanBackedCount] = useState(0);
 
   // Stabilize options to prevent infinite re-renders
   const optionsKey = JSON.stringify(options);
@@ -86,6 +90,8 @@ export function useAgents(options: UseAgentsOptions = {}): UseAgentsResult {
       setTotal(response.meta.total);
       setHasMore(response.meta.has_more);
       setPage(pageNum);
+      setActiveCount(response.meta.active_count);
+      setHumanBackedCount(response.meta.human_backed_count);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch agents');
     } finally {
@@ -114,6 +120,8 @@ export function useAgents(options: UseAgentsOptions = {}): UseAgentsResult {
     total,
     hasMore,
     page,
+    activeCount,
+    humanBackedCount,
     refetch,
     loadMore,
   };

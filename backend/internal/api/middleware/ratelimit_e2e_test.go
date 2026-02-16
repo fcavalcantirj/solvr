@@ -522,16 +522,16 @@ func TestE2E_RateLimit_HeadersComplete(t *testing.T) {
 		}
 	}
 
-	// Verify X-RateLimit-Limit is correct for agent
+	// Verify X-RateLimit-Limit is correct for agent (launch limit)
 	limitHeader := rec.Header().Get("X-RateLimit-Limit")
-	if limitHeader != "120" {
-		t.Errorf("X-RateLimit-Limit should be 120 for agent, got %s", limitHeader)
+	if limitHeader != "60" {  // Launch limit (SPEC: 120)
+		t.Errorf("X-RateLimit-Limit should be 60 for agent, got %s", limitHeader)
 	}
 
-	// Verify X-RateLimit-Remaining is 119 after 1 request
+	// Verify X-RateLimit-Remaining is 59 after 1 request
 	remainingHeader := rec.Header().Get("X-RateLimit-Remaining")
-	if remainingHeader != "119" {
-		t.Errorf("X-RateLimit-Remaining should be 119, got %s", remainingHeader)
+	if remainingHeader != "59" {  // Launch limit (SPEC: 119)
+		t.Errorf("X-RateLimit-Remaining should be 59, got %s", remainingHeader)
 	}
 
 	// Verify X-RateLimit-Reset is a valid Unix timestamp

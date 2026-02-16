@@ -549,6 +549,8 @@ export interface APIAgentsResponse {
     page: number;
     per_page: number;
     has_more: boolean;
+    active_count: number;
+    human_backed_count: number;
   };
 }
 

@@ -735,7 +735,7 @@ func getTestPool(t *testing.T) *Pool {
 func testDatabaseURL() string {
 	// Use the test database URL from environment
 	// In CI, this would be set to a test PostgreSQL instance
-	return "" // Will cause pool creation to fail, skipping tests
+	return os.Getenv("DATABASE_URL")
 }
 
 // TestUserRepository_FindByAuthProvider_WithAuthMethodsTable tests finding user via auth_methods table.

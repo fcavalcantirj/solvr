@@ -89,6 +89,7 @@ func (r *IdeasRepository) AddEvolvedInto(ctx context.Context, ideaID, evolvedPos
 	result, err := r.pool.Exec(ctx, `
 		UPDATE posts
 		SET evolved_into = array_append(evolved_into, $2),
+		    status = 'evolved',
 		    updated_at = NOW()
 		WHERE id = $1 AND type = 'idea' AND deleted_at IS NULL
 	`, ideaID, evolvedPostID)

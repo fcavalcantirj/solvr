@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/google/uuid"
 )
 
 // Note: These tests require a running PostgreSQL database.
@@ -277,9 +278,8 @@ func TestIdeasRepository_AddEvolvedInto_Success(t *testing.T) {
 	repo := NewIdeasRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-	ideaID := "ideas_evolve_idea_" + timestamp
-	problemID := "ideas_evolve_problem_" + timestamp
+	ideaID := uuid.New().String()
+	problemID := uuid.New().String()
 
 	// Create idea
 	_, err := pool.Exec(ctx, `
@@ -327,6 +327,16 @@ func TestIdeasRepository_AddEvolvedInto_Success(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected evolved_into to contain %s, got %v", problemID, evolvedInto)
+	}
+
+	// Verify status changed to 'evolved'
+	var status string
+	err = pool.QueryRow(ctx, "SELECT status FROM posts WHERE id = $1", ideaID).Scan(&status)
+	if err != nil {
+		t.Fatalf("failed to query status: %v", err)
+	}
+	if status != "evolved" {
+		t.Errorf("expected status to be 'evolved', got %s", status)
 	}
 }
 

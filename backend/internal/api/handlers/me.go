@@ -22,19 +22,26 @@ type MeAgentStatsInterface interface {
 	GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error)
 }
 
+// AuthMethodRepositoryInterface defines the interface for auth method repository operations.
+type AuthMethodRepositoryInterface interface {
+	FindByUserID(ctx context.Context, userID string) ([]*models.AuthMethod, error)
+}
+
 // MeHandler handles the GET /v1/auth/me endpoint.
 type MeHandler struct {
 	config         *OAuthConfig
 	userRepo       MeUserRepositoryInterface
 	agentStatsRepo MeAgentStatsInterface
+	authMethodRepo AuthMethodRepositoryInterface
 }
 
 // NewMeHandler creates a new MeHandler instance.
-func NewMeHandler(config *OAuthConfig, userRepo MeUserRepositoryInterface, agentStatsRepo MeAgentStatsInterface) *MeHandler {
+func NewMeHandler(config *OAuthConfig, userRepo MeUserRepositoryInterface, agentStatsRepo MeAgentStatsInterface, authMethodRepo AuthMethodRepositoryInterface) *MeHandler {
 	return &MeHandler{
 		config:         config,
 		userRepo:       userRepo,
 		agentStatsRepo: agentStatsRepo,
+		authMethodRepo: authMethodRepo,
 	}
 }
 
@@ -152,6 +159,54 @@ func (h *MeHandler) handleUserMe(w http.ResponseWriter, ctx context.Context, cla
 		Bio:         user.Bio,
 		Role:        user.Role,
 		Stats:       *stats,
+	}
+
+	writeMeJSON(w, http.StatusOK, response)
+}
+
+// AuthMethodResponse represents a single auth method in the response.
+type AuthMethodResponse struct {
+	Provider   string `json:"provider"`      // "google", "github", "email"
+	LinkedAt   string `json:"linked_at"`     // ISO8601 timestamp
+	LastUsedAt string `json:"last_used_at"`  // ISO8601 timestamp
+}
+
+// AuthMethodsListResponse is the response for GET /v1/me/auth-methods
+type AuthMethodsListResponse struct {
+	AuthMethods []AuthMethodResponse `json:"auth_methods"`
+}
+
+// GetMyAuthMethods handles GET /v1/me/auth-methods
+// Returns list of authentication methods linked to the current user's account.
+// Requires JWT authentication (users only, not agents).
+func (h *MeHandler) GetMyAuthMethods(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Require user authentication (JWT only)
+	claims := auth.ClaimsFromContext(ctx)
+	if claims == nil {
+		writeMeUnauthorized(w, "UNAUTHORIZED", "Authentication required")
+		return
+	}
+
+	// Fetch auth methods from repository
+	methods, err := h.authMethodRepo.FindByUserID(ctx, claims.UserID)
+	if err != nil {
+		writeMeInternalError(w, "Failed to fetch authentication methods")
+		return
+	}
+
+	// Transform to response format (exclude sensitive fields)
+	response := AuthMethodsListResponse{
+		AuthMethods: make([]AuthMethodResponse, len(methods)),
+	}
+
+	for i, method := range methods {
+		response.AuthMethods[i] = AuthMethodResponse{
+			Provider:   method.AuthProvider,
+			LinkedAt:   method.CreatedAt.Format("2006-01-02T15:04:05.999999Z07:00"),
+			LastUsedAt: method.LastUsedAt.Format("2006-01-02T15:04:05.999999Z07:00"),
+		}
 	}
 
 	writeMeJSON(w, http.StatusOK, response)

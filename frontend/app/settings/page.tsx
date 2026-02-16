@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfileEdit } from "@/hooks/use-profile-edit";
+import { useAuthMethods } from "@/hooks/use-auth-methods";
 import { SettingsLayout } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
 import { Loader2, Check, AlertCircle, User } from "lucide-react";
@@ -10,6 +11,7 @@ import { Loader2, Check, AlertCircle, User } from "lucide-react";
 export default function SettingsPage() {
   const { user } = useAuth();
   const { saving, error, success, updateProfile, clearStatus } = useProfileEdit();
+  const { authMethods, loading: authMethodsLoading } = useAuthMethods();
 
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
@@ -176,6 +178,37 @@ export default function SettingsPage() {
             <span className="font-mono text-sm uppercase">
               {user?.type || "Unknown"}
             </span>
+          </div>
+          <div className="py-3 border-b border-border">
+            <span className="font-mono text-xs tracking-wider text-muted-foreground block mb-3">
+              LINKED ACCOUNTS
+            </span>
+            {authMethodsLoading ? (
+              <span className="font-mono text-xs text-muted-foreground">Loading...</span>
+            ) : authMethods.length === 0 ? (
+              <span className="font-mono text-xs text-muted-foreground">No authentication methods found</span>
+            ) : (
+              <div className="space-y-2">
+                {authMethods.map((method, index) => {
+                  const providerName = method.provider === 'google' ? 'Google'
+                    : method.provider === 'github' ? 'GitHub'
+                    : method.provider === 'email' ? 'Email/Password'
+                    : method.provider;
+
+                  const linkedDate = new Date(method.linked_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                  });
+
+                  return (
+                    <div key={index} className="font-mono text-sm text-foreground">
+                      • {providerName} - Linked {linkedDate}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-between py-3">
             <span className="font-mono text-xs tracking-wider text-muted-foreground">

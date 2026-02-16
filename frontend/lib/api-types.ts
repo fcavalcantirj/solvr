@@ -857,3 +857,16 @@ export interface FetchLeaderboardParams {
   limit?: number;
   offset?: number;
 }
+
+// Auth Methods
+export interface APIAuthMethodResponse {
+  provider: string;         // "google" | "github" | "email"
+  linked_at: string;        // ISO timestamp
+  last_used_at: string;     // ISO timestamp
+}
+
+export interface APIAuthMethodsListResponse {
+  data: {
+    auth_methods: APIAuthMethodResponse[];
+  };
+}

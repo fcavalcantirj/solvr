@@ -266,6 +266,10 @@ class SolvrAPI {
     return this.fetch<APIMeResponse>('/v1/me');
   }
 
+  async getMyAuthMethods(): Promise<APIAuthMethodsListResponse> {
+    return this.fetch<APIAuthMethodsListResponse>('/v1/me/auth-methods');
+  }
+
   // Email/password authentication
   async login(email: string, password: string): Promise<{
     access_token: string;

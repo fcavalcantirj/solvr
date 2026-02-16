@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,10 +77,32 @@ func (m *mockUserRepoForAuth) Create(ctx context.Context, user *models.User) (*m
 	return user, nil
 }
 
+func (m *mockUserRepoForAuth) Delete(ctx context.Context, id string) error {
+	// Find and delete user by ID from both maps
+	var emailKey string
+	var usernameKey string
+	for email, user := range m.users {
+		if user.ID == id {
+			emailKey = email
+			usernameKey = user.Username
+			break
+		}
+	}
+
+	if emailKey == "" {
+		return db.ErrNotFound
+	}
+
+	delete(m.users, emailKey)
+	delete(m.usersByUsername, usernameKey)
+	return nil
+}
+
 // mockAuthMethodRepoStub is a minimal mock for AuthMethodRepository
 // that tracks auth methods in memory
 type mockAuthMethodRepoStub struct {
-	methods map[string][]*models.AuthMethod // keyed by user_id
+	methods   map[string][]*models.AuthMethod // keyed by user_id
+	createErr error
 }
 
 func newMockAuthMethodRepoStub() *mockAuthMethodRepoStub {
@@ -89,6 +112,11 @@ func newMockAuthMethodRepoStub() *mockAuthMethodRepoStub {
 }
 
 func (m *mockAuthMethodRepoStub) Create(ctx context.Context, method *models.AuthMethod) (*models.AuthMethod, error) {
+	// Return error if set (for testing failure scenarios)
+	if m.createErr != nil {
+		return nil, m.createErr
+	}
+
 	// Generate ID if not set
 	if method.ID == "" {
 		method.ID = "mock-auth-method-id"
@@ -800,5 +828,69 @@ func TestLogin_OAuthOnlyUser(t *testing.T) {
 	message := errorObj["message"].(string)
 	if !strings.Contains(strings.ToLower(message), "google") && !strings.Contains(strings.ToLower(message), "github") {
 		t.Errorf("error message should mention OAuth providers: %s", message)
+	}
+}
+
+// TestRegister_AuthMethodFailure_RollsBackUser tests that if auth_method creation fails,
+// the user is deleted (compensating transaction).
+func TestRegister_AuthMethodFailure_RollsBackUser(t *testing.T) {
+	mockRepo := newMockUserRepoForAuth()
+	config := &OAuthConfig{
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
+		RefreshExpiry: "168h",
+	}
+
+	// Mock auth method repo that always fails
+	mockAuthMethodRepo := &mockAuthMethodRepoStub{
+		methods:   make(map[string][]*models.AuthMethod),
+		createErr: errors.New("database constraint violation"),
+	}
+
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+
+	reqBody := RegisterRequest{
+		Email:       "rollback@example.com",
+		Password:    "securepass123",
+		Username:    "rollbackuser",
+		DisplayName: "Rollback User",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.Register(w, req)
+
+	// Verify registration failed
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	// Verify error response indicates registration failed
+	var errResp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	errorObj, ok := errResp["error"].(map[string]interface{})
+	if !ok {
+		t.Fatal("error object not found in response")
+	}
+	code := errorObj["code"].(string)
+	if code != "REGISTRATION_FAILED" {
+		t.Errorf("expected error code REGISTRATION_FAILED, got %s", code)
+	}
+
+	// CRITICAL VERIFICATION: User should have been deleted (rollback)
+	_, exists := mockRepo.users["rollback@example.com"]
+	if exists {
+		t.Error("User should have been rolled back after auth_method creation failed!")
+	}
+
+	// Verify user is not in username map either
+	_, exists = mockRepo.usersByUsername["rollbackuser"]
+	if exists {
+		t.Error("User should have been rolled back from username map after auth_method creation failed!")
 	}
 }

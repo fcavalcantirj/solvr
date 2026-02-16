@@ -30,6 +30,7 @@ type UserRepositoryForAuth interface {
 	FindByEmail(ctx context.Context, email string) (*models.User, error)
 	FindByUsername(ctx context.Context, username string) (*models.User, error)
 	Create(ctx context.Context, user *models.User) (*models.User, error)
+	Delete(ctx context.Context, id string) error
 }
 
 // AuthMethodRepository defines required DB methods for auth method operations.
@@ -186,7 +187,7 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 6.5: Create auth_method entry for email/password
+	// Step 6.5: Create auth_method entry for email/password (atomic with user creation)
 	authMethod := &models.AuthMethod{
 		UserID:       createdUser.ID,
 		AuthProvider: models.AuthProviderEmail,
@@ -194,9 +195,22 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = h.authMethodRepo.Create(ctx, authMethod)
 	if err != nil {
-		// Log error but don't fail registration - user is already created
-		// In a production system with transactions, this would rollback
-		slog.Warn("auth method creation failed", "error", err, "op", "Register", "user_id", createdUser.ID)
+		// CRITICAL: User created but auth_method failed - delete user to rollback
+		slog.Error("auth_method creation failed, rolling back user creation",
+			"error", err,
+			"op", "Register",
+			"user_id", createdUser.ID)
+
+		// Attempt to delete the stranded user
+		if deleteErr := h.userRepo.Delete(ctx, createdUser.ID); deleteErr != nil {
+			slog.Error("failed to rollback user creation",
+				"error", deleteErr,
+				"user_id", createdUser.ID)
+		}
+
+		writeErrorResponse(w, http.StatusInternalServerError, "REGISTRATION_FAILED",
+			"Failed to complete registration. Please try again.")
+		return
 	}
 
 	// Step 7: Generate JWT

@@ -13,7 +13,8 @@ import (
 // TestOAuthUserServiceAdapter_FindOrCreateUser_NewUser tests adapter with new user.
 func TestOAuthUserServiceAdapter_FindOrCreateUser_NewUser(t *testing.T) {
 	repo := NewMockUserRepository()
-	service := NewOAuthUserService(repo)
+	authMethodRepo := NewMockAuthMethodRepository()
+	service := NewOAuthUserService(repo, authMethodRepo)
 	adapter := NewOAuthUserServiceAdapter(service)
 
 	info := &handlers.OAuthUserInfoData{
@@ -75,7 +76,8 @@ func TestOAuthUserServiceAdapter_FindOrCreateUser_ExistingUser(t *testing.T) {
 	repo.usersByProvider["google:google-existing-123"] = existingUser
 	repo.usersByEmail[existingUser.Email] = existingUser
 
-	service := NewOAuthUserService(repo)
+	authMethodRepo := NewMockAuthMethodRepository()
+	service := NewOAuthUserService(repo, authMethodRepo)
 	adapter := NewOAuthUserServiceAdapter(service)
 
 	info := &handlers.OAuthUserInfoData{
@@ -120,7 +122,8 @@ func TestOAuthUserServiceAdapter_FindOrCreateUser_LinkByEmail(t *testing.T) {
 	repo.usersByProvider["github:github-123"] = existingUser
 	repo.usersByEmail[existingUser.Email] = existingUser
 
-	service := NewOAuthUserService(repo)
+	authMethodRepo := NewMockAuthMethodRepository()
+	service := NewOAuthUserService(repo, authMethodRepo)
 	adapter := NewOAuthUserServiceAdapter(service)
 
 	// New Google login with same email

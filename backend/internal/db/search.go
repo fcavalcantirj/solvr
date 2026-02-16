@@ -140,8 +140,9 @@ func buildTsQuery(query string) string {
 		}
 	}
 
-	// Join with :* for prefix matching and & for AND
-	// This gives "word1:* & word2:*" which matches prefixes
+	// Join with :* for prefix matching and | for OR
+	// This gives "word1:* | word2:*" which matches any of the words
+	// Using OR instead of AND makes search more forgiving and finds more results
 	if len(escaped) == 0 {
 		return ""
 	}
@@ -150,7 +151,7 @@ func buildTsQuery(query string) string {
 		escaped[i] = escaped[i] + ":*"
 	}
 
-	return strings.Join(escaped, " & ")
+	return strings.Join(escaped, " | ")
 }
 
 // buildSearchFilters builds the WHERE clause filters based on search options.

@@ -218,7 +218,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	if pool != nil {
 		userRepoForOAuth := db.NewUserRepository(pool)
 		authMethodRepoForOAuth := db.NewAuthMethodRepository(pool)
-		oauthUserService := services.NewOAuthUserService(userRepoForOAuth)
+		oauthUserService := services.NewOAuthUserService(userRepoForOAuth, authMethodRepoForOAuth)
 		oauthUserAdapter := services.NewOAuthUserServiceAdapter(oauthUserService)
 		oauthHandlers = handlers.NewOAuthHandlersWithUserService(oauthConfig, pool, nil, oauthUserAdapter)
 		authUserRepo = db.NewUserRepository(pool)

@@ -164,5 +164,169 @@
       "Verify: link appears in correct position on both desktop and mobile"
     ],
     "passes": true
+  },
+  {
+    "category": "backend",
+    "description": "Add TDD tests for search accuracy - exact title matches and multi-word queries",
+    "steps": [
+      "Open backend/internal/api/handlers/search_integration_test.go",
+      "Add TestSearch_ExactTitleMatch test function",
+      "Create 4 test posts with titles: 'Race Conditions in Go', 'How to Handle Race Conditions', 'Understanding Race Conditions', 'Thread Safety and Race Conditions'",
+      "Search for 'race condition' (without s) - should return all 4 posts using prefix matching",
+      "Search for 'race conditions' (with s) - should return all 4 posts",
+      "Search for exact title 'Race Conditions in Go' - should return that post as #1 result with highest rank",
+      "Add TestSearch_MultiWordQuery test function",
+      "Test AND vs OR logic: 'race condition' should use OR not AND",
+      "Should find posts with either 'race' OR 'condition', not require both",
+      "Add TestSearch_PartialWordMatch test function",
+      "Test 'rac' finds 'race', 'cond' finds 'condition' (prefix matching)",
+      "Verify: go test ./internal/api/handlers -run TestSearch_ExactTitleMatch -v passes",
+      "Verify: go test ./internal/api/handlers -run TestSearch_MultiWordQuery -v passes",
+      "Verify: go test ./internal/api/handlers -run TestSearch_PartialWordMatch -v passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Fix search query logic - change AND to OR for better matching",
+    "steps": [
+      "Open backend/internal/db/search.go",
+      "Find buildTsQuery function (around line 118-154)",
+      "Current logic: word1:* & word2:* (strict AND - requires both words)",
+      "Change to: word1:* | word2:* (relaxed OR - matches either word)",
+      "Update string join from ' & ' to ' | '",
+      "Keep prefix matching format: word:* for each term",
+      "Add comment explaining OR logic improves UX - finds more results",
+      "Verify: go test ./internal/db -run TestSearch -v passes",
+      "Verify: go test ./internal/api/handlers -run TestSearch -v passes",
+      "Verify: all search integration tests pass with OR logic"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Add full-text search indexes to posts table if missing",
+    "steps": [
+      "Create backend/migrations/000034_add_fulltext_indexes.up.sql",
+      "Add: CREATE INDEX IF NOT EXISTS idx_posts_title_tsvector ON posts USING GIN (to_tsvector('english', title));",
+      "Add: CREATE INDEX IF NOT EXISTS idx_posts_description_tsvector ON posts USING GIN (to_tsvector('english', description));",
+      "Add: CREATE INDEX IF NOT EXISTS idx_posts_content_tsvector ON posts USING GIN (to_tsvector('english', title || ' ' || description));",
+      "Add comment explaining indexes accelerate full-text search queries",
+      "Create backend/migrations/000034_add_fulltext_indexes.down.sql",
+      "Add: DROP INDEX IF EXISTS idx_posts_title_tsvector;",
+      "Add: DROP INDEX IF EXISTS idx_posts_description_tsvector;",
+      "Add: DROP INDEX IF EXISTS idx_posts_content_tsvector;",
+      "Test migration: migrate -path migrations -database $DATABASE_URL up",
+      "Verify: SELECT indexname FROM pg_indexes WHERE tablename='posts' shows 3 new tsvector indexes",
+      "Verify: Search queries run faster (<50ms) with indexes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Create useDebounce hook for input debouncing",
+    "steps": [
+      "Create frontend/hooks/use-debounce.ts",
+      "Import useState and useEffect from 'react'",
+      "Export function useDebounce<T>(value: T, delay: number): T",
+      "Create state: const [debouncedValue, setDebouncedValue] = useState<T>(value);",
+      "useEffect with dependencies [value, delay]",
+      "Inside effect: const handler = setTimeout(() => setDebouncedValue(value), delay);",
+      "Return cleanup: return () => clearTimeout(handler);",
+      "Return debouncedValue",
+      "Add JSDoc comments explaining hook usage and parameters",
+      "Verify: npx tsc --noEmit passes with no type errors"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Fix problems-filters.tsx - add input-level debouncing to stop API spam",
+    "steps": [
+      "Open frontend/components/problems/problems-filters.tsx",
+      "Import: import { useState, useEffect } from 'react';",
+      "Import: import { useDebounce } from '@/hooks/use-debounce';",
+      "Add local state inside ProblemsFilters component: const [localQuery, setLocalQuery] = useState(filters.query || '');",
+      "Add: const debouncedQuery = useDebounce(localQuery, 500); // 500ms debounce",
+      "Add useEffect: when debouncedQuery changes, call onFiltersChange({ ...filters, query: debouncedQuery })",
+      "Dependencies: [debouncedQuery]",
+      "Change input onChange to: onChange={(e) => setLocalQuery(e.target.value)}",
+      "Change input value to: value={localQuery}",
+      "Now input updates local state immediately (no lag), parent updates after 500ms debounce",
+      "Verify: typing 'race condition' (14 chars) triggers only 1 onFiltersChange call after 500ms, not 14"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Fix questions-filters.tsx - add input-level debouncing",
+    "steps": [
+      "Open frontend/components/questions/questions-filters.tsx",
+      "Apply same fix as problems-filters.tsx",
+      "Import useState, useEffect from 'react'",
+      "Import useDebounce from '@/hooks/use-debounce'",
+      "Add localQuery state and debouncedQuery with 500ms delay",
+      "Add useEffect to update parent on debounced change",
+      "Update input onChange to setLocalQuery, value to localQuery",
+      "Verify: debouncing works for questions search"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Fix ideas-filters.tsx - add input-level debouncing",
+    "steps": [
+      "Open frontend/components/ideas/ideas-filters.tsx",
+      "Apply same fix as problems-filters.tsx",
+      "Import useState, useEffect from 'react'",
+      "Import useDebounce from '@/hooks/use-debounce'",
+      "Add localQuery state and debouncedQuery with 500ms delay",
+      "Add useEffect to update parent on debounced change",
+      "Update input onChange to setLocalQuery, value to localQuery",
+      "Verify: debouncing works for ideas search"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add TDD tests for search debouncing in problems-filters",
+    "steps": [
+      "Create frontend/components/problems/__tests__/problems-filters.test.tsx",
+      "Import: render, screen, fireEvent, waitFor from '@testing-library/react'",
+      "Import: vi from 'vitest'",
+      "Import: ProblemsFilters from '../problems-filters'",
+      "Test: 'debounces search input' - verify onFiltersChange called once after 500ms, not 14 times",
+      "Mock onFiltersChange: const onFiltersChange = vi.fn();",
+      "Render ProblemsFilters with empty filters",
+      "Get input: screen.getByPlaceholderText('Search problems...')",
+      "Type multiple characters quickly with fireEvent.change",
+      "Assert onFiltersChange NOT called immediately: expect(onFiltersChange).not.toHaveBeenCalled();",
+      "Wait 600ms: await waitFor(() => expect(onFiltersChange).toHaveBeenCalledTimes(1), { timeout: 600 });",
+      "Test: 'updates input immediately for good UX' - verify no input lag",
+      "Type in input, assert input.value updates immediately",
+      "Verify: npm test -- problems-filters.test.tsx passes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Add TDD tests for search results display in problems-list",
+    "steps": [
+      "Create frontend/components/problems/__tests__/problems-list.test.tsx",
+      "Import: render, screen from '@testing-library/react'",
+      "Import: vi from 'vitest'",
+      "Import: ProblemsList from '../problems-list'",
+      "Mock useSearch hook to return test data",
+      "Test: 'displays search results' - mock 2 results, verify both titles appear",
+      "Mock results: [{ id: '1', title: 'Race Conditions in Go' }, { id: '2', title: 'How to Handle Race Conditions' }]",
+      "Render ProblemsList with searchQuery='race condition'",
+      "Assert: screen.getByText('Race Conditions in Go') exists",
+      "Assert: screen.getByText('How to Handle Race Conditions') exists",
+      "Test: 'shows no results message when search returns empty'",
+      "Mock useSearch to return empty array []",
+      "Assert: screen.getByText(/no results found/i) exists",
+      "Verify: npm test -- problems-list.test.tsx passes"
+    ],
+    "passes": false
   }
 ]

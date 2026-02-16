@@ -153,6 +153,24 @@ func (r *UserRepository) Update(ctx context.Context, user *models.User) (*models
 	return r.scanUser(row)
 }
 
+// Delete permanently deletes a user from the database.
+// WARNING: This is a hard delete. Use with caution.
+// Returns ErrNotFound if user doesn't exist.
+func (r *UserRepository) Delete(ctx context.Context, id string) error {
+	query := `DELETE FROM users WHERE id = $1`
+
+	result, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
 // scanUser scans a user row into a User struct.
 func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 	user := &models.User{}

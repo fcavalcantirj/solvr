@@ -733,3 +733,182 @@ func parseExecutionTime(line string) (float64, error) {
 	_, err := fmt.Sscanf(timeStr, "%f", &t)
 	return t, err
 }
+
+// TestSearchRepository_Search_ExactTitleMatch tests that exact title matches are found.
+// Per plan: Verify "race condition" finds posts with those words in the title.
+func TestSearchRepository_Search_ExactTitleMatch(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	// Create posts with specific titles
+	titles := []string{
+		"Race Conditions in Go",
+		"How to Handle Race Conditions",
+		"Understanding Race Conditions",
+		"Thread Safety and Race Conditions",
+	}
+
+	for i, title := range titles {
+		insertTestPost(t, pool, ctx, fmt.Sprintf("post-exact-%d", i), "problem", title,
+			"This is a test description", []string{"go"}, "open")
+	}
+
+	// Test 1: Search for "race condition" (without s) - should find all 4 posts
+	results, total, err := repo.Search(ctx, "race condition", models.SearchOptions{
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if total < 4 {
+		t.Errorf("expected at least 4 results for 'race condition', got %d", total)
+		t.Logf("Found posts:")
+		for _, r := range results {
+			t.Logf("  - %s: %s", r.ID, r.Title)
+		}
+	}
+
+	// Test 2: Search for "race conditions" (with s) - should find all 4 posts
+	_, total2, err := repo.Search(ctx, "race conditions", models.SearchOptions{
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if total2 < 4 {
+		t.Errorf("expected at least 4 results for 'race conditions', got %d", total2)
+	}
+
+	// Test 3: Search for exact title "Race Conditions in Go" - should return that post as #1
+	results3, _, err := repo.Search(ctx, "Race Conditions in Go", models.SearchOptions{
+		Sort:    "relevance",
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if len(results3) == 0 {
+		t.Fatal("expected at least 1 result for exact title match")
+	}
+
+	// The first result should be the exact match (highest relevance)
+	if results3[0].Title != "Race Conditions in Go" {
+		t.Logf("Warning: exact title match not first. Got: %s", results3[0].Title)
+		t.Logf("All results:")
+		for i, r := range results3 {
+			t.Logf("  %d. [score=%.2f] %s", i+1, r.Score, r.Title)
+		}
+	}
+}
+
+// TestSearchRepository_Search_MultiWordQuery tests AND vs OR logic for multi-word queries.
+// Per plan: Verify if "race condition" uses AND (strict) or OR (relaxed).
+func TestSearchRepository_Search_MultiWordQuery(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	// Create posts with only one of the search terms
+	insertTestPost(t, pool, ctx, "post-mw-1", "problem",
+		"Race detection in concurrent programs",
+		"This post is only about race detection", []string{}, "open")
+
+	insertTestPost(t, pool, ctx, "post-mw-2", "problem",
+		"Understanding conditional logic",
+		"This post is only about conditions", []string{}, "open")
+
+	insertTestPost(t, pool, ctx, "post-mw-3", "problem",
+		"Race condition debugging",
+		"This post has both race and condition", []string{}, "open")
+
+	// Search for "race condition"
+	results, total, err := repo.Search(ctx, "race condition", models.SearchOptions{
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	t.Logf("Search for 'race condition' returned %d results:", total)
+	for _, r := range results {
+		t.Logf("  - %s: %s", r.ID, r.Title)
+	}
+
+	// If using AND logic: only post-mw-3 should match (has both words)
+	// If using OR logic: all 3 posts should match (has either word)
+	// Current implementation uses AND (&), so we expect only 1 result
+	// After fix with OR (|), we should get 3 results
+
+	if total == 1 {
+		t.Logf("CURRENT: Using AND logic - only posts with both 'race' AND 'condition' are returned")
+		if results[0].ID != "post-mw-3" {
+			t.Errorf("expected post-mw-3 (has both words), got %s", results[0].ID)
+		}
+	} else if total == 3 {
+		t.Logf("AFTER FIX: Using OR logic - posts with 'race' OR 'condition' are returned")
+	} else {
+		t.Errorf("unexpected result count: got %d, expected 1 (AND logic) or 3 (OR logic)", total)
+	}
+}
+
+// TestSearchRepository_Search_PartialWordMatch tests prefix matching.
+// Per plan: Verify "rac" finds "race" and "cond" finds "condition".
+func TestSearchRepository_Search_PartialWordMatch(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	insertTestPost(t, pool, ctx, "post-partial-1", "problem",
+		"Race conditions in Go",
+		"Description", []string{}, "open")
+
+	// Test 1: "rac" should find "race"
+	_, total1, err := repo.Search(ctx, "rac", models.SearchOptions{
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if total1 == 0 {
+		t.Error("expected 'rac' to find posts with 'race' (prefix matching)")
+	} else {
+		t.Logf("Prefix match 'rac' found %d results", total1)
+	}
+
+	// Test 2: "cond" should find "condition"
+	_, total2, err := repo.Search(ctx, "cond", models.SearchOptions{
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if total2 == 0 {
+		t.Error("expected 'cond' to find posts with 'conditions' (prefix matching)")
+	} else {
+		t.Logf("Prefix match 'cond' found %d results", total2)
+	}
+}

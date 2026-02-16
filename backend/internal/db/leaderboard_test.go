@@ -101,6 +101,26 @@ func TestLeaderboardIntegration_AllTypes(t *testing.T) {
 		t.Error("expected non-zero entries")
 	}
 
+	// NEW: Verify agent reputation is calculated correctly from solved post
+	// Agent created solved post, should have 100 reputation
+	var agentEntry *models.LeaderboardEntry
+	for i := range entries {
+		if entries[i].ID == agent.ID && entries[i].Type == "agent" {
+			agentEntry = &entries[i]
+			break
+		}
+	}
+
+	if agentEntry == nil {
+		t.Fatal("agent not found in leaderboard")
+	}
+
+	if agentEntry.Reputation != 100 {
+		t.Errorf("expected reputation 100 for solved post, got %d (BUG: using stale agents.reputation)", agentEntry.Reputation)
+	}
+
+	t.Logf("✓ Agent reputation correctly calculated: %d", agentEntry.Reputation)
+
 	// Verify entries have ranks
 	for i, entry := range entries {
 		if entry.Rank != i+1+opts.Offset {

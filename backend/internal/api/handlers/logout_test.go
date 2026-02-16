@@ -42,7 +42,7 @@ func TestLogout_Success(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	handler := NewOAuthHandlersWithLogout(cfg, nil, mockDB)
+	handler := NewOAuthHandlersWithLogout(cfg, nil, mockDB, mockDB)
 
 	// Create valid JWT for authentication
 	jwt, err := auth.GenerateJWT(cfg.JWTSecret, "user-id-456", "test@example.com", "user", 15*time.Minute)
@@ -98,7 +98,7 @@ func TestLogout_MissingRefreshToken(t *testing.T) {
 		deleted: []string{},
 	}
 
-	handler := NewOAuthHandlersWithLogout(cfg, nil, mockDB)
+	handler := NewOAuthHandlersWithLogout(cfg, nil, mockDB, mockDB)
 
 	// Create valid JWT for authentication
 	jwt, err := auth.GenerateJWT(cfg.JWTSecret, "user-id-456", "test@example.com", "user", 15*time.Minute)
@@ -150,7 +150,7 @@ func TestLogout_InvalidJSON(t *testing.T) {
 		deleted: []string{},
 	}
 
-	handler := NewOAuthHandlersWithLogout(cfg, nil, mockDB)
+	handler := NewOAuthHandlersWithLogout(cfg, nil, mockDB, mockDB)
 
 	// Create valid JWT for authentication
 	jwt, err := auth.GenerateJWT(cfg.JWTSecret, "user-id-456", "test@example.com", "user", 15*time.Minute)
@@ -191,7 +191,7 @@ func TestLogout_TokenNotFound(t *testing.T) {
 		deleted: []string{},
 	}
 
-	handler := NewOAuthHandlersWithLogout(cfg, nil, mockDB)
+	handler := NewOAuthHandlersWithLogout(cfg, nil, mockDB, mockDB)
 
 	// Create valid JWT for authentication
 	jwt, err := auth.GenerateJWT(cfg.JWTSecret, "user-id-456", "test@example.com", "user", 15*time.Minute)
@@ -234,7 +234,7 @@ func TestLogout_NoAuth(t *testing.T) {
 		deleted: []string{},
 	}
 
-	handler := NewOAuthHandlersWithLogout(cfg, nil, mockDB)
+	handler := NewOAuthHandlersWithLogout(cfg, nil, mockDB, mockDB)
 
 	body := `{"refresh_token":"some-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", strings.NewReader(body))
@@ -299,7 +299,7 @@ func TestLogout_SubsequentRefreshFails(t *testing.T) {
 	}
 
 	// Create handlers
-	logoutHandler := NewOAuthHandlersWithLogout(cfg, nil, mockDB)
+	logoutHandler := NewOAuthHandlersWithLogout(cfg, nil, mockDB, mockDB)
 	refreshHandler := NewOAuthHandlersWithRefresh(cfg, nil, mockDB, mockUserRepo)
 
 	// Create valid JWT for authentication

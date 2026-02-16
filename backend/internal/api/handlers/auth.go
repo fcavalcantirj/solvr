@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/mail"
 	"regexp"
@@ -20,8 +20,9 @@ import (
 
 // AuthHandlers handles email/password authentication.
 type AuthHandlers struct {
-	config   *OAuthConfig
-	userRepo UserRepositoryForAuth
+	config         *OAuthConfig
+	userRepo       UserRepositoryForAuth
+	authMethodRepo AuthMethodRepository
 }
 
 // UserRepositoryForAuth defines required DB methods for auth operations.
@@ -29,6 +30,16 @@ type UserRepositoryForAuth interface {
 	FindByEmail(ctx context.Context, email string) (*models.User, error)
 	FindByUsername(ctx context.Context, username string) (*models.User, error)
 	Create(ctx context.Context, user *models.User) (*models.User, error)
+}
+
+// AuthMethodRepository defines required DB methods for auth method operations.
+type AuthMethodRepository interface {
+	Create(ctx context.Context, method *models.AuthMethod) (*models.AuthMethod, error)
+	FindByUserID(ctx context.Context, userID string) ([]*models.AuthMethod, error)
+	FindByProvider(ctx context.Context, provider, providerID string) (*models.AuthMethod, error)
+	GetEmailAuthMethod(ctx context.Context, userID string) (*models.AuthMethod, error)
+	UpdateLastUsed(ctx context.Context, methodID string) error
+	HasEmailAuth(ctx context.Context, userID string) (bool, error)
 }
 
 // RegisterRequest is the request body for registration.
@@ -55,20 +66,20 @@ type RegisterUserResponse struct {
 	Role        string `json:"role"`
 }
 
-// LoginRequest is the request body for login.
+// LoginRequest is the request body for log/slogin.
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// LoginResponse is the success response for login.
+// LoginResponse is the success response for log/slogin.
 type LoginResponse struct {
 	AccessToken  string            `json:"access_token"`
 	RefreshToken string            `json:"refresh_token"`
 	User         LoginUserResponse `json:"user"`
 }
 
-// LoginUserResponse contains user info in login response.
+// LoginUserResponse contains user info in log/slogin response.
 type LoginUserResponse struct {
 	ID          string `json:"id"`
 	Username    string `json:"username"`
@@ -81,10 +92,11 @@ type LoginUserResponse struct {
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]{3,30}$`)
 
 // NewAuthHandlers creates a new AuthHandlers instance.
-func NewAuthHandlers(config *OAuthConfig, userRepo UserRepositoryForAuth) *AuthHandlers {
+func NewAuthHandlers(config *OAuthConfig, userRepo UserRepositoryForAuth, authMethodRepo AuthMethodRepository) *AuthHandlers {
 	return &AuthHandlers{
-		config:   config,
-		userRepo: userRepo,
+		config:         config,
+		userRepo:       userRepo,
+		authMethodRepo: authMethodRepo,
 	}
 }
 
@@ -119,7 +131,7 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	// Step 3: Check email uniqueness
 	existingUser, err := h.userRepo.FindByEmail(ctx, req.Email)
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
-		log.Printf("FindByEmail failed: %v", err)
+		slog.Error("FindByEmail failed", "error", err, "op", "Register")
 		writeInternalError(w, "Database error")
 		return
 	}
@@ -131,7 +143,7 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	// Step 4: Check username uniqueness
 	existingUser, err = h.userRepo.FindByUsername(ctx, req.Username)
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
-		log.Printf("FindByUsername failed: %v", err)
+		slog.Error("FindByUsername failed", "error", err, "op", "Register")
 		writeInternalError(w, "Database error")
 		return
 	}
@@ -143,7 +155,7 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	// Step 5: Hash password with bcrypt
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("bcrypt.GenerateFromPassword failed: %v", err)
+		slog.Error("bcrypt hash failed", "error", err, "op", "Register")
 		writeInternalError(w, "Failed to hash password")
 		return
 	}
@@ -169,9 +181,22 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, http.StatusConflict, "DUPLICATE_USERNAME", "Username already taken")
 			return
 		}
-		log.Printf("Create user failed: %v", err)
+		slog.Error("user creation failed", "error", err, "op", "Register")
 		writeInternalError(w, "Database error")
 		return
+	}
+
+	// Step 6.5: Create auth_method entry for email/password
+	authMethod := &models.AuthMethod{
+		UserID:       createdUser.ID,
+		AuthProvider: models.AuthProviderEmail,
+		PasswordHash: string(passwordHash),
+	}
+	_, err = h.authMethodRepo.Create(ctx, authMethod)
+	if err != nil {
+		// Log error but don't fail registration - user is already created
+		// In a production system with transactions, this would rollback
+		slog.Warn("auth method creation failed", "error", err, "op", "Register", "user_id", createdUser.ID)
 	}
 
 	// Step 7: Generate JWT
@@ -182,7 +207,7 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, err := auth.GenerateJWT(h.config.JWTSecret, createdUser.ID, createdUser.Email, createdUser.Role, jwtExpiry)
 	if err != nil {
-		log.Printf("JWT generation failed: %v", err)
+		slog.Error("JWT generation failed", "error", err, "op", "Register")
 		writeInternalError(w, "Failed to generate access token")
 		return
 	}
@@ -208,8 +233,8 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// Login handles POST /v1/auth/login for email/password authentication.
-// Per PRD Task 49: Email/password login with bcrypt verification.
+// Login handles POST /v1/auth/log/slogin for email/password authentication.
+// Per PRD Task 49: Email/password log/slogin with bcrypt verification.
 func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -235,33 +260,60 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Database error
-		log.Printf("FindByEmail failed: %v", err)
+		slog.Error("FindByEmail failed", "error", err, "op", "Login")
 		writeInternalError(w, "Database error")
 		return
 	}
 
-	// Step 4: Check if user has password (OAuth-only users don't)
-	if user.PasswordHash == "" {
-		// OAuth-only user trying to login with password
-		var provider string
-		switch user.AuthProvider {
-		case models.AuthProviderGoogle:
-			provider = "Google"
-		case models.AuthProviderGitHub:
-			provider = "GitHub"
-		default:
-			provider = "OAuth provider"
+	// Step 4: Query auth methods to get password hash
+	authMethods, err := h.authMethodRepo.FindByUserID(ctx, user.ID)
+	if err != nil {
+		slog.Error("FindByUserID failed", "error", err, "op", "Login")
+		writeInternalError(w, "Failed to query auth methods")
+		return
+	}
+
+	// Step 4.5: Find email auth method
+	var emailMethod *models.AuthMethod
+	for _, method := range authMethods {
+		if method.AuthProvider == models.AuthProviderEmail {
+			emailMethod = method
+			break
 		}
-		writeErrorResponse(w, http.StatusUnauthorized, "OAUTH_ONLY_USER",
-			fmt.Sprintf("This account uses %s. Please sign in with %s.", provider, provider))
+	}
+
+	if emailMethod == nil || emailMethod.PasswordHash == "" {
+		// User exists but doesn't have email/password auth
+		// Find what OAuth providers they have
+		oauthProviders := []string{}
+		for _, method := range authMethods {
+			if method.AuthProvider != models.AuthProviderEmail {
+				oauthProviders = append(oauthProviders, method.AuthProvider)
+			}
+		}
+
+		message := "This account uses OAuth"
+		if len(oauthProviders) > 0 {
+			message = fmt.Sprintf("This account uses %s. Please sign in with %s.",
+				strings.Join(oauthProviders, " or "),
+				oauthProviders[0])
+		}
+
+		writeErrorResponse(w, http.StatusUnauthorized, "OAUTH_ONLY_USER", message)
 		return
 	}
 
 	// Step 5: Verify password with bcrypt
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(emailMethod.PasswordHash), []byte(req.Password)); err != nil {
 		// Wrong password - return generic error (no password enumeration)
 		writeErrorResponse(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid email or password")
 		return
+	}
+
+	// Step 5.5: Update last_used_at for this auth method
+	if err := h.authMethodRepo.UpdateLastUsed(ctx, emailMethod.ID); err != nil {
+		// Log but don't fail login
+		slog.Warn("last_used_at update failed", "error", err, "op", "Login", "method_id", emailMethod.ID)
 	}
 
 	// Step 6: Generate JWT
@@ -272,7 +324,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, err := auth.GenerateJWT(h.config.JWTSecret, user.ID, user.Email, user.Role, jwtExpiry)
 	if err != nil {
-		log.Printf("JWT generation failed: %v", err)
+		slog.Error("JWT generation failed", "error", err, "op", "Login")
 		writeInternalError(w, "Failed to generate access token")
 		return
 	}

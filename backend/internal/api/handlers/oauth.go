@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -204,7 +204,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Other errors are gateway errors
-		log.Printf("GitHub token exchange failed: %v", err)
+		slog.Error("GitHub token exchange failed", "error", err)
 		writeBadGateway(w, "Failed to communicate with GitHub")
 		return
 	}
@@ -212,7 +212,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	// Step 2: Fetch user info from GitHub
 	ghUser, err := gitHubClient.GetUser(ctx, tokenResp.AccessToken)
 	if err != nil {
-		log.Printf("GitHub user fetch failed: %v", err)
+		slog.Error("GitHub user fetch failed", "error", err)
 		writeBadGateway(w, "Failed to fetch user info from GitHub")
 		return
 	}
@@ -222,7 +222,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	if email == "" {
 		email, err = gitHubClient.GetPrimaryEmail(ctx, tokenResp.AccessToken)
 		if err != nil {
-			log.Printf("GitHub email fetch failed: %v", err)
+			slog.Error("GitHub email fetch failed", "error", err)
 			writeBadGateway(w, "Failed to fetch user email from GitHub")
 			return
 		}
@@ -246,7 +246,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	if h.userService != nil {
 		user, _, err = h.userService.FindOrCreateUser(ctx, userInfo)
 		if err != nil {
-			log.Printf("User creation/lookup failed: %v", err)
+			slog.Error("User creation/lookup failed", "error", err)
 			writeInternalError(w, "Failed to create or find user")
 			return
 		}
@@ -270,7 +270,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, err := auth.GenerateJWT(h.config.JWTSecret, user.ID, user.Email, user.Role, jwtExpiry)
 	if err != nil {
-		log.Printf("JWT generation failed: %v", err)
+		slog.Error("JWT generation failed", "error", err)
 		writeInternalError(w, "Failed to generate access token")
 		return
 	}
@@ -286,7 +286,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		}
 		expiresAt := time.Now().Add(refreshExpiry)
 		if _, err := h.tokenStore.StoreToken(ctx, user.ID, refreshToken, expiresAt); err != nil {
-			log.Printf("Refresh token storage failed: %v", err)
+			slog.Error("Refresh token storage failed", "error", err)
 			// Continue anyway - user can still use access token
 		}
 	}
@@ -353,7 +353,7 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Other errors are gateway errors
-		log.Printf("Google token exchange failed: %v", err)
+		slog.Error("Google token exchange failed", "error", err)
 		writeBadGateway(w, "Failed to communicate with Google")
 		return
 	}
@@ -361,7 +361,7 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	// Step 2: Fetch user info from Google
 	googleUser, err := googleClient.GetUser(ctx, tokenResp.AccessToken)
 	if err != nil {
-		log.Printf("Google user fetch failed: %v", err)
+		slog.Error("Google user fetch failed", "error", err)
 		writeBadGateway(w, "Failed to fetch user info from Google")
 		return
 	}
@@ -389,7 +389,7 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	if h.userService != nil {
 		user, _, err = h.userService.FindOrCreateUser(ctx, userInfo)
 		if err != nil {
-			log.Printf("User creation/lookup failed: %v", err)
+			slog.Error("User creation/lookup failed", "error", err)
 			writeInternalError(w, "Failed to create or find user")
 			return
 		}
@@ -413,7 +413,7 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, err := auth.GenerateJWT(h.config.JWTSecret, user.ID, user.Email, user.Role, jwtExpiry)
 	if err != nil {
-		log.Printf("JWT generation failed: %v", err)
+		slog.Error("JWT generation failed", "error", err)
 		writeInternalError(w, "Failed to generate access token")
 		return
 	}
@@ -429,7 +429,7 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 		expiresAt := time.Now().Add(refreshExpiry)
 		if _, err := h.tokenStore.StoreToken(ctx, user.ID, refreshToken, expiresAt); err != nil {
-			log.Printf("Refresh token storage failed: %v", err)
+			slog.Error("Refresh token storage failed", "error", err)
 			// Continue anyway - user can still use access token
 		}
 	}
@@ -537,7 +537,7 @@ type RefreshTokenDBInterface interface {
 	GetByTokenHash(ctx context.Context, tokenHash string) (*RefreshTokenRecordData, error)
 }
 
-// LogoutRefreshTokenDBInterface extends RefreshTokenDBInterface with deletion for logout.
+// LogoutRefreshTokenDBInterface extends RefreshTokenDBInterface with deletion for log/slogout.
 type LogoutRefreshTokenDBInterface interface {
 	RefreshTokenDBInterface
 	DeleteByTokenHash(ctx context.Context, tokenHash string) error
@@ -613,7 +613,7 @@ func (h *OAuthHandlers) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	// Look up the token in the database
 	record, err := h.refreshDB.GetByTokenHash(ctx, tokenHash)
 	if err != nil {
-		log.Printf("Refresh token lookup failed: %v", err)
+		slog.Error("Refresh token lookup failed", "error", err)
 		writeInternalError(w, "Failed to validate refresh token")
 		return
 	}
@@ -633,7 +633,7 @@ func (h *OAuthHandlers) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	// Look up user
 	user, err := h.userRepo.FindByID(ctx, record.UserID)
 	if err != nil {
-		log.Printf("User lookup failed: %v", err)
+		slog.Error("User lookup failed", "error", err)
 		writeInternalError(w, "Failed to find user")
 		return
 	}
@@ -650,7 +650,7 @@ func (h *OAuthHandlers) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, err := auth.GenerateJWT(h.config.JWTSecret, user.ID, user.Email, user.Role, jwtExpiry)
 	if err != nil {
-		log.Printf("JWT generation failed: %v", err)
+		slog.Error("JWT generation failed", "error", err)
 		writeInternalError(w, "Failed to generate access token")
 		return
 	}
@@ -683,24 +683,26 @@ func NewOAuthHandlersWithLogout(
 	config *OAuthConfig,
 	pool *db.Pool,
 	logoutDB LogoutRefreshTokenDBInterface,
+	refreshDB LogoutRefreshTokenDBInterface,
 ) *OAuthHandlers {
 	return &OAuthHandlers{
 		config:        config,
 		pool:          pool,
 		logoutDB:      logoutDB,
+		refreshDB:     refreshDB,
 		gitHubBaseURL: "https://github.com",
 		googleBaseURL: "https://oauth2.googleapis.com",
 	}
 }
 
-// LogoutRequest is the request body for POST /v1/auth/logout.
+// LogoutRequest is the request body for POST /v1/auth/log/slogout.
 type LogoutRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-// Logout handles POST /v1/auth/logout
+// Logout handles POST /v1/auth/log/slogout
 // Requires valid JWT, deletes refresh token from database.
-// Per SPEC.md Part 5.2: POST /auth/logout -> Invalidate tokens.
+// Per SPEC.md Part 5.2: POST /auth/log/slogout -> Invalidate tokens.
 func (h *OAuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -731,7 +733,7 @@ func (h *OAuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	// Note: This is idempotent - if token doesn't exist, we still return 204
 	if h.logoutDB != nil {
 		if err := h.logoutDB.DeleteByTokenHash(ctx, tokenHash); err != nil {
-			log.Printf("Error deleting refresh token: %v", err)
+			slog.Error("Error deleting refresh token", "error", err)
 			// We still return 204 - logout should be idempotent
 		}
 	}

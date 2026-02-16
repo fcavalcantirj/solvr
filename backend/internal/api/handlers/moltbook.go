@@ -4,7 +4,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -135,7 +135,7 @@ func (h *MoltbookHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Network or server error
-		log.Printf("Moltbook API error: %v", err)
+		slog.Error("Moltbook API error", "error", err, "op", "Moltbook")
 		writeMoltbookBadGateway(w, "Failed to communicate with Moltbook")
 		return
 	}
@@ -147,7 +147,7 @@ func (h *MoltbookHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	if h.agentService != nil {
 		existingAgent, err := h.agentService.FindByMoltbookID(ctx, moltbookAgent.MoltbookID)
 		if err != nil {
-			log.Printf("Agent lookup failed: %v", err)
+			slog.Error("Agent lookup failed", "error", err, "op", "Moltbook")
 			writeMoltbookInternalError(w, "Failed to lookup agent")
 			return
 		}
@@ -157,7 +157,7 @@ func (h *MoltbookHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 			agent = existingAgent
 			apiKey, err = h.agentService.GenerateNewAPIKey(ctx, existingAgent.ID)
 			if err != nil {
-				log.Printf("API key generation failed: %v", err)
+				slog.Error("API key generation failed", "error", err, "op", "Moltbook")
 				writeMoltbookInternalError(w, "Failed to generate API key")
 				return
 			}
@@ -165,7 +165,7 @@ func (h *MoltbookHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 			// New agent - create from Moltbook data
 			agent, apiKey, err = h.agentService.CreateAgentFromMoltbook(ctx, moltbookAgent)
 			if err != nil {
-				log.Printf("Agent creation failed: %v", err)
+				slog.Error("Agent creation failed", "error", err, "op", "Moltbook")
 				writeMoltbookInternalError(w, "Failed to create agent")
 				return
 			}

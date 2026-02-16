@@ -25,18 +25,16 @@ func (r *LeaderboardRepository) GetLeaderboard(ctx context.Context, opts models.
 	startDate := getTimeframeDate(opts.Timeframe)
 
 	// Build the query based on options
-	query := r.buildLeaderboardQuery(opts)
-
-	// Execute query with appropriate parameters
-	var rows interface{ Next() bool; Close(); Scan(...interface{}) error; Err() error }
-	var err error
-
-	if startDate != nil {
-		rows, err = r.pool.Query(ctx, query, opts.Limit, opts.Offset, startDate)
-	} else {
-		rows, err = r.pool.Query(ctx, query, opts.Limit, opts.Offset)
+	// Always pass startDate - use epoch for all_time to include all activity
+	if startDate == nil {
+		epoch := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+		startDate = &epoch
 	}
 
+	query := r.buildLeaderboardQuery(opts)
+
+	// Execute query with startDate parameter
+	rows, err := r.pool.Query(ctx, query, opts.Limit, opts.Offset, startDate)
 	if err != nil {
 		LogQueryError(ctx, "GetLeaderboard", "leaderboard", err)
 		return nil, 0, err
@@ -134,18 +132,9 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 		typeFilter = "" // "all" - no filter
 	}
 
-	// For timeframe filtering, we need to add a date filter
-	var timeframeFilter string
-	if opts.Timeframe == "monthly" || opts.Timeframe == "weekly" {
-		timeframeFilter = "$3"
-	} else {
-		// For all_time, use a very old date (essentially no filter)
-		timeframeFilter = "'1970-01-01'::timestamptz"
-	}
-
 	// Build the query
-	// For simplicity and performance, we'll use the pre-calculated reputation for agents (all_time)
-	// and recalculate for timeframes. For users, we always recalculate.
+	// Always recalculate reputation from activity for consistency.
+	// The timeframe filter is always $3 (startDate parameter).
 	query := fmt.Sprintf(`
 		WITH leaderboard_data AS (
 			-- Agents
@@ -154,64 +143,61 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 				'agent' AS entity_type,
 				a.display_name,
 				COALESCE(a.avatar_url, '') AS avatar_url,
-				CASE
-					WHEN %s = '1970-01-01'::timestamptz THEN a.reputation
-					ELSE (
-						-- For timeframes, recalculate reputation from activity
-						COALESCE((
-							SELECT COUNT(*)
-							FROM posts p
-							WHERE p.posted_by_id = a.id
-								AND p.posted_by_type = 'agent'
-								AND p.type = 'problem'
-								AND p.status = 'solved'
-								AND p.deleted_at IS NULL
-								AND p.created_at >= %s
-						), 0) * 100
-						+
-						COALESCE((
-							SELECT COUNT(*)
-							FROM answers ans
-							WHERE ans.author_id = a.id
-								AND ans.author_type = 'agent'
-								AND ans.is_accepted = true
-								AND ans.deleted_at IS NULL
-								AND ans.created_at >= %s
-						), 0) * 50
-						+
-						COALESCE((
-							SELECT COUNT(*)
-							FROM votes v
-							WHERE v.confirmed = true
-								AND v.direction = 'up'
-								AND v.created_at >= %s
-								AND (
-									(v.target_type = 'post' AND EXISTS (
-										SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'agent' AND p.posted_by_id = a.id
-									))
-									OR (v.target_type = 'answer' AND EXISTS (
-										SELECT 1 FROM answers ans WHERE ans.id = v.target_id AND ans.author_type = 'agent' AND ans.author_id = a.id
-									))
-								)
-						), 0) * 2
-						-
-						COALESCE((
-							SELECT COUNT(*)
-							FROM votes v
-							WHERE v.confirmed = true
-								AND v.direction = 'down'
-								AND v.created_at >= %s
-								AND (
-									(v.target_type = 'post' AND EXISTS (
-										SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'agent' AND p.posted_by_id = a.id
-									))
-									OR (v.target_type = 'answer' AND EXISTS (
-										SELECT 1 FROM answers ans WHERE ans.id = v.target_id AND ans.author_type = 'agent' AND ans.author_id = a.id
-									))
-								)
-						), 0)
-					)
-				END AS reputation,
+				-- Always recalculate reputation from activity (no cached value)
+				(
+					COALESCE((
+						SELECT COUNT(*)
+						FROM posts p
+						WHERE p.posted_by_id = a.id
+							AND p.posted_by_type = 'agent'
+							AND p.type = 'problem'
+							AND p.status = 'solved'
+							AND p.deleted_at IS NULL
+							AND p.created_at >= $3
+					), 0) * 100
+					+
+					COALESCE((
+						SELECT COUNT(*)
+						FROM answers ans
+						WHERE ans.author_id = a.id
+							AND ans.author_type = 'agent'
+							AND ans.is_accepted = true
+							AND ans.deleted_at IS NULL
+							AND ans.created_at >= $3
+					), 0) * 50
+					+
+					COALESCE((
+						SELECT COUNT(*)
+						FROM votes v
+						WHERE v.confirmed = true
+							AND v.direction = 'up'
+							AND v.created_at >= $3
+							AND (
+								(v.target_type = 'post' AND EXISTS (
+									SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'agent' AND p.posted_by_id = a.id
+								))
+								OR (v.target_type = 'answer' AND EXISTS (
+									SELECT 1 FROM answers ans WHERE ans.id = v.target_id AND ans.author_type = 'agent' AND ans.author_id = a.id
+								))
+							)
+					), 0) * 2
+					-
+					COALESCE((
+						SELECT COUNT(*)
+						FROM votes v
+						WHERE v.confirmed = true
+							AND v.direction = 'down'
+							AND v.created_at >= $3
+							AND (
+								(v.target_type = 'post' AND EXISTS (
+									SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'agent' AND p.posted_by_id = a.id
+								))
+								OR (v.target_type = 'answer' AND EXISTS (
+									SELECT 1 FROM answers ans WHERE ans.id = v.target_id AND ans.author_type = 'agent' AND ans.author_id = a.id
+								))
+							)
+					), 0)
+				) AS reputation,
 				a.created_at,
 				-- Key stats
 				COALESCE((
@@ -222,7 +208,7 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 						AND p.type = 'problem'
 						AND p.status = 'solved'
 						AND p.deleted_at IS NULL
-						AND p.created_at >= %s
+						AND p.created_at >= $3
 				), 0) AS problems_solved,
 				COALESCE((
 					SELECT COUNT(*)
@@ -231,14 +217,14 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 						AND ans.author_type = 'agent'
 						AND ans.is_accepted = true
 						AND ans.deleted_at IS NULL
-						AND ans.created_at >= %s
+						AND ans.created_at >= $3
 				), 0) AS answers_accepted,
 				COALESCE((
 					SELECT COUNT(*)
 					FROM votes v
 					WHERE v.confirmed = true
 						AND v.direction = 'up'
-						AND v.created_at >= %s
+						AND v.created_at >= $3
 						AND (
 							(v.target_type = 'post' AND EXISTS (
 								SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'agent' AND p.posted_by_id = a.id
@@ -259,7 +245,7 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 				'user' AS entity_type,
 				u.display_name,
 				COALESCE(u.avatar_url, '') AS avatar_url,
-				-- Calculate user reputation from activity (users don't have a reputation column)
+				-- Calculate user reputation from activity
 				(
 					COALESCE((
 						SELECT COUNT(*)
@@ -269,7 +255,7 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 							AND p.type = 'problem'
 							AND p.status = 'solved'
 							AND p.deleted_at IS NULL
-							AND p.created_at >= %s
+							AND p.created_at >= $3
 					), 0) * 100
 					+
 					COALESCE((
@@ -279,7 +265,7 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 							AND ans.author_type = 'human'
 							AND ans.is_accepted = true
 							AND ans.deleted_at IS NULL
-							AND ans.created_at >= %s
+							AND ans.created_at >= $3
 					), 0) * 50
 					+
 					COALESCE((
@@ -287,7 +273,7 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 						FROM votes v
 						WHERE v.confirmed = true
 							AND v.direction = 'up'
-							AND v.created_at >= %s
+							AND v.created_at >= $3
 							AND (
 								(v.target_type = 'post' AND EXISTS (
 									SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
@@ -303,7 +289,7 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 						FROM votes v
 						WHERE v.confirmed = true
 							AND v.direction = 'down'
-							AND v.created_at >= %s
+							AND v.created_at >= $3
 							AND (
 								(v.target_type = 'post' AND EXISTS (
 									SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
@@ -324,7 +310,7 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 						AND p.type = 'problem'
 						AND p.status = 'solved'
 						AND p.deleted_at IS NULL
-						AND p.created_at >= %s
+						AND p.created_at >= $3
 				), 0) AS problems_solved,
 				COALESCE((
 					SELECT COUNT(*)
@@ -333,14 +319,14 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 						AND ans.author_type = 'human'
 						AND ans.is_accepted = true
 						AND ans.deleted_at IS NULL
-						AND ans.created_at >= %s
+						AND ans.created_at >= $3
 				), 0) AS answers_accepted,
 				COALESCE((
 					SELECT COUNT(*)
 					FROM votes v
 					WHERE v.confirmed = true
 						AND v.direction = 'up'
-						AND v.created_at >= %s
+						AND v.created_at >= $3
 						AND (
 							(v.target_type = 'post' AND EXISTS (
 								SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
@@ -386,11 +372,7 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 		CROSS JOIN total_count tc
 		ORDER BY rl.rank
 		LIMIT $1 OFFSET $2
-	`, timeframeFilter, timeframeFilter, timeframeFilter, timeframeFilter, timeframeFilter,
-	   timeframeFilter, timeframeFilter, timeframeFilter,
-	   timeframeFilter, timeframeFilter, timeframeFilter, timeframeFilter,
-	   timeframeFilter, timeframeFilter, timeframeFilter,
-	   typeFilter)
+	`, typeFilter)
 
 	return query
 }

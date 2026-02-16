@@ -4,6 +4,7 @@ package services
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -587,5 +588,98 @@ func TestOAuthUserService_AccountLinking_MultipleProviders(t *testing.T) {
 	}
 	if !providers[models.AuthProviderGitHub] {
 		t.Error("Missing GitHub auth method")
+	}
+}
+
+// TestOAuthUserService_ReturningUser_Integration is an end-to-end integration test
+// that simulates the real OAuth returning user flow:
+// 1. First login: creates user + auth_method
+// 2. Simulate migration: clear deprecated columns (auth_provider, auth_provider_id)
+// 3. Second login: should find existing user via auth_methods table
+//
+// This test requires a real PostgreSQL database (DATABASE_URL).
+func TestOAuthUserService_ReturningUser_Integration(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := db.NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	userRepo := db.NewUserRepository(pool)
+	authMethodRepo := db.NewAuthMethodRepository(pool)
+	service := NewOAuthUserService(userRepo, authMethodRepo)
+
+	// Use unique email to avoid conflicts with other test runs
+	suffix := time.Now().Format("150405.000")
+	testEmail := "returning_oauth_" + suffix + "@example.com"
+
+	githubProfile := &OAuthUserInfo{
+		Provider:    models.AuthProviderGitHub,
+		ProviderID:  "github_returning_" + suffix,
+		Email:       testEmail,
+		DisplayName: "Returning OAuth User",
+		AvatarURL:   "https://github.com/avatar.png",
+	}
+
+	// First login: create user
+	user1, isNew1, err := service.FindOrCreateUser(ctx, githubProfile)
+	if err != nil {
+		t.Fatalf("First login error = %v", err)
+	}
+	if !isNew1 {
+		t.Error("First login should create new user (isNew = true)")
+	}
+
+	// Clean up after test
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM auth_methods WHERE user_id = $1", user1.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", user1.ID)
+	}()
+
+	// Simulate migration: clear deprecated columns to NULL
+	// This mimics production state after migration 000032
+	_, err = pool.Exec(ctx, "UPDATE users SET auth_provider = NULL, auth_provider_id = NULL WHERE id = $1", user1.ID)
+	if err != nil {
+		t.Fatalf("Failed to simulate migration: %v", err)
+	}
+
+	// Verify auth_method exists
+	methods, err := authMethodRepo.FindByUserID(ctx, user1.ID)
+	if err != nil {
+		t.Fatalf("FindByUserID error = %v", err)
+	}
+	if len(methods) != 1 {
+		t.Fatalf("Expected 1 auth method, got %d", len(methods))
+	}
+	if methods[0].AuthProvider != models.AuthProviderGitHub {
+		t.Errorf("Auth method provider = %v, want %v", methods[0].AuthProvider, models.AuthProviderGitHub)
+	}
+
+	// Second login: should find existing user (not create duplicate)
+	user2, isNew2, err := service.FindOrCreateUser(ctx, githubProfile)
+	if err != nil {
+		t.Fatalf("Second login error = %v", err)
+	}
+	if isNew2 {
+		t.Error("Second login should find existing user (isNew = false)")
+	}
+	if user2.ID != user1.ID {
+		t.Errorf("Second login returned different user: got %v, want %v", user2.ID, user1.ID)
+	}
+
+	// Verify only one user exists (no duplicate)
+	var userCount int
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE email = $1", testEmail).Scan(&userCount)
+	if err != nil {
+		t.Fatalf("Count query error = %v", err)
+	}
+	if userCount != 1 {
+		t.Errorf("User count = %d, want 1 (no duplicates)", userCount)
 	}
 }

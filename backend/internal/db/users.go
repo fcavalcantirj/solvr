@@ -110,11 +110,22 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*models.User,
 
 // FindByAuthProvider finds a user by their OAuth provider and provider ID.
 // Per SPEC.md Part 5.2: Look up user by auth_provider and auth_provider_id.
+//
+// This method queries the auth_methods table (introduced in migration 000032)
+// rather than the deprecated users.auth_provider columns. This allows:
+// - Users to have multiple auth providers (GitHub + Google)
+// - Proper auth method linking/unlinking
+// - Clean separation of auth data from user profile data
+//
+// Returns ErrNotFound if no user has this OAuth provider linked.
 func (r *UserRepository) FindByAuthProvider(ctx context.Context, provider, providerID string) (*models.User, error) {
 	query := `
-		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
-		FROM users
-		WHERE auth_provider = $1 AND auth_provider_id = $2
+		SELECT u.id, u.username, u.display_name, u.email, u.auth_provider,
+		       u.auth_provider_id, u.password_hash, u.avatar_url, u.bio,
+		       u.role, u.created_at, u.updated_at
+		FROM users u
+		INNER JOIN auth_methods am ON u.id = am.user_id
+		WHERE am.auth_provider = $1 AND am.auth_provider_id = $2
 	`
 
 	row := r.pool.QueryRow(ctx, query, provider, providerID)

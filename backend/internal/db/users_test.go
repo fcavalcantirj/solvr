@@ -738,6 +738,223 @@ func testDatabaseURL() string {
 	return "" // Will cause pool creation to fail, skipping tests
 }
 
+// TestUserRepository_FindByAuthProvider_WithAuthMethodsTable tests finding user via auth_methods table.
+// This test validates the fix for GitHub OAuth login failure.
+// Users created with NULL auth_provider/auth_provider_id (post-migration 000032) should be
+// findable via their auth_methods records.
+// This is an integration test that requires a real PostgreSQL database.
+func TestUserRepository_FindByAuthProvider_WithAuthMethodsTable(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	userRepo := NewUserRepository(pool)
+	authMethodRepo := NewAuthMethodRepository(pool)
+	suffix := time.Now().Format("150405.000")
+
+	// Create user with NULL auth_provider/auth_provider_id (post-migration style)
+	user := &models.User{
+		Username:    "authmethoduser_" + suffix,
+		DisplayName: "Auth Method User",
+		Email:       "authmethod_" + suffix + "@example.com",
+		Role:        models.UserRoleUser,
+		// Note: auth_provider and auth_provider_id are NULL
+	}
+
+	created, err := userRepo.Create(ctx, user)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// Clean up after test
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM auth_methods WHERE user_id = $1", created.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", created.ID)
+	}()
+
+	// Insert auth_methods record (this is how OAuth data is stored post-migration)
+	authMethod := &models.AuthMethod{
+		UserID:         created.ID,
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "github_123",
+	}
+	_, err = authMethodRepo.Create(ctx, authMethod)
+	if err != nil {
+		t.Fatalf("AuthMethod.Create() error = %v", err)
+	}
+
+	// Query by OAuth provider (should find user via auth_methods JOIN)
+	found, err := userRepo.FindByAuthProvider(ctx, models.AuthProviderGitHub, "github_123")
+	if err != nil {
+		t.Fatalf("FindByAuthProvider() error = %v, want success", err)
+	}
+
+	if found.ID != created.ID {
+		t.Errorf("FindByAuthProvider() ID = %v, want %v", found.ID, created.ID)
+	}
+	if found.Email != created.Email {
+		t.Errorf("FindByAuthProvider() Email = %v, want %v", found.Email, created.Email)
+	}
+}
+
+// TestUserRepository_FindByAuthProvider_MultipleAuthMethods tests finding user with multiple auth methods.
+// Verifies that a user with both GitHub and Google OAuth can be found by either provider.
+// This is an integration test that requires a real PostgreSQL database.
+func TestUserRepository_FindByAuthProvider_MultipleAuthMethods(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	userRepo := NewUserRepository(pool)
+	authMethodRepo := NewAuthMethodRepository(pool)
+	suffix := time.Now().Format("150405.000")
+
+	// Create user
+	user := &models.User{
+		Username:    "multiauth_" + suffix,
+		DisplayName: "Multi Auth User",
+		Email:       "multiauth_" + suffix + "@example.com",
+		Role:        models.UserRoleUser,
+	}
+
+	created, err := userRepo.Create(ctx, user)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// Clean up after test
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM auth_methods WHERE user_id = $1", created.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", created.ID)
+	}()
+
+	// Add GitHub auth method
+	githubMethod := &models.AuthMethod{
+		UserID:         created.ID,
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "gh_123",
+	}
+	_, err = authMethodRepo.Create(ctx, githubMethod)
+	if err != nil {
+		t.Fatalf("Create GitHub auth method error = %v", err)
+	}
+
+	// Add Google auth method
+	googleMethod := &models.AuthMethod{
+		UserID:         created.ID,
+		AuthProvider:   models.AuthProviderGoogle,
+		AuthProviderID: "gg_456",
+	}
+	_, err = authMethodRepo.Create(ctx, googleMethod)
+	if err != nil {
+		t.Fatalf("Create Google auth method error = %v", err)
+	}
+
+	// Should be able to find user by GitHub
+	foundGH, err := userRepo.FindByAuthProvider(ctx, models.AuthProviderGitHub, "gh_123")
+	if err != nil {
+		t.Errorf("FindByAuthProvider(github) error = %v", err)
+	} else if foundGH.ID != created.ID {
+		t.Errorf("FindByAuthProvider(github) ID = %v, want %v", foundGH.ID, created.ID)
+	}
+
+	// Should be able to find user by Google
+	foundGG, err := userRepo.FindByAuthProvider(ctx, models.AuthProviderGoogle, "gg_456")
+	if err != nil {
+		t.Errorf("FindByAuthProvider(google) error = %v", err)
+	} else if foundGG.ID != created.ID {
+		t.Errorf("FindByAuthProvider(google) ID = %v, want %v", foundGG.ID, created.ID)
+	}
+}
+
+// TestUserRepository_FindByAuthProvider_DeletedAuthMethod tests that deleted auth methods return ErrNotFound.
+// Verifies that when an auth method is deleted (user unlinks provider), the query correctly fails.
+// This is an integration test that requires a real PostgreSQL database.
+func TestUserRepository_FindByAuthProvider_DeletedAuthMethod(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	userRepo := NewUserRepository(pool)
+	authMethodRepo := NewAuthMethodRepository(pool)
+	suffix := time.Now().Format("150405.000")
+
+	// Create user
+	user := &models.User{
+		Username:    "deleteauth_" + suffix,
+		DisplayName: "Delete Auth User",
+		Email:       "deleteauth_" + suffix + "@example.com",
+		Role:        models.UserRoleUser,
+	}
+
+	created, err := userRepo.Create(ctx, user)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// Clean up after test
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM auth_methods WHERE user_id = $1", created.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", created.ID)
+	}()
+
+	// Add GitHub auth method
+	githubMethod := &models.AuthMethod{
+		UserID:         created.ID,
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "gh_123",
+	}
+	createdMethod, err := authMethodRepo.Create(ctx, githubMethod)
+	if err != nil {
+		t.Fatalf("Create auth method error = %v", err)
+	}
+
+	// Verify we can find the user
+	found, err := userRepo.FindByAuthProvider(ctx, models.AuthProviderGitHub, "gh_123")
+	if err != nil {
+		t.Fatalf("FindByAuthProvider() before delete error = %v", err)
+	}
+	if found.ID != created.ID {
+		t.Errorf("FindByAuthProvider() before delete ID = %v, want %v", found.ID, created.ID)
+	}
+
+	// Delete the auth method (unlink)
+	err = authMethodRepo.Delete(ctx, createdMethod.ID)
+	if err != nil {
+		t.Fatalf("Delete auth method error = %v", err)
+	}
+
+	// Should NOT find user after deletion
+	_, err = userRepo.FindByAuthProvider(ctx, models.AuthProviderGitHub, "gh_123")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("FindByAuthProvider() after delete error = %v, want ErrNotFound", err)
+	}
+}
+
 // cleanupTestDB cleans up test data.
 func cleanupTestDB(t *testing.T, pool *Pool) {
 	t.Helper()
@@ -748,6 +965,7 @@ func cleanupTestDB(t *testing.T, pool *Pool) {
 	// Clean up in reverse order of dependencies
 	_, _ = pool.Exec(ctx, "DELETE FROM refresh_tokens")
 	_, _ = pool.Exec(ctx, "DELETE FROM notifications")
+	_, _ = pool.Exec(ctx, "DELETE FROM auth_methods")
 	_, _ = pool.Exec(ctx, "DELETE FROM agents")
 	_, _ = pool.Exec(ctx, "DELETE FROM users")
 	pool.Close()

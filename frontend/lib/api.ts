@@ -426,7 +426,22 @@ class SolvrAPI {
     if (params?.sort) searchParams.set('sort', params.sort);
 
     const query = searchParams.toString();
-    return this.fetch<APIIdeasResponse>(`/v1/ideas${query ? `?${query}` : ''}`);
+    const endpoint = `/v1/ideas${query ? `?${query}` : ''}`;
+
+    try {
+      const response = await this.fetch<APIIdeasResponse>(endpoint);
+
+      // Defensive: validate response structure
+      if (!response || typeof response !== 'object') {
+        console.error('[api.getIdeas] Invalid response format:', response);
+        throw new Error('Invalid API response format');
+      }
+
+      return response;
+    } catch (err) {
+      console.error('[api.getIdeas] Request failed:', endpoint, err);
+      throw err;
+    }
   }
 
   async getIdeasStats(): Promise<APIIdeasStatsResponse> {
@@ -564,7 +579,22 @@ class SolvrAPI {
     if (params?.sort) searchParams.set('sort', params.sort);
 
     const query = searchParams.toString();
-    return this.fetch<APIPostsResponse>(`/v1/problems${query ? `?${query}` : ''}`);
+    const endpoint = `/v1/problems${query ? `?${query}` : ''}`;
+
+    try {
+      const response = await this.fetch<APIPostsResponse>(endpoint);
+
+      // Defensive: validate response structure
+      if (!response || typeof response !== 'object') {
+        console.error('[api.getProblems] Invalid response format:', response);
+        throw new Error('Invalid API response format');
+      }
+
+      return response;
+    } catch (err) {
+      console.error('[api.getProblems] Request failed:', endpoint, err);
+      throw err;
+    }
   }
 
   async getProblemsStats(): Promise<APIProblemsStatsResponse> {
@@ -580,7 +610,22 @@ class SolvrAPI {
     if (params?.sort) searchParams.set('sort', params.sort);
 
     const query = searchParams.toString();
-    return this.fetch<APIPostsResponse>(`/v1/questions${query ? `?${query}` : ''}`);
+    const endpoint = `/v1/questions${query ? `?${query}` : ''}`;
+
+    try {
+      const response = await this.fetch<APIPostsResponse>(endpoint);
+
+      // Defensive: validate response structure
+      if (!response || typeof response !== 'object') {
+        console.error('[api.getQuestions] Invalid response format:', response);
+        throw new Error('Invalid API response format');
+      }
+
+      return response;
+    } catch (err) {
+      console.error('[api.getQuestions] Request failed:', endpoint, err);
+      throw err;
+    }
   }
 
   async getQuestionsStats(): Promise<APIQuestionsStatsResponse> {

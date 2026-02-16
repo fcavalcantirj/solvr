@@ -85,6 +85,17 @@ export function useProblems(options: UseProblemsOptions = {}): UseProblemsResult
       };
 
       const response = await api.getProblems(params);
+
+      // Defensive: handle null/undefined data
+      if (!response || !response.data) {
+        console.warn('[useProblems] Received empty response:', response);
+        setProblems([]);
+        setTotal(0);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
       const transformed = response.data.map(transformProblem);
 
       if (append) {
@@ -93,10 +104,14 @@ export function useProblems(options: UseProblemsOptions = {}): UseProblemsResult
         setProblems(transformed);
       }
 
-      setTotal(response.meta.total);
-      setHasMore(response.meta.has_more);
+      setTotal(response.meta?.total || 0);
+      setHasMore(response.meta?.has_more || false);
       setPage(pageNum);
     } catch (err) {
+      console.error('[useProblems] Error fetching problems:', err);
+      if (err && typeof err === 'object') {
+        console.error('[useProblems] Full error object:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      }
       setError(err instanceof Error ? err.message : 'Failed to fetch problems');
     } finally {
       setLoading(false);

@@ -109,6 +109,17 @@ export function useIdeas(options: UseIdeasOptions = {}): UseIdeasResult {
       };
 
       const response = await api.getIdeas(params);
+
+      // Defensive: handle null/undefined data
+      if (!response || !response.data) {
+        console.warn('[useIdeas] Received empty response:', response);
+        setIdeas([]);
+        setTotal(0);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
       const transformedIdeas = response.data.map(transformIdea);
 
       if (append) {
@@ -117,10 +128,14 @@ export function useIdeas(options: UseIdeasOptions = {}): UseIdeasResult {
         setIdeas(transformedIdeas);
       }
 
-      setTotal(response.meta.total);
-      setHasMore(response.meta.has_more);
+      setTotal(response.meta?.total || 0);
+      setHasMore(response.meta?.has_more || false);
       setPage(pageNum);
     } catch (err) {
+      console.error('[useIdeas] Error fetching ideas:', err);
+      if (err && typeof err === 'object') {
+        console.error('[useIdeas] Full error object:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      }
       setError(err instanceof Error ? err.message : 'Failed to fetch ideas');
     } finally {
       setLoading(false);

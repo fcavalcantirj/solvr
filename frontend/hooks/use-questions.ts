@@ -92,6 +92,17 @@ export function useQuestions(options: UseQuestionsOptions = {}): UseQuestionsRes
       };
 
       const response = await api.getQuestions(params);
+
+      // Defensive: handle null/undefined data
+      if (!response || !response.data) {
+        console.warn('[useQuestions] Received empty response:', response);
+        setQuestions([]);
+        setTotal(0);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
       const transformed = response.data.map(transformQuestion);
 
       if (append) {
@@ -100,10 +111,14 @@ export function useQuestions(options: UseQuestionsOptions = {}): UseQuestionsRes
         setQuestions(transformed);
       }
 
-      setTotal(response.meta.total);
-      setHasMore(response.meta.has_more);
+      setTotal(response.meta?.total || 0);
+      setHasMore(response.meta?.has_more || false);
       setPage(pageNum);
     } catch (err) {
+      console.error('[useQuestions] Error fetching questions:', err);
+      if (err && typeof err === 'object') {
+        console.error('[useQuestions] Full error object:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      }
       setError(err instanceof Error ? err.message : 'Failed to fetch questions');
     } finally {
       setLoading(false);

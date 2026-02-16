@@ -5,6 +5,11 @@ import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
 
+// Force all pages to be dynamic (no static generation at build time)
+// This works around Next.js 15 bug with useState in Header component
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-HS74SKKSQY'
 
 const _inter = Inter({ subsets: ["latin"], variable: '--font-inter' });

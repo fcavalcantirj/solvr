@@ -213,4 +213,57 @@ describe('useProblems', () => {
     expect(result.current.total).toBe(0);
     expect(result.current.hasMore).toBe(false);
   });
+
+  it('handles null response.data gracefully', async () => {
+    const mockResponse = {
+      data: null as any,
+      meta: { total: 0, page: 1, per_page: 20, has_more: false }
+    };
+    (api.getProblems as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+
+    const { result } = renderHook(() => useProblems());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.error).toBe(null);
+    expect(result.current.problems).toEqual([]);
+    expect(result.current.total).toBe(0);
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  it('handles undefined response.data gracefully', async () => {
+    const mockResponse = {
+      meta: { total: 0, page: 1, per_page: 20, has_more: false }
+    } as any;
+    (api.getProblems as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+
+    const { result } = renderHook(() => useProblems());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.error).toBe(null);
+    expect(result.current.problems).toEqual([]);
+    expect(result.current.total).toBe(0);
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  it('handles missing meta gracefully', async () => {
+    const mockResponse = {
+      data: []
+    } as any;
+    (api.getProblems as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+
+    const { result } = renderHook(() => useProblems());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.error).toBe(null);
+    expect(result.current.problems).toEqual([]);
+  });
 });

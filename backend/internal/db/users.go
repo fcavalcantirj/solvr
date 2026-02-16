@@ -3,6 +3,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"strings"
@@ -174,20 +175,31 @@ func (r *UserRepository) Delete(ctx context.Context, id string) error {
 // scanUser scans a user row into a User struct.
 func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 	user := &models.User{}
+
+	// Use sql.NullString for nullable fields
+	var passwordHash, avatarURL, bio, authProvider, authProviderID sql.NullString
+
 	err := row.Scan(
 		&user.ID,
 		&user.Username,
 		&user.DisplayName,
 		&user.Email,
-		&user.AuthProvider,
-		&user.AuthProviderID,
-		&user.PasswordHash,
-		&user.AvatarURL,
-		&user.Bio,
+		&authProvider,
+		&authProviderID,
+		&passwordHash,
+		&avatarURL,
+		&bio,
 		&user.Role,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
+
+	// Convert nullable fields to strings (empty if NULL)
+	user.AuthProvider = authProvider.String
+	user.AuthProviderID = authProviderID.String
+	user.PasswordHash = passwordHash.String
+	user.AvatarURL = avatarURL.String
+	user.Bio = bio.String
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

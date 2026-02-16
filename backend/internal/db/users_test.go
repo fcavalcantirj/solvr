@@ -650,6 +650,74 @@ func TestUser_JSONSerializationSecurity(t *testing.T) {
 	}
 }
 
+// TestUserRepository_FindByAuthProvider_NullPasswordHash tests that we can scan
+// OAuth users who have NULL password_hash (they don't use password auth).
+// This is a regression test for the bug: "can't scan into dest[6]: cannot scan NULL into *string"
+// Per TDD: This test ensures OAuth users with NULL password_hash can be scanned successfully.
+func TestUserRepository_FindByAuthProvider_NullPasswordHash(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDB(t, pool)
+
+	ctx := context.Background()
+
+	// Insert an OAuth user directly into DB with NULL password_hash
+	// This simulates what happens in production for OAuth users
+	insertQuery := `
+		INSERT INTO users (username, display_name, email, auth_provider, auth_provider_id, password_hash, role)
+		VALUES ($1, $2, $3, $4, $5, NULL, $6)
+		RETURNING id
+	`
+
+	var userID string
+	err := pool.QueryRow(ctx, insertQuery,
+		"oauth_null_test",
+		"OAuth Null Test User",
+		"oauth_null@example.com",
+		models.AuthProviderGoogle,
+		"google_null_123",
+		models.UserRoleUser,
+	).Scan(&userID)
+
+	if err != nil {
+		t.Fatalf("Failed to insert OAuth user with NULL password_hash: %v", err)
+	}
+
+	// Now try to find this user by auth provider
+	// This should NOT fail with "can't scan into dest[6]: cannot scan NULL into *string"
+	repo := NewUserRepository(pool)
+	foundUser, err := repo.FindByAuthProvider(ctx, models.AuthProviderGoogle, "google_null_123")
+	if err != nil {
+		t.Fatalf("FindByAuthProvider failed with NULL password_hash: %v", err)
+	}
+
+	if foundUser == nil {
+		t.Fatal("Expected user to be found, got nil")
+	}
+
+	// Verify user fields
+	if foundUser.ID != userID {
+		t.Errorf("Expected user ID %s, got %s", userID, foundUser.ID)
+	}
+
+	if foundUser.Username != "oauth_null_test" {
+		t.Errorf("Expected username 'oauth_null_test', got '%s'", foundUser.Username)
+	}
+
+	if foundUser.Email != "oauth_null@example.com" {
+		t.Errorf("Expected email 'oauth_null@example.com', got '%s'", foundUser.Email)
+	}
+
+	// Password hash should be empty string (not cause a scan error)
+	if foundUser.PasswordHash != "" {
+		t.Errorf("Expected empty password hash for OAuth user, got '%s'", foundUser.PasswordHash)
+	}
+
+	t.Logf("SUCCESS: Can scan OAuth user with NULL password_hash (no scan error)")
+}
+
 // Helper functions for tests
 
 // getTestPool returns a test database pool or nil if DATABASE_URL is not set.

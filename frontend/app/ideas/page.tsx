@@ -40,7 +40,7 @@ export default function IdeasPage() {
 
   // Lifted filter state (same pattern as problems/page.tsx and questions/page.tsx)
   const [stage, setStage] = useState<string>('all');
-  const [sort, setSort] = useState<string>('newest');
+  const [sort, setSort] = useState<string>('votes');
   const [tags, setTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 

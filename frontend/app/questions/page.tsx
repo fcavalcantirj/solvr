@@ -15,7 +15,7 @@ export default function QuestionsPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const [status, setStatus] = useState<string | undefined>(undefined);
-  const [sort, setSort] = useState<'newest' | 'votes' | 'answers'>('newest');
+  const [sort, setSort] = useState<'newest' | 'votes' | 'answers'>('votes');
   const [tags, setTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 

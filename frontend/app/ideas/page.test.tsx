@@ -74,8 +74,8 @@ describe('IdeasPage', () => {
     render(<IdeasPage />);
 
     const filters = screen.getByTestId('ideas-filters');
-    // Initially: stage undefined (all), sort newest, tags empty
-    expect(filters.getAttribute('data-sort')).toBe('newest');
+    // Initially: stage undefined (all), sort votes, tags empty
+    expect(filters.getAttribute('data-sort')).toBe('votes');
     expect(filters.getAttribute('data-tags')).toBe('[]');
   });
 
@@ -86,7 +86,7 @@ describe('IdeasPage', () => {
     expect(mockIdeasListOptions).toHaveBeenCalled();
     const lastCall = mockIdeasListOptions.mock.calls[mockIdeasListOptions.mock.calls.length - 1][0];
     expect(lastCall).toBeDefined();
-    expect(lastCall.sort).toBe('newest');
+    expect(lastCall.sort).toBe('votes');
     expect(lastCall.tags).toEqual([]);
   });
 

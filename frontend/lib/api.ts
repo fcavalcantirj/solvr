@@ -69,6 +69,10 @@ import type {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
+interface FetchOptions extends RequestInit {
+  skipAuthEvent?: boolean;
+}
+
 class SolvrAPI {
   private baseUrl: string;
   private authToken: string | null = null;
@@ -94,7 +98,7 @@ class SolvrAPI {
     this.authEventHandlers = this.authEventHandlers.filter(h => h !== handler);
   }
 
-  private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  private async fetch<T>(endpoint: string, options?: FetchOptions): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -113,8 +117,8 @@ class SolvrAPI {
       const message = errorBody.error?.message || `API error: ${response.status}`;
       const error = new APIError(message, response.status);
 
-      // Emit auth errors before throwing
-      if (error.statusCode === 401) {
+      // Emit auth errors before throwing (unless explicitly skipped for optional background checks)
+      if (error.statusCode === 401 && !options?.skipAuthEvent) {
         this.authEventHandlers.forEach(handler => handler(error));
       }
 
@@ -220,6 +224,7 @@ class SolvrAPI {
   async getMyVote(postId: string): Promise<{ data: { vote: 'up' | 'down' | null } }> {
     return this.fetch<{ data: { vote: 'up' | 'down' | null } }>(`/v1/posts/${postId}/my-vote`, {
       method: 'GET',
+      skipAuthEvent: true,  // Don't show auth modal on 401 - this is an optional background check
     });
   }
 

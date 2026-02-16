@@ -31,21 +31,24 @@ interface QuestionsFiltersProps {
   status?: string;
   sort: 'newest' | 'votes' | 'answers';
   tags: string[];
+  searchQuery: string;
   onStatusChange: (status: string | undefined) => void;
   onSortChange: (sort: 'newest' | 'votes' | 'answers') => void;
   onTagsChange: (tags: string[]) => void;
+  onSearchQueryChange: (query: string) => void;
 }
 
 export function QuestionsFilters({
   status,
   sort,
   tags,
+  searchQuery,
   onStatusChange,
   onSortChange,
   onTagsChange,
+  onSearchQueryChange,
 }: QuestionsFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
 
   // Find active status key from API value
   const activeStatusKey = statuses.find((s) => s.apiValue === status)?.key || "all";
@@ -71,7 +74,7 @@ export function QuestionsFilters({
     onStatusChange(undefined);
     onSortChange("newest");
     onTagsChange([]);
-    setSearchQuery("");
+    onSearchQueryChange("");
   };
 
   const hasActiveFilters =
@@ -87,15 +90,28 @@ export function QuestionsFilters({
           {/* Search */}
           <div className="flex-1 max-w-lg">
             <div className="relative">
-              <Search
-                size={16}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
-              />
+              <button
+                data-testid="search-icon-button"
+                onClick={() => {
+                  // Icon click doesn't need to do anything special
+                  // Search is already triggered by onChange
+                }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                aria-label="Search"
+              >
+                <Search size={16} />
+              </button>
               <input
                 type="text"
                 placeholder="Search questions..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => onSearchQueryChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    // Enter key submits current search query
+                    // Search is already triggered by onChange, this is just for UX
+                  }
+                }}
                 className="w-full bg-background border border-border pl-11 pr-4 py-2.5 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors"
               />
             </div>

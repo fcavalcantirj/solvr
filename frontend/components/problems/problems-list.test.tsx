@@ -7,6 +7,11 @@ vi.mock('@/hooks/use-problems', () => ({
   useProblems: vi.fn(),
 }));
 
+// Mock the useSearch hook
+vi.mock('@/hooks/use-posts', () => ({
+  useSearch: vi.fn(),
+}));
+
 // Mock VoteButton
 vi.mock('@/components/ui/vote-button', () => ({
   VoteButton: ({ postId, initialScore, showDownvote, direction, size }: {
@@ -36,6 +41,7 @@ vi.mock('next/link', () => ({
 }));
 
 import { useProblems } from '@/hooks/use-problems';
+import { useSearch } from '@/hooks/use-posts';
 
 const mockProblem = {
   id: 'problem-123',
@@ -199,5 +205,141 @@ describe('ProblemsList', () => {
     for (const btn of secondButtons) {
       expect(btn.getAttribute('data-initial-score')).toBe('7');
     }
+  });
+});
+
+describe('ProblemsList - Search Integration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('uses useSearch hook when searchQuery is provided', () => {
+    const mockSearchPost = {
+      id: 'post-123',
+      title: 'Search Result',
+      snippet: 'A search result...',
+      status: 'open',
+      votes: 10,
+      responses: 2,
+      views: 50,
+      author: { id: 'user-1', name: 'testuser', type: 'human' as const },
+      tags: ['react'],
+      time: '1h ago',
+      type: 'problem' as const,
+    };
+
+    vi.mocked(useProblems).mockReturnValue({
+      problems: [],
+      loading: false,
+      error: null,
+      total: 0,
+      hasMore: false,
+      page: 1,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    vi.mocked(useSearch).mockReturnValue({
+      posts: [mockSearchPost],
+      loading: false,
+      error: null,
+      hasMore: false,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<ProblemsList searchQuery="test search" />);
+
+    // Both hooks are called (React rules), but useSearch result is used
+    expect(useSearch).toHaveBeenCalledWith('test search', 'problem');
+    expect(screen.getByText('Search Result')).toBeInTheDocument();
+  });
+
+  it('uses useProblems hook when searchQuery is empty', () => {
+    vi.mocked(useProblems).mockReturnValue({
+      problems: [mockProblem],
+      loading: false,
+      error: null,
+      total: 1,
+      hasMore: false,
+      page: 1,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    vi.mocked(useSearch).mockReturnValue({
+      posts: [],
+      loading: false,
+      error: null,
+      hasMore: false,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<ProblemsList searchQuery="" />);
+
+    // Both hooks are called (React rules), but useProblems result is used
+    expect(useProblems).toHaveBeenCalled();
+    expect(useSearch).toHaveBeenCalledWith('', 'problem');
+    expect(screen.getByText('Test Problem')).toBeInTheDocument();
+  });
+
+  it('uses useProblems hook when searchQuery is undefined', () => {
+    vi.mocked(useProblems).mockReturnValue({
+      problems: [mockProblem],
+      loading: false,
+      error: null,
+      total: 1,
+      hasMore: false,
+      page: 1,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    vi.mocked(useSearch).mockReturnValue({
+      posts: [],
+      loading: false,
+      error: null,
+      hasMore: false,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<ProblemsList />);
+
+    // Both hooks are called (React rules), but useProblems result is used
+    expect(useProblems).toHaveBeenCalled();
+    expect(useSearch).toHaveBeenCalledWith('', 'problem');
+    expect(screen.getByText('Test Problem')).toBeInTheDocument();
+  });
+
+  it('transforms search results to problem format', () => {
+    const mockSearchPost = {
+      id: 'post-search-1',
+      title: 'Async Bug',
+      snippet: 'Having issues with async...',
+      status: 'open',
+      votes: 15,
+      responses: 3,
+      views: 100,
+      author: { id: 'user-2', name: 'developer', type: 'human' as const },
+      tags: ['async', 'node.js'],
+      time: '2h ago',
+      type: 'problem' as const,
+    };
+
+    vi.mocked(useSearch).mockReturnValue({
+      posts: [mockSearchPost],
+      loading: false,
+      error: null,
+      hasMore: false,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<ProblemsList searchQuery="async" />);
+
+    // Should render the search result
+    expect(screen.getByText('Async Bug')).toBeInTheDocument();
   });
 });

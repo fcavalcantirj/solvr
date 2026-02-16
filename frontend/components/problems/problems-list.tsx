@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Bot, User, GitBranch, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useProblems, ProblemListItem, UseProblemsOptions } from "@/hooks/use-problems";
+import { useSearch } from "@/hooks/use-posts";
 import { VoteButton } from "@/components/ui/vote-button";
 
 // Map API weight (1-5) to display labels
@@ -34,11 +35,38 @@ interface ProblemsListProps {
   status?: string;
   tags?: string[];
   sort?: 'newest' | 'votes' | 'approaches';
+  searchQuery?: string;
 }
 
-export function ProblemsList({ status, tags, sort }: ProblemsListProps) {
+export function ProblemsList({ status, tags, sort, searchQuery }: ProblemsListProps) {
+  // Use search when there's a query, otherwise use regular problems fetch
+  const isSearching = Boolean(searchQuery?.trim());
+
   const options: UseProblemsOptions = { status, tags, sort };
-  const { problems, loading, error, hasMore, loadMore } = useProblems(options);
+  const problemsResult = useProblems(options);
+  const searchResult = useSearch(searchQuery || '', 'problem');
+
+  // Select appropriate result based on whether we're searching
+  const { problems, loading, error, hasMore, loadMore } = isSearching
+    ? {
+        problems: searchResult.posts.map(post => ({
+          id: post.id,
+          title: post.title,
+          snippet: post.snippet,
+          status: post.status,
+          tags: post.tags,
+          voteScore: post.votes,
+          approachesCount: post.responses,
+          viewCount: post.views,
+          author: post.author,
+          timestamp: post.time,
+        })),
+        loading: searchResult.loading,
+        error: searchResult.error,
+        hasMore: false,
+        loadMore: () => {},
+      }
+    : problemsResult;
 
   if (loading && problems.length === 0) {
     return (

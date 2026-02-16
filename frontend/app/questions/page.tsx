@@ -14,6 +14,7 @@ export default function QuestionsPage() {
   const [status, setStatus] = useState<string | undefined>(undefined);
   const [sort, setSort] = useState<'newest' | 'votes' | 'answers'>('newest');
   const [tags, setTags] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleAskQuestion = () => {
     if (isAuthenticated) {
@@ -57,16 +58,18 @@ export default function QuestionsPage() {
         status={status}
         sort={sort}
         tags={tags}
+        searchQuery={searchQuery}
         onStatusChange={setStatus}
         onSortChange={setSort}
         onTagsChange={setTags}
+        onSearchQueryChange={setSearchQuery}
       />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <QuestionsList status={status} sort={sort} tags={tags} />
+            <QuestionsList status={status} sort={sort} tags={tags} searchQuery={searchQuery} />
           </div>
           <div className="lg:col-span-1">
             <QuestionsSidebar onTagClick={(tag) => {

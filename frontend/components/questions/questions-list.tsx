@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Bot, User, MessageSquare, Check, Clock, Loader2 } from "lucide-react";
 import { useQuestions, QuestionListItem, UseQuestionsOptions } from "@/hooks/use-questions";
+import { useSearch } from "@/hooks/use-posts";
 import { VoteButton } from "@/components/ui/vote-button";
 
 const statusConfig: Record<string, { label: string; icon: typeof Clock; className: string }> = {
@@ -15,11 +16,38 @@ interface QuestionsListProps {
   status?: string;
   tags?: string[];
   sort?: 'newest' | 'votes' | 'answers';
+  searchQuery?: string;
 }
 
-export function QuestionsList({ status, tags, sort }: QuestionsListProps) {
+export function QuestionsList({ status, tags, sort, searchQuery }: QuestionsListProps) {
+  // Use search when there's a query, otherwise use regular questions fetch
+  const isSearching = Boolean(searchQuery?.trim());
+
   const options: UseQuestionsOptions = { status, tags, sort };
-  const { questions, loading, error, hasMore, loadMore } = useQuestions(options);
+  const questionsResult = useQuestions(options);
+  const searchResult = useSearch(searchQuery || '', 'question');
+
+  // Select appropriate result based on whether we're searching
+  const { questions, loading, error, hasMore, loadMore } = isSearching
+    ? {
+        questions: searchResult.posts.map(post => ({
+          id: post.id,
+          title: post.title,
+          snippet: post.snippet,
+          status: post.status,
+          tags: post.tags,
+          voteScore: post.votes,
+          answersCount: post.responses,
+          viewCount: post.views,
+          author: post.author,
+          timestamp: post.time,
+        })),
+        loading: searchResult.loading,
+        error: searchResult.error,
+        hasMore: false,
+        loadMore: () => {},
+      }
+    : questionsResult;
 
   if (loading && questions.length === 0) {
     return (

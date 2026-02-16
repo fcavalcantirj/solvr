@@ -6,6 +6,7 @@ import { Sparkles, MessageSquare, GitBranch, Zap, ChevronDown, Loader2 } from "l
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIdeas, IdeaListItem, IdeaStage, UseIdeasOptions } from "@/hooks/use-ideas";
+import { useSearch } from "@/hooks/use-posts";
 import { VoteButton } from "@/components/ui/vote-button";
 
 const stageConfig: Record<IdeaStage | string, { label: string; color: string }> = {
@@ -23,12 +24,40 @@ const potentialConfig = {
 };
 
 interface IdeasListProps {
-  options?: UseIdeasOptions;
+  options?: UseIdeasOptions & { searchQuery?: string };
 }
 
 export function IdeasList({ options }: IdeasListProps) {
   const [expandedIdea, setExpandedIdea] = useState<string | null>(null);
-  const { ideas, loading, error, total, hasMore, loadMore } = useIdeas(options);
+
+  // Use search when there's a query, otherwise use regular ideas fetch
+  const isSearching = Boolean(options?.searchQuery?.trim());
+
+  const ideasResult = useIdeas(options);
+  const searchResult = useSearch(options?.searchQuery || '', 'idea');
+
+  // Select appropriate result based on whether we're searching
+  const { ideas, loading, error, total, hasMore, loadMore } = isSearching
+    ? {
+        ideas: searchResult.posts.map(post => ({
+          id: post.id,
+          title: post.title,
+          snippet: post.snippet,
+          stage: post.status as IdeaStage,
+          tags: post.tags,
+          supportScore: post.votes,
+          engagementCount: post.responses,
+          viewCount: post.views,
+          author: post.author,
+          timestamp: post.time,
+        })),
+        loading: searchResult.loading,
+        error: searchResult.error,
+        total: searchResult.posts.length,
+        hasMore: false,
+        loadMore: () => {},
+      }
+    : ideasResult;
 
   if (loading && ideas.length === 0) {
     return (

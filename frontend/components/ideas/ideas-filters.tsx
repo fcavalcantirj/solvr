@@ -20,9 +20,11 @@ export interface IdeasFiltersProps {
   stage: string;
   sort: string;
   tags: string[];
+  searchQuery: string;
   onStageChange: (stage: string) => void;
   onSortChange: (sort: string) => void;
   onTagsChange: (tags: string[]) => void;
+  onSearchQueryChange: (query: string) => void;
 }
 
 function getStages(stats?: IdeasFilterStats) {
@@ -56,13 +58,14 @@ export function IdeasFilters({
   stage,
   sort,
   tags,
+  searchQuery,
   onStageChange,
   onSortChange,
   onTagsChange,
+  onSearchQueryChange,
 }: IdeasFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [activePotential, setActivePotential] = useState("any");
-  const [searchQuery, setSearchQuery] = useState("");
 
   const { trending, loading: trendingLoading } = useTrending();
 
@@ -108,12 +111,28 @@ export function IdeasFilters({
         {/* Search and Filter Toggle */}
         <div className="flex items-center gap-2 sm:gap-4 py-4 border-t border-border">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <button
+              data-testid="search-icon-button"
+              onClick={() => {
+                // Icon click doesn't need to do anything special
+                // Search is already triggered by onChange
+              }}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+              aria-label="Search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
             <input
               type="text"
               placeholder="Search ideas..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => onSearchQueryChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  // Enter key submits current search query
+                  // Search is already triggered by onChange, this is just for UX
+                }
+              }}
               className="w-full bg-secondary/50 border border-border pl-10 pr-4 py-2 font-mono text-sm focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
             />
           </div>

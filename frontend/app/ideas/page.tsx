@@ -39,6 +39,7 @@ export default function IdeasPage() {
   const [stage, setStage] = useState<string>('all');
   const [sort, setSort] = useState<string>('newest');
   const [tags, setTags] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleSparkIdea = () => {
     if (isAuthenticated) {
@@ -139,16 +140,18 @@ export default function IdeasPage() {
           stage={stage}
           sort={sort}
           tags={tags}
+          searchQuery={searchQuery}
           onStageChange={setStage}
           onSortChange={setSort}
           onTagsChange={setTags}
+          onSearchQueryChange={setSearchQuery}
         />
 
         {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2">
-              <IdeasList options={{ status: apiStatus, sort: sort as 'newest' | 'trending' | 'most_support', tags }} />
+              <IdeasList options={{ status: apiStatus, sort: sort as 'newest' | 'trending' | 'most_support', tags, searchQuery }} />
             </div>
             <div className="lg:col-span-1">
               <IdeasSidebar />

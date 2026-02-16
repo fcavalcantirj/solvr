@@ -1126,19 +1126,18 @@ func TestMCPToolsListEndpoint(t *testing.T) {
 }
 
 // =============================================================================
-// Search API Auth Tests (Router Level)
+// Search API Public Access Tests (Router Level)
 //
-// These tests verify that the search endpoint REQUIRES authentication.
-// Auth is enforced at the router level via UnifiedAuthMiddleware.
+// These tests verify that the search endpoint is PUBLIC (no auth required).
+// Per SPEC.md Part 5.6: "All content should be publicly discoverable and readable"
 // =============================================================================
 
-// TestSearchEndpointRequiresAuth verifies GET /v1/search requires authentication.
-// Per user decision: search should not be public - it requires an agent key,
-// user API key, or JWT token.
+// TestSearchEndpointRequiresAuth verifies GET /v1/search is publicly accessible.
+// UPDATED: Search is now public per SPEC.md Part 5.6
 func TestSearchEndpointRequiresAuth(t *testing.T) {
 	router := setupTestRouter(t)
 
-	// GET /v1/search without auth should return 401
+	// GET /v1/search without auth should return 200 OK
 	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -1148,20 +1147,20 @@ func TestSearchEndpointRequiresAuth(t *testing.T) {
 		t.Errorf("GET /v1/search returned 404 - endpoint not wired")
 	}
 
-	// Should return 401 Unauthorized (not 200)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401 (unauthorized), got %d: %s", w.Code, w.Body.String())
+	// Should return 200 OK (search is public)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 (public access), got %d: %s", w.Code, w.Body.String())
 	}
 
-	// Verify error response is JSON
+	// Verify response is JSON
 	var response map[string]interface{}
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	// Should have error object
-	if response["error"] == nil {
-		t.Error("expected error object in response")
+	// Should have data array (not error object)
+	if response["data"] == nil {
+		t.Error("expected data in response")
 	}
 }
 
@@ -1217,44 +1216,46 @@ func TestSearchEndpointWithAPIKey(t *testing.T) {
 	}
 }
 
-// TestSearchEndpointWithInvalidAPIKey verifies GET /v1/search rejects invalid API key.
+// TestSearchEndpointWithInvalidAPIKey verifies GET /v1/search works even with invalid API key.
+// UPDATED: Search is public - invalid auth is ignored
 func TestSearchEndpointWithInvalidAPIKey(t *testing.T) {
 	router := setupTestRouter(t)
 
-	// GET /v1/search with invalid API key should return 401
+	// GET /v1/search with invalid API key should return 200 OK (auth is optional)
 	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)
 	req.Header.Set("Authorization", "Bearer solvr_invalid_api_key_12345678901234567890")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Should return 401 Unauthorized
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d: %s", w.Code, w.Body.String())
+	// Should return 200 OK (search is public, invalid auth is ignored)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 (public access), got %d: %s", w.Code, w.Body.String())
 	}
 
-	var errResp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	// Should have error object
-	if errResp["error"] == nil {
-		t.Error("expected error object in response")
+	// Should have data array (not error object)
+	if resp["data"] == nil {
+		t.Error("expected data in response")
 	}
 }
 
-// TestSearchEndpointWithMalformedAuth verifies GET /v1/search rejects malformed auth.
+// TestSearchEndpointWithMalformedAuth verifies GET /v1/search works even with malformed auth.
+// UPDATED: Search is public - malformed auth is ignored
 func TestSearchEndpointWithMalformedAuth(t *testing.T) {
 	router := setupTestRouter(t)
 
-	// GET /v1/search with malformed auth header should return 401
+	// GET /v1/search with malformed auth header should return 200 OK (auth is optional)
 	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)
 	req.Header.Set("Authorization", "NotBearer something")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Should return 401 Unauthorized
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d: %s", w.Code, w.Body.String())
+	// Should return 200 OK (search is public, malformed auth is ignored)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 (public access), got %d: %s", w.Code, w.Body.String())
 	}
 }

@@ -21,7 +21,7 @@ export interface IdeaListItem {
   branches: number;
   tags: string[];
   timestamp: string;
-  supporters: Array<{ name: string; type: 'human' | 'ai' }>;
+  supporters?: Array<{ name: string; type: 'human' | 'ai' }>;
   recentComment: {
     author: string;
     type: 'human' | 'ai';
@@ -59,7 +59,7 @@ function transformIdea(post: APIPost): IdeaListItem {
     branches: post.evolved_into?.length ?? 0,
     tags: post.tags || [],
     timestamp: formatRelativeTime(post.created_at),
-    supporters: [],
+    supporters: (post as any).supporters ?? [],
     recentComment: null,
   };
 }

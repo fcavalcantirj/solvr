@@ -11,16 +11,14 @@ import (
 )
 
 // =============================================================================
-// Search API Auth Behavior Tests
+// Search API Public Access Tests
 //
-// These tests document that the search endpoint REQUIRES authentication.
-// Per user decision: search should not be public - it requires an agent key,
-// user API key, or JWT token.
+// These tests document that the search endpoint is PUBLIC and does NOT require
+// authentication. Per SPEC.md Part 5.6: "All content should be publicly
+// discoverable and readable".
 //
-// This protects against:
-// - Scraping/abuse
-// - Rate limit bypass
-// - Anonymous usage tracking issues
+// Authentication is only required for mutations (POST/PATCH/DELETE), not for
+// browsing content or searching.
 // =============================================================================
 
 // TestSearch_NoAuthRequired verifies search works without any authentication.
@@ -53,7 +51,7 @@ func TestSearch_NoAuthRequired(t *testing.T) {
 
 	handler.Search(w, req)
 
-	// Handler itself returns 200 OK - auth is enforced at router level
+	// Handler returns 200 OK - search is public, no auth required
 	if w.Code != http.StatusOK {
 		t.Errorf("Search handler should return 200. Expected 200, got %d", w.Code)
 	}
@@ -119,9 +117,9 @@ func TestSearch_WithInvalidAuthHeader(t *testing.T) {
 
 	handler.Search(w, req)
 
-	// Handler returns 200 - auth validation is at router level
+	// Handler returns 200 - search is public, ignores invalid auth
 	if w.Code != http.StatusOK {
-		t.Errorf("Search handler returns 200 (auth is at router level). Expected 200, got %d", w.Code)
+		t.Errorf("Search handler returns 200 (search is public). Expected 200, got %d", w.Code)
 	}
 }
 
@@ -144,8 +142,8 @@ func TestSearch_WithJWTAuthHeader(t *testing.T) {
 	}
 }
 
-// TestSearch_PublicReadContract documents authentication requirements for search.
-// NOTE: Handler tests show handler behavior. Router integration tests verify auth.
+// TestSearch_PublicReadContract documents that search is public and works with or without auth.
+// NOTE: Handler tests show handler behavior. Router integration tests verify no auth required.
 func TestSearch_PublicReadContract(t *testing.T) {
 	repo := NewMockSearchRepository()
 	repo.SetResults([]models.SearchResult{
@@ -176,37 +174,37 @@ func TestSearch_PublicReadContract(t *testing.T) {
 			name:        "no auth",
 			authHeader:  "",
 			shouldWork:  true,
-			description: "Handler itself doesn't reject (auth is at router level)",
+			description: "Search is public - works without any auth",
 		},
 		{
 			name:        "agent api key",
 			authHeader:  "Bearer solvr_abc123",
 			shouldWork:  true,
-			description: "Agents can search with their keys",
+			description: "Search is public - works with agent key (optional)",
 		},
 		{
 			name:        "user api key",
 			authHeader:  "Bearer solvr_sk_xyz789",
 			shouldWork:  true,
-			description: "Users can search with their keys",
+			description: "Search is public - works with user key (optional)",
 		},
 		{
 			name:        "jwt token",
 			authHeader:  "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.sig",
 			shouldWork:  true,
-			description: "JWT authenticated users can search",
+			description: "Search is public - works with JWT (optional)",
 		},
 		{
 			name:        "invalid token",
 			authHeader:  "Bearer invalid",
 			shouldWork:  true,
-			description: "Handler doesn't validate tokens (router middleware does)",
+			description: "Search is public - ignores invalid auth",
 		},
 		{
 			name:        "malformed header",
 			authHeader:  "NotBearer something",
 			shouldWork:  true,
-			description: "Handler doesn't validate headers (router middleware does)",
+			description: "Search is public - ignores malformed auth",
 		},
 	}
 

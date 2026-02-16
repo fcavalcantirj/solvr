@@ -200,4 +200,93 @@ describe('IdeasList', () => {
       expect(btn.getAttribute('data-initial-score')).toBe('7');
     }
   });
+
+  describe('Defensive null handling', () => {
+    it('handles undefined supporters array gracefully', () => {
+      const ideaWithUndefinedSupporters = {
+        ...mockIdea,
+        supporters: undefined,
+      };
+      vi.mocked(useIdeas).mockReturnValue({
+        ideas: [ideaWithUndefinedSupporters],
+        loading: false,
+        error: null,
+        total: 1,
+        hasMore: false,
+        page: 1,
+        loadMore: vi.fn(),
+        refetch: vi.fn(),
+      });
+
+      // Should not crash
+      expect(() => render(<IdeasList />)).not.toThrow();
+    });
+
+    it('handles null supporters array gracefully', () => {
+      const ideaWithNullSupporters = {
+        ...mockIdea,
+        supporters: null as any,
+      };
+      vi.mocked(useIdeas).mockReturnValue({
+        ideas: [ideaWithNullSupporters],
+        loading: false,
+        error: null,
+        total: 1,
+        hasMore: false,
+        page: 1,
+        loadMore: vi.fn(),
+        refetch: vi.fn(),
+      });
+
+      // Should not crash
+      expect(() => render(<IdeasList />)).not.toThrow();
+    });
+
+    it('does not render supporters preview when supporters is undefined', () => {
+      const ideaWithUndefinedSupporters = {
+        ...mockIdea,
+        supporters: undefined,
+      };
+      vi.mocked(useIdeas).mockReturnValue({
+        ideas: [ideaWithUndefinedSupporters],
+        loading: false,
+        error: null,
+        total: 1,
+        hasMore: false,
+        page: 1,
+        loadMore: vi.fn(),
+        refetch: vi.fn(),
+      });
+
+      const { container } = render(<IdeasList />);
+
+      // Supporters UI should not be rendered
+      // The supporters div has flex -space-x-1, which is specific to supporters
+      const supportersElements = container.querySelectorAll('.flex.-space-x-1');
+      expect(supportersElements.length).toBe(0);
+    });
+
+    it('does not render supporters preview when supporters is empty', () => {
+      const ideaWithEmptySupporters = {
+        ...mockIdea,
+        supporters: [],
+      };
+      vi.mocked(useIdeas).mockReturnValue({
+        ideas: [ideaWithEmptySupporters],
+        loading: false,
+        error: null,
+        total: 1,
+        hasMore: false,
+        page: 1,
+        loadMore: vi.fn(),
+        refetch: vi.fn(),
+      });
+
+      const { container } = render(<IdeasList />);
+
+      // Supporters UI should not be rendered when array is empty
+      const supportersElements = container.querySelectorAll('.flex.-space-x-1');
+      expect(supportersElements.length).toBe(0);
+    });
+  });
 });

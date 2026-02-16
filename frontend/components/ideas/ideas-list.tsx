@@ -226,7 +226,7 @@ function IdeaCard({ idea, expanded, onToggleExpand }: IdeaCardProps) {
             </div>
 
             {/* Supporters preview */}
-            {idea.supporters.length > 0 && (
+            {idea.supporters && idea.supporters.length > 0 && (
               <div className="flex items-center">
                 <div className="flex -space-x-1">
                   {idea.supporters.slice(0, 3).map((supporter, idx) => (

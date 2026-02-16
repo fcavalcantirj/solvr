@@ -214,15 +214,19 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	// Per BE-002: Google OAuth creates/finds users in database
 	var oauthHandlers *handlers.OAuthHandlers
 	var authUserRepo handlers.UserRepositoryForAuth
+	var authMethodRepo handlers.AuthMethodRepository
 	if pool != nil {
 		userRepoForOAuth := db.NewUserRepository(pool)
+		authMethodRepoForOAuth := db.NewAuthMethodRepository(pool)
 		oauthUserService := services.NewOAuthUserService(userRepoForOAuth)
 		oauthUserAdapter := services.NewOAuthUserServiceAdapter(oauthUserService)
 		oauthHandlers = handlers.NewOAuthHandlersWithUserService(oauthConfig, pool, nil, oauthUserAdapter)
 		authUserRepo = db.NewUserRepository(pool)
+		authMethodRepo = authMethodRepoForOAuth
 	} else {
 		// Fallback for testing when pool is nil
 		oauthHandlers = handlers.NewOAuthHandlers(oauthConfig, pool, nil)
+		authMethodRepo = nil // Will be nil for testing
 	}
 
 	// Create API key validator for agent authentication
@@ -271,7 +275,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		r.Get("/auth/google/callback", oauthHandlers.GoogleCallback)
 
 		// Email/password authentication (API-CRITICAL per PRD Task 48 & 49)
-		authHandler := handlers.NewAuthHandlers(oauthConfig, authUserRepo)
+		authHandler := handlers.NewAuthHandlers(oauthConfig, authUserRepo, authMethodRepo)
 		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
 

@@ -249,3 +249,64 @@ func TestListAgents_ValidStatuses(t *testing.T) {
 		}
 	}
 }
+
+// TestListAgents_IncludesStats tests that meta includes active_count and human_backed_count.
+// Per bug fix: frontend should not calculate stats from paginated results.
+// Backend must provide total active_count and human_backed_count in meta.
+func TestListAgents_IncludesStats(t *testing.T) {
+	repo := NewMockAgentRepository()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	// Set up test agents with different statuses and badges
+	repo.agents["agent1"] = &models.Agent{
+		ID:                   "agent1",
+		DisplayName:          "Agent One",
+		Status:               "active",
+		HasHumanBackedBadge:  true,
+		Reputation:           100,
+		CreatedAt:            time.Now(),
+		UpdatedAt:            time.Now(),
+	}
+	repo.agents["agent2"] = &models.Agent{
+		ID:                   "agent2",
+		DisplayName:          "Agent Two",
+		Status:               "active",
+		HasHumanBackedBadge:  false,
+		Reputation:           50,
+		CreatedAt:            time.Now(),
+		UpdatedAt:            time.Now(),
+	}
+	repo.agents["agent3"] = &models.Agent{
+		ID:                   "agent3",
+		DisplayName:          "Agent Three",
+		Status:               "pending",
+		HasHumanBackedBadge:  false,
+		Reputation:           25,
+		CreatedAt:            time.Now(),
+		UpdatedAt:            time.Now(),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents", nil)
+	rr := httptest.NewRecorder()
+	handler.ListAgents(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp AgentsListResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Verify stats in meta
+	if resp.Meta.ActiveCount != 2 {
+		t.Errorf("expected active_count 2, got %d", resp.Meta.ActiveCount)
+	}
+	if resp.Meta.HumanBackedCount != 1 {
+		t.Errorf("expected human_backed_count 1, got %d", resp.Meta.HumanBackedCount)
+	}
+	if resp.Meta.Total != 3 {
+		t.Errorf("expected total 3, got %d", resp.Meta.Total)
+	}
+}

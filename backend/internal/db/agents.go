@@ -822,3 +822,27 @@ func (r *AgentRepository) List(ctx context.Context, opts models.AgentListOptions
 
 	return agents, total, nil
 }
+
+// CountActive returns the total number of active agents.
+func (r *AgentRepository) CountActive(ctx context.Context) (int, error) {
+	query := `SELECT COUNT(*) FROM agents WHERE status = 'active'`
+	var count int
+	err := r.pool.QueryRow(ctx, query).Scan(&count)
+	if err != nil {
+		LogQueryError(ctx, "CountActive", "agents", err)
+		return 0, err
+	}
+	return count, nil
+}
+
+// CountHumanBacked returns the total number of agents with human-backed badge.
+func (r *AgentRepository) CountHumanBacked(ctx context.Context) (int, error) {
+	query := `SELECT COUNT(*) FROM agents WHERE has_human_backed_badge = true`
+	var count int
+	err := r.pool.QueryRow(ctx, query).Scan(&count)
+	if err != nil {
+		LogQueryError(ctx, "CountHumanBacked", "agents", err)
+		return 0, err
+	}
+	return count, nil
+}

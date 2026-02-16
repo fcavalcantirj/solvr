@@ -76,6 +76,86 @@ func (m *mockUserRepoForAuth) Create(ctx context.Context, user *models.User) (*m
 	return user, nil
 }
 
+// mockAuthMethodRepoStub is a minimal mock for AuthMethodRepository
+// that tracks auth methods in memory
+type mockAuthMethodRepoStub struct {
+	methods map[string][]*models.AuthMethod // keyed by user_id
+}
+
+func newMockAuthMethodRepoStub() *mockAuthMethodRepoStub {
+	return &mockAuthMethodRepoStub{
+		methods: make(map[string][]*models.AuthMethod),
+	}
+}
+
+func (m *mockAuthMethodRepoStub) Create(ctx context.Context, method *models.AuthMethod) (*models.AuthMethod, error) {
+	// Generate ID if not set
+	if method.ID == "" {
+		method.ID = "mock-auth-method-id"
+	}
+	// Store method
+	m.methods[method.UserID] = append(m.methods[method.UserID], method)
+	return method, nil
+}
+
+func (m *mockAuthMethodRepoStub) FindByUserID(ctx context.Context, userID string) ([]*models.AuthMethod, error) {
+	methods, exists := m.methods[userID]
+	if !exists {
+		return []*models.AuthMethod{}, nil
+	}
+	return methods, nil
+}
+
+func (m *mockAuthMethodRepoStub) FindByProvider(ctx context.Context, provider, providerID string) (*models.AuthMethod, error) {
+	for _, methods := range m.methods {
+		for _, method := range methods {
+			if method.AuthProvider == provider && method.AuthProviderID == providerID {
+				return method, nil
+			}
+		}
+	}
+	return nil, db.ErrNotFound
+}
+
+func (m *mockAuthMethodRepoStub) GetEmailAuthMethod(ctx context.Context, userID string) (*models.AuthMethod, error) {
+	methods, exists := m.methods[userID]
+	if !exists {
+		return nil, db.ErrNotFound
+	}
+	for _, method := range methods {
+		if method.AuthProvider == models.AuthProviderEmail {
+			return method, nil
+		}
+	}
+	return nil, db.ErrNotFound
+}
+
+func (m *mockAuthMethodRepoStub) UpdateLastUsed(ctx context.Context, methodID string) error {
+	// Find and update the method
+	for _, methods := range m.methods {
+		for _, method := range methods {
+			if method.ID == methodID {
+				// In a real implementation, this would update last_used_at timestamp
+				return nil
+			}
+		}
+	}
+	return db.ErrNotFound
+}
+
+func (m *mockAuthMethodRepoStub) HasEmailAuth(ctx context.Context, userID string) (bool, error) {
+	methods, exists := m.methods[userID]
+	if !exists {
+		return false, nil
+	}
+	for _, method := range methods {
+		if method.AuthProvider == models.AuthProviderEmail {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // TestRegister_ValidRequest tests successful registration with valid input.
 func TestRegister_ValidRequest(t *testing.T) {
 	mockRepo := newMockUserRepoForAuth()
@@ -84,7 +164,8 @@ func TestRegister_ValidRequest(t *testing.T) {
 		JWTExpiry:    "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, mockRepo)
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
 
 	reqBody := RegisterRequest{
 		Email:       "newuser@example.com",
@@ -178,7 +259,8 @@ func TestRegister_DuplicateEmail(t *testing.T) {
 		JWTExpiry:    "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, mockRepo)
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
 
 	// Create existing user
 	existingUser := &models.User{
@@ -233,7 +315,8 @@ func TestRegister_WeakPassword(t *testing.T) {
 		JWTExpiry:    "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, mockRepo)
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
 
 	testCases := []struct {
 		name     string
@@ -294,7 +377,8 @@ func TestRegister_InvalidEmail(t *testing.T) {
 		JWTExpiry:    "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, mockRepo)
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
 
 	testCases := []struct {
 		name  string
@@ -350,7 +434,8 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 		JWTExpiry:    "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, mockRepo)
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
 
 	// Create existing user
 	existingUser := &models.User{
@@ -405,7 +490,8 @@ func TestRegister_InvalidUsername(t *testing.T) {
 		JWTExpiry:    "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, mockRepo)
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
 
 	testCases := []struct {
 		name     string
@@ -467,7 +553,8 @@ func TestLogin_ValidCredentials(t *testing.T) {
 		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, mockRepo)
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
 
 	// Create a user with password
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.DefaultCost)
@@ -480,6 +567,15 @@ func TestLogin_ValidCredentials(t *testing.T) {
 		Role:         models.UserRoleUser,
 	}
 	mockRepo.users["user@example.com"] = existingUser
+
+	// Create corresponding auth_method entry
+	authMethod := &models.AuthMethod{
+		ID:           "auth-method-123",
+		UserID:       "user-123",
+		AuthProvider: models.AuthProviderEmail,
+		PasswordHash: string(passwordHash),
+	}
+	mockAuthMethodRepo.methods["user-123"] = []*models.AuthMethod{authMethod}
 
 	// Attempt login
 	reqBody := LoginRequest{
@@ -543,7 +639,8 @@ func TestLogin_WrongPassword(t *testing.T) {
 		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, mockRepo)
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
 
 	// Create a user with password
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.DefaultCost)
@@ -556,6 +653,15 @@ func TestLogin_WrongPassword(t *testing.T) {
 		Role:         models.UserRoleUser,
 	}
 	mockRepo.users["user@example.com"] = existingUser
+
+	// Create corresponding auth_method entry
+	authMethod := &models.AuthMethod{
+		ID:           "auth-method-123",
+		UserID:       "user-123",
+		AuthProvider: models.AuthProviderEmail,
+		PasswordHash: string(passwordHash),
+	}
+	mockAuthMethodRepo.methods["user-123"] = []*models.AuthMethod{authMethod}
 
 	// Attempt login with wrong password
 	reqBody := LoginRequest{
@@ -597,7 +703,8 @@ func TestLogin_NonExistentEmail(t *testing.T) {
 		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, mockRepo)
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
 
 	// Attempt login with non-existent email
 	reqBody := LoginRequest{
@@ -639,7 +746,8 @@ func TestLogin_OAuthOnlyUser(t *testing.T) {
 		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, mockRepo)
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
 
 	// Create an OAuth-only user (no password_hash)
 	oauthUser := &models.User{
@@ -652,6 +760,15 @@ func TestLogin_OAuthOnlyUser(t *testing.T) {
 		Role:           models.UserRoleUser,
 	}
 	mockRepo.users["oauth@example.com"] = oauthUser
+
+	// Create OAuth auth_method entry (no email/password method)
+	oauthMethod := &models.AuthMethod{
+		ID:             "oauth-method-456",
+		UserID:         "user-456",
+		AuthProvider:   models.AuthProviderGoogle,
+		AuthProviderID: "google-123",
+	}
+	mockAuthMethodRepo.methods["user-456"] = []*models.AuthMethod{oauthMethod}
 
 	// Attempt login with password
 	reqBody := LoginRequest{

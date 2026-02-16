@@ -44,6 +44,9 @@ type AgentRepositoryInterface interface {
 	GetAgentByAPIKeyHash(ctx context.Context, key string) (*models.Agent, error)
 	// List agents (API-001 requirement)
 	List(ctx context.Context, opts models.AgentListOptions) ([]models.AgentWithPostCount, int, error)
+	// Count stats for agents listing
+	CountActive(ctx context.Context) (int, error)
+	CountHumanBacked(ctx context.Context) (int, error)
 }
 
 // ClaimTokenRepositoryInterface defines database operations for claim tokens.
@@ -787,10 +790,12 @@ type AgentsListResponse struct {
 
 // AgentsListMeta contains metadata for agent list responses.
 type AgentsListMeta struct {
-	Total   int  `json:"total"`
-	Page    int  `json:"page"`
-	PerPage int  `json:"per_page"`
-	HasMore bool `json:"has_more"`
+	Total            int  `json:"total"`
+	Page             int  `json:"page"`
+	PerPage          int  `json:"per_page"`
+	HasMore          bool `json:"has_more"`
+	ActiveCount      int  `json:"active_count"`
+	HumanBackedCount int  `json:"human_backed_count"`
 }
 
 // ListAgents handles GET /v1/agents - list registered agents.
@@ -861,6 +866,18 @@ func (h *AgentsHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch stats for meta
+	activeCount, err := h.repo.CountActive(r.Context())
+	if err != nil {
+		// Log error but continue with 0
+		activeCount = 0
+	}
+	humanBackedCount, err := h.repo.CountHumanBacked(r.Context())
+	if err != nil {
+		// Log error but continue with 0
+		humanBackedCount = 0
+	}
+
 	// Calculate has_more
 	hasMore := page*perPage < total
 
@@ -868,10 +885,12 @@ func (h *AgentsHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	resp := AgentsListResponse{
 		Data: agents,
 		Meta: AgentsListMeta{
-			Total:   total,
-			Page:    page,
-			PerPage: perPage,
-			HasMore: hasMore,
+			Total:            total,
+			Page:             page,
+			PerPage:          perPage,
+			HasMore:          hasMore,
+			ActiveCount:      activeCount,
+			HumanBackedCount: humanBackedCount,
 		},
 	}
 

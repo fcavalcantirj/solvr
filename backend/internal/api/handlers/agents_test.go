@@ -227,6 +227,26 @@ func (m *MockAgentRepository) List(ctx context.Context, opts models.AgentListOpt
 	return agents[start:end], total, nil
 }
 
+func (m *MockAgentRepository) CountActive(ctx context.Context) (int, error) {
+	count := 0
+	for _, agent := range m.agents {
+		if agent.Status == "active" {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (m *MockAgentRepository) CountHumanBacked(ctx context.Context) (int, error) {
+	count := 0
+	for _, agent := range m.agents {
+		if agent.HasHumanBackedBadge {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // Helper to add JWT claims to request context
 func addJWTClaimsToContext(r *http.Request, userID, email, role string) *http.Request {
 	claims := &auth.Claims{

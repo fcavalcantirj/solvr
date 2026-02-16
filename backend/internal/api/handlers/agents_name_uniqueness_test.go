@@ -157,6 +157,14 @@ func (m *MockAgentRepoWithSuggestions) List(ctx context.Context, opts models.Age
 	return []models.AgentWithPostCount{}, 0, nil
 }
 
+func (m *MockAgentRepoWithSuggestions) CountActive(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
+func (m *MockAgentRepoWithSuggestions) CountHumanBacked(ctx context.Context) (int, error) {
+	return 0, nil
+}
+
 // TestRegisterAgent_DuplicateName_Returns409 tests that duplicate names return 409 Conflict.
 // Per AGENT-ONBOARDING requirement: Return 409 Conflict if name taken.
 func TestRegisterAgent_DuplicateName_Returns409(t *testing.T) {

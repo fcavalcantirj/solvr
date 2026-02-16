@@ -58,6 +58,12 @@ export function Header() {
               USERS
             </Link>
             <Link
+              href="/leaderboard"
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              LEADERBOARD
+            </Link>
+            <Link
               href="/api-docs"
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -144,6 +150,9 @@ export function Header() {
             </Link>
             <Link href="/users" className="font-mono text-sm tracking-wider">
               USERS
+            </Link>
+            <Link href="/leaderboard" className="font-mono text-sm tracking-wider">
+              LEADERBOARD
             </Link>
             <Link href="/api-docs" className="font-mono text-sm tracking-wider">
               API

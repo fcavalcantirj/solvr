@@ -32,6 +32,44 @@ describe('Header', () => {
     vi.clearAllMocks();
   });
 
+  describe('LEADERBOARD link in navigation', () => {
+    it('displays LEADERBOARD link in desktop navigation', () => {
+      render(<Header />);
+
+      const leaderboardLink = screen.getByRole('link', { name: 'LEADERBOARD' });
+      expect(leaderboardLink).toBeInTheDocument();
+      expect(leaderboardLink).toHaveAttribute('href', '/leaderboard');
+    });
+
+    it('positions LEADERBOARD link between USERS and API in desktop nav', () => {
+      render(<Header />);
+
+      const links = screen.getAllByRole('link');
+      const usersIndex = links.findIndex(link => link.textContent === 'USERS');
+      const leaderboardIndex = links.findIndex(link => link.textContent === 'LEADERBOARD');
+      const apiIndex = links.findIndex(link => link.textContent === 'API');
+
+      expect(leaderboardIndex).toBeGreaterThan(usersIndex);
+      expect(leaderboardIndex).toBeLessThan(apiIndex);
+    });
+
+    it('displays LEADERBOARD link in mobile menu', () => {
+      render(<Header />);
+
+      // Open mobile menu
+      const menuButton = screen.getByRole('button');
+      fireEvent.click(menuButton);
+
+      // Should find LEADERBOARD in mobile menu (desktop + mobile)
+      const leaderboardLinks = screen.getAllByRole('link', { name: 'LEADERBOARD' });
+      expect(leaderboardLinks.length).toBeGreaterThanOrEqual(2);
+
+      // Mobile link should also point to /leaderboard
+      const mobileLeaderboardLink = leaderboardLinks[1];
+      expect(mobileLeaderboardLink).toHaveAttribute('href', '/leaderboard');
+    });
+  });
+
   describe('USERS link in navigation', () => {
     it('shows USERS link in desktop navigation', () => {
       render(<Header />);

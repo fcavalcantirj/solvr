@@ -63,6 +63,8 @@ import type {
   APIQuestionsStatsResponse,
   APIContributionsResponse,
   FetchContributionsParams,
+  APILeaderboardResponse,
+  FetchLeaderboardParams,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -598,6 +600,29 @@ class SolvrAPI {
 
     const query = searchParams.toString();
     return this.fetch<APIFeedResponse>(`/v1/feed/stuck${query ? `?${query}` : ''}`);
+  }
+
+  // Leaderboard (PRD-v5)
+  async getLeaderboard(params?: FetchLeaderboardParams): Promise<APILeaderboardResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.type && params.type !== 'all') searchParams.set('type', params.type);
+    if (params?.timeframe) searchParams.set('timeframe', params.timeframe);
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.offset) searchParams.set('offset', params.offset.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APILeaderboardResponse>(`/v1/leaderboard${query ? `?${query}` : ''}`);
+  }
+
+  async getLeaderboardByTag(tag: string, params?: FetchLeaderboardParams): Promise<APILeaderboardResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.type && params.type !== 'all') searchParams.set('type', params.type);
+    if (params?.timeframe) searchParams.set('timeframe', params.timeframe);
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.offset) searchParams.set('offset', params.offset.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APILeaderboardResponse>(`/v1/leaderboard/tags/${encodeURIComponent(tag)}${query ? `?${query}` : ''}`);
   }
 }
 

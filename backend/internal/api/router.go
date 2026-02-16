@@ -369,6 +369,16 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Get("/sitemap/counts", sitemapHandler.GetSitemapCounts)
 		}
 
+		// Leaderboard endpoints (PRD-v5)
+		// GET /v1/leaderboard - global leaderboard (no auth required)
+		// GET /v1/leaderboard/tags/{tag} - tag-specific leaderboard (no auth required)
+		if pool != nil {
+			leaderboardRepo := db.NewLeaderboardRepository(pool)
+			leaderboardHandler := handlers.NewLeaderboardHandler(leaderboardRepo)
+			r.Get("/leaderboard", leaderboardHandler.GetLeaderboard)
+			r.Get("/leaderboard/tags/{tag}", leaderboardHandler.GetLeaderboardByTag)
+		}
+
 		// Problems endpoints (API-CRITICAL per PRD-v2)
 		// GET /v1/problems - list problems (no auth required)
 		r.Get("/problems", problemsHandler.List)

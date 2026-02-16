@@ -1,3 +1,62 @@
+2026-02-15: PRD-v5 Task 3 - Create tag-specific leaderboard endpoint
+- Created db/leaderboard_tags.go with GetLeaderboardByTag method (482 lines)
+- SQL query filters all activity by tag: problems, answers (via parent question), votes
+- Tag parameter: $3 = ANY(p.tags) for TEXT[] array filtering
+- Tag filtering cascades: posts directly, answers inherit from question tags, approaches inherit from problem tags
+- Vote attribution: EXISTS subqueries with JOIN to parent post for tag filtering
+- Added getTimeframeDate() helper to leaderboard.go for code reuse (extracted from GetLeaderboard)
+- Created leaderboard_tags_test.go with 4 integration tests (380 lines):
+  * TestLeaderboardByTag_ValidTag - agent appears in golang leaderboard
+  * TestLeaderboardByTag_NoActivity - empty array for non-existent tag
+  * TestLeaderboardByTag_Pagination - page 1 and 2 with continuous ranks
+  * TestLeaderboardByTag_FiltersByTag - isolated activity per tag (rust vs python)
+- Added GetLeaderboardByTag handler to handlers/leaderboard.go
+- Route: GET /v1/leaderboard/tags/{tag} with type, timeframe, pagination support
+- Added 4 handler tests to leaderboard_test.go (659 lines total):
+  * TestGetLeaderboardByTag_ValidTag - verifies tag passed to repo
+  * TestGetLeaderboardByTag_NoActivity - empty results for non-existent tag
+  * TestGetLeaderboardByTag_Pagination - limit=5, offset=10, hasMore calculation
+  * TestGetLeaderboardByTag_InvalidTag - 400 error for missing tag
+- All 13 leaderboard tests pass (9 existing + 4 new handler tests)
+- Repository uses GIN index on posts.tags for efficient filtering (created in migration 000003)
+- File sizes: leaderboard_tags.go 482, leaderboard.go 396, handler 180, tests 659 (all under 800)
+- Backend builds successfully, route registered in router.go
+
+2026-02-15: PRD-v5 Task 2 - Add timeframe filtering to leaderboard
+- Updated db/leaderboard.go with timeframe support (monthly, weekly, all_time)
+- Added helper functions: getMonthStart() and getWeekStart() for date calculations
+- Updated buildLeaderboardQuery() to filter activity by created_at >= start_date
+- For all_time + agents: uses pre-calculated a.reputation (includes bonus_points, faster)
+- For timeframes + agents: recalculates reputation from activity within timeframe
+- For users: always calculates reputation from activity (no reputation column)
+- Correct schema usage: posted_by_id/posted_by_type for posts, author_id/author_type for answers
+- Vote counting: target_type/target_id with EXISTS subqueries to find vote targets
+- Added 4 new tests to handlers/leaderboard_test.go: AllTime, Monthly, Weekly, InvalidTimeframe
+- All 9 leaderboard tests pass (5 from Task 1 + 4 new)
+- Backend builds successfully
+- API endpoints ready: GET /v1/leaderboard?timeframe=all_time|monthly|weekly
+- Week calculation follows ISO 8601 (Monday = start of week)
+- File: backend/internal/db/leaderboard.go = 388 lines (under 800 limit)
+
+2026-02-15: PRD-v5 Task 1 - Create base leaderboard endpoint
+- Created models/leaderboard.go: LeaderboardEntry and LeaderboardOptions structs (50 lines)
+- Created db/leaderboard.go: LeaderboardRepository with GetLeaderboard method (~350 lines)
+- SQL query: UNION of agents and users, ORDER BY reputation DESC, ROW_NUMBER() for rank
+- Supports type filtering (all/agents/users) and pagination (limit, offset)
+- Created handlers/leaderboard.go: LeaderboardHandler with GetLeaderboard endpoint (~100 lines)
+- Response format: { data: LeaderboardEntry[], meta: { total, page, per_page, has_more } }
+- Added route GET /v1/leaderboard (no auth required) in router.go
+- Created handlers/leaderboard_test.go with 5 passing unit tests:
+  - TestGetLeaderboard_AllTypes (mixed agents and users)
+  - TestGetLeaderboard_AgentsOnly (type filter)
+  - TestGetLeaderboard_UsersOnly (type filter)
+  - TestGetLeaderboard_Pagination (limit/offset)
+  - TestGetLeaderboard_RankingOrder (reputation sort)
+- Created db/leaderboard_test.go with 5 integration tests (skip without DATABASE_URL)
+- All tests pass, backend builds successfully
+- Followed TDD workflow: wrote tests first, then implementation
+- Total: ~850 lines across 5 new files, all under 800-line individual file limit
+
 2026-02-15: Remove placeholder guides and 'MORE GUIDES COMING SOON' text
 - Removed 4 unlinked guide cards (Contributing Solutions, Authentication Flows, MCP Server Integration, Rate Limits & Best Practices)
 - Removed "MORE GUIDES COMING SOON" placeholder section (lines 261-295, saved 35 lines)
@@ -1066,3 +1125,88 @@
 - Error handling: Shows user-friendly error messages on 401/409/400 responses
 - Security: Passwords not logged, JWT stored in localStorage, cleared on logout
 - Next step: Fix dead social links on About page (PRD Task next)
+
+2026-02-15: PRD-v5 Task 4 - Add TypeScript types and API client methods for leaderboard
+- Added LeaderboardKeyStats interface to api-types.ts (problems_solved, answers_accepted, upvotes_received, total_contributions)
+- Added LeaderboardEntry interface (rank, id, type: 'agent' | 'user', display_name, avatar_url?, reputation, key_stats)
+- Added APILeaderboardResponse interface (data: LeaderboardEntry[], meta with pagination)
+- Added FetchLeaderboardParams interface (type?: 'all' | 'agents' | 'users', timeframe?, limit?, offset?)
+- Added APILeaderboardResponse and FetchLeaderboardParams to api.ts imports
+- Added getLeaderboard(params?) method to SolvrAPI class → GET /v1/leaderboard with query params
+- Added getLeaderboardByTag(tag, params?) method to SolvrAPI class → GET /v1/leaderboard/tags/{tag} with URL encoding
+- Both methods follow existing pattern: URLSearchParams for query building, skip type='all' (backend default)
+- File sizes: api-types.ts 857 lines, api.ts 633 lines (both under 900)
+- Verified: npx tsc --noEmit passes with no type errors
+- Type mapping from backend Go structs to frontend TypeScript 1:1 with optional avatar_url
+- Union type for entity type ('agent' | 'user') catches typos at compile time
+- All params optional to match backend defaults (type=all, timeframe=all_time, limit=50, offset=0)
+
+2026-02-15: PRD-v5 Task 5 - Create useLeaderboard hook with TDD approach
+- Created hooks/use-leaderboard.test.ts with 6 tests FIRST (TDD RED phase):
+  * fetches from API on mount with correct params (type, timeframe, limit=50, offset=0)
+  * transforms LeaderboardEntry data correctly (adds profileLink: /agents/{id} or /users/{id})
+  * type filter change resets to offset 0 and refetches
+  * timeframe filter change resets to offset 0 and refetches
+  * loadMore() increments offset by 50 and appends results
+  * error handling displays error state
+- Created hooks/use-leaderboard.ts following useProblems pattern (TDD GREEN phase):
+  * UseLeaderboardOptions interface: type?, timeframe?
+  * UseLeaderboardResult interface: entries[], loading, error, total, hasMore, refetch(), loadMore()
+  * transformLeaderboardEntry() converts snake_case API → camelCase UI + adds profileLink
+  * avatarUrl handling: empty string maps to undefined
+  * Uses offset-based pagination (not page-based): offset 0, 50, 100...
+  * fetchLeaderboard(offset, append?) handles initial load and pagination
+  * loadMore() increments offset by 50, appends to existing entries
+  * refetch() resets offset to 0, clears entries, fetches from start
+  * Filter changes trigger useEffect → fetchLeaderboard(0) for reset
+- All 6 tests pass (TDD GREEN verified)
+- TypeScript compilation passes with no errors
+- File sizes: use-leaderboard.ts 122 lines, use-leaderboard.test.ts 241 lines (both under 800)
+- Followed TDD workflow: RED (failing tests) → GREEN (implementation) → verified
+
+2026-02-15: PRD-v5 Task 6 - Create /leaderboard page with tabs, filters, and ranked list (TDD approach)
+- Created app/leaderboard/page.test.tsx with 8 tests FIRST (TDD RED phase):
+  * renders timeframe tabs (ALL TIME, THIS MONTH, THIS WEEK)
+  * clicking timeframe tab updates active state and calls hook with new timeframe
+  * renders type filter pills (ALL, HUMANS, AGENTS)
+  * clicking type pill updates filter and calls hook with new type
+  * renders leaderboard entries with correct rank badges (#1, #2, #3)
+  * rank #1-#3 have special styling (gold bg-yellow-500, silver bg-gray-400, bronze bg-orange-600)
+  * entries link to correct profile pages (/agents/{id} or /users/{id} based on type)
+  * LOAD MORE button calls loadMore() and is hidden when !hasMore
+- Created app/leaderboard/page.tsx following agents/page.tsx pattern (TDD GREEN phase):
+  * 'use client' component with useState for timeframe and type filters
+  * Uses useLeaderboard({ type, timeframe }) hook for data fetching
+  * Page header: Trophy icon, "LEADERBOARD" title, description, stats (125 total contributors)
+  * Timeframe tabs: ALL TIME | THIS MONTH | THIS WEEK (active bg-foreground)
+  * Type filter pills: ALL | HUMANS | AGENTS (active bg-foreground with border)
+  * Leaderboard entries: rank badge, avatar (or initials fallback), display name link, type icon (Bot/User)
+  * Key stats: "{X} problems solved • {Y} answers accepted" in muted text
+  * Reputation: large emerald-500 number with "REP" label
+  * Rank badges: gold (#1), silver (#2), bronze (#3), muted (rest)
+  * Loading state: 10 skeleton loaders with pulse animation
+  * Empty state: Trophy icon with "No entries found" message
+  * Error state: Red border with "Failed to load leaderboard" and error message
+  * LOAD MORE button: visible when hasMore, calls loadMore(), hidden when !hasMore
+  * Style: monospace fonts, border styling consistent with /agents and /users pages
+- All 8 tests pass (TDD GREEN verified)
+- TypeScript compilation passes with no errors
+- File sizes: page.tsx 294 lines, page.test.tsx 252 lines (both under 800)
+- Followed TDD workflow: RED (failing tests) → GREEN (implementation) → verified
+- Note: Metadata not added (client component limitation in Next.js 13+)
+
+2026-02-15: PRD-v5 Task 7 - Add LEADERBOARD navigation link to header (TDD approach)
+- Updated components/header.test.tsx with 3 tests FIRST (TDD RED phase):
+  * displays LEADERBOARD link in desktop navigation
+  * positions LEADERBOARD link between USERS and API in desktop nav
+  * displays LEADERBOARD link in mobile menu
+- Updated components/header.tsx (TDD GREEN phase):
+  * Added LEADERBOARD link to desktop nav between USERS and API (line 60-66)
+  * Link href: /leaderboard
+  * Style: font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors
+  * Added LEADERBOARD link to mobile menu between USERS and API (line 148-150)
+  * Mobile style: font-mono text-sm tracking-wider (consistent with other mobile links)
+- All 10 tests pass (7 existing + 3 new) (TDD GREEN verified)
+- TypeScript compilation passes with no errors
+- File sizes: header.tsx 176 lines, header.test.tsx 135 lines (both under 800)
+- Followed TDD workflow: RED (failing tests) → GREEN (implementation) → verified

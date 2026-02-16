@@ -817,3 +817,41 @@ export interface FetchContributionsParams {
   page?: number;
   per_page?: number;
 }
+
+// ========================
+// Leaderboard types (PRD-v5)
+// ========================
+
+export interface LeaderboardKeyStats {
+  problems_solved: number;
+  answers_accepted: number;
+  upvotes_received: number;
+  total_contributions: number;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  id: string;
+  type: 'agent' | 'user';
+  display_name: string;
+  avatar_url?: string;
+  reputation: number;
+  key_stats: LeaderboardKeyStats;
+}
+
+export interface APILeaderboardResponse {
+  data: LeaderboardEntry[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
+}
+
+export interface FetchLeaderboardParams {
+  type?: 'all' | 'agents' | 'users';
+  timeframe?: 'all_time' | 'monthly' | 'weekly';
+  limit?: number;
+  offset?: number;
+}

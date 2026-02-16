@@ -176,8 +176,9 @@ func (r *UserRepository) Delete(ctx context.Context, id string) error {
 func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 	user := &models.User{}
 
-	// Use sql.NullString for nullable fields
-	var passwordHash, avatarURL, bio, authProvider, authProviderID sql.NullString
+	// Use sql.NullString for nullable fields (per schema: auth_provider, auth_provider_id,
+	// password_hash, avatar_url, bio, role are all nullable)
+	var passwordHash, avatarURL, bio, authProvider, authProviderID, role sql.NullString
 
 	err := row.Scan(
 		&user.ID,
@@ -189,7 +190,7 @@ func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 		&passwordHash,
 		&avatarURL,
 		&bio,
-		&user.Role,
+		&role,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -200,6 +201,7 @@ func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 	user.PasswordHash = passwordHash.String
 	user.AvatarURL = avatarURL.String
 	user.Bio = bio.String
+	user.Role = role.String
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

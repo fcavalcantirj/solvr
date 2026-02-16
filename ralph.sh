@@ -95,7 +95,10 @@ for ((i=1; i<=$1; i++)); do
 
 IMPORTANT: Always use 'git add .' before committing to include NEW files, not just modified ones!
 
-CRITICAL: ONE TASK AT A TIME. NO FILE OVER 800 LINES." > "$tmpfile" 2>&1 || true
+CRITICAL: 
+- ONE TASK ONLY then STOP. Do NOT continue to another task.
+- After commit+push, you are DONE. Exit immediately.
+- NO FILE OVER 800 LINES." > "$tmpfile" 2>&1 || true
 
   iter_end=$(date +%s)
   iter_time=$((iter_end - iter_start))

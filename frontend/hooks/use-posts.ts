@@ -78,6 +78,17 @@ export function usePosts(params?: FetchPostsParams): UsePostsResult {
 
       const stableParams: FetchPostsParams = JSON.parse(paramsKey);
       const response = await api.getPosts({ ...stableParams, page: pageNum });
+
+      // Defensive: handle null/undefined data
+      if (!response || !response.data) {
+        console.warn('[usePosts] Received empty response:', response);
+        setPosts([]);
+        setTotal(0);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
       const transformedPosts = response.data.map(transformPost);
 
       if (append) {
@@ -90,6 +101,10 @@ export function usePosts(params?: FetchPostsParams): UsePostsResult {
       setHasMore(response.meta.has_more);
       setPage(pageNum);
     } catch (err) {
+      console.error('[usePosts] Error:', err);
+      if (err && typeof err === 'object') {
+        console.error('[usePosts] Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      }
       setError(err instanceof Error ? err.message : 'Failed to fetch posts');
     } finally {
       setLoading(false);
@@ -139,9 +154,22 @@ export function useSearch(query: string, type?: PostType | 'all') {
         setLoading(true);
         setError(null);
         const response = await api.search({ q: query, type });
+
+        // Defensive: handle null/undefined data
+        if (!response || !response.data) {
+          console.warn('[useSearch] Received empty response:', response);
+          setPosts([]);
+          setLoading(false);
+          return;
+        }
+
         const transformedPosts = response.data.map(post => transformPost(post as APIPost));
         setPosts(transformedPosts);
       } catch (err) {
+        console.error('[useSearch] Error:', err);
+        if (err && typeof err === 'object') {
+          console.error('[useSearch] Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+        }
         setError(err instanceof Error ? err.message : 'Search failed');
       } finally {
         setLoading(false);

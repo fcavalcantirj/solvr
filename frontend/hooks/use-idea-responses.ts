@@ -81,6 +81,16 @@ export function useIdeaResponses(ideaId: string, options: UseIdeaResponsesOption
         per_page: options.perPage || 20,
       });
 
+      // Defensive: handle null/undefined data
+      if (!response || !response.data) {
+        console.warn('[useIdeaResponses] Received empty response:', response);
+        setResponses([]);
+        setTotal(0);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
       const transformedResponses = response.data.map(transformResponse);
 
       if (append) {
@@ -93,6 +103,10 @@ export function useIdeaResponses(ideaId: string, options: UseIdeaResponsesOption
       setHasMore(response.meta.has_more);
       setPage(pageNum);
     } catch (err) {
+      console.error('[useIdeaResponses] Error:', err);
+      if (err && typeof err === 'object') {
+        console.error('[useIdeaResponses] Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      }
       setError(err instanceof Error ? err.message : 'Failed to fetch responses');
     } finally {
       setLoading(false);

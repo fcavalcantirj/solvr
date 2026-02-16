@@ -33,7 +33,9 @@ function transformQuestion(post: APIPost): QuestionListItem {
   return {
     id: post.id,
     title: post.title,
-    snippet: post.description.slice(0, 200) + (post.description.length > 200 ? '...' : ''),
+    snippet: post.description
+      ? post.description.slice(0, 200) + (post.description.length > 200 ? '...' : '')
+      : '',
     status: post.status,
     displayStatus: mapQuestionStatus(post.status),
     voteScore: post.vote_score,

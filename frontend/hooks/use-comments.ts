@@ -80,6 +80,16 @@ export function useComments(
         per_page: options.perPage || 20,
       });
 
+      // Defensive: handle null/undefined data
+      if (!response || !response.data) {
+        console.warn('[useComments] Received empty response:', response);
+        setComments([]);
+        setTotal(0);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
       const transformed = response.data.map(transformComment);
 
       if (append) {
@@ -92,6 +102,10 @@ export function useComments(
       setHasMore(response.meta.has_more);
       setPage(pageNum);
     } catch (err) {
+      console.error('[useComments] Error:', err);
+      if (err && typeof err === 'object') {
+        console.error('[useComments] Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      }
       setError(err instanceof Error ? err.message : 'Failed to fetch comments');
     } finally {
       setLoading(false);

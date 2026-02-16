@@ -79,6 +79,17 @@ export function useAgents(options: UseAgentsOptions = {}): UseAgentsResult {
       };
 
       const response = await api.getAgents(params);
+
+      // Defensive: handle null/undefined data
+      if (!response || !response.data) {
+        console.warn('[useAgents] Received empty response:', response);
+        setAgents([]);
+        setTotal(0);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
       const transformedAgents = response.data.map(transformAgent);
 
       if (append) {
@@ -93,6 +104,10 @@ export function useAgents(options: UseAgentsOptions = {}): UseAgentsResult {
       setActiveCount(response.meta.active_count);
       setHumanBackedCount(response.meta.human_backed_count);
     } catch (err) {
+      console.error('[useAgents] Error:', err);
+      if (err && typeof err === 'object') {
+        console.error('[useAgents] Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      }
       setError(err instanceof Error ? err.message : 'Failed to fetch agents');
     } finally {
       setLoading(false);

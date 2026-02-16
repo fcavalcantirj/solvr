@@ -129,7 +129,22 @@ class SolvrAPI {
     if (params.page) searchParams.set('page', params.page.toString());
     if (params.per_page) searchParams.set('per_page', params.per_page.toString());
 
-    return this.fetch<APISearchResponse>(`/v1/search?${searchParams.toString()}`);
+    const endpoint = `/v1/search?${searchParams.toString()}`;
+
+    try {
+      const response = await this.fetch<APISearchResponse>(endpoint);
+
+      // Defensive: validate response structure
+      if (!response || typeof response !== 'object') {
+        console.error('[api.search] Invalid response format:', response);
+        throw new Error('Invalid API response format');
+      }
+
+      return response;
+    } catch (err) {
+      console.error('[api.search] Request failed:', endpoint, err);
+      throw err;
+    }
   }
 
   async getPost(id: string): Promise<{ data: APIPost }> {
@@ -694,7 +709,8 @@ export function formatRelativeTime(dateString: string): string {
 }
 
 // Utility: truncate text for snippet
-export function truncateText(text: string, maxLength: number = 200): string {
+export function truncateText(text: string | undefined, maxLength: number = 200): string {
+  if (!text) return '';
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength).trim() + '...';
 }

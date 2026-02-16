@@ -46,7 +46,9 @@ function transformIdea(post: APIPost): IdeaListItem {
   return {
     id: post.id,
     title: post.title,
-    spark: post.description.slice(0, 200) + (post.description.length > 200 ? '...' : ''),
+    spark: post.description
+      ? post.description.slice(0, 200) + (post.description.length > 200 ? '...' : '')
+      : '',
     stage: mapStatusToStage(post.status),
     potential: post.vote_score > 50 ? 'high' : post.vote_score > 10 ? 'rising' : 'needs_validation',
     author: {

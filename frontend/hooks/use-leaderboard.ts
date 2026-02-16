@@ -78,6 +78,17 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}): UseLeaderbo
       };
 
       const response = await api.getLeaderboard(params);
+
+      // Defensive: handle null/undefined data
+      if (!response || !response.data) {
+        console.warn('[useLeaderboard] Received empty response:', response);
+        setEntries([]);
+        setTotal(0);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
       const transformed = response.data.map(transformLeaderboardEntry);
 
       if (append) {
@@ -90,6 +101,10 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}): UseLeaderbo
       setHasMore(response.meta.has_more);
       setOffset(offsetNum);
     } catch (err) {
+      console.error('[useLeaderboard] Error:', err);
+      if (err && typeof err === 'object') {
+        console.error('[useLeaderboard] Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      }
       setError(err instanceof Error ? err.message : 'Failed to fetch leaderboard');
     } finally {
       setLoading(false);

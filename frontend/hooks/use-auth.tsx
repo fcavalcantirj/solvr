@@ -1,7 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
+import { AuthRequiredModal } from '@/components/ui/auth-required-modal';
 
 export interface User {
   id: string;
@@ -14,6 +15,9 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  showAuthModal: boolean;
+  authModalMessage: string;
+  setShowAuthModal: (show: boolean) => void;
   setToken: (token: string) => Promise<void>;
   logout: () => void;
   loginWithGitHub: () => void;
@@ -29,6 +33,14 @@ const TOKEN_KEY = 'auth_token';
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalMessage, setAuthModalMessage] = useState('Login required to continue');
+  const userRef = useRef<User | null>(null);
+
+  // Keep ref in sync with user state
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const fetchUser = useCallback(async () => {
     try {
@@ -60,6 +72,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
   }, [fetchUser]);
 
+  // Listen for auth errors from API client
+  useEffect(() => {
+    const handler = () => {
+      // Only show modal if user is not authenticated (use ref for current value)
+      if (!userRef.current) {
+        setAuthModalMessage('Login required to continue');
+        setShowAuthModal(true);
+      }
+    };
+
+    api.onAuthError(handler);
+    return () => api.offAuthError(handler);
+  }, []); // Empty dependency array since we use ref
+
   const setToken = useCallback(async (token: string) => {
     localStorage.setItem(TOKEN_KEY, token);
     api.setAuthToken(token);
@@ -70,6 +96,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(TOKEN_KEY);
     api.clearAuthToken();
     setUser(null);
+    // Reload page to clear all state
+    window.location.href = '/';
   }, []);
 
   const loginWithGitHub = useCallback(() => {
@@ -147,6 +175,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isAuthenticated: user !== null,
         isLoading,
+        showAuthModal,
+        authModalMessage,
+        setShowAuthModal,
         setToken,
         logout,
         loginWithGitHub,
@@ -156,6 +187,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+      <AuthRequiredModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        message={authModalMessage}
+      />
     </AuthContext.Provider>
   );
 }

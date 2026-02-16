@@ -36,9 +36,8 @@ export function useAnswerVote(answerId: string, initialScore: number): UseAnswer
       setScore(previousScore);
       setUserVote(previousVote);
       if (isUnauthorizedError(err)) {
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
-        localStorage.setItem('auth_return_url', window.location.pathname);
-        window.location.href = `${API_BASE_URL}/v1/auth/google`;
+        setError('Login required to vote');
+        // Modal will be shown automatically by AuthContext
         return;
       }
       setError(err instanceof Error ? err.message : 'Failed to vote');

@@ -9,12 +9,15 @@ import { api } from '@/lib/api';
 vi.mock('@/lib/api', () => ({
   api: {
     voteOnPost: vi.fn(),
+    getMyVote: vi.fn(),
   },
 }));
 
 describe('useVote', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Mock getMyVote to return null vote by default (user not voted yet or not logged in)
+    (api.getMyVote as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not authenticated'));
   });
 
   afterEach(() => {
@@ -99,25 +102,12 @@ describe('useVote', () => {
     expect(result.current.score).toBe(24);
   });
 
-  it('should redirect to login on 401 APIError', async () => {
+  it('should set error state on 401 APIError without redirecting', async () => {
     // Arrange - API returns 401 APIError
     const { APIError } = await import('@/lib/api-error');
     (api.voteOnPost as ReturnType<typeof vi.fn>).mockRejectedValue(
       new APIError('authentication required', 401)
     );
-
-    // Mock window.location
-    const originalHref = window.location.href;
-    const hrefSetter = vi.fn();
-    Object.defineProperty(window, 'location', {
-      writable: true,
-      value: {
-        ...window.location,
-        pathname: '/feed',
-        get href() { return ''; },
-        set href(val: string) { hrefSetter(val); },
-      },
-    });
 
     // Act
     const { result } = renderHook(() => useVote('post-123', 24));
@@ -125,11 +115,10 @@ describe('useVote', () => {
       await result.current.upvote();
     });
 
-    // Assert - score rolled back, redirect triggered
+    // Assert - score rolled back, error message set, no redirect
     expect(result.current.score).toBe(24);
-    expect(hrefSetter).toHaveBeenCalledWith(
-      expect.stringContaining('/v1/auth/google')
-    );
+    expect(result.current.error).toBe('Login required to vote');
+    // Modal will be shown automatically by AuthContext via event system
   });
 
   it('should track userVote after successful vote', async () => {

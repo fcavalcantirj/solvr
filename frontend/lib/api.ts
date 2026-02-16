@@ -72,6 +72,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 class SolvrAPI {
   private baseUrl: string;
   private authToken: string | null = null;
+  private authEventHandlers: Array<(error: APIError) => void> = [];
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
@@ -83,6 +84,14 @@ class SolvrAPI {
 
   clearAuthToken() {
     this.authToken = null;
+  }
+
+  onAuthError(handler: (error: APIError) => void) {
+    this.authEventHandlers.push(handler);
+  }
+
+  offAuthError(handler: (error: APIError) => void) {
+    this.authEventHandlers = this.authEventHandlers.filter(h => h !== handler);
   }
 
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -102,7 +111,14 @@ class SolvrAPI {
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
       const message = errorBody.error?.message || `API error: ${response.status}`;
-      throw new APIError(message, response.status);
+      const error = new APIError(message, response.status);
+
+      // Emit auth errors before throwing
+      if (error.statusCode === 401) {
+        this.authEventHandlers.forEach(handler => handler(error));
+      }
+
+      throw error;
     }
 
     return response.json();

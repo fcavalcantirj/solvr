@@ -12,7 +12,14 @@ vi.mock('@/lib/api', () => ({
     clearAuthToken: vi.fn(),
     login: vi.fn(),
     register: vi.fn(),
+    onAuthError: vi.fn(),
+    offAuthError: vi.fn(),
   },
+}));
+
+// Mock the AuthRequiredModal component
+vi.mock('@/components/ui/auth-required-modal', () => ({
+  AuthRequiredModal: () => null,
 }));
 
 // Mock localStorage
@@ -108,7 +115,7 @@ describe('useAuth', () => {
     expect(result.current.isAuthenticated).toBe(true);
   });
 
-  it('should clear user on logout', async () => {
+  it('should clear user and reload page on logout', async () => {
     localStorageMock.setItem('auth_token', 'test-token');
     (api.getMe as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: {
@@ -117,6 +124,17 @@ describe('useAuth', () => {
         display_name: 'Test User',
         email: 'test@example.com',
       }
+    });
+
+    // Mock window.location
+    const hrefSetter = vi.fn();
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: {
+        ...window.location,
+        get href() { return ''; },
+        set href(val: string) { hrefSetter(val); },
+      },
     });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -131,8 +149,7 @@ describe('useAuth', () => {
 
     expect(localStorageMock.removeItem).toHaveBeenCalledWith('auth_token');
     expect(api.clearAuthToken).toHaveBeenCalled();
-    expect(result.current.user).toBeNull();
-    expect(result.current.isAuthenticated).toBe(false);
+    expect(hrefSetter).toHaveBeenCalledWith('/');
   });
 
   it('should handle getMe errors gracefully', async () => {
@@ -287,5 +304,110 @@ describe('useAuth', () => {
       error: 'Email already registered'
     });
     expect(result.current.isAuthenticated).toBe(false);
+  });
+
+  it('should subscribe to auth errors on mount', async () => {
+    (api.getMe as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not authenticated'));
+
+    renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(api.onAuthError).toHaveBeenCalled();
+    });
+  });
+
+  it('should unsubscribe from auth errors on unmount', async () => {
+    (api.getMe as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not authenticated'));
+
+    const { unmount } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(api.onAuthError).toHaveBeenCalled();
+    });
+
+    unmount();
+
+    expect(api.offAuthError).toHaveBeenCalled();
+  });
+
+  it('should show auth modal when unauthenticated user encounters 401', async () => {
+    (api.getMe as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not authenticated'));
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Simulate 401 error by calling the registered handler
+    const authErrorHandler = (api.onAuthError as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const { APIError } = await import('@/lib/api-error');
+
+    act(() => {
+      authErrorHandler(new APIError('Unauthorized', 401));
+    });
+
+    await waitFor(() => {
+      expect(result.current.showAuthModal).toBe(true);
+      expect(result.current.authModalMessage).toBe('Login required to continue');
+    });
+  });
+
+  it('should not show auth modal when authenticated user encounters 401', async () => {
+    localStorageMock.setItem('auth_token', 'test-token');
+    (api.getMe as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        id: 'user-123',
+        type: 'human',
+        display_name: 'Test User',
+        email: 'test@example.com',
+      }
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isAuthenticated).toBe(true);
+    });
+
+    // Simulate 401 error by calling the registered handler
+    const authErrorHandler = (api.onAuthError as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const { APIError } = await import('@/lib/api-error');
+
+    act(() => {
+      authErrorHandler(new APIError('Unauthorized', 401));
+    });
+
+    // Should not show modal for authenticated users (might be a stale token situation)
+    expect(result.current.showAuthModal).toBe(false);
+  });
+
+  it('should allow closing auth modal', async () => {
+    (api.getMe as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not authenticated'));
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Show the modal
+    const authErrorHandler = (api.onAuthError as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const { APIError } = await import('@/lib/api-error');
+
+    act(() => {
+      authErrorHandler(new APIError('Unauthorized', 401));
+    });
+
+    await waitFor(() => {
+      expect(result.current.showAuthModal).toBe(true);
+    });
+
+    // Close the modal
+    act(() => {
+      result.current.setShowAuthModal(false);
+    });
+
+    expect(result.current.showAuthModal).toBe(false);
   });
 });

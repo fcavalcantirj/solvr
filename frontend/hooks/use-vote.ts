@@ -67,10 +67,8 @@ export function useVote(postId: string, initialScore: number): UseVoteResult {
       setUserVote(previousVote);
 
       if (isUnauthorizedError(err)) {
-        // Redirect to login — store return URL so user comes back after auth
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
-        localStorage.setItem('auth_return_url', window.location.pathname);
-        window.location.href = `${API_BASE_URL}/v1/auth/google`;
+        setError('Login required to vote');
+        // Modal will be shown automatically by AuthContext
         return;
       }
 

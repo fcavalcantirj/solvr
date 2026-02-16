@@ -56,7 +56,8 @@ export function VoteButton({
           sizeConfig[size].button,
           'flex items-center justify-center border border-border hover:bg-foreground hover:text-background hover:border-foreground transition-colors disabled:opacity-50',
           isVoting && 'cursor-wait',
-          userVote === 'up' && 'bg-foreground text-background border-foreground'
+          userVote === 'up' && 'bg-foreground text-background border-foreground',
+          error && 'border-red-500/50'
         )}
         title={error || 'Upvote'}
       >
@@ -73,7 +74,8 @@ export function VoteButton({
             sizeConfig[size].button,
             'flex items-center justify-center border border-border hover:bg-foreground hover:text-background hover:border-foreground transition-colors disabled:opacity-50',
             isVoting && 'cursor-wait',
-            userVote === 'down' && 'bg-foreground text-background border-foreground'
+            userVote === 'down' && 'bg-foreground text-background border-foreground',
+            error && 'border-red-500/50'
           )}
           title={error || 'Downvote'}
         >

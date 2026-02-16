@@ -266,18 +266,22 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		r.Get("/claim/{token}", agentsHandler.GetClaimInfo)
 
 		// OAuth endpoints (API-CRITICAL requirement)
+		// SECURITY: Wrapped with BlockAgentAPIKeys middleware to prevent agents from
+		// registering as humans (see SPEC.md Part 21: Security)
 		// Per SPEC.md Part 5.2: GitHub OAuth
-		r.Get("/auth/github", oauthHandlers.GitHubRedirect)
-		r.Get("/auth/github/callback", oauthHandlers.GitHubCallback)
+		r.With(apimiddleware.BlockAgentAPIKeys).Get("/auth/github", oauthHandlers.GitHubRedirect)
+		r.With(apimiddleware.BlockAgentAPIKeys).Get("/auth/github/callback", oauthHandlers.GitHubCallback)
 
 		// Per SPEC.md Part 5.2: Google OAuth
-		r.Get("/auth/google", oauthHandlers.GoogleRedirect)
-		r.Get("/auth/google/callback", oauthHandlers.GoogleCallback)
+		r.With(apimiddleware.BlockAgentAPIKeys).Get("/auth/google", oauthHandlers.GoogleRedirect)
+		r.With(apimiddleware.BlockAgentAPIKeys).Get("/auth/google/callback", oauthHandlers.GoogleCallback)
 
 		// Email/password authentication (API-CRITICAL per PRD Task 48 & 49)
+		// SECURITY: Wrapped with BlockAgentAPIKeys middleware to prevent agents from
+		// registering as humans (see SPEC.md Part 21: Security)
 		authHandler := handlers.NewAuthHandlers(oauthConfig, authUserRepo, authMethodRepo)
-		r.Post("/auth/register", authHandler.Register)
-		r.Post("/auth/login", authHandler.Login)
+		r.With(apimiddleware.BlockAgentAPIKeys).Post("/auth/register", authHandler.Register)
+		r.With(apimiddleware.BlockAgentAPIKeys).Post("/auth/login", authHandler.Login)
 
 		// Moltbook OAuth (API-CRITICAL per PRD-v2)
 		// Per SPEC.md Part 5.2: POST /auth/moltbook for agent authentication via Moltbook

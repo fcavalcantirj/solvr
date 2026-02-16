@@ -865,7 +865,7 @@
       "  - Assert: Should work (JWT doesn't block, only agent API keys block)",
       "Verify: go test ./internal/api/handlers -run TestRegister_Blocks -v passes all 5 tests"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

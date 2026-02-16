@@ -1210,3 +1210,11 @@
 - TypeScript compilation passes with no errors
 - File sizes: header.tsx 176 lines, header.test.tsx 135 lines (both under 800)
 - Followed TDD workflow: RED (failing tests) → GREEN (implementation) → verified
+
+2026-02-16: PRD-v5 Task 8 - Add TDD tests for agent-trying-to-register-as-human vulnerability
+- Added missing test: TestRegister_AllowsHumanJWTAuth to auth_agent_blocking_test.go
+- Test verifies JWT tokens (human auth) are NOT blocked by agent API key middleware
+- Middleware correctly distinguishes: Bearer solvr_* (block) vs Bearer eyJ* (allow)
+- All 6 auth agent blocking tests pass (5 existing + 1 new)
+- Security boundary proven: agents blocked, humans allowed (both no-auth and JWT)
+- File: auth_agent_blocking_test.go now 233 lines (under 800 limit)

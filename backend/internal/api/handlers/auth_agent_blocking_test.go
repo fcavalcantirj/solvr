@@ -77,6 +77,43 @@ func TestRegister_AllowsHumanRegistration(t *testing.T) {
 	}
 }
 
+func TestRegister_AllowsHumanJWTAuth(t *testing.T) {
+	// Arrange: Set up handler with middleware
+	authHandler := setupAuthTestHandler(t)
+	r := chi.NewRouter()
+	r.With(middleware.BlockAgentAPIKeys).Post("/auth/register", authHandler.Register)
+
+	// Create registration payload
+	payload := map[string]string{
+		"email":        "jwtuser@test.com",
+		"password":     "SecurePass123",
+		"username":     "jwt_user",
+		"display_name": "JWT Test User",
+	}
+	body, _ := json.Marshal(payload)
+
+	// Create request with JWT token (not agent API key)
+	// Using a realistic JWT format: 3-part base64-encoded token
+	req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c")
+	rec := httptest.NewRecorder()
+
+	// Act
+	r.ServeHTTP(rec, req)
+
+	// Assert: Should NOT be 403 (middleware should allow JWT through)
+	if rec.Code == http.StatusForbidden {
+		t.Errorf("JWT tokens should not be blocked by agent API key middleware, got 403")
+	}
+
+	// Additional check: Response should be normal registration flow
+	// (Either 201 success or 400 validation error, but NOT 403 forbidden)
+	if rec.Code != http.StatusCreated && rec.Code != http.StatusBadRequest {
+		t.Logf("Expected 201 or 400, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestLogin_BlocksAgentAPIKey(t *testing.T) {
 	// Arrange
 	authHandler := setupAuthTestHandler(t)

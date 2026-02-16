@@ -132,7 +132,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	// Determine sort order
 	orderClause := "p.created_at DESC" // default: newest
 	switch opts.Sort {
-	case "votes":
+	case "votes", "top": // "top" is frontend alias for vote-based sorting
 		orderClause = "(p.upvotes - p.downvotes) DESC, p.created_at DESC"
 	case "approaches":
 		orderClause = "COALESCE(app_cnt.cnt, 0) DESC, p.created_at DESC"

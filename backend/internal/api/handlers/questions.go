@@ -161,7 +161,7 @@ func (h *QuestionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Parse sort parameter
 	if sortParam := r.URL.Query().Get("sort"); sortParam != "" {
 		switch sortParam {
-		case "newest", "votes", "answers":
+		case "newest", "votes", "top", "answers": // "top" is frontend alias for vote-based sorting
 			opts.Sort = sortParam
 		}
 		// Invalid values are silently ignored (defaults to newest)

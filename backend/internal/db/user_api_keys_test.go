@@ -629,6 +629,91 @@ func TestUserAPIKeyRepository_Regenerate_NotFound(t *testing.T) {
 	}
 }
 
+// TestUserAPIKeyRepository_GetUserByAPIKey_SchemaCompatibility tests that GetUserByAPIKey
+// works with the actual database schema. This is a regression test for the bug where
+// the query tried to SELECT u.status which didn't exist in the users table.
+// Per TDD: This test ensures the query only selects columns that actually exist.
+func TestUserAPIKeyRepository_GetUserByAPIKey_SchemaCompatibility(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDBWithAPIKeys(t, pool)
+
+	// Create a user
+	userRepo := NewUserRepository(pool)
+	user, err := userRepo.Create(context.Background(), &models.User{
+		Username:       "schema_test_user",
+		DisplayName:    "Schema Test User",
+		Email:          "schema_test@example.com",
+		AuthProvider:   models.AuthProviderGoogle,
+		AuthProviderID: "google_schema_123",
+		Role:           models.UserRoleUser,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Create an API key
+	repo := NewUserAPIKeyRepository(pool)
+	ctx := context.Background()
+
+	rawKey := auth.GenerateAPIKey()
+	hash, err := auth.HashAPIKey(rawKey)
+	if err != nil {
+		t.Fatalf("Failed to hash key: %v", err)
+	}
+
+	apiKey := &models.UserAPIKey{
+		UserID:  user.ID,
+		Name:    "Schema Test Key",
+		KeyHash: hash,
+	}
+
+	createdKey, err := repo.Create(ctx, apiKey)
+	if err != nil {
+		t.Fatalf("Failed to create API key: %v", err)
+	}
+
+	// Test GetUserByAPIKey - this should NOT fail with "column u.status does not exist"
+	foundUser, foundKey, err := repo.GetUserByAPIKey(ctx, rawKey)
+	if err != nil {
+		t.Fatalf("GetUserByAPIKey failed: %v", err)
+	}
+
+	if foundUser == nil {
+		t.Fatal("Expected user to be found, got nil")
+	}
+
+	if foundKey == nil {
+		t.Fatal("Expected key to be found, got nil")
+	}
+
+	// Verify user fields are populated correctly
+	if foundUser.ID != user.ID {
+		t.Errorf("Expected user ID %s, got %s", user.ID, foundUser.ID)
+	}
+
+	if foundUser.Email != user.Email {
+		t.Errorf("Expected user email %s, got %s", user.Email, foundUser.Email)
+	}
+
+	if foundUser.Username != user.Username {
+		t.Errorf("Expected username %s, got %s", user.Username, foundUser.Username)
+	}
+
+	// Verify key fields
+	if foundKey.ID != createdKey.ID {
+		t.Errorf("Expected key ID %s, got %s", createdKey.ID, foundKey.ID)
+	}
+
+	if foundKey.Name != "Schema Test Key" {
+		t.Errorf("Expected key name 'Schema Test Key', got '%s'", foundKey.Name)
+	}
+
+	t.Logf("SUCCESS: GetUserByAPIKey works with database schema (no u.status column error)")
+}
+
 // cleanupTestDBWithAPIKeys extends cleanup to include user_api_keys.
 func cleanupTestDBWithAPIKeys(t *testing.T, pool *Pool) {
 	t.Helper()

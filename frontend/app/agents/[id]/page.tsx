@@ -1,5 +1,8 @@
 "use client";
 
+// Force dynamic rendering - this page imports Header which uses client-side state
+export const dynamic = 'force-dynamic';
+
 import { useParams } from "next/navigation";
 import { Bot, AlertCircle, Loader2, Shield, Calendar, Mail } from "lucide-react";
 import Link from "next/link";

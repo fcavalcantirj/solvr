@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+
+// Force dynamic rendering - this page uses client-side state (useState)
+// and should not be statically generated at build time
+export const dynamic = 'force-dynamic';
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import {

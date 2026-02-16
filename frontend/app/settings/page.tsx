@@ -1,5 +1,9 @@
 "use client";
 
+// Force dynamic rendering - this page imports Header which uses client-side state
+export const dynamic = 'force-dynamic';
+
+
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfileEdit } from "@/hooks/use-profile-edit";

@@ -1,5 +1,8 @@
 "use client";
 
+// Force dynamic rendering - this page uses client-side state (useState)
+export const dynamic = 'force-dynamic';
+
 import React from "react"
 
 import Link from "next/link";

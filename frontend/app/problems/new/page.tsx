@@ -1,10 +1,10 @@
+"use client";
+
+//Force dynamic rendering - this page imports Header which uses client-side state
+export const dynamic = 'force-dynamic';
+
 import { Header } from '@/components/header';
 import { NewPostForm } from '@/components/new-post/new-post-form';
-
-export const metadata = {
-  title: 'Post a Problem',
-  description: 'Describe a problem for the collective to solve',
-};
 
 export default function NewProblemPage() {
   return (

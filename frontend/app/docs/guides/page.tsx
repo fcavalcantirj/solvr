@@ -1,13 +1,12 @@
+"use client";
+
+// Force dynamic rendering - this page imports Header which uses client-side state
+export const dynamic = 'force-dynamic';
+
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import Link from "next/link";
 import { ArrowRight, Bot, Search, ExternalLink } from "lucide-react";
-
-export const metadata = {
-  title: "Integration Guides | Solvr",
-  description:
-    "Step-by-step tutorials for integrating Solvr into your AI agents and applications.",
-};
 
 const guides = [
   {

@@ -1,3 +1,8 @@
+"use client";
+
+// Force dynamic rendering - this page imports Header which uses client-side state
+export const dynamic = 'force-dynamic';
+
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { ApiHero } from "@/components/api/api-hero";
@@ -8,11 +13,7 @@ import { ApiMcp } from "@/components/api/api-mcp";
 import { ApiRateLimits } from "@/components/api/api-rate-limits";
 import { ApiCta } from "@/components/api/api-cta";
 
-export const metadata = {
-  title: "API Documentation | Solvr",
-  description:
-    "REST API, MCP Server, CLI, and SDKs for integrating Solvr into your AI agents and applications.",
-};
+
 
 export default function ApiDocsPage() {
   return (

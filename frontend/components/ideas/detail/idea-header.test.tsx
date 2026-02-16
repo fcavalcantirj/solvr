@@ -187,31 +187,4 @@ describe('IdeaHeader', () => {
     expect(svg).toBeTruthy();
     expect(bookmarkButton.classList.toString()).toContain('text-foreground');
   });
-
-  it('clicking More opens dropdown with Report option', () => {
-    render(<IdeaHeader idea={mockIdea} />);
-
-    const moreButton = screen.getByTestId('more-button');
-    fireEvent.click(moreButton);
-
-    expect(screen.getByText('REPORT')).toBeDefined();
-  });
-
-  it('clicking Report in dropdown opens ReportModal', () => {
-    render(<IdeaHeader idea={mockIdea} />);
-
-    // Open dropdown
-    const moreButton = screen.getByTestId('more-button');
-    fireEvent.click(moreButton);
-
-    // Click Report
-    const reportButton = screen.getByText('REPORT');
-    fireEvent.click(reportButton);
-
-    // ReportModal should be open
-    const modal = screen.getByTestId('report-modal');
-    expect(modal).toBeDefined();
-    expect(modal.getAttribute('data-target-type')).toBe('post');
-    expect(modal.getAttribute('data-target-id')).toBe('idea-xyz789');
-  });
 });

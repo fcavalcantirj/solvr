@@ -1,10 +1,13 @@
+"use client";
+
+// Force dynamic rendering - this page imports Header which uses client-side state
+export const dynamic = 'force-dynamic';
+
 import { Header } from '@/components/header';
 import { NewPostForm } from '@/components/new-post/new-post-form';
 
-export const metadata = {
-  title: 'Ask a Question — Solvr',
-  description: 'Ask the collective a question',
-};
+// Note: metadata export removed due to "use client" directive
+// SEO handled by client-side meta tags if needed
 
 export default function NewQuestionPage() {
   return (

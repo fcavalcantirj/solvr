@@ -1,3 +1,8 @@
+"use client";
+
+// Force dynamic rendering - this page imports Header which uses client-side state
+export const dynamic = 'force-dynamic';
+
 import { Header } from "@/components/header";
 import { ProblemDetailClient } from "@/components/problems/detail/problem-detail-client";
 

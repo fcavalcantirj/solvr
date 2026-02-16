@@ -399,6 +399,10 @@ func (m *mockPostsRepo) Vote(ctx context.Context, postID, voterType, voterID, di
 	return nil
 }
 
+func (m *mockPostsRepo) GetUserVote(ctx context.Context, postID, voterType, voterID string) (*string, error) {
+	return nil, nil
+}
+
 type mockClaims struct {
 	userID string
 	role   string

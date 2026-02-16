@@ -641,3 +641,44 @@ func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, d
 		return nil
 	})
 }
+
+// GetUserVote returns the user's current vote on a post, or nil if not voted.
+// Returns ErrPostNotFound if the post doesn't exist or is deleted.
+func (r *PostRepository) GetUserVote(ctx context.Context, postID, voterType, voterID string) (*string, error) {
+	// Check if post exists (same pattern as Vote() line 541-557)
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM posts WHERE id = $1 AND deleted_at IS NULL)",
+		postID,
+	).Scan(&exists)
+	if err != nil {
+		if isInvalidUUIDError(err) {
+			slog.Debug("invalid UUID format", "op", "GetUserVote.CheckExists", "table", "posts", "id", postID)
+			return nil, ErrPostNotFound
+		}
+		LogQueryError(ctx, "GetUserVote.CheckExists", "posts", err)
+		return nil, fmt.Errorf("failed to check post existence: %w", err)
+	}
+	if !exists {
+		return nil, ErrPostNotFound
+	}
+
+	// Get user's vote (same query as Vote() line 561-566)
+	var direction string
+	err = r.pool.QueryRow(ctx,
+		`SELECT direction FROM votes
+		 WHERE target_type = 'post' AND target_id = $1
+		 AND voter_type = $2 AND voter_id = $3`,
+		postID, voterType, voterID,
+	).Scan(&direction)
+
+	if err != nil && err.Error() != "no rows in result set" {
+		LogQueryError(ctx, "GetUserVote", "votes", err)
+		return nil, fmt.Errorf("failed to get user vote: %w", err)
+	}
+
+	if direction == "" {
+		return nil, nil // No vote
+	}
+	return &direction, nil
+}

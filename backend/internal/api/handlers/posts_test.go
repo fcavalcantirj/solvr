@@ -27,6 +27,7 @@ type MockPostsRepository struct {
 	deletedID   string
 	vote        *models.Vote
 	voteErr     error
+	userVote    *string // for GetUserVote mock
 }
 
 func NewMockPostsRepository() *MockPostsRepository {
@@ -92,7 +93,16 @@ func (m *MockPostsRepository) Vote(ctx context.Context, postID, voterType, voter
 		VoterID:    voterID,
 		Direction:  direction,
 	}
+	// Also update userVote for GetUserVote
+	m.userVote = &direction
 	return nil
+}
+
+func (m *MockPostsRepository) GetUserVote(ctx context.Context, postID, voterType, voterID string) (*string, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.userVote, nil
 }
 
 func (m *MockPostsRepository) SetPosts(posts []models.PostWithAuthor, total int) {
@@ -110,6 +120,10 @@ func (m *MockPostsRepository) SetError(err error) {
 
 func (m *MockPostsRepository) SetVoteError(err error) {
 	m.voteErr = err
+}
+
+func (m *MockPostsRepository) SetUserVote(vote *string) {
+	m.userVote = vote
 }
 
 // Error for testing - ErrCannotVoteOwn is specific to this test file

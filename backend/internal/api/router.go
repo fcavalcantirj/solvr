@@ -431,6 +431,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Delete("/posts/{id}", postsHandler.Delete)
 			// Per SPEC.md Part 5.6: POST /v1/posts/:id/vote - vote on post (requires auth)
 			r.Post("/posts/{id}/vote", postsHandler.Vote)
+			// GET /v1/posts/:id/my-vote - get current user's vote on a post (requires auth)
+			r.Get("/posts/{id}/my-vote", postsHandler.GetMyVote)
 
 			// Per prd-v4: PATCH /v1/agents/{id} - update agent profile (requires auth)
 			// Works with JWT (human owner) or API key (agent updating itself)

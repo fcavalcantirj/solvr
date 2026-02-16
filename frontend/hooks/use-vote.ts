@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { isUnauthorizedError } from '@/lib/api-error';
 
@@ -16,6 +16,7 @@ export interface UseVoteResult {
 /**
  * Hook to handle voting on posts.
  * Provides optimistic updates with rollback on error.
+ * Fetches user's current vote on mount.
  * @param postId - The post ID to vote on
  * @param initialScore - The initial vote score
  * @returns Vote state and actions
@@ -25,6 +26,23 @@ export function useVote(postId: string, initialScore: number): UseVoteResult {
   const [isVoting, setIsVoting] = useState(false);
   const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch user's vote on mount
+  useEffect(() => {
+    const fetchUserVote = async () => {
+      try {
+        const response = await api.getMyVote(postId);
+        setUserVote(response.data.vote);
+      } catch (err) {
+        // Silently fail if unauthorized (user not logged in)
+        if (!isUnauthorizedError(err)) {
+          console.error('Failed to fetch user vote:', err);
+        }
+      }
+    };
+
+    fetchUserVote();
+  }, [postId]);
 
   const vote = useCallback(async (direction: 'up' | 'down') => {
     if (isVoting) return;
@@ -47,6 +65,7 @@ export function useVote(postId: string, initialScore: number): UseVoteResult {
       // Rollback on error
       setScore(previousScore);
       setUserVote(previousVote);
+
       if (isUnauthorizedError(err)) {
         // Redirect to login — store return URL so user comes back after auth
         const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -54,7 +73,14 @@ export function useVote(postId: string, initialScore: number): UseVoteResult {
         window.location.href = `${API_BASE_URL}/v1/auth/google`;
         return;
       }
-      setError(err instanceof Error ? err.message : 'Failed to vote');
+
+      // Handle duplicate vote error (409)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to vote';
+      if (errorMessage.includes('409') || errorMessage.includes('DUPLICATE_VOTE')) {
+        setError('You have already voted on this post');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setIsVoting(false);
     }

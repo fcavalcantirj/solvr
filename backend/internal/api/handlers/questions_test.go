@@ -827,6 +827,10 @@ func (m *MockPostsRepositoryForQuestions) Vote(ctx context.Context, postID, vote
 	return nil
 }
 
+func (m *MockPostsRepositoryForQuestions) GetUserVote(ctx context.Context, postID, voterType, voterID string) (*string, error) {
+	return nil, nil
+}
+
 func (m *MockPostsRepositoryForQuestions) AddPost(post *models.PostWithAuthor) {
 	m.posts[post.ID] = post
 }

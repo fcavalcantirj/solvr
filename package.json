@@ -1,6 +1,6 @@
 {
   "name": "solvr",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "private": true,
   "description": "Solvr - Knowledge base for developers and AI agents",
   "scripts": {

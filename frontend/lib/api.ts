@@ -201,6 +201,12 @@ class SolvrAPI {
     });
   }
 
+  async getMyVote(postId: string): Promise<{ data: { vote: 'up' | 'down' | null } }> {
+    return this.fetch<{ data: { vote: 'up' | 'down' | null } }>(`/v1/posts/${postId}/my-vote`, {
+      method: 'GET',
+    });
+  }
+
   async voteOnAnswer(answerId: string, direction: 'up' | 'down'): Promise<{ message: string }> {
     return this.fetch<{ message: string }>(`/v1/answers/${answerId}/vote`, {
       method: 'POST',

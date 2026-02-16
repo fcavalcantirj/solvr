@@ -733,3 +733,8 @@ func (m *MockPostsRepositoryForIntegration) Vote(ctx context.Context, postID, vo
 	}
 	return nil
 }
+
+func (m *MockPostsRepositoryForIntegration) GetUserVote(ctx context.Context, postID, voterType, voterID string) (*string, error) {
+	// Stub implementation for integration tests
+	return nil, nil
+}

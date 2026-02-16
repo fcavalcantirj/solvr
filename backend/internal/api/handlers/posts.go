@@ -81,6 +81,9 @@ type PostsRepositoryInterface interface {
 
 	// Vote records a vote on a post.
 	Vote(ctx context.Context, postID, voterType, voterID, direction string) error
+
+	// GetUserVote returns the user's current vote on a post, or nil if not voted.
+	GetUserVote(ctx context.Context, postID, voterType, voterID string) (*string, error)
 }
 
 // PostsHandler handles post-related HTTP requests.
@@ -601,6 +604,44 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 			"upvotes":    updatedPost.Upvotes,
 			"downvotes":  updatedPost.Downvotes,
 			"user_vote":  req.Direction,
+		},
+	})
+}
+
+// GetMyVote handles GET /v1/posts/:id/my-vote - get current user's vote on a post.
+func (h *PostsHandler) GetMyVote(w http.ResponseWriter, r *http.Request) {
+	// Require authentication
+	authInfo := GetAuthInfo(r)
+	if authInfo == nil {
+		writePostsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	postID := chi.URLParam(r, "id")
+	if postID == "" {
+		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "post ID is required")
+		return
+	}
+
+	vote, err := h.repo.GetUserVote(r.Context(), postID, string(authInfo.AuthorType), authInfo.AuthorID)
+	if err != nil {
+		if errors.Is(err, db.ErrPostNotFound) {
+			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
+			return
+		}
+		ctx := response.LogContext{
+			Operation: "GetUserVote",
+			Resource:  "post",
+			RequestID: r.Header.Get("X-Request-ID"),
+			Extra:     map[string]string{"postID": postID, "caller": "GetMyVote"},
+		}
+		response.WriteInternalErrorWithLog(w, "failed to get user vote", err, ctx, h.logger)
+		return
+	}
+
+	writePostsJSON(w, http.StatusOK, map[string]interface{}{
+		"data": map[string]interface{}{
+			"vote": vote,
 		},
 	})
 }

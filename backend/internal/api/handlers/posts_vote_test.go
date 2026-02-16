@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -216,5 +217,133 @@ func TestVote_DuplicateVote(t *testing.T) {
 
 	if w.Code != http.StatusConflict {
 		t.Errorf("expected status 409, got %d", w.Code)
+	}
+}
+
+// ============================================================================
+// GET /v1/posts/:id/my-vote - GetMyVote Tests
+// ============================================================================
+
+// TestGetMyVote_Success tests successful fetch of user's vote.
+func TestGetMyVote_Success_Upvote(t *testing.T) {
+	repo := NewMockPostsRepository()
+	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	repo.SetPost(&post)
+	upvote := "up"
+	repo.SetUserVote(&upvote)
+
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts/post-123/my-vote", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "post-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.GetMyVote(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected data object in response")
+	}
+
+	vote, ok := data["vote"].(string)
+	if !ok {
+		t.Fatal("expected vote string in response data")
+	}
+
+	if vote != "up" {
+		t.Errorf("expected vote 'up', got %s", vote)
+	}
+}
+
+// TestGetMyVote_NoVote tests when user hasn't voted.
+func TestGetMyVote_NoVote(t *testing.T) {
+	repo := NewMockPostsRepository()
+	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	repo.SetPost(&post)
+	repo.SetUserVote(nil) // No vote
+
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts/post-123/my-vote", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "post-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.GetMyVote(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected data object in response")
+	}
+
+	vote := data["vote"]
+	if vote != nil {
+		t.Errorf("expected vote nil, got %v", vote)
+	}
+}
+
+// TestGetMyVote_Unauthorized tests 401 when not authenticated.
+func TestGetMyVote_Unauthorized(t *testing.T) {
+	repo := NewMockPostsRepository()
+	post := createTestPost("post-123", "Test Post", models.PostTypeProblem)
+	repo.SetPost(&post)
+
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts/post-123/my-vote", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "post-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	// No auth context
+	w := httptest.NewRecorder()
+
+	handler.GetMyVote(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", w.Code)
+	}
+}
+
+// TestGetMyVote_PostNotFound tests 404 when post doesn't exist.
+func TestGetMyVote_PostNotFound(t *testing.T) {
+	repo := NewMockPostsRepository()
+	repo.SetError(db.ErrPostNotFound)
+
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts/non-existent/my-vote", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "non-existent")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.GetMyVote(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", w.Code)
 	}
 }

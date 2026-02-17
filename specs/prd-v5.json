@@ -1022,7 +1022,7 @@
       "Verify: DELETE /v1/agents/me with agent API key soft-deletes agent",
       "Verify: Agent's posts and activity remain visible after deletion"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
@@ -1056,7 +1056,7 @@
       "Verify: User is permanently removed from database (hard delete)",
       "Document in SPEC.md: Admin endpoints for cleaning up test accounts"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "docs",

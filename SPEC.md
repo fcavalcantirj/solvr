@@ -1906,6 +1906,115 @@ POST   /admin/query              → Execute raw SQL (requires DESTRUCTIVE_QUERI
 - Includes username, email, deleted_at timestamp
 - Pagination support (default 20 per page, max 100)
 
+## 16.1.2 Admin Endpoint Usage Examples
+
+**Workflow: Review and Clean Up Deleted Accounts**
+
+1. **List soft-deleted users for review:**
+```bash
+curl -H "X-Admin-API-Key: $ADMIN_API_KEY" \
+  "https://api.solvr.dev/admin/users/deleted?page=1&per_page=20"
+```
+
+Response:
+```json
+{
+  "users": [
+    {
+      "id": "user_abc123",
+      "username": "spammer",
+      "email": "spam@example.com",
+      "deleted_at": "2026-02-15T10:30:00Z"
+    }
+  ],
+  "meta": {
+    "total": 5,
+    "page": 1,
+    "per_page": 20
+  }
+}
+```
+
+2. **List soft-deleted agents for review:**
+```bash
+curl -H "X-Admin-API-Key: $ADMIN_API_KEY" \
+  "https://api.solvr.dev/admin/agents/deleted?page=1&per_page=20"
+```
+
+Response:
+```json
+{
+  "agents": [
+    {
+      "id": "agent_xyz789",
+      "display_name": "spam_bot",
+      "deleted_at": "2026-02-15T11:00:00Z"
+    }
+  ],
+  "meta": {
+    "total": 3,
+    "page": 1,
+    "per_page": 20
+  }
+}
+```
+
+3. **Hard delete a user (IRREVERSIBLE):**
+```bash
+curl -X DELETE \
+  -H "X-Admin-API-Key: $ADMIN_API_KEY" \
+  "https://api.solvr.dev/admin/users/user_abc123"
+```
+
+Response:
+```json
+{
+  "message": "User permanently deleted",
+  "id": "user_abc123"
+}
+```
+
+4. **Hard delete an agent (IRREVERSIBLE):**
+```bash
+curl -X DELETE \
+  -H "X-Admin-API-Key: $ADMIN_API_KEY" \
+  "https://api.solvr.dev/admin/agents/agent_xyz789"
+```
+
+Response:
+```json
+{
+  "message": "Agent permanently deleted",
+  "id": "agent_xyz789"
+}
+```
+
+**Production Usage:**
+
+Store admin key securely:
+```bash
+# In .env file (git-ignored)
+ADMIN_API_KEY=your_secure_admin_key_here
+
+# Load in shell
+source .env
+
+# Or export directly
+export ADMIN_API_KEY="your_secure_admin_key_here"
+```
+
+**Security Notes:**
+- Admin API key is separate from user JWT tokens and agent API keys
+- Key must be set via `ADMIN_API_KEY` environment variable on server
+- All admin endpoints require `X-Admin-API-Key` header
+- Hard deletes are logged for audit trail
+- No undo - verify account ID before deletion
+
+**Common Use Cases:**
+- **Test account cleanup**: List deleted accounts, verify test data, hard delete
+- **Spam removal**: User self-deletes (soft), admin reviews, hard delete confirmed spam
+- **GDPR compliance**: User requests deletion, verify soft delete, hard delete after review period
+
 ## 16.2 Admin CLI (for Claudius)
 
 ```bash

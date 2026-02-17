@@ -1,3 +1,36 @@
+2026-02-16: PRD-v5 Task 22 - Add agent self-deletion endpoint DELETE /v1/agents/me
+- Created migration 000035 adds deleted_at column to agents table (+ partial index for performance)
+- Updated Agent model with DeletedAt *time.Time field
+- Added Delete() method to AgentRepository with soft delete logic (UPDATE agents SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL)
+- Updated agentColumns constant from 17 to 18 columns (added deleted_at)
+- Updated all agent SELECT queries to filter deleted_at IS NULL (9 queries):
+  * FindByID, FindByHumanID, FindByAPIKeyHash (auth security - deleted agents can't authenticate)
+  * FindByName, GetAgentByAPIKeyHash, GetAgentStats subquery
+  * List (added to WHERE conditions), CountActive, CountHumanBacked
+- Updated all Scan operations to include &agent.DeletedAt (Create, Update, scanAgent, scanAgentRows)
+- Created DeleteMe handler in AgentsHandler with proper auth checks:
+  * Blocks JWT users (403 FORBIDDEN - humans must use DELETE /v1/me instead)
+  * Requires API key auth (401 if missing)
+  * Returns 404 if agent already deleted
+  * Returns 500 on repository errors with logging
+- Registered DELETE /v1/agents/me route in router.go (unified auth group, line 449)
+- Created agents_deletion_test.go with 5 comprehensive TDD tests (462 lines):
+  * TestDeleteAgentMe_Success - soft delete sets DeletedAt, API key invalidated, agent hidden from queries
+  * TestDeleteAgentMe_Unauthorized - 401 when no API key provided
+  * TestDeleteAgentMe_HumanCannotDelete - 403 when JWT user tries to delete agents
+  * TestDeleteAgentMe_AlreadyDeleted - 404 when agent already soft-deleted
+  * TestDeleteAgentMe_RepositoryError - 500 on database errors
+- Updated all mock repositories with Delete stub (MockAgentRepository, MockAgentRepoWithSuggestions)
+- Verified deleted agents cannot authenticate (FindByAPIKeyHash filters deleted_at IS NULL)
+- Verified agent posts remain visible after deletion (no cascade delete)
+- Verified GET /v1/agents/{id} returns 404 for deleted agents
+- Test results: All 5 DeleteMe tests pass, all handler tests pass
+- Implementation complete following TDD RED → GREEN → REFACTOR workflow
+- NOTE: db/agents.go (889 lines) and handlers/agents.go (947 lines) exceed 800-line limit
+  * These files were already over limit before this task (848 and 900 lines respectively)
+  * Recommend creating refactoring task to split these files into modules
+- Updated prd-v5.json: Task 22 passes false → true
+
 2026-02-16: PRD-v5 Task 10 - Implement user soft delete (VERIFICATION)
 - Verified UserRepository.Delete() implements soft delete (UPDATE users SET deleted_at = NOW())
 - Verified all SELECT queries filter deleted_at IS NULL (FindByID, FindByEmail, FindByUsername, FindByAuthProvider, List)
@@ -1271,3 +1304,16 @@ All 6 middleware tests pass
 Integration tests with handlers pass (verified in Task 8)
 File size: 56 lines (middleware), 173 lines (tests) - both under 800 limit
 PRD Task 9 marked complete
+
+2026-02-16: Task 47 COMPLETE - Admin hard-delete documentation
+- Added Section 16.1.2 to SPEC.md with curl usage examples
+- Documented complete workflow: list deleted → review → hard delete
+- Included security notes, production usage, and common use cases
+- All 4 admin endpoints documented with request/response examples:
+  * GET /admin/users/deleted (list soft-deleted users)
+  * GET /admin/agents/deleted (list soft-deleted agents)
+  * DELETE /admin/users/{id} (hard delete user - IRREVERSIBLE)
+  * DELETE /admin/agents/{id} (hard delete agent - IRREVERSIBLE)
+- Implementation was already complete in commit 4b05b4d
+- Test coverage: 413 lines in admin_test.go
+- Marked prd-v5.json Task 47 as passes: true

@@ -46,19 +46,41 @@ func (r *FeedRepository) GetRecentActivity(ctx context.Context, page, perPage in
 	}
 
 	// Query for recent activity with author info
+	// Uses LEFT JOIN subqueries instead of correlated subqueries for better performance
 	query := `
 		SELECT
 			p.id, p.type, p.title, p.description, p.tags,
 			p.status, p.posted_by_type, p.posted_by_id,
 			p.upvotes - p.downvotes as vote_score,
-			(SELECT COUNT(*) FROM answers a WHERE a.question_id = p.id AND a.deleted_at IS NULL) as answer_count,
-			(SELECT COUNT(*) FROM approaches ap WHERE ap.problem_id = p.id AND ap.deleted_at IS NULL) as approach_count,
+			CASE
+				WHEN p.type = 'question' THEN COALESCE(ans_cnt.cnt, 0)
+				WHEN p.type = 'idea' THEN COALESCE(resp_cnt.cnt, 0)
+				ELSE 0
+			END as answer_count,
+			COALESCE(app_cnt.cnt, 0) as approach_count,
 			p.created_at,
 			COALESCE(u.display_name, a.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, a.avatar_url, '') as author_avatar_url
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
+		LEFT JOIN (
+			SELECT question_id, COUNT(*) as cnt
+			FROM answers
+			WHERE deleted_at IS NULL
+			GROUP BY question_id
+		) ans_cnt ON ans_cnt.question_id = p.id
+		LEFT JOIN (
+			SELECT problem_id, COUNT(*) as cnt
+			FROM approaches
+			WHERE deleted_at IS NULL
+			GROUP BY problem_id
+		) app_cnt ON app_cnt.problem_id = p.id
+		LEFT JOIN (
+			SELECT idea_id, COUNT(*) as cnt
+			FROM responses
+			GROUP BY idea_id
+		) resp_cnt ON resp_cnt.idea_id = p.id
 		WHERE p.deleted_at IS NULL
 		ORDER BY p.created_at DESC
 		LIMIT $1 OFFSET $2

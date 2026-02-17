@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/fcavalcantirj/solvr/internal/reputation"
 )
 
 // LeaderboardRepository handles database operations for leaderboard.
@@ -143,118 +144,15 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 				'agent' AS entity_type,
 				a.display_name,
 				COALESCE(a.avatar_url, '') AS avatar_url,
-				-- Reputation formula matching agents.GetAgentStats() for consistency
-				-- Formula: bonus + problems_solved*100 + problems_contributed*25 +
-				--          answers_accepted*50 + answers_given*10 + ideas_posted*15 +
-				--          responses_given*5 + upvotes*2 - downvotes*1
-				(
-					-- Bonus from agents.reputation column
-					COALESCE(a.reputation, 0)
-					+
-					-- Problems SOLVED: 100 points each
-					COALESCE((
-						SELECT COUNT(*)
-						FROM posts p
-						WHERE p.posted_by_id = a.id
-							AND p.posted_by_type = 'agent'
-							AND p.type = 'problem'
-							AND p.status = 'solved'
-							AND p.deleted_at IS NULL
-							AND p.created_at >= $3
-					), 0) * 100
-					+
-					-- Problems CONTRIBUTED (all problems): 25 points each
-					COALESCE((
-						SELECT COUNT(*)
-						FROM posts p
-						WHERE p.posted_by_id = a.id
-							AND p.posted_by_type = 'agent'
-							AND p.type = 'problem'
-							AND p.deleted_at IS NULL
-							AND p.created_at >= $3
-					), 0) * 25
-					+
-					-- Answers ACCEPTED: 50 points each
-					COALESCE((
-						SELECT COUNT(*)
-						FROM answers ans
-						WHERE ans.author_id = a.id
-							AND ans.author_type = 'agent'
-							AND ans.is_accepted = true
-							AND ans.deleted_at IS NULL
-							AND ans.created_at >= $3
-					), 0) * 50
-					+
-					-- Answers GIVEN (all answers): 10 points each
-					COALESCE((
-						SELECT COUNT(*)
-						FROM answers ans
-						WHERE ans.author_id = a.id
-							AND ans.author_type = 'agent'
-							AND ans.deleted_at IS NULL
-							AND ans.created_at >= $3
-					), 0) * 10
-					+
-					-- Ideas POSTED: 15 points each
-					COALESCE((
-						SELECT COUNT(*)
-						FROM posts p
-						WHERE p.posted_by_id = a.id
-							AND p.posted_by_type = 'agent'
-							AND p.type = 'idea'
-							AND p.deleted_at IS NULL
-							AND p.created_at >= $3
-					), 0) * 15
-					+
-					-- Responses GIVEN: 5 points each
-					COALESCE((
-						SELECT COUNT(*)
-						FROM responses r
-						WHERE r.author_id = a.id
-							AND r.author_type = 'agent'
-							AND r.created_at >= $3
-					), 0) * 5
-					+
-					-- Upvotes RECEIVED: 2 points each
-					COALESCE((
-						SELECT COUNT(*)
-						FROM votes v
-						WHERE v.confirmed = true
-							AND v.direction = 'up'
-							AND v.created_at >= $3
-							AND (
-								(v.target_type = 'post' AND EXISTS (
-									SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'agent' AND p.posted_by_id = a.id
-								))
-								OR (v.target_type = 'answer' AND EXISTS (
-									SELECT 1 FROM answers ans WHERE ans.id = v.target_id AND ans.author_type = 'agent' AND ans.author_id = a.id
-								))
-								OR (v.target_type = 'response' AND EXISTS (
-									SELECT 1 FROM responses r WHERE r.id = v.target_id AND r.author_type = 'agent' AND r.author_id = a.id
-								))
-							)
-					), 0) * 2
-					-
-					-- Downvotes RECEIVED: -1 point each
-					COALESCE((
-						SELECT COUNT(*)
-						FROM votes v
-						WHERE v.confirmed = true
-							AND v.direction = 'down'
-							AND v.created_at >= $3
-							AND (
-								(v.target_type = 'post' AND EXISTS (
-									SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'agent' AND p.posted_by_id = a.id
-								))
-								OR (v.target_type = 'answer' AND EXISTS (
-									SELECT 1 FROM answers ans WHERE ans.id = v.target_id AND ans.author_type = 'agent' AND ans.author_id = a.id
-								))
-								OR (v.target_type = 'response' AND EXISTS (
-									SELECT 1 FROM responses r WHERE r.id = v.target_id AND r.author_type = 'agent' AND r.author_id = a.id
-								))
-							)
-					), 0)
-				) AS reputation,
+				-- Reputation calculated using centralized reputation.BuildReputationSQL
+				` + reputation.BuildReputationSQL(reputation.SQLBuilderOptions{
+		EntityType:     "agent",
+		EntityIDColumn: "a.id",
+		AuthorType:     "agent",
+		TimeFilter:     "AND created_at >= $3",
+		IncludeBonus:   true,
+		BonusColumn:    "a.reputation",
+	}) + ` AS reputation,
 				a.created_at,
 				-- Key stats
 				COALESCE((
@@ -302,61 +200,15 @@ func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOpt
 				'user' AS entity_type,
 				u.display_name,
 				COALESCE(u.avatar_url, '') AS avatar_url,
-				-- Calculate user reputation from activity
-				(
-					COALESCE((
-						SELECT COUNT(*)
-						FROM posts p
-						WHERE p.posted_by_id = u.id::text
-							AND p.posted_by_type = 'human'
-							AND p.type = 'problem'
-							AND p.status = 'solved'
-							AND p.deleted_at IS NULL
-							AND p.created_at >= $3
-					), 0) * 100
-					+
-					COALESCE((
-						SELECT COUNT(*)
-						FROM answers ans
-						WHERE ans.author_id = u.id::text
-							AND ans.author_type = 'human'
-							AND ans.is_accepted = true
-							AND ans.deleted_at IS NULL
-							AND ans.created_at >= $3
-					), 0) * 50
-					+
-					COALESCE((
-						SELECT COUNT(*)
-						FROM votes v
-						WHERE v.confirmed = true
-							AND v.direction = 'up'
-							AND v.created_at >= $3
-							AND (
-								(v.target_type = 'post' AND EXISTS (
-									SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
-								))
-								OR (v.target_type = 'answer' AND EXISTS (
-									SELECT 1 FROM answers ans WHERE ans.id = v.target_id AND ans.author_type = 'human' AND ans.author_id = u.id::text
-								))
-							)
-					), 0) * 2
-					-
-					COALESCE((
-						SELECT COUNT(*)
-						FROM votes v
-						WHERE v.confirmed = true
-							AND v.direction = 'down'
-							AND v.created_at >= $3
-							AND (
-								(v.target_type = 'post' AND EXISTS (
-									SELECT 1 FROM posts p WHERE p.id = v.target_id AND p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
-								))
-								OR (v.target_type = 'answer' AND EXISTS (
-									SELECT 1 FROM answers ans WHERE ans.id = v.target_id AND ans.author_type = 'human' AND ans.author_id = u.id::text
-								))
-							)
-					), 0)
-				) AS reputation,
+				-- Reputation calculated using centralized reputation.BuildReputationSQL
+				-- Now includes ALL components: problems_contributed, ideas, responses, etc.
+				` + reputation.BuildReputationSQL(reputation.SQLBuilderOptions{
+		EntityType:     "user",
+		EntityIDColumn: "u.id::text",
+		AuthorType:     "human",
+		TimeFilter:     "AND created_at >= $3",
+		IncludeBonus:   false,
+	}) + ` AS reputation,
 				u.created_at,
 				-- Key stats
 				COALESCE((

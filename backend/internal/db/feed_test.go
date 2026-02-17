@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -271,28 +272,20 @@ func TestFeedRepository_GetRecentActivity_ExcludesDeleted(t *testing.T) {
 	cleanupFeedTestData(t, pool)
 }
 
-// Helper function to clean up test data
-func cleanupFeedTestData(t *testing.T, pool *Pool) {
-	ctx := context.Background()
-	// Clean in order: answers -> approaches -> posts -> agents -> users
-	_, _ = pool.pool.Exec(ctx, "DELETE FROM answers")
-	_, _ = pool.pool.Exec(ctx, "DELETE FROM approaches")
-	_, _ = pool.pool.Exec(ctx, "DELETE FROM posts")
-	_, _ = pool.pool.Exec(ctx, "DELETE FROM agents")
-	_, _ = pool.pool.Exec(ctx, "DELETE FROM users")
-}
 
 // Helper function to create a test user
 func createFeedTestUser(t *testing.T, repo *UserRepository) *models.User {
 	t.Helper()
 	ctx := context.Background()
 
+	// Use shorter timestamp format to stay within username length limit (30 chars)
+	timestamp := time.Now().Format("150405.000")
 	user := &models.User{
-		Username:       "testuser" + time.Now().Format("20060102150405.000000000"),
+		Username:       "testuser" + timestamp,
 		DisplayName:    "Test User",
-		Email:          "test" + time.Now().Format("20060102150405.000000000") + "@example.com",
+		Email:          "test" + timestamp + "@example.com",
 		AuthProvider:   "github",
-		AuthProviderID: "github_" + time.Now().Format("20060102150405.000000000"),
+		AuthProviderID: "github_" + timestamp,
 		Role:           "user",
 	}
 
@@ -302,6 +295,204 @@ func createFeedTestUser(t *testing.T, repo *UserRepository) *models.User {
 	}
 
 	return created
+}
+
+// TestFeedRepository_GetRecentActivity_CommentCounts tests that comment counts are correct for all post types.
+// This test verifies that:
+// - Questions show answer_count (from answers table)
+// - Problems show approach_count (from approaches table)
+// - Ideas show answer_count (from responses table, mapped to answer_count field)
+func TestFeedRepository_GetRecentActivity_CommentCounts(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	feedRepo := NewFeedRepository(pool)
+	postRepo := NewPostRepository(pool)
+	userRepo := NewUserRepository(pool)
+	answersRepo := NewAnswersRepository(pool)
+	approachesRepo := NewApproachesRepository(pool)
+	responsesRepo := NewResponsesRepository(pool)
+
+	// Clean up any existing test data
+	cleanupFeedTestData(t, pool)
+
+	// Create a test user
+	testUser := createFeedTestUser(t, userRepo)
+
+	// Create a question with 2 answers
+	question := createFeedTestPost(t, postRepo, "Test Question", models.PostTypeQuestion, models.PostStatusOpen, models.AuthorTypeHuman, testUser.ID)
+	for i := 0; i < 2; i++ {
+		_, err := answersRepo.CreateAnswer(ctx, &models.Answer{
+			QuestionID: question.ID,
+			AuthorType: models.AuthorTypeHuman,
+			AuthorID:   testUser.ID,
+			Content:    fmt.Sprintf("Answer %d", i+1),
+		})
+		if err != nil {
+			t.Fatalf("failed to create answer: %v", err)
+		}
+	}
+
+	// Create a problem with 3 approaches
+	problem := createFeedTestPost(t, postRepo, "Test Problem", models.PostTypeProblem, models.PostStatusOpen, models.AuthorTypeHuman, testUser.ID)
+	for i := 0; i < 3; i++ {
+		_, err := approachesRepo.CreateApproach(ctx, &models.Approach{
+			ProblemID:  problem.ID,
+			AuthorType: models.AuthorTypeHuman,
+			AuthorID:   testUser.ID,
+			Angle:      fmt.Sprintf("Approach %d", i+1),
+			Status:     models.ApproachStatusWorking,
+		})
+		if err != nil {
+			t.Fatalf("failed to create approach: %v", err)
+		}
+	}
+
+	// Create an idea with 4 responses
+	idea := createFeedTestPost(t, postRepo, "Test Idea", models.PostTypeIdea, models.PostStatusActive, models.AuthorTypeHuman, testUser.ID)
+	for i := 0; i < 4; i++ {
+		_, err := responsesRepo.CreateResponse(ctx, &models.Response{
+			IdeaID:       idea.ID,
+			AuthorType:   models.AuthorTypeHuman,
+			AuthorID:     testUser.ID,
+			Content:      fmt.Sprintf("Response %d", i+1),
+			ResponseType: models.ResponseTypeSupport,
+		})
+		if err != nil {
+			t.Fatalf("failed to create response: %v", err)
+		}
+	}
+
+	// Get recent activity
+	items, total, err := feedRepo.GetRecentActivity(ctx, 1, 20)
+	if err != nil {
+		t.Fatalf("GetRecentActivity failed: %v", err)
+	}
+
+	if total != 3 {
+		t.Errorf("expected total 3, got %d", total)
+	}
+
+	if len(items) != 3 {
+		t.Errorf("expected 3 items, got %d", len(items))
+	}
+
+	// Verify comment counts for each post type
+	foundQuestion := false
+	foundProblem := false
+	foundIdea := false
+
+	for _, item := range items {
+		switch item.Type {
+		case "question":
+			foundQuestion = true
+			if item.AnswerCount != 2 {
+				t.Errorf("expected question to have answer_count=2, got %d", item.AnswerCount)
+			}
+			if item.ApproachCount != 0 {
+				t.Errorf("expected question to have approach_count=0, got %d", item.ApproachCount)
+			}
+		case "problem":
+			foundProblem = true
+			if item.ApproachCount != 3 {
+				t.Errorf("expected problem to have approach_count=3, got %d", item.ApproachCount)
+			}
+			// Problems can have answer_count=0 or be nil, both are fine
+		case "idea":
+			foundIdea = true
+			// Ideas use answer_count field for responses
+			if item.AnswerCount != 4 {
+				t.Errorf("expected idea to have answer_count=4 (responses), got %d", item.AnswerCount)
+			}
+			if item.ApproachCount != 0 {
+				t.Errorf("expected idea to have approach_count=0, got %d", item.ApproachCount)
+			}
+		}
+	}
+
+	if !foundQuestion {
+		t.Error("question not found in feed results")
+	}
+	if !foundProblem {
+		t.Error("problem not found in feed results")
+	}
+	if !foundIdea {
+		t.Error("idea not found in feed results")
+	}
+
+	// Clean up
+	cleanupFeedTestData(t, pool)
+}
+
+// TestFeedRepository_GetStuckProblems_ApproachCounts tests that approach counts are correct for stuck problems.
+func TestFeedRepository_GetStuckProblems_ApproachCounts(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	feedRepo := NewFeedRepository(pool)
+	postRepo := NewPostRepository(pool)
+	userRepo := NewUserRepository(pool)
+	approachesRepo := NewApproachesRepository(pool)
+
+	// Clean up any existing test data
+	cleanupFeedTestData(t, pool)
+
+	// Create a test user
+	testUser := createFeedTestUser(t, userRepo)
+
+	// Create a problem that's stuck (has approach but old activity)
+	// We'll mark it as in_progress which qualifies it as "stuck"
+	problem := createFeedTestPost(t, postRepo, "Stuck Problem", models.PostTypeProblem, models.PostStatusInProgress, models.AuthorTypeHuman, testUser.ID)
+
+	// Add 1 approach
+	_, err := approachesRepo.CreateApproach(ctx, &models.Approach{
+		ProblemID:  problem.ID,
+		AuthorType: models.AuthorTypeHuman,
+		AuthorID:   testUser.ID,
+		Angle:      "Trying this approach",
+		Status:     models.ApproachStatusWorking,
+	})
+	if err != nil {
+		t.Fatalf("failed to create approach: %v", err)
+	}
+
+	// Get stuck problems
+	items, _, err := feedRepo.GetStuckProblems(ctx, 1, 20)
+	if err != nil {
+		t.Fatalf("GetStuckProblems failed: %v", err)
+	}
+
+	// Find our problem
+	found := false
+	for _, item := range items {
+		if item.ID == problem.ID {
+			found = true
+			if item.ApproachCount != 1 {
+				t.Errorf("expected problem to have approach_count=1, got %d", item.ApproachCount)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("stuck problem not found in results")
+	}
+
+	// Clean up
+	cleanupFeedTestData(t, pool)
+}
+
+// Helper function to clean up test data
+func cleanupFeedTestData(t *testing.T, pool *Pool) {
+	ctx := context.Background()
+	// Clean in order: responses -> answers -> approaches -> posts -> agents -> users
+	_, _ = pool.pool.Exec(ctx, "DELETE FROM responses")
+	_, _ = pool.pool.Exec(ctx, "DELETE FROM answers")
+	_, _ = pool.pool.Exec(ctx, "DELETE FROM approaches")
+	_, _ = pool.pool.Exec(ctx, "DELETE FROM posts")
+	_, _ = pool.pool.Exec(ctx, "DELETE FROM agents")
+	_, _ = pool.pool.Exec(ctx, "DELETE FROM users")
 }
 
 // Helper function to create a test post

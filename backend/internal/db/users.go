@@ -97,11 +97,12 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 }
 
 // FindByID finds a user by their ID.
+// Filters out soft-deleted users (WHERE deleted_at IS NULL).
 func (r *UserRepository) FindByID(ctx context.Context, id string) (*models.User, error) {
 	query := `
 		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
 		FROM users
-		WHERE id = $1
+		WHERE id = $1 AND deleted_at IS NULL
 	`
 
 	row := r.pool.QueryRow(ctx, query, id)
@@ -118,6 +119,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*models.User,
 // - Clean separation of auth data from user profile data
 //
 // Returns ErrNotFound if no user has this OAuth provider linked.
+// Filters out soft-deleted users (WHERE deleted_at IS NULL).
 func (r *UserRepository) FindByAuthProvider(ctx context.Context, provider, providerID string) (*models.User, error) {
 	query := `
 		SELECT u.id, u.username, u.display_name, u.email, u.auth_provider,
@@ -126,6 +128,7 @@ func (r *UserRepository) FindByAuthProvider(ctx context.Context, provider, provi
 		FROM users u
 		INNER JOIN auth_methods am ON u.id = am.user_id
 		WHERE am.auth_provider = $1 AND am.auth_provider_id = $2
+		  AND u.deleted_at IS NULL
 	`
 
 	row := r.pool.QueryRow(ctx, query, provider, providerID)
@@ -134,11 +137,12 @@ func (r *UserRepository) FindByAuthProvider(ctx context.Context, provider, provi
 
 // FindByEmail finds a user by their email address.
 // Per SPEC.md Part 5.2: Link accounts if email matches.
+// Filters out soft-deleted users (WHERE deleted_at IS NULL).
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := `
 		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
 		FROM users
-		WHERE email = $1
+		WHERE email = $1 AND deleted_at IS NULL
 	`
 
 	row := r.pool.QueryRow(ctx, query, email)
@@ -147,11 +151,12 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models
 
 // FindByUsername finds a user by username.
 // Returns db.ErrNotFound if no user exists with that username.
+// Filters out soft-deleted users (WHERE deleted_at IS NULL).
 func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*models.User, error) {
 	query := `
 		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
 		FROM users
-		WHERE username = $1
+		WHERE username = $1 AND deleted_at IS NULL
 	`
 
 	row := r.pool.QueryRow(ctx, query, username)
@@ -178,11 +183,11 @@ func (r *UserRepository) Update(ctx context.Context, user *models.User) (*models
 	return r.scanUser(row)
 }
 
-// Delete permanently deletes a user from the database.
-// WARNING: This is a hard delete. Use with caution.
-// Returns ErrNotFound if user doesn't exist.
+// Delete soft-deletes a user by setting deleted_at to NOW().
+// Per PRD-v5 Task 12: User self-deletion (soft delete).
+// Returns ErrNotFound if user doesn't exist or is already deleted.
 func (r *UserRepository) Delete(ctx context.Context, id string) error {
-	query := `DELETE FROM users WHERE id = $1`
+	query := `UPDATE users SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`
 
 	result, err := r.pool.Exec(ctx, query, id)
 	if err != nil {
@@ -346,6 +351,7 @@ func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOpt
 	}
 
 	// Query with agents_count subquery
+	// Filters out soft-deleted users (WHERE deleted_at IS NULL)
 	query := `
 		SELECT
 			u.id,
@@ -367,6 +373,7 @@ func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOpt
 			(SELECT COUNT(*) FROM agents WHERE human_id = u.id) as agents_count,
 			u.created_at
 		FROM users u
+		WHERE u.deleted_at IS NULL
 		ORDER BY ` + orderBy + `
 		LIMIT $1 OFFSET $2
 	`
@@ -402,9 +409,9 @@ func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOpt
 		return nil, 0, err
 	}
 
-	// Get total count
+	// Get total count (exclude soft-deleted users)
 	var total int
-	countQuery := `SELECT COUNT(*) FROM users`
+	countQuery := `SELECT COUNT(*) FROM users WHERE deleted_at IS NULL`
 	err = r.pool.QueryRow(ctx, countQuery).Scan(&total)
 	if err != nil {
 		LogQueryError(ctx, "List.Count", "users", err)

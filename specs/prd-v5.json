@@ -930,7 +930,7 @@
       "  - Assert: agents.human_id set to NULL (unclaimed, agents remain)",
       "Verify: go test ./internal/api/handlers -run TestDeleteMe -v passes all 5 tests"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
@@ -953,7 +953,7 @@
       "Verify: psql -c '\\d agents' shows deleted_at TIMESTAMPTZ column",
       "Verify: psql -c '\\di' shows idx_users_not_deleted and idx_agents_not_deleted partial indexes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
@@ -986,7 +986,7 @@
       "Verify: User cannot log in after deletion (GetByEmail returns ErrNotFound)",
       "Verify: User's posts remain visible after deletion"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

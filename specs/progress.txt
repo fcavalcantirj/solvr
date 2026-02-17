@@ -1,3 +1,19 @@
+2026-02-16: PRD-v5 Task 10 - Implement user soft delete (VERIFICATION)
+- Verified UserRepository.Delete() implements soft delete (UPDATE users SET deleted_at = NOW())
+- Verified all SELECT queries filter deleted_at IS NULL (FindByID, FindByEmail, FindByUsername, FindByAuthProvider, List)
+- Verified MeHandler.DeleteMe endpoint fully functional (auth checks, agent blocking, agent unclaiming)
+- Verified migration 000034 adds deleted_at column to users table
+- Verified 5 comprehensive tests in users_deletion_test.go all pass:
+  * TestDeleteMe_Success - successful soft delete with agent unclaiming
+  * TestDeleteMe_Unauthorized - 401 when no JWT provided
+  * TestDeleteMe_AgentCannotDeleteHumans - 403 when agent tries to delete users
+  * TestDeleteMe_AlreadyDeleted - 404 when user already deleted
+  * TestDeleteMe_CascadeChecks - verifies agents unclaimed, posts remain visible
+- Verified DELETE /v1/me route registered in router.go (line 453)
+- Test results: All 5 DeleteMe tests pass, repository tests pass, full test suite passes
+- Implementation complete and verified working
+- Updated prd-v5.json: passes false → true
+
 2026-02-15: PRD-v5 Task 3 - Create tag-specific leaderboard endpoint
 - Created db/leaderboard_tags.go with GetLeaderboardByTag method (482 lines)
 - SQL query filters all activity by tag: problems, answers (via parent question), votes

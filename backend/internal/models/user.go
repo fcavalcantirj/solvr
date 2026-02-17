@@ -50,6 +50,11 @@ type User struct {
 
 	// UpdatedAt is when the user was last modified.
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// DeletedAt is when the user was soft-deleted (NULL if not deleted).
+	// Per PRD-v5 Task 10-12: User self-deletion feature.
+	// When set, the user is considered deleted and filtered from queries.
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 // UserStats contains computed statistics for a user.

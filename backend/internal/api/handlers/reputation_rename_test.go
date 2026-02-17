@@ -131,7 +131,7 @@ func TestAgentList_ReturnsReputation_NotKarma(t *testing.T) {
 func TestMeEndpoint_Agent_ReturnsReputation_NotKarma(t *testing.T) {
 	config := &OAuthConfig{JWTSecret: "test-secret"}
 	userRepo := NewMockMeUserRepository()
-	handler := NewMeHandler(config, userRepo, nil, nil)
+	handler := NewMeHandler(config, userRepo, nil, nil, nil)
 
 	// Create request with agent context
 	agent := &models.Agent{

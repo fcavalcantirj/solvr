@@ -4,10 +4,13 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // MeUserRepositoryInterface defines the interface for user repository operations
@@ -15,6 +18,7 @@ import (
 type MeUserRepositoryInterface interface {
 	FindByID(ctx context.Context, id string) (*models.User, error)
 	GetUserStats(ctx context.Context, userID string) (*models.UserStats, error)
+	Delete(ctx context.Context, id string) error
 }
 
 // MeAgentStatsInterface defines the interface for fetching computed agent stats.
@@ -27,21 +31,28 @@ type AuthMethodRepositoryInterface interface {
 	FindByUserID(ctx context.Context, userID string) ([]*models.AuthMethod, error)
 }
 
+// PoolInterface defines the interface for database pool operations needed by MeHandler.
+type PoolInterface interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
 // MeHandler handles the GET /v1/auth/me endpoint.
 type MeHandler struct {
 	config         *OAuthConfig
 	userRepo       MeUserRepositoryInterface
 	agentStatsRepo MeAgentStatsInterface
 	authMethodRepo AuthMethodRepositoryInterface
+	pool           PoolInterface
 }
 
 // NewMeHandler creates a new MeHandler instance.
-func NewMeHandler(config *OAuthConfig, userRepo MeUserRepositoryInterface, agentStatsRepo MeAgentStatsInterface, authMethodRepo AuthMethodRepositoryInterface) *MeHandler {
+func NewMeHandler(config *OAuthConfig, userRepo MeUserRepositoryInterface, agentStatsRepo MeAgentStatsInterface, authMethodRepo AuthMethodRepositoryInterface, pool PoolInterface) *MeHandler {
 	return &MeHandler{
 		config:         config,
 		userRepo:       userRepo,
 		agentStatsRepo: agentStatsRepo,
 		authMethodRepo: authMethodRepo,
+		pool:           pool,
 	}
 }
 
@@ -210,6 +221,95 @@ func (h *MeHandler) GetMyAuthMethods(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeMeJSON(w, http.StatusOK, response)
+}
+
+// DeleteMe handles DELETE /v1/me
+// Soft-deletes the authenticated user's account.
+// Per PRD-v5 Task 12: User self-deletion.
+//
+// This endpoint requires JWT authentication. Agents cannot use this endpoint.
+//
+// Effects of deletion:
+// - User is soft-deleted (deleted_at set to NOW())
+// - User's agents are unclaimed (human_id set to NULL)
+// - User's posts/contributions remain visible
+// - User cannot log in after deletion
+//
+// Returns:
+// - 200 OK: Account deleted successfully
+// - 401 Unauthorized: No JWT token provided
+// - 403 Forbidden: Agent tried to delete user account
+// - 404 Not Found: User already deleted
+// - 500 Internal Server Error: Database error
+func (h *MeHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Check for agent authentication (API key) - agents cannot delete user accounts
+	agent := auth.AgentFromContext(ctx)
+	if agent != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": map[string]string{
+				"code":    "FORBIDDEN",
+				"message": "agents cannot delete user accounts",
+			},
+		})
+		return
+	}
+
+	// Require user authentication (JWT)
+	claims := auth.ClaimsFromContext(ctx)
+	if claims == nil {
+		writeMeUnauthorized(w, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	userID := claims.UserID
+
+	// Unclaim all agents owned by this user
+	if h.pool != nil {
+		if err := h.unclaimAgents(ctx, userID); err != nil {
+			writeMeInternalError(w, "Failed to unclaim agents")
+			return
+		}
+	}
+
+	// Soft-delete the user
+	err := h.userRepo.Delete(ctx, userID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) || err.Error() == "record not found" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": map[string]string{
+					"code":    "NOT_FOUND",
+					"message": "user not found",
+				},
+			})
+			return
+		}
+
+		writeMeInternalError(w, "Failed to delete account")
+		return
+	}
+
+	// Return success
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"data": map[string]string{
+			"message": "Account deleted successfully",
+		},
+	})
+}
+
+// unclaimAgents sets human_id to NULL for all agents owned by the given user.
+// This allows agents to remain active but unclaimed after user deletion.
+func (h *MeHandler) unclaimAgents(ctx context.Context, userID string) error {
+	query := `UPDATE agents SET human_id = NULL WHERE human_id = $1`
+	_, err := h.pool.Exec(ctx, query, userID)
+	return err
 }
 
 // Helper functions for writing responses

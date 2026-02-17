@@ -52,6 +52,11 @@ func (m *MockMeUserRepository) GetUserStats(ctx context.Context, userID string) 
 	return stats, nil
 }
 
+func (m *MockMeUserRepository) Delete(ctx context.Context, id string) error {
+	// Not used in existing me_test.go tests, but required by interface
+	return nil
+}
+
 func TestMe_Success(t *testing.T) {
 	// Setup: create user in mock repository
 	repo := NewMockMeUserRepository()
@@ -75,7 +80,7 @@ func TestMe_Success(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo, nil, nil)
+	handler := NewMeHandler(config, repo, nil, nil, nil)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
@@ -142,7 +147,7 @@ func TestMe_NoAuth(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo, nil, nil)
+	handler := NewMeHandler(config, repo, nil, nil, nil)
 
 	// Create request WITHOUT claims in context
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
@@ -178,7 +183,7 @@ func TestMe_UserNotFound(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo, nil, nil)
+	handler := NewMeHandler(config, repo, nil, nil, nil)
 
 	// Create request with claims for non-existent user
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
@@ -236,7 +241,7 @@ func TestMe_IncludesAllStats(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo, nil, nil)
+	handler := NewMeHandler(config, repo, nil, nil, nil)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
@@ -305,7 +310,7 @@ func TestMe_AdminUser(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo, nil, nil)
+	handler := NewMeHandler(config, repo, nil, nil, nil)
 
 	// Create request with admin claims
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
@@ -367,7 +372,7 @@ func TestMe_Agent_ReturnsComputedReputation(t *testing.T) {
 	}
 
 	config := &OAuthConfig{JWTSecret: "test-secret-key"}
-	handler := NewMeHandler(config, repo, agentStats, nil)
+	handler := NewMeHandler(config, repo, agentStats, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
 	agent := &models.Agent{
@@ -404,7 +409,7 @@ func TestMe_AgentWithAPIKey(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo, nil, nil)
+	handler := NewMeHandler(config, repo, nil, nil, nil)
 
 	// Create request with agent in context (simulating API key middleware)
 	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
@@ -473,7 +478,7 @@ func TestMe_AgentWithHumanBackedBadge(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo, nil, nil)
+	handler := NewMeHandler(config, repo, nil, nil, nil)
 
 	// Create request with claimed agent
 	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
@@ -532,7 +537,7 @@ func TestMe_PrefersAgentOverClaims(t *testing.T) {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	handler := NewMeHandler(config, repo, nil, nil)
+	handler := NewMeHandler(config, repo, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
 
@@ -616,7 +621,7 @@ func TestGetMyAuthMethods_SingleProvider(t *testing.T) {
 	authMethodRepo.methods[userID] = []*models.AuthMethod{authMethod}
 
 	config := &OAuthConfig{JWTSecret: "test-secret-key"}
-	handler := NewMeHandler(config, userRepo, nil, authMethodRepo)
+	handler := NewMeHandler(config, userRepo, nil, authMethodRepo, nil)
 
 	// Create request with JWT
 	req := httptest.NewRequest(http.MethodGet, "/v1/me/auth-methods", nil)
@@ -690,7 +695,7 @@ func TestGetMyAuthMethods_MultipleProviders(t *testing.T) {
 	}
 
 	config := &OAuthConfig{JWTSecret: "test-secret-key"}
-	handler := NewMeHandler(config, userRepo, nil, authMethodRepo)
+	handler := NewMeHandler(config, userRepo, nil, authMethodRepo, nil)
 
 	// Create request with JWT
 	req := httptest.NewRequest(http.MethodGet, "/v1/me/auth-methods", nil)
@@ -749,7 +754,7 @@ func TestGetMyAuthMethods_EmptyList(t *testing.T) {
 	// Don't add any methods to authMethodRepo
 
 	config := &OAuthConfig{JWTSecret: "test-secret-key"}
-	handler := NewMeHandler(config, userRepo, nil, authMethodRepo)
+	handler := NewMeHandler(config, userRepo, nil, authMethodRepo, nil)
 
 	// Create request with JWT
 	req := httptest.NewRequest(http.MethodGet, "/v1/me/auth-methods", nil)
@@ -791,7 +796,7 @@ func TestGetMyAuthMethods_Unauthorized(t *testing.T) {
 	authMethodRepo := NewMockAuthMethodRepository()
 
 	config := &OAuthConfig{JWTSecret: "test-secret-key"}
-	handler := NewMeHandler(config, userRepo, nil, authMethodRepo)
+	handler := NewMeHandler(config, userRepo, nil, authMethodRepo, nil)
 
 	// Create request WITHOUT claims
 	req := httptest.NewRequest(http.MethodGet, "/v1/me/auth-methods", nil)
@@ -843,7 +848,7 @@ func TestGetMyAuthMethods_ExcludesSensitiveFields(t *testing.T) {
 	}
 
 	config := &OAuthConfig{JWTSecret: "test-secret-key"}
-	handler := NewMeHandler(config, userRepo, nil, authMethodRepo)
+	handler := NewMeHandler(config, userRepo, nil, authMethodRepo, nil)
 
 	// Create request with JWT
 	req := httptest.NewRequest(http.MethodGet, "/v1/me/auth-methods", nil)

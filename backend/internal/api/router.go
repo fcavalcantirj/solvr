@@ -447,9 +447,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 
 			// Per FIX-005: GET /v1/me - current authenticated entity info
 			// Works with both JWT (humans) and API key (agents)
-			meHandler := handlers.NewMeHandler(oauthConfig, userRepo, agentRepo, authMethodRepo)
+			meHandler := handlers.NewMeHandler(oauthConfig, userRepo, agentRepo, authMethodRepo, pool)
 			r.Get("/me", meHandler.Me)
 			r.Get("/me/auth-methods", meHandler.GetMyAuthMethods)
+			r.Delete("/me", meHandler.DeleteMe) // PRD-v5 Task 12: User self-deletion
 
 			// BE-003: User profile endpoints
 			// PATCH /v1/me - update own profile

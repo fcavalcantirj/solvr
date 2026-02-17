@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Sparkles, MessageSquare, GitBranch, Zap, ChevronDown, Loader2 } from "lucide-react";
+import { Sparkles, GitBranch, Eye, Zap, ChevronDown, Loader2, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIdeas, IdeaListItem, IdeaStage, UseIdeasOptions } from "@/hooks/use-ideas";
@@ -42,14 +42,18 @@ export function IdeasList({ options }: IdeasListProps) {
         ideas: searchResult.posts.map(post => ({
           id: post.id,
           title: post.title,
-          snippet: post.snippet,
+          spark: post.snippet,
           stage: post.status as IdeaStage,
-          tags: post.tags,
-          supportScore: post.votes,
-          engagementCount: post.responses,
-          viewCount: post.views,
+          potential: post.votes > 50 ? 'high' as const : post.votes > 10 ? 'rising' as const : 'needs_validation' as const,
           author: post.author,
+          support: post.votes,
+          comments: post.comments,
+          branches: post.responses,
+          viewCount: post.views,
+          tags: post.tags,
           timestamp: post.time,
+          supporters: [],
+          recentComment: null,
         })),
         loading: searchResult.loading,
         error: searchResult.error,
@@ -265,15 +269,17 @@ function IdeaCard({ idea, expanded, onToggleExpand }: IdeaCardProps) {
               />
             </div>
             <span className="flex items-center gap-1 sm:gap-1.5 font-mono text-xs text-muted-foreground">
-              <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+              <GitBranch size={14} />
+              {idea.branches}
+            </span>
+            <span className="flex items-center gap-1 sm:gap-1.5 font-mono text-xs text-muted-foreground">
+              <MessageCircle size={14} />
               {idea.comments}
             </span>
-            {idea.branches > 0 && (
-              <span className="flex items-center gap-1 sm:gap-1.5 font-mono text-xs text-muted-foreground">
-                <GitBranch className="w-3.5 h-3.5 shrink-0" />
-                {idea.branches}
-              </span>
-            )}
+            <span className="flex items-center gap-1 sm:gap-1.5 font-mono text-xs text-muted-foreground">
+              <Eye size={14} />
+              {idea.viewCount}
+            </span>
           </div>
         </div>
 

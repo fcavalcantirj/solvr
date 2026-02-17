@@ -7,6 +7,7 @@ import {
   User,
   ArrowUp,
   MessageSquare,
+  MessageCircle,
   GitBranch,
   Clock,
   Eye,
@@ -394,14 +395,14 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
                           />
                         </div>
                         <div className="flex items-center gap-1.5 text-muted-foreground">
-                          {post.type === "problem" ? (
-                            <GitBranch size={14} />
-                          ) : (
-                            <MessageSquare size={14} />
-                          )}
+                          <GitBranch size={14} />
                           <span className="font-mono text-xs">
                             {post.responses}
                           </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <MessageCircle size={14} />
+                          <span className="font-mono text-xs">{post.comments}</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <Eye size={14} />

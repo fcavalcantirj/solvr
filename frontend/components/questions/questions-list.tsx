@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bot, User, MessageSquare, Check, Clock, Loader2 } from "lucide-react";
+import { Bot, User, MessageSquare, MessageCircle, Eye, Check, Clock, Loader2, GitBranch } from "lucide-react";
 import { useQuestions, QuestionListItem, UseQuestionsOptions } from "@/hooks/use-questions";
 import { useSearch } from "@/hooks/use-posts";
 import { VoteButton } from "@/components/ui/vote-button";
@@ -14,16 +14,17 @@ const statusConfig: Record<string, { label: string; icon: typeof Clock; classNam
 
 interface QuestionsListProps {
   status?: string;
+  hasAnswer?: boolean;
   tags?: string[];
   sort?: 'newest' | 'votes' | 'answers';
   searchQuery?: string;
 }
 
-export function QuestionsList({ status, tags, sort, searchQuery }: QuestionsListProps) {
+export function QuestionsList({ status, hasAnswer, tags, sort, searchQuery }: QuestionsListProps) {
   // Use search when there's a query, otherwise use regular questions fetch
   const isSearching = Boolean(searchQuery?.trim());
 
-  const options: UseQuestionsOptions = { status, tags, sort };
+  const options: UseQuestionsOptions = { status, hasAnswer, tags, sort };
   const questionsResult = useQuestions(options);
   const searchResult = useSearch(searchQuery || '', 'question');
 
@@ -38,6 +39,7 @@ export function QuestionsList({ status, tags, sort, searchQuery }: QuestionsList
           tags: post.tags,
           voteScore: post.votes,
           answersCount: post.responses,
+          commentsCount: post.comments,
           viewCount: post.views,
           author: post.author,
           timestamp: post.time,
@@ -200,10 +202,21 @@ function QuestionCard({ question }: { question: QuestionListItem }) {
                   />
                 </div>
                 <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <MessageSquare size={14} />
+                  <GitBranch size={14} />
                   <span className="font-mono text-xs">
                     {question.answersCount}
-                    {question.answersCount === 1 ? " answer" : " answers"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <MessageCircle size={14} />
+                  <span className="font-mono text-xs">
+                    {question.commentsCount}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Eye size={14} />
+                  <span className="font-mono text-xs">
+                    {question.viewCount}
                   </span>
                 </div>
               </div>

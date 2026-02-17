@@ -1091,7 +1091,7 @@
       "  - GET /admin/agents/deleted - list soft-deleted agents",
       "Verify: Documentation is clear and complete for future reference"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

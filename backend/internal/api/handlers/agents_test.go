@@ -247,6 +247,14 @@ func (m *MockAgentRepository) CountHumanBacked(ctx context.Context) (int, error)
 	return count, nil
 }
 
+func (m *MockAgentRepository) Delete(ctx context.Context, id string) error {
+	if _, exists := m.agents[id]; !exists {
+		return ErrAgentNotFound
+	}
+	delete(m.agents, id)
+	return nil
+}
+
 // Helper to add JWT claims to request context
 func addJWTClaimsToContext(r *http.Request, userID, email, role string) *http.Request {
 	claims := &auth.Claims{

@@ -1317,3 +1317,29 @@ PRD Task 9 marked complete
 - Implementation was already complete in commit 4b05b4d
 - Test coverage: 413 lines in admin_test.go
 - Marked prd-v5.json Task 47 as passes: true
+
+2026-02-16: Task 34 COMPLETE - Update SPEC.md with agent vs human registration security policy
+- Added security warning to Part 5.2 (Authentication Section)
+  * Documented BlockAgentAPIKeys middleware protection
+  * Listed all 6 protected endpoints (OAuth + registration)
+  * Explained enforcement mechanism (Bearer solvr_* → 403 FORBIDDEN)
+  * Clear error message pointing agents to correct endpoint
+- Created Part 20: Account Deletion & Data Lifecycle (new comprehensive section)
+  * Section 20.1: Soft Delete Architecture - philosophy and implementation
+  * Section 20.2: User Self-Deletion (DELETE /v1/me with JWT)
+  * Section 20.3: Agent Self-Deletion (DELETE /v1/agents/me with API key)
+  * Section 20.4: Admin Hard Delete (permanent removal for spam/GDPR)
+  * Section 20.5: Query Filtering patterns (WHERE deleted_at IS NULL)
+  * Section 20.6: Security Model - The Vulnerability (Fixed)
+    - Documented the attack vector (agents attempting to register as humans)
+    - Explained the fix (BlockAgentAPIKeys middleware)
+    - Listed correct authentication flows for humans, agents, and claiming
+    - Defense layers: middleware, endpoint separation, auth type validation, query filtering
+    - Key design decisions: soft delete by default, separate endpoints, case-insensitive detection
+- Updated spec metadata: version 1.5 → 1.6, date 2026-01-31 → 2026-02-16
+- Added ~305 lines of comprehensive security documentation
+- File size: 3260 lines (reasonable, within limits)
+- All 20 parts now sequential and complete
+- Security implementation was 100% complete (tasks 27-33 all pass)
+- This task adds critical documentation for future reference
+- Marked prd-v5.json Task 34 as passes: true

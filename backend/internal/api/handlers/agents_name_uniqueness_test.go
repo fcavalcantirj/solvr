@@ -165,6 +165,16 @@ func (m *MockAgentRepoWithSuggestions) CountHumanBacked(ctx context.Context) (in
 	return 0, nil
 }
 
+func (m *MockAgentRepoWithSuggestions) Delete(ctx context.Context, id string) error {
+	if _, exists := m.agents[id]; !exists {
+		return ErrAgentNotFound
+	}
+	agent := m.agents[id]
+	delete(m.agents, id)
+	delete(m.agentsByName, agent.DisplayName)
+	return nil
+}
+
 // TestRegisterAgent_DuplicateName_Returns409 tests that duplicate names return 409 Conflict.
 // Per AGENT-ONBOARDING requirement: Return 409 Conflict if name taken.
 func TestRegisterAgent_DuplicateName_Returns409(t *testing.T) {

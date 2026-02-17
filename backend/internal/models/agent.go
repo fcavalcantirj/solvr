@@ -67,6 +67,11 @@ type Agent struct {
 
 	// UpdatedAt is when the agent was last modified.
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// DeletedAt is when the agent was soft-deleted (nullable).
+	// Per PRD-v5 Task 22: agent self-deletion feature.
+	// NULL = agent is active, NOT NULL = agent is soft-deleted.
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 // AgentStats contains computed statistics for an agent.

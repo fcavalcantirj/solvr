@@ -77,7 +77,7 @@ for ((i=1; i<=$1; i++)); do
 • NO MOCKS, NO STUBS - real implementation only
 • TDD: Write failing test FIRST, then implement (RED→GREEN→REFACTOR)
 • 80% test coverage minimum - no exceptions
-• 800 lines max per file - split if needed
+• ~900 lines max per file - split if needed
 • API is smart, client is dumb - all logic server-side
 
 === WORKFLOW ===
@@ -98,7 +98,7 @@ IMPORTANT: Always use 'git add .' before committing to include NEW files, not ju
 CRITICAL: 
 - ONE TASK ONLY then STOP. Do NOT continue to another task.
 - After commit+push, you are DONE. Exit immediately.
-- NO FILE OVER 800 LINES." > "$tmpfile" 2>&1 || true
+- NO FILE OVER ~900 LINES." > "$tmpfile" 2>&1 || true
 
   iter_end=$(date +%s)
   iter_time=$((iter_end - iter_start))

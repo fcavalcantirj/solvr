@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -47,6 +48,8 @@ type AgentRepositoryInterface interface {
 	// Count stats for agents listing
 	CountActive(ctx context.Context) (int, error)
 	CountHumanBacked(ctx context.Context) (int, error)
+	// Soft delete agent (PRD-v5 Task 22)
+	Delete(ctx context.Context, id string) error
 }
 
 // ClaimTokenRepositoryInterface defines database operations for claim tokens.
@@ -630,6 +633,50 @@ func (h *AgentsHandler) RevokeAPIKey(w http.ResponseWriter, r *http.Request, age
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeleteMe handles DELETE /v1/agents/me - agent self-deletion.
+// Per PRD-v5 Task 22: allows agents to soft-delete their own accounts.
+// Requires API key authentication (not JWT).
+// Returns 403 if called by a human user (JWT).
+func (h *AgentsHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Check for JWT authentication (human trying to delete agent) - reject with 403
+	claims := auth.ClaimsFromContext(ctx)
+	if claims != nil {
+		writeAgentError(w, http.StatusForbidden, "FORBIDDEN",
+			"Humans cannot delete agents. Use DELETE /v1/me instead.")
+		return
+	}
+
+	// Require API key authentication
+	agent := auth.AgentFromContext(ctx)
+	if agent == nil {
+		writeAgentError(w, http.StatusUnauthorized, "UNAUTHORIZED",
+			"API key authentication required")
+		return
+	}
+
+	// Soft delete the agent
+	err := h.repo.Delete(ctx, agent.ID)
+	if err != nil {
+		if errors.Is(err, db.ErrAgentNotFound) {
+			writeAgentError(w, http.StatusNotFound, "NOT_FOUND",
+				"Agent not found or already deleted")
+			return
+		}
+		slog.Error("failed to delete agent", "error", err, "agent_id", agent.ID)
+		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR",
+			"Failed to delete agent")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Agent deleted successfully",
+	})
 }
 
 // ActivityResponse is the response structure for the activity endpoint.

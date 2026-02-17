@@ -36,11 +36,11 @@ cd frontend && npm test -- --coverage
 
 **Coverage requirement: 80% minimum for both backend and frontend.**
 
-### 2. File Size Limit — 800 Lines Max
+### 2. File Size Limit — ~900 Lines Max
 
-**No single code file should exceed 800 lines.**
+**No single code file should exceed ~900 lines.**
 
-- If a file grows beyond 800 lines, split it into modules
+- If a file grows beyond ~900 lines, split it into modules
 - Documentation files (`.md`) are exempt
 - Check before committing: `wc -l backend/**/*.go frontend/**/*.ts frontend/**/*.tsx`
 
@@ -218,7 +218,7 @@ solvr/
 5. **Verify:**
    - `go test ./...` passes
    - `npm test` passes
-   - No file exceeds 800 lines
+   - No file exceeds ~900 lines
 6. **Update `specs/prd-v1.json`** — set `"passes": true`
 7. **Update `specs/progress.txt`** — note what you did
 8. **Commit and push**

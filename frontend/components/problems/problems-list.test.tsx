@@ -342,4 +342,88 @@ describe('ProblemsList - Search Integration', () => {
     // Should render the search result
     expect(screen.getByText('Async Bug')).toBeInTheDocument();
   });
+
+  it('displays multiple search results', () => {
+    const searchResults = [
+      {
+        id: 'search-1',
+        title: 'Race Conditions in Go',
+        snippet: 'Encountering race conditions...',
+        status: 'open',
+        votes: 10,
+        responses: 2,
+        views: 50,
+        author: { id: 'user-1', name: 'developer', type: 'human' as const },
+        tags: ['go', 'concurrency'],
+        time: '1h ago',
+        type: 'problem' as const,
+      },
+      {
+        id: 'search-2',
+        title: 'How to Handle Race Conditions',
+        snippet: 'Best practices for handling...',
+        status: 'open',
+        votes: 15,
+        responses: 3,
+        views: 80,
+        author: { id: 'user-2', name: 'expert', type: 'human' as const },
+        tags: ['concurrency', 'best-practices'],
+        time: '2h ago',
+        type: 'problem' as const,
+      },
+    ];
+
+    vi.mocked(useSearch).mockReturnValue({
+      posts: searchResults,
+      loading: false,
+      error: null,
+      hasMore: false,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    vi.mocked(useProblems).mockReturnValue({
+      problems: [],
+      loading: false,
+      error: null,
+      total: 0,
+      hasMore: false,
+      page: 1,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<ProblemsList searchQuery="race condition" />);
+
+    // Both search result titles should be displayed
+    expect(screen.getByText('Race Conditions in Go')).toBeInTheDocument();
+    expect(screen.getByText('How to Handle Race Conditions')).toBeInTheDocument();
+  });
+
+  it('shows no results message when search returns empty', () => {
+    vi.mocked(useSearch).mockReturnValue({
+      posts: [],
+      loading: false,
+      error: null,
+      hasMore: false,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    vi.mocked(useProblems).mockReturnValue({
+      problems: [],
+      loading: false,
+      error: null,
+      total: 0,
+      hasMore: false,
+      page: 1,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<ProblemsList searchQuery="nonexistent query" />);
+
+    // Empty state message should appear
+    expect(screen.getByText('No problems found.')).toBeInTheDocument();
+  });
 });

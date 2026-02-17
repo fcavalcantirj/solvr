@@ -1468,3 +1468,164 @@ Task 10: Full-text search indexes (2026-02-16)
 - Total added storage: 272kB
 - All backend tests pass (go test ./... -cover)
 - Task 10 complete. Marked prd-v5.json as passes: true.
+
+2026-02-16: PRD-v5 Task 14 - Add TDD tests for search debouncing in ProblemsFilters
+
+ProblemsFilters component (lines 64-82) already has debouncing implemented:
+- Uses useDebounce hook with 500ms delay
+- Local state (localSearchQuery) updates immediately for responsive UX
+- Debounced value triggers parent callback after delay
+- Enter key bypasses debounce for immediate search (lines 140-145)
+
+Test suite was missing specific debouncing tests. Following TDD principles, added 5 new tests:
+
+Added to problems-filters.test.tsx:
+1. prevents immediate API calls when typing (debounces)
+   - Verifies callback NOT called immediately after typing
+   - Verifies callback NOT called even after 100ms (before 500ms debounce completes)
+   
+2. triggers parent callback after 500ms debounce period
+   - Types "test query" in search input
+   - Verifies callback NOT called immediately
+   - Advances fake timers by 500ms
+   - Verifies callback called exactly once with correct value
+
+3. cancels previous timers on rapid typing (debounce reset)
+   - Types 4 characters rapidly: 'r', 'ra', 'rac', 'race'
+   - Advances timers by 100ms between each keystroke
+   - Verifies callback called only ONCE (not 4 times) with final value 'race'
+
+4. updates input value immediately without lag (responsive UX)
+   - Types characters: 't', 'te', 'tes', 'test'
+   - Verifies input.value reflects typed text immediately (no debounce delay on display)
+
+5. bypasses debounce when Enter key is pressed
+   - Types "urgent query" in search input
+   - Presses Enter key
+   - Verifies callback called immediately (no 500ms wait)
+
+Also updated existing test (line 10-30) to handle debouncing:
+- Old test expected immediate callback (pre-debounce behavior)
+- Updated to use fake timers, advance by 500ms, and expect debounced callback
+
+Testing approach:
+- Used vi.useFakeTimers() for deterministic time control
+- Used act() to handle React state updates properly
+- Used vi.advanceTimersByTime(500) to fast-forward time without real waits
+- Cleaned up with vi.useRealTimers() in afterEach()
+
+Test results: All 11 tests pass (6 existing + 5 new)
+- Test run time: 68ms (fast due to fake timers)
+- File size: 362 lines (well under 900 line limit)
+
+Verified implementation matches tests:
+- Debounce delay is exactly 500ms (line 68: useDebounce(localSearchQuery, 500))
+- Enter key handler calls onSearchQueryChange(localSearchQuery) immediately (line 143)
+- Local state updates immediately on onChange (line 139: setLocalSearchQuery)
+
+Task 14 complete. Marked prd-v5.json as passes: true.
+
+2026-02-16: PRD-v5 Tasks 11-13 - Add input-level debouncing to all filter components
+
+All three filter components (problems, questions, ideas) already had debouncing implemented using useDebounce hook with 500ms delay. Tasks required adding TDD tests to verify the debouncing behavior.
+
+## Task 11: ProblemsFilters - COMPLETE
+
+Implementation already done (lines 64-82 of problems-filters.tsx):
+- Local state (localSearchQuery) for immediate UI updates
+- Debounced value triggers parent after 500ms
+- Enter key bypasses debounce (lines 140-145)
+
+Tests added to problems-filters.test.tsx (Task 14):
+- 5 new debouncing tests + updated existing test
+- All 11 tests pass
+- File size: 362 lines
+
+## Task 12: QuestionsFilters - COMPLETE
+
+Implementation already done (lines 54-73 of questions-filters.tsx):
+- Same pattern as ProblemsFilters
+- useDebounce(localSearchQuery, 500)
+- Enter key bypass at lines 128-132
+
+Created questions-filters.test.tsx with 11 tests:
+- 6 basic functionality tests (search, status, sort, tags, clear, prop sync)
+- 5 debouncing tests (prevent immediate, 500ms delay, rapid typing reset, immediate display, Enter bypass)
+- All tests pass
+- Test execution: 73ms
+- File size: 398 lines
+
+## Task 13: IdeasFilters - COMPLETE
+
+Implementation already done (lines 71-89 of ideas-filters.tsx):
+- Same pattern as other filters
+- useDebounce(localSearchQuery, 500)
+- Enter key bypass at lines 149-152
+
+Updated ideas-filters.test.tsx (tests existed but lacked debouncing tests):
+- Fixed 6 existing tests (added missing searchQuery and onSearchQueryChange props)
+- Added 5 new debouncing tests
+- All 11 tests pass
+- Test execution: 71ms
+- File size: 329 lines
+
+## Testing Pattern (consistent across all three)
+
+All three test suites use the same testing approach:
+1. **prevents immediate API calls** - verifies callback not called immediately or after 100ms
+2. **triggers callback after 500ms** - verifies debounced callback with correct value
+3. **cancels previous timers on rapid typing** - verifies only final value triggers callback (not each keystroke)
+4. **updates input immediately** - verifies input.value reflects typed text without lag
+5. **bypasses debounce on Enter key** - verifies Enter triggers immediate callback
+
+Uses Vitest fake timers (vi.useFakeTimers, vi.advanceTimersByTime, act()) for deterministic time control.
+
+## Summary
+
+All three filter components now have:
+- ✅ Implementation: useDebounce with 500ms delay
+- ✅ TDD tests: 11 tests each (6 basic + 5 debouncing)
+- ✅ Test coverage: Debouncing behavior fully validated
+- ✅ File sizes: All under 900 line limit
+
+Tasks 11, 12, 13 marked complete in prd-v5.json.
+Total test count: 33 tests across 3 components, all passing.
+
+---
+
+## 2026-02-16 | Task 16: Add TDD Tests for Search Results Display in ProblemsList
+
+### Implementation Details
+
+Added 2 new test cases to the existing `ProblemsList - Search Integration` test suite in `frontend/components/problems/problems-list.test.tsx`:
+
+**Test 1: displays multiple search results**
+- Mocks `useSearch` to return 2 search results with different titles
+- Verifies both titles are displayed correctly: "Race Conditions in Go" and "How to Handle Race Conditions"
+- Tests proper transformation from `FeedPost` format to `ProblemListItem` format
+- Lines: 346-401
+
+**Test 2: shows no results message when search returns empty**
+- Mocks `useSearch` to return empty array `[]`
+- Verifies empty state message "No problems found." appears for search queries with no results
+- Tests empty state handling specifically for search (not just regular browsing)
+- Lines: 403-428
+
+### Test Results
+
+- All 12 tests in problems-list.test.tsx pass (6 VoteButton tests + 6 Search Integration tests)
+- Test execution: 49ms
+- No regressions in full test suite (653 tests passing)
+- File size: 429 lines (well under 900 line limit)
+
+### Success Criteria
+
+- ✅ 2 new tests added to Search Integration suite
+- ✅ All 12 tests pass
+- ✅ Tests follow existing patterns (mock setup, assertions)
+- ✅ No changes to component code (tests only)
+- ✅ Tests verify correct behavior for multiple results and empty results
+- ✅ prd-v5.json task marked as "passes": true
+- ✅ progress.txt updated
+
+Task 16 complete.

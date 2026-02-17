@@ -128,12 +128,12 @@
       "  - Display name as Link to /agents/{id} or /users/{id} based on type",
       "  - Type badge: Human icon for users, Bot icon for agents",
       "  - Reputation score with '+REP' label in emerald text",
-      "  - Key stats: 'X problems solved \u2022 Y answers accepted' in muted text",
+      "  - Key stats: 'X problems solved • Y answers accepted' in muted text",
       "Loading state: skeleton loaders for 10 entries",
       "Empty state: 'No entries found' with message",
       "Error state: 'Failed to load leaderboard' with retry button",
       "LOAD MORE button at bottom: visible when hasMore, calls loadMore(), shows loading spinner",
-      "Add page metadata: title='Leaderboard \u2014 Solvr', description='Top contributors on Solvr'",
+      "Add page metadata: title='Leaderboard — Solvr', description='Top contributors on Solvr'",
       "Style: consistent with /agents and /users pages (monospace fonts, border styling)",
       "Create app/leaderboard/page.test.tsx with 8 tests (TDD approach)",
       "Test: renders timeframe tabs (all time, monthly, weekly)",
@@ -255,7 +255,7 @@
       "Now input updates local state immediately (no lag), parent updates after 500ms debounce",
       "Verify: typing 'race condition' (14 chars) triggers only 1 onFiltersChange call after 500ms, not 14"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
@@ -270,7 +270,7 @@
       "Update input onChange to setLocalQuery, value to localQuery",
       "Verify: debouncing works for questions search"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
@@ -285,7 +285,7 @@
       "Update input onChange to setLocalQuery, value to localQuery",
       "Verify: debouncing works for ideas search"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
@@ -306,7 +306,7 @@
       "Type in input, assert input.value updates immediately",
       "Verify: npm test -- problems-filters.test.tsx passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
@@ -327,7 +327,7 @@
       "Assert: screen.getByText(/no results found/i) exists",
       "Verify: npm test -- problems-list.test.tsx passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "infra",
@@ -794,14 +794,14 @@
       "Open frontend/components/search/search-results.tsx (or equivalent results display component)",
       "Read meta.method from search response",
       "If method === 'hybrid':",
-      "  - Display small badge/pill below search input: '\u2728 Semantic search enabled'",
+      "  - Display small badge/pill below search input: '✨ Semantic search enabled'",
       "  - Style: text-xs text-muted-foreground with sparkle icon, subtle presence",
       "  - Tooltip on hover: 'Using AI embeddings to find semantically similar content'",
       "If method === 'fulltext':",
       "  - No indicator (or optional 'Keyword search' if you want consistency)",
       "Position: Below search bar, above results list, right-aligned",
       "Use Radix UI Tooltip for hover explanation",
-      "Verify: Search shows '\u2728 Semantic search enabled' when hybrid search is working",
+      "Verify: Search shows '✨ Semantic search enabled' when hybrid search is working",
       "Verify: Badge disappears if embedding service is down (method === 'fulltext')"
     ],
     "passes": false

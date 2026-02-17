@@ -1218,3 +1218,40 @@
 - All 6 auth agent blocking tests pass (5 existing + 1 new)
 - Security boundary proven: agents blocked, humans allowed (both no-auth and JWT)
 - File: auth_agent_blocking_test.go now 233 lines (under 800 limit)
+
+2026-02-16: PRD-v5 Task 9 - Verify middleware to block agent API keys from human registration
+
+VERIFICATION COMPLETE - Implementation already existed from commit e3d1bd9
+
+Middleware Implementation (backend/internal/api/middleware/block_agent_auth.go):
+- BlockAgentAPIKeys middleware detects Bearer tokens starting with 'solvr_' (case-insensitive)
+- Returns 403 FORBIDDEN with helpful error: "Agents cannot register as humans. Use POST /v1/agents/register instead."
+- Correctly allows through: no auth, JWT tokens, non-agent Bearer tokens, Basic auth
+
+Test Coverage (block_agent_auth_test.go - 173 lines, 6 tests):
+- TestBlockAgentAPIKeys_NoAuthHeader → PASS (allows requests without auth)
+- TestBlockAgentAPIKeys_EmptyAuthHeader → PASS (allows empty auth header)
+- TestBlockAgentAPIKeys_BearerTokenNotAgent → PASS (allows JWT tokens)
+- TestBlockAgentAPIKeys_AgentAPIKeyBlocked → PASS (blocks solvr_* keys with 403)
+- TestBlockAgentAPIKeys_AgentAPIKeyVariations → PASS (6 variations: lowercase, uppercase, mixed case)
+- TestBlockAgentAPIKeys_BasicAuthNotBlocked → PASS (allows Basic auth through)
+
+Router Integration (backend/internal/api/router.go):
+- All 6 human auth endpoints wrapped with middleware:
+  - POST /v1/auth/register (email/password registration)
+  - POST /v1/auth/login (email/password login)
+  - GET /v1/auth/github (GitHub OAuth redirect)
+  - GET /v1/auth/github/callback (GitHub OAuth callback)
+  - GET /v1/auth/google (Google OAuth redirect)
+  - GET /v1/auth/google/callback (Google OAuth callback)
+
+Security Boundary Verified:
+✅ Agent API keys (Bearer solvr_*) → BLOCKED (403)
+✅ Human JWT tokens (Bearer eyJ*) → ALLOWED
+✅ No auth header → ALLOWED (normal registration flow)
+✅ Basic auth → ALLOWED (different auth scheme)
+
+All 6 middleware tests pass
+Integration tests with handlers pass (verified in Task 8)
+File size: 56 lines (middleware), 173 lines (tests) - both under 800 limit
+PRD Task 9 marked complete

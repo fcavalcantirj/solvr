@@ -897,7 +897,7 @@
       "Verify: curl -H 'Authorization: Bearer solvr_test123' http://localhost:8080/v1/auth/register returns 403",
       "Verify: curl http://localhost:8080/v1/auth/register (no auth header) returns 400 (validation error, not 403)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

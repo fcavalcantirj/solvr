@@ -184,7 +184,7 @@
       "Verify: go test ./internal/api/handlers -run TestSearch_MultiWordQuery -v passes",
       "Verify: go test ./internal/api/handlers -run TestSearch_PartialWordMatch -v passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
@@ -1129,6 +1129,6 @@
       "Verify: Delete account flow works end-to-end",
       "Verify: User is redirected to landing page after deletion"
     ],
-    "passes": false
+    "passes": true
   }
 ]

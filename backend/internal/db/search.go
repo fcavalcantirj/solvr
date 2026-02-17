@@ -280,3 +280,8 @@ func (r *SearchRepository) getSearchCount(ctx context.Context, tsquery string, o
 
 	return total, nil
 }
+
+// GetPool returns the underlying database pool for testing purposes.
+func (r *SearchRepository) GetPool() *Pool {
+	return r.pool
+}

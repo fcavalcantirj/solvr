@@ -237,7 +237,7 @@
       "Add JSDoc comments explaining hook usage and parameters",
       "Verify: npx tsc --noEmit passes with no type errors"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

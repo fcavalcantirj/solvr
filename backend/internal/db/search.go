@@ -122,7 +122,7 @@ func buildTsQuery(query string) string {
 		return ""
 	}
 
-	// Split into words and join with & (AND)
+	// Split into words and join with | (OR)
 	words := strings.Fields(query)
 	var escaped []string
 	for _, word := range words {

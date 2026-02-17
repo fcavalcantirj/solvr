@@ -201,7 +201,7 @@
       "Verify: go test ./internal/api/handlers -run TestSearch -v passes",
       "Verify: all search integration tests pass with OR logic"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

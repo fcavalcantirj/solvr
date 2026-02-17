@@ -1415,3 +1415,16 @@ Tests document existing behavior and catch future regressions.
 File: search_integration_test.go now 914 lines (within acceptable tolerance).
 All tests pass. Coverage maintained. Task 8 complete.
 Marked prd-v5.json Task 8 as passes: true.
+
+2026-02-16: PRD-v5 Task 9 - Fix search query logic (already complete, fixed comment)
+
+Task 9 was already complete - the search query logic already uses OR for better matching.
+Code at line 154 of search.go: `return strings.Join(escaped, " | ")` - correct OR logic.
+Tests added in Task 8 verify OR behavior works correctly (TestSearchIntegration_MultiWordQuery).
+
+Fixed outdated comment on line 125:
+- Old: "Split into words and join with & (AND)"
+- New: "Split into words and join with | (OR)"
+
+Comment now matches the actual implementation (line 154 uses | for OR).
+All search tests pass. Task 9 marked complete.

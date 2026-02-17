@@ -112,6 +112,34 @@ function hoverPost(index: number) {
   fireEvent.mouseEnter(articles[index]);
 }
 
+describe('FeedList Comment Counts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('displays correct comment counts for all post types', () => {
+    render(<FeedList />);
+
+    // The default mock already has:
+    // - post-1 (problem) with 3 responses (approaches)
+    // - post-2 (question) with 1 response (answer)
+    // Both should be visible in the feed
+
+    const articles = screen.getAllByRole('article');
+    expect(articles).toHaveLength(2);
+
+    // First post is problem with 3 approaches
+    const problemCard = articles[0];
+    expect(problemCard).toHaveTextContent('Test Problem');
+    expect(problemCard).toHaveTextContent('3'); // approaches count
+
+    // Second post is question with 1 answer
+    const questionCard = articles[1];
+    expect(questionCard).toHaveTextContent('Test Question');
+    expect(questionCard).toHaveTextContent('1'); // answers count
+  });
+});
+
 describe('FeedList More Menu', () => {
   beforeEach(() => {
     vi.clearAllMocks();

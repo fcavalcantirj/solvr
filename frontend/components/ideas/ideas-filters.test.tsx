@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { IdeasFilters } from './ideas-filters';
 
 // Mock useTrending
@@ -30,9 +30,11 @@ describe('IdeasFilters', () => {
         stage="all"
         sort="newest"
         tags={[]}
+        searchQuery=""
         onStageChange={vi.fn()}
         onSortChange={vi.fn()}
         onTagsChange={vi.fn()}
+        onSearchQueryChange={vi.fn()}
       />
     );
 
@@ -57,9 +59,11 @@ describe('IdeasFilters', () => {
         stage="all"
         sort="newest"
         tags={[]}
+        searchQuery=""
         onStageChange={onStageChange}
         onSortChange={vi.fn()}
         onTagsChange={vi.fn()}
+        onSearchQueryChange={vi.fn()}
       />
     );
 
@@ -74,9 +78,11 @@ describe('IdeasFilters', () => {
         stage="all"
         sort="newest"
         tags={[]}
+        searchQuery=""
         onStageChange={vi.fn()}
         onSortChange={onSortChange}
         onTagsChange={vi.fn()}
+        onSearchQueryChange={vi.fn()}
       />
     );
 
@@ -94,9 +100,11 @@ describe('IdeasFilters', () => {
         stage="all"
         sort="newest"
         tags={[]}
+        searchQuery=""
         onStageChange={vi.fn()}
         onSortChange={vi.fn()}
         onTagsChange={onTagsChange}
+        onSearchQueryChange={vi.fn()}
       />
     );
 
@@ -114,9 +122,11 @@ describe('IdeasFilters', () => {
         stage="spark"
         sort="newest"
         tags={[]}
+        searchQuery=""
         onStageChange={vi.fn()}
         onSortChange={vi.fn()}
         onTagsChange={vi.fn()}
+        onSearchQueryChange={vi.fn()}
       />
     );
 
@@ -136,6 +146,8 @@ describe('IdeasFilters', () => {
         onStageChange={vi.fn()}
         onSortChange={vi.fn()}
         onTagsChange={vi.fn()}
+        searchQuery=""
+        onSearchQueryChange={vi.fn()}
       />
     );
 
@@ -145,5 +157,195 @@ describe('IdeasFilters', () => {
     // MOST SUPPORT (mapped from 'votes') should have active styling
     const votesButton = screen.getByText('MOST SUPPORT');
     expect(votesButton.className).toContain('bg-foreground');
+  });
+});
+
+describe('IdeasFilters - Search Debouncing', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  it('prevents immediate API calls when typing (debounces)', async () => {
+    vi.useFakeTimers();
+    const mockOnSearchQueryChange = vi.fn();
+
+    render(
+      <IdeasFilters
+        stage="all"
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStageChange={vi.fn()}
+        onSortChange={vi.fn()}
+        onTagsChange={vi.fn()}
+        onSearchQueryChange={mockOnSearchQueryChange}
+      />
+    );
+
+    const searchInput = screen.getByPlaceholderText('Search ideas...');
+    fireEvent.change(searchInput, { target: { value: 'test' } });
+
+    // Immediately after typing: parent callback should NOT be called
+    expect(mockOnSearchQueryChange).not.toHaveBeenCalled();
+
+    // Even after 100ms: still not called (debounce is 500ms)
+    vi.advanceTimersByTime(100);
+    expect(mockOnSearchQueryChange).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+  });
+
+  it('triggers parent callback after 500ms debounce period', async () => {
+    vi.useFakeTimers();
+    const mockOnSearchQueryChange = vi.fn();
+
+    render(
+      <IdeasFilters
+        stage="all"
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStageChange={vi.fn()}
+        onSortChange={vi.fn()}
+        onTagsChange={vi.fn()}
+        onSearchQueryChange={mockOnSearchQueryChange}
+      />
+    );
+
+    const searchInput = screen.getByPlaceholderText('Search ideas...');
+    fireEvent.change(searchInput, { target: { value: 'test query' } });
+
+    // Not called immediately
+    expect(mockOnSearchQueryChange).not.toHaveBeenCalled();
+
+    // After 500ms: parent callback SHOULD be called with the correct value
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(mockOnSearchQueryChange).toHaveBeenCalledWith('test query');
+    expect(mockOnSearchQueryChange).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
+  });
+
+  it('cancels previous timers on rapid typing (debounce reset)', async () => {
+    vi.useFakeTimers();
+    const mockOnSearchQueryChange = vi.fn();
+
+    render(
+      <IdeasFilters
+        stage="all"
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStageChange={vi.fn()}
+        onSortChange={vi.fn()}
+        onTagsChange={vi.fn()}
+        onSearchQueryChange={mockOnSearchQueryChange}
+      />
+    );
+
+    const searchInput = screen.getByPlaceholderText('Search ideas...');
+
+    // Type multiple characters rapidly (each keystroke resets the timer)
+    fireEvent.change(searchInput, { target: { value: 'a' } });
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    fireEvent.change(searchInput, { target: { value: 'ai' } });
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    fireEvent.change(searchInput, { target: { value: 'ai ' } });
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    fireEvent.change(searchInput, { target: { value: 'ai code' } });
+
+    // Only 300ms has passed total, no callback yet
+    expect(mockOnSearchQueryChange).not.toHaveBeenCalled();
+
+    // Now wait 500ms from the LAST keystroke
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(mockOnSearchQueryChange).toHaveBeenCalledWith('ai code');
+    // Should be called only ONCE with the final value (not 4 times)
+    expect(mockOnSearchQueryChange).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
+  });
+
+  it('updates input value immediately without lag (responsive UX)', () => {
+    render(
+      <IdeasFilters
+        stage="all"
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStageChange={vi.fn()}
+        onSortChange={vi.fn()}
+        onTagsChange={vi.fn()}
+        onSearchQueryChange={vi.fn()}
+      />
+    );
+
+    const searchInput = screen.getByPlaceholderText('Search ideas...') as HTMLInputElement;
+
+    // Type characters
+    fireEvent.change(searchInput, { target: { value: 'r' } });
+    expect(searchInput.value).toBe('r');
+
+    fireEvent.change(searchInput, { target: { value: 're' } });
+    expect(searchInput.value).toBe('re');
+
+    fireEvent.change(searchInput, { target: { value: 'rea' } });
+    expect(searchInput.value).toBe('rea');
+
+    fireEvent.change(searchInput, { target: { value: 'react' } });
+    expect(searchInput.value).toBe('react');
+
+    // Input shows typed text immediately (no debounce delay on display)
+  });
+
+  it('bypasses debounce when Enter key is pressed', async () => {
+    vi.useFakeTimers();
+    const mockOnSearchQueryChange = vi.fn();
+
+    render(
+      <IdeasFilters
+        stage="all"
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStageChange={vi.fn()}
+        onSortChange={vi.fn()}
+        onTagsChange={vi.fn()}
+        onSearchQueryChange={mockOnSearchQueryChange}
+      />
+    );
+
+    const searchInput = screen.getByPlaceholderText('Search ideas...');
+
+    // Type text
+    fireEvent.change(searchInput, { target: { value: 'urgent idea' } });
+
+    // Not called immediately (debounce active)
+    expect(mockOnSearchQueryChange).not.toHaveBeenCalled();
+
+    // Press Enter key
+    fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+    // Enter should trigger immediate callback (no wait needed)
+    expect(mockOnSearchQueryChange).toHaveBeenCalledWith('urgent idea');
+    expect(mockOnSearchQueryChange).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
   });
 });

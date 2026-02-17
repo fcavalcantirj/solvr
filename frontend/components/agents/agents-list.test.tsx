@@ -118,7 +118,7 @@ describe('AgentsList', () => {
     render(<AgentsList />);
 
     // Shield icon should be present with correct tooltip for human-backed agent
-    const shieldIcon = document.querySelector('[title="Human-backed agent"]');
+    const shieldIcon = document.querySelector('[aria-label="Human-backed agent"]');
     expect(shieldIcon).toBeInTheDocument();
     expect(shieldIcon).toHaveClass('w-3', 'h-3', 'text-emerald-500');
   });
@@ -152,7 +152,7 @@ describe('AgentsList', () => {
     render(<AgentsList />);
 
     // Shield icon should NOT be present
-    const shieldIcon = document.querySelector('[title="Human-backed agent"]');
+    const shieldIcon = document.querySelector('[aria-label="Human-backed agent"]');
     expect(shieldIcon).not.toBeInTheDocument();
   });
 

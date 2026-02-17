@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 // Mock the API module
 vi.mock('@/lib/api', () => ({
   api: {
-    createResponse: vi.fn(),
+    createIdeaResponse: vi.fn(),
   },
 }));
 
@@ -46,7 +46,7 @@ describe('useResponseForm', () => {
   it('should submit response and clear form on success', async () => {
     // Arrange
     const onSuccess = vi.fn();
-    (api.createResponse as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (api.createIdeaResponse as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: {
         id: 'response-456',
         idea_id: 'idea-123',
@@ -66,7 +66,7 @@ describe('useResponseForm', () => {
     });
 
     // Assert
-    expect(api.createResponse).toHaveBeenCalledWith('idea-123', 'My response content');
+    expect(api.createIdeaResponse).toHaveBeenCalledWith('idea-123', 'My response content', 'support');
     expect(result.current.content).toBe(''); // Form cleared
     expect(result.current.isSubmitting).toBe(false);
     expect(result.current.error).toBeNull();
@@ -76,7 +76,7 @@ describe('useResponseForm', () => {
   it('should handle API errors', async () => {
     // Arrange
     const onSuccess = vi.fn();
-    (api.createResponse as ReturnType<typeof vi.fn>).mockRejectedValue(
+    (api.createIdeaResponse as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('Auth required')
     );
 
@@ -109,7 +109,7 @@ describe('useResponseForm', () => {
     });
 
     // Assert
-    expect(api.createResponse).not.toHaveBeenCalled();
+    expect(api.createIdeaResponse).not.toHaveBeenCalled();
     expect(result.current.error).toBe('Response content is required');
   });
 
@@ -119,7 +119,7 @@ describe('useResponseForm', () => {
     const promise = new Promise((resolve) => {
       resolvePromise = resolve;
     });
-    (api.createResponse as ReturnType<typeof vi.fn>).mockReturnValue(promise);
+    (api.createIdeaResponse as ReturnType<typeof vi.fn>).mockReturnValue(promise);
 
     // Act
     const { result } = renderHook(() => useResponseForm('idea-123', vi.fn()));

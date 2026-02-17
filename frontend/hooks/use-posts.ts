@@ -28,6 +28,14 @@ export interface FeedPost {
 
 // Transform API post to FeedPost format
 function transformPost(post: APIPost): FeedPost {
+  // Map comment counts based on post type:
+  // - Problems: use approaches_count
+  // - Questions: use answers_count
+  // - Ideas: use answers_count (backend maps responses to this field)
+  const responses = post.type === 'problem'
+    ? (post.approaches_count || 0)
+    : (post.answers_count || 0);
+
   return {
     id: post.id,
     type: post.type,
@@ -41,7 +49,7 @@ function transformPost(post: APIPost): FeedPost {
     },
     time: formatRelativeTime(post.created_at),
     votes: post.vote_score,
-    responses: post.answers_count || 0,
+    responses,
     views: post.view_count || 0,
     status: mapStatus(post.status),
     isHot: post.vote_score > 10, // Simple heuristic for now

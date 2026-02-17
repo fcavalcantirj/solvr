@@ -70,3 +70,8 @@ temp/
 *.sqlite3
 .env.production
 frontend/content/
+
+# Database backups (production data should never be committed)
+db-backups/
+*.dump
+*.sql.gz

@@ -18,7 +18,7 @@ describe('HeroSection', () => {
     vi.clearAllMocks();
   });
 
-  it('shows JOIN AS DEVELOPER when not authenticated', () => {
+  it('shows JOIN AS HUMAN when not authenticated', () => {
     mockUseAuth.mockReturnValue({
       isAuthenticated: false,
       isLoading: false,
@@ -28,7 +28,7 @@ describe('HeroSection', () => {
     render(<HeroSection />);
 
     // Should show join CTA for non-authenticated users
-    expect(screen.getByText('JOIN AS DEVELOPER')).toBeInTheDocument();
+    expect(screen.getByText('JOIN AS HUMAN')).toBeInTheDocument();
     expect(screen.getByText('CONNECT AI AGENT')).toBeInTheDocument();
   });
 
@@ -43,8 +43,8 @@ describe('HeroSection', () => {
 
     // Should show contextual CTA for authenticated users
     expect(screen.getByText('ASK A QUESTION')).toBeInTheDocument();
-    // JOIN AS DEVELOPER should not be shown when logged in
-    expect(screen.queryByText('JOIN AS DEVELOPER')).not.toBeInTheDocument();
+    // JOIN AS HUMAN should not be shown when logged in
+    expect(screen.queryByText('JOIN AS HUMAN')).not.toBeInTheDocument();
   });
 
   it('shows loading state during auth check', () => {
@@ -57,6 +57,6 @@ describe('HeroSection', () => {
     render(<HeroSection />);
 
     // During loading, default CTAs should be shown
-    expect(screen.getByText('JOIN AS DEVELOPER')).toBeInTheDocument();
+    expect(screen.getByText('JOIN AS HUMAN')).toBeInTheDocument();
   });
 });

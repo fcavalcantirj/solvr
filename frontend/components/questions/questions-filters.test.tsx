@@ -1,72 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { ProblemsFilters } from './problems-filters';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { QuestionsFilters } from './questions-filters';
 
-describe('ProblemsFilters - Search Functionality', () => {
+describe('QuestionsFilters - Basic Functionality', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('calls onSearchQueryChange when user types in search input (after debounce)', async () => {
-    vi.useFakeTimers();
-    const mockOnSearchQueryChange = vi.fn();
-
+  it('renders search input', () => {
     render(
-      <ProblemsFilters
-        status={undefined}
-        sort="newest"
-        tags={[]}
-        searchQuery=""
-        onStatusChange={vi.fn()}
-        onSortChange={vi.fn()}
-        onTagsChange={vi.fn()}
-        onSearchQueryChange={mockOnSearchQueryChange}
-      />
-    );
-
-    const searchInput = screen.getByPlaceholderText('Search problems...');
-    fireEvent.change(searchInput, { target: { value: 'test query' } });
-
-    // Not called immediately due to debouncing
-    expect(mockOnSearchQueryChange).not.toHaveBeenCalled();
-
-    // After 500ms debounce, it should be called
-    await act(async () => {
-      vi.advanceTimersByTime(500);
-    });
-
-    expect(mockOnSearchQueryChange).toHaveBeenCalledWith('test query');
-
-    vi.useRealTimers();
-  });
-
-  it('triggers search on Enter key press', () => {
-    const mockOnSearchQueryChange = vi.fn();
-
-    render(
-      <ProblemsFilters
-        status={undefined}
-        sort="newest"
-        tags={[]}
-        searchQuery="test"
-        onStatusChange={vi.fn()}
-        onSortChange={vi.fn()}
-        onTagsChange={vi.fn()}
-        onSearchQueryChange={mockOnSearchQueryChange}
-      />
-    );
-
-    const searchInput = screen.getByPlaceholderText('Search problems...');
-    fireEvent.keyDown(searchInput, { key: 'Enter' });
-
-    // Enter key should not prevent default search behavior
-    // The search is already triggered by onChange, Enter is just for convenience
-    expect(searchInput).toBeInTheDocument();
-  });
-
-  it('shows clickable lens icon with hover effect', () => {
-    render(
-      <ProblemsFilters
+      <QuestionsFilters
         status={undefined}
         sort="newest"
         tags={[]}
@@ -78,42 +21,121 @@ describe('ProblemsFilters - Search Functionality', () => {
       />
     );
 
-    const lensIcon = screen.getByTestId('search-icon-button');
-    expect(lensIcon).toBeInTheDocument();
-    expect(lensIcon.tagName).toBe('BUTTON');
-    expect(lensIcon).toHaveClass('cursor-pointer');
+    const searchInput = screen.getByPlaceholderText('Search questions...');
+    expect(searchInput).toBeInTheDocument();
   });
 
-  it('clears search query when "CLEAR ALL" is clicked', () => {
+  it('calls onStatusChange when status button is clicked', () => {
+    const mockOnStatusChange = vi.fn();
+
+    render(
+      <QuestionsFilters
+        status={undefined}
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStatusChange={mockOnStatusChange}
+        onSortChange={vi.fn()}
+        onTagsChange={vi.fn()}
+        onSearchQueryChange={vi.fn()}
+      />
+    );
+
+    // Get all ANSWERED buttons (desktop and mobile) and click the first one
+    const answeredButtons = screen.getAllByText('ANSWERED');
+    fireEvent.click(answeredButtons[0]);
+
+    expect(mockOnStatusChange).toHaveBeenCalledWith('answered');
+  });
+
+  it('calls onSortChange when sort option is clicked', () => {
+    const mockOnSortChange = vi.fn();
+
+    render(
+      <QuestionsFilters
+        status={undefined}
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStatusChange={vi.fn()}
+        onSortChange={mockOnSortChange}
+        onTagsChange={vi.fn()}
+        onSearchQueryChange={vi.fn()}
+      />
+    );
+
+    // Open filters first
+    const filtersButton = screen.getByText(/FILTERS/);
+    fireEvent.click(filtersButton);
+
+    const votesButton = screen.getByText('MOST VOTED');
+    fireEvent.click(votesButton);
+
+    expect(mockOnSortChange).toHaveBeenCalledWith('votes');
+  });
+
+  it('calls onTagsChange when tag is toggled', () => {
+    const mockOnTagsChange = vi.fn();
+
+    render(
+      <QuestionsFilters
+        status={undefined}
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStatusChange={vi.fn()}
+        onSortChange={vi.fn()}
+        onTagsChange={mockOnTagsChange}
+        onSearchQueryChange={vi.fn()}
+      />
+    );
+
+    // Open filters first
+    const filtersButton = screen.getByText(/FILTERS/);
+    fireEvent.click(filtersButton);
+
+    // Click a tag
+    const reactTag = screen.getByText('react');
+    fireEvent.click(reactTag);
+
+    expect(mockOnTagsChange).toHaveBeenCalledWith(['react']);
+  });
+
+  it('clears all filters when CLEAR ALL is clicked', () => {
+    const mockOnStatusChange = vi.fn();
+    const mockOnSortChange = vi.fn();
+    const mockOnTagsChange = vi.fn();
     const mockOnSearchQueryChange = vi.fn();
 
     render(
-      <ProblemsFilters
-        status="open"
+      <QuestionsFilters
+        status="answered"
         sort="votes"
         tags={['react']}
-        searchQuery="test search"
-        onStatusChange={vi.fn()}
-        onSortChange={vi.fn()}
-        onTagsChange={vi.fn()}
+        searchQuery="test"
+        onStatusChange={mockOnStatusChange}
+        onSortChange={mockOnSortChange}
+        onTagsChange={mockOnTagsChange}
         onSearchQueryChange={mockOnSearchQueryChange}
       />
     );
 
-    // Need to open filters first to see "CLEAR ALL" button
+    // Open filters first
     const filtersButton = screen.getByText(/FILTERS/);
     fireEvent.click(filtersButton);
 
     const clearButton = screen.getByText('CLEAR ALL');
     fireEvent.click(clearButton);
 
-    // Should have been called with empty string
+    expect(mockOnStatusChange).toHaveBeenCalledWith(undefined);
+    expect(mockOnSortChange).toHaveBeenCalledWith('newest');
+    expect(mockOnTagsChange).toHaveBeenCalledWith([]);
     expect(mockOnSearchQueryChange).toHaveBeenCalledWith('');
   });
 
-  it('uses searchQuery prop instead of local state', () => {
-    const { rerender } = render(
-      <ProblemsFilters
+  it('uses searchQuery prop to display value', () => {
+    render(
+      <QuestionsFilters
         status={undefined}
         sort="newest"
         tags={[]}
@@ -125,67 +147,12 @@ describe('ProblemsFilters - Search Functionality', () => {
       />
     );
 
-    const searchInput = screen.getByPlaceholderText('Search problems...') as HTMLInputElement;
+    const searchInput = screen.getByPlaceholderText('Search questions...') as HTMLInputElement;
     expect(searchInput.value).toBe('initial query');
-
-    // Rerender with updated prop
-    rerender(
-      <ProblemsFilters
-        status={undefined}
-        sort="newest"
-        tags={[]}
-        searchQuery="updated query"
-        onStatusChange={vi.fn()}
-        onSortChange={vi.fn()}
-        onTagsChange={vi.fn()}
-        onSearchQueryChange={vi.fn()}
-      />
-    );
-
-    expect(searchInput.value).toBe('updated query');
-  });
-
-  it('includes searchQuery in hasActiveFilters check', () => {
-    const { rerender } = render(
-      <ProblemsFilters
-        status={undefined}
-        sort="newest"
-        tags={[]}
-        searchQuery=""
-        onStatusChange={vi.fn()}
-        onSortChange={vi.fn()}
-        onTagsChange={vi.fn()}
-        onSearchQueryChange={vi.fn()}
-      />
-    );
-
-    // Open filters to check if "CLEAR ALL" is shown
-    const filtersButton = screen.getByText(/FILTERS/);
-    fireEvent.click(filtersButton);
-
-    // No active filters, so "CLEAR ALL" should not be visible
-    expect(screen.queryByText('CLEAR ALL')).not.toBeInTheDocument();
-
-    // Rerender with search query
-    rerender(
-      <ProblemsFilters
-        status={undefined}
-        sort="newest"
-        tags={[]}
-        searchQuery="test"
-        onStatusChange={vi.fn()}
-        onSortChange={vi.fn()}
-        onTagsChange={vi.fn()}
-        onSearchQueryChange={vi.fn()}
-      />
-    );
-
-    // Now "CLEAR ALL" should be visible because we have a search query
-    expect(screen.getByText('CLEAR ALL')).toBeInTheDocument();
   });
 });
 
-describe('ProblemsFilters - Search Debouncing', () => {
+describe('QuestionsFilters - Search Debouncing', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
@@ -196,7 +163,7 @@ describe('ProblemsFilters - Search Debouncing', () => {
     const mockOnSearchQueryChange = vi.fn();
 
     render(
-      <ProblemsFilters
+      <QuestionsFilters
         status={undefined}
         sort="newest"
         tags={[]}
@@ -208,7 +175,7 @@ describe('ProblemsFilters - Search Debouncing', () => {
       />
     );
 
-    const searchInput = screen.getByPlaceholderText('Search problems...');
+    const searchInput = screen.getByPlaceholderText('Search questions...');
     fireEvent.change(searchInput, { target: { value: 'test' } });
 
     // Immediately after typing: parent callback should NOT be called
@@ -226,7 +193,7 @@ describe('ProblemsFilters - Search Debouncing', () => {
     const mockOnSearchQueryChange = vi.fn();
 
     render(
-      <ProblemsFilters
+      <QuestionsFilters
         status={undefined}
         sort="newest"
         tags={[]}
@@ -238,7 +205,7 @@ describe('ProblemsFilters - Search Debouncing', () => {
       />
     );
 
-    const searchInput = screen.getByPlaceholderText('Search problems...');
+    const searchInput = screen.getByPlaceholderText('Search questions...');
     fireEvent.change(searchInput, { target: { value: 'test query' } });
 
     // Not called immediately
@@ -260,7 +227,7 @@ describe('ProblemsFilters - Search Debouncing', () => {
     const mockOnSearchQueryChange = vi.fn();
 
     render(
-      <ProblemsFilters
+      <QuestionsFilters
         status={undefined}
         sort="newest"
         tags={[]}
@@ -272,25 +239,25 @@ describe('ProblemsFilters - Search Debouncing', () => {
       />
     );
 
-    const searchInput = screen.getByPlaceholderText('Search problems...');
+    const searchInput = screen.getByPlaceholderText('Search questions...');
 
     // Type multiple characters rapidly (each keystroke resets the timer)
-    fireEvent.change(searchInput, { target: { value: 'r' } });
+    fireEvent.change(searchInput, { target: { value: 't' } });
     await act(async () => {
       vi.advanceTimersByTime(100);
     });
 
-    fireEvent.change(searchInput, { target: { value: 'ra' } });
+    fireEvent.change(searchInput, { target: { value: 'ty' } });
     await act(async () => {
       vi.advanceTimersByTime(100);
     });
 
-    fireEvent.change(searchInput, { target: { value: 'rac' } });
+    fireEvent.change(searchInput, { target: { value: 'typ' } });
     await act(async () => {
       vi.advanceTimersByTime(100);
     });
 
-    fireEvent.change(searchInput, { target: { value: 'race' } });
+    fireEvent.change(searchInput, { target: { value: 'typescript' } });
 
     // Only 300ms has passed total, no callback yet
     expect(mockOnSearchQueryChange).not.toHaveBeenCalled();
@@ -300,7 +267,7 @@ describe('ProblemsFilters - Search Debouncing', () => {
       vi.advanceTimersByTime(500);
     });
 
-    expect(mockOnSearchQueryChange).toHaveBeenCalledWith('race');
+    expect(mockOnSearchQueryChange).toHaveBeenCalledWith('typescript');
     // Should be called only ONCE with the final value (not 4 times)
     expect(mockOnSearchQueryChange).toHaveBeenCalledTimes(1);
 
@@ -309,7 +276,7 @@ describe('ProblemsFilters - Search Debouncing', () => {
 
   it('updates input value immediately without lag (responsive UX)', () => {
     render(
-      <ProblemsFilters
+      <QuestionsFilters
         status={undefined}
         sort="newest"
         tags={[]}
@@ -321,7 +288,7 @@ describe('ProblemsFilters - Search Debouncing', () => {
       />
     );
 
-    const searchInput = screen.getByPlaceholderText('Search problems...') as HTMLInputElement;
+    const searchInput = screen.getByPlaceholderText('Search questions...') as HTMLInputElement;
 
     // Type characters
     fireEvent.change(searchInput, { target: { value: 't' } });
@@ -344,7 +311,7 @@ describe('ProblemsFilters - Search Debouncing', () => {
     const mockOnSearchQueryChange = vi.fn();
 
     render(
-      <ProblemsFilters
+      <QuestionsFilters
         status={undefined}
         sort="newest"
         tags={[]}
@@ -356,10 +323,10 @@ describe('ProblemsFilters - Search Debouncing', () => {
       />
     );
 
-    const searchInput = screen.getByPlaceholderText('Search problems...');
+    const searchInput = screen.getByPlaceholderText('Search questions...');
 
     // Type text
-    fireEvent.change(searchInput, { target: { value: 'urgent query' } });
+    fireEvent.change(searchInput, { target: { value: 'urgent question' } });
 
     // Not called immediately (debounce active)
     expect(mockOnSearchQueryChange).not.toHaveBeenCalled();
@@ -368,7 +335,7 @@ describe('ProblemsFilters - Search Debouncing', () => {
     fireEvent.keyDown(searchInput, { key: 'Enter' });
 
     // Enter should trigger immediate callback (no wait needed)
-    expect(mockOnSearchQueryChange).toHaveBeenCalledWith('urgent query');
+    expect(mockOnSearchQueryChange).toHaveBeenCalledWith('urgent question');
     expect(mockOnSearchQueryChange).toHaveBeenCalledTimes(1);
 
     vi.useRealTimers();

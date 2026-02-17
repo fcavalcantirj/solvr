@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/go-chi/chi/v5"
 )
 
 // AdminHandler handles admin operations like raw SQL queries.
@@ -172,6 +174,177 @@ func writeAdminError(w http.ResponseWriter, status int, code, message string) {
 		"error": map[string]string{
 			"code":    code,
 			"message": message,
+		},
+	})
+}
+
+// checkAdminAuth validates the X-Admin-API-Key header.
+// Returns true if authorized, false otherwise (and writes error response).
+func (h *AdminHandler) checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
+	adminKey := os.Getenv("ADMIN_API_KEY")
+	if adminKey == "" {
+		writeAdminError(w, http.StatusServiceUnavailable, "ADMIN_NOT_CONFIGURED", "admin API key not configured")
+		return false
+	}
+
+	providedKey := r.Header.Get("X-Admin-API-Key")
+	if providedKey == "" {
+		writeAdminError(w, http.StatusUnauthorized, "MISSING_API_KEY", "X-Admin-API-Key header required")
+		return false
+	}
+
+	if providedKey != adminKey {
+		writeAdminError(w, http.StatusForbidden, "INVALID_API_KEY", "invalid admin API key")
+		return false
+	}
+
+	return true
+}
+
+// HardDeleteUser permanently deletes a user (admin-only).
+// Per PRD-v5 Task 17: Admin hard-delete endpoints.
+// DELETE /admin/users/{id}
+func (h *AdminHandler) HardDeleteUser(w http.ResponseWriter, r *http.Request) {
+	if !h.checkAdminAuth(w, r) {
+		return
+	}
+
+	// Parse user ID from path
+	userID := chi.URLParam(r, "id")
+	if userID == "" {
+		writeAdminError(w, http.StatusBadRequest, "MISSING_ID", "user ID required")
+		return
+	}
+
+	// Execute hard delete
+	userRepo := db.NewUserRepository(h.pool)
+	err := userRepo.HardDelete(r.Context(), userID)
+	if err != nil {
+		if err == db.ErrNotFound {
+			writeAdminError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
+			return
+		}
+		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete user")
+		return
+	}
+
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "User permanently deleted",
+		"id":      userID,
+	})
+}
+
+// HardDeleteAgent permanently deletes an agent (admin-only).
+// Per PRD-v5 Task 17: Admin hard-delete endpoints.
+// DELETE /admin/agents/{id}
+func (h *AdminHandler) HardDeleteAgent(w http.ResponseWriter, r *http.Request) {
+	if !h.checkAdminAuth(w, r) {
+		return
+	}
+
+	// Parse agent ID from path
+	agentID := chi.URLParam(r, "id")
+	if agentID == "" {
+		writeAdminError(w, http.StatusBadRequest, "MISSING_ID", "agent ID required")
+		return
+	}
+
+	// Execute hard delete
+	agentRepo := db.NewAgentRepository(h.pool)
+	err := agentRepo.HardDelete(r.Context(), agentID)
+	if err != nil {
+		if err == db.ErrAgentNotFound {
+			writeAdminError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
+			return
+		}
+		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete agent")
+		return
+	}
+
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Agent permanently deleted",
+		"id":      agentID,
+	})
+}
+
+// ListDeletedUsers returns soft-deleted users for admin review.
+// Per PRD-v5 Task 17: List deleted accounts before permanent deletion.
+// GET /admin/users/deleted?page=1&per_page=20
+func (h *AdminHandler) ListDeletedUsers(w http.ResponseWriter, r *http.Request) {
+	if !h.checkAdminAuth(w, r) {
+		return
+	}
+
+	// Parse pagination params
+	page := 1
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	perPage := 20
+	if perPageStr := r.URL.Query().Get("per_page"); perPageStr != "" {
+		if pp, err := strconv.Atoi(perPageStr); err == nil && pp > 0 && pp <= 100 {
+			perPage = pp
+		}
+	}
+
+	// Fetch deleted users
+	userRepo := db.NewUserRepository(h.pool)
+	users, total, err := userRepo.ListDeleted(r.Context(), page, perPage)
+	if err != nil {
+		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list deleted users")
+		return
+	}
+
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+		"users": users,
+		"meta": map[string]interface{}{
+			"total":    total,
+			"page":     page,
+			"per_page": perPage,
+		},
+	})
+}
+
+// ListDeletedAgents returns soft-deleted agents for admin review.
+// Per PRD-v5 Task 17: List deleted accounts before permanent deletion.
+// GET /admin/agents/deleted?page=1&per_page=20
+func (h *AdminHandler) ListDeletedAgents(w http.ResponseWriter, r *http.Request) {
+	if !h.checkAdminAuth(w, r) {
+		return
+	}
+
+	// Parse pagination params
+	page := 1
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	perPage := 20
+	if perPageStr := r.URL.Query().Get("per_page"); perPageStr != "" {
+		if pp, err := strconv.Atoi(perPageStr); err == nil && pp > 0 && pp <= 100 {
+			perPage = pp
+		}
+	}
+
+	// Fetch deleted agents
+	agentRepo := db.NewAgentRepository(h.pool)
+	agents, total, err := agentRepo.ListDeleted(r.Context(), page, perPage)
+	if err != nil {
+		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list deleted agents")
+		return
+	}
+
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+		"agents": agents,
+		"meta": map[string]interface{}{
+			"total":    total,
+			"page":     page,
+			"per_page": perPage,
 		},
 	})
 }

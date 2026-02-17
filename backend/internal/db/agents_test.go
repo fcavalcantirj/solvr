@@ -335,6 +335,136 @@ func TestAgentRepository_FindByHumanID(t *testing.T) {
 
 // Note: getTestPool is defined in users_test.go and shared across db package tests
 
+// TestAgentRepository_HardDelete tests permanently deleting an agent from the database.
+func TestAgentRepository_HardDelete(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	// Create an agent
+	agent := &models.Agent{
+		ID:          "harddelete_" + time.Now().Format("20060102150405"),
+		DisplayName: "Hard Delete Agent",
+	}
+
+	err := repo.Create(ctx, agent)
+	if err != nil {
+		t.Fatalf("failed to create agent: %v", err)
+	}
+
+	// Hard delete the agent
+	err = repo.HardDelete(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("HardDelete() error = %v", err)
+	}
+
+	// Verify agent is gone
+	_, err = repo.FindByID(ctx, agent.ID)
+	if err != ErrAgentNotFound {
+		t.Errorf("FindByID() after hard delete error = %v, want ErrAgentNotFound", err)
+	}
+}
+
+// TestAgentRepository_HardDelete_NotFound tests hard deleting a non-existent agent.
+func TestAgentRepository_HardDelete_NotFound(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	// Try to hard delete non-existent agent
+	err := repo.HardDelete(ctx, "nonexistent_agent")
+	if err != ErrAgentNotFound {
+		t.Errorf("HardDelete() error = %v, want ErrAgentNotFound", err)
+	}
+}
+
+// TestAgentRepository_ListDeleted tests listing soft-deleted agents.
+func TestAgentRepository_ListDeleted(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewAgentRepository(pool)
+	ctx := context.Background()
+
+	// Create 2 agents and soft-delete them
+	agent1 := &models.Agent{
+		ID:          "deleted_agent1_" + time.Now().Format("20060102150405"),
+		DisplayName: "Deleted Agent 1",
+	}
+	err := repo.Create(ctx, agent1)
+	if err != nil {
+		t.Fatalf("failed to create agent1: %v", err)
+	}
+
+	agent2 := &models.Agent{
+		ID:          "deleted_agent2_" + time.Now().Format("20060102150405"),
+		DisplayName: "Deleted Agent 2",
+	}
+	err = repo.Create(ctx, agent2)
+	if err != nil {
+		t.Fatalf("failed to create agent2: %v", err)
+	}
+
+	// Soft-delete both agents
+	err = repo.Delete(ctx, agent1.ID)
+	if err != nil {
+		t.Fatalf("Delete(agent1) error = %v", err)
+	}
+	time.Sleep(10 * time.Millisecond) // Ensure different deleted_at timestamps
+	err = repo.Delete(ctx, agent2.ID)
+	if err != nil {
+		t.Fatalf("Delete(agent2) error = %v", err)
+	}
+
+	// List deleted agents
+	agents, total, err := repo.ListDeleted(ctx, 1, 10)
+	if err != nil {
+		t.Fatalf("ListDeleted() error = %v", err)
+	}
+
+	// Should find at least our 2 deleted agents
+	if total < 2 {
+		t.Errorf("ListDeleted() total = %d, want >= 2", total)
+	}
+
+	// Verify our deleted agents are in the list
+	found1, found2 := false, false
+	for _, a := range agents {
+		if a.ID == agent1.ID {
+			found1 = true
+			if a.DeletedAt == nil {
+				t.Error("ListDeleted() agent1 should have deleted_at set")
+			}
+		}
+		if a.ID == agent2.ID {
+			found2 = true
+			if a.DeletedAt == nil {
+				t.Error("ListDeleted() agent2 should have deleted_at set")
+			}
+		}
+	}
+
+	if !found1 {
+		t.Error("ListDeleted() did not return agent1")
+	}
+	if !found2 {
+		t.Error("ListDeleted() did not return agent2")
+	}
+}
+
 // ============================================================================
 // Tests for AGENT-LINKING requirement: One human per agent (DB enforced)
 // ============================================================================

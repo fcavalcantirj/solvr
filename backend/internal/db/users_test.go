@@ -955,6 +955,148 @@ func TestUserRepository_FindByAuthProvider_DeletedAuthMethod(t *testing.T) {
 	}
 }
 
+// TestUserRepository_HardDelete tests permanently deleting a user from the database.
+func TestUserRepository_HardDelete(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDB(t, pool)
+
+	repo := NewUserRepository(pool)
+	ctx := context.Background()
+
+	// Create a user
+	user := &models.User{
+		Username:       "harddeleteuser",
+		DisplayName:    "Hard Delete User",
+		Email:          "harddelete@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "harddelete_123",
+		Role:           models.UserRoleUser,
+	}
+
+	created, err := repo.Create(ctx, user)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// Hard delete the user
+	err = repo.HardDelete(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("HardDelete() error = %v", err)
+	}
+
+	// Verify user is gone (even FindByID with deleted_at check should fail)
+	_, err = repo.FindByID(ctx, created.ID)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("FindByID() after hard delete error = %v, want ErrNotFound", err)
+	}
+}
+
+// TestUserRepository_HardDelete_NotFound tests hard deleting a non-existent user.
+func TestUserRepository_HardDelete_NotFound(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDB(t, pool)
+
+	repo := NewUserRepository(pool)
+	ctx := context.Background()
+
+	// Try to hard delete non-existent user
+	err := repo.HardDelete(ctx, "00000000-0000-0000-0000-000000000000")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("HardDelete() error = %v, want ErrNotFound", err)
+	}
+}
+
+// TestUserRepository_ListDeleted tests listing soft-deleted users.
+func TestUserRepository_ListDeleted(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDB(t, pool)
+
+	repo := NewUserRepository(pool)
+	ctx := context.Background()
+
+	// Create 2 users and soft-delete them
+	user1 := &models.User{
+		Username:       "deleted1",
+		DisplayName:    "Deleted User 1",
+		Email:          "deleted1@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "deleted1_123",
+		Role:           models.UserRoleUser,
+	}
+	created1, err := repo.Create(ctx, user1)
+	if err != nil {
+		t.Fatalf("Create(user1) error = %v", err)
+	}
+
+	user2 := &models.User{
+		Username:       "deleted2",
+		DisplayName:    "Deleted User 2",
+		Email:          "deleted2@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "deleted2_123",
+		Role:           models.UserRoleUser,
+	}
+	created2, err := repo.Create(ctx, user2)
+	if err != nil {
+		t.Fatalf("Create(user2) error = %v", err)
+	}
+
+	// Soft-delete both users
+	err = repo.Delete(ctx, created1.ID)
+	if err != nil {
+		t.Fatalf("Delete(user1) error = %v", err)
+	}
+	time.Sleep(10 * time.Millisecond) // Ensure different deleted_at timestamps
+	err = repo.Delete(ctx, created2.ID)
+	if err != nil {
+		t.Fatalf("Delete(user2) error = %v", err)
+	}
+
+	// List deleted users
+	users, total, err := repo.ListDeleted(ctx, 1, 10)
+	if err != nil {
+		t.Fatalf("ListDeleted() error = %v", err)
+	}
+
+	// Should find at least our 2 deleted users
+	if total < 2 {
+		t.Errorf("ListDeleted() total = %d, want >= 2", total)
+	}
+
+	// Verify our deleted users are in the list
+	found1, found2 := false, false
+	for _, u := range users {
+		if u.ID == created1.ID {
+			found1 = true
+			if u.DeletedAt == nil {
+				t.Error("ListDeleted() user1 should have deleted_at set")
+			}
+		}
+		if u.ID == created2.ID {
+			found2 = true
+			if u.DeletedAt == nil {
+				t.Error("ListDeleted() user2 should have deleted_at set")
+			}
+		}
+	}
+
+	if !found1 {
+		t.Error("ListDeleted() did not return user1")
+	}
+	if !found2 {
+		t.Error("ListDeleted() did not return user2")
+	}
+}
+
 // cleanupTestDB cleans up test data.
 func cleanupTestDB(t *testing.T, pool *Pool) {
 	t.Helper()

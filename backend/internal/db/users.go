@@ -201,6 +201,105 @@ func (r *UserRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// HardDelete permanently removes a user from the database (admin-only).
+// Per PRD-v5 Task 17: Admin hard-delete endpoints.
+// This is IRREVERSIBLE - the user record is permanently deleted.
+// Returns ErrNotFound if user doesn't exist.
+func (r *UserRepository) HardDelete(ctx context.Context, id string) error {
+	query := `DELETE FROM users WHERE id = $1`
+
+	result, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		LogQueryError(ctx, "HardDelete", "users", err)
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// ListDeleted returns soft-deleted users with pagination.
+// Per PRD-v5 Task 17: Admin endpoints to review deleted accounts before permanent deletion.
+// Returns users ordered by deleted_at DESC (most recently deleted first).
+func (r *UserRepository) ListDeleted(ctx context.Context, page, perPage int) ([]models.User, int, error) {
+	offset := (page - 1) * perPage
+
+	query := `
+		SELECT id, username, display_name, email, auth_provider, auth_provider_id,
+		       password_hash, avatar_url, bio, role, created_at, updated_at, deleted_at
+		FROM users
+		WHERE deleted_at IS NOT NULL
+		ORDER BY deleted_at DESC
+		LIMIT $1 OFFSET $2
+	`
+
+	rows, err := r.pool.Query(ctx, query, perPage, offset)
+	if err != nil {
+		LogQueryError(ctx, "ListDeleted", "users", err)
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var users []models.User
+	for rows.Next() {
+		var user models.User
+		var passwordHash, avatarURL, bio, authProvider, authProviderID, role sql.NullString
+		var deletedAt sql.NullTime
+
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.DisplayName,
+			&user.Email,
+			&authProvider,
+			&authProviderID,
+			&passwordHash,
+			&avatarURL,
+			&bio,
+			&role,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+			&deletedAt,
+		)
+		if err != nil {
+			LogQueryError(ctx, "ListDeleted.Scan", "users", err)
+			return nil, 0, err
+		}
+
+		// Convert nullable fields
+		user.AuthProvider = authProvider.String
+		user.AuthProviderID = authProviderID.String
+		user.PasswordHash = passwordHash.String
+		user.AvatarURL = avatarURL.String
+		user.Bio = bio.String
+		user.Role = role.String
+		if deletedAt.Valid {
+			user.DeletedAt = &deletedAt.Time
+		}
+
+		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "ListDeleted.Rows", "users", err)
+		return nil, 0, err
+	}
+
+	// Count total deleted users
+	var total int
+	countQuery := `SELECT COUNT(*) FROM users WHERE deleted_at IS NOT NULL`
+	err = r.pool.QueryRow(ctx, countQuery).Scan(&total)
+	if err != nil {
+		LogQueryError(ctx, "ListDeleted.Count", "users", err)
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+
 // scanUser scans a user row into a User struct.
 func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 	user := &models.User{}

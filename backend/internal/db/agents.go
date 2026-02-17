@@ -29,7 +29,8 @@ type AgentRepository struct {
 // Used to keep queries consistent and DRY.
 // Note: COALESCE handles NULL values for nullable columns scanned into non-pointer Go types.
 // Without COALESCE, pgx fails when scanning NULL into string/[]string.
-const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, reputation, human_claimed_at, has_human_backed_badge, created_at, updated_at`
+// 18 columns total (added deleted_at for PRD-v5 Task 22)
+const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, reputation, human_claimed_at, has_human_backed_badge, created_at, updated_at, deleted_at`
 
 // NewAgentRepository creates a new AgentRepository.
 func NewAgentRepository(pool *Pool) *AgentRepository {
@@ -76,6 +77,7 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		&agent.HasHumanBackedBadge,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
+		&agent.DeletedAt,
 	)
 
 	if err != nil {
@@ -91,16 +93,18 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 }
 
 // FindByID finds an agent by their ID.
+// Filters out soft-deleted agents (WHERE deleted_at IS NULL).
 func (r *AgentRepository) FindByID(ctx context.Context, id string) (*models.Agent, error) {
-	query := `SELECT ` + agentColumns + ` FROM agents WHERE id = $1`
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE id = $1 AND deleted_at IS NULL`
 
 	row := r.pool.QueryRow(ctx, query, id)
 	return r.scanAgent(row)
 }
 
 // FindByHumanID finds all agents owned by a human user.
+// Filters out soft-deleted agents (WHERE deleted_at IS NULL).
 func (r *AgentRepository) FindByHumanID(ctx context.Context, humanID string) ([]*models.Agent, error) {
-	query := `SELECT ` + agentColumns + ` FROM agents WHERE human_id = $1 ORDER BY created_at DESC`
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE human_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`
 
 	rows, err := r.pool.Query(ctx, query, humanID)
 	if err != nil {
@@ -123,8 +127,10 @@ func (r *AgentRepository) FindByHumanID(ctx context.Context, humanID string) ([]
 
 // FindByAPIKeyHash finds an agent by their API key hash.
 // Used for API key authentication.
+// Filters out soft-deleted agents (WHERE deleted_at IS NULL).
+// This ensures deleted agents cannot authenticate via API key.
 func (r *AgentRepository) FindByAPIKeyHash(ctx context.Context, hash string) (*models.Agent, error) {
-	query := `SELECT ` + agentColumns + ` FROM agents WHERE api_key_hash = $1`
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE api_key_hash = $1 AND deleted_at IS NULL`
 
 	row := r.pool.QueryRow(ctx, query, hash)
 	return r.scanAgent(row)
@@ -169,6 +175,7 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 		&agent.HasHumanBackedBadge,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
+		&agent.DeletedAt,
 	)
 
 	if err != nil {
@@ -181,6 +188,93 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 	}
 
 	return nil
+}
+
+// Delete soft-deletes an agent by setting deleted_at timestamp.
+// Per PRD-v5 Task 22: agent self-deletion feature.
+// This is a soft delete - the agent record remains in the database but is hidden from queries.
+// Posts created by the agent remain visible (no cascade delete).
+// Returns ErrAgentNotFound if agent doesn't exist or is already deleted.
+func (r *AgentRepository) Delete(ctx context.Context, id string) error {
+	query := `
+		UPDATE agents
+		SET deleted_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+
+	result, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		LogQueryError(ctx, "Delete", "agents", err)
+		return fmt.Errorf("failed to delete agent: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrAgentNotFound
+	}
+
+	return nil
+}
+
+// HardDelete permanently removes an agent from the database (admin-only).
+// Per PRD-v5 Task 17: Admin hard-delete endpoints.
+// This is IRREVERSIBLE - the agent record is permanently deleted.
+// Returns ErrAgentNotFound if agent doesn't exist.
+func (r *AgentRepository) HardDelete(ctx context.Context, id string) error {
+	query := `DELETE FROM agents WHERE id = $1`
+
+	result, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		LogQueryError(ctx, "HardDelete", "agents", err)
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrAgentNotFound
+	}
+
+	return nil
+}
+
+// ListDeleted returns soft-deleted agents with pagination.
+// Per PRD-v5 Task 17: Admin endpoints to review deleted accounts before permanent deletion.
+// Returns agents ordered by deleted_at DESC (most recently deleted first).
+func (r *AgentRepository) ListDeleted(ctx context.Context, page, perPage int) ([]models.Agent, int, error) {
+	offset := (page - 1) * perPage
+
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT $1 OFFSET $2`
+
+	rows, err := r.pool.Query(ctx, query, perPage, offset)
+	if err != nil {
+		LogQueryError(ctx, "ListDeleted", "agents", err)
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var agents []models.Agent
+	for rows.Next() {
+		agent, err := r.scanAgentRows(rows)
+		if err != nil {
+			LogQueryError(ctx, "ListDeleted.Scan", "agents", err)
+			return nil, 0, err
+		}
+		agents = append(agents, *agent)
+	}
+
+	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "ListDeleted.Rows", "agents", err)
+		return nil, 0, err
+	}
+
+	// Count total deleted agents
+	var total int
+	countQuery := `SELECT COUNT(*) FROM agents WHERE deleted_at IS NOT NULL`
+	err = r.pool.QueryRow(ctx, countQuery).Scan(&total)
+	if err != nil {
+		LogQueryError(ctx, "ListDeleted.Count", "agents", err)
+		return nil, 0, err
+	}
+
+	return agents, total, nil
 }
 
 // UpdateAPIKeyHash updates the API key hash for an agent.
@@ -243,7 +337,7 @@ func (r *AgentRepository) GetAgentStats(ctx context.Context, agentID string) (*m
 	//            - downvotes_received * 1
 	query := `
 		WITH agent_bonus AS (
-			SELECT COALESCE(reputation, 0) as bonus FROM agents WHERE id = $1
+			SELECT COALESCE(reputation, 0) as bonus FROM agents WHERE id = $1 AND deleted_at IS NULL
 		),
 		agent_posts AS (
 			SELECT
@@ -352,6 +446,7 @@ func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 		&agent.HasHumanBackedBadge,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
+		&agent.DeletedAt,
 	)
 
 	if err != nil {
@@ -386,6 +481,7 @@ func (r *AgentRepository) scanAgentRows(rows pgx.Rows) (*models.Agent, error) {
 		&agent.HasHumanBackedBadge,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
+		&agent.DeletedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -619,8 +715,9 @@ func (r *AgentRepository) GrantHumanBackedBadge(ctx context.Context, agentID str
 
 // FindByName finds an agent by their display name.
 // Used for name uniqueness checks during registration.
+// Filters out soft-deleted agents (WHERE deleted_at IS NULL).
 func (r *AgentRepository) FindByName(ctx context.Context, name string) (*models.Agent, error) {
-	query := `SELECT ` + agentColumns + ` FROM agents WHERE display_name = $1`
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE display_name = $1 AND deleted_at IS NULL`
 
 	row := r.pool.QueryRow(ctx, query, name)
 	return r.scanAgent(row)
@@ -632,7 +729,8 @@ func (r *AgentRepository) FindByName(ctx context.Context, name string) (*models.
 // Per SPEC.md Part 8.1: API keys are hashed with bcrypt and never stored plain.
 func (r *AgentRepository) GetAgentByAPIKeyHash(ctx context.Context, key string) (*models.Agent, error) {
 	// Query all agents that have an API key hash set
-	query := `SELECT ` + agentColumns + ` FROM agents WHERE api_key_hash IS NOT NULL AND api_key_hash != ''`
+	// Filters out soft-deleted agents
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE api_key_hash IS NOT NULL AND api_key_hash != '' AND deleted_at IS NULL`
 
 	rows, err := r.pool.Query(ctx, query)
 	if err != nil {
@@ -695,6 +793,9 @@ func (r *AgentRepository) List(ctx context.Context, opts models.AgentListOptions
 		args = append(args, "%"+opts.Query+"%")
 		argNum++
 	}
+
+	// Always filter out soft-deleted agents (PRD-v5 Task 22)
+	conditions = append(conditions, "a.deleted_at IS NULL")
 
 	whereClause := ""
 	if len(conditions) > 0 {
@@ -824,8 +925,9 @@ func (r *AgentRepository) List(ctx context.Context, opts models.AgentListOptions
 }
 
 // CountActive returns the total number of active agents.
+// Filters out soft-deleted agents (WHERE deleted_at IS NULL).
 func (r *AgentRepository) CountActive(ctx context.Context) (int, error) {
-	query := `SELECT COUNT(*) FROM agents WHERE status = 'active'`
+	query := `SELECT COUNT(*) FROM agents WHERE status = 'active' AND deleted_at IS NULL`
 	var count int
 	err := r.pool.QueryRow(ctx, query).Scan(&count)
 	if err != nil {
@@ -836,8 +938,9 @@ func (r *AgentRepository) CountActive(ctx context.Context) (int, error) {
 }
 
 // CountHumanBacked returns the total number of agents with human-backed badge.
+// Filters out soft-deleted agents (WHERE deleted_at IS NULL).
 func (r *AgentRepository) CountHumanBacked(ctx context.Context) (int, error) {
-	query := `SELECT COUNT(*) FROM agents WHERE has_human_backed_badge = true`
+	query := `SELECT COUNT(*) FROM agents WHERE has_human_backed_badge = true AND deleted_at IS NULL`
 	var count int
 	err := r.pool.QueryRow(ctx, query).Scan(&count)
 	if err != nil {

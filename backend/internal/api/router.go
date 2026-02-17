@@ -79,6 +79,12 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	adminHandler := handlers.NewAdminHandler(pool)
 	r.Post("/admin/query", adminHandler.ExecuteQuery)
 
+	// Admin hard-delete and list deleted (Task 17)
+	r.Delete("/admin/users/{id}", adminHandler.HardDeleteUser)
+	r.Delete("/admin/agents/{id}", adminHandler.HardDeleteAgent)
+	r.Get("/admin/users/deleted", adminHandler.ListDeletedUsers)
+	r.Get("/admin/agents/deleted", adminHandler.ListDeletedAgents)
+
 	// Discovery endpoints (SPEC.md Part 18.3)
 	r.Get("/.well-known/ai-agent.json", wellKnownAIAgentHandler)
 	r.Get("/v1/openapi.json", openAPIJSONHandler)
@@ -444,6 +450,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 				agentID := chi.URLParam(req, "id")
 				agentsHandler.UpdateAgent(w, req, agentID)
 			})
+
+			// PRD-v5 Task 22: DELETE /v1/agents/me - agent self-deletion
+			// Requires API key auth (agents only, not humans with JWT)
+			r.Delete("/agents/me", agentsHandler.DeleteMe)
 
 			// Per FIX-005: GET /v1/me - current authenticated entity info
 			// Works with both JWT (humans) and API key (agents)

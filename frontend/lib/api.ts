@@ -513,6 +513,14 @@ class SolvrAPI {
     });
   }
 
+  async deleteMe(): Promise<void> {
+    await this.fetch<void>('/v1/me', {
+      method: 'DELETE',
+    });
+    // Clear auth token after successful deletion
+    this.clearAuthToken();
+  }
+
   // API Key management
   async listAPIKeys(): Promise<APIKeysListResponse> {
     return this.fetch<APIKeysListResponse>('/v1/users/me/api-keys');

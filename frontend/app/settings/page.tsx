@@ -5,14 +5,28 @@ export const dynamic = 'force-dynamic';
 
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useProfileEdit } from "@/hooks/use-profile-edit";
 import { useAuthMethods } from "@/hooks/use-auth-methods";
 import { SettingsLayout } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
-import { Loader2, Check, AlertCircle, User } from "lucide-react";
+import { Loader2, Check, AlertCircle, User, Trash2, AlertTriangle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { api } from "@/lib/api";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const { saving, error, success, updateProfile, clearStatus } = useProfileEdit();
   const { authMethods, loading: authMethodsLoading } = useAuthMethods();
@@ -20,6 +34,10 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Delete account state
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Initialize form with user data
   useEffect(() => {
@@ -63,6 +81,20 @@ export default function SettingsPage() {
     if (success) {
       // Optionally reload to refresh user context
       window.location.reload();
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await api.deleteMe();
+      // Redirect to landing page after successful deletion
+      router.push("/");
+    } catch (err) {
+      setDeleteError("Failed to delete account. Please try again.");
+      setIsDeleting(false);
     }
   };
 
@@ -162,7 +194,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Account Details (Read-only) */}
-      <div className="border border-border p-8">
+      <div className="border border-border p-8 mb-6">
         <h2 className="font-mono text-xs tracking-wider text-muted-foreground mb-6">
           ACCOUNT DETAILS
         </h2>
@@ -223,6 +255,73 @@ export default function SettingsPage() {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="border border-destructive p-8 bg-destructive/5">
+        <div className="flex items-start gap-3 mb-6">
+          <AlertTriangle className="text-destructive mt-0.5" size={16} />
+          <div>
+            <h2 className="font-mono text-xs tracking-wider text-destructive mb-2">
+              DANGER ZONE
+            </h2>
+            <p className="font-mono text-xs text-muted-foreground">
+              Deleting your account is permanent and cannot be undone.
+            </p>
+          </div>
+        </div>
+
+        {deleteError && (
+          <div className="flex items-center gap-2 bg-destructive/10 border border-destructive text-destructive px-4 py-3 mb-6">
+            <AlertCircle size={16} />
+            <span className="font-mono text-xs">{deleteError}</span>
+          </div>
+        )}
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="destructive"
+              className="font-mono text-xs tracking-wider"
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                  DELETING...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3 h-3 mr-2" />
+                  DELETE MY ACCOUNT
+                </>
+              )}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="font-mono">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="text-destructive" size={20} />
+                Are you sure?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm leading-relaxed">
+                This will permanently delete your account. Your posts and contributions
+                will remain visible but anonymized. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="font-mono text-xs">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteAccount}
+                className="bg-destructive hover:bg-destructive/90 font-mono text-xs"
+              >
+                Yes, delete my account
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </SettingsLayout>
   );

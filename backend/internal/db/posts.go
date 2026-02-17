@@ -106,6 +106,17 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 
 	whereClause := strings.Join(conditions, " AND ")
 
+	// Build answer count filter condition for main query
+	// This will be added after the LEFT JOIN so ans_cnt.cnt is available
+	var answerCountFilter string
+	if opts.HasAnswer != nil {
+		if *opts.HasAnswer {
+			answerCountFilter = " AND COALESCE(ans_cnt.cnt, 0) > 0"
+		} else {
+			answerCountFilter = " AND COALESCE(ans_cnt.cnt, 0) = 0"
+		}
+	}
+
 	// Calculate pagination
 	page := opts.Page
 	if page < 1 {
@@ -120,8 +131,25 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	}
 	offset := (page - 1) * perPage
 
-	// Query for total count
-	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM posts p WHERE %s`, whereClause)
+	// Query for total count (with answer count filter if needed)
+	var countQuery string
+	if answerCountFilter != "" {
+		// When filtering by answer count, we need to include the LEFT JOIN in the count query
+		countQuery = fmt.Sprintf(`
+			SELECT COUNT(*) FROM (
+				SELECT p.id
+				FROM posts p
+				LEFT JOIN (
+					SELECT question_id, COUNT(*) as cnt
+					FROM answers WHERE deleted_at IS NULL
+					GROUP BY question_id
+				) ans_cnt ON ans_cnt.question_id = p.id
+				WHERE %s%s
+			) counted
+		`, whereClause, answerCountFilter)
+	} else {
+		countQuery = fmt.Sprintf(`SELECT COUNT(*) FROM posts p WHERE %s`, whereClause)
+	}
 	var total int
 	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
@@ -152,7 +180,8 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
 			COALESCE(ans_cnt.cnt, 0) as answers_count,
-			COALESCE(app_cnt.cnt, 0) as approaches_count
+			COALESCE(app_cnt.cnt, 0) as approaches_count,
+			COALESCE(cmt_cnt.cnt, 0) as comments_count
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
@@ -166,10 +195,16 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			FROM approaches WHERE deleted_at IS NULL
 			GROUP BY problem_id
 		) app_cnt ON app_cnt.problem_id = p.id
-		WHERE %s
+		LEFT JOIN (
+			SELECT target_id, COUNT(*) as cnt
+			FROM comments
+			WHERE target_type = 'post' AND deleted_at IS NULL
+			GROUP BY target_id
+		) cmt_cnt ON cmt_cnt.target_id = p.id
+		WHERE %s%s
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, whereClause, orderClause, argNum, argNum+1)
+	`, whereClause, answerCountFilter, orderClause, argNum, argNum+1)
 
 	args = append(args, perPage, offset)
 
@@ -232,6 +267,7 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 		&authorAvatarURL,
 		&post.AnswersCount,
 		&post.ApproachesCount,
+		&post.CommentsCount,
 	)
 	if err != nil {
 		return nil, err
@@ -379,7 +415,8 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
 			COALESCE(ans_cnt.cnt, 0) as answers_count,
-			COALESCE(app_cnt.cnt, 0) as approaches_count
+			COALESCE(app_cnt.cnt, 0) as approaches_count,
+			COALESCE(cmt_cnt.cnt, 0) as comments_count
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
@@ -393,6 +430,12 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 			FROM approaches WHERE deleted_at IS NULL
 			GROUP BY problem_id
 		) app_cnt ON app_cnt.problem_id = p.id
+		LEFT JOIN (
+			SELECT target_id, COUNT(*) as cnt
+			FROM comments
+			WHERE target_type = 'post' AND deleted_at IS NULL
+			GROUP BY target_id
+		) cmt_cnt ON cmt_cnt.target_id = p.id
 		WHERE p.id = $1 AND p.deleted_at IS NULL
 	`
 
@@ -424,6 +467,7 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 		&authorAvatarURL,
 		&post.AnswersCount,
 		&post.ApproachesCount,
+		&post.CommentsCount,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

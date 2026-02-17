@@ -220,7 +220,7 @@
       "Verify: SELECT indexname FROM pg_indexes WHERE tablename='posts' shows 3 new tsvector indexes",
       "Verify: Search queries run faster (<50ms) with indexes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

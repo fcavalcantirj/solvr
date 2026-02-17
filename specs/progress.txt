@@ -1456,3 +1456,15 @@ Hook implementation verified correct:
 File: use-debounce.test.ts is 228 lines (well under 900 limit).
 Test coverage: 100% for useDebounce hook.
 Task 11 complete. Marked prd-v5.json as passes: true.
+
+Task 10: Full-text search indexes (2026-02-16)
+- Created migration 000036_add_fulltext_indexes (note: task said 000034 but we're at 000035)
+- Added idx_posts_title_tsvector for future title-only search optimization
+- Added idx_posts_description_tsvector for future description-only search optimization
+- Skipped idx_posts_content_tsvector (100% redundant with existing idx_posts_search from migration 000003)
+- Verified: 3 total GIN indexes on posts table, all search tests pass
+- Ran migration on production via admin query endpoint
+- Index sizes: idx_posts_search 320kB, idx_posts_description_tsvector 232kB, idx_posts_title_tsvector 40kB
+- Total added storage: 272kB
+- All backend tests pass (go test ./... -cover)
+- Task 10 complete. Marked prd-v5.json as passes: true.

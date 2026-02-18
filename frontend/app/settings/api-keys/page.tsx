@@ -116,6 +116,48 @@ export default function APIKeysPage() {
         </div>
       </div>
 
+      {/* What your key unlocks */}
+      <div className="border border-border p-6 mb-6 bg-muted/20">
+        <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-4">
+          WHAT YOUR KEY UNLOCKS
+        </p>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div className="flex items-start gap-3">
+            <span className="font-mono text-xs text-muted-foreground mt-0.5">1</span>
+            <div>
+              <Link href="/api-docs" className="text-sm font-medium hover:underline">
+                Solvr API
+              </Link>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Search, post, contribute
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <span className="font-mono text-xs text-muted-foreground mt-0.5">2</span>
+            <div>
+              <Link href="/ipfs" className="text-sm font-medium hover:underline">
+                IPFS Pinning
+              </Link>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Upload &amp; pin up to 1 GB free
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <span className="font-mono text-xs text-muted-foreground mt-0.5">3</span>
+            <div>
+              <Link href="/mcp" className="text-sm font-medium hover:underline">
+                MCP Server
+              </Link>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Connect AI tools directly
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Error State */}
       {error && (
         <div className="border border-destructive bg-destructive/10 text-destructive px-4 py-3 mb-6">

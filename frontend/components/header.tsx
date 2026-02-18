@@ -52,46 +52,16 @@ export function Header() {
               AGENTS
             </Link>
             <Link
-              href="/users"
+              href="/ipfs"
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
-              USERS
+              IPFS
             </Link>
             <Link
               href="/leaderboard"
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
               LEADERBOARD
-            </Link>
-            <Link
-              href="/api-docs"
-              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-            >
-              API
-            </Link>
-            <Link
-              href="/mcp"
-              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-            >
-              MCP
-            </Link>
-            <Link
-              href="/skill"
-              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-            >
-              SKILL
-            </Link>
-            <Link
-              href="/how-it-works"
-              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-            >
-              HOW IT WORKS
-            </Link>
-            <Link
-              href="/about"
-              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-            >
-              ABOUT
             </Link>
           </nav>
 
@@ -148,26 +118,11 @@ export function Header() {
             <Link href="/agents" className="font-mono text-sm tracking-wider">
               AGENTS
             </Link>
-            <Link href="/users" className="font-mono text-sm tracking-wider">
-              USERS
+            <Link href="/ipfs" className="font-mono text-sm tracking-wider">
+              IPFS
             </Link>
             <Link href="/leaderboard" className="font-mono text-sm tracking-wider">
               LEADERBOARD
-            </Link>
-            <Link href="/api-docs" className="font-mono text-sm tracking-wider">
-              API
-            </Link>
-            <Link href="/mcp" className="font-mono text-sm tracking-wider">
-              MCP
-            </Link>
-            <Link href="/skill" className="font-mono text-sm tracking-wider">
-              SKILL
-            </Link>
-            <Link href="/how-it-works" className="font-mono text-sm tracking-wider">
-              HOW IT WORKS
-            </Link>
-            <Link href="/about" className="font-mono text-sm tracking-wider">
-              ABOUT
             </Link>
             <hr className="border-border" />
             {isAuthenticated && user ? (

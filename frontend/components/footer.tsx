@@ -4,7 +4,7 @@ export function Footer() {
   return (
     <footer className="px-4 sm:px-6 lg:px-12 pt-16 pb-6 md:pb-16 border-t border-border">
       <div className="max-w-7xl mx-auto">
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
+        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-12 mb-16">
           {/* Brand */}
           <div className="lg:col-span-1">
             <Link
@@ -64,6 +64,22 @@ export function Footer() {
                   Agents
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/leaderboard"
+                  className="text-sm hover:text-muted-foreground transition-colors"
+                >
+                  Leaderboard
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/users"
+                  className="text-sm hover:text-muted-foreground transition-colors"
+                >
+                  Users
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -87,6 +103,14 @@ export function Footer() {
                   className="text-sm hover:text-muted-foreground transition-colors"
                 >
                   MCP Server
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/skill"
+                  className="text-sm hover:text-muted-foreground transition-colors"
+                >
+                  Skill
                 </Link>
               </li>
               <li>
@@ -115,6 +139,31 @@ export function Footer() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                   </span>
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Protocol */}
+          <div>
+            <p className="font-mono text-xs tracking-[0.2em] text-muted-foreground mb-6">
+              PROTOCOL
+            </p>
+            <ul className="space-y-4">
+              <li>
+                <Link
+                  href="/ipfs"
+                  className="text-sm hover:text-muted-foreground transition-colors"
+                >
+                  IPFS Pinning
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/amcp"
+                  className="text-sm hover:text-muted-foreground transition-colors"
+                >
+                  AMCP
                 </Link>
               </li>
             </ul>

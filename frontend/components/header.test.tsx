@@ -32,90 +32,7 @@ describe('Header', () => {
     vi.clearAllMocks();
   });
 
-  describe('LEADERBOARD link in navigation', () => {
-    it('displays LEADERBOARD link in desktop navigation', () => {
-      render(<Header />);
-
-      const leaderboardLink = screen.getByRole('link', { name: 'LEADERBOARD' });
-      expect(leaderboardLink).toBeInTheDocument();
-      expect(leaderboardLink).toHaveAttribute('href', '/leaderboard');
-    });
-
-    it('positions LEADERBOARD link between USERS and API in desktop nav', () => {
-      render(<Header />);
-
-      const links = screen.getAllByRole('link');
-      const usersIndex = links.findIndex(link => link.textContent === 'USERS');
-      const leaderboardIndex = links.findIndex(link => link.textContent === 'LEADERBOARD');
-      const apiIndex = links.findIndex(link => link.textContent === 'API');
-
-      expect(leaderboardIndex).toBeGreaterThan(usersIndex);
-      expect(leaderboardIndex).toBeLessThan(apiIndex);
-    });
-
-    it('displays LEADERBOARD link in mobile menu', () => {
-      render(<Header />);
-
-      // Open mobile menu
-      const menuButton = screen.getByRole('button');
-      fireEvent.click(menuButton);
-
-      // Should find LEADERBOARD in mobile menu (desktop + mobile)
-      const leaderboardLinks = screen.getAllByRole('link', { name: 'LEADERBOARD' });
-      expect(leaderboardLinks.length).toBeGreaterThanOrEqual(2);
-
-      // Mobile link should also point to /leaderboard
-      const mobileLeaderboardLink = leaderboardLinks[1];
-      expect(mobileLeaderboardLink).toHaveAttribute('href', '/leaderboard');
-    });
-  });
-
-  describe('USERS link in navigation', () => {
-    it('shows USERS link in desktop navigation', () => {
-      render(<Header />);
-
-      const usersLink = screen.getByRole('link', { name: 'USERS' });
-      expect(usersLink).toBeInTheDocument();
-      expect(usersLink).toHaveAttribute('href', '/users');
-    });
-
-    it('positions USERS link between AGENTS and API in desktop nav', () => {
-      render(<Header />);
-
-      const links = screen.getAllByRole('link');
-      const agentsIndex = links.findIndex(link => link.textContent === 'AGENTS');
-      const usersIndex = links.findIndex(link => link.textContent === 'USERS');
-      const apiIndex = links.findIndex(link => link.textContent === 'API');
-
-      expect(usersIndex).toBeGreaterThan(agentsIndex);
-      expect(usersIndex).toBeLessThan(apiIndex);
-    });
-
-    it('shows USERS link in mobile navigation', () => {
-      render(<Header />);
-
-      // Open mobile menu
-      const menuButton = screen.getByRole('button');
-      fireEvent.click(menuButton);
-
-      // Should find USERS in mobile menu (there are now 2 USERS links - desktop and mobile)
-      const usersLinks = screen.getAllByRole('link', { name: 'USERS' });
-      expect(usersLinks.length).toBeGreaterThanOrEqual(2);
-
-      // Mobile link should also point to /users
-      const mobileUsersLink = usersLinks[1];
-      expect(mobileUsersLink).toHaveAttribute('href', '/users');
-    });
-
-    it('applies correct styling to USERS link', () => {
-      render(<Header />);
-
-      const usersLink = screen.getByRole('link', { name: 'USERS' });
-      expect(usersLink).toHaveClass('font-mono', 'text-xs', 'tracking-wider', 'text-muted-foreground');
-    });
-  });
-
-  describe('main navigation links', () => {
+  describe('desktop navigation links', () => {
     it('renders logo linking to home', () => {
       render(<Header />);
 
@@ -123,18 +40,60 @@ describe('Header', () => {
       expect(logo.closest('a')).toHaveAttribute('href', '/');
     });
 
-    it('renders AGENTS link', () => {
+    it('renders all 7 nav links in desktop nav', () => {
       render(<Header />);
 
-      const agentsLink = screen.getByRole('link', { name: 'AGENTS' });
-      expect(agentsLink).toHaveAttribute('href', '/agents');
+      const expectedLinks = [
+        { name: 'FEED', href: '/feed' },
+        { name: 'PROBLEMS', href: '/problems' },
+        { name: 'QUESTIONS', href: '/questions' },
+        { name: 'IDEAS', href: '/ideas' },
+        { name: 'AGENTS', href: '/agents' },
+        { name: 'IPFS', href: '/ipfs' },
+        { name: 'LEADERBOARD', href: '/leaderboard' },
+      ];
+
+      for (const { name, href } of expectedLinks) {
+        const link = screen.getByRole('link', { name });
+        expect(link).toHaveAttribute('href', href);
+      }
     });
 
-    it('renders API link', () => {
+    it('positions IPFS between AGENTS and LEADERBOARD', () => {
       render(<Header />);
 
-      const apiLink = screen.getByRole('link', { name: 'API' });
-      expect(apiLink).toHaveAttribute('href', '/api-docs');
+      const links = screen.getAllByRole('link');
+      const agentsIndex = links.findIndex(link => link.textContent === 'AGENTS');
+      const ipfsIndex = links.findIndex(link => link.textContent === 'IPFS');
+      const leaderboardIndex = links.findIndex(link => link.textContent === 'LEADERBOARD');
+
+      expect(ipfsIndex).toBeGreaterThan(agentsIndex);
+      expect(ipfsIndex).toBeLessThan(leaderboardIndex);
+    });
+  });
+
+  describe('mobile navigation', () => {
+    it('displays all nav links in mobile menu', () => {
+      render(<Header />);
+
+      const menuButton = screen.getByRole('button');
+      fireEvent.click(menuButton);
+
+      // Should find IPFS in mobile menu (desktop + mobile = 2)
+      const ipfsLinks = screen.getAllByRole('link', { name: 'IPFS' });
+      expect(ipfsLinks.length).toBeGreaterThanOrEqual(2);
+      expect(ipfsLinks[1]).toHaveAttribute('href', '/ipfs');
+    });
+
+    it('displays LEADERBOARD in mobile menu', () => {
+      render(<Header />);
+
+      const menuButton = screen.getByRole('button');
+      fireEvent.click(menuButton);
+
+      const leaderboardLinks = screen.getAllByRole('link', { name: 'LEADERBOARD' });
+      expect(leaderboardLinks.length).toBeGreaterThanOrEqual(2);
+      expect(leaderboardLinks[1]).toHaveAttribute('href', '/leaderboard');
     });
   });
 });

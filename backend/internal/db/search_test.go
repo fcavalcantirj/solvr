@@ -21,7 +21,7 @@ func TestSearchRepository_Search(t *testing.T) {
 
 	// Insert test data
 	ctx := context.Background()
-	insertTestPost(t, pool, ctx, "post-1", "problem", "Race condition in PostgreSQL async queries",
+	post1ID := insertTestPost(t, pool, ctx, "problem", "Race condition in PostgreSQL async queries",
 		"When running multiple async queries to PostgreSQL, I encounter race conditions.", []string{"postgresql", "async"}, "solved")
 
 	// Search for "race condition"
@@ -45,7 +45,7 @@ func TestSearchRepository_Search(t *testing.T) {
 	// Verify the result is what we inserted
 	found := false
 	for _, r := range results {
-		if r.ID == "post-1" {
+		if r.ID == post1ID {
 			found = true
 			if r.Title != "Race condition in PostgreSQL async queries" {
 				t.Errorf("expected title 'Race condition in PostgreSQL async queries', got '%s'", r.Title)
@@ -57,7 +57,7 @@ func TestSearchRepository_Search(t *testing.T) {
 	}
 
 	if !found {
-		t.Error("expected to find post-1 in results")
+		t.Error("expected to find inserted post in results")
 	}
 }
 
@@ -70,10 +70,10 @@ func TestSearchRepository_Search_RelevanceScore(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert two posts, one more relevant than the other
-	insertTestPost(t, pool, ctx, "post-rel-1", "problem",
+	postRel1ID := insertTestPost(t, pool, ctx, "problem",
 		"PostgreSQL PostgreSQL PostgreSQL connection issues",
 		"Multiple mentions of PostgreSQL connection", []string{"postgresql"}, "open")
-	insertTestPost(t, pool, ctx, "post-rel-2", "question",
+	insertTestPost(t, pool, ctx, "question",
 		"How to connect to database",
 		"Generic database question", []string{"database"}, "open")
 
@@ -93,8 +93,8 @@ func TestSearchRepository_Search_RelevanceScore(t *testing.T) {
 	}
 
 	// First result should be the one with more PostgreSQL mentions
-	if results[0].ID != "post-rel-1" {
-		t.Errorf("expected post-rel-1 to be first (most relevant), got %s", results[0].ID)
+	if results[0].ID != postRel1ID {
+		t.Errorf("expected most-relevant post to be first, got %s", results[0].ID)
 	}
 
 	// Verify score is populated
@@ -111,7 +111,7 @@ func TestSearchRepository_Search_Snippet(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPost(t, pool, ctx, "post-snip-1", "problem",
+	postSnip1ID := insertTestPost(t, pool, ctx, "problem",
 		"Async error handling in Go",
 		"When handling errors in async Go code, you need to be careful with goroutines and channels.",
 		[]string{"go", "async"}, "open")
@@ -137,7 +137,7 @@ func TestSearchRepository_Search_Snippet(t *testing.T) {
 
 	// The snippet should have highlights (ts_headline wraps in <b>, we convert to <mark>)
 	// Note: If using StartSel/StopSel options, it uses <mark> directly
-	if len(snippet) > 0 && results[0].ID == "post-snip-1" {
+	if len(snippet) > 0 && results[0].ID == postSnip1ID {
 		// Just verify snippet is populated, highlighting tested by visual inspection
 		t.Logf("Generated snippet: %s", snippet)
 	}
@@ -151,9 +151,9 @@ func TestSearchRepository_Search_TypeFilter(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPost(t, pool, ctx, "post-type-1", "problem", "Test problem", "Description", []string{}, "open")
-	insertTestPost(t, pool, ctx, "post-type-2", "question", "Test question", "Description", []string{}, "open")
-	insertTestPost(t, pool, ctx, "post-type-3", "idea", "Test idea", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "problem", "Test problem", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "question", "Test question", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "idea", "Test idea", "Description", []string{}, "open")
 
 	// Search with type=problem filter
 	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
@@ -181,8 +181,8 @@ func TestSearchRepository_Search_StatusFilter(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPost(t, pool, ctx, "post-status-1", "problem", "Test open", "Description", []string{}, "open")
-	insertTestPost(t, pool, ctx, "post-status-2", "problem", "Test solved", "Description", []string{}, "solved")
+	insertTestPost(t, pool, ctx, "problem", "Test open", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "problem", "Test solved", "Description", []string{}, "solved")
 
 	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Status:  "solved",
@@ -209,8 +209,8 @@ func TestSearchRepository_Search_TagsFilter(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPost(t, pool, ctx, "post-tags-1", "problem", "Go concurrency test", "Description", []string{"go", "concurrency"}, "open")
-	insertTestPost(t, pool, ctx, "post-tags-2", "problem", "Python test", "Description", []string{"python"}, "open")
+	insertTestPost(t, pool, ctx, "problem", "Go concurrency test", "Description", []string{"go", "concurrency"}, "open")
+	insertTestPost(t, pool, ctx, "problem", "Python test", "Description", []string{"python"}, "open")
 
 	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Tags:    []string{"go"},
@@ -237,8 +237,8 @@ func TestSearchRepository_Search_ExcludeDeleted(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPost(t, pool, ctx, "post-active", "problem", "Active post searchable", "Description", []string{}, "open")
-	insertTestPostDeleted(t, pool, ctx, "post-deleted", "problem", "Deleted post not searchable", "Description", []string{}, "open")
+	insertTestPost(t, pool, ctx, "problem", "Active post searchable", "Description", []string{}, "open")
+	deletedID := insertTestPostDeleted(t, pool, ctx, "problem", "Deleted post not searchable", "Description", []string{}, "open")
 
 	results, _, err := repo.Search(ctx, "post searchable", models.SearchOptions{
 		Page:    1,
@@ -250,7 +250,7 @@ func TestSearchRepository_Search_ExcludeDeleted(t *testing.T) {
 	}
 
 	for _, r := range results {
-		if r.ID == "post-deleted" {
+		if r.ID == deletedID {
 			t.Error("deleted posts should not appear in search results")
 		}
 	}
@@ -264,8 +264,8 @@ func TestSearchRepository_Search_SortNewest(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPostWithTime(t, pool, ctx, "post-old", "problem", "Test old", "Description", []string{}, "open", time.Now().Add(-24*time.Hour))
-	insertTestPostWithTime(t, pool, ctx, "post-new", "problem", "Test new", "Description", []string{}, "open", time.Now())
+	insertTestPostWithTime(t, pool, ctx, "problem", "Test old", "Description", []string{}, "open", time.Now().Add(-24*time.Hour))
+	postNewID := insertTestPostWithTime(t, pool, ctx, "problem", "Test new", "Description", []string{}, "open", time.Now())
 
 	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Sort:    "newest",
@@ -278,7 +278,7 @@ func TestSearchRepository_Search_SortNewest(t *testing.T) {
 	}
 
 	if len(results) >= 2 {
-		if results[0].ID != "post-new" {
+		if results[0].ID != postNewID {
 			t.Errorf("expected newest post first, got %s", results[0].ID)
 		}
 	}
@@ -292,8 +292,8 @@ func TestSearchRepository_Search_SortVotes(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPostWithVotes(t, pool, ctx, "post-low", "problem", "Test low votes", "Description", []string{}, "open", 5, 3)   // Score: 2
-	insertTestPostWithVotes(t, pool, ctx, "post-high", "problem", "Test high votes", "Description", []string{}, "open", 10, 1) // Score: 9
+	insertTestPostWithVotes(t, pool, ctx, "problem", "Test low votes", "Description", []string{}, "open", 5, 3)   // Score: 2
+	postHighID := insertTestPostWithVotes(t, pool, ctx, "problem", "Test high votes", "Description", []string{}, "open", 10, 1) // Score: 9
 
 	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Sort:    "votes",
@@ -306,7 +306,7 @@ func TestSearchRepository_Search_SortVotes(t *testing.T) {
 	}
 
 	if len(results) >= 2 {
-		if results[0].ID != "post-high" {
+		if results[0].ID != postHighID {
 			t.Errorf("expected highest voted post first, got %s", results[0].ID)
 		}
 	}
@@ -320,14 +320,17 @@ func TestSearchRepository_Search_Pagination(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	// Insert 5 posts
-	for i := 1; i <= 5; i++ {
-		insertTestPost(t, pool, ctx, "post-page-"+string(rune('0'+i)), "problem",
-			"Pagination test post", "Description", []string{}, "open")
+	// Use a unique term unlikely to appear in other tests' data
+	uniqueTerm := fmt.Sprintf("xqzpaginationtest%d", time.Now().UnixNano())
+
+	// Insert 5 posts with the unique term
+	for range 5 {
+		insertTestPost(t, pool, ctx, "problem",
+			uniqueTerm+" post", "This post contains the unique term for pagination testing.", []string{}, "open")
 	}
 
 	// Request page 1 with 2 per page
-	results, total, err := repo.Search(ctx, "pagination test", models.SearchOptions{
+	results, total, err := repo.Search(ctx, uniqueTerm, models.SearchOptions{
 		Page:    1,
 		PerPage: 2,
 	})
@@ -345,7 +348,7 @@ func TestSearchRepository_Search_Pagination(t *testing.T) {
 	}
 
 	// Request page 2
-	results2, _, err := repo.Search(ctx, "pagination test", models.SearchOptions{
+	results2, _, err := repo.Search(ctx, uniqueTerm, models.SearchOptions{
 		Page:    2,
 		PerPage: 2,
 	})
@@ -379,8 +382,8 @@ func TestSearchRepository_Search_DateFilter(t *testing.T) {
 	oldDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	newDate := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
 
-	insertTestPostWithTime(t, pool, ctx, "post-2024", "problem", "Old post date filter", "Description", []string{}, "open", oldDate)
-	insertTestPostWithTime(t, pool, ctx, "post-2026", "problem", "New post date filter", "Description", []string{}, "open", newDate)
+	post2024ID := insertTestPostWithTime(t, pool, ctx, "problem", "Old post date filter", "Description", []string{}, "open", oldDate)
+	insertTestPostWithTime(t, pool, ctx, "problem", "New post date filter", "Description", []string{}, "open", newDate)
 
 	// Search only for posts in 2026
 	results, _, err := repo.Search(ctx, "post date filter", models.SearchOptions{
@@ -395,7 +398,7 @@ func TestSearchRepository_Search_DateFilter(t *testing.T) {
 	}
 
 	for _, r := range results {
-		if r.ID == "post-2024" {
+		if r.ID == post2024ID {
 			t.Error("post from 2024 should not appear when filtering for 2026")
 		}
 	}
@@ -409,9 +412,9 @@ func TestSearchRepository_Search_AuthorFilter(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPostWithAuthor(t, pool, ctx, "post-author-1", "problem", "Test author filter", "Description",
+	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author filter", "Description",
 		[]string{}, "open", "human", "user-123")
-	insertTestPostWithAuthor(t, pool, ctx, "post-author-2", "problem", "Test author filter", "Description",
+	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author filter", "Description",
 		[]string{}, "open", "agent", "claude")
 
 	results, _, err := repo.Search(ctx, "test author filter", models.SearchOptions{
@@ -439,9 +442,9 @@ func TestSearchRepository_Search_AuthorTypeFilter(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPostWithAuthor(t, pool, ctx, "post-atype-1", "problem", "Test author type filter", "Description",
+	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author type filter", "Description",
 		[]string{}, "open", "human", "user-456")
-	insertTestPostWithAuthor(t, pool, ctx, "post-atype-2", "problem", "Test author type filter", "Description",
+	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author type filter", "Description",
 		[]string{}, "open", "agent", "bot-1")
 
 	results, _, err := repo.Search(ctx, "test author type filter", models.SearchOptions{
@@ -482,58 +485,72 @@ func setupTestDB(t *testing.T) *Pool {
 }
 
 func cleanupTestData(t *testing.T, pool *Pool, ctx context.Context) {
-	_, err := pool.Exec(ctx, "DELETE FROM posts WHERE id LIKE 'post-%'")
+	// Clean up posts created by test authors (posted_by_id is a text column, safe to use string matching)
+	_, err := pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id IN ('test-user', 'user-123', 'user-456', 'claude', 'bot-1')")
 	if err != nil {
 		t.Logf("cleanup warning: %v", err)
 	}
 }
 
-func insertTestPost(t *testing.T, pool *Pool, ctx context.Context, id, postType, title, desc string, tags []string, status string) {
-	insertTestPostWithAuthor(t, pool, ctx, id, postType, title, desc, tags, status, "human", "test-user")
+// insertTestPost inserts a test post and returns the generated UUID.
+func insertTestPost(t *testing.T, pool *Pool, ctx context.Context, postType, title, desc string, tags []string, status string) string {
+	return insertTestPostWithAuthor(t, pool, ctx, postType, title, desc, tags, status, "human", "test-user")
 }
 
-func insertTestPostDeleted(t *testing.T, pool *Pool, ctx context.Context, id, postType, title, desc string, tags []string, status string) {
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, tags, status, posted_by_type, posted_by_id, deleted_at)
-		VALUES ($1, $2, $3, $4, $5, $6, 'human', 'test-user', NOW())
-		ON CONFLICT (id) DO NOTHING
-	`, id, postType, title, desc, tags, status)
+// insertTestPostDeleted inserts a deleted test post and returns the generated UUID.
+func insertTestPostDeleted(t *testing.T, pool *Pool, ctx context.Context, postType, title, desc string, tags []string, status string) string {
+	var id string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, deleted_at)
+		VALUES ($1, $2, $3, $4, $5, 'human', 'test-user', NOW())
+		RETURNING id::text
+	`, postType, title, desc, tags, status).Scan(&id)
 	if err != nil {
-		t.Fatalf("failed to insert test post: %v", err)
+		t.Fatalf("failed to insert deleted test post: %v", err)
 	}
+	return id
 }
 
-func insertTestPostWithTime(t *testing.T, pool *Pool, ctx context.Context, id, postType, title, desc string, tags []string, status string, createdAt time.Time) {
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, tags, status, posted_by_type, posted_by_id, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, 'human', 'test-user', $7)
-		ON CONFLICT (id) DO NOTHING
-	`, id, postType, title, desc, tags, status, createdAt)
+// insertTestPostWithTime inserts a test post with a specific created_at and returns the generated UUID.
+func insertTestPostWithTime(t *testing.T, pool *Pool, ctx context.Context, postType, title, desc string, tags []string, status string, createdAt time.Time) string {
+	var id string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, created_at)
+		VALUES ($1, $2, $3, $4, $5, 'human', 'test-user', $6)
+		RETURNING id::text
+	`, postType, title, desc, tags, status, createdAt).Scan(&id)
 	if err != nil {
-		t.Fatalf("failed to insert test post: %v", err)
+		t.Fatalf("failed to insert test post with time: %v", err)
 	}
+	return id
 }
 
-func insertTestPostWithVotes(t *testing.T, pool *Pool, ctx context.Context, id, postType, title, desc string, tags []string, status string, upvotes, downvotes int) {
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, tags, status, posted_by_type, posted_by_id, upvotes, downvotes)
-		VALUES ($1, $2, $3, $4, $5, $6, 'human', 'test-user', $7, $8)
-		ON CONFLICT (id) DO NOTHING
-	`, id, postType, title, desc, tags, status, upvotes, downvotes)
+// insertTestPostWithVotes inserts a test post with vote counts and returns the generated UUID.
+func insertTestPostWithVotes(t *testing.T, pool *Pool, ctx context.Context, postType, title, desc string, tags []string, status string, upvotes, downvotes int) string {
+	var id string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id, upvotes, downvotes)
+		VALUES ($1, $2, $3, $4, $5, 'human', 'test-user', $6, $7)
+		RETURNING id::text
+	`, postType, title, desc, tags, status, upvotes, downvotes).Scan(&id)
 	if err != nil {
-		t.Fatalf("failed to insert test post: %v", err)
+		t.Fatalf("failed to insert test post with votes: %v", err)
 	}
+	return id
 }
 
-func insertTestPostWithAuthor(t *testing.T, pool *Pool, ctx context.Context, id, postType, title, desc string, tags []string, status string, authorType, authorID string) {
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, tags, status, posted_by_type, posted_by_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		ON CONFLICT (id) DO NOTHING
-	`, id, postType, title, desc, tags, status, authorType, authorID)
+// insertTestPostWithAuthor inserts a test post with a specific author and returns the generated UUID.
+func insertTestPostWithAuthor(t *testing.T, pool *Pool, ctx context.Context, postType, title, desc string, tags []string, status string, authorType, authorID string) string {
+	var id string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, tags, status, posted_by_type, posted_by_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id::text
+	`, postType, title, desc, tags, status, authorType, authorID).Scan(&id)
 	if err != nil {
-		t.Fatalf("failed to insert test post: %v", err)
+		t.Fatalf("failed to insert test post with author: %v", err)
 	}
+	return id
 }
 
 func containsTag(tags []string, target string) bool {
@@ -557,7 +574,6 @@ func TestSearchRepository_Search_PerformanceTarget(t *testing.T) {
 	// Insert a modest amount of test data to simulate realistic conditions
 	for i := 0; i < 50; i++ {
 		insertTestPost(t, pool, ctx,
-			"post-perf-"+string(rune('A'+i%26))+string(rune('0'+i/26)),
 			[]string{"problem", "question", "idea"}[i%3],
 			"Performance test post about async programming and database optimization",
 			"This is a longer description that contains various keywords like PostgreSQL, async, Go, error handling, concurrency, and optimization. It simulates realistic post content for search performance testing.",
@@ -751,8 +767,8 @@ func TestSearchRepository_Search_ExactTitleMatch(t *testing.T) {
 		"Thread Safety and Race Conditions",
 	}
 
-	for i, title := range titles {
-		insertTestPost(t, pool, ctx, fmt.Sprintf("post-exact-%d", i), "problem", title,
+	for _, title := range titles {
+		insertTestPost(t, pool, ctx, "problem", title,
 			"This is a test description", []string{"go"}, "open")
 	}
 
@@ -823,15 +839,15 @@ func TestSearchRepository_Search_MultiWordQuery(t *testing.T) {
 	ctx := context.Background()
 
 	// Create posts with only one of the search terms
-	insertTestPost(t, pool, ctx, "post-mw-1", "problem",
+	insertTestPost(t, pool, ctx, "problem",
 		"Race detection in concurrent programs",
 		"This post is only about race detection", []string{}, "open")
 
-	insertTestPost(t, pool, ctx, "post-mw-2", "problem",
+	insertTestPost(t, pool, ctx, "problem",
 		"Understanding conditional logic",
 		"This post is only about conditions", []string{}, "open")
 
-	insertTestPost(t, pool, ctx, "post-mw-3", "problem",
+	postMW3ID := insertTestPost(t, pool, ctx, "problem",
 		"Race condition debugging",
 		"This post has both race and condition", []string{}, "open")
 
@@ -850,20 +866,77 @@ func TestSearchRepository_Search_MultiWordQuery(t *testing.T) {
 		t.Logf("  - %s: %s", r.ID, r.Title)
 	}
 
-	// If using AND logic: only post-mw-3 should match (has both words)
+	// If using AND logic: only postMW3 should match (has both words)
 	// If using OR logic: all 3 posts should match (has either word)
-	// Current implementation uses AND (&), so we expect only 1 result
-	// After fix with OR (|), we should get 3 results
+	// Current implementation uses OR (|), so we expect 3 results
 
 	if total == 1 {
 		t.Logf("CURRENT: Using AND logic - only posts with both 'race' AND 'condition' are returned")
-		if results[0].ID != "post-mw-3" {
-			t.Errorf("expected post-mw-3 (has both words), got %s", results[0].ID)
+		if results[0].ID != postMW3ID {
+			t.Errorf("expected post with both words to be first, got %s", results[0].ID)
 		}
-	} else if total == 3 {
-		t.Logf("AFTER FIX: Using OR logic - posts with 'race' OR 'condition' are returned")
+	} else if total >= 3 {
+		t.Logf("Using OR logic - posts with 'race' OR 'condition' are returned")
 	} else {
-		t.Errorf("unexpected result count: got %d, expected 1 (AND logic) or 3 (OR logic)", total)
+		t.Errorf("unexpected result count: got %d, expected 1 (AND logic) or 3+ (OR logic)", total)
+	}
+}
+
+// TestSearch_IdeasFoundAndVoteScorePresent is a regression test for two bugs:
+// 1. Case-insensitive search: "solvr" (lowercase) must find ideas with "Solvr" (capitalized) in title
+// 2. vote_score field: search results must return correct vote_score value (not zero/missing)
+// This validates the fix in backend/internal/db/search.go (SQL alias votes→vote_score)
+// and backend/internal/models/search.go (JSON tag votes→vote_score).
+func TestSearch_IdeasFoundAndVoteScorePresent(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewSearchRepository(pool)
+	ctx := context.Background()
+
+	// Insert idea with "Solvr" capitalized in title (simulates the production bug scenario)
+	postSolvrID := insertTestPostWithVotes(t, pool, ctx, "idea",
+		"Pattern: Solvr API Key Not in Environment",
+		"When SOLVR_API_KEY is not set, the agent fails silently with no helpful message.",
+		[]string{"solvr", "environment"}, "open", 5, 0) // upvotes=5, downvotes=0 → vote_score=5
+
+	// Search for "solvr" (lowercase) with type=idea filter
+	// PostgreSQL tsvector normalizes case so "Solvr" and "solvr" are equivalent
+	results, total, err := repo.Search(ctx, "solvr", models.SearchOptions{
+		Type:    "idea",
+		Page:    1,
+		PerPage: 20,
+	})
+
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if total == 0 {
+		t.Fatal("case-insensitive search for 'solvr' returned 0 results — tsvector normalization broken or idea not indexed")
+	}
+
+	// Verify the specific idea is in results with correct vote_score
+	found := false
+	for _, r := range results {
+		if r.ID == postSolvrID {
+			found = true
+			if r.VoteScore != 5 {
+				t.Errorf("vote_score field missing or wrong: expected 5 (upvotes-downvotes), got %d — check SQL alias in search.go", r.VoteScore)
+			}
+			if r.Type != "idea" {
+				t.Errorf("expected type=idea, got %s", r.Type)
+			}
+			break
+		}
+	}
+
+	if !found {
+		t.Error("idea 'Pattern: Solvr API Key Not in Environment' not found when searching 'solvr' with type=idea filter")
+		t.Log("Results returned:")
+		for _, r := range results {
+			t.Logf("  - %s: %s (type=%s, vote_score=%d)", r.ID, r.Title, r.Type, r.VoteScore)
+		}
 	}
 }
 
@@ -876,7 +949,7 @@ func TestSearchRepository_Search_PartialWordMatch(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPost(t, pool, ctx, "post-partial-1", "problem",
+	insertTestPost(t, pool, ctx, "problem",
 		"Race conditions in Go",
 		"Description", []string{}, "open")
 

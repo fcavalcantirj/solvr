@@ -507,6 +507,70 @@ func TestListUsers_Empty(t *testing.T) {
 	}
 }
 
+// TestListUsers_HasMoreField tests that meta.has_more is returned correctly.
+// Bug 7: Users page pagination broken — has_more was missing from API response.
+// MUST FAIL before the fix (has_more field missing from UsersListResponse.Meta).
+func TestListUsers_HasMoreField(t *testing.T) {
+	userListRepo := NewMockUserListRepository()
+	handler := NewUsersHandler(nil, nil)
+	handler.SetUserListRepository(userListRepo)
+
+	// Set up 25 total users but only populate 20 in the slice (as if DB returned page 1)
+	now := time.Now()
+	for i := 1; i <= 20; i++ {
+		userListRepo.users = append(userListRepo.users, models.UserListItem{
+			ID:        "user-" + string(rune('A'+i-1)),
+			Username:  "user" + string(rune('A'+i-1)),
+			CreatedAt: now,
+		})
+	}
+	userListRepo.total = 25 // 25 total, only 20 returned → has_more must be true
+
+	// Page 1: limit=20, offset=0 → has_more should be true (5 more remain)
+	req := httptest.NewRequest(http.MethodGet, "/v1/users?limit=20&offset=0", nil)
+	rr := httptest.NewRecorder()
+	handler.ListUsers(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp1 struct {
+		Meta struct {
+			Total   int  `json:"total"`
+			HasMore bool `json:"has_more"`
+		} `json:"meta"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp1); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if !resp1.Meta.HasMore {
+		t.Errorf("expected has_more=true when total=25 and limit=20 offset=0, got false")
+	}
+
+	// Page 2: limit=20, offset=20 → has_more should be false (nothing more)
+	req2 := httptest.NewRequest(http.MethodGet, "/v1/users?limit=20&offset=20", nil)
+	rr2 := httptest.NewRecorder()
+	handler.ListUsers(rr2, req2)
+
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr2.Code, rr2.Body.String())
+	}
+
+	var resp2 struct {
+		Meta struct {
+			Total   int  `json:"total"`
+			HasMore bool `json:"has_more"`
+		} `json:"meta"`
+	}
+	if err := json.NewDecoder(rr2.Body).Decode(&resp2); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp2.Meta.HasMore {
+		t.Errorf("expected has_more=false when total=25 and limit=20 offset=20, got true")
+	}
+}
+
 // ============================================================================
 // Tests for GET /v1/users/{id} UUID validation
 // ============================================================================

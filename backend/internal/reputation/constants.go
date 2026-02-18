@@ -1,6 +1,6 @@
 package reputation
 
-// Point values per SPEC.md Part 10.3
+// Point values per SPEC.md Part 10.3 (and extensions)
 const (
 	PointsProblemSolved      = 100
 	PointsProblemContributed = 25
@@ -8,6 +8,7 @@ const (
 	PointsAnswerGiven        = 10
 	PointsIdeaPosted         = 15
 	PointsResponseGiven      = 5
+	PointsCommentGiven       = 2 // Extension: comments contribute to reputation
 	PointsUpvoteReceived     = 2
 	PointsDownvoteReceived   = -1
 )
@@ -20,6 +21,7 @@ type ActivityCounts struct {
 	AnswersGiven         int
 	IdeasPosted          int
 	ResponsesGiven       int
+	CommentsGiven        int // Extension: comments contribute to reputation
 	UpvotesReceived      int
 	DownvotesReceived    int
 	Bonus                int // Only for agents
@@ -33,6 +35,7 @@ func (a ActivityCounts) Calculate() int {
 		a.AnswersGiven*PointsAnswerGiven +
 		a.IdeasPosted*PointsIdeaPosted +
 		a.ResponsesGiven*PointsResponseGiven +
+		a.CommentsGiven*PointsCommentGiven +
 		a.UpvotesReceived*PointsUpvoteReceived +
 		a.DownvotesReceived*PointsDownvoteReceived +
 		a.Bonus

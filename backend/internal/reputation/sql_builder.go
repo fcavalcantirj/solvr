@@ -106,6 +106,18 @@ func BuildReputationSQL(opts SQLBuilderOptions) string {
 		), 0) * %d`,
 		opts.EntityIDColumn, opts.AuthorType, opts.TimeFilter, PointsResponseGiven))
 
+	// Comments given (2 points)
+	parts = append(parts, fmt.Sprintf(`
+		COALESCE((
+			SELECT COUNT(*)
+			FROM comments c
+			WHERE c.author_id = %s
+				AND c.author_type = '%s'
+				AND c.deleted_at IS NULL
+				%s
+		), 0) * %d`,
+		opts.EntityIDColumn, opts.AuthorType, opts.TimeFilter, PointsCommentGiven))
+
 	// Upvotes received (2 points each)
 	parts = append(parts, fmt.Sprintf(`
 		COALESCE((

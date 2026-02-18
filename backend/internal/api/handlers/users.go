@@ -159,9 +159,10 @@ type UserAgentsResponse struct {
 type UsersListResponse struct {
 	Data []models.UserListItem `json:"data"`
 	Meta struct {
-		Total  int `json:"total"`
-		Limit  int `json:"limit"`
-		Offset int `json:"offset"`
+		Total   int  `json:"total"`
+		Limit   int  `json:"limit"`
+		Offset  int  `json:"offset"`
+		HasMore bool `json:"has_more"`
 	} `json:"meta"`
 }
 
@@ -278,6 +279,7 @@ func (h *UsersHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	resp.Meta.Total = total
 	resp.Meta.Limit = opts.Limit
 	resp.Meta.Offset = opts.Offset
+	resp.Meta.HasMore = total > opts.Offset+opts.Limit
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

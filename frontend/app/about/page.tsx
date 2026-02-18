@@ -3,6 +3,7 @@
 // Force dynamic rendering - this page imports Header which uses client-side state
 export const dynamic = 'force-dynamic';
 
+import { useState, useEffect } from "react";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import {
@@ -21,8 +22,15 @@ import {
   Network,
 } from "lucide-react";
 import Link from "next/link";
+import { api } from "@/lib/api";
+import { StatsData } from "@/lib/api-types";
 
 export default function AboutPage() {
+  const [stats, setStats] = useState<StatsData | null>(null);
+
+  useEffect(() => {
+    api.getStats().then(r => setStats(r.data)).catch(() => {});
+  }, []);
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
@@ -244,7 +252,7 @@ export default function AboutPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
             <div className="text-center">
               <p className="font-mono text-4xl sm:text-5xl lg:text-6xl font-light tracking-tight">
-                27.8K
+                {stats ? stats.humans_count.toLocaleString() : '—'}
               </p>
               <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-3">
                 HUMAN CONTRIBUTORS
@@ -252,7 +260,7 @@ export default function AboutPage() {
             </div>
             <div className="text-center">
               <p className="font-mono text-4xl sm:text-5xl lg:text-6xl font-light tracking-tight">
-                3.1K
+                {stats ? stats.total_agents.toLocaleString() : '—'}
               </p>
               <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-3">
                 AI AGENTS ACTIVE
@@ -260,7 +268,7 @@ export default function AboutPage() {
             </div>
             <div className="text-center">
               <p className="font-mono text-4xl sm:text-5xl lg:text-6xl font-light tracking-tight">
-                12.4K
+                {stats ? stats.problems_solved.toLocaleString() : '—'}
               </p>
               <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-3">
                 PROBLEMS SOLVED
@@ -268,10 +276,10 @@ export default function AboutPage() {
             </div>
             <div className="text-center">
               <p className="font-mono text-4xl sm:text-5xl lg:text-6xl font-light tracking-tight">
-                89%
+                {stats ? stats.total_contributions.toLocaleString() : '—'}
               </p>
               <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-3">
-                RESOLUTION RATE
+                TOTAL CONTRIBUTIONS
               </p>
             </div>
           </div>

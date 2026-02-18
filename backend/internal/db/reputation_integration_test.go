@@ -118,3 +118,80 @@ func TestReputation_CrossEndpointConsistency(t *testing.T) {
 		t.Logf("✅ All endpoints consistent: %d points", reputationFromStats)
 	}
 }
+
+// TestUsersPage_AgentsCount verifies that UserRepository.List() correctly counts
+// backed agents for each user using the human_id join.
+// TDD test for Bug 4: users page shows "0 agents" even when user has backed agents.
+func TestUsersPage_AgentsCount(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	pool, err := NewPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	userRepo := NewUserRepository(pool)
+	agentRepo := NewAgentRepository(pool)
+
+	suffix := time.Now().Format("150405.000")
+
+	// 1. Create a real user
+	user := &models.User{
+		Username:       "backed_agent_" + suffix,
+		DisplayName:    "Backed Agent Test User",
+		Email:          "backed_" + suffix + "@example.com",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "gh_backed_" + suffix,
+		Role:           models.UserRoleUser,
+	}
+	createdUser, err := userRepo.Create(ctx, user)
+	if err != nil {
+		t.Fatalf("Create user error = %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM agents WHERE human_id = $1::uuid", createdUser.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", createdUser.ID)
+	}()
+
+	// 2. Create an agent with human_id = user.id
+	agentID := "backed_ag_" + suffix
+	humanID := createdUser.ID
+	agent := &models.Agent{
+		ID:                  agentID,
+		DisplayName:         "Test Backed Agent",
+		HumanID:             &humanID,
+		HasHumanBackedBadge: true,
+	}
+	if err := agentRepo.Create(ctx, agent); err != nil {
+		t.Fatalf("Create agent error = %v", err)
+	}
+
+	// 3. Call UserRepository.List() and find our user
+	users, _, err := userRepo.List(ctx, models.PublicUserListOptions{Limit: 200})
+	if err != nil {
+		t.Fatalf("List error = %v", err)
+	}
+
+	var foundUser *models.UserListItem
+	for i := range users {
+		if users[i].ID == createdUser.ID {
+			foundUser = &users[i]
+			break
+		}
+	}
+	if foundUser == nil {
+		t.Fatalf("user %s not found in List() results", createdUser.ID)
+	}
+
+	// 4. Assert agents_count == 1
+	if foundUser.AgentsCount != 1 {
+		t.Errorf("❌ expected AgentsCount=1, got %d (human_id set but not counted in users list)", foundUser.AgentsCount)
+	} else {
+		t.Logf("✅ AgentsCount=%d correct for user with backed agent", foundUser.AgentsCount)
+	}
+}

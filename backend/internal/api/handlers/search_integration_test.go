@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -39,7 +38,7 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 			AuthorType:   "agent",
 			AuthorName:   "Claude",
 			Score:        0.95,
-			Votes:        42,
+			VoteScore:        42,
 			AnswersCount: 5,
 			CreatedAt:    now.Add(-24 * time.Hour),
 		})
@@ -55,7 +54,7 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 			AuthorType:   "human",
 			AuthorName:   "John Developer",
 			Score:        0.88,
-			Votes:        15,
+			VoteScore:        15,
 			AnswersCount: 2,
 			CreatedAt:    now.Add(-12 * time.Hour),
 		})
@@ -71,7 +70,7 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 			AuthorType:   "agent",
 			AuthorName:   "Helper Bot",
 			Score:        0.82,
-			Votes:        28,
+			VoteScore:        28,
 			AnswersCount: 3,
 			CreatedAt:    now.Add(-6 * time.Hour),
 		})
@@ -87,7 +86,7 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 			AuthorType:   "human",
 			AuthorName:   "Jane Coder",
 			Score:        0.75,
-			Votes:        10,
+			VoteScore:        10,
 			AnswersCount: 0,
 			CreatedAt:    now.Add(-1 * time.Hour),
 		})
@@ -287,9 +286,9 @@ func TestSearchIntegration_FullFlow(t *testing.T) {
 
 		// Verify sorted by votes descending
 		for i := 1; i < len(resp.Data); i++ {
-			if resp.Data[i].Votes > resp.Data[i-1].Votes {
+			if resp.Data[i].VoteScore > resp.Data[i-1].VoteScore {
 				t.Errorf("Step 7: results not sorted by votes, got %d > %d",
-					resp.Data[i].Votes, resp.Data[i-1].Votes)
+					resp.Data[i].VoteScore, resp.Data[i-1].VoteScore)
 			}
 		}
 
@@ -478,7 +477,7 @@ func TestSearchIntegration_ResponseFormat(t *testing.T) {
 		AuthorType:   "agent",
 		AuthorName:   "Test Agent",
 		Score:        0.95,
-		Votes:        42,
+		VoteScore:        42,
 		AnswersCount: 5,
 		CreatedAt:    now,
 		SolvedAt:     &solvedAt,
@@ -539,7 +538,7 @@ func TestSearchIntegration_ResponseFormat(t *testing.T) {
 		item := data[0].(map[string]interface{})
 
 		// Verify required fields per SPEC.md Part 5.5
-		requiredFields := []string{"id", "type", "title", "snippet", "tags", "status", "author", "score", "votes", "answers_count", "created_at"}
+		requiredFields := []string{"id", "type", "title", "snippet", "tags", "status", "author", "score", "vote_score", "answers_count", "created_at"}
 		for _, field := range requiredFields {
 			if _, ok := item[field]; !ok {
 				t.Errorf("expected '%s' in search result", field)
@@ -756,7 +755,7 @@ func sortSearchResults(results []models.SearchResult, sortOpt string) {
 	sort.Slice(results, func(i, j int) bool {
 		switch sortOpt {
 		case "votes":
-			return results[i].Votes > results[j].Votes
+			return results[i].VoteScore > results[j].VoteScore
 		case "newest", "activity":
 			return results[i].CreatedAt.After(results[j].CreatedAt)
 		default: // relevance
@@ -790,13 +789,12 @@ func setupDBBackedSearchRepo(t *testing.T) (*db.SearchRepository, *db.Pool) {
 }
 
 func insertSearchTestPost(t *testing.T, pool *db.Pool, ctx context.Context,
-	id, postType, title, desc string, tags []string, status string) {
+	postType, title, desc string, tags []string, status string) {
 	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, tags, status,
+		INSERT INTO posts (type, title, description, tags, status,
 			posted_by_type, posted_by_id, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, 'human', 'test-user', NOW())
-		ON CONFLICT (id) DO NOTHING
-	`, id, postType, title, desc, tags, status)
+		VALUES ($1, $2, $3, $4, $5, 'human', 'test-user', NOW())
+	`, postType, title, desc, tags, status)
 	if err != nil {
 		t.Fatalf("failed to insert test post: %v", err)
 	}
@@ -816,9 +814,8 @@ func TestSearchIntegration_ExactTitleMatch(t *testing.T) {
 		"Thread Safety and Race Conditions",
 	}
 
-	for i, title := range titles {
+	for _, title := range titles {
 		insertSearchTestPost(t, pool, ctx,
-			fmt.Sprintf("search-test-exact-%d", i),
 			"problem", title, "Test description", []string{"go"}, "open")
 	}
 
@@ -856,10 +853,10 @@ func TestSearchIntegration_MultiWordQuery(t *testing.T) {
 	ctx := context.Background()
 
 	// Create posts with only ONE of the search terms
-	insertSearchTestPost(t, pool, ctx, "search-test-mw-1", "problem",
+	insertSearchTestPost(t, pool, ctx, "problem",
 		"Race detection in programs", "About race", []string{}, "open")
 
-	insertSearchTestPost(t, pool, ctx, "search-test-mw-2", "problem",
+	insertSearchTestPost(t, pool, ctx, "problem",
 		"Conditional logic patterns", "About conditions", []string{}, "open")
 
 	handler := NewSearchHandler(repo)
@@ -891,7 +888,7 @@ func TestSearchIntegration_PartialWordMatch(t *testing.T) {
 	repo, pool := setupDBBackedSearchRepo(t)
 	ctx := context.Background()
 
-	insertSearchTestPost(t, pool, ctx, "search-test-partial-1", "problem",
+	insertSearchTestPost(t, pool, ctx, "problem",
 		"Race conditions in Go", "Description", []string{}, "open")
 
 	handler := NewSearchHandler(repo)

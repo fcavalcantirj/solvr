@@ -52,7 +52,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 				p.posted_by_id
 			) as author_name,
 			ts_rank(to_tsvector('english', p.title || ' ' || p.description), to_tsquery('english', $1)) as score,
-			(p.upvotes - p.downvotes) as votes,
+			(p.upvotes - p.downvotes) as vote_score,
 			COALESCE((SELECT COUNT(*) FROM answers WHERE question_id = p.id AND deleted_at IS NULL), 0) as answers_count,
 			p.created_at,
 			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at
@@ -236,7 +236,7 @@ func scanSearchResults(rows pgx.Rows) ([]models.SearchResult, error) {
 			&r.AuthorID,
 			&r.AuthorName,
 			&r.Score,
-			&r.Votes,
+			&r.VoteScore,
 			&r.AnswersCount,
 			&r.CreatedAt,
 			&r.SolvedAt,

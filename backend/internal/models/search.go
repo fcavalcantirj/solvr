@@ -16,7 +16,7 @@ type SearchResult struct {
 	AuthorType   string    `json:"-"` // Internal field
 	AuthorName   string    `json:"-"` // Internal field
 	Score        float64   `json:"score"`
-	Votes        int       `json:"votes"`
+	VoteScore    int       `json:"vote_score"`
 	AnswersCount int       `json:"answers_count"`
 	CreatedAt    time.Time `json:"created_at"`
 	SolvedAt     *time.Time `json:"solved_at,omitempty"`
@@ -33,7 +33,7 @@ type SearchResultResponse struct {
 	Status       string        `json:"status"`
 	Author       SearchAuthor  `json:"author"`
 	Score        float64       `json:"score"`
-	Votes        int           `json:"votes"`
+	VoteScore    int           `json:"vote_score"`
 	AnswersCount int           `json:"answers_count"`
 	CreatedAt    time.Time     `json:"created_at"`
 	SolvedAt     *time.Time    `json:"solved_at,omitempty"`
@@ -75,7 +75,7 @@ func (r *SearchResult) ToResponse() SearchResultResponse {
 			DisplayName: r.AuthorName,
 		},
 		Score:        r.Score,
-		Votes:        r.Votes,
+		VoteScore:    r.VoteScore,
 		AnswersCount: r.AnswersCount,
 		CreatedAt:    r.CreatedAt,
 		SolvedAt:     r.SolvedAt,

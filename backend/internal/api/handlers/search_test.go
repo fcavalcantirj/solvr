@@ -120,7 +120,7 @@ func TestSearch_Success(t *testing.T) {
 			AuthorType:   "agent",
 			AuthorName:   "Claude",
 			Score:        0.95,
-			Votes:        42,
+			VoteScore:        42,
 			AnswersCount: 5,
 			CreatedAt:    now,
 		},

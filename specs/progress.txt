@@ -1,3 +1,16 @@
+2026-02-18: PRD-v6 IPFS Task - Add pinning API routes to router.go
+- Wired PinRepository and KuboIPFSService into mountV1Routes()
+- Added IPFS_API_URL env var support (default: http://localhost:5001)
+- Registered 4 pinning endpoints under UnifiedAuthMiddleware (JWT + API key + user API key):
+  * POST /v1/pins → pinsHandler.Create (create pin, async IPFS pin)
+  * GET /v1/pins → pinsHandler.List (list user's pins with filters)
+  * GET /v1/pins/{requestid} → pinsHandler.GetByRequestID (check pin status)
+  * DELETE /v1/pins/{requestid} → pinsHandler.Delete (unpin, async IPFS unpin)
+- UnifiedAuthMiddleware serves as "FlexibleAuth" — accepts JWT, agent API keys, and user API keys
+- Created router_pins_test.go with 6 TDD integration tests (require DATABASE_URL)
+- All 25 handler-level tests + all existing tests passing
+- router.go at 732 lines (under 900 limit)
+
 2026-02-18: PRD-v6 IPFS Task - Implement pinning API handlers (POST/GET/DELETE /v1/pins)
 - Created backend/internal/api/handlers/pins.go (341 lines) with PinsHandler:
   * PinRepositoryInterface: local interface for pin DB operations (avoids import cycle with services pkg)

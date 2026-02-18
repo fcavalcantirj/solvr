@@ -207,7 +207,8 @@
       "Document: pinning API follows IPFS Pinning Service API spec for compatibility",
       "Verify: all pinning endpoints accessible and authenticated"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: Wired PinRepository + KuboIPFSService in mountV1Routes(). Added IPFS_API_URL env var. 4 routes (POST/GET/GET/:id/DELETE) under existing UnifiedAuthMiddleware (JWT + agent API keys + user API keys). 6 TDD integration tests in router_pins_test.go. All tests passing."
   },
   {
     "category": "backend",

@@ -114,6 +114,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	var bookmarksRepo handlers.BookmarksRepositoryInterface
 	var viewsRepo handlers.ViewsRepositoryInterface
 	var reportsRepo handlers.ReportsRepositoryInterface
+	var pinsRepo handlers.PinRepositoryInterface
 	if pool == nil {
 		log.Println("WARNING: Database pool is nil. V1 API routes will not be mounted.")
 		return
@@ -134,6 +135,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	ideasRepo = db.NewIdeasRepository(pool)
 	commentsRepo = db.NewCommentsRepository(pool)
 	notificationsRepo = db.NewNotificationsRepository(pool)
+	pinsRepo = db.NewPinRepository(pool)
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
 	agentsHandler.SetClaimTokenRepository(claimTokenRepo)
@@ -189,6 +191,15 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		db.NewApproachesRepository(pool),
 		db.NewResponsesRepository(pool),
 	)
+
+	// Create IPFS pinning handler
+	// IPFS API URL: configurable via env, defaults to localhost kubo node
+	ipfsAPIURL := os.Getenv("IPFS_API_URL")
+	if ipfsAPIURL == "" {
+		ipfsAPIURL = "http://localhost:5001"
+	}
+	ipfsService := services.NewKuboIPFSService(ipfsAPIURL)
+	pinsHandler := handlers.NewPinsHandler(pinsRepo, ipfsService)
 
 	// JWT secret for auth middleware - read from env or use test default
 	jwtSecret := os.Getenv("JWT_SECRET")
@@ -540,6 +551,17 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Post("/reports", reportsHandler.Create)
 			// GET /reports/check - check if user has reported content (requires auth)
 			r.Get("/reports/check", reportsHandler.Check)
+
+			// IPFS Pinning Service API endpoints (per prd-v6-ipfs-expanded.json)
+			// Follows IPFS Pinning Service API spec for interoperability
+			// POST /v1/pins - create a pin request (async IPFS pin)
+			r.Post("/pins", pinsHandler.Create)
+			// GET /v1/pins - list user's pins with filters
+			r.Get("/pins", pinsHandler.List)
+			// GET /v1/pins/:requestid - check pin status by request ID
+			r.Get("/pins/{requestid}", pinsHandler.GetByRequestID)
+			// DELETE /v1/pins/:requestid - unpin content (async IPFS unpin)
+			r.Delete("/pins/{requestid}", pinsHandler.Delete)
 		})
 	})
 }

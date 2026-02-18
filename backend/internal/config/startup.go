@@ -54,6 +54,14 @@ func LogStartupConfig(logger *slog.Logger, cfg *Config, dbConnected bool) {
 		"rate_limiting", "enabled",
 	)
 
+	// IPFS configuration
+	if cfg != nil && cfg.IPFSAPIURL != "" {
+		logger.Info("IPFS Configuration",
+			"ipfs_api_url", cfg.IPFSAPIURL,
+			"max_upload_size_mb", cfg.MaxUploadSizeBytes/(1024*1024),
+		)
+	}
+
 	// Log rate limits if configured
 	if cfg != nil {
 		agentGeneral := cfg.RateLimitAgentGeneral

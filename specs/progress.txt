@@ -1872,3 +1872,18 @@ Added 2 new test cases to the existing `ProblemsList - Search Integration` test 
 - ✅ progress.txt updated
 
 Task 16 complete.
+
+2026-02-18: PRD-v6 IPFS Task - Connect Solvr backend to solvr-ipfs-01
+- Added IPFS_API_URL to Config struct (config/env.go) with default http://localhost:5001
+- Added MAX_UPLOAD_SIZE_BYTES to Config struct (default 100MB = 104857600 bytes)
+- Added getEnvOrDefaultInt64 helper for int64 env var loading
+- Added IPFS startup logging to LogStartupConfig (config/startup.go): logs ipfs_api_url and max_upload_size_mb
+- Created DEPLOYMENT.md documenting 3 IPFS connection methods:
+  * Option A: Direct connection (UFW allowlist)
+  * Option B: SSH tunnel (systemd service)
+  * Option C: Docker network (development)
+- Includes server details, env vars, verification steps, security notes
+- TDD tests: 5 config tests (default URL, custom URL, default upload size, custom upload size, invalid upload size)
+- TDD tests: 2 startup logging tests (IPFS config log, IPFS default log)
+- Router already reads IPFS_API_URL from env since pins/health endpoints were implemented
+- All backend tests passing

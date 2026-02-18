@@ -58,6 +58,10 @@ type Config struct {
 	// Monitoring
 	SentryDSN string
 	LogLevel  string
+
+	// IPFS
+	IPFSAPIURL        string
+	MaxUploadSizeBytes int64
 }
 
 // Load reads configuration from environment variables.
@@ -125,6 +129,10 @@ func Load() (*Config, error) {
 	cfg.SentryDSN = os.Getenv("SENTRY_DSN")
 	cfg.LogLevel = getEnvOrDefault("LOG_LEVEL", "info")
 
+	// IPFS
+	cfg.IPFSAPIURL = getEnvOrDefault("IPFS_API_URL", "http://localhost:5001")
+	cfg.MaxUploadSizeBytes = getEnvOrDefaultInt64("MAX_UPLOAD_SIZE_BYTES", 100*1024*1024) // 100MB
+
 	return cfg, nil
 }
 
@@ -150,6 +158,16 @@ func getEnvOrDefault(key, defaultValue string) string {
 func getEnvOrDefaultInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intVal, err := strconv.Atoi(value); err == nil {
+			return intVal
+		}
+	}
+	return defaultValue
+}
+
+// getEnvOrDefaultInt64 returns the environment variable as int64 or a default.
+func getEnvOrDefaultInt64(key string, defaultValue int64) int64 {
+	if value := os.Getenv(key); value != "" {
+		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil && intVal > 0 {
 			return intVal
 		}
 	}

@@ -474,7 +474,8 @@
       "Test: curl $IPFS_API_URL/api/v0/id returns peer ID 12D3KooWJG6rZ1KWTQy1fPeaZuxhfukik3RmYTjyf76Yn6CwUP3A",
       "Document connection method in DEPLOYMENT.md"
     ],
-    "passes": false,
+    "passes": true,
+    "notes": "DONE 2026-02-18: IPFS_API_URL added to Config struct (config/env.go) with default http://localhost:5001. MAX_UPLOAD_SIZE_BYTES added (default 100MB). IPFS startup logging in LogStartupConfig. 7 TDD tests (5 config + 2 startup). DEPLOYMENT.md created with 3 connection methods (direct, SSH tunnel, Docker), server details, verification steps. Router already reads IPFS_API_URL from env since pins/health endpoints were implemented.",
     "server": {
       "ip": "<IPFS_SERVER>",
       "ssh_port": 2222,

@@ -178,3 +178,56 @@ func TestLogStartupConfig_RateLimits(t *testing.T) {
 		t.Errorf("expected log to contain agent rate limit, got:\n%s", logOutput)
 	}
 }
+
+func TestLogStartupConfig_IPFS(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, nil)
+	logger := slog.New(handler)
+
+	cfg := &Config{
+		AppEnv:             "production",
+		JWTSecret:          "test-jwt-secret-that-is-long-enough-32",
+		IPFSAPIURL:         "http://65.109.134.87:5001",
+		MaxUploadSizeBytes: 52428800, // 50MB
+	}
+
+	LogStartupConfig(logger, cfg, true)
+
+	logOutput := buf.String()
+
+	expected := []string{
+		"IPFS Configuration",
+		"ipfs_api_url=http://65.109.134.87:5001",
+		"max_upload_size_mb=50",
+	}
+
+	for _, exp := range expected {
+		if !strings.Contains(logOutput, exp) {
+			t.Errorf("expected log to contain %q, got:\n%s", exp, logOutput)
+		}
+	}
+}
+
+func TestLogStartupConfig_IPFSDefault(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, nil)
+	logger := slog.New(handler)
+
+	cfg := &Config{
+		AppEnv:             "development",
+		JWTSecret:          "test-jwt-secret-that-is-long-enough-32",
+		IPFSAPIURL:         "http://localhost:5001",
+		MaxUploadSizeBytes: 100 * 1024 * 1024, // 100MB
+	}
+
+	LogStartupConfig(logger, cfg, false)
+
+	logOutput := buf.String()
+
+	if !strings.Contains(logOutput, "ipfs_api_url=http://localhost:5001") {
+		t.Errorf("expected log to contain default IPFS API URL, got:\n%s", logOutput)
+	}
+	if !strings.Contains(logOutput, "max_upload_size_mb=100") {
+		t.Errorf("expected log to contain default upload size, got:\n%s", logOutput)
+	}
+}

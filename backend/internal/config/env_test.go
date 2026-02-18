@@ -326,3 +326,100 @@ func TestJWTSecretMinLength(t *testing.T) {
 			"Update SECURITY.md if this change is intentional", MinJWTSecretLength, expectedMinLength)
 	}
 }
+
+// TestLoad_IPFSAPIURLDefault verifies IPFS_API_URL defaults to localhost:5001.
+func TestLoad_IPFSAPIURLDefault(t *testing.T) {
+	os.Setenv("DATABASE_URL", "postgres://localhost/db")
+	os.Setenv("JWT_SECRET", "test-secret-key-at-least-32-chars")
+	os.Unsetenv("IPFS_API_URL")
+	defer os.Unsetenv("DATABASE_URL")
+	defer os.Unsetenv("JWT_SECRET")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.IPFSAPIURL != "http://localhost:5001" {
+		t.Errorf("IPFSAPIURL = %q, want %q (default)", cfg.IPFSAPIURL, "http://localhost:5001")
+	}
+}
+
+// TestLoad_IPFSAPIURLCustom verifies custom IPFS_API_URL is loaded from env.
+func TestLoad_IPFSAPIURLCustom(t *testing.T) {
+	os.Setenv("DATABASE_URL", "postgres://localhost/db")
+	os.Setenv("JWT_SECRET", "test-secret-key-at-least-32-chars")
+	os.Setenv("IPFS_API_URL", "http://65.109.134.87:5001")
+	defer os.Unsetenv("DATABASE_URL")
+	defer os.Unsetenv("JWT_SECRET")
+	defer os.Unsetenv("IPFS_API_URL")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.IPFSAPIURL != "http://65.109.134.87:5001" {
+		t.Errorf("IPFSAPIURL = %q, want %q", cfg.IPFSAPIURL, "http://65.109.134.87:5001")
+	}
+}
+
+// TestLoad_MaxUploadSizeDefault verifies MAX_UPLOAD_SIZE_BYTES defaults to 100MB.
+func TestLoad_MaxUploadSizeDefault(t *testing.T) {
+	os.Setenv("DATABASE_URL", "postgres://localhost/db")
+	os.Setenv("JWT_SECRET", "test-secret-key-at-least-32-chars")
+	os.Unsetenv("MAX_UPLOAD_SIZE_BYTES")
+	defer os.Unsetenv("DATABASE_URL")
+	defer os.Unsetenv("JWT_SECRET")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	// Default: 100MB = 100 * 1024 * 1024
+	want := int64(100 * 1024 * 1024)
+	if cfg.MaxUploadSizeBytes != want {
+		t.Errorf("MaxUploadSizeBytes = %d, want %d (default 100MB)", cfg.MaxUploadSizeBytes, want)
+	}
+}
+
+// TestLoad_MaxUploadSizeCustom verifies MAX_UPLOAD_SIZE_BYTES from env.
+func TestLoad_MaxUploadSizeCustom(t *testing.T) {
+	os.Setenv("DATABASE_URL", "postgres://localhost/db")
+	os.Setenv("JWT_SECRET", "test-secret-key-at-least-32-chars")
+	os.Setenv("MAX_UPLOAD_SIZE_BYTES", "52428800") // 50MB
+	defer os.Unsetenv("DATABASE_URL")
+	defer os.Unsetenv("JWT_SECRET")
+	defer os.Unsetenv("MAX_UPLOAD_SIZE_BYTES")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	want := int64(52428800)
+	if cfg.MaxUploadSizeBytes != want {
+		t.Errorf("MaxUploadSizeBytes = %d, want %d", cfg.MaxUploadSizeBytes, want)
+	}
+}
+
+// TestLoad_MaxUploadSizeInvalid verifies invalid MAX_UPLOAD_SIZE_BYTES falls back to default.
+func TestLoad_MaxUploadSizeInvalid(t *testing.T) {
+	os.Setenv("DATABASE_URL", "postgres://localhost/db")
+	os.Setenv("JWT_SECRET", "test-secret-key-at-least-32-chars")
+	os.Setenv("MAX_UPLOAD_SIZE_BYTES", "not-a-number")
+	defer os.Unsetenv("DATABASE_URL")
+	defer os.Unsetenv("JWT_SECRET")
+	defer os.Unsetenv("MAX_UPLOAD_SIZE_BYTES")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	want := int64(100 * 1024 * 1024)
+	if cfg.MaxUploadSizeBytes != want {
+		t.Errorf("MaxUploadSizeBytes = %d, want %d (default on invalid input)", cfg.MaxUploadSizeBytes, want)
+	}
+}

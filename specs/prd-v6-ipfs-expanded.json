@@ -494,7 +494,8 @@
       "Update agent registration to accept amcp_aid field (KERI AID for verification)",
       "Verify: AMCP agents get pinning access, non-AMCP agents see pinning as premium feature"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: Migration 000038 adds has_amcp_identity, amcp_aid (unique), pinning_quota_bytes to agents table. Agent model updated with 3 new fields. Registration accepts optional amcp_aid field — when provided, sets has_amcp_identity=true and auto-provisions 1GB (1073741824 bytes) pinning quota. GET /v1/me returns amcp_enabled and pinning_quota_bytes fields. 6 TDD tests (3 registration, 2 /me response, 1 validation). All backend tests passing."
   },
   {
     "category": "backend",

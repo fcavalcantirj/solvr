@@ -71,6 +71,7 @@ type MeResponse struct {
 
 // AgentMeResponse represents the response for GET /v1/me for agents (API key auth).
 // Per FIX-005: GET /v1/me with API key returns agent info.
+// Per prd-v6-ipfs-expanded: includes AMCP identity and pinning quota fields.
 type AgentMeResponse struct {
 	ID                  string   `json:"id"`
 	Type                string   `json:"type"` // Always "agent" to distinguish from user response
@@ -82,6 +83,8 @@ type AgentMeResponse struct {
 	Reputation          int      `json:"reputation"`
 	HumanID             string   `json:"human_id,omitempty"`
 	HasHumanBackedBadge bool     `json:"has_human_backed_badge"`
+	AMCPEnabled         bool     `json:"amcp_enabled"`
+	PinningQuotaBytes   int64    `json:"pinning_quota_bytes"`
 }
 
 // Me handles GET /v1/me
@@ -121,6 +124,8 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 		Status:              agent.Status,
 		Reputation:          agent.Reputation,
 		HasHumanBackedBadge: agent.HasHumanBackedBadge,
+		AMCPEnabled:         agent.HasAMCPIdentity,
+		PinningQuotaBytes:   agent.PinningQuotaBytes,
 	}
 
 	// Override with computed reputation from stats if available

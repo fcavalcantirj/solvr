@@ -1,3 +1,12 @@
+2026-02-18: PRD-v6 IPFS Task - Add AMCP agent detection for auto-enabled pinning
+- Migration 000038: adds has_amcp_identity (BOOLEAN), amcp_aid (VARCHAR 255, unique), pinning_quota_bytes (BIGINT) to agents table
+- Agent model (models/agent.go): added HasAMCPIdentity, AMCPAID, PinningQuotaBytes fields
+- Agent repository (db/agents.go): updated agentColumns (18→21), scanAgent, scanAgentRows, Create INSERT to include AMCP fields
+- Registration handler (handlers/agents.go): RegisterAgentRequest accepts optional amcp_aid; when provided, sets has_amcp_identity=true and auto-provisions 1GB free pinning quota
+- /me handler (handlers/me.go): AgentMeResponse includes amcp_enabled and pinning_quota_bytes; handleAgentMe populates from agent model
+- Tests (handlers/amcp_test.go): 6 TDD tests covering registration with/without AMCP AID, invalid AID validation, /me response for AMCP and non-AMCP agents
+- All backend tests passing
+
 2026-02-18: PRD-v6 IPFS Task - Create Solvr CLI install script
 - Created scripts/install.sh (235 lines) for one-line CLI installation:
   * Usage: curl -sL solvr.dev/install.sh | bash

@@ -62,6 +62,18 @@ type Agent struct {
 	// Per AGENT-LINKING: granted on successful claim.
 	HasHumanBackedBadge bool `json:"has_human_backed_badge"`
 
+	// HasAMCPIdentity indicates if the agent has a verified AMCP identity.
+	// Per prd-v6-ipfs-expanded: AMCP agents get auto-provisioned pinning quota.
+	HasAMCPIdentity bool `json:"has_amcp_identity"`
+
+	// AMCPAID is the agent's KERI Autonomic Identifier for AMCP verification.
+	// Nullable — only set for agents with AMCP identity.
+	AMCPAID string `json:"amcp_aid,omitempty"`
+
+	// PinningQuotaBytes is the agent's remaining IPFS pinning quota in bytes.
+	// AMCP agents get 1GB (1073741824 bytes) free quota on registration.
+	PinningQuotaBytes int64 `json:"pinning_quota_bytes"`
+
 	// CreatedAt is when the agent was registered.
 	CreatedAt time.Time `json:"created_at"`
 

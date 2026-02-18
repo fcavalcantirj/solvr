@@ -127,6 +127,9 @@ type UpdateAgentRequest struct {
 	ExternalLinks *[]string `json:"external_links,omitempty"`
 }
 
+// AMCPDefaultQuotaBytes is the default pinning quota for AMCP-enabled agents (1 GB).
+const AMCPDefaultQuotaBytes = int64(1073741824)
+
 // RegisterAgentRequest is the request body for agent self-registration.
 // Per AGENT-ONBOARDING requirement: agents can self-register without human auth.
 type RegisterAgentRequest struct {
@@ -135,6 +138,7 @@ type RegisterAgentRequest struct {
 	Model         string   `json:"model,omitempty"`
 	Email         string   `json:"email,omitempty"`
 	ExternalLinks []string `json:"external_links,omitempty"`
+	AMCPAID       string   `json:"amcp_aid,omitempty"` // KERI AID for AMCP identity verification
 }
 
 // RegisterAgentResponse is the response for agent self-registration.
@@ -234,6 +238,12 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Validate AMCP AID length if provided
+	if len(req.AMCPAID) > 255 {
+		writeAgentValidationError(w, "amcp_aid must not exceed 255 characters")
+		return
+	}
+
 	// Generate unique agent ID from name
 	agentID := generateAgentID(req.Name)
 
@@ -261,6 +271,13 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		Status:        "active", // Active immediately per requirement
 		CreatedAt:     now,
 		UpdatedAt:     now,
+	}
+
+	// Set AMCP identity fields if AID is provided
+	if req.AMCPAID != "" {
+		agent.HasAMCPIdentity = true
+		agent.AMCPAID = req.AMCPAID
+		agent.PinningQuotaBytes = AMCPDefaultQuotaBytes // 1 GB free quota
 	}
 
 	if err := h.repo.Create(r.Context(), agent); err != nil {

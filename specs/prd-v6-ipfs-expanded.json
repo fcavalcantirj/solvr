@@ -98,7 +98,8 @@
       "Create backend/internal/services/ipfs_test.go with mock tests",
       "Verify: go build ./internal/services compiles"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: IPFSService interface + KuboIPFSService with Pin, Unpin, PinStatus, Add, ObjectStat. Retry logic (3 retries, exponential backoff, skip 4xx). 22 TDD tests. All backend tests passing."
   },
   {
     "category": "backend",

@@ -1,3 +1,29 @@
+2026-02-18: PRD-v6 IPFS Task - Create IPFS client service for kubo API interaction
+- Created backend/internal/services/ipfs.go (296 lines) with IPFSService interface and KuboIPFSService:
+  * IPFSService interface: Pin(ctx, cid), Unpin(ctx, cid), PinStatus(ctx, cid), Add(ctx, reader), ObjectStat(ctx, cid)
+  * KuboIPFSService struct with baseURL, httpClient, maxRetries, retryDelay
+  * NewKuboIPFSService(baseURL) — default 5min timeout, 3 retries, 1s delay
+  * NewKuboIPFSServiceWithTimeout(baseURL, timeout) — custom timeout
+  * NewKuboIPFSServiceWithConfig(baseURL, cfg) — full config control
+  * Pin: POST /api/v0/pin/add?arg={cid}&progress=false
+  * Unpin: POST /api/v0/pin/rm?arg={cid}
+  * PinStatus: POST /api/v0/pin/ls?arg={cid} — returns "direct" or "recursive"
+  * Add: POST /api/v0/add with multipart form data, returns CID
+  * ObjectStat: POST /api/v0/object/stat?arg={cid} — returns cumulative size
+  * doWithRetry: retry logic with exponential backoff, skips retry on 4xx client errors
+  * Input validation: ErrEmptyCID, ErrNilReader
+- Created backend/internal/services/ipfs_test.go (558 lines) with 22 TDD tests:
+  * TestNewKuboIPFSService: constructor, timeout, trailing slash stripping
+  * TestKuboIPFSService_Pin: success, HTTP failure, connection failure, empty CID, context cancellation
+  * TestKuboIPFSService_Unpin: success, not pinned error, empty CID
+  * TestKuboIPFSService_PinStatus: recursive type, direct type, not pinned error, empty CID
+  * TestKuboIPFSService_Add: success with multipart, HTTP failure, nil reader, empty content
+  * TestKuboIPFSService_ObjectStat: size response, empty CID, HTTP failure
+  * TestIPFSServiceInterface: compile-time interface check
+  * TestKuboIPFSService_RetryOnTransientFailure: retry on 502, max retries, no retry on 400
+  * TestIPFSConfig_Defaults: default config values
+- All 22 tests passing, all backend tests passing (go test ./...)
+
 2026-02-18: PRD-v6 IPFS Task - Create PinRepository with CRUD operations
 - Created backend/internal/db/pins.go (280 lines) with PinRepository:
   * NewPinRepository(pool) constructor following existing patterns

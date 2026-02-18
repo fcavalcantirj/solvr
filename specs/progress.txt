@@ -1,3 +1,28 @@
+2026-02-18: PRD-v6 IPFS Task - Create Pin model and database migration for pinning service
+- Created Pin model in backend/internal/models/pin.go with:
+  * PinStatus type with constants: Queued, Pinning, Pinned, Failed
+  * IsValidPinStatus validation function
+  * Pin struct matching IPFS Pinning Service API spec (requestid, cid, status, name, origins, meta, delegates, owner_id, owner_type, size_bytes, timestamps)
+  * PinListOptions for filtering/pagination
+  * PinResponse, PinInfo, PinExtra structs for API response format
+  * ToPinResponse() conversion method for Pinning Service API compatibility
+- Created migration 000037_create_pins_table.up.sql with:
+  * pins table with all required columns (id UUID, cid TEXT, status, name, origins TEXT[], meta JSONB, delegates TEXT[], owner_id, owner_type, size_bytes, timestamps)
+  * CHECK constraint on status (queued, pinning, pinned, failed)
+  * CHECK constraint on owner_type (user, agent)
+  * UNIQUE constraint on (cid, owner_id) — prevents duplicate pins per owner
+  * Indexes: idx_pins_cid, idx_pins_owner, idx_pins_status, idx_pins_created_at
+- Created down migration: DROP TABLE IF EXISTS pins
+- Created TDD tests in models/pin_test.go:
+  * TestIsValidPinStatus — validates all valid/invalid status values
+  * TestPin_ToPinResponse — tests full and minimal pin conversion to API response
+  * TestPinStatusConstants — verifies constant string values
+- Added migration test in db/migrations_test.go:
+  * TestMigrations_PinsTable — verifies table, columns, indexes, and constraints
+  * Updated TestMigrations_AllTablesExist to include "pins"
+- All tests pass: go test ./... (all packages green)
+- Updated prd-v6-ipfs-expanded.json: task passes false → true
+
 2026-02-16: PRD-v5 Task 22 - Add agent self-deletion endpoint DELETE /v1/agents/me
 - Created migration 000035 adds deleted_at column to agents table (+ partial index for performance)
 - Updated Agent model with DeletedAt *time.Time field

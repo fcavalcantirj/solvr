@@ -722,6 +722,7 @@ func TestMigrations_AllTablesExist(t *testing.T) {
 		"flags",
 		"refresh_tokens",
 		"config",
+		"pins",
 	}
 
 	for _, table := range expectedTables {
@@ -734,5 +735,99 @@ func TestMigrations_AllTablesExist(t *testing.T) {
 		if err != nil {
 			t.Errorf("Table %s does not exist: %v", table, err)
 		}
+	}
+}
+
+// TestMigrations_PinsTable tests that the pins migration creates the table correctly.
+func TestMigrations_PinsTable(t *testing.T) {
+	url := getTestDatabaseURL(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	pool, err := db.NewPool(ctx, url)
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	// Verify pins table exists
+	var tableName string
+	err = pool.QueryRow(ctx, `
+		SELECT table_name
+		FROM information_schema.tables
+		WHERE table_schema = 'public' AND table_name = 'pins'
+	`).Scan(&tableName)
+	if err != nil {
+		t.Fatalf("Pins table does not exist: %v", err)
+	}
+
+	// Verify columns exist
+	columns := []string{
+		"id", "cid", "status", "name",
+		"origins", "meta", "delegates",
+		"owner_id", "owner_type", "size_bytes",
+		"created_at", "updated_at", "pinned_at",
+	}
+	for _, col := range columns {
+		var colName string
+		err = pool.QueryRow(ctx, `
+			SELECT column_name
+			FROM information_schema.columns
+			WHERE table_schema = 'public' AND table_name = 'pins' AND column_name = $1
+		`, col).Scan(&colName)
+		if err != nil {
+			t.Errorf("Column %s does not exist in pins table: %v", col, err)
+		}
+	}
+
+	// Verify indexes exist
+	indexes := []string{
+		"idx_pins_cid",
+		"idx_pins_owner",
+		"idx_pins_status",
+		"idx_pins_created_at",
+	}
+	for _, idx := range indexes {
+		var idxName string
+		err = pool.QueryRow(ctx, `
+			SELECT indexname
+			FROM pg_indexes
+			WHERE schemaname = 'public' AND tablename = 'pins' AND indexname = $1
+		`, idx).Scan(&idxName)
+		if err != nil {
+			t.Errorf("Index %s does not exist on pins table: %v", idx, err)
+		}
+	}
+
+	// Verify check constraints exist
+	constraints := []string{
+		"pins_status_check",
+		"pins_owner_type_check",
+	}
+	for _, con := range constraints {
+		var conName string
+		err = pool.QueryRow(ctx, `
+			SELECT constraint_name
+			FROM information_schema.table_constraints
+			WHERE table_schema = 'public'
+			AND table_name = 'pins'
+			AND constraint_name = $1
+		`, con).Scan(&conName)
+		if err != nil {
+			t.Errorf("Constraint %s does not exist on pins table: %v", con, err)
+		}
+	}
+
+	// Verify unique constraint on (cid, owner_id)
+	var uniqueConName string
+	err = pool.QueryRow(ctx, `
+		SELECT constraint_name
+		FROM information_schema.table_constraints
+		WHERE table_schema = 'public'
+		AND table_name = 'pins'
+		AND constraint_name = 'pins_cid_owner_unique'
+	`).Scan(&uniqueConName)
+	if err != nil {
+		t.Error("Unique constraint pins_cid_owner_unique does not exist on pins table")
 	}
 }

@@ -54,7 +54,8 @@
       "Create down migration: DROP TABLE pins;",
       "Verify: migrate up creates table, migrate down drops it cleanly"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: Migration 000037 (not 000039 as spec suggested, since 000036 was latest). Pin model with ToPinResponse(), PinListOptions, PinResponse types. TDD tests all passing."
   },
   {
     "category": "backend",

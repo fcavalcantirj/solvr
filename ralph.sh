@@ -81,9 +81,16 @@ for ((i=1; i<=$1; i++)); do
 • API is smart, client is dumb - all logic server-side
 
 === WORKFLOW ===
+
+🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+⛔ PHASE RESTRICTION: ONLY WORK ON TASKS WHERE \"phase\": 1 ⛔
+⛔ DO NOT TOUCH phase 2 or phase 3 tasks - they are BLOCKED ⛔
+⛔ If all phase 1 tasks pass, STOP and report PHASE_1_COMPLETE ⛔
+🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+
 1. Read CLAUDE.md for project guidelines and golden rules.
 2. Read SPEC.md for full specification details when needed.
-3. Find the highest-priority requirement in specs/prd-v4.json where passes=false and work ONLY on that.
+3. Find the highest-priority requirement in specs/prd-v6-ipfs-expanded.json where passes=false AND phase=1 and work ONLY on that.
 4. WRITE TESTS FIRST (TDD) - create _test.go or .test.tsx BEFORE implementation.
 5. Implement minimum code to make tests pass.
 6. For backend: run 'cd backend && go test ./...' to verify.

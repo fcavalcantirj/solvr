@@ -125,8 +125,11 @@ func (h *PinsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Spawn async goroutine to pin content on IPFS
 	go h.asyncPin(pin.ID, pin.CID)
 
-	// Return 202 Accepted with pin response in Pinning Service API format
-	response.WriteJSON(w, http.StatusAccepted, pin.ToPinResponse())
+	// Return 202 Accepted with pin response in Pinning Service API format.
+	// Uses raw encoding (no data envelope) for IPFS Pinning Service API compliance.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(pin.ToPinResponse())
 }
 
 // asyncPin performs the actual IPFS pinning in the background.
@@ -180,7 +183,10 @@ func (h *PinsHandler) GetByRequestID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.WriteJSON(w, http.StatusOK, pin.ToPinResponse())
+	// Raw encoding (no data envelope) for IPFS Pinning Service API compliance.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(pin.ToPinResponse())
 }
 
 // List handles GET /v1/pins — list user's pins.

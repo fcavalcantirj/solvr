@@ -88,17 +88,13 @@ func TestUploadHandler_AddContent_Success(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	data, ok := resp["data"].(map[string]interface{})
-	if !ok {
-		t.Fatal("expected data object in response")
-	}
-
-	if data["cid"] != "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG" {
-		t.Errorf("expected CID in response, got %v", data["cid"])
+	// Response is raw format (no data envelope) for IPFS API compatibility
+	if resp["cid"] != "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG" {
+		t.Errorf("expected CID in response, got %v", resp["cid"])
 	}
 
 	// size should be reported
-	size, ok := data["size"].(float64)
+	size, ok := resp["size"].(float64)
 	if !ok {
 		t.Fatal("expected size in response")
 	}
@@ -256,20 +252,20 @@ func TestUploadHandler_AddContent_ResponseFormat(t *testing.T) {
 		t.Errorf("expected Content-Type application/json, got %s", ct)
 	}
 
+	// Response is raw format (no data envelope) for IPFS API compatibility
 	var resp map[string]interface{}
 	json.NewDecoder(w.Body).Decode(&resp)
-	data := resp["data"].(map[string]interface{})
 
 	// Must have cid and size
-	if data["cid"] == nil {
+	if resp["cid"] == nil {
 		t.Error("missing 'cid' field in response")
 	}
-	if data["size"] == nil {
+	if resp["size"] == nil {
 		t.Error("missing 'size' field in response")
 	}
 
-	if data["cid"] != "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi" {
-		t.Errorf("expected CIDv1, got %v", data["cid"])
+	if resp["cid"] != "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi" {
+		t.Errorf("expected CIDv1, got %v", resp["cid"])
 	}
 }
 

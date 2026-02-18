@@ -47,7 +47,7 @@ func TestPinRepository_Create(t *testing.T) {
 		Meta:      map[string]string{"app": "solvr-test"},
 		Delegates: []string{"/ip4/10.0.0.1/tcp/4001"},
 		OwnerID:   "test-pin-user-" + suffix,
-		OwnerType: "user",
+		OwnerType: "human",
 	}
 
 	err := repo.Create(ctx, pin)
@@ -88,7 +88,7 @@ func TestPinRepository_Create_Duplicate(t *testing.T) {
 		CID:       "QmDup" + suffix,
 		Status:    models.PinStatusQueued,
 		OwnerID:   "test-pin-dup-" + suffix,
-		OwnerType: "user",
+		OwnerType: "human",
 	}
 
 	err := repo.Create(ctx, pin)
@@ -101,7 +101,7 @@ func TestPinRepository_Create_Duplicate(t *testing.T) {
 		CID:       "QmDup" + suffix,
 		Status:    models.PinStatusQueued,
 		OwnerID:   "test-pin-dup-" + suffix,
-		OwnerType: "user",
+		OwnerType: "human",
 	}
 
 	err = repo.Create(ctx, dup)
@@ -124,7 +124,7 @@ func TestPinRepository_Create_DifferentOwnersSameCID(t *testing.T) {
 		CID:       cid,
 		Status:    models.PinStatusQueued,
 		OwnerID:   "test-pin-owner1-" + suffix,
-		OwnerType: "user",
+		OwnerType: "human",
 	}
 	err := repo.Create(ctx, pin1)
 	if err != nil {
@@ -165,7 +165,7 @@ func TestPinRepository_GetByID(t *testing.T) {
 		Meta:      map[string]string{"key": "value"},
 		Delegates: []string{"/ip4/10.0.0.1/tcp/4001"},
 		OwnerID:   "test-pin-getbyid-" + suffix,
-		OwnerType: "user",
+		OwnerType: "human",
 	}
 	err := repo.Create(ctx, pin)
 	if err != nil {
@@ -227,7 +227,7 @@ func TestPinRepository_GetByCID(t *testing.T) {
 		CID:       "QmGetByCID" + suffix,
 		Status:    models.PinStatusQueued,
 		OwnerID:   ownerID,
-		OwnerType: "user",
+		OwnerType: "human",
 	}
 	err := repo.Create(ctx, pin)
 	if err != nil {
@@ -276,7 +276,7 @@ func TestPinRepository_ListByOwner(t *testing.T) {
 			Status:    models.PinStatusQueued,
 			Name:      "list-test",
 			OwnerID:   ownerID,
-			OwnerType: "user",
+			OwnerType: "human",
 		}
 		err := repo.Create(ctx, pin)
 		if err != nil {
@@ -285,7 +285,7 @@ func TestPinRepository_ListByOwner(t *testing.T) {
 	}
 
 	// List all pins for owner
-	pins, total, err := repo.ListByOwner(ctx, ownerID, "user", models.PinListOptions{
+	pins, total, err := repo.ListByOwner(ctx, ownerID, "human", models.PinListOptions{
 		Limit: 10,
 	})
 	if err != nil {
@@ -314,7 +314,7 @@ func TestPinRepository_ListByOwner_FilterByStatus(t *testing.T) {
 		CID:       "QmQueued" + suffix,
 		Status:    models.PinStatusQueued,
 		OwnerID:   ownerID,
-		OwnerType: "user",
+		OwnerType: "human",
 	}
 	err := repo.Create(ctx, queuedPin)
 	if err != nil {
@@ -326,7 +326,7 @@ func TestPinRepository_ListByOwner_FilterByStatus(t *testing.T) {
 		CID:       "QmPinned" + suffix,
 		Status:    models.PinStatusQueued,
 		OwnerID:   ownerID,
-		OwnerType: "user",
+		OwnerType: "human",
 	}
 	err = repo.Create(ctx, pinnedPin)
 	if err != nil {
@@ -338,7 +338,7 @@ func TestPinRepository_ListByOwner_FilterByStatus(t *testing.T) {
 	}
 
 	// Filter by status=pinned
-	pins, total, err := repo.ListByOwner(ctx, ownerID, "user", models.PinListOptions{
+	pins, total, err := repo.ListByOwner(ctx, ownerID, "human", models.PinListOptions{
 		Status: models.PinStatusPinned,
 		Limit:  10,
 	})
@@ -372,7 +372,7 @@ func TestPinRepository_ListByOwner_Pagination(t *testing.T) {
 			CID:       "QmPage" + suffix + string(rune('A'+i)),
 			Status:    models.PinStatusQueued,
 			OwnerID:   ownerID,
-			OwnerType: "user",
+			OwnerType: "human",
 		}
 		err := repo.Create(ctx, pin)
 		if err != nil {
@@ -381,7 +381,7 @@ func TestPinRepository_ListByOwner_Pagination(t *testing.T) {
 	}
 
 	// Get first page (limit 2)
-	page1, total, err := repo.ListByOwner(ctx, ownerID, "user", models.PinListOptions{
+	page1, total, err := repo.ListByOwner(ctx, ownerID, "human", models.PinListOptions{
 		Limit:  2,
 		Offset: 0,
 	})
@@ -397,7 +397,7 @@ func TestPinRepository_ListByOwner_Pagination(t *testing.T) {
 	}
 
 	// Get second page
-	page2, _, err := repo.ListByOwner(ctx, ownerID, "user", models.PinListOptions{
+	page2, _, err := repo.ListByOwner(ctx, ownerID, "human", models.PinListOptions{
 		Limit:  2,
 		Offset: 2,
 	})
@@ -432,7 +432,7 @@ func TestPinRepository_ListByOwner_FilterByCID(t *testing.T) {
 			CID:       cid,
 			Status:    models.PinStatusQueued,
 			OwnerID:   ownerID,
-			OwnerType: "user",
+			OwnerType: "human",
 		}
 		err := repo.Create(ctx, pin)
 		if err != nil {
@@ -441,7 +441,7 @@ func TestPinRepository_ListByOwner_FilterByCID(t *testing.T) {
 	}
 
 	// Filter by specific CID
-	pins, total, err := repo.ListByOwner(ctx, ownerID, "user", models.PinListOptions{
+	pins, total, err := repo.ListByOwner(ctx, ownerID, "human", models.PinListOptions{
 		CID:   targetCID,
 		Limit: 10,
 	})
@@ -472,7 +472,7 @@ func TestPinRepository_UpdateStatus(t *testing.T) {
 		CID:       "QmUpdateStatus" + suffix,
 		Status:    models.PinStatusQueued,
 		OwnerID:   "test-pin-update-" + suffix,
-		OwnerType: "user",
+		OwnerType: "human",
 	}
 	err := repo.Create(ctx, pin)
 	if err != nil {
@@ -537,7 +537,7 @@ func TestPinRepository_Delete(t *testing.T) {
 		CID:       "QmDelete" + suffix,
 		Status:    models.PinStatusQueued,
 		OwnerID:   "test-pin-delete-" + suffix,
-		OwnerType: "user",
+		OwnerType: "human",
 	}
 	err := repo.Create(ctx, pin)
 	if err != nil {
@@ -579,7 +579,7 @@ func TestPinRepository_ListByOwner_EmptyResult(t *testing.T) {
 	suffix := time.Now().Format("150405.000000")
 
 	// List for an owner with no pins
-	pins, total, err := repo.ListByOwner(ctx, "test-pin-empty-"+suffix, "user", models.PinListOptions{
+	pins, total, err := repo.ListByOwner(ctx, "test-pin-empty-"+suffix, "human", models.PinListOptions{
 		Limit: 10,
 	})
 	if err != nil {
@@ -611,7 +611,7 @@ func TestPinRepository_ListByOwner_DefaultLimit(t *testing.T) {
 		CID:       "QmDefLimit" + suffix,
 		Status:    models.PinStatusQueued,
 		OwnerID:   ownerID,
-		OwnerType: "user",
+		OwnerType: "human",
 	}
 	err := repo.Create(ctx, pin)
 	if err != nil {
@@ -619,7 +619,7 @@ func TestPinRepository_ListByOwner_DefaultLimit(t *testing.T) {
 	}
 
 	// List with 0 limit (should use default 10)
-	pins, _, err := repo.ListByOwner(ctx, ownerID, "user", models.PinListOptions{
+	pins, _, err := repo.ListByOwner(ctx, ownerID, "human", models.PinListOptions{
 		Limit: 0,
 	})
 	if err != nil {

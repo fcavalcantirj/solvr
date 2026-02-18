@@ -76,12 +76,14 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	r.Get("/health/live", healthLiveHandler)
 	r.Get("/health/ready", healthReadyHandler(pool))
 
-	// IPFS health check (per prd-v6-ipfs-expanded.json)
-	// GET /v1/health/ipfs - check IPFS node connectivity (no auth, public monitoring endpoint)
+	// IPFS configuration (shared by health check and pinning service)
 	ipfsAPIURL := os.Getenv("IPFS_API_URL")
 	if ipfsAPIURL == "" {
 		ipfsAPIURL = "http://localhost:5001"
 	}
+
+	// IPFS health check (per prd-v6-ipfs-expanded.json)
+	// GET /v1/health/ipfs - check IPFS node connectivity (no auth, public monitoring endpoint)
 	ipfsHealthSvc := services.NewKuboIPFSServiceWithConfig(ipfsAPIURL, services.IPFSConfig{
 		Timeout:    5 * time.Second,
 		MaxRetries: 0,
@@ -107,13 +109,13 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	r.Get("/v1/openapi.yaml", openAPIYAMLHandler)
 
 	// Mount v1 API routes
-	mountV1Routes(r, pool)
+	mountV1Routes(r, pool, ipfsAPIURL)
 
 	return r
 }
 
 // mountV1Routes mounts all v1 API routes.
-func mountV1Routes(r *chi.Mux, pool *db.Pool) {
+func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string) {
 	// Create repositories and handlers
 	var agentRepo handlers.AgentRepositoryInterface
 	var claimTokenRepo handlers.ClaimTokenRepositoryInterface
@@ -208,12 +210,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 		db.NewResponsesRepository(pool),
 	)
 
-	// Create IPFS pinning handler
-	// IPFS API URL: configurable via env, defaults to localhost kubo node
-	ipfsAPIURL := os.Getenv("IPFS_API_URL")
-	if ipfsAPIURL == "" {
-		ipfsAPIURL = "http://localhost:5001"
-	}
+	// Create IPFS pinning handler (uses ipfsAPIURL passed from NewRouter)
 	ipfsService := services.NewKuboIPFSService(ipfsAPIURL)
 	pinsHandler := handlers.NewPinsHandler(pinsRepo, ipfsService)
 

@@ -218,22 +218,18 @@ func TestPinsHandler_Create_Success_Human(t *testing.T) {
 		t.Errorf("expected status 202, got %d: %s", w.Code, w.Body.String())
 	}
 
+	// Response is raw Pinning Service API format (no data envelope)
 	var resp map[string]interface{}
 	json.NewDecoder(w.Body).Decode(&resp)
 
-	data, ok := resp["data"].(map[string]interface{})
-	if !ok {
-		t.Fatal("expected data object in response")
-	}
-
-	if data["requestid"] == nil || data["requestid"] == "" {
+	if resp["requestid"] == nil || resp["requestid"] == "" {
 		t.Error("expected requestid in response")
 	}
-	if data["status"] != "queued" {
-		t.Errorf("expected status 'queued', got %v", data["status"])
+	if resp["status"] != "queued" {
+		t.Errorf("expected status 'queued', got %v", resp["status"])
 	}
 
-	pin := data["pin"].(map[string]interface{})
+	pin := resp["pin"].(map[string]interface{})
 	if pin["cid"] != "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG" {
 		t.Errorf("expected CID in pin info, got %v", pin["cid"])
 	}
@@ -522,21 +518,20 @@ func TestPinsHandler_Create_ResponseFormat(t *testing.T) {
 		t.Errorf("expected Content-Type application/json, got %s", ct)
 	}
 
-	// Verify Pinning Service API response format
+	// Verify Pinning Service API response format (raw, no data envelope)
 	var resp map[string]interface{}
 	json.NewDecoder(w.Body).Decode(&resp)
-	data := resp["data"].(map[string]interface{})
 
 	// Must have: requestid, status, created, pin, delegates
 	requiredFields := []string{"requestid", "status", "created", "pin", "delegates"}
 	for _, field := range requiredFields {
-		if data[field] == nil {
+		if resp[field] == nil {
 			t.Errorf("missing required field '%s' in response", field)
 		}
 	}
 
 	// delegates must be an array
-	delegates, ok := data["delegates"].([]interface{})
+	delegates, ok := resp["delegates"].([]interface{})
 	if !ok {
 		t.Error("delegates should be an array")
 	}
@@ -545,7 +540,7 @@ func TestPinsHandler_Create_ResponseFormat(t *testing.T) {
 	}
 
 	// pin sub-object must have cid
-	pinObj := data["pin"].(map[string]interface{})
+	pinObj := resp["pin"].(map[string]interface{})
 	if pinObj["cid"] != "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG" {
 		t.Errorf("expected CID in pin, got %v", pinObj["cid"])
 	}
@@ -571,11 +566,11 @@ func TestPinsHandler_GetByRequestID_Success(t *testing.T) {
 		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
 	}
 
+	// Response is raw Pinning Service API format (no data envelope)
 	var resp map[string]interface{}
 	json.NewDecoder(w.Body).Decode(&resp)
-	data := resp["data"].(map[string]interface{})
-	if data["requestid"] != "pin-uuid-1" {
-		t.Errorf("expected requestid pin-uuid-1, got %v", data["requestid"])
+	if resp["requestid"] != "pin-uuid-1" {
+		t.Errorf("expected requestid pin-uuid-1, got %v", resp["requestid"])
 	}
 }
 

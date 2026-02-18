@@ -2,7 +2,9 @@ package middleware
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -136,6 +138,71 @@ func TestBodyLimit_RejectsOneByteOverLimit(t *testing.T) {
 
 	if rr.Code != http.StatusRequestEntityTooLarge {
 		t.Errorf("expected status 413 for over-limit payload, got %d", rr.Code)
+	}
+}
+
+// TestBodyLimit_AllowsMultipartUploads tests that multipart/form-data requests
+// bypass the body limit. Upload endpoints have their own size limits via
+// http.MaxBytesReader. This prevents the global 64KB limit from blocking
+// legitimate file uploads (BUG 1: BodyLimit blocks uploads >64KB).
+func TestBodyLimit_AllowsMultipartUploads(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("%d", len(body))))
+	})
+
+	// 1KB limit - much smaller than the multipart payload
+	wrapped := BodyLimit(1024)(handler)
+
+	// Create a 10KB multipart body (well over the 1KB limit)
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, err := writer.CreateFormFile("file", "test.bin")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	part.Write(make([]byte, 10*1024)) // 10KB file
+	writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/upload", &buf)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	w := httptest.NewRecorder()
+	wrapped.ServeHTTP(w, req)
+
+	if w.Code == http.StatusRequestEntityTooLarge {
+		t.Error("BUG 1: multipart upload was blocked by BodyLimit middleware - should be exempt for file uploads")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 for multipart upload, got %d", w.Code)
+	}
+}
+
+// TestBodyLimit_StillBlocksLargeJSON tests that non-multipart POST requests
+// are still subject to the body limit even after the multipart exemption.
+func TestBodyLimit_StillBlocksLargeJSON(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called for oversized JSON payload")
+		w.WriteHeader(http.StatusOK)
+	})
+
+	wrapped := BodyLimit(1024)(handler)
+
+	// 10KB JSON payload (over 1KB limit)
+	largeJSON := bytes.Repeat([]byte("a"), 10*1024)
+	req := httptest.NewRequest(http.MethodPost, "/api/data", bytes.NewReader(largeJSON))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	wrapped.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("expected 413 for oversized JSON, got %d - body limit not enforced", w.Code)
 	}
 }
 

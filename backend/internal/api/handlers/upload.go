@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -112,7 +113,10 @@ func (h *UploadHandler) AddContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.WriteJSON(w, http.StatusOK, AddContentResponse{
+	// Raw encoding (no data envelope) for IPFS API compatibility.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(AddContentResponse{
 		CID:  cid,
 		Size: n,
 	})

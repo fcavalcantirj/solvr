@@ -20,7 +20,7 @@
   },
   {
     "category": "infra",
-    "phase": 2,
+    "phase": 3,
     "description": "Create IPFS cluster configuration for production scalability",
     "steps": [
       "Add ipfs-cluster-service to docker-compose.prod.yml",
@@ -250,7 +250,7 @@
   },
   {
     "category": "backend",
-    "phase": 2,
+    "phase": 3,
     "description": "Implement Supermemory-style relationship model — updates/extends/derives",
     "steps": [
       "Create backend/migrations/000041_add_relationship_tracking.up.sql",

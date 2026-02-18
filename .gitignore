@@ -27,6 +27,7 @@ Thumbs.db
 *.dylib
 /backend/api
 /backend/cmd/api/api
+/cli/cli
 
 # Test binary, built with `go test -c`
 *.test

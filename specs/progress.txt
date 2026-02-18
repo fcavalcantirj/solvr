@@ -1,3 +1,34 @@
+2026-02-18: PRD-v6 IPFS Task - Create PinRepository with CRUD operations
+- Created backend/internal/db/pins.go (280 lines) with PinRepository:
+  * NewPinRepository(pool) constructor following existing patterns
+  * Create(ctx, pin) — INSERT with RETURNING, populates pin struct, handles unique constraint (ErrDuplicatePin)
+  * GetByID(ctx, id) — SELECT by UUID, returns ErrPinNotFound on miss
+  * GetByCID(ctx, cid, ownerID) — lookup by CID and owner combo
+  * ListByOwner(ctx, ownerID, ownerType, opts) — paginated list with dynamic filters (CID, name, status)
+  * UpdateStatus(ctx, id, status) — updates pin status, auto-sets pinned_at when status=pinned
+  * Delete(ctx, id) — hard DELETE, returns ErrPinNotFound on miss
+  * DRY helpers: scanPin(), scanPinRow(), nullableString(), pinColumns constant
+- Created backend/internal/db/pins_test.go (632 lines) with 17 TDD integration tests:
+  * TestPinRepository_Create — create and verify all fields populated
+  * TestPinRepository_Create_Duplicate — same CID+owner returns ErrDuplicatePin
+  * TestPinRepository_Create_DifferentOwnersSameCID — different owners can pin same CID
+  * TestPinRepository_GetByID — retrieve and verify all fields
+  * TestPinRepository_GetByID_NotFound — returns ErrPinNotFound
+  * TestPinRepository_GetByCID — lookup by CID + owner
+  * TestPinRepository_GetByCID_NotFound — returns ErrPinNotFound
+  * TestPinRepository_ListByOwner — list with pagination
+  * TestPinRepository_ListByOwner_FilterByStatus — status filter
+  * TestPinRepository_ListByOwner_Pagination — offset-based pagination
+  * TestPinRepository_ListByOwner_FilterByCID — CID filter
+  * TestPinRepository_UpdateStatus — queued→pinning→pinned lifecycle
+  * TestPinRepository_UpdateStatus_NotFound — returns ErrPinNotFound
+  * TestPinRepository_Delete — hard delete and verify gone
+  * TestPinRepository_Delete_NotFound — returns ErrPinNotFound
+  * TestPinRepository_ListByOwner_EmptyResult — returns empty slice, not nil
+  * TestPinRepository_ListByOwner_DefaultLimit — 0 limit defaults to 10
+- All tests pass: go test ./... (all packages green)
+- Updated prd-v6-ipfs-expanded.json: PinRepository task passes false → true
+
 2026-02-18: PRD-v6 IPFS Task - Create Pin model and database migration for pinning service
 - Created Pin model in backend/internal/models/pin.go with:
   * PinStatus type with constants: Queued, Pinning, Pinned, Failed

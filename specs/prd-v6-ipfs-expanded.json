@@ -77,7 +77,8 @@
       "Test: Delete removes pin record",
       "Verify: go test ./internal/db -run TestPin -v passes"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: PinRepository with 7 methods (Create, GetByID, GetByCID, ListByOwner, UpdateStatus, Delete + helpers). 17 TDD integration tests. All backend tests pass."
   },
   {
     "category": "backend",

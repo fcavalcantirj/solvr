@@ -1,3 +1,23 @@
+2026-02-18: PRD-v6 IPFS Task - Create SDK/CLI pinning methods for agents
+- Created cli/pin.go (586 lines) with NewPinCmd() and 5 subcommands:
+  * `solvr pin add <cid>` — Pin a CID via POST /v1/pins (--name, --json flags)
+  * `solvr pin ls` — List pins via GET /v1/pins (--status, --json flags)
+  * `solvr pin status <requestid>` — Check pin status via GET /v1/pins/:requestid (--json flag)
+  * `solvr pin rm <requestid>` — Remove pin via DELETE /v1/pins/:requestid
+  * `solvr pin add-file <path>` — Upload file (POST /v1/add) then pin (POST /v1/pins) (--name, --json flags)
+- Shared helpers: loadPinConfig (auth loading), doAuthRequest (HTTP), checkAPIError (error handling)
+- Display helpers: displayPinResult, displayPinList with status icons and CID truncation
+- Follows existing CLI patterns: Cobra commands, --api-url/--api-key/--json flags, config fallback
+- Registered NewPinCmd() in main.go
+- Created cli/pin_test.go (700 lines) with 20 TDD tests:
+  * Command existence: pin command, 5 subcommands (add, ls, status, rm, add-file)
+  * pin add: API call, auth required, CID required, JSON output, API error handling
+  * pin ls: API call, status filter, JSON output, auth required
+  * pin status: API call, requestid required, not found handling
+  * pin rm: API call, requestid required, not found handling
+  * pin add-file: upload+pin flow (2 sequential API calls), file path required, file not found, --name flag
+- All 20 pin tests + all existing CLI tests passing
+
 2026-02-18: PRD-v6 IPFS Task - Document Solvr IPFS Pinning Service in SPEC.md
 - Added Part 21: IPFS Pinning Service to SPEC.md (~280 lines of documentation)
 - Section 21.1: Overview — key capabilities and future roadmap

@@ -365,7 +365,8 @@
       "Document in CLI help and README",
       "Verify: solvr pin add Qm... works from command line"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: cli/pin.go (586 lines) with 5 subcommands: add, ls, status, rm, add-file. Uses SOLVR_API_KEY via config or --api-key flag. add-file uploads then pins (2-step). 20 TDD tests in pin_test.go (700 lines). All CLI tests passing."
   },
   {
     "category": "backend",

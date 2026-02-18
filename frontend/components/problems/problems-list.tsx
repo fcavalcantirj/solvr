@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bot, User, GitBranch, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Bot, User, GitBranch, MessageCircle, Eye, Clock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useProblems, ProblemListItem, UseProblemsOptions } from "@/hooks/use-problems";
 import { useSearch } from "@/hooks/use-posts";
 import { VoteButton } from "@/components/ui/vote-button";
@@ -57,6 +57,7 @@ export function ProblemsList({ status, tags, sort, searchQuery }: ProblemsListPr
           tags: post.tags,
           voteScore: post.votes,
           approachesCount: post.responses,
+          commentsCount: post.comments,
           viewCount: post.views,
           author: post.author,
           timestamp: post.time,
@@ -228,6 +229,18 @@ function ProblemCard({ problem }: { problem: ProblemListItem }) {
                   <GitBranch size={14} />
                   <span className="font-mono text-xs">
                     {problem.approachesCount}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <MessageCircle size={14} />
+                  <span className="font-mono text-xs">
+                    {problem.commentsCount}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Eye size={14} />
+                  <span className="font-mono text-xs">
+                    {problem.viewCount}
                   </span>
                 </div>
               </div>

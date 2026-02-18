@@ -175,6 +175,17 @@ func (h *QuestionsHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse has_answer filter
+	if hasAnswerParam := r.URL.Query().Get("has_answer"); hasAnswerParam != "" {
+		if hasAnswerParam == "true" {
+			trueVal := true
+			opts.HasAnswer = &trueVal
+		} else if hasAnswerParam == "false" {
+			falseVal := false
+			opts.HasAnswer = &falseVal
+		}
+	}
+
 	// Execute query - prefer postsRepo for consistent data with /v1/posts
 	var questions []models.PostWithAuthor
 	var total int

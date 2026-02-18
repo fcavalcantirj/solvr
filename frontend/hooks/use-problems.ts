@@ -12,6 +12,7 @@ export interface ProblemListItem {
   voteScore: number;
   viewCount: number;
   approachesCount: number;
+  commentsCount: number;
   author: {
     id: string;
     name: string;
@@ -33,6 +34,7 @@ function transformProblem(post: APIPost): ProblemListItem {
     voteScore: post.vote_score,
     viewCount: post.view_count,
     approachesCount: post.approaches_count || 0,
+    commentsCount: post.comments_count || 0,
     author: {
       id: post.author.id,
       name: post.author.display_name,

@@ -58,6 +58,7 @@ func (r *FeedRepository) GetRecentActivity(ctx context.Context, page, perPage in
 				ELSE 0
 			END as answer_count,
 			COALESCE(app_cnt.cnt, 0) as approach_count,
+			COALESCE(cmt_cnt.cnt, 0) as comment_count,
 			p.created_at,
 			COALESCE(u.display_name, a.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, a.avatar_url, '') as author_avatar_url
@@ -81,6 +82,12 @@ func (r *FeedRepository) GetRecentActivity(ctx context.Context, page, perPage in
 			FROM responses
 			GROUP BY idea_id
 		) resp_cnt ON resp_cnt.idea_id = p.id
+		LEFT JOIN (
+			SELECT target_id, COUNT(*) as cnt
+			FROM comments
+			WHERE target_type = 'post' AND deleted_at IS NULL
+			GROUP BY target_id
+		) cmt_cnt ON cmt_cnt.target_id = p.id
 		WHERE p.deleted_at IS NULL
 		ORDER BY p.created_at DESC
 		LIMIT $1 OFFSET $2
@@ -158,6 +165,7 @@ func (r *FeedRepository) GetStuckProblems(ctx context.Context, page, perPage int
 			p.upvotes - p.downvotes as vote_score,
 			0 as answer_count,
 			(SELECT COUNT(*) FROM approaches ap WHERE ap.problem_id = p.id AND ap.deleted_at IS NULL) as approach_count,
+			(SELECT COUNT(*) FROM comments c WHERE c.target_type = 'post' AND c.target_id = p.id AND c.deleted_at IS NULL) as comment_count,
 			p.created_at,
 			COALESCE(u.display_name, a.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, a.avatar_url, '') as author_avatar_url
@@ -246,6 +254,7 @@ func (r *FeedRepository) GetUnansweredQuestions(ctx context.Context, page, perPa
 			p.upvotes - p.downvotes as vote_score,
 			0 as answer_count,
 			0 as approach_count,
+			(SELECT COUNT(*) FROM comments c WHERE c.target_type = 'post' AND c.target_id = p.id AND c.deleted_at IS NULL) as comment_count,
 			p.created_at,
 			COALESCE(u.display_name, a.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, a.avatar_url, '') as author_avatar_url
@@ -306,6 +315,7 @@ func (r *FeedRepository) scanFeedItem(rows interface{ Scan(dest ...any) error })
 		&item.VoteScore,
 		&item.AnswerCount,
 		&item.ApproachCount,
+		&item.CommentCount,
 		&item.CreatedAt,
 		&authorDisplayName,
 		&authorAvatarURL,

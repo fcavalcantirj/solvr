@@ -266,4 +266,45 @@ describe('useProblems', () => {
     expect(result.current.error).toBe(null);
     expect(result.current.problems).toEqual([]);
   });
+
+  it('handles null commentsCount from production API', async () => {
+    // Production API may return null when comments table doesn't exist
+    const mockProblem = {
+      id: 'p1',
+      type: 'problem' as const,
+      title: 'Test Problem',
+      description: 'Test description',
+      status: 'open',
+      upvotes: 5,
+      downvotes: 1,
+      vote_score: 4,
+      view_count: 100,
+      author: {
+        id: 'u1',
+        type: 'human' as const,
+        display_name: 'Test User',
+        avatar_url: ''
+      },
+      tags: ['test'],
+      created_at: '2026-01-15T10:00:00Z',
+      updated_at: '2026-01-15T10:00:00Z',
+      approaches_count: 2,
+      comments_count: null, // Production returns null
+    };
+
+    (api.getProblems as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [mockProblem],
+      meta: { total: 1, page: 1, per_page: 20, has_more: false },
+    });
+
+    const { result } = renderHook(() => useProblems());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // null should be converted to 0
+    expect(result.current.problems[0].commentsCount).toBe(0);
+    expect(result.current.problems[0].commentsCount).not.toBeNull();
+  });
 });

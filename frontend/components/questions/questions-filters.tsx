@@ -5,10 +5,10 @@ import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 
 const statuses = [
-  { key: "all", label: "ALL", apiValue: undefined },
-  { key: "unanswered", label: "UNANSWERED", apiValue: "open" },
-  { key: "answered", label: "ANSWERED", apiValue: "answered" },
-  { key: "accepted", label: "ACCEPTED", apiValue: "solved" },
+  { key: "all", label: "ALL", hasAnswer: undefined, status: undefined },
+  { key: "unanswered", label: "UNANSWERED", hasAnswer: false, status: undefined },
+  { key: "answered", label: "ANSWERED", hasAnswer: true, status: undefined },
+  { key: "accepted", label: "ACCEPTED", hasAnswer: undefined, status: "solved" },
 ];
 
 const sorts: Array<{ key: 'newest' | 'votes' | 'answers'; label: string }> = [
@@ -30,10 +30,12 @@ const popularTags = [
 
 interface QuestionsFiltersProps {
   status?: string;
+  hasAnswer?: boolean;
   sort: 'newest' | 'votes' | 'answers';
   tags: string[];
   searchQuery: string;
   onStatusChange: (status: string | undefined) => void;
+  onHasAnswerChange: (hasAnswer: boolean | undefined) => void;
   onSortChange: (sort: 'newest' | 'votes' | 'answers') => void;
   onTagsChange: (tags: string[]) => void;
   onSearchQueryChange: (query: string) => void;
@@ -41,10 +43,12 @@ interface QuestionsFiltersProps {
 
 export function QuestionsFilters({
   status,
+  hasAnswer,
   sort,
   tags,
   searchQuery,
   onStatusChange,
+  onHasAnswerChange,
   onSortChange,
   onTagsChange,
   onSearchQueryChange,
@@ -57,8 +61,13 @@ export function QuestionsFilters({
   // Debounced value that triggers parent update (prevents excessive API calls)
   const debouncedSearchQuery = useDebounce(localSearchQuery, 500);
 
-  // Find active status key from API value
-  const activeStatusKey = statuses.find((s) => s.apiValue === status)?.key || "all";
+  // Find active status key from status and hasAnswer values
+  const activeStatusKey = statuses.find((s) => {
+    // Match if both status and hasAnswer match (or both are undefined)
+    const statusMatches = s.status === status || (s.status === undefined && status === undefined);
+    const hasAnswerMatches = s.hasAnswer === hasAnswer || (s.hasAnswer === undefined && hasAnswer === undefined);
+    return statusMatches && hasAnswerMatches;
+  })?.key || "all";
 
   // Sync local state with prop changes (e.g., when filters are cleared)
   useEffect(() => {
@@ -74,7 +83,8 @@ export function QuestionsFilters({
 
   const handleStatusChange = (key: string) => {
     const selected = statuses.find((s) => s.key === key);
-    onStatusChange(selected?.apiValue);
+    onStatusChange(selected?.status);
+    onHasAnswerChange(selected?.hasAnswer);
   };
 
   const handleSortChange = (key: 'newest' | 'votes' | 'answers') => {
@@ -91,6 +101,7 @@ export function QuestionsFilters({
 
   const clearFilters = () => {
     onStatusChange(undefined);
+    onHasAnswerChange(undefined);
     onSortChange("newest");
     onTagsChange([]);
     onSearchQueryChange("");

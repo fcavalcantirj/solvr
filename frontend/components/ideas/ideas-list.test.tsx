@@ -47,6 +47,7 @@ const mockIdea = {
   support: 25,
   comments: 3,
   branches: 0,
+  viewCount: 42,
   tags: ['ai', 'testing'],
   timestamp: '2h ago',
   supporters: [],

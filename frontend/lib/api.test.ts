@@ -3,6 +3,41 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { api } from './api';
 import { APIError } from './api-error';
 
+describe('SolvrAPI Configuration', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    global.fetch = fetchMock;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('uses configured API base URL for all requests', async () => {
+    // Arrange: Mock successful response
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [], meta: { page: 1, per_page: 20, total: 0 } }),
+    });
+
+    // Act: Make an API call
+    await api.getPosts();
+
+    // Assert: Verify the URL is using the configured base URL
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const calledUrl = fetchMock.mock.calls[0][0];
+
+    // The baseUrl is set at module load time from NEXT_PUBLIC_API_URL or defaults to production
+    // In development with .env.local, should be localhost:8080
+    // In production, should be https://api.solvr.dev
+    const expectedBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
+    expect(calledUrl).toContain(expectedBaseUrl);
+    expect(calledUrl).toContain('/v1/posts');
+  });
+});
+
 describe('SolvrAPI Auth Event Handling', () => {
   let authHandler: ReturnType<typeof vi.fn>;
   let fetchMock: ReturnType<typeof vi.fn>;

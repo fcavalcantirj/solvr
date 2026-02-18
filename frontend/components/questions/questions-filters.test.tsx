@@ -11,10 +11,12 @@ describe('QuestionsFilters - Basic Functionality', () => {
     render(
       <QuestionsFilters
         status={undefined}
+        hasAnswer={undefined}
         sort="newest"
         tags={[]}
         searchQuery=""
         onStatusChange={vi.fn()}
+        onHasAnswerChange={vi.fn()}
         onSortChange={vi.fn()}
         onTagsChange={vi.fn()}
         onSearchQueryChange={vi.fn()}
@@ -27,25 +29,29 @@ describe('QuestionsFilters - Basic Functionality', () => {
 
   it('calls onStatusChange when status button is clicked', () => {
     const mockOnStatusChange = vi.fn();
+    const mockOnHasAnswerChange = vi.fn();
 
     render(
       <QuestionsFilters
         status={undefined}
+        hasAnswer={undefined}
         sort="newest"
         tags={[]}
         searchQuery=""
         onStatusChange={mockOnStatusChange}
+        onHasAnswerChange={mockOnHasAnswerChange}
         onSortChange={vi.fn()}
         onTagsChange={vi.fn()}
         onSearchQueryChange={vi.fn()}
       />
     );
 
-    // Get all ANSWERED buttons (desktop and mobile) and click the first one
-    const answeredButtons = screen.getAllByText('ANSWERED');
-    fireEvent.click(answeredButtons[0]);
+    // Click ACCEPTED button (which sets status to "solved")
+    const acceptedButtons = screen.getAllByText('ACCEPTED');
+    fireEvent.click(acceptedButtons[0]);
 
-    expect(mockOnStatusChange).toHaveBeenCalledWith('answered');
+    expect(mockOnStatusChange).toHaveBeenCalledWith('solved');
+    expect(mockOnHasAnswerChange).toHaveBeenCalledWith(undefined);
   });
 
   it('calls onSortChange when sort option is clicked', () => {
@@ -103,17 +109,20 @@ describe('QuestionsFilters - Basic Functionality', () => {
 
   it('clears all filters when CLEAR ALL is clicked', () => {
     const mockOnStatusChange = vi.fn();
+    const mockOnHasAnswerChange = vi.fn();
     const mockOnSortChange = vi.fn();
     const mockOnTagsChange = vi.fn();
     const mockOnSearchQueryChange = vi.fn();
 
     render(
       <QuestionsFilters
-        status="answered"
+        status="solved"
+        hasAnswer={true}
         sort="votes"
         tags={['react']}
         searchQuery="test"
         onStatusChange={mockOnStatusChange}
+        onHasAnswerChange={mockOnHasAnswerChange}
         onSortChange={mockOnSortChange}
         onTagsChange={mockOnTagsChange}
         onSearchQueryChange={mockOnSearchQueryChange}
@@ -128,6 +137,7 @@ describe('QuestionsFilters - Basic Functionality', () => {
     fireEvent.click(clearButton);
 
     expect(mockOnStatusChange).toHaveBeenCalledWith(undefined);
+    expect(mockOnHasAnswerChange).toHaveBeenCalledWith(undefined);
     expect(mockOnSortChange).toHaveBeenCalledWith('newest');
     expect(mockOnTagsChange).toHaveBeenCalledWith([]);
     expect(mockOnSearchQueryChange).toHaveBeenCalledWith('');
@@ -278,10 +288,12 @@ describe('QuestionsFilters - Search Debouncing', () => {
     render(
       <QuestionsFilters
         status={undefined}
+        hasAnswer={undefined}
         sort="newest"
         tags={[]}
         searchQuery=""
         onStatusChange={vi.fn()}
+        onHasAnswerChange={vi.fn()}
         onSortChange={vi.fn()}
         onTagsChange={vi.fn()}
         onSearchQueryChange={vi.fn()}
@@ -339,5 +351,111 @@ describe('QuestionsFilters - Search Debouncing', () => {
     expect(mockOnSearchQueryChange).toHaveBeenCalledTimes(1);
 
     vi.useRealTimers();
+  });
+});
+
+describe('QuestionsFilters - Has Answer Filter', () => {
+  it('calls onHasAnswerChange with false when UNANSWERED is clicked', () => {
+    const mockOnStatusChange = vi.fn();
+    const mockOnHasAnswerChange = vi.fn();
+
+    render(
+      <QuestionsFilters
+        status={undefined}
+        hasAnswer={undefined}
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStatusChange={mockOnStatusChange}
+        onHasAnswerChange={mockOnHasAnswerChange}
+        onSortChange={vi.fn()}
+        onTagsChange={vi.fn()}
+        onSearchQueryChange={vi.fn()}
+      />
+    );
+
+    const unansweredButtons = screen.getAllByText('UNANSWERED');
+    fireEvent.click(unansweredButtons[0]);
+
+    expect(mockOnHasAnswerChange).toHaveBeenCalledWith(false);
+    expect(mockOnStatusChange).toHaveBeenCalledWith(undefined);
+  });
+
+  it('calls onHasAnswerChange with true when ANSWERED is clicked', () => {
+    const mockOnStatusChange = vi.fn();
+    const mockOnHasAnswerChange = vi.fn();
+
+    render(
+      <QuestionsFilters
+        status={undefined}
+        hasAnswer={undefined}
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStatusChange={mockOnStatusChange}
+        onHasAnswerChange={mockOnHasAnswerChange}
+        onSortChange={vi.fn()}
+        onTagsChange={vi.fn()}
+        onSearchQueryChange={vi.fn()}
+      />
+    );
+
+    const answeredButtons = screen.getAllByText('ANSWERED');
+    fireEvent.click(answeredButtons[0]);
+
+    expect(mockOnHasAnswerChange).toHaveBeenCalledWith(true);
+    expect(mockOnStatusChange).toHaveBeenCalledWith(undefined);
+  });
+
+  it('calls onHasAnswerChange with undefined when ALL is clicked', () => {
+    const mockOnStatusChange = vi.fn();
+    const mockOnHasAnswerChange = vi.fn();
+
+    render(
+      <QuestionsFilters
+        status={undefined}
+        hasAnswer={false}
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStatusChange={mockOnStatusChange}
+        onHasAnswerChange={mockOnHasAnswerChange}
+        onSortChange={vi.fn()}
+        onTagsChange={vi.fn()}
+        onSearchQueryChange={vi.fn()}
+      />
+    );
+
+    const allButtons = screen.getAllByText('ALL');
+    fireEvent.click(allButtons[0]);
+
+    expect(mockOnHasAnswerChange).toHaveBeenCalledWith(undefined);
+    expect(mockOnStatusChange).toHaveBeenCalledWith(undefined);
+  });
+
+  it('calls onHasAnswerChange with undefined when ACCEPTED is clicked', () => {
+    const mockOnStatusChange = vi.fn();
+    const mockOnHasAnswerChange = vi.fn();
+
+    render(
+      <QuestionsFilters
+        status={undefined}
+        hasAnswer={true}
+        sort="newest"
+        tags={[]}
+        searchQuery=""
+        onStatusChange={mockOnStatusChange}
+        onHasAnswerChange={mockOnHasAnswerChange}
+        onSortChange={vi.fn()}
+        onTagsChange={vi.fn()}
+        onSearchQueryChange={vi.fn()}
+      />
+    );
+
+    const acceptedButtons = screen.getAllByText('ACCEPTED');
+    fireEvent.click(acceptedButtons[0]);
+
+    expect(mockOnHasAnswerChange).toHaveBeenCalledWith(undefined);
+    expect(mockOnStatusChange).toHaveBeenCalledWith('solved');
   });
 });

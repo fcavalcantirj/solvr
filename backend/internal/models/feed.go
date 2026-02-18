@@ -46,6 +46,9 @@ type FeedItem struct {
 	// ApproachCount is the number of approaches (for problems).
 	ApproachCount int `json:"approach_count,omitempty"`
 
+	// CommentCount is the number of comments on the post.
+	CommentCount int `json:"comment_count"`
+
 	// CreatedAt is when the post was created.
 	CreatedAt time.Time `json:"created_at"`
 }

@@ -175,4 +175,27 @@ describe('useIdeas - evolved_into and field resolution', () => {
     expect(idea.supporters).toEqual([]); // Empty but intentional, not a TODO
     expect(idea.recentComment).toBeNull(); // Null but intentional, not a TODO
   });
+
+  it('handles null comments from production API', async () => {
+    // Production API may return null when comments table doesn't exist
+    const ideaWithNullComments = {
+      ...mockIdeaWithEvolvedInto,
+      comments_count: null,
+    };
+
+    (api.getIdeas as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [ideaWithNullComments],
+      meta: { total: 1, page: 1, per_page: 20, has_more: false },
+    });
+
+    const { result } = renderHook(() => useIdeas());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // null should be converted to 0
+    expect(result.current.ideas[0].comments).toBe(0);
+    expect(result.current.ideas[0].comments).not.toBeNull();
+  });
 });

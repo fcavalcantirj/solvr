@@ -936,3 +936,77 @@ func TestListAnswers_QuestionFromPostsRepo(t *testing.T) {
 		t.Errorf("FIX-023: Question exists in postsRepo but handler returned 404 - handler must use postsRepo.FindByID when available")
 	}
 }
+
+func TestQuestionsHandler_List_HasAnswerFilter(t *testing.T) {
+	repo := NewMockQuestionsRepository()
+	handler := NewQuestionsHandler(repo)
+
+	// Create test questions with different answer counts
+	q1 := createTestQuestion("q1", "Question with 0 answers")
+	q1.AnswersCount = 0
+	
+	q2 := createTestQuestion("q2", "Question with 1 answer")
+	q2.AnswersCount = 1
+	
+	q3 := createTestQuestion("q3", "Question with 3 answers")
+	q3.AnswersCount = 3
+
+	tests := []struct {
+		name           string
+		hasAnswerParam string
+		expectNil      bool
+		expectValue    bool
+	}{
+		{
+			name:           "has_answer=false filters for unanswered",
+			hasAnswerParam: "false",
+			expectNil:      false,
+			expectValue:    false,
+		},
+		{
+			name:           "has_answer=true filters for answered",
+			hasAnswerParam: "true",
+			expectNil:      false,
+			expectValue:    true,
+		},
+		{
+			name:           "no has_answer parameter means no filter",
+			hasAnswerParam: "",
+			expectNil:      true,
+			expectValue:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo.SetQuestions([]models.PostWithAuthor{q1, q2, q3}, 3)
+
+			url := "/v1/questions"
+			if tt.hasAnswerParam != "" {
+				url += "?has_answer=" + tt.hasAnswerParam
+			}
+
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			w := httptest.NewRecorder()
+
+			handler.List(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Errorf("expected status 200, got %d", w.Code)
+			}
+
+			// Verify that the repository received the correct opts
+			if tt.expectNil {
+				if repo.listOpts.HasAnswer != nil {
+					t.Errorf("expected HasAnswer to be nil, got %v", *repo.listOpts.HasAnswer)
+				}
+			} else {
+				if repo.listOpts.HasAnswer == nil {
+					t.Errorf("expected HasAnswer to be %v, got nil", tt.expectValue)
+				} else if *repo.listOpts.HasAnswer != tt.expectValue {
+					t.Errorf("expected HasAnswer to be %v, got %v", tt.expectValue, *repo.listOpts.HasAnswer)
+				}
+			}
+		})
+	}
+}

@@ -36,6 +36,7 @@ const mockPostWithAvatar = {
   created_at: '2026-01-15T10:00:00Z',
   updated_at: '2026-01-16T10:00:00Z',
   approaches_count: 3,
+  comments_count: 5,
 };
 
 const mockPostWithoutAvatar = {
@@ -57,6 +58,7 @@ const mockPostWithoutAvatar = {
   created_at: '2026-01-20T10:00:00Z',
   updated_at: '2026-01-20T10:00:00Z',
   answers_count: 2,
+  comments_count: 0,
 };
 
 const mockResponse = {
@@ -151,5 +153,44 @@ describe('usePosts - avatar and pinned field resolution', () => {
     const post = result.current.posts[0];
     expect(post.author.avatar).toBeDefined(); // was TODO: now resolved from API
     expect(typeof post.isPinned).toBe('boolean'); // was TODO: now explicitly false
+  });
+
+  it('includes comment count in transformed post', async () => {
+    (api.getPosts as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+
+    const { result } = renderHook(() => usePosts());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // First post has 5 comments
+    expect(result.current.posts[0].comments).toBe(5);
+
+    // Second post has 0 comments
+    expect(result.current.posts[1].comments).toBe(0);
+  });
+
+  it('handles null comments_count from production API', async () => {
+    // Production API returns null when comments table doesn't exist or query fails
+    const postWithNullComments = {
+      ...mockPostWithAvatar,
+      comments_count: null,
+    };
+
+    (api.getPosts as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [postWithNullComments],
+      meta: { total: 1, page: 1, per_page: 20, has_more: false },
+    });
+
+    const { result } = renderHook(() => usePosts());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // null should be converted to 0, not displayed as null
+    expect(result.current.posts[0].comments).toBe(0);
+    expect(result.current.posts[0].comments).not.toBeNull();
   });
 });

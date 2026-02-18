@@ -24,6 +24,7 @@ export interface APIPost {
   updated_at: string;
   answers_count?: number;
   approaches_count?: number;
+  comments_count?: number | null;  // Production may return null when comments table doesn't exist
   evolved_into?: string[];
 }
 
@@ -694,6 +695,7 @@ export interface APIProblemsStatsResponse {
 
 export interface FetchQuestionsParams {
   status?: string;
+  has_answer?: boolean;
   tags?: string[];
   sort?: 'newest' | 'votes' | 'answers';
   page?: number;
@@ -738,6 +740,7 @@ export interface APIFeedItem {
   vote_score: number;
   answer_count: number;
   approach_count?: number;
+  comment_count: number;
   created_at: string;
 }
 

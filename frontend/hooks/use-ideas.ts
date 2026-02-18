@@ -19,6 +19,7 @@ export interface IdeaListItem {
   support: number;
   comments: number;
   branches: number;
+  viewCount: number;
   tags: string[];
   timestamp: string;
   supporters?: Array<{ name: string; type: 'human' | 'ai' }>;
@@ -57,8 +58,9 @@ function transformIdea(post: APIPost): IdeaListItem {
       avatar: post.author.avatar_url || post.author.display_name.slice(0, 2).toUpperCase(),
     },
     support: post.upvotes,
-    comments: post.answers_count || 0,
+    comments: post.comments_count || 0,
     branches: post.evolved_into?.length ?? 0,
+    viewCount: post.view_count || 0,
     tags: post.tags || [],
     timestamp: formatRelativeTime(post.created_at),
     supporters: (post as any).supporters ?? [],

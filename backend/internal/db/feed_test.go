@@ -517,3 +517,72 @@ func createFeedTestPost(t *testing.T, repo *PostRepository, title string, postTy
 
 	return created
 }
+
+// === Comment Count Tests (TDD: comment_count field in feed) ===
+
+// TestFeedRepository_GetRecentActivity_IncludesCommentCount verifies that GetRecentActivity() returns comment count for each post.
+// This test ensures that feed items display accurate comment counts.
+func TestFeedRepository_GetRecentActivity_IncludesCommentCount(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	feedRepo := NewFeedRepository(pool)
+	postsRepo := NewPostRepository(pool)
+	commentsRepo := NewCommentsRepository(pool)
+	ctx := context.Background()
+
+	// Create a test post
+	post, err := postsRepo.Create(ctx, &models.Post{
+		Type:         models.PostTypeProblem,
+		Title:        "Test Problem for Comments",
+		Description:  "Test",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create test post: %v", err)
+	}
+
+	// Add 2 comments
+	for i := 1; i <= 2; i++ {
+		_, err = commentsRepo.Create(ctx, &models.Comment{
+			TargetType: "post",
+			TargetID:   post.ID,
+			AuthorType: models.AuthorTypeAgent,
+			AuthorID:   "test_agent",
+			Content:    fmt.Sprintf("Comment %d", i),
+		})
+		if err != nil {
+			t.Fatalf("failed to create comment %d: %v", i, err)
+		}
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM comments WHERE target_id = $1", post.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.ID)
+	}()
+
+	// Act: Get recent activity feed
+	items, _, err := feedRepo.GetRecentActivity(ctx, 1, 10)
+	if err != nil {
+		t.Fatalf("GetRecentActivity() error = %v", err)
+	}
+
+	// Assert: Find the created post and verify comment count
+	var found *models.FeedItem
+	for i := range items {
+		if items[i].ID == post.ID {
+			found = &items[i]
+			break
+		}
+	}
+
+	if found == nil {
+		t.Fatal("created post should be in feed")
+	}
+
+	if found.CommentCount != 2 {
+		t.Errorf("expected CommentCount = 2, got %d", found.CommentCount)
+	}
+}

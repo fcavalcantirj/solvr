@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -14,12 +15,15 @@ func createCommentTestUser(t *testing.T, pool *Pool) *models.User {
 	ctx := context.Background()
 	userRepo := NewUserRepository(pool)
 
+	now := time.Now()
+	ts := now.Format("150405.000000")
+	username := "c" + now.Format("0405") + fmt.Sprintf("%06d", now.Nanosecond()/1000)[:5]
 	user := &models.User{
-		Username:       "commentuser" + time.Now().Format("20060102150405.000000000"),
+		Username:       username,
 		DisplayName:    "Comment Test User",
-		Email:          "comment" + time.Now().Format("20060102150405.000000000") + "@example.com",
+		Email:          "comment" + ts + "@example.com",
 		AuthProvider:   "github",
-		AuthProviderID: "github_comment_" + time.Now().Format("20060102150405.000000000"),
+		AuthProviderID: "gh_cmt_" + ts,
 		Role:           "user",
 	}
 
@@ -38,7 +42,7 @@ func createCommentTestPost(t *testing.T, pool *Pool, userID string) *models.Post
 
 	post := &models.Post{
 		Type:         models.PostTypeQuestion,
-		Title:        "Test question for comments " + time.Now().Format("20060102150405.000000000"),
+		Title:        "Test question for comments " + time.Now().Format("150405"),
 		Description:  "This is a test question used for comment testing",
 		Tags:         []string{"test"},
 		PostedByType: models.AuthorTypeHuman,

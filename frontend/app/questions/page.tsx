@@ -15,6 +15,7 @@ export default function QuestionsPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const [status, setStatus] = useState<string | undefined>(undefined);
+  const [hasAnswer, setHasAnswer] = useState<boolean | undefined>(undefined);
   const [sort, setSort] = useState<'newest' | 'votes' | 'answers'>('votes');
   const [tags, setTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,10 +60,12 @@ export default function QuestionsPage() {
       {/* Filters */}
       <QuestionsFilters
         status={status}
+        hasAnswer={hasAnswer}
         sort={sort}
         tags={tags}
         searchQuery={searchQuery}
         onStatusChange={setStatus}
+        onHasAnswerChange={setHasAnswer}
         onSortChange={setSort}
         onTagsChange={setTags}
         onSearchQueryChange={setSearchQuery}
@@ -72,7 +75,7 @@ export default function QuestionsPage() {
       <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <QuestionsList status={status} sort={sort} tags={tags} searchQuery={searchQuery} />
+            <QuestionsList status={status} hasAnswer={hasAnswer} sort={sort} tags={tags} searchQuery={searchQuery} />
           </div>
           <div className="lg:col-span-1">
             <QuestionsSidebar onTagClick={(tag) => {

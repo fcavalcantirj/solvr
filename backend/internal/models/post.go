@@ -131,6 +131,7 @@ type PostWithAuthor struct {
 	VoteScore       int        `json:"vote_score"`
 	AnswersCount    int        `json:"answers_count"`
 	ApproachesCount int        `json:"approaches_count"`
+	CommentsCount   int        `json:"comments_count"`
 }
 
 // PostListOptions contains options for listing posts.
@@ -140,6 +141,7 @@ type PostListOptions struct {
 	Tags       []string   // Filter by tags
 	AuthorType AuthorType // Filter by author type (BE-003)
 	AuthorID   string     // Filter by author ID (BE-003)
+	HasAnswer  *bool      // Filter by answer count: nil=no filter, false=0 answers, true=1+ answers
 	Sort       string     // Sort order: "newest" (default), "votes", "approaches"
 	Page       int        // Page number (1-indexed)
 	PerPage    int        // Results per page

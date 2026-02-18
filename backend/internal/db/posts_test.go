@@ -4,6 +4,7 @@ package db
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -795,6 +796,63 @@ func TestPostRepository_FindByID_ValidUUIDNotFound(t *testing.T) {
 
 	if post != nil {
 		t.Error("expected nil post for non-existent UUID")
+	}
+}
+
+// TestPostRepository_FindByID_IncludesCommentCount verifies that FindByID() returns comment count.
+// This test ensures that individual post detail pages display accurate comment counts.
+func TestPostRepository_FindByID_IncludesCommentCount(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	commentsRepo := NewCommentsRepository(pool)
+	ctx := context.Background()
+
+	// Create a test post
+	post, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeProblem,
+		Title:        "Test Problem for Comments in FindByID",
+		Description:  "Testing comment count in FindByID",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create test post: %v", err)
+	}
+
+	// Add 2 comments to the post
+	for i := 1; i <= 2; i++ {
+		_, err = commentsRepo.Create(ctx, &models.Comment{
+			TargetType: "post",
+			TargetID:   post.ID,
+			AuthorType: models.AuthorTypeAgent,
+			AuthorID:   "test_agent",
+			Content:    fmt.Sprintf("Comment %d", i),
+		})
+		if err != nil {
+			t.Fatalf("failed to create comment %d: %v", i, err)
+		}
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM comments WHERE target_id = $1", post.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.ID)
+	}()
+
+	// Act: FindByID
+	found, err := repo.FindByID(ctx, post.ID)
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+
+	// Assert: Verify comment count
+	if found.CommentsCount != 2 {
+		t.Errorf("expected CommentsCount = 2, got %d", found.CommentsCount)
 	}
 }
 
@@ -2857,5 +2915,581 @@ func TestPostRepository_List_SortByTop_WithNegativeScores(t *testing.T) {
 	}
 	if posts[foundNeg].VoteScore != -3 {
 		t.Errorf("negative post: expected vote score -3, got %d", posts[foundNeg].VoteScore)
+	}
+}
+
+func TestPostRepository_List_HasAnswerFalse(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	answerRepo := NewAnswersRepository(pool)
+	ctx := context.Background()
+
+	// Create 3 questions with different answer counts
+	// q1: 0 answers
+	q1, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Question with 0 answers",
+		Description:  "Test question with no answers",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create q1: %v", err)
+	}
+
+	// q2: 1 answer
+	q2, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Question with 1 answer",
+		Description:  "Test question with one answer",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create q2: %v", err)
+	}
+
+	_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
+		QuestionID: q2.ID,
+		Content:    "Answer 1",
+		AuthorType: models.AuthorTypeAgent,
+		AuthorID:   "test_agent",
+	})
+	if err != nil {
+		t.Fatalf("failed to create answer for q2: %v", err)
+	}
+
+	// q3: 3 answers
+	q3, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Question with 3 answers",
+		Description:  "Test question with three answers",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create q3: %v", err)
+	}
+
+	for i := 1; i <= 3; i++ {
+		_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
+			QuestionID: q3.ID,
+			Content:    "Answer " + string(rune('0'+i)),
+			AuthorType: models.AuthorTypeAgent,
+			AuthorID:   "test_agent",
+		})
+		if err != nil {
+			t.Fatalf("failed to create answer %d for q3: %v", i, err)
+		}
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE question_id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
+	}()
+
+	// Act: List with HasAnswer = false
+	falseVal := false
+	opts := models.PostListOptions{
+		Type:      models.PostTypeQuestion,
+		HasAnswer: &falseVal,
+		Page:      1,
+		PerPage:   100,
+	}
+
+	posts, total, err := repo.List(ctx, opts)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	// Assert: Only q1 (0 answers) should be returned
+	if total == 0 {
+		t.Errorf("expected at least 1 question, got %d", total)
+	}
+
+	// Find q1 in results
+	found := false
+	for _, post := range posts {
+		if post.ID == q1.ID {
+			found = true
+			if post.AnswersCount != 0 {
+				t.Errorf("expected q1 to have 0 answers, got %d", post.AnswersCount)
+			}
+		}
+		// Verify all returned posts have 0 answers
+		if post.AnswersCount != 0 {
+			t.Errorf("HasAnswer=false should only return questions with 0 answers, got question %s with %d answers", post.ID, post.AnswersCount)
+		}
+	}
+
+	if !found {
+		t.Errorf("expected q1 (0 answers) to be in results")
+	}
+}
+
+func TestPostRepository_List_HasAnswerTrue(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	answerRepo := NewAnswersRepository(pool)
+	ctx := context.Background()
+
+	// Create 3 questions with different answer counts
+	// q1: 0 answers
+	q1, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Question with 0 answers",
+		Description:  "Test question with no answers",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create q1: %v", err)
+	}
+
+	// q2: 1 answer
+	q2, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Question with 1 answer",
+		Description:  "Test question with one answer",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create q2: %v", err)
+	}
+
+	_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
+		QuestionID: q2.ID,
+		Content:    "Answer 1",
+		AuthorType: models.AuthorTypeAgent,
+		AuthorID:   "test_agent",
+	})
+	if err != nil {
+		t.Fatalf("failed to create answer for q2: %v", err)
+	}
+
+	// q3: 3 answers
+	q3, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Question with 3 answers",
+		Description:  "Test question with three answers",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create q3: %v", err)
+	}
+
+	for i := 1; i <= 3; i++ {
+		_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
+			QuestionID: q3.ID,
+			Content:    "Answer " + string(rune('0'+i)),
+			AuthorType: models.AuthorTypeAgent,
+			AuthorID:   "test_agent",
+		})
+		if err != nil {
+			t.Fatalf("failed to create answer %d for q3: %v", i, err)
+		}
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE question_id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
+	}()
+
+	// Act: List with HasAnswer = true
+	trueVal := true
+	opts := models.PostListOptions{
+		Type:      models.PostTypeQuestion,
+		HasAnswer: &trueVal,
+		Page:      1,
+		PerPage:   100,
+	}
+
+	posts, total, err := repo.List(ctx, opts)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	// Assert: q2 and q3 (with answers) should be returned
+	if total == 0 {
+		t.Errorf("expected at least 2 questions, got %d", total)
+	}
+
+	// Verify all returned posts have 1+ answers
+	for _, post := range posts {
+		if post.AnswersCount == 0 {
+			t.Errorf("HasAnswer=true should only return questions with 1+ answers, got question %s with 0 answers", post.ID)
+		}
+	}
+
+	// Verify q1 (0 answers) is NOT in results
+	for _, post := range posts {
+		if post.ID == q1.ID {
+			t.Errorf("q1 (0 answers) should not be in results for HasAnswer=true")
+		}
+	}
+}
+
+func TestPostRepository_List_NoHasAnswerFilter(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	answerRepo := NewAnswersRepository(pool)
+	ctx := context.Background()
+
+	// Create 3 questions with different answer counts
+	// q1: 0 answers
+	q1, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Question with 0 answers",
+		Description:  "Test question with no answers",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create q1: %v", err)
+	}
+
+	// q2: 1 answer
+	q2, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Question with 1 answer",
+		Description:  "Test question with one answer",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create q2: %v", err)
+	}
+
+	_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
+		QuestionID: q2.ID,
+		Content:    "Answer 1",
+		AuthorType: models.AuthorTypeAgent,
+		AuthorID:   "test_agent",
+	})
+	if err != nil {
+		t.Fatalf("failed to create answer for q2: %v", err)
+	}
+
+	// q3: 3 answers
+	q3, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Question with 3 answers",
+		Description:  "Test question with three answers",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create q3: %v", err)
+	}
+
+	for i := 1; i <= 3; i++ {
+		_, err = answerRepo.CreateAnswer(ctx, &models.Answer{
+			QuestionID: q3.ID,
+			Content:    "Answer " + string(rune('0'+i)),
+			AuthorType: models.AuthorTypeAgent,
+			AuthorID:   "test_agent",
+		})
+		if err != nil {
+			t.Fatalf("failed to create answer %d for q3: %v", i, err)
+		}
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM answers WHERE question_id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2, $3)", q1.ID, q2.ID, q3.ID)
+	}()
+
+	// Act: List without HasAnswer parameter (nil)
+	opts := models.PostListOptions{
+		Type:    models.PostTypeQuestion,
+		Page:    1,
+		PerPage: 100,
+	}
+
+	posts, total, err := repo.List(ctx, opts)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	// Assert: All 3 questions should be returned
+	if total == 0 {
+		t.Errorf("expected at least 3 questions, got %d", total)
+	}
+
+	// Count how many of our test questions are in the results
+	foundCount := 0
+	for _, post := range posts {
+		if post.ID == q1.ID || post.ID == q2.ID || post.ID == q3.ID {
+			foundCount++
+		}
+	}
+
+	if foundCount != 3 {
+		t.Errorf("expected all 3 test questions to be in results, found %d", foundCount)
+	}
+}
+
+// === Comment Count Tests (TDD: comments_count field) ===
+
+// TestPostRepository_List_IncludesCommentCount verifies that List() returns comment count for each post.
+// This test ensures that posts display accurate comment counts on list pages (feed, problems, questions, ideas).
+func TestPostRepository_List_IncludesCommentCount(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	commentsRepo := NewCommentsRepository(pool)
+	ctx := context.Background()
+
+	// Create a test post
+	post, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Test Question for Comments",
+		Description:  "Test",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create test post: %v", err)
+	}
+
+	// Add 3 comments to the post
+	for i := 1; i <= 3; i++ {
+		_, err = commentsRepo.Create(ctx, &models.Comment{
+			TargetType: "post",
+			TargetID:   post.ID,
+			AuthorType: models.AuthorTypeAgent,
+			AuthorID:   "test_agent",
+			Content:    fmt.Sprintf("Comment %d", i),
+		})
+		if err != nil {
+			t.Fatalf("failed to create comment %d: %v", i, err)
+		}
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM comments WHERE target_id = $1", post.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.ID)
+	}()
+
+	// Act: List posts
+	posts, _, err := repo.List(ctx, models.PostListOptions{
+		Type:    models.PostTypeQuestion,
+		Page:    1,
+		PerPage: 10,
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	// Assert: Find the created post and verify comment count
+	var found *models.PostWithAuthor
+	for i := range posts {
+		if posts[i].ID == post.ID {
+			found = &posts[i]
+			break
+		}
+	}
+
+	if found == nil {
+		t.Fatal("created post should be in results")
+	}
+
+	if found.CommentsCount != 3 {
+		t.Errorf("expected CommentsCount = 3, got %d", found.CommentsCount)
+	}
+}
+
+// TestPostRepository_List_CommentsCountAllTypes verifies that comments_count works for ALL post types.
+// BUG: Frontend shows comments_count: 0 for Problems and Ideas, but correct count for Questions.
+// This test reproduces the issue by testing all three post types with the same query path.
+func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	commentsRepo := NewCommentsRepository(pool)
+	ctx := context.Background()
+
+	// Create one post of each type
+	question, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "Question with comments",
+		Description:  "Test question",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create question: %v", err)
+	}
+
+	problem, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeProblem,
+		Title:        "Problem with comments",
+		Description:  "Test problem",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create problem: %v", err)
+	}
+
+	idea, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeIdea,
+		Title:        "Idea with comments",
+		Description:  "Test idea",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent",
+		Status:       models.PostStatusOpen,
+	})
+	if err != nil {
+		t.Fatalf("failed to create idea: %v", err)
+	}
+
+	// Add 1 comment to each post
+	_, err = commentsRepo.Create(ctx, &models.Comment{
+		TargetType: "post",
+		TargetID:   question.ID,
+		AuthorType: models.AuthorTypeAgent,
+		AuthorID:   "test_agent",
+		Content:    "Comment on question",
+	})
+	if err != nil {
+		t.Fatalf("failed to create comment on question: %v", err)
+	}
+
+	_, err = commentsRepo.Create(ctx, &models.Comment{
+		TargetType: "post",
+		TargetID:   problem.ID,
+		AuthorType: models.AuthorTypeAgent,
+		AuthorID:   "test_agent",
+		Content:    "Comment on problem",
+	})
+	if err != nil {
+		t.Fatalf("failed to create comment on problem: %v", err)
+	}
+
+	_, err = commentsRepo.Create(ctx, &models.Comment{
+		TargetType: "post",
+		TargetID:   idea.ID,
+		AuthorType: models.AuthorTypeAgent,
+		AuthorID:   "test_agent",
+		Content:    "Comment on idea",
+	})
+	if err != nil {
+		t.Fatalf("failed to create comment on idea: %v", err)
+	}
+
+	// Cleanup
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM comments WHERE target_id IN ($1, $2, $3)", question.ID, problem.ID, idea.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2, $3)", question.ID, problem.ID, idea.ID)
+	}()
+
+	// Test Questions - Should return comments_count = 1
+	questions, _, err := repo.List(ctx, models.PostListOptions{
+		Type:    models.PostTypeQuestion,
+		Page:    1,
+		PerPage: 10,
+	})
+	if err != nil {
+		t.Fatalf("List(questions) error = %v", err)
+	}
+
+	var foundQuestion *models.PostWithAuthor
+	for i := range questions {
+		if questions[i].ID == question.ID {
+			foundQuestion = &questions[i]
+			break
+		}
+	}
+	if foundQuestion == nil {
+		t.Fatal("question should be in results")
+	}
+	if foundQuestion.CommentsCount != 1 {
+		t.Errorf("Questions: expected CommentsCount = 1, got %d", foundQuestion.CommentsCount)
+	}
+
+	// Test Problems - Should return comments_count = 1
+	problems, _, err := repo.List(ctx, models.PostListOptions{
+		Type:    models.PostTypeProblem,
+		Page:    1,
+		PerPage: 10,
+	})
+	if err != nil {
+		t.Fatalf("List(problems) error = %v", err)
+	}
+
+	var foundProblem *models.PostWithAuthor
+	for i := range problems {
+		if problems[i].ID == problem.ID {
+			foundProblem = &problems[i]
+			break
+		}
+	}
+	if foundProblem == nil {
+		t.Fatal("problem should be in results")
+	}
+	if foundProblem.CommentsCount != 1 {
+		t.Errorf("Problems: expected CommentsCount = 1, got %d", foundProblem.CommentsCount)
+	}
+
+	// Test Ideas - Should return comments_count = 1
+	ideas, _, err := repo.List(ctx, models.PostListOptions{
+		Type:    models.PostTypeIdea,
+		Page:    1,
+		PerPage: 10,
+	})
+	if err != nil {
+		t.Fatalf("List(ideas) error = %v", err)
+	}
+
+	var foundIdea *models.PostWithAuthor
+	for i := range ideas {
+		if ideas[i].ID == idea.ID {
+			foundIdea = &ideas[i]
+			break
+		}
+	}
+	if foundIdea == nil {
+		t.Fatal("idea should be in results")
+	}
+	if foundIdea.CommentsCount != 1 {
+		t.Errorf("Ideas: expected CommentsCount = 1, got %d", foundIdea.CommentsCount)
 	}
 }

@@ -20,6 +20,8 @@ export interface QuestionListItem {
   displayStatus: string;
   voteScore: number;
   answersCount: number;
+  commentsCount: number;
+  viewCount: number;
   author: {
     id: string;
     name: string;
@@ -40,6 +42,8 @@ function transformQuestion(post: APIPost): QuestionListItem {
     displayStatus: mapQuestionStatus(post.status),
     voteScore: post.vote_score,
     answersCount: post.answers_count || 0,
+    commentsCount: post.comments_count || 0,
+    viewCount: post.view_count || 0,
     author: {
       id: post.author.id,
       name: post.author.display_name,
@@ -52,6 +56,7 @@ function transformQuestion(post: APIPost): QuestionListItem {
 
 export interface UseQuestionsOptions {
   status?: string;
+  hasAnswer?: boolean;
   tags?: string[];
   sort?: 'newest' | 'votes' | 'answers';
   page?: number;
@@ -87,6 +92,7 @@ export function useQuestions(options: UseQuestionsOptions = {}): UseQuestionsRes
       const stableOptions: UseQuestionsOptions = JSON.parse(optionsKey);
       const params: FetchQuestionsParams = {
         status: stableOptions.status,
+        has_answer: stableOptions.hasAnswer,
         tags: stableOptions.tags,
         sort: stableOptions.sort,
         page: pageNum,

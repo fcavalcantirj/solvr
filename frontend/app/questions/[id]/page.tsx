@@ -1,5 +1,3 @@
-"use client";
-
 // Force dynamic rendering - this page imports Header which uses client-side state
 export const dynamic = 'force-dynamic';
 

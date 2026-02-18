@@ -20,6 +20,7 @@ export interface FeedPost {
   time: string;
   votes: number;
   responses: number;
+  comments: number;
   views: number;
   status: string;
   isHot?: boolean;
@@ -50,6 +51,7 @@ function transformPost(post: APIPost): FeedPost {
     time: formatRelativeTime(post.created_at),
     votes: post.vote_score,
     responses,
+    comments: post.comments_count || 0,
     views: post.view_count || 0,
     status: mapStatus(post.status),
     isHot: post.vote_score > 10, // Simple heuristic for now

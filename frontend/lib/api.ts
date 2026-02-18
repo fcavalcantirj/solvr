@@ -654,6 +654,7 @@ class SolvrAPI {
   async getQuestions(params?: FetchQuestionsParams): Promise<APIPostsResponse> {
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.set('status', params.status);
+    if (params?.has_answer !== undefined) searchParams.set('has_answer', params.has_answer.toString());
     if (params?.tags && params.tags.length > 0) searchParams.set('tags', params.tags.join(','));
     if (params?.page) searchParams.set('page', params.page.toString());
     if (params?.per_page) searchParams.set('per_page', params.per_page.toString());

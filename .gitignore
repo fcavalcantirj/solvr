@@ -1,79 +1,68 @@
-# Environment files
-.env
-.env.local
-.env.*.local
 
-.claude/
-moltbook-drafts/
-skill-v2-draft.md
-
-# IDE/Editor
-.idea/
-.vscode/
-*.swp
-*.swo
 *~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Go
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
 /backend/api
 /backend/cmd/api/api
-/cli/cli
-
-# Test binary, built with `go test -c`
-*.test
-
-# Output of the go coverage tool
-*.out
-
-# Go workspace file
-go.work
-go.work.sum
-
-# Dependency directories
-vendor/
-
-# Node.js / npm
-node_modules/
-
-# Build outputs
-dist/
+# Binaries for programs and plugins
 build/
-out/
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Coverage
+# Build outputs
+.claude/
+/cli/cli
 coverage/
+# Coverage
 *.coverprofile
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
+# Database backups (production data should never be committed)
 # Database files (local dev)
 *.db
+db-backups/
+# Dependency directories
+DEPLOYMENT.md
+dist/
+*.dll
+.DS_Store
+*.dump
+*.dylib
+.env
+# Environment files
+.env.*.local
+.env.local
+.env.production
+*.exe
+*.exe~
+frontend/content/
+# Go
+go.work
+# Go workspace file
+go.work.sum
+.idea/
+# IDE/Editor
+*.log
+# Logs
+moltbook-drafts/
+# Node.js / npm
+node_modules/
+npm-debug.log*
+# OS
+*.out
+out/
+# Output of the go coverage tool
+scripts/backup-prod-db.sh
+skill-v2-draft.md
+*.so
+specs/PRD-AUDIT-2026-02-17.md
+*.sql.gz
 *.sqlite
 *.sqlite3
-.env.production
-frontend/content/
-
-# Database backups (production data should never be committed)
-db-backups/
-*.dump
-*.sql.gz
-DEPLOYMENT.md
+*.swo
+*.swp
+temp/
+# Temporary files
+*.test
+# Test binary, built with `go test -c`
+TESTING.md
+Thumbs.db
+*.tmp
+tmp/
+vendor/
+.vscode/
+yarn-debug.log*
+yarn-error.log*

@@ -1,6 +1,6 @@
 "use client";
 
-// Force dynamic rendering - this page imports Header which uses client-side state
+// Force dynamic rendering - this page uses client-side state (useState)
 export const dynamic = 'force-dynamic';
 
 
@@ -8,7 +8,6 @@ import React from "react"
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, Github, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +21,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const { loginWithGitHub, loginWithGoogle, loginWithEmail } = useAuth();
-  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,10 +30,10 @@ export default function LoginPage() {
     const result = await loginWithEmail(email, password);
 
     if (result.success) {
-      // Redirect to home or saved return URL
+      // Hard reload to ensure all components refresh with authenticated state
       const returnUrl = localStorage.getItem('auth_return_url') || '/';
       localStorage.removeItem('auth_return_url');
-      router.push(returnUrl);
+      window.location.href = returnUrl;
     } else {
       setError(result.error || "Login failed. Please try again.");
       setIsLoading(false);

@@ -410,4 +410,111 @@ describe('useAuth', () => {
 
     expect(result.current.showAuthModal).toBe(false);
   });
+
+  it('should NOT show auth modal during initialization (stale token 401)', async () => {
+    // Simulate a stale token in localStorage that will cause a 401 during init
+    localStorageMock.setItem('auth_token', 'stale-expired-token');
+
+    // Make getMe return a promise we control so we can trigger the handler DURING loading
+    let rejectGetMe: (error: Error) => void;
+    (api.getMe as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      new Promise((_, reject) => { rejectGetMe = reject; })
+    );
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    // isLoading should be true at this point (init in progress)
+    expect(result.current.isLoading).toBe(true);
+
+    // Simulate 401 error DURING initialization
+    const authErrorHandler = (api.onAuthError as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const { APIError } = await import('@/lib/api-error');
+
+    act(() => {
+      authErrorHandler(new APIError('Unauthorized', 401));
+    });
+
+    // Modal should NOT show during initialization
+    expect(result.current.showAuthModal).toBe(false);
+
+    // Now resolve the getMe to finish init
+    await act(async () => {
+      rejectGetMe(new Error('Unauthorized'));
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Modal should still be false - the 401 during init was suppressed
+    expect(result.current.showAuthModal).toBe(false);
+  });
+
+  it('should NOT show auth modal on auth pages (/login, /join, /auth)', async () => {
+    (api.getMe as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not authenticated'));
+
+    // Mock window.location.pathname to be /login
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { ...window.location, pathname: '/login' },
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Simulate 401 error after init on login page
+    const authErrorHandler = (api.onAuthError as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const { APIError } = await import('@/lib/api-error');
+
+    act(() => {
+      authErrorHandler(new APIError('Unauthorized', 401));
+    });
+
+    // Modal should NOT show on login page
+    expect(result.current.showAuthModal).toBe(false);
+
+    // Restore pathname
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { ...window.location, pathname: '/' },
+    });
+  });
+
+  it('should show auth modal after init on non-auth pages when unauthenticated', async () => {
+    (api.getMe as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not authenticated'));
+
+    // Ensure we're on a regular page
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { ...window.location, pathname: '/questions/some-id' },
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Simulate 401 error after init on a normal page
+    const authErrorHandler = (api.onAuthError as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const { APIError } = await import('@/lib/api-error');
+
+    act(() => {
+      authErrorHandler(new APIError('Unauthorized', 401));
+    });
+
+    // Modal SHOULD show after init on non-auth pages
+    await waitFor(() => {
+      expect(result.current.showAuthModal).toBe(true);
+    });
+
+    // Restore pathname
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { ...window.location, pathname: '/' },
+    });
+  });
 });

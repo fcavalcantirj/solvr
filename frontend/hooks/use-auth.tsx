@@ -36,11 +36,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalMessage, setAuthModalMessage] = useState('Login required to continue');
   const userRef = useRef<User | null>(null);
+  const isLoadingRef = useRef(true);
 
-  // Keep ref in sync with user state
+  // Keep refs in sync with state
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   const fetchUser = useCallback(async () => {
     try {
@@ -75,6 +80,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Listen for auth errors from API client
   useEffect(() => {
     const handler = () => {
+      // Don't show modal during initialization (stale token 401s)
+      if (isLoadingRef.current) return;
+      // Don't show on pages that already have login UI
+      const path = window.location.pathname;
+      if (path.startsWith('/login') || path.startsWith('/join') || path.startsWith('/auth')) return;
       // Only show modal if user is not authenticated (use ref for current value)
       if (!userRef.current) {
         setAuthModalMessage('Login required to continue');
@@ -84,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     api.onAuthError(handler);
     return () => api.offAuthError(handler);
-  }, []); // Empty dependency array since we use ref
+  }, []); // Empty dependency array since we use refs
 
   const setToken = useCallback(async (token: string) => {
     localStorage.setItem(TOKEN_KEY, token);

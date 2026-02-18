@@ -4,11 +4,10 @@ export const dynamic = 'force-dynamic';
 
 import { Suspense } from "react";
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 
 function AuthCallbackContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { setToken } = useAuth();
   const [error, setError] = useState<string | null>(null);
@@ -39,8 +38,8 @@ function AuthCallbackContent() {
         const returnUrl = localStorage.getItem("auth_return_url") || "/feed";
         localStorage.removeItem("auth_return_url");
 
-        // Redirect to return URL
-        router.push(returnUrl);
+        // Hard reload to ensure all components refresh with authenticated state
+        window.location.href = returnUrl;
       } catch (err) {
         setError("Failed to authenticate. Please try again.");
         setIsProcessing(false);
@@ -48,7 +47,7 @@ function AuthCallbackContent() {
     };
 
     handleCallback();
-  }, [searchParams, setToken, router]);
+  }, [searchParams, setToken]);
 
   if (error) {
     return (

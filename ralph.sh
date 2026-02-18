@@ -71,7 +71,7 @@ for ((i=1; i<=$1; i++)); do
   iter_start=$(date +%s)
 
   # Run claude synchronously
-  claude --dangerously-skip-permissions --no-session-persistence -p --output-format json "@CLAUDE.md @SPEC.md @specs/prd-v4.json @specs/progress.txt \
+  claude --dangerously-skip-permissions --no-session-persistence -p --output-format json "@CLAUDE.md @SPEC.md @specs/prd-v6-ipfs-expanded.json @specs/progress.txt \
 
 === GOLDEN RULES (MUST FOLLOW) ===
 • NO MOCKS, NO STUBS - real implementation only
@@ -96,7 +96,7 @@ for ((i=1; i<=$1; i++)); do
 6. For backend: run 'cd backend && go test ./...' to verify.
 7. For frontend: run 'cd frontend && npm test' to verify.
 8. Update specs/progress.txt with what you did.
-9. Update specs/prd-v4.json with passes=true for completed requirement.
+9. Update specs/prd-v6-ipfs-expanded.json with passes=true for completed requirement.
 10. COMMIT: Run 'git add .' to stage ALL files (including new ones), then 'git commit -m "message"'.
 11. PUSH: Run 'git push' to push to repository.
 

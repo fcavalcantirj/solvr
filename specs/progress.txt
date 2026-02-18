@@ -1,3 +1,12 @@
+2026-02-18: PRD-v6 IPFS Phase 2 - Add crystallization_cid column to problems table
+- Migration 000040_add_crystallization_fields: adds crystallization_cid (TEXT) and crystallized_at (TIMESTAMPTZ) to posts table
+- Partial index idx_posts_crystallization_cid on crystallization_cid WHERE NOT NULL
+- Post model (models/post.go): added CrystallizationCID (*string) and CrystallizedAt (*time.Time) fields with omitempty JSON
+- Post repository (db/posts.go): updated postColumns, scanPost, scanPostRows, scanPostWithAuthorRows, Create RETURNING, Update RETURNING, List SELECT, FindByID SELECT+Scan — all include crystallization_cid and crystallized_at
+- New method: SetCrystallizationCID(ctx, postID, cid) for crystallization service to set CID + timestamp
+- TDD tests (db/crystallization_test.go): 3 integration tests (migration schema validation, post model fields through CRUD, SetCrystallizationCID method)
+- All backend tests passing (integration tests skip without DATABASE_URL)
+
 2026-02-18: PRD-v6 IPFS Task - Add AMCP agent detection for auto-enabled pinning
 - Migration 000038: adds has_amcp_identity (BOOLEAN), amcp_aid (VARCHAR 255, unique), pinning_quota_bytes (BIGINT) to agents table
 - Agent model (models/agent.go): added HasAMCPIdentity, AMCPAID, PinningQuotaBytes fields

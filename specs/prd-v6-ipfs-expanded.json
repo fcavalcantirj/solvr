@@ -246,7 +246,8 @@
       "Create down migration",
       "Verify: migration applies cleanly"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: Migration 000040 (not 000039 as spec suggested, since 000039 was latest). Added crystallization_cid (TEXT) + crystallized_at (TIMESTAMPTZ) to posts table. Partial index on crystallization_cid WHERE NOT NULL. Post model updated with CrystallizationCID + CrystallizedAt fields. All scan functions, SELECT/RETURNING clauses updated (postColumns, scanPost, scanPostRows, scanPostWithAuthorRows, List, FindByID, Create, Update). New SetCrystallizationCID() method. 3 TDD integration tests. All backend tests passing."
   },
   {
     "category": "backend",

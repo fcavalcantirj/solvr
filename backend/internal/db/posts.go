@@ -57,7 +57,7 @@ type PostRepository struct {
 // Used to keep queries consistent and DRY.
 const postColumns = `id, type, title, description, tags, posted_by_type, posted_by_id,
 	status, upvotes, downvotes, view_count, success_criteria, weight, accepted_answer_id,
-	evolved_into, created_at, updated_at, deleted_at`
+	evolved_into, created_at, updated_at, deleted_at, crystallization_cid, crystallized_at`
 
 // NewPostRepository creates a new PostRepository.
 func NewPostRepository(pool *Pool) *PostRepository {
@@ -177,6 +177,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			p.upvotes, p.downvotes, p.view_count, p.success_criteria, p.weight,
 			p.accepted_answer_id, p.evolved_into,
 			p.created_at, p.updated_at, p.deleted_at,
+			p.crystallization_cid, p.crystallized_at,
 			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
 			COALESCE(ans_cnt.cnt, 0) as answers_count,
@@ -263,6 +264,8 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 		&post.CreatedAt,
 		&post.UpdatedAt,
 		&post.DeletedAt,
+		&post.CrystallizationCID,
+		&post.CrystallizedAt,
 		&authorDisplayName,
 		&authorAvatarURL,
 		&post.AnswersCount,
@@ -310,6 +313,8 @@ func (r *PostRepository) scanPost(row pgx.Row) (*models.Post, error) {
 		&post.CreatedAt,
 		&post.UpdatedAt,
 		&post.DeletedAt,
+		&post.CrystallizationCID,
+		&post.CrystallizedAt,
 	)
 
 	if err != nil {
@@ -349,6 +354,8 @@ func (r *PostRepository) scanPostRows(rows pgx.Rows) (*models.Post, error) {
 		&post.CreatedAt,
 		&post.UpdatedAt,
 		&post.DeletedAt,
+		&post.CrystallizationCID,
+		&post.CrystallizedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -374,7 +381,8 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 			posted_by_type, posted_by_id, status,
 			upvotes, downvotes, view_count, success_criteria, weight,
 			accepted_answer_id, evolved_into,
-			created_at, updated_at, deleted_at
+			created_at, updated_at, deleted_at,
+			crystallization_cid, crystallized_at
 	`
 
 	// Default status to 'draft' if not provided
@@ -412,6 +420,7 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 			p.upvotes, p.downvotes, p.view_count, p.success_criteria, p.weight,
 			p.accepted_answer_id, p.evolved_into,
 			p.created_at, p.updated_at, p.deleted_at,
+			p.crystallization_cid, p.crystallized_at,
 			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
 			COALESCE(ans_cnt.cnt, 0) as answers_count,
@@ -463,6 +472,8 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 		&post.CreatedAt,
 		&post.UpdatedAt,
 		&post.DeletedAt,
+		&post.CrystallizationCID,
+		&post.CrystallizedAt,
 		&authorDisplayName,
 		&authorAvatarURL,
 		&post.AnswersCount,
@@ -520,7 +531,8 @@ func (r *PostRepository) Update(ctx context.Context, post *models.Post) (*models
 			posted_by_type, posted_by_id, status,
 			upvotes, downvotes, view_count, success_criteria, weight,
 			accepted_answer_id, evolved_into,
-			created_at, updated_at, deleted_at
+			created_at, updated_at, deleted_at,
+			crystallization_cid, crystallized_at
 	`
 
 	row := r.pool.QueryRow(ctx, query,
@@ -725,4 +737,30 @@ func (r *PostRepository) GetUserVote(ctx context.Context, postID, voterType, vot
 		return nil, nil // No vote
 	}
 	return &direction, nil
+}
+
+// SetCrystallizationCID sets the IPFS CID for a crystallized problem snapshot.
+// Sets both crystallization_cid and crystallized_at (to current time).
+// Returns ErrPostNotFound if the post doesn't exist or is deleted.
+func (r *PostRepository) SetCrystallizationCID(ctx context.Context, postID, cid string) error {
+	query := `
+		UPDATE posts
+		SET crystallization_cid = $2, crystallized_at = NOW(), updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+
+	result, err := r.pool.Exec(ctx, query, postID, cid)
+	if err != nil {
+		if isInvalidUUIDError(err) {
+			return ErrPostNotFound
+		}
+		LogQueryError(ctx, "SetCrystallizationCID", "posts", err)
+		return fmt.Errorf("set crystallization CID failed: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrPostNotFound
+	}
+
+	return nil
 }

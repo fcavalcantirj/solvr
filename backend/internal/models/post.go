@@ -109,6 +109,13 @@ type Post struct {
 
 	// DeletedAt is when the post was soft deleted (null if not deleted).
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+
+	// CrystallizationCID is the IPFS CID of the immutable snapshot (problems only).
+	// Set when a solved problem is crystallized to IPFS for permanent archival.
+	CrystallizationCID *string `json:"crystallization_cid,omitempty"`
+
+	// CrystallizedAt is when the problem was crystallized to IPFS.
+	CrystallizedAt *time.Time `json:"crystallized_at,omitempty"`
 }
 
 // VoteScore returns the computed vote score (upvotes - downvotes).

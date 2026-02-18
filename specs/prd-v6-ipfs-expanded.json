@@ -346,7 +346,8 @@
       "Reference: IPFS Pinning Service API spec, Supermemory patterns",
       "Verify: documentation complete and accurate"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: Added Part 21 (not 22, since Part 20 was latest) to SPEC.md with ~280 lines. Covers: architecture diagram, database schema, all 5 API endpoints (POST/GET/DELETE /v1/pins, POST /v1/add, GET /v1/health/ipfs), authentication, pin status lifecycle, KuboIPFSService methods & retry logic, env vars, file layout, and future sections for crystallization (Phase 2), approach relationships (Phase 2), and smart forgetting (Phase 3). Spec version bumped to 1.7."
   },
   {
     "category": "integration",

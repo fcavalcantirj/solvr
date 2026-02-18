@@ -1,3 +1,25 @@
+2026-02-18: PRD-v6 IPFS Task - Document Solvr IPFS Pinning Service in SPEC.md
+- Added Part 21: IPFS Pinning Service to SPEC.md (~280 lines of documentation)
+- Section 21.1: Overview — key capabilities and future roadmap
+- Section 21.2: Architecture — component diagram, Kubo node details, production server info
+- Section 21.3: Database Schema — pins table with constraints and indexes
+- Section 21.4: API Endpoints — complete docs for all 5 endpoints:
+  * POST /v1/pins (create pin, async, 202 Accepted)
+  * GET /v1/pins (list with cid/name/status/limit filters)
+  * GET /v1/pins/:requestid (get pin status, ownership check)
+  * DELETE /v1/pins/:requestid (unpin, async IPFS unpin)
+  * POST /v1/add (file upload, multipart/form-data, configurable size limit)
+  * GET /v1/health/ipfs (public health check, 5s timeout)
+- Section 21.5: Pin Status Lifecycle — queued → pinning → pinned/failed
+- Section 21.6: IPFS Client Service — KuboIPFSService methods, retry logic, configuration
+- Section 21.7: Environment Variables — IPFS_API_URL, MAX_UPLOAD_SIZE_BYTES
+- Section 21.8: File Layout — complete file tree of IPFS-related code
+- Section 21.9: Future: Problem Crystallization (Phase 2) — design for IPFS archival
+- Section 21.10: Future: Approach Relationships (Phase 2) — Supermemory-inspired tracking
+- Section 21.11: Future: Smart Forgetting (Phase 3) — auto-archive stale approaches
+- Updated spec version to 1.7, date to 2026-02-18
+- All backend tests passing
+
 2026-02-18: PRD-v6 IPFS Task - Implement GET /v1/health/ipfs endpoint (IPFS health check)
 - Created backend/internal/api/handlers/ipfs_health.go (76 lines) with IPFSHealthHandler:
   * IPFSHealthChecker interface: NodeInfo(ctx) for checking IPFS node connectivity

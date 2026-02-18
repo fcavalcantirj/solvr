@@ -271,7 +271,40 @@ func (s *KuboIPFSService) doPost(ctx context.Context, url string) ([]byte, int, 
 	return body, resp.StatusCode, nil
 }
 
+// NodeInfoResult holds identity information returned by a kubo IPFS node.
+type NodeInfoResult struct {
+	PeerID          string
+	AgentVersion    string
+	ProtocolVersion string
+}
+
+// NodeInfo retrieves identity information from the IPFS node via POST /api/v0/id.
+func (s *KuboIPFSService) NodeInfo(ctx context.Context) (*NodeInfoResult, error) {
+	url := fmt.Sprintf("%s/api/v0/id", s.baseURL)
+	body, err := s.doWithRetry(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+
+	var result idResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("ipfs: failed to parse id response: %w", err)
+	}
+
+	return &NodeInfoResult{
+		PeerID:          result.ID,
+		AgentVersion:    result.AgentVersion,
+		ProtocolVersion: result.ProtocolVersion,
+	}, nil
+}
+
 // Kubo API response types.
+
+type idResponse struct {
+	ID              string `json:"ID"`
+	AgentVersion    string `json:"AgentVersion"`
+	ProtocolVersion string `json:"ProtocolVersion"`
+}
 
 type pinLsResponse struct {
 	Keys map[string]pinLsEntry `json:"Keys"`

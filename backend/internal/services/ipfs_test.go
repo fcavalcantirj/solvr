@@ -556,3 +556,91 @@ func TestIPFSConfig_Defaults(t *testing.T) {
 		t.Errorf("expected default retry delay %v, got %v", DefaultRetryDelay, cfg.RetryDelay)
 	}
 }
+
+// TestNodeInfo tests the NodeInfo method.
+func TestNodeInfo(t *testing.T) {
+	t.Run("returns node info on success", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/v0/id" {
+				t.Errorf("expected path /api/v0/id, got %s", r.URL.Path)
+			}
+			if r.Method != http.MethodPost {
+				t.Errorf("expected POST, got %s", r.Method)
+			}
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"ID":              "12D3KooWTest123",
+				"AgentVersion":    "kubo/0.39.0/",
+				"ProtocolVersion": "ipfs/0.1.0",
+			})
+		}))
+		defer server.Close()
+
+		svc := newTestService(server.URL)
+		info, err := svc.NodeInfo(context.Background())
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if info == nil {
+			t.Fatal("expected non-nil info")
+		}
+		if info.PeerID != "12D3KooWTest123" {
+			t.Errorf("expected peer ID '12D3KooWTest123', got '%s'", info.PeerID)
+		}
+		if info.AgentVersion != "kubo/0.39.0/" {
+			t.Errorf("expected agent version 'kubo/0.39.0/', got '%s'", info.AgentVersion)
+		}
+		if info.ProtocolVersion != "ipfs/0.1.0" {
+			t.Errorf("expected protocol version 'ipfs/0.1.0', got '%s'", info.ProtocolVersion)
+		}
+	})
+
+	t.Run("returns error on server error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("internal error"))
+		}))
+		defer server.Close()
+
+		svc := newTestService(server.URL)
+		info, err := svc.NodeInfo(context.Background())
+
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if info != nil {
+			t.Errorf("expected nil info, got %+v", info)
+		}
+	})
+
+	t.Run("returns error on connection refused", func(t *testing.T) {
+		svc := newTestService("http://127.0.0.1:1")
+		info, err := svc.NodeInfo(context.Background())
+
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if info != nil {
+			t.Errorf("expected nil info, got %+v", info)
+		}
+	})
+
+	t.Run("returns error on invalid JSON response", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("not json"))
+		}))
+		defer server.Close()
+
+		svc := newTestService(server.URL)
+		info, err := svc.NodeInfo(context.Background())
+
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if info != nil {
+			t.Errorf("expected nil info, got %+v", info)
+		}
+	})
+}

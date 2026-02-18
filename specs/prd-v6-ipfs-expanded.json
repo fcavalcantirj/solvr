@@ -504,7 +504,8 @@
       "Add to main /v1/health endpoint as ipfs sub-object",
       "Alert if IPFS disconnected for >5 minutes (integrate with existing alerting)"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: IPFSHealthHandler with Check endpoint (GET /v1/health/ipfs). IPFSHealthChecker interface, IPFSNodeInfo/IPFSHealthResponse structs. NodeInfo method added to KuboIPFSService (POST /api/v0/id). ipfsHealthAdapter bridges services→handlers. 5s timeout, 0 retries. 6 handler tests + 4 service tests + 2 router integration tests. All passing."
   },
   {
     "category": "frontend",

@@ -76,6 +76,21 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	r.Get("/health/live", healthLiveHandler)
 	r.Get("/health/ready", healthReadyHandler(pool))
 
+	// IPFS health check (per prd-v6-ipfs-expanded.json)
+	// GET /v1/health/ipfs - check IPFS node connectivity (no auth, public monitoring endpoint)
+	ipfsAPIURL := os.Getenv("IPFS_API_URL")
+	if ipfsAPIURL == "" {
+		ipfsAPIURL = "http://localhost:5001"
+	}
+	ipfsHealthSvc := services.NewKuboIPFSServiceWithConfig(ipfsAPIURL, services.IPFSConfig{
+		Timeout:    5 * time.Second,
+		MaxRetries: 0,
+		RetryDelay: 0,
+	})
+	ipfsHealthAdapter := &ipfsHealthAdapter{ipfs: ipfsHealthSvc}
+	ipfsHealthHandler := handlers.NewIPFSHealthHandler(ipfsHealthAdapter)
+	r.Get("/v1/health/ipfs", ipfsHealthHandler.Check)
+
 	// Admin endpoints (requires X-Admin-API-Key header)
 	adminHandler := handlers.NewAdminHandler(pool)
 	r.Post("/admin/query", adminHandler.ExecuteQuery)
@@ -654,6 +669,23 @@ func wrapCommentsCreateWithType(h *handlers.CommentsHandler, targetType string) 
 		rctx.URLParams.Add("target_type", targetType)
 		h.Create(w, r)
 	}
+}
+
+// ipfsHealthAdapter wraps KuboIPFSService to satisfy handlers.IPFSHealthChecker.
+type ipfsHealthAdapter struct {
+	ipfs *services.KuboIPFSService
+}
+
+func (a *ipfsHealthAdapter) NodeInfo(ctx context.Context) (*handlers.IPFSNodeInfo, error) {
+	result, err := a.ipfs.NodeInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &handlers.IPFSNodeInfo{
+		PeerID:          result.PeerID,
+		AgentVersion:    result.AgentVersion,
+		ProtocolVersion: result.ProtocolVersion,
+	}, nil
 }
 
 // HealthResponse is the response structure for health endpoints

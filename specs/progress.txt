@@ -1,3 +1,28 @@
+2026-02-18: PRD-v6 IPFS Task - Implement GET /v1/health/ipfs endpoint (IPFS health check)
+- Created backend/internal/api/handlers/ipfs_health.go (76 lines) with IPFSHealthHandler:
+  * IPFSHealthChecker interface: NodeInfo(ctx) for checking IPFS node connectivity
+  * IPFSNodeInfo struct: PeerID, AgentVersion, ProtocolVersion
+  * IPFSHealthResponse struct: Connected, PeerID, Version, Error
+  * Check handler (GET /v1/health/ipfs): calls kubo /api/v0/id, returns 200 OK (healthy) or 503 (unavailable)
+  * Handles timeout (context.DeadlineExceeded) → returns "timeout" error
+  * Handles nil NodeInfo → returns 503
+- Created backend/internal/api/handlers/ipfs_health_test.go (216 lines) with 6 TDD tests:
+  * MockIPFSHealthChecker with configurable NodeInfo and error
+  * Test: healthy node returns 200 with connected=true, peer_id, version
+  * Test: unhealthy node returns 503 with connected=false and error message
+  * Test: timeout returns 503 with error "timeout"
+  * Test: nil NodeInfo returns 503
+  * Test: response format has required fields (connected, peer_id, version)
+  * Test: context cancelled returns 503
+- Added NodeInfo method to KuboIPFSService (services/ipfs.go):
+  * Calls POST /api/v0/id on kubo node, returns NodeInfoResult (PeerID, AgentVersion, ProtocolVersion)
+  * 4 TDD tests in ipfs_test.go: success, server error, connection refused, invalid JSON
+- Created ipfsHealthAdapter in router.go to bridge services.NodeInfoResult → handlers.IPFSNodeInfo
+- Wired GET /v1/health/ipfs at router level (no auth required, works even without DB pool)
+- Health IPFS service uses 5s timeout, 0 retries (fast failure for monitoring)
+- Created router_ipfs_health_test.go with 2 integration tests (503 without running IPFS node)
+- All backend tests passing (go test ./...)
+
 2026-02-18: PRD-v6 IPFS Task - Implement POST /v1/add endpoint (upload content, return CID)
 - Created backend/internal/api/handlers/upload.go (119 lines) with UploadHandler:
   * IPFSAdder interface: Add(ctx, reader) for IPFS upload (avoids import cycle)

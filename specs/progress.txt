@@ -1,3 +1,23 @@
+2026-02-18: PRD-v6 IPFS Task - Implement POST /v1/add endpoint (upload content, return CID)
+- Created backend/internal/api/handlers/upload.go (119 lines) with UploadHandler:
+  * IPFSAdder interface: Add(ctx, reader) for IPFS upload (avoids import cycle)
+  * NewUploadHandler(ipfs, maxUploadSize) constructor with configurable size limit
+  * AddContent handler (POST /v1/add): multipart/form-data with 'file' field
+  * Size limit via http.MaxBytesReader (default 100MB, configurable via MAX_UPLOAD_SIZE_BYTES env)
+  * Validates: auth required, multipart format, file field exists, file not empty
+  * Returns: { cid: string, size: number } — does NOT auto-pin
+  * Errors: 401 (no auth), 400 (bad request), 413 (file too large), 500 (IPFS error)
+- Created backend/internal/api/handlers/upload_test.go (282 lines) with 10 TDD tests:
+  * MockIPFSAdder: Add mock with configurable error and CID return
+  * Test: success (human), success (agent), no auth (401), oversized file (413)
+  * Test: missing file field (400), not multipart (400), empty file (400), IPFS error (500)
+  * Test: response format verification, DefaultMaxUploadSize constant check
+- Created backend/internal/api/router_upload_test.go (111 lines) with 2 integration tests:
+  * Test: POST /v1/add requires auth (401 without auth)
+  * Test: POST /v1/add with agent API key (auth passes, returns 200 or 500)
+- Wired into router.go: POST /v1/add under UnifiedAuthMiddleware, MAX_UPLOAD_SIZE_BYTES env var
+- All tests passing (go test ./...)
+
 2026-02-18: PRD-v6 IPFS Task - Add pinning API routes to router.go
 - Wired PinRepository and KuboIPFSService into mountV1Routes()
 - Added IPFS_API_URL env var support (default: http://localhost:5001)

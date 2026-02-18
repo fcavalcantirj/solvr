@@ -384,7 +384,8 @@
       "Test: POST /v1/add without auth returns 401",
       "Verify: go test passes"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: UploadHandler with IPFSAdder interface, AddContent (POST /v1/add), multipart file upload, configurable size limit (MAX_UPLOAD_SIZE_BYTES env, default 100MB), empty file rejection, does NOT auto-pin. 10 TDD handler tests + 2 router integration tests. All passing."
   },
   {
     "category": "backend",

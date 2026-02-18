@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -200,6 +201,16 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 	}
 	ipfsService := services.NewKuboIPFSService(ipfsAPIURL)
 	pinsHandler := handlers.NewPinsHandler(pinsRepo, ipfsService)
+
+	// Create IPFS upload handler
+	// Max upload size: configurable via env, defaults to 100MB
+	maxUploadSize := int64(handlers.DefaultMaxUploadSize)
+	if maxUploadSizeStr := os.Getenv("MAX_UPLOAD_SIZE_BYTES"); maxUploadSizeStr != "" {
+		if parsed, err := strconv.ParseInt(maxUploadSizeStr, 10, 64); err == nil && parsed > 0 {
+			maxUploadSize = parsed
+		}
+	}
+	uploadHandler := handlers.NewUploadHandler(ipfsService, maxUploadSize)
 
 	// JWT secret for auth middleware - read from env or use test default
 	jwtSecret := os.Getenv("JWT_SECRET")
@@ -562,6 +573,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool) {
 			r.Get("/pins/{requestid}", pinsHandler.GetByRequestID)
 			// DELETE /v1/pins/:requestid - unpin content (async IPFS unpin)
 			r.Delete("/pins/{requestid}", pinsHandler.Delete)
+
+			// IPFS content upload endpoint (per prd-v6-ipfs-expanded.json)
+			// POST /v1/add - upload content to IPFS and return CID (does NOT auto-pin)
+			r.Post("/add", uploadHandler.AddContent)
 		})
 	})
 }

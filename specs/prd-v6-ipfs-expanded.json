@@ -123,7 +123,8 @@
       "Test: POST /v1/pins without auth returns 401 Unauthorized",
       "Verify: go test ./internal/api/handlers -run TestPins -v passes"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: PinsHandler with Create, IPFSPinner interface (avoids import cycle), CID validation (CIDv0 Qm... + CIDv1 baf...), async goroutine pinning, 12 TDD tests. All passing."
   },
   {
     "category": "backend",
@@ -144,7 +145,8 @@
       "Test: Only owner can view their pin (403 for others)",
       "Verify: go test passes"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: GetByRequestID handler with ownership check (403 for non-owners), 4 TDD tests. Implemented in same pins.go handler file."
   },
   {
     "category": "backend",
@@ -163,7 +165,8 @@
       "Test: Pagination with before/after cursors works",
       "Verify: go test passes"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: List handler with status/cid/name/limit filters, Pinning Service API format (count+results), 5 TDD tests."
   },
   {
     "category": "backend",
@@ -185,7 +188,8 @@
       "Test: Non-owner DELETE returns 403 Forbidden",
       "Verify: go test passes"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: Delete handler with ownership check, async IPFS unpin, 4 TDD tests."
   },
   {
     "category": "backend",

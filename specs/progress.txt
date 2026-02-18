@@ -1,3 +1,25 @@
+2026-02-18: PRD-v6 IPFS Task - Implement pinning API handlers (POST/GET/DELETE /v1/pins)
+- Created backend/internal/api/handlers/pins.go (341 lines) with PinsHandler:
+  * PinRepositoryInterface: local interface for pin DB operations (avoids import cycle with services pkg)
+  * IPFSPinner: local interface (Pin, Unpin) for IPFS operations (avoids import cycle)
+  * NewPinsHandler(repo, ipfs) constructor with JSON logger
+  * Create handler (POST /v1/pins): validates CID format (CIDv0 Qm... + CIDv1 baf...), creates pin record as 'queued', spawns async goroutine for IPFS pinning, returns 202 Accepted with Pinning Service API format
+  * GetByRequestID handler (GET /v1/pins/:requestid): ownership check (403 for non-owners), returns pin status
+  * List handler (GET /v1/pins): filters by cid, name, status, limit; returns Pinning Service API format (count + results)
+  * Delete handler (DELETE /v1/pins/:requestid): ownership check, deletes pin record, async IPFS unpin, returns 202 Accepted
+  * IsValidCID: validates CIDv0 (Qm..., base58, 44+ chars) and CIDv1 (baf..., base32/36lower, 50+ chars)
+  * asyncPin: background goroutine transitions queued→pinning→pinned/failed
+- Created backend/internal/api/handlers/pins_test.go (845 lines) with 26 TDD tests:
+  * MockPinRepository: full interface mock with configurable errors and call tracking
+  * MockIPFSPinner: Pin/Unpin mock with CID tracking
+  * Test helpers: addPinsAuthContext, addPinsAgentContext, createTestPin, addPinsRouteContext
+  * POST /v1/pins tests (12): success human, success agent, no auth, invalid JSON, missing CID, invalid CID, valid CIDv0, valid CIDv1, duplicate pin (409), internal error (500), empty body, response format verification
+  * GET /v1/pins/:requestid tests (4): success, not found (404), forbidden (403), no auth (401)
+  * GET /v1/pins tests (5): success, status filter, no auth, CID filter, pagination
+  * DELETE /v1/pins/:requestid tests (4): success, not found, forbidden, no auth
+  * IsValidCID tests (7): CIDv0, CIDv1 bafy, CIDv1 bafk, empty, random, too short, numbers
+- All 26 tests passing, all backend tests passing (go test ./...)
+
 2026-02-18: PRD-v6 IPFS Task - Create IPFS client service for kubo API interaction
 - Created backend/internal/services/ipfs.go (296 lines) with IPFSService interface and KuboIPFSService:
   * IPFSService interface: Pin(ctx, cid), Unpin(ctx, cid), PinStatus(ctx, cid), Add(ctx, reader), ObjectStat(ctx, cid)

@@ -76,3 +76,4 @@ frontend/content/
 db-backups/
 *.dump
 *.sql.gz
+DEPLOYMENT.md

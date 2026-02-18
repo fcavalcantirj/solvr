@@ -341,4 +341,45 @@ describe('useProblem', () => {
     expect(result.current.approaches).toEqual([]);
     expect(result.current.error).toBeNull();
   });
+
+  it('should include crystallization fields when present', async () => {
+    const crystallizedProblem = {
+      ...mockProblem,
+      status: 'solved',
+      crystallization_cid: 'QmTestCid123',
+      crystallized_at: '2026-02-15T10:30:00Z',
+    };
+
+    (api.getPost as ReturnType<typeof vi.fn>).mockResolvedValue({ data: crystallizedProblem });
+    (api.getProblemApproaches as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+      meta: { total: 0, page: 1, per_page: 20, has_more: false },
+    });
+
+    const { result } = renderHook(() => useProblem('problem-123'));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.problem?.crystallizationCid).toBe('QmTestCid123');
+    expect(result.current.problem?.crystallizedAt).toBe('2026-02-15T10:30:00Z');
+  });
+
+  it('should have undefined crystallization fields when not present', async () => {
+    (api.getPost as ReturnType<typeof vi.fn>).mockResolvedValue({ data: mockProblem });
+    (api.getProblemApproaches as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+      meta: { total: 0, page: 1, per_page: 20, has_more: false },
+    });
+
+    const { result } = renderHook(() => useProblem('problem-123'));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.problem?.crystallizationCid).toBeUndefined();
+    expect(result.current.problem?.crystallizedAt).toBeUndefined();
+  });
 });

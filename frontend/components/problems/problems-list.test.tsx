@@ -33,6 +33,14 @@ vi.mock('@/components/ui/vote-button', () => ({
   ),
 }));
 
+// Mock CrystallizationBadge
+vi.mock('@/components/problems/detail/crystallization-badge', () => ({
+  CrystallizationBadge: ({ crystallizationCid, variant }: { crystallizationCid?: string; variant?: string }) =>
+    crystallizationCid ? (
+      <span data-testid="crystallization-badge" data-variant={variant}>CRYSTALLIZED</span>
+    ) : null,
+}));
+
 // Mock next/link
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -205,6 +213,53 @@ describe('ProblemsList', () => {
     for (const btn of secondButtons) {
       expect(btn.getAttribute('data-initial-score')).toBe('7');
     }
+  });
+});
+
+describe('ProblemsList - Crystallization Badge', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders crystallization badge for crystallized problems', () => {
+    const crystallizedProblem = {
+      ...mockProblem,
+      id: 'problem-crystal',
+      status: 'solved',
+      crystallizationCid: 'QmTestCid123',
+    };
+
+    vi.mocked(useProblems).mockReturnValue({
+      problems: [crystallizedProblem],
+      loading: false,
+      error: null,
+      total: 1,
+      hasMore: false,
+      page: 1,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<ProblemsList />);
+
+    expect(screen.getByText('CRYSTALLIZED')).toBeInTheDocument();
+  });
+
+  it('does not render crystallization badge for non-crystallized problems', () => {
+    vi.mocked(useProblems).mockReturnValue({
+      problems: [mockProblem],
+      loading: false,
+      error: null,
+      total: 1,
+      hasMore: false,
+      page: 1,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<ProblemsList />);
+
+    expect(screen.queryByText('CRYSTALLIZED')).not.toBeInTheDocument();
   });
 });
 
@@ -398,6 +453,47 @@ describe('ProblemsList - Search Integration', () => {
     // Both search result titles should be displayed
     expect(screen.getByText('Race Conditions in Go')).toBeInTheDocument();
     expect(screen.getByText('How to Handle Race Conditions')).toBeInTheDocument();
+  });
+
+  it('displays crystallization badge on crystallized search results', () => {
+    const crystallizedSearchPost = {
+      id: 'post-crystal-1',
+      title: 'Crystallized Problem',
+      snippet: 'A crystallized problem...',
+      status: 'solved',
+      votes: 30,
+      responses: 5,
+      views: 200,
+      author: { id: 'user-1', name: 'testuser', type: 'human' as const },
+      tags: ['go'],
+      time: '3d ago',
+      type: 'problem' as const,
+      crystallizationCid: 'QmTestCid123',
+    };
+
+    vi.mocked(useSearch).mockReturnValue({
+      posts: [crystallizedSearchPost],
+      loading: false,
+      error: null,
+      hasMore: false,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    vi.mocked(useProblems).mockReturnValue({
+      problems: [],
+      loading: false,
+      error: null,
+      total: 0,
+      hasMore: false,
+      page: 1,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<ProblemsList searchQuery="crystallized" />);
+
+    expect(screen.getByText('Crystallized Problem')).toBeInTheDocument();
   });
 
   it('shows no results message when search returns empty', () => {

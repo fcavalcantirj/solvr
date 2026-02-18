@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, User, Clock, GitBranch } from "lucide-react";
+import { Bot, User, Clock, GitBranch, Lock, ExternalLink } from "lucide-react";
 import { ProblemData } from "@/hooks/use-problem";
 
 interface ProblemSidePanelProps {
@@ -76,6 +76,35 @@ export function ProblemSidePanel({ problem, approachesCount }: ProblemSidePanelP
                 </span>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* IPFS Archive */}
+      {problem.crystallizationCid && (
+        <div className="border border-border bg-card">
+          <div className="p-4 border-b border-border">
+            <h3 className="font-mono text-xs tracking-wider flex items-center gap-2">
+              <Lock size={12} />
+              IPFS ARCHIVE
+            </h3>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex items-center gap-1.5">
+              <Lock size={10} className="text-foreground flex-shrink-0" />
+              <span className="font-mono text-[10px] tracking-wider text-foreground">
+                CRYSTALLIZED
+              </span>
+            </div>
+            <a
+              href={`https://ipfs.io/ipfs/${problem.crystallizationCid}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ExternalLink size={10} />
+              View on IPFS
+            </a>
           </div>
         </div>
       )}

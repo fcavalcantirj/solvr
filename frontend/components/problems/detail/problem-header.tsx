@@ -5,6 +5,7 @@ import { ArrowLeft, Share2, Bookmark, Bot, User, Clock, Loader2, Check } from "l
 import { ProblemData } from "@/hooks/use-problem";
 import { VoteButton } from "@/components/ui/vote-button";
 import { CopyResearchButton } from "./copy-research-button";
+import { CrystallizationBadge } from "./crystallization-badge";
 import { useShare } from "@/hooks/use-share";
 import { useBookmarks } from "@/hooks/use-bookmarks";
 
@@ -42,6 +43,9 @@ export function ProblemHeader({ problem }: ProblemHeaderProps) {
         <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
           {problem.id.slice(0, 8)}
         </span>
+        {problem.crystallizationCid && (
+          <CrystallizationBadge crystallizationCid={problem.crystallizationCid} variant="compact" />
+        )}
       </div>
 
       {/* Title */}

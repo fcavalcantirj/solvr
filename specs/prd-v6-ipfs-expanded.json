@@ -309,7 +309,8 @@
       "Include: CID (truncated with copy button), crystallized date, link to gateway",
       "Verify: crystallized problems show badge, link works"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: CrystallizationBadge component (crystallization-badge.tsx) with compact/detailed variants. Added crystallization_cid/crystallized_at to APIPost, ProblemData, ProblemListItem types. Badge shows in ProblemCard (list), ProblemHeader (detail meta row), ProblemSidePanel (IPFS ARCHIVE section with gateway link). Uses ipfs.io gateway. Lock icon from lucide-react. 10 badge tests + 2 header tests + 7 side panel tests + 2 list tests + 2 hook tests = 23 new tests. All 693 frontend tests passing."
   },
   {
     "category": "frontend",

@@ -5,6 +5,7 @@ import { Bot, User, GitBranch, MessageCircle, Eye, Clock, CheckCircle2, AlertCir
 import { useProblems, ProblemListItem, UseProblemsOptions } from "@/hooks/use-problems";
 import { useSearch } from "@/hooks/use-posts";
 import { VoteButton } from "@/components/ui/vote-button";
+import { CrystallizationBadge } from "@/components/problems/detail/crystallization-badge";
 
 // Map API weight (1-5) to display labels
 function mapWeight(weight?: number): "critical" | "high" | "medium" | "low" {
@@ -157,6 +158,9 @@ function ProblemCard({ problem }: { problem: ProblemListItem }) {
                 <StatusIcon size={12} className={problem.status === "in_progress" ? "animate-spin" : ""} />
                 {statusCfg.label}
               </span>
+              {problem.crystallizationCid && (
+                <CrystallizationBadge crystallizationCid={problem.crystallizationCid} variant="compact" />
+              )}
             </div>
 
             {/* Title */}

@@ -1930,3 +1930,33 @@ Task 16 complete.
   * Starts goroutine with DefaultCrystallizationInterval (24h)
   * Graceful shutdown via context cancellation
 - All backend tests passing (12 packages)
+
+=== IPFS Phase 2: Add crystallization badge to solved problems (frontend) ===
+Date: 2026-02-18
+
+Type Updates:
+- Added crystallization_cid, crystallized_at to APIPost interface (lib/api-types.ts)
+- Added crystallizationCid, crystallizedAt to ProblemData (hooks/use-problem.ts)
+- Added crystallizationCid to ProblemListItem (hooks/use-problems.ts)
+- Updated transformProblem functions in both hooks to pass through crystallization fields
+
+New Component:
+- Created CrystallizationBadge (components/problems/detail/crystallization-badge.tsx)
+  * Two variants: compact (list view) and detailed (shows truncated CID)
+  * Renders as clickable link to IPFS gateway (ipfs.io)
+  * Lock icon from lucide-react
+  * Returns null when no CID present
+  * Opens in new tab with proper rel attributes
+
+Integration Points:
+- ProblemCard in problems-list.tsx: shows compact badge next to status in header row
+- ProblemHeader in problem-header.tsx: shows compact badge in meta row
+- ProblemSidePanel in problem-side-panel.tsx: shows IPFS ARCHIVE section with CRYSTALLIZED status and gateway link
+
+Tests (23 new, TDD approach):
+- 10 CrystallizationBadge unit tests: null/undefined/empty CID, compact variant, detailed variant with truncation, CIDv0/CIDv1, link attributes
+- 7 ProblemSidePanel tests: basic rendering, crystallization section presence/absence, gateway link, author types
+- 2 ProblemHeader tests: badge presence/absence for crystallized problems
+- 2 ProblemsList tests: badge rendering for crystallized/non-crystallized problems
+- 2 useProblem hook tests: crystallization fields present/absent
+- All 693 frontend tests passing (83 test files)

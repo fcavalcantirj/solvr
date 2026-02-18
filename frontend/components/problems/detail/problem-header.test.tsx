@@ -42,6 +42,14 @@ vi.mock('./copy-research-button', () => ({
   CopyResearchButton: () => <div data-testid="copy-research-button">CopyResearchButton</div>,
 }));
 
+// Mock CrystallizationBadge
+vi.mock('./crystallization-badge', () => ({
+  CrystallizationBadge: ({ crystallizationCid }: { crystallizationCid?: string }) =>
+    crystallizationCid ? (
+      <span data-testid="crystallization-badge">CRYSTALLIZED</span>
+    ) : null,
+}));
+
 // Mock next/link
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
@@ -136,5 +144,21 @@ describe('ProblemHeader', () => {
     const voteButton = screen.getByTestId('vote-button');
     expect(voteButton.getAttribute('data-post-id')).toBe(mockProblem.id);
     expect(voteButton.getAttribute('data-score')).toBe('42');
+  });
+
+  it('does not render crystallization badge when not crystallized', () => {
+    render(<ProblemHeader problem={mockProblem} />);
+    expect(screen.queryByText('CRYSTALLIZED')).not.toBeInTheDocument();
+  });
+
+  it('renders crystallization badge when problem is crystallized', () => {
+    const crystallizedProblem: ProblemData = {
+      ...mockProblem,
+      status: 'SOLVED',
+      crystallizationCid: 'QmTestCid123',
+      crystallizedAt: '2026-02-15T10:30:00Z',
+    };
+    render(<ProblemHeader problem={crystallizedProblem} />);
+    expect(screen.getByText('CRYSTALLIZED')).toBeInTheDocument();
   });
 });

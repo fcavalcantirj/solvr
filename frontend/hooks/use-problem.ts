@@ -52,6 +52,8 @@ export interface ProblemData {
   time: string;
   approachesCount: number;
   views: number;
+  crystallizationCid?: string;
+  crystallizedAt?: string;
 }
 
 export interface UseProblemResult {
@@ -83,6 +85,8 @@ function transformProblem(post: APIPost): ProblemData {
     time: formatRelativeTime(post.created_at),
     approachesCount: post.approaches_count || 0,
     views: post.view_count || 0,
+    crystallizationCid: post.crystallization_cid,
+    crystallizedAt: post.crystallized_at,
   };
 }
 

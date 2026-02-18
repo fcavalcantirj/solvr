@@ -26,6 +26,8 @@ export interface APIPost {
   approaches_count?: number;
   comments_count?: number | null;  // Production may return null when comments table doesn't exist
   evolved_into?: string[];
+  crystallization_cid?: string;
+  crystallized_at?: string;
 }
 
 export interface APIPostsResponse {

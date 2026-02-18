@@ -20,6 +20,7 @@ export interface ProblemListItem {
   };
   tags: string[];
   timestamp: string;
+  crystallizationCid?: string;
 }
 
 function transformProblem(post: APIPost): ProblemListItem {
@@ -42,6 +43,7 @@ function transformProblem(post: APIPost): ProblemListItem {
     },
     tags: post.tags || [],
     timestamp: formatRelativeTime(post.created_at),
+    crystallizationCid: post.crystallization_cid,
   };
 }
 

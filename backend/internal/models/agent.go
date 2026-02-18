@@ -70,9 +70,13 @@ type Agent struct {
 	// Nullable — only set for agents with AMCP identity.
 	AMCPAID string `json:"amcp_aid,omitempty"`
 
-	// PinningQuotaBytes is the agent's remaining IPFS pinning quota in bytes.
+	// PinningQuotaBytes is the agent's IPFS pinning quota in bytes.
 	// AMCP agents get 1GB (1073741824 bytes) free quota on registration.
 	PinningQuotaBytes int64 `json:"pinning_quota_bytes"`
+
+	// StorageUsedBytes tracks total pinned content size for the agent.
+	// Per prd-v6-ipfs-expanded Phase 2: storage quota tracking.
+	StorageUsedBytes int64 `json:"storage_used_bytes"`
 
 	// CreatedAt is when the agent was registered.
 	CreatedAt time.Time `json:"created_at"`

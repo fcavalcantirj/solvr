@@ -154,6 +154,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string) {
 	commentsRepo = db.NewCommentsRepository(pool)
 	notificationsRepo = db.NewNotificationsRepository(pool)
 	pinsRepo = db.NewPinRepository(pool)
+	storageRepo := db.NewStorageRepository(pool)
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
 	agentsHandler.SetClaimTokenRepository(claimTokenRepo)
@@ -213,6 +214,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string) {
 	// Create IPFS pinning handler (uses ipfsAPIURL passed from NewRouter)
 	ipfsService := services.NewKuboIPFSService(ipfsAPIURL)
 	pinsHandler := handlers.NewPinsHandler(pinsRepo, ipfsService)
+	pinsHandler.SetStorageRepo(storageRepo)
 
 	// Create IPFS upload handler
 	// Max upload size: configurable via env, defaults to 100MB
@@ -495,6 +497,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string) {
 			r.Get("/me", meHandler.Me)
 			r.Get("/me/auth-methods", meHandler.GetMyAuthMethods)
 			r.Delete("/me", meHandler.DeleteMe) // PRD-v5 Task 12: User self-deletion
+
+			// Per prd-v6-ipfs-expanded Phase 2: GET /v1/me/storage - storage usage
+			storageHandler := handlers.NewStorageHandler(storageRepo)
+			r.Get("/me/storage", storageHandler.GetStorage)
 
 			// BE-003: User profile endpoints
 			// PATCH /v1/me - update own profile

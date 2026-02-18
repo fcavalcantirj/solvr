@@ -407,7 +407,8 @@
       "Add TDD tests for quota enforcement",
       "Verify: user over quota cannot pin new content"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: Migration 000041 (not 000042 as spec suggested, since 000040 was latest). StorageRepository (db/storage.go) with GetStorageUsage() and UpdateStorageUsed() for both human/agent. StorageHandler (handlers/storage.go) for GET /v1/me/storage. Quota enforcement in PinsHandler.Create (402 if exceeded). Storage decrement in PinsHandler.Delete. User model adds StorageUsedBytes + StorageQuotaBytes. Agent model adds StorageUsedBytes (quota already existed as pinning_quota_bytes). 9 handler TDD tests + 5 DB integration tests. All backend tests passing."
   },
   {
     "category": "backend",

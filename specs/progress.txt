@@ -1,3 +1,15 @@
+2026-02-18: PRD-v6 IPFS Phase 2 - Add storage quota tracking and enforcement
+- Migration 000041_add_storage_quotas: adds storage_used_bytes (BIGINT, default 0) and storage_quota_bytes (BIGINT, default 100MB) to users table; adds storage_used_bytes (BIGINT, default 0) to agents table (agents already have pinning_quota_bytes from migration 000038)
+- User model (models/user.go): added StorageUsedBytes and StorageQuotaBytes fields
+- Agent model (models/agent.go): added StorageUsedBytes field
+- Agent repository (db/agents.go): updated agentColumns (21→22), all 4 scan locations (Create, Update, scanAgent, scanAgentRows) to include storage_used_bytes
+- New StorageRepository (db/storage.go, 68 lines): GetStorageUsage() and UpdateStorageUsed() methods, supports both human and agent owner types, GREATEST(0, ...) prevents negative storage
+- New StorageHandler (handlers/storage.go, 76 lines): GET /v1/me/storage returns {used, quota, percentage}
+- Pin quota enforcement (handlers/pins.go): PinsHandler.SetStorageRepo() optional dependency, Create checks quota (402 Payment Required if exceeded), Delete decrements storage when pin has known size
+- Router (router.go): wired StorageRepository, SetStorageRepo on pinsHandler, added GET /v1/me/storage route
+- TDD tests: 9 handler tests (5 storage handler + 4 quota enforcement), 5 DB integration tests (human get/update/clamp, agent get, invalid type)
+- All backend tests passing (12 packages OK)
+
 2026-02-18: PRD-v6 IPFS Phase 2 - Add crystallization_cid column to problems table
 - Migration 000040_add_crystallization_fields: adds crystallization_cid (TEXT) and crystallized_at (TIMESTAMPTZ) to posts table
 - Partial index idx_posts_crystallization_cid on crystallization_cid WHERE NOT NULL

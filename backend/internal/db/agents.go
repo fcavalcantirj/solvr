@@ -29,8 +29,8 @@ type AgentRepository struct {
 // Used to keep queries consistent and DRY.
 // Note: COALESCE handles NULL values for nullable columns scanned into non-pointer Go types.
 // Without COALESCE, pgx fails when scanning NULL into string/[]string.
-// 21 columns total (added AMCP fields for prd-v6-ipfs-expanded)
-const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, reputation, human_claimed_at, has_human_backed_badge, has_amcp_identity, COALESCE(amcp_aid, '') as amcp_aid, pinning_quota_bytes, created_at, updated_at, deleted_at`
+// 22 columns total (added storage_used_bytes for prd-v6-ipfs-expanded Phase 2)
+const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, reputation, human_claimed_at, has_human_backed_badge, has_amcp_identity, COALESCE(amcp_aid, '') as amcp_aid, pinning_quota_bytes, storage_used_bytes, created_at, updated_at, deleted_at`
 
 // NewAgentRepository creates a new AgentRepository.
 func NewAgentRepository(pool *Pool) *AgentRepository {
@@ -87,6 +87,7 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		&agent.HasAMCPIdentity,
 		&agent.AMCPAID,
 		&agent.PinningQuotaBytes,
+		&agent.StorageUsedBytes,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,
@@ -188,6 +189,7 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 		&agent.HasAMCPIdentity,
 		&agent.AMCPAID,
 		&agent.PinningQuotaBytes,
+		&agent.StorageUsedBytes,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,
@@ -462,6 +464,7 @@ func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 		&agent.HasAMCPIdentity,
 		&agent.AMCPAID,
 		&agent.PinningQuotaBytes,
+		&agent.StorageUsedBytes,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,
@@ -500,6 +503,7 @@ func (r *AgentRepository) scanAgentRows(rows pgx.Rows) (*models.Agent, error) {
 		&agent.HasAMCPIdentity,
 		&agent.AMCPAID,
 		&agent.PinningQuotaBytes,
+		&agent.StorageUsedBytes,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,

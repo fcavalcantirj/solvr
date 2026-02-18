@@ -37,9 +37,10 @@ type IPFSPinner interface {
 // PinsHandler handles IPFS pinning API HTTP requests.
 // Follows the IPFS Pinning Service API spec for interoperability.
 type PinsHandler struct {
-	repo   PinRepositoryInterface
-	ipfs   IPFSPinner
-	logger *slog.Logger
+	repo        PinRepositoryInterface
+	ipfs        IPFSPinner
+	storageRepo StorageRepositoryInterface
+	logger      *slog.Logger
 }
 
 // NewPinsHandler creates a new PinsHandler.
@@ -54,6 +55,12 @@ func NewPinsHandler(repo PinRepositoryInterface, ipfs IPFSPinner) *PinsHandler {
 // SetLogger sets a custom logger for the handler.
 func (h *PinsHandler) SetLogger(logger *slog.Logger) {
 	h.logger = logger
+}
+
+// SetStorageRepo sets the storage repository for quota enforcement.
+// When set, pin creation checks quota before allowing new pins.
+func (h *PinsHandler) SetStorageRepo(repo StorageRepositoryInterface) {
+	h.storageRepo = repo
 }
 
 // CreatePinRequest represents the request body for POST /v1/pins.
@@ -87,6 +94,18 @@ func (h *PinsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !IsValidCID(req.CID) {
 		response.WriteError(w, http.StatusBadRequest, response.ErrCodeValidation, "invalid CID format: must be a valid CIDv0 (Qm...) or CIDv1 (bafy...)")
 		return
+	}
+
+	// Check storage quota if storage repo is configured
+	if h.storageRepo != nil {
+		used, quota, err := h.storageRepo.GetStorageUsage(r.Context(), authInfo.AuthorID, string(authInfo.AuthorType))
+		if err != nil {
+			h.logger.Error("failed to check storage quota", "ownerID", authInfo.AuthorID, "error", err.Error())
+			// Fail open — allow the pin if we can't check quota
+		} else if used >= quota {
+			response.WriteError(w, http.StatusPaymentRequired, "QUOTA_EXCEEDED", "storage quota exceeded")
+			return
+		}
 	}
 
 	// Build pin model
@@ -292,6 +311,13 @@ func (h *PinsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 		response.WriteInternalErrorWithLog(w, "failed to delete pin", err, ctx, h.logger)
 		return
+	}
+
+	// Decrement storage usage if pin had a known size
+	if h.storageRepo != nil && pin.SizeBytes != nil && *pin.SizeBytes > 0 {
+		if updateErr := h.storageRepo.UpdateStorageUsed(r.Context(), authInfo.AuthorID, string(authInfo.AuthorType), -*pin.SizeBytes); updateErr != nil {
+			h.logger.Error("failed to decrement storage usage", "ownerID", authInfo.AuthorID, "error", updateErr.Error())
+		}
 	}
 
 	// Async unpin from IPFS

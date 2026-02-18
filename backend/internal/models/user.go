@@ -51,6 +51,14 @@ type User struct {
 	// UpdatedAt is when the user was last modified.
 	UpdatedAt time.Time `json:"updated_at"`
 
+	// StorageUsedBytes tracks total pinned content size for the account.
+	// Per prd-v6-ipfs-expanded Phase 2: storage quota tracking.
+	StorageUsedBytes int64 `json:"storage_used_bytes"`
+
+	// StorageQuotaBytes is the maximum allowed storage (tier-based).
+	// Default: 100MB (104857600 bytes).
+	StorageQuotaBytes int64 `json:"storage_quota_bytes"`
+
 	// DeletedAt is when the user was soft-deleted (NULL if not deleted).
 	// Per PRD-v5 Task 10-12: User self-deletion feature.
 	// When set, the user is considered deleted and filtered from queries.

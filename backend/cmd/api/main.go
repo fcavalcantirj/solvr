@@ -15,6 +15,7 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/config"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/jobs"
+	"github.com/fcavalcantirj/solvr/internal/services"
 )
 
 func main() {
@@ -72,6 +73,29 @@ func main() {
 		log.Println("Cleanup job started (runs every hour)")
 	}
 
+	// Start crystallization cron job if database and IPFS are available
+	// Per prd-v6: "Create cron job to scan for crystallization candidates daily"
+	var crystallizationCancel context.CancelFunc
+	if pool != nil {
+		ipfsURL := os.Getenv("IPFS_API_URL")
+		if ipfsURL == "" {
+			ipfsURL = "http://localhost:5001"
+		}
+		postRepo := db.NewPostRepository(pool)
+		approachRepo := db.NewApproachesRepository(pool)
+		ipfsSvc := services.NewKuboIPFSService(ipfsURL)
+		crystallizationSvc := services.NewCrystallizationService(
+			postRepo, postRepo, approachRepo, ipfsSvc, ipfsSvc,
+		)
+		crystallizationJob := jobs.NewCrystallizationJob(
+			postRepo, crystallizationSvc, jobs.DefaultCrystallizationStabilityPeriod,
+		)
+		var crystallizationCtx context.Context
+		crystallizationCtx, crystallizationCancel = context.WithCancel(context.Background())
+		go crystallizationJob.RunScheduled(crystallizationCtx, jobs.DefaultCrystallizationInterval)
+		log.Println("Crystallization job started (runs every 24 hours)")
+	}
+
 	// Create server
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -96,9 +120,12 @@ func main() {
 
 	log.Println("Shutting down server...")
 
-	// Stop the cleanup job if running
+	// Stop background jobs if running
 	if cleanupCancel != nil {
 		cleanupCancel()
+	}
+	if crystallizationCancel != nil {
+		crystallizationCancel()
 	}
 
 	// Create shutdown context with timeout

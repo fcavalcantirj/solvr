@@ -1896,3 +1896,25 @@ Task 16 complete.
 - TDD tests: 2 startup logging tests (IPFS config log, IPFS default log)
 - Router already reads IPFS_API_URL from env since pins/health endpoints were implemented
 - All backend tests passing
+
+2026-02-18: PRD-v6 Phase 2 - Create problem crystallization service (cron job)
+- CrystallizationService already existed with CrystallizeProblem(), BuildSnapshot(), SnapshotToReader()
+- 13 existing unit tests all passing (eligibility, snapshot, IPFS failure, stability period, etc.)
+- Added ListCrystallizationCandidates() to PostRepository (db/posts.go):
+  * SQL query: type=problem, status=solved, deleted_at IS NULL, crystallization_cid IS NULL, updated_at < NOW() - stability_period
+  * Results ordered by oldest first (crystallize most stable problems first)
+  * Configurable limit parameter (default 50)
+  * Returns []string (post IDs) for lightweight batch processing
+- 3 DB integration tests: candidate filtering, limit param, empty results
+- Created CrystallizationJob in jobs/crystallization.go:
+  * CrystallizationCandidateLister interface (ListCrystallizationCandidates)
+  * ProblemCrystallizer interface (CrystallizeProblem)
+  * RunOnce() — scan and crystallize, returns (crystallized, failed) counts
+  * RunScheduled() — runs immediately on start, then every 24h (configurable)
+  * Graceful context-based cancellation
+- 9 job unit tests: crystallize candidates, no candidates, list error, partial failure, all fail, scheduled run, constants
+- Wired CrystallizationJob into cmd/api/main.go:
+  * Creates PostRepository, ApproachesRepository, KuboIPFSService, CrystallizationService
+  * Starts goroutine with DefaultCrystallizationInterval (24h)
+  * Graceful shutdown via context cancellation
+- All backend tests passing (12 packages)

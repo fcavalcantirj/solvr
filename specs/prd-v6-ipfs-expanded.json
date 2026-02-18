@@ -231,7 +231,8 @@
       "Test: Crystallization failure doesn't affect problem status",
       "Verify: go test passes"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: CrystallizationService (crystallization.go, 308 lines) with CrystallizeProblem(), BuildSnapshot(), SnapshotToReader(), validateEligibility(), IsCrystallizationCandidate(). 13 unit tests in crystallization_test.go (700 lines). ListCrystallizationCandidates() added to PostRepository (posts.go) with SQL query for eligible candidates. 3 DB integration tests. CrystallizationJob (jobs/crystallization.go, 110 lines) with RunOnce() + RunScheduled() (24h interval). 9 job tests. Wired into main.go with graceful shutdown. All backend tests passing."
   },
   {
     "category": "backend",

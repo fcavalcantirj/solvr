@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -291,6 +292,210 @@ func TestCrystallization_SetCrystallizationCID(t *testing.T) {
 	if err == nil {
 		t.Error("SetCrystallizationCID() on non-existent post should return error")
 	}
+}
+
+// TestCrystallization_ListCandidates tests that ListCrystallizationCandidates
+// returns only solved problems that are stable and not yet crystallized.
+func TestCrystallization_ListCandidates(t *testing.T) {
+	url := getTestDatabaseURL(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	pool, err := db.NewPool(ctx, url)
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	// Create a test user
+	var userID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO users (username, display_name, email, auth_provider, auth_provider_id)
+		VALUES ('crystal_cand_user', 'Crystal Candidate User', 'crystal_cand@example.com', 'github', 'crystal_cand_github')
+		RETURNING id::text
+	`).Scan(&userID)
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id = $1", userID)
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1::uuid", userID)
+	}()
+
+	postRepo := db.NewPostRepository(pool)
+	stabilityPeriod := 7 * 24 * time.Hour
+
+	// 1. Create a solved problem that is stable (updated_at > 7 days ago)
+	stableID := createTestPost(t, pool, ctx, userID,
+		"Stable Solved Problem", models.PostTypeProblem, models.PostStatusSolved)
+	// Set updated_at to 10 days ago
+	_, err = pool.Exec(ctx, `UPDATE posts SET updated_at = NOW() - INTERVAL '10 days' WHERE id = $1`, stableID)
+	if err != nil {
+		t.Fatalf("Failed to set updated_at: %v", err)
+	}
+
+	// 2. Create a solved problem that is NOT stable (updated_at 3 days ago)
+	unstableID := createTestPost(t, pool, ctx, userID,
+		"Unstable Solved Problem", models.PostTypeProblem, models.PostStatusSolved)
+	_, err = pool.Exec(ctx, `UPDATE posts SET updated_at = NOW() - INTERVAL '3 days' WHERE id = $1`, unstableID)
+	if err != nil {
+		t.Fatalf("Failed to set updated_at: %v", err)
+	}
+
+	// 3. Create a solved problem that is already crystallized
+	crystallizedID := createTestPost(t, pool, ctx, userID,
+		"Already Crystallized Problem", models.PostTypeProblem, models.PostStatusSolved)
+	_, err = pool.Exec(ctx, `UPDATE posts SET updated_at = NOW() - INTERVAL '10 days', crystallization_cid = 'bafyexisting', crystallized_at = NOW() WHERE id = $1`, crystallizedID)
+	if err != nil {
+		t.Fatalf("Failed to set crystallization fields: %v", err)
+	}
+
+	// 4. Create an open problem (not solved)
+	openID := createTestPost(t, pool, ctx, userID,
+		"Open Problem", models.PostTypeProblem, models.PostStatusOpen)
+	_, err = pool.Exec(ctx, `UPDATE posts SET updated_at = NOW() - INTERVAL '10 days' WHERE id = $1`, openID)
+	if err != nil {
+		t.Fatalf("Failed to set updated_at: %v", err)
+	}
+
+	// 5. Create a question (not a problem)
+	questionID := createTestPost(t, pool, ctx, userID,
+		"A Question", models.PostTypeQuestion, models.PostStatusOpen)
+	_, err = pool.Exec(ctx, `UPDATE posts SET updated_at = NOW() - INTERVAL '10 days' WHERE id = $1`, questionID)
+	if err != nil {
+		t.Fatalf("Failed to set updated_at: %v", err)
+	}
+
+	// 6. Create a deleted solved problem
+	deletedID := createTestPost(t, pool, ctx, userID,
+		"Deleted Solved Problem", models.PostTypeProblem, models.PostStatusSolved)
+	_, err = pool.Exec(ctx, `UPDATE posts SET updated_at = NOW() - INTERVAL '10 days', deleted_at = NOW() WHERE id = $1`, deletedID)
+	if err != nil {
+		t.Fatalf("Failed to delete post: %v", err)
+	}
+
+	// Run ListCrystallizationCandidates
+	candidates, err := postRepo.ListCrystallizationCandidates(ctx, stabilityPeriod, 100)
+	if err != nil {
+		t.Fatalf("ListCrystallizationCandidates() error = %v", err)
+	}
+
+	// Only stableID should be returned
+	found := false
+	for _, id := range candidates {
+		if id == stableID {
+			found = true
+		}
+		if id == unstableID {
+			t.Error("Unstable problem should NOT be a candidate")
+		}
+		if id == crystallizedID {
+			t.Error("Already crystallized problem should NOT be a candidate")
+		}
+		if id == openID {
+			t.Error("Open problem should NOT be a candidate")
+		}
+		if id == questionID {
+			t.Error("Question should NOT be a candidate")
+		}
+		if id == deletedID {
+			t.Error("Deleted problem should NOT be a candidate")
+		}
+	}
+	if !found {
+		t.Errorf("Stable solved problem %q should be a candidate, got candidates: %v", stableID, candidates)
+	}
+}
+
+// TestCrystallization_ListCandidates_Limit tests that the limit parameter works.
+func TestCrystallization_ListCandidates_Limit(t *testing.T) {
+	url := getTestDatabaseURL(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	pool, err := db.NewPool(ctx, url)
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	// Create a test user
+	var userID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO users (username, display_name, email, auth_provider, auth_provider_id)
+		VALUES ('crystal_limit_user', 'Crystal Limit User', 'crystal_limit@example.com', 'github', 'crystal_limit_github')
+		RETURNING id::text
+	`).Scan(&userID)
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id = $1", userID)
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1::uuid", userID)
+	}()
+
+	postRepo := db.NewPostRepository(pool)
+
+	// Create 3 stable solved problems
+	for i := 0; i < 3; i++ {
+		id := createTestPost(t, pool, ctx, userID,
+			fmt.Sprintf("Limit Test Problem %d", i), models.PostTypeProblem, models.PostStatusSolved)
+		_, err = pool.Exec(ctx, `UPDATE posts SET updated_at = NOW() - INTERVAL '10 days' WHERE id = $1`, id)
+		if err != nil {
+			t.Fatalf("Failed to set updated_at: %v", err)
+		}
+	}
+
+	// Limit to 2
+	candidates, err := postRepo.ListCrystallizationCandidates(ctx, 7*24*time.Hour, 2)
+	if err != nil {
+		t.Fatalf("ListCrystallizationCandidates() error = %v", err)
+	}
+
+	if len(candidates) > 2 {
+		t.Errorf("Expected at most 2 candidates with limit=2, got %d", len(candidates))
+	}
+}
+
+// TestCrystallization_ListCandidates_Empty tests with no candidates.
+func TestCrystallization_ListCandidates_Empty(t *testing.T) {
+	url := getTestDatabaseURL(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	pool, err := db.NewPool(ctx, url)
+	if err != nil {
+		t.Fatalf("NewPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	postRepo := db.NewPostRepository(pool)
+
+	// Use a very long stability period so nothing qualifies
+	candidates, err := postRepo.ListCrystallizationCandidates(ctx, 365*24*time.Hour, 100)
+	if err != nil {
+		t.Fatalf("ListCrystallizationCandidates() error = %v", err)
+	}
+
+	// Should return empty list, not error
+	if candidates == nil {
+		t.Error("Expected empty slice, got nil")
+	}
+}
+
+// createTestPost creates a test post and returns its ID.
+func createTestPost(t *testing.T, pool *db.Pool, ctx context.Context, userID, title string, postType models.PostType, status models.PostStatus) string {
+	t.Helper()
+	var postID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id, status)
+		VALUES ($1, $2, 'Test description for crystallization candidate test.', ARRAY['test'], 'human', $3, $4)
+		RETURNING id::text
+	`, string(postType), title, userID, string(status)).Scan(&postID)
+	if err != nil {
+		t.Fatalf("Failed to create test post %q: %v", title, err)
+	}
+	return postID
 }
 
 // intPtr returns a pointer to an int value.

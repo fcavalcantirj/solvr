@@ -1,3 +1,33 @@
+2026-02-18: PRD-v6 IPFS Task - Create Solvr CLI install script
+- Created scripts/install.sh (235 lines) for one-line CLI installation:
+  * Usage: curl -sL solvr.dev/install.sh | bash
+  * Detects OS (linux, darwin, windows) and architecture (amd64, arm64, armv7)
+  * Downloads pre-built binary from GitHub releases (fcavalcantirj/solvr)
+  * Archive format: solvr_{version}_{os}_{arch}.tar.gz
+  * Default install: /usr/local/bin (fallback ~/.local/bin if no write access)
+  * --version flag: install specific version (e.g., --version 0.1.0)
+  * --prefix flag: custom install location (e.g., --prefix ~/.local)
+  * --help flag: usage documentation
+  * Version validation (semver format X.Y.Z)
+  * Automatic latest version detection via GitHub API
+  * PATH check with instructions if install dir not in PATH
+  * Colored output (auto-disabled in non-terminal)
+  * Supports both curl and wget for downloads
+  * Uninstall instructions in output
+  * Build-from-source fallback instructions on download failure
+- Created scripts/install_test.sh (224 lines) with 32 TDD tests:
+  * detect_os: returns value, correct OS for current platform
+  * detect_arch: returns value, correct arch for current machine
+  * build_download_url: repo path, version tag, OS, arch, .tar.gz extension (5 tests)
+  * get_install_dir: with prefix, without prefix defaults
+  * validate_version_format: valid semver (3), invalid (3)
+  * binary_name: linux, windows (.exe), darwin
+  * archive_name: format correctness (2 tests)
+  * install_binary: file exists, executable, runs correctly
+  * parse_args: version/prefix flags, defaults
+- Test mode: SOLVR_INSTALL_TEST=1 sources functions without running main()
+- All 32 tests passing, all backend tests passing
+
 2026-02-18: PRD-v6 IPFS Task - Create SDK/CLI pinning methods for agents
 - Created cli/pin.go (586 lines) with NewPinCmd() and 5 subcommands:
   * `solvr pin add <cid>` — Pin a CID via POST /v1/pins (--name, --json flags)

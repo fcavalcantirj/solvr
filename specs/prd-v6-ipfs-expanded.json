@@ -460,7 +460,8 @@
       "Add uninstall instructions in output",
       "Verify: curl -sL solvr.dev/install.sh | bash installs working CLI"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-18: scripts/install.sh (235 lines) with OS/arch detection (linux/darwin/windows, amd64/arm64/armv7), GitHub releases download, --version/--prefix flags, PATH check, curl+wget support, colored output. scripts/install_test.sh (224 lines) with 32 TDD tests covering all helper functions. Uses SOLVR_INSTALL_TEST=1 for testable sourcing. All tests passing."
   },
   {
     "category": "integration",

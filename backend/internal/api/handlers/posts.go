@@ -87,9 +87,17 @@ type PostsRepositoryInterface interface {
 }
 
 // PostsHandler handles post-related HTTP requests.
+// EmbeddingServiceInterface defines the interface for generating text embeddings.
+// Used by PostsHandler to generate embeddings on post creation.
+type EmbeddingServiceInterface interface {
+	GenerateEmbedding(ctx context.Context, text string) ([]float32, error)
+	GenerateQueryEmbedding(ctx context.Context, text string) ([]float32, error)
+}
+
 type PostsHandler struct {
-	repo   PostsRepositoryInterface
-	logger *slog.Logger
+	repo             PostsRepositoryInterface
+	logger           *slog.Logger
+	embeddingService EmbeddingServiceInterface
 }
 
 // NewPostsHandler creates a new PostsHandler.
@@ -104,6 +112,12 @@ func NewPostsHandler(repo PostsRepositoryInterface) *PostsHandler {
 // This is useful for testing or custom logging configurations.
 func (h *PostsHandler) SetLogger(logger *slog.Logger) {
 	h.logger = logger
+}
+
+// SetEmbeddingService sets the embedding service for generating post embeddings.
+// When set, post creation will generate and store embeddings for semantic search.
+func (h *PostsHandler) SetEmbeddingService(svc EmbeddingServiceInterface) {
+	h.embeddingService = svc
 }
 
 // CreatePostRequest is the request body for creating a post.

@@ -444,7 +444,7 @@
       "Store as field: embeddingService services.EmbeddingService",
       "Verify: go run ./cmd/api starts successfully with EMBEDDING_PROVIDER=voyage and VOYAGE_API_KEY set"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

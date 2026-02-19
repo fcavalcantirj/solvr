@@ -208,6 +208,71 @@ func TestLogStartupConfig_IPFS(t *testing.T) {
 	}
 }
 
+func TestLogStartupConfig_EmbeddingVoyage(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, nil)
+	logger := slog.New(handler)
+
+	cfg := &Config{
+		AppEnv:            "production",
+		JWTSecret:         "test-jwt-secret-that-is-long-enough-32",
+		EmbeddingProvider: "voyage",
+		VoyageAPIKey:      "voyage-key-123",
+		OllamaBaseURL:     "http://localhost:11434/v1",
+	}
+
+	LogStartupConfig(logger, cfg, true)
+
+	logOutput := buf.String()
+
+	expected := []string{
+		"Embedding Configuration",
+		"provider=voyage",
+		"voyage_api_key=configured",
+	}
+
+	for _, exp := range expected {
+		if !strings.Contains(logOutput, exp) {
+			t.Errorf("expected log to contain %q, got:\n%s", exp, logOutput)
+		}
+	}
+
+	// API key value should NOT be logged
+	if strings.Contains(logOutput, "voyage-key-123") {
+		t.Errorf("log should NOT contain Voyage API key value, got:\n%s", logOutput)
+	}
+}
+
+func TestLogStartupConfig_EmbeddingOllama(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, nil)
+	logger := slog.New(handler)
+
+	cfg := &Config{
+		AppEnv:            "development",
+		JWTSecret:         "test-jwt-secret-that-is-long-enough-32",
+		EmbeddingProvider: "ollama",
+		OllamaBaseURL:     "http://gpu-server:11434/v1",
+	}
+
+	LogStartupConfig(logger, cfg, false)
+
+	logOutput := buf.String()
+
+	expected := []string{
+		"Embedding Configuration",
+		"provider=ollama",
+		`voyage_api_key="not configured"`,
+		"ollama_base_url=http://gpu-server:11434/v1",
+	}
+
+	for _, exp := range expected {
+		if !strings.Contains(logOutput, exp) {
+			t.Errorf("expected log to contain %q, got:\n%s", exp, logOutput)
+		}
+	}
+}
+
 func TestLogStartupConfig_IPFSDefault(t *testing.T) {
 	var buf bytes.Buffer
 	handler := slog.NewTextHandler(&buf, nil)

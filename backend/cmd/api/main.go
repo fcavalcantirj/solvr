@@ -47,8 +47,29 @@ func main() {
 		}
 	}
 
-	// Create router with database pool
-	router := api.NewRouter(pool)
+	// Initialize embedding service based on configuration
+	var embeddingService services.EmbeddingService
+	if cfg != nil {
+		provider := cfg.EmbeddingProvider
+		if provider == "" {
+			provider = "voyage"
+		}
+		switch provider {
+		case "ollama":
+			embeddingService = services.NewOllamaEmbeddingService(cfg.OllamaBaseURL)
+			log.Printf("Embedding service: ollama (base URL: %s)", cfg.OllamaBaseURL)
+		default:
+			if cfg.VoyageAPIKey != "" {
+				embeddingService = services.NewVoyageEmbeddingService(cfg.VoyageAPIKey)
+				log.Println("Embedding service: voyage")
+			} else {
+				log.Println("Embedding service: disabled (no VOYAGE_API_KEY)")
+			}
+		}
+	}
+
+	// Create router with database pool and embedding service
+	router := api.NewRouter(pool, embeddingService)
 
 	// Note: API routes are now mounted directly in api.NewRouter() via mountV1Routes()
 	// The previous call to api.MountAPIRoutes() was removed per FIX-001 because

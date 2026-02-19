@@ -62,6 +62,11 @@ type Config struct {
 	// IPFS
 	IPFSAPIURL        string
 	MaxUploadSizeBytes int64
+
+	// Embeddings
+	EmbeddingProvider string // "voyage" or "ollama"
+	VoyageAPIKey      string
+	OllamaBaseURL     string
 }
 
 // Load reads configuration from environment variables.
@@ -132,6 +137,11 @@ func Load() (*Config, error) {
 	// IPFS
 	cfg.IPFSAPIURL = getEnvOrDefault("IPFS_API_URL", "http://localhost:5001")
 	cfg.MaxUploadSizeBytes = getEnvOrDefaultInt64("MAX_UPLOAD_SIZE_BYTES", 100*1024*1024) // 100MB
+
+	// Embeddings
+	cfg.EmbeddingProvider = getEnvOrDefault("EMBEDDING_PROVIDER", "voyage")
+	cfg.VoyageAPIKey = os.Getenv("VOYAGE_API_KEY")
+	cfg.OllamaBaseURL = getEnvOrDefault("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 
 	return cfg, nil
 }

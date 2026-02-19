@@ -404,6 +404,99 @@ func TestLoad_MaxUploadSizeCustom(t *testing.T) {
 	}
 }
 
+// TestLoad_EmbeddingProviderDefault verifies EMBEDDING_PROVIDER defaults to "voyage".
+func TestLoad_EmbeddingProviderDefault(t *testing.T) {
+	os.Setenv("DATABASE_URL", "postgres://localhost/db")
+	os.Setenv("JWT_SECRET", "test-secret-key-at-least-32-chars")
+	os.Unsetenv("EMBEDDING_PROVIDER")
+	defer os.Unsetenv("DATABASE_URL")
+	defer os.Unsetenv("JWT_SECRET")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.EmbeddingProvider != "voyage" {
+		t.Errorf("EmbeddingProvider = %q, want %q (default)", cfg.EmbeddingProvider, "voyage")
+	}
+}
+
+// TestLoad_EmbeddingProviderOllama verifies EMBEDDING_PROVIDER can be set to "ollama".
+func TestLoad_EmbeddingProviderOllama(t *testing.T) {
+	os.Setenv("DATABASE_URL", "postgres://localhost/db")
+	os.Setenv("JWT_SECRET", "test-secret-key-at-least-32-chars")
+	os.Setenv("EMBEDDING_PROVIDER", "ollama")
+	defer os.Unsetenv("DATABASE_URL")
+	defer os.Unsetenv("JWT_SECRET")
+	defer os.Unsetenv("EMBEDDING_PROVIDER")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.EmbeddingProvider != "ollama" {
+		t.Errorf("EmbeddingProvider = %q, want %q", cfg.EmbeddingProvider, "ollama")
+	}
+}
+
+// TestLoad_VoyageAPIKey verifies VOYAGE_API_KEY is loaded from env.
+func TestLoad_VoyageAPIKey(t *testing.T) {
+	os.Setenv("DATABASE_URL", "postgres://localhost/db")
+	os.Setenv("JWT_SECRET", "test-secret-key-at-least-32-chars")
+	os.Setenv("VOYAGE_API_KEY", "test-voyage-key-123")
+	defer os.Unsetenv("DATABASE_URL")
+	defer os.Unsetenv("JWT_SECRET")
+	defer os.Unsetenv("VOYAGE_API_KEY")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.VoyageAPIKey != "test-voyage-key-123" {
+		t.Errorf("VoyageAPIKey = %q, want %q", cfg.VoyageAPIKey, "test-voyage-key-123")
+	}
+}
+
+// TestLoad_OllamaBaseURLDefault verifies OLLAMA_BASE_URL defaults to localhost.
+func TestLoad_OllamaBaseURLDefault(t *testing.T) {
+	os.Setenv("DATABASE_URL", "postgres://localhost/db")
+	os.Setenv("JWT_SECRET", "test-secret-key-at-least-32-chars")
+	os.Unsetenv("OLLAMA_BASE_URL")
+	defer os.Unsetenv("DATABASE_URL")
+	defer os.Unsetenv("JWT_SECRET")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.OllamaBaseURL != "http://localhost:11434/v1" {
+		t.Errorf("OllamaBaseURL = %q, want %q (default)", cfg.OllamaBaseURL, "http://localhost:11434/v1")
+	}
+}
+
+// TestLoad_OllamaBaseURLCustom verifies OLLAMA_BASE_URL can be customized.
+func TestLoad_OllamaBaseURLCustom(t *testing.T) {
+	os.Setenv("DATABASE_URL", "postgres://localhost/db")
+	os.Setenv("JWT_SECRET", "test-secret-key-at-least-32-chars")
+	os.Setenv("OLLAMA_BASE_URL", "http://gpu-server:11434/v1")
+	defer os.Unsetenv("DATABASE_URL")
+	defer os.Unsetenv("JWT_SECRET")
+	defer os.Unsetenv("OLLAMA_BASE_URL")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.OllamaBaseURL != "http://gpu-server:11434/v1" {
+		t.Errorf("OllamaBaseURL = %q, want %q", cfg.OllamaBaseURL, "http://gpu-server:11434/v1")
+	}
+}
+
 // TestLoad_MaxUploadSizeInvalid verifies invalid MAX_UPLOAD_SIZE_BYTES falls back to default.
 func TestLoad_MaxUploadSizeInvalid(t *testing.T) {
 	os.Setenv("DATABASE_URL", "postgres://localhost/db")

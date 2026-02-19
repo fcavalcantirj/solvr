@@ -1,3 +1,18 @@
+2026-02-19: PRD-v5 Semantic Search - Add embedding service configuration and initialization in main.go
+- Config (internal/config/env.go): Added EmbeddingProvider, VoyageAPIKey, OllamaBaseURL fields
+  * EMBEDDING_PROVIDER (default: "voyage"), VOYAGE_API_KEY (optional), OLLAMA_BASE_URL (default: http://localhost:11434/v1)
+- Startup logging (internal/config/startup.go): Added Embedding Configuration log line (provider, key status, ollama URL)
+  * Voyage API key value never logged (security)
+- Main entry point (cmd/api/main.go): Initializes embedding service based on EMBEDDING_PROVIDER
+  * "ollama" -> NewOllamaEmbeddingService, "voyage" -> NewVoyageEmbeddingService (if VOYAGE_API_KEY set), else disabled
+  * Passes embedding service to NewRouter as optional variadic param
+- Router (internal/api/router.go): NewRouter accepts optional EmbeddingService, passes to mountV1Routes
+  * mountV1Routes calls postsHandler.SetEmbeddingService() when non-nil
+- PostsHandler (internal/api/handlers/posts.go): Added EmbeddingServiceInterface and embeddingService field
+  * SetEmbeddingService() setter (follows existing pattern: SetLogger, SetClaimTokenRepository, etc.)
+- TDD tests: 7 new tests (5 config, 2 startup logging), all passing
+- All 12 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Add Ollama embedding client as self-hosted fallback option
 - New file: backend/internal/services/embeddings_ollama.go (117 lines)
   * OllamaEmbeddingService struct implementing EmbeddingService via local Ollama instance

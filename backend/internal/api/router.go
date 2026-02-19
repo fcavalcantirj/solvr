@@ -28,7 +28,8 @@ const Version = "0.2.0"
 
 // NewRouter creates and configures a new chi router with all middleware.
 // The pool parameter is optional - if nil, /health/ready will return 503.
-func NewRouter(pool *db.Pool) *chi.Mux {
+// The embeddingService parameter is optional - if nil, post creation won't generate embeddings.
+func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middleware stack
@@ -109,13 +110,17 @@ func NewRouter(pool *db.Pool) *chi.Mux {
 	r.Get("/v1/openapi.yaml", openAPIYAMLHandler)
 
 	// Mount v1 API routes
-	mountV1Routes(r, pool, ipfsAPIURL)
+	var embedSvc services.EmbeddingService
+	if len(embeddingService) > 0 {
+		embedSvc = embeddingService[0]
+	}
+	mountV1Routes(r, pool, ipfsAPIURL, embedSvc)
 
 	return r
 }
 
 // mountV1Routes mounts all v1 API routes.
-func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string) {
+func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingService services.EmbeddingService) {
 	// Create repositories and handlers
 	var agentRepo handlers.AgentRepositoryInterface
 	var claimTokenRepo handlers.ClaimTokenRepositoryInterface
@@ -162,6 +167,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string) {
 
 	// Create posts handler
 	postsHandler := handlers.NewPostsHandler(postsRepo)
+	if embeddingService != nil {
+		postsHandler.SetEmbeddingService(embeddingService)
+	}
 
 	// Create search handler (per SPEC.md Part 5.5)
 	searchHandler := handlers.NewSearchHandler(searchRepo)

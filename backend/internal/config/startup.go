@@ -62,6 +62,23 @@ func LogStartupConfig(logger *slog.Logger, cfg *Config, dbConnected bool) {
 		)
 	}
 
+	// Embedding configuration
+	if cfg != nil {
+		embeddingProvider := cfg.EmbeddingProvider
+		if embeddingProvider == "" {
+			embeddingProvider = "voyage"
+		}
+		voyageKeyStatus := "not configured"
+		if cfg.VoyageAPIKey != "" {
+			voyageKeyStatus = "configured"
+		}
+		logger.Info("Embedding Configuration",
+			"provider", embeddingProvider,
+			"voyage_api_key", voyageKeyStatus,
+			"ollama_base_url", cfg.OllamaBaseURL,
+		)
+	}
+
 	// Log rate limits if configured
 	if cfg != nil {
 		agentGeneral := cfg.RateLimitAgentGeneral

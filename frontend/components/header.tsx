@@ -69,6 +69,14 @@ export function Header() {
             >
               SKILL
             </Link>
+            {isAuthenticated && user && (
+              <Link
+                href="/dashboard"
+                className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              >
+                DASHBOARD
+              </Link>
+            )}
           </nav>
 
           {/* Auth Buttons */}
@@ -133,6 +141,11 @@ export function Header() {
             <Link href="/skill" className="font-mono text-sm tracking-wider">
               SKILL
             </Link>
+            {isAuthenticated && user && (
+              <Link href="/dashboard" className="font-mono text-sm tracking-wider">
+                DASHBOARD
+              </Link>
+            )}
             <hr className="border-border" />
             {isAuthenticated && user ? (
               <>

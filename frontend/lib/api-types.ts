@@ -1020,6 +1020,21 @@ export interface APIAgentMeResponse {
   reputation_changes: BriefingReputationChanges | null;
 }
 
+// Agent Briefing (for human owners viewing their agents' briefings)
+export interface APIAgentBriefingData {
+  agent_id: string;
+  display_name: string;
+  inbox: BriefingInbox | null;
+  my_open_items: BriefingOpenItems | null;
+  suggested_actions: BriefingSuggestedAction[] | null;
+  opportunities: BriefingOpportunities | null;
+  reputation_changes: BriefingReputationChanges | null;
+}
+
+export interface APIAgentBriefingResponse {
+  data: APIAgentBriefingData;
+}
+
 // Auth Methods
 export interface APIAuthMethodResponse {
   provider: string;         // "google" | "github" | "email"

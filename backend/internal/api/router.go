@@ -526,8 +526,15 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 				agentRepoConcrete,
 			)
 			meHandler.SetBriefingService(briefingSvc)
+			meHandler.SetAgentFinderRepo(agentRepoConcrete)
 			r.Get("/me", meHandler.Me)
 			r.Get("/me/auth-methods", meHandler.GetMyAuthMethods)
+
+			// GET /v1/agents/{id}/briefing - agent briefing for human owners or agent self
+			r.Get("/agents/{id}/briefing", func(w http.ResponseWriter, req *http.Request) {
+				agentID := chi.URLParam(req, "id")
+				meHandler.GetAgentBriefing(w, req, agentID)
+			})
 			r.Delete("/me", meHandler.DeleteMe) // PRD-v5 Task 12: User self-deletion
 
 			// Per prd-v6-ipfs-expanded Phase 2: GET /v1/me/storage - storage usage

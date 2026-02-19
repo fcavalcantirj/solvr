@@ -91,6 +91,11 @@ type BriefingServiceInterface interface {
 	GetBriefingForAgent(ctx context.Context, agent *models.Agent) (*models.BriefingResult, error)
 }
 
+// AgentFinderInterface defines the minimal interface for looking up agents by ID.
+type AgentFinderInterface interface {
+	FindByID(ctx context.Context, id string) (*models.Agent, error)
+}
+
 // MeHandler handles the GET /v1/auth/me endpoint.
 type MeHandler struct {
 	config               *OAuthConfig
@@ -98,6 +103,7 @@ type MeHandler struct {
 	agentStatsRepo       MeAgentStatsInterface
 	authMethodRepo       AuthMethodRepositoryInterface
 	pool                 PoolInterface
+	agentFinderRepo      AgentFinderInterface
 	briefingService      BriefingServiceInterface
 	inboxRepo            BriefingInboxRepo
 	briefingRepo         UpdateLastBriefingRepo
@@ -148,6 +154,11 @@ func (h *MeHandler) SetOpportunitiesRepo(repo BriefingOpportunitiesRepo) {
 // SetReputationRepo sets the reputation changes repository for agent /me enrichment.
 func (h *MeHandler) SetReputationRepo(repo BriefingReputationRepo) {
 	h.reputationRepo = repo
+}
+
+// SetAgentFinderRepo sets the agent finder repository for agent briefing lookups.
+func (h *MeHandler) SetAgentFinderRepo(repo AgentFinderInterface) {
+	h.agentFinderRepo = repo
 }
 
 // MeResponse represents the response for GET /v1/me for humans (JWT auth).
@@ -579,6 +590,104 @@ func writeMeInternalError(w http.ResponseWriter, message string) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"error": map[string]string{
 			"code":    "INTERNAL_ERROR",
+			"message": message,
+		},
+	})
+}
+
+// AgentBriefingResponse represents the response for GET /v1/agents/{id}/briefing.
+// Returns briefing sections without agent profile details (those come from GET /agents/{id}).
+type AgentBriefingResponse struct {
+	AgentID           string                          `json:"agent_id"`
+	DisplayName       string                          `json:"display_name"`
+	Inbox             *models.BriefingInbox           `json:"inbox"`
+	MyOpenItems       *models.OpenItemsResult         `json:"my_open_items"`
+	SuggestedActions  []models.SuggestedAction        `json:"suggested_actions"`
+	Opportunities     *models.OpportunitiesSection     `json:"opportunities"`
+	ReputationChanges *models.ReputationChangesResult  `json:"reputation_changes"`
+}
+
+// GetAgentBriefing handles GET /v1/agents/{id}/briefing.
+// Returns the 5 briefing sections for a specific agent.
+// Auth: JWT (human who claimed the agent) or agent API key (self).
+// Does NOT update last_briefing_at — only the agent's own /me call does that.
+func (h *MeHandler) GetAgentBriefing(w http.ResponseWriter, r *http.Request, agentID string) {
+	ctx := r.Context()
+
+	// Check agent API key auth first (agent accessing own briefing)
+	authAgent := auth.AgentFromContext(ctx)
+	if authAgent != nil {
+		if authAgent.ID != agentID {
+			writeMeForbidden(w, "FORBIDDEN", "Agents can only access their own briefing")
+			return
+		}
+		h.serveAgentBriefing(w, ctx, authAgent)
+		return
+	}
+
+	// Check human JWT auth
+	claims := auth.ClaimsFromContext(ctx)
+	if claims == nil {
+		writeMeUnauthorized(w, "UNAUTHORIZED", "Authentication required")
+		return
+	}
+
+	// Look up the agent
+	if h.agentFinderRepo == nil {
+		writeMeInternalError(w, "Agent lookup not configured")
+		return
+	}
+
+	agent, err := h.agentFinderRepo.FindByID(ctx, agentID)
+	if err != nil {
+		writeMeNotFound(w, "Agent not found")
+		return
+	}
+
+	// Verify the human is the owner (claimed the agent)
+	if agent.HumanID == nil || *agent.HumanID != claims.UserID {
+		writeMeForbidden(w, "FORBIDDEN", "You must be the claiming owner of this agent")
+		return
+	}
+
+	h.serveAgentBriefing(w, ctx, agent)
+}
+
+// serveAgentBriefing fetches and returns the briefing for the given agent.
+func (h *MeHandler) serveAgentBriefing(w http.ResponseWriter, ctx context.Context, agent *models.Agent) {
+	if h.briefingService == nil {
+		writeMeInternalError(w, "Briefing service not configured")
+		return
+	}
+
+	briefing, err := h.briefingService.GetBriefingForAgent(ctx, agent)
+	if err != nil {
+		writeMeInternalError(w, "Failed to assemble briefing")
+		return
+	}
+
+	response := AgentBriefingResponse{
+		AgentID:           agent.ID,
+		DisplayName:       agent.DisplayName,
+		Inbox:             briefing.Inbox,
+		MyOpenItems:       briefing.MyOpenItems,
+		SuggestedActions:  briefing.SuggestedActions,
+		Opportunities:     briefing.Opportunities,
+		ReputationChanges: briefing.ReputationChanges,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"data": response,
+	})
+}
+
+func writeMeForbidden(w http.ResponseWriter, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]string{
+			"code":    code,
 			"message": message,
 		},
 	})

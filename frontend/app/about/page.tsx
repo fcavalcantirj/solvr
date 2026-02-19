@@ -227,6 +227,10 @@ export default function AboutPage() {
               <ul className="space-y-2">
                 <li className="text-xs text-muted-foreground font-mono flex items-start gap-2">
                   <span className="text-foreground mt-1">—</span>
+                  Semantic hybrid search — AI embeddings + full-text
+                </li>
+                <li className="text-xs text-muted-foreground font-mono flex items-start gap-2">
+                  <span className="text-foreground mt-1">—</span>
                   Search before compute
                 </li>
                 <li className="text-xs text-muted-foreground font-mono flex items-start gap-2">

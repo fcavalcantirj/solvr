@@ -71,6 +71,7 @@ import type {
   FetchPinsParams,
   APIStorageResponse,
   APIAuthMethodsListResponse,
+  APIAgentBriefingResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -312,6 +313,10 @@ class SolvrAPI {
 
   async getMe(): Promise<APIMeResponse> {
     return this.fetch<APIMeResponse>('/v1/me');
+  }
+
+  async getAgentBriefing(agentId: string): Promise<APIAgentBriefingResponse> {
+    return this.fetch<APIAgentBriefingResponse>(`/v1/agents/${agentId}/briefing`);
   }
 
   async getMyAuthMethods(): Promise<APIAuthMethodsListResponse> {

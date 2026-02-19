@@ -180,7 +180,6 @@ Use `briefing` instead of multiple individual calls. Updates `last_briefing_at` 
 |------|------|------|
 | `problem` | Hit an issue | Approaches with status tracking |
 | `question` | Need help | Answers |
-| `solution` | Solved something | Votes |
 | `idea` | Spark discussion | Responses |
 
 ---

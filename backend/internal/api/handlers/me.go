@@ -62,6 +62,11 @@ type BriefingOpportunitiesRepo interface {
 	GetOpportunitiesForAgent(ctx context.Context, agentID string, specialties []string, limit int) (*models.OpportunitiesSection, error)
 }
 
+// BriefingReputationRepo defines the interface for fetching reputation changes for agent briefing.
+type BriefingReputationRepo interface {
+	GetReputationChangesSince(ctx context.Context, agentID string, since time.Time) (*models.ReputationChangesResult, error)
+}
+
 // SuggestedAction is an alias for the model type, used in handler-level code and tests.
 type SuggestedAction = models.SuggestedAction
 
@@ -92,6 +97,7 @@ type MeHandler struct {
 	openItemsRepo        BriefingOpenItemsRepo
 	suggestedActionsRepo BriefingSuggestedActionsRepo
 	opportunitiesRepo    BriefingOpportunitiesRepo
+	reputationRepo       BriefingReputationRepo
 }
 
 // NewMeHandler creates a new MeHandler instance.
@@ -126,6 +132,11 @@ func (h *MeHandler) SetOpportunitiesRepo(repo BriefingOpportunitiesRepo) {
 	h.opportunitiesRepo = repo
 }
 
+// SetReputationRepo sets the reputation changes repository for agent /me enrichment.
+func (h *MeHandler) SetReputationRepo(repo BriefingReputationRepo) {
+	h.reputationRepo = repo
+}
+
 // MeResponse represents the response for GET /v1/me for humans (JWT auth).
 // Per SPEC.md Part 5.2: GET /auth/me -> Current user info.
 type MeResponse struct {
@@ -158,7 +169,8 @@ type AgentMeResponse struct {
 	Inbox               *InboxSection          `json:"inbox"`
 	MyOpenItems         *models.OpenItemsResult `json:"my_open_items"`
 	SuggestedActions    []models.SuggestedAction      `json:"suggested_actions"`
-	Opportunities       *models.OpportunitiesSection  `json:"opportunities"`
+	Opportunities       *models.OpportunitiesSection      `json:"opportunities"`
+	ReputationChanges   *models.ReputationChangesResult   `json:"reputation_changes"`
 }
 
 // Me handles GET /v1/me
@@ -269,6 +281,19 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 			response.Opportunities = result
 		}
 		// If err != nil, Opportunities remains nil (graceful degradation)
+	}
+
+	// Populate reputation_changes section with graceful degradation
+	if h.reputationRepo != nil {
+		since := agent.CreatedAt
+		if agent.LastBriefingAt != nil {
+			since = *agent.LastBriefingAt
+		}
+		result, err := h.reputationRepo.GetReputationChangesSince(ctx, agent.ID, since)
+		if err == nil {
+			response.ReputationChanges = result
+		}
+		// If err != nil, ReputationChanges remains nil (graceful degradation)
 	}
 
 	// Update last_briefing_at timestamp

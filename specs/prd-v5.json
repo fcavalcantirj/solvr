@@ -1258,7 +1258,7 @@
       "Graceful degradation: nil on error",
       "Verify: go test ./internal/api/handlers -run TestAgentMe_ReputationChanges -v passes all 4 tests"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

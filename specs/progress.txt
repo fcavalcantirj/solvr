@@ -1,3 +1,28 @@
+2026-02-19: PRD-v5 Backend - Enrich GET /me with reputation_changes section
+- Modified: backend/internal/models/briefing.go (58 lines)
+  * Added ReputationChangesResult struct: SinceLastCheck, Breakdown
+  * Added ReputationEvent struct: Reason, PostID, PostTitle, Delta
+- Modified: backend/internal/api/handlers/me.go (529 lines)
+  * Added BriefingReputationRepo interface: GetReputationChangesSince(ctx, agentID, since)
+  * Added reputationRepo field to MeHandler
+  * Added SetReputationRepo setter method
+  * Added ReputationChanges field to AgentMeResponse
+  * Updated handleAgentMe: populates reputation_changes, uses LastBriefingAt or CreatedAt as 'since'
+  * Graceful degradation: nil on error
+- Modified: backend/internal/db/briefing.go (463 lines)
+  * Added GetReputationChangesSince method to BriefingRepository
+  * Query 1: Votes on agent's posts, approaches, and answers since given time
+  * Query 2: Accepted answers since given time (+50 rep each)
+  * Calculates total delta, formats as "+N" or "-N"
+- New file: backend/internal/api/handlers/me_reputation_changes_test.go (312 lines)
+  * MockBriefingReputationRepo mock
+  * 5 TDD tests: TestAgentMe_ReputationChangesDelta,
+    TestAgentMe_ReputationChangesBreakdown, TestAgentMe_ReputationChangesFirstTime,
+    TestAgentMe_ReputationChangesNone, TestAgentMe_ReputationChangesGracefulDegradation
+- Modified: backend/internal/api/router.go (815 lines)
+  * Wired briefingRepo to MeHandler via SetReputationRepo
+- All backend tests pass (go test ./...)
+
 2026-02-19: PRD-v5 Backend - Enrich GET /me with opportunities section
 - Modified: backend/internal/models/briefing.go (44 lines)
   * Added OpportunitiesSection struct: ProblemsInMyDomain, Items

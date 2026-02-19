@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
@@ -327,6 +328,115 @@ func (r *BriefingRepository) GetOpportunitiesForAgent(ctx context.Context, agent
 	return &models.OpportunitiesSection{
 		ProblemsInMyDomain: totalCount,
 		Items:              items,
+	}, nil
+}
+
+// GetReputationChangesSince returns reputation changes for the given agent since the specified time.
+// It queries votes on the agent's posts and approaches, and accepted answers.
+// Returns a formatted delta string (e.g. "+20", "-5", "+0") and a breakdown of individual events.
+func (r *BriefingRepository) GetReputationChangesSince(ctx context.Context, agentID string, since time.Time) (*models.ReputationChangesResult, error) {
+	const eventsLimit = 10
+
+	// Query votes on agent's posts and approaches since the given time
+	query := `
+		SELECT
+			CASE
+				WHEN v.target_type = 'approach' THEN
+					CASE v.direction WHEN 'up' THEN 'approach_upvoted' ELSE 'approach_downvoted' END
+				WHEN v.target_type = 'answer' THEN
+					CASE v.direction WHEN 'up' THEN 'answer_upvoted' ELSE 'answer_downvoted' END
+				ELSE
+					CASE v.direction WHEN 'up' THEN 'post_upvoted' ELSE 'post_downvoted' END
+			END AS reason,
+			COALESCE(p.id::text, ap.id::text, ans_p.id::text, '') AS post_id,
+			COALESCE(p.title, ap_post.title, ans_p.title, '') AS post_title,
+			CASE v.direction WHEN 'up' THEN 10 ELSE -1 END AS delta
+		FROM votes v
+		LEFT JOIN posts p ON v.target_type = 'post' AND v.target_id = p.id AND p.posted_by_id = $1
+		LEFT JOIN approaches ap ON v.target_type = 'approach' AND v.target_id = ap.id AND ap.author_id = $1
+		LEFT JOIN posts ap_post ON ap.problem_id = ap_post.id
+		LEFT JOIN answers ans ON v.target_type = 'answer' AND v.target_id = ans.id AND ans.author_id = $1
+		LEFT JOIN posts ans_p ON ans.question_id = ans_p.id
+		WHERE v.created_at > $2
+			AND v.confirmed = true
+			AND (
+				(v.target_type = 'post' AND p.id IS NOT NULL)
+				OR (v.target_type = 'approach' AND ap.id IS NOT NULL)
+				OR (v.target_type = 'answer' AND ans.id IS NOT NULL)
+			)
+		ORDER BY v.created_at DESC
+		LIMIT $3
+	`
+
+	rows, err := r.pool.Query(ctx, query, agentID, since, eventsLimit)
+	if err != nil {
+		LogQueryError(ctx, "GetReputationChangesSince", "votes", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var breakdown []models.ReputationEvent
+	totalDelta := 0
+
+	for rows.Next() {
+		var event models.ReputationEvent
+		if err := rows.Scan(&event.Reason, &event.PostID, &event.PostTitle, &event.Delta); err != nil {
+			LogQueryError(ctx, "GetReputationChangesSince.scan", "votes", err)
+			return nil, err
+		}
+		breakdown = append(breakdown, event)
+		totalDelta += event.Delta
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Check for accepted answers since the given time
+	acceptedQuery := `
+		SELECT ans.id, COALESCE(p.title, '') AS post_title
+		FROM answers ans
+		JOIN posts p ON ans.question_id = p.id
+		WHERE ans.author_id = $1
+			AND ans.is_accepted = true
+			AND ans.created_at > $2
+		ORDER BY ans.created_at DESC
+		LIMIT $3
+	`
+
+	acceptedRows, err := r.pool.Query(ctx, acceptedQuery, agentID, since, eventsLimit)
+	if err != nil {
+		LogQueryError(ctx, "GetReputationChangesSince", "answers(accepted)", err)
+		return nil, err
+	}
+	defer acceptedRows.Close()
+
+	for acceptedRows.Next() {
+		var ansID, postTitle string
+		if err := acceptedRows.Scan(&ansID, &postTitle); err != nil {
+			LogQueryError(ctx, "GetReputationChangesSince.scan", "answers(accepted)", err)
+			return nil, err
+		}
+		breakdown = append(breakdown, models.ReputationEvent{
+			Reason:    "answer_accepted",
+			PostID:    ansID,
+			PostTitle: postTitle,
+			Delta:     50,
+		})
+		totalDelta += 50
+	}
+	if err := acceptedRows.Err(); err != nil {
+		return nil, err
+	}
+
+	if breakdown == nil {
+		breakdown = []models.ReputationEvent{}
+	}
+
+	sinceLastCheck := fmt.Sprintf("%+d", totalDelta)
+
+	return &models.ReputationChangesResult{
+		SinceLastCheck: sinceLastCheck,
+		Breakdown:      breakdown,
 	}, nil
 }
 

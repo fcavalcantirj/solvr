@@ -42,3 +42,17 @@ type Opportunity struct {
 	PostedBy        string   `json:"posted_by"`
 	AgeHours        int      `json:"age_hours"`
 }
+
+// ReputationChangesResult holds the reputation delta and breakdown since the last briefing.
+type ReputationChangesResult struct {
+	SinceLastCheck string            `json:"since_last_check"`
+	Breakdown      []ReputationEvent `json:"breakdown"`
+}
+
+// ReputationEvent represents a single reputation change event.
+type ReputationEvent struct {
+	Reason    string `json:"reason"`
+	PostID    string `json:"post_id"`
+	PostTitle string `json:"post_title"`
+	Delta     int    `json:"delta"`
+}

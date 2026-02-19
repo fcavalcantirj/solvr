@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -49,13 +52,24 @@ type QuestionsRepositoryInterface interface {
 
 // QuestionsHandler handles question-related HTTP requests.
 type QuestionsHandler struct {
-	repo      QuestionsRepositoryInterface
-	postsRepo PostsRepositoryInterface // For listing questions (shares data with /v1/posts)
+	repo             QuestionsRepositoryInterface
+	postsRepo        PostsRepositoryInterface // For listing questions (shares data with /v1/posts)
+	embeddingService EmbeddingServiceInterface
+	logger           *slog.Logger
 }
 
 // NewQuestionsHandler creates a new QuestionsHandler.
 func NewQuestionsHandler(repo QuestionsRepositoryInterface) *QuestionsHandler {
-	return &QuestionsHandler{repo: repo}
+	return &QuestionsHandler{
+		repo:   repo,
+		logger: slog.New(slog.NewJSONHandler(os.Stderr, nil)),
+	}
+}
+
+// SetEmbeddingService sets the embedding service for generating answer embeddings.
+// When set, answer creation and updates will generate and store embeddings for semantic search.
+func (h *QuestionsHandler) SetEmbeddingService(svc EmbeddingServiceInterface) {
+	h.embeddingService = svc
 }
 
 // SetPostsRepository sets the posts repository for listing operations.
@@ -453,6 +467,20 @@ func (h *QuestionsHandler) CreateAnswer(w http.ResponseWriter, r *http.Request) 
 		IsAccepted: false,
 	}
 
+	// Generate embedding for semantic search
+	if h.embeddingService != nil {
+		embedCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		embedding, embedErr := h.embeddingService.GenerateEmbedding(embedCtx, req.Content)
+		if embedErr != nil {
+			h.logger.Warn("failed to generate embedding for answer", "error", embedErr)
+		} else {
+			vecStr := float32SliceToVectorString(embedding)
+			answer.EmbeddingStr = &vecStr
+		}
+	}
+
 	createdAnswer, err := h.repo.CreateAnswer(r.Context(), answer)
 	if err != nil {
 		writeQuestionsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create answer")
@@ -506,6 +534,7 @@ func (h *QuestionsHandler) UpdateAnswer(w http.ResponseWriter, r *http.Request) 
 
 	// Apply updates
 	updatedAnswer := existingAnswer.Answer
+	contentChanged := false
 
 	if req.Content != nil {
 		if len(*req.Content) > 30000 {
@@ -513,6 +542,21 @@ func (h *QuestionsHandler) UpdateAnswer(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		updatedAnswer.Content = *req.Content
+		contentChanged = true
+	}
+
+	// Regenerate embedding if content changed
+	if contentChanged && h.embeddingService != nil {
+		embedCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		embedding, embedErr := h.embeddingService.GenerateEmbedding(embedCtx, updatedAnswer.Content)
+		if embedErr != nil {
+			h.logger.Warn("failed to regenerate embedding for answer", "error", embedErr, "answerID", answerID)
+		} else {
+			vecStr := float32SliceToVectorString(embedding)
+			updatedAnswer.EmbeddingStr = &vecStr
+		}
 	}
 
 	result, err := h.repo.UpdateAnswer(r.Context(), &updatedAnswer)

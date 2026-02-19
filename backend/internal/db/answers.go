@@ -151,10 +151,10 @@ func (r *AnswersRepository) CreateAnswer(ctx context.Context, answer *models.Ans
 		id = uuid.New().String()
 	}
 
-	// Insert answer
+	// Insert answer with optional embedding for semantic search
 	err := r.pool.QueryRow(ctx, `
-		INSERT INTO answers (id, question_id, author_type, author_id, content)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO answers (id, question_id, author_type, author_id, content, embedding)
+		VALUES ($1, $2, $3, $4, $5, $6::vector)
 		RETURNING id, question_id, author_type, author_id, content, is_accepted, upvotes, downvotes, created_at
 	`,
 		id,
@@ -162,6 +162,7 @@ func (r *AnswersRepository) CreateAnswer(ctx context.Context, answer *models.Ans
 		answer.AuthorType,
 		answer.AuthorID,
 		answer.Content,
+		answer.EmbeddingStr,
 	).Scan(
 		&answer.ID,
 		&answer.QuestionID,
@@ -258,12 +259,13 @@ func (r *AnswersRepository) FindAnswerByID(ctx context.Context, id string) (*mod
 func (r *AnswersRepository) UpdateAnswer(ctx context.Context, answer *models.Answer) (*models.Answer, error) {
 	err := r.pool.QueryRow(ctx, `
 		UPDATE answers
-		SET content = $2
+		SET content = $2, embedding = COALESCE($3::vector, embedding)
 		WHERE id = $1 AND deleted_at IS NULL
 		RETURNING id, question_id, author_type, author_id, content, is_accepted, upvotes, downvotes, created_at
 	`,
 		answer.ID,
 		answer.Content,
+		answer.EmbeddingStr,
 	).Scan(
 		&answer.ID,
 		&answer.QuestionID,

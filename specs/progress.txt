@@ -1,3 +1,26 @@
+2026-02-19: PRD-v5 Semantic Search - Add synchronous embedding generation to answer creation handler
+- Modified: backend/internal/api/handlers/questions.go (761 lines)
+  * Added embeddingService field and logger to QuestionsHandler struct
+  * Added SetEmbeddingService() method matching PostsHandler pattern
+  * CreateAnswer: generates embedding via embeddingService.GenerateEmbedding() with 5s timeout
+  * CreateAnswer: uses answer.Content as embedding input text
+  * CreateAnswer: graceful degradation - logs warning and proceeds with nil embedding on error
+  * UpdateAnswer: tracks contentChanged flag, only regenerates embedding when content changes
+  * Added imports: log/slog, os, time
+- Modified: backend/internal/models/answer.go (89 lines)
+  * Added EmbeddingStr *string field (json:"-" to exclude from API responses)
+  * Carries PostgreSQL vector literal from handler to repository
+- Modified: backend/internal/db/answers.go (472 lines)
+  * CreateAnswer: INSERT query includes embedding column with $6::vector cast
+  * UpdateAnswer: uses COALESCE($3::vector, embedding) to preserve existing embedding
+- Modified: backend/internal/api/router.go (797 lines)
+  * Wires embeddingService to questionsHandler.SetEmbeddingService() (like postsHandler)
+- New file: backend/internal/api/handlers/answers_embedding_test.go (265 lines)
+  * 6 TDD tests: create with embedding, create with failure (graceful degradation),
+    create without service, update content regenerates embedding,
+    update with embedding failure still updates, no content change skips regeneration
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Extend backfill worker to embed answers and approaches
 - Modified: backend/cmd/backfill-embeddings/main.go (611 lines)
   * Added -content-types flag: accepts 'posts', 'answers', 'approaches', 'all' (default: 'all')

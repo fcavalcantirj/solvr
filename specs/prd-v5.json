@@ -562,7 +562,7 @@
       "Verify: POST /v1/questions/{id}/answers with valid body populates embedding column",
       "Verify: Latency increases by ~50-100ms for answer creation"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

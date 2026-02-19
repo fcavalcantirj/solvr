@@ -180,6 +180,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	// Create content handlers (API-CRITICAL per PRD-v2)
 	problemsHandler := handlers.NewProblemsHandler(problemsRepo)
 	questionsHandler := handlers.NewQuestionsHandler(questionsRepo)
+	if embeddingService != nil {
+		questionsHandler.SetEmbeddingService(embeddingService)
+	}
 	ideasHandler := handlers.NewIdeasHandler(ideasRepo)
 	commentsHandler := handlers.NewCommentsHandler(commentsRepo)
 	commentsHandler.SetAgentRepository(agentRepo)

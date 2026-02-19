@@ -38,6 +38,10 @@ type Answer struct {
 
 	// DeletedAt is when the answer was soft deleted (null if not deleted).
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+
+	// EmbeddingStr carries the PostgreSQL vector literal from handler to repository.
+	// Excluded from JSON API responses.
+	EmbeddingStr *string `json:"-"`
 }
 
 // VoteScore returns the computed vote score (upvotes - downvotes).

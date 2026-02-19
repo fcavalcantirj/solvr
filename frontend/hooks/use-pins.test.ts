@@ -8,9 +8,11 @@ import { usePins } from './use-pins';
 vi.mock('@/lib/api', () => ({
   api: {
     listPins: vi.fn(),
+    getAgentPins: vi.fn(),
     createPin: vi.fn(),
     deletePin: vi.fn(),
     getStorageUsage: vi.fn(),
+    getAgentStorage: vi.fn(),
   },
 }));
 
@@ -205,5 +207,34 @@ describe('usePins', () => {
 
     expect(result.current.pins).toHaveLength(0);
     expect(result.current.totalCount).toBe(0);
+  });
+
+  it('fetches agent pins when agentId is provided', async () => {
+    vi.mocked(api.getAgentPins).mockResolvedValue(mockPinsListResponse);
+    vi.mocked(api.getAgentStorage).mockResolvedValue(mockStorageResponse);
+
+    const { result } = renderHook(() => usePins({ agentId: 'agent_test_1' }));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(api.getAgentPins).toHaveBeenCalledWith('agent_test_1', { limit: 100 });
+    expect(api.listPins).not.toHaveBeenCalled();
+    expect(result.current.pins).toHaveLength(2);
+  });
+
+  it('fetches agent storage when agentId is provided', async () => {
+    vi.mocked(api.getAgentPins).mockResolvedValue(mockPinsListResponse);
+    vi.mocked(api.getAgentStorage).mockResolvedValue(mockStorageResponse);
+
+    const { result } = renderHook(() => usePins({ agentId: 'agent_test_1' }));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(api.getAgentStorage).toHaveBeenCalledWith('agent_test_1');
+    expect(api.getStorageUsage).not.toHaveBeenCalled();
   });
 });

@@ -180,7 +180,9 @@ export default function DashboardPage() {
                     </span>
                   )}
                   {pins && (
-                    <span>{pins.count} pins</span>
+                    <Link href={`/pins?agent=${agent.id}`} className="underline hover:text-foreground">
+                      {pins.count} pins
+                    </Link>
                   )}
                 </div>
               )}

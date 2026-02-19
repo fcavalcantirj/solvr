@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import PinsPage from './page';
 
-// Mock next/navigation
+// Mock next/navigation — default empty params, tests can override
+const mockSearchParams = vi.fn(() => new URLSearchParams());
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams(),
 }));
 
 // Mock next/link
@@ -252,5 +253,40 @@ describe('PinsPage', () => {
     });
     render(<PinsPage />);
     expect(screen.getByText(/sign in to manage/i)).toBeInTheDocument();
+  });
+
+  it('passes agentId to usePins when ?agent= param is set', () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams('agent=ClaudiusThePirateEmperor'));
+    mockUsePins.mockReturnValue(defaultPinsResult);
+    render(<PinsPage />);
+
+    // usePins should be called with agentId
+    expect(mockUsePins).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'ClaudiusThePirateEmperor' })
+    );
+  });
+
+  it('shows agent name in header when viewing agent pins', () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams('agent=ClaudiusThePirateEmperor'));
+    mockUsePins.mockReturnValue({
+      ...defaultPinsResult,
+      pins: [pinFixtures[0]],
+      totalCount: 1,
+    });
+    render(<PinsPage />);
+
+    expect(screen.getByText(/ClaudiusThePirateEmperor/)).toBeInTheDocument();
+  });
+
+  it('renders CID as clickable IPFS gateway link', () => {
+    mockUsePins.mockReturnValue({
+      ...defaultPinsResult,
+      pins: [pinFixtures[0]],
+      totalCount: 1,
+    });
+    render(<PinsPage />);
+
+    const cidLink = screen.getByRole('link', { name: /QmTest1.*12345/i });
+    expect(cidLink).toHaveAttribute('href', expect.stringContaining('ipfs.io/ipfs/QmTest123'));
   });
 });

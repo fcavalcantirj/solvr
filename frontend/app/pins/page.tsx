@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/header";
 import { useAuth } from "@/hooks/use-auth";
 import { usePins } from "@/hooks/use-pins";
@@ -15,8 +16,11 @@ import {
   Check,
   Loader2,
   X,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
+
+const IPFS_GATEWAY_BASE = "https://ipfs.io/ipfs/";
 
 type StatusFilter = PinStatus | 'all';
 
@@ -66,9 +70,14 @@ function formatDate(dateStr: string): string {
 
 export default function PinsPage() {
   const { user, isAuthenticated } = useAuth();
+  const searchParams = useSearchParams();
+  const agentId = searchParams.get("agent") || undefined;
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  const pinsOptions = statusFilter !== "all" ? { status: statusFilter } : undefined;
+  const pinsOptions = {
+    ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+    ...(agentId ? { agentId } : {}),
+  } as { status?: PinStatus; agentId?: string } | undefined;
   const {
     pins,
     loading,
@@ -186,9 +195,16 @@ export default function PinsPage() {
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <h1 className="font-mono text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight text-foreground">
-                MY PINS
-              </h1>
+              <div>
+                <h1 className="font-mono text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight text-foreground">
+                  {agentId ? `${agentId}'s PINS` : "MY PINS"}
+                </h1>
+                {agentId && (
+                  <Link href="/pins" className="font-mono text-xs text-muted-foreground hover:text-foreground underline mt-1 inline-block">
+                    View my pins
+                  </Link>
+                )}
+              </div>
               <button
                 onClick={() => setShowCreateDialog(true)}
                 className="font-mono text-xs px-4 py-2 bg-foreground text-background hover:bg-foreground/90 transition-colors flex items-center gap-2"
@@ -471,12 +487,15 @@ function PinRow({
 
         {/* CID */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span
-            className="font-mono text-xs text-muted-foreground truncate"
+          <a
+            href={`${IPFS_GATEWAY_BASE}${pin.pin.cid}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-xs text-muted-foreground hover:text-foreground truncate underline"
             title={pin.pin.cid}
           >
             {truncateCID(pin.pin.cid)}
-          </span>
+          </a>
           <button
             onClick={() => onCopy(pin.pin.cid, pin.requestid)}
             className="text-muted-foreground hover:text-foreground transition-colors shrink-0"

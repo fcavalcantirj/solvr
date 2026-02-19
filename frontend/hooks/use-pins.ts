@@ -6,6 +6,7 @@ import type { APIPinResponse, PinStatus } from '@/lib/api-types';
 
 export interface UsePinsOptions {
   status?: PinStatus;
+  agentId?: string;
 }
 
 export interface StorageInfo {
@@ -41,12 +42,17 @@ export function usePins(options?: UsePinsOptions): UsePinsResult {
 
       const stableOptions: UsePinsOptions | undefined = optionsKey ? JSON.parse(optionsKey) : undefined;
 
+      const agentId = stableOptions?.agentId;
+      const pinsPromise = agentId
+        ? api.getAgentPins(agentId, { status: stableOptions?.status, limit: 100 })
+        : api.listPins({ status: stableOptions?.status, limit: 100 });
+      const storagePromise = agentId
+        ? api.getAgentStorage(agentId)
+        : api.getStorageUsage();
+
       const [pinsResponse, storageResponse] = await Promise.allSettled([
-        api.listPins({
-          status: stableOptions?.status,
-          limit: 100,
-        }),
-        api.getStorageUsage(),
+        pinsPromise,
+        storagePromise,
       ]);
 
       if (pinsResponse.status === 'fulfilled') {

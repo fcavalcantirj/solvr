@@ -230,7 +230,7 @@ describe("DashboardPage", () => {
     });
   });
 
-  it("renders agent pin count", async () => {
+  it("renders agent pin count as link to pins page", async () => {
     mockUseAuth.mockReturnValue({
       user: { id: "user-1", type: "human", displayName: "Test Human" },
       isAuthenticated: true,
@@ -244,7 +244,8 @@ describe("DashboardPage", () => {
     render(<DashboardPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/3 pins/i)).toBeInTheDocument();
+      const pinLink = screen.getByRole("link", { name: /3 pins/i });
+      expect(pinLink).toHaveAttribute("href", "/pins?agent=agent_test_1");
     });
   });
 

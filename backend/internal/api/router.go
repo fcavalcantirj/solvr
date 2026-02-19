@@ -172,6 +172,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	}
 
 	// Create search handler (per SPEC.md Part 5.5)
+	// Wire embedding service for hybrid RRF search (full-text + vector similarity)
+	if embeddingService != nil {
+		if sr, ok := searchRepo.(*db.SearchRepository); ok {
+			sr.SetEmbeddingService(embeddingService)
+		}
+	}
 	searchHandler := handlers.NewSearchHandler(searchRepo)
 
 	// Create feed handler (per SPEC.md Part 5.6: GET /feed endpoints)

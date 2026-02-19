@@ -703,7 +703,7 @@
       "Comment: Hybrid search combines exact keyword matching (full-text) with semantic similarity (vector)",
       "Verify: go test ./internal/db -run TestSearch -v passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

@@ -4,16 +4,26 @@ package db
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/jackc/pgx/v5"
+	pgvector "github.com/pgvector/pgvector-go"
 )
+
+// QueryEmbedder generates query embeddings for hybrid search.
+// Defined in db package to avoid import cycle with services package.
+// The services.EmbeddingService type satisfies this interface.
+type QueryEmbedder interface {
+	GenerateQueryEmbedding(ctx context.Context, text string) ([]float32, error)
+}
 
 // SearchRepository implements SearchRepositoryInterface for PostgreSQL.
 type SearchRepository struct {
-	pool *Pool
+	pool             *Pool
+	embeddingService QueryEmbedder
 }
 
 // NewSearchRepository creates a new SearchRepository.
@@ -21,12 +31,34 @@ func NewSearchRepository(pool *Pool) *SearchRepository {
 	return &SearchRepository{pool: pool}
 }
 
-// Search performs a full-text search across posts, answers, and approaches.
+// SetEmbeddingService sets the embedding service for hybrid search.
+// When set, Search() uses hybrid RRF (full-text + vector similarity).
+// When nil, Search() falls back to full-text only.
+func (r *SearchRepository) SetEmbeddingService(svc QueryEmbedder) {
+	r.embeddingService = svc
+}
+
+// Search performs a search across posts, answers, and approaches.
+// When an embedding service is configured, uses hybrid RRF search
+// (combining full-text keyword matching with vector semantic similarity).
+// Falls back to full-text only search if embedding service is nil or fails.
 // Supports ContentTypes filter to search specific content sources.
 // When ContentTypes is empty, searches only posts (backwards compatible).
-// When ContentTypes is specified, searches the requested types and merges results.
 func (r *SearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
 	tsquery := buildTsQuery(query)
+
+	// Try to generate query embedding for hybrid search
+	var queryEmbedding []float32
+	if r.embeddingService != nil {
+		emb, err := r.embeddingService.GenerateQueryEmbedding(ctx, query)
+		if err != nil {
+			// Hybrid search combines exact keyword matching (full-text) with semantic similarity (vector)
+			// If embedding generation fails, fall back to full-text only search
+			log.Printf("search: embedding generation failed, falling back to full-text: %v", err)
+		} else {
+			queryEmbedding = emb
+		}
+	}
 
 	contentTypes := opts.ContentTypes
 	searchAll := len(contentTypes) == 0
@@ -35,7 +67,13 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 
 	// Search posts if requested or default
 	if searchAll || containsContentType(contentTypes, "posts") {
-		posts, err := r.searchPosts(ctx, tsquery, opts)
+		var posts []models.SearchResult
+		var err error
+		if queryEmbedding != nil {
+			posts, err = r.searchPostsHybrid(ctx, query, queryEmbedding, tsquery, opts)
+		} else {
+			posts, err = r.searchPosts(ctx, tsquery, opts)
+		}
 		if err != nil {
 			return nil, 0, err
 		}
@@ -138,6 +176,89 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 	if err != nil {
 		LogQueryError(ctx, "Search.Posts", "posts", err)
 		return nil, fmt.Errorf("search posts query failed: %w", err)
+	}
+	defer rows.Close()
+
+	results, err := scanSearchResults(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	// Tag all results with source "post"
+	for i := range results {
+		results[i].Source = "post"
+	}
+
+	return results, nil
+}
+
+// searchPostsHybrid uses the hybrid_search SQL function to combine full-text and
+// vector similarity search using Reciprocal Rank Fusion (RRF).
+// The hybrid_search function returns SETOF posts, so we query it and format
+// results into SearchResult the same way searchPosts does.
+func (r *SearchRepository) searchPostsHybrid(ctx context.Context, query string, embedding []float32, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
+	queryVec := pgvector.NewVector(embedding)
+
+	limit := opts.PerPage
+	if limit == 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	// Request more results from hybrid_search to allow for post-filtering
+	matchCount := limit * 3
+	if matchCount < 60 {
+		matchCount = 60
+	}
+
+	// Use hybrid_search SQL function, then apply the same formatting as searchPosts
+	baseQuery := `
+		SELECT
+			p.id,
+			p.type,
+			p.title,
+			ts_headline('english', p.description, to_tsquery('english', $4),
+				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=30, MaxFragments=1') as snippet,
+			p.tags,
+			p.status,
+			p.posted_by_type,
+			p.posted_by_id,
+			COALESCE(
+				CASE WHEN p.posted_by_type = 'human' THEN u.display_name
+					 ELSE a.display_name
+				END,
+				p.posted_by_id
+			) as author_name,
+			1.0 as score,
+			(p.upvotes - p.downvotes) as vote_score,
+			COALESCE((SELECT COUNT(*) FROM answers WHERE question_id = p.id AND deleted_at IS NULL), 0) as answers_count,
+			p.created_at,
+			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at
+		FROM hybrid_search($1, $2, $3, 1.0, 1.0, 60) p
+		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
+		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
+		WHERE 1=1
+	`
+
+	args := []any{query, queryVec, matchCount, tsquery}
+	argNum := 5
+
+	// Apply filters (reuse the same filter builder, but need to adjust field references)
+	filters, args, _ := buildSearchFilters(opts, args, argNum)
+	if filters != "" {
+		baseQuery += " " + filters
+	}
+
+	// For hybrid search, the ordering is already handled by the SQL function (RRF score)
+	// but we preserve it through the query
+	baseQuery += " LIMIT " + fmt.Sprintf("%d", limit)
+
+	rows, err := r.pool.Query(ctx, baseQuery, args...)
+	if err != nil {
+		// If hybrid search fails (e.g., missing function), fall back to full-text
+		log.Printf("search: hybrid_search query failed, falling back to full-text: %v", err)
+		return r.searchPosts(ctx, tsquery, opts)
 	}
 	defer rows.Close()
 

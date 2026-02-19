@@ -1,3 +1,26 @@
+2026-02-19: PRD-v5 Semantic Search - Update search repository to use hybrid RRF function with vector + full-text search
+- Modified: backend/internal/db/search.go (550 lines)
+  * Added QueryEmbedder interface (consumer-side, avoids import cycle with services package)
+  * Added embeddingService field to SearchRepository struct
+  * Added SetEmbeddingService() setter method
+  * Updated Search() to generate query embedding when embedding service is available
+  * Added searchPostsHybrid() method: calls hybrid_search SQL function with RRF fusion
+  * Graceful fallback: if embedding fails, logs warning and uses full-text only
+  * If hybrid_search SQL query fails, falls back to full-text searchPosts()
+  * Parameters: query text, pgvector.Vector, match_count, fts_weight=1.0, vec_weight=1.0, rrf_k=60
+- New file: backend/internal/db/search_hybrid_test.go (309 lines)
+  * 5 TDD tests for hybrid search integration
+  * TestSearchRepository_HybridSearch_WithEmbeddingService: verifies hybrid search with real Voyage API
+  * TestSearchRepository_HybridSearch_FallbackWithoutEmbeddingService: verifies full-text fallback when no embedding service
+  * TestSearchRepository_HybridSearch_FiltersWork: verifies type/status/tag filters work with hybrid search
+  * TestSearchRepository_HybridSearch_EmbeddingErrorFallback: verifies graceful fallback on embedding errors
+  * TestSearchRepository_SetEmbeddingService: verifies setter method
+  * Test-only Voyage API client (avoids import cycle with services package)
+- Modified: backend/internal/api/router.go (806 lines)
+  * Wire embeddingService to SearchRepository via SetEmbeddingService() in mountV1Routes()
+  * Type assertion to *db.SearchRepository for interface-safe wiring
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Add pgvector Go library and register vector type in database pool
 - Added dependency: github.com/pgvector/pgvector-go v0.3.0 (and pgx subpackage)
 - Modified: backend/internal/db/pool.go (173 lines)

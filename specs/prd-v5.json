@@ -469,7 +469,7 @@
       "  - Assert: embedding length is 768, baseURL is http://localhost:11434/v1",
       "Verify: go test ./internal/services -run TestEmbedding -v passes all 5 tests"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
@@ -495,7 +495,7 @@
       "Verify: go build ./cmd/backfill-embeddings compiles",
       "Verify: ./backfill-embeddings -dry-run=true shows correct post count and plan"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

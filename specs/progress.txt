@@ -1,3 +1,22 @@
+2026-02-19: PRD-v5 Semantic Search - Create backfill worker CLI tool to embed existing posts
+- New file: backend/cmd/backfill-embeddings/main.go (265 lines)
+  * CLI tool with -batch-size (default: 100) and -dry-run flags
+  * Loads config from env vars (DATABASE_URL, EMBEDDING_PROVIDER, VOYAGE_API_KEY, OLLAMA_BASE_URL)
+  * Initializes embedding service based on EMBEDDING_PROVIDER (voyage default, ollama fallback)
+  * Queries posts WHERE embedding IS NULL, processes in configurable batches
+  * Rate limiting: 50 posts/second to respect Voyage API free tier
+  * Progress logging: "Processed X/Y posts (Z%)" per batch
+  * Error handling: logs errors but continues processing (no single failure stops backfill)
+  * Dry-run mode: reports count and plan without making changes
+  * Final summary: "Backfill complete: N posts embedded, M errors"
+  * PostgreSQL vector string format for embedding storage (no pgvector-go dependency)
+- New file: backend/cmd/backfill-embeddings/backfill_test.go (286 lines)
+  * 6 TDD tests: dry run, batch processing, embedding error recovery, DB error recovery,
+    empty database, context cancellation
+  * Mock interfaces for database and embedding service
+- Also marked "Add TDD tests for embedding service" as passes:true (was already implemented)
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Add embedding service configuration and initialization in main.go
 - Config (internal/config/env.go): Added EmbeddingProvider, VoyageAPIKey, OllamaBaseURL fields
   * EMBEDDING_PROVIDER (default: "voyage"), VOYAGE_API_KEY (optional), OLLAMA_BASE_URL (default: http://localhost:11434/v1)

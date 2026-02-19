@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	pgxvec "github.com/pgvector/pgvector-go/pgx"
 )
 
 // ErrTest is used for testing transaction rollback behavior.
@@ -76,6 +77,11 @@ func NewPool(ctx context.Context, databaseURL string) (*Pool, error) {
 	config.MinConns = 2
 	config.MaxConnIdleTime = 30 * time.Second
 	config.HealthCheckPeriod = 30 * time.Second
+
+	// Registers pgvector types so pgx can scan vector columns into pgvector.Vector type
+	config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		return pgxvec.RegisterTypes(ctx, conn)
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {

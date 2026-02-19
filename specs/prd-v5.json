@@ -678,7 +678,7 @@
       "Verify: go build ./internal/db compiles without errors",
       "Verify: Can query posts with embedding column: rows, err := pool.Query(ctx, 'SELECT embedding FROM posts WHERE id = $1', postID)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

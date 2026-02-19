@@ -1,3 +1,17 @@
+2026-02-19: PRD-v5 Semantic Search - Add pgvector Go library and register vector type in database pool
+- Added dependency: github.com/pgvector/pgvector-go v0.3.0 (and pgx subpackage)
+- Modified: backend/internal/db/pool.go (173 lines)
+  * Added import: pgxvec "github.com/pgvector/pgvector-go/pgx"
+  * Added AfterConnect callback to pool config: calls pgxvec.RegisterTypes(ctx, conn)
+  * Registers pgvector types so pgx can scan vector columns into pgvector.Vector type
+- New file: backend/internal/db/pool_pgvector_test.go (92 lines)
+  * 3 TDD tests: vector literal scan, embedding column scan, AfterConnect callback set
+  * TestPool_PgvectorTypeRegistered: scans '[1,2,3]'::vector into pgvector.Vector
+  * TestPool_PgvectorEmbeddingColumnScan: scans embedding from posts table
+  * TestPool_AfterConnectSet: verifies config.AfterConnect is not nil
+- Modified: backend/go.mod (added pgvector-go dependency)
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Update search to support unified search across posts, answers, and approaches
 - Modified: backend/internal/models/search.go (87 lines)
   * Added ContentTypes []string field to SearchOptions (filter: "posts", "answers", "approaches")

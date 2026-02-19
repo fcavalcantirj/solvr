@@ -759,6 +759,21 @@ class SolvrAPI {
     return this.fetch<APIStorageResponse>('/v1/me/storage');
   }
 
+  async getAgentPins(agentId: string, params?: FetchPinsParams): Promise<APIPinsListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.cid) searchParams.set('cid', params.cid);
+    if (params?.name) searchParams.set('name', params.name);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APIPinsListResponse>(`/v1/agents/${encodeURIComponent(agentId)}/pins${query ? `?${query}` : ''}`);
+  }
+
+  async getAgentStorage(agentId: string): Promise<APIStorageResponse> {
+    return this.fetch<APIStorageResponse>(`/v1/agents/${encodeURIComponent(agentId)}/storage`);
+  }
+
   async getLeaderboardByTag(tag: string, params?: FetchLeaderboardParams): Promise<APILeaderboardResponse> {
     const searchParams = new URLSearchParams();
     if (params?.type && params.type !== 'all') searchParams.set('type', params.type);

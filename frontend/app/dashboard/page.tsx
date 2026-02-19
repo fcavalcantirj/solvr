@@ -10,11 +10,19 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Loader2, Bot, LogIn } from "lucide-react";
 import Link from "next/link";
-import type { APIAgent, APIAgentBriefingData } from "@/lib/api-types";
+import type { APIAgent, APIAgentBriefingData, APIPinsListResponse } from "@/lib/api-types";
+
+interface StorageData {
+  used: number;
+  quota: number;
+  percentage: number;
+}
 
 interface AgentWithBriefing {
   agent: APIAgent;
   briefing: APIAgentBriefingData | null;
+  pins: APIPinsListResponse | null;
+  storage: StorageData | null;
   error: string | null;
 }
 
@@ -42,19 +50,35 @@ export default function DashboardPage() {
           return;
         }
 
-        // Fetch briefing for each agent
+        // Fetch briefing, pins, and storage for each agent
         const results = await Promise.all(
           agentsResponse.data.map(async (agent) => {
+            let briefing: APIAgentBriefingData | null = null;
+            let pins: APIPinsListResponse | null = null;
+            let storage: StorageData | null = null;
+            let fetchError: string | null = null;
+
             try {
               const briefingResponse = await api.getAgentBriefing(agent.id);
-              return { agent, briefing: briefingResponse.data, error: null };
+              briefing = briefingResponse.data;
             } catch (err) {
-              return {
-                agent,
-                briefing: null,
-                error: err instanceof Error ? err.message : "Failed to load briefing",
-              };
+              fetchError = err instanceof Error ? err.message : "Failed to load briefing";
             }
+
+            try {
+              pins = await api.getAgentPins(agent.id);
+            } catch {
+              // Graceful degradation — pins section just won't show
+            }
+
+            try {
+              const storageResponse = await api.getAgentStorage(agent.id);
+              storage = storageResponse.data;
+            } catch {
+              // Graceful degradation — storage section just won't show
+            }
+
+            return { agent, briefing, pins, storage, error: fetchError };
           })
         );
 
@@ -126,7 +150,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {!authLoading && !loading && agents.map(({ agent, briefing, error: briefingError }) => (
+          {!authLoading && !loading && agents.map(({ agent, briefing, pins, storage, error: briefingError }) => (
             <div key={agent.id} className="mb-8">
               <div className="border border-border p-4 mb-0">
                 <div className="flex items-center gap-3">
@@ -145,6 +169,19 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
+
+              {(storage || pins) && (
+                <div className="border border-border border-t-0 p-3 flex gap-6 text-xs text-muted-foreground">
+                  {storage && (
+                    <span>
+                      Storage: {formatBytes(storage.used)} / {formatBytes(storage.quota)} ({storage.percentage.toFixed(1)}%)
+                    </span>
+                  )}
+                  {pins && (
+                    <span>{pins.count} pins</span>
+                  )}
+                </div>
+              )}
 
               {briefingError && (
                 <div className="border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
@@ -168,4 +205,12 @@ export default function DashboardPage() {
       <Footer />
     </>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const value = bytes / Math.pow(1024, i);
+  return `${value.toFixed(1)} ${units[i]}`;
 }

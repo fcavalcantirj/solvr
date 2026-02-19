@@ -237,6 +237,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	ipfsService := services.NewKuboIPFSService(ipfsAPIURL)
 	pinsHandler := handlers.NewPinsHandler(pinsRepo, ipfsService)
 	pinsHandler.SetStorageRepo(storageRepo)
+	pinsHandler.SetAgentFinderRepo(agentRepoConcrete)
 
 	// Create IPFS upload handler
 	// Max upload size: configurable via env, defaults to 100MB
@@ -539,7 +540,20 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 			// Per prd-v6-ipfs-expanded Phase 2: GET /v1/me/storage - storage usage
 			storageHandler := handlers.NewStorageHandler(storageRepo)
+			storageHandler.SetAgentFinderRepo(agentRepoConcrete)
 			r.Get("/me/storage", storageHandler.GetStorage)
+
+			// GET /v1/agents/{id}/pins - agent pins for human owners or agent self
+			r.Get("/agents/{id}/pins", func(w http.ResponseWriter, req *http.Request) {
+				agentID := chi.URLParam(req, "id")
+				pinsHandler.ListAgentPins(w, req, agentID)
+			})
+
+			// GET /v1/agents/{id}/storage - agent storage for human owners or agent self
+			r.Get("/agents/{id}/storage", func(w http.ResponseWriter, req *http.Request) {
+				agentID := chi.URLParam(req, "id")
+				storageHandler.GetAgentStorage(w, req, agentID)
+			})
 
 			// Heartbeat endpoint — agent/user check-in with aggregated status
 			heartbeatHandler := handlers.NewHeartbeatHandler(agentRepo, notificationsRepo, storageRepo)

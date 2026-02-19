@@ -17,10 +17,14 @@ vi.mock("@/hooks/use-auth", () => ({
 // Mock API
 const mockGetUserAgents = vi.fn();
 const mockGetAgentBriefing = vi.fn();
+const mockGetAgentPins = vi.fn();
+const mockGetAgentStorage = vi.fn();
 vi.mock("@/lib/api", () => ({
   api: {
     getUserAgents: (...args: unknown[]) => mockGetUserAgents(...args),
     getAgentBriefing: (...args: unknown[]) => mockGetAgentBriefing(...args),
+    getAgentPins: (...args: unknown[]) => mockGetAgentPins(...args),
+    getAgentStorage: (...args: unknown[]) => mockGetAgentStorage(...args),
   },
 }));
 
@@ -61,6 +65,17 @@ const mockBriefingData = {
   suggested_actions: [],
   opportunities: { problems_in_my_domain: 3, items: [] },
   reputation_changes: { since_last_check: "+15", breakdown: [] },
+};
+
+const mockPinsData = {
+  count: 3,
+  results: [
+    { requestid: "pin-1", status: "pinned", created: "2025-01-01T00:00:00Z", pin: { cid: "QmTest1" }, delegates: [] },
+  ],
+};
+
+const mockStorageData = {
+  data: { used: 52428800, quota: 1073741824, percentage: 4.88 },
 };
 
 describe("DashboardPage", () => {
@@ -105,6 +120,8 @@ describe("DashboardPage", () => {
     });
     mockGetUserAgents.mockResolvedValue({ data: [mockAgent] });
     mockGetAgentBriefing.mockResolvedValue({ data: mockBriefingData });
+    mockGetAgentPins.mockResolvedValue(mockPinsData);
+    mockGetAgentStorage.mockResolvedValue(mockStorageData);
 
     render(<DashboardPage />);
 
@@ -130,6 +147,8 @@ describe("DashboardPage", () => {
     const agent2 = { ...mockAgent, id: "agent_test_2", display_name: "Agent Two" };
     mockGetUserAgents.mockResolvedValue({ data: [mockAgent, agent2] });
     mockGetAgentBriefing.mockResolvedValue({ data: mockBriefingData });
+    mockGetAgentPins.mockResolvedValue(mockPinsData);
+    mockGetAgentStorage.mockResolvedValue(mockStorageData);
 
     render(<DashboardPage />);
 
@@ -147,6 +166,8 @@ describe("DashboardPage", () => {
     });
     mockGetUserAgents.mockResolvedValue({ data: [mockAgent] });
     mockGetAgentBriefing.mockRejectedValue(new Error("Forbidden"));
+    mockGetAgentPins.mockResolvedValue(mockPinsData);
+    mockGetAgentStorage.mockResolvedValue(mockStorageData);
 
     render(<DashboardPage />);
 
@@ -163,6 +184,8 @@ describe("DashboardPage", () => {
     });
     mockGetUserAgents.mockResolvedValue({ data: [mockAgent] });
     mockGetAgentBriefing.mockResolvedValue({ data: mockBriefingData });
+    mockGetAgentPins.mockResolvedValue(mockPinsData);
+    mockGetAgentStorage.mockResolvedValue(mockStorageData);
 
     render(<DashboardPage />);
 
@@ -177,6 +200,8 @@ describe("DashboardPage", () => {
     });
     mockGetUserAgents.mockResolvedValue({ data: [mockAgent] });
     mockGetAgentBriefing.mockResolvedValue({ data: mockBriefingData });
+    mockGetAgentPins.mockResolvedValue(mockPinsData);
+    mockGetAgentStorage.mockResolvedValue(mockStorageData);
 
     render(<DashboardPage />);
 
@@ -184,5 +209,82 @@ describe("DashboardPage", () => {
       const agentLink = screen.getByRole("link", { name: "Test Agent" });
       expect(agentLink).toHaveAttribute("href", "/agents/agent_test_1");
     });
+  });
+
+  it("renders agent storage usage", async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: "user-1", type: "human", displayName: "Test Human" },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockGetUserAgents.mockResolvedValue({ data: [mockAgent] });
+    mockGetAgentBriefing.mockResolvedValue({ data: mockBriefingData });
+    mockGetAgentPins.mockResolvedValue(mockPinsData);
+    mockGetAgentStorage.mockResolvedValue(mockStorageData);
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/50\.0 MB/)).toBeInTheDocument();
+      expect(screen.getByText(/1\.0 GB/)).toBeInTheDocument();
+    });
+  });
+
+  it("renders agent pin count", async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: "user-1", type: "human", displayName: "Test Human" },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockGetUserAgents.mockResolvedValue({ data: [mockAgent] });
+    mockGetAgentBriefing.mockResolvedValue({ data: mockBriefingData });
+    mockGetAgentPins.mockResolvedValue(mockPinsData);
+    mockGetAgentStorage.mockResolvedValue(mockStorageData);
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/3 pins/i)).toBeInTheDocument();
+    });
+  });
+
+  it("handles storage fetch error gracefully", async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: "user-1", type: "human", displayName: "Test Human" },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockGetUserAgents.mockResolvedValue({ data: [mockAgent] });
+    mockGetAgentBriefing.mockResolvedValue({ data: mockBriefingData });
+    mockGetAgentPins.mockResolvedValue(mockPinsData);
+    mockGetAgentStorage.mockRejectedValue(new Error("Storage unavailable"));
+
+    render(<DashboardPage />);
+
+    // Should still render agent name and briefing even if storage fails
+    await waitFor(() => {
+      expect(screen.getByText("Test Agent")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("agent-briefing")).toBeInTheDocument();
+  });
+
+  it("handles pins fetch error gracefully", async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: "user-1", type: "human", displayName: "Test Human" },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockGetUserAgents.mockResolvedValue({ data: [mockAgent] });
+    mockGetAgentBriefing.mockResolvedValue({ data: mockBriefingData });
+    mockGetAgentPins.mockRejectedValue(new Error("Pins unavailable"));
+    mockGetAgentStorage.mockResolvedValue(mockStorageData);
+
+    render(<DashboardPage />);
+
+    // Should still render agent name and briefing even if pins fails
+    await waitFor(() => {
+      expect(screen.getByText("Test Agent")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("agent-briefing")).toBeInTheDocument();
   });
 });

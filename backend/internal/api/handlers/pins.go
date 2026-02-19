@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
+	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -42,6 +43,7 @@ type PinsHandler struct {
 	repo        PinRepositoryInterface
 	ipfs        IPFSPinner
 	storageRepo StorageRepositoryInterface
+	agentFinder AgentFinderInterface
 	logger      *slog.Logger
 }
 
@@ -63,6 +65,87 @@ func (h *PinsHandler) SetLogger(logger *slog.Logger) {
 // When set, pin creation checks quota before allowing new pins.
 func (h *PinsHandler) SetStorageRepo(repo StorageRepositoryInterface) {
 	h.storageRepo = repo
+}
+
+// SetAgentFinderRepo sets the agent finder for cross-entity pin access.
+func (h *PinsHandler) SetAgentFinderRepo(repo AgentFinderInterface) {
+	h.agentFinder = repo
+}
+
+// ListAgentPins handles GET /v1/agents/{id}/pins — list an agent's pins.
+// Accessible by the agent itself (API key) or by the human who claimed the agent (JWT).
+func (h *PinsHandler) ListAgentPins(w http.ResponseWriter, r *http.Request, agentID string) {
+	ctx := r.Context()
+
+	// Check agent API key auth first (agent accessing own pins)
+	authAgent := auth.AgentFromContext(ctx)
+	if authAgent != nil {
+		if authAgent.ID != agentID {
+			response.WriteForbidden(w, "agents can only access their own pins")
+			return
+		}
+	} else {
+		// Check human JWT auth
+		claims := auth.ClaimsFromContext(ctx)
+		if claims == nil {
+			response.WriteUnauthorized(w, "authentication required")
+			return
+		}
+
+		// Look up the agent
+		agent, err := h.agentFinder.FindByID(ctx, agentID)
+		if err != nil {
+			response.WriteNotFound(w, "agent not found")
+			return
+		}
+
+		// Verify the human is the owner
+		if agent.HumanID == nil || *agent.HumanID != claims.UserID {
+			response.WriteForbidden(w, "you must be the claiming owner of this agent")
+			return
+		}
+	}
+
+	// Parse query params (same as List)
+	opts := models.PinListOptions{
+		CID:    r.URL.Query().Get("cid"),
+		Name:   r.URL.Query().Get("name"),
+		Status: models.PinStatus(r.URL.Query().Get("status")),
+	}
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit < 1 {
+			response.WriteError(w, http.StatusBadRequest, response.ErrCodeValidation, "limit must be a positive integer")
+			return
+		}
+		if limit > 1000 {
+			limit = 1000
+		}
+		opts.Limit = limit
+	}
+
+	pins, total, err := h.repo.ListByOwner(ctx, agentID, "agent", opts)
+	if err != nil {
+		logCtx := response.LogContext{
+			Operation: "ListAgentPins",
+			Resource:  "pin",
+			RequestID: r.Header.Get("X-Request-ID"),
+		}
+		response.WriteInternalErrorWithLog(w, "failed to list agent pins", err, logCtx, h.logger)
+		return
+	}
+
+	results := make([]models.PinResponse, len(pins))
+	for i := range pins {
+		results[i] = pins[i].ToPinResponse()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"count":   total,
+		"results": results,
+	})
 }
 
 // CreatePinRequest represents the request body for POST /v1/pins.

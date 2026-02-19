@@ -14,9 +14,9 @@ import (
 
 // SearchRepositoryInterface defines the database operations for search.
 type SearchRepositoryInterface interface {
-	// Search performs a full-text search with the given query and options.
-	// Returns results, total count, and any error.
-	Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error)
+	// Search performs a search with the given query and options.
+	// Returns results, total count, search method used ("hybrid" or "fulltext"), and any error.
+	Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error)
 }
 
 // SearchHandler handles search-related HTTP requests.
@@ -43,6 +43,7 @@ type SearchResponseMeta struct {
 	PerPage int    `json:"per_page"`
 	HasMore bool   `json:"has_more"`
 	TookMs  int64  `json:"took_ms"`
+	Method  string `json:"method"` // "hybrid" or "fulltext" - indicates which search method was used
 }
 
 // Search handles GET /v1/search - search the knowledge base.
@@ -134,10 +135,18 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute search
-	results, total, err := h.repo.Search(r.Context(), query, opts)
+	results, total, method, err := h.repo.Search(r.Context(), query, opts)
 	if err != nil {
 		writeSearchError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "search failed")
 		return
+	}
+
+	// Normalize search method for frontend consumption
+	// Backend uses "hybrid_rrf" and "fulltext_only" internally;
+	// frontend expects "hybrid" or "fulltext"
+	searchMethod := "fulltext"
+	if method == "hybrid_rrf" || method == "hybrid" {
+		searchMethod = "hybrid"
 	}
 
 	// Convert to response format
@@ -162,6 +171,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 			PerPage: opts.PerPage,
 			HasMore: hasMore,
 			TookMs:  tookMs,
+			Method:  searchMethod,
 		},
 	}
 

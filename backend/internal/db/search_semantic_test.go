@@ -88,7 +88,7 @@ func TestSearchHybrid_SemanticSimilarity(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	repo.SetEmbeddingService(embedSvc)
 
-	results, total, err := repo.Search(ctx, "golang race condition", models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, "golang race condition", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -183,7 +183,7 @@ func TestSearchHybrid_FallbackToFullText(t *testing.T) {
 	repo.SetEmbeddingService(&brokenEmbeddingService{})
 
 	// Search should still work via full-text fallback
-	results, total, err := repo.Search(ctx, "golang", models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, "golang", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -232,7 +232,7 @@ func TestSearchHybrid_EmptyEmbeddings(t *testing.T) {
 
 	// Search should work - the hybrid_search SQL function handles NULL embeddings
 	// via the "embedding IS NOT NULL" filter in the semantic CTE
-	results, total, err := repo.Search(ctx, "null embeddings hybrid search", models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, "null embeddings hybrid search", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -286,7 +286,7 @@ func TestSearchHybrid_RRFWeighting(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	repo.SetEmbeddingService(embedSvc)
 
-	results, total, err := repo.Search(ctx, "improve database query performance", models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, "improve database query performance", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})

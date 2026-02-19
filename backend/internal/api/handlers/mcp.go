@@ -266,7 +266,7 @@ func (h *MCPHandler) executeSearch(ctx context.Context, args map[string]interfac
 		opts.Type = postType
 	}
 
-	results, total, err := h.searchRepo.Search(ctx, query, opts)
+	results, total, _, err := h.searchRepo.Search(ctx, query, opts)
 	if err != nil {
 		return nil, err
 	}

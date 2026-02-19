@@ -773,7 +773,7 @@
       "Update search_test.go to assert meta.method is returned correctly",
       "Verify: GET /v1/search?q=test returns { results: [...], meta: { total: 5, method: 'hybrid' } }"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

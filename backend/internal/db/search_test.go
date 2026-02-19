@@ -25,7 +25,7 @@ func TestSearchRepository_Search(t *testing.T) {
 		"When running multiple async queries to PostgreSQL, I encounter race conditions.", []string{"postgresql", "async"}, "solved")
 
 	// Search for "race condition"
-	results, total, err := repo.Search(ctx, "race condition", models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, "race condition", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -78,7 +78,7 @@ func TestSearchRepository_Search_RelevanceScore(t *testing.T) {
 		"Generic database question", []string{"database"}, "open")
 
 	// Search for "PostgreSQL"
-	results, _, err := repo.Search(ctx, "PostgreSQL", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "PostgreSQL", models.SearchOptions{
 		Sort:    "relevance",
 		Page:    1,
 		PerPage: 20,
@@ -116,7 +116,7 @@ func TestSearchRepository_Search_Snippet(t *testing.T) {
 		"When handling errors in async Go code, you need to be careful with goroutines and channels.",
 		[]string{"go", "async"}, "open")
 
-	results, _, err := repo.Search(ctx, "async error", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "async error", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -156,7 +156,7 @@ func TestSearchRepository_Search_TypeFilter(t *testing.T) {
 	insertTestPost(t, pool, ctx, "idea", "Test idea", "Description", []string{}, "open")
 
 	// Search with type=problem filter
-	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Type:    "problem",
 		Page:    1,
 		PerPage: 20,
@@ -184,7 +184,7 @@ func TestSearchRepository_Search_StatusFilter(t *testing.T) {
 	insertTestPost(t, pool, ctx, "problem", "Test open", "Description", []string{}, "open")
 	insertTestPost(t, pool, ctx, "problem", "Test solved", "Description", []string{}, "solved")
 
-	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Status:  "solved",
 		Page:    1,
 		PerPage: 20,
@@ -212,7 +212,7 @@ func TestSearchRepository_Search_TagsFilter(t *testing.T) {
 	insertTestPost(t, pool, ctx, "problem", "Go concurrency test", "Description", []string{"go", "concurrency"}, "open")
 	insertTestPost(t, pool, ctx, "problem", "Python test", "Description", []string{"python"}, "open")
 
-	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Tags:    []string{"go"},
 		Page:    1,
 		PerPage: 20,
@@ -240,7 +240,7 @@ func TestSearchRepository_Search_ExcludeDeleted(t *testing.T) {
 	insertTestPost(t, pool, ctx, "problem", "Active post searchable", "Description", []string{}, "open")
 	deletedID := insertTestPostDeleted(t, pool, ctx, "problem", "Deleted post not searchable", "Description", []string{}, "open")
 
-	results, _, err := repo.Search(ctx, "post searchable", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "post searchable", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -267,7 +267,7 @@ func TestSearchRepository_Search_SortNewest(t *testing.T) {
 	insertTestPostWithTime(t, pool, ctx, "problem", "Test old", "Description", []string{}, "open", time.Now().Add(-24*time.Hour))
 	postNewID := insertTestPostWithTime(t, pool, ctx, "problem", "Test new", "Description", []string{}, "open", time.Now())
 
-	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Sort:    "newest",
 		Page:    1,
 		PerPage: 20,
@@ -295,7 +295,7 @@ func TestSearchRepository_Search_SortVotes(t *testing.T) {
 	insertTestPostWithVotes(t, pool, ctx, "problem", "Test low votes", "Description", []string{}, "open", 5, 3)   // Score: 2
 	postHighID := insertTestPostWithVotes(t, pool, ctx, "problem", "Test high votes", "Description", []string{}, "open", 10, 1) // Score: 9
 
-	results, _, err := repo.Search(ctx, "test", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "test", models.SearchOptions{
 		Sort:    "votes",
 		Page:    1,
 		PerPage: 20,
@@ -330,7 +330,7 @@ func TestSearchRepository_Search_Pagination(t *testing.T) {
 	}
 
 	// Request page 1 with 2 per page
-	results, total, err := repo.Search(ctx, uniqueTerm, models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, uniqueTerm, models.SearchOptions{
 		Page:    1,
 		PerPage: 2,
 	})
@@ -348,7 +348,7 @@ func TestSearchRepository_Search_Pagination(t *testing.T) {
 	}
 
 	// Request page 2
-	results2, _, err := repo.Search(ctx, uniqueTerm, models.SearchOptions{
+	results2, _, _, err := repo.Search(ctx, uniqueTerm, models.SearchOptions{
 		Page:    2,
 		PerPage: 2,
 	})
@@ -386,7 +386,7 @@ func TestSearchRepository_Search_DateFilter(t *testing.T) {
 	insertTestPostWithTime(t, pool, ctx, "problem", "New post date filter", "Description", []string{}, "open", newDate)
 
 	// Search only for posts in 2026
-	results, _, err := repo.Search(ctx, "post date filter", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "post date filter", models.SearchOptions{
 		FromDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		ToDate:   time.Date(2026, 12, 31, 23, 59, 59, 0, time.UTC),
 		Page:     1,
@@ -417,7 +417,7 @@ func TestSearchRepository_Search_AuthorFilter(t *testing.T) {
 	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author filter", "Description",
 		[]string{}, "open", "agent", "claude")
 
-	results, _, err := repo.Search(ctx, "test author filter", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "test author filter", models.SearchOptions{
 		Author:  "claude",
 		Page:    1,
 		PerPage: 20,
@@ -447,7 +447,7 @@ func TestSearchRepository_Search_AuthorTypeFilter(t *testing.T) {
 	insertTestPostWithAuthor(t, pool, ctx, "problem", "Test author type filter", "Description",
 		[]string{}, "open", "agent", "bot-1")
 
-	results, _, err := repo.Search(ctx, "test author type filter", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "test author type filter", models.SearchOptions{
 		AuthorType: "agent",
 		Page:       1,
 		PerPage:    20,
@@ -635,7 +635,7 @@ func TestSearchRepository_Search_PerformanceTarget(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			start := time.Now()
-			_, _, err := repo.Search(ctx, tc.query, tc.opts)
+			_, _, _, err := repo.Search(ctx, tc.query, tc.opts)
 			duration := time.Since(start)
 
 			if err != nil {
@@ -773,7 +773,7 @@ func TestSearchRepository_Search_ExactTitleMatch(t *testing.T) {
 	}
 
 	// Test 1: Search for "race condition" (without s) - should find all 4 posts
-	results, total, err := repo.Search(ctx, "race condition", models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, "race condition", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -791,7 +791,7 @@ func TestSearchRepository_Search_ExactTitleMatch(t *testing.T) {
 	}
 
 	// Test 2: Search for "race conditions" (with s) - should find all 4 posts
-	_, total2, err := repo.Search(ctx, "race conditions", models.SearchOptions{
+	_, total2, _, err := repo.Search(ctx, "race conditions", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -805,7 +805,7 @@ func TestSearchRepository_Search_ExactTitleMatch(t *testing.T) {
 	}
 
 	// Test 3: Search for exact title "Race Conditions in Go" - should return that post as #1
-	results3, _, err := repo.Search(ctx, "Race Conditions in Go", models.SearchOptions{
+	results3, _, _, err := repo.Search(ctx, "Race Conditions in Go", models.SearchOptions{
 		Sort:    "relevance",
 		Page:    1,
 		PerPage: 20,
@@ -852,7 +852,7 @@ func TestSearchRepository_Search_MultiWordQuery(t *testing.T) {
 		"This post has both race and condition", []string{}, "open")
 
 	// Search for "race condition"
-	results, total, err := repo.Search(ctx, "race condition", models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, "race condition", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -902,7 +902,7 @@ func TestSearch_IdeasFoundAndVoteScorePresent(t *testing.T) {
 
 	// Search for "solvr" (lowercase) with type=idea filter
 	// PostgreSQL tsvector normalizes case so "Solvr" and "solvr" are equivalent
-	results, total, err := repo.Search(ctx, "solvr", models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, "solvr", models.SearchOptions{
 		Type:    "idea",
 		Page:    1,
 		PerPage: 20,
@@ -954,7 +954,7 @@ func TestSearchRepository_Search_PartialWordMatch(t *testing.T) {
 		"Description", []string{}, "open")
 
 	// Test 1: "rac" should find "race"
-	_, total1, err := repo.Search(ctx, "rac", models.SearchOptions{
+	_, total1, _, err := repo.Search(ctx, "rac", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -970,7 +970,7 @@ func TestSearchRepository_Search_PartialWordMatch(t *testing.T) {
 	}
 
 	// Test 2: "cond" should find "condition"
-	_, total2, err := repo.Search(ctx, "cond", models.SearchOptions{
+	_, total2, _, err := repo.Search(ctx, "cond", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})

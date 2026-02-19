@@ -15,6 +15,7 @@ import (
 type MockSearchRepository struct {
 	results     []models.SearchResult
 	total       int
+	method      string
 	searchErr   error
 	searchQuery string
 	searchOpts  models.SearchOptions
@@ -26,19 +27,28 @@ func NewMockSearchRepository() *MockSearchRepository {
 	}
 }
 
-func (m *MockSearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
+func (m *MockSearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error) {
 	m.searchQuery = query
 	m.searchOpts = opts
 	if m.searchErr != nil {
-		return nil, 0, m.searchErr
+		return nil, 0, "", m.searchErr
 	}
-	return m.results, m.total, nil
+	method := m.method
+	if method == "" {
+		method = "fulltext"
+	}
+	return m.results, m.total, method, nil
 }
 
 // SetResults configures mock to return specific results.
 func (m *MockSearchRepository) SetResults(results []models.SearchResult, total int) {
 	m.results = results
 	m.total = total
+}
+
+// SetMethod configures mock to return a specific search method.
+func (m *MockSearchRepository) SetMethod(method string) {
+	m.method = method
 }
 
 // SetError configures mock to return an error.

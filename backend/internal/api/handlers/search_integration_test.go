@@ -657,7 +657,7 @@ func (m *MockSearchRepositoryWithPosts) AddPost(post models.SearchResult) {
 	m.posts = append(m.posts, post)
 }
 
-func (m *MockSearchRepositoryWithPosts) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
+func (m *MockSearchRepositoryWithPosts) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error) {
 	m.lastOpts = opts
 
 	// Filter posts based on query and options
@@ -727,7 +727,7 @@ func (m *MockSearchRepositoryWithPosts) Search(ctx context.Context, query string
 
 	start := (page - 1) * perPage
 	if start >= len(filtered) {
-		return []models.SearchResult{}, total, nil
+		return []models.SearchResult{}, total, "fulltext", nil
 	}
 
 	end := start + perPage
@@ -735,7 +735,7 @@ func (m *MockSearchRepositoryWithPosts) Search(ctx context.Context, query string
 		end = len(filtered)
 	}
 
-	return filtered[start:end], total, nil
+	return filtered[start:end], total, "fulltext", nil
 }
 
 // hasAnyTag checks if postTags contains any of filterTags.

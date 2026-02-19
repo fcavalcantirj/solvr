@@ -44,7 +44,7 @@ func (r *SearchRepository) SetEmbeddingService(svc QueryEmbedder) {
 // Falls back to full-text only search if embedding service is nil or fails.
 // Supports ContentTypes filter to search specific content sources.
 // When ContentTypes is empty, searches only posts (backwards compatible).
-func (r *SearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
+func (r *SearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error) {
 	start := time.Now()
 	tsquery := buildTsQuery(query)
 
@@ -81,7 +81,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 			posts, err = r.searchPosts(ctx, tsquery, opts)
 		}
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, "", err
 		}
 		allResults = append(allResults, posts...)
 	}
@@ -90,7 +90,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	if containsContentType(contentTypes, "answers") {
 		answers, err := r.searchAnswers(ctx, tsquery)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, "", err
 		}
 		allResults = append(allResults, answers...)
 	}
@@ -99,7 +99,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	if containsContentType(contentTypes, "approaches") {
 		approaches, err := r.searchApproaches(ctx, tsquery)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, "", err
 		}
 		allResults = append(allResults, approaches...)
 	}
@@ -127,7 +127,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	if offset >= total {
 		duration := time.Since(start).Milliseconds()
 		LogSearchCompleted(ctx, query, duration, 0, searchMethod)
-		return []models.SearchResult{}, total, nil
+		return []models.SearchResult{}, total, searchMethod, nil
 	}
 
 	end := offset + limit
@@ -138,7 +138,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	duration := time.Since(start).Milliseconds()
 	LogSearchCompleted(ctx, query, duration, len(allResults[offset:end]), searchMethod)
 
-	return allResults[offset:end], total, nil
+	return allResults[offset:end], total, searchMethod, nil
 }
 
 // searchPosts searches posts using full-text search (existing logic).

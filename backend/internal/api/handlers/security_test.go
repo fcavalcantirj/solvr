@@ -64,9 +64,9 @@ func TestSQLInjectionPrevention(t *testing.T) {
 				// Create mock repository that records the query
 				var capturedQuery string
 				mockRepo := &mockSearchRepo{
-					searchFunc: func(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
+					searchFunc: func(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error) {
 						capturedQuery = query
-						return []models.SearchResult{}, 0, nil
+						return []models.SearchResult{}, 0, "fulltext", nil
 					},
 				}
 
@@ -116,8 +116,8 @@ func TestSQLInjectionPrevention(t *testing.T) {
 		for _, tc := range injectionFilters {
 			t.Run(tc.name, func(t *testing.T) {
 				mockRepo := &mockSearchRepo{
-					searchFunc: func(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
-						return []models.SearchResult{}, 0, nil
+					searchFunc: func(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error) {
+						return []models.SearchResult{}, 0, "fulltext", nil
 					},
 				}
 
@@ -297,14 +297,14 @@ func TestXSSPrevention(t *testing.T) {
 		// Search results contain <mark> tags for highlighting
 		// These are intentional, but other HTML should be escaped
 		mockRepo := &mockSearchRepo{
-			searchFunc: func(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
+			searchFunc: func(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error) {
 				return []models.SearchResult{
 					{
 						ID:      "test-123",
 						Title:   "Test <script>alert('xss')</script>",
 						Snippet: "This is a <mark>test</mark> snippet",
 					},
-				}, 1, nil
+				}, 1, "fulltext", nil
 			},
 		}
 
@@ -338,14 +338,14 @@ func TestXSSPrevention(t *testing.T) {
 // Mock repositories for testing
 
 type mockSearchRepo struct {
-	searchFunc func(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error)
+	searchFunc func(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error)
 }
 
-func (m *mockSearchRepo) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
+func (m *mockSearchRepo) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error) {
 	if m.searchFunc != nil {
 		return m.searchFunc(ctx, query, opts)
 	}
-	return nil, 0, nil
+	return nil, 0, "fulltext", nil
 }
 
 type mockPostsRepo struct {
@@ -573,9 +573,9 @@ func TestErrorMessagesDoNotLeakInfo(t *testing.T) {
 
 	t.Run("search errors use generic messages", func(t *testing.T) {
 		mockRepo := &mockSearchRepo{
-			searchFunc: func(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
+			searchFunc: func(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error) {
 				// Simulate internal error
-				return nil, 0, context.Canceled
+				return nil, 0, "", context.Canceled
 			},
 		}
 

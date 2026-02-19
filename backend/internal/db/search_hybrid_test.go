@@ -54,7 +54,7 @@ func TestSearchRepository_HybridSearch_WithEmbeddingService(t *testing.T) {
 	repo.SetEmbeddingService(embedSvc)
 
 	// Search should work and return results
-	results, total, err := repo.Search(ctx, "golang concurrency", models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, "golang concurrency", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -102,7 +102,7 @@ func TestSearchRepository_HybridSearch_FallbackWithoutEmbeddingService(t *testin
 	repo := NewSearchRepository(pool)
 
 	// Search should work using full-text only
-	results, total, err := repo.Search(ctx, "fallback search", models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, "fallback search", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})
@@ -152,7 +152,7 @@ func TestSearchRepository_HybridSearch_FiltersWork(t *testing.T) {
 	repo.SetEmbeddingService(embedSvc)
 
 	// Search with type filter
-	results, _, err := repo.Search(ctx, "hybrid filter test", models.SearchOptions{
+	results, _, _, err := repo.Search(ctx, "hybrid filter test", models.SearchOptions{
 		Type:    "problem",
 		Page:    1,
 		PerPage: 20,
@@ -188,7 +188,7 @@ func TestSearchRepository_HybridSearch_EmbeddingErrorFallback(t *testing.T) {
 	repo.SetEmbeddingService(&brokenEmbeddingService{})
 
 	// Search should fall back to full-text and still return results
-	results, total, err := repo.Search(ctx, "embedding error graceful fallback", models.SearchOptions{
+	results, total, _, err := repo.Search(ctx, "embedding error graceful fallback", models.SearchOptions{
 		Page:    1,
 		PerPage: 20,
 	})

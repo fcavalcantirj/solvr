@@ -1,3 +1,25 @@
+2026-02-19: PRD-v5 Semantic Search - Return search method in response metadata
+- Modified: backend/internal/api/handlers/search.go (208 lines)
+  * Updated SearchRepositoryInterface: Search() now returns 4 values (results, total, method, error)
+  * Added Method field to SearchResponseMeta: "hybrid" or "fulltext"
+  * Handler normalizes internal method names ("hybrid_rrf" → "hybrid", "fulltext_only" → "fulltext")
+  * Frontend can display "Powered by semantic search" badge when method == "hybrid"
+- Modified: backend/internal/db/search.go (562 lines)
+  * Updated Search() signature to return search method as 3rd return value
+  * Returns "hybrid_rrf" when embedding service succeeds, "fulltext_only" when not
+- New file: backend/internal/api/handlers/search_method_test.go (185 lines)
+  * 4 TDD tests for search method in response metadata
+  * TestSearch_MetaMethodHybrid: verifies method="hybrid" when embedding service available
+  * TestSearch_MetaMethodFulltext: verifies method="fulltext" when no embedding service
+  * TestSearch_MetaMethodDefaultsToFulltext: verifies default method is "fulltext"
+  * TestSearch_MetaMethodWithResults: verifies method returned alongside results and total
+- Updated mock repositories in search_test.go, search_integration_test.go, security_test.go
+  * All mock Search() methods updated to return 4 values
+  * Added SetMethod() to MockSearchRepository for test control
+- Updated all Search() call sites in db test files (33 call sites across 4 files)
+- Updated mcp.go handler to accept 4th return value
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Add observability logging for search method and latency
 - Modified: backend/internal/db/logger.go (144 lines)
   * Added LogSearchCompleted(): logs search method (hybrid_rrf or fulltext_only), query, duration_ms, results_count

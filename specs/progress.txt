@@ -1,3 +1,28 @@
+2026-02-19: PRD-v5 Semantic Search - Update search to support unified search across posts, answers, and approaches
+- Modified: backend/internal/models/search.go (87 lines)
+  * Added ContentTypes []string field to SearchOptions (filter: "posts", "answers", "approaches")
+  * Added Source string field to SearchResult and SearchResultResponse ("post", "answer", "approach")
+  * Updated ToResponse() to include Source field in JSON output
+- Modified: backend/internal/db/search.go (429 lines)
+  * Refactored Search() to support multi-content-type searching
+  * Extracted searchPosts() for existing post full-text search (backwards compatible)
+  * Added searchAnswers(): full-text search on answers.content with author resolution
+  * Added searchApproaches(): full-text search on angle/method/outcome/solution with author resolution
+  * Both answer and approach queries join with parent post for tags, user/agent tables for author names
+  * Merged results sorted by relevance score, with pagination applied to unified result set
+  * When ContentTypes is empty, searches only posts (backwards compatible)
+  * Added containsContentType() helper for type filtering
+- Modified: backend/internal/api/handlers/search.go (200 lines)
+  * Added content_types query param parsing (comma-separated: posts,answers,approaches)
+  * Updated handler doc block with content_types parameter documentation
+- New file: backend/internal/api/handlers/search_content_types_test.go (161 lines)
+  * 5 TDD tests: content_types parsing, default (empty=all), source field in response,
+    posts-only filter, all three types parsing
+- New file: backend/internal/db/search_unified_test.go (149 lines)
+  * 3 TDD tests: posts and answers search, posts-only filter, source metadata verification
+  * Helper functions: insertTestAnswer, insertTestApproach for test data
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Create hybrid_search SQL function for posts table
 - New file: backend/migrations/000046_hybrid_search_posts.up.sql
   * hybrid_search SQL function: combines full-text search on title+description with vector similarity

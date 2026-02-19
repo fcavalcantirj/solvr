@@ -56,6 +56,7 @@ type SearchResponseMeta struct {
 //   - from_date: filter posts after this date (ISO format)
 //   - to_date: filter posts before this date (ISO format)
 //   - sort: relevance|newest|votes|activity (default: relevance)
+//   - content_types: comma-separated content sources to search (posts,answers,approaches; default: all)
 //   - page: page number (default: 1)
 //   - per_page: results per page (default: 20, max: 50)
 func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
@@ -83,6 +84,14 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		// Trim whitespace from each tag
 		for i, tag := range opts.Tags {
 			opts.Tags[i] = strings.TrimSpace(tag)
+		}
+	}
+
+	// Parse content_types (comma-separated: posts, answers, approaches)
+	if ctParam := r.URL.Query().Get("content_types"); ctParam != "" {
+		opts.ContentTypes = strings.Split(ctParam, ",")
+		for i, ct := range opts.ContentTypes {
+			opts.ContentTypes[i] = strings.TrimSpace(ct)
 		}
 	}
 

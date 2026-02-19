@@ -4,6 +4,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -20,20 +21,79 @@ func NewSearchRepository(pool *Pool) *SearchRepository {
 	return &SearchRepository{pool: pool}
 }
 
-// Search performs a full-text search using PostgreSQL's tsvector/tsquery.
-// Implements SPEC.md Part 5.5 search requirements:
-// - Full-text search with ts_rank for relevance scoring
-// - ts_headline for snippets with <mark> highlights
-// - Filters for type, tags, status, author, author_type, from_date, to_date
-// - Sorting by relevance, newest, votes, or activity
-// - Pagination with page and per_page
-// - Excludes deleted posts (deleted_at IS NULL)
+// Search performs a full-text search across posts, answers, and approaches.
+// Supports ContentTypes filter to search specific content sources.
+// When ContentTypes is empty, searches only posts (backwards compatible).
+// When ContentTypes is specified, searches the requested types and merges results.
 func (r *SearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
-	// Build the tsquery from the search query
-	// Convert query to websearch format (handles phrases, OR, AND, NOT)
 	tsquery := buildTsQuery(query)
 
-	// Base query with full-text search
+	contentTypes := opts.ContentTypes
+	searchAll := len(contentTypes) == 0
+
+	var allResults []models.SearchResult
+
+	// Search posts if requested or default
+	if searchAll || containsContentType(contentTypes, "posts") {
+		posts, err := r.searchPosts(ctx, tsquery, opts)
+		if err != nil {
+			return nil, 0, err
+		}
+		allResults = append(allResults, posts...)
+	}
+
+	// Search answers if explicitly requested
+	if containsContentType(contentTypes, "answers") {
+		answers, err := r.searchAnswers(ctx, tsquery)
+		if err != nil {
+			return nil, 0, err
+		}
+		allResults = append(allResults, answers...)
+	}
+
+	// Search approaches if explicitly requested
+	if containsContentType(contentTypes, "approaches") {
+		approaches, err := r.searchApproaches(ctx, tsquery)
+		if err != nil {
+			return nil, 0, err
+		}
+		allResults = append(allResults, approaches...)
+	}
+
+	// Sort merged results by score descending
+	sort.Slice(allResults, func(i, j int) bool {
+		return allResults[i].Score > allResults[j].Score
+	})
+
+	// Apply pagination
+	total := len(allResults)
+	limit := opts.PerPage
+	if limit == 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	offset := (opts.Page - 1) * limit
+	if offset < 0 {
+		offset = 0
+	}
+
+	if offset >= total {
+		return []models.SearchResult{}, total, nil
+	}
+
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
+	return allResults[offset:end], total, nil
+}
+
+// searchPosts searches posts using full-text search (existing logic).
+func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
 	baseQuery := `
 		SELECT
 			p.id,
@@ -63,55 +123,164 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 		AND to_tsvector('english', p.title || ' ' || p.description) @@ to_tsquery('english', $1)
 	`
 
-	// Build filters
 	args := []any{tsquery}
 	argNum := 2
 
-	filters, args, argNum := buildSearchFilters(opts, args, argNum)
+	filters, args, _ := buildSearchFilters(opts, args, argNum)
 	if filters != "" {
 		baseQuery += " " + filters
 	}
 
-	// Add ordering
 	orderBy := getSearchOrderBy(opts.Sort)
 	baseQuery += " ORDER BY " + orderBy
 
-	// Add pagination
-	limit := opts.PerPage
-	if limit == 0 {
-		limit = 20
-	}
-	if limit > 50 {
-		limit = 50
-	}
-
-	offset := (opts.Page - 1) * limit
-	if offset < 0 {
-		offset = 0
-	}
-
-	baseQuery += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset)
-
-	// Execute main query
 	rows, err := r.pool.Query(ctx, baseQuery, args...)
 	if err != nil {
-		LogQueryError(ctx, "Search", "posts", err)
-		return nil, 0, fmt.Errorf("search query failed: %w", err)
+		LogQueryError(ctx, "Search.Posts", "posts", err)
+		return nil, fmt.Errorf("search posts query failed: %w", err)
 	}
 	defer rows.Close()
 
 	results, err := scanSearchResults(rows)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
-	// Get total count for pagination
-	total, err := r.getSearchCount(ctx, tsquery, opts)
+	// Tag all results with source "post"
+	for i := range results {
+		results[i].Source = "post"
+	}
+
+	return results, nil
+}
+
+// searchAnswers searches answers using full-text search on content.
+func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string) ([]models.SearchResult, error) {
+	query := `
+		SELECT
+			a.id::text,
+			'answer' as type,
+			ts_headline('english', a.content, to_tsquery('english', $1),
+				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=30, MaxFragments=1') as title,
+			ts_headline('english', a.content, to_tsquery('english', $1),
+				'StartSel=<mark>, StopSel=</mark>, MaxWords=80, MinWords=40, MaxFragments=1') as snippet,
+			COALESCE(p.tags, ARRAY[]::text[]) as tags,
+			CASE WHEN a.is_accepted THEN 'accepted' ELSE '' END as status,
+			a.author_type,
+			a.author_id,
+			COALESCE(
+				CASE WHEN a.author_type = 'human' THEN u.display_name
+					 ELSE ag.display_name
+				END,
+				a.author_id
+			) as author_name,
+			ts_rank(to_tsvector('english', a.content), to_tsquery('english', $1)) as score,
+			(a.upvotes - a.downvotes) as vote_score,
+			0 as answers_count,
+			a.created_at,
+			NULL::timestamptz as solved_at
+		FROM answers a
+		LEFT JOIN posts p ON a.question_id = p.id
+		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
+		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
+		WHERE a.deleted_at IS NULL
+		AND to_tsvector('english', a.content) @@ to_tsquery('english', $1)
+		ORDER BY score DESC
+	`
+
+	rows, err := r.pool.Query(ctx, query, tsquery)
 	if err != nil {
-		return nil, 0, err
+		LogQueryError(ctx, "Search.Answers", "answers", err)
+		return nil, fmt.Errorf("search answers query failed: %w", err)
+	}
+	defer rows.Close()
+
+	results, err := scanSearchResults(rows)
+	if err != nil {
+		return nil, err
 	}
 
-	return results, total, nil
+	// Tag all results with source "answer"
+	for i := range results {
+		results[i].Source = "answer"
+	}
+
+	return results, nil
+}
+
+// searchApproaches searches approaches using full-text search on angle, method, outcome, solution.
+func (r *SearchRepository) searchApproaches(ctx context.Context, tsquery string) ([]models.SearchResult, error) {
+	query := `
+		SELECT
+			a.id::text,
+			'approach' as type,
+			ts_headline('english',
+				COALESCE(a.angle, '') || ' ' || COALESCE(a.method, ''),
+				to_tsquery('english', $1),
+				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20, MaxFragments=1') as title,
+			ts_headline('english',
+				COALESCE(a.angle, '') || ' ' || COALESCE(a.method, '') || ' ' ||
+				COALESCE(a.outcome, '') || ' ' || COALESCE(a.solution, ''),
+				to_tsquery('english', $1),
+				'StartSel=<mark>, StopSel=</mark>, MaxWords=80, MinWords=40, MaxFragments=1') as snippet,
+			COALESCE(p.tags, ARRAY[]::text[]) as tags,
+			a.status::text,
+			a.author_type,
+			a.author_id,
+			COALESCE(
+				CASE WHEN a.author_type = 'human' THEN u.display_name
+					 ELSE ag.display_name
+				END,
+				a.author_id
+			) as author_name,
+			ts_rank(to_tsvector('english',
+				COALESCE(a.angle, '') || ' ' || COALESCE(a.method, '') || ' ' ||
+				COALESCE(a.outcome, '') || ' ' || COALESCE(a.solution, '')),
+				to_tsquery('english', $1)) as score,
+			0 as vote_score,
+			0 as answers_count,
+			a.created_at,
+			NULL::timestamptz as solved_at
+		FROM approaches a
+		LEFT JOIN posts p ON a.problem_id = p.id
+		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
+		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
+		WHERE a.deleted_at IS NULL
+		AND to_tsvector('english',
+			COALESCE(a.angle, '') || ' ' || COALESCE(a.method, '') || ' ' ||
+			COALESCE(a.outcome, '') || ' ' || COALESCE(a.solution, ''))
+			@@ to_tsquery('english', $1)
+		ORDER BY score DESC
+	`
+
+	rows, err := r.pool.Query(ctx, query, tsquery)
+	if err != nil {
+		LogQueryError(ctx, "Search.Approaches", "approaches", err)
+		return nil, fmt.Errorf("search approaches query failed: %w", err)
+	}
+	defer rows.Close()
+
+	results, err := scanSearchResults(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	// Tag all results with source "approach"
+	for i := range results {
+		results[i].Source = "approach"
+	}
+
+	return results, nil
+}
+
+// containsContentType checks if a content type is in the list.
+func containsContentType(types []string, target string) bool {
+	for _, t := range types {
+		if t == target {
+			return true
+		}
+	}
+	return false
 }
 
 // buildTsQuery converts a search query to PostgreSQL's websearch-compatible tsquery format.
@@ -252,33 +421,6 @@ func scanSearchResults(rows pgx.Rows) ([]models.SearchResult, error) {
 	}
 
 	return results, nil
-}
-
-// getSearchCount returns the total count of matching posts.
-func (r *SearchRepository) getSearchCount(ctx context.Context, tsquery string, opts models.SearchOptions) (int, error) {
-	countQuery := `
-		SELECT COUNT(*)
-		FROM posts p
-		WHERE p.deleted_at IS NULL
-		AND to_tsvector('english', p.title || ' ' || p.description) @@ to_tsquery('english', $1)
-	`
-
-	args := []any{tsquery}
-	argNum := 2
-
-	filters, args, _ := buildSearchFilters(opts, args, argNum)
-	if filters != "" {
-		countQuery += " " + filters
-	}
-
-	var total int
-	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
-	if err != nil {
-		LogQueryError(ctx, "Search.Count", "posts", err)
-		return 0, fmt.Errorf("count query failed: %w", err)
-	}
-
-	return total, nil
 }
 
 // GetPool returns the underlying database pool for testing purposes.

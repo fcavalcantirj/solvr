@@ -633,7 +633,7 @@
       "Verify: GET /v1/search?q=golang&content_types=posts,answers returns results from both",
       "Verify: Search results include source field indicating post/answer/approach"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

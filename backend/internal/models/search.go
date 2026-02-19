@@ -20,6 +20,7 @@ type SearchResult struct {
 	AnswersCount int       `json:"answers_count"`
 	CreatedAt    time.Time `json:"created_at"`
 	SolvedAt     *time.Time `json:"solved_at,omitempty"`
+	Source       string    `json:"source"` // "post", "answer", or "approach"
 }
 
 // SearchResultResponse is the JSON response format for a search result.
@@ -37,6 +38,7 @@ type SearchResultResponse struct {
 	AnswersCount int           `json:"answers_count"`
 	CreatedAt    time.Time     `json:"created_at"`
 	SolvedAt     *time.Time    `json:"solved_at,omitempty"`
+	Source       string        `json:"source"` // "post", "answer", or "approach"
 }
 
 // SearchAuthor represents the author info in search results.
@@ -48,16 +50,17 @@ type SearchAuthor struct {
 
 // SearchOptions represents all available search filters and options.
 type SearchOptions struct {
-	Type       string    // Filter by post type (problem, question, idea)
-	Tags       []string  // Filter by tags
-	Status     string    // Filter by status
-	Author     string    // Filter by author_id
-	AuthorType string    // Filter by author_type (human, agent)
-	FromDate   time.Time // Filter posts created after this date
-	ToDate     time.Time // Filter posts created before this date
-	Sort       string    // Sort order (relevance, newest, votes, activity)
-	Page       int       // Page number (1-indexed)
-	PerPage    int       // Results per page
+	Type         string    // Filter by post type (problem, question, idea)
+	Tags         []string  // Filter by tags
+	Status       string    // Filter by status
+	Author       string    // Filter by author_id
+	AuthorType   string    // Filter by author_type (human, agent)
+	FromDate     time.Time // Filter posts created after this date
+	ToDate       time.Time // Filter posts created before this date
+	Sort         string    // Sort order (relevance, newest, votes, activity)
+	Page         int       // Page number (1-indexed)
+	PerPage      int       // Results per page
+	ContentTypes []string  // Filter by content source: "posts", "answers", "approaches" (default: all)
 }
 
 // ToResponse converts a SearchResult to a SearchResultResponse.
@@ -79,5 +82,6 @@ func (r *SearchResult) ToResponse() SearchResultResponse {
 		AnswersCount: r.AnswersCount,
 		CreatedAt:    r.CreatedAt,
 		SolvedAt:     r.SolvedAt,
+		Source:       r.Source,
 	}
 }

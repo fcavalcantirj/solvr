@@ -52,6 +52,14 @@ type BriefingOpenItemsRepo interface {
 	GetOpenItemsForAgent(ctx context.Context, agentID string) (*models.OpenItemsResult, error)
 }
 
+// BriefingSuggestedActionsRepo defines the interface for fetching suggested actions for agent briefing.
+type BriefingSuggestedActionsRepo interface {
+	GetSuggestedActionsForAgent(ctx context.Context, agentID string) ([]models.SuggestedAction, error)
+}
+
+// SuggestedAction is an alias for the model type, used in handler-level code and tests.
+type SuggestedAction = models.SuggestedAction
+
 // InboxSection represents the inbox portion of the agent /me response.
 type InboxSection struct {
 	UnreadCount int         `json:"unread_count"`
@@ -69,14 +77,15 @@ type InboxItem struct {
 
 // MeHandler handles the GET /v1/auth/me endpoint.
 type MeHandler struct {
-	config         *OAuthConfig
-	userRepo       MeUserRepositoryInterface
-	agentStatsRepo MeAgentStatsInterface
-	authMethodRepo AuthMethodRepositoryInterface
-	pool           PoolInterface
-	inboxRepo      BriefingInboxRepo
-	briefingRepo   UpdateLastBriefingRepo
-	openItemsRepo  BriefingOpenItemsRepo
+	config               *OAuthConfig
+	userRepo             MeUserRepositoryInterface
+	agentStatsRepo       MeAgentStatsInterface
+	authMethodRepo       AuthMethodRepositoryInterface
+	pool                 PoolInterface
+	inboxRepo            BriefingInboxRepo
+	briefingRepo         UpdateLastBriefingRepo
+	openItemsRepo        BriefingOpenItemsRepo
+	suggestedActionsRepo BriefingSuggestedActionsRepo
 }
 
 // NewMeHandler creates a new MeHandler instance.
@@ -99,6 +108,11 @@ func (h *MeHandler) SetBriefingRepos(inboxRepo BriefingInboxRepo, briefingRepo U
 // SetOpenItemsRepo sets the open items repository for agent /me enrichment.
 func (h *MeHandler) SetOpenItemsRepo(repo BriefingOpenItemsRepo) {
 	h.openItemsRepo = repo
+}
+
+// SetSuggestedActionsRepo sets the suggested actions repository for agent /me enrichment.
+func (h *MeHandler) SetSuggestedActionsRepo(repo BriefingSuggestedActionsRepo) {
+	h.suggestedActionsRepo = repo
 }
 
 // MeResponse represents the response for GET /v1/me for humans (JWT auth).
@@ -132,6 +146,7 @@ type AgentMeResponse struct {
 	PinningQuotaBytes   int64             `json:"pinning_quota_bytes"`
 	Inbox               *InboxSection          `json:"inbox"`
 	MyOpenItems         *models.OpenItemsResult `json:"my_open_items"`
+	SuggestedActions    []models.SuggestedAction `json:"suggested_actions"`
 }
 
 // Me handles GET /v1/me
@@ -217,6 +232,20 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 			response.MyOpenItems = result
 		}
 		// If err != nil, MyOpenItems remains nil (graceful degradation)
+	}
+
+	// Populate suggested_actions with graceful degradation (defaults to empty slice)
+	response.SuggestedActions = []models.SuggestedAction{}
+	if h.suggestedActionsRepo != nil {
+		actions, err := h.suggestedActionsRepo.GetSuggestedActionsForAgent(ctx, agent.ID)
+		if err == nil {
+			const maxSuggestedActions = 5
+			if len(actions) > maxSuggestedActions {
+				actions = actions[:maxSuggestedActions]
+			}
+			response.SuggestedActions = actions
+		}
+		// If err != nil, SuggestedActions remains empty slice (graceful degradation)
 	}
 
 	// Update last_briefing_at timestamp

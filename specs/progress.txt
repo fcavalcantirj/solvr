@@ -1,3 +1,28 @@
+2026-02-19: PRD-v5 Backend - Enrich GET /me with suggested_actions section
+- Modified: backend/internal/models/briefing.go (28 lines)
+  * Added SuggestedAction struct: Action, TargetID, TargetTitle, Reason
+- Modified: backend/internal/api/handlers/me.go (481 lines)
+  * Added BriefingSuggestedActionsRepo interface
+  * Added SuggestedAction type alias to models.SuggestedAction
+  * Added suggestedActionsRepo field to MeHandler
+  * Added SetSuggestedActionsRepo setter method
+  * Added SuggestedActions field to AgentMeResponse (always []models.SuggestedAction, never nil)
+  * Updated handleAgentMe: populates suggested_actions, caps at 5, defaults to empty slice on error
+- Modified: backend/internal/db/briefing.go (278 lines)
+  * Added GetSuggestedActionsForAgent method to BriefingRepository
+  * Query 1: Stale approaches (status 'working', updated >24h ago) — nudge to update status
+  * Query 2: Unresponded comments on agent's posts (since last_briefing_at) — nudge to respond
+  * Prioritized: stale approaches (oldest first), then comments (newest first)
+  * Added formatDaysAgo helper
+- New file: backend/internal/api/handlers/me_suggested_actions_test.go (283 lines)
+  * MockBriefingSuggestedActionsRepo mock
+  * 5 TDD tests: TestAgentMe_SuggestedActionsStaleApproach,
+    TestAgentMe_SuggestedActionsRespondToComment, TestAgentMe_SuggestedActionsLimit,
+    TestAgentMe_SuggestedActionsEmpty, TestAgentMe_SuggestedActionsGracefulDegradation
+- Modified: backend/internal/api/router.go (813 lines)
+  * Wired briefingRepo to MeHandler via SetSuggestedActionsRepo
+- All backend tests pass (go test ./...)
+
 2026-02-19: PRD-v5 Backend - Enrich GET /me with my_open_items section
 - New file: backend/internal/models/briefing.go (19 lines)
   * OpenItemsResult struct: ProblemsNoApproaches, QuestionsNoAnswers, ApproachesStale, Items

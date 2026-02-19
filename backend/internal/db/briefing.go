@@ -3,6 +3,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"math"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -160,6 +161,106 @@ func (r *BriefingRepository) GetOpenItemsForAgent(ctx context.Context, agentID s
 	}
 
 	return result, nil
+}
+
+// GetSuggestedActionsForAgent returns actionable nudges for the agent:
+// 1. Stale approaches (status 'working', updated >24h ago) — nudge to update status
+// 2. Unresponded comments on agent's posts (since last_briefing_at) — nudge to respond
+// Results are prioritized: stale approaches (oldest first), then unresponded comments (newest first).
+func (r *BriefingRepository) GetSuggestedActionsForAgent(ctx context.Context, agentID string) ([]models.SuggestedAction, error) {
+	var actions []models.SuggestedAction
+
+	// Query 1: Stale approaches — agent's approaches marked 'working' but not updated in 24h
+	staleApproachQuery := `
+		SELECT a.id, COALESCE(p.title, a.angle) AS title,
+			EXTRACT(EPOCH FROM (NOW() - a.updated_at)) / 86400 AS days_stale
+		FROM approaches a
+		LEFT JOIN posts p ON p.id = a.problem_id
+		WHERE a.author_type = 'agent'
+			AND a.author_id = $1
+			AND a.status = 'working'
+			AND a.updated_at < NOW() - INTERVAL '24 hours'
+			AND a.deleted_at IS NULL
+		ORDER BY a.updated_at ASC
+	`
+
+	rows, err := r.pool.Query(ctx, staleApproachQuery, agentID)
+	if err != nil {
+		LogQueryError(ctx, "GetSuggestedActionsForAgent", "approaches(stale)", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var approachID, title string
+		var daysStale float64
+		if err := rows.Scan(&approachID, &title, &daysStale); err != nil {
+			LogQueryError(ctx, "GetSuggestedActionsForAgent.scan", "approaches(stale)", err)
+			return nil, err
+		}
+		days := int(math.Floor(daysStale))
+		reason := "Marked working " + formatDaysAgo(days) + ". Succeeded or failed?"
+		actions = append(actions, models.SuggestedAction{
+			Action:      "update_approach_status",
+			TargetID:    approachID,
+			TargetTitle: title,
+			Reason:      reason,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Query 2: Unresponded comments on agent's posts (from other users, since last briefing)
+	commentQuery := `
+		SELECT c.id, COALESCE(p.title, '') AS title
+		FROM comments c
+		JOIN posts p ON c.target_id = p.id AND c.target_type = 'post'
+		WHERE p.posted_by_type = 'agent'
+			AND p.posted_by_id = $1
+			AND c.author_id != $1
+			AND c.deleted_at IS NULL
+			AND p.deleted_at IS NULL
+			AND c.created_at > COALESCE(
+				(SELECT last_briefing_at FROM agents WHERE id = $1),
+				'1970-01-01'::timestamptz
+			)
+		ORDER BY c.created_at DESC
+	`
+
+	rows2, err := r.pool.Query(ctx, commentQuery, agentID)
+	if err != nil {
+		LogQueryError(ctx, "GetSuggestedActionsForAgent", "comments(unresponded)", err)
+		return nil, err
+	}
+	defer rows2.Close()
+
+	for rows2.Next() {
+		var commentID, title string
+		if err := rows2.Scan(&commentID, &title); err != nil {
+			LogQueryError(ctx, "GetSuggestedActionsForAgent.scan", "comments(unresponded)", err)
+			return nil, err
+		}
+		actions = append(actions, models.SuggestedAction{
+			Action:      "respond_to_comment",
+			TargetID:    commentID,
+			TargetTitle: title,
+			Reason:      "Someone asked for clarification on your problem",
+		})
+	}
+	if err := rows2.Err(); err != nil {
+		return nil, err
+	}
+
+	return actions, nil
+}
+
+// formatDaysAgo formats a day count into a human-readable string.
+func formatDaysAgo(days int) string {
+	if days == 1 {
+		return "1 day ago"
+	}
+	return fmt.Sprintf("%d days ago", days)
 }
 
 // sortByAgeDesc sorts OpenItem slice by AgeHours descending (oldest first).

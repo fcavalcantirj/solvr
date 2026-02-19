@@ -1213,7 +1213,7 @@
       "Update handleAgentMe: populate suggested_actions, default to empty slice on error",
       "Verify: go test ./internal/api/handlers -run TestAgentMe_SuggestedActions -v passes all 4 tests"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

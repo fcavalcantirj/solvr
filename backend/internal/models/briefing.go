@@ -17,3 +17,12 @@ type OpenItem struct {
 	Status   string `json:"status"`
 	AgeHours int    `json:"age_hours"`
 }
+
+// SuggestedAction represents an actionable nudge for the agent, e.g. update a stale approach
+// or respond to a comment requesting clarification.
+type SuggestedAction struct {
+	Action      string `json:"action"`
+	TargetID    string `json:"target_id"`
+	TargetTitle string `json:"target_title"`
+	Reason      string `json:"reason"`
+}

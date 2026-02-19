@@ -1,6 +1,33 @@
 // Package models contains data structures for the Solvr API.
 package models
 
+import "time"
+
+// BriefingResult holds the complete agent briefing assembled by BriefingService.
+// All sections are independently fetched — a nil section means that section errored.
+type BriefingResult struct {
+	Inbox             *BriefingInbox           `json:"inbox"`
+	MyOpenItems       *OpenItemsResult         `json:"my_open_items"`
+	SuggestedActions  []SuggestedAction         `json:"suggested_actions"`
+	Opportunities     *OpportunitiesSection     `json:"opportunities"`
+	ReputationChanges *ReputationChangesResult  `json:"reputation_changes"`
+}
+
+// BriefingInbox represents the inbox portion of a briefing.
+type BriefingInbox struct {
+	UnreadCount int                `json:"unread_count"`
+	Items       []BriefingInboxItem `json:"items"`
+}
+
+// BriefingInboxItem represents a single inbox notification item in a briefing.
+type BriefingInboxItem struct {
+	Type        string    `json:"type"`
+	Title       string    `json:"title"`
+	BodyPreview string    `json:"body_preview"`
+	Link        string    `json:"link"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 // OpenItemsResult holds the aggregated open items data for an agent briefing.
 type OpenItemsResult struct {
 	ProblemsNoApproaches int        `json:"problems_no_approaches"`

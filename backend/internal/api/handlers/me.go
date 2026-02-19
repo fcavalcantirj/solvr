@@ -85,6 +85,12 @@ type InboxItem struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// BriefingServiceInterface defines the interface for the aggregated briefing service.
+// When set on MeHandler, it replaces the individual repo calls in handleAgentMe.
+type BriefingServiceInterface interface {
+	GetBriefingForAgent(ctx context.Context, agent *models.Agent) (*models.BriefingResult, error)
+}
+
 // MeHandler handles the GET /v1/auth/me endpoint.
 type MeHandler struct {
 	config               *OAuthConfig
@@ -92,6 +98,7 @@ type MeHandler struct {
 	agentStatsRepo       MeAgentStatsInterface
 	authMethodRepo       AuthMethodRepositoryInterface
 	pool                 PoolInterface
+	briefingService      BriefingServiceInterface
 	inboxRepo            BriefingInboxRepo
 	briefingRepo         UpdateLastBriefingRepo
 	openItemsRepo        BriefingOpenItemsRepo
@@ -109,6 +116,12 @@ func NewMeHandler(config *OAuthConfig, userRepo MeUserRepositoryInterface, agent
 		authMethodRepo: authMethodRepo,
 		pool:           pool,
 	}
+}
+
+// SetBriefingService sets the aggregated BriefingService for agent /me enrichment.
+// When set, handleAgentMe delegates all briefing section assembly to the service.
+func (h *MeHandler) SetBriefingService(svc BriefingServiceInterface) {
+	h.briefingService = svc
 }
 
 // SetBriefingRepos sets the inbox and briefing repositories for agent /me enrichment.
@@ -226,6 +239,58 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 		response.HumanID = *agent.HumanID
 	}
 
+	// Use BriefingService if available (aggregates all sections in one call)
+	if h.briefingService != nil {
+		h.populateFromBriefingService(ctx, agent, &response)
+	} else {
+		h.populateFromIndividualRepos(ctx, agent, &response)
+	}
+
+	writeMeJSON(w, http.StatusOK, response)
+}
+
+// populateFromBriefingService uses the aggregated BriefingService to populate all briefing sections.
+func (h *MeHandler) populateFromBriefingService(ctx context.Context, agent *models.Agent, response *AgentMeResponse) {
+	briefing, err := h.briefingService.GetBriefingForAgent(ctx, agent)
+	if err != nil {
+		// If the service itself errors, default to empty briefing sections
+		response.SuggestedActions = []models.SuggestedAction{}
+		return
+	}
+
+	// Map models.BriefingInbox to handler InboxSection
+	if briefing.Inbox != nil {
+		items := make([]InboxItem, len(briefing.Inbox.Items))
+		for i, item := range briefing.Inbox.Items {
+			items[i] = InboxItem{
+				Type:        item.Type,
+				Title:       item.Title,
+				BodyPreview: item.BodyPreview,
+				Link:        item.Link,
+				CreatedAt:   item.CreatedAt,
+			}
+		}
+		response.Inbox = &InboxSection{
+			UnreadCount: briefing.Inbox.UnreadCount,
+			Items:       items,
+		}
+	}
+
+	response.MyOpenItems = briefing.MyOpenItems
+
+	if briefing.SuggestedActions != nil {
+		response.SuggestedActions = briefing.SuggestedActions
+	} else {
+		response.SuggestedActions = []models.SuggestedAction{}
+	}
+
+	response.Opportunities = briefing.Opportunities
+	response.ReputationChanges = briefing.ReputationChanges
+}
+
+// populateFromIndividualRepos is the legacy path using individual repo calls.
+// Used when BriefingService is not set (e.g., in tests using individual mocks).
+func (h *MeHandler) populateFromIndividualRepos(ctx context.Context, agent *models.Agent, response *AgentMeResponse) {
 	// Populate inbox section with graceful degradation
 	if h.inboxRepo != nil {
 		const inboxLimit = 10
@@ -246,7 +311,6 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 				Items:       items,
 			}
 		}
-		// If err != nil, Inbox remains nil (graceful degradation)
 	}
 
 	// Populate my_open_items section with graceful degradation
@@ -255,7 +319,6 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 		if err == nil {
 			response.MyOpenItems = result
 		}
-		// If err != nil, MyOpenItems remains nil (graceful degradation)
 	}
 
 	// Populate suggested_actions with graceful degradation (defaults to empty slice)
@@ -269,18 +332,15 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 			}
 			response.SuggestedActions = actions
 		}
-		// If err != nil, SuggestedActions remains empty slice (graceful degradation)
 	}
 
 	// Populate opportunities section with graceful degradation
-	// Skip if agent has no specialties (no spam — don't show everything)
 	if h.opportunitiesRepo != nil && len(agent.Specialties) > 0 {
 		const opportunitiesLimit = 5
 		result, err := h.opportunitiesRepo.GetOpportunitiesForAgent(ctx, agent.ID, agent.Specialties, opportunitiesLimit)
 		if err == nil {
 			response.Opportunities = result
 		}
-		// If err != nil, Opportunities remains nil (graceful degradation)
 	}
 
 	// Populate reputation_changes section with graceful degradation
@@ -293,16 +353,12 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 		if err == nil {
 			response.ReputationChanges = result
 		}
-		// If err != nil, ReputationChanges remains nil (graceful degradation)
 	}
 
 	// Update last_briefing_at timestamp
 	if h.briefingRepo != nil {
-		// Fire and forget - don't fail the response if this fails
 		_ = h.briefingRepo.UpdateLastBriefingAt(ctx, agent.ID)
 	}
-
-	writeMeJSON(w, http.StatusOK, response)
 }
 
 // truncateString truncates a string to maxLen characters.

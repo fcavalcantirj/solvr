@@ -1282,7 +1282,7 @@
       "Verify: go test ./internal/services -run TestBriefingService -v passes all 4 tests",
       "Verify: go test ./internal/api/handlers -run TestAgentMe -v passes (integration with service)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "skill",

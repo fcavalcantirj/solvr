@@ -516,12 +516,16 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// Per FIX-005: GET /v1/me - current authenticated entity info
 			// Works with both JWT (humans) and API key (agents)
 			meHandler := handlers.NewMeHandler(oauthConfig, userRepo, agentRepo, authMethodRepo, pool)
-			meHandler.SetBriefingRepos(notificationsRepoConcrete, agentRepoConcrete)
 			briefingRepo := db.NewBriefingRepository(pool)
-			meHandler.SetOpenItemsRepo(briefingRepo)
-			meHandler.SetSuggestedActionsRepo(briefingRepo)
-			meHandler.SetOpportunitiesRepo(briefingRepo)
-			meHandler.SetReputationRepo(briefingRepo)
+			briefingSvc := services.NewBriefingService(
+				notificationsRepoConcrete,
+				briefingRepo,
+				briefingRepo,
+				briefingRepo,
+				briefingRepo,
+				agentRepoConcrete,
+			)
+			meHandler.SetBriefingService(briefingSvc)
 			r.Get("/me", meHandler.Me)
 			r.Get("/me/auth-methods", meHandler.GetMyAuthMethods)
 			r.Delete("/me", meHandler.DeleteMe) // PRD-v5 Task 12: User self-deletion

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -390,15 +391,15 @@ func TestKuboIPFSService_Add(t *testing.T) {
 	})
 }
 
-// TestKuboIPFSService_ObjectStat tests the ObjectStat method.
+// TestKuboIPFSService_ObjectStat tests the ObjectStat method (uses dag/stat API).
 func TestKuboIPFSService_ObjectStat(t *testing.T) {
 	t.Run("returns size for existing object", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				t.Errorf("expected POST, got %s", r.Method)
 			}
-			if !strings.HasPrefix(r.URL.Path, "/api/v0/object/stat") {
-				t.Errorf("expected /api/v0/object/stat, got %s", r.URL.Path)
+			if !strings.HasPrefix(r.URL.Path, "/api/v0/dag/stat") {
+				t.Errorf("expected /api/v0/dag/stat, got %s", r.URL.Path)
 			}
 
 			arg := r.URL.Query().Get("arg")
@@ -406,15 +407,10 @@ func TestKuboIPFSService_ObjectStat(t *testing.T) {
 				t.Errorf("expected arg=QmTest123, got %s", arg)
 			}
 
+			// dag/stat returns streaming NDJSON; simulate with final line
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"Hash":           "QmTest123",
-				"NumLinks":       0,
-				"BlockSize":      256,
-				"LinksSize":      0,
-				"DataSize":       256,
-				"CumulativeSize": 256,
-			})
+			fmt.Fprintln(w, `{"TotalSize":256,"DagStats":[{"Cid":"QmTest123","Size":256,"NumBlocks":1}]}`)
+			fmt.Fprintln(w, `{"UniqueBlocks":1,"TotalSize":6376,"Ratio":1,"DagStats":[{"Cid":"QmTest123","Size":6376,"NumBlocks":1}]}`)
 		}))
 		defer server.Close()
 
@@ -423,8 +419,8 @@ func TestKuboIPFSService_ObjectStat(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if size != 256 {
-			t.Errorf("expected size 256, got %d", size)
+		if size != 6376 {
+			t.Errorf("expected size 6376 (last line TotalSize), got %d", size)
 		}
 	})
 

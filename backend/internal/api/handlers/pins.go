@@ -24,6 +24,7 @@ type PinRepositoryInterface interface {
 	GetByCID(ctx context.Context, cid, ownerID string) (*models.Pin, error)
 	ListByOwner(ctx context.Context, ownerID, ownerType string, opts models.PinListOptions) ([]models.Pin, int, error)
 	UpdateStatus(ctx context.Context, id string, status models.PinStatus) error
+	UpdateStatusAndSize(ctx context.Context, id string, status models.PinStatus, sizeBytes int64) error
 	Delete(ctx context.Context, id string) error
 }
 
@@ -32,6 +33,7 @@ type PinRepositoryInterface interface {
 type IPFSPinner interface {
 	Pin(ctx context.Context, cid string) error
 	Unpin(ctx context.Context, cid string) error
+	ObjectStat(ctx context.Context, cid string) (int64, error)
 }
 
 // PinsHandler handles IPFS pinning API HTTP requests.
@@ -166,8 +168,29 @@ func (h *PinsHandler) asyncPin(pinID, cid string) {
 		return
 	}
 
-	// Pin succeeded
-	_ = h.repo.UpdateStatus(ctx, pinID, models.PinStatusPinned)
+	// Get content size from IPFS
+	var sizeBytes int64
+	size, statErr := h.ipfs.ObjectStat(ctx, cid)
+	if statErr != nil {
+		h.logger.Error("ObjectStat failed after pin", "pinID", pinID, "cid", cid, "error", statErr.Error())
+	} else {
+		sizeBytes = size
+	}
+
+	// Pin succeeded — update status and size
+	_ = h.repo.UpdateStatusAndSize(ctx, pinID, models.PinStatusPinned, sizeBytes)
+
+	// Increment storage usage if size is known
+	if h.storageRepo != nil && sizeBytes > 0 {
+		pin, getErr := h.repo.GetByID(ctx, pinID)
+		if getErr != nil {
+			h.logger.Error("failed to get pin for storage update", "pinID", pinID, "error", getErr.Error())
+		} else {
+			if updateErr := h.storageRepo.UpdateStorageUsed(ctx, pin.OwnerID, pin.OwnerType, sizeBytes); updateErr != nil {
+				h.logger.Error("failed to increment storage usage", "ownerID", pin.OwnerID, "error", updateErr.Error())
+			}
+		}
+	}
 }
 
 // GetByRequestID handles GET /v1/pins/:requestid — check pin status.

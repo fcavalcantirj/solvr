@@ -57,6 +57,12 @@ type NotificationsRepositoryInterface interface {
 
 	// FindByID finds a notification by ID.
 	FindByID(ctx context.Context, id string) (*Notification, error)
+
+	// GetUnreadCountForAgent returns the number of unread notifications for an agent.
+	GetUnreadCountForAgent(ctx context.Context, agentID string) (int, error)
+
+	// GetUnreadCountForUser returns the number of unread notifications for a user.
+	GetUnreadCountForUser(ctx context.Context, userID string) (int, error)
 }
 
 // NotificationsHandler handles notification-related HTTP requests.

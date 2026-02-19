@@ -83,6 +83,14 @@ func (m *MockNotificationsRepository) FindByID(ctx context.Context, id string) (
 	return m.findByIDNotification, m.findByIDErr
 }
 
+func (m *MockNotificationsRepository) GetUnreadCountForAgent(ctx context.Context, agentID string) (int, error) {
+	return 0, nil
+}
+
+func (m *MockNotificationsRepository) GetUnreadCountForUser(ctx context.Context, userID string) (int, error) {
+	return 0, nil
+}
+
 func createTestNotification(id, title, nType string, userID, agentID *string) Notification {
 	n := Notification{
 		ID:        id,

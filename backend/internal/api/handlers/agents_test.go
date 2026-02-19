@@ -255,6 +255,10 @@ func (m *MockAgentRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func (m *MockAgentRepository) UpdateLastSeen(ctx context.Context, id string) error {
+	return nil
+}
+
 // Helper to add JWT claims to request context
 func addJWTClaimsToContext(r *http.Request, userID, email, role string) *http.Request {
 	claims := &auth.Claims{

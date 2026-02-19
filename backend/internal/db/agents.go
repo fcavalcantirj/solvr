@@ -29,8 +29,8 @@ type AgentRepository struct {
 // Used to keep queries consistent and DRY.
 // Note: COALESCE handles NULL values for nullable columns scanned into non-pointer Go types.
 // Without COALESCE, pgx fails when scanning NULL into string/[]string.
-// 22 columns total (added storage_used_bytes for prd-v6-ipfs-expanded Phase 2)
-const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, reputation, human_claimed_at, has_human_backed_badge, has_amcp_identity, COALESCE(amcp_aid, '') as amcp_aid, pinning_quota_bytes, storage_used_bytes, created_at, updated_at, deleted_at`
+// 23 columns total (added last_seen_at for heartbeat liveness tracking)
+const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, reputation, human_claimed_at, has_human_backed_badge, has_amcp_identity, COALESCE(amcp_aid, '') as amcp_aid, pinning_quota_bytes, storage_used_bytes, last_seen_at, created_at, updated_at, deleted_at`
 
 // NewAgentRepository creates a new AgentRepository.
 func NewAgentRepository(pool *Pool) *AgentRepository {
@@ -41,8 +41,8 @@ func NewAgentRepository(pool *Pool) *AgentRepository {
 // The agent struct is populated with timestamps after successful creation.
 func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error {
 	query := `
-		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, model, email, external_links, has_amcp_identity, amcp_aid, pinning_quota_bytes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, model, email, external_links, has_amcp_identity, amcp_aid)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING ` + agentColumns
 
 	// Convert empty AMCP AID to nil for nullable column
@@ -65,7 +65,6 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		agent.ExternalLinks,
 		agent.HasAMCPIdentity,
 		amcpAID,
-		agent.PinningQuotaBytes,
 	)
 
 	err := row.Scan(
@@ -88,6 +87,7 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		&agent.AMCPAID,
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
+		&agent.LastSeenAt,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,
@@ -190,6 +190,7 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 		&agent.AMCPAID,
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
+		&agent.LastSeenAt,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,
@@ -465,6 +466,7 @@ func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 		&agent.AMCPAID,
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
+		&agent.LastSeenAt,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,
@@ -504,6 +506,7 @@ func (r *AgentRepository) scanAgentRows(rows pgx.Rows) (*models.Agent, error) {
 		&agent.AMCPAID,
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
+		&agent.LastSeenAt,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,
@@ -964,6 +967,15 @@ func (r *AgentRepository) CountActive(ctx context.Context) (int, error) {
 
 // CountHumanBacked returns the total number of agents with human-backed badge.
 // Filters out soft-deleted agents (WHERE deleted_at IS NULL).
+// UpdateLastSeen sets the last_seen_at timestamp to NOW() for heartbeat liveness tracking.
+func (r *AgentRepository) UpdateLastSeen(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE agents SET last_seen_at = NOW() WHERE id = $1`, id)
+	if err != nil {
+		LogQueryError(ctx, "UpdateLastSeen", "agents", err)
+	}
+	return err
+}
+
 func (r *AgentRepository) CountHumanBacked(ctx context.Context) (int, error) {
 	query := `SELECT COUNT(*) FROM agents WHERE has_human_backed_badge = true AND deleted_at IS NULL`
 	var count int

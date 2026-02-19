@@ -175,6 +175,10 @@ func (m *MockAgentRepoWithSuggestions) Delete(ctx context.Context, id string) er
 	return nil
 }
 
+func (m *MockAgentRepoWithSuggestions) UpdateLastSeen(ctx context.Context, id string) error {
+	return nil
+}
+
 // TestRegisterAgent_DuplicateName_Returns409 tests that duplicate names return 409 Conflict.
 // Per AGENT-ONBOARDING requirement: Return 409 Conflict if name taken.
 func TestRegisterAgent_DuplicateName_Returns409(t *testing.T) {

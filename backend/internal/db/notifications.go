@@ -159,6 +159,27 @@ func (r *NotificationsRepository) markAllRead(ctx context.Context, column, id st
 	return int(result.RowsAffected()), nil
 }
 
+// GetUnreadCountForAgent returns the number of unread notifications for an agent.
+func (r *NotificationsRepository) GetUnreadCountForAgent(ctx context.Context, agentID string) (int, error) {
+	return r.getUnreadCount(ctx, "agent_id", agentID)
+}
+
+// GetUnreadCountForUser returns the number of unread notifications for a user.
+func (r *NotificationsRepository) GetUnreadCountForUser(ctx context.Context, userID string) (int, error) {
+	return r.getUnreadCount(ctx, "user_id", userID)
+}
+
+func (r *NotificationsRepository) getUnreadCount(ctx context.Context, column, id string) (int, error) {
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM notifications WHERE %s = $1 AND read_at IS NULL`, column)
+	var count int
+	err := r.pool.QueryRow(ctx, query, id).Scan(&count)
+	if err != nil {
+		LogQueryError(ctx, "GetUnreadCount", "notifications", err)
+		return 0, err
+	}
+	return count, nil
+}
+
 // FindByID finds a notification by ID.
 func (r *NotificationsRepository) FindByID(ctx context.Context, id string) (*models.Notification, error) {
 	query := `

@@ -502,6 +502,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string) {
 			storageHandler := handlers.NewStorageHandler(storageRepo)
 			r.Get("/me/storage", storageHandler.GetStorage)
 
+			// Heartbeat endpoint — agent/user check-in with aggregated status
+			heartbeatHandler := handlers.NewHeartbeatHandler(agentRepo, notificationsRepo, storageRepo)
+			r.Get("/heartbeat", heartbeatHandler.Heartbeat)
+
 			// BE-003: User profile endpoints
 			// PATCH /v1/me - update own profile
 			r.Patch("/me", usersHandler.UpdateProfile)

@@ -50,6 +50,8 @@ type AgentRepositoryInterface interface {
 	CountHumanBacked(ctx context.Context) (int, error)
 	// Soft delete agent (PRD-v5 Task 22)
 	Delete(ctx context.Context, id string) error
+	// Heartbeat liveness tracking
+	UpdateLastSeen(ctx context.Context, id string) error
 }
 
 // ClaimTokenRepositoryInterface defines database operations for claim tokens.

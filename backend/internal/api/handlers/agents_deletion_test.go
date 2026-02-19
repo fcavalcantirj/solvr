@@ -151,6 +151,10 @@ func (m *MockAgentRepositoryWithDelete) CountHumanBacked(ctx context.Context) (i
 	return 0, nil
 }
 
+func (m *MockAgentRepositoryWithDelete) UpdateLastSeen(ctx context.Context, id string) error {
+	return nil
+}
+
 // TestDeleteAgentMe_Success verifies authenticated agent can delete their own account (soft delete).
 //
 // TDD RED PHASE: This test will FAIL because:

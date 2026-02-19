@@ -196,24 +196,30 @@ func (s *KuboIPFSService) Add(ctx context.Context, reader io.Reader) (string, er
 	return result.Hash, nil
 }
 
-// ObjectStat returns the cumulative size of an object via POST /api/v0/object/stat?arg={cid}.
+// ObjectStat returns the total size of a DAG via POST /api/v0/dag/stat?arg={cid}.
+// Kubo v0.33+ removed object/stat; dag/stat returns streaming NDJSON progress.
+// We parse the last line which contains the final TotalSize.
 func (s *KuboIPFSService) ObjectStat(ctx context.Context, cid string) (int64, error) {
 	if cid == "" {
 		return 0, ErrEmptyCID
 	}
 
-	url := fmt.Sprintf("%s/api/v0/object/stat?arg=%s", s.baseURL, cid)
+	url := fmt.Sprintf("%s/api/v0/dag/stat?arg=%s", s.baseURL, cid)
 	body, err := s.doWithRetry(ctx, url)
 	if err != nil {
 		return 0, err
 	}
 
-	var result objectStatResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return 0, fmt.Errorf("ipfs: failed to parse object/stat response: %w", err)
+	// dag/stat returns streaming NDJSON; parse last line for final result
+	lines := bytes.Split(bytes.TrimSpace(body), []byte("\n"))
+	lastLine := lines[len(lines)-1]
+
+	var result dagStatResponse
+	if err := json.Unmarshal(lastLine, &result); err != nil {
+		return 0, fmt.Errorf("ipfs: failed to parse dag/stat response: %w", err)
 	}
 
-	return result.CumulativeSize, nil
+	return result.TotalSize, nil
 }
 
 // doWithRetry performs a POST request with retry logic for transient failures.
@@ -326,4 +332,8 @@ type objectStatResponse struct {
 	LinksSize      int64  `json:"LinksSize"`
 	DataSize       int64  `json:"DataSize"`
 	CumulativeSize int64  `json:"CumulativeSize"`
+}
+
+type dagStatResponse struct {
+	TotalSize int64 `json:"TotalSize"`
 }

@@ -1,0 +1,192 @@
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/models"
+)
+
+// HeartbeatNotifRepo defines the notification operations needed by the heartbeat handler.
+type HeartbeatNotifRepo interface {
+	GetUnreadCountForAgent(ctx context.Context, agentID string) (int, error)
+	GetUnreadCountForUser(ctx context.Context, userID string) (int, error)
+}
+
+// HeartbeatAgentRepo defines the agent operations needed by the heartbeat handler.
+type HeartbeatAgentRepo interface {
+	UpdateLastSeen(ctx context.Context, id string) error
+}
+
+// HeartbeatHandler handles the GET /v1/heartbeat endpoint.
+type HeartbeatHandler struct {
+	agentRepo   HeartbeatAgentRepo
+	notifRepo   HeartbeatNotifRepo
+	storageRepo StorageRepositoryInterface
+}
+
+// NewHeartbeatHandler creates a new HeartbeatHandler.
+func NewHeartbeatHandler(agentRepo HeartbeatAgentRepo, notifRepo HeartbeatNotifRepo, storageRepo StorageRepositoryInterface) *HeartbeatHandler {
+	return &HeartbeatHandler{
+		agentRepo:   agentRepo,
+		notifRepo:   notifRepo,
+		storageRepo: storageRepo,
+	}
+}
+
+type heartbeatAgentInfo struct {
+	ID                  string `json:"id"`
+	DisplayName         string `json:"display_name"`
+	Status              string `json:"status"`
+	Reputation          int    `json:"reputation"`
+	HasHumanBackedBadge bool   `json:"has_human_backed_badge"`
+	Claimed             bool   `json:"claimed"`
+}
+
+type heartbeatNotifications struct {
+	UnreadCount int `json:"unread_count"`
+}
+
+type heartbeatStorage struct {
+	UsedBytes  int64   `json:"used_bytes"`
+	QuotaBytes int64   `json:"quota_bytes"`
+	Percentage float64 `json:"percentage"`
+}
+
+type heartbeatPlatform struct {
+	Version   string `json:"version"`
+	Timestamp string `json:"timestamp"`
+}
+
+type heartbeatResponse struct {
+	Status        string                 `json:"status"`
+	Agent         *heartbeatAgentInfo    `json:"agent,omitempty"`
+	User          map[string]interface{} `json:"user,omitempty"`
+	Notifications heartbeatNotifications `json:"notifications"`
+	Storage       heartbeatStorage       `json:"storage"`
+	Platform      heartbeatPlatform      `json:"platform"`
+}
+
+// Heartbeat handles GET /v1/heartbeat — agent/user check-in endpoint.
+// Returns aggregated status: identity, unread notifications, storage, platform info.
+// Side effect: updates last_seen_at for liveness tracking.
+func (h *HeartbeatHandler) Heartbeat(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Check agent auth first (API key)
+	agent := auth.AgentFromContext(ctx)
+	if agent != nil {
+		h.handleAgentHeartbeat(w, ctx, agent)
+		return
+	}
+
+	// Check user auth (JWT)
+	claims := auth.ClaimsFromContext(ctx)
+	if claims != nil {
+		h.handleUserHeartbeat(w, ctx, claims)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]string{
+			"code":    "UNAUTHORIZED",
+			"message": "authentication required",
+		},
+	})
+}
+
+func (h *HeartbeatHandler) handleAgentHeartbeat(w http.ResponseWriter, ctx context.Context, agent *models.Agent) {
+	// Update last_seen_at
+	if h.agentRepo != nil {
+		_ = h.agentRepo.UpdateLastSeen(ctx, agent.ID)
+	}
+
+	// Get unread notification count
+	var unreadCount int
+	if h.notifRepo != nil {
+		count, err := h.notifRepo.GetUnreadCountForAgent(ctx, agent.ID)
+		if err == nil {
+			unreadCount = count
+		}
+	}
+
+	// Get storage usage
+	var used, quota int64
+	if h.storageRepo != nil {
+		u, q, err := h.storageRepo.GetStorageUsage(ctx, agent.ID, "agent")
+		if err == nil {
+			used = u
+			quota = q
+		}
+	}
+
+	var percentage float64
+	if quota > 0 {
+		percentage = float64(used) / float64(quota) * 100.0
+	}
+
+	resp := heartbeatResponse{
+		Status: "ok",
+		Agent: &heartbeatAgentInfo{
+			ID:                  agent.ID,
+			DisplayName:         agent.DisplayName,
+			Status:              agent.Status,
+			Reputation:          agent.Reputation,
+			HasHumanBackedBadge: agent.HasHumanBackedBadge,
+			Claimed:             agent.HumanID != nil,
+		},
+		Notifications: heartbeatNotifications{UnreadCount: unreadCount},
+		Storage:       heartbeatStorage{UsedBytes: used, QuotaBytes: quota, Percentage: percentage},
+		Platform:      heartbeatPlatform{Version: "0.2.0", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (h *HeartbeatHandler) handleUserHeartbeat(w http.ResponseWriter, ctx context.Context, claims *auth.Claims) {
+	// Get unread notification count
+	var unreadCount int
+	if h.notifRepo != nil {
+		count, err := h.notifRepo.GetUnreadCountForUser(ctx, claims.UserID)
+		if err == nil {
+			unreadCount = count
+		}
+	}
+
+	// Get storage usage
+	var used, quota int64
+	if h.storageRepo != nil {
+		u, q, err := h.storageRepo.GetStorageUsage(ctx, claims.UserID, "user")
+		if err == nil {
+			used = u
+			quota = q
+		}
+	}
+
+	var percentage float64
+	if quota > 0 {
+		percentage = float64(used) / float64(quota) * 100.0
+	}
+
+	resp := heartbeatResponse{
+		Status: "ok",
+		User: map[string]interface{}{
+			"id":   claims.UserID,
+			"role": claims.Role,
+		},
+		Notifications: heartbeatNotifications{UnreadCount: unreadCount},
+		Storage:       heartbeatStorage{UsedBytes: used, QuotaBytes: quota, Percentage: percentage},
+		Platform:      heartbeatPlatform{Version: "0.2.0", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}

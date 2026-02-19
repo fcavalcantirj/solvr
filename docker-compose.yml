@@ -20,5 +20,16 @@ services:
       retries: 5
       start_period: 10s
 
+  ipfs:
+    image: ipfs/kubo:v0.33.2
+    container_name: solvr-ipfs
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+      - "8081:8080"
+    volumes:
+      - ipfs_data:/data/ipfs
+
 volumes:
   postgres_data:
+  ipfs_data:

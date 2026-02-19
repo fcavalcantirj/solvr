@@ -494,6 +494,152 @@ cmd_claim() {
     echo "Benefits: +50 reputation, Human-Backed badge, verified collaboration"
 }
 
+# ============================================================================
+# IPFS Pinning Commands
+# ============================================================================
+
+cmd_pin() {
+    local subcmd="${1:-}"
+    shift || true
+
+    case "$subcmd" in
+        add)
+            local cid="${1:-}"
+            local name=""
+            shift || true
+
+            if [ -z "$cid" ]; then
+                echo -e "${RED}Error: pin add requires a CID${NC}" >&2
+                echo "Usage: solvr pin add <cid> [--name <name>]" >&2
+                exit 1
+            fi
+
+            # Parse optional --name flag
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --name) name="${2:-}"; shift 2 || break ;;
+                    *) shift ;;
+                esac
+            done
+
+            local data="{\"cid\":\"${cid}\"}"
+            if [ -n "$name" ]; then
+                data="{\"cid\":\"${cid}\",\"name\":\"${name}\"}"
+            fi
+
+            local result
+            result=$(api_call POST "/pins" "$data") || return 1
+
+            echo -e "${GREEN}Pin created!${NC}"
+            echo "$result" | jq '{requestid, status, cid: .pin.cid, name: .pin.name}' 2>/dev/null || echo "$result"
+            ;;
+        ls)
+            local status_filter=""
+            local limit=""
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --status) status_filter="${2:-}"; shift 2 || break ;;
+                    --limit) limit="${2:-}"; shift 2 || break ;;
+                    *) shift ;;
+                esac
+            done
+
+            local endpoint="/pins"
+            local sep="?"
+            if [ -n "$status_filter" ]; then
+                endpoint="${endpoint}${sep}status=${status_filter}"
+                sep="&"
+            fi
+            if [ -n "$limit" ]; then
+                endpoint="${endpoint}${sep}limit=${limit}"
+            fi
+
+            local result
+            result=$(api_call GET "$endpoint") || return 1
+            echo "$result" | jq '.' 2>/dev/null || echo "$result"
+            ;;
+        status)
+            local requestid="${1:-}"
+            if [ -z "$requestid" ]; then
+                echo -e "${RED}Error: pin status requires a request ID${NC}" >&2
+                echo "Usage: solvr pin status <requestid>" >&2
+                exit 1
+            fi
+
+            local result
+            result=$(api_call GET "/pins/${requestid}") || return 1
+            echo "$result" | jq '{requestid, status, cid: .pin.cid, name: .pin.name, created}' 2>/dev/null || echo "$result"
+            ;;
+        rm)
+            local requestid="${1:-}"
+            if [ -z "$requestid" ]; then
+                echo -e "${RED}Error: pin rm requires a request ID${NC}" >&2
+                echo "Usage: solvr pin rm <requestid>" >&2
+                exit 1
+            fi
+
+            api_call DELETE "/pins/${requestid}" > /dev/null || return 1
+            echo -e "${GREEN}Pin removed.${NC}"
+            ;;
+        *)
+            echo "Usage: solvr pin <add|ls|status|rm>"
+            echo ""
+            echo "Subcommands:"
+            echo "  add <cid> [--name <n>]    Pin a CID to IPFS"
+            echo "  ls [--status <s>]         List your pins"
+            echo "  status <requestid>        Check pin status"
+            echo "  rm <requestid>            Remove a pin"
+            ;;
+    esac
+}
+
+cmd_storage() {
+    local result
+    result=$(api_call GET "/me/storage") || return 1
+
+    local used quota percentage
+    used=$(echo "$result" | jq -r '.data.used // 0' 2>/dev/null)
+    quota=$(echo "$result" | jq -r '.data.quota // 0' 2>/dev/null)
+    percentage=$(echo "$result" | jq -r '.data.percentage // 0' 2>/dev/null)
+
+    # Human-readable sizes
+    local used_mb quota_mb
+    used_mb=$(echo "scale=1; ${used:-0} / 1048576" | bc 2>/dev/null || echo "0")
+    quota_mb=$(echo "scale=1; ${quota:-0} / 1048576" | bc 2>/dev/null || echo "0")
+
+    echo -e "${CYAN}Storage Usage${NC}"
+    echo "  Used:  ${used_mb} MB"
+    echo "  Quota: ${quota_mb} MB"
+    echo "  Usage: ${percentage}%"
+}
+
+cmd_heartbeat() {
+    local result
+    result=$(api_call GET "/heartbeat") || return 1
+
+    local status agent_id agent_status reputation unread
+    status=$(echo "$result" | jq -r '.status // "unknown"' 2>/dev/null)
+    agent_id=$(echo "$result" | jq -r '.agent.id // "unknown"' 2>/dev/null)
+    agent_status=$(echo "$result" | jq -r '.agent.status // "unknown"' 2>/dev/null)
+    reputation=$(echo "$result" | jq -r '.agent.reputation // 0' 2>/dev/null)
+    unread=$(echo "$result" | jq -r '.notifications.unread_count // 0' 2>/dev/null)
+
+    local used quota percentage
+    used=$(echo "$result" | jq -r '.storage.used_bytes // 0' 2>/dev/null)
+    quota=$(echo "$result" | jq -r '.storage.quota_bytes // 0' 2>/dev/null)
+    percentage=$(echo "$result" | jq -r '.storage.percentage // 0' 2>/dev/null)
+
+    local used_mb quota_mb
+    used_mb=$(echo "scale=1; ${used:-0} / 1048576" | bc 2>/dev/null || echo "0")
+    quota_mb=$(echo "scale=1; ${quota:-0} / 1048576" | bc 2>/dev/null || echo "0")
+
+    echo -e "${GREEN}HEARTBEAT: ${status}${NC}"
+    echo -e "  Agent:         ${agent_id} (${agent_status})"
+    echo -e "  Reputation:    ${reputation}"
+    echo -e "  Notifications: ${unread} unread"
+    echo -e "  Storage:       ${used_mb} / ${quota_mb} MB (${percentage}%)"
+}
+
 cmd_help() {
     cat << 'EOF'
 Solvr CLI - Knowledge base for developers and AI agents
@@ -512,6 +658,9 @@ COMMANDS:
     answer <post_id> <content>    Post an answer to a question
     approach <problem_id> <strategy>  Start an approach to a problem
     vote <id> up|down             Vote on a post
+    pin <subcmd> [args]           IPFS pinning (add, ls, status, rm)
+    storage                       Show storage usage and quota
+    heartbeat                     Check-in: status, notifications, storage
     help                          Show this help message
 
 SEARCH OPTIONS:
@@ -546,6 +695,18 @@ EXAMPLES:
 
     # Vote on a helpful post
     solvr vote post_abc123 up
+
+    # IPFS pinning
+    solvr pin add QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG --name "checkpoint"
+    solvr pin ls --status pinned
+    solvr pin status abc-123-def
+    solvr pin rm abc-123-def
+
+    # Check storage quota
+    solvr storage
+
+    # Heartbeat (check-in)
+    solvr heartbeat
 
 CONFIGURATION:
     API key is loaded from (in priority order):
@@ -659,6 +820,15 @@ main() {
                 exit 1
             fi
             cmd_vote "$@"
+            ;;
+        pin)
+            cmd_pin "$@"
+            ;;
+        storage)
+            cmd_storage
+            ;;
+        heartbeat)
+            cmd_heartbeat
             ;;
         help|--help|-h)
             cmd_help

@@ -31,6 +31,10 @@ type MockPinRepository struct {
 	deletedID  string      // tracks what was passed to Delete
 	updatedID  string      // tracks what was passed to UpdateStatus
 	updatedSt  models.PinStatus
+	// Size tracking
+	updatedSizeID    string
+	updatedSizeBytes int64
+	updatedSizeSt    models.PinStatus
 }
 
 func NewMockPinRepository() *MockPinRepository {
@@ -87,6 +91,16 @@ func (m *MockPinRepository) UpdateStatus(ctx context.Context, id string, status 
 	return nil
 }
 
+func (m *MockPinRepository) UpdateStatusAndSize(ctx context.Context, id string, status models.PinStatus, sizeBytes int64) error {
+	m.updatedSizeID = id
+	m.updatedSizeSt = status
+	m.updatedSizeBytes = sizeBytes
+	if m.updateErr != nil {
+		return m.updateErr
+	}
+	return nil
+}
+
 func (m *MockPinRepository) Delete(ctx context.Context, id string) error {
 	m.deletedID = id
 	if m.deleteErr != nil {
@@ -120,10 +134,13 @@ func (m *MockPinRepository) SetDeleteError(err error) {
 
 // MockIPFSPinner implements IPFSPinner for testing.
 type MockIPFSPinner struct {
-	pinErr       error
-	unpinErr     error
-	pinnedCIDs   []string // tracks what was pinned
-	unpinnedCIDs []string // tracks what was unpinned
+	pinErr         error
+	unpinErr       error
+	objectStatSize int64  // size returned by ObjectStat
+	objectStatErr  error  // error returned by ObjectStat
+	objectStatCID  string // tracks CID passed to ObjectStat
+	pinnedCIDs     []string // tracks what was pinned
+	unpinnedCIDs   []string // tracks what was unpinned
 }
 
 func NewMockIPFSPinner() *MockIPFSPinner {
@@ -138,6 +155,11 @@ func (m *MockIPFSPinner) Pin(ctx context.Context, cid string) error {
 func (m *MockIPFSPinner) Unpin(ctx context.Context, cid string) error {
 	m.unpinnedCIDs = append(m.unpinnedCIDs, cid)
 	return m.unpinErr
+}
+
+func (m *MockIPFSPinner) ObjectStat(ctx context.Context, cid string) (int64, error) {
+	m.objectStatCID = cid
+	return m.objectStatSize, m.objectStatErr
 }
 
 // Verify MockIPFSPinner implements IPFSPinner at compile time.
@@ -809,6 +831,141 @@ func TestPinsHandler_Delete_NoAuth(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected status 401, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// --- asyncPin Size Tracking Tests ---
+
+func TestAsyncPin_UpdatesSizeAfterSuccess(t *testing.T) {
+	repo := NewMockPinRepository()
+	ipfs := NewMockIPFSPinner()
+	ipfs.objectStatSize = 1048576 // 1MB
+	handler := NewPinsHandler(repo, ipfs)
+
+	// Set up a pin that GetByID can return (needed for owner lookup)
+	repo.SetPin(&models.Pin{
+		ID:        "pin-123",
+		CID:       "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG",
+		OwnerID:   "user-123",
+		OwnerType: "human",
+	})
+
+	// Call asyncPin directly (it's synchronous despite the name)
+	handler.asyncPin("pin-123", "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG")
+
+	// Verify ObjectStat was called with the right CID
+	if ipfs.objectStatCID != "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG" {
+		t.Errorf("expected ObjectStat called with CID, got %q", ipfs.objectStatCID)
+	}
+
+	// Verify UpdateStatusAndSize was called (not just UpdateStatus)
+	if repo.updatedSizeID != "pin-123" {
+		t.Errorf("expected UpdateStatusAndSize called with pin-123, got %q", repo.updatedSizeID)
+	}
+	if repo.updatedSizeSt != models.PinStatusPinned {
+		t.Errorf("expected status pinned, got %v", repo.updatedSizeSt)
+	}
+	if repo.updatedSizeBytes != 1048576 {
+		t.Errorf("expected size 1048576, got %d", repo.updatedSizeBytes)
+	}
+}
+
+func TestAsyncPin_IncrementsStorageUsage(t *testing.T) {
+	repo := NewMockPinRepository()
+	ipfs := NewMockIPFSPinner()
+	ipfs.objectStatSize = 2097152 // 2MB
+	storageRepo := NewMockStorageRepository()
+	storageRepo.usedBytes = 0 // start at 0
+
+	handler := NewPinsHandler(repo, ipfs)
+	handler.SetStorageRepo(storageRepo)
+
+	// Set up pin for GetByID
+	repo.SetPin(&models.Pin{
+		ID:        "pin-456",
+		CID:       "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG",
+		OwnerID:   "user-789",
+		OwnerType: "human",
+	})
+
+	handler.asyncPin("pin-456", "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG")
+
+	// Verify storage was incremented
+	if storageRepo.updatedOwnerID != "user-789" {
+		t.Errorf("expected storage updated for user-789, got %q", storageRepo.updatedOwnerID)
+	}
+	if storageRepo.updatedDelta != 2097152 {
+		t.Errorf("expected storage delta 2097152, got %d", storageRepo.updatedDelta)
+	}
+}
+
+func TestAsyncPin_NoStorageUpdate_WhenObjectStatFails(t *testing.T) {
+	repo := NewMockPinRepository()
+	ipfs := NewMockIPFSPinner()
+	ipfs.objectStatErr = context.DeadlineExceeded // ObjectStat fails
+	storageRepo := NewMockStorageRepository()
+
+	handler := NewPinsHandler(repo, ipfs)
+	handler.SetStorageRepo(storageRepo)
+
+	repo.SetPin(&models.Pin{
+		ID:        "pin-789",
+		CID:       "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG",
+		OwnerID:   "user-123",
+		OwnerType: "human",
+	})
+
+	handler.asyncPin("pin-789", "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG")
+
+	// Pin should still succeed (status pinned) even if ObjectStat fails
+	// But UpdateStatusAndSize should be called with 0 size
+	if repo.updatedSizeSt != models.PinStatusPinned {
+		t.Errorf("expected status pinned even on ObjectStat failure, got %v", repo.updatedSizeSt)
+	}
+
+	// Storage should NOT be updated when size is 0
+	if storageRepo.updatedOwnerID != "" {
+		t.Errorf("expected no storage update when ObjectStat fails, but got update for %q", storageRepo.updatedOwnerID)
+	}
+}
+
+func TestDelete_DecrementsStorageUsage(t *testing.T) {
+	repo := NewMockPinRepository()
+	ipfs := NewMockIPFSPinner()
+	storageRepo := NewMockStorageRepository()
+	storageRepo.usedBytes = 5242880 // 5MB used
+
+	handler := NewPinsHandler(repo, ipfs)
+	handler.SetStorageRepo(storageRepo)
+
+	// Pin with known size
+	size := int64(1048576) // 1MB
+	repo.SetPin(&models.Pin{
+		ID:        "pin-del-1",
+		CID:       "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG",
+		Status:    models.PinStatusPinned,
+		OwnerID:   "user-123",
+		OwnerType: "human",
+		SizeBytes: &size,
+	})
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/pins/pin-del-1", nil)
+	req = addPinsAuthContext(req, "user-123", "user")
+	req = addPinsRouteContext(req, "requestid", "pin-del-1")
+
+	w := httptest.NewRecorder()
+	handler.Delete(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("expected status 202, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify storage was decremented
+	if storageRepo.updatedOwnerID != "user-123" {
+		t.Errorf("expected storage decremented for user-123, got %q", storageRepo.updatedOwnerID)
+	}
+	if storageRepo.updatedDelta != -1048576 {
+		t.Errorf("expected storage delta -1048576, got %d", storageRepo.updatedDelta)
 	}
 }
 

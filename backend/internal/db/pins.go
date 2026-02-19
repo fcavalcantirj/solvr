@@ -216,6 +216,27 @@ func (r *PinRepository) UpdateStatus(ctx context.Context, id string, status mode
 	return nil
 }
 
+// UpdateStatusAndSize updates a pin's status and size_bytes atomically.
+func (r *PinRepository) UpdateStatusAndSize(ctx context.Context, id string, status models.PinStatus, sizeBytes int64) error {
+	query := `
+		UPDATE pins
+		SET status = $2, size_bytes = $3, pinned_at = NOW(), updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.pool.Exec(ctx, query, id, string(status), sizeBytes)
+	if err != nil {
+		LogQueryError(ctx, "UpdateStatusAndSize", "pins", err)
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrPinNotFound
+	}
+
+	return nil
+}
+
 // Delete removes a pin record (hard delete).
 func (r *PinRepository) Delete(ctx context.Context, id string) error {
 	query := `DELETE FROM pins WHERE id = $1`

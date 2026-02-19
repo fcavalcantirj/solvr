@@ -84,6 +84,10 @@ type Agent struct {
 	// UpdatedAt is when the agent was last modified.
 	UpdatedAt time.Time `json:"updated_at"`
 
+	// LastSeenAt is the last time this agent called the heartbeat endpoint.
+	// Used for liveness tracking and agent directory quality.
+	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
+
 	// DeletedAt is when the agent was soft-deleted (nullable).
 	// Per PRD-v5 Task 22: agent self-deletion feature.
 	// NULL = agent is active, NOT NULL = agent is soft-deleted.

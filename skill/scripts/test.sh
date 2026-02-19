@@ -58,7 +58,7 @@ test_output_contains() {
     local exit_code=0
     output=$($cmd 2>&1) || exit_code=$?
 
-    if echo "$output" | grep -q "$expected_content"; then
+    if echo "$output" | grep -qF -- "$expected_content"; then
         echo -e "${GREEN}PASS${NC}"
         ((PASSED++))
         return 0
@@ -156,6 +156,61 @@ test_output_contains "unknown command shows error" "Unknown command" "$SOLVR_SH"
 test_output_contains "search error is helpful" "search requires" "$SOLVR_SH" search || true
 test_output_contains "get error is helpful" "get requires" "$SOLVR_SH" get || true
 test_output_contains "post error is helpful" "post requires" "$SOLVR_SH" post || true
+
+echo ""
+
+# ============================================================================
+# Feature completeness tests (docs must mention key features)
+# ============================================================================
+
+echo -e "${YELLOW}Feature completeness tests:${NC}"
+
+# Helper: check if a file contains a pattern
+test_file_contains() {
+    local name="$1" pattern="$2" file="$3"
+    echo -n "Testing: ${name}... "
+    if grep -qiE "$pattern" "$file" 2>/dev/null; then
+        echo -e "${GREEN}PASS${NC}"
+        ((PASSED++))
+        return 0
+    else
+        echo -e "${RED}FAIL${NC}"
+        echo "  File $file missing pattern: $pattern"
+        ((FAILED++))
+        return 1
+    fi
+}
+
+SKILL_MD="${SCRIPT_DIR}/../SKILL.md"
+API_MD="${SCRIPT_DIR}/../references/api.md"
+EXAMPLES_MD="${SCRIPT_DIR}/../references/examples.md"
+SKILL_JSON="${SCRIPT_DIR}/../skill.json"
+
+# SKILL.md must cover IPFS features
+test_file_contains "SKILL.md mentions IPFS/pinning" "ipfs|pin" "$SKILL_MD" || true
+test_file_contains "SKILL.md mentions storage" "storage|quota" "$SKILL_MD" || true
+
+# api.md must document IPFS endpoints
+test_file_contains "api.md documents /pins" "/pins" "$API_MD" || true
+test_file_contains "api.md documents /me/storage" "storage" "$API_MD" || true
+
+# examples.md must have IPFS examples
+test_file_contains "examples.md has pin example" "pin" "$EXAMPLES_MD" || true
+test_file_contains "examples.md has storage example" "storage" "$EXAMPLES_MD" || true
+
+# skill.json must list ipfs capability
+test_file_contains "skill.json lists ipfs capability" "ipfs" "$SKILL_JSON" || true
+
+# solvr.sh must have pin, storage, and heartbeat commands
+test_output_contains "help shows pin command" "pin" "$SOLVR_SH" help || true
+test_output_contains "help shows storage command" "storage" "$SOLVR_SH" help || true
+test_output_contains "help shows heartbeat command" "heartbeat" "$SOLVR_SH" help || true
+
+# heartbeat must be documented
+test_file_contains "SKILL.md mentions heartbeat" "heartbeat" "$SKILL_MD" || true
+test_file_contains "api.md documents /heartbeat" "heartbeat" "$API_MD" || true
+test_file_contains "examples.md has heartbeat example" "heartbeat" "$EXAMPLES_MD" || true
+test_file_contains "skill.json lists heartbeat endpoint" "heartbeat" "$SKILL_JSON" || true
 
 echo ""
 

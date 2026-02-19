@@ -608,7 +608,7 @@
       "Verify: psql -c '\\df hybrid_search_answers' shows function",
       "Verify: psql -c '\\df hybrid_search_approaches' shows function"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

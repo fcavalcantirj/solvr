@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# PRD file (can be overridden with env var)
+PRD_FILE="${PRD_FILE:-specs/prd-v6-ipfs-expanded.json}"
+
 # Colors
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -71,7 +74,7 @@ for ((i=1; i<=$1; i++)); do
   iter_start=$(date +%s)
 
   # Run claude synchronously
-  claude --dangerously-skip-permissions --no-session-persistence -p --output-format json "@CLAUDE.md @SPEC.md @specs/prd-v6-ipfs-expanded.json @specs/progress.txt \
+  claude --dangerously-skip-permissions --no-session-persistence -p --output-format json "@CLAUDE.md @SPEC.md @$PRD_FILE @specs/progress.txt \
 
 === GOLDEN RULES (MUST FOLLOW) ===
 • NO MOCKS, NO STUBS - real implementation only
@@ -90,13 +93,13 @@ for ((i=1; i<=$1; i++)); do
 
 1. Read CLAUDE.md for project guidelines and golden rules.
 2. Read SPEC.md for full specification details when needed.
-3. Find the highest-priority requirement in specs/prd-v6-ipfs-expanded.json where passes=false AND phase=2 and work ONLY on that.
+3. Find the highest-priority requirement in $PRD_FILE where passes=false AND phase=2 and work ONLY on that.
 4. WRITE TESTS FIRST (TDD) - create _test.go or .test.tsx BEFORE implementation.
 5. Implement minimum code to make tests pass.
 6. For backend: run 'cd backend && go test ./...' to verify.
 7. For frontend: run 'cd frontend && npm test' to verify.
 8. Update specs/progress.txt with what you did.
-9. Update specs/prd-v6-ipfs-expanded.json with passes=true for completed requirement.
+9. Update $PRD_FILE with passes=true for completed requirement.
 10. COMMIT: Run 'git add .' to stage ALL files (including new ones), then 'git commit -m "message"'.
 11. PUSH: Run 'git push' to push to repository.
 

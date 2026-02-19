@@ -343,7 +343,7 @@
       "Verify: docker exec solvr-postgres psql -U solvr -d solvr -c 'SELECT version();' shows pgvector/pgvector:0.8.1-pg16",
       "Note: pgvector/pgvector image is superset of official postgres - zero data loss, all data in volume persists"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

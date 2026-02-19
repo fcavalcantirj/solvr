@@ -398,7 +398,7 @@
       "Add go.mod dependency: github.com/pkoukk/tiktoken-go for token counting",
       "Verify: go build ./internal/services compiles without errors"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

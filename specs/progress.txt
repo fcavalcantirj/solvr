@@ -1,3 +1,19 @@
+2026-02-19: PRD-v5 Semantic Search - Create embedding service interface and Voyage AI client
+- New file: backend/internal/services/embeddings.go (213 lines)
+  * EmbeddingService interface with GenerateEmbedding() and GenerateQueryEmbedding() methods
+  * VoyageEmbeddingService struct implementing EmbeddingService via Voyage AI API
+  * Default model: voyage-code-3, baseURL: https://api.voyageai.com/v1
+  * Asymmetric embeddings: input_type "document" for content, "query" for search
+  * Token truncation: ~8000 token limit using character-based estimation (~4 chars/token)
+  * Exponential backoff retry on 429 rate limits, no retry on other 4xx
+  * Error handling: ErrEmptyInput, ErrEmptyEmbeddingResponse, wrapped API errors
+- New file: backend/internal/services/embeddings_test.go (337 lines)
+  * 11 tests covering: constructor, document/query embeddings, API errors, rate limit retry,
+    empty input, empty response, context cancellation, long input truncation, interface compliance,
+    client error no-retry
+- Note: Used character-based token estimation instead of tiktoken-go (Voyage uses its own tokenizer, not OpenAI's)
+- All backend tests passing (12 packages OK)
+
 2026-02-19: PRD-v5 Semantic Search - Create pgvector migration for embedding columns
 - Migration 000044_enable_pgvector.up.sql: CREATE EXTENSION vector, ADD COLUMN embedding vector(1024) to posts/answers/approaches, CREATE INDEX USING hnsw with vector_cosine_ops
 - Migration 000044_enable_pgvector.down.sql: DROP INDEX, DROP COLUMN, DROP EXTENSION (fully reversible)

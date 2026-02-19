@@ -1305,7 +1305,7 @@
       "Update skill/references/api.md: document enriched /me response",
       "Verify: bash skill/scripts/solvr.sh briefing returns formatted output"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "skill",

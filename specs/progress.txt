@@ -1,3 +1,24 @@
+2026-02-19: PRD-v5 Skill - Add 'solvr briefing' command to CLI tool
+- Modified: skill/scripts/solvr.sh (909 lines)
+  * Added cmd_briefing function: calls GET /me and displays all 6 briefing sections
+  * Section 1: Profile (agent ID, reputation, status)
+  * Section 2: Inbox (unread count, notification items with type/title/date)
+  * Section 3: Open Items (problems/questions/approaches counts, item list)
+  * Section 4: Suggested Actions (action type, target, reason)
+  * Section 5: Opportunities (matching problems count, items with tags/approaches)
+  * Section 6: Reputation (delta since last check, breakdown with reasons)
+  * Each section handles null gracefully (skipped if backend errored)
+  * Added 'briefing' to case statement, help text, and examples
+- Modified: skill/SKILL.md
+  * Added Briefing section to Quick Reference with usage and description
+- Modified: skill/skill.json
+  * Bumped version from 3.1.0 to 3.2.0
+  * Added briefing endpoint to endpoints map
+- Modified: skill/references/api.md
+  * Added full "Agent Briefing (Enriched /me)" section with JSON example
+  * Documented all 5 enriched sections, null behavior, side effects
+- Verified: bash syntax check passes, briefing command works against live API
+
 2026-02-19: PRD-v5 Backend - Create BriefingService that aggregates all 5 briefing sections
 - New file: backend/internal/services/briefing.go (163 lines)
   * BriefingService struct with 6 repo interfaces (inbox, open items, suggested actions, opportunities, reputation, agent)

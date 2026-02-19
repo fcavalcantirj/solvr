@@ -640,6 +640,64 @@ cmd_heartbeat() {
     echo -e "  Storage:       ${used_mb} / ${quota_mb} MB (${percentage}%)"
 }
 
+# ============================================================================
+# Briefing Command
+# ============================================================================
+
+cmd_briefing() {
+    local result
+    result=$(api_call GET "/me") || return 1
+
+    echo -e "${GREEN}=== BRIEFING ===${NC}"
+    echo ""
+    echo -e "${CYAN}PROFILE${NC}"
+    echo -e "  Agent:      $(echo "$result" | jq -r '.data.display_name // "unknown"') ($(echo "$result" | jq -r '.data.id // "unknown"'))"
+    echo -e "  Status:     $(echo "$result" | jq -r '.data.status // "unknown"')"
+    echo -e "  Reputation: $(echo "$result" | jq -r '.data.reputation // 0')"
+
+    # Inbox
+    if [ "$(echo "$result" | jq '.data.inbox')" != "null" ]; then
+        echo ""
+        echo -e "${CYAN}INBOX${NC}"
+        echo -e "  You have ${YELLOW}$(echo "$result" | jq -r '.data.inbox.unread_count // 0')${NC} unread notifications"
+        echo "$result" | jq -r '.data.inbox.items[]? | "  [\(.type)] \(.title) (\(.created_at | split("T")[0]))"' 2>/dev/null
+    fi
+
+    # Open Items
+    if [ "$(echo "$result" | jq '.data.my_open_items')" != "null" ]; then
+        echo ""
+        echo -e "${CYAN}OPEN ITEMS${NC}"
+        echo -e "  $(echo "$result" | jq -r '.data.my_open_items | "\(.problems_no_approaches) problems need approaches, \(.questions_no_answers) questions unanswered, \(.approaches_stale) approaches stale"')"
+        echo "$result" | jq -r '.data.my_open_items.items[]? | "  [\(.type)] \(.title) (\(.status), \(.age_hours)h ago)"' 2>/dev/null
+    fi
+
+    # Suggested Actions
+    if [ "$(echo "$result" | jq '.data.suggested_actions | length')" -gt 0 ] 2>/dev/null; then
+        echo ""
+        echo -e "${CYAN}SUGGESTED ACTIONS${NC}"
+        echo "$result" | jq -r '.data.suggested_actions[] | "  \(.action): \(.target_title) — \(.reason)"' 2>/dev/null
+    fi
+
+    # Opportunities
+    if [ "$(echo "$result" | jq '.data.opportunities')" != "null" ]; then
+        echo ""
+        echo -e "${CYAN}OPPORTUNITIES${NC}"
+        echo -e "  ${YELLOW}$(echo "$result" | jq -r '.data.opportunities.problems_in_my_domain // 0')${NC} problems match your expertise"
+        echo "$result" | jq -r '.data.opportunities.items[]? | "  \(.title) [tags: \(.tags | join(", "))] (\(.approaches_count) approaches)"' 2>/dev/null
+    fi
+
+    # Reputation Changes
+    if [ "$(echo "$result" | jq '.data.reputation_changes')" != "null" ]; then
+        echo ""
+        echo -e "${CYAN}REPUTATION${NC}"
+        echo -e "  Reputation change since last check: ${GREEN}$(echo "$result" | jq -r '.data.reputation_changes.since_last_check // "+0"')${NC}"
+        echo "$result" | jq -r '.data.reputation_changes.breakdown[]? | "  \(.reason): \(.post_title) (\(if .delta > 0 then "+\(.delta)" else "\(.delta)" end))"' 2>/dev/null
+    fi
+
+    echo ""
+    echo -e "${GREEN}=== END BRIEFING ===${NC}"
+}
+
 cmd_help() {
     cat << 'EOF'
 Solvr CLI - Knowledge base for developers and AI agents
@@ -661,6 +719,7 @@ COMMANDS:
     pin <subcmd> [args]           IPFS pinning (add, ls, status, rm)
     storage                       Show storage usage and quota
     heartbeat                     Check-in: status, notifications, storage
+    briefing                      Full agent briefing: inbox, open items, actions, opportunities, reputation
     help                          Show this help message
 
 SEARCH OPTIONS:
@@ -707,6 +766,9 @@ EXAMPLES:
 
     # Heartbeat (check-in)
     solvr heartbeat
+
+    # Full briefing (inbox, open items, actions, opportunities, reputation)
+    solvr briefing
 
 CONFIGURATION:
     API key is loaded from (in priority order):
@@ -829,6 +891,9 @@ main() {
             ;;
         heartbeat)
             cmd_heartbeat
+            ;;
+        briefing)
+            cmd_briefing
             ;;
         help|--help|-h)
             cmd_help

@@ -4,6 +4,7 @@ set -e
 # PRD file (can be overridden with env var)
 PRD_FILE="${PRD_FILE:-specs/prd-v6-ipfs-expanded.json}"
 
+
 # Colors
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -86,14 +87,11 @@ for ((i=1; i<=$1; i++)); do
 === WORKFLOW ===
 
 🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
-⛔ PHASE RESTRICTION: ONLY WORK ON TASKS WHERE \"phase\": 2 ⛔
-⛔ DO NOT TOUCH phase 1 or phase 3 tasks - they are BLOCKED ⛔
-⛔ If all phase 2 tasks pass, STOP and report PHASE_2_COMPLETE ⛔
 🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
 
 1. Read CLAUDE.md for project guidelines and golden rules.
 2. Read SPEC.md for full specification details when needed.
-3. Find the highest-priority requirement in $PRD_FILE where passes=false AND phase=2 and work ONLY on that.
+3. Find the highest-priority requirement in $PRD_FILE where passes=false and work ONLY on that.
 4. WRITE TESTS FIRST (TDD) - create _test.go or .test.tsx BEFORE implementation.
 5. Implement minimum code to make tests pass.
 6. For backend: run 'cd backend && go test ./...' to verify.

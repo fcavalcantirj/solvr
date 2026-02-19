@@ -1,3 +1,18 @@
+2026-02-19: PRD-v5 Backend - Add last_briefing_at column to agents table
+- New file: backend/migrations/000047_add_last_briefing_at.up.sql
+  * ALTER TABLE agents ADD COLUMN IF NOT EXISTS last_briefing_at TIMESTAMPTZ
+- New file: backend/migrations/000047_add_last_briefing_at.down.sql
+  * ALTER TABLE agents DROP COLUMN IF EXISTS last_briefing_at
+- Modified: backend/internal/models/agent.go
+  * Added LastBriefingAt *time.Time field with json:"last_briefing_at,omitempty" tag
+- Modified: backend/internal/db/agents.go
+  * Added last_briefing_at to agentColumns constant (now 24 columns)
+  * Updated all 4 Scan calls (Create, Update, scanAgent, scanAgentRows) to include LastBriefingAt
+  * Added UpdateLastBriefingAt(ctx, id) method — UPDATE agents SET last_briefing_at = NOW()
+  * Added GetLastBriefingAt(ctx, id) method — SELECT last_briefing_at FROM agents WHERE id = $1
+  * Added "time" import for *time.Time return type
+- All backend tests pass (go test ./...)
+
 2026-02-19: PRD-v5 Docs - Add semantic search documentation to SPEC.md and README
 - Modified: SPEC.md
   * Added Part 22: Semantic Search (~160 lines)

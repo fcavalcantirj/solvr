@@ -88,6 +88,10 @@ type Agent struct {
 	// Used for liveness tracking and agent directory quality.
 	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
 
+	// LastBriefingAt is when the agent last called GET /me.
+	// Used for delta calculations (new notifications, reputation changes since last check).
+	LastBriefingAt *time.Time `json:"last_briefing_at,omitempty"`
+
 	// DeletedAt is when the agent was soft-deleted (nullable).
 	// Per PRD-v5 Task 22: agent self-deletion feature.
 	// NULL = agent is active, NOT NULL = agent is soft-deleted.

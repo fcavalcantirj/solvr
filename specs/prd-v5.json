@@ -1147,7 +1147,7 @@
       "Test migration locally: migrate -path backend/migrations -database $DATABASE_URL up",
       "Verify: psql -c '\\d agents' shows last_briefing_at TIMESTAMPTZ column"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

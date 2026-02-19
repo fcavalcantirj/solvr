@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/jackc/pgx/v5"
@@ -29,8 +30,8 @@ type AgentRepository struct {
 // Used to keep queries consistent and DRY.
 // Note: COALESCE handles NULL values for nullable columns scanned into non-pointer Go types.
 // Without COALESCE, pgx fails when scanning NULL into string/[]string.
-// 23 columns total (added last_seen_at for heartbeat liveness tracking)
-const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, reputation, human_claimed_at, has_human_backed_badge, has_amcp_identity, COALESCE(amcp_aid, '') as amcp_aid, pinning_quota_bytes, storage_used_bytes, last_seen_at, created_at, updated_at, deleted_at`
+// 24 columns total (added last_briefing_at for GET /me delta tracking)
+const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, reputation, human_claimed_at, has_human_backed_badge, has_amcp_identity, COALESCE(amcp_aid, '') as amcp_aid, pinning_quota_bytes, storage_used_bytes, last_seen_at, last_briefing_at, created_at, updated_at, deleted_at`
 
 // NewAgentRepository creates a new AgentRepository.
 func NewAgentRepository(pool *Pool) *AgentRepository {
@@ -88,6 +89,7 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
 		&agent.LastSeenAt,
+		&agent.LastBriefingAt,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,
@@ -191,6 +193,7 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
 		&agent.LastSeenAt,
+		&agent.LastBriefingAt,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,
@@ -467,6 +470,7 @@ func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
 		&agent.LastSeenAt,
+		&agent.LastBriefingAt,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,
@@ -507,6 +511,7 @@ func (r *AgentRepository) scanAgentRows(rows pgx.Rows) (*models.Agent, error) {
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
 		&agent.LastSeenAt,
+		&agent.LastBriefingAt,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 		&agent.DeletedAt,
@@ -974,6 +979,31 @@ func (r *AgentRepository) UpdateLastSeen(ctx context.Context, id string) error {
 		LogQueryError(ctx, "UpdateLastSeen", "agents", err)
 	}
 	return err
+}
+
+// UpdateLastBriefingAt sets the last_briefing_at timestamp to NOW() when agent calls GET /me.
+// Used for delta calculations (new notifications, reputation changes since last briefing).
+func (r *AgentRepository) UpdateLastBriefingAt(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE agents SET last_briefing_at = NOW() WHERE id = $1`, id)
+	if err != nil {
+		LogQueryError(ctx, "UpdateLastBriefingAt", "agents", err)
+	}
+	return err
+}
+
+// GetLastBriefingAt returns the last_briefing_at timestamp for an agent.
+// Returns nil if the agent has never called GET /me.
+func (r *AgentRepository) GetLastBriefingAt(ctx context.Context, id string) (*time.Time, error) {
+	var lastBriefingAt *time.Time
+	err := r.pool.QueryRow(ctx, `SELECT last_briefing_at FROM agents WHERE id = $1`, id).Scan(&lastBriefingAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrAgentNotFound
+		}
+		LogQueryError(ctx, "GetLastBriefingAt", "agents", err)
+		return nil, err
+	}
+	return lastBriefingAt, nil
 }
 
 func (r *AgentRepository) CountHumanBacked(ctx context.Context) (int, error) {

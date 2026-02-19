@@ -27,11 +27,10 @@ echo "Synced: skill/SKILL.md -> frontend/public/skill.md"
 
 # 1b. Sync HEARTBEAT.md
 SOURCE_HEARTBEAT="$REPO_ROOT/skill/HEARTBEAT.md"
-DEST_HEARTBEAT="$PUBLIC_DIR/heartbeat.md"
-
 if [ -f "$SOURCE_HEARTBEAT" ]; then
-    cp "$SOURCE_HEARTBEAT" "$DEST_HEARTBEAT"
-    echo "Synced: skill/HEARTBEAT.md -> frontend/public/heartbeat.md"
+    cp "$SOURCE_HEARTBEAT" "$PUBLIC_DIR/heartbeat.md"
+    cp "$SOURCE_HEARTBEAT" "$PUBLIC_DIR/HEARTBEAT.md"
+    echo "Synced: skill/HEARTBEAT.md -> frontend/public/heartbeat.md + HEARTBEAT.md"
 fi
 
 # 2. Sync install script

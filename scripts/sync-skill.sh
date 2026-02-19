@@ -23,7 +23,8 @@ if [ ! -f "$SOURCE_SKILL" ]; then
 fi
 
 cp "$SOURCE_SKILL" "$DEST_SKILL"
-echo "Synced: skill/SKILL.md -> frontend/public/skill.md"
+cp "$SOURCE_SKILL" "$PUBLIC_DIR/SKILL.md"
+echo "Synced: skill/SKILL.md -> frontend/public/skill.md + SKILL.md"
 
 # 1b. Sync HEARTBEAT.md
 SOURCE_HEARTBEAT="$REPO_ROOT/skill/HEARTBEAT.md"

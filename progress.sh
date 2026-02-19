@@ -2,7 +2,7 @@
 
 # Count passed and total requirements in PRD
 
-prd_file="specs/prd-v6-ipfs-expanded.json"
+prd_file="${PRD_FILE:-specs/prd-v6-ipfs-expanded.json}"
 
 if [ ! -f "$prd_file" ]; then
   echo "0/0 (0%) - PRD not found"

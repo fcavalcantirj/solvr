@@ -1,5 +1,5 @@
 // Package main implements the backfill-embeddings CLI tool.
-// It generates embeddings for existing posts that don't have one.
+// It generates embeddings for existing posts, answers, and approaches that don't have one.
 package main
 
 import (
@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/config"
@@ -22,18 +23,48 @@ type postRow struct {
 	Description string
 }
 
+// answerRow holds the minimal fields needed for answer embedding generation.
+type answerRow struct {
+	ID      string
+	Content string
+}
+
+// approachRow holds the minimal fields needed for approach embedding generation.
+type approachRow struct {
+	ID       string
+	Angle    string
+	Method   string
+	Outcome  string
+	Solution string
+}
+
 // backfillDB abstracts database operations for testing.
 type backfillDB interface {
 	GetPostsWithoutEmbedding(ctx context.Context, limit, offset int) ([]postRow, error)
 	CountPostsWithoutEmbedding(ctx context.Context) (int, error)
 	UpdatePostEmbedding(ctx context.Context, id string, embedding []float32) error
+	GetAnswersWithoutEmbedding(ctx context.Context, limit, offset int) ([]answerRow, error)
+	CountAnswersWithoutEmbedding(ctx context.Context) (int, error)
+	UpdateAnswerEmbedding(ctx context.Context, id string, embedding []float32) error
+	GetApproachesWithoutEmbedding(ctx context.Context, limit, offset int) ([]approachRow, error)
+	CountApproachesWithoutEmbedding(ctx context.Context) (int, error)
+	UpdateApproachEmbedding(ctx context.Context, id string, embedding []float32) error
 }
 
 // backfillResult holds the summary of a backfill run.
 type backfillResult struct {
-	totalFound int
-	embedded   int
-	errors     int
+	totalFound         int
+	embedded           int
+	errors             int
+	postsFound         int
+	postsEmbedded      int
+	postsErrors        int
+	answersFound       int
+	answersEmbedded    int
+	answersErrors      int
+	approachesFound    int
+	approachesEmbedded int
+	approachesErrors   int
 }
 
 // backfillWorker orchestrates the backfill process.
@@ -42,40 +73,94 @@ type backfillWorker struct {
 	embeddingService services.EmbeddingService
 	batchSize        int
 	dryRun           bool
-	rateLimit        int // posts per second
+	rateLimit        int      // items per second
+	contentTypes     []string // which content types to process
 }
 
-// run executes the backfill process.
+// parseContentTypes parses a comma-separated content types string.
+// Valid values: "posts", "answers", "approaches", "all" (default).
+func parseContentTypes(s string) []string {
+	if s == "" || s == "all" {
+		return []string{"posts", "answers", "approaches"}
+	}
+	parts := strings.Split(s, ",")
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "posts" || p == "answers" || p == "approaches" {
+			result = append(result, p)
+		}
+	}
+	if len(result) == 0 {
+		return []string{"posts", "answers", "approaches"}
+	}
+	return result
+}
+
+// shouldProcess returns true if the given content type is in the worker's contentTypes list.
+func (w *backfillWorker) shouldProcess(contentType string) bool {
+	for _, ct := range w.contentTypes {
+		if ct == contentType {
+			return true
+		}
+	}
+	return false
+}
+
+// run executes the backfill process for all configured content types.
 func (w *backfillWorker) run(ctx context.Context) (*backfillResult, error) {
-	total, err := w.db.CountPostsWithoutEmbedding(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("count posts: %w", err)
+	result := &backfillResult{}
+
+	if w.shouldProcess("posts") {
+		if err := w.runPosts(ctx, result); err != nil {
+			return result, err
+		}
 	}
 
-	result := &backfillResult{totalFound: total}
+	if w.shouldProcess("answers") {
+		if err := w.runAnswers(ctx, result); err != nil {
+			return result, err
+		}
+	}
+
+	if w.shouldProcess("approaches") {
+		if err := w.runApproaches(ctx, result); err != nil {
+			return result, err
+		}
+	}
+
+	// Aggregate totals
+	result.totalFound = result.postsFound + result.answersFound + result.approachesFound
+	result.embedded = result.postsEmbedded + result.answersEmbedded + result.approachesEmbedded
+	result.errors = result.postsErrors + result.answersErrors + result.approachesErrors
+
+	return result, nil
+}
+
+// runPosts embeds posts without embeddings.
+func (w *backfillWorker) runPosts(ctx context.Context, result *backfillResult) error {
+	total, err := w.db.CountPostsWithoutEmbedding(ctx)
+	if err != nil {
+		return fmt.Errorf("count posts: %w", err)
+	}
+	result.postsFound = total
 
 	if total == 0 {
 		slog.Info("No posts need embedding")
-		return result, nil
+		return nil
 	}
 
 	if w.dryRun {
-		slog.Info("Dry run mode",
-			"total_posts", total,
+		slog.Info("Dry run: posts",
+			"total", total,
 			"batch_size", w.batchSize,
-			"batches", (total+w.batchSize-1)/w.batchSize,
 		)
 		fmt.Printf("Dry run: would embed %d posts in batches of %d\n", total, w.batchSize)
-		return result, nil
+		return nil
 	}
 
-	slog.Info("Starting backfill",
-		"total_posts", total,
-		"batch_size", w.batchSize,
-		"rate_limit", w.rateLimit,
-	)
+	slog.Info("Starting posts backfill", "total", total, "batch_size", w.batchSize)
 
-	// Calculate delay between posts for rate limiting
 	var delay time.Duration
 	if w.rateLimit > 0 {
 		delay = time.Second / time.Duration(w.rateLimit)
@@ -84,13 +169,13 @@ func (w *backfillWorker) run(ctx context.Context) (*backfillResult, error) {
 	offset := 0
 	for {
 		if ctx.Err() != nil {
-			slog.Info("Context canceled, stopping backfill")
+			slog.Info("Context canceled, stopping posts backfill")
 			break
 		}
 
 		batch, err := w.db.GetPostsWithoutEmbedding(ctx, w.batchSize, offset)
 		if err != nil {
-			return nil, fmt.Errorf("fetch batch at offset %d: %w", offset, err)
+			return fmt.Errorf("fetch posts batch at offset %d: %w", offset, err)
 		}
 		if len(batch) == 0 {
 			break
@@ -98,39 +183,31 @@ func (w *backfillWorker) run(ctx context.Context) (*backfillResult, error) {
 
 		for _, post := range batch {
 			if ctx.Err() != nil {
-				slog.Info("Context canceled, stopping backfill")
 				break
 			}
 
 			text := post.Title + " " + post.Description
 			embedding, err := w.embeddingService.GenerateEmbedding(ctx, text)
 			if err != nil {
-				slog.Error("Failed to generate embedding",
-					"post_id", post.ID,
-					"error", err,
-				)
-				result.errors++
+				slog.Error("Failed to generate embedding", "post_id", post.ID, "error", err)
+				result.postsErrors++
 				continue
 			}
 
 			if err := w.db.UpdatePostEmbedding(ctx, post.ID, embedding); err != nil {
-				slog.Error("Failed to update embedding",
-					"post_id", post.ID,
-					"error", err,
-				)
-				result.errors++
+				slog.Error("Failed to update embedding", "post_id", post.ID, "error", err)
+				result.postsErrors++
 				continue
 			}
 
-			result.embedded++
+			result.postsEmbedded++
 
-			// Rate limiting
 			if delay > 0 {
 				time.Sleep(delay)
 			}
 		}
 
-		processed := result.embedded + result.errors
+		processed := result.postsEmbedded + result.postsErrors
 		pct := 0
 		if total > 0 {
 			pct = processed * 100 / total
@@ -140,7 +217,185 @@ func (w *backfillWorker) run(ctx context.Context) (*backfillResult, error) {
 		offset += w.batchSize
 	}
 
-	return result, nil
+	return nil
+}
+
+// runAnswers embeds answers without embeddings.
+func (w *backfillWorker) runAnswers(ctx context.Context, result *backfillResult) error {
+	total, err := w.db.CountAnswersWithoutEmbedding(ctx)
+	if err != nil {
+		return fmt.Errorf("count answers: %w", err)
+	}
+	result.answersFound = total
+
+	if total == 0 {
+		slog.Info("No answers need embedding")
+		return nil
+	}
+
+	if w.dryRun {
+		slog.Info("Dry run: answers",
+			"total", total,
+			"batch_size", w.batchSize,
+		)
+		fmt.Printf("Dry run: would embed %d answers in batches of %d\n", total, w.batchSize)
+		return nil
+	}
+
+	slog.Info("Starting answers backfill", "total", total, "batch_size", w.batchSize)
+
+	var delay time.Duration
+	if w.rateLimit > 0 {
+		delay = time.Second / time.Duration(w.rateLimit)
+	}
+
+	offset := 0
+	for {
+		if ctx.Err() != nil {
+			slog.Info("Context canceled, stopping answers backfill")
+			break
+		}
+
+		batch, err := w.db.GetAnswersWithoutEmbedding(ctx, w.batchSize, offset)
+		if err != nil {
+			return fmt.Errorf("fetch answers batch at offset %d: %w", offset, err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+
+		for _, answer := range batch {
+			if ctx.Err() != nil {
+				break
+			}
+
+			embedding, err := w.embeddingService.GenerateEmbedding(ctx, answer.Content)
+			if err != nil {
+				slog.Error("Failed to generate embedding", "answer_id", answer.ID, "error", err)
+				result.answersErrors++
+				continue
+			}
+
+			if err := w.db.UpdateAnswerEmbedding(ctx, answer.ID, embedding); err != nil {
+				slog.Error("Failed to update embedding", "answer_id", answer.ID, "error", err)
+				result.answersErrors++
+				continue
+			}
+
+			result.answersEmbedded++
+
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+		}
+
+		processed := result.answersEmbedded + result.answersErrors
+		pct := 0
+		if total > 0 {
+			pct = processed * 100 / total
+		}
+		slog.Info(fmt.Sprintf("Processed %d/%d answers (%d%%)", processed, total, pct))
+
+		offset += w.batchSize
+	}
+
+	return nil
+}
+
+// buildApproachText combines approach fields into embedding input text.
+// Empty outcome and solution fields are omitted.
+func buildApproachText(a approachRow) string {
+	parts := []string{a.Angle, a.Method}
+	if a.Outcome != "" {
+		parts = append(parts, a.Outcome)
+	}
+	if a.Solution != "" {
+		parts = append(parts, a.Solution)
+	}
+	return strings.Join(parts, " ")
+}
+
+// runApproaches embeds approaches without embeddings.
+func (w *backfillWorker) runApproaches(ctx context.Context, result *backfillResult) error {
+	total, err := w.db.CountApproachesWithoutEmbedding(ctx)
+	if err != nil {
+		return fmt.Errorf("count approaches: %w", err)
+	}
+	result.approachesFound = total
+
+	if total == 0 {
+		slog.Info("No approaches need embedding")
+		return nil
+	}
+
+	if w.dryRun {
+		slog.Info("Dry run: approaches",
+			"total", total,
+			"batch_size", w.batchSize,
+		)
+		fmt.Printf("Dry run: would embed %d approaches in batches of %d\n", total, w.batchSize)
+		return nil
+	}
+
+	slog.Info("Starting approaches backfill", "total", total, "batch_size", w.batchSize)
+
+	var delay time.Duration
+	if w.rateLimit > 0 {
+		delay = time.Second / time.Duration(w.rateLimit)
+	}
+
+	offset := 0
+	for {
+		if ctx.Err() != nil {
+			slog.Info("Context canceled, stopping approaches backfill")
+			break
+		}
+
+		batch, err := w.db.GetApproachesWithoutEmbedding(ctx, w.batchSize, offset)
+		if err != nil {
+			return fmt.Errorf("fetch approaches batch at offset %d: %w", offset, err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+
+		for _, approach := range batch {
+			if ctx.Err() != nil {
+				break
+			}
+
+			text := buildApproachText(approach)
+			embedding, err := w.embeddingService.GenerateEmbedding(ctx, text)
+			if err != nil {
+				slog.Error("Failed to generate embedding", "approach_id", approach.ID, "error", err)
+				result.approachesErrors++
+				continue
+			}
+
+			if err := w.db.UpdateApproachEmbedding(ctx, approach.ID, embedding); err != nil {
+				slog.Error("Failed to update embedding", "approach_id", approach.ID, "error", err)
+				result.approachesErrors++
+				continue
+			}
+
+			result.approachesEmbedded++
+
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+		}
+
+		processed := result.approachesEmbedded + result.approachesErrors
+		pct := 0
+		if total > 0 {
+			pct = processed * 100 / total
+		}
+		slog.Info(fmt.Sprintf("Processed %d/%d approaches (%d%%)", processed, total, pct))
+
+		offset += w.batchSize
+	}
+
+	return nil
 }
 
 // pgBackfillDB implements backfillDB using a real PostgreSQL connection.
@@ -180,10 +435,90 @@ func (d *pgBackfillDB) CountPostsWithoutEmbedding(ctx context.Context) (int, err
 }
 
 func (d *pgBackfillDB) UpdatePostEmbedding(ctx context.Context, id string, embedding []float32) error {
-	// Convert []float32 to PostgreSQL vector string format: [0.1,0.2,0.3]
 	vecStr := float32SliceToVectorString(embedding)
 	_, err := d.pool.Exec(ctx,
 		`UPDATE posts SET embedding = $1::vector, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`,
+		vecStr, id,
+	)
+	return err
+}
+
+func (d *pgBackfillDB) GetAnswersWithoutEmbedding(ctx context.Context, limit, offset int) ([]answerRow, error) {
+	query := `SELECT id, content FROM answers
+		WHERE deleted_at IS NULL AND embedding IS NULL
+		ORDER BY created_at ASC
+		LIMIT $1 OFFSET $2`
+
+	rows, err := d.pool.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("query answers: %w", err)
+	}
+	defer rows.Close()
+
+	var answers []answerRow
+	for rows.Next() {
+		var a answerRow
+		if err := rows.Scan(&a.ID, &a.Content); err != nil {
+			return nil, fmt.Errorf("scan answer: %w", err)
+		}
+		answers = append(answers, a)
+	}
+	return answers, rows.Err()
+}
+
+func (d *pgBackfillDB) CountAnswersWithoutEmbedding(ctx context.Context) (int, error) {
+	var count int
+	err := d.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM answers WHERE deleted_at IS NULL AND embedding IS NULL`,
+	).Scan(&count)
+	return count, err
+}
+
+func (d *pgBackfillDB) UpdateAnswerEmbedding(ctx context.Context, id string, embedding []float32) error {
+	vecStr := float32SliceToVectorString(embedding)
+	_, err := d.pool.Exec(ctx,
+		`UPDATE answers SET embedding = $1::vector WHERE id = $2 AND deleted_at IS NULL`,
+		vecStr, id,
+	)
+	return err
+}
+
+func (d *pgBackfillDB) GetApproachesWithoutEmbedding(ctx context.Context, limit, offset int) ([]approachRow, error) {
+	query := `SELECT id, angle, COALESCE(method, ''), COALESCE(outcome, ''), COALESCE(solution, '')
+		FROM approaches
+		WHERE deleted_at IS NULL AND embedding IS NULL
+		ORDER BY created_at ASC
+		LIMIT $1 OFFSET $2`
+
+	rows, err := d.pool.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("query approaches: %w", err)
+	}
+	defer rows.Close()
+
+	var approaches []approachRow
+	for rows.Next() {
+		var a approachRow
+		if err := rows.Scan(&a.ID, &a.Angle, &a.Method, &a.Outcome, &a.Solution); err != nil {
+			return nil, fmt.Errorf("scan approach: %w", err)
+		}
+		approaches = append(approaches, a)
+	}
+	return approaches, rows.Err()
+}
+
+func (d *pgBackfillDB) CountApproachesWithoutEmbedding(ctx context.Context) (int, error) {
+	var count int
+	err := d.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM approaches WHERE deleted_at IS NULL AND embedding IS NULL`,
+	).Scan(&count)
+	return count, err
+}
+
+func (d *pgBackfillDB) UpdateApproachEmbedding(ctx context.Context, id string, embedding []float32) error {
+	vecStr := float32SliceToVectorString(embedding)
+	_, err := d.pool.Exec(ctx,
+		`UPDATE approaches SET embedding = $1::vector, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`,
 		vecStr, id,
 	)
 	return err
@@ -207,9 +542,12 @@ func float32SliceToVectorString(v []float32) string {
 }
 
 func main() {
-	batchSize := flag.Int("batch-size", 100, "Number of posts to process per batch")
+	batchSize := flag.Int("batch-size", 100, "Number of items to process per batch")
 	dryRun := flag.Bool("dry-run", false, "Show what would be embedded without making changes")
+	contentTypesFlag := flag.String("content-types", "all", "Content types to embed: posts, answers, approaches, all (comma-separated)")
 	flag.Parse()
+
+	contentTypes := parseContentTypes(*contentTypesFlag)
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -248,12 +586,15 @@ func main() {
 		log.Println("Embedding service: voyage")
 	}
 
+	log.Printf("Content types: %s", strings.Join(contentTypes, ", "))
+
 	worker := &backfillWorker{
 		db:               &pgBackfillDB{pool: pool},
 		embeddingService: embeddingService,
 		batchSize:        *batchSize,
 		dryRun:           *dryRun,
-		rateLimit:        50, // 50 posts/second to respect Voyage API free tier limits
+		rateLimit:        50,
+		contentTypes:     contentTypes,
 	}
 
 	result, err := worker.run(ctx)
@@ -261,5 +602,10 @@ func main() {
 		log.Fatalf("Backfill failed: %v", err)
 	}
 
-	fmt.Printf("Backfill complete: %d posts embedded, %d errors\n", result.embedded, result.errors)
+	fmt.Printf("Backfill complete: %d posts, %d answers, %d approaches embedded\n",
+		result.postsEmbedded, result.answersEmbedded, result.approachesEmbedded)
+	if result.errors > 0 {
+		fmt.Printf("Errors: %d posts, %d answers, %d approaches\n",
+			result.postsErrors, result.answersErrors, result.approachesErrors)
+	}
 }

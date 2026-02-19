@@ -1,3 +1,24 @@
+2026-02-19: PRD-v5 Semantic Search - Extend backfill worker to embed answers and approaches
+- Modified: backend/cmd/backfill-embeddings/main.go (611 lines)
+  * Added -content-types flag: accepts 'posts', 'answers', 'approaches', 'all' (default: 'all')
+  * Added answerRow and approachRow types for answer/approach data
+  * Extended backfillDB interface with 6 new methods for answers and approaches
+  * Added runAnswers(): queries answers WHERE embedding IS NULL, uses answer.Content as text
+  * Added runApproaches(): queries approaches WHERE embedding IS NULL, combines angle + method + outcome + solution
+  * buildApproachText() helper omits empty outcome/solution fields
+  * Extended backfillResult with per-type breakdowns: postsEmbedded, answersEmbedded, approachesEmbedded, etc.
+  * Progress logging shows content type: 'Processed X/Y posts', 'Processed X/Y answers', etc.
+  * Final summary: 'Backfill complete: N posts, M answers, K approaches embedded'
+  * parseContentTypes() parses comma-separated flag, defaults to all
+  * pgBackfillDB implements all 9 interface methods for real PostgreSQL
+- Modified: backend/cmd/backfill-embeddings/backfill_test.go (682 lines)
+  * Extended mockDB with answers/approaches slices and per-type update tracking
+  * 11 new tests: answers only, approaches only, approach text combination,
+    approach text omits empty fields, all content types, dry run all types,
+    answer embedding error, parseContentTypes (all, single, multiple, empty)
+  * All 17 tests passing (6 existing + 11 new)
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Add synchronous embedding generation to POST and PATCH posts handlers
 - Modified: backend/internal/api/handlers/posts.go (729 lines)
   * Create handler: generates embedding via embeddingService.GenerateEmbedding() after validation

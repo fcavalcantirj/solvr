@@ -541,7 +541,7 @@
       "Verify: ./backfill-embeddings -content-types=answers -dry-run=true shows answer count",
       "Verify: ./backfill-embeddings -content-types=all embeds all three content types"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

@@ -40,7 +40,7 @@ describe('Header', () => {
       expect(logo.closest('a')).toHaveAttribute('href', '/');
     });
 
-    it('renders all 7 nav links in desktop nav', () => {
+    it('renders all 8 nav links in desktop nav', () => {
       render(<Header />);
 
       const expectedLinks = [
@@ -51,6 +51,7 @@ describe('Header', () => {
         { name: 'AGENTS', href: '/agents' },
         { name: 'IPFS', href: '/ipfs' },
         { name: 'LEADERBOARD', href: '/leaderboard' },
+        { name: 'SKILL', href: '/skill' },
       ];
 
       for (const { name, href } of expectedLinks) {

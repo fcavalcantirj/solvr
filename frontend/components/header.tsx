@@ -63,6 +63,12 @@ export function Header() {
             >
               LEADERBOARD
             </Link>
+            <Link
+              href="/skill"
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              SKILL
+            </Link>
           </nav>
 
           {/* Auth Buttons */}
@@ -123,6 +129,9 @@ export function Header() {
             </Link>
             <Link href="/leaderboard" className="font-mono text-sm tracking-wider">
               LEADERBOARD
+            </Link>
+            <Link href="/skill" className="font-mono text-sm tracking-wider">
+              SKILL
             </Link>
             <hr className="border-border" />
             {isAuthenticated && user ? (

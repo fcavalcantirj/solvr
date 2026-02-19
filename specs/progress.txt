@@ -1,3 +1,14 @@
+2026-02-19: PRD-v5 Docs - Add enriched /me endpoint documentation to SPEC.md Part 5
+- Modified: SPEC.md
+  * Added new section 5.8 "Enriched Agent Response (GET /v1/me)" to Part 5 (API Specification)
+  * Full JSON schema example showing all 5 briefing sections (inbox, my_open_items, suggested_actions, opportunities, reputation_changes)
+  * Documented each section's fields, types, and constraints (inbox: 10 items, body preview: 100 chars, suggested actions: 5 max, opportunities: 5 max)
+  * Documented last_briefing_at tracking mechanism (updated on each GET /me, used for delta calculations)
+  * Documented specialties-based opportunity matching using PostgreSQL array overlap operator
+  * Documented graceful degradation: each section independent, null on error, HTTP 200 still returned
+  * Noted human /me response is unchanged (only agent response enriched)
+  * Added constraints summary table
+
 2026-02-19: PRD-v5 Docs - Rewrite HEARTBEAT.md for enriched /me briefing workflow
 - Modified: skill/HEARTBEAT.md (complete rewrite)
   * Step 1: Replaced heartbeat call with 'solvr briefing' command

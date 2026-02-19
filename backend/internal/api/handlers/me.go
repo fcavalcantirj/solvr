@@ -47,6 +47,11 @@ type UpdateLastBriefingRepo interface {
 	UpdateLastBriefingAt(ctx context.Context, id string) error
 }
 
+// BriefingOpenItemsRepo defines the interface for fetching open items for agent briefing.
+type BriefingOpenItemsRepo interface {
+	GetOpenItemsForAgent(ctx context.Context, agentID string) (*models.OpenItemsResult, error)
+}
+
 // InboxSection represents the inbox portion of the agent /me response.
 type InboxSection struct {
 	UnreadCount int         `json:"unread_count"`
@@ -71,6 +76,7 @@ type MeHandler struct {
 	pool           PoolInterface
 	inboxRepo      BriefingInboxRepo
 	briefingRepo   UpdateLastBriefingRepo
+	openItemsRepo  BriefingOpenItemsRepo
 }
 
 // NewMeHandler creates a new MeHandler instance.
@@ -88,6 +94,11 @@ func NewMeHandler(config *OAuthConfig, userRepo MeUserRepositoryInterface, agent
 func (h *MeHandler) SetBriefingRepos(inboxRepo BriefingInboxRepo, briefingRepo UpdateLastBriefingRepo) {
 	h.inboxRepo = inboxRepo
 	h.briefingRepo = briefingRepo
+}
+
+// SetOpenItemsRepo sets the open items repository for agent /me enrichment.
+func (h *MeHandler) SetOpenItemsRepo(repo BriefingOpenItemsRepo) {
+	h.openItemsRepo = repo
 }
 
 // MeResponse represents the response for GET /v1/me for humans (JWT auth).
@@ -117,9 +128,10 @@ type AgentMeResponse struct {
 	Reputation          int           `json:"reputation"`
 	HumanID             string        `json:"human_id,omitempty"`
 	HasHumanBackedBadge bool          `json:"has_human_backed_badge"`
-	AMCPEnabled         bool          `json:"amcp_enabled"`
-	PinningQuotaBytes   int64         `json:"pinning_quota_bytes"`
-	Inbox               *InboxSection `json:"inbox"`
+	AMCPEnabled         bool              `json:"amcp_enabled"`
+	PinningQuotaBytes   int64             `json:"pinning_quota_bytes"`
+	Inbox               *InboxSection          `json:"inbox"`
+	MyOpenItems         *models.OpenItemsResult `json:"my_open_items"`
 }
 
 // Me handles GET /v1/me
@@ -196,6 +208,15 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 			}
 		}
 		// If err != nil, Inbox remains nil (graceful degradation)
+	}
+
+	// Populate my_open_items section with graceful degradation
+	if h.openItemsRepo != nil {
+		result, err := h.openItemsRepo.GetOpenItemsForAgent(ctx, agent.ID)
+		if err == nil {
+			response.MyOpenItems = result
+		}
+		// If err != nil, MyOpenItems remains nil (graceful degradation)
 	}
 
 	// Update last_briefing_at timestamp

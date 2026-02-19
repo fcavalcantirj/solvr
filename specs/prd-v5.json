@@ -1192,7 +1192,7 @@
       "Update handleAgentMe: populate my_open_items with graceful degradation on error",
       "Verify: go test ./internal/api/handlers -run TestAgentMe_OpenItems -v passes all 5 tests"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

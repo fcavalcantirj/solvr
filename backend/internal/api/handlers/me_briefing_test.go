@@ -457,3 +457,339 @@ func TestAgentMe_UpdatesLastBriefingAt(t *testing.T) {
 		t.Errorf("expected UpdateLastBriefingAt called with %q, got %q", agentID, briefingRepo.calledWith)
 	}
 }
+
+// MockBriefingOpenItemsRepo implements BriefingOpenItemsRepo for testing.
+type MockBriefingOpenItemsRepo struct {
+	result *models.OpenItemsResult
+	err    error
+}
+
+func (m *MockBriefingOpenItemsRepo) GetOpenItemsForAgent(ctx context.Context, agentID string) (*models.OpenItemsResult, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.result, nil
+}
+
+// TestAgentMe_OpenItemsProblemsNoApproaches verifies that my_open_items reports problems with no approaches.
+func TestAgentMe_OpenItemsProblemsNoApproaches(t *testing.T) {
+	repo := NewMockMeUserRepository()
+	config := &OAuthConfig{JWTSecret: "test-secret-key"}
+
+	openItemsRepo := &MockBriefingOpenItemsRepo{
+		result: &models.OpenItemsResult{
+			ProblemsNoApproaches: 1,
+			QuestionsNoAnswers:   0,
+			ApproachesStale:      0,
+			Items: []models.OpenItem{
+				{
+					Type:     "problem",
+					ID:       "prob-1",
+					Title:    "Unapproached Problem",
+					Status:   "open",
+					AgeHours: 48,
+				},
+			},
+		},
+	}
+
+	handler := NewMeHandler(config, repo, nil, nil, nil)
+	handler.openItemsRepo = openItemsRepo
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	agent := &models.Agent{
+		ID:          "open_items_agent",
+		DisplayName: "Open Items Agent",
+		Status:      "active",
+	}
+	ctx := auth.ContextWithAgent(req.Context(), agent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.Me(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&response)
+	data := response["data"].(map[string]interface{})
+
+	openItems, ok := data["my_open_items"].(map[string]interface{})
+	if !ok {
+		t.Fatal("response missing 'my_open_items' field or it's not an object")
+	}
+
+	pna := int(openItems["problems_no_approaches"].(float64))
+	if pna != 1 {
+		t.Errorf("expected problems_no_approaches=1, got %d", pna)
+	}
+
+	qna := int(openItems["questions_no_answers"].(float64))
+	if qna != 0 {
+		t.Errorf("expected questions_no_answers=0, got %d", qna)
+	}
+}
+
+// TestAgentMe_OpenItemsQuestionsNoAnswers verifies questions without answers are counted.
+func TestAgentMe_OpenItemsQuestionsNoAnswers(t *testing.T) {
+	repo := NewMockMeUserRepository()
+	config := &OAuthConfig{JWTSecret: "test-secret-key"}
+
+	openItemsRepo := &MockBriefingOpenItemsRepo{
+		result: &models.OpenItemsResult{
+			ProblemsNoApproaches: 0,
+			QuestionsNoAnswers:   2,
+			ApproachesStale:      0,
+			Items: []models.OpenItem{
+				{Type: "question", ID: "q-1", Title: "Unanswered Q1", Status: "open", AgeHours: 24},
+				{Type: "question", ID: "q-2", Title: "Unanswered Q2", Status: "open", AgeHours: 12},
+			},
+		},
+	}
+
+	handler := NewMeHandler(config, repo, nil, nil, nil)
+	handler.openItemsRepo = openItemsRepo
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	agent := &models.Agent{
+		ID:          "qna_agent",
+		DisplayName: "QNA Agent",
+		Status:      "active",
+	}
+	ctx := auth.ContextWithAgent(req.Context(), agent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.Me(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&response)
+	data := response["data"].(map[string]interface{})
+	openItems := data["my_open_items"].(map[string]interface{})
+
+	qna := int(openItems["questions_no_answers"].(float64))
+	if qna != 2 {
+		t.Errorf("expected questions_no_answers=2, got %d", qna)
+	}
+}
+
+// TestAgentMe_OpenItemsStaleApproaches verifies stale approaches (working for >24h) are counted.
+func TestAgentMe_OpenItemsStaleApproaches(t *testing.T) {
+	repo := NewMockMeUserRepository()
+	config := &OAuthConfig{JWTSecret: "test-secret-key"}
+
+	openItemsRepo := &MockBriefingOpenItemsRepo{
+		result: &models.OpenItemsResult{
+			ProblemsNoApproaches: 0,
+			QuestionsNoAnswers:   0,
+			ApproachesStale:      1,
+			Items: []models.OpenItem{
+				{Type: "approach", ID: "app-old", Title: "Stale approach", Status: "working", AgeHours: 36},
+			},
+		},
+	}
+
+	handler := NewMeHandler(config, repo, nil, nil, nil)
+	handler.openItemsRepo = openItemsRepo
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	agent := &models.Agent{
+		ID:          "stale_agent",
+		DisplayName: "Stale Agent",
+		Status:      "active",
+	}
+	ctx := auth.ContextWithAgent(req.Context(), agent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.Me(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&response)
+	data := response["data"].(map[string]interface{})
+	openItems := data["my_open_items"].(map[string]interface{})
+
+	stale := int(openItems["approaches_stale"].(float64))
+	if stale != 1 {
+		t.Errorf("expected approaches_stale=1, got %d", stale)
+	}
+}
+
+// TestAgentMe_OpenItemsWithDetails verifies items array has type, id, title, status, age_hours.
+func TestAgentMe_OpenItemsWithDetails(t *testing.T) {
+	repo := NewMockMeUserRepository()
+	config := &OAuthConfig{JWTSecret: "test-secret-key"}
+
+	openItemsRepo := &MockBriefingOpenItemsRepo{
+		result: &models.OpenItemsResult{
+			ProblemsNoApproaches: 1,
+			QuestionsNoAnswers:   1,
+			ApproachesStale:      1,
+			Items: []models.OpenItem{
+				{Type: "problem", ID: "prob-1", Title: "My Problem", Status: "open", AgeHours: 72},
+				{Type: "question", ID: "q-1", Title: "My Question", Status: "open", AgeHours: 48},
+				{Type: "approach", ID: "app-1", Title: "My Approach", Status: "working", AgeHours: 36},
+			},
+		},
+	}
+
+	handler := NewMeHandler(config, repo, nil, nil, nil)
+	handler.openItemsRepo = openItemsRepo
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	agent := &models.Agent{
+		ID:          "details_agent",
+		DisplayName: "Details Agent",
+		Status:      "active",
+	}
+	ctx := auth.ContextWithAgent(req.Context(), agent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.Me(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&response)
+	data := response["data"].(map[string]interface{})
+	openItems := data["my_open_items"].(map[string]interface{})
+
+	items, ok := openItems["items"].([]interface{})
+	if !ok {
+		t.Fatal("my_open_items.items is not an array")
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(items))
+	}
+
+	// Verify first item has all required fields
+	item0 := items[0].(map[string]interface{})
+	for _, field := range []string{"type", "id", "title", "status", "age_hours"} {
+		if _, ok := item0[field]; !ok {
+			t.Errorf("item missing field %q", field)
+		}
+	}
+
+	if item0["type"] != "problem" {
+		t.Errorf("expected type 'problem', got %q", item0["type"])
+	}
+	if item0["id"] != "prob-1" {
+		t.Errorf("expected id 'prob-1', got %q", item0["id"])
+	}
+	if item0["title"] != "My Problem" {
+		t.Errorf("expected title 'My Problem', got %q", item0["title"])
+	}
+	if int(item0["age_hours"].(float64)) != 72 {
+		t.Errorf("expected age_hours 72, got %v", item0["age_hours"])
+	}
+}
+
+// TestAgentMe_OpenItemsEmpty verifies new agent with no open items returns all counts at 0.
+func TestAgentMe_OpenItemsEmpty(t *testing.T) {
+	repo := NewMockMeUserRepository()
+	config := &OAuthConfig{JWTSecret: "test-secret-key"}
+
+	openItemsRepo := &MockBriefingOpenItemsRepo{
+		result: &models.OpenItemsResult{
+			ProblemsNoApproaches: 0,
+			QuestionsNoAnswers:   0,
+			ApproachesStale:      0,
+			Items:                []models.OpenItem{},
+		},
+	}
+
+	handler := NewMeHandler(config, repo, nil, nil, nil)
+	handler.openItemsRepo = openItemsRepo
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	agent := &models.Agent{
+		ID:          "empty_open_agent",
+		DisplayName: "Empty Agent",
+		Status:      "active",
+	}
+	ctx := auth.ContextWithAgent(req.Context(), agent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.Me(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&response)
+	data := response["data"].(map[string]interface{})
+	openItems := data["my_open_items"].(map[string]interface{})
+
+	pna := int(openItems["problems_no_approaches"].(float64))
+	qna := int(openItems["questions_no_answers"].(float64))
+	stale := int(openItems["approaches_stale"].(float64))
+
+	if pna != 0 {
+		t.Errorf("expected problems_no_approaches=0, got %d", pna)
+	}
+	if qna != 0 {
+		t.Errorf("expected questions_no_answers=0, got %d", qna)
+	}
+	if stale != 0 {
+		t.Errorf("expected approaches_stale=0, got %d", stale)
+	}
+
+	items := openItems["items"].([]interface{})
+	if len(items) != 0 {
+		t.Errorf("expected 0 items, got %d", len(items))
+	}
+}
+
+// TestAgentMe_OpenItemsGracefulDegradation verifies that if open items repo fails,
+// the /me response still works but my_open_items is nil.
+func TestAgentMe_OpenItemsGracefulDegradation(t *testing.T) {
+	repo := NewMockMeUserRepository()
+	config := &OAuthConfig{JWTSecret: "test-secret-key"}
+
+	openItemsRepo := &MockBriefingOpenItemsRepo{
+		err: context.DeadlineExceeded,
+	}
+
+	handler := NewMeHandler(config, repo, nil, nil, nil)
+	handler.openItemsRepo = openItemsRepo
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	agent := &models.Agent{
+		ID:          "degraded_open_agent",
+		DisplayName: "Degraded Agent",
+		Status:      "active",
+	}
+	ctx := auth.ContextWithAgent(req.Context(), agent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.Me(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&response)
+	data := response["data"].(map[string]interface{})
+
+	// my_open_items should be null/nil on error
+	if data["my_open_items"] != nil {
+		t.Errorf("expected my_open_items to be nil on error, got %v", data["my_open_items"])
+	}
+}

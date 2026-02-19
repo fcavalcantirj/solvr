@@ -1,3 +1,26 @@
+2026-02-19: PRD-v5 Backend - Enrich GET /me with my_open_items section
+- New file: backend/internal/models/briefing.go (19 lines)
+  * OpenItemsResult struct: ProblemsNoApproaches, QuestionsNoAnswers, ApproachesStale, Items
+  * OpenItem struct: Type, ID, Title, Status, AgeHours
+- New file: backend/internal/db/briefing.go (177 lines)
+  * BriefingRepository with GetOpenItemsForAgent method
+  * 3 SQL queries: problems with 0 approaches, questions with 0 answers, stale approaches (working >24h)
+  * Results sorted by age descending, limited to 10 items
+- Modified: backend/internal/api/handlers/me.go (452 lines)
+  * Added BriefingOpenItemsRepo interface
+  * Added openItemsRepo field to MeHandler
+  * Added SetOpenItemsRepo method
+  * Added MyOpenItems field to AgentMeResponse
+  * handleAgentMe populates my_open_items with graceful degradation
+- Modified: backend/internal/api/handlers/me_briefing_test.go (795 lines)
+  * Added MockBriefingOpenItemsRepo
+  * 6 TDD tests: TestAgentMe_OpenItemsProblemsNoApproaches, TestAgentMe_OpenItemsQuestionsNoAnswers,
+    TestAgentMe_OpenItemsStaleApproaches, TestAgentMe_OpenItemsWithDetails,
+    TestAgentMe_OpenItemsEmpty, TestAgentMe_OpenItemsGracefulDegradation
+- Modified: backend/internal/api/router.go (811 lines)
+  * Created BriefingRepository and wired to MeHandler via SetOpenItemsRepo
+- All backend tests pass (go test ./...)
+
 2026-02-19: PRD-v5 Backend - Enrich GET /me response with inbox section
 - New file: backend/internal/api/handlers/me_briefing_test.go (459 lines)
   * 7 TDD tests: TestAgentMe_IncludesInbox, TestAgentMe_InboxUnreadCount,

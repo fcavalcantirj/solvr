@@ -1940,6 +1940,59 @@ func TestPostRepository_Vote_InvalidVoterType(t *testing.T) {
 	}
 }
 
+// TestPostRepository_Vote_SetsConfirmedTrue verifies that votes are inserted
+// with confirmed = true so they count toward reputation calculations.
+func TestPostRepository_Vote_SetsConfirmedTrue(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	ctx := context.Background()
+
+	// Create a post to vote on
+	post := &models.Post{
+		Type:         models.PostTypeProblem,
+		Title:        "Post for Confirmed Vote Test",
+		Description:  "Testing that votes are auto-confirmed",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent_vote",
+		Status:       models.PostStatusOpen,
+	}
+
+	createdPost, err := repo.Create(ctx, post)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM votes WHERE target_id = $1", createdPost.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", createdPost.ID)
+	}()
+
+	// Cast an upvote
+	err = repo.Vote(ctx, createdPost.ID, "agent", "voter_agent_confirmed", "up")
+	if err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
+
+	// Query the votes table directly to verify confirmed = true
+	var confirmed bool
+	err = pool.QueryRow(ctx,
+		"SELECT confirmed FROM votes WHERE target_type = 'post' AND target_id = $1 AND voter_id = $2",
+		createdPost.ID, "voter_agent_confirmed",
+	).Scan(&confirmed)
+	if err != nil {
+		t.Fatalf("QueryRow() error = %v", err)
+	}
+
+	if !confirmed {
+		t.Error("expected vote to be confirmed = true, got false")
+	}
+}
+
 // TestPostRepository_Create_ReturnsViewCount verifies that Create returns a post
 // with view_count field properly scanned from the RETURNING clause.
 // FIX-030: Create was missing view_count in RETURNING, causing scan mismatch error.

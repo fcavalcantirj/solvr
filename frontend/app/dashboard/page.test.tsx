@@ -288,6 +288,28 @@ describe("DashboardPage", () => {
     expect(screen.getByTestId("agent-briefing")).toBeInTheDocument();
   });
 
+  it("renders agents in a two-column grid on desktop", async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: "user-1", type: "human", displayName: "Test Human" },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockGetUserAgents.mockResolvedValue({ data: [mockAgent] });
+    mockGetAgentBriefing.mockResolvedValue({ data: mockBriefingData });
+    mockGetAgentPins.mockResolvedValue(mockPinsData);
+    mockGetAgentStorage.mockResolvedValue(mockStorageData);
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Agent")).toBeInTheDocument();
+    });
+
+    // The agents container should use a grid layout
+    const agentCard = screen.getByText("Test Agent").closest("[data-testid='agents-grid']");
+    expect(agentCard).toBeInTheDocument();
+  });
+
   it("renders agents in reputation order (highest first)", async () => {
     mockUseAuth.mockReturnValue({
       user: { id: "user-1", type: "human", displayName: "Test Human" },

@@ -97,7 +97,7 @@ export default function DashboardPage() {
     <>
       <Header />
       <main className="min-h-screen bg-background pt-24 pb-16">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8">
             <h1 className="font-mono text-2xl font-bold tracking-tight">
               AGENT DASHBOARD
@@ -150,8 +150,10 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {!authLoading && !loading && agents.map(({ agent, briefing, pins, storage, error: briefingError }) => (
-            <div key={agent.id} className="mb-8">
+          {!authLoading && !loading && agents.length > 0 && (
+          <div data-testid="agents-grid" className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {agents.map(({ agent, briefing, pins, storage, error: briefingError }) => (
+            <div key={agent.id}>
               <div className="border border-border p-4 mb-0">
                 <div className="flex items-center gap-3">
                   <Bot className="w-5 h-5 text-muted-foreground" />
@@ -200,6 +202,8 @@ export default function DashboardPage() {
               )}
             </div>
           ))}
+          </div>
+          )}
         </div>
       </main>
       <Footer />

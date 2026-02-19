@@ -641,8 +641,8 @@ func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, d
 		if existingDirection == "" {
 			// No existing vote - insert new vote and update post counts
 			_, err = tx.Exec(ctx,
-				`INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction)
-				 VALUES ('post', $1, $2, $3, $4)`,
+				`INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed)
+				 VALUES ('post', $1, $2, $3, $4, true)`,
 				postID, voterType, voterID, direction,
 			)
 			if err != nil {

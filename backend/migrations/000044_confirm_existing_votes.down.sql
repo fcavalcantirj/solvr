@@ -1,0 +1,2 @@
+-- No-op: cannot distinguish which votes were originally unconfirmed vs confirmed
+-- since none were ever confirmed before this migration.

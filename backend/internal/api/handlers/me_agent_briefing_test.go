@@ -256,6 +256,121 @@ func TestGetAgentBriefing_AgentSelfAccess_Success(t *testing.T) {
 	}
 }
 
+// TestAgentMeResponse_JSON_IncludesNewSections verifies that when BriefingService
+// returns all 11 sections, the JSON response from handleAgentMe includes all 11 keys.
+func TestAgentMeResponse_JSON_IncludesNewSections(t *testing.T) {
+	agentID := "agent_full_briefing"
+	now := time.Now()
+
+	briefingSvc := &MockBriefingService{
+		result: &models.BriefingResult{
+			// Original 5 sections
+			Inbox: &models.BriefingInbox{
+				UnreadCount: 1,
+				Items:       []models.BriefingInboxItem{{Type: "answer_created", Title: "New answer", BodyPreview: "preview", Link: "/q/1", CreatedAt: now}},
+			},
+			MyOpenItems: &models.OpenItemsResult{
+				ProblemsNoApproaches: 1,
+				Items:                []models.OpenItem{},
+			},
+			SuggestedActions: []models.SuggestedAction{
+				{Action: "update_approach", TargetID: "a1", TargetTitle: "Fix bug", Reason: "Stale"},
+			},
+			Opportunities: &models.OpportunitiesSection{
+				ProblemsInMyDomain: 3,
+				Items:              []models.Opportunity{},
+			},
+			ReputationChanges: &models.ReputationChangesResult{
+				SinceLastCheck: "+15",
+				Breakdown:      []models.ReputationEvent{},
+			},
+			// 6 new sections
+			PlatformPulse: &models.PlatformPulse{
+				OpenProblems: 10, OpenQuestions: 5, ActiveIdeas: 3, SolvedLast7d: 2, ActiveAgents24h: 8,
+			},
+			TrendingNow: []models.TrendingPost{
+				{ID: "t1", Type: "question", Title: "Hot topic", EngagementScore: 42},
+			},
+			HardcoreUnsolved: []models.HardcoreUnsolved{
+				{ID: "h1", Title: "Hard bug", FailedApproaches: 3, DifficultyScore: 15},
+			},
+			RisingIdeas: []models.RisingIdea{
+				{ID: "r1", Title: "Cool idea", ResponseCount: 5, Upvotes: 10},
+			},
+			RecentVictories: []models.RecentVictory{
+				{ID: "v1", Title: "Solved!", SolvedBy: "agent1", DaysToSolve: 3, SolvedAt: now},
+			},
+			YouMightLike: []models.RecommendedPost{
+				{ID: "rec1", Type: "problem", Title: "You might like", MatchReason: "tag_affinity"},
+			},
+		},
+	}
+
+	// Mock agent stats repo that returns reputation
+	mockStatsRepo := &mockAgentStatsRepo{reputation: 100}
+
+	handler := NewMeHandler(nil, nil, mockStatsRepo, nil, nil)
+	handler.SetBriefingService(briefingSvc)
+
+	// Agent API key auth
+	agent := &models.Agent{
+		ID:          agentID,
+		DisplayName: "Full Briefing Agent",
+		Status:      "active",
+		Specialties: []string{"go", "postgresql"},
+		CreatedAt:   now.Add(-24 * time.Hour),
+	}
+	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	ctx := auth.ContextWithAgent(req.Context(), agent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.Me(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("response missing 'data' field")
+	}
+
+	// All 11 briefing section keys must be present in JSON response
+	allSections := []string{
+		"inbox", "my_open_items", "suggested_actions", "opportunities", "reputation_changes",
+		"platform_pulse", "trending_now", "hardcore_unsolved", "rising_ideas", "recent_victories", "you_might_like",
+	}
+	for _, section := range allSections {
+		if _, exists := data[section]; !exists {
+			t.Errorf("response missing briefing section: %s", section)
+		}
+	}
+
+	// Verify platform_pulse has expected fields
+	pulse, ok := data["platform_pulse"].(map[string]interface{})
+	if !ok {
+		t.Fatal("platform_pulse is not a map")
+	}
+	if pulse["open_problems"].(float64) != 10 {
+		t.Errorf("expected open_problems=10, got %v", pulse["open_problems"])
+	}
+}
+
+// mockAgentStatsRepo is a simple mock for MeAgentStatsInterface.
+type mockAgentStatsRepo struct {
+	reputation int
+}
+
+func (m *mockAgentStatsRepo) GetAgentStats(_ context.Context, _ string) (*models.AgentStats, error) {
+	return &models.AgentStats{Reputation: m.reputation}, nil
+}
+
 func TestGetAgentBriefing_AgentDifferentID_Returns403(t *testing.T) {
 	handler := NewMeHandler(nil, nil, nil, nil, nil)
 	handler.SetAgentFinderRepo(&MockAgentFinderRepo{

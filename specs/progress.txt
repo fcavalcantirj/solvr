@@ -2618,3 +2618,33 @@ Tests (23 new, TDD approach):
   * Comment: method indicates if semantic search was used (hybrid) or fell back to full-text (fulltext)
 - Verified: npx tsc --noEmit shows no new type errors (pre-existing errors in test files unrelated)
 - All 741 frontend tests passing (88 test files)
+
+2026-02-19: PRD-v5 Backend - Refactor BriefingService to use BriefingDeps struct pattern for extensible section injection
+- Modified: backend/internal/models/briefing.go
+  * Added 6 new model structs: PlatformPulse, TrendingPost, HardcoreUnsolved, RisingIdea, RecentVictory, RecommendedPost
+  * Added 6 new fields to BriefingResult: PlatformPulse, TrendingNow, HardcoreUnsolved, RisingIdeas, RecentVictories, YouMightLike
+- Modified: backend/internal/services/briefing.go
+  * Added 6 new interfaces: BriefingPlatformPulseRepo, BriefingTrendingRepo, BriefingHardcoreRepo, BriefingRisingIdeasRepo, BriefingVictoriesRepo, BriefingRecommendationsRepo
+  * Added BriefingDeps struct with all 12 repository fields
+  * Added NewBriefingServiceWithDeps(deps BriefingDeps) constructor
+  * Added 6 new repo fields to BriefingService struct
+  * Added 5 new section limit constants (trending, hardcore, rising ideas, victories, recommendations = 5 each)
+  * Added Sections 6-11 fetching in GetBriefingForAgent with nil-check on repo before calling
+  * Each new section has graceful degradation (log warning on error, skip if repo nil)
+  * Existing NewBriefingService() unchanged for backwards compatibility
+- Modified: backend/internal/api/handlers/me.go
+  * Added 6 new fields to AgentMeResponse struct: PlatformPulse, TrendingNow, HardcoreUnsolved, RisingIdeas, RecentVictories, YouMightLike
+  * Updated populateFromBriefingService() to map all 6 new sections from BriefingResult
+- Modified: backend/internal/api/router.go
+  * Updated briefing service creation to use NewBriefingServiceWithDeps with BriefingDeps struct
+  * Platform-wide repos set to nil (pending db implementations in future PRD tasks)
+- Modified: backend/internal/services/briefing_test.go
+  * Added 6 new mock repo implementations for platform repos
+  * Test: TestNewBriefingServiceWithDeps_AllSections — all 12 repos, verify all 11 sections populated
+  * Test: TestNewBriefingServiceWithDeps_NilPlatformRepos — nil new repos, verify 5 original work, 6 new nil
+  * Test: TestOldConstructor_BackwardsCompat — NewBriefingService(), verify 5 populated, 6 new nil
+- Modified: backend/internal/api/handlers/me_agent_briefing_test.go
+  * Test: TestAgentMeResponse_JSON_IncludesNewSections — mock all 11 sections, verify JSON has all 11 keys
+  * Added mockAgentStatsRepo for reputation computation
+- Verified: go test ./... passes all packages
+- File sizes: briefing.go=300, briefing_test.go=665, models/briefing.go=155, me.go=710, me_agent_briefing_test.go=394, router.go=852 (all under 900)

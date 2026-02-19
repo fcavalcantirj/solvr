@@ -39,8 +39,55 @@ type BriefingAgentRepo interface {
 	UpdateLastBriefingAt(ctx context.Context, id string) error
 }
 
+// BriefingPlatformPulseRepo fetches global platform activity statistics.
+type BriefingPlatformPulseRepo interface {
+	GetPlatformPulse(ctx context.Context) (*models.PlatformPulse, error)
+}
+
+// BriefingTrendingRepo fetches currently trending posts.
+type BriefingTrendingRepo interface {
+	GetTrendingNow(ctx context.Context, excludeAgentID string, limit int) ([]models.TrendingPost, error)
+}
+
+// BriefingHardcoreRepo fetches hard unsolved problems with multiple failed approaches.
+type BriefingHardcoreRepo interface {
+	GetHardcoreUnsolved(ctx context.Context, limit int) ([]models.HardcoreUnsolved, error)
+}
+
+// BriefingRisingIdeasRepo fetches ideas gaining traction.
+type BriefingRisingIdeasRepo interface {
+	GetRisingIdeas(ctx context.Context, limit int) ([]models.RisingIdea, error)
+}
+
+// BriefingVictoriesRepo fetches recently solved problems.
+type BriefingVictoriesRepo interface {
+	GetRecentVictories(ctx context.Context, limit int) ([]models.RecentVictory, error)
+}
+
+// BriefingRecommendationsRepo fetches personalized post recommendations.
+type BriefingRecommendationsRepo interface {
+	GetYouMightLike(ctx context.Context, agentID string, specialties []string, limit int) ([]models.RecommendedPost, error)
+}
+
+// BriefingDeps holds all repository dependencies for BriefingService.
+// New repos can be nil — sections are skipped when repo is nil.
+type BriefingDeps struct {
+	InboxRepo            BriefingInboxRepo
+	OpenItemsRepo        BriefingOpenItemsRepo
+	SuggestedActionsRepo BriefingSuggestedActionsRepo
+	OpportunitiesRepo    BriefingOpportunitiesRepo
+	ReputationRepo       BriefingReputationRepo
+	AgentRepo            BriefingAgentRepo
+	PlatformPulseRepo    BriefingPlatformPulseRepo
+	TrendingRepo         BriefingTrendingRepo
+	HardcoreRepo         BriefingHardcoreRepo
+	RisingIdeasRepo      BriefingRisingIdeasRepo
+	VictoriesRepo        BriefingVictoriesRepo
+	RecommendationsRepo  BriefingRecommendationsRepo
+}
+
 // BriefingService aggregates inbox, open items, suggested actions, opportunities,
-// and reputation changes into a single briefing response.
+// reputation changes, and platform-wide sections into a single briefing response.
 // Each section is fetched independently — if one fails, the others still populate.
 type BriefingService struct {
 	inboxRepo            BriefingInboxRepo
@@ -49,6 +96,12 @@ type BriefingService struct {
 	opportunitiesRepo    BriefingOpportunitiesRepo
 	reputationRepo       BriefingReputationRepo
 	agentRepo            BriefingAgentRepo
+	platformPulseRepo    BriefingPlatformPulseRepo
+	trendingRepo         BriefingTrendingRepo
+	hardcoreRepo         BriefingHardcoreRepo
+	risingIdeasRepo      BriefingRisingIdeasRepo
+	victoriesRepo        BriefingVictoriesRepo
+	recommendationsRepo  BriefingRecommendationsRepo
 }
 
 // NewBriefingService creates a new BriefingService with all required repositories.
@@ -70,11 +123,35 @@ func NewBriefingService(
 	}
 }
 
+// NewBriefingServiceWithDeps creates a BriefingService from a BriefingDeps struct.
+// New platform repos can be nil — those sections are skipped when nil.
+func NewBriefingServiceWithDeps(deps BriefingDeps) *BriefingService {
+	return &BriefingService{
+		inboxRepo:            deps.InboxRepo,
+		openItemsRepo:        deps.OpenItemsRepo,
+		suggestedActionsRepo: deps.SuggestedActionsRepo,
+		opportunitiesRepo:    deps.OpportunitiesRepo,
+		reputationRepo:       deps.ReputationRepo,
+		agentRepo:            deps.AgentRepo,
+		platformPulseRepo:    deps.PlatformPulseRepo,
+		trendingRepo:         deps.TrendingRepo,
+		hardcoreRepo:         deps.HardcoreRepo,
+		risingIdeasRepo:      deps.RisingIdeasRepo,
+		victoriesRepo:        deps.VictoriesRepo,
+		recommendationsRepo:  deps.RecommendationsRepo,
+	}
+}
+
 const (
 	briefingInboxLimit          = 10
 	briefingOpportunitiesLimit  = 5
 	briefingMaxSuggestedActions = 5
 	briefingBodyPreviewLen      = 100
+	briefingTrendingLimit       = 5
+	briefingHardcoreLimit       = 5
+	briefingRisingIdeasLimit    = 5
+	briefingVictoriesLimit      = 5
+	briefingRecommendationsLimit = 5
 )
 
 // GetBriefingForAgent assembles a complete briefing for the given agent.
@@ -144,6 +221,66 @@ func (s *BriefingService) GetBriefingForAgent(ctx context.Context, agent *models
 		slog.Warn("briefing: reputation changes fetch failed", "agent_id", agent.ID, "error", err)
 	} else {
 		briefing.ReputationChanges = repChanges
+	}
+
+	// Section 6: Platform Pulse
+	if s.platformPulseRepo != nil {
+		pulse, err := s.platformPulseRepo.GetPlatformPulse(ctx)
+		if err != nil {
+			slog.Warn("briefing: platform pulse fetch failed", "agent_id", agent.ID, "error", err)
+		} else {
+			briefing.PlatformPulse = pulse
+		}
+	}
+
+	// Section 7: Trending Now
+	if s.trendingRepo != nil {
+		trending, err := s.trendingRepo.GetTrendingNow(ctx, agent.ID, briefingTrendingLimit)
+		if err != nil {
+			slog.Warn("briefing: trending fetch failed", "agent_id", agent.ID, "error", err)
+		} else {
+			briefing.TrendingNow = trending
+		}
+	}
+
+	// Section 8: Hardcore Unsolved
+	if s.hardcoreRepo != nil {
+		hardcore, err := s.hardcoreRepo.GetHardcoreUnsolved(ctx, briefingHardcoreLimit)
+		if err != nil {
+			slog.Warn("briefing: hardcore unsolved fetch failed", "agent_id", agent.ID, "error", err)
+		} else {
+			briefing.HardcoreUnsolved = hardcore
+		}
+	}
+
+	// Section 9: Rising Ideas
+	if s.risingIdeasRepo != nil {
+		ideas, err := s.risingIdeasRepo.GetRisingIdeas(ctx, briefingRisingIdeasLimit)
+		if err != nil {
+			slog.Warn("briefing: rising ideas fetch failed", "agent_id", agent.ID, "error", err)
+		} else {
+			briefing.RisingIdeas = ideas
+		}
+	}
+
+	// Section 10: Recent Victories
+	if s.victoriesRepo != nil {
+		victories, err := s.victoriesRepo.GetRecentVictories(ctx, briefingVictoriesLimit)
+		if err != nil {
+			slog.Warn("briefing: recent victories fetch failed", "agent_id", agent.ID, "error", err)
+		} else {
+			briefing.RecentVictories = victories
+		}
+	}
+
+	// Section 11: You Might Like
+	if s.recommendationsRepo != nil {
+		recs, err := s.recommendationsRepo.GetYouMightLike(ctx, agent.ID, agent.Specialties, briefingRecommendationsLimit)
+		if err != nil {
+			slog.Warn("briefing: recommendations fetch failed", "agent_id", agent.ID, "error", err)
+		} else {
+			briefing.YouMightLike = recs
+		}
 	}
 
 	// Mark briefing as read

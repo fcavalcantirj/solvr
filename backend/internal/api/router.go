@@ -524,14 +524,21 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// Works with both JWT (humans) and API key (agents)
 			meHandler := handlers.NewMeHandler(oauthConfig, userRepo, agentRepo, authMethodRepo, pool)
 			briefingRepo := db.NewBriefingRepository(pool)
-			briefingSvc := services.NewBriefingService(
-				notificationsRepoConcrete,
-				briefingRepo,
-				briefingRepo,
-				briefingRepo,
-				briefingRepo,
-				agentRepoConcrete,
-			)
+			briefingSvc := services.NewBriefingServiceWithDeps(services.BriefingDeps{
+				InboxRepo:            notificationsRepoConcrete,
+				OpenItemsRepo:        briefingRepo,
+				SuggestedActionsRepo: briefingRepo,
+				OpportunitiesRepo:    briefingRepo,
+				ReputationRepo:       briefingRepo,
+				AgentRepo:            agentRepoConcrete,
+				// Platform-wide repos (nil until db implementations are added)
+				PlatformPulseRepo:   nil,
+				TrendingRepo:        nil,
+				HardcoreRepo:        nil,
+				RisingIdeasRepo:     nil,
+				VictoriesRepo:       nil,
+				RecommendationsRepo: nil,
+			})
 			meHandler.SetBriefingService(briefingSvc)
 			meHandler.SetAgentFinderRepo(agentRepoConcrete)
 			r.Get("/me", meHandler.Me)

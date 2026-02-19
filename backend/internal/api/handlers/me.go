@@ -190,11 +190,19 @@ type AgentMeResponse struct {
 	HasHumanBackedBadge bool          `json:"has_human_backed_badge"`
 	AMCPEnabled         bool              `json:"amcp_enabled"`
 	PinningQuotaBytes   int64             `json:"pinning_quota_bytes"`
-	Inbox               *InboxSection          `json:"inbox"`
-	MyOpenItems         *models.OpenItemsResult `json:"my_open_items"`
-	SuggestedActions    []models.SuggestedAction      `json:"suggested_actions"`
-	Opportunities       *models.OpportunitiesSection      `json:"opportunities"`
-	ReputationChanges   *models.ReputationChangesResult   `json:"reputation_changes"`
+	// Agent-centric sections (original 5)
+	Inbox               *InboxSection                    `json:"inbox"`
+	MyOpenItems         *models.OpenItemsResult          `json:"my_open_items"`
+	SuggestedActions    []models.SuggestedAction         `json:"suggested_actions"`
+	Opportunities       *models.OpportunitiesSection     `json:"opportunities"`
+	ReputationChanges   *models.ReputationChangesResult  `json:"reputation_changes"`
+	// Platform-wide sections (6 new)
+	PlatformPulse    *models.PlatformPulse     `json:"platform_pulse"`
+	TrendingNow      []models.TrendingPost     `json:"trending_now"`
+	HardcoreUnsolved []models.HardcoreUnsolved `json:"hardcore_unsolved"`
+	RisingIdeas      []models.RisingIdea       `json:"rising_ideas"`
+	RecentVictories  []models.RecentVictory    `json:"recent_victories"`
+	YouMightLike     []models.RecommendedPost  `json:"you_might_like"`
 }
 
 // Me handles GET /v1/me
@@ -297,6 +305,14 @@ func (h *MeHandler) populateFromBriefingService(ctx context.Context, agent *mode
 
 	response.Opportunities = briefing.Opportunities
 	response.ReputationChanges = briefing.ReputationChanges
+
+	// Map 6 new platform-wide sections
+	response.PlatformPulse = briefing.PlatformPulse
+	response.TrendingNow = briefing.TrendingNow
+	response.HardcoreUnsolved = briefing.HardcoreUnsolved
+	response.RisingIdeas = briefing.RisingIdeas
+	response.RecentVictories = briefing.RecentVictories
+	response.YouMightLike = briefing.YouMightLike
 }
 
 // populateFromIndividualRepos is the legacy path using individual repo calls.

@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -365,5 +366,243 @@ func TestGetRecentVictories_OrderedByMostRecent(t *testing.T) {
 	}
 	if idx2 > idx1 {
 		t.Errorf("newer problem (idx %d) should appear before older problem (idx %d)", idx2, idx1)
+	}
+}
+
+// --- GetTrendingNow ---
+
+// helper: create a confirmed vote on a post within the last 7 days
+func createRecentVote(t *testing.T, pool *Pool, postID, voterID string, voterType string) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := pool.Exec(ctx,
+		`INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed, created_at)
+		 VALUES ('post', $1, $2, $3, 'up', true, NOW())`,
+		postID, voterType, voterID)
+	if err != nil {
+		t.Fatalf("failed to create vote on post %s: %v", postID, err)
+	}
+}
+
+// helper: create a post view within the last 7 days
+func createRecentView(t *testing.T, pool *Pool, postID, viewerID string) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := pool.Exec(ctx,
+		`INSERT INTO post_views (post_id, viewer_type, viewer_id, viewed_at)
+		 VALUES ($1, 'agent', $2, NOW())`,
+		postID, viewerID)
+	if err != nil {
+		t.Fatalf("failed to create view on post %s: %v", postID, err)
+	}
+}
+
+func TestGetTrendingNow_RankedByEngagement(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create 3 posts by the user (not the agent, so they won't be excluded)
+	postA := createBriefingPost(t, pool, "Trending post A high engagement", "problem", "open", "human", userID, []string{"go"})
+	postB := createBriefingPost(t, pool, "Trending post B medium engagement", "question", "open", "human", userID, []string{"go"})
+	postC := createBriefingPost(t, pool, "Trending post C zero engagement", "idea", "open", "human", userID, []string{"go"})
+
+	// Post A: 3 votes + 2 views = engagement 5
+	createRecentVote(t, pool, postA, "voter_a1", "agent")
+	createRecentVote(t, pool, postA, "voter_a2", "agent")
+	createRecentVote(t, pool, postA, "voter_a3", "agent")
+	createRecentView(t, pool, postA, "viewer_a1")
+	createRecentView(t, pool, postA, "viewer_a2")
+
+	// Post B: 1 vote = engagement 1
+	createRecentVote(t, pool, postB, "voter_b1", "agent")
+
+	// Post C: 0 engagement
+
+	repo := NewPlatformBriefingRepository(pool)
+	trending, err := repo.GetTrendingNow(ctx, agentID, 10)
+	if err != nil {
+		t.Fatalf("GetTrendingNow failed: %v", err)
+	}
+
+	// Find positions of our posts
+	idxA, idxB := -1, -1
+	for i, p := range trending {
+		if p.ID == postA {
+			idxA = i
+		}
+		if p.ID == postB {
+			idxB = i
+		}
+	}
+
+	if idxA == -1 {
+		t.Fatal("expected postA in trending results")
+	}
+	if idxB == -1 {
+		t.Fatal("expected postB in trending results")
+	}
+	if idxA >= idxB {
+		t.Errorf("postA (engagement=5) should rank before postB (engagement=1), got idxA=%d, idxB=%d", idxA, idxB)
+	}
+
+	// Verify postA fields
+	for _, p := range trending {
+		if p.ID == postA {
+			if p.Type != "problem" {
+				t.Errorf("expected type='problem', got %q", p.Type)
+			}
+			if p.VoteScore < 3 {
+				t.Errorf("expected vote_score >= 3, got %d", p.VoteScore)
+			}
+			if p.ViewCount < 2 {
+				t.Errorf("expected view_count >= 2, got %d", p.ViewCount)
+			}
+			if p.AuthorType != "human" {
+				t.Errorf("expected author_type='human', got %q", p.AuthorType)
+			}
+			if p.AuthorName == "" {
+				t.Error("expected non-empty author_name")
+			}
+		}
+	}
+
+	// PostC may or may not appear (0 engagement), but if present should be after A and B
+	_ = postC
+}
+
+func TestGetTrendingNow_ExcludesAgentOwnPosts(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create a highly-voted post BY the agent
+	agentPost := createBriefingPost(t, pool, "Agent own post should be excluded", "problem", "open", "agent", agentID, []string{"go"})
+	createRecentVote(t, pool, agentPost, "voter_x1", "agent")
+	createRecentVote(t, pool, agentPost, "voter_x2", "agent")
+	createRecentVote(t, pool, agentPost, "voter_x3", "agent")
+
+	repo := NewPlatformBriefingRepository(pool)
+	trending, err := repo.GetTrendingNow(ctx, agentID, 50)
+	if err != nil {
+		t.Fatalf("GetTrendingNow failed: %v", err)
+	}
+
+	for _, p := range trending {
+		if p.ID == agentPost {
+			t.Error("agent's own post should be excluded from trending_now results")
+		}
+	}
+}
+
+func TestGetTrendingNow_ExcludesDraftAndClosed(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create a draft post with votes
+	draftPost := createBriefingPost(t, pool, "Draft post with votes", "problem", "draft", "human", userID, []string{"go"})
+	createRecentVote(t, pool, draftPost, "voter_d1", "agent")
+	createRecentVote(t, pool, draftPost, "voter_d2", "agent")
+
+	// Create a closed post with votes
+	closedPost := createBriefingPost(t, pool, "Closed post with votes", "question", "closed", "human", userID, []string{"go"})
+	createRecentVote(t, pool, closedPost, "voter_c1", "agent")
+	createRecentVote(t, pool, closedPost, "voter_c2", "agent")
+
+	repo := NewPlatformBriefingRepository(pool)
+	trending, err := repo.GetTrendingNow(ctx, agentID, 50)
+	if err != nil {
+		t.Fatalf("GetTrendingNow failed: %v", err)
+	}
+
+	for _, p := range trending {
+		if p.ID == draftPost {
+			t.Error("draft post should be excluded from trending results")
+		}
+		if p.ID == closedPost {
+			t.Error("closed post should be excluded from trending results")
+		}
+	}
+}
+
+func TestGetTrendingNow_MixOfTypes(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create one of each type with engagement
+	problemPost := createBriefingPost(t, pool, "Trending problem mix test", "problem", "open", "human", userID, []string{"go"})
+	questionPost := createBriefingPost(t, pool, "Trending question mix test", "question", "open", "human", userID, []string{"go"})
+	ideaPost := createBriefingPost(t, pool, "Trending idea mix test", "idea", "open", "human", userID, []string{"go"})
+
+	createRecentVote(t, pool, problemPost, "voter_mix1", "agent")
+	createRecentVote(t, pool, questionPost, "voter_mix2", "agent")
+	createRecentVote(t, pool, ideaPost, "voter_mix3", "agent")
+
+	repo := NewPlatformBriefingRepository(pool)
+	trending, err := repo.GetTrendingNow(ctx, agentID, 50)
+	if err != nil {
+		t.Fatalf("GetTrendingNow failed: %v", err)
+	}
+
+	typesFound := map[string]bool{}
+	for _, p := range trending {
+		if p.ID == problemPost || p.ID == questionPost || p.ID == ideaPost {
+			typesFound[p.Type] = true
+		}
+	}
+
+	if !typesFound["problem"] {
+		t.Error("expected problem type in trending results")
+	}
+	if !typesFound["question"] {
+		t.Error("expected question type in trending results")
+	}
+	if !typesFound["idea"] {
+		t.Error("expected idea type in trending results")
+	}
+}
+
+func TestGetTrendingNow_LimitRespected(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create 10 posts with engagement
+	for i := 0; i < 10; i++ {
+		postID := createBriefingPost(t, pool, fmt.Sprintf("Limit test post %d", i), "problem", "open", "human", userID, []string{"go"})
+		voterID := fmt.Sprintf("voter_limit_%d", i)
+		createRecentVote(t, pool, postID, voterID, "agent")
+	}
+
+	repo := NewPlatformBriefingRepository(pool)
+	trending, err := repo.GetTrendingNow(ctx, agentID, 5)
+	if err != nil {
+		t.Fatalf("GetTrendingNow failed: %v", err)
+	}
+
+	if len(trending) > 5 {
+		t.Errorf("expected at most 5 results with limit=5, got %d", len(trending))
 	}
 }

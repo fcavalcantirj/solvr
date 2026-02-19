@@ -1,3 +1,25 @@
+2026-02-19: PRD-v5 Backend - Add trending_now section showing top 5 posts by engagement velocity
+- Modified: backend/internal/models/briefing.go
+  * Updated TrendingPost struct to match PRD spec: VoteScore, ViewCount, AuthorName, AuthorType fields
+  * Removed old EngagementScore and PostedBy fields
+- Modified: backend/internal/db/briefing_platform.go
+  * Implemented GetTrendingNow(ctx, excludeAgentID, limit) method on PlatformBriefingRepository
+  * Engagement velocity = confirmed votes in last 7d + post views in last 7d
+  * JOINs users and agents tables to resolve author display name
+  * Excludes agent's own posts, drafts, and closed posts
+  * Orders by engagement_velocity DESC, created_at DESC
+  * Handles nil tags (returns empty slice)
+- New tests: backend/internal/db/briefing_platform_test.go
+  * TestGetTrendingNow_RankedByEngagement - 3 posts with different engagement, verifies ordering
+  * TestGetTrendingNow_ExcludesAgentOwnPosts - agent's own post excluded from results
+  * TestGetTrendingNow_ExcludesDraftAndClosed - draft and closed posts excluded
+  * TestGetTrendingNow_MixOfTypes - problem+question+idea all appear in results
+  * TestGetTrendingNow_LimitRespected - limit=5 returns at most 5 results
+- Modified: backend/internal/api/router.go
+  * Wired TrendingRepo and VictoriesRepo to PlatformBriefingRepository (was nil)
+- Updated mock data in services/briefing_test.go and handlers/me_agent_briefing_test.go
+- Verified: go test ./... passes (all packages), npm test passes (778 tests)
+
 2026-02-19: PRD-v5 Backend - Add recent_victories section with solver info to platform briefing
 - Modified: backend/internal/models/briefing.go
   * Updated RecentVictory struct: added SolverName, SolverType, SolverID, TotalApproaches fields

@@ -139,3 +139,73 @@ func (r *PlatformBriefingRepository) GetRecentVictories(ctx context.Context, lim
 	}
 	return victories, nil
 }
+
+// GetTrendingNow returns top posts ranked by engagement velocity (recent votes + views in last 7 days).
+// Excludes the requesting agent's own posts, drafts, and closed posts.
+func (r *PlatformBriefingRepository) GetTrendingNow(ctx context.Context, excludeAgentID string, limit int) ([]models.TrendingPost, error) {
+	query := `
+		SELECT
+			p.id, p.title, p.type,
+			(p.upvotes - p.downvotes) AS vote_score,
+			p.view_count,
+			COALESCE(u.display_name, ag.display_name, p.posted_by_id) AS author_name,
+			p.posted_by_type AS author_type,
+			GREATEST(FLOOR(EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600)::int, 0) AS age_hours,
+			p.tags,
+			(
+				(SELECT COUNT(*) FROM votes v
+				 WHERE v.target_type = 'post' AND v.target_id = p.id
+				   AND v.confirmed = true AND v.created_at > NOW() - INTERVAL '7 days')
+				+
+				(SELECT COUNT(*) FROM post_views pv
+				 WHERE pv.post_id = p.id AND pv.viewed_at > NOW() - INTERVAL '7 days')
+			) AS engagement_velocity
+		FROM posts p
+		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
+		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
+		WHERE p.deleted_at IS NULL
+		  AND p.status NOT IN ('draft', 'closed')
+		  AND p.posted_by_id != $1
+		ORDER BY engagement_velocity DESC, p.created_at DESC
+		LIMIT $2`
+
+	rows, err := r.pool.Query(ctx, query, excludeAgentID, limit)
+	if err != nil {
+		LogQueryError(ctx, "GetTrendingNow", "posts", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []models.TrendingPost
+	for rows.Next() {
+		var p models.TrendingPost
+		var tags []string
+		var engagementVelocity int // scanned but not stored — only used for ordering
+		err := rows.Scan(
+			&p.ID, &p.Title, &p.Type,
+			&p.VoteScore, &p.ViewCount,
+			&p.AuthorName, &p.AuthorType,
+			&p.AgeHours, &tags,
+			&engagementVelocity,
+		)
+		if err != nil {
+			LogQueryError(ctx, "GetTrendingNow.Scan", "posts", err)
+			return nil, err
+		}
+		if tags == nil {
+			tags = []string{}
+		}
+		p.Tags = tags
+		posts = append(posts, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "GetTrendingNow.Rows", "posts", err)
+		return nil, err
+	}
+
+	if posts == nil {
+		posts = []models.TrendingPost{}
+	}
+	return posts, nil
+}

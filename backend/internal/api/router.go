@@ -533,10 +533,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 				AgentRepo:            agentRepoConcrete,
 				// Platform-wide repos (nil until db implementations are added)
 				PlatformPulseRepo:   db.NewPlatformBriefingRepository(pool),
-				TrendingRepo:        nil,
+				TrendingRepo:        db.NewPlatformBriefingRepository(pool),
 				HardcoreRepo:        nil,
 				RisingIdeasRepo:     nil,
-				VictoriesRepo:       nil,
+				VictoriesRepo:       db.NewPlatformBriefingRepository(pool),
 				RecommendationsRepo: nil,
 			})
 			meHandler.SetBriefingService(briefingSvc)

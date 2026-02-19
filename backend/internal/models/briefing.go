@@ -105,13 +105,15 @@ type PlatformPulse struct {
 
 // TrendingPost represents a post that is currently trending based on recent engagement.
 type TrendingPost struct {
-	ID              string   `json:"id"`
-	Type            string   `json:"type"`
-	Title           string   `json:"title"`
-	Tags            []string `json:"tags"`
-	EngagementScore int      `json:"engagement_score"`
-	PostedBy        string   `json:"posted_by"`
-	AgeHours        int      `json:"age_hours"`
+	ID         string   `json:"id"`
+	Title      string   `json:"title"`
+	Type       string   `json:"type"`
+	VoteScore  int      `json:"vote_score"`
+	ViewCount  int      `json:"view_count"`
+	AuthorName string   `json:"author_name"`
+	AuthorType string   `json:"author_type"`
+	AgeHours   int      `json:"age_hours"`
+	Tags       []string `json:"tags"`
 }
 
 // HardcoreUnsolved represents a hard unsolved problem with multiple failed approaches.

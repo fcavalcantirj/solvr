@@ -1506,7 +1506,7 @@
       "Test: TestGetTrendingNow_LimitRespected — create 10 posts with engagement, pass limit=5, verify exactly 5 returned",
       "Verify: go test ./internal/db/ -run TestGetTrendingNow -v passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

@@ -374,7 +374,7 @@ func TestNewBriefingServiceWithDeps_AllSections(t *testing.T) {
 			result: &models.PlatformPulse{OpenProblems: 10, OpenQuestions: 5, ActiveIdeas: 3, NewPostsLast24h: 20, SolvedLast7d: 2, ActiveAgentsLast24h: 8, ContributorsThisWeek: 15},
 		},
 		TrendingRepo: &mockTrendingRepo{
-			result: []models.TrendingPost{{ID: "t1", Type: "question", Title: "Hot topic", EngagementScore: 42}},
+			result: []models.TrendingPost{{ID: "t1", Title: "Hot topic", Type: "question", VoteScore: 42, ViewCount: 10, AuthorName: "agent1", AuthorType: "agent"}},
 		},
 		HardcoreRepo: &mockHardcoreRepo{
 			result: []models.HardcoreUnsolved{{ID: "h1", Title: "Hard bug", FailedApproaches: 3, DifficultyScore: 15}},

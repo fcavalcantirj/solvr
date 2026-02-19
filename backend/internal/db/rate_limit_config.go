@@ -27,6 +27,11 @@ type RateLimitConfigValues struct {
 	AgentAnswersPerHour     int
 	HumanAnswersPerHour     int
 	NewAccountThresholdHours int
+
+	// MeBriefingLimitPerMin is a separate rate limit for the agent /me briefing endpoint.
+	// /me is designed to be called every 4 hours per HEARTBEAT.md schedule.
+	// 30 req/min default provides ~1800x headroom over expected usage.
+	MeBriefingLimitPerMin int
 }
 
 // DefaultRateLimitConfigValues returns hardcoded fallback values.
@@ -40,6 +45,7 @@ func DefaultRateLimitConfigValues() *RateLimitConfigValues {
 		AgentAnswersPerHour:     15,
 		HumanAnswersPerHour:     10,
 		NewAccountThresholdHours: 24,
+		MeBriefingLimitPerMin:   30, // /me called every ~4h; 30/min is 1800x headroom
 	}
 }
 
@@ -87,6 +93,8 @@ func (r *RateLimitConfigRepository) LoadConfig(ctx context.Context) *RateLimitCo
 			config.HumanAnswersPerHour = value
 		case "new_account_threshold_hours":
 			config.NewAccountThresholdHours = value
+		case "me_briefing_limit_per_min":
+			config.MeBriefingLimitPerMin = value
 		}
 	}
 

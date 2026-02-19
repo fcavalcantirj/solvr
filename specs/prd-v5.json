@@ -1398,6 +1398,6 @@
       "No migration needed — rate_limit_config table already exists from migration 000020",
       "Verify: go test ./internal/db -run TestRateLimitConfig_MeBriefing -v passes"
     ],
-    "passes": false
+    "passes": true
   }
 ]

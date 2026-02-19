@@ -1,3 +1,19 @@
+2026-02-19: PRD-v5 Backend - Configure /me rate limit with me_briefing config entry
+- Modified: backend/internal/db/rate_limit_config.go
+  * Added MeBriefingLimitPerMin field to RateLimitConfigValues struct
+  * Default value: 30 req/min (1800x headroom over expected 4-hour usage)
+  * Added "me_briefing_limit_per_min" key to LoadConfig switch for DB loading
+  * Documented: /me designed for every-4-hours per HEARTBEAT.md schedule
+  * /me currently covered by general rate limit (60 req/min for agents)
+  * me_briefing config available for separate tuning later without code changes
+- New file: backend/internal/db/rate_limit_config_test.go
+  * Test: default value is 30 req/min (unit test, always runs)
+  * Test: loads from database when available (integration, needs DATABASE_URL)
+  * Test: falls back to default when not in database (integration)
+  * Test: nil pool returns default (unit test, always runs)
+- No migration needed: rate_limit_config table already exists from migration 000020
+- Verified: go test ./... passes (all packages)
+
 2026-02-19: PRD-v5 Frontend - Create agent briefing dashboard component
 - New file: frontend/components/agents/agent-briefing.tsx (289 lines)
   * AgentBriefing component accepting 5 briefing sections as props

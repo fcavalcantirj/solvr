@@ -1,3 +1,9 @@
+2026-02-19: PRD-v5 Semantic Search - Create pgvector migration for embedding columns
+- Migration 000044_enable_pgvector.up.sql: CREATE EXTENSION vector, ADD COLUMN embedding vector(1024) to posts/answers/approaches, CREATE INDEX USING hnsw with vector_cosine_ops
+- Migration 000044_enable_pgvector.down.sql: DROP INDEX, DROP COLUMN, DROP EXTENSION (fully reversible)
+- Note: PRD says 000035 but that number was taken (agents soft delete), used next available 000044
+- All backend tests passing (12 packages OK)
+
 2026-02-19: PRD-v6 IPFS Phase 2 - Create pinning dashboard for users and agents
 - New types in lib/api-types.ts: PinStatus, APIPinInfo, APIPinExtra, APIPinResponse, APIPinsListResponse, FetchPinsParams, APIStorageResponse (~45 lines)
 - New API methods in lib/api.ts: createPin(), listPins(), deletePin(), getStorageUsage() (~30 lines)

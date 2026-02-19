@@ -375,7 +375,7 @@
       "Verify: psql -c '\\d approaches' shows embedding vector(1024) column",
       "Verify: psql -c '\\di' shows idx_posts_embedding, idx_answers_embedding, idx_approaches_embedding HNSW indexes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

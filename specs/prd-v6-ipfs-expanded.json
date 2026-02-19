@@ -527,6 +527,7 @@
       "Add to /admin/system page",
       "Refresh every 30s via polling or WebSocket"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-19: IPFSStatusIndicator component (ipfs-status.tsx, 98 lines) with color-coded status dot (green/yellow/red), peer ID truncation, version display, error details. useIPFSHealth hook (63 lines) with configurable polling (default 30s), auto-fetch, manual refetch. Admin system page at /admin/system. APIIPFSHealthResponse type + api.getIPFSHealth() method. 23 TDD tests (8 hook + 12 component + 3 page). All 716 frontend tests passing."
   }
 ]

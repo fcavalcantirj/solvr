@@ -65,6 +65,7 @@ import type {
   FetchContributionsParams,
   APILeaderboardResponse,
   FetchLeaderboardParams,
+  APIIPFSHealthResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -712,6 +713,11 @@ class SolvrAPI {
 
     const query = searchParams.toString();
     return this.fetch<APILeaderboardResponse>(`/v1/leaderboard${query ? `?${query}` : ''}`);
+  }
+
+  // IPFS Health
+  async getIPFSHealth(): Promise<APIIPFSHealthResponse> {
+    return this.fetch<APIIPFSHealthResponse>('/v1/health/ipfs');
   }
 
   async getLeaderboardByTag(tag: string, params?: FetchLeaderboardParams): Promise<APILeaderboardResponse> {

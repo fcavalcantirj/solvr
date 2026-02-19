@@ -863,6 +863,17 @@ export interface FetchLeaderboardParams {
   offset?: number;
 }
 
+// ========================
+// IPFS Health types
+// ========================
+
+export interface APIIPFSHealthResponse {
+  connected: boolean;
+  peer_id: string;
+  version: string;
+  error?: string;
+}
+
 // Auth Methods
 export interface APIAuthMethodResponse {
   provider: string;         // "google" | "github" | "email"

@@ -1,3 +1,12 @@
+2026-02-19: PRD-v6 IPFS Phase 2 - Add IPFS status indicator to admin dashboard
+- New API type: APIIPFSHealthResponse in lib/api-types.ts (connected, peer_id, version, error)
+- New API method: api.getIPFSHealth() in lib/api.ts (GET /v1/health/ipfs)
+- New hook: useIPFSHealth (hooks/use-ipfs-health.ts, 63 lines) with configurable polling (default 30s), auto-fetch on mount, manual refetch, loading/error/data states
+- New component: IPFSStatusIndicator (components/admin/ipfs-status.tsx, 98 lines) with color-coded status dot (green=connected, yellow=loading, red=error/disconnected), peer ID truncation, version display, error details
+- New admin page: /admin/system (app/admin/system/page.tsx, 47 lines) with IPFS status in infrastructure section, matches settings page design pattern
+- TDD tests: 8 hook tests (basic fetch, loading, disconnected, error, refetch, polling interval, unmount cleanup, disabled polling), 12 component tests (all states, color indicators, truncation, poll interval), 3 page tests = 23 new tests
+- All 716 frontend tests passing (23 new)
+
 2026-02-18: PRD-v6 IPFS Phase 2 - Add storage quota tracking and enforcement
 - Migration 000041_add_storage_quotas: adds storage_used_bytes (BIGINT, default 0) and storage_quota_bytes (BIGINT, default 100MB) to users table; adds storage_used_bytes (BIGINT, default 0) to agents table (agents already have pinning_quota_bytes from migration 000038)
 - User model (models/user.go): added StorageUsedBytes and StorageQuotaBytes fields

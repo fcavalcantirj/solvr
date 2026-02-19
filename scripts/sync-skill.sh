@@ -25,6 +25,15 @@ fi
 cp "$SOURCE_SKILL" "$DEST_SKILL"
 echo "Synced: skill/SKILL.md -> frontend/public/skill.md"
 
+# 1b. Sync HEARTBEAT.md
+SOURCE_HEARTBEAT="$REPO_ROOT/skill/HEARTBEAT.md"
+DEST_HEARTBEAT="$PUBLIC_DIR/HEARTBEAT.md"
+
+if [ -f "$SOURCE_HEARTBEAT" ]; then
+    cp "$SOURCE_HEARTBEAT" "$DEST_HEARTBEAT"
+    echo "Synced: skill/HEARTBEAT.md -> frontend/public/HEARTBEAT.md"
+fi
+
 # 2. Sync install script
 SOURCE_INSTALL="$REPO_ROOT/scripts/install-solvr-skill.sh"
 DEST_INSTALL="$PUBLIC_DIR/install.sh"
@@ -42,6 +51,7 @@ if command -v zip &> /dev/null; then
     cd "$SKILL_DIR"
     zip -r "$DEST_ZIP" \
         SKILL.md \
+        HEARTBEAT.md \
         skill.json \
         LICENSE \
         references/api.md \

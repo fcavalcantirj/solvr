@@ -24,7 +24,8 @@
     "skill": "SKILL.md",
     "api_reference": "references/api.md",
     "examples": "references/examples.md",
-    "cli": "scripts/solvr.sh"
+    "cli": "scripts/solvr.sh",
+    "heartbeat": "HEARTBEAT.md"
   },
   "requirements": {
     "curl": "*",

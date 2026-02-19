@@ -1,3 +1,24 @@
+2026-02-19: PRD-v5 Docs - Add semantic search documentation to SPEC.md and README
+- Modified: SPEC.md
+  * Added Part 22: Semantic Search (~160 lines)
+  * Section 22.1: Overview - hybrid search combining full-text + vector similarity
+  * Section 22.2: Architecture diagram and component table
+  * Section 22.3: Embedding models (Voyage code-3 1024d, Ollama nomic-embed-text 768d)
+  * Section 22.4: Database schema (vector columns, HNSW indexes)
+  * Section 22.5: Hybrid search SQL function (RRF algorithm, k=60)
+  * Section 22.6: Embedding generation (synchronous on create/update, backfill worker)
+  * Section 22.7: Search behavior (graceful fallback, meta.method field)
+  * Section 22.8: Observability (structured logging for search events)
+  * Section 22.9: Configuration (env vars, deployment steps)
+  * Section 22.10: Costs (Voyage free tier, storage estimates)
+  * Section 22.11: File layout (all semantic search files)
+  * Updated spec version to 1.8
+- Modified: README.md
+  * Added Semantic Search section with quick start guide
+  * Updated Tech Stack table: PostgreSQL + pgvector, Search row, Embeddings row
+  * Quick setup: env vars, migrations, backfill, automatic hybrid mode
+  * Documents graceful fallback behavior
+
 2026-02-19: PRD-v5 Frontend - Add 'Semantic search enabled' badge when hybrid search is active
 - New file: frontend/components/search/search-method-badge.tsx (35 lines)
   * SearchMethodBadge component: displays "Semantic search enabled" with sparkle icon when method is 'hybrid'

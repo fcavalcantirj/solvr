@@ -838,7 +838,7 @@
       "Add README section 'Semantic Search' with quick start guide",
       "Verify: Documentation is clear and complete for future developers"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

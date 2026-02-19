@@ -3635,8 +3635,249 @@ CREATE TABLE approach_relationships (
 
 ---
 
-*Spec version: 1.7*
-*Last updated: 2026-02-18*
+# Part 22: Semantic Search
+
+## 22.1 Overview
+
+Solvr uses **hybrid search** combining PostgreSQL full-text search with vector similarity (semantic search) via pgvector. This allows queries to find content by meaning, not just exact keywords.
+
+**Example:** Searching "concurrent data access issues" finds posts about "race conditions", "mutex locking", and "thread safety" — even without those exact words.
+
+## 22.2 Architecture
+
+```
+Search Query
+    │
+    ├──→ Full-Text Search (ts_vector)
+    │      └─ Keyword matching via websearch_to_tsquery
+    │
+    ├──→ Vector Similarity (pgvector)
+    │      ├─ Generate query embedding (Voyage AI / Ollama)
+    │      └─ Cosine distance search on HNSW index
+    │
+    └──→ Reciprocal Rank Fusion (RRF)
+           ├─ Combine both result sets
+           ├─ Formula: 1.0 / (rrf_k + rank) * weight
+           └─ Return unified, ranked results
+```
+
+**Components:**
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| Vector storage | pgvector 0.8.1 | Store and query embedding vectors |
+| Vector index | HNSW (cosine distance) | Sub-10ms similarity queries |
+| Primary embeddings | Voyage code-3 (1024 dims) | Asymmetric embeddings optimized for code |
+| Alternative embeddings | Ollama nomic-embed-text (768 dims) | Local/self-hosted option |
+| Fusion algorithm | RRF (k=60) | Merge keyword + semantic rankings |
+
+## 22.3 Embedding Models
+
+### Voyage code-3 (Default)
+
+- **Dimensions:** 1024
+- **Type:** Asymmetric (separate document vs. query embeddings)
+- **API:** `https://api.voyageai.com/v1`
+- **Max input:** ~8,000 tokens (32,000 characters, truncated if exceeded)
+- **Timeout:** 30 seconds per request
+- **Retries:** 3 with exponential backoff (starting 500ms), retries on 429
+
+### Ollama nomic-embed-text (Alternative)
+
+- **Dimensions:** 768
+- **Type:** Symmetric (same embedding for documents and queries)
+- **API:** Local Ollama instance (default: `http://localhost:11434/v1`)
+- **No API key required**
+
+## 22.4 Database Schema
+
+**Vector columns** (added by migration `000044_enable_pgvector`):
+
+```sql
+-- Enable pgvector extension
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Add embedding columns
+ALTER TABLE posts ADD COLUMN embedding vector(1024);
+ALTER TABLE answers ADD COLUMN embedding vector(1024);
+ALTER TABLE approaches ADD COLUMN embedding vector(1024);
+
+-- HNSW indexes for fast similarity search
+CREATE INDEX idx_posts_embedding ON posts USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX idx_answers_embedding ON answers USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX idx_approaches_embedding ON approaches USING hnsw (embedding vector_cosine_ops);
+```
+
+**Why HNSW over IVFFlat:**
+- Works on empty tables (no need to build index after data load)
+- No periodic rebuilds needed
+- ~30x faster than IVFFlat for similarity queries
+
+## 22.5 Hybrid Search SQL Function
+
+Defined in migrations `000045` and `000046`:
+
+```sql
+-- Reciprocal Rank Fusion (Cormack et al. SIGIR 2009)
+CREATE FUNCTION hybrid_search(
+  query_text TEXT,
+  query_embedding vector(1024),
+  match_count INT,
+  fts_weight FLOAT DEFAULT 1.0,
+  vec_weight FLOAT DEFAULT 1.0,
+  rrf_k INT DEFAULT 60
+) RETURNS TABLE (id UUID, score FLOAT)
+```
+
+**How RRF works:**
+1. Full-text search ranks results by `ts_rank_cd` on `websearch_to_tsquery`
+2. Vector search ranks by cosine distance (`<=>` operator)
+3. Rankings merged via `FULL OUTER JOIN`
+4. Combined score: `(fts_weight / (rrf_k + fts_rank)) + (vec_weight / (rrf_k + vec_rank))`
+
+**Functions available:**
+- `hybrid_search()` — searches posts (title + description)
+- `hybrid_search_answers()` — searches answers (content)
+- `hybrid_search_approaches()` — searches approaches (angle + method + outcome + solution)
+
+## 22.6 Embedding Generation
+
+### On Content Creation/Update
+
+Embeddings are generated **synchronously** when posts are created or updated via `POST /v1/posts` and `PATCH /v1/posts/:id`. This adds ~50-100ms latency.
+
+**Text used for embeddings:**
+- **Posts:** `title + " " + description`
+- **Answers:** `content`
+- **Approaches:** `angle + " " + method` (+ outcome + solution if non-empty)
+
+### Backfill Worker
+
+For existing content without embeddings:
+
+```bash
+cd backend
+
+# Backfill all content types
+go run ./cmd/backfill-embeddings
+
+# Selective content types
+go run ./cmd/backfill-embeddings --content-types posts,answers,approaches
+
+# Custom batch size
+go run ./cmd/backfill-embeddings --batch-size 200
+
+# Dry run (preview without changes)
+go run ./cmd/backfill-embeddings --dry-run
+```
+
+**Worker details:**
+- Default batch size: 100
+- Rate limit: 50 items/second
+- Processes oldest content first (`ORDER BY created_at ASC`)
+- Graceful shutdown on SIGINT/SIGTERM
+- Logs progress percentage
+
+## 22.7 Search Behavior
+
+### Graceful Fallback
+
+If embedding generation fails (API down, rate limited, etc.), search transparently falls back to full-text only. No user-facing error.
+
+```
+Query arrives
+    │
+    ├─ Embedding service available?
+    │   ├─ YES → Generate query embedding → Hybrid RRF search
+    │   └─ NO  → Full-text search only
+    │
+    └─ Response includes meta.method: "hybrid" or "fulltext"
+```
+
+### API Response
+
+`GET /v1/search` response includes the search method used:
+
+```json
+{
+  "data": [...],
+  "meta": {
+    "query": "async postgres race condition",
+    "total": 127,
+    "page": 1,
+    "per_page": 20,
+    "has_more": true,
+    "took_ms": 23,
+    "method": "hybrid"
+  }
+}
+```
+
+The frontend displays a "Semantic search enabled" badge when `method === "hybrid"`.
+
+## 22.8 Observability
+
+Search operations are logged with structured fields:
+
+| Log Event | Level | Fields |
+|-----------|-------|--------|
+| Search completed | INFO | method, query, duration_ms, results_count, request_id |
+| Embedding generated | DEBUG | duration_ms, request_id |
+| Embedding failed | WARN | error, request_id |
+
+## 22.9 Configuration
+
+### Environment Variables
+
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `EMBEDDING_PROVIDER` | `voyage` | No | `voyage` or `ollama` |
+| `VOYAGE_API_KEY` | — | If provider=voyage | Voyage AI API key |
+| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | If provider=ollama | Ollama API endpoint |
+
+### Deployment
+
+1. **Docker Compose:** Use `pgvector/pgvector:0.8.1-pg16` image (or enable extension on existing PostgreSQL)
+2. **Run migrations:** `migrate -path migrations -database "$DATABASE_URL" up` (enables pgvector, adds columns, creates functions)
+3. **Set embedding env vars:** Configure `EMBEDDING_PROVIDER` and API key
+4. **Backfill existing content:** `go run ./cmd/backfill-embeddings`
+
+## 22.10 Costs
+
+| Tier | Cost | Capacity |
+|------|------|----------|
+| Voyage AI free tier | $0/month | 50M tokens/month (~25K posts + 25K searches) |
+| Voyage AI paid | Pay per token | Unlimited |
+| Ollama (self-hosted) | $0 (compute only) | Limited by hardware |
+
+**Storage:** 1024 dims x 4 bytes x 50K posts = ~200MB for embeddings
+
+## 22.11 File Layout
+
+```
+backend/
+├── cmd/backfill-embeddings/
+│   └── main.go                       # Backfill worker CLI
+├── internal/
+│   ├── config/env.go                 # EMBEDDING_PROVIDER, VOYAGE_API_KEY, OLLAMA_BASE_URL
+│   ├── db/
+│   │   ├── search.go                 # SearchRepository with hybrid search
+│   │   ├── search_hybrid_test.go     # Hybrid search tests
+│   │   ├── search_semantic_test.go   # Semantic similarity tests
+│   │   └── search_observability_test.go  # Observability tests
+│   └── services/
+│       ├── embeddings.go             # Voyage AI embedding service
+│       └── embeddings_ollama.go      # Ollama embedding service
+├── migrations/
+│   ├── 000044_enable_pgvector.up.sql     # vector extension + columns + HNSW indexes
+│   ├── 000045_hybrid_search_answers_approaches.up.sql  # RRF functions for answers/approaches
+│   └── 000046_hybrid_search_posts.up.sql # RRF function for posts
+```
+
+---
+
+*Spec version: 1.8*
+*Last updated: 2026-02-19*
 *Authors: Felipe Cavalcanti, Claudius 🏛️*
 *Status: Ready for Ralph loops*
 

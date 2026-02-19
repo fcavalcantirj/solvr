@@ -1,3 +1,18 @@
+2026-02-19: PRD-v5 Semantic Search - Create hybrid_search SQL function for posts table
+- New file: backend/migrations/000046_hybrid_search_posts.up.sql
+  * hybrid_search SQL function: combines full-text search on title+description with vector similarity
+  * Uses Reciprocal Rank Fusion (RRF) from Cormack et al. SIGIR 2009 (rrf_k=60 default)
+  * Parameters: query_text, query_embedding vector(1024), match_count (default 20), fts_weight, vec_weight, rrf_k
+  * full_text CTE: ts_rank_cd scoring on to_tsvector('english', title || ' ' || description)
+  * semantic CTE: cosine distance (<=>) on embedding column with NULL filtering
+  * FULL OUTER JOIN ensures results found by only one method still appear
+  * Filters deleted records (deleted_at IS NULL), handles NULL embeddings
+  * RETURNS SETOF posts, LANGUAGE sql STABLE
+- New file: backend/migrations/000046_hybrid_search_posts.down.sql
+  * DROP FUNCTION IF EXISTS hybrid_search
+- Follows exact same pattern as hybrid_search_answers and hybrid_search_approaches (migration 000045)
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Create hybrid search functions for answers and approaches tables
 - New file: backend/migrations/000045_hybrid_search_answers_approaches.up.sql
   * hybrid_search_answers SQL function: combines full-text search on content with vector similarity

@@ -662,7 +662,7 @@
       "Test migration: migrate -path backend/migrations -database $DATABASE_URL up",
       "Verify: psql -c '\\df hybrid_search' shows function with correct parameters"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

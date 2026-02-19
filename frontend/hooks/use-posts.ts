@@ -147,15 +147,20 @@ export function usePosts(params?: FetchPostsParams): UsePostsResult {
   };
 }
 
+// Search method type: 'hybrid' (semantic + keyword) or 'fulltext' (keyword only)
+export type SearchMethod = 'hybrid' | 'fulltext';
+
 // Hook for search
 export function useSearch(query: string, type?: PostType | 'all') {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchMethod, setSearchMethod] = useState<SearchMethod | undefined>(undefined);
 
   useEffect(() => {
     if (!query.trim()) {
       setPosts([]);
+      setSearchMethod(undefined);
       return;
     }
 
@@ -169,12 +174,14 @@ export function useSearch(query: string, type?: PostType | 'all') {
         if (!response || !response.data) {
           console.warn('[useSearch] Received empty response:', response);
           setPosts([]);
+          setSearchMethod(undefined);
           setLoading(false);
           return;
         }
 
         const transformedPosts = response.data.map(post => transformPost(post as APIPost));
         setPosts(transformedPosts);
+        setSearchMethod(response.meta?.method);
       } catch (err) {
         console.error('[useSearch] Error:', err);
         if (err && typeof err === 'object') {
@@ -191,5 +198,5 @@ export function useSearch(query: string, type?: PostType | 'all') {
     return () => clearTimeout(timer);
   }, [query, type]);
 
-  return { posts, loading, error };
+  return { posts, loading, error, searchMethod };
 }

@@ -51,6 +51,7 @@ vi.mock('@/hooks/use-posts', () => ({
     posts: [],
     loading: false,
     error: null,
+    searchMethod: undefined,
   })),
   PostType: {},
   FeedPost: {},
@@ -81,6 +82,11 @@ vi.mock('@/lib/filter-utils', () => ({
   mapStatusFilter: vi.fn((v: string) => v),
   mapSortFilter: vi.fn((v: string) => v),
   mapTimeframeFilter: vi.fn((v: string) => v),
+}));
+
+vi.mock('@/components/search/search-method-badge', () => ({
+  SearchMethodBadge: ({ method }: { method?: string }) =>
+    method === 'hybrid' ? <div data-testid="search-method-badge">Semantic search enabled</div> : null,
 }));
 
 vi.mock('@/components/ui/vote-button', () => ({

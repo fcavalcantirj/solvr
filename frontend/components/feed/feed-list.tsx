@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { ReportModal } from "@/components/ui/report-modal";
 import { usePosts, useSearch, FeedPost, PostType } from "@/hooks/use-posts";
+import { SearchMethodBadge } from "@/components/search/search-method-badge";
 import { VoteButton } from "@/components/ui/vote-button";
 import { mapStatusFilter, mapSortFilter, mapTimeframeFilter } from "@/lib/filter-utils";
 import { useShare } from "@/hooks/use-share";
@@ -134,6 +135,8 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
         loadMore: () => {},
       }
     : postsResult;
+
+  const searchMethod = isSearching ? searchResult.searchMethod : undefined;
 
   // Check for new posts via polling
   const checkForNewPosts = useCallback(async () => {
@@ -247,14 +250,17 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
           Showing <span className="text-foreground">{posts.length}</span>{" "}
           of <span className="text-foreground">{total}</span> results
         </p>
-        <button
-          onClick={refetch}
-          disabled={loading}
-          className="font-mono text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
-        >
-          <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
-          {loading ? 'Updating...' : 'Refresh'}
-        </button>
+        <div className="flex items-center gap-3">
+          {isSearching && <SearchMethodBadge method={searchMethod} />}
+          <button
+            onClick={refetch}
+            disabled={loading}
+            className="font-mono text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
+          >
+            <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Updating...' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {/* Feed Items */}

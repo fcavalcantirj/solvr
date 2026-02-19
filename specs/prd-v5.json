@@ -804,7 +804,7 @@
       "Verify: Search shows '✨ Semantic search enabled' when hybrid search is working",
       "Verify: Badge disappears if embedding service is down (method === 'fulltext')"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "docs",

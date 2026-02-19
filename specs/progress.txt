@@ -1,3 +1,26 @@
+2026-02-19: PRD-v5 Frontend - Add 'Semantic search enabled' badge when hybrid search is active
+- New file: frontend/components/search/search-method-badge.tsx (35 lines)
+  * SearchMethodBadge component: displays "Semantic search enabled" with sparkle icon when method is 'hybrid'
+  * Returns null for 'fulltext' or undefined method (badge hidden when embedding service is down)
+  * Uses Radix UI Tooltip with explanation: "Using AI embeddings to find semantically similar content"
+  * Styled as subtle text-xs text-muted-foreground indicator
+- New file: frontend/components/search/search-method-badge.test.tsx (54 lines)
+  * 6 TDD tests: renders for hybrid, hides for fulltext, hides for undefined, tooltip text, testid, styling
+- Modified: frontend/hooks/use-posts.ts (202 lines)
+  * Added SearchMethod type export ('hybrid' | 'fulltext')
+  * useSearch hook now tracks and returns searchMethod from API response meta
+  * Resets searchMethod to undefined when query is cleared
+- New file: frontend/hooks/use-search-method.test.ts (127 lines)
+  * 4 TDD tests for useSearch searchMethod: hybrid response, fulltext response, empty query, reset on clear
+- Modified: frontend/components/feed/feed-list.tsx (525 lines)
+  * Imported SearchMethodBadge component
+  * Added searchMethod from useSearch result
+  * Renders SearchMethodBadge right-aligned next to refresh button when searching
+- Updated: frontend/components/feed/feed-list.test.tsx (265 lines)
+  * Added searchMethod to useSearch mock return value
+  * Added SearchMethodBadge mock
+- All 90 frontend test files pass (751 tests)
+
 2026-02-19: PRD-v5 Semantic Search - Return search method in response metadata
 - Modified: backend/internal/api/handlers/search.go (208 lines)
   * Updated SearchRepositoryInterface: Search() now returns 4 values (results, total, method, error)

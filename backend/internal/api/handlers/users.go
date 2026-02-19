@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -31,6 +32,7 @@ type UsersPostRepositoryInterface interface {
 // Per prd-v4: GET /v1/users/{id}/agents endpoint to list agents by human_id.
 type UsersAgentRepositoryInterface interface {
 	FindByHumanID(ctx context.Context, humanID string) ([]*models.Agent, error)
+	GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error)
 }
 
 // UsersUserListRepositoryInterface defines the user list repository operations.
@@ -195,13 +197,25 @@ func (h *UsersHandler) GetUserAgents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert to response format (ensure api_key_hash is not exposed)
+	// Also enrich with computed reputation from GetAgentStats.
 	responseAgents := make([]models.Agent, 0, len(agents))
 	for _, agent := range agents {
-		// Create a copy without api_key_hash
 		responseAgent := *agent
 		responseAgent.APIKeyHash = "" // Ensure not exposed
+
+		// Replace stored bonus with computed reputation
+		stats, err := h.agentRepo.GetAgentStats(ctx, agent.ID)
+		if err == nil && stats != nil {
+			responseAgent.Reputation = stats.Reputation
+		}
+
 		responseAgents = append(responseAgents, responseAgent)
 	}
+
+	// Sort by computed reputation (highest first)
+	sort.Slice(responseAgents, func(i, j int) bool {
+		return responseAgents[i].Reputation > responseAgents[j].Reputation
+	})
 
 	// Build response
 	resp := UserAgentsResponse{}

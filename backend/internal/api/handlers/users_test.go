@@ -53,12 +53,14 @@ func (m *MockUsersUserRepository) GetUserStats(ctx context.Context, userID strin
 
 // MockUsersAgentRepository implements the agent repository interface for testing.
 type MockUsersAgentRepository struct {
-	agents map[string][]*models.Agent // humanID -> agents
+	agents map[string][]*models.Agent    // humanID -> agents
+	stats  map[string]*models.AgentStats // agentID -> stats
 }
 
 func NewMockUsersAgentRepository() *MockUsersAgentRepository {
 	return &MockUsersAgentRepository{
 		agents: make(map[string][]*models.Agent),
+		stats:  make(map[string]*models.AgentStats),
 	}
 }
 
@@ -68,6 +70,14 @@ func (m *MockUsersAgentRepository) FindByHumanID(ctx context.Context, humanID st
 		return []*models.Agent{}, nil
 	}
 	return agents, nil
+}
+
+func (m *MockUsersAgentRepository) GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error) {
+	stats, ok := m.stats[agentID]
+	if !ok {
+		return &models.AgentStats{}, nil
+	}
+	return stats, nil
 }
 
 // ============================================================================
@@ -644,5 +654,128 @@ func TestGetUserProfile_ValidUUID(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected status 200 for valid UUID, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// ============================================================================
+// Tests for computed reputation in GET /v1/users/{id}/agents
+// ============================================================================
+
+// TestGetUserAgents_ReturnsComputedReputation verifies that the response
+// includes the dynamically computed reputation, not the stored bonus.
+func TestGetUserAgents_ReturnsComputedReputation(t *testing.T) {
+	agentRepo := NewMockUsersAgentRepository()
+	handler := NewUsersHandler(nil, nil)
+	handler.SetAgentRepository(agentRepo)
+
+	humanID := "c3d4e5f6-a7b8-9012-cdef-123456789012"
+	agentRepo.agents[humanID] = []*models.Agent{
+		{
+			ID:          "agent_computed",
+			DisplayName: "Computed Rep Agent",
+			HumanID:     &humanID,
+			Reputation:  50, // Stored bonus only
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		},
+	}
+	// Mock computed stats: real reputation is 520 (includes activity)
+	agentRepo.stats["agent_computed"] = &models.AgentStats{
+		Reputation:          520,
+		ProblemsContributed: 18,
+		IdeasPosted:         30,
+		UpvotesReceived:     6,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/"+humanID+"/agents", nil)
+	rr := httptest.NewRecorder()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", humanID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	handler.GetUserAgents(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Data []models.Agent `json:"data"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(resp.Data))
+	}
+
+	// Should return computed reputation (520), not stored bonus (50)
+	if resp.Data[0].Reputation != 520 {
+		t.Errorf("expected computed reputation 520, got %d", resp.Data[0].Reputation)
+	}
+}
+
+// TestGetUserAgents_OrderedByComputedReputation verifies that agents are
+// ordered by their computed reputation (highest first), not stored bonus.
+func TestGetUserAgents_OrderedByComputedReputation(t *testing.T) {
+	agentRepo := NewMockUsersAgentRepository()
+	handler := NewUsersHandler(nil, nil)
+	handler.SetAgentRepository(agentRepo)
+
+	humanID := "d4e5f6a7-b8c9-0123-defa-234567890123"
+	agentRepo.agents[humanID] = []*models.Agent{
+		{
+			ID:          "agent_low_rep",
+			DisplayName: "Low Rep",
+			HumanID:     &humanID,
+			Reputation:  50, // Same stored bonus
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		},
+		{
+			ID:          "agent_high_rep",
+			DisplayName: "High Rep",
+			HumanID:     &humanID,
+			Reputation:  50, // Same stored bonus
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		},
+	}
+	// Different computed reputations
+	agentRepo.stats["agent_low_rep"] = &models.AgentStats{Reputation: 80}
+	agentRepo.stats["agent_high_rep"] = &models.AgentStats{Reputation: 520}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/"+humanID+"/agents", nil)
+	rr := httptest.NewRecorder()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", humanID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	handler.GetUserAgents(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Data []models.Agent `json:"data"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 agents, got %d", len(resp.Data))
+	}
+
+	// Highest computed reputation should be first
+	if resp.Data[0].ID != "agent_high_rep" {
+		t.Errorf("expected first agent to be 'agent_high_rep' (rep 520), got '%s'", resp.Data[0].ID)
+	}
+	if resp.Data[1].ID != "agent_low_rep" {
+		t.Errorf("expected second agent to be 'agent_low_rep' (rep 80), got '%s'", resp.Data[1].ID)
 	}
 }

@@ -241,7 +241,7 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, query string, 
 				END,
 				p.posted_by_id
 			) as author_name,
-			1.0 as score,
+			1.0 / (ROW_NUMBER() OVER() + 1)::float as score,
 			(p.upvotes - p.downvotes) as vote_score,
 			COALESCE((SELECT COUNT(*) FROM answers WHERE question_id = p.id AND deleted_at IS NULL), 0) as answers_count,
 			p.created_at,
@@ -287,6 +287,8 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, query string, 
 }
 
 // searchAnswers searches answers using full-text search on content.
+// TODO: Wire up hybrid_search_answers() SQL function (migration 000045) for semantic search.
+// Currently only full-text; the SQL function exists but is not called from Go code.
 func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string) ([]models.SearchResult, error) {
 	query := `
 		SELECT
@@ -341,6 +343,8 @@ func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string) ([
 }
 
 // searchApproaches searches approaches using full-text search on angle, method, outcome, solution.
+// TODO: Wire up hybrid_search_approaches() SQL function (migration 000045) for semantic search.
+// Currently only full-text; the SQL function exists but is not called from Go code.
 func (r *SearchRepository) searchApproaches(ctx context.Context, tsquery string) ([]models.SearchResult, error) {
 	query := `
 		SELECT

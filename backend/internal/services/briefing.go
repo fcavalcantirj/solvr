@@ -3,7 +3,7 @@ package services
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -87,7 +87,7 @@ func (s *BriefingService) GetBriefingForAgent(ctx context.Context, agent *models
 	// Section 1: Inbox
 	notifications, totalUnread, err := s.inboxRepo.GetRecentUnreadForAgent(ctx, agent.ID, briefingInboxLimit)
 	if err != nil {
-		log.Printf("[WARN] briefing: inbox fetch failed for agent %s: %v", agent.ID, err)
+		slog.Warn("briefing: inbox fetch failed", "agent_id", agent.ID, "error", err)
 	} else {
 		items := make([]models.BriefingInboxItem, len(notifications))
 		for i, n := range notifications {
@@ -108,7 +108,7 @@ func (s *BriefingService) GetBriefingForAgent(ctx context.Context, agent *models
 	// Section 2: Open Items
 	openItems, err := s.openItemsRepo.GetOpenItemsForAgent(ctx, agent.ID)
 	if err != nil {
-		log.Printf("[WARN] briefing: open items fetch failed for agent %s: %v", agent.ID, err)
+		slog.Warn("briefing: open items fetch failed", "agent_id", agent.ID, "error", err)
 	} else {
 		briefing.MyOpenItems = openItems
 	}
@@ -116,7 +116,7 @@ func (s *BriefingService) GetBriefingForAgent(ctx context.Context, agent *models
 	// Section 3: Suggested Actions
 	actions, err := s.suggestedActionsRepo.GetSuggestedActionsForAgent(ctx, agent.ID)
 	if err != nil {
-		log.Printf("[WARN] briefing: suggested actions fetch failed for agent %s: %v", agent.ID, err)
+		slog.Warn("briefing: suggested actions fetch failed", "agent_id", agent.ID, "error", err)
 	} else {
 		if len(actions) > briefingMaxSuggestedActions {
 			actions = actions[:briefingMaxSuggestedActions]
@@ -128,7 +128,7 @@ func (s *BriefingService) GetBriefingForAgent(ctx context.Context, agent *models
 	if len(agent.Specialties) > 0 {
 		opps, err := s.opportunitiesRepo.GetOpportunitiesForAgent(ctx, agent.ID, agent.Specialties, briefingOpportunitiesLimit)
 		if err != nil {
-			log.Printf("[WARN] briefing: opportunities fetch failed for agent %s: %v", agent.ID, err)
+			slog.Warn("briefing: opportunities fetch failed", "agent_id", agent.ID, "error", err)
 		} else {
 			briefing.Opportunities = opps
 		}
@@ -141,14 +141,14 @@ func (s *BriefingService) GetBriefingForAgent(ctx context.Context, agent *models
 	}
 	repChanges, err := s.reputationRepo.GetReputationChangesSince(ctx, agent.ID, since)
 	if err != nil {
-		log.Printf("[WARN] briefing: reputation changes fetch failed for agent %s: %v", agent.ID, err)
+		slog.Warn("briefing: reputation changes fetch failed", "agent_id", agent.ID, "error", err)
 	} else {
 		briefing.ReputationChanges = repChanges
 	}
 
 	// Mark briefing as read
 	if err := s.agentRepo.UpdateLastBriefingAt(ctx, agent.ID); err != nil {
-		log.Printf("[WARN] briefing: UpdateLastBriefingAt failed for agent %s: %v", agent.ID, err)
+		slog.Warn("briefing: UpdateLastBriefingAt failed", "agent_id", agent.ID, "error", err)
 	}
 
 	return briefing, nil

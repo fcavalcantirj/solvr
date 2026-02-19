@@ -69,6 +69,9 @@ func TestSearchUnified_PostsAndAnswers(t *testing.T) {
 		t.Errorf("expected to find post %s in results", postID)
 	}
 
+	if !foundAnswer {
+		t.Errorf("expected to find answer %s in unified results (total: %d)", answerID, total)
+	}
 	t.Logf("Found post: %v, found answer: %v, total: %d", foundPost, foundAnswer, total)
 }
 

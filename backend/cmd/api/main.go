@@ -56,8 +56,7 @@ func main() {
 		}
 		switch provider {
 		case "ollama":
-			embeddingService = services.NewOllamaEmbeddingService(cfg.OllamaBaseURL)
-			log.Printf("Embedding service: ollama (base URL: %s)", cfg.OllamaBaseURL)
+			log.Fatal("FATAL: EMBEDDING_PROVIDER=ollama is incompatible with the current database schema (vector(1024)). Ollama nomic-embed-text produces 768-dim vectors. Use EMBEDDING_PROVIDER=voyage or update migration 000044 to vector(768).")
 		default:
 			if cfg.VoyageAPIKey != "" {
 				embeddingService = services.NewVoyageEmbeddingService(cfg.VoyageAPIKey)

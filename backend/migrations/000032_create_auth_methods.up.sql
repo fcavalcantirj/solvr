@@ -20,12 +20,13 @@ CREATE TABLE auth_methods (
     last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     -- Ensure one auth provider type per user (but user can have multiple provider types)
-    CONSTRAINT auth_methods_unique_provider_per_user UNIQUE(user_id, auth_provider),
-
-    -- OAuth provider IDs must be globally unique (same GitHub ID can't be used by 2 users)
-    CONSTRAINT auth_methods_unique_oauth_id UNIQUE(auth_provider, auth_provider_id)
-        WHERE auth_provider_id IS NOT NULL
+    CONSTRAINT auth_methods_unique_provider_per_user UNIQUE(user_id, auth_provider)
 );
+
+-- OAuth provider IDs must be globally unique (same GitHub ID can't be used by 2 users)
+-- Partial unique index: only enforced when auth_provider_id IS NOT NULL
+CREATE UNIQUE INDEX auth_methods_unique_oauth_id ON auth_methods(auth_provider, auth_provider_id)
+    WHERE auth_provider_id IS NOT NULL;
 
 -- Create indexes for efficient lookups
 CREATE INDEX idx_auth_methods_user_id ON auth_methods(user_id);

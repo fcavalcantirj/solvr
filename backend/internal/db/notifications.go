@@ -180,6 +180,70 @@ func (r *NotificationsRepository) getUnreadCount(ctx context.Context, column, id
 	return count, nil
 }
 
+// GetRecentUnreadForAgent returns the most recent unread notifications for an agent,
+// limited by the given count, along with the total unread count.
+// Used by the agent briefing /me endpoint.
+func (r *NotificationsRepository) GetRecentUnreadForAgent(ctx context.Context, agentID string, limit int) ([]models.Notification, int, error) {
+	if limit < 1 {
+		limit = 10
+	}
+
+	// Get total unread count
+	var totalUnread int
+	countQuery := `SELECT COUNT(*) FROM notifications WHERE agent_id = $1 AND read_at IS NULL`
+	err := r.pool.QueryRow(ctx, countQuery, agentID).Scan(&totalUnread)
+	if err != nil {
+		LogQueryError(ctx, "GetRecentUnreadForAgent.Count", "notifications", err)
+		return nil, 0, err
+	}
+
+	// Get recent unread notifications
+	query := `
+		SELECT id, user_id, agent_id, type, title, COALESCE(body, '') as body, COALESCE(link, '') as link, read_at, created_at
+		FROM notifications
+		WHERE agent_id = $1 AND read_at IS NULL
+		ORDER BY created_at DESC
+		LIMIT $2
+	`
+	rows, err := r.pool.Query(ctx, query, agentID, limit)
+	if err != nil {
+		LogQueryError(ctx, "GetRecentUnreadForAgent.Query", "notifications", err)
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var notifications []models.Notification
+	for rows.Next() {
+		var n models.Notification
+		err := rows.Scan(
+			&n.ID,
+			&n.UserID,
+			&n.AgentID,
+			&n.Type,
+			&n.Title,
+			&n.Body,
+			&n.Link,
+			&n.ReadAt,
+			&n.CreatedAt,
+		)
+		if err != nil {
+			LogQueryError(ctx, "GetRecentUnreadForAgent.Scan", "notifications", err)
+			return nil, 0, fmt.Errorf("scan failed: %w", err)
+		}
+		notifications = append(notifications, n)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	if notifications == nil {
+		notifications = []models.Notification{}
+	}
+
+	return notifications, totalUnread, nil
+}
+
 // FindByID finds a notification by ID.
 func (r *NotificationsRepository) FindByID(ctx context.Context, id string) (*models.Notification, error) {
 	query := `

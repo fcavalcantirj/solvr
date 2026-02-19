@@ -63,6 +63,9 @@ type NotificationsRepositoryInterface interface {
 
 	// GetUnreadCountForUser returns the number of unread notifications for a user.
 	GetUnreadCountForUser(ctx context.Context, userID string) (int, error)
+
+	// GetRecentUnreadForAgent returns recent unread notifications for agent briefing.
+	GetRecentUnreadForAgent(ctx context.Context, agentID string, limit int) ([]Notification, int, error)
 }
 
 // NotificationsHandler handles notification-related HTTP requests.

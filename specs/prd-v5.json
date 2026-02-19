@@ -1169,7 +1169,7 @@
       "Update last_briefing_at: call UpdateLastBriefingAt(ctx, agent.ID) at end of handleAgentMe",
       "Verify: go test ./internal/api/handlers -run TestAgentMe_Inbox -v passes all 5 tests"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

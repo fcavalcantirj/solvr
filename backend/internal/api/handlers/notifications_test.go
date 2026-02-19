@@ -91,6 +91,10 @@ func (m *MockNotificationsRepository) GetUnreadCountForUser(ctx context.Context,
 	return 0, nil
 }
 
+func (m *MockNotificationsRepository) GetRecentUnreadForAgent(ctx context.Context, agentID string, limit int) ([]Notification, int, error) {
+	return nil, 0, nil
+}
+
 func createTestNotification(id, title, nType string, userID, agentID *string) Notification {
 	n := Notification{
 		ID:        id,

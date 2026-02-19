@@ -143,7 +143,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		return
 	}
 
-	agentRepo = db.NewAgentRepository(pool)
+	agentRepoConcrete := db.NewAgentRepository(pool)
+	agentRepo = agentRepoConcrete
 	claimTokenRepo = db.NewClaimTokenRepository(pool)
 	postsRepo = db.NewPostRepository(pool)
 	searchRepo = db.NewSearchRepository(pool)
@@ -157,7 +158,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	questionsRepo = db.NewQuestionsRepository(pool)
 	ideasRepo = db.NewIdeasRepository(pool)
 	commentsRepo = db.NewCommentsRepository(pool)
-	notificationsRepo = db.NewNotificationsRepository(pool)
+	notificationsRepoConcrete := db.NewNotificationsRepository(pool)
+	notificationsRepo = notificationsRepoConcrete
 	pinsRepo = db.NewPinRepository(pool)
 	storageRepo := db.NewStorageRepository(pool)
 
@@ -514,6 +516,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// Per FIX-005: GET /v1/me - current authenticated entity info
 			// Works with both JWT (humans) and API key (agents)
 			meHandler := handlers.NewMeHandler(oauthConfig, userRepo, agentRepo, authMethodRepo, pool)
+			meHandler.SetBriefingRepos(notificationsRepoConcrete, agentRepoConcrete)
 			r.Get("/me", meHandler.Me)
 			r.Get("/me/auth-methods", meHandler.GetMyAuthMethods)
 			r.Delete("/me", meHandler.DeleteMe) // PRD-v5 Task 12: User self-deletion

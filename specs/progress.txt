@@ -1,3 +1,30 @@
+2026-02-19: PRD-v5 Backend - Enrich GET /me response with inbox section
+- New file: backend/internal/api/handlers/me_briefing_test.go (459 lines)
+  * 7 TDD tests: TestAgentMe_IncludesInbox, TestAgentMe_InboxUnreadCount,
+    TestAgentMe_InboxItems, TestAgentMe_InboxLimit, TestAgentMe_InboxEmpty,
+    TestAgentMe_InboxGracefulDegradation, TestAgentMe_UpdatesLastBriefingAt
+  * MockBriefingInboxRepo and MockUpdateLastBriefingRepo mocks
+- Modified: backend/internal/api/handlers/me.go (431 lines)
+  * Added BriefingInboxRepo interface: GetRecentUnreadForAgent(ctx, agentID, limit)
+  * Added UpdateLastBriefingRepo interface: UpdateLastBriefingAt(ctx, id)
+  * Added InboxSection struct: UnreadCount int, Items []InboxItem
+  * Added InboxItem struct: Type, Title, BodyPreview, Link, CreatedAt
+  * Added Inbox *InboxSection field to AgentMeResponse
+  * Added SetBriefingRepos() method for dependency injection
+  * Updated handleAgentMe: populates inbox section (max 10 items, truncates body to 100 chars)
+  * Graceful degradation: if inbox repo fails, Inbox is nil (doesn't fail response)
+  * Calls UpdateLastBriefingAt at end of handleAgentMe
+  * Added truncateString helper
+- Modified: backend/internal/db/notifications.go (276 lines)
+  * Added GetRecentUnreadForAgent: SELECT unread notifications + total unread count
+- Modified: backend/internal/api/handlers/notifications.go
+  * Added GetRecentUnreadForAgent to NotificationsRepositoryInterface
+- Modified: backend/internal/api/handlers/notifications_test.go
+  * Added GetRecentUnreadForAgent stub to MockNotificationsRepository
+- Modified: backend/internal/api/router.go (809 lines)
+  * Wired notificationsRepoConcrete and agentRepoConcrete via SetBriefingRepos
+- All backend tests pass (go test ./...)
+
 2026-02-19: PRD-v5 Backend - Add last_briefing_at column to agents table
 - New file: backend/migrations/000047_add_last_briefing_at.up.sql
   * ALTER TABLE agents ADD COLUMN IF NOT EXISTS last_briefing_at TIMESTAMPTZ

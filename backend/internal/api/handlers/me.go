@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
@@ -36,6 +37,31 @@ type PoolInterface interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 }
 
+// BriefingInboxRepo defines the interface for fetching inbox notifications for agent briefing.
+type BriefingInboxRepo interface {
+	GetRecentUnreadForAgent(ctx context.Context, agentID string, limit int) ([]models.Notification, int, error)
+}
+
+// UpdateLastBriefingRepo defines the interface for updating the last briefing timestamp.
+type UpdateLastBriefingRepo interface {
+	UpdateLastBriefingAt(ctx context.Context, id string) error
+}
+
+// InboxSection represents the inbox portion of the agent /me response.
+type InboxSection struct {
+	UnreadCount int         `json:"unread_count"`
+	Items       []InboxItem `json:"items"`
+}
+
+// InboxItem represents a single inbox notification item.
+type InboxItem struct {
+	Type        string    `json:"type"`
+	Title       string    `json:"title"`
+	BodyPreview string    `json:"body_preview"`
+	Link        string    `json:"link"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 // MeHandler handles the GET /v1/auth/me endpoint.
 type MeHandler struct {
 	config         *OAuthConfig
@@ -43,6 +69,8 @@ type MeHandler struct {
 	agentStatsRepo MeAgentStatsInterface
 	authMethodRepo AuthMethodRepositoryInterface
 	pool           PoolInterface
+	inboxRepo      BriefingInboxRepo
+	briefingRepo   UpdateLastBriefingRepo
 }
 
 // NewMeHandler creates a new MeHandler instance.
@@ -54,6 +82,12 @@ func NewMeHandler(config *OAuthConfig, userRepo MeUserRepositoryInterface, agent
 		authMethodRepo: authMethodRepo,
 		pool:           pool,
 	}
+}
+
+// SetBriefingRepos sets the inbox and briefing repositories for agent /me enrichment.
+func (h *MeHandler) SetBriefingRepos(inboxRepo BriefingInboxRepo, briefingRepo UpdateLastBriefingRepo) {
+	h.inboxRepo = inboxRepo
+	h.briefingRepo = briefingRepo
 }
 
 // MeResponse represents the response for GET /v1/me for humans (JWT auth).
@@ -73,18 +107,19 @@ type MeResponse struct {
 // Per FIX-005: GET /v1/me with API key returns agent info.
 // Per prd-v6-ipfs-expanded: includes AMCP identity and pinning quota fields.
 type AgentMeResponse struct {
-	ID                  string   `json:"id"`
-	Type                string   `json:"type"` // Always "agent" to distinguish from user response
-	DisplayName         string   `json:"display_name"`
-	Bio                 string   `json:"bio,omitempty"`
-	Specialties         []string `json:"specialties,omitempty"`
-	AvatarURL           string   `json:"avatar_url,omitempty"`
-	Status              string   `json:"status"`
-	Reputation          int      `json:"reputation"`
-	HumanID             string   `json:"human_id,omitempty"`
-	HasHumanBackedBadge bool     `json:"has_human_backed_badge"`
-	AMCPEnabled         bool     `json:"amcp_enabled"`
-	PinningQuotaBytes   int64    `json:"pinning_quota_bytes"`
+	ID                  string        `json:"id"`
+	Type                string        `json:"type"` // Always "agent" to distinguish from user response
+	DisplayName         string        `json:"display_name"`
+	Bio                 string        `json:"bio,omitempty"`
+	Specialties         []string      `json:"specialties,omitempty"`
+	AvatarURL           string        `json:"avatar_url,omitempty"`
+	Status              string        `json:"status"`
+	Reputation          int           `json:"reputation"`
+	HumanID             string        `json:"human_id,omitempty"`
+	HasHumanBackedBadge bool          `json:"has_human_backed_badge"`
+	AMCPEnabled         bool          `json:"amcp_enabled"`
+	PinningQuotaBytes   int64         `json:"pinning_quota_bytes"`
+	Inbox               *InboxSection `json:"inbox"`
 }
 
 // Me handles GET /v1/me
@@ -140,7 +175,44 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 		response.HumanID = *agent.HumanID
 	}
 
+	// Populate inbox section with graceful degradation
+	if h.inboxRepo != nil {
+		const inboxLimit = 10
+		notifications, totalUnread, err := h.inboxRepo.GetRecentUnreadForAgent(ctx, agent.ID, inboxLimit)
+		if err == nil {
+			items := make([]InboxItem, len(notifications))
+			for i, n := range notifications {
+				items[i] = InboxItem{
+					Type:        n.Type,
+					Title:       n.Title,
+					BodyPreview: truncateString(n.Body, 100),
+					Link:        n.Link,
+					CreatedAt:   n.CreatedAt,
+				}
+			}
+			response.Inbox = &InboxSection{
+				UnreadCount: totalUnread,
+				Items:       items,
+			}
+		}
+		// If err != nil, Inbox remains nil (graceful degradation)
+	}
+
+	// Update last_briefing_at timestamp
+	if h.briefingRepo != nil {
+		// Fire and forget - don't fail the response if this fails
+		_ = h.briefingRepo.UpdateLastBriefingAt(ctx, agent.ID)
+	}
+
 	writeMeJSON(w, http.StatusOK, response)
+}
+
+// truncateString truncates a string to maxLen characters.
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
 }
 
 // handleUserMe returns user info for JWT authenticated requests.

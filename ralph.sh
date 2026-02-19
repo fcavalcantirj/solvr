@@ -2,7 +2,7 @@
 set -e
 
 # PRD file (can be overridden with env var)
-PRD_FILE="${PRD_FILE:-specs/prd-v6-ipfs-expanded.json}"
+PRD_FILE="${PRD_FILE:-specs/prd-v5.json}"
 
 
 # Colors

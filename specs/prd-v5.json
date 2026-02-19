@@ -734,7 +734,7 @@
       "Verify: go test ./internal/db -run TestSearchHybrid -v passes all 4 tests",
       "Verify: Tests require EMBEDDING_PROVIDER and VOYAGE_API_KEY or OLLAMA_BASE_URL env vars"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

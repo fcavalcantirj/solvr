@@ -1,3 +1,23 @@
+2026-02-19: PRD-v5 Semantic Search - Add TDD integration tests for hybrid semantic search
+- New file: backend/internal/db/search_semantic_test.go (264 lines)
+  * 4 TDD integration tests for hybrid search with real embeddings
+  * TestSearchHybrid_SemanticSimilarity: creates 4 posts (3 Go-related, 1 Python), searches "golang race condition"
+    - Asserts Posts 1,2,3 (Go concurrency) found, Post 4 (Python) not prominently ranked
+    - Verifies Post 1 (exact keyword "golang") ranks in top 3
+    - Tests that semantically similar content ("Thread Safety in Go") found via vector similarity
+  * TestSearchHybrid_FallbackToFullText: uses brokenEmbeddingService to simulate API failure
+    - Asserts search gracefully falls back to full-text and still returns results
+  * TestSearchHybrid_EmptyEmbeddings: creates posts without embeddings (embedding IS NULL)
+    - Asserts hybrid search doesn't crash, finds posts via full-text component
+  * TestSearchHybrid_RRFWeighting: tests RRF fusion of keyword + semantic ranking
+    - Creates Post A (strong keyword match) and Post B (strong semantic match)
+    - Asserts both appear in top 5 results due to RRF fusion
+  * Helper: insertTestPostWithEmbedding() generates real Voyage API embeddings for test posts
+  * Helper: formatVectorLiteral() converts float32 slice to PostgreSQL vector literal
+  * Helper: requireEmbeddingAPIKey() skips tests when VOYAGE_API_KEY not set
+  * Tests require EMBEDDING_PROVIDER and VOYAGE_API_KEY or EMBEDDING_API_KEY env vars
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Update search repository to use hybrid RRF function with vector + full-text search
 - Modified: backend/internal/db/search.go (550 lines)
   * Added QueryEmbedder interface (consumer-side, avoids import cycle with services package)

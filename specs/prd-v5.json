@@ -785,7 +785,7 @@
       "Comment: method indicates if semantic search was used (hybrid) or fell back to full-text (fulltext)",
       "Verify: npx tsc --noEmit passes with no type errors"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

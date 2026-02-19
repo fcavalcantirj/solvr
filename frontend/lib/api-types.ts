@@ -49,6 +49,8 @@ export interface APISearchResponse {
     per_page: number;
     has_more: boolean;
     took_ms: number;
+    // Indicates search method: 'hybrid' (semantic + keyword) or 'fulltext' (keyword only)
+    method: 'hybrid' | 'fulltext';
   };
 }
 

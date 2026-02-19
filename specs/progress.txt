@@ -2302,3 +2302,10 @@ Tests (23 new, TDD approach):
 - 2 ProblemsList tests: badge rendering for crystallized/non-crystallized problems
 - 2 useProblem hook tests: crystallization fields present/absent
 - All 693 frontend tests passing (83 test files)
+
+2026-02-19: PRD-v5 Semantic Search - Update search API types to include method in response metadata
+- Modified: frontend/lib/api-types.ts
+  * Added `method: 'hybrid' | 'fulltext'` field to APISearchResponse meta interface
+  * Comment: method indicates if semantic search was used (hybrid) or fell back to full-text (fulltext)
+- Verified: npx tsc --noEmit shows no new type errors (pre-existing errors in test files unrelated)
+- All 741 frontend tests passing (88 test files)

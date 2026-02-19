@@ -342,7 +342,8 @@
       "TESTS: Test pin list render, create flow validation, delete confirmation, error handling, empty state",
       "VERIFY: Dashboard matches Solvr aesthetic, works e2e in light/dark mode, CID copy works"
     ],
-    "passes": false
+    "passes": true,
+    "notes": "DONE 2026-02-19: Pinning dashboard at /pins (page.tsx, 531 lines). New types: PinStatus, APIPinInfo, APIPinExtra, APIPinResponse, APIPinsListResponse, FetchPinsParams, APIStorageResponse in api-types.ts. New API methods: createPin(), listPins(), deletePin(), getStorageUsage() in api.ts. usePins hook (98 lines) with parallel pin+storage fetch via Promise.allSettled, status filtering, create/delete/refetch actions. Page features: auth gate, HardDrive header, storage usage bar (color-coded: green/yellow/red), status filter tabs (ALL/PINNED/QUEUED/PINNING/FAILED), pin list with truncated CID + copy, status badges (color-coded + animate-pulse for pinning), create pin dialog with CID validation (Qm.../bafy...), delete confirmation dialog. MY PINS added to UserMenu dropdown. 10 hook tests + 15 page tests = 25 new tests. All 741 frontend tests passing."
   },
   {
     "category": "docs",

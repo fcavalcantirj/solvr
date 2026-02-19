@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { User, Settings, Key, LogOut, ChevronDown, Bot } from "lucide-react";
+import { User, Settings, Key, LogOut, ChevronDown, Bot, HardDrive } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 interface UserMenuProps {
@@ -50,6 +50,11 @@ export function UserMenu({ className = "" }: UserMenuProps) {
       label: "MY AGENTS",
       href: "/settings/agents",
       icon: Bot,
+    },
+    {
+      label: "MY PINS",
+      href: "/pins",
+      icon: HardDrive,
     },
     {
       label: "SETTINGS",

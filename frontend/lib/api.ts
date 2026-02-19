@@ -66,6 +66,10 @@ import type {
   APILeaderboardResponse,
   FetchLeaderboardParams,
   APIIPFSHealthResponse,
+  APIPinResponse,
+  APIPinsListResponse,
+  FetchPinsParams,
+  APIStorageResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -718,6 +722,35 @@ class SolvrAPI {
   // IPFS Health
   async getIPFSHealth(): Promise<APIIPFSHealthResponse> {
     return this.fetch<APIIPFSHealthResponse>('/v1/health/ipfs');
+  }
+
+  // Pins / IPFS Pinning
+  async createPin(cid: string, name?: string): Promise<APIPinResponse> {
+    return this.fetch<APIPinResponse>('/v1/pins', {
+      method: 'POST',
+      body: JSON.stringify({ cid, name }),
+    });
+  }
+
+  async listPins(params?: FetchPinsParams): Promise<APIPinsListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.cid) searchParams.set('cid', params.cid);
+    if (params?.name) searchParams.set('name', params.name);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+
+    const query = searchParams.toString();
+    return this.fetch<APIPinsListResponse>(`/v1/pins${query ? `?${query}` : ''}`);
+  }
+
+  async deletePin(requestID: string): Promise<void> {
+    await this.fetch<void>(`/v1/pins/${encodeURIComponent(requestID)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getStorageUsage(): Promise<APIStorageResponse> {
+    return this.fetch<APIStorageResponse>('/v1/me/storage');
   }
 
   async getLeaderboardByTag(tag: string, params?: FetchLeaderboardParams): Promise<APILeaderboardResponse> {

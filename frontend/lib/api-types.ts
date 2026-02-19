@@ -874,6 +874,52 @@ export interface APIIPFSHealthResponse {
   error?: string;
 }
 
+// ========================
+// Pins / IPFS Pinning types
+// ========================
+
+export type PinStatus = 'queued' | 'pinning' | 'pinned' | 'failed';
+
+export interface APIPinInfo {
+  cid: string;
+  name?: string;
+  origins?: string[];
+  meta?: Record<string, string>;
+}
+
+export interface APIPinExtra {
+  size_bytes?: number;
+}
+
+export interface APIPinResponse {
+  requestid: string;
+  status: PinStatus;
+  created: string;
+  pin: APIPinInfo;
+  delegates: string[];
+  info?: APIPinExtra;
+}
+
+export interface APIPinsListResponse {
+  count: number;
+  results: APIPinResponse[];
+}
+
+export interface FetchPinsParams {
+  cid?: string;
+  name?: string;
+  status?: PinStatus;
+  limit?: number;
+}
+
+export interface APIStorageResponse {
+  data: {
+    used: number;
+    quota: number;
+    percentage: number;
+  };
+}
+
 // Auth Methods
 export interface APIAuthMethodResponse {
   provider: string;         // "google" | "github" | "email"

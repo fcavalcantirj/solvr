@@ -1,3 +1,22 @@
+2026-02-19: PRD-v6 IPFS Phase 2 - Create pinning dashboard for users and agents
+- New types in lib/api-types.ts: PinStatus, APIPinInfo, APIPinExtra, APIPinResponse, APIPinsListResponse, FetchPinsParams, APIStorageResponse (~45 lines)
+- New API methods in lib/api.ts: createPin(), listPins(), deletePin(), getStorageUsage() (~30 lines)
+- New hook: usePins (hooks/use-pins.ts, 98 lines) with pins list, loading/error/storage states, createPin(), deletePin(), refetch(), status filtering, Promise.allSettled for parallel pin+storage fetch
+- New page: /pins (app/pins/page.tsx, 531 lines) - full pinning management dashboard:
+  * Auth gate: redirects unauthenticated users to login
+  * Page header with HardDrive icon, "MY PINS" title, "PIN NEW CONTENT" button
+  * Storage usage bar: shows used/quota with color-coded progress (green < 80%, yellow 80-90%, red > 90%)
+  * Status filter tabs: ALL, PINNED, QUEUED, PINNING, FAILED
+  * Pin list: name (or "Unnamed"), truncated CID with copy-to-clipboard, status badge (color-coded), size (human-readable), date, delete button
+  * Create pin dialog: CID input with validation (Qm... or bafy...), optional name, error display
+  * Delete confirmation dialog: "This will unpin the content. Continue?"
+  * Loading skeleton, empty state with HardDrive icon, error state with retry button
+  * Responsive: mobile-first card list, all monochrome/font-mono matching Solvr design system
+- Nav: Added "MY PINS" (HardDrive icon) to UserMenu dropdown in user-menu.tsx
+- Footer: IPFS link already exists in Protocol section (/ipfs)
+- TDD tests: 10 hook tests (fetch, loading, error, filter, create, delete, refetch, storage error, empty) + 15 page tests (header, loading, empty, list, error, storage bar, create dialog, CID validation, submit, delete dialog, unnamed, CID truncation, status tabs, auth redirect)
+- All 741 frontend tests passing (25 new)
+
 2026-02-19: PRD-v6 IPFS Phase 2 - Add IPFS status indicator to admin dashboard
 - New API type: APIIPFSHealthResponse in lib/api-types.ts (connected, peer_id, version, error)
 - New API method: api.getIPFSHealth() in lib/api.ts (GET /v1/health/ipfs)

@@ -318,6 +318,34 @@ if [ "$HAS_CREDS" = true ]; then
     # Search should work (even if no results)
     test_case "search executes" 0 "$SOLVR_SH" search "test query placeholder" --json || true
 
+    # Search method indicator: output must show (hybrid search, Nms) or (fulltext search, Nms)
+    test_output_contains "search shows method indicator" "search," "$SOLVR_SH" search "test query" || true
+
+    echo ""
+
+    # ========================================================================
+    # Briefing end-to-end tests (require credentials)
+    # ========================================================================
+
+    echo -e "${YELLOW}Briefing end-to-end tests (with credentials):${NC}"
+
+    # Briefing returns successfully
+    test_case "briefing executes" 0 "$SOLVR_SH" briefing || true
+
+    # Briefing output contains all 5 section headers
+    test_output_contains "briefing shows PROFILE section" "PROFILE" "$SOLVR_SH" briefing || true
+    test_output_contains "briefing shows INBOX section" "INBOX" "$SOLVR_SH" briefing || true
+    test_output_contains "briefing shows OPEN ITEMS section" "OPEN ITEMS" "$SOLVR_SH" briefing || true
+    test_output_contains "briefing shows OPPORTUNITIES section" "OPPORTUNITIES" "$SOLVR_SH" briefing || true
+    test_output_contains "briefing shows REPUTATION section" "REPUTATION" "$SOLVR_SH" briefing || true
+
+    # Briefing shows agent identity
+    test_output_contains "briefing shows agent name" "Agent:" "$SOLVR_SH" briefing || true
+
+    # Briefing shows structured delimiters
+    test_output_contains "briefing shows start delimiter" "=== BRIEFING ===" "$SOLVR_SH" briefing || true
+    test_output_contains "briefing shows end delimiter" "=== END BRIEFING ===" "$SOLVR_SH" briefing || true
+
     echo ""
 else
     echo -e "${YELLOW}Skipping API tests (no credentials found)${NC}"

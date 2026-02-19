@@ -158,9 +158,11 @@ cmd_search() {
     fi
 
     # Pretty print results
-    local total
+    local total method took
     total=$(echo "$response" | jq -r '.meta.total // 0')
-    echo -e "${CYAN}Found ${total} results:${NC}\n"
+    method=$(echo "$response" | jq -r '.meta.method // "fulltext"')
+    took=$(echo "$response" | jq -r '.meta.took_ms // "?"')
+    echo -e "${CYAN}Found ${total} results:${NC} (${method} search, ${took}ms)\n"
 
     echo "$response" | jq -r '.data[]? | "[\(.type)] \(.title)\n  ID: \(.id)\n  Score: \(.score // "N/A")\n  Status: \(.status)\n  \(.snippet // .description | .[0:100])...\n"' 2>/dev/null || echo "No results found"
 }

@@ -419,7 +419,7 @@
       "Comment: If using Ollama, must update migration to vector(768) instead of vector(1024)",
       "Verify: go build ./internal/services compiles without errors"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

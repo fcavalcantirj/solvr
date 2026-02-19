@@ -1,3 +1,16 @@
+2026-02-19: PRD-v5 Semantic Search - Add Ollama embedding client as self-hosted fallback option
+- New file: backend/internal/services/embeddings_ollama.go (117 lines)
+  * OllamaEmbeddingService struct implementing EmbeddingService via local Ollama instance
+  * Uses OpenAI-compatible API format (POST /embeddings)
+  * Default model: nomic-embed-text, baseURL: http://localhost:11434/v1
+  * 768-dimension vectors (vs 1024 for Voyage code-3)
+  * Symmetric embeddings: GenerateQueryEmbedding delegates to same method as GenerateEmbedding
+  * 30s timeout for CPU inference (can be slow on local hardware)
+- New file: backend/internal/services/embeddings_ollama_test.go (193 lines)
+  * 7 tests: constructor, custom baseURL, generate embedding (768-dim), query embedding (symmetric),
+    empty input, empty response, API error, timeout, interface compliance
+- All backend tests passing (12 packages OK)
+
 2026-02-19: PRD-v5 Semantic Search - Create embedding service interface and Voyage AI client
 - New file: backend/internal/services/embeddings.go (213 lines)
   * EmbeddingService interface with GenerateEmbedding() and GenerateQueryEmbedding() methods

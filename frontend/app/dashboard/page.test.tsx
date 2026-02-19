@@ -287,4 +287,34 @@ describe("DashboardPage", () => {
     });
     expect(screen.getByTestId("agent-briefing")).toBeInTheDocument();
   });
+
+  it("renders agents in reputation order (highest first)", async () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: "user-1", type: "human", displayName: "Test Human" },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+
+    const lowRepAgent = { ...mockAgent, id: "agent_low", display_name: "Low Rep Agent", reputation: 10 };
+    const midRepAgent = { ...mockAgent, id: "agent_mid", display_name: "Mid Rep Agent", reputation: 50 };
+    const highRepAgent = { ...mockAgent, id: "agent_high", display_name: "High Rep Agent", reputation: 200 };
+
+    // API returns in wrong order (backend will fix this, but frontend should preserve order)
+    mockGetUserAgents.mockResolvedValue({ data: [highRepAgent, midRepAgent, lowRepAgent] });
+    mockGetAgentBriefing.mockResolvedValue({ data: mockBriefingData });
+    mockGetAgentPins.mockResolvedValue(mockPinsData);
+    mockGetAgentStorage.mockResolvedValue(mockStorageData);
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("High Rep Agent")).toBeInTheDocument();
+    });
+
+    // Get all agent name links and verify order
+    const links = screen.getAllByRole("link", { name: /Rep Agent/ });
+    expect(links[0]).toHaveTextContent("High Rep Agent");
+    expect(links[1]).toHaveTextContent("Mid Rep Agent");
+    expect(links[2]).toHaveTextContent("Low Rep Agent");
+  });
 });

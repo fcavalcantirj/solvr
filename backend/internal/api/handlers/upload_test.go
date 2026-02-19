@@ -11,6 +11,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // --- Mock IPFS Adder ---
@@ -274,5 +276,206 @@ func TestUploadHandler_DefaultMaxUploadSize(t *testing.T) {
 	expected := int64(100 * 1024 * 1024)
 	if DefaultMaxUploadSize != expected {
 		t.Errorf("expected DefaultMaxUploadSize to be %d (100MB), got %d", expected, DefaultMaxUploadSize)
+	}
+}
+
+// --- Mock Pin Repo for Upload Tests ---
+
+type MockUploadPinRepo struct {
+	created   *models.Pin
+	createErr error
+}
+
+func (m *MockUploadPinRepo) Create(ctx context.Context, pin *models.Pin) error {
+	if m.createErr != nil {
+		return m.createErr
+	}
+	m.created = pin
+	return nil
+}
+
+func (m *MockUploadPinRepo) GetByID(ctx context.Context, id string) (*models.Pin, error) {
+	return nil, nil
+}
+
+func (m *MockUploadPinRepo) GetByCID(ctx context.Context, cid, ownerID string) (*models.Pin, error) {
+	return nil, nil
+}
+
+func (m *MockUploadPinRepo) ListByOwner(ctx context.Context, ownerID, ownerType string, opts models.PinListOptions) ([]models.Pin, int, error) {
+	return nil, 0, nil
+}
+
+func (m *MockUploadPinRepo) UpdateStatus(ctx context.Context, id string, status models.PinStatus) error {
+	return nil
+}
+
+func (m *MockUploadPinRepo) UpdateStatusAndSize(ctx context.Context, id string, status models.PinStatus, sizeBytes int64) error {
+	return nil
+}
+
+func (m *MockUploadPinRepo) Delete(ctx context.Context, id string) error {
+	return nil
+}
+
+// --- Mock Storage Repo for Upload Tests ---
+
+type MockUploadStorageRepo struct {
+	updatedOwnerID   string
+	updatedOwnerType string
+	updatedDelta     int64
+	updateErr        error
+}
+
+func (m *MockUploadStorageRepo) GetStorageUsage(ctx context.Context, ownerID, ownerType string) (int64, int64, error) {
+	return 0, 0, nil
+}
+
+func (m *MockUploadStorageRepo) UpdateStorageUsed(ctx context.Context, ownerID, ownerType string, deltaBytes int64) error {
+	if m.updateErr != nil {
+		return m.updateErr
+	}
+	m.updatedOwnerID = ownerID
+	m.updatedOwnerType = ownerType
+	m.updatedDelta = deltaBytes
+	return nil
+}
+
+// --- Auto-Pin Tests ---
+
+func TestAddContent_CreatesPinRecord(t *testing.T) {
+	adder := NewMockIPFSAdder()
+	pinRepo := &MockUploadPinRepo{}
+	storageRepo := &MockUploadStorageRepo{}
+
+	handler := NewUploadHandler(adder, DefaultMaxUploadSize)
+	handler.SetPinRepo(pinRepo)
+	handler.SetStorageRepo(storageRepo)
+
+	content := []byte("auto-pin test content")
+	req := createMultipartFileRequest(t, "file", "test.txt", content)
+	req = addPinsAgentContext(req, "agent_test_1")
+
+	w := httptest.NewRecorder()
+	handler.AddContent(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify pin record was created
+	if pinRepo.created == nil {
+		t.Fatal("expected pin record to be created, got nil")
+	}
+
+	if pinRepo.created.CID != adder.returnCID {
+		t.Errorf("expected pin CID %q, got %q", adder.returnCID, pinRepo.created.CID)
+	}
+
+	if pinRepo.created.OwnerID != "agent_test_1" {
+		t.Errorf("expected ownerID %q, got %q", "agent_test_1", pinRepo.created.OwnerID)
+	}
+
+	if pinRepo.created.OwnerType != "agent" {
+		t.Errorf("expected ownerType %q, got %q", "agent", pinRepo.created.OwnerType)
+	}
+
+	if pinRepo.created.Status != models.PinStatusPinned {
+		t.Errorf("expected status %q, got %q", models.PinStatusPinned, pinRepo.created.Status)
+	}
+
+	sizeBytes := pinRepo.created.SizeBytes
+	if sizeBytes == nil || *sizeBytes != int64(len(content)) {
+		t.Errorf("expected sizeBytes %d, got %v", len(content), sizeBytes)
+	}
+}
+
+func TestAddContent_PinFailure_StillReturns200(t *testing.T) {
+	adder := NewMockIPFSAdder()
+	pinRepo := &MockUploadPinRepo{createErr: errors.New("db connection lost")}
+	storageRepo := &MockUploadStorageRepo{}
+
+	handler := NewUploadHandler(adder, DefaultMaxUploadSize)
+	handler.SetPinRepo(pinRepo)
+	handler.SetStorageRepo(storageRepo)
+
+	content := []byte("pin failure test")
+	req := createMultipartFileRequest(t, "file", "test.txt", content)
+	req = addPinsAuthContext(req, "user-123", "user")
+
+	w := httptest.NewRecorder()
+	handler.AddContent(w, req)
+
+	// Upload should still succeed even if pin creation fails
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 even with pin failure, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify CID is still returned
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["cid"] != adder.returnCID {
+		t.Errorf("expected CID in response even with pin failure")
+	}
+}
+
+func TestAddContent_PinHasCorrectOwnerType(t *testing.T) {
+	adder := NewMockIPFSAdder()
+	pinRepo := &MockUploadPinRepo{}
+
+	handler := NewUploadHandler(adder, DefaultMaxUploadSize)
+	handler.SetPinRepo(pinRepo)
+
+	content := []byte("human upload")
+	req := createMultipartFileRequest(t, "file", "test.txt", content)
+	req = addPinsAuthContext(req, "user-456", "user")
+
+	w := httptest.NewRecorder()
+	handler.AddContent(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if pinRepo.created == nil {
+		t.Fatal("expected pin record for human upload")
+	}
+	if pinRepo.created.OwnerType != "human" {
+		t.Errorf("expected human ownerType %q, got %q", "human", pinRepo.created.OwnerType)
+	}
+	if pinRepo.created.OwnerID != "user-456" {
+		t.Errorf("expected ownerID %q, got %q", "user-456", pinRepo.created.OwnerID)
+	}
+}
+
+func TestAddContent_UpdatesStorageUsed(t *testing.T) {
+	adder := NewMockIPFSAdder()
+	pinRepo := &MockUploadPinRepo{}
+	storageRepo := &MockUploadStorageRepo{}
+
+	handler := NewUploadHandler(adder, DefaultMaxUploadSize)
+	handler.SetPinRepo(pinRepo)
+	handler.SetStorageRepo(storageRepo)
+
+	content := []byte("storage tracking test content")
+	req := createMultipartFileRequest(t, "file", "test.txt", content)
+	req = addPinsAgentContext(req, "agent_storage_1")
+
+	w := httptest.NewRecorder()
+	handler.AddContent(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify storage was updated
+	if storageRepo.updatedOwnerID != "agent_storage_1" {
+		t.Errorf("expected storage update for ownerID %q, got %q", "agent_storage_1", storageRepo.updatedOwnerID)
+	}
+	if storageRepo.updatedOwnerType != "agent" {
+		t.Errorf("expected storage ownerType %q, got %q", "agent", storageRepo.updatedOwnerType)
+	}
+	if storageRepo.updatedDelta != int64(len(content)) {
+		t.Errorf("expected storage delta %d, got %d", len(content), storageRepo.updatedDelta)
 	}
 }

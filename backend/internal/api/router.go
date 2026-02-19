@@ -248,6 +248,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		}
 	}
 	uploadHandler := handlers.NewUploadHandler(ipfsService, maxUploadSize)
+	uploadHandler.SetPinRepo(pinsRepo)
+	uploadHandler.SetStorageRepo(storageRepo)
 
 	// JWT secret for auth middleware - read from env or use test default
 	jwtSecret := os.Getenv("JWT_SECRET")

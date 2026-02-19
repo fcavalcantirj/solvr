@@ -119,7 +119,7 @@ func (r *AgentRepository) FindByID(ctx context.Context, id string) (*models.Agen
 // FindByHumanID finds all agents owned by a human user.
 // Filters out soft-deleted agents (WHERE deleted_at IS NULL).
 func (r *AgentRepository) FindByHumanID(ctx context.Context, humanID string) ([]*models.Agent, error) {
-	query := `SELECT ` + agentColumns + ` FROM agents WHERE human_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE human_id = $1 AND deleted_at IS NULL ORDER BY reputation DESC, created_at DESC`
 
 	rows, err := r.pool.Query(ctx, query, humanID)
 	if err != nil {

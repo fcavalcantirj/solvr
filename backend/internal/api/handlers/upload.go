@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // DefaultMaxUploadSize is the default maximum upload size (100MB).
@@ -25,6 +26,8 @@ type IPFSAdder interface {
 type UploadHandler struct {
 	ipfs          IPFSAdder
 	maxUploadSize int64
+	pinRepo       PinRepositoryInterface
+	storageRepo   StorageRepositoryInterface
 	logger        *slog.Logger
 }
 
@@ -37,6 +40,16 @@ func NewUploadHandler(ipfs IPFSAdder, maxUploadSize int64) *UploadHandler {
 	}
 }
 
+// SetPinRepo sets the pin repository for auto-pin on upload.
+func (h *UploadHandler) SetPinRepo(repo PinRepositoryInterface) {
+	h.pinRepo = repo
+}
+
+// SetStorageRepo sets the storage repository for tracking upload size.
+func (h *UploadHandler) SetStorageRepo(repo StorageRepositoryInterface) {
+	h.storageRepo = repo
+}
+
 // AddContentResponse represents the response from POST /v1/add.
 type AddContentResponse struct {
 	CID  string `json:"cid"`
@@ -45,7 +58,7 @@ type AddContentResponse struct {
 
 // AddContent handles POST /v1/add — upload content to IPFS and return CID.
 // Accepts multipart/form-data with a 'file' field.
-// Does NOT auto-pin — user must call POST /v1/pins separately.
+// Auto-creates a pin record and updates storage tracking.
 func (h *UploadHandler) AddContent(w http.ResponseWriter, r *http.Request) {
 	authInfo := GetAuthInfo(r)
 	if authInfo == nil {
@@ -111,6 +124,23 @@ func (h *UploadHandler) AddContent(w http.ResponseWriter, r *http.Request) {
 		}
 		response.WriteInternalErrorWithLog(w, "failed to upload to IPFS", err, ctx, h.logger)
 		return
+	}
+
+	// Auto-create pin record for tracking
+	if h.pinRepo != nil {
+		sizeBytes := n
+		pin := &models.Pin{
+			CID:       cid,
+			Status:    models.PinStatusPinned,
+			OwnerID:   authInfo.AuthorID,
+			OwnerType: string(authInfo.AuthorType),
+			SizeBytes: &sizeBytes,
+		}
+		if err := h.pinRepo.Create(r.Context(), pin); err != nil {
+			h.logger.Warn("failed to create pin record", "cid", cid, "error", err)
+		} else if h.storageRepo != nil {
+			_ = h.storageRepo.UpdateStorageUsed(r.Context(), authInfo.AuthorID, string(authInfo.AuthorType), n)
+		}
 	}
 
 	// Raw encoding (no data envelope) for IPFS API compatibility.

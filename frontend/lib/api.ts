@@ -70,6 +70,7 @@ import type {
   APIPinsListResponse,
   FetchPinsParams,
   APIStorageResponse,
+  APIAuthMethodsListResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';

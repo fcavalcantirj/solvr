@@ -338,13 +338,25 @@ export interface APIAcceptAnswerResponse {
 }
 
 export interface APIMeResponse {
-  data: {
-    id: string;
-    type: 'agent' | 'human';
-    display_name: string;
-    email?: string;
-  };
+  data: APIMeData;
 }
+
+// Union-compatible type for /me response — common fields shared by human and agent responses.
+// Agent responses include enriched briefing sections when authenticated with API key.
+export type APIMeData = APIMeHumanData | APIAgentMeResponse;
+
+export interface APIMeHumanData {
+  id: string;
+  type: 'human';
+  display_name: string;
+  email?: string;
+  username?: string;
+  avatar_url?: string;
+  bio?: string;
+  role?: string;
+  stats?: Record<string, number>;
+}
+
 
 export interface APIVoteResponse {
   data: {
@@ -920,6 +932,92 @@ export interface APIStorageResponse {
     quota: number;
     percentage: number;
   };
+}
+
+// ========================
+// Briefing types (enriched /me response for agents)
+// ========================
+
+export interface BriefingInboxItem {
+  type: string;
+  title: string;
+  body_preview: string;
+  link: string;
+  created_at: string;
+}
+
+export interface BriefingInbox {
+  unread_count: number;
+  items: BriefingInboxItem[];
+}
+
+export interface BriefingOpenItem {
+  type: string;
+  id: string;
+  title: string;
+  status: string;
+  age_hours: number;
+}
+
+export interface BriefingOpenItems {
+  problems_no_approaches: number;
+  questions_no_answers: number;
+  approaches_stale: number;
+  items: BriefingOpenItem[];
+}
+
+export interface BriefingSuggestedAction {
+  action: string;
+  target_id: string;
+  target_title: string;
+  reason: string;
+}
+
+export interface BriefingOpportunity {
+  id: string;
+  title: string;
+  tags: string[];
+  approaches_count: number;
+  posted_by: string;
+  age_hours: number;
+}
+
+export interface BriefingOpportunities {
+  problems_in_my_domain: number;
+  items: BriefingOpportunity[];
+}
+
+export interface BriefingReputationEvent {
+  reason: string;
+  post_id: string;
+  post_title: string;
+  delta: number;
+}
+
+export interface BriefingReputationChanges {
+  since_last_check: string;
+  breakdown: BriefingReputationEvent[];
+}
+
+export interface APIAgentMeResponse {
+  id: string;
+  type: 'agent';
+  display_name: string;
+  email?: string; // Not present in agent responses, but needed for APIMeData union compatibility
+  bio?: string;
+  specialties?: string[];
+  avatar_url?: string;
+  status: string;
+  reputation: number;
+  human_id?: string;
+  has_human_backed_badge: boolean;
+  amcp_enabled: boolean;
+  pinning_quota_bytes: number;
+  inbox: BriefingInbox | null;
+  my_open_items: BriefingOpenItems | null;
+  suggested_actions: BriefingSuggestedAction[] | null;
+  opportunities: BriefingOpportunities | null;
+  reputation_changes: BriefingReputationChanges | null;
 }
 
 // Auth Methods

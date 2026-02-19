@@ -1381,7 +1381,7 @@
       "Style: consistent with existing agent profile page, monospace fonts, border styling",
       "Verify: npm test -- agent-briefing.test.tsx passes all 4 tests"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

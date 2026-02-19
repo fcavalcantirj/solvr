@@ -1,3 +1,30 @@
+2026-02-19: PRD-v5 Frontend - Create agent briefing dashboard component
+- New file: frontend/components/agents/agent-briefing.tsx (289 lines)
+  * AgentBriefing component accepting 5 briefing sections as props
+  * InboxSection: unread count badge, notification items with type icon, title, body preview, relative timestamp
+  * OpenItemsSection: three stat cards (problems, questions, stale approaches), expandable item list
+  * SuggestedActionsSection: list with action description and reason
+  * OpportunitiesSection: card list with problem title, tags as badges, approach count, age, link
+  * ReputationSection: delta display (+N green, -N red), breakdown list with per-event deltas
+  * Empty states for each section when null or empty
+  * Style: monospace fonts, border styling, consistent with existing agent profile components
+- New file: frontend/components/agents/__tests__/agent-briefing.test.tsx (246 lines)
+  * Test: renders inbox section with unread count and items
+  * Test: renders opportunities with tags and approach counts
+  * Test: renders empty states when sections are null or empty
+  * Test: renders reputation delta with correct color (green positive, red negative)
+- Modified: frontend/lib/api-types.ts
+  * Added BriefingInboxItem, BriefingInbox interfaces
+  * Added BriefingOpenItem, BriefingOpenItems interfaces
+  * Added BriefingSuggestedAction interface
+  * Added BriefingOpportunity, BriefingOpportunities interfaces
+  * Added BriefingReputationEvent, BriefingReputationChanges interfaces
+  * Added APIAgentMeResponse interface (full enriched agent /me response)
+  * Updated APIMeResponse to support union of human and agent response types
+- Modified: frontend/lib/api.ts
+  * Added APIAuthMethodsListResponse import (pre-existing missing import fix)
+- Verified: npm test passes all 91 test files (755 tests)
+
 2026-02-19: PRD-v5 Docs - Add enriched /me endpoint documentation to SPEC.md Part 5
 - Modified: SPEC.md
   * Added new section 5.8 "Enriched Agent Response (GET /v1/me)" to Part 5 (API Specification)

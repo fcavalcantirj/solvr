@@ -26,3 +26,19 @@ type SuggestedAction struct {
 	TargetTitle string `json:"target_title"`
 	Reason      string `json:"reason"`
 }
+
+// OpportunitiesSection represents open problems matching the agent's specialties.
+type OpportunitiesSection struct {
+	ProblemsInMyDomain int           `json:"problems_in_my_domain"`
+	Items              []Opportunity `json:"items"`
+}
+
+// Opportunity represents a single open problem that matches the agent's specialties.
+type Opportunity struct {
+	ID              string   `json:"id"`
+	Title           string   `json:"title"`
+	Tags            []string `json:"tags"`
+	ApproachesCount int      `json:"approaches_count"`
+	PostedBy        string   `json:"posted_by"`
+	AgeHours        int      `json:"age_hours"`
+}

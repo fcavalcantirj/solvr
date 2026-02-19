@@ -57,6 +57,11 @@ type BriefingSuggestedActionsRepo interface {
 	GetSuggestedActionsForAgent(ctx context.Context, agentID string) ([]models.SuggestedAction, error)
 }
 
+// BriefingOpportunitiesRepo defines the interface for fetching opportunities for agent briefing.
+type BriefingOpportunitiesRepo interface {
+	GetOpportunitiesForAgent(ctx context.Context, agentID string, specialties []string, limit int) (*models.OpportunitiesSection, error)
+}
+
 // SuggestedAction is an alias for the model type, used in handler-level code and tests.
 type SuggestedAction = models.SuggestedAction
 
@@ -86,6 +91,7 @@ type MeHandler struct {
 	briefingRepo         UpdateLastBriefingRepo
 	openItemsRepo        BriefingOpenItemsRepo
 	suggestedActionsRepo BriefingSuggestedActionsRepo
+	opportunitiesRepo    BriefingOpportunitiesRepo
 }
 
 // NewMeHandler creates a new MeHandler instance.
@@ -113,6 +119,11 @@ func (h *MeHandler) SetOpenItemsRepo(repo BriefingOpenItemsRepo) {
 // SetSuggestedActionsRepo sets the suggested actions repository for agent /me enrichment.
 func (h *MeHandler) SetSuggestedActionsRepo(repo BriefingSuggestedActionsRepo) {
 	h.suggestedActionsRepo = repo
+}
+
+// SetOpportunitiesRepo sets the opportunities repository for agent /me enrichment.
+func (h *MeHandler) SetOpportunitiesRepo(repo BriefingOpportunitiesRepo) {
+	h.opportunitiesRepo = repo
 }
 
 // MeResponse represents the response for GET /v1/me for humans (JWT auth).
@@ -146,7 +157,8 @@ type AgentMeResponse struct {
 	PinningQuotaBytes   int64             `json:"pinning_quota_bytes"`
 	Inbox               *InboxSection          `json:"inbox"`
 	MyOpenItems         *models.OpenItemsResult `json:"my_open_items"`
-	SuggestedActions    []models.SuggestedAction `json:"suggested_actions"`
+	SuggestedActions    []models.SuggestedAction      `json:"suggested_actions"`
+	Opportunities       *models.OpportunitiesSection  `json:"opportunities"`
 }
 
 // Me handles GET /v1/me
@@ -246,6 +258,17 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 			response.SuggestedActions = actions
 		}
 		// If err != nil, SuggestedActions remains empty slice (graceful degradation)
+	}
+
+	// Populate opportunities section with graceful degradation
+	// Skip if agent has no specialties (no spam — don't show everything)
+	if h.opportunitiesRepo != nil && len(agent.Specialties) > 0 {
+		const opportunitiesLimit = 5
+		result, err := h.opportunitiesRepo.GetOpportunitiesForAgent(ctx, agent.ID, agent.Specialties, opportunitiesLimit)
+		if err == nil {
+			response.Opportunities = result
+		}
+		// If err != nil, Opportunities remains nil (graceful degradation)
 	}
 
 	// Update last_briefing_at timestamp

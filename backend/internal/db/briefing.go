@@ -255,6 +255,81 @@ func (r *BriefingRepository) GetSuggestedActionsForAgent(ctx context.Context, ag
 	return actions, nil
 }
 
+// GetOpportunitiesForAgent returns open problems matching the agent's specialties.
+// Problems are ordered by approach count ASC (zero approaches first), then newest first.
+// Excludes the agent's own posts and solved/closed problems.
+// Uses PostgreSQL array overlap operator (&&) to match ANY tag in agent specialties.
+func (r *BriefingRepository) GetOpportunitiesForAgent(ctx context.Context, agentID string, specialties []string, limit int) (*models.OpportunitiesSection, error) {
+	// Count total matching problems
+	countQuery := `
+		SELECT COUNT(*)
+		FROM posts
+		WHERE type = 'problem'
+			AND status IN ('open', 'in_progress')
+			AND posted_by_id != $1
+			AND tags && $2::text[]
+			AND deleted_at IS NULL
+	`
+
+	var totalCount int
+	err := r.pool.QueryRow(ctx, countQuery, agentID, specialties).Scan(&totalCount)
+	if err != nil {
+		LogQueryError(ctx, "GetOpportunitiesForAgent", "posts(count)", err)
+		return nil, err
+	}
+
+	// Fetch top opportunities ordered by approach_count ASC, created_at DESC
+	itemsQuery := `
+		SELECT p.id, p.title, p.tags, p.posted_by_id,
+			COUNT(a.id) AS approach_count,
+			EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600 AS age_hours
+		FROM posts p
+		LEFT JOIN approaches a ON a.problem_id = p.id AND a.deleted_at IS NULL
+		WHERE p.type = 'problem'
+			AND p.status IN ('open', 'in_progress')
+			AND p.posted_by_id != $1
+			AND p.tags && $2::text[]
+			AND p.deleted_at IS NULL
+		GROUP BY p.id, p.title, p.tags, p.posted_by_id, p.created_at
+		ORDER BY approach_count ASC, p.created_at DESC
+		LIMIT $3
+	`
+
+	rows, err := r.pool.Query(ctx, itemsQuery, agentID, specialties, limit)
+	if err != nil {
+		LogQueryError(ctx, "GetOpportunitiesForAgent", "posts(items)", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []models.Opportunity
+	for rows.Next() {
+		var opp models.Opportunity
+		var ageHoursFloat float64
+		if err := rows.Scan(&opp.ID, &opp.Title, &opp.Tags, &opp.PostedBy, &opp.ApproachesCount, &ageHoursFloat); err != nil {
+			LogQueryError(ctx, "GetOpportunitiesForAgent.scan", "posts(items)", err)
+			return nil, err
+		}
+		opp.AgeHours = int(math.Floor(ageHoursFloat))
+		if opp.Tags == nil {
+			opp.Tags = []string{}
+		}
+		items = append(items, opp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if items == nil {
+		items = []models.Opportunity{}
+	}
+
+	return &models.OpportunitiesSection{
+		ProblemsInMyDomain: totalCount,
+		Items:              items,
+	}, nil
+}
+
 // formatDaysAgo formats a day count into a human-readable string.
 func formatDaysAgo(days int) string {
 	if days == 1 {

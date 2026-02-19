@@ -1,3 +1,28 @@
+2026-02-19: PRD-v5 Backend - Enrich GET /me with opportunities section
+- Modified: backend/internal/models/briefing.go (44 lines)
+  * Added OpportunitiesSection struct: ProblemsInMyDomain, Items
+  * Added Opportunity struct: ID, Title, Tags, ApproachesCount, PostedBy, AgeHours
+- Modified: backend/internal/api/handlers/me.go (504 lines)
+  * Added BriefingOpportunitiesRepo interface
+  * Added opportunitiesRepo field to MeHandler
+  * Added SetOpportunitiesRepo setter method
+  * Added Opportunities field to AgentMeResponse
+  * Updated handleAgentMe: skips if no specialties, populates with graceful degradation
+- Modified: backend/internal/db/briefing.go (353 lines)
+  * Added GetOpportunitiesForAgent method to BriefingRepository
+  * Count query: total matching problems in agent's domain
+  * Items query: JOIN approaches, ORDER BY approach_count ASC, created_at DESC
+  * Uses PostgreSQL array overlap operator (&&) for tag matching
+- New file: backend/internal/api/handlers/me_opportunities_test.go (373 lines)
+  * MockBriefingOpportunitiesRepo mock
+  * 6 TDD tests: TestAgentMe_OpportunitiesMatchSpecialties,
+    TestAgentMe_OpportunitiesExcludesOwnPosts, TestAgentMe_OpportunitiesExcludesSolved,
+    TestAgentMe_OpportunitiesPrioritizesZeroApproaches, TestAgentMe_OpportunitiesLimit,
+    TestAgentMe_OpportunitiesNoSpecialties
+- Modified: backend/internal/api/router.go (813 lines)
+  * Wired briefingRepo to MeHandler via SetOpportunitiesRepo
+- All backend tests pass (go test ./...)
+
 2026-02-19: PRD-v5 Backend - Enrich GET /me with suggested_actions section
 - Modified: backend/internal/models/briefing.go (28 lines)
   * Added SuggestedAction struct: Action, TargetID, TargetTitle, Reason

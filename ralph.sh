@@ -86,8 +86,6 @@ for ((i=1; i<=$1; i++)); do
 
 === WORKFLOW ===
 
-🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
-🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
 
 1. Read CLAUDE.md for project guidelines and golden rules.
 2. Read SPEC.md for full specification details when needed.
@@ -155,10 +153,8 @@ CRITICAL:
     # WARNING if context exceeds threshold
     if [ "$iter_context" -gt "$CONTEXT_WARNING_THRESHOLD" ]; then
       echo ""
-      echo -e "${RED}${BOLD}🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨${NC}"
       echo -e "${RED}${BOLD}  ⚠️  WARNING: CONTEXT EXCEEDED ${CONTEXT_WARNING_THRESHOLD} TOKENS!${NC}"
       echo -e "${RED}${BOLD}  ⚠️  This iteration used ${iter_context} tokens${NC}"
-      echo -e "${RED}${BOLD}🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨${NC}"
       echo ""
     fi
   else

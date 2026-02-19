@@ -118,13 +118,14 @@ type TrendingPost struct {
 
 // HardcoreUnsolved represents a hard unsolved problem with multiple failed approaches.
 type HardcoreUnsolved struct {
-	ID               string   `json:"id"`
-	Title            string   `json:"title"`
-	Tags             []string `json:"tags"`
-	FailedApproaches int      `json:"failed_approaches"`
-	TotalApproaches  int      `json:"total_approaches"`
-	DifficultyScore  int      `json:"difficulty_score"`
-	AgeHours         int      `json:"age_hours"`
+	ID              string   `json:"id"`
+	Title           string   `json:"title"`
+	Weight          int      `json:"weight"`
+	TotalApproaches int      `json:"total_approaches"`
+	FailedCount     int      `json:"failed_count"`
+	AgeDays         int      `json:"age_days"`
+	Tags            []string `json:"tags"`
+	DifficultyScore float64  `json:"difficulty_score"`
 }
 
 // RisingIdea represents an idea gaining traction with recent engagement.

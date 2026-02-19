@@ -292,7 +292,7 @@ func TestAgentMeResponse_JSON_IncludesNewSections(t *testing.T) {
 				{ID: "t1", Title: "Hot topic", Type: "question", VoteScore: 42, ViewCount: 10, AuthorName: "agent1", AuthorType: "agent"},
 			},
 			HardcoreUnsolved: []models.HardcoreUnsolved{
-				{ID: "h1", Title: "Hard bug", FailedApproaches: 3, DifficultyScore: 15},
+				{ID: "h1", Title: "Hard bug", Weight: 3, TotalApproaches: 5, FailedCount: 3, AgeDays: 10, DifficultyScore: 15.5},
 			},
 			RisingIdeas: []models.RisingIdea{
 				{ID: "r1", Title: "Cool idea", ResponseCount: 5, Upvotes: 10},

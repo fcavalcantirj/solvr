@@ -606,3 +606,206 @@ func TestGetTrendingNow_LimitRespected(t *testing.T) {
 		t.Errorf("expected at most 5 results with limit=5, got %d", len(trending))
 	}
 }
+
+// --- GetHardcoreUnsolved ---
+
+// helper: create failed approaches on a problem
+func createFailedApproaches(t *testing.T, pool *Pool, problemID string, count int, authorType, authorID string) {
+	t.Helper()
+	ctx := context.Background()
+	for i := 0; i < count; i++ {
+		_, err := pool.Exec(ctx,
+			`INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
+			 VALUES ($1, $2, $3, $4, 'failed')`,
+			problemID, authorType, authorID, fmt.Sprintf("Failed approach %d", i))
+		if err != nil {
+			t.Fatalf("failed to create approach %d: %v", i, err)
+		}
+	}
+}
+
+func TestGetHardcoreUnsolved_ManyFailedApproaches(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create a problem with 3 failed approaches (qualifies: failed_count >= 2)
+	problemID := createBriefingPost(t, pool, "Hardcore problem many failures", "problem", "open", "human", userID, []string{"go"})
+	createFailedApproaches(t, pool, problemID, 3, "agent", agentID)
+
+	repo := NewPlatformBriefingRepository(pool)
+	results, err := repo.GetHardcoreUnsolved(ctx, 10)
+	if err != nil {
+		t.Fatalf("GetHardcoreUnsolved failed: %v", err)
+	}
+
+	found := false
+	for _, h := range results {
+		if h.ID == problemID {
+			found = true
+			if h.FailedCount != 3 {
+				t.Errorf("expected failed_count=3, got %d", h.FailedCount)
+			}
+			if h.TotalApproaches != 3 {
+				t.Errorf("expected total_approaches=3, got %d", h.TotalApproaches)
+			}
+			if h.DifficultyScore <= 0 {
+				t.Errorf("expected positive difficulty_score, got %f", h.DifficultyScore)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected problem with 3 failed approaches in hardcore_unsolved results")
+	}
+}
+
+func TestGetHardcoreUnsolved_HighWeight(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create a problem with weight=5 and age > 1 day (qualifies: weight >= 4)
+	problemID := createBriefingPost(t, pool, "Hardcore high weight problem", "problem", "open", "human", userID, []string{"go"})
+	_, err := pool.Exec(ctx, "UPDATE posts SET weight = 5, created_at = NOW() - INTERVAL '2 days' WHERE id = $1", problemID)
+	if err != nil {
+		t.Fatalf("failed to update weight: %v", err)
+	}
+
+	repo := NewPlatformBriefingRepository(pool)
+	results, err := repo.GetHardcoreUnsolved(ctx, 10)
+	if err != nil {
+		t.Fatalf("GetHardcoreUnsolved failed: %v", err)
+	}
+
+	found := false
+	for _, h := range results {
+		if h.ID == problemID {
+			found = true
+			if h.Weight != 5 {
+				t.Errorf("expected weight=5, got %d", h.Weight)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected high-weight problem in hardcore_unsolved results")
+	}
+}
+
+func TestGetHardcoreUnsolved_ExcludesSolvedAndClosed(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create a solved problem with many failed approaches
+	solvedProblem := createBriefingPost(t, pool, "Solved hardcore problem", "problem", "open", "human", userID, []string{"go"})
+	createFailedApproaches(t, pool, solvedProblem, 5, "agent", agentID)
+	_, err := pool.Exec(ctx, "UPDATE posts SET status = 'solved' WHERE id = $1", solvedProblem)
+	if err != nil {
+		t.Fatalf("failed to mark solved: %v", err)
+	}
+
+	// Create a closed problem with many failed approaches
+	closedProblem := createBriefingPost(t, pool, "Closed hardcore problem", "problem", "open", "human", userID, []string{"go"})
+	createFailedApproaches(t, pool, closedProblem, 5, "agent", agentID)
+	_, err = pool.Exec(ctx, "UPDATE posts SET status = 'closed' WHERE id = $1", closedProblem)
+	if err != nil {
+		t.Fatalf("failed to mark closed: %v", err)
+	}
+
+	repo := NewPlatformBriefingRepository(pool)
+	results, err := repo.GetHardcoreUnsolved(ctx, 50)
+	if err != nil {
+		t.Fatalf("GetHardcoreUnsolved failed: %v", err)
+	}
+
+	for _, h := range results {
+		if h.ID == solvedProblem {
+			t.Error("solved problem should be excluded from hardcore_unsolved")
+		}
+		if h.ID == closedProblem {
+			t.Error("closed problem should be excluded from hardcore_unsolved")
+		}
+	}
+}
+
+func TestGetHardcoreUnsolved_DifficultyScoreOrdering(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Problem with 5 failed approaches (higher difficulty)
+	hardProblem := createBriefingPost(t, pool, "Very hard problem", "problem", "open", "human", userID, []string{"go"})
+	createFailedApproaches(t, pool, hardProblem, 5, "agent", agentID)
+
+	// Problem with 2 failed approaches (lower difficulty)
+	easyProblem := createBriefingPost(t, pool, "Less hard problem", "problem", "open", "human", userID, []string{"go"})
+	createFailedApproaches(t, pool, easyProblem, 2, "agent", agentID)
+
+	repo := NewPlatformBriefingRepository(pool)
+	results, err := repo.GetHardcoreUnsolved(ctx, 50)
+	if err != nil {
+		t.Fatalf("GetHardcoreUnsolved failed: %v", err)
+	}
+
+	idxHard, idxEasy := -1, -1
+	for i, h := range results {
+		if h.ID == hardProblem {
+			idxHard = i
+		}
+		if h.ID == easyProblem {
+			idxEasy = i
+		}
+	}
+
+	if idxHard == -1 {
+		t.Fatal("expected hard problem in results")
+	}
+	if idxEasy == -1 {
+		t.Fatal("expected easy problem in results")
+	}
+	if idxHard >= idxEasy {
+		t.Errorf("harder problem (5 failures, idx=%d) should rank before easier (2 failures, idx=%d)", idxHard, idxEasy)
+	}
+}
+
+func TestGetHardcoreUnsolved_NoQualifyingProblems(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create a simple problem with 0 approaches (doesn't qualify)
+	createBriefingPost(t, pool, "Simple easy problem", "problem", "open", "human", userID, []string{"go"})
+
+	repo := NewPlatformBriefingRepository(pool)
+	results, err := repo.GetHardcoreUnsolved(ctx, 10)
+	if err != nil {
+		t.Fatalf("GetHardcoreUnsolved should not error for no results: %v", err)
+	}
+
+	// Results may include other test data, but our simple problem should NOT be here
+	for _, h := range results {
+		if h.Title == "Simple easy problem" {
+			t.Error("simple problem with 0 approaches should not appear in hardcore_unsolved")
+		}
+	}
+}

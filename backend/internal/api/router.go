@@ -534,7 +534,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 				// Platform-wide repos (nil until db implementations are added)
 				PlatformPulseRepo:   db.NewPlatformBriefingRepository(pool),
 				TrendingRepo:        db.NewPlatformBriefingRepository(pool),
-				HardcoreRepo:        nil,
+				HardcoreRepo:        db.NewPlatformBriefingRepository(pool),
 				RisingIdeasRepo:     nil,
 				VictoriesRepo:       db.NewPlatformBriefingRepository(pool),
 				RecommendationsRepo: nil,

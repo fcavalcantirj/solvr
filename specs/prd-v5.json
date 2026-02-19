@@ -1529,7 +1529,7 @@
       "Test: TestGetHardcoreUnsolved_NoQualifyingProblems — create simple problem with 0 approaches, verify empty result (not error)",
       "Verify: go test ./internal/db/ -run TestGetHardcoreUnsolved -v passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

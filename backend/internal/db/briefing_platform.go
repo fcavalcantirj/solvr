@@ -209,3 +209,74 @@ func (r *PlatformBriefingRepository) GetTrendingNow(ctx context.Context, exclude
 	}
 	return posts, nil
 }
+
+// GetHardcoreUnsolved returns the toughest uncracked problems ranked by difficulty score.
+// Qualifiers (any one is enough): 2+ failed approaches, weight>=4, old (30d+) with positive votes,
+// or 3+ total approaches with at least 1 failure.
+func (r *PlatformBriefingRepository) GetHardcoreUnsolved(ctx context.Context, limit int) ([]models.HardcoreUnsolved, error) {
+	query := `
+		WITH problem_stats AS (
+			SELECT
+				p.id, p.title,
+				COALESCE(p.weight, 1) AS weight,
+				p.tags,
+				(p.upvotes - p.downvotes) AS vote_score,
+				COUNT(a.id) AS total_approaches,
+				COUNT(a.id) FILTER (WHERE a.status = 'failed') AS failed_count,
+				GREATEST(EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 86400, 0) AS age_days
+			FROM posts p
+			LEFT JOIN approaches a ON a.problem_id = p.id AND a.deleted_at IS NULL
+			WHERE p.type = 'problem'
+			  AND p.status NOT IN ('solved', 'closed')
+			  AND p.deleted_at IS NULL
+			GROUP BY p.id, p.title, p.weight, p.tags, p.upvotes, p.downvotes, p.created_at
+		)
+		SELECT
+			id, title, weight, total_approaches, failed_count,
+			FLOOR(age_days)::int AS age_days,
+			tags,
+			weight * (1 + failed_count * 3) * ln(age_days + 2) * (1 + GREATEST(vote_score, 0) * 0.5) AS difficulty_score
+		FROM problem_stats
+		WHERE failed_count >= 2
+		   OR weight >= 4
+		   OR (age_days > 30 AND vote_score > 0)
+		   OR (total_approaches >= 3 AND failed_count >= 1)
+		ORDER BY difficulty_score DESC
+		LIMIT $1`
+
+	rows, err := r.pool.Query(ctx, query, limit)
+	if err != nil {
+		LogQueryError(ctx, "GetHardcoreUnsolved", "posts", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var problems []models.HardcoreUnsolved
+	for rows.Next() {
+		var h models.HardcoreUnsolved
+		var tags []string
+		err := rows.Scan(
+			&h.ID, &h.Title, &h.Weight, &h.TotalApproaches, &h.FailedCount,
+			&h.AgeDays, &tags, &h.DifficultyScore,
+		)
+		if err != nil {
+			LogQueryError(ctx, "GetHardcoreUnsolved.Scan", "posts", err)
+			return nil, err
+		}
+		if tags == nil {
+			tags = []string{}
+		}
+		h.Tags = tags
+		problems = append(problems, h)
+	}
+
+	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "GetHardcoreUnsolved.Rows", "posts", err)
+		return nil, err
+	}
+
+	if problems == nil {
+		problems = []models.HardcoreUnsolved{}
+	}
+	return problems, nil
+}

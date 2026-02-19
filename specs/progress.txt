@@ -1,3 +1,22 @@
+2026-02-19: PRD-v5 Backend - Add hardcore_unsolved section showing toughest uncracked problems
+- Modified: backend/internal/models/briefing.go
+  * Updated HardcoreUnsolved struct to match PRD: Weight, FailedCount, AgeDays, DifficultyScore(float64)
+  * Removed old FailedApproaches(int) and AgeHours(int) fields
+- Modified: backend/internal/db/briefing_platform.go
+  * Implemented GetHardcoreUnsolved(ctx, limit) method on PlatformBriefingRepository
+  * Uses CTE with problem_stats aggregation, difficulty formula: weight*(1+failed*3)*ln(age+2)*(1+votes*0.5)
+  * WHERE qualifiers: 2+ failures, weight>=4, old(30d+) with positive votes, or 3+ approaches with 1+ failure
+  * Excludes solved and closed problems
+- New tests: backend/internal/db/briefing_platform_test.go
+  * TestGetHardcoreUnsolved_ManyFailedApproaches - 3 failed approaches, verifies failed_count=3
+  * TestGetHardcoreUnsolved_HighWeight - weight=5 problem qualifies even with 0 approaches
+  * TestGetHardcoreUnsolved_ExcludesSolvedAndClosed - solved/closed excluded
+  * TestGetHardcoreUnsolved_DifficultyScoreOrdering - 5 failures ranks before 2 failures
+  * TestGetHardcoreUnsolved_NoQualifyingProblems - 0 approaches doesn't qualify
+- Modified: backend/internal/api/router.go - wired HardcoreRepo
+- Updated mock data in services/briefing_test.go and handlers/me_agent_briefing_test.go
+- Verified: go test ./... passes (all packages)
+
 2026-02-19: PRD-v5 Backend - Add trending_now section showing top 5 posts by engagement velocity
 - Modified: backend/internal/models/briefing.go
   * Updated TrendingPost struct to match PRD spec: VoteScore, ViewCount, AuthorName, AuthorType fields

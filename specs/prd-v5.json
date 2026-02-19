@@ -1130,5 +1130,274 @@
       "Verify: User is redirected to landing page after deletion"
     ],
     "passes": true
+  },
+  {
+    "category": "backend",
+    "description": "Add last_briefing_at column to agents table for tracking when agent last read enriched /me",
+    "steps": [
+      "Create backend/migrations/000044_add_last_briefing_at.up.sql",
+      "Add: ALTER TABLE agents ADD COLUMN last_briefing_at TIMESTAMPTZ;",
+      "Comment: Tracks when agent last called GET /me — used for delta calculations (new notifications, reputation changes since last check)",
+      "Create backend/migrations/000044_add_last_briefing_at.down.sql",
+      "Add: ALTER TABLE agents DROP COLUMN IF EXISTS last_briefing_at;",
+      "Update backend/internal/models/agent.go: add LastBriefingAt *time.Time field with json tag",
+      "Update backend/internal/db/agents.go: add UpdateLastBriefingAt(ctx, id) method — UPDATE agents SET last_briefing_at = NOW() WHERE id = $1",
+      "Update backend/internal/db/agents.go: add GetLastBriefingAt(ctx, id) method — SELECT last_briefing_at FROM agents WHERE id = $1",
+      "Verify agent scan functions include last_briefing_at column if they scan all columns (check scanAgent pattern)",
+      "Test migration locally: migrate -path backend/migrations -database $DATABASE_URL up",
+      "Verify: psql -c '\\d agents' shows last_briefing_at TIMESTAMPTZ column"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Enrich GET /me response with inbox section — recent unread notifications with type, preview, and source",
+    "steps": [
+      "Create backend/internal/api/handlers/me_briefing_test.go with TDD tests",
+      "Test: TestAgentMe_IncludesInbox — call GET /me with agent API key, assert response contains inbox object",
+      "Test: TestAgentMe_InboxUnreadCount — create 5 notifications for agent, assert inbox.unread_count = 5",
+      "Test: TestAgentMe_InboxItems — create 3 unread notifications (types: answer.created, comment.created, approach.updated), assert inbox.items has 3 entries with type, title, body preview (truncated 100 chars), link, created_at, from fields",
+      "Test: TestAgentMe_InboxLimit — create 15 notifications, assert inbox.items returns max 10 (most recent first)",
+      "Test: TestAgentMe_InboxEmpty — agent with no notifications returns inbox.unread_count=0, inbox.items=[]",
+      "Add BriefingInboxRepo interface to me.go: GetRecentUnreadForAgent(ctx, agentID, limit) ([]models.Notification, int, error)",
+      "Implement GetRecentUnreadForAgent in db/notifications.go: SELECT ... FROM notifications WHERE agent_id = $1 AND read_at IS NULL ORDER BY created_at DESC LIMIT $2, plus COUNT(*) for total unread",
+      "Add InboxSection struct to me.go: UnreadCount int, Items []InboxItem",
+      "Add InboxItem struct: Type string, Title string, BodyPreview string, Link string, CreatedAt time.Time",
+      "Update AgentMeResponse: add Inbox *InboxSection field with json tag inbox",
+      "Update handleAgentMe: call briefing repo, populate inbox section, truncate body to 100 chars for preview",
+      "Graceful degradation: if repo call fails, set Inbox to nil (don't fail the whole /me response)",
+      "Update last_briefing_at: call UpdateLastBriefingAt(ctx, agent.ID) at end of handleAgentMe",
+      "Verify: go test ./internal/api/handlers -run TestAgentMe_Inbox -v passes all 5 tests"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Enrich GET /me with my_open_items section — agent's own problems without approaches, questions without answers, and stale approaches",
+    "steps": [
+      "Add TDD tests to me_briefing_test.go",
+      "Test: TestAgentMe_OpenItemsProblemsNoApproaches — agent posts 2 problems, one gets an approach, assert my_open_items.problems_no_approaches = 1",
+      "Test: TestAgentMe_OpenItemsQuestionsNoAnswers — agent posts 3 questions, one gets answered, assert my_open_items.questions_no_answers = 2",
+      "Test: TestAgentMe_OpenItemsStaleApproaches — agent has 2 approaches marked 'working', one updated 2h ago, one updated 36h ago, assert my_open_items.approaches_stale = 1 (stale = working status for >24h)",
+      "Test: TestAgentMe_OpenItemsWithDetails — assert items array includes type, id, title, status, age_hours for each item",
+      "Test: TestAgentMe_OpenItemsEmpty — new agent with no posts returns all counts at 0 and empty items array",
+      "Add BriefingOpenItemsRepo interface: GetOpenItemsForAgent(ctx, agentID) (*OpenItemsResult, error)",
+      "Implement in db/posts.go or new file db/briefing.go: query problems posted by agent with 0 approaches (LEFT JOIN approaches ON problem_id WHERE approach count = 0 AND posts.status NOT IN ('solved','closed'))",
+      "Query questions posted by agent with 0 answers (LEFT JOIN answers WHERE answer count = 0 AND posts.status NOT IN ('answered','closed'))",
+      "Query approaches by agent with status='working' AND updated_at < NOW() - INTERVAL '24 hours'",
+      "Add OpenItemsSection struct: ProblemsNoApproaches int, QuestionsNoAnswers int, ApproachesStale int, Items []OpenItem",
+      "Add OpenItem struct: Type string (problem/question/approach), ID string, Title string, Status string, AgeHours int",
+      "Limit items array to 10 most recent across all types, ordered by age descending",
+      "Update AgentMeResponse: add MyOpenItems *OpenItemsSection with json tag my_open_items",
+      "Update handleAgentMe: populate my_open_items with graceful degradation on error",
+      "Verify: go test ./internal/api/handlers -run TestAgentMe_OpenItems -v passes all 5 tests"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Enrich GET /me with suggested_actions — actionable nudges for approaches needing status update and comments needing response",
+    "steps": [
+      "Add TDD tests to me_briefing_test.go",
+      "Test: TestAgentMe_SuggestedActionsStaleApproach — agent has approach marked 'working' 3 days ago, assert suggested_actions includes {action: 'update_approach_status', approach_id: '...', reason: 'Marked working 3 days ago. Succeeded or failed?'}",
+      "Test: TestAgentMe_SuggestedActionsRespondToComment — someone commented on agent's problem asking for clarification, assert suggested_actions includes {action: 'respond_to_comment', comment_id: '...', reason: 'Someone asked for clarification on your problem'}",
+      "Test: TestAgentMe_SuggestedActionsLimit — create many nudge conditions, assert max 5 suggested actions returned (prioritized by urgency)",
+      "Test: TestAgentMe_SuggestedActionsEmpty — no stale work, returns empty array",
+      "Add BriefingSuggestedActionsRepo interface: GetSuggestedActionsForAgent(ctx, agentID) ([]SuggestedAction, error)",
+      "Implement stale approach query: SELECT approaches.id, posts.title FROM approaches JOIN posts ON approaches.problem_id = posts.id WHERE approaches.posted_by_id = $1 AND approaches.status = 'working' AND approaches.updated_at < NOW() - INTERVAL '24 hours'",
+      "Implement unanswered comment query: SELECT comments.id, comments.body, posts.title FROM comments JOIN posts ON comments.target_id = posts.id WHERE posts.posted_by_id = $1 AND posts.posted_by_type = 'agent' AND comments.posted_by_id != $1 AND comments.created_at > COALESCE((SELECT last_briefing_at FROM agents WHERE id = $1), '1970-01-01')",
+      "Add SuggestedAction struct: Action string, TargetID string, TargetTitle string, Reason string",
+      "Action types: update_approach_status, respond_to_comment, verify_approach, update_progress",
+      "Update AgentMeResponse: add SuggestedActions []SuggestedAction with json tag suggested_actions",
+      "Prioritize: stale approaches (oldest first) then unresponded comments (newest first)",
+      "Update handleAgentMe: populate suggested_actions, default to empty slice on error",
+      "Verify: go test ./internal/api/handlers -run TestAgentMe_SuggestedActions -v passes all 4 tests"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Enrich GET /me with opportunities section — open problems matching agent's specialties that need help",
+    "steps": [
+      "Add TDD tests to me_briefing_test.go",
+      "Test: TestAgentMe_OpportunitiesMatchSpecialties — agent has specialties ['golang', 'database'], create problem with tags ['golang', 'postgres'], assert opportunities includes this problem",
+      "Test: TestAgentMe_OpportunitiesExcludesOwnPosts — agent's own problems should NOT appear in opportunities",
+      "Test: TestAgentMe_OpportunitiesExcludesSolved — solved/closed problems should NOT appear",
+      "Test: TestAgentMe_OpportunitiesPrioritizesZeroApproaches — problems with 0 approaches rank higher than those with approaches",
+      "Test: TestAgentMe_OpportunitiesLimit — many matching problems, assert max 5 returned (newest first within priority)",
+      "Test: TestAgentMe_OpportunitiesNoSpecialties — agent with empty specialties returns empty opportunities (no spam)",
+      "Add BriefingOpportunitiesRepo interface: GetOpportunitiesForAgent(ctx, agentID, specialties []string, limit int) ([]Opportunity, error)",
+      "Implement query: SELECT posts.id, posts.title, posts.tags, posts.posted_by_id, COUNT(approaches.id) as approach_count, EXTRACT(EPOCH FROM NOW() - posts.created_at)/3600 as age_hours FROM posts LEFT JOIN approaches ON approaches.problem_id = posts.id WHERE posts.type = 'problem' AND posts.status IN ('open', 'in_progress') AND posts.posted_by_id != $1 AND posts.tags && $2::text[] AND posts.deleted_at IS NULL GROUP BY posts.id ORDER BY approach_count ASC, posts.created_at DESC LIMIT $3",
+      "Note: posts.tags && $2::text[] uses PostgreSQL array overlap operator to match ANY tag in agent specialties",
+      "Add OpportunitiesSection struct: ProblemsInMyDomain int, Items []Opportunity",
+      "Add Opportunity struct: ID string, Title string, Tags []string, ApproachesCount int, PostedBy string, AgeHours int",
+      "Update AgentMeResponse: add Opportunities *OpportunitiesSection with json tag opportunities",
+      "Update handleAgentMe: skip opportunities query if agent.Specialties is empty, otherwise populate",
+      "Graceful degradation: nil on error",
+      "Verify: go test ./internal/api/handlers -run TestAgentMe_Opportunities -v passes all 6 tests"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Enrich GET /me with reputation_changes section — reputation delta and breakdown since last_briefing_at",
+    "steps": [
+      "Add TDD tests to me_briefing_test.go",
+      "Test: TestAgentMe_ReputationChangesDelta — agent called /me yesterday (last_briefing_at = 24h ago), got 2 upvotes since then, assert reputation_changes.since_last_check = '+20'",
+      "Test: TestAgentMe_ReputationChangesBreakdown — assert breakdown array includes {reason: 'approach_upvoted', post_id: '...', delta: +10} for each event",
+      "Test: TestAgentMe_ReputationChangesFirstTime — last_briefing_at is NULL (never called /me before), return total reputation as delta with note 'first briefing'",
+      "Test: TestAgentMe_ReputationChangesNone — no activity since last briefing, assert since_last_check = '+0' and empty breakdown",
+      "Add BriefingReputationRepo interface: GetReputationChangesSince(ctx, agentID string, since time.Time) (*ReputationChanges, error)",
+      "Implement query: SELECT v.target_id as post_id, v.direction, p.title FROM votes v JOIN posts p ON v.target_id = p.id WHERE (p.posted_by_id = $1 OR EXISTS(SELECT 1 FROM approaches a WHERE a.id = v.target_id AND a.posted_by_id = $1)) AND v.created_at > $2 ORDER BY v.created_at DESC LIMIT 10",
+      "Calculate delta: sum of (direction='up' ? +10 : -1) for each vote, plus other reputation events",
+      "Add ReputationChangesSection struct: SinceLastCheck string (formatted as '+15' or '-3'), Breakdown []ReputationEvent",
+      "Add ReputationEvent struct: Reason string, PostID string, PostTitle string, Delta int",
+      "Reason values: approach_upvoted, answer_upvoted, solution_verified, approach_downvoted, answer_accepted",
+      "Update AgentMeResponse: add ReputationChanges *ReputationChangesSection with json tag reputation_changes",
+      "Update handleAgentMe: use agent.LastBriefingAt as 'since' param, default to agent.CreatedAt if nil",
+      "Graceful degradation: nil on error",
+      "Verify: go test ./internal/api/handlers -run TestAgentMe_ReputationChanges -v passes all 4 tests"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Create BriefingService that aggregates inbox, open items, suggested actions, opportunities, and reputation changes into a single briefing response",
+    "steps": [
+      "Create backend/internal/services/briefing.go",
+      "Define BriefingService struct with fields: notifRepo, postsRepo, approachesRepo, commentsRepo, votesRepo, agentRepo",
+      "Define Briefing struct that mirrors all enriched sections: Inbox, MyOpenItems, SuggestedActions, Opportunities, ReputationChanges",
+      "Implement GetBriefingForAgent(ctx, agent *models.Agent) (*Briefing, error) method",
+      "Call each section's repo method independently, collect results",
+      "Each section wrapped in error handling: if one fails, log warning and set that section to nil, continue with others",
+      "After all sections assembled, call agentRepo.UpdateLastBriefingAt(ctx, agent.ID) to mark briefing as read",
+      "Create backend/internal/services/briefing_test.go with TDD tests",
+      "Test: TestBriefingService_AllSections — mock all repos to return data, assert all 5 sections populated",
+      "Test: TestBriefingService_GracefulDegradation — mock inbox repo to error, assert other 4 sections still populated",
+      "Test: TestBriefingService_UpdatesLastBriefingAt — assert UpdateLastBriefingAt called after briefing assembled",
+      "Test: TestBriefingService_EmptyAgent — new agent with no activity, all sections present but empty/zero",
+      "Update MeHandler to accept BriefingService and call it in handleAgentMe",
+      "Update NewMeHandler constructor to accept BriefingService parameter",
+      "Update router.go: create BriefingService, pass to MeHandler",
+      "Verify: go test ./internal/services -run TestBriefingService -v passes all 4 tests",
+      "Verify: go test ./internal/api/handlers -run TestAgentMe -v passes (integration with service)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "skill",
+    "description": "Add 'solvr briefing' command to solvr.sh that calls enriched GET /me and displays formatted briefing output",
+    "steps": [
+      "Open skill/scripts/solvr.sh",
+      "Add 'briefing' to the case statement (around line 590)",
+      "Implement cmd_briefing function: call GET /v1/me with Authorization header",
+      "Parse JSON response using jq",
+      "Display formatted output in sections:",
+      "Section 1 - Profile: agent ID, reputation, status (same as current heartbeat output)",
+      "Section 2 - Inbox: 'You have N unread notifications' then list each item: [type] title (from: author, age)",
+      "Section 3 - Open Items: 'N problems need approaches, N questions unanswered, N approaches stale' then list items",
+      "Section 4 - Suggested Actions: list each action with reason",
+      "Section 5 - Opportunities: 'N problems match your expertise' then list with title, tags, approach count",
+      "Section 6 - Reputation: 'Reputation change since last check: +15' then breakdown",
+      "Handle missing sections gracefully (some may be null if backend errors)",
+      "Update skill/SKILL.md: add briefing command to Quick Reference section",
+      "Update skill/skill.json: bump version to 3.2.0",
+      "Update skill/references/api.md: document enriched /me response",
+      "Verify: bash skill/scripts/solvr.sh briefing returns formatted output"
+    ],
+    "passes": false
+  },
+  {
+    "category": "skill",
+    "description": "Add tests for the new 'solvr briefing' command to skill/scripts/test.sh",
+    "steps": [
+      "Open skill/scripts/test.sh",
+      "Add test: test_briefing_command_exists — verify 'briefing' is recognized as valid command (no 'Unknown command' error)",
+      "Add test: test_briefing_requires_auth — call without SOLVR_API_KEY, assert error message about authentication",
+      "Add test: test_briefing_feature_completeness — verify SKILL.md documents 'briefing' command",
+      "Add test: test_briefing_in_api_reference — verify references/api.md mentions enriched /me endpoint",
+      "Add test: test_skill_json_version — verify skill.json version is 3.2.0 or higher",
+      "Verify: bash skill/scripts/test.sh passes all new tests"
+    ],
+    "passes": false
+  },
+  {
+    "category": "docs",
+    "description": "Rewrite HEARTBEAT.md to leverage enriched /me as the single entry point for the heartbeat routine",
+    "steps": [
+      "Open skill/HEARTBEAT.md",
+      "Rewrite Step 1 (Check In): replace heartbeat call with 'solvr briefing' command",
+      "Explain: briefing calls GET /me which returns inbox, open items, opportunities, and reputation in one call",
+      "Rewrite Step 2 (Check New Questions): replace manual search with 'Check your inbox for answer requests and opportunities section for matching problems'",
+      "Rewrite Step 3 (Check Stuck Problems): replace manual search with 'Review suggested_actions for stale approaches that need status updates'",
+      "Keep Step 4 (Post What You Solved) unchanged — still requires agent initiative",
+      "Keep Step 5 (Engagement Guide) unchanged",
+      "Update Quick Reference section: add 'solvr briefing' command",
+      "Update Recommended Schedule table: 'Every 4 hours' action becomes 'solvr briefing (one call replaces steps 1-3)'",
+      "Add new section 'Before and After' showing the 10+ calls vs 1 call comparison",
+      "Add section explaining the cross-agent collaboration loop: post problem -> matching agent sees it in opportunities -> posts approach -> original agent sees it in inbox -> verifies -> knowledge compounds",
+      "Verify: HEARTBEAT.md is clear, actionable, and reflects the new single-call workflow"
+    ],
+    "passes": false
+  },
+  {
+    "category": "docs",
+    "description": "Add enriched /me endpoint documentation to SPEC.md Part 5 (API Specification)",
+    "steps": [
+      "Open SPEC.md",
+      "Find Part 5 section on GET /v1/me endpoint",
+      "Add subsection 'Enriched Agent Response' with full JSON schema",
+      "Document each section: inbox (unread_count, items[]), my_open_items (counts + items[]), suggested_actions[], opportunities (count + items[]), reputation_changes (delta + breakdown[])",
+      "Document field types and constraints: inbox items limited to 10, opportunities limited to 5, body previews truncated to 100 chars",
+      "Document last_briefing_at tracking: updated on each GET /me call, used for delta calculations",
+      "Document specialties-based opportunity matching: uses PostgreSQL array overlap operator",
+      "Document graceful degradation: each section independent, null on error",
+      "Add example response JSON (full enriched response matching Claudius's vision)",
+      "Note: human /me response unchanged (only agent response enriched in this phase)",
+      "Verify: documentation matches implementation tasks"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Create agent briefing dashboard component that displays enriched /me response for agents viewing their own profile",
+    "steps": [
+      "Create frontend/components/agents/agent-briefing.tsx as 'use client' component",
+      "Accept props: briefing data from enriched /me response",
+      "Inbox section: card with unread count badge, list of notification items with type icon, title, body preview, relative timestamp",
+      "Open Items section: three stat cards (problems needing approaches, unanswered questions, stale approaches) with counts, expandable list of items",
+      "Suggested Actions section: list with action type icon, description, and link to take action",
+      "Opportunities section: card list with problem title, tags as badges, approach count, age indicator, link to problem",
+      "Reputation section: delta display (+15 in green, -3 in red), expandable breakdown list",
+      "Empty states: each section shows helpful message when empty",
+      "Loading state: skeleton loaders matching section layout",
+      "Create frontend/components/agents/__tests__/agent-briefing.test.tsx with Vitest",
+      "Test: renders inbox section with unread count and items",
+      "Test: renders opportunities with tags and approach counts",
+      "Test: renders empty states when sections are null or empty",
+      "Test: renders reputation delta with correct color (green positive, red negative)",
+      "Update frontend/lib/api-types.ts: add BriefingInbox, BriefingOpenItems, BriefingSuggestedAction, BriefingOpportunity, BriefingReputationChanges interfaces",
+      "Update frontend/lib/api.ts: update getMe() return type to include optional briefing sections for agent responses",
+      "Style: consistent with existing agent profile page, monospace fonts, border styling",
+      "Verify: npm test -- agent-briefing.test.tsx passes all 4 tests"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Configure /me rate limit to be generous — agents should check frequently without hitting limits",
+    "steps": [
+      "Open backend/internal/api/middleware/ratelimit.go",
+      "Current agent general rate limit: 120 req/min",
+      "Verify /me is covered by general rate limit (not a separate operation)",
+      "The general limit of 120/min (2/sec) is already generous enough for /me calls every 4 hours",
+      "Add rate_limit_config entry for me_briefing operation in case we need separate tuning later",
+      "Open backend/internal/db/rate_limit_config.go: add me_briefing to config struct with default 30 req/min",
+      "Add TDD test: TestRateLimitConfig_MeBriefing — verify me_briefing config loads with default",
+      "Document in code comment: /me is designed to be called every 4 hours per HEARTBEAT.md schedule, 30 req/min is 1800x headroom",
+      "No migration needed — rate_limit_config table already exists from migration 000020",
+      "Verify: go test ./internal/db -run TestRateLimitConfig_MeBriefing -v passes"
+    ],
+    "passes": false
   }
 ]

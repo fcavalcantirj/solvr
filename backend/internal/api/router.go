@@ -201,6 +201,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	// Per FIX-020: Set posts repository on content handlers so type-specific list endpoints
 	// (GET /v1/problems, /v1/questions, /v1/ideas) return data consistent with /v1/posts
 	problemsHandler.SetPostsRepository(postsRepo)
+	approachRelRepo := db.NewApproachRelationshipsRepository(pool)
+	problemsHandler.SetApproachRelationshipsRepository(approachRelRepo)
 	questionsHandler.SetPostsRepository(postsRepo)
 	ideasHandler.SetPostsRepository(postsRepo)
 
@@ -458,6 +460,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		r.Get("/problems/{id}", problemsHandler.Get)
 		// GET /v1/problems/:id/approaches - list approaches (no auth required)
 		r.Get("/problems/{id}/approaches", problemsHandler.ListApproaches)
+		// GET /v1/problems/:id/approaches/:approachId/history - version chain (no auth required)
+		r.Get("/problems/{id}/approaches/{approachId}/history", problemsHandler.GetApproachHistory)
 		// GET /v1/problems/:id/export - export problem as markdown (no auth required)
 		r.Get("/problems/{id}/export", problemsHandler.Export)
 

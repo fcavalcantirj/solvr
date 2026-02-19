@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -531,6 +532,156 @@ func TestVerifyApproach_ApproachNotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	handler.VerifyApproach(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", w.Code)
+	}
+}
+
+// ============================================================================
+// GET /v1/problems/:id/approaches/:approachId/history - Version History Tests
+// ============================================================================
+
+// MockRelationshipsRepository implements ApproachRelationshipsRepositoryInterface for testing.
+type MockRelationshipsRepository struct {
+	history *models.ApproachVersionHistory
+	err     error
+}
+
+func (m *MockRelationshipsRepository) GetVersionChain(_ context.Context, _ string, _ int) (*models.ApproachVersionHistory, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.history, nil
+}
+
+func (m *MockRelationshipsRepository) CreateRelationship(_ context.Context, rel *models.ApproachRelationship) (*models.ApproachRelationship, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	rel.ID = "rel-mock-1"
+	rel.CreatedAt = time.Now()
+	return rel, nil
+}
+
+// TestGetApproachHistory_Success tests a 3-version chain.
+func TestGetApproachHistory_Success(t *testing.T) {
+	repo := NewMockProblemsRepository()
+	approach := createTestApproach("approach-v3", "problem-123")
+	repo.SetApproach(&approach)
+
+	relRepo := &MockRelationshipsRepository{
+		history: &models.ApproachVersionHistory{
+			Current: approach,
+			History: []models.ApproachWithAuthor{
+				createTestApproach("approach-v1", "problem-123"),
+				createTestApproach("approach-v2", "problem-123"),
+			},
+			Relationships: []models.ApproachRelationship{
+				{ID: "rel-1", FromApproachID: "approach-v3", ToApproachID: "approach-v2", RelationType: models.RelationTypeUpdates},
+				{ID: "rel-2", FromApproachID: "approach-v2", ToApproachID: "approach-v1", RelationType: models.RelationTypeUpdates},
+			},
+		},
+	}
+
+	handler := NewProblemsHandler(repo)
+	handler.SetApproachRelationshipsRepository(relRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/problems/problem-123/approaches/approach-v3/history", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "problem-123")
+	rctx.URLParams.Add("approachId", "approach-v3")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+
+	handler.GetApproachHistory(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected data object in response")
+	}
+
+	history, ok := data["history"].([]interface{})
+	if !ok {
+		t.Fatal("expected history array in data")
+	}
+	if len(history) != 2 {
+		t.Errorf("expected 2 history entries, got %d", len(history))
+	}
+
+	rels, ok := data["relationships"].([]interface{})
+	if !ok {
+		t.Fatal("expected relationships array in data")
+	}
+	if len(rels) != 2 {
+		t.Errorf("expected 2 relationships, got %d", len(rels))
+	}
+}
+
+// TestGetApproachHistory_NoHistory tests an approach with no version history.
+func TestGetApproachHistory_NoHistory(t *testing.T) {
+	repo := NewMockProblemsRepository()
+	approach := createTestApproach("approach-1", "problem-123")
+	repo.SetApproach(&approach)
+
+	relRepo := &MockRelationshipsRepository{
+		history: &models.ApproachVersionHistory{
+			Current:       approach,
+			History:       []models.ApproachWithAuthor{},
+			Relationships: []models.ApproachRelationship{},
+		},
+	}
+
+	handler := NewProblemsHandler(repo)
+	handler.SetApproachRelationshipsRepository(relRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/problems/problem-123/approaches/approach-1/history", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "problem-123")
+	rctx.URLParams.Add("approachId", "approach-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+
+	handler.GetApproachHistory(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	data := resp["data"].(map[string]interface{})
+	history := data["history"].([]interface{})
+	if len(history) != 0 {
+		t.Errorf("expected 0 history entries, got %d", len(history))
+	}
+}
+
+// TestGetApproachHistory_NotFound tests 404 when approach doesn't exist.
+func TestGetApproachHistory_NotFound(t *testing.T) {
+	repo := NewMockProblemsRepository()
+	repo.SetApproach(nil)
+
+	handler := NewProblemsHandler(repo)
+	handler.SetApproachRelationshipsRepository(&MockRelationshipsRepository{})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/problems/problem-123/approaches/nonexistent/history", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "problem-123")
+	rctx.URLParams.Add("approachId", "nonexistent")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+
+	handler.GetApproachHistory(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected status 404, got %d", w.Code)

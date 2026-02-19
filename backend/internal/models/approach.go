@@ -78,6 +78,18 @@ type Approach struct {
 	// DeletedAt is when the approach was soft deleted (null if not deleted).
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 
+	// IsLatest is true if this is the latest version (not superseded).
+	IsLatest bool `json:"is_latest"`
+
+	// ForgetAfter is the time after which this approach should be auto-archived.
+	ForgetAfter *time.Time `json:"forget_after,omitempty"`
+
+	// ArchivedAt is when the approach was archived to IPFS cold storage.
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+
+	// ArchivedCID is the IPFS CID of the archived approach content.
+	ArchivedCID string `json:"archived_cid,omitempty"`
+
 	// EmbeddingStr carries PostgreSQL vector literal from handler to repository.
 	// Excluded from JSON responses.
 	EmbeddingStr *string `json:"-"`
@@ -142,4 +154,29 @@ type UpdateApproachRequest struct {
 	Status  *string `json:"status,omitempty"`
 	Outcome *string `json:"outcome,omitempty"`
 	Method  *string `json:"method,omitempty"`
+}
+
+// ApproachRelationType represents the type of relationship between approaches.
+type ApproachRelationType string
+
+const (
+	RelationTypeUpdates ApproachRelationType = "updates"
+	RelationTypeExtends ApproachRelationType = "extends"
+	RelationTypeDerives ApproachRelationType = "derives"
+)
+
+// ApproachRelationship represents a link between two approaches.
+type ApproachRelationship struct {
+	ID             string               `json:"id"`
+	FromApproachID string               `json:"from_approach_id"`
+	ToApproachID   string               `json:"to_approach_id"`
+	RelationType   ApproachRelationType `json:"relation_type"`
+	CreatedAt      time.Time            `json:"created_at"`
+}
+
+// ApproachVersionHistory is the response for the version history endpoint.
+type ApproachVersionHistory struct {
+	Current       ApproachWithAuthor     `json:"current"`
+	History       []ApproachWithAuthor   `json:"history"`
+	Relationships []ApproachRelationship `json:"relationships"`
 }

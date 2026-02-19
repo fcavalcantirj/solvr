@@ -72,6 +72,7 @@ import type {
   APIStorageResponse,
   APIAuthMethodsListResponse,
   APIAgentBriefingResponse,
+  APIApproachVersionHistory,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -194,6 +195,13 @@ class SolvrAPI {
 
     const query = searchParams.toString();
     return this.fetch<APIApproachesResponse>(`/v1/problems/${problemId}/approaches${query ? `?${query}` : ''}`);
+  }
+
+  async getApproachHistory(problemId: string, approachId: string, depth?: number): Promise<{ data: APIApproachVersionHistory }> {
+    const searchParams = new URLSearchParams();
+    if (depth) searchParams.set('depth', depth.toString());
+    const query = searchParams.toString();
+    return this.fetch<{ data: APIApproachVersionHistory }>(`/v1/problems/${problemId}/approaches/${approachId}/history${query ? `?${query}` : ''}`);
   }
 
   async exportProblem(problemId: string): Promise<{ markdown: string; token_estimate: number }> {

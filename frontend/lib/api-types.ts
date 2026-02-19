@@ -126,6 +126,20 @@ export interface APIApproachesResponse {
   };
 }
 
+export interface APIApproachRelationship {
+  id: string;
+  from_approach_id: string;
+  to_approach_id: string;
+  relation_type: 'updates' | 'extends' | 'derives';
+  created_at: string;
+}
+
+export interface APIApproachVersionHistory {
+  current: APIApproachWithAuthor;
+  history: APIApproachWithAuthor[];
+  relationships: APIApproachRelationship[];
+}
+
 export interface FetchPostsParams {
   type?: 'problem' | 'question' | 'idea' | 'all';
   status?: string;

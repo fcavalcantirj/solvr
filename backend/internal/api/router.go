@@ -179,6 +179,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 	// Create content handlers (API-CRITICAL per PRD-v2)
 	problemsHandler := handlers.NewProblemsHandler(problemsRepo)
+	if embeddingService != nil {
+		problemsHandler.SetEmbeddingService(embeddingService)
+	}
 	questionsHandler := handlers.NewQuestionsHandler(questionsRepo)
 	if embeddingService != nil {
 		questionsHandler.SetEmbeddingService(embeddingService)

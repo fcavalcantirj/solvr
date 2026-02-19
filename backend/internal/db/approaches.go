@@ -35,8 +35,8 @@ func (r *ApproachesRepository) CreateApproach(ctx context.Context, approach *mod
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO approaches (
 			problem_id, author_type, author_id, angle, method,
-			assumptions, differs_from, status, outcome, solution
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			assumptions, differs_from, status, outcome, solution, embedding
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::vector)
 		RETURNING id, created_at, updated_at
 	`,
 		approach.ProblemID,
@@ -49,6 +49,7 @@ func (r *ApproachesRepository) CreateApproach(ctx context.Context, approach *mod
 		approach.Status,
 		approach.Outcome,
 		approach.Solution,
+		approach.EmbeddingStr,
 	).Scan(&id, &createdAt, &updatedAt)
 
 	if err != nil {
@@ -260,6 +261,7 @@ func (r *ApproachesRepository) UpdateApproach(ctx context.Context, approach *mod
 		    outcome = COALESCE($3, outcome),
 		    solution = COALESCE($4, solution),
 		    method = COALESCE($5, method),
+		    embedding = COALESCE($6::vector, embedding),
 		    updated_at = NOW()
 		WHERE id = $1 AND deleted_at IS NULL
 		RETURNING status, outcome, solution, method, updated_at
@@ -269,6 +271,7 @@ func (r *ApproachesRepository) UpdateApproach(ctx context.Context, approach *mod
 		nullIfEmpty(approach.Outcome),
 		nullIfEmpty(approach.Solution),
 		nullIfEmpty(approach.Method),
+		approach.EmbeddingStr,
 	).Scan(
 		&approach.Status,
 		&approach.Outcome,

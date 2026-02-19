@@ -584,7 +584,7 @@
       "Verify: POST /v1/problems/{id}/approaches with valid body populates embedding column",
       "Verify: Latency increases by ~50-100ms for approach creation"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

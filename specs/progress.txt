@@ -1,3 +1,27 @@
+2026-02-19: PRD-v5 Semantic Search - Add synchronous embedding generation to approach creation handler
+- Modified: backend/internal/api/handlers/problems.go (942 lines)
+  * Added embeddingService field and logger to ProblemsHandler struct
+  * Added SetEmbeddingService() method matching PostsHandler/QuestionsHandler pattern
+  * CreateApproach: generates embedding via embeddingService.GenerateEmbedding() with 5s timeout
+  * CreateApproach: combines approach.Angle + " " + approach.Method as embedding input text
+  * CreateApproach: graceful degradation - logs warning and proceeds with nil embedding on error
+  * UpdateApproach: tracks contentChanged flag for method or outcome changes
+  * UpdateApproach: regenerates embedding when method or outcome changes, skips for status-only
+  * Added imports: log/slog, os
+- Modified: backend/internal/models/approach.go (145 lines)
+  * Added EmbeddingStr *string field (json:"-" to exclude from API responses)
+  * Carries PostgreSQL vector literal from handler to repository
+- Modified: backend/internal/db/approaches.go (468 lines)
+  * CreateApproach: INSERT query includes embedding column with $11::vector cast
+  * UpdateApproach: uses COALESCE($6::vector, embedding) to preserve existing embedding
+- Modified: backend/internal/api/router.go (800 lines)
+  * Wires embeddingService to problemsHandler.SetEmbeddingService() (like postsHandler/questionsHandler)
+- New file: backend/internal/api/handlers/approaches_embedding_test.go (271 lines)
+  * 6 TDD tests: create with embedding, create with failure (graceful degradation),
+    create without service, update method regenerates embedding,
+    update with embedding failure still updates, status-only change skips regeneration
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Add synchronous embedding generation to answer creation handler
 - Modified: backend/internal/api/handlers/questions.go (761 lines)
   * Added embeddingService field and logger to QuestionsHandler struct

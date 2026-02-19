@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -50,13 +52,24 @@ type ProblemsRepositoryInterface interface {
 
 // ProblemsHandler handles problem-related HTTP requests.
 type ProblemsHandler struct {
-	repo      ProblemsRepositoryInterface
-	postsRepo PostsRepositoryInterface // For listing problems (shares data with /v1/posts)
+	repo             ProblemsRepositoryInterface
+	postsRepo        PostsRepositoryInterface // For listing problems (shares data with /v1/posts)
+	embeddingService EmbeddingServiceInterface
+	logger           *slog.Logger
 }
 
 // NewProblemsHandler creates a new ProblemsHandler.
 func NewProblemsHandler(repo ProblemsRepositoryInterface) *ProblemsHandler {
-	return &ProblemsHandler{repo: repo}
+	return &ProblemsHandler{
+		repo:   repo,
+		logger: slog.New(slog.NewJSONHandler(os.Stderr, nil)),
+	}
+}
+
+// SetEmbeddingService sets the embedding service for generating approach embeddings.
+// When set, approach creation/update will generate and store embeddings for semantic search.
+func (h *ProblemsHandler) SetEmbeddingService(svc EmbeddingServiceInterface) {
+	h.embeddingService = svc
 }
 
 // SetPostsRepository sets the posts repository for listing operations.
@@ -469,6 +482,21 @@ func (h *ProblemsHandler) CreateApproach(w http.ResponseWriter, r *http.Request)
 		Status:      models.ApproachStatusStarting,
 	}
 
+	// Synchronous embedding: combine angle + method for semantic search
+	if h.embeddingService != nil {
+		embedCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		text := approach.Angle + " " + approach.Method
+		embedding, embedErr := h.embeddingService.GenerateEmbedding(embedCtx, text)
+		if embedErr != nil {
+			h.logger.Warn("failed to generate embedding for approach", "error", embedErr)
+		} else {
+			vecStr := float32SliceToVectorString(embedding)
+			approach.EmbeddingStr = &vecStr
+		}
+	}
+
 	createdApproach, err := h.repo.CreateApproach(r.Context(), approach)
 	if err != nil {
 		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create approach")
@@ -522,6 +550,7 @@ func (h *ProblemsHandler) UpdateApproach(w http.ResponseWriter, r *http.Request)
 
 	// Apply updates
 	updatedApproach := existingApproach.Approach
+	contentChanged := false
 
 	if req.Status != nil {
 		newStatus := models.ApproachStatus(*req.Status)
@@ -538,6 +567,7 @@ func (h *ProblemsHandler) UpdateApproach(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		updatedApproach.Outcome = *req.Outcome
+		contentChanged = true
 	}
 
 	if req.Method != nil {
@@ -546,6 +576,22 @@ func (h *ProblemsHandler) UpdateApproach(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		updatedApproach.Method = *req.Method
+		contentChanged = true
+	}
+
+	// Regenerate embedding if method or outcome changed (content that affects semantic meaning)
+	if contentChanged && h.embeddingService != nil {
+		embedCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		text := updatedApproach.Angle + " " + updatedApproach.Method
+		embedding, embedErr := h.embeddingService.GenerateEmbedding(embedCtx, text)
+		if embedErr != nil {
+			h.logger.Warn("failed to regenerate embedding for approach", "error", embedErr)
+		} else {
+			vecStr := float32SliceToVectorString(embedding)
+			updatedApproach.EmbeddingStr = &vecStr
+		}
 	}
 
 	result, err := h.repo.UpdateApproach(r.Context(), &updatedApproach)

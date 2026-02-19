@@ -77,6 +77,10 @@ type Approach struct {
 
 	// DeletedAt is when the approach was soft deleted (null if not deleted).
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+
+	// EmbeddingStr carries PostgreSQL vector literal from handler to repository.
+	// Excluded from JSON responses.
+	EmbeddingStr *string `json:"-"`
 }
 
 // ApproachAuthor contains author information for display.

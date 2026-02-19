@@ -375,9 +375,10 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 			upvotes, downvotes,
 			success_criteria, weight,
 			accepted_answer_id, evolved_into,
+			embedding,
 			created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::vector, NOW(), NOW())
 		RETURNING id, type, title, description, tags,
 			posted_by_type, posted_by_id, status,
 			upvotes, downvotes, view_count, success_criteria, weight,
@@ -406,6 +407,7 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 		post.Weight,
 		post.AcceptedAnswerID,
 		post.EvolvedInto,
+		post.EmbeddingStr,
 	)
 
 	return r.scanPost(row)
@@ -526,6 +528,7 @@ func (r *PostRepository) Update(ctx context.Context, post *models.Post) (*models
 			weight = $7,
 			accepted_answer_id = $8,
 			evolved_into = $9,
+			embedding = COALESCE($10::vector, embedding),
 			updated_at = NOW()
 		WHERE id = $1 AND deleted_at IS NULL
 		RETURNING id, type, title, description, tags,
@@ -546,6 +549,7 @@ func (r *PostRepository) Update(ctx context.Context, post *models.Post) (*models
 		post.Weight,
 		post.AcceptedAnswerID,
 		post.EvolvedInto,
+		post.EmbeddingStr,
 	)
 
 	return r.scanPost(row)

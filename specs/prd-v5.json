@@ -520,7 +520,7 @@
       "Verify: POST /v1/posts with valid body succeeds and embedding column is populated",
       "Verify: Latency increases by ~50-100ms (measure with time curl)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
 	"github.com/fcavalcantirj/solvr/internal/db"
@@ -342,6 +343,21 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Weight:          req.Weight,
 	}
 
+	// Synchronous embedding adds ~50-100ms latency but ensures post is immediately searchable
+	if h.embeddingService != nil {
+		embedCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		text := post.Title + " " + post.Description
+		embedding, embedErr := h.embeddingService.GenerateEmbedding(embedCtx, text)
+		if embedErr != nil {
+			h.logger.Warn("failed to generate embedding for post", "error", embedErr)
+		} else {
+			vecStr := float32SliceToVectorString(embedding)
+			post.EmbeddingStr = &vecStr
+		}
+	}
+
 	createdPost, err := h.repo.Create(r.Context(), post)
 	if err != nil {
 		ctx := response.LogContext{
@@ -448,6 +464,22 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		updatedPost.Status = newStatus
+	}
+
+	// Regenerate embedding if title or description changed
+	contentChanged := req.Title != nil || req.Description != nil
+	if contentChanged && h.embeddingService != nil {
+		embedCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		text := updatedPost.Title + " " + updatedPost.Description
+		embedding, embedErr := h.embeddingService.GenerateEmbedding(embedCtx, text)
+		if embedErr != nil {
+			h.logger.Warn("failed to regenerate embedding for post", "error", embedErr, "postID", postID)
+		} else {
+			vecStr := float32SliceToVectorString(embedding)
+			updatedPost.EmbeddingStr = &vecStr
+		}
 	}
 
 	result, err := h.repo.Update(r.Context(), &updatedPost)
@@ -665,6 +697,23 @@ func writePostsJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
+}
+
+// float32SliceToVectorString converts a float32 slice to PostgreSQL vector literal format.
+// Example: [0.1, 0.2, 0.3] -> "[0.1,0.2,0.3]"
+func float32SliceToVectorString(v []float32) string {
+	if len(v) == 0 {
+		return "[]"
+	}
+	s := "["
+	for i, f := range v {
+		if i > 0 {
+			s += ","
+		}
+		s += fmt.Sprintf("%g", f)
+	}
+	s += "]"
+	return s
 }
 
 // writePostsError writes an error JSON response.

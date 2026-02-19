@@ -1,3 +1,25 @@
+2026-02-19: PRD-v5 Semantic Search - Add synchronous embedding generation to POST and PATCH posts handlers
+- Modified: backend/internal/api/handlers/posts.go (729 lines)
+  * Create handler: generates embedding via embeddingService.GenerateEmbedding() after validation
+  * Combines title + description as embedding input text
+  * 5-second context timeout prevents slow embedding API from blocking request
+  * Graceful degradation: on error, logs warning and proceeds with nil embedding
+  * Update handler: regenerates embedding only when title or description changes
+  * Status-only or tags-only updates skip embedding regeneration
+  * Added float32SliceToVectorString() helper for PostgreSQL vector literal format
+- Modified: backend/internal/models/post.go (209 lines)
+  * Added EmbeddingStr *string field (json:"-" to exclude from API responses)
+  * Carries PostgreSQL vector literal from handler to repository
+- Modified: backend/internal/db/posts.go (823 lines)
+  * Create query: includes embedding column with $N::vector cast
+  * Update query: uses COALESCE($N::vector, embedding) to preserve existing embedding
+- New file: backend/internal/api/handlers/posts_embedding_test.go (234 lines)
+  * 6 TDD tests: create with embedding, create with failure (graceful degradation),
+    create without service, update title regenerates, update description regenerates,
+    status-only change skips regeneration
+  * MockEmbeddingService tracks callCount and lastInput for assertions
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Create backfill worker CLI tool to embed existing posts
 - New file: backend/cmd/backfill-embeddings/main.go (265 lines)
   * CLI tool with -batch-size (default: 100) and -dry-run flags

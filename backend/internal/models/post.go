@@ -116,6 +116,10 @@ type Post struct {
 
 	// CrystallizedAt is when the problem was crystallized to IPFS.
 	CrystallizedAt *time.Time `json:"crystallized_at,omitempty"`
+
+	// EmbeddingStr is the PostgreSQL vector literal for the post embedding.
+	// Set during creation/update for semantic search. Not returned in JSON responses.
+	EmbeddingStr *string `json:"-"`
 }
 
 // VoteScore returns the computed vote score (upvotes - downvotes).

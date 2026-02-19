@@ -286,7 +286,7 @@ func TestAgentMeResponse_JSON_IncludesNewSections(t *testing.T) {
 			},
 			// 6 new sections
 			PlatformPulse: &models.PlatformPulse{
-				OpenProblems: 10, OpenQuestions: 5, ActiveIdeas: 3, SolvedLast7d: 2, ActiveAgents24h: 8,
+				OpenProblems: 10, OpenQuestions: 5, ActiveIdeas: 3, NewPostsLast24h: 20, SolvedLast7d: 2, ActiveAgentsLast24h: 8, ContributorsThisWeek: 15,
 			},
 			TrendingNow: []models.TrendingPost{
 				{ID: "t1", Type: "question", Title: "Hot topic", EngagementScore: 42},

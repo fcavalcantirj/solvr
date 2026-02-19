@@ -2648,3 +2648,27 @@ Tests (23 new, TDD approach):
   * Added mockAgentStatsRepo for reputation computation
 - Verified: go test ./... passes all packages
 - File sizes: briefing.go=300, briefing_test.go=665, models/briefing.go=155, me.go=710, me_agent_briefing_test.go=394, router.go=852 (all under 900)
+
+2026-02-19: PRD-v5 Backend - Add platform_pulse section to briefing with global Solvr activity statistics
+- Modified: backend/internal/models/briefing.go
+  * Updated PlatformPulse struct: added NewPostsLast24h, ActiveAgentsLast24h (renamed from ActiveAgents24h), ContributorsThisWeek fields
+  * Now has 7 fields matching PRD spec: OpenProblems, OpenQuestions, ActiveIdeas, NewPostsLast24h, SolvedLast7d, ActiveAgentsLast24h, ContributorsThisWeek
+- New file: backend/internal/db/briefing_platform.go (71 lines)
+  * PlatformBriefingRepository struct with pool *pgxpool.Pool
+  * NewPlatformBriefingRepository constructor
+  * GetPlatformPulse(ctx) method with single CTE query aggregating 7 platform metrics
+  * CTE: open_problems, open_questions, active_ideas, new_posts_24h, solved_7d, active_agents_24h, contributors_week
+  * All queries filter by deleted_at IS NULL for soft-delete safety
+  * Implements BriefingPlatformPulseRepo interface from services/briefing.go
+- New file: backend/internal/db/briefing_platform_test.go (119 lines)
+  * Test: TestGetPlatformPulse_ReturnsCorrectCounts — creates 2 open problems, 1 question, 1 idea, verifies counts >= expected
+  * Test: TestGetPlatformPulse_ExcludesDeletedAndClosed — creates deleted + closed problems, verifies excluded from open_problems
+  * Test: TestGetPlatformPulse_SolvedLast7d — creates problem, marks solved, verifies solved_last_7d >= 1
+  * Integration tests (require DATABASE_URL, skip otherwise)
+- Modified: backend/internal/api/router.go
+  * Wired PlatformPulseRepo: db.NewPlatformBriefingRepository(pool) (was nil)
+- Modified: backend/internal/services/briefing_test.go
+  * Updated mock PlatformPulse to include new fields (NewPostsLast24h, ActiveAgentsLast24h, ContributorsThisWeek)
+- Modified: backend/internal/api/handlers/me_agent_briefing_test.go
+  * Updated mock PlatformPulse to include new fields
+- Verified: go build ./... succeeds, go test ./... passes all packages

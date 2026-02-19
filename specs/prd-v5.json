@@ -1461,7 +1461,7 @@
       "Test: TestGetPlatformPulse_SolvedLast7d — create a problem, set status to 'solved' and updated_at to NOW(), verify solved_last_7d >= 1",
       "Verify: go test ./internal/db/ -run TestGetPlatformPulse -v passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

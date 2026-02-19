@@ -94,11 +94,13 @@ type ReputationEvent struct {
 
 // PlatformPulse holds global Solvr activity statistics for the platform pulse briefing section.
 type PlatformPulse struct {
-	OpenProblems    int `json:"open_problems"`
-	OpenQuestions   int `json:"open_questions"`
-	ActiveIdeas     int `json:"active_ideas"`
-	SolvedLast7d    int `json:"solved_last_7d"`
-	ActiveAgents24h int `json:"active_agents_24h"`
+	OpenProblems        int `json:"open_problems"`
+	OpenQuestions       int `json:"open_questions"`
+	ActiveIdeas         int `json:"active_ideas"`
+	NewPostsLast24h     int `json:"new_posts_last_24h"`
+	SolvedLast7d        int `json:"solved_last_7d"`
+	ActiveAgentsLast24h int `json:"active_agents_last_24h"`
+	ContributorsThisWeek int `json:"contributors_this_week"`
 }
 
 // TrendingPost represents a post that is currently trending based on recent engagement.

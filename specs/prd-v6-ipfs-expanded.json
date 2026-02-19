@@ -46,7 +46,7 @@
       "Add columns: name TEXT, origins TEXT[], meta JSONB, delegates TEXT[]",
       "Add columns: owner_id UUID REFERENCES (users OR agents), owner_type ENUM('user','agent')",
       "Add size_bytes BIGINT (populated after pin completes)",
-      "Add unique constraint on (cid, owner_id) — same owner can't pin same CID twice",
+      "Add unique constraint on (cid, owner_id) \u2014 same owner can't pin same CID twice",
       "Add index on cid for fast lookup",
       "Add index on owner_id for listing user's pins",
       "Create backend/internal/models/pin.go with Pin struct matching table",
@@ -63,12 +63,12 @@
     "description": "Create PinRepository with CRUD operations",
     "steps": [
       "Create backend/internal/db/pins.go with PinRepository struct",
-      "Implement Create(ctx, pin) — INSERT INTO pins, return created pin with ID",
-      "Implement GetByID(ctx, id) — SELECT * FROM pins WHERE id = $1",
-      "Implement GetByCID(ctx, cid, ownerID) — lookup by CID and owner",
-      "Implement ListByOwner(ctx, ownerID, ownerType, opts) — paginated list",
-      "Implement UpdateStatus(ctx, id, status) — update pin status",
-      "Implement Delete(ctx, id) — DELETE FROM pins WHERE id = $1",
+      "Implement Create(ctx, pin) \u2014 INSERT INTO pins, return created pin with ID",
+      "Implement GetByID(ctx, id) \u2014 SELECT * FROM pins WHERE id = $1",
+      "Implement GetByCID(ctx, cid, ownerID) \u2014 lookup by CID and owner",
+      "Implement ListByOwner(ctx, ownerID, ownerType, opts) \u2014 paginated list",
+      "Implement UpdateStatus(ctx, id, status) \u2014 update pin status",
+      "Implement Delete(ctx, id) \u2014 DELETE FROM pins WHERE id = $1",
       "Add ListOptions: limit, offset, status filter",
       "Create backend/internal/db/pins_test.go with TDD tests",
       "Test: Create pin, retrieve by ID, verify all fields",
@@ -88,10 +88,10 @@
       "Create backend/internal/services/ipfs.go with IPFSService interface",
       "Methods: Pin(ctx, cid) error, Unpin(ctx, cid) error, PinStatus(ctx, cid) (string, error), Add(ctx, reader) (string, error)",
       "Implement KuboIPFSService struct with baseURL, httpClient fields",
-      "NewKuboIPFSService(baseURL string) — default: http://localhost:5001",
+      "NewKuboIPFSService(baseURL string) \u2014 default: http://localhost:5001",
       "Pin method: POST /api/v0/pin/add?arg={cid}&progress=false",
       "Unpin method: POST /api/v0/pin/rm?arg={cid}",
-      "PinStatus method: POST /api/v0/pin/ls?arg={cid} — returns 'direct', 'recursive', or error if not pinned",
+      "PinStatus method: POST /api/v0/pin/ls?arg={cid} \u2014 returns 'direct', 'recursive', or error if not pinned",
       "Add method: POST /api/v0/add with multipart form data, returns CID",
       "Add timeout configuration: default 5min for large files",
       "Add retry logic for transient failures",
@@ -104,7 +104,7 @@
   {
     "category": "backend",
     "phase": 1,
-    "description": "Implement POST /v1/pins endpoint — Pinning Service API compatible",
+    "description": "Implement POST /v1/pins endpoint \u2014 Pinning Service API compatible",
     "steps": [
       "Create backend/internal/api/handlers/pins.go with PinsHandler struct",
       "Inject: pinRepo, ipfsService, config",
@@ -129,7 +129,7 @@
   {
     "category": "backend",
     "phase": 1,
-    "description": "Implement GET /v1/pins/:requestid endpoint — check pin status",
+    "description": "Implement GET /v1/pins/:requestid endpoint \u2014 check pin status",
     "steps": [
       "Add GetByRequestID handler to PinsHandler",
       "Parse requestid from URL path parameter",
@@ -151,7 +151,7 @@
   {
     "category": "backend",
     "phase": 1,
-    "description": "Implement GET /v1/pins endpoint — list user's pins",
+    "description": "Implement GET /v1/pins endpoint \u2014 list user's pins",
     "steps": [
       "Add List handler to PinsHandler",
       "Parse query params: cid (filter), name (filter), status (filter), limit (default 10, max 1000), before, after (cursor pagination)",
@@ -171,7 +171,7 @@
   {
     "category": "backend",
     "phase": 1,
-    "description": "Implement DELETE /v1/pins/:requestid endpoint — unpin content",
+    "description": "Implement DELETE /v1/pins/:requestid endpoint \u2014 unpin content",
     "steps": [
       "Add Delete handler to PinsHandler",
       "Parse requestid from URL path",
@@ -213,12 +213,12 @@
   {
     "category": "backend",
     "phase": 2,
-    "description": "Create problem crystallization service — snapshot solved problems to IPFS",
+    "description": "Create problem crystallization service \u2014 snapshot solved problems to IPFS",
     "steps": [
       "Create backend/internal/services/crystallization.go with CrystallizationService",
       "Method: CrystallizeProblem(ctx, problemID) (cid string, error)",
       "Crystallization criteria: status=solved, has verified approach, stable for 7 days (configurable)",
-      "Build snapshot: problem + all approaches + accepted solution → JSON document",
+      "Build snapshot: problem + all approaches + accepted solution \u2192 JSON document",
       "Include metadata: crystallized_at, version, original_problem_id",
       "Call ipfsService.Add(ctx, snapshotReader) to get CID",
       "Auto-pin the CID via pinning service",
@@ -253,7 +253,7 @@
   {
     "category": "backend",
     "phase": 3,
-    "description": "Implement Supermemory-style relationship model — updates/extends/derives",
+    "description": "Implement Supermemory-style relationship model \u2014 updates/extends/derives",
     "steps": [
       "Create backend/migrations/000041_add_relationship_tracking.up.sql",
       "Add approach_relationships table: id, from_approach_id, to_approach_id, relation_type ENUM('updates','extends','derives'), created_at",
@@ -265,7 +265,7 @@
       "  - 'updates': new approach explicitly supersedes old (same angle, different method)",
       "  - 'extends': new approach builds on old (references old approach ID)",
       "  - 'derives': new approach inferred from pattern (auto-detected via similarity)",
-      "Add API: GET /v1/problems/:id/approaches/:id/history — returns version chain",
+      "Add API: GET /v1/problems/:id/approaches/:id/history \u2014 returns version chain",
       "Add TDD tests for relationship tracking",
       "Verify: approach version chains work correctly"
     ],
@@ -274,11 +274,11 @@
   {
     "category": "backend",
     "phase": 3,
-    "description": "Implement smart forgetting — auto-archive stale approaches",
+    "description": "Implement smart forgetting \u2014 auto-archive stale approaches",
     "steps": [
       "Create backend/internal/services/forgetting.go with ForgettingService",
       "Method: MarkForForgetting(ctx, approachID, forgetAfter time.Time)",
-      "Method: ProcessForgetting(ctx) — cron job to archive forgotten approaches",
+      "Method: ProcessForgetting(ctx) \u2014 cron job to archive forgotten approaches",
       "Forgetting criteria: failed approaches older than 90 days, superseded approaches older than 180 days",
       "Archive to cold storage (IPFS) before removing from hot queries",
       "Keep reference in approaches table: archived_cid, archived_at",
@@ -300,7 +300,7 @@
     "description": "Add crystallization badge to solved problems",
     "steps": [
       "Update ProblemCard component to show crystallization status",
-      "If crystallization_cid exists: show '🔒 Crystallized' badge with IPFS icon",
+      "If crystallization_cid exists: show '\ud83d\udd12 Crystallized' badge with IPFS icon",
       "Badge is clickable: opens IPFS gateway link to crystallized snapshot",
       "Gateway URL: https://gateway.pinata.cloud/ipfs/{cid} or configurable",
       "Add tooltip: 'This problem has been permanently archived to IPFS'",
@@ -318,17 +318,24 @@
     "description": "Create pinning dashboard for users and agents",
     "steps": [
       "Create frontend/app/pins/page.tsx as pinning management dashboard",
-      "Show list of user's pins with: name, CID, status, size, created date",
-      "Status badges: Queued (yellow), Pinning (blue), Pinned (green), Failed (red)",
-      "Add 'Pin New Content' button: opens modal with CID input",
-      "Pin modal: CID input, optional name, submit button",
-      "Validation: check CID format before submission",
-      "Add delete button per pin: confirmation dialog, calls DELETE /v1/pins/:id",
-      "Add storage usage summary: 'Using X GB of Y GB'",
-      "Add link to pricing/upgrade for more storage",
-      "Create usePins hook for fetching and managing pins state",
-      "Add tests for pin list, create, delete flows",
-      "Verify: pin dashboard works end-to-end"
+      "DESIGN: Follow Solvr design system \u2014 use leaderboard/page.tsx as reference",
+      "DESIGN: Use font-mono for all text, sharp corners (no border-radius), monochrome palette",
+      "DESIGN: Page header with icon, uppercase title, muted description (matching leaderboard pattern)",
+      "DESIGN: Use existing components from components/ui/ (badge, button, dialog, card)",
+      "Show list of user's pins with: name, CID (truncated with copy button), status badge, size, created date",
+      "Status badges using Badge component: Queued (yellow/warning), Pinning (blue/info), Pinned (green/success), Failed (red/destructive)",
+      "Add 'PIN NEW CONTENT' button (uppercase, font-mono text-xs) \u2014 opens Dialog modal",
+      "Pin modal: CID input with validation, optional name field, submit button",
+      "Validation: check CID format (Qm... or bafy...) before submission, show inline error",
+      "Add delete button per pin: AlertDialog confirmation, calls DELETE /v1/pins/:id",
+      "Add storage usage summary bar: 'USING X GB OF Y GB' with visual progress indicator",
+      "Add upgrade CTA link for users near quota",
+      "STATES: Loading skeleton (animate-pulse, bg-muted pattern), empty state with icon, error state with retry",
+      "RESPONSIVE: Mobile-first, stack on small screens, table-like on lg+",
+      "DARK MODE: Ensure all colors use CSS variables (--foreground, --muted, etc.)",
+      "Create usePins hook in hooks/use-pins.ts for fetching and managing pins state",
+      "Add tests for pin list render, create flow, delete flow, error handling",
+      "Verify: pin dashboard matches Solvr aesthetic, works end-to-end in light/dark mode"
     ],
     "passes": false
   },
@@ -358,11 +365,11 @@
     "description": "Create SDK method for agents to use Solvr pinning",
     "steps": [
       "Update Solvr CLI/SDK to include pinning methods",
-      "Add: solvr pin add <cid> [--name <name>] — create pin",
-      "Add: solvr pin ls [--status <status>] — list pins",
-      "Add: solvr pin status <requestid> — check pin status",
-      "Add: solvr pin rm <requestid> — remove pin",
-      "Add: solvr pin add-file <path> — upload file and pin (calls /add then /pins)",
+      "Add: solvr pin add <cid> [--name <name>] \u2014 create pin",
+      "Add: solvr pin ls [--status <status>] \u2014 list pins",
+      "Add: solvr pin status <requestid> \u2014 check pin status",
+      "Add: solvr pin rm <requestid> \u2014 remove pin",
+      "Add: solvr pin add-file <path> \u2014 upload file and pin (calls /add then /pins)",
       "Use SOLVR_API_KEY for authentication",
       "Return CID on successful pin for use in AMCP checkpoints",
       "Document in CLI help and README",
@@ -374,14 +381,14 @@
   {
     "category": "backend",
     "phase": 1,
-    "description": "Implement POST /v1/add endpoint — upload content and return CID",
+    "description": "Implement POST /v1/add endpoint \u2014 upload content and return CID",
     "steps": [
       "Add AddContent handler to PinsHandler or new UploadHandler",
       "Accept multipart/form-data with 'file' field",
       "Size limit: configurable, default 100MB",
       "Call ipfsService.Add(ctx, file) to upload to kubo and get CID",
       "Return: { cid: string, size: number }",
-      "Do NOT auto-pin — user must call POST /v1/pins separately",
+      "Do NOT auto-pin \u2014 user must call POST /v1/pins separately",
       "Add rate limiting: 50 uploads/hour per user",
       "Add TDD tests:",
       "Test: POST /v1/add with file returns CID",
@@ -403,7 +410,7 @@
       "Update pin creation to check quota: if storage_used + pin_size > quota, reject with 402 Payment Required",
       "Update pin deletion to decrement storage_used",
       "Create GetStorageUsage(ctx, ownerID) method in repository",
-      "Add API: GET /v1/me/storage — returns { used, quota, percentage }",
+      "Add API: GET /v1/me/storage \u2014 returns { used, quota, percentage }",
       "Add frontend component showing storage usage bar",
       "Add TDD tests for quota enforcement",
       "Verify: user over quota cannot pin new content"
@@ -414,7 +421,7 @@
   {
     "category": "backend",
     "phase": 3,
-    "description": "Implement approach version history API — traverse version chains",
+    "description": "Implement approach version history API \u2014 traverse version chains",
     "steps": [
       "Add GET /v1/problems/:id/approaches/:id/history endpoint",
       "Return: { current: Approach, history: Approach[], relationships: Relationship[] }",
@@ -433,7 +440,7 @@
   {
     "category": "frontend",
     "phase": 3,
-    "description": "Add approach version history UI — timeline view",
+    "description": "Add approach version history UI \u2014 timeline view",
     "steps": [
       "Create ApproachHistory component showing version timeline",
       "Timeline: vertical list with versions connected by relationship lines",
@@ -450,7 +457,7 @@
   {
     "category": "integration",
     "phase": 1,
-    "description": "Create Solvr CLI install script — curl -sL solvr.dev/install.sh | bash",
+    "description": "Create Solvr CLI install script \u2014 curl -sL solvr.dev/install.sh | bash",
     "steps": [
       "Create scripts/install.sh for Solvr CLI installation",
       "Detect OS and architecture (Linux, macOS, arm64, amd64)",
@@ -491,7 +498,7 @@
   {
     "category": "integration",
     "phase": 1,
-    "description": "Add AMCP agent detection — auto-enable pinning for agents with valid AMCP identity",
+    "description": "Add AMCP agent detection \u2014 auto-enable pinning for agents with valid AMCP identity",
     "steps": [
       "When agent authenticates via API key, check if agent has AMCP identity (new field in agents table)",
       "If has_amcp_identity=true: auto-provision 1GB free pinning quota",
@@ -500,12 +507,12 @@
       "Verify: AMCP agents get pinning access, non-AMCP agents see pinning as premium feature"
     ],
     "passes": true,
-    "notes": "DONE 2026-02-18: Migration 000038 adds has_amcp_identity, amcp_aid (unique), pinning_quota_bytes to agents table. Agent model updated with 3 new fields. Registration accepts optional amcp_aid field — when provided, sets has_amcp_identity=true and auto-provisions 1GB (1073741824 bytes) pinning quota. GET /v1/me returns amcp_enabled and pinning_quota_bytes fields. 6 TDD tests (3 registration, 2 /me response, 1 validation). All backend tests passing."
+    "notes": "DONE 2026-02-18: Migration 000038 adds has_amcp_identity, amcp_aid (unique), pinning_quota_bytes to agents table. Agent model updated with 3 new fields. Registration accepts optional amcp_aid field \u2014 when provided, sets has_amcp_identity=true and auto-provisions 1GB (1073741824 bytes) pinning quota. GET /v1/me returns amcp_enabled and pinning_quota_bytes fields. 6 TDD tests (3 registration, 2 /me response, 1 validation). All backend tests passing."
   },
   {
     "category": "backend",
     "phase": 1,
-    "description": "Implement health check endpoint for IPFS connection — GET /v1/health/ipfs",
+    "description": "Implement health check endpoint for IPFS connection \u2014 GET /v1/health/ipfs",
     "steps": [
       "Create /v1/health/ipfs endpoint that checks IPFS connectivity",
       "Response: { connected: boolean, peer_id: string, version: string, repo_size_bytes: number }",
@@ -514,7 +521,7 @@
       "Alert if IPFS disconnected for >5 minutes (integrate with existing alerting)"
     ],
     "passes": true,
-    "notes": "DONE 2026-02-18: IPFSHealthHandler with Check endpoint (GET /v1/health/ipfs). IPFSHealthChecker interface, IPFSNodeInfo/IPFSHealthResponse structs. NodeInfo method added to KuboIPFSService (POST /api/v0/id). ipfsHealthAdapter bridges services→handlers. 5s timeout, 0 retries. 6 handler tests + 4 service tests + 2 router integration tests. All passing."
+    "notes": "DONE 2026-02-18: IPFSHealthHandler with Check endpoint (GET /v1/health/ipfs). IPFSHealthChecker interface, IPFSNodeInfo/IPFSHealthResponse structs. NodeInfo method added to KuboIPFSService (POST /api/v0/id). ipfsHealthAdapter bridges services\u2192handlers. 5s timeout, 0 retries. 6 handler tests + 4 service tests + 2 router integration tests. All passing."
   },
   {
     "category": "frontend",

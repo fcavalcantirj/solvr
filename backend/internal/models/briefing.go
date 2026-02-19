@@ -136,14 +136,17 @@ type RisingIdea struct {
 	AgeHours      int      `json:"age_hours"`
 }
 
-// RecentVictory represents a recently solved problem.
+// RecentVictory represents a recently solved problem with solver info.
 type RecentVictory struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Tags        []string `json:"tags"`
-	SolvedBy    string   `json:"solved_by"`
-	DaysToSolve int      `json:"days_to_solve"`
-	SolvedAt    time.Time `json:"solved_at"`
+	ID              string    `json:"id"`
+	Title           string    `json:"title"`
+	SolverName      string    `json:"solver_name"`
+	SolverType      string    `json:"solver_type"`
+	SolverID        string    `json:"solver_id"`
+	TotalApproaches int       `json:"total_approaches"`
+	DaysToSolve     int       `json:"days_to_solve"`
+	SolvedAt        string    `json:"solved_at"`
+	Tags            []string  `json:"tags"`
 }
 
 // RecommendedPost represents a post recommended for the agent based on their activity and specialties.

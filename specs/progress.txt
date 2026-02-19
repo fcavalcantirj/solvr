@@ -1,3 +1,27 @@
+2026-02-19: PRD-v5 Backend - Add recent_victories section with solver info to platform briefing
+- Modified: backend/internal/models/briefing.go
+  * Updated RecentVictory struct: added SolverName, SolverType, SolverID, TotalApproaches fields
+  * Changed SolvedAt from time.Time to string (ISO 8601 formatted by SQL)
+  * Removed old SolvedBy field (replaced by SolverName/SolverType/SolverID)
+- Modified: backend/internal/db/briefing_platform.go
+  * Implemented GetRecentVictories(ctx, limit) method on PlatformBriefingRepository
+  * Uses DISTINCT ON (p.id) to pick first succeeded approach per problem
+  * JOINs users and agents tables to resolve solver display name
+  * Filters to solved problems within last 14 days
+  * Calculates days_to_solve from (updated_at - created_at)
+  * Counts total approaches per problem (including failed/deleted_at IS NULL)
+  * Handles nil tags (returns empty slice), handles no succeeded approach (solver_name='Unknown')
+  * Orders results by solved_at DESC (most recent first)
+- New tests: backend/internal/db/briefing_platform_test.go
+  * TestGetRecentVictories_ReturnsSolvedWithSolver - verifies solver name, type, id populated
+  * TestGetRecentVictories_ShowsTotalApproachCount - 3 approaches (2 failed, 1 succeeded) = total 3
+  * TestGetRecentVictories_ExcludesOlderThan14Days - problem solved 15 days ago excluded
+  * TestGetRecentVictories_DaysToSolve - problem created 5 days ago, solved now, days >= 4
+  * TestGetRecentVictories_OrderedByMostRecent - newer solved problem appears first
+- Fixed: backend/internal/services/briefing_test.go and handlers/me_agent_briefing_test.go
+  * Updated mock RecentVictory to use new field names
+- Verified: go test ./... passes (all packages), npm test passes (778 tests)
+
 2026-02-19: PRD-v5 Backend - Configure /me rate limit with me_briefing config entry
 - Modified: backend/internal/db/rate_limit_config.go
   * Added MeBriefingLimitPerMin field to RateLimitConfigValues struct

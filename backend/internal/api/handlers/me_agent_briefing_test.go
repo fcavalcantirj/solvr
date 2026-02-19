@@ -298,7 +298,7 @@ func TestAgentMeResponse_JSON_IncludesNewSections(t *testing.T) {
 				{ID: "r1", Title: "Cool idea", ResponseCount: 5, Upvotes: 10},
 			},
 			RecentVictories: []models.RecentVictory{
-				{ID: "v1", Title: "Solved!", SolvedBy: "agent1", DaysToSolve: 3, SolvedAt: now},
+				{ID: "v1", Title: "Solved!", SolverName: "agent1", SolverType: "agent", SolverID: "agent1", TotalApproaches: 2, DaysToSolve: 3, SolvedAt: now.Format(time.RFC3339)},
 			},
 			YouMightLike: []models.RecommendedPost{
 				{ID: "rec1", Type: "problem", Title: "You might like", MatchReason: "tag_affinity"},

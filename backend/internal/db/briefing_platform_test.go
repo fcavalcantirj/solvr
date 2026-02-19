@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // --- GetPlatformPulse ---
@@ -117,5 +118,252 @@ func TestGetPlatformPulse_SolvedLast7d(t *testing.T) {
 
 	if pulse.SolvedLast7d < 1 {
 		t.Errorf("expected solved_last_7d >= 1, got %d", pulse.SolvedLast7d)
+	}
+}
+
+// --- GetRecentVictories ---
+
+func TestGetRecentVictories_ReturnsSolvedWithSolver(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create a problem, set status to solved
+	problemID := createBriefingPost(t, pool, "Victory problem with solver", "problem", "open", "human", userID, []string{"go", "testing"})
+	_, err := pool.Exec(ctx, "UPDATE posts SET status = 'solved', updated_at = NOW() WHERE id = $1", problemID)
+	if err != nil {
+		t.Fatalf("failed to mark problem solved: %v", err)
+	}
+
+	// Create a succeeded approach by the agent
+	_, err = pool.Exec(ctx,
+		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
+		 VALUES ($1, 'agent', $2, 'Used a clever technique', 'succeeded')`, problemID, agentID)
+	if err != nil {
+		t.Fatalf("failed to create succeeded approach: %v", err)
+	}
+
+	repo := NewPlatformBriefingRepository(pool)
+	victories, err := repo.GetRecentVictories(ctx, 10)
+	if err != nil {
+		t.Fatalf("GetRecentVictories failed: %v", err)
+	}
+
+	found := false
+	for _, v := range victories {
+		if v.ID == problemID {
+			found = true
+			if v.Title != "Victory problem with solver" {
+				t.Errorf("expected title 'Victory problem with solver', got %q", v.Title)
+			}
+			// Solver name should be the agent's display name
+			if v.SolverName == "" || v.SolverName == "Unknown" {
+				t.Errorf("expected a solver name, got %q", v.SolverName)
+			}
+			if v.SolverType != "agent" {
+				t.Errorf("expected solver_type='agent', got %q", v.SolverType)
+			}
+			if v.SolverID != agentID {
+				t.Errorf("expected solver_id=%q, got %q", agentID, v.SolverID)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected to find the solved problem in recent victories")
+	}
+}
+
+func TestGetRecentVictories_ShowsTotalApproachCount(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create a problem
+	problemID := createBriefingPost(t, pool, "Victory with multiple approaches", "problem", "open", "human", userID, []string{"go"})
+	_, err := pool.Exec(ctx, "UPDATE posts SET status = 'solved', updated_at = NOW() WHERE id = $1", problemID)
+	if err != nil {
+		t.Fatalf("failed to mark problem solved: %v", err)
+	}
+
+	// Create 2 failed approaches and 1 succeeded
+	_, err = pool.Exec(ctx,
+		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status) VALUES
+		 ($1, 'agent', $2, 'Failed approach 1', 'failed'),
+		 ($1, 'human', $3, 'Failed approach 2', 'failed'),
+		 ($1, 'agent', $2, 'Succeeded approach', 'succeeded')`,
+		problemID, agentID, userID)
+	if err != nil {
+		t.Fatalf("failed to create approaches: %v", err)
+	}
+
+	repo := NewPlatformBriefingRepository(pool)
+	victories, err := repo.GetRecentVictories(ctx, 10)
+	if err != nil {
+		t.Fatalf("GetRecentVictories failed: %v", err)
+	}
+
+	found := false
+	for _, v := range victories {
+		if v.ID == problemID {
+			found = true
+			if v.TotalApproaches != 3 {
+				t.Errorf("expected total_approaches=3, got %d", v.TotalApproaches)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected to find the solved problem in recent victories")
+	}
+}
+
+func TestGetRecentVictories_ExcludesOlderThan14Days(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create a solved problem, then set its updated_at to 15 days ago
+	problemID := createBriefingPost(t, pool, "Old victory", "problem", "open", "human", userID, []string{"go"})
+	_, err := pool.Exec(ctx, "UPDATE posts SET status = 'solved', updated_at = NOW() - INTERVAL '15 days' WHERE id = $1", problemID)
+	if err != nil {
+		t.Fatalf("failed to set old solved date: %v", err)
+	}
+
+	// Create a succeeded approach
+	_, err = pool.Exec(ctx,
+		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
+		 VALUES ($1, 'agent', $2, 'Old approach', 'succeeded')`, problemID, agentID)
+	if err != nil {
+		t.Fatalf("failed to create approach: %v", err)
+	}
+
+	repo := NewPlatformBriefingRepository(pool)
+	victories, err := repo.GetRecentVictories(ctx, 10)
+	if err != nil {
+		t.Fatalf("GetRecentVictories failed: %v", err)
+	}
+
+	for _, v := range victories {
+		if v.ID == problemID {
+			t.Error("problem solved 15 days ago should be excluded from recent victories")
+		}
+	}
+}
+
+func TestGetRecentVictories_DaysToSolve(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create a problem with created_at = NOW() - 5 days
+	problemID := createBriefingPost(t, pool, "Days to solve test", "problem", "open", "human", userID, []string{"go"})
+	_, err := pool.Exec(ctx,
+		"UPDATE posts SET created_at = NOW() - INTERVAL '5 days', status = 'solved', updated_at = NOW() WHERE id = $1", problemID)
+	if err != nil {
+		t.Fatalf("failed to update problem: %v", err)
+	}
+
+	// Create a succeeded approach
+	_, err = pool.Exec(ctx,
+		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
+		 VALUES ($1, 'agent', $2, 'Solve it', 'succeeded')`, problemID, agentID)
+	if err != nil {
+		t.Fatalf("failed to create approach: %v", err)
+	}
+
+	repo := NewPlatformBriefingRepository(pool)
+	victories, err := repo.GetRecentVictories(ctx, 10)
+	if err != nil {
+		t.Fatalf("GetRecentVictories failed: %v", err)
+	}
+
+	found := false
+	for _, v := range victories {
+		if v.ID == problemID {
+			found = true
+			if v.DaysToSolve < 4 {
+				t.Errorf("expected days_to_solve >= 4 (created 5 days ago, solved now), got %d", v.DaysToSolve)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected to find the solved problem in recent victories")
+	}
+}
+
+func TestGetRecentVictories_OrderedByMostRecent(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create 2 solved problems at different times
+	problem1ID := createBriefingPost(t, pool, "Older solved problem", "problem", "open", "human", userID, []string{"go"})
+	_, err := pool.Exec(ctx, "UPDATE posts SET status = 'solved', updated_at = NOW() - INTERVAL '2 days' WHERE id = $1", problem1ID)
+	if err != nil {
+		t.Fatalf("failed to update problem1: %v", err)
+	}
+	_, err = pool.Exec(ctx,
+		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
+		 VALUES ($1, 'agent', $2, 'Approach for old', 'succeeded')`, problem1ID, agentID)
+	if err != nil {
+		t.Fatalf("failed to create approach for problem1: %v", err)
+	}
+
+	problem2ID := createBriefingPost(t, pool, "Newer solved problem", "problem", "open", "human", userID, []string{"go"})
+	// Small delay to ensure different timestamps
+	time.Sleep(10 * time.Millisecond)
+	_, err = pool.Exec(ctx, "UPDATE posts SET status = 'solved', updated_at = NOW() WHERE id = $1", problem2ID)
+	if err != nil {
+		t.Fatalf("failed to update problem2: %v", err)
+	}
+	_, err = pool.Exec(ctx,
+		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
+		 VALUES ($1, 'agent', $2, 'Approach for new', 'succeeded')`, problem2ID, agentID)
+	if err != nil {
+		t.Fatalf("failed to create approach for problem2: %v", err)
+	}
+
+	repo := NewPlatformBriefingRepository(pool)
+	victories, err := repo.GetRecentVictories(ctx, 10)
+	if err != nil {
+		t.Fatalf("GetRecentVictories failed: %v", err)
+	}
+
+	// Find positions
+	idx1 := -1
+	idx2 := -1
+	for i, v := range victories {
+		if v.ID == problem1ID {
+			idx1 = i
+		}
+		if v.ID == problem2ID {
+			idx2 = i
+		}
+	}
+
+	if idx1 == -1 || idx2 == -1 {
+		t.Fatalf("expected both problems in results, got idx1=%d, idx2=%d", idx1, idx2)
+	}
+	if idx2 > idx1 {
+		t.Errorf("newer problem (idx %d) should appear before older problem (idx %d)", idx2, idx1)
 	}
 }

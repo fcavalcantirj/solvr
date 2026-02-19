@@ -74,3 +74,68 @@ func (r *PlatformBriefingRepository) GetPlatformPulse(ctx context.Context) (*mod
 	}
 	return p, nil
 }
+
+// GetRecentVictories returns recently solved problems (within 14 days) with solver info.
+// Uses DISTINCT ON to pick the first succeeded approach per problem, then orders by most recent.
+func (r *PlatformBriefingRepository) GetRecentVictories(ctx context.Context, limit int) ([]models.RecentVictory, error) {
+	query := `
+		SELECT * FROM (
+			SELECT DISTINCT ON (p.id)
+				p.id,
+				p.title,
+				COALESCE(u.display_name, ag.display_name, a.author_id, 'Unknown') AS solver_name,
+				COALESCE(a.author_type, '') AS solver_type,
+				COALESCE(a.author_id, '') AS solver_id,
+				(SELECT COUNT(*) FROM approaches WHERE problem_id = p.id AND deleted_at IS NULL) AS total_approaches,
+				GREATEST(FLOOR(EXTRACT(EPOCH FROM (p.updated_at - p.created_at)) / 86400)::int, 0) AS days_to_solve,
+				TO_CHAR(p.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS solved_at,
+				p.tags
+			FROM posts p
+			LEFT JOIN approaches a ON a.problem_id = p.id AND a.status = 'succeeded' AND a.deleted_at IS NULL
+			LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
+			LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
+			WHERE p.type = 'problem'
+				AND p.status = 'solved'
+				AND p.updated_at > NOW() - INTERVAL '14 days'
+				AND p.deleted_at IS NULL
+			ORDER BY p.id, a.created_at ASC
+		) sub
+		ORDER BY solved_at DESC
+		LIMIT $1`
+
+	rows, err := r.pool.Query(ctx, query, limit)
+	if err != nil {
+		LogQueryError(ctx, "GetRecentVictories", "posts", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var victories []models.RecentVictory
+	for rows.Next() {
+		var v models.RecentVictory
+		var tags []string
+		err := rows.Scan(
+			&v.ID, &v.Title, &v.SolverName, &v.SolverType, &v.SolverID,
+			&v.TotalApproaches, &v.DaysToSolve, &v.SolvedAt, &tags,
+		)
+		if err != nil {
+			LogQueryError(ctx, "GetRecentVictories.Scan", "posts", err)
+			return nil, err
+		}
+		if tags == nil {
+			tags = []string{}
+		}
+		v.Tags = tags
+		victories = append(victories, v)
+	}
+
+	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "GetRecentVictories.Rows", "posts", err)
+		return nil, err
+	}
+
+	if victories == nil {
+		victories = []models.RecentVictory{}
+	}
+	return victories, nil
+}

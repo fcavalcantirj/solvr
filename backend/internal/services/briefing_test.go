@@ -383,7 +383,7 @@ func TestNewBriefingServiceWithDeps_AllSections(t *testing.T) {
 			result: []models.RisingIdea{{ID: "r1", Title: "Cool idea", ResponseCount: 5, Upvotes: 10}},
 		},
 		VictoriesRepo: &mockVictoriesRepo{
-			result: []models.RecentVictory{{ID: "v1", Title: "Solved!", SolvedBy: "agent1", DaysToSolve: 3, SolvedAt: now}},
+			result: []models.RecentVictory{{ID: "v1", Title: "Solved!", SolverName: "agent1", SolverType: "agent", SolverID: "agent1", TotalApproaches: 2, DaysToSolve: 3, SolvedAt: now.Format(time.RFC3339)}},
 		},
 		RecommendationsRepo: &mockRecommendationsRepo{
 			result: []models.RecommendedPost{{ID: "rec1", Type: "problem", Title: "You might like", MatchReason: "tag_affinity"}},

@@ -1484,7 +1484,7 @@
       "Test: TestGetRecentVictories_OrderedByMostRecent — create 2 solved problems at different times, verify first result is more recent",
       "Verify: go test ./internal/db/ -run TestGetRecentVictories -v passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

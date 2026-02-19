@@ -1,3 +1,15 @@
+2026-02-19: PRD-v5 Skill - Add tests for 'solvr briefing' command to test.sh
+- Modified: skill/scripts/test.sh
+  * Added "Shared helpers and paths" section — moved test_file_contains() and file path variables before briefing tests
+  * Added "Briefing command tests" section with 5 new tests:
+    1. test_briefing_command_exists — verifies 'briefing' is recognized (no 'Unknown command' error)
+    2. test_briefing_requires_auth — verifies error when called without SOLVR_API_KEY
+    3. SKILL.md documents briefing command — checks SKILL.md contains 'briefing'
+    4. api.md documents enriched /me endpoint — checks api.md references enriched /me
+    5. skill.json version >= 3.2.0 — parses semver and validates version constraint
+  * Fixed pre-existing bug: ((PASSED++)) and ((FAILED++)) caused set -e to exit when counter was 0 (arithmetic evaluation returns falsy for 0). Added || true to all counter increments.
+- Verified: bash skill/scripts/test.sh passes all 47 tests (42 existing + 5 new)
+
 2026-02-19: PRD-v5 Skill - Add 'solvr briefing' command to CLI tool
 - Modified: skill/scripts/solvr.sh (909 lines)
   * Added cmd_briefing function: calls GET /me and displays all 6 briefing sections

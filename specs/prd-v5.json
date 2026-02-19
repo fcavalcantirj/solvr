@@ -1319,7 +1319,7 @@
       "Add test: test_skill_json_version — verify skill.json version is 3.2.0 or higher",
       "Verify: bash skill/scripts/test.sh passes all new tests"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "docs",

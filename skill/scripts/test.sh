@@ -34,14 +34,14 @@ test_case() {
 
     if [ "$actual_exit" -eq "$expected_exit" ]; then
         echo -e "${GREEN}PASS${NC}"
-        ((PASSED++))
+        ((PASSED++)) || true
         return 0
     else
         echo -e "${RED}FAIL${NC}"
         echo "  Expected exit code: ${expected_exit}"
         echo "  Actual exit code: ${actual_exit}"
         echo "  Output: ${output}"
-        ((FAILED++))
+        ((FAILED++)) || true
         return 1
     fi
 }
@@ -60,13 +60,13 @@ test_output_contains() {
 
     if echo "$output" | grep -qF -- "$expected_content"; then
         echo -e "${GREEN}PASS${NC}"
-        ((PASSED++))
+        ((PASSED++)) || true
         return 0
     else
         echo -e "${RED}FAIL${NC}"
         echo "  Expected output to contain: ${expected_content}"
         echo "  Actual output: ${output}"
-        ((FAILED++))
+        ((FAILED++)) || true
         return 1
     fi
 }
@@ -160,10 +160,8 @@ test_output_contains "post error is helpful" "post requires" "$SOLVR_SH" post ||
 echo ""
 
 # ============================================================================
-# Feature completeness tests (docs must mention key features)
+# Shared helpers and paths for feature tests
 # ============================================================================
-
-echo -e "${YELLOW}Feature completeness tests:${NC}"
 
 # Helper: check if a file contains a pattern
 test_file_contains() {
@@ -171,12 +169,12 @@ test_file_contains() {
     echo -n "Testing: ${name}... "
     if grep -qiE "$pattern" "$file" 2>/dev/null; then
         echo -e "${GREEN}PASS${NC}"
-        ((PASSED++))
+        ((PASSED++)) || true
         return 0
     else
         echo -e "${RED}FAIL${NC}"
         echo "  File $file missing pattern: $pattern"
-        ((FAILED++))
+        ((FAILED++)) || true
         return 1
     fi
 }
@@ -185,6 +183,93 @@ SKILL_MD="${SCRIPT_DIR}/../SKILL.md"
 API_MD="${SCRIPT_DIR}/../references/api.md"
 EXAMPLES_MD="${SCRIPT_DIR}/../references/examples.md"
 SKILL_JSON="${SCRIPT_DIR}/../skill.json"
+
+# ============================================================================
+# Briefing command tests
+# ============================================================================
+
+echo -e "${YELLOW}Briefing command tests:${NC}"
+
+# Test: briefing is recognized as a valid command (no 'Unknown command' error)
+test_briefing_command_exists() {
+    local name="briefing command exists (no Unknown command)"
+    echo -n "Testing: ${name}... "
+    local output
+    # briefing will fail without auth, but should NOT say "Unknown command"
+    output=$("$SOLVR_SH" briefing 2>&1) || true
+    if echo "$output" | grep -qF "Unknown command"; then
+        echo -e "${RED}FAIL${NC}"
+        echo "  Got 'Unknown command' — briefing not recognized"
+        echo "  Output: ${output}"
+        ((FAILED++)) || true
+        return 1
+    else
+        echo -e "${GREEN}PASS${NC}"
+        ((PASSED++)) || true
+        return 0
+    fi
+}
+test_briefing_command_exists || true
+
+# Test: briefing requires authentication (error about API key when none set)
+test_briefing_requires_auth() {
+    local name="briefing requires auth (error without API key)"
+    echo -n "Testing: ${name}... "
+    local output
+    local exit_code=0
+    # Run without credentials
+    output=$(SOLVR_API_KEY="" HOME="/nonexistent" "$SOLVR_SH" briefing 2>&1) || exit_code=$?
+    if [ "$exit_code" -ne 0 ] && echo "$output" | grep -qiE "API key|credentials|auth"; then
+        echo -e "${GREEN}PASS${NC}"
+        ((PASSED++)) || true
+        return 0
+    else
+        echo -e "${RED}FAIL${NC}"
+        echo "  Expected non-zero exit and auth error message"
+        echo "  Exit code: ${exit_code}"
+        echo "  Output: ${output}"
+        ((FAILED++)) || true
+        return 1
+    fi
+}
+test_briefing_requires_auth || true
+
+# Test: SKILL.md documents the briefing command
+test_file_contains "SKILL.md documents briefing command" "briefing" "$SKILL_MD" || true
+
+# Test: api.md documents enriched /me endpoint
+test_file_contains "api.md documents enriched /me endpoint" "enriched.*(/me|briefing)|briefing.*/me" "$API_MD" || true
+
+# Test: skill.json version is 3.2.0 or higher
+test_skill_json_version() {
+    local name="skill.json version >= 3.2.0"
+    echo -n "Testing: ${name}... "
+    local version
+    version=$(jq -r '.version // "0.0.0"' "$SKILL_JSON" 2>/dev/null)
+    local major minor patch
+    IFS='.' read -r major minor patch <<< "$version"
+    major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
+    # Check >= 3.2.0: major > 3, or (major == 3 and minor > 2), or (major == 3 and minor == 2 and patch >= 0)
+    if [ "$major" -gt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -gt 2 ]; } || { [ "$major" -eq 3 ] && [ "$minor" -eq 2 ] && [ "$patch" -ge 0 ]; }; then
+        echo -e "${GREEN}PASS${NC}"
+        ((PASSED++)) || true
+        return 0
+    else
+        echo -e "${RED}FAIL${NC}"
+        echo "  Expected version >= 3.2.0, got: ${version}"
+        ((FAILED++)) || true
+        return 1
+    fi
+}
+test_skill_json_version || true
+
+echo ""
+
+# ============================================================================
+# Feature completeness tests (docs must mention key features)
+# ============================================================================
+
+echo -e "${YELLOW}Feature completeness tests:${NC}"
 
 # SKILL.md must cover IPFS features
 test_file_contains "SKILL.md mentions IPFS/pinning" "ipfs|pin" "$SKILL_MD" || true

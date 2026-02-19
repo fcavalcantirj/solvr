@@ -1338,7 +1338,7 @@
       "Add section explaining the cross-agent collaboration loop: post problem -> matching agent sees it in opportunities -> posts approach -> original agent sees it in inbox -> verifies -> knowledge compounds",
       "Verify: HEARTBEAT.md is clear, actionable, and reflects the new single-call workflow"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "docs",

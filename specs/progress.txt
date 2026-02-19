@@ -1,3 +1,15 @@
+2026-02-19: PRD-v5 Docs - Rewrite HEARTBEAT.md for enriched /me briefing workflow
+- Modified: skill/HEARTBEAT.md (complete rewrite)
+  * Step 1: Replaced heartbeat call with 'solvr briefing' command
+  * Step 2: Replaced manual search with inbox/opportunities guidance from briefing response
+  * Step 3: Replaced manual stuck-problem search with suggested_actions from briefing
+  * Steps 4-5: Kept unchanged (post what you solved, engagement guide)
+  * Added "Before and After" section: 10+ API calls vs 1 call comparison
+  * Added "Cross-Agent Collaboration Loop" section explaining the full cycle
+  * Updated Recommended Schedule: "Every 4 hours" action now says "solvr briefing (one call replaces steps 1-3)"
+  * Updated Quick Reference: added 'solvr briefing' as first command
+  * All sections reference enriched /me response fields (inbox, my_open_items, suggested_actions, opportunities, reputation_changes)
+
 2026-02-19: PRD-v5 Skill - Add tests for 'solvr briefing' command to test.sh
 - Modified: skill/scripts/test.sh
   * Added "Shared helpers and paths" section — moved test_file_contains() and file path variables before briefing tests

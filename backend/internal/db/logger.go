@@ -96,3 +96,49 @@ func LogNotFound(ctx context.Context, op, table, id string) {
 
 	slog.Debug("resource not found", attrs...)
 }
+
+// LogSearchCompleted logs a completed search with method and latency.
+// method is "hybrid_rrf" when vector+fulltext fusion is used, or "fulltext_only" for keyword-only.
+// duration_ms in milliseconds (not seconds) - consistent with project convention.
+func LogSearchCompleted(ctx context.Context, query string, durationMs int64, resultsCount int, method string) {
+	attrs := []any{
+		"query", query,
+		"duration_ms", durationMs,
+		"results_count", resultsCount,
+		"method", method,
+	}
+
+	if reqID := ctx.Value(requestIDKey); reqID != nil {
+		attrs = append(attrs, "request_id", reqID)
+	}
+
+	slog.Info("search completed", attrs...)
+}
+
+// LogSearchEmbeddingGenerated logs query embedding generation timing at DEBUG level.
+// duration_ms in milliseconds (not seconds) - consistent with project convention.
+func LogSearchEmbeddingGenerated(ctx context.Context, durationMs int64) {
+	attrs := []any{
+		"duration_ms", durationMs,
+	}
+
+	if reqID := ctx.Value(requestIDKey); reqID != nil {
+		attrs = append(attrs, "request_id", reqID)
+	}
+
+	slog.Debug("query embedding generated", attrs...)
+}
+
+// LogSearchEmbeddingFailed logs when embedding generation fails and search falls back to full-text.
+// Logged at WARN level since the search still works but with reduced quality.
+func LogSearchEmbeddingFailed(ctx context.Context, errMsg string) {
+	attrs := []any{
+		"error", errMsg,
+	}
+
+	if reqID := ctx.Value(requestIDKey); reqID != nil {
+		attrs = append(attrs, "request_id", reqID)
+	}
+
+	slog.Warn("search embedding generation failed, falling back to full-text", attrs...)
+}

@@ -4,9 +4,9 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/jackc/pgx/v5"
@@ -45,18 +45,24 @@ func (r *SearchRepository) SetEmbeddingService(svc QueryEmbedder) {
 // Supports ContentTypes filter to search specific content sources.
 // When ContentTypes is empty, searches only posts (backwards compatible).
 func (r *SearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, error) {
+	start := time.Now()
 	tsquery := buildTsQuery(query)
 
 	// Try to generate query embedding for hybrid search
 	var queryEmbedding []float32
+	searchMethod := "fulltext_only"
 	if r.embeddingService != nil {
+		embStart := time.Now()
 		emb, err := r.embeddingService.GenerateQueryEmbedding(ctx, query)
 		if err != nil {
 			// Hybrid search combines exact keyword matching (full-text) with semantic similarity (vector)
 			// If embedding generation fails, fall back to full-text only search
-			log.Printf("search: embedding generation failed, falling back to full-text: %v", err)
+			LogSearchEmbeddingFailed(ctx, err.Error())
 		} else {
+			embDuration := time.Since(embStart).Milliseconds()
+			LogSearchEmbeddingGenerated(ctx, embDuration)
 			queryEmbedding = emb
+			searchMethod = "hybrid_rrf"
 		}
 	}
 
@@ -119,6 +125,8 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	}
 
 	if offset >= total {
+		duration := time.Since(start).Milliseconds()
+		LogSearchCompleted(ctx, query, duration, 0, searchMethod)
 		return []models.SearchResult{}, total, nil
 	}
 
@@ -126,6 +134,9 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	if end > total {
 		end = total
 	}
+
+	duration := time.Since(start).Milliseconds()
+	LogSearchCompleted(ctx, query, duration, len(allResults[offset:end]), searchMethod)
 
 	return allResults[offset:end], total, nil
 }
@@ -257,7 +268,7 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, query string, 
 	rows, err := r.pool.Query(ctx, baseQuery, args...)
 	if err != nil {
 		// If hybrid search fails (e.g., missing function), fall back to full-text
-		log.Printf("search: hybrid_search query failed, falling back to full-text: %v", err)
+		LogSearchEmbeddingFailed(ctx, fmt.Sprintf("hybrid_search query failed: %v", err))
 		return r.searchPosts(ctx, tsquery, opts)
 	}
 	defer rows.Close()

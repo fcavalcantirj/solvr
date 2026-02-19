@@ -756,7 +756,7 @@
       "Verify: Search queries log to stdout with method and latency",
       "Verify: Can grep logs for 'hybrid_rrf' vs 'fulltext_only' to measure adoption"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

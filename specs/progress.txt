@@ -1,3 +1,24 @@
+2026-02-19: PRD-v5 Semantic Search - Add observability logging for search method and latency
+- Modified: backend/internal/db/logger.go (144 lines)
+  * Added LogSearchCompleted(): logs search method (hybrid_rrf or fulltext_only), query, duration_ms, results_count
+  * Added LogSearchEmbeddingGenerated(): logs embedding generation time at DEBUG level
+  * Added LogSearchEmbeddingFailed(): logs embedding failure at WARN level with error message
+  * All functions include request_id from context when available
+- Modified: backend/internal/db/search.go (561 lines)
+  * Added timing to Search() method: measures total duration and logs via LogSearchCompleted
+  * Added embedding generation timing: measures embedding duration separately, logs via LogSearchEmbeddingGenerated
+  * Replaced log.Printf calls with structured slog-based logging functions
+  * Tracks search method as "hybrid_rrf" or "fulltext_only" for adoption metrics
+  * duration_ms in milliseconds (not seconds) - consistent with project convention
+- New file: backend/internal/db/search_observability_test.go (174 lines)
+  * 5 TDD tests for search observability logging
+  * TestLogSearchCompleted_HybridRRF: verifies hybrid search logs with correct method and fields
+  * TestLogSearchCompleted_FulltextOnly: verifies fulltext search logs with correct method
+  * TestLogSearchCompleted_WithRequestID: verifies request_id is included from context
+  * TestLogSearchEmbeddingGenerated: verifies embedding timing logged at DEBUG level
+  * TestLogSearchEmbeddingFailed: verifies embedding failure logged at WARN level
+- All 13 backend packages passing
+
 2026-02-19: PRD-v5 Semantic Search - Add TDD integration tests for hybrid semantic search
 - New file: backend/internal/db/search_semantic_test.go (264 lines)
   * 4 TDD integration tests for hybrid search with real embeddings

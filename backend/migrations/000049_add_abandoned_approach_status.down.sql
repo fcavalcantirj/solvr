@@ -1,0 +1,4 @@
+-- Rollback: remove 'abandoned' approach status.
+-- Since the column is VARCHAR (no CHECK constraint), no schema change is needed.
+-- Any approaches with status='abandoned' should be reviewed manually before rollback.
+-- UPDATE approaches SET status = 'failed' WHERE status = 'abandoned';

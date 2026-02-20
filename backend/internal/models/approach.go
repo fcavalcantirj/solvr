@@ -15,13 +15,14 @@ const (
 	ApproachStatusStuck     ApproachStatus = "stuck"
 	ApproachStatusFailed    ApproachStatus = "failed"
 	ApproachStatusSucceeded ApproachStatus = "succeeded"
+	ApproachStatusAbandoned ApproachStatus = "abandoned"
 )
 
 // IsValidApproachStatus checks if an approach status is valid.
 func IsValidApproachStatus(s ApproachStatus) bool {
 	switch s {
 	case ApproachStatusStarting, ApproachStatusWorking, ApproachStatusStuck,
-		ApproachStatusFailed, ApproachStatusSucceeded:
+		ApproachStatusFailed, ApproachStatusSucceeded, ApproachStatusAbandoned:
 		return true
 	default:
 		return false

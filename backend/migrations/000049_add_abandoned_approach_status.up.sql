@@ -1,0 +1,6 @@
+-- Add 'abandoned' as a valid approach status.
+-- The approaches.status column is VARCHAR(20), so no schema change is needed.
+-- This migration documents the addition of the new status value.
+-- The 'abandoned' status is used by the stale content auto-cleanup job
+-- to mark approaches that have been in 'starting' or 'working' status
+-- for too long without any updates.

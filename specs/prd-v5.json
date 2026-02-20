@@ -1642,7 +1642,7 @@
       "Create migration 000049_add_abandoned_approach_status.down.sql",
       "Verify: go test ./internal/models/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

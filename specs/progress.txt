@@ -1,3 +1,15 @@
+2026-02-20: PRD-v5 Backend - Add abandoned status to approach model
+- Modified: backend/internal/models/approach.go
+  * Added ApproachStatusAbandoned = "abandoned" constant
+  * Updated IsValidApproachStatus() to include "abandoned" as valid status
+- New file: backend/internal/models/approach_test.go
+  * TestIsValidApproachStatus_Abandoned: verifies constant value and validity check
+- New file: backend/migrations/000049_add_abandoned_approach_status.up.sql
+  * Comment-only migration documenting new status (VARCHAR column, no schema change needed)
+- New file: backend/migrations/000049_add_abandoned_approach_status.down.sql
+  * Rollback documentation with manual UPDATE suggestion
+- All backend tests pass (go test ./...)
+
 2026-02-20: PRD-v5 Backend - Fix suggested actions sort order bug and add limit of 5
 - Modified: backend/internal/db/briefing.go
   * Changed ORDER BY a.updated_at ASC to DESC in GetSuggestedActionsForAgent (line 185)

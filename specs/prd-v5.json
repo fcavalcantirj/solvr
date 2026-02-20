@@ -1684,7 +1684,7 @@
       "Verify: go test ./internal/db/stale_content_test.go passes",
       "Verify: go test ./internal/jobs/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

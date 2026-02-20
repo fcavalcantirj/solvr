@@ -1,3 +1,23 @@
+2026-02-20: PRD-v5 Backend - Implement stale content repository queries and wire cleanup job into main.go
+- New file: backend/internal/db/stale_content.go (130 lines)
+  * StaleContentRepository struct with pool *Pool and notifRepo *NotificationsRepository
+  * AbandonStaleApproaches(ctx, olderThan): UPDATE approaches SET status='abandoned' WHERE status IN ('working','starting') AND updated_at < cutoff AND deleted_at IS NULL
+  * WarnApproachesApproachingAbandonment(ctx, warningThreshold, abandonThreshold): SELECT approaches in warning window, create notification with type='approach_abandonment_warning' for each
+  * Deduplication: NOT EXISTS check prevents duplicate warnings within same abandon window
+  * Supports both agent and human authors (sets correct notification recipient)
+  * MarkDormantPosts(ctx, olderThan): UPDATE posts SET status='dormant' WHERE type='problem' AND status='open' AND created_at < cutoff AND NOT EXISTS (approaches)
+- New file: backend/internal/db/stale_content_test.go (195 lines)
+  * TestStaleContent_AbandonApproaches_Integration: creates 35-day old working approach, verifies status becomes 'abandoned'
+  * TestStaleContent_WarnApproaches_Integration: creates 25-day old working approach, verifies warning notification created with type='approach_abandonment_warning'
+  * TestStaleContent_MarkDormant_Integration: creates 65-day old open problem with 0 approaches, verifies status becomes 'dormant'
+  * TestStaleContent_SkipsRecentContent: creates 10-day old approach and problem, verifies neither abandoned nor marked dormant
+- Modified: backend/cmd/api/main.go
+  * Wired StaleContentJob with StaleContentRepository (satisfies all 3 interfaces)
+  * Runs every 24 hours via RunScheduled
+  * Added staleContentCancel for graceful shutdown
+- Verified: go build ./... passes
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-20: PRD-v5 Backend - Create stale content auto-cleanup job with 7-day warning notifications
 - Modified: backend/internal/db/notifications.go
   * Added Create(ctx, notification) method — INSERT INTO notifications RETURNING full record

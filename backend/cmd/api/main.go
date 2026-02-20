@@ -116,6 +116,19 @@ func main() {
 		log.Println("Crystallization job started (runs every 24 hours)")
 	}
 
+	// Start stale content cleanup job if database is available
+	// Per prd-v5: abandon stale approaches (30d), warn before abandonment (23d), mark dormant posts (60d)
+	var staleContentCancel context.CancelFunc
+	if pool != nil {
+		notifRepo := db.NewNotificationsRepository(pool)
+		staleContentRepo := db.NewStaleContentRepository(pool, notifRepo)
+		staleContentJob := jobs.NewStaleContentJob(staleContentRepo, staleContentRepo, staleContentRepo)
+		var staleContentCtx context.Context
+		staleContentCtx, staleContentCancel = context.WithCancel(context.Background())
+		go staleContentJob.RunScheduled(staleContentCtx, jobs.DefaultStaleContentInterval)
+		log.Println("Stale content cleanup job started (runs every 24 hours)")
+	}
+
 	// Create server
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -146,6 +159,9 @@ func main() {
 	}
 	if crystallizationCancel != nil {
 		crystallizationCancel()
+	}
+	if staleContentCancel != nil {
+		staleContentCancel()
 	}
 
 	// Create shutdown context with timeout

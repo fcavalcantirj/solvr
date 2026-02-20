@@ -1,3 +1,20 @@
+2026-02-20: PRD-v5 Backend - Add rising_ideas section showing ideas gaining traction
+- Modified: backend/internal/db/briefing_platform.go
+  * Implemented GetRisingIdeas(ctx, limit) method on PlatformBriefingRepository
+  * Query: LEFT JOIN responses, GROUP BY idea, HAVING responses > 0 OR upvotes > 0
+  * Orders by response count DESC (momentum), then upvotes DESC, then recency DESC
+  * Excludes dormant and closed ideas, handles nil tags and nil evolved_into
+- New file: backend/internal/db/briefing_rising_ideas_test.go (split from briefing_platform_test.go for 900-line limit)
+  * TestGetRisingIdeas_RankedByResponses - 2 ideas with different response counts, verifies ordering
+  * TestGetRisingIdeas_IncludesUpvotedNoResponses - idea with upvotes but 0 responses, verify included
+  * TestGetRisingIdeas_ExcludesDormant - dormant idea with responses excluded
+  * TestGetRisingIdeas_EvolvedCount - idea with evolved_into array, verify evolved_count=2
+  * TestGetRisingIdeas_ExcludesZeroEngagement - idea with 0 responses and 0 upvotes excluded
+- Modified: backend/internal/api/router.go
+  * Wired RisingIdeasRepo to PlatformBriefingRepository (was nil)
+- Model, service interface, and handler already existed (pre-wired)
+- Verified: go test ./... passes (all packages)
+
 2026-02-19: PRD-v5 Backend - Add hardcore_unsolved section showing toughest uncracked problems
 - Modified: backend/internal/models/briefing.go
   * Updated HardcoreUnsolved struct to match PRD: Weight, FailedCount, AgeDays, DifficultyScore(float64)

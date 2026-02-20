@@ -1549,7 +1549,7 @@
       "Test: TestGetRisingIdeas_ExcludesZeroEngagement — create idea with 0 responses and 0 upvotes, verify excluded (HAVING clause)",
       "Verify: go test ./internal/db/ -run TestGetRisingIdeas -v passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

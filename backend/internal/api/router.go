@@ -535,7 +535,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 				PlatformPulseRepo:   db.NewPlatformBriefingRepository(pool),
 				TrendingRepo:        db.NewPlatformBriefingRepository(pool),
 				HardcoreRepo:        db.NewPlatformBriefingRepository(pool),
-				RisingIdeasRepo:     nil,
+				RisingIdeasRepo:     db.NewPlatformBriefingRepository(pool),
 				VictoriesRepo:       db.NewPlatformBriefingRepository(pool),
 				RecommendationsRepo: nil,
 			})

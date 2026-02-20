@@ -809,3 +809,5 @@ func TestGetHardcoreUnsolved_NoQualifyingProblems(t *testing.T) {
 		}
 	}
 }
+
+// Rising Ideas tests are in briefing_rising_ideas_test.go

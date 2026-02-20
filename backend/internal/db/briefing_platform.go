@@ -210,6 +210,64 @@ func (r *PlatformBriefingRepository) GetTrendingNow(ctx context.Context, exclude
 	return posts, nil
 }
 
+// GetRisingIdeas returns ideas gaining traction via responses and upvotes.
+// Includes all ideas with engagement (responses > 0 OR upvotes > 0), excluding dormant and closed.
+// Orders by response count (momentum), then upvotes, then recency.
+func (r *PlatformBriefingRepository) GetRisingIdeas(ctx context.Context, limit int) ([]models.RisingIdea, error) {
+	query := `
+		SELECT p.id, p.title,
+			COUNT(r.id) AS responses_count,
+			p.upvotes,
+			COALESCE(array_length(p.evolved_into, 1), 0) AS evolved_count,
+			GREATEST(FLOOR(EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600)::int, 0) AS age_hours,
+			p.tags
+		FROM posts p
+		LEFT JOIN responses r ON r.idea_id = p.id
+		WHERE p.type = 'idea'
+		  AND p.status NOT IN ('dormant', 'closed')
+		  AND p.deleted_at IS NULL
+		GROUP BY p.id, p.title, p.upvotes, p.evolved_into, p.created_at, p.tags
+		HAVING COUNT(r.id) > 0 OR p.upvotes > 0
+		ORDER BY COUNT(r.id) DESC, p.upvotes DESC, p.created_at DESC
+		LIMIT $1`
+
+	rows, err := r.pool.Query(ctx, query, limit)
+	if err != nil {
+		LogQueryError(ctx, "GetRisingIdeas", "posts", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ideas []models.RisingIdea
+	for rows.Next() {
+		var idea models.RisingIdea
+		var tags []string
+		err := rows.Scan(
+			&idea.ID, &idea.Title, &idea.ResponseCount,
+			&idea.Upvotes, &idea.EvolvedCount, &idea.AgeHours, &tags,
+		)
+		if err != nil {
+			LogQueryError(ctx, "GetRisingIdeas.Scan", "posts", err)
+			return nil, err
+		}
+		if tags == nil {
+			tags = []string{}
+		}
+		idea.Tags = tags
+		ideas = append(ideas, idea)
+	}
+
+	if err := rows.Err(); err != nil {
+		LogQueryError(ctx, "GetRisingIdeas.Rows", "posts", err)
+		return nil, err
+	}
+
+	if ideas == nil {
+		ideas = []models.RisingIdea{}
+	}
+	return ideas, nil
+}
+
 // GetHardcoreUnsolved returns the toughest uncracked problems ranked by difficulty score.
 // Qualifiers (any one is enough): 2+ failed approaches, weight>=4, old (30d+) with positive votes,
 // or 3+ total approaches with at least 1 failure.

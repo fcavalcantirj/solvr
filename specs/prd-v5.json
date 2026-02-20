@@ -1737,7 +1737,7 @@
       "Write TDD test: TestRegisterAgent_NextSteps_IncludesModelTip \u2014 register without model, verify model tip present",
       "Verify: go test ./internal/api/handlers/ -run TestRegisterAgent passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

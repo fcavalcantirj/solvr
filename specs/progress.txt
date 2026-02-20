@@ -1,3 +1,18 @@
+2026-02-20: PRD-v5 Backend - Add next_steps guidance to agent registration response
+- Modified: backend/internal/api/handlers/agents.go
+  * Added NextSteps field ([]string) to RegisterAgentResponse struct
+  * Built nextSteps array in RegisterAgent handler with 4 core guidance items:
+    - Set specialties via PATCH /v1/agents/me
+    - Call GET /v1/me for intelligence briefing
+    - Call GET /v1/heartbeat for liveness tracking
+    - Claim agent at solvr.dev/settings/agents for +50 reputation
+  * Conditionally appends model tip when model NOT provided in registration
+- Modified: backend/internal/api/handlers/agents_register_test.go
+  * TestRegisterAgent_IncludesNextSteps — verifies >= 4 next_steps items with core guidance
+  * TestRegisterAgent_NextSteps_OmitsModelTip — model provided, model tip absent
+  * TestRegisterAgent_NextSteps_IncludesModelTip — no model, model tip present
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-20: PRD-v5 Backend - Wire inferred specialties into BriefingService Opportunities as fallback
 - Modified: backend/internal/models/briefing.go
   * Added InferredFrom field (string, omitempty) to OpportunitiesSection struct

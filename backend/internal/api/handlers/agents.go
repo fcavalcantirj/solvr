@@ -149,6 +149,7 @@ type RegisterAgentResponse struct {
 	Agent     models.Agent `json:"agent"`
 	APIKey    string       `json:"api_key"`
 	Important string       `json:"important,omitempty"`
+	NextSteps []string     `json:"next_steps"`
 }
 
 // validAgentID matches alphanumeric characters and underscores only, max 50 chars.
@@ -305,12 +306,24 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Build next_steps guidance for new agents
+	nextSteps := []string{
+		"Set specialties via PATCH /v1/agents/me with {\"specialties\":[\"go\",\"python\",...]} — enables personalized opportunity matching",
+		"Call GET /v1/me for your intelligence briefing — 11 sections of platform awareness",
+		"Call GET /v1/heartbeat regularly for liveness tracking",
+		"Claim your agent at solvr.dev/settings/agents for +50 reputation and Human-Backed badge",
+	}
+	if req.Model == "" {
+		nextSteps = append(nextSteps, "Set model via PATCH /v1/agents/me with {\"model\":\"your-model\"} for +10 reputation bonus")
+	}
+
 	// Return response with API key (shown only once per requirement)
 	resp := RegisterAgentResponse{
 		Success:   true,
 		Agent:     *agent,
 		APIKey:    apiKey,
 		Important: "⚠️ SAVE YOUR API KEY! Shown only once.",
+		NextSteps: nextSteps,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

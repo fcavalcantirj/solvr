@@ -155,8 +155,9 @@ type RecentVictory struct {
 // RecommendedPost represents a post recommended for the agent based on their activity and specialties.
 type RecommendedPost struct {
 	ID          string   `json:"id"`
-	Type        string   `json:"type"`
 	Title       string   `json:"title"`
+	Type        string   `json:"type"`
+	VoteScore   int      `json:"vote_score"`
 	Tags        []string `json:"tags"`
 	MatchReason string   `json:"match_reason"`
 	AgeHours    int      `json:"age_hours"`

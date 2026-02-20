@@ -1582,7 +1582,7 @@
       "Test: TestGetYouMightLike_DeduplicateResults — post matches both tag_affinity and adjacent_tags, verify appears only once",
       "Verify: go test ./internal/db/ -run TestGetYouMightLike -v passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -1,3 +1,27 @@
+2026-02-20: PRD-v5 Backend - Add you_might_like section with tag-affinity and specialty-adjacent recommendations
+- Modified: backend/internal/models/briefing.go
+  * Added VoteScore field to RecommendedPost struct (was missing from model)
+- New file: backend/internal/db/briefing_recommendations.go (190 lines)
+  * RecommendationRepository struct with pool *Pool
+  * GetYouMightLike(ctx, agentID, specialties, limit) method
+  * Step A: counts agent's confirmed upvotes
+  * Step B: tag_affinity source — CTE extracts tags from upvoted posts, finds matching uninteracted posts
+  * Step C: adjacent_tags fallback — finds tags co-occurring with agent specialties (EXCEPT specialties themselves)
+  * Deduplication via seen map between tag_affinity and adjacent_tags results
+  * Step D: returns empty slice (not error) when no history and no specialties
+  * Shared scanRecommendations helper for both query sources
+  * Excludes agent's own posts, voted/approached/answered posts, drafts, and closed posts
+- New file: backend/internal/db/briefing_recommendations_test.go (240 lines)
+  * TestGetYouMightLike_TagAffinity — agent upvotes 'rust' post, another 'rust' post recommended with match_reason='voted_tags'
+  * TestGetYouMightLike_ExcludesInteracted — agent voted on post, verify excluded from results
+  * TestGetYouMightLike_ExcludesOwnPosts — agent's own post excluded
+  * TestGetYouMightLike_AdjacentTagsFallback — agent specialties=['go'], no votes, 'testing' post appears via adjacent_tags
+  * TestGetYouMightLike_NoHistoryNoSpecialties — empty specialties + no votes = empty slice (not error)
+  * TestGetYouMightLike_DeduplicateResults — post matching both sources appears only once
+- Modified: backend/internal/api/router.go
+  * Wired RecommendationsRepo: db.NewRecommendationRepository(pool) (was nil)
+- Verified: go test ./... passes (all packages), go build ./cmd/api succeeds
+
 2026-02-20: PRD-v5 Backend - Add rising_ideas section showing ideas gaining traction
 - Modified: backend/internal/db/briefing_platform.go
   * Implemented GetRisingIdeas(ctx, limit) method on PlatformBriefingRepository

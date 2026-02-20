@@ -2001,5 +2001,58 @@
       "Verify: SPEC.md is consistent with implemented endpoints"
     ],
     "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "Add platform-wide total_backed_agents to GET /v1/users response meta so frontend can show accurate stats",
+    "steps": [
+      "ROOT CAUSE: /users page header shows '0 BACKED AGENTS' because it sums agents_count from only the current page of 20 users. When sort=newest, newest users have 0 agents. The API must return a platform-wide aggregate.",
+      "Write failing test TestListUsers_AggregateStats in backend/internal/api/handlers/users_test.go (TDD RED)",
+      "Test: GET /v1/users response meta must include total_backed_agents integer field",
+      "Add totalBackedAgents int field to MockUserListRepository struct (line 243-246) and add GetAggregateStats(ctx context.Context) (int, error) method returning m.totalBackedAgents, nil",
+      "Set mock.totalBackedAgents = 42, call GET /v1/users, assert resp.Meta.TotalBackedAgents == 42",
+      "Add GetAggregateStats(ctx context.Context) (int, error) to UsersUserListRepositoryInterface (backend/internal/api/handlers/users.go lines 40-42)",
+      "Add TotalBackedAgents int `json:\"total_backed_agents\"` to UsersListResponse.Meta struct (backend/internal/api/handlers/users.go lines 163-168)",
+      "Implement GetAggregateStats on UserRepository in backend/internal/db/users.go (after line 520): SELECT COUNT(*) FROM agents WHERE human_id IS NOT NULL — consistent with per-user subquery at line 471 which uses WHERE human_id = u.id without deleted_at filter",
+      "NOTE: UserRepository is wired as the production implementor via db.NewUserRepository(pool) in backend/internal/api/router.go line 224",
+      "Update ListUsers handler (backend/internal/api/handlers/users.go lines 290-296): after building resp, call h.userListRepo.GetAggregateStats(ctx) and set resp.Meta.TotalBackedAgents before encoding response",
+      "Run failing test — should now pass (TDD GREEN)",
+      "Verify: go test ./internal/api/handlers/ -run TestListUsers passes",
+      "Verify: curl localhost:8080/v1/users response meta includes total_backed_agents field"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Change /users page default sort from 'newest' to 'reputation' so top contributors appear first instead of inactive new users",
+    "steps": [
+      "ROOT CAUSE: Default sort is 'newest' (frontend/app/users/page.tsx line 164). Newest users have 0 reputation and 0 agents (confirmed via API), making the page look dead. Changing default to 'reputation' shows active users first.",
+      "TDD RED: Update existing test 'passes limit and offset to API' in frontend/hooks/use-users.test.ts line 146: change expected sort from 'newest' to 'reputation' — this test calls useUsers({ limit: 10, offset: 20 }) with no sort, so default applies",
+      "TDD RED: Write new test 'defaults to reputation sort when no sort option provided' — renderHook(() => useUsers()), assert api.getUsers called with { limit: 20, offset: 0, sort: 'reputation' }",
+      "TDD GREEN: Update frontend/hooks/use-users.ts line 57: change options.sort || 'newest' to options.sort || 'reputation'",
+      "TDD GREEN: Update frontend/hooks/use-users.ts line 71: change stableOptions.sort || 'newest' to stableOptions.sort || 'reputation'",
+      "TDD GREEN: Update frontend/app/users/page.tsx line 164: change useState<SortOption>('newest') to useState<SortOption>('reputation')",
+      "Verify: npm test -- --run hooks/use-users.test.ts passes (all tests green)",
+      "Verify: /users page loads showing top contributors by reputation, not newest inactive users"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "Use API total_backed_agents from meta for /users header stats instead of client-side sum of current page",
+    "steps": [
+      "ROOT CAUSE: frontend/app/users/page.tsx line 169 computes totalAgents = users.reduce((sum, u) => sum + u.agentsCount, 0) which only sums the 20 visible users. Must use API-provided platform-wide total instead.",
+      "DEPENDS ON: backend task 'Add platform-wide total_backed_agents to GET /v1/users response meta' must be completed first",
+      "Update frontend/lib/api-types.ts: add total_backed_agents: number to APIUsersResponse.meta interface (lines 669-677). NOTE: meta also has page/per_page but actual API returns limit/offset — pre-existing inconsistency, not in scope",
+      "TDD RED: Write failing test in frontend/hooks/use-users.test.ts: 'returns totalBackedAgents from API meta' — mock returns meta.total_backed_agents: 157, assert result.current.totalBackedAgents === 157",
+      "TDD RED: Update all 3 mock meta objects in test file to include total_backed_agents — mockUsersResponse (line 37-42), page2Response (line 177-182), and inline empty response (line 262)",
+      "TDD GREEN: Update frontend/hooks/use-users.ts — add useState for totalBackedAgents (after line 53), add to UseUsersResult interface (after line 42), extract response.meta.total_backed_agents in fetchUsers (after line 84), add to return object (lines 107-116)",
+      "Update frontend/app/users/page.tsx line 166: destructure totalBackedAgents from useUsers(options) — change from { users, loading, total } to { users, loading, total, totalBackedAgents }",
+      "Delete line 169: const totalAgents = users.reduce((sum, u) => sum + u.agentsCount, 0)",
+      "Replace {formatNumber(totalAgents)} with {formatNumber(totalBackedAgents)} at line 228",
+      "Verify: npm test -- --run hooks/use-users.test.ts passes (all tests green)",
+      "Verify: /users page header shows correct platform-wide backed agents count regardless of sort or page"
+    ],
+    "passes": false
   }
 ]

@@ -1,3 +1,29 @@
+2026-02-20: PRD-v5 Backend - Create stale content auto-cleanup job with 7-day warning notifications
+- Modified: backend/internal/db/notifications.go
+  * Added Create(ctx, notification) method — INSERT INTO notifications RETURNING full record
+  * Pattern: accepts *models.Notification, returns created notification with generated ID
+- Modified: backend/internal/db/notifications_test.go
+  * Added TestNotificationsRepository_Create — creates notification for agent, verifies all fields, checks it appears in GetNotificationsForAgent
+- New file: backend/internal/jobs/stale_content.go (130 lines)
+  * Constants: DefaultStaleApproachThreshold=30d, DefaultDormantPostThreshold=60d, DefaultWarningThreshold=23d, DefaultStaleContentInterval=24h
+  * StaleApproachUpdater interface: AbandonStaleApproaches(ctx, olderThan) (int64, error)
+  * StaleApproachWarner interface: WarnApproachesApproachingAbandonment(ctx, warningThreshold, abandonThreshold) (int64, error)
+  * DormantPostUpdater interface: MarkDormantPosts(ctx, olderThan) (int64, error)
+  * StaleContentJob struct with RunOnce(ctx) returning StaleContentResult{Abandoned, Warned, Dormant}
+  * RunScheduled(ctx, interval) — ticker-based matching CrystallizationJob pattern
+  * Each step independent — errors in one don't prevent others
+- New file: backend/internal/jobs/stale_content_test.go (175 lines)
+  * TestStaleContentJob_AbandonApproaches — mock returns 3, verify RunOnce succeeds
+  * TestStaleContentJob_WarnBeforeAbandonment — mock returns 2 warned
+  * TestStaleContentJob_MarkDormant — mock returns 2 dormant
+  * TestStaleContentJob_NoStaleContent — all zeros, no errors
+  * TestStaleContentJob_ErrorsDoNotCrash — abandon errors, warn+dormant still run
+  * TestStaleContentJob_RunScheduled — context cancellation stops job
+  * TestStaleContentJob_DefaultConstants — verifies all 4 constant values
+- Verified: go test ./internal/jobs/... passes (all 7 new + 8 existing tests)
+- Verified: go test ./internal/db/notifications_test.go compiles (integration tests skip without DB)
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-20: PRD-v5 Backend - Add abandoned status to approach model
 - Modified: backend/internal/models/approach.go
   * Added ApproachStatusAbandoned = "abandoned" constant

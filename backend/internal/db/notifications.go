@@ -20,6 +20,37 @@ func NewNotificationsRepository(pool *Pool) *NotificationsRepository {
 	return &NotificationsRepository{pool: pool}
 }
 
+// Create inserts a new notification into the database.
+// The notification must have at least a Type and Title set, and either UserID or AgentID.
+func (r *NotificationsRepository) Create(ctx context.Context, n *models.Notification) (*models.Notification, error) {
+	query := `
+		INSERT INTO notifications (user_id, agent_id, type, title, body, link)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, user_id, agent_id, type, title, COALESCE(body, '') as body, COALESCE(link, '') as link, read_at, created_at
+	`
+
+	var created models.Notification
+	err := r.pool.QueryRow(ctx, query,
+		n.UserID, n.AgentID, n.Type, n.Title, n.Body, n.Link,
+	).Scan(
+		&created.ID,
+		&created.UserID,
+		&created.AgentID,
+		&created.Type,
+		&created.Title,
+		&created.Body,
+		&created.Link,
+		&created.ReadAt,
+		&created.CreatedAt,
+	)
+	if err != nil {
+		LogQueryError(ctx, "Create", "notifications", err)
+		return nil, fmt.Errorf("failed to create notification: %w", err)
+	}
+
+	return &created, nil
+}
+
 // GetNotificationsForUser returns notifications for a user, paginated, ordered by created_at DESC.
 func (r *NotificationsRepository) GetNotificationsForUser(ctx context.Context, userID string, page, perPage int) ([]models.Notification, int, error) {
 	return r.getNotifications(ctx, "user_id", userID, page, perPage)

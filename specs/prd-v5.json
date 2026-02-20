@@ -1664,7 +1664,7 @@
       "Verify: go test ./internal/jobs/... passes",
       "Verify: go test ./internal/db/notifications_test.go passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

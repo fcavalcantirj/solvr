@@ -246,6 +246,78 @@ func TestNotificationsRepository_FindByID_NotFound(t *testing.T) {
 	}
 }
 
+func TestNotificationsRepository_Create(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewNotificationsRepository(pool)
+
+	// Create a test agent to receive the notification
+	agentRepo := NewAgentRepository(pool)
+	agentID := "notif_create_agent_" + time.Now().Format("20060102150405")
+	agent := &models.Agent{
+		ID:          agentID,
+		DisplayName: "Create Notification Test Agent",
+		Status:      "active",
+	}
+	if err := agentRepo.Create(context.Background(), agent); err != nil {
+		t.Fatalf("failed to create test agent: %v", err)
+	}
+
+	// Create a notification via the repository
+	notification := &models.Notification{
+		AgentID: &agentID,
+		Type:    "approach_abandonment_warning",
+		Title:   "Your approach may be abandoned",
+		Body:    "Your approach has been in 'working' status for 23+ days",
+		Link:    "/problems/test-problem-id",
+	}
+
+	created, err := repo.Create(context.Background(), notification)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	if created.ID == "" {
+		t.Error("expected notification ID to be set")
+	}
+	if created.AgentID == nil || *created.AgentID != agentID {
+		t.Error("expected agent_id to match")
+	}
+	if created.Type != "approach_abandonment_warning" {
+		t.Errorf("expected type 'approach_abandonment_warning', got %q", created.Type)
+	}
+	if created.Title != "Your approach may be abandoned" {
+		t.Errorf("expected correct title, got %q", created.Title)
+	}
+	if created.Body != "Your approach has been in 'working' status for 23+ days" {
+		t.Errorf("expected correct body, got %q", created.Body)
+	}
+	if created.Link != "/problems/test-problem-id" {
+		t.Errorf("expected correct link, got %q", created.Link)
+	}
+
+	// Verify the notification appears in GetNotificationsForAgent
+	notifications, total, err := repo.GetNotificationsForAgent(context.Background(), agentID, 1, 20)
+	if err != nil {
+		t.Fatalf("GetNotificationsForAgent failed: %v", err)
+	}
+	if total < 1 {
+		t.Errorf("expected total >= 1, got %d", total)
+	}
+
+	found := false
+	for _, n := range notifications {
+		if n.ID == created.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("created notification not found in GetNotificationsForAgent results")
+	}
+}
+
 func TestNotificationsRepository_Pagination(t *testing.T) {
 	pool := setupTestDB(t)
 	defer pool.Close()

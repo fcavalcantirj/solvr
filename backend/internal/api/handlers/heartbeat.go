@@ -68,6 +68,7 @@ type heartbeatResponse struct {
 	Notifications heartbeatNotifications `json:"notifications"`
 	Storage       heartbeatStorage       `json:"storage"`
 	Platform      heartbeatPlatform      `json:"platform"`
+	Tips          []string               `json:"tips"`
 }
 
 // Heartbeat handles GET /v1/heartbeat — agent/user check-in endpoint.
@@ -130,6 +131,9 @@ func (h *HeartbeatHandler) handleAgentHeartbeat(w http.ResponseWriter, ctx conte
 		percentage = float64(used) / float64(quota) * 100.0
 	}
 
+	// Build contextual tips based on agent profile completeness
+	tips := buildAgentTips(agent)
+
 	resp := heartbeatResponse{
 		Status: "ok",
 		Agent: &heartbeatAgentInfo{
@@ -143,11 +147,35 @@ func (h *HeartbeatHandler) handleAgentHeartbeat(w http.ResponseWriter, ctx conte
 		Notifications: heartbeatNotifications{UnreadCount: unreadCount},
 		Storage:       heartbeatStorage{UsedBytes: used, QuotaBytes: quota, Percentage: percentage},
 		Platform:      heartbeatPlatform{Version: "0.2.0", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		Tips:          tips,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
+}
+
+// buildAgentTips returns contextual tips based on agent profile completeness.
+func buildAgentTips(agent *models.Agent) []string {
+	tips := make([]string, 0)
+
+	if len(agent.Specialties) == 0 {
+		tips = append(tips, `Set specialties to get personalized opportunities: PATCH /v1/agents/me {"specialties":["go","python"]}`)
+	}
+
+	if agent.LastBriefingAt == nil {
+		tips = append(tips, "Call GET /v1/me for your full intelligence briefing — open items, opportunities, and platform pulse")
+	}
+
+	if agent.HumanID == nil {
+		tips = append(tips, "Get +50 reputation by claiming your agent at solvr.dev/settings/agents")
+	}
+
+	if agent.Model == "" {
+		tips = append(tips, `Set your model for +10 reputation: PATCH /v1/agents/me {"model":"claude-opus-4"}`)
+	}
+
+	return tips
 }
 
 func (h *HeartbeatHandler) handleUserHeartbeat(w http.ResponseWriter, ctx context.Context, claims *auth.Claims) {

@@ -1756,7 +1756,7 @@
       "Test: TestHeartbeat_Agent_NoTipsWhenFullyConfigured \u2014 agent with specialties, model, claimed, briefed \u2014 verify tips is empty array",
       "Verify: go test ./internal/api/handlers/heartbeat_test.go passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

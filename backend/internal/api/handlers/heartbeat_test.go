@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -202,6 +203,196 @@ func TestHeartbeat_Agent_IncludesStorage(t *testing.T) {
 	percentage := storage["percentage"].(float64)
 	if percentage < 48.0 || percentage > 49.0 {
 		t.Errorf("expected percentage ~48.83, got %v", percentage)
+	}
+}
+
+func TestHeartbeat_Agent_TipsWhenSpecialtiesEmpty(t *testing.T) {
+	agentRepo := &MockHeartbeatAgentRepo{MockAgentRepository: NewMockAgentRepository()}
+	humanID := "owner-123"
+	agent := &models.Agent{
+		ID:          "tips_agent",
+		Status:      "active",
+		HumanID:     &humanID,
+		Specialties: nil,
+		Model:       "claude-opus-4",
+	}
+	// Set LastBriefingAt so briefing tip is NOT shown
+	now := time.Now()
+	agent.LastBriefingAt = &now
+	agentRepo.agents["tips_agent"] = agent
+
+	handler := NewHeartbeatHandler(agentRepo, &MockHeartbeatNotifRepo{}, &MockHeartbeatStorageRepo{})
+
+	req := httptest.NewRequest("GET", "/v1/heartbeat", nil)
+	ctx := context.WithValue(req.Context(), auth.AgentContextKey, agent)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	handler.Heartbeat(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	tipsRaw, ok := resp["tips"]
+	if !ok {
+		t.Fatal("expected 'tips' field in response")
+	}
+	tips := tipsRaw.([]interface{})
+
+	found := false
+	for _, tip := range tips {
+		if tipStr, ok := tip.(string); ok {
+			if contains(tipStr, "specialties") {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected specialties tip in tips, got %v", tips)
+	}
+}
+
+func TestHeartbeat_Agent_TipsWhenNeverBriefed(t *testing.T) {
+	agentRepo := &MockHeartbeatAgentRepo{MockAgentRepository: NewMockAgentRepository()}
+	humanID := "owner-123"
+	agent := &models.Agent{
+		ID:             "briefing_agent",
+		Status:         "active",
+		HumanID:        &humanID,
+		Specialties:    []string{"go"},
+		Model:          "claude-opus-4",
+		LastBriefingAt: nil, // Never briefed
+	}
+	agentRepo.agents["briefing_agent"] = agent
+
+	handler := NewHeartbeatHandler(agentRepo, &MockHeartbeatNotifRepo{}, &MockHeartbeatStorageRepo{})
+
+	req := httptest.NewRequest("GET", "/v1/heartbeat", nil)
+	ctx := context.WithValue(req.Context(), auth.AgentContextKey, agent)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	handler.Heartbeat(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	tipsRaw, ok := resp["tips"]
+	if !ok {
+		t.Fatal("expected 'tips' field in response")
+	}
+	tips := tipsRaw.([]interface{})
+
+	found := false
+	for _, tip := range tips {
+		if tipStr, ok := tip.(string); ok {
+			if contains(tipStr, "briefing") || contains(tipStr, "/v1/me") {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected briefing tip in tips, got %v", tips)
+	}
+}
+
+func TestHeartbeat_Agent_TipsWhenUnclaimed(t *testing.T) {
+	agentRepo := &MockHeartbeatAgentRepo{MockAgentRepository: NewMockAgentRepository()}
+	now := time.Now()
+	agent := &models.Agent{
+		ID:             "unclaimed_agent",
+		Status:         "active",
+		HumanID:        nil, // Unclaimed
+		Specialties:    []string{"go"},
+		Model:          "claude-opus-4",
+		LastBriefingAt: &now,
+	}
+	agentRepo.agents["unclaimed_agent"] = agent
+
+	handler := NewHeartbeatHandler(agentRepo, &MockHeartbeatNotifRepo{}, &MockHeartbeatStorageRepo{})
+
+	req := httptest.NewRequest("GET", "/v1/heartbeat", nil)
+	ctx := context.WithValue(req.Context(), auth.AgentContextKey, agent)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	handler.Heartbeat(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	tipsRaw, ok := resp["tips"]
+	if !ok {
+		t.Fatal("expected 'tips' field in response")
+	}
+	tips := tipsRaw.([]interface{})
+
+	found := false
+	for _, tip := range tips {
+		if tipStr, ok := tip.(string); ok {
+			if contains(tipStr, "claim") || contains(tipStr, "+50 reputation") {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected claim tip in tips, got %v", tips)
+	}
+}
+
+func TestHeartbeat_Agent_NoTipsWhenFullyConfigured(t *testing.T) {
+	agentRepo := &MockHeartbeatAgentRepo{MockAgentRepository: NewMockAgentRepository()}
+	humanID := "owner-123"
+	now := time.Now()
+	agent := &models.Agent{
+		ID:             "configured_agent",
+		Status:         "active",
+		HumanID:        &humanID,
+		Specialties:    []string{"go", "postgresql"},
+		Model:          "claude-opus-4",
+		LastBriefingAt: &now,
+	}
+	agentRepo.agents["configured_agent"] = agent
+
+	handler := NewHeartbeatHandler(agentRepo, &MockHeartbeatNotifRepo{}, &MockHeartbeatStorageRepo{})
+
+	req := httptest.NewRequest("GET", "/v1/heartbeat", nil)
+	ctx := context.WithValue(req.Context(), auth.AgentContextKey, agent)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	handler.Heartbeat(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	tipsRaw, ok := resp["tips"]
+	if !ok {
+		t.Fatal("expected 'tips' field in response")
+	}
+	tips := tipsRaw.([]interface{})
+
+	if len(tips) != 0 {
+		t.Errorf("expected empty tips for fully configured agent, got %v", tips)
 	}
 }
 

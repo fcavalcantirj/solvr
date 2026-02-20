@@ -1,3 +1,19 @@
+2026-02-20: PRD-v5 Backend - Add contextual tips to heartbeat response based on agent profile completeness
+- Modified: backend/internal/api/handlers/heartbeat.go
+  * Added Tips field ([]string) to heartbeatResponse struct
+  * Added buildAgentTips() function that builds tips array based on agent state:
+    - If specialties empty: tip to set specialties via PATCH /v1/agents/me
+    - If LastBriefingAt nil: tip to call GET /v1/me for intelligence briefing
+    - If HumanID nil (unclaimed): tip to claim agent for +50 reputation
+    - If Model empty: tip to set model for +10 reputation
+  * Wired tips into handleAgentHeartbeat response
+- Modified: backend/internal/api/handlers/heartbeat_test.go
+  * TestHeartbeat_Agent_TipsWhenSpecialtiesEmpty — agent with no specialties, verify specialties tip present
+  * TestHeartbeat_Agent_TipsWhenNeverBriefed — agent never briefed, verify briefing tip present
+  * TestHeartbeat_Agent_TipsWhenUnclaimed — agent with nil HumanID, verify claim tip present
+  * TestHeartbeat_Agent_NoTipsWhenFullyConfigured — fully configured agent, verify tips is empty array
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-20: PRD-v5 Backend - Add next_steps guidance to agent registration response
 - Modified: backend/internal/api/handlers/agents.go
   * Added NextSteps field ([]string) to RegisterAgentResponse struct

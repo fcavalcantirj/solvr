@@ -18,7 +18,12 @@ BATCH_PAUSE_MINS=${BATCH_PAUSE_MINS:-15}     # Pause between successful batches
 WAIT_TIME_SECS=$((WAIT_TIME_MINS * 60))
 BATCH_PAUSE_SECS=$((BATCH_PAUSE_MINS * 60))
 
-# Telegram notification settings (optional - set env vars to enable)
+# Telegram notification settings
+# Priority: env var > OpenClaw config file
+OPENCLAW_CONFIG="${HOME}/.openclaw/openclaw.json"
+if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] && [ -f "$OPENCLAW_CONFIG" ]; then
+  TELEGRAM_BOT_TOKEN=$(jq -r '.channels.telegram.botToken // empty' "$OPENCLAW_CONFIG" 2>/dev/null || echo "")
+fi
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-""}
 TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-"152099202"}  # Felipe's Telegram ID
 
@@ -29,7 +34,7 @@ send_telegram() {
     curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
       -d "chat_id=${TELEGRAM_CHAT_ID}" \
       -d "text=${message}" \
-      -d "parse_mode=Markdown" > /dev/null 2>&1
+      -d "parse_mode=Markdown" >> /tmp/telegram-debug.log 2>&1
   fi
 }
 

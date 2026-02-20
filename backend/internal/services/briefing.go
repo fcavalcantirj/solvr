@@ -34,9 +34,10 @@ type BriefingReputationRepo interface {
 	GetReputationChangesSince(ctx context.Context, agentID string, since time.Time) (*models.ReputationChangesResult, error)
 }
 
-// BriefingAgentRepo updates the last briefing timestamp after assembling the briefing.
+// BriefingAgentRepo updates agent timestamps after assembling the briefing.
 type BriefingAgentRepo interface {
 	UpdateLastBriefingAt(ctx context.Context, id string) error
+	UpdateLastSeen(ctx context.Context, id string) error
 }
 
 // BriefingPlatformPulseRepo fetches global platform activity statistics.
@@ -286,6 +287,11 @@ func (s *BriefingService) GetBriefingForAgent(ctx context.Context, agent *models
 	// Mark briefing as read
 	if err := s.agentRepo.UpdateLastBriefingAt(ctx, agent.ID); err != nil {
 		slog.Warn("briefing: UpdateLastBriefingAt failed", "agent_id", agent.ID, "error", err)
+	}
+
+	// Update liveness (replaces legacy heartbeat's last_seen_at tracking)
+	if err := s.agentRepo.UpdateLastSeen(ctx, agent.ID); err != nil {
+		slog.Warn("briefing: UpdateLastSeen failed", "agent_id", agent.ID, "error", err)
 	}
 
 	return briefing, nil

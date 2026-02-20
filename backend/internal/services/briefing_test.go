@@ -59,13 +59,20 @@ func (m *mockReputationRepo) GetReputationChangesSince(_ context.Context, _ stri
 }
 
 type mockAgentBriefingRepo struct {
-	calledWith string
-	err        error
+	calledWith         string
+	lastSeenCalledWith string
+	err                error
+	lastSeenErr        error
 }
 
 func (m *mockAgentBriefingRepo) UpdateLastBriefingAt(_ context.Context, id string) error {
 	m.calledWith = id
 	return m.err
+}
+
+func (m *mockAgentBriefingRepo) UpdateLastSeen(_ context.Context, id string) error {
+	m.lastSeenCalledWith = id
+	return m.lastSeenErr
 }
 
 // TestBriefingService_AllSections verifies that when all repos return data,
@@ -661,5 +668,45 @@ func TestBriefingService_EmptyAgent(t *testing.T) {
 	}
 	if len(briefing.ReputationChanges.Breakdown) != 0 {
 		t.Errorf("expected 0 breakdown events, got %d", len(briefing.ReputationChanges.Breakdown))
+	}
+}
+
+// TestBriefingService_UpdatesLastSeen verifies that GetBriefingForAgent
+// calls UpdateLastSeen in addition to UpdateLastBriefingAt, so that agents
+// using briefing (instead of legacy heartbeat) are counted as active.
+func TestBriefingService_UpdatesLastSeen(t *testing.T) {
+	now := time.Now()
+	lastBriefing := now.Add(-4 * time.Hour)
+
+	agentRepo := &mockAgentBriefingRepo{}
+	svc := NewBriefingService(
+		&mockInboxRepo{},
+		&mockOpenItemsRepo{result: &models.OpenItemsResult{}},
+		&mockSuggestedActionsRepo{},
+		&mockOpportunitiesRepo{result: &models.OpportunitiesSection{}},
+		&mockReputationRepo{result: &models.ReputationChangesResult{SinceLastCheck: "+0"}},
+		agentRepo,
+	)
+
+	agent := &models.Agent{
+		ID:             "test-agent-liveness",
+		Specialties:    []string{"go"},
+		CreatedAt:      now.Add(-30 * 24 * time.Hour),
+		LastBriefingAt: &lastBriefing,
+	}
+
+	_, err := svc.GetBriefingForAgent(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// UpdateLastBriefingAt should be called (existing behavior)
+	if agentRepo.calledWith != "test-agent-liveness" {
+		t.Errorf("expected UpdateLastBriefingAt called with %q, got %q", "test-agent-liveness", agentRepo.calledWith)
+	}
+
+	// UpdateLastSeen should ALSO be called (new behavior — fixes active_agents_last_24h = 0)
+	if agentRepo.lastSeenCalledWith != "test-agent-liveness" {
+		t.Errorf("expected UpdateLastSeen called with %q, got %q", "test-agent-liveness", agentRepo.lastSeenCalledWith)
 	}
 }

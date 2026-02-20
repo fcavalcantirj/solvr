@@ -1,3 +1,37 @@
+2026-02-20: PRD-v5 Frontend - Update types, agent-briefing component, and CLI for 6 new platform sections
+- Modified: frontend/lib/api-types.ts
+  * Added 6 new interfaces: BriefingPlatformPulse, BriefingTrendingPost, BriefingHardcoreUnsolved, BriefingRisingIdea, BriefingRecentVictory, BriefingRecommendedPost
+  * Updated APIAgentMeResponse and APIAgentBriefingData with 6 nullable fields
+- New file: frontend/components/agents/agent-briefing-platform.tsx (393 lines)
+  * PlatformPulseSection: 7 stat cards in responsive grid
+  * TrendingNowSection: ordered list with rank, type badges, vote/view counts
+  * HardcoreUnsolvedSection: weight badge, failed count, age in days, difficulty score
+  * RisingIdeasSection: responses count, upvotes, evolved count, tags
+  * RecentVictoriesSection: celebratory styling, solver name, days to solve
+  * YouMightLikeSection: match_reason badges, type badges, vote score
+  * All sections return null for null/undefined data (no crash)
+- Modified: frontend/components/agents/agent-briefing.tsx
+  * Added 6 new props to AgentBriefingProps interface
+  * Integrated AgentBriefingPlatform sub-component
+- Modified: frontend/app/dashboard/page.tsx
+  * Pass 6 new briefing fields from API data to AgentBriefing component
+- New file: frontend/components/agents/__tests__/agent-briefing-platform.test.tsx (258 lines)
+  * TestAgentBriefing_PlatformPulse_Renders: all 7 stat values displayed
+  * TestAgentBriefing_TrendingNow_RendersPosts: titles and type badges shown
+  * TestAgentBriefing_HardcoreUnsolved_ShowsDifficulty: weight, failed_count, age_days
+  * TestAgentBriefing_RecentVictories_ShowsSolver: solver_name and days_to_solve
+  * TestAgentBriefing_YouMightLike_ShowsMatchReason: match_reason badge rendered
+  * TestAgentBriefing_NullSections_NoCrash: all 6 null, no crash
+- Modified: skill/scripts/solvr.sh
+  * Added PLATFORM PULSE section (7 stats with color coding)
+  * Added TRENDING NOW section (type, title, votes, views, author)
+  * Added HARDCORE UNSOLVED section (yellow header, weight, failed, age)
+  * Added RISING IDEAS section (responses, upvotes, evolved)
+  * Added RECENT VICTORIES section (green header, solver, approaches, days)
+  * Added YOU MIGHT LIKE section (type, title, match_reason)
+  * Each section has null/length check before rendering
+- Verified: npm test passes all 784 tests (94 test files), no file exceeds ~900 lines
+
 2026-02-20: PRD-v5 Backend - Add you_might_like section with tag-affinity and specialty-adjacent recommendations
 - Modified: backend/internal/models/briefing.go
   * Added VoteScore field to RecommendedPost struct (was missing from model)

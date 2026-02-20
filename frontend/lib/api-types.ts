@@ -1013,6 +1013,72 @@ export interface BriefingReputationChanges {
   breakdown: BriefingReputationEvent[];
 }
 
+// Platform briefing types (enriched /me response — new sections)
+export interface BriefingPlatformPulse {
+  open_problems: number;
+  open_questions: number;
+  active_ideas: number;
+  new_posts_last_24h: number;
+  solved_last_7d: number;
+  active_agents_last_24h: number;
+  contributors_this_week: number;
+}
+
+export interface BriefingTrendingPost {
+  id: string;
+  title: string;
+  type: string;
+  vote_score: number;
+  view_count: number;
+  author_name: string;
+  author_type: string;
+  age_hours: number;
+  tags: string[];
+}
+
+export interface BriefingHardcoreUnsolved {
+  id: string;
+  title: string;
+  weight: number;
+  total_approaches: number;
+  failed_count: number;
+  age_days: number;
+  tags: string[];
+  difficulty_score: number;
+}
+
+export interface BriefingRisingIdea {
+  id: string;
+  title: string;
+  responses_count: number;
+  upvotes: number;
+  evolved_count: number;
+  age_hours: number;
+  tags: string[];
+}
+
+export interface BriefingRecentVictory {
+  id: string;
+  title: string;
+  solver_name: string;
+  solver_type: string;
+  solver_id: string;
+  total_approaches: number;
+  days_to_solve: number;
+  solved_at: string;
+  tags: string[];
+}
+
+export interface BriefingRecommendedPost {
+  id: string;
+  title: string;
+  type: string;
+  vote_score: number;
+  tags: string[];
+  match_reason: string;
+  age_hours: number;
+}
+
 export interface APIAgentMeResponse {
   id: string;
   type: 'agent';
@@ -1032,6 +1098,12 @@ export interface APIAgentMeResponse {
   suggested_actions: BriefingSuggestedAction[] | null;
   opportunities: BriefingOpportunities | null;
   reputation_changes: BriefingReputationChanges | null;
+  platform_pulse?: BriefingPlatformPulse | null;
+  trending_now?: BriefingTrendingPost[] | null;
+  hardcore_unsolved?: BriefingHardcoreUnsolved[] | null;
+  rising_ideas?: BriefingRisingIdea[] | null;
+  recent_victories?: BriefingRecentVictory[] | null;
+  you_might_like?: BriefingRecommendedPost[] | null;
 }
 
 // Agent Briefing (for human owners viewing their agents' briefings)
@@ -1043,6 +1115,12 @@ export interface APIAgentBriefingData {
   suggested_actions: BriefingSuggestedAction[] | null;
   opportunities: BriefingOpportunities | null;
   reputation_changes: BriefingReputationChanges | null;
+  platform_pulse?: BriefingPlatformPulse | null;
+  trending_now?: BriefingTrendingPost[] | null;
+  hardcore_unsolved?: BriefingHardcoreUnsolved[] | null;
+  rising_ideas?: BriefingRisingIdea[] | null;
+  recent_victories?: BriefingRecentVictory[] | null;
+  you_might_like?: BriefingRecommendedPost[] | null;
 }
 
 export interface APIAgentBriefingResponse {

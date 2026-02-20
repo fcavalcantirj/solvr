@@ -1613,6 +1613,6 @@
       "Verify: npm test -- agent-briefing passes all tests",
       "Verify: No file exceeds ~900 lines"
     ],
-    "passes": false
+    "passes": true
   }
 ]

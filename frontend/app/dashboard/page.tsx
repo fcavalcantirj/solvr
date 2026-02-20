@@ -200,6 +200,12 @@ export default function DashboardPage() {
                   suggestedActions={briefing.suggested_actions}
                   opportunities={briefing.opportunities}
                   reputationChanges={briefing.reputation_changes}
+                  platformPulse={briefing.platform_pulse}
+                  trendingNow={briefing.trending_now}
+                  hardcoreUnsolved={briefing.hardcore_unsolved}
+                  risingIdeas={briefing.rising_ideas}
+                  recentVictories={briefing.recent_victories}
+                  youMightLike={briefing.you_might_like}
                 />
               )}
             </div>

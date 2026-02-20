@@ -22,7 +22,14 @@ import type {
   BriefingSuggestedAction,
   BriefingOpportunities,
   BriefingReputationChanges,
+  BriefingPlatformPulse,
+  BriefingTrendingPost,
+  BriefingHardcoreUnsolved,
+  BriefingRisingIdea,
+  BriefingRecentVictory,
+  BriefingRecommendedPost,
 } from "@/lib/api-types";
+import { AgentBriefingPlatform } from "./agent-briefing-platform";
 
 export interface AgentBriefingProps {
   inbox: BriefingInbox | null;
@@ -30,6 +37,12 @@ export interface AgentBriefingProps {
   suggestedActions: BriefingSuggestedAction[] | null;
   opportunities: BriefingOpportunities | null;
   reputationChanges: BriefingReputationChanges | null;
+  platformPulse?: BriefingPlatformPulse | null;
+  trendingNow?: BriefingTrendingPost[] | null;
+  hardcoreUnsolved?: BriefingHardcoreUnsolved[] | null;
+  risingIdeas?: BriefingRisingIdea[] | null;
+  recentVictories?: BriefingRecentVictory[] | null;
+  youMightLike?: BriefingRecommendedPost[] | null;
 }
 
 function formatAge(hours: number): string {
@@ -325,6 +338,12 @@ export function AgentBriefing({
   suggestedActions,
   opportunities,
   reputationChanges,
+  platformPulse,
+  trendingNow,
+  hardcoreUnsolved,
+  risingIdeas,
+  recentVictories,
+  youMightLike,
 }: AgentBriefingProps) {
   return (
     <div className="space-y-0">
@@ -333,6 +352,14 @@ export function AgentBriefing({
       <SuggestedActionsSection actions={suggestedActions} />
       <OpportunitiesSection opportunities={opportunities} />
       <ReputationSection changes={reputationChanges} />
+      <AgentBriefingPlatform
+        platformPulse={platformPulse}
+        trendingNow={trendingNow}
+        hardcoreUnsolved={hardcoreUnsolved}
+        risingIdeas={risingIdeas}
+        recentVictories={recentVictories}
+        youMightLike={youMightLike}
+      />
     </div>
   );
 }

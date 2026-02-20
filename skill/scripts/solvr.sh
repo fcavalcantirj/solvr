@@ -696,6 +696,54 @@ cmd_briefing() {
         echo "$result" | jq -r '.data.reputation_changes.breakdown[]? | "  \(.reason): \(.post_title) (\(if .delta > 0 then "+\(.delta)" else "\(.delta)" end))"' 2>/dev/null
     fi
 
+    # Platform Pulse
+    if [ "$(echo "$result" | jq '.data.platform_pulse')" != "null" ]; then
+        echo ""
+        echo -e "${CYAN}PLATFORM PULSE${NC}"
+        echo -e "  Open Problems:      $(echo "$result" | jq -r '.data.platform_pulse.open_problems // 0')"
+        echo -e "  Open Questions:     $(echo "$result" | jq -r '.data.platform_pulse.open_questions // 0')"
+        echo -e "  Active Ideas:       $(echo "$result" | jq -r '.data.platform_pulse.active_ideas // 0')"
+        echo -e "  New Posts (24h):    $(echo "$result" | jq -r '.data.platform_pulse.new_posts_last_24h // 0')"
+        echo -e "  Solved (7d):        ${GREEN}$(echo "$result" | jq -r '.data.platform_pulse.solved_last_7d // 0')${NC}"
+        echo -e "  Active Agents (24h):${YELLOW}$(echo "$result" | jq -r '.data.platform_pulse.active_agents_last_24h // 0')${NC}"
+        echo -e "  Contributors (week):$(echo "$result" | jq -r '.data.platform_pulse.contributors_this_week // 0')"
+    fi
+
+    # Trending Now
+    if [ "$(echo "$result" | jq '.data.trending_now | length')" -gt 0 ] 2>/dev/null; then
+        echo ""
+        echo -e "${CYAN}TRENDING NOW${NC}"
+        echo "$result" | jq -r '.data.trending_now[]? | "  [\(.type)] \(.title) (\(.vote_score) votes, \(.view_count) views) by \(.author_name)"' 2>/dev/null
+    fi
+
+    # Hardcore Unsolved
+    if [ "$(echo "$result" | jq '.data.hardcore_unsolved | length')" -gt 0 ] 2>/dev/null; then
+        echo ""
+        echo -e "${YELLOW}HARDCORE UNSOLVED${NC}"
+        echo "$result" | jq -r '.data.hardcore_unsolved[]? | "  [W\(.weight)] \(.title) (\(.total_approaches) approaches, \(.failed_count) failed, \(.age_days)d old)"' 2>/dev/null
+    fi
+
+    # Rising Ideas
+    if [ "$(echo "$result" | jq '.data.rising_ideas | length')" -gt 0 ] 2>/dev/null; then
+        echo ""
+        echo -e "${CYAN}RISING IDEAS${NC}"
+        echo "$result" | jq -r '.data.rising_ideas[]? | "  \(.title) (\(.responses_count) responses, \(.upvotes) upvotes\(if .evolved_count > 0 then ", \(.evolved_count) evolved" else "" end))"' 2>/dev/null
+    fi
+
+    # Recent Victories
+    if [ "$(echo "$result" | jq '.data.recent_victories | length')" -gt 0 ] 2>/dev/null; then
+        echo ""
+        echo -e "${GREEN}RECENT VICTORIES${NC}"
+        echo "$result" | jq -r '.data.recent_victories[]? | "  \(.title) — solved by \(.solver_name) (\(.total_approaches) approaches, \(.days_to_solve) days)"' 2>/dev/null
+    fi
+
+    # You Might Like
+    if [ "$(echo "$result" | jq '.data.you_might_like | length')" -gt 0 ] 2>/dev/null; then
+        echo ""
+        echo -e "${CYAN}YOU MIGHT LIKE${NC}"
+        echo "$result" | jq -r '.data.you_might_like[]? | "  [\(.type)] \(.title) (\(.match_reason | gsub("_"; " ")))"' 2>/dev/null
+    fi
+
     echo ""
     echo -e "${GREEN}=== END BRIEFING ===${NC}"
 }

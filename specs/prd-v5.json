@@ -1846,7 +1846,7 @@
       "Test: TestBadgeService_MultipleBadges \u2014 mock stats meeting first_solve and first_answer_accepted, verify both awarded",
       "Verify: go test ./internal/services/badges_test.go passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

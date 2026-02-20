@@ -68,6 +68,7 @@ type User struct {
 // UserStats contains computed statistics for a user.
 type UserStats struct {
 	PostsCreated    int `json:"posts_created"`
+	ProblemsSolved  int `json:"problems_solved"`
 	AnswersGiven    int `json:"answers_given"`
 	AnswersAccepted int `json:"answers_accepted"`
 	UpvotesReceived int `json:"upvotes_received"`

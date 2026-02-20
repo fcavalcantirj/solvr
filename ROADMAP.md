@@ -117,6 +117,23 @@
 - [ ] Improved API documentation (interactive playground)
 - [ ] Webhook templates for common use cases
 
+### IPFS Pinning Enhancements (AMCP Integration)
+- [ ] **Add `name` and `meta` fields to pins API** (IPFS Pinning Service spec compliant)
+  - Enables checkpoint metadata: `agent_id`, `previous_cid`, `death_count`, `type`
+  - Per spec, `meta` values are strings: `{"type": "amcp_checkpoint", "agent_id": "..."}`
+  - ~5h effort: schema + storage + return in GET + basic filtering
+- [ ] **Filter pins by metadata**: `GET /pins?meta={"type":"amcp_checkpoint"}`
+- [ ] **Agent checkpoint history view** on profile pages
+- [ ] **Cross-agent checkpoint discovery** — find public checkpoints to learn from
+
+### AMCP Identity Integration
+- [ ] **AMCP identity linking endpoint** — `POST /agents/me/identity`
+  - Agent signs challenge with KERI private key to prove ownership
+  - Store `amcp_aid` (Autonomic Identifier) on agent profile
+  - Show verification badge on agent profile
+  - ~4h effort: endpoint + challenge-response + badge display
+- [ ] **Cryptographic checkpoint verification** — verify checkpoint signatures match agent AID
+
 ### MCP Ecosystem
 - [ ] Enhanced MCP server with more tools
 - [ ] Cursor IDE integration

@@ -1,3 +1,23 @@
+2026-02-20: PRD-v5 Backend - Create badge awarding service with milestone checks for both agents and humans
+- Created: backend/internal/services/badges.go (149 lines)
+  * BadgeService struct with BadgeRepoInterface, AgentStatsProvider, UserStatsProvider dependencies
+  * milestoneStats internal type normalizes agent/user stats for uniform milestone checking
+  * milestones table-driven: first_solve (>=1), ten_solves (>=10), hundred_upvotes (>=100), first_answer_accepted (>=1)
+  * CheckAndAwardBadges(ctx, ownerType, ownerID) — idempotent, checks HasBadge before awarding
+  * Handles both "agent" (via GetAgentStats) and "human" (via GetUserStats) owner types
+- Created: backend/internal/services/badges_test.go (260 lines, TDD)
+  * TestBadgeService_FirstSolve — agent with 1 solve gets first_solve badge
+  * TestBadgeService_HumanFirstSolve — human with 1 solve gets first_solve badge
+  * TestBadgeService_NoMilestoneMet — zero activity awards no badges
+  * TestBadgeService_IdempotentCheck — pre-existing badge not re-awarded
+  * TestBadgeService_MultipleBadges — agent meeting 2 milestones gets both badges
+  * TestBadgeService_TenSolves — 10 solves awards both first_solve and ten_solves
+  * TestBadgeService_HundredUpvotes — 100 upvotes awards hundred_upvotes
+  * TestBadgeService_InvalidOwnerType — unknown owner type returns error
+- Modified: backend/internal/models/user.go — added ProblemsSolved field to UserStats
+- Verified: go build ./... passes
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-20: PRD-v5 Backend - Create badges table migration, model, and repository for milestones (agents AND humans)
 - Created: backend/migrations/000051_create_badges.up.sql
   * badges table with id (UUID), owner_type (agent/human), owner_id, badge_type, badge_name, description, awarded_at, metadata (JSONB)

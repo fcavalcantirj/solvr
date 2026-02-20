@@ -1778,7 +1778,7 @@
       "Test: TestFollows_CountFollowers \u2014 create 2 followers for same target, verify count is 2",
       "Verify: go test ./internal/db/follows_test.go passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

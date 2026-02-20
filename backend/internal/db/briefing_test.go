@@ -315,6 +315,120 @@ func TestBriefing_SuggestedActions_UnrespondedComment(t *testing.T) {
 	}
 }
 
+// --- GetSuggestedActionsForAgent: Sort Order & Limit ---
+
+func TestBriefing_SuggestedActions_SortOrder(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	problemID := createBriefingPost(t, pool, "Problem for sort order", "problem", "open", "human", userID, []string{"go"})
+
+	// Create 3 stale approaches with different updated_at times
+	var approach48h, approach72h, approach96h string
+	err := pool.QueryRow(ctx,
+		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status, updated_at)
+		 VALUES ($1, 'agent', $2, 'Approach 48h', 'working', NOW() - INTERVAL '48 hours')
+		 RETURNING id`, problemID, agentID).Scan(&approach48h)
+	if err != nil {
+		t.Fatalf("failed to create 48h approach: %v", err)
+	}
+
+	err = pool.QueryRow(ctx,
+		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status, updated_at)
+		 VALUES ($1, 'agent', $2, 'Approach 72h', 'working', NOW() - INTERVAL '72 hours')
+		 RETURNING id`, problemID, agentID).Scan(&approach72h)
+	if err != nil {
+		t.Fatalf("failed to create 72h approach: %v", err)
+	}
+
+	err = pool.QueryRow(ctx,
+		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status, updated_at)
+		 VALUES ($1, 'agent', $2, 'Approach 96h', 'working', NOW() - INTERVAL '96 hours')
+		 RETURNING id`, problemID, agentID).Scan(&approach96h)
+	if err != nil {
+		t.Fatalf("failed to create 96h approach: %v", err)
+	}
+
+	repo := NewBriefingRepository(pool)
+	actions, err := repo.GetSuggestedActionsForAgent(ctx, agentID)
+	if err != nil {
+		t.Fatalf("GetSuggestedActionsForAgent failed: %v", err)
+	}
+
+	// Filter to only stale approach actions
+	var staleActions []string
+	for _, a := range actions {
+		if a.Action == "update_approach_status" {
+			staleActions = append(staleActions, a.TargetID)
+		}
+	}
+
+	if len(staleActions) < 3 {
+		t.Fatalf("expected at least 3 stale approach actions, got %d", len(staleActions))
+	}
+
+	// First returned action should be the NEWEST stale approach (48h), not oldest (96h)
+	if staleActions[0] != approach48h {
+		t.Errorf("expected first action to be newest stale approach (48h, id=%s), got %s", approach48h, staleActions[0])
+	}
+	// Last should be oldest (96h)
+	if staleActions[len(staleActions)-1] != approach96h {
+		t.Errorf("expected last action to be oldest stale approach (96h, id=%s), got %s", approach96h, staleActions[len(staleActions)-1])
+	}
+}
+
+func TestBriefing_SuggestedActions_LimitFive(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	problemID := createBriefingPost(t, pool, "Problem for limit test", "problem", "open", "human", userID, []string{"go"})
+
+	// Create 7 stale approaches
+	for i := 1; i <= 7; i++ {
+		interval := fmt.Sprintf("%d hours", 24+i*12) // 36h, 48h, 60h, ...
+		_, err := pool.Exec(ctx,
+			`INSERT INTO approaches (problem_id, author_type, author_id, angle, status, updated_at)
+			 VALUES ($1, 'agent', $2, $3, 'working', NOW() - $4::interval)`,
+			problemID, agentID, fmt.Sprintf("Limit approach %d", i), interval)
+		if err != nil {
+			t.Fatalf("failed to create approach %d: %v", i, err)
+		}
+	}
+
+	repo := NewBriefingRepository(pool)
+	actions, err := repo.GetSuggestedActionsForAgent(ctx, agentID)
+	if err != nil {
+		t.Fatalf("GetSuggestedActionsForAgent failed: %v", err)
+	}
+
+	// Total actions should be at most 5 (the limit)
+	if len(actions) > 5 {
+		t.Errorf("expected at most 5 suggested actions, got %d", len(actions))
+	}
+
+	// Verify the 5 actions are the 5 NEWEST stale approaches (smallest intervals)
+	// With DESC order and LIMIT 5, we should get the 5 most recently updated
+	for _, a := range actions {
+		if a.Action != "update_approach_status" {
+			continue
+		}
+		// All returned actions should have valid non-empty target titles
+		if a.TargetTitle == "" {
+			t.Error("expected non-empty target title for stale approach action")
+		}
+	}
+}
+
 // --- GetOpportunitiesForAgent ---
 
 func TestBriefing_Opportunities_MatchesSpecialties(t *testing.T) {

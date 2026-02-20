@@ -1,3 +1,13 @@
+2026-02-20: PRD-v5 Backend - Fix suggested actions sort order bug and add limit of 5
+- Modified: backend/internal/db/briefing.go
+  * Changed ORDER BY a.updated_at ASC to DESC in GetSuggestedActionsForAgent (line 185)
+  * Stale approaches now sorted newest-first (most recently updated first)
+  * Added maxActions=5 constant and cap on total returned actions
+- Modified: backend/internal/db/briefing_test.go
+  * Added TestBriefing_SuggestedActions_SortOrder: creates 3 stale approaches at 48h/72h/96h, asserts newest (48h) returned first
+  * Added TestBriefing_SuggestedActions_LimitFive: creates 7 stale approaches, asserts max 5 returned
+- All backend tests pass (go test ./...)
+
 2026-02-20: PRD-v5 Frontend - Update types, agent-briefing component, and CLI for 6 new platform sections
 - Modified: frontend/lib/api-types.ts
   * Added 6 new interfaces: BriefingPlatformPulse, BriefingTrendingPost, BriefingHardcoreUnsolved, BriefingRisingIdea, BriefingRecentVictory, BriefingRecommendedPost

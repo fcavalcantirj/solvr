@@ -167,8 +167,10 @@ func (r *BriefingRepository) GetOpenItemsForAgent(ctx context.Context, agentID s
 // GetSuggestedActionsForAgent returns actionable nudges for the agent:
 // 1. Stale approaches (status 'working', updated >24h ago) — nudge to update status
 // 2. Unresponded comments on agent's posts (since last_briefing_at) — nudge to respond
-// Results are prioritized: stale approaches (oldest first), then unresponded comments (newest first).
+// Results are prioritized: stale approaches (newest first), then unresponded comments (newest first).
+// Maximum 5 actions returned.
 func (r *BriefingRepository) GetSuggestedActionsForAgent(ctx context.Context, agentID string) ([]models.SuggestedAction, error) {
+	const maxActions = 5
 	var actions []models.SuggestedAction
 
 	// Query 1: Stale approaches — agent's approaches marked 'working' but not updated in 24h
@@ -182,7 +184,7 @@ func (r *BriefingRepository) GetSuggestedActionsForAgent(ctx context.Context, ag
 			AND a.status = 'working'
 			AND a.updated_at < NOW() - INTERVAL '24 hours'
 			AND a.deleted_at IS NULL
-		ORDER BY a.updated_at ASC
+		ORDER BY a.updated_at DESC
 	`
 
 	rows, err := r.pool.Query(ctx, staleApproachQuery, agentID)
@@ -251,6 +253,11 @@ func (r *BriefingRepository) GetSuggestedActionsForAgent(ctx context.Context, ag
 	}
 	if err := rows2.Err(); err != nil {
 		return nil, err
+	}
+
+	// Cap total actions at maxActions
+	if len(actions) > maxActions {
+		actions = actions[:maxActions]
 	}
 
 	return actions, nil

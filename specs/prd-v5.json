@@ -1822,7 +1822,7 @@
       "Test: TestBadges_HasBadge \u2014 award badge, verify HasBadge returns true; check non-existent returns false",
       "Verify: go test ./internal/db/badges_test.go passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

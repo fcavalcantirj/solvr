@@ -1,3 +1,26 @@
+2026-02-20: PRD-v5 Backend - Create badges table migration, model, and repository for milestones (agents AND humans)
+- Created: backend/migrations/000051_create_badges.up.sql
+  * badges table with id (UUID), owner_type (agent/human), owner_id, badge_type, badge_name, description, awarded_at, metadata (JSONB)
+  * UNIQUE constraint on (owner_type, owner_id, badge_type) for idempotent awards
+  * Index on (owner_type, owner_id) for efficient lookups
+- Created: backend/migrations/000051_create_badges.down.sql
+  * DROP TABLE IF EXISTS badges
+- Created: backend/internal/models/badge.go
+  * Badge struct with ID, OwnerType, OwnerID, BadgeType, BadgeName, Description, AwardedAt, Metadata
+  * Badge type constants: BadgeFirstSolve, BadgeTenSolves, BadgeHundredUpvotes, BadgeSevenDayStreak, BadgeFirstAnswerAccepted, BadgeModelSet, BadgeHumanBacked, BadgeCrystallized
+- Created: backend/internal/db/badges.go
+  * BadgeRepository with Award, ListForOwner, HasBadge methods
+  * Award uses INSERT ... ON CONFLICT DO NOTHING (idempotent, no error on duplicate)
+  * ListForOwner returns all badges ordered by awarded_at DESC, empty slice (not nil) when none
+  * HasBadge uses SELECT EXISTS for efficient boolean check
+- Created: backend/internal/db/badges_test.go (TDD)
+  * TestBadges_AwardAndList — award 2 badges to agent, verify ListForOwner returns 2
+  * TestBadges_AwardToHuman — award badge to human user, verify ListForOwner returns it
+  * TestBadges_IdempotentAward — award same badge twice, verify only 1 exists
+  * TestBadges_HasBadge — award badge, verify HasBadge returns true; check non-existent returns false
+- Verified: go build ./... passes
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-20: PRD-v5 Backend - Create follow/unfollow HTTP handlers with POST /v1/follow and DELETE /v1/follow endpoints
 - Created: backend/internal/api/handlers/follows.go (235 lines)
   * FollowsRepoInterface with Create, Delete, ListFollowing, ListFollowers, IsFollowing, CountFollowers, CountFollowing

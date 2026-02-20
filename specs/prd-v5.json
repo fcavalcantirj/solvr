@@ -1801,7 +1801,7 @@
       "Test: TestFollow_Unauthenticated \u2014 verify 401 without auth",
       "Verify: go test ./internal/api/handlers/follows_test.go passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

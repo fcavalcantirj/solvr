@@ -207,3 +207,19 @@ func (r *FollowsRepository) CountFollowers(ctx context.Context, followedType, fo
 
 	return count, nil
 }
+
+// CountFollowing returns the number of entities that the given user/agent is following.
+func (r *FollowsRepository) CountFollowing(ctx context.Context, followerType, followerID string) (int, error) {
+	query := `
+		SELECT COUNT(*) FROM follows
+		WHERE follower_type = $1 AND follower_id = $2
+	`
+
+	var count int
+	err := r.pool.QueryRow(ctx, query, followerType, followerID).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}

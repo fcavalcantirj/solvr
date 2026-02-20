@@ -161,6 +161,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	notificationsRepoConcrete := db.NewNotificationsRepository(pool)
 	notificationsRepo = notificationsRepoConcrete
 	pinsRepo = db.NewPinRepository(pool)
+	followsRepo := db.NewFollowsRepository(pool)
 	storageRepo := db.NewStorageRepository(pool)
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
@@ -212,6 +213,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	bookmarksHandler := handlers.NewBookmarksHandler(bookmarksRepo)
 	viewsHandler := handlers.NewViewsHandler(viewsRepo)
 	reportsHandler := handlers.NewReportsHandler(reportsRepo)
+	followsHandler := handlers.NewFollowsHandler(followsRepo)
 
 	// Create users handler (BE-003: User profile endpoints)
 	// Type assertion to get the full interface needed by UsersHandler
@@ -650,6 +652,16 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Post("/reports", reportsHandler.Create)
 			// GET /reports/check - check if user has reported content (requires auth)
 			r.Get("/reports/check", reportsHandler.Check)
+
+			// Follows endpoints (PRD-v5: social graph)
+			// POST /follow - follow an entity (requires auth)
+			r.Post("/follow", followsHandler.Follow)
+			// DELETE /follow - unfollow an entity (requires auth)
+			r.Delete("/follow", followsHandler.Unfollow)
+			// GET /following - list entities the caller follows (requires auth)
+			r.Get("/following", followsHandler.ListFollowing)
+			// GET /followers - list entities following the caller (requires auth)
+			r.Get("/followers", followsHandler.ListFollowers)
 
 			// IPFS Pinning Service API endpoints (per prd-v6-ipfs-expanded.json)
 			// Follows IPFS Pinning Service API spec for interoperability

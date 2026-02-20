@@ -1,3 +1,26 @@
+2026-02-20: PRD-v5 Backend - Create follow/unfollow HTTP handlers with POST /v1/follow and DELETE /v1/follow endpoints
+- Created: backend/internal/api/handlers/follows.go (235 lines)
+  * FollowsRepoInterface with Create, Delete, ListFollowing, ListFollowers, IsFollowing, CountFollowers, CountFollowing
+  * FollowsHandler struct with repo and logger
+  * POST /v1/follow handler: parse body {target_type, target_id}, determine caller from auth context, prevent self-follow, create follow, return 201
+  * DELETE /v1/follow handler: parse body {target_type, target_id}, determine caller, delete follow, return 200
+  * GET /v1/following handler: list entities caller follows with pagination (limit, offset), return {data: [], meta: {total, has_more}}
+  * GET /v1/followers handler: list entities following caller with pagination
+- Created: backend/internal/api/handlers/follows_test.go (277 lines, TDD)
+  * TestFollow_AgentFollowsAgent — agent calls POST /v1/follow with agent target, verify 201
+  * TestFollow_AgentFollowsUser — agent follows human user, verify 201
+  * TestFollow_Unfollow — agent calls DELETE /v1/follow, verify 200
+  * TestFollow_SelfFollow — agent tries to follow self, verify 400 VALIDATION_ERROR
+  * TestFollow_ListFollowing — agent follows 2 entities, GET /v1/following returns 2
+  * TestFollow_Unauthenticated — verify 401 without auth
+- Modified: backend/internal/db/follows.go
+  * Added CountFollowing() method for pagination totals
+- Modified: backend/internal/api/router.go
+  * Wired FollowsRepository and FollowsHandler
+  * Added routes: POST /v1/follow, DELETE /v1/follow, GET /v1/following, GET /v1/followers under combined auth middleware
+- Verified: go build ./... passes
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-20: PRD-v5 Backend - Create follows table migration and repository for social graph
 - Created: backend/migrations/000050_create_follows.up.sql
   * follows table with follower_type/follower_id, followed_type/followed_id

@@ -52,3 +52,60 @@ describe('AboutPage Social Links', () => {
     expect(deadLinks?.length || 0).toBe(0);
   });
 });
+
+describe('AboutPage Team Section', () => {
+  it('renders real team members', () => {
+    render(<AboutPage />);
+    expect(screen.getByText('Felipe Cavalcanti')).toBeDefined();
+    expect(screen.getByText('Marcelo Ballona')).toBeDefined();
+    expect(screen.getByText('ClaudiusThePirateEmperor')).toBeDefined();
+  });
+
+  it('does not render fictional team members', () => {
+    render(<AboutPage />);
+    expect(screen.queryByText('Alex Chen')).toBeNull();
+    expect(screen.queryByText('Sarah Kim')).toBeNull();
+    expect(screen.queryByText('Marcus Webb')).toBeNull();
+    expect(screen.queryByText('ARIA-7')).toBeNull();
+  });
+
+  it('links Felipe to his solvr profile', () => {
+    render(<AboutPage />);
+    const felipeLink = screen.getByRole('link', { name: /Felipe Cavalcanti/i });
+    expect(felipeLink).toHaveAttribute('href', '/users/26911295-5bf7-4c4e-91a1-03d483e78063');
+  });
+
+  it('links Claudius to his agent profile', () => {
+    render(<AboutPage />);
+    const claudiusLink = screen.getByRole('link', { name: /ClaudiusThePirateEmperor/i });
+    expect(claudiusLink).toHaveAttribute('href', '/agents/agent_ClaudiusThePirateEmperor');
+  });
+});
+
+describe('AboutPage Infrastructure Section', () => {
+  it('renders infrastructure technologies', () => {
+    render(<AboutPage />);
+    expect(screen.getByText('IPFS Pinning')).toBeDefined();
+    expect(screen.getByText('AMCP Protocol')).toBeDefined();
+    expect(screen.getByText('Heartbeat & Briefing')).toBeDefined();
+    expect(screen.getByText('Solvr Skill')).toBeDefined();
+  });
+});
+
+describe('AboutPage OpenClaw Section', () => {
+  it('renders OpenClaw section with three layers', () => {
+    render(<AboutPage />);
+    expect(screen.getByText('OPENCLAW')).toBeDefined();
+    expect(screen.getByText('IPFS Node')).toBeDefined();
+    expect(screen.getByText('AMCP Identity')).toBeDefined();
+    expect(screen.getByText('Proactive Loop')).toBeDefined();
+  });
+});
+
+describe('AboutPage Founding Info', () => {
+  it('shows correct founding year and location', () => {
+    render(<AboutPage />);
+    expect(screen.getByText('FOUNDED 2026')).toBeDefined();
+    expect(screen.getByText('THE INTERNET')).toBeDefined();
+  });
+});

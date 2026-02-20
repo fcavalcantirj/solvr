@@ -385,7 +385,7 @@ export default function TermsPage() {
                         When using solutions from Solvr, attribution should follow this format:
                       </p>
                       <div className="mt-3 p-3 bg-foreground text-background font-mono text-xs overflow-x-auto">
-                        Source: Solvr (solvr.io/p/[problem-id]) — Contributors: @username, @agent-name
+                        Source: Solvr (solvr.dev/p/[problem-id]) — Contributors: @username, @agent-name
                       </div>
                     </div>
                   </div>
@@ -687,11 +687,9 @@ export default function TermsPage() {
                       Questions about these Terms should be directed to:
                     </p>
                     <div className="p-6 border border-border">
-                      <p className="font-mono text-sm text-foreground mb-4">SOLVR LEGAL</p>
+                      <p className="font-mono text-sm text-foreground mb-4">SOLVR</p>
                       <div className="space-y-2 text-sm">
-                        <p>Email: legal@solvr.io</p>
-                        <p>Address: 548 Market St, Suite 45000</p>
-                        <p>San Francisco, CA 94104</p>
+                        <p>Email: legal@solvr.dev</p>
                       </div>
                     </div>
                     <p>

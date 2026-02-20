@@ -163,7 +163,7 @@ export default function PrivacyPage() {
                       API Documentation
                     </Link>
                     <a
-                      href="mailto:privacy@solvr.io"
+                      href="mailto:privacy@solvr.dev"
                       className="block text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
                       Contact Privacy Team
@@ -677,12 +677,12 @@ export default function PrivacyPage() {
                         {
                           right: "Objection",
                           desc: "Object to certain processing activities",
-                          action: "Contact privacy@solvr.io",
+                          action: "Contact privacy@solvr.dev",
                         },
                         {
                           right: "Restriction",
                           desc: "Request limited processing of your data",
-                          action: "Contact privacy@solvr.io",
+                          action: "Contact privacy@solvr.dev",
                         },
                       ].map((item) => (
                         <div
@@ -788,7 +788,7 @@ export default function PrivacyPage() {
                         In the event of a data breach, we will notify affected
                         users within 72 hours and relevant authorities as
                         required by law. Our incident response team is available
-                        24/7 at security@solvr.io.
+                        24/7 at security@solvr.dev.
                       </p>
                     </div>
                   </div>
@@ -927,7 +927,7 @@ export default function PrivacyPage() {
                       Solvr is not intended for users under 16 years of age. We
                       do not knowingly collect personal information from
                       children. If you believe a child has provided us with
-                      personal data, please contact us at privacy@solvr.io.
+                      personal data, please contact us at privacy@solvr.dev.
                     </p>
                   </div>
                 </section>
@@ -1000,10 +1000,10 @@ export default function PrivacyPage() {
                           PRIVACY INQUIRIES
                         </p>
                         <a
-                          href="mailto:privacy@solvr.io"
+                          href="mailto:privacy@solvr.dev"
                           className="font-mono text-sm hover:underline"
                         >
-                          privacy@solvr.io
+                          privacy@solvr.dev
                         </a>
                       </div>
                       <div className="p-6 border border-border">
@@ -1011,44 +1011,25 @@ export default function PrivacyPage() {
                           DATA PROTECTION OFFICER
                         </p>
                         <a
-                          href="mailto:dpo@solvr.io"
+                          href="mailto:dpo@solvr.dev"
                           className="font-mono text-sm hover:underline"
                         >
-                          dpo@solvr.io
+                          dpo@solvr.dev
                         </a>
                       </div>
                     </div>
 
                     <div className="p-6 border border-border bg-secondary/30">
                       <p className="font-mono text-xs text-foreground mb-3">
-                        MAILING ADDRESS
+                        CONTACT
                       </p>
                       <p className="text-sm text-muted-foreground leading-relaxed">
-                        Solvr Inc.
-                        <br />
-                        Attn: Privacy Team
-                        <br />
-                        548 Market Street, Suite 35000
-                        <br />
-                        San Francisco, CA 94104
-                        <br />
-                        United States
-                      </p>
-                    </div>
-
-                    <div className="p-4 border border-border">
-                      <p className="font-mono text-xs text-muted-foreground mb-2">
-                        EU REPRESENTATIVE
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        For EU residents: Solvr EU Representative, Dublin,
-                        Ireland
-                        <br />
+                        Email:{" "}
                         <a
-                          href="mailto:eu-privacy@solvr.io"
+                          href="mailto:privacy@solvr.dev"
                           className="hover:underline"
                         >
-                          eu-privacy@solvr.io
+                          privacy@solvr.dev
                         </a>
                       </p>
                     </div>
@@ -1079,7 +1060,7 @@ export default function PrivacyPage() {
               GO TO SETTINGS
             </Link>
             <a
-              href="mailto:privacy@solvr.io"
+              href="mailto:privacy@solvr.dev"
               className="inline-flex items-center justify-center gap-2 border border-background/30 font-mono text-xs tracking-wider px-8 py-4 hover:bg-background/10 transition-colors"
             >
               CONTACT PRIVACY TEAM

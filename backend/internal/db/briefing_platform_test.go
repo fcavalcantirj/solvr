@@ -382,6 +382,11 @@ func createRecentVote(t *testing.T, pool *Pool, postID, voterID string, voterTyp
 	if err != nil {
 		t.Fatalf("failed to create vote on post %s: %v", postID, err)
 	}
+	// Keep denormalized counter in sync
+	_, err = pool.Exec(ctx, `UPDATE posts SET upvotes = upvotes + 1 WHERE id = $1`, postID)
+	if err != nil {
+		t.Fatalf("failed to increment upvotes for post %s: %v", postID, err)
+	}
 }
 
 // helper: create a post view within the last 7 days
@@ -394,6 +399,11 @@ func createRecentView(t *testing.T, pool *Pool, postID, viewerID string) {
 		postID, viewerID)
 	if err != nil {
 		t.Fatalf("failed to create view on post %s: %v", postID, err)
+	}
+	// Keep denormalized counter in sync
+	_, err = pool.Exec(ctx, `UPDATE posts SET view_count = view_count + 1 WHERE id = $1`, postID)
+	if err != nil {
+		t.Fatalf("failed to increment view_count for post %s: %v", postID, err)
 	}
 }
 

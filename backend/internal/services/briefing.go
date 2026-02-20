@@ -70,39 +70,47 @@ type BriefingRecommendationsRepo interface {
 	GetYouMightLike(ctx context.Context, agentID string, specialties []string, limit int) ([]models.RecommendedPost, error)
 }
 
+// BriefingInferredSpecialtiesRepo infers specialties from agent activity when
+// explicit specialties are empty.
+type BriefingInferredSpecialtiesRepo interface {
+	InferSpecialtiesForAgent(ctx context.Context, agentID string) ([]string, error)
+}
+
 // BriefingDeps holds all repository dependencies for BriefingService.
 // New repos can be nil — sections are skipped when repo is nil.
 type BriefingDeps struct {
-	InboxRepo            BriefingInboxRepo
-	OpenItemsRepo        BriefingOpenItemsRepo
-	SuggestedActionsRepo BriefingSuggestedActionsRepo
-	OpportunitiesRepo    BriefingOpportunitiesRepo
-	ReputationRepo       BriefingReputationRepo
-	AgentRepo            BriefingAgentRepo
-	PlatformPulseRepo    BriefingPlatformPulseRepo
-	TrendingRepo         BriefingTrendingRepo
-	HardcoreRepo         BriefingHardcoreRepo
-	RisingIdeasRepo      BriefingRisingIdeasRepo
-	VictoriesRepo        BriefingVictoriesRepo
-	RecommendationsRepo  BriefingRecommendationsRepo
+	InboxRepo               BriefingInboxRepo
+	OpenItemsRepo           BriefingOpenItemsRepo
+	SuggestedActionsRepo    BriefingSuggestedActionsRepo
+	OpportunitiesRepo       BriefingOpportunitiesRepo
+	ReputationRepo          BriefingReputationRepo
+	AgentRepo               BriefingAgentRepo
+	PlatformPulseRepo       BriefingPlatformPulseRepo
+	TrendingRepo            BriefingTrendingRepo
+	HardcoreRepo            BriefingHardcoreRepo
+	RisingIdeasRepo         BriefingRisingIdeasRepo
+	VictoriesRepo           BriefingVictoriesRepo
+	RecommendationsRepo     BriefingRecommendationsRepo
+	InferredSpecialtiesRepo BriefingInferredSpecialtiesRepo
 }
 
 // BriefingService aggregates inbox, open items, suggested actions, opportunities,
 // reputation changes, and platform-wide sections into a single briefing response.
 // Each section is fetched independently — if one fails, the others still populate.
 type BriefingService struct {
-	inboxRepo            BriefingInboxRepo
-	openItemsRepo        BriefingOpenItemsRepo
-	suggestedActionsRepo BriefingSuggestedActionsRepo
-	opportunitiesRepo    BriefingOpportunitiesRepo
-	reputationRepo       BriefingReputationRepo
-	agentRepo            BriefingAgentRepo
-	platformPulseRepo    BriefingPlatformPulseRepo
-	trendingRepo         BriefingTrendingRepo
-	hardcoreRepo         BriefingHardcoreRepo
-	risingIdeasRepo      BriefingRisingIdeasRepo
-	victoriesRepo        BriefingVictoriesRepo
-	recommendationsRepo  BriefingRecommendationsRepo
+	inboxRepo               BriefingInboxRepo
+	openItemsRepo           BriefingOpenItemsRepo
+	suggestedActionsRepo    BriefingSuggestedActionsRepo
+	opportunitiesRepo       BriefingOpportunitiesRepo
+	reputationRepo          BriefingReputationRepo
+	agentRepo               BriefingAgentRepo
+	platformPulseRepo       BriefingPlatformPulseRepo
+	trendingRepo            BriefingTrendingRepo
+	hardcoreRepo            BriefingHardcoreRepo
+	risingIdeasRepo         BriefingRisingIdeasRepo
+	victoriesRepo           BriefingVictoriesRepo
+	recommendationsRepo     BriefingRecommendationsRepo
+	inferredSpecialtiesRepo BriefingInferredSpecialtiesRepo
 }
 
 // NewBriefingService creates a new BriefingService with all required repositories.
@@ -128,18 +136,19 @@ func NewBriefingService(
 // New platform repos can be nil — those sections are skipped when nil.
 func NewBriefingServiceWithDeps(deps BriefingDeps) *BriefingService {
 	return &BriefingService{
-		inboxRepo:            deps.InboxRepo,
-		openItemsRepo:        deps.OpenItemsRepo,
-		suggestedActionsRepo: deps.SuggestedActionsRepo,
-		opportunitiesRepo:    deps.OpportunitiesRepo,
-		reputationRepo:       deps.ReputationRepo,
-		agentRepo:            deps.AgentRepo,
-		platformPulseRepo:    deps.PlatformPulseRepo,
-		trendingRepo:         deps.TrendingRepo,
-		hardcoreRepo:         deps.HardcoreRepo,
-		risingIdeasRepo:      deps.RisingIdeasRepo,
-		victoriesRepo:        deps.VictoriesRepo,
-		recommendationsRepo:  deps.RecommendationsRepo,
+		inboxRepo:               deps.InboxRepo,
+		openItemsRepo:           deps.OpenItemsRepo,
+		suggestedActionsRepo:    deps.SuggestedActionsRepo,
+		opportunitiesRepo:       deps.OpportunitiesRepo,
+		reputationRepo:          deps.ReputationRepo,
+		agentRepo:               deps.AgentRepo,
+		platformPulseRepo:       deps.PlatformPulseRepo,
+		trendingRepo:            deps.TrendingRepo,
+		hardcoreRepo:            deps.HardcoreRepo,
+		risingIdeasRepo:         deps.RisingIdeasRepo,
+		victoriesRepo:           deps.VictoriesRepo,
+		recommendationsRepo:     deps.RecommendationsRepo,
+		inferredSpecialtiesRepo: deps.InferredSpecialtiesRepo,
 	}
 }
 
@@ -202,12 +211,24 @@ func (s *BriefingService) GetBriefingForAgent(ctx context.Context, agent *models
 		briefing.SuggestedActions = actions
 	}
 
-	// Section 4: Opportunities (skip if no specialties)
-	if len(agent.Specialties) > 0 {
-		opps, err := s.opportunitiesRepo.GetOpportunitiesForAgent(ctx, agent.ID, agent.Specialties, briefingOpportunitiesLimit)
+	// Section 4: Opportunities (with inferred specialties fallback)
+	specialties := agent.Specialties
+	inferredFrom := "explicit"
+	if len(specialties) == 0 && s.inferredSpecialtiesRepo != nil {
+		inferred, inferErr := s.inferredSpecialtiesRepo.InferSpecialtiesForAgent(ctx, agent.ID)
+		if inferErr != nil {
+			slog.Warn("briefing: inferred specialties fetch failed", "agent_id", agent.ID, "error", inferErr)
+		} else if len(inferred) > 0 {
+			specialties = inferred
+			inferredFrom = "inferred"
+		}
+	}
+	if len(specialties) > 0 {
+		opps, err := s.opportunitiesRepo.GetOpportunitiesForAgent(ctx, agent.ID, specialties, briefingOpportunitiesLimit)
 		if err != nil {
 			slog.Warn("briefing: opportunities fetch failed", "agent_id", agent.ID, "error", err)
 		} else {
+			opps.InferredFrom = inferredFrom
 			briefing.Opportunities = opps
 		}
 	}

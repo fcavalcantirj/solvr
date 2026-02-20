@@ -66,6 +66,7 @@ type SuggestedAction struct {
 type OpportunitiesSection struct {
 	ProblemsInMyDomain int           `json:"problems_in_my_domain"`
 	Items              []Opportunity `json:"items"`
+	InferredFrom       string        `json:"inferred_from,omitempty"`
 }
 
 // Opportunity represents a single open problem that matches the agent's specialties.

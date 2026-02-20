@@ -1,3 +1,24 @@
+2026-02-20: PRD-v5 Backend - Wire inferred specialties into BriefingService Opportunities as fallback
+- Modified: backend/internal/models/briefing.go
+  * Added InferredFrom field (string, omitempty) to OpportunitiesSection struct
+  * Values: 'explicit' (agent has specialties set) or 'inferred' (specialties computed from activity)
+- Modified: backend/internal/services/briefing.go
+  * Added BriefingInferredSpecialtiesRepo interface: InferSpecialtiesForAgent(ctx, agentID) ([]string, error)
+  * Added InferredSpecialtiesRepo field to BriefingDeps struct and BriefingService struct
+  * Updated NewBriefingServiceWithDeps to wire the new repo
+  * Updated GetBriefingForAgent() Section 4 (Opportunities):
+    - If agent.Specialties is empty AND InferredSpecialtiesRepo is non-nil, calls InferSpecialtiesForAgent
+    - If inferred specialties returned, uses them for opportunity matching with inferred_from='inferred'
+    - If agent has explicit specialties, uses those with inferred_from='explicit'
+- Modified: backend/internal/services/briefing_test.go
+  * Added mockInferredSpecialtiesRepo with called/calledWith tracking
+  * TestBriefing_Opportunities_InferredSpecialties — agent with empty specialties, inference returns ['go','postgresql'], verifies opportunities fetched with inferred_from='inferred'
+  * TestBriefing_Opportunities_ExplicitTakesPrecedence — agent with explicit specialties, verifies inference NOT called, inferred_from='explicit'
+- Modified: backend/internal/api/router.go
+  * Wired db.NewInferredSpecialtiesRepository(pool) into BriefingDeps.InferredSpecialtiesRepo
+- Verified: go build ./... passes
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-20: PRD-v5 Backend - Create inferred specialties service for agents and users
 - New file: backend/internal/db/inferred_specialties.go (155 lines)
   * InferredSpecialtiesRepository struct with pool *Pool

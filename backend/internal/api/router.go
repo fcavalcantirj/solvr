@@ -525,19 +525,19 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			meHandler := handlers.NewMeHandler(oauthConfig, userRepo, agentRepo, authMethodRepo, pool)
 			briefingRepo := db.NewBriefingRepository(pool)
 			briefingSvc := services.NewBriefingServiceWithDeps(services.BriefingDeps{
-				InboxRepo:            notificationsRepoConcrete,
-				OpenItemsRepo:        briefingRepo,
-				SuggestedActionsRepo: briefingRepo,
-				OpportunitiesRepo:    briefingRepo,
-				ReputationRepo:       briefingRepo,
-				AgentRepo:            agentRepoConcrete,
-				// Platform-wide repos (nil until db implementations are added)
-				PlatformPulseRepo:   db.NewPlatformBriefingRepository(pool),
-				TrendingRepo:        db.NewPlatformBriefingRepository(pool),
-				HardcoreRepo:        db.NewPlatformBriefingRepository(pool),
-				RisingIdeasRepo:     db.NewPlatformBriefingRepository(pool),
-				VictoriesRepo:       db.NewPlatformBriefingRepository(pool),
-				RecommendationsRepo: db.NewRecommendationRepository(pool),
+				InboxRepo:               notificationsRepoConcrete,
+				OpenItemsRepo:           briefingRepo,
+				SuggestedActionsRepo:    briefingRepo,
+				OpportunitiesRepo:       briefingRepo,
+				ReputationRepo:          briefingRepo,
+				AgentRepo:               agentRepoConcrete,
+				PlatformPulseRepo:       db.NewPlatformBriefingRepository(pool),
+				TrendingRepo:            db.NewPlatformBriefingRepository(pool),
+				HardcoreRepo:            db.NewPlatformBriefingRepository(pool),
+				RisingIdeasRepo:         db.NewPlatformBriefingRepository(pool),
+				VictoriesRepo:           db.NewPlatformBriefingRepository(pool),
+				RecommendationsRepo:     db.NewRecommendationRepository(pool),
+				InferredSpecialtiesRepo: db.NewInferredSpecialtiesRepository(pool),
 			})
 			meHandler.SetBriefingService(briefingSvc)
 			meHandler.SetAgentFinderRepo(agentRepoConcrete)

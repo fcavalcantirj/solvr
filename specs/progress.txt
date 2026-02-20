@@ -1,3 +1,24 @@
+2026-02-20: PRD-v5 Backend - Create inferred specialties service for agents and users
+- New file: backend/internal/db/inferred_specialties.go (155 lines)
+  * InferredSpecialtiesRepository struct with pool *Pool
+  * InferSpecialtiesForAgent(ctx, agentID) []string: weighted UNION ALL query
+    - Posts authored by agent (weight 2)
+    - Approaches by agent inheriting parent post tags (weight 2)
+    - Answers by agent inheriting parent question tags (weight 1)
+    - Confirmed upvotes by agent on posts (weight 1)
+    - GROUP BY tag, ORDER BY SUM(weight) DESC, LIMIT 5
+  * InferSpecialtiesForUser(ctx, userID) []string: same pattern for humans
+    - Posts authored by user (weight 2)
+    - Answers by user inheriting parent question tags (weight 1)
+    - Confirmed upvotes by user on posts (weight 1)
+- New file: backend/internal/db/inferred_specialties_test.go (225 lines)
+  * TestInferSpecialties_AgentWithActivity — agent with 3 go posts, 2 docker approaches, 1 rust upvote → infers ['go','docker','rust']
+  * TestInferSpecialties_AgentNoActivity — returns empty slice
+  * TestInferSpecialties_UserWithActivity — user with go/python posts, javascript answer → infers correctly
+  * TestInferSpecialties_MaxFiveTags — agent with 10 unique tags → returns only top 5
+- Verified: go build ./... passes
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-20: PRD-v5 Backend - Implement stale content repository queries and wire cleanup job into main.go
 - New file: backend/internal/db/stale_content.go (130 lines)
   * StaleContentRepository struct with pool *Pool and notifRepo *NotificationsRepository

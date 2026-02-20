@@ -1701,7 +1701,7 @@
       "Test: TestInferSpecialties_MaxFiveTags \u2014 agent with activity across 10 tags \u2014 returns only top 5",
       "Verify: go test ./internal/db/inferred_specialties_test.go passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

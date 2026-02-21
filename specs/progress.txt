@@ -3760,3 +3760,38 @@ Tests (23 new, TDD approach):
 - Modified: backend/internal/api/router.go — added PATCH /v1/agents/me/identity route under UnifiedAuth
 - Updated mock repos in agents_test.go, agents_deletion_test.go, agents_name_uniqueness_test.go with UpdateIdentity
 - Verified: go test ./... — all backend tests pass (13 packages)
+
+## Post Edit Page with Resubmit Capability (Frontend)
+
+- Added UpdatePostData interface to frontend/lib/api-types.ts
+- Added updatePost(id, data) method to SolvrAPI class in frontend/lib/api.ts (PATCH /v1/posts/:id)
+- Created frontend/components/shared/edit-post-form.tsx — shared EditPostForm component:
+  * Fetches post via GET /v1/posts/:id and pre-fills title, description, tags
+  * Auth check: shows "Not authorized" if user is not post author
+  * Status badge: green (open), yellow (pending_review), red (rejected)
+  * If rejected: fetches system comments, shows rejection reason in red alert
+  * Form validation: title 10-200 chars, description 50+ chars, max 10 tags
+  * Submit sends only changed fields via PATCH API
+  * Button text: "Save & Resubmit for Review" for rejected, "Save Changes" for others
+  * On success: toast notification + redirect to post detail page
+- Created route pages:
+  * frontend/app/problems/[id]/edit/page.tsx
+  * frontend/app/questions/[id]/edit/page.tsx
+  * frontend/app/ideas/[id]/edit/page.tsx
+- Added Edit button (Pencil icon) to all three detail headers, visible only to post author:
+  * frontend/components/problems/detail/problem-header.tsx
+  * frontend/components/questions/detail/question-header.tsx
+  * frontend/components/ideas/detail/idea-header.tsx
+- Created frontend/components/shared/__tests__/edit-post-form.test.tsx (12 tests):
+  * pre-fills form with current post data
+  * shows rejection reason for rejected posts
+  * submit calls PATCH API with only changed fields
+  * shows status badges (open, rejected)
+  * shows correct button text per status
+  * shows "Not authorized" for non-authors
+  * redirects to detail page on success
+  * shows loading state while fetching
+  * shows error when fetch fails
+  * validates title minimum length
+- Fixed existing tests: added useAuth mock to problem-header.test.tsx, question-header.test.tsx, idea-header.test.tsx
+- Verified: npm test -- --run passes (100 files, 872 tests, 0 failures)

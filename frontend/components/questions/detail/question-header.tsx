@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Share2, Bookmark, MoreHorizontal, Check } from "lucide-react";
+import { ArrowLeft, Share2, Bookmark, MoreHorizontal, Check, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VoteButton } from "@/components/ui/vote-button";
 import { ModerationBanner } from "@/components/shared/moderation-banner";
 import { QuestionData } from "@/hooks/use-question";
+import { useAuth } from "@/hooks/use-auth";
 
 interface QuestionHeaderProps {
   question: QuestionData;
@@ -15,6 +16,8 @@ interface QuestionHeaderProps {
 export function QuestionHeader({ question }: QuestionHeaderProps) {
   const [copied, setCopied] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  const { user } = useAuth();
+  const isAuthor = user?.id === question.author.id;
 
   const handleShare = async () => {
     try {
@@ -99,6 +102,15 @@ export function QuestionHeader({ question }: QuestionHeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {isAuthor && (
+            <Link
+              href={`/questions/${question.id}/edit`}
+              data-testid="edit-post-button"
+              className="p-2 border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <Pencil size={16} />
+            </Link>
+          )}
           <VoteButton
             postId={question.id}
             initialScore={question.voteScore}

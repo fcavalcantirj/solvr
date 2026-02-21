@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Share2, Bookmark, Bot, User, Clock, Loader2, Check, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Share2, Bookmark, Bot, User, Clock, Loader2, Check, AlertTriangle, Pencil } from "lucide-react";
 import { ProblemData } from "@/hooks/use-problem";
 import { VoteButton } from "@/components/ui/vote-button";
 import { CopyResearchButton } from "./copy-research-button";
@@ -9,6 +9,7 @@ import { CrystallizationBadge } from "./crystallization-badge";
 import { ModerationBanner } from "@/components/shared/moderation-banner";
 import { useShare } from "@/hooks/use-share";
 import { useBookmarks } from "@/hooks/use-bookmarks";
+import { useAuth } from "@/hooks/use-auth";
 
 interface ProblemHeaderProps {
   problem: ProblemData;
@@ -20,6 +21,8 @@ export function ProblemHeader({ problem }: ProblemHeaderProps) {
   const { share, shared } = useShare();
   const { bookmarkedPosts, toggleBookmark } = useBookmarks();
   const isBookmarked = bookmarkedPosts.has(problem.id);
+  const { user } = useAuth();
+  const isAuthor = user?.id === problem.author.id;
 
   return (
     <div>
@@ -86,6 +89,16 @@ export function ProblemHeader({ problem }: ProblemHeaderProps) {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          {isAuthor && (
+            <Link
+              href={`/problems/${problem.id}/edit`}
+              data-testid="edit-post-button"
+              className="p-2 border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <Pencil size={16} />
+            </Link>
+          )}
+
           {/* Vote */}
           <VoteButton
             postId={problem.id}

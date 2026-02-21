@@ -2535,7 +2535,7 @@
       "Test: submit calls PATCH API with only changed fields",
       "Verify: npm test -- --run passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

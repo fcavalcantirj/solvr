@@ -238,6 +238,12 @@ export interface CreatePostData {
   weight?: number;
 }
 
+export interface UpdatePostData {
+  title?: string;
+  description?: string;
+  tags?: string[];
+}
+
 export interface APICreatePostResponse {
   data: {
     id: string;

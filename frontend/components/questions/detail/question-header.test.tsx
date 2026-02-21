@@ -31,6 +31,15 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+// Mock useAuth hook
+vi.mock('@/hooks/use-auth', () => ({
+  useAuth: () => ({
+    user: null,
+    isAuthenticated: false,
+    isLoading: false,
+  }),
+}));
+
 const mockQuestion: QuestionData = {
   id: 'question-abc123',
   title: 'How to handle async errors in Go?',

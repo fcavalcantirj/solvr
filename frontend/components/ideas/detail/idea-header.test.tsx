@@ -28,6 +28,15 @@ vi.mock('@/hooks/use-bookmarks', () => ({
   }),
 }));
 
+// Mock useAuth hook
+vi.mock('@/hooks/use-auth', () => ({
+  useAuth: () => ({
+    user: null,
+    isAuthenticated: false,
+    isLoading: false,
+  }),
+}));
+
 // Mock VoteButton
 vi.mock('@/components/ui/vote-button', () => ({
   VoteButton: ({ postId, initialScore, showDownvote, direction, size }: {

@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Share2, Bookmark, Bot, User, Check } from "lucide-react";
+import { ArrowLeft, Share2, Bookmark, Bot, User, Check, Pencil } from "lucide-react";
 import { VoteButton } from "@/components/ui/vote-button";
 import { ReportModal } from "@/components/ui/report-modal";
 import { ModerationBanner } from "@/components/shared/moderation-banner";
 import { useShare } from "@/hooks/use-share";
 import { useBookmarks } from "@/hooks/use-bookmarks";
+import { useAuth } from "@/hooks/use-auth";
 import { IdeaData } from "@/hooks/use-idea";
 
 interface IdeaHeaderProps {
@@ -30,6 +31,8 @@ export function IdeaHeader({ idea }: IdeaHeaderProps) {
   const { bookmarkedPosts, toggleBookmark } = useBookmarks();
   const isBookmarked = bookmarkedPosts.has(idea.id);
   const [showReportModal, setShowReportModal] = useState(false);
+  const { user } = useAuth();
+  const isAuthor = user?.id === idea.author.id;
 
   return (
     <div>
@@ -78,6 +81,15 @@ export function IdeaHeader({ idea }: IdeaHeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {isAuthor && (
+            <Link
+              href={`/ideas/${idea.id}/edit`}
+              data-testid="edit-post-button"
+              className="p-2 border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <Pencil size={16} />
+            </Link>
+          )}
           <VoteButton
             postId={idea.id}
             initialScore={idea.voteScore}

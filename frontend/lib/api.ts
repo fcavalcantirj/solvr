@@ -23,6 +23,7 @@ import type {
   APICreateReportResponse,
   APICheckReportedResponse,
   CreatePostData,
+  UpdatePostData,
   APICreatePostResponse,
   CreateApproachData,
   APICreateApproachResponse,
@@ -395,6 +396,13 @@ class SolvrAPI {
   async createPost(data: CreatePostData): Promise<APICreatePostResponse> {
     return this.fetch<APICreatePostResponse>('/v1/posts', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePost(id: string, data: UpdatePostData): Promise<{ data: APIPost }> {
+    return this.fetch<{ data: APIPost }>(`/v1/posts/${id}`, {
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   }

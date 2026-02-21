@@ -1,3 +1,30 @@
+2026-02-21: PRD-v5 Backend - Add badges to /me response and create public badge endpoints
+- Modified: backend/internal/api/handlers/me.go (731 lines, under 900 limit)
+  * Added badgeRepo field (BadgeRepoInterface) to MeHandler struct
+  * Added Badges field ([]models.Badge) to AgentMeResponse
+  * Added Badges field ([]models.Badge) to MeResponse
+  * In handleAgentMe: fetch badges via badgeRepo.ListForOwner("agent", agentID), default to empty slice
+  * In handleUserMe: fetch badges via badgeRepo.ListForOwner("human", userID), default to empty slice
+- Created: backend/internal/api/handlers/me_badges.go (63 lines)
+  * BadgeRepoInterface with ListForOwner method
+  * SetBadgeRepo setter method on MeHandler
+  * BadgesResponse struct with Badges field
+  * GetAgentBadges handler: GET /v1/agents/{id}/badges (no auth required)
+  * GetUserBadges handler: GET /v1/users/{id}/badges (no auth required)
+  * Both return empty array (not null) when no badges exist
+- Created: backend/internal/api/handlers/me_badges_test.go (5 TDD tests)
+  * TestAgentMe_IncludesBadges — agent with 2 badges, verify badges array in /me response
+  * TestUserMe_IncludesBadges — user with 1 badge, verify badges array in /me response
+  * TestGetAgentBadges — GET /v1/agents/{id}/badges returns 2 correct badges
+  * TestGetUserBadges — GET /v1/users/{id}/badges returns 1 correct badge
+  * TestGetBadges_NoBadges — verify empty array (not null) for both agent and user with no badges
+- Modified: backend/internal/api/router.go
+  * Added public badge routes: GET /v1/agents/{id}/badges, GET /v1/users/{id}/badges
+  * Created BadgeRepository and wired to badges handler in public section
+  * Also set BadgeRepo on meHandler in auth section for /me enrichment
+- Verified: go build ./... passes
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-20: PRD-v5 Backend - Create badge awarding service with milestone checks for both agents and humans
 - Created: backend/internal/services/badges.go (149 lines)
   * BadgeService struct with BadgeRepoInterface, AgentStatsProvider, UserStatsProvider dependencies

@@ -1867,7 +1867,7 @@
       "Verify: go test ./internal/api/handlers/me_badges_test.go passes",
       "Verify: me.go stays under 900 lines"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

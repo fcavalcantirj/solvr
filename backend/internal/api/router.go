@@ -403,6 +403,21 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// Per prd-v4: GET /v1/users/{id}/contributions - list user contributions (no auth required)
 		r.Get("/users/{id}/contributions", usersHandler.GetUserContributions)
 
+		// Per prd-v5: GET /v1/agents/{id}/badges and /v1/users/{id}/badges (no auth required)
+		if pool != nil {
+			badgeRepo := db.NewBadgeRepository(pool)
+			badgesHandler := handlers.NewMeHandler(oauthConfig, nil, nil, nil, nil)
+			badgesHandler.SetBadgeRepo(badgeRepo)
+			r.Get("/agents/{id}/badges", func(w http.ResponseWriter, req *http.Request) {
+				agentID := chi.URLParam(req, "id")
+				badgesHandler.GetAgentBadges(w, req, agentID)
+			})
+			r.Get("/users/{id}/badges", func(w http.ResponseWriter, req *http.Request) {
+				userID := chi.URLParam(req, "id")
+				badgesHandler.GetUserBadges(w, req, userID)
+			})
+		}
+
 		// Posts endpoints (API-CRITICAL requirement)
 		// Per SPEC.md Part 5.6: GET /v1/posts - list posts (no auth required)
 		r.Get("/posts", postsHandler.List)
@@ -543,6 +558,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			})
 			meHandler.SetBriefingService(briefingSvc)
 			meHandler.SetAgentFinderRepo(agentRepoConcrete)
+			meHandler.SetBadgeRepo(db.NewBadgeRepository(pool))
 			r.Get("/me", meHandler.Me)
 			r.Get("/me/auth-methods", meHandler.GetMyAuthMethods)
 

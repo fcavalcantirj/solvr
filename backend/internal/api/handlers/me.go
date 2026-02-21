@@ -111,6 +111,7 @@ type MeHandler struct {
 	suggestedActionsRepo BriefingSuggestedActionsRepo
 	opportunitiesRepo    BriefingOpportunitiesRepo
 	reputationRepo       BriefingReputationRepo
+	badgeRepo            BadgeRepoInterface
 }
 
 // NewMeHandler creates a new MeHandler instance.
@@ -172,6 +173,7 @@ type MeResponse struct {
 	Bio         string           `json:"bio,omitempty"`
 	Role        string           `json:"role"`
 	Stats       models.UserStats `json:"stats"`
+	Badges      []models.Badge   `json:"badges"`
 }
 
 // AgentMeResponse represents the response for GET /v1/me for agents (API key auth).
@@ -196,6 +198,8 @@ type AgentMeResponse struct {
 	SuggestedActions    []models.SuggestedAction         `json:"suggested_actions"`
 	Opportunities       *models.OpportunitiesSection     `json:"opportunities"`
 	ReputationChanges   *models.ReputationChangesResult  `json:"reputation_changes"`
+	// Badges
+	Badges           []models.Badge            `json:"badges"`
 	// Platform-wide sections (6 new)
 	PlatformPulse    *models.PlatformPulse     `json:"platform_pulse"`
 	TrendingNow      []models.TrendingPost     `json:"trending_now"`
@@ -256,6 +260,14 @@ func (h *MeHandler) handleAgentMe(w http.ResponseWriter, ctx context.Context, ag
 	// Include human_id if claimed
 	if agent.HumanID != nil {
 		response.HumanID = *agent.HumanID
+	}
+
+	// Fetch badges for agent
+	response.Badges = []models.Badge{}
+	if h.badgeRepo != nil {
+		if badges, err := h.badgeRepo.ListForOwner(ctx, "agent", agent.ID); err == nil {
+			response.Badges = badges
+		}
 	}
 
 	// Use BriefingService if available (aggregates all sections in one call)
@@ -418,6 +430,14 @@ func (h *MeHandler) handleUserMe(w http.ResponseWriter, ctx context.Context, cla
 		stats = &models.UserStats{}
 	}
 
+	// Fetch badges for user
+	badges := []models.Badge{}
+	if h.badgeRepo != nil {
+		if b, err := h.badgeRepo.ListForOwner(ctx, "human", claims.UserID); err == nil {
+			badges = b
+		}
+	}
+
 	// Build response
 	response := MeResponse{
 		ID:          user.ID,
@@ -428,6 +448,7 @@ func (h *MeHandler) handleUserMe(w http.ResponseWriter, ctx context.Context, cla
 		Bio:         user.Bio,
 		Role:        user.Role,
 		Stats:       *stats,
+		Badges:      badges,
 	}
 
 	writeMeJSON(w, http.StatusOK, response)

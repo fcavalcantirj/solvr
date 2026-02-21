@@ -69,6 +69,7 @@ import type {
   APIPinResponse,
   APIPinsListResponse,
   FetchPinsParams,
+  CreatePinParams,
   APIStorageResponse,
   APIAuthMethodsListResponse,
   APIAgentBriefingResponse,
@@ -742,10 +743,14 @@ class SolvrAPI {
   }
 
   // Pins / IPFS Pinning
-  async createPin(cid: string, name?: string): Promise<APIPinResponse> {
+  async createPin(params: CreatePinParams): Promise<APIPinResponse> {
+    const body: Record<string, unknown> = { cid: params.cid };
+    if (params.name) body.name = params.name;
+    if (params.origins?.length) body.origins = params.origins;
+    if (params.meta && Object.keys(params.meta).length > 0) body.meta = params.meta;
     return this.fetch<APIPinResponse>('/v1/pins', {
       method: 'POST',
-      body: JSON.stringify({ cid, name }),
+      body: JSON.stringify(body),
     });
   }
 
@@ -755,6 +760,9 @@ class SolvrAPI {
     if (params?.name) searchParams.set('name', params.name);
     if (params?.status) searchParams.set('status', params.status);
     if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.meta && Object.keys(params.meta).length > 0) {
+      searchParams.set('meta', JSON.stringify(params.meta));
+    }
 
     const query = searchParams.toString();
     return this.fetch<APIPinsListResponse>(`/v1/pins${query ? `?${query}` : ''}`);
@@ -776,6 +784,9 @@ class SolvrAPI {
     if (params?.name) searchParams.set('name', params.name);
     if (params?.status) searchParams.set('status', params.status);
     if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.meta && Object.keys(params.meta).length > 0) {
+      searchParams.set('meta', JSON.stringify(params.meta));
+    }
 
     const query = searchParams.toString();
     return this.fetch<APIPinsListResponse>(`/v1/agents/${encodeURIComponent(agentId)}/pins${query ? `?${query}` : ''}`);

@@ -1,3 +1,21 @@
+2026-02-21: PRD-v5 Frontend - Pin meta support: CreatePinParams, meta badges, CHECKPOINTS filter
+- Modified: lib/api-types.ts — added CreatePinParams interface, added meta field to FetchPinsParams
+- Modified: lib/api.ts — changed createPin(cid, name?) to createPin(params: CreatePinParams), added meta JSON filter to listPins/getAgentPins
+- Modified: hooks/use-pins.ts — changed createPin sig to CreatePinParams, added meta option to UsePinsOptions, passes meta to fetch params
+- Modified: hooks/use-pins.test.ts — updated createPin calls to use object params
+- Modified: app/pins/page.tsx — added collapsible METADATA section in create dialog (key-value pairs, max 10, with add/remove), meta badges on PinRow (system keys in emerald, user keys in secondary), meta type filter pills (ALL | CHECKPOINTS) with data-testid attributes
+- Modified: app/pins/page.test.tsx — added 8 new TDD tests (all passing):
+  * renders METADATA collapsible section in create pin dialog
+  * submits pin with meta data via CreatePinParams
+  * submits pin without name (backend auto-generates)
+  * renders meta tags as badges in PinRow
+  * renders system meta keys with emerald badge style
+  * renders user-defined meta keys with secondary badge style
+  * renders meta type filter pills (ALL | CHECKPOINTS)
+  * clicking CHECKPOINTS filter passes meta param to usePins
+- Updated existing test: createPin call signature from positional args to CreatePinParams object
+- Verified: npm test — all 820 tests pass across 96 test files
+
 2026-02-21: PRD-v5 Backend - Enable family access to pins (self, sibling agents, claiming human)
 - Modified: handlers/pins.go — extracted isFamilyAccess(caller, target *models.Agent) bool helper (reusable by checkpoints/resurrection)
 - Modified: handlers/pins.go — updated ListAgentPins() agent auth branch: self-access allowed directly, non-self looks up target via agentFinder.FindByID() and checks isFamilyAccess()

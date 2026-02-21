@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/header";
 import { useAuth } from "@/hooks/use-auth";
 import { usePins } from "@/hooks/use-pins";
-import type { PinStatus, APIPinResponse } from "@/lib/api-types";
+import type { PinStatus, APIPinResponse, CreatePinParams } from "@/lib/api-types";
 import {
   HardDrive,
   Plus,
@@ -17,12 +17,23 @@ import {
   Loader2,
   X,
   ExternalLink,
+  ChevronDown,
+  ChevronRight,
+  Minus,
 } from "lucide-react";
 import Link from "next/link";
 
 const IPFS_GATEWAY_BASE = "https://ipfs.io/ipfs/";
 
 type StatusFilter = PinStatus | 'all';
+type MetaFilter = 'all' | 'checkpoints';
+
+const SYSTEM_META_KEYS = new Set(['type', 'agent_id']);
+
+const META_FILTER_OPTIONS: { label: string; value: MetaFilter; meta?: Record<string, string> }[] = [
+  { label: 'ALL', value: 'all' },
+  { label: 'CHECKPOINTS', value: 'checkpoints', meta: { type: 'amcp_checkpoint' } },
+];
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -73,11 +84,14 @@ export default function PinsPage() {
   const searchParams = useSearchParams();
   const agentId = searchParams.get("agent") || undefined;
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [metaFilter, setMetaFilter] = useState<MetaFilter>("all");
 
+  const activeMetaOption = META_FILTER_OPTIONS.find(o => o.value === metaFilter);
   const pinsOptions = {
     ...(statusFilter !== "all" ? { status: statusFilter } : {}),
     ...(agentId ? { agentId } : {}),
-  } as { status?: PinStatus; agentId?: string } | undefined;
+    ...(activeMetaOption?.meta ? { meta: activeMetaOption.meta } : {}),
+  } as { status?: PinStatus; agentId?: string; meta?: Record<string, string> } | undefined;
   const {
     pins,
     loading,
@@ -95,6 +109,8 @@ export default function PinsPage() {
   const [createName, setCreateName] = useState("");
   const [createError, setCreateError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [showMeta, setShowMeta] = useState(false);
+  const [metaPairs, setMetaPairs] = useState<{ key: string; value: string }[]>([]);
 
   // Delete dialog state
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -137,10 +153,25 @@ export default function PinsPage() {
     setCreateError("");
     setCreating(true);
     try {
-      await createPin(createCID.trim(), createName.trim() || undefined);
+      const params: CreatePinParams = { cid: createCID.trim() };
+      const trimmedName = createName.trim();
+      if (trimmedName) params.name = trimmedName;
+
+      // Build meta from non-empty pairs
+      const meta: Record<string, string> = {};
+      for (const pair of metaPairs) {
+        const k = pair.key.trim();
+        const v = pair.value.trim();
+        if (k && v) meta[k] = v;
+      }
+      if (Object.keys(meta).length > 0) params.meta = meta;
+
+      await createPin(params);
       setShowCreateDialog(false);
       setCreateCID("");
       setCreateName("");
+      setMetaPairs([]);
+      setShowMeta(false);
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : "Failed to create pin");
     } finally {
@@ -249,7 +280,7 @@ export default function PinsPage() {
             )}
 
             {/* Status Filter Tabs */}
-            <div className="flex items-center gap-2 mt-6">
+            <div className="flex items-center gap-2 mt-6 flex-wrap">
               {statusTabs.map((tab) => (
                 <button
                   key={tab.value}
@@ -261,6 +292,23 @@ export default function PinsPage() {
                   }`}
                 >
                   {tab.label}
+                </button>
+              ))}
+
+              {/* Meta Type Filter Pills */}
+              <div className="w-px h-5 bg-border mx-1" />
+              {META_FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  data-testid={`meta-filter-${opt.value}`}
+                  onClick={() => setMetaFilter(opt.value)}
+                  className={`font-mono text-xs px-3 py-1.5 border transition-colors ${
+                    metaFilter === opt.value
+                      ? "bg-foreground text-background border-foreground"
+                      : "bg-background text-muted-foreground border-border hover:border-foreground"
+                  }`}
+                >
+                  {opt.label}
                 </button>
               ))}
             </div>
@@ -364,6 +412,8 @@ export default function PinsPage() {
                   setCreateError("");
                   setCreateCID("");
                   setCreateName("");
+                  setMetaPairs([]);
+                  setShowMeta(false);
                 }}
                 className="text-muted-foreground hover:text-foreground"
               >
@@ -399,6 +449,72 @@ export default function PinsPage() {
                   placeholder="Optional name"
                   className="w-full font-mono text-sm px-3 py-2 border border-border bg-background focus:border-foreground focus:outline-none transition-colors"
                 />
+              </div>
+
+              {/* Collapsible Metadata Section */}
+              <div className="border border-border">
+                <button
+                  type="button"
+                  onClick={() => setShowMeta(!showMeta)}
+                  className="w-full flex items-center justify-between px-3 py-2 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <span>METADATA</span>
+                  {showMeta ? (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  )}
+                </button>
+                {showMeta && (
+                  <div className="px-3 pb-3 space-y-2">
+                    {metaPairs.map((pair, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={pair.key}
+                          onChange={(e) => {
+                            const updated = [...metaPairs];
+                            updated[idx] = { ...updated[idx], key: e.target.value };
+                            setMetaPairs(updated);
+                          }}
+                          placeholder="key"
+                          maxLength={64}
+                          className="flex-1 font-mono text-xs px-2 py-1.5 border border-border bg-background focus:border-foreground focus:outline-none transition-colors"
+                        />
+                        <input
+                          type="text"
+                          value={pair.value}
+                          onChange={(e) => {
+                            const updated = [...metaPairs];
+                            updated[idx] = { ...updated[idx], value: e.target.value };
+                            setMetaPairs(updated);
+                          }}
+                          placeholder="value"
+                          maxLength={256}
+                          className="flex-1 font-mono text-xs px-2 py-1.5 border border-border bg-background focus:border-foreground focus:outline-none transition-colors"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setMetaPairs(metaPairs.filter((_, i) => i !== idx))}
+                          className="text-muted-foreground hover:text-red-500 transition-colors shrink-0"
+                          aria-label="Remove field"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {metaPairs.length < 10 && (
+                      <button
+                        type="button"
+                        onClick={() => setMetaPairs([...metaPairs, { key: "", value: "" }])}
+                        className="font-mono text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                      >
+                        <Plus className="w-3 h-3" />
+                        ADD FIELD
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {createError && (
@@ -475,14 +591,33 @@ function PinRow({
   onCopy: (cid: string, pinId: string) => void;
   onDelete: (id: string) => void;
 }) {
+  const meta = pin.pin.meta;
+  const metaEntries = meta ? Object.entries(meta) : [];
+
   return (
     <div className="border border-border hover:border-foreground transition-colors p-4 sm:p-6">
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-        {/* Name */}
+        {/* Name + Meta Badges */}
         <div className="min-w-0 sm:w-40">
           <span className="font-mono text-sm font-medium truncate block">
             {pin.pin.name || "Unnamed"}
           </span>
+          {metaEntries.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {metaEntries.map(([k, v]) => (
+                <span
+                  key={k}
+                  className={`inline-block font-mono text-[10px] px-1.5 py-0.5 border ${
+                    SYSTEM_META_KEYS.has(k)
+                      ? "bg-emerald-500/20 text-emerald-600 border-emerald-500/30"
+                      : "bg-secondary text-muted-foreground border-border"
+                  }`}
+                >
+                  {k}: {v}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* CID */}

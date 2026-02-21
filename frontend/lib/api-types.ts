@@ -939,6 +939,14 @@ export interface FetchPinsParams {
   name?: string;
   status?: PinStatus;
   limit?: number;
+  meta?: Record<string, string>;
+}
+
+export interface CreatePinParams {
+  cid: string;
+  name?: string;
+  origins?: string[];
+  meta?: Record<string, string>;
 }
 
 export interface APIStorageResponse {

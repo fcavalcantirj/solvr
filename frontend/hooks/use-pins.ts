@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
-import type { APIPinResponse, PinStatus } from '@/lib/api-types';
+import type { APIPinResponse, PinStatus, CreatePinParams } from '@/lib/api-types';
 
 export interface UsePinsOptions {
   status?: PinStatus;
   agentId?: string;
+  meta?: Record<string, string>;
 }
 
 export interface StorageInfo {
@@ -21,7 +22,7 @@ export interface UsePinsResult {
   error: string | null;
   totalCount: number;
   storage: StorageInfo | null;
-  createPin: (cid: string, name?: string) => Promise<void>;
+  createPin: (params: CreatePinParams) => Promise<void>;
   deletePin: (requestID: string) => Promise<void>;
   refetch: () => void;
 }
@@ -43,9 +44,16 @@ export function usePins(options?: UsePinsOptions): UsePinsResult {
       const stableOptions: UsePinsOptions | undefined = optionsKey ? JSON.parse(optionsKey) : undefined;
 
       const agentId = stableOptions?.agentId;
+      const fetchParams = {
+        status: stableOptions?.status,
+        limit: 100,
+        ...(stableOptions?.meta && Object.keys(stableOptions.meta).length > 0
+          ? { meta: stableOptions.meta }
+          : {}),
+      };
       const pinsPromise = agentId
-        ? api.getAgentPins(agentId, { status: stableOptions?.status, limit: 100 })
-        : api.listPins({ status: stableOptions?.status, limit: 100 });
+        ? api.getAgentPins(agentId, fetchParams)
+        : api.listPins(fetchParams);
       const storagePromise = agentId
         ? api.getAgentStorage(agentId)
         : api.getStorageUsage();
@@ -81,8 +89,8 @@ export function usePins(options?: UsePinsOptions): UsePinsResult {
     fetchPins();
   }, [fetchPins]);
 
-  const createPin = useCallback(async (cid: string, name?: string) => {
-    await api.createPin(cid, name);
+  const createPin = useCallback(async (params: CreatePinParams) => {
+    await api.createPin(params);
     fetchPins();
   }, [fetchPins]);
 

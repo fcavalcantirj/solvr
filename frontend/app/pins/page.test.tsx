@@ -176,7 +176,10 @@ describe('PinsPage', () => {
     fireEvent.click(submitButton!);
 
     await waitFor(() => {
-      expect(mockCreate).toHaveBeenCalledWith('QmValidCIDTest123456789abcdefghijklmnopqrs12', 'my-content');
+      expect(mockCreate).toHaveBeenCalledWith({
+        cid: 'QmValidCIDTest123456789abcdefghijklmnopqrs12',
+        name: 'my-content',
+      });
     });
   });
 
@@ -241,7 +244,9 @@ describe('PinsPage', () => {
 
   it('shows status filter tabs', () => {
     render(<PinsPage />);
-    expect(screen.getByText('ALL')).toBeInTheDocument();
+    // "ALL" appears in both status and meta filter tabs
+    const allButtons = screen.getAllByText('ALL');
+    expect(allButtons.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/PINNED/)).toBeInTheDocument();
     expect(screen.getByText(/QUEUED/)).toBeInTheDocument();
   });
@@ -288,5 +293,183 @@ describe('PinsPage', () => {
 
     const cidLink = screen.getByRole('link', { name: /QmTest1.*12345/i });
     expect(cidLink).toHaveAttribute('href', expect.stringContaining('ipfs.io/ipfs/QmTest123'));
+  });
+
+  // ====== Meta features tests ======
+
+  it('renders METADATA collapsible section in create pin dialog', () => {
+    render(<PinsPage />);
+    fireEvent.click(screen.getByText('PIN NEW CONTENT'));
+
+    const metadataToggle = screen.getByText('METADATA');
+    expect(metadataToggle).toBeInTheDocument();
+
+    // Initially collapsed — no key/value inputs visible
+    expect(screen.queryByPlaceholderText(/key/i)).not.toBeInTheDocument();
+
+    // Click to expand
+    fireEvent.click(metadataToggle);
+
+    // Now shows add row button
+    expect(screen.getByText('ADD FIELD')).toBeInTheDocument();
+  });
+
+  it('submits pin with meta data via CreatePinParams', async () => {
+    const mockCreate = vi.fn().mockResolvedValue(undefined);
+    mockUsePins.mockReturnValue({
+      ...defaultPinsResult,
+      createPin: mockCreate,
+    });
+
+    render(<PinsPage />);
+    fireEvent.click(screen.getByText('PIN NEW CONTENT'));
+
+    // Fill CID
+    const cidInput = screen.getByPlaceholderText(/Qm\.\.\. or bafy\.\.\./i);
+    fireEvent.change(cidInput, { target: { value: 'QmValidCIDTest123456789abcdefghijklmnopqrs12' } });
+
+    // Fill Name
+    const nameInput = screen.getByPlaceholderText(/optional name/i);
+    fireEvent.change(nameInput, { target: { value: 'meta-test' } });
+
+    // Expand metadata and add a key-value pair
+    fireEvent.click(screen.getByText('METADATA'));
+    fireEvent.click(screen.getByText('ADD FIELD'));
+
+    const keyInputs = screen.getAllByPlaceholderText(/key/i);
+    const valueInputs = screen.getAllByPlaceholderText(/value/i);
+    fireEvent.change(keyInputs[0], { target: { value: 'type' } });
+    fireEvent.change(valueInputs[0], { target: { value: 'amcp_checkpoint' } });
+
+    // Submit
+    const dialogButtons = screen.getAllByRole('button');
+    const submitButton = dialogButtons.find(b => b.textContent === 'PIN');
+    fireEvent.click(submitButton!);
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith({
+        cid: 'QmValidCIDTest123456789abcdefghijklmnopqrs12',
+        name: 'meta-test',
+        meta: { type: 'amcp_checkpoint' },
+      });
+    });
+  });
+
+  it('submits pin without name (backend auto-generates)', async () => {
+    const mockCreate = vi.fn().mockResolvedValue(undefined);
+    mockUsePins.mockReturnValue({
+      ...defaultPinsResult,
+      createPin: mockCreate,
+    });
+
+    render(<PinsPage />);
+    fireEvent.click(screen.getByText('PIN NEW CONTENT'));
+
+    const cidInput = screen.getByPlaceholderText(/Qm\.\.\. or bafy\.\.\./i);
+    fireEvent.change(cidInput, { target: { value: 'QmValidCIDTest123456789abcdefghijklmnopqrs12' } });
+
+    // Leave name empty — backend should auto-generate
+    const dialogButtons = screen.getAllByRole('button');
+    const submitButton = dialogButtons.find(b => b.textContent === 'PIN');
+    fireEvent.click(submitButton!);
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith({
+        cid: 'QmValidCIDTest123456789abcdefghijklmnopqrs12',
+      });
+    });
+  });
+
+  it('renders meta tags as badges in PinRow', () => {
+    const pinWithMeta = {
+      requestid: 'pin-meta-1',
+      status: 'pinned' as const,
+      created: '2026-02-18T10:00:00Z',
+      pin: {
+        cid: 'QmTest123456789abcdefghijklmnopqrstuvwxyz12345',
+        name: 'checkpoint-pin',
+        meta: { type: 'amcp_checkpoint', agent_id: 'claudius' },
+      },
+      delegates: [],
+    };
+
+    mockUsePins.mockReturnValue({
+      ...defaultPinsResult,
+      pins: [pinWithMeta],
+      totalCount: 1,
+    });
+    render(<PinsPage />);
+
+    // Meta key:value should render as badges
+    expect(screen.getByText('type: amcp_checkpoint')).toBeInTheDocument();
+    expect(screen.getByText('agent_id: claudius')).toBeInTheDocument();
+  });
+
+  it('renders system meta keys with emerald badge style', () => {
+    const pinWithSystemMeta = {
+      requestid: 'pin-sys-1',
+      status: 'pinned' as const,
+      created: '2026-02-18T10:00:00Z',
+      pin: {
+        cid: 'QmTest123456789abcdefghijklmnopqrstuvwxyz12345',
+        name: 'sys-pin',
+        meta: { type: 'amcp_checkpoint' },
+      },
+      delegates: [],
+    };
+
+    mockUsePins.mockReturnValue({
+      ...defaultPinsResult,
+      pins: [pinWithSystemMeta],
+      totalCount: 1,
+    });
+    render(<PinsPage />);
+
+    const badge = screen.getByText('type: amcp_checkpoint');
+    expect(badge.className).toContain('bg-emerald-500/20');
+  });
+
+  it('renders user-defined meta keys with secondary badge style', () => {
+    const pinWithUserMeta = {
+      requestid: 'pin-user-1',
+      status: 'pinned' as const,
+      created: '2026-02-18T10:00:00Z',
+      pin: {
+        cid: 'QmTest123456789abcdefghijklmnopqrstuvwxyz12345',
+        name: 'user-pin',
+        meta: { project: 'my-app' },
+      },
+      delegates: [],
+    };
+
+    mockUsePins.mockReturnValue({
+      ...defaultPinsResult,
+      pins: [pinWithUserMeta],
+      totalCount: 1,
+    });
+    render(<PinsPage />);
+
+    const badge = screen.getByText('project: my-app');
+    expect(badge.className).toContain('bg-secondary');
+  });
+
+  it('renders meta type filter pills (ALL | CHECKPOINTS)', () => {
+    render(<PinsPage />);
+
+    // Look for meta type filter pills separate from status tabs
+    expect(screen.getByTestId('meta-filter-all')).toBeInTheDocument();
+    expect(screen.getByTestId('meta-filter-checkpoints')).toBeInTheDocument();
+  });
+
+  it('clicking CHECKPOINTS filter passes meta param to usePins', () => {
+    render(<PinsPage />);
+
+    const checkpointsFilter = screen.getByTestId('meta-filter-checkpoints');
+    fireEvent.click(checkpointsFilter);
+
+    // usePins should be called with meta filter
+    expect(mockUsePins).toHaveBeenCalledWith(
+      expect.objectContaining({ meta: { type: 'amcp_checkpoint' } })
+    );
   });
 });

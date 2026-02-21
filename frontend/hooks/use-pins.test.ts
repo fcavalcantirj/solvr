@@ -122,10 +122,10 @@ describe('usePins', () => {
     });
 
     await act(async () => {
-      await result.current.createPin('QmNewCID', 'my-pin');
+      await result.current.createPin({ cid: 'QmNewCID', name: 'my-pin' });
     });
 
-    expect(api.createPin).toHaveBeenCalledWith('QmNewCID', 'my-pin');
+    expect(api.createPin).toHaveBeenCalledWith({ cid: 'QmNewCID', name: 'my-pin' });
     // Should refetch after creating
     expect(api.listPins).toHaveBeenCalledTimes(2);
   });
@@ -159,7 +159,7 @@ describe('usePins', () => {
 
     await expect(
       act(async () => {
-        await result.current.createPin('bad-cid');
+        await result.current.createPin({ cid: 'bad-cid' });
       })
     ).rejects.toThrow('CID invalid');
   });

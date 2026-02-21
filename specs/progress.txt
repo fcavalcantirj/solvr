@@ -1,3 +1,20 @@
+2026-02-21: PRD-v5 Backend - Add IPFS Pinning endpoints to OpenAPI spec and discovery document
+- Modified: backend/internal/api/discovery_test.go (376 lines)
+  * TestOpenAPISpec_IncludesPinEndpoints — verifies /pins, /pins/{requestid}, /agents/{id}/pins, /agents/{id}/checkpoints, /agents/me/checkpoints, /agents/{id}/resurrection-bundle, /agents/me/identity paths in OpenAPI spec
+  * TestOpenAPISpec_PinSchemas — verifies PinResponse, PinInfo, CreatePinRequest, CreateCheckpointRequest, ResurrectionBundleResponse schemas in components
+- Modified: backend/internal/api/openapi_schemas.go (847 lines)
+  * Added 9 new schemas: PinResponse, PinInfo, CreatePinRequest, PinsListResponse, CreateCheckpointRequest, CheckpointsResponse, ResurrectionBundleResponse, UpdateIdentityRequest
+  * Pin schemas follow IPFS Pinning Service API spec (requestid, status enum, pin object, delegates)
+  * ResurrectionBundleResponse includes identity, knowledge, reputation, latest_checkpoint, death_count sections
+- Modified: backend/internal/api/openapi_paths.go (847 lines)
+  * Added 7 new path functions: pinsPath (POST+GET), pinByRequestIDPath (GET+DELETE), agentPinsPath (GET), agentMeCheckpointsPath (POST), agentCheckpointsPath (GET), agentResurrectionBundlePath (GET), agentMeIdentityPath (PATCH)
+  * Added requestIDParam() helper for /pins/{requestid} path
+  * All paths include proper security, parameters, request bodies, and response references
+- Modified: backend/internal/api/discovery.go (232 lines)
+  * Added "IPFS Pinning" and "Agent Continuity" tags
+  * Registered all 7 new paths in buildPaths()
+- Verified: go test ./... — all packages pass, zero failures
+
 2026-02-21: PRD-v5 Backend - Create resurrection bundle endpoint GET /v1/agents/{id}/resurrection-bundle
 - Created: backend/internal/api/handlers/resurrection.go (258 lines)
   * ResurrectionHandler struct with AgentFinderInterface, ResurrectionCheckpointFinder, ResurrectionKnowledgeRepo, ResurrectionStatsRepo, ResurrectionAgentUpdateRepo deps

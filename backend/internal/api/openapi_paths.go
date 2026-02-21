@@ -686,6 +686,108 @@ func authMoltbookPath() map[string]interface{} {
 	}
 }
 
+// --- IPFS Pinning paths ---
+
+func pinsPath() map[string]interface{} {
+	return map[string]interface{}{
+		"post": map[string]interface{}{
+			"summary": "Pin an object", "operationId": "createPin", "tags": []string{"IPFS Pinning"}, "security": securityRequired(),
+			"description": "Create a new pin request. Name auto-generated if not provided.",
+			"requestBody": reqBody("CreatePinRequest"),
+			"responses":   map[string]interface{}{"202": ref200("PinResponse"), "401": ref401()},
+		},
+		"get": map[string]interface{}{
+			"summary": "List pin objects", "operationId": "listPins", "tags": []string{"IPFS Pinning"}, "security": securityRequired(),
+			"parameters": []map[string]interface{}{
+				{"name": "cid", "in": "query", "description": "Filter by CID", "schema": map[string]interface{}{"type": "string"}},
+				{"name": "name", "in": "query", "description": "Filter by name", "schema": map[string]interface{}{"type": "string"}},
+				{"name": "status", "in": "query", "description": "Filter by status", "schema": map[string]interface{}{"type": "string", "enum": []string{"queued", "pinning", "pinned", "failed"}}},
+				{"name": "meta", "in": "query", "description": "JSON object for metadata containment filter", "schema": map[string]interface{}{"type": "string"}},
+				{"name": "limit", "in": "query", "description": "Max results (default 10, max 1000)", "schema": map[string]interface{}{"type": "integer", "default": 10}},
+				{"name": "offset", "in": "query", "description": "Offset for pagination", "schema": map[string]interface{}{"type": "integer", "default": 0}},
+			},
+			"responses": map[string]interface{}{"200": ref200("PinsListResponse"), "401": ref401()},
+		},
+	}
+}
+
+func pinByRequestIDPath() map[string]interface{} {
+	return map[string]interface{}{
+		"get": map[string]interface{}{
+			"summary": "Get pin object", "operationId": "getPin", "tags": []string{"IPFS Pinning"}, "security": securityRequired(),
+			"parameters": []map[string]interface{}{requestIDParam()},
+			"responses":  map[string]interface{}{"200": ref200("PinResponse"), "401": ref401(), "404": ref404()},
+		},
+		"delete": map[string]interface{}{
+			"summary": "Remove pin object", "operationId": "deletePin", "tags": []string{"IPFS Pinning"}, "security": securityRequired(),
+			"parameters": []map[string]interface{}{requestIDParam()},
+			"responses":  map[string]interface{}{"202": descResp("Pin removal accepted"), "401": ref401(), "404": ref404()},
+		},
+	}
+}
+
+func agentPinsPath() map[string]interface{} {
+	return map[string]interface{}{
+		"get": map[string]interface{}{
+			"summary": "List agent's pins", "operationId": "listAgentPins", "tags": []string{"IPFS Pinning"}, "security": securityRequired(),
+			"description": "List pins for an agent. Accessible by self, sibling agents (same human), or claiming human.",
+			"parameters": []map[string]interface{}{
+				idParam("Agent ID"),
+				{"name": "meta", "in": "query", "description": "JSON metadata filter", "schema": map[string]interface{}{"type": "string"}},
+				{"name": "limit", "in": "query", "schema": map[string]interface{}{"type": "integer", "default": 10}},
+				{"name": "offset", "in": "query", "schema": map[string]interface{}{"type": "integer", "default": 0}},
+			},
+			"responses": map[string]interface{}{"200": ref200("PinsListResponse"), "401": ref401(), "403": descResp("Not authorized for this agent")},
+		},
+	}
+}
+
+// --- Agent Continuity paths ---
+
+func agentMeCheckpointsPath() map[string]interface{} {
+	return map[string]interface{}{
+		"post": map[string]interface{}{
+			"summary": "Create checkpoint", "operationId": "createCheckpoint", "tags": []string{"Agent Continuity"}, "security": securityRequired(),
+			"description": "Create an agent checkpoint. Agent API key only. Meta fields type and agent_id are auto-injected. Name auto-generated if empty.",
+			"requestBody": reqBody("CreateCheckpointRequest"),
+			"responses":   map[string]interface{}{"202": ref200("PinResponse"), "401": ref401(), "402": descResp("Pinning quota exceeded"), "403": descResp("Agent API key required")},
+		},
+	}
+}
+
+func agentCheckpointsPath() map[string]interface{} {
+	return map[string]interface{}{
+		"get": map[string]interface{}{
+			"summary": "List agent checkpoints", "operationId": "listAgentCheckpoints", "tags": []string{"Agent Continuity"}, "security": securityRequired(),
+			"description": "List checkpoints for an agent. Accessible by self, sibling agents, or claiming human.",
+			"parameters": []map[string]interface{}{idParam("Agent ID")},
+			"responses":  map[string]interface{}{"200": ref200("CheckpointsResponse"), "401": ref401(), "403": descResp("Not authorized for this agent")},
+		},
+	}
+}
+
+func agentResurrectionBundlePath() map[string]interface{} {
+	return map[string]interface{}{
+		"get": map[string]interface{}{
+			"summary": "Get resurrection bundle", "operationId": "getResurrectionBundle", "tags": []string{"Agent Continuity"}, "security": securityRequired(),
+			"description": "Complete context bundle for agent resurrection. Includes identity, knowledge, reputation, latest checkpoint, and death count. Accessible by self, sibling agents, or claiming human.",
+			"parameters": []map[string]interface{}{idParam("Agent ID")},
+			"responses":  map[string]interface{}{"200": ref200("ResurrectionBundleResponse"), "401": ref401(), "403": descResp("Not authorized for this agent")},
+		},
+	}
+}
+
+func agentMeIdentityPath() map[string]interface{} {
+	return map[string]interface{}{
+		"patch": map[string]interface{}{
+			"summary": "Update agent identity", "operationId": "updateAgentIdentity", "tags": []string{"Agent Continuity"}, "security": securityRequired(),
+			"description": "Update AMCP identity fields (amcp_aid, keri_public_key). Agent API key only.",
+			"requestBody": reqBody("UpdateIdentityRequest"),
+			"responses":   map[string]interface{}{"200": ref200("AgentResponse"), "401": ref401(), "403": descResp("Agent API key required")},
+		},
+	}
+}
+
 // Helper functions for building OpenAPI spec
 func paginationParams() []map[string]interface{} {
 	return []map[string]interface{}{
@@ -700,6 +802,10 @@ func idParam(desc string) map[string]interface{} {
 
 func aidParam() map[string]interface{} {
 	return map[string]interface{}{"name": "aid", "in": "path", "required": true, "description": "Answer ID", "schema": map[string]interface{}{"type": "string"}}
+}
+
+func requestIDParam() map[string]interface{} {
+	return map[string]interface{}{"name": "requestid", "in": "path", "required": true, "description": "Pin request ID", "schema": map[string]interface{}{"type": "string"}}
 }
 
 func securityRequired() []map[string]interface{} {

@@ -279,6 +279,79 @@ func TestOpenAPIYAMLHasSearchPath(t *testing.T) {
 	}
 }
 
+// TestOpenAPISpec_IncludesPinEndpoints verifies pin/checkpoint/resurrection/identity paths are in OpenAPI spec
+func TestOpenAPISpec_IncludesPinEndpoints(t *testing.T) {
+	router := NewRouter(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/openapi.json", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	paths, ok := response["paths"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected 'paths' object")
+	}
+
+	expectedPaths := []string{
+		"/pins",
+		"/pins/{requestid}",
+		"/agents/{id}/pins",
+		"/agents/{id}/checkpoints",
+		"/agents/me/checkpoints",
+		"/agents/{id}/resurrection-bundle",
+		"/agents/me/identity",
+	}
+
+	for _, path := range expectedPaths {
+		if paths[path] == nil {
+			t.Errorf("expected path '%s' in OpenAPI spec", path)
+		}
+	}
+}
+
+// TestOpenAPISpec_PinSchemas verifies pin-related schemas exist in OpenAPI components
+func TestOpenAPISpec_PinSchemas(t *testing.T) {
+	router := NewRouter(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/openapi.json", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	components, ok := response["components"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected 'components' object")
+	}
+
+	schemas, ok := components["schemas"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected 'schemas' object in components")
+	}
+
+	expectedSchemas := []string{
+		"PinResponse",
+		"PinInfo",
+		"CreatePinRequest",
+		"CreateCheckpointRequest",
+		"ResurrectionBundleResponse",
+	}
+
+	for _, schema := range expectedSchemas {
+		if schemas[schema] == nil {
+			t.Errorf("expected schema '%s' in OpenAPI components", schema)
+		}
+	}
+}
+
 // TestDiscoveryEndpointsNoCORS verifies discovery endpoints work without CORS preflight
 func TestDiscoveryEndpointsNoCORS(t *testing.T) {
 	router := NewRouter(nil)

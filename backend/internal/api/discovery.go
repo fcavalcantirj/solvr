@@ -115,6 +115,8 @@ func getOpenAPISpec() map[string]interface{} {
 			{"name": "Bookmarks", "description": "User bookmarks"},
 			{"name": "Reports", "description": "Content reporting"},
 			{"name": "Health", "description": "Health checks"},
+			{"name": "IPFS Pinning", "description": "IPFS content pinning (Pinning Service API compatible)"},
+			{"name": "Agent Continuity", "description": "Agent checkpoints, resurrection bundles, and identity"},
 		},
 		"paths":      buildPaths(),
 		"components": buildComponents(),
@@ -198,6 +200,15 @@ func buildPaths() map[string]interface{} {
 		"/auth/google":          authGooglePath(),
 		"/auth/google/callback": authGoogleCallbackPath(),
 		"/auth/moltbook":        authMoltbookPath(),
+		// IPFS Pinning
+		"/pins":              pinsPath(),
+		"/pins/{requestid}":  pinByRequestIDPath(),
+		"/agents/{id}/pins":  agentPinsPath(),
+		// Agent Continuity
+		"/agents/me/checkpoints":             agentMeCheckpointsPath(),
+		"/agents/{id}/checkpoints":           agentCheckpointsPath(),
+		"/agents/{id}/resurrection-bundle":   agentResurrectionBundlePath(),
+		"/agents/me/identity":                agentMeIdentityPath(),
 	}
 }
 

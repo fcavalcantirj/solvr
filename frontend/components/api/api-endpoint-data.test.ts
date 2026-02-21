@@ -3,6 +3,7 @@ import { endpointGroups } from "./api-endpoint-data";
 import { coreEndpointGroups } from "./api-endpoint-data-core";
 import { contentEndpointGroups } from "./api-endpoint-data-content";
 import { userEndpointGroups } from "./api-endpoint-data-user";
+import { ipfsEndpointGroups } from "./api-endpoint-data-ipfs";
 
 // Helper: find an endpoint by method and path across all groups
 function findEndpoint(method: string, path: string) {
@@ -26,7 +27,8 @@ describe("api-endpoint-data completeness", () => {
     expect(endpointGroups.length).toBe(
       coreEndpointGroups.length +
         contentEndpointGroups.length +
-        userEndpointGroups.length,
+        userEndpointGroups.length +
+        ipfsEndpointGroups.length,
     );
   });
 
@@ -180,6 +182,102 @@ describe("api-endpoint-data completeness", () => {
       const ep = findEndpoint("POST", "/responses/{id}/comments");
       expect(ep).toBeDefined();
       expect(ep!.auth).toBe("both");
+    });
+  });
+
+  // --- IPFS & Agent Continuity endpoints (api-endpoint-data-ipfs.ts) ---
+
+  describe("IPFS Pinning group", () => {
+    it("has an IPFS Pinning group", () => {
+      const group = findGroup("IPFS Pinning");
+      expect(group).toBeDefined();
+      expect(group!.description).toBeTruthy();
+    });
+
+    it("documents POST /pins (create pin)", () => {
+      const ep = findEndpoint("POST", "/pins");
+      expect(ep).toBeDefined();
+      expect(ep!.auth).toBe("api_key");
+    });
+
+    it("POST /pins has meta param", () => {
+      const ep = findEndpoint("POST", "/pins");
+      expect(ep).toBeDefined();
+      const metaParam = ep!.params?.find((p) => p.name === "meta");
+      expect(metaParam).toBeDefined();
+      expect(metaParam!.type).toBe("object");
+    });
+
+    it("POST /pins has name param", () => {
+      const ep = findEndpoint("POST", "/pins");
+      expect(ep).toBeDefined();
+      const nameParam = ep!.params?.find((p) => p.name === "name");
+      expect(nameParam).toBeDefined();
+      expect(nameParam!.required).toBe(false);
+    });
+
+    it("POST /pins has origins param", () => {
+      const ep = findEndpoint("POST", "/pins");
+      expect(ep).toBeDefined();
+      const originsParam = ep!.params?.find((p) => p.name === "origins");
+      expect(originsParam).toBeDefined();
+    });
+
+    it("documents GET /pins (list pins)", () => {
+      const ep = findEndpoint("GET", "/pins");
+      expect(ep).toBeDefined();
+      expect(ep!.auth).toBe("api_key");
+    });
+
+    it("GET /pins has meta filter param", () => {
+      const ep = findEndpoint("GET", "/pins");
+      expect(ep).toBeDefined();
+      const metaParam = ep!.params?.find((p) => p.name === "meta");
+      expect(metaParam).toBeDefined();
+    });
+
+    it("documents GET /pins/{requestid} (get pin)", () => {
+      const ep = findEndpoint("GET", "/pins/{requestid}");
+      expect(ep).toBeDefined();
+      expect(ep!.auth).toBe("api_key");
+    });
+
+    it("documents DELETE /pins/{requestid} (delete pin)", () => {
+      const ep = findEndpoint("DELETE", "/pins/{requestid}");
+      expect(ep).toBeDefined();
+      expect(ep!.auth).toBe("api_key");
+    });
+  });
+
+  describe("Agent Continuity group", () => {
+    it("has an Agent Continuity group", () => {
+      const group = findGroup("Agent Continuity");
+      expect(group).toBeDefined();
+      expect(group!.description).toBeTruthy();
+    });
+
+    it("documents POST /agents/me/checkpoints (create checkpoint)", () => {
+      const ep = findEndpoint("POST", "/agents/me/checkpoints");
+      expect(ep).toBeDefined();
+      expect(ep!.auth).toBe("api_key");
+    });
+
+    it("documents GET /agents/{id}/checkpoints (list checkpoints)", () => {
+      const ep = findEndpoint("GET", "/agents/{id}/checkpoints");
+      expect(ep).toBeDefined();
+      expect(ep!.auth).toBe("both");
+    });
+
+    it("documents GET /agents/{id}/resurrection-bundle", () => {
+      const ep = findEndpoint("GET", "/agents/{id}/resurrection-bundle");
+      expect(ep).toBeDefined();
+      expect(ep!.auth).toBe("both");
+    });
+
+    it("documents PATCH /agents/me/identity", () => {
+      const ep = findEndpoint("PATCH", "/agents/me/identity");
+      expect(ep).toBeDefined();
+      expect(ep!.auth).toBe("api_key");
     });
   });
 });

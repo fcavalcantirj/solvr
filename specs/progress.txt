@@ -1,3 +1,33 @@
+2026-02-21: PRD-v5 Frontend - Add IPFS & Pinning and Agent Continuity endpoint groups to API documentation page
+- Created: frontend/components/api/api-endpoint-data-ipfs.ts (240 lines)
+  * ipfsEndpointGroups: EndpointGroup[] with 2 groups
+  * "IPFS Pinning" group: POST /pins (with cid, name, origins, meta params), GET /pins (with status, name, cid, meta, limit params), GET /pins/{requestid}, DELETE /pins/{requestid}
+  * "Agent Continuity" group: POST /agents/me/checkpoints (with cid, name, meta params), GET /agents/{id}/checkpoints, GET /agents/{id}/resurrection-bundle, PATCH /agents/me/identity (with amcp_aid, keri_public_key params)
+  * All endpoints include auth types (api_key or both) and full JSON response examples
+- Modified: frontend/components/api/api-endpoint-data.ts (12 lines)
+  * Added import for ipfsEndpointGroups
+  * Spread ipfsEndpointGroups into main endpointGroups array
+- Modified: frontend/components/api/api-endpoint-data.test.ts (252 lines)
+  * Added import for ipfsEndpointGroups
+  * Updated "combines all endpoint groups" test to include ipfsEndpointGroups.length
+  * Added "IPFS Pinning group" describe block with 9 tests:
+    - has an IPFS Pinning group
+    - documents POST /pins (create pin) with api_key auth
+    - POST /pins has meta param (object type)
+    - POST /pins has name param (not required)
+    - POST /pins has origins param
+    - documents GET /pins (list pins) with api_key auth
+    - GET /pins has meta filter param
+    - documents GET /pins/{requestid} with api_key auth
+    - documents DELETE /pins/{requestid} with api_key auth
+  * Added "Agent Continuity group" describe block with 5 tests:
+    - has an Agent Continuity group
+    - documents POST /agents/me/checkpoints with api_key auth
+    - documents GET /agents/{id}/checkpoints with both auth
+    - documents GET /agents/{id}/resurrection-bundle with both auth
+    - documents PATCH /agents/me/identity with api_key auth
+- Verified: npm test -- --run — all 834 tests pass across 96 test files
+
 2026-02-21: PRD-v5 Backend - Add IPFS Pinning endpoints to OpenAPI spec and discovery document
 - Modified: backend/internal/api/discovery_test.go (376 lines)
   * TestOpenAPISpec_IncludesPinEndpoints — verifies /pins, /pins/{requestid}, /agents/{id}/pins, /agents/{id}/checkpoints, /agents/me/checkpoints, /agents/{id}/resurrection-bundle, /agents/me/identity paths in OpenAPI spec

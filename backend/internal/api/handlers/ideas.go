@@ -81,6 +81,9 @@ func (h *IdeasHandler) findIdea(ctx context.Context, id string) (*models.PostWit
 	// Fall back to ideas-specific repo (for backwards compatibility)
 	idea, err := h.repo.FindIdeaByID(ctx, id)
 	if err != nil {
+		if err.Error() == ErrIdeaNotFound.Error() {
+			return nil, ErrIdeaNotFound
+		}
 		return nil, err
 	}
 

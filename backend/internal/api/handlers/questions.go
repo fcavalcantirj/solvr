@@ -104,6 +104,9 @@ func (h *QuestionsHandler) findQuestion(ctx context.Context, id string) (*models
 	// Fall back to questions-specific repo (for backwards compatibility)
 	question, err := h.repo.FindQuestionByID(ctx, id)
 	if err != nil {
+		if err.Error() == ErrQuestionNotFound.Error() {
+			return nil, ErrQuestionNotFound
+		}
 		return nil, err
 	}
 

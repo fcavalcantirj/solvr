@@ -13,10 +13,12 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestE2E_AgentRegistrationAndPosting verifies the complete flow:
@@ -60,6 +62,7 @@ func TestE2E_AgentRegistrationAndPosting(t *testing.T) {
 	t.Logf("Step 1 PASSED: Agent registered with API key")
 
 	// Step 2: Create a post using the API key
+	groqThrottle(t)
 	postTitle := "E2E Test Question: How do I test async handlers?"
 	postDesc := "This is an E2E test question created by an agent to verify the full flow from registration to search. " +
 		"The question is about testing async handlers in Go applications with proper error handling."
@@ -104,6 +107,12 @@ func TestE2E_AgentRegistrationAndPosting(t *testing.T) {
 	}
 
 	t.Logf("Step 2 PASSED: Post created with ID: %s", postID)
+
+	// Wait for content moderation to approve the post (async GROQ call).
+	// Posts start as pending_review; listings only show open posts.
+	if !waitForPostOpen(t, router, postID, "Bearer "+apiKey) {
+		t.Skip("post did not become open within 35s - GROQ rate limited or slow")
+	}
 
 	// Step 3: Verify post appears in GET /v1/posts
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/posts", nil)
@@ -345,6 +354,7 @@ func TestE2E_PostAppearsInList(t *testing.T) {
 	apiKey := regResp["api_key"].(string)
 
 	// Create a unique post
+	groqThrottle(t)
 	uniqueTitle := "E2E Unique Post " + randomSuffix()
 	postBody := `{
 		"type": "question",
@@ -366,6 +376,12 @@ func TestE2E_PostAppearsInList(t *testing.T) {
 	var createResp map[string]interface{}
 	json.NewDecoder(createW.Body).Decode(&createResp)
 	postID := createResp["data"].(map[string]interface{})["id"].(string)
+
+	// Wait for content moderation to approve the post (async GROQ call).
+	// Posts start as pending_review; listings only show open posts.
+	if !waitForPostOpen(t, router, postID, "Bearer "+apiKey) {
+		t.Skip("post did not become open within 35s - GROQ rate limited or slow")
+	}
 
 	// List all posts
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/posts", nil)
@@ -484,11 +500,8 @@ func TestE2E_SearchEndpointWorks(t *testing.T) {
 }
 
 // randomSuffix generates a short random suffix for unique test names.
+// Uses nanosecond timestamp mod 1000000 to produce a 6-digit suffix.
+// Agent names must fit within VARCHAR(50): prefix (≤16 chars) + suffix (6 chars) = ≤22 chars.
 func randomSuffix() string {
-	// Use timestamp-based suffix for uniqueness
-	return strings.ReplaceAll(
-		strings.ReplaceAll(
-			strings.Split(httptest.NewRequest("", "/", nil).Header.Get("X-Request-Id"), "-")[0],
-			"", ""),
-		"", "") + "_test"
+	return fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
 }

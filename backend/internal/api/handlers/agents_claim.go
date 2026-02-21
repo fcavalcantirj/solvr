@@ -21,6 +21,7 @@ const ReputationBonusOnClaim = 50
 // Per SECURE-CLAIMING requirement: generate claim TOKEN for agent-human linking.
 type GenerateClaimResponse struct {
 	Token        string    `json:"token"`
+	ClaimURL     string    `json:"claim_url"`
 	ExpiresAt    time.Time `json:"expires_at"`
 	Instructions string    `json:"instructions"`
 }
@@ -73,6 +74,7 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 		// Return existing active token
 		resp := GenerateClaimResponse{
 			Token:        existingToken.Token,
+			ClaimURL:     "https://solvr.dev/claim/" + existingToken.Token,
 			ExpiresAt:    existingToken.ExpiresAt,
 			Instructions: generateClaimInstructions(),
 		}
@@ -111,6 +113,7 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 	// Return token and instructions
 	resp := GenerateClaimResponse{
 		Token:        tokenValue,
+		ClaimURL:     "https://solvr.dev/claim/" + tokenValue,
 		ExpiresAt:    claimToken.ExpiresAt,
 		Instructions: generateClaimInstructions(),
 	}

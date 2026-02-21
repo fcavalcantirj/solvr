@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -116,7 +117,7 @@ func TestPinsCreateWithAgentAPIKey(t *testing.T) {
 	router := setupTestRouter(t)
 
 	// First, register an agent to get an API key
-	reqBody := `{"name":"pins_test_agent","description":"Test agent for pinning API"}`
+	reqBody := fmt.Sprintf(`{"name":"pins_test_%s","description":"Test agent for pinning API"}`, randomSuffix())
 	regReq := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
 	regReq.Header.Set("Content-Type", "application/json")
 	regW := httptest.NewRecorder()
@@ -166,7 +167,7 @@ func TestPinsListWithAgentAPIKey(t *testing.T) {
 	router := setupTestRouter(t)
 
 	// Register an agent first
-	reqBody := `{"name":"pins_list_agent","description":"Test agent for listing pins"}`
+	reqBody := fmt.Sprintf(`{"name":"pins_list_%s","description":"Test agent for listing pins"}`, randomSuffix())
 	regReq := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
 	regReq.Header.Set("Content-Type", "application/json")
 	regW := httptest.NewRecorder()

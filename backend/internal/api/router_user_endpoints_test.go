@@ -205,7 +205,7 @@ func TestUserEndpoints_NotificationsWithJWT(t *testing.T) {
 	r := setupTestRouter(t)
 
 	// Create a valid JWT token for testing
-	jwt := createUserEndpointsTestJWT("test-user-123")
+	jwt := createUserEndpointsTestJWT("00000000-0000-0000-0000-000000000001")
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/notifications", nil)
 	req.Header.Set("Authorization", "Bearer "+jwt)
@@ -243,7 +243,7 @@ func TestUserEndpoints_APIKeysListWithJWT(t *testing.T) {
 	r := setupTestRouter(t)
 
 	// Create a valid JWT token for testing
-	jwt := createUserEndpointsTestJWT("test-user-123")
+	jwt := createUserEndpointsTestJWT("00000000-0000-0000-0000-000000000001")
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/users/me/api-keys", nil)
 	req.Header.Set("Authorization", "Bearer "+jwt)

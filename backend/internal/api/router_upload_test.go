@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -63,7 +64,7 @@ func TestAddEndpointWithAgentAPIKey(t *testing.T) {
 
 	// Register an agent to get an API key
 	regReq := httptest.NewRequest(http.MethodPost, "/v1/agents/register",
-		bytes.NewReader([]byte(`{"name":"upload_test_agent","description":"Test agent for upload API"}`)))
+		bytes.NewReader([]byte(fmt.Sprintf(`{"name":"upload_test_%s","description":"Test agent for upload API"}`, randomSuffix()))))
 	regReq.Header.Set("Content-Type", "application/json")
 	regW := httptest.NewRecorder()
 	router.ServeHTTP(regW, regReq)

@@ -116,6 +116,9 @@ func (h *ProblemsHandler) findProblem(ctx context.Context, id string) (*models.P
 	// Fall back to problems-specific repo (for backwards compatibility)
 	problem, err := h.repo.FindProblemByID(ctx, id)
 	if err != nil {
+		if err.Error() == ErrProblemNotFound.Error() {
+			return nil, ErrProblemNotFound
+		}
 		return nil, err
 	}
 

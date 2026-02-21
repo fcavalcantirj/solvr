@@ -43,6 +43,7 @@ func TestCommentsCount_ProblemsShowCountAfterComment(t *testing.T) {
 	apiKey := testCommentsSetup(t, router)
 
 	// Create problem
+	groqThrottle(t)
 	title := fmt.Sprintf("Test problem for comments count %d", time.Now().UnixNano()%100000)
 	postBody := fmt.Sprintf(`{"type":"problem","title":%q,"description":"E2E test verifying that comments_count is correctly returned for problems in the listing endpoint"}`, title)
 	createReq := httptest.NewRequest(http.MethodPost, "/v1/posts", strings.NewReader(postBody))
@@ -59,6 +60,12 @@ func TestCommentsCount_ProblemsShowCountAfterComment(t *testing.T) {
 	postID, _ := data["id"].(string)
 	if postID == "" {
 		t.Fatal("expected post id in response")
+	}
+
+	// Wait for content moderation to approve the post (async GROQ call).
+	// Posts start as pending_review; listings only show open posts.
+	if !waitForPostOpen(t, router, postID, "Bearer "+apiKey) {
+		t.Skip("post did not become open within 35s - GROQ rate limited or slow")
 	}
 
 	// Add a comment
@@ -107,6 +114,7 @@ func TestCommentsCount_IdeasShowCountAfterComment(t *testing.T) {
 	apiKey := testCommentsSetup(t, router)
 
 	// Create idea
+	groqThrottle(t)
 	title := fmt.Sprintf("Test idea for comments count %d", time.Now().UnixNano()%100000)
 	postBody := fmt.Sprintf(`{"type":"idea","title":%q,"description":"E2E test verifying that comments_count is correctly returned for ideas in the listing endpoint"}`, title)
 	createReq := httptest.NewRequest(http.MethodPost, "/v1/posts", strings.NewReader(postBody))
@@ -123,6 +131,11 @@ func TestCommentsCount_IdeasShowCountAfterComment(t *testing.T) {
 	postID, _ := data["id"].(string)
 	if postID == "" {
 		t.Fatal("expected post id in response")
+	}
+
+	// Wait for content moderation to approve the post (async GROQ call).
+	if !waitForPostOpen(t, router, postID, "Bearer "+apiKey) {
+		t.Skip("post did not become open within 35s - GROQ rate limited or slow")
 	}
 
 	// Add a comment
@@ -171,6 +184,7 @@ func TestCommentsCount_FeedShowsCommentCount(t *testing.T) {
 	apiKey := testCommentsSetup(t, router)
 
 	// Create question
+	groqThrottle(t)
 	title := fmt.Sprintf("Test question for feed comments %d", time.Now().UnixNano()%100000)
 	postBody := fmt.Sprintf(`{"type":"question","title":%q,"description":"E2E test verifying that comments_count is correctly returned for all post types in the feed"}`, title)
 	createReq := httptest.NewRequest(http.MethodPost, "/v1/posts", strings.NewReader(postBody))
@@ -187,6 +201,11 @@ func TestCommentsCount_FeedShowsCommentCount(t *testing.T) {
 	postID, _ := data["id"].(string)
 	if postID == "" {
 		t.Fatal("expected post id in response")
+	}
+
+	// Wait for content moderation to approve the post (async GROQ call).
+	if !waitForPostOpen(t, router, postID, "Bearer "+apiKey) {
+		t.Skip("post did not become open within 35s - GROQ rate limited or slow")
 	}
 
 	// Add 2 comments

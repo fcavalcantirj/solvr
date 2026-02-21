@@ -113,11 +113,11 @@ func TestAdminHandler_HardDeleteUser_NotFound(t *testing.T) {
 
 	handler := NewAdminHandler(pool)
 
-	req := httptest.NewRequest(http.MethodDelete, "/admin/users/nonexistent", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/admin/users/00000000-0000-0000-0000-000000000999", nil)
 	req.Header.Set("X-Admin-API-Key", "test-admin-key")
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "nonexistent")
+	rctx.URLParams.Add("id", "00000000-0000-0000-0000-000000000999")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
@@ -210,11 +210,11 @@ func TestAdminHandler_HardDeleteAgent_NotFound(t *testing.T) {
 
 	handler := NewAdminHandler(pool)
 
-	req := httptest.NewRequest(http.MethodDelete, "/admin/agents/nonexistent", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/admin/agents/00000000-0000-0000-0000-000000000999", nil)
 	req.Header.Set("X-Admin-API-Key", "test-admin-key")
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "nonexistent")
+	rctx.URLParams.Add("id", "00000000-0000-0000-0000-000000000999")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()

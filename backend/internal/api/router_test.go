@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -395,7 +396,7 @@ func TestAgentsRegisterEndpoint(t *testing.T) {
 	router := setupTestRouter(t)
 
 	// Create a valid registration request
-	reqBody := `{"name":"test_agent","description":"A test agent"}`
+	reqBody := fmt.Sprintf(`{"name":"test_agent_%s","description":"A test agent"}`, randomSuffix())
 	req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -472,24 +473,23 @@ func TestGetClaimInfoEndpointExists(t *testing.T) {
 	}
 }
 
-// TestConfirmClaimEndpointExists verifies POST /v1/claim/{token} endpoint exists.
+// TestConfirmClaimEndpointExists verifies GET /v1/claim/{token} endpoint exists.
 // Per API-CRITICAL requirement: Wire /v1/claim/{token} endpoints.
 func TestConfirmClaimEndpointExists(t *testing.T) {
 	router := setupTestRouter(t)
 
-	// POST /v1/claim/{token} should return 401 without auth (not 404)
-	req := httptest.NewRequest(http.MethodPost, "/v1/claim/test_token_123", nil)
+	// GET /v1/claim/{token} is a public endpoint - should return 200, 404 (not found), or 500
+	req := httptest.NewRequest(http.MethodGet, "/v1/claim/test_token_123", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
+	// Should NOT return 405 (method not allowed) - endpoint is wired as GET
+	if w.Code == http.StatusMethodNotAllowed {
+		t.Errorf("GET /v1/claim/{token} returned 405 - wrong HTTP method registered")
+	}
 	// Should NOT return 404 - endpoint should be wired
 	if w.Code == http.StatusNotFound {
-		t.Errorf("POST /v1/claim/{token} returned 404 - endpoint not wired")
-	}
-
-	// ConfirmClaim requires JWT auth, so should return 401 or 500 (if repo not configured)
-	if w.Code != http.StatusUnauthorized && w.Code != http.StatusInternalServerError {
-		t.Errorf("expected status 401 or 500, got %d: %s", w.Code, w.Body.String())
+		t.Errorf("GET /v1/claim/{token} returned 404 - endpoint not wired")
 	}
 }
 
@@ -794,7 +794,7 @@ func TestGetAgentProfileEndpoint(t *testing.T) {
 	router := setupTestRouter(t)
 
 	// Use in-memory repo's first agent - register one first
-	reqBody := `{"name":"test_profile_agent","description":"Test agent for profile endpoint"}`
+	reqBody := fmt.Sprintf(`{"name":"test_profile_%s","description":"Test agent for profile endpoint"}`, randomSuffix())
 	regReq := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
 	regReq.Header.Set("Content-Type", "application/json")
 	regW := httptest.NewRecorder()
@@ -868,7 +868,7 @@ func TestClaimEndpointWithAPIKeyAuth(t *testing.T) {
 	router := setupTestRouter(t)
 
 	// First, register an agent to get an API key
-	reqBody := `{"name":"claim_test_agent","description":"Test agent for claim endpoint"}`
+	reqBody := fmt.Sprintf(`{"name":"claim_test_%s","description":"Test agent for claim endpoint"}`, randomSuffix())
 	regReq := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
 	regReq.Header.Set("Content-Type", "application/json")
 	regW := httptest.NewRecorder()
@@ -980,7 +980,7 @@ func TestMeEndpointWithAPIKey(t *testing.T) {
 	router := setupTestRouter(t)
 
 	// First, register an agent to get an API key
-	reqBody := `{"name":"me_test_agent","description":"Test agent for /me endpoint"}`
+	reqBody := fmt.Sprintf(`{"name":"me_test_%s","description":"Test agent for /me endpoint"}`, randomSuffix())
 	regReq := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
 	regReq.Header.Set("Content-Type", "application/json")
 	regW := httptest.NewRecorder()
@@ -1029,8 +1029,8 @@ func TestMeEndpointWithAPIKey(t *testing.T) {
 
 	// Should have agent ID (the registration handler prefixes with "agent_")
 	agentID, _ := data["id"].(string)
-	if agentID != "me_test_agent" && agentID != "agent_me_test_agent" {
-		t.Errorf("expected id to contain 'me_test_agent', got %v", data["id"])
+	if !strings.Contains(agentID, "me_test_") {
+		t.Errorf("expected id to contain 'me_test_', got %v", data["id"])
 	}
 
 	// Should have display_name
@@ -1169,7 +1169,7 @@ func TestSearchEndpointWithAPIKey(t *testing.T) {
 	router := setupTestRouter(t)
 
 	// First, register an agent to get an API key
-	reqBody := `{"name":"search_test_agent","description":"Test agent for search endpoint"}`
+	reqBody := fmt.Sprintf(`{"name":"search_test_%s","description":"Test agent for search endpoint"}`, randomSuffix())
 	regReq := httptest.NewRequest(http.MethodPost, "/v1/agents/register", strings.NewReader(reqBody))
 	regReq.Header.Set("Content-Type", "application/json")
 	regW := httptest.NewRecorder()

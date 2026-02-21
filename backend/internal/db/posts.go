@@ -218,7 +218,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		LEFT JOIN (
 			SELECT target_id, COUNT(*) as cnt
 			FROM comments
-			WHERE target_type = 'post' AND deleted_at IS NULL
+			WHERE target_type = 'post' AND deleted_at IS NULL AND author_type != 'system'
 			GROUP BY target_id
 		) cmt_cnt ON cmt_cnt.target_id = p.id
 		%s
@@ -492,7 +492,7 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 		LEFT JOIN (
 			SELECT target_id, COUNT(*) as cnt
 			FROM comments
-			WHERE target_type = 'post' AND deleted_at IS NULL
+			WHERE target_type = 'post' AND deleted_at IS NULL AND author_type != 'system'
 			GROUP BY target_id
 		) cmt_cnt ON cmt_cnt.target_id = p.id
 		%s

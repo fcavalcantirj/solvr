@@ -226,7 +226,7 @@ func TestCommentsEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
 	t.Run("GET /v1/approaches/:id/comments returns list", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/approaches/test-id/comments", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v1/approaches/00000000-0000-0000-0000-000000000001/comments", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -238,7 +238,7 @@ func TestCommentsEndpoints(t *testing.T) {
 
 	t.Run("POST /v1/approaches/:id/comments requires auth", func(t *testing.T) {
 		reqBody := `{"content":"Test comment"}`
-		req := httptest.NewRequest(http.MethodPost, "/v1/approaches/test-id/comments", strings.NewReader(reqBody))
+		req := httptest.NewRequest(http.MethodPost, "/v1/approaches/00000000-0000-0000-0000-000000000001/comments", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -291,6 +291,7 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 
 	t.Run("Problem created via /v1/posts appears in /v1/problems", func(t *testing.T) {
 		// Create a problem via /v1/posts
+		groqThrottle(t)
 		body := `{
 			"type": "problem",
 			"title": "Test problem title for listing",
@@ -309,6 +310,11 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 		}
 		data := createResp["data"].(map[string]interface{})
 		postID := data["id"].(string)
+
+		// Wait for content moderation to approve the post (async GROQ call).
+		if !waitForPostOpen(t, router, postID, "Bearer "+token) {
+			t.Skipf("post %s did not become open - GROQ rate limited or slow", postID)
+		}
 
 		// GET /v1/problems should include this problem
 		w = authGet("/v1/problems")
@@ -341,6 +347,7 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 
 	t.Run("Question created via /v1/posts appears in /v1/questions", func(t *testing.T) {
 		// Create a question via /v1/posts
+		groqThrottle(t)
 		body := `{
 			"type": "question",
 			"title": "Test question title for listing",
@@ -357,6 +364,11 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 		}
 		data := createResp["data"].(map[string]interface{})
 		postID := data["id"].(string)
+
+		// Wait for content moderation to approve the post (async GROQ call).
+		if !waitForPostOpen(t, router, postID, "Bearer "+token) {
+			t.Skipf("post %s did not become open - GROQ rate limited or slow", postID)
+		}
 
 		// GET /v1/questions should include this question
 		w = authGet("/v1/questions")
@@ -388,6 +400,7 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 
 	t.Run("Idea created via /v1/posts appears in /v1/ideas", func(t *testing.T) {
 		// Create an idea via /v1/posts
+		groqThrottle(t)
 		body := `{
 			"type": "idea",
 			"title": "Test idea title for listing",
@@ -404,6 +417,11 @@ func TestTypeSpecificListEndpoints(t *testing.T) {
 		}
 		data := createResp["data"].(map[string]interface{})
 		postID := data["id"].(string)
+
+		// Wait for content moderation to approve the post (async GROQ call).
+		if !waitForPostOpen(t, router, postID, "Bearer "+token) {
+			t.Skipf("post %s did not become open - GROQ rate limited or slow", postID)
+		}
 
 		// GET /v1/ideas should include this idea
 		w = authGet("/v1/ideas")
@@ -439,7 +457,7 @@ func TestPostCommentsEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
 	t.Run("GET /v1/posts/:id/comments returns list (no auth required)", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/posts/test-post-id/comments", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v1/posts/00000000-0000-0000-0000-000000000001/comments", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -460,7 +478,7 @@ func TestPostCommentsEndpoints(t *testing.T) {
 
 	t.Run("POST /v1/posts/:id/comments requires auth", func(t *testing.T) {
 		reqBody := `{"content":"Test comment on post"}`
-		req := httptest.NewRequest(http.MethodPost, "/v1/posts/test-post-id/comments", strings.NewReader(reqBody))
+		req := httptest.NewRequest(http.MethodPost, "/v1/posts/00000000-0000-0000-0000-000000000001/comments", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)

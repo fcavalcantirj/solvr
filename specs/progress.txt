@@ -1,3 +1,28 @@
+2026-02-21: PRD-v5 Backend - Create Groq-powered content moderation service
+- Created: backend/internal/services/content_moderation.go
+  * ContentModerationService struct with Groq API integration
+  * ModerationResult struct: Approved, LanguageDetected, RejectionReasons, Confidence, Explanation, Reasoning
+  * ModerationInput struct: Title, Description, Tags
+  * Functional options: WithGroqBaseURL, WithGroqModel, WithHTTPTimeout, WithLogger
+  * OpenAI-compatible chat completions API with json_schema strict mode
+  * Static system prompt for prompt caching optimization
+  * RateLimitError type with RetryAfter duration (HTTP 429 handling)
+  * Rate limit header monitoring with slog warnings when < 10 requests remaining
+  * include_reasoning: true for explainable moderation decisions
+  * temperature: 0.1, max_completion_tokens: 512
+- Created: backend/internal/services/content_moderation_test.go (9 tests)
+  * TestModerationResult_JSONParsing - parse sample Groq response
+  * TestModerateContent_EnglishApproved - English tech post approved
+  * TestModerateContent_ChineseRejected - Chinese post rejected with not_english reason
+  * TestModerateContent_PromptInjection - prompt injection rejected
+  * TestModerateContent_APIError - HTTP 500 returns error (not panic)
+  * TestModerateContent_RateLimit429 - HTTP 429 returns RateLimitError with retry-after
+  * TestModerateContent_Timeout - slow response returns context deadline error
+  * TestContentPolicy_StaticPrompt - system prompt is constant string
+  * TestModerateContent_StrictSchema - request uses json_schema with strict:true
+- Updated: backend/.env.example with GROQ_API_KEY and GROQ_MODEL
+- All tests pass: go test ./internal/services/... -run TestModerat
+
 2026-02-21: PRD-v5 Backend - Migration: Add pending_review/rejected post statuses and system comment author type
 - Created: backend/migrations/000054_content_moderation_statuses.up.sql
   * ALTER TABLE posts: expanded posts_status_check to include 'pending_review' and 'rejected'

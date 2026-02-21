@@ -2347,7 +2347,7 @@
       "Test: TestModerateContent_StrictSchema \u2014 verify request uses json_schema with strict:true (not json_object)",
       "Verify: go test ./internal/services/... -run TestModerat passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

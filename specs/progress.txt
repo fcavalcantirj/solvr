@@ -27,6 +27,42 @@
 - All backend tests pass: go test ./...
 - All frontend tests pass: npm test (849 tests)
 
+2026-02-21: PRD-v5 Backend - Post creation sets pending_review and triggers async Groq moderation
+- Modified: backend/internal/api/handlers/posts.go
+  * Added ContentModerationServiceInterface, PostStatusUpdaterInterface, FlagCreatorInterface
+  * Added ModerationInput, ModerationResult local types (avoid import cycle with services)
+  * Added RateLimitError interface for rate limit detection
+  * Added contentModService, statusUpdater, flagCreator, retryDelays fields to PostsHandler
+  * Added SetContentModerationService, SetPostStatusUpdater, SetFlagCreator, SetRetryDelays setters
+  * Changed Create handler to set PostStatusPendingReview instead of PostStatusOpen
+  * Added goroutine spawn after repo.Create() to call moderatePostAsync()
+  * Implemented moderatePostAsync() with 30s timeout, exponential backoff retry (2s, 4s, 8s)
+  * Rate limit errors: sleep retry-after duration, does NOT count as attempt
+  * Other errors: exponential backoff, max 3 attempts
+  * All retries fail: log error, create admin flag with reason 'moderation_failed'
+  * Approved: UpdateStatus to 'open'; Rejected: UpdateStatus to 'rejected'
+- Modified: backend/internal/db/posts.go
+  * Added UpdateStatus(ctx, postID, status) method to PostRepository
+  * SQL: UPDATE posts SET status=$1, updated_at=NOW() WHERE id=$2 AND deleted_at IS NULL
+- Modified: backend/internal/services/content_moderation.go
+  * Added GetRetryAfter() method to RateLimitError for interface compliance
+- Created: backend/internal/api/moderation_adapter.go
+  * ContentModerationAdapter bridges services.ContentModerationService to handlers interface
+  * Converts between services.ModerationInput/Result and handlers.ModerationInput/Result
+- Modified: backend/internal/api/router.go
+  * Wire ContentModerationService when GROQ_API_KEY env var is set
+  * Set PostStatusUpdater using PostRepository (implements UpdateStatus)
+- Created: backend/internal/api/handlers/posts_moderation_test.go (7 tests)
+  * TestCreatePost_SetsPendingReview — post created with pending_review status
+  * TestCreatePost_NoModerationService — no panic when service is nil
+  * TestModeratePostAsync_Approved — approved result updates to 'open'
+  * TestModeratePostAsync_Rejected — rejected result updates to 'rejected'
+  * TestModeratePostAsync_RetryOnError — error then success on 2nd call
+  * TestModeratePostAsync_AllRetriesFail — 3 errors, flag created, stays pending_review
+  * TestModeratePostAsync_RateLimitRetry — rate limit sleep, doesn't count as attempt
+  * TestModeratePostAsync_SpawnsGoroutine — Create handler spawns goroutine
+- All backend tests pass: go test ./...
+
 2026-02-21: PRD-v5 Backend - Create Groq-powered content moderation service
 - Created: backend/internal/services/content_moderation.go
   * ContentModerationService struct with Groq API integration

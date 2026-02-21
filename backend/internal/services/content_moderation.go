@@ -34,6 +34,11 @@ func (e *RateLimitError) Error() string {
 	return fmt.Sprintf("content moderation: rate limited, retry after %v: %s", e.RetryAfter, e.Message)
 }
 
+// GetRetryAfter returns the duration to wait before retrying.
+func (e *RateLimitError) GetRetryAfter() time.Duration {
+	return e.RetryAfter
+}
+
 // ModerationInput contains the post content to be moderated.
 type ModerationInput struct {
 	Title       string

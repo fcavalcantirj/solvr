@@ -17,6 +17,7 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // Pagination constants per SPEC.md Part 5.6
@@ -95,17 +96,64 @@ type EmbeddingServiceInterface interface {
 	GenerateQueryEmbedding(ctx context.Context, text string) ([]float32, error)
 }
 
+// ModerationInput contains the post content to be moderated.
+// Mirrors services.ModerationInput to avoid import cycle.
+type ModerationInput struct {
+	Title       string
+	Description string
+	Tags        []string
+}
+
+// ModerationResult contains the moderation decision.
+// Mirrors services.ModerationResult to avoid import cycle.
+type ModerationResult struct {
+	Approved         bool
+	LanguageDetected string
+	RejectionReasons []string
+	Confidence       float64
+	Explanation      string
+}
+
+// RateLimitError is returned when a moderation API is rate limited.
+type RateLimitError interface {
+	error
+	GetRetryAfter() time.Duration
+}
+
+// ContentModerationServiceInterface defines the interface for content moderation.
+type ContentModerationServiceInterface interface {
+	ModerateContent(ctx context.Context, input ModerationInput) (*ModerationResult, error)
+}
+
+// PostStatusUpdaterInterface updates post status without requiring full PostsRepositoryInterface.
+type PostStatusUpdaterInterface interface {
+	UpdateStatus(ctx context.Context, postID string, status models.PostStatus) error
+}
+
+// FlagCreatorInterface creates admin flags for moderation failures.
+type FlagCreatorInterface interface {
+	CreateFlag(ctx context.Context, flag *models.Flag) (*models.Flag, error)
+}
+
+// Default retry delays for content moderation (exponential backoff: 2s, 4s, 8s).
+var defaultRetryDelays = []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second}
+
 type PostsHandler struct {
-	repo             PostsRepositoryInterface
-	logger           *slog.Logger
-	embeddingService EmbeddingServiceInterface
+	repo              PostsRepositoryInterface
+	logger            *slog.Logger
+	embeddingService  EmbeddingServiceInterface
+	contentModService ContentModerationServiceInterface
+	statusUpdater     PostStatusUpdaterInterface
+	flagCreator       FlagCreatorInterface
+	retryDelays       []time.Duration
 }
 
 // NewPostsHandler creates a new PostsHandler.
 func NewPostsHandler(repo PostsRepositoryInterface) *PostsHandler {
 	return &PostsHandler{
-		repo:   repo,
-		logger: slog.New(slog.NewJSONHandler(os.Stderr, nil)),
+		repo:        repo,
+		logger:      slog.New(slog.NewJSONHandler(os.Stderr, nil)),
+		retryDelays: defaultRetryDelays,
 	}
 }
 
@@ -119,6 +167,27 @@ func (h *PostsHandler) SetLogger(logger *slog.Logger) {
 // When set, post creation will generate and store embeddings for semantic search.
 func (h *PostsHandler) SetEmbeddingService(svc EmbeddingServiceInterface) {
 	h.embeddingService = svc
+}
+
+// SetContentModerationService sets the content moderation service.
+// When set, post creation triggers async moderation via Groq.
+func (h *PostsHandler) SetContentModerationService(svc ContentModerationServiceInterface) {
+	h.contentModService = svc
+}
+
+// SetPostStatusUpdater sets the post status updater for async moderation.
+func (h *PostsHandler) SetPostStatusUpdater(updater PostStatusUpdaterInterface) {
+	h.statusUpdater = updater
+}
+
+// SetFlagCreator sets the flag creator for moderation failure reporting.
+func (h *PostsHandler) SetFlagCreator(creator FlagCreatorInterface) {
+	h.flagCreator = creator
+}
+
+// SetRetryDelays overrides retry delays (useful for testing).
+func (h *PostsHandler) SetRetryDelays(delays []time.Duration) {
+	h.retryDelays = delays
 }
 
 // CreatePostRequest is the request body for creating a post.
@@ -347,7 +416,7 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Tags:            req.Tags,
 		PostedByType:    authInfo.AuthorType,
 		PostedByID:      authInfo.AuthorID,
-		Status:          models.PostStatusOpen,
+		Status:          models.PostStatusPendingReview,
 		SuccessCriteria: req.SuccessCriteria,
 		Weight:          req.Weight,
 	}
@@ -381,6 +450,11 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		response.WriteInternalErrorWithLog(w, "failed to create post", err, ctx, h.logger)
 		return
+	}
+
+	// Trigger async content moderation if service is configured
+	if h.contentModService != nil {
+		go h.moderatePostAsync(createdPost.ID, post.Title, post.Description, post.Tags, string(authInfo.AuthorType), authInfo.AuthorID)
 	}
 
 	writePostsJSON(w, http.StatusCreated, map[string]interface{}{
@@ -723,6 +797,85 @@ func float32SliceToVectorString(v []float32) string {
 	}
 	s += "]"
 	return s
+}
+
+// moderatePostAsync runs content moderation asynchronously with retry logic.
+// Uses context.Background() with 30s timeout (not request context).
+func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags []string, authorType, authorID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	input := ModerationInput{
+		Title:       title,
+		Description: description,
+		Tags:        tags,
+	}
+
+	maxAttempts := len(h.retryDelays)
+	attempt := 0
+
+	for attempt < maxAttempts {
+		result, err := h.contentModService.ModerateContent(ctx, input)
+		if err != nil {
+			// Rate limit errors: sleep and retry without counting as attempt
+			var rateLimitErr RateLimitError
+			if errors.As(err, &rateLimitErr) {
+				retryAfter := rateLimitErr.GetRetryAfter()
+				h.logger.Warn("moderation rate limited, retrying", "postID", postID, "retryAfter", retryAfter)
+				time.Sleep(retryAfter)
+				continue
+			}
+
+			// Other errors: count as attempt and use exponential backoff
+			attempt++
+			h.logger.Warn("moderation attempt failed", "postID", postID, "attempt", attempt, "error", err)
+			if attempt < maxAttempts {
+				time.Sleep(h.retryDelays[attempt-1])
+				continue
+			}
+
+			// All retries exhausted
+			h.logger.Error("moderation failed after all retries", "postID", postID, "attempts", attempt)
+			if h.flagCreator != nil {
+				parsedID, parseErr := uuid.Parse(postID)
+				if parseErr != nil {
+					h.logger.Error("invalid post ID for flag creation", "postID", postID, "error", parseErr)
+					return
+				}
+				flag := &models.Flag{
+					TargetType:   "post",
+					TargetID:     parsedID,
+					ReporterType: "system",
+					ReporterID:   "content-moderation",
+					Reason:       "moderation_failed",
+					Details:      fmt.Sprintf("Content moderation failed after %d attempts: %v", attempt, err),
+					Status:       "pending",
+				}
+				if _, flagErr := h.flagCreator.CreateFlag(ctx, flag); flagErr != nil {
+					h.logger.Error("failed to create moderation failure flag", "postID", postID, "error", flagErr)
+				}
+			}
+			return
+		}
+
+		// Moderation succeeded - update status
+		if h.statusUpdater == nil {
+			h.logger.Error("no status updater configured", "postID", postID)
+			return
+		}
+
+		var newStatus models.PostStatus
+		if result.Approved {
+			newStatus = models.PostStatusOpen
+		} else {
+			newStatus = models.PostStatusRejected
+		}
+
+		if err := h.statusUpdater.UpdateStatus(ctx, postID, newStatus); err != nil {
+			h.logger.Error("failed to update post status after moderation", "postID", postID, "status", newStatus, "error", err)
+		}
+		return
+	}
 }
 
 // writePostsError writes an error JSON response.

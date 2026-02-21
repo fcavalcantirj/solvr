@@ -174,6 +174,14 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	if embeddingService != nil {
 		postsHandler.SetEmbeddingService(embeddingService)
 	}
+	// Wire content moderation service if GROQ_API_KEY is configured
+	if groqAPIKey := os.Getenv("GROQ_API_KEY"); groqAPIKey != "" {
+		modSvc := services.NewContentModerationService(groqAPIKey)
+		postsHandler.SetContentModerationService(NewContentModerationAdapter(modSvc))
+		if pr, ok := postsRepo.(*db.PostRepository); ok {
+			postsHandler.SetPostStatusUpdater(pr)
+		}
+	}
 
 	// Create search handler (per SPEC.md Part 5.5)
 	// Wire embedding service for hybrid RRF search (full-text + vector similarity)

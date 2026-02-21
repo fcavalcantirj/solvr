@@ -826,3 +826,26 @@ func (r *PostRepository) SetCrystallizationCID(ctx context.Context, postID, cid 
 
 	return nil
 }
+
+// UpdateStatus updates only the status of a post.
+func (r *PostRepository) UpdateStatus(ctx context.Context, postID string, status models.PostStatus) error {
+	query := `
+		UPDATE posts SET status = $1, updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+	`
+
+	result, err := r.pool.Exec(ctx, query, status, postID)
+	if err != nil {
+		if isInvalidUUIDError(err) {
+			return ErrPostNotFound
+		}
+		LogQueryError(ctx, "UpdateStatus", "posts", err)
+		return fmt.Errorf("update post status failed: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrPostNotFound
+	}
+
+	return nil
+}

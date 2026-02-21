@@ -2403,7 +2403,7 @@
       "Verify: go test ./internal/api/handlers/... -run TestCreatePost passes",
       "Verify: go test ./internal/api/handlers/... -run TestModeratePost passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

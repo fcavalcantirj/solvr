@@ -474,3 +474,59 @@ func TestCreateModerationComment_Rejected(t *testing.T) {
 		t.Errorf("expected content to contain resubmit instructions, got %q", c.Content)
 	}
 }
+
+func TestNewContentModerationService_WithGroqModel(t *testing.T) {
+	customModel := "my-custom-model-v2"
+	svc := NewContentModerationService("test-key", WithGroqModel(customModel))
+
+	// Verify the custom model is used in the API request
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
+		model, ok := body["model"].(string)
+		if !ok || model != customModel {
+			t.Errorf("expected model %q in request, got %q", customModel, model)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(groqModerationResponse(true, "english", nil, 0.99, "Valid")))
+	}))
+	defer server.Close()
+
+	svc.baseURL = server.URL
+	_, err := svc.ModerateContent(context.Background(), ModerationInput{
+		Title:       "Test post",
+		Description: "A valid technical description for testing purposes.",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNewContentModerationService_DefaultModel(t *testing.T) {
+	svc := NewContentModerationService("test-key")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
+		model, ok := body["model"].(string)
+		if !ok || model != DefaultGroqModel {
+			t.Errorf("expected default model %q in request, got %q", DefaultGroqModel, model)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(groqModerationResponse(true, "english", nil, 0.99, "Valid")))
+	}))
+	defer server.Close()
+
+	svc.baseURL = server.URL
+	_, err := svc.ModerateContent(context.Background(), ModerationInput{
+		Title:       "Test post",
+		Description: "A valid technical description for testing purposes.",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

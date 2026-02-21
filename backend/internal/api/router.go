@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -176,7 +177,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	}
 	// Wire content moderation service if GROQ_API_KEY is configured
 	if groqAPIKey := os.Getenv("GROQ_API_KEY"); groqAPIKey != "" {
-		modSvc := services.NewContentModerationService(groqAPIKey)
+		var modOpts []services.Option
+		if groqModel := os.Getenv("GROQ_MODEL"); groqModel != "" {
+			modOpts = append(modOpts, services.WithGroqModel(groqModel))
+		}
+		modSvc := services.NewContentModerationService(groqAPIKey, modOpts...)
 		postsHandler.SetContentModerationService(NewContentModerationAdapter(modSvc))
 		if pr, ok := postsRepo.(*db.PostRepository); ok {
 			postsHandler.SetPostStatusUpdater(pr)
@@ -184,6 +189,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		postsHandler.SetCommentRepo(commentsRepo)
 		notifSvc := NewModerationNotificationService(notificationsRepoConcrete.Create)
 		postsHandler.SetNotificationService(notifSvc)
+	} else {
+		slog.Warn("GROQ_API_KEY not set - content moderation disabled, posts created as pending_review without auto-moderation")
 	}
 
 	// Create search handler (per SPEC.md Part 5.5)

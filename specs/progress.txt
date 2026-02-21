@@ -1,3 +1,15 @@
+2026-02-21: PRD-v5 Backend - Wire up ContentModerationService with env vars and dependency injection
+- Modified: backend/internal/api/router.go
+  * Added GROQ_MODEL env var reading: reads os.Getenv("GROQ_MODEL") and passes services.WithGroqModel() option
+  * Added else-branch when GROQ_API_KEY is empty: slog.Warn("GROQ_API_KEY not set - content moderation disabled, posts created as pending_review without auto-moderation")
+  * Added "log/slog" import for structured warning logging
+  * All existing wiring already in place: SetContentModerationService, SetPostStatusUpdater, SetCommentRepo, SetNotificationService
+- Verified: backend/.env.example already has GROQ_API_KEY and GROQ_MODEL entries (lines 59-64)
+- Modified: backend/internal/services/content_moderation_test.go (+2 tests)
+  * TestNewContentModerationService_WithGroqModel: verifies custom model is sent in Groq API request body
+  * TestNewContentModerationService_DefaultModel: verifies default model (openai/gpt-oss-safeguard-20b) is sent when no option provided
+- All backend tests pass: go test ./...
+
 2026-02-21: PRD-v5 Frontend - Display system moderation comments with distinct styling (moderator badge)
 - Modified: frontend/lib/api-types.ts
   * Updated APICommentAuthor.type and APICommentWithAuthor.author_type to include 'system' union member

@@ -2570,7 +2570,7 @@
       "Verify: API starts with GROQ_API_KEY (moderation enabled, logged)",
       "Verify: POST /v1/posts triggers Groq moderation call (check logs for moderation result)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

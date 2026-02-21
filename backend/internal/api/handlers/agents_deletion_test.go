@@ -155,6 +155,20 @@ func (m *MockAgentRepositoryWithDelete) UpdateLastSeen(ctx context.Context, id s
 	return nil
 }
 
+func (m *MockAgentRepositoryWithDelete) UpdateIdentity(ctx context.Context, agentID string, amcpAID *string, keriPublicKey *string) (*models.Agent, error) {
+	agent, exists := m.agents[agentID]
+	if !exists {
+		return nil, ErrAgentNotFound
+	}
+	if amcpAID != nil {
+		agent.AMCPAID = *amcpAID
+	}
+	if keriPublicKey != nil {
+		agent.KERIPublicKey = *keriPublicKey
+	}
+	return agent, nil
+}
+
 // TestDeleteAgentMe_Success verifies authenticated agent can delete their own account (soft delete).
 //
 // TDD RED PHASE: This test will FAIL because:

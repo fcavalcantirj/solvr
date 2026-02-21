@@ -3345,3 +3345,37 @@ Tests (23 new, TDD approach):
 - Modified: frontend/lib/api-types.ts — added latest_checkpoint?: APIPinResponse | null to APIAgentMeResponse
 - Verified: go test ./... — all backend packages pass
 - Verified: npm test — all 820 frontend tests pass across 96 test files
+
+2026-02-21: PRD-v5 Backend - Add keri_public_key column and PATCH /v1/agents/me/identity endpoint
+- Created: backend/migrations/000053_add_keri_public_key.up.sql
+  * ALTER TABLE agents ADD COLUMN IF NOT EXISTS keri_public_key TEXT
+  * CREATE UNIQUE INDEX idx_agents_keri_public_key (partial, WHERE NOT NULL)
+- Created: backend/migrations/000053_add_keri_public_key.down.sql (reverse)
+- Modified: backend/internal/models/agent.go — added KERIPublicKey field (json: keri_public_key,omitempty)
+- Modified: backend/internal/db/agents.go:
+  * Updated agentColumns from 24 to 25 columns (added keri_public_key)
+  * Updated Create() INSERT to include keri_public_key parameter ($14)
+  * Updated ALL 4 scan calls (Create, Update, scanAgent, scanAgentRows) to include KERIPublicKey
+  * Added ErrDuplicateAMCPAID error variable
+  * Added UpdateIdentity() method — partial update of amcp_aid and keri_public_key with duplicate detection
+- Modified: backend/internal/api/handlers/agents.go:
+  * Added ErrDuplicateAMCPAID error variable
+  * Added KERIPublicKey to RegisterAgentRequest struct
+  * Added UpdateIdentityRequest struct (amcp_aid?, keri_public_key?)
+  * Added UpdateIdentity to AgentRepositoryInterface
+  * Added keri_public_key validation in RegisterAgent (max 512 chars)
+  * Added keri_public_key storage in RegisterAgent
+  * Added UpdateIdentity handler: agent API key only, 403 for humans, partial updates, 409 for duplicate AID
+- Created: backend/internal/api/handlers/agents_identity_test.go (344 lines, 8 tests):
+  * TestUpdateIdentity_SetAMCPFields — PATCH both amcp_aid and keri_public_key, verify stored
+  * TestUpdateIdentity_DuplicateAID — two agents try same amcp_aid, 409 conflict
+  * TestUpdateIdentity_HumanCannot — human JWT calls PATCH, 403 forbidden
+  * TestUpdateIdentity_PartialUpdate — only keri_public_key sent, amcp_aid unchanged
+  * TestUpdateIdentity_NoAuth — unauthenticated request, 403
+  * TestUpdateIdentity_InvalidJSON — invalid JSON body, 400
+  * TestUpdateIdentity_AMCPAIDTooLong — AID > 255 chars, 400
+  * TestUpdateIdentity_KERIPublicKeyTooLong — key > 512 chars, 400
+- Added: TestRegisterAgent_WithKERIPublicKey to agents_register_test.go — register with keri_public_key, verify stored
+- Modified: backend/internal/api/router.go — added PATCH /v1/agents/me/identity route under UnifiedAuth
+- Updated mock repos in agents_test.go, agents_deletion_test.go, agents_name_uniqueness_test.go with UpdateIdentity
+- Verified: go test ./... — all backend tests pass (13 packages)

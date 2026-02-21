@@ -485,6 +485,51 @@ func TestRegisterAgent_NextSteps_OmitsModelTip(t *testing.T) {
 	}
 }
 
+// TestRegisterAgent_WithKERIPublicKey tests that agent can register with keri_public_key.
+// Per prd-v5: Register agent with keri_public_key field, verify stored on agent.
+func TestRegisterAgent_WithKERIPublicKey(t *testing.T) {
+	repo := NewMockAgentRepositoryWithNameLookup()
+	handler := NewAgentsHandler(repo, "test-jwt-secret")
+
+	reqBody := map[string]interface{}{
+		"name":            "keri_agent",
+		"description":     "Agent with KERI key",
+		"amcp_aid":        "ELI7pg979AdhmvrjDeam2eAO2sRnVerenQApFL0Zef1U",
+		"keri_public_key": "DG1q5cYDaQvEgYwK0FJC_O5YfHxr_4HP0gzgrSS8BQMC",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	handler.RegisterAgent(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp RegisterAgentResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Verify AMCP AID is set
+	if resp.Agent.AMCPAID != "ELI7pg979AdhmvrjDeam2eAO2sRnVerenQApFL0Zef1U" {
+		t.Errorf("expected amcp_aid set, got '%s'", resp.Agent.AMCPAID)
+	}
+
+	// Verify KERI public key is set
+	if resp.Agent.KERIPublicKey != "DG1q5cYDaQvEgYwK0FJC_O5YfHxr_4HP0gzgrSS8BQMC" {
+		t.Errorf("expected keri_public_key set, got '%s'", resp.Agent.KERIPublicKey)
+	}
+
+	// Verify AMCP identity is flagged
+	if !resp.Agent.HasAMCPIdentity {
+		t.Error("expected has_amcp_identity to be true")
+	}
+}
+
 // TestRegisterAgent_NextSteps_IncludesModelTip tests that model tip is included when model is NOT provided.
 // Per prd-v5: If model NOT provided, add tip about setting model for +10 reputation bonus.
 func TestRegisterAgent_NextSteps_IncludesModelTip(t *testing.T) {

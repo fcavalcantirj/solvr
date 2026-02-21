@@ -18,6 +18,7 @@ var (
 	ErrDuplicateAgentID    = errors.New("agent ID already exists")
 	ErrAgentNotFound       = errors.New("agent not found")
 	ErrAgentAlreadyClaimed = errors.New("agent is already claimed by a human")
+	ErrDuplicateAMCPAID    = errors.New("amcp_aid already in use by another agent")
 )
 
 // AgentRepository handles database operations for agents.
@@ -30,8 +31,8 @@ type AgentRepository struct {
 // Used to keep queries consistent and DRY.
 // Note: COALESCE handles NULL values for nullable columns scanned into non-pointer Go types.
 // Without COALESCE, pgx fails when scanning NULL into string/[]string.
-// 24 columns total (added last_briefing_at for GET /me delta tracking)
-const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, reputation, human_claimed_at, has_human_backed_badge, has_amcp_identity, COALESCE(amcp_aid, '') as amcp_aid, pinning_quota_bytes, storage_used_bytes, last_seen_at, last_briefing_at, created_at, updated_at, deleted_at`
+// 25 columns total (added keri_public_key for KERI identity management)
+const agentColumns = `id, display_name, human_id, COALESCE(bio, '') as bio, COALESCE(specialties, '{}') as specialties, COALESCE(avatar_url, '') as avatar_url, COALESCE(api_key_hash, '') as api_key_hash, COALESCE(moltbook_id, '') as moltbook_id, COALESCE(model, '') as model, COALESCE(email, '') as email, COALESCE(external_links, '{}') as external_links, status, reputation, human_claimed_at, has_human_backed_badge, has_amcp_identity, COALESCE(amcp_aid, '') as amcp_aid, COALESCE(keri_public_key, '') as keri_public_key, pinning_quota_bytes, storage_used_bytes, last_seen_at, last_briefing_at, created_at, updated_at, deleted_at`
 
 // NewAgentRepository creates a new AgentRepository.
 func NewAgentRepository(pool *Pool) *AgentRepository {
@@ -42,14 +43,20 @@ func NewAgentRepository(pool *Pool) *AgentRepository {
 // The agent struct is populated with timestamps after successful creation.
 func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error {
 	query := `
-		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, model, email, external_links, has_amcp_identity, amcp_aid)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, model, email, external_links, has_amcp_identity, amcp_aid, keri_public_key)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING ` + agentColumns
 
 	// Convert empty AMCP AID to nil for nullable column
 	var amcpAID *string
 	if agent.AMCPAID != "" {
 		amcpAID = &agent.AMCPAID
+	}
+
+	// Convert empty KERI public key to nil for nullable column
+	var keriPubKey *string
+	if agent.KERIPublicKey != "" {
+		keriPubKey = &agent.KERIPublicKey
 	}
 
 	row := r.pool.QueryRow(ctx, query,
@@ -66,6 +73,7 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		agent.ExternalLinks,
 		agent.HasAMCPIdentity,
 		amcpAID,
+		keriPubKey,
 	)
 
 	err := row.Scan(
@@ -86,6 +94,7 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		&agent.HasHumanBackedBadge,
 		&agent.HasAMCPIdentity,
 		&agent.AMCPAID,
+		&agent.KERIPublicKey,
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
 		&agent.LastSeenAt,
@@ -190,6 +199,7 @@ func (r *AgentRepository) Update(ctx context.Context, agent *models.Agent) error
 		&agent.HasHumanBackedBadge,
 		&agent.HasAMCPIdentity,
 		&agent.AMCPAID,
+		&agent.KERIPublicKey,
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
 		&agent.LastSeenAt,
@@ -446,7 +456,7 @@ func (r *AgentRepository) GetAgentStats(ctx context.Context, agentID string) (*m
 }
 
 // scanAgent scans an agent row into an Agent struct.
-// Expects columns in order defined by agentColumns constant.
+// Expects columns in order defined by agentColumns constant (25 columns).
 func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 	agent := &models.Agent{}
 	err := row.Scan(
@@ -467,6 +477,7 @@ func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 		&agent.HasHumanBackedBadge,
 		&agent.HasAMCPIdentity,
 		&agent.AMCPAID,
+		&agent.KERIPublicKey,
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
 		&agent.LastSeenAt,
@@ -487,7 +498,7 @@ func (r *AgentRepository) scanAgent(row pgx.Row) (*models.Agent, error) {
 }
 
 // scanAgentRows scans a rows result into an Agent struct.
-// Used for queries that return multiple rows.
+// Used for queries that return multiple rows (25 columns).
 func (r *AgentRepository) scanAgentRows(rows pgx.Rows) (*models.Agent, error) {
 	agent := &models.Agent{}
 	err := rows.Scan(
@@ -508,6 +519,7 @@ func (r *AgentRepository) scanAgentRows(rows pgx.Rows) (*models.Agent, error) {
 		&agent.HasHumanBackedBadge,
 		&agent.HasAMCPIdentity,
 		&agent.AMCPAID,
+		&agent.KERIPublicKey,
 		&agent.PinningQuotaBytes,
 		&agent.StorageUsedBytes,
 		&agent.LastSeenAt,
@@ -744,6 +756,70 @@ func (r *AgentRepository) GrantHumanBackedBadge(ctx context.Context, agentID str
 	}
 
 	return nil
+}
+
+// UpdateIdentity updates AMCP identity fields (amcp_aid, keri_public_key) for an agent.
+// Supports partial updates: only provided (non-nil) fields are changed.
+// Returns ErrDuplicateAMCPAID if the amcp_aid is already used by another agent.
+// Returns the updated agent.
+func (r *AgentRepository) UpdateIdentity(ctx context.Context, agentID string, amcpAID *string, keriPublicKey *string) (*models.Agent, error) {
+	// Build dynamic SET clause for partial update
+	setClauses := []string{"updated_at = NOW()"}
+	args := []any{agentID}
+	argNum := 2
+
+	if amcpAID != nil {
+		setClauses = append(setClauses, fmt.Sprintf("amcp_aid = $%d", argNum))
+		if *amcpAID == "" {
+			args = append(args, nil)
+		} else {
+			args = append(args, *amcpAID)
+		}
+		argNum++
+		// Set has_amcp_identity based on whether amcp_aid is non-empty
+		setClauses = append(setClauses, fmt.Sprintf("has_amcp_identity = $%d", argNum))
+		args = append(args, *amcpAID != "")
+		argNum++
+		// Auto-provision pinning quota for AMCP agents (1 GB)
+		if *amcpAID != "" {
+			setClauses = append(setClauses, fmt.Sprintf("pinning_quota_bytes = GREATEST(pinning_quota_bytes, $%d)", argNum))
+			args = append(args, int64(1073741824))
+			argNum++
+		}
+	}
+
+	if keriPublicKey != nil {
+		setClauses = append(setClauses, fmt.Sprintf("keri_public_key = $%d", argNum))
+		if *keriPublicKey == "" {
+			args = append(args, nil)
+		} else {
+			args = append(args, *keriPublicKey)
+		}
+		argNum++
+	}
+
+	query := `UPDATE agents SET ` + strings.Join(setClauses, ", ") + ` WHERE id = $1 AND deleted_at IS NULL RETURNING ` + agentColumns
+
+	row := r.pool.QueryRow(ctx, query, args...)
+	agent, err := r.scanAgent(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrAgentNotFound) {
+			return nil, ErrAgentNotFound
+		}
+		// Check for unique constraint violation on amcp_aid or keri_public_key
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
+			if strings.Contains(err.Error(), "amcp_aid") {
+				return nil, ErrDuplicateAMCPAID
+			}
+			if strings.Contains(err.Error(), "keri_public_key") {
+				return nil, errors.New("keri_public_key already in use by another agent")
+			}
+		}
+		LogQueryError(ctx, "UpdateIdentity", "agents", err)
+		return nil, err
+	}
+
+	return agent, nil
 }
 
 // FindByName finds an agent by their display name.

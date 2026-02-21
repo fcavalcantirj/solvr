@@ -179,6 +179,20 @@ func (m *MockAgentRepoWithSuggestions) UpdateLastSeen(ctx context.Context, id st
 	return nil
 }
 
+func (m *MockAgentRepoWithSuggestions) UpdateIdentity(ctx context.Context, agentID string, amcpAID *string, keriPublicKey *string) (*models.Agent, error) {
+	agent, exists := m.agents[agentID]
+	if !exists {
+		return nil, ErrAgentNotFound
+	}
+	if amcpAID != nil {
+		agent.AMCPAID = *amcpAID
+	}
+	if keriPublicKey != nil {
+		agent.KERIPublicKey = *keriPublicKey
+	}
+	return agent, nil
+}
+
 // TestRegisterAgent_DuplicateName_Returns409 tests that duplicate names return 409 Conflict.
 // Per AGENT-ONBOARDING requirement: Return 409 Conflict if name taken.
 func TestRegisterAgent_DuplicateName_Returns409(t *testing.T) {

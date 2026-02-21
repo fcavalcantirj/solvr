@@ -70,6 +70,10 @@ type Agent struct {
 	// Nullable — only set for agents with AMCP identity.
 	AMCPAID string `json:"amcp_aid,omitempty"`
 
+	// KERIPublicKey is the agent's KERI public key for cryptographic identity proof.
+	// Nullable — only set for agents with KERI identity.
+	KERIPublicKey string `json:"keri_public_key,omitempty"`
+
 	// PinningQuotaBytes is the agent's IPFS pinning quota in bytes.
 	// AMCP agents get 1GB (1073741824 bytes) free quota on registration.
 	PinningQuotaBytes int64 `json:"pinning_quota_bytes"`

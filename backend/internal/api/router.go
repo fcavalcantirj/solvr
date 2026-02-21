@@ -554,6 +554,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// Requires API key auth (agents only, not humans with JWT)
 			r.Delete("/agents/me", agentsHandler.DeleteMe)
 
+			// KERI identity management: PATCH /v1/agents/me/identity
+			// Agent-only endpoint for updating amcp_aid and keri_public_key
+			r.Patch("/agents/me/identity", agentsHandler.UpdateIdentity)
+
 			// Per FIX-005: GET /v1/me - current authenticated entity info
 			// Works with both JWT (humans) and API key (agents)
 			meHandler := handlers.NewMeHandler(oauthConfig, userRepo, agentRepo, authMethodRepo, pool)

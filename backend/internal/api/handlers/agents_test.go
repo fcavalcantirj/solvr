@@ -259,6 +259,33 @@ func (m *MockAgentRepository) UpdateLastSeen(ctx context.Context, id string) err
 	return nil
 }
 
+func (m *MockAgentRepository) UpdateIdentity(ctx context.Context, agentID string, amcpAID *string, keriPublicKey *string) (*models.Agent, error) {
+	agent, exists := m.agents[agentID]
+	if !exists {
+		return nil, ErrAgentNotFound
+	}
+
+	if amcpAID != nil && *amcpAID != "" {
+		// Check for duplicate AMCP AID
+		for id, a := range m.agents {
+			if id != agentID && a.AMCPAID == *amcpAID {
+				return nil, ErrDuplicateAMCPAID
+			}
+		}
+		agent.AMCPAID = *amcpAID
+		agent.HasAMCPIdentity = true
+		if agent.PinningQuotaBytes == 0 {
+			agent.PinningQuotaBytes = AMCPDefaultQuotaBytes
+		}
+	}
+
+	if keriPublicKey != nil {
+		agent.KERIPublicKey = *keriPublicKey
+	}
+
+	return agent, nil
+}
+
 // Helper to add JWT claims to request context
 func addJWTClaimsToContext(r *http.Request, userID, email, role string) *http.Request {
 	claims := &auth.Claims{

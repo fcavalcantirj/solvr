@@ -2207,7 +2207,7 @@
       "TDD GREEN: Run all tests \u2014 confirm all passing",
       "Verify: go test ./internal/api/handlers/ -run 'TestRegisterAgent_WithKERI|TestUpdateIdentity' -v passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

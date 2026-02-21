@@ -22,6 +22,7 @@ var (
 	ErrDuplicateAgentID   = errors.New("agent ID already exists")
 	ErrDuplicateAgentName = errors.New("agent name already exists")
 	ErrAgentNotFound      = errors.New("agent not found")
+	ErrDuplicateAMCPAID   = errors.New("amcp_aid already in use by another agent")
 )
 
 // AgentRepositoryInterface defines the database operations for agents.
@@ -52,6 +53,8 @@ type AgentRepositoryInterface interface {
 	Delete(ctx context.Context, id string) error
 	// Heartbeat liveness tracking
 	UpdateLastSeen(ctx context.Context, id string) error
+	// KERI identity management
+	UpdateIdentity(ctx context.Context, agentID string, amcpAID *string, keriPublicKey *string) (*models.Agent, error)
 }
 
 // ClaimTokenRepositoryInterface defines database operations for claim tokens.
@@ -140,7 +143,15 @@ type RegisterAgentRequest struct {
 	Model         string   `json:"model,omitempty"`
 	Email         string   `json:"email,omitempty"`
 	ExternalLinks []string `json:"external_links,omitempty"`
-	AMCPAID       string   `json:"amcp_aid,omitempty"` // KERI AID for AMCP identity verification
+	AMCPAID       string   `json:"amcp_aid,omitempty"`        // KERI AID for AMCP identity verification
+	KERIPublicKey string   `json:"keri_public_key,omitempty"` // KERI public key for cryptographic identity
+}
+
+// UpdateIdentityRequest is the request body for PATCH /v1/agents/me/identity.
+// Per prd-v5: Agent-only endpoint for updating AMCP identity fields.
+type UpdateIdentityRequest struct {
+	AMCPAID       *string `json:"amcp_aid,omitempty"`
+	KERIPublicKey *string `json:"keri_public_key,omitempty"`
 }
 
 // RegisterAgentResponse is the response for agent self-registration.
@@ -247,6 +258,12 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate KERI public key length if provided
+	if len(req.KERIPublicKey) > 512 {
+		writeAgentValidationError(w, "keri_public_key must not exceed 512 characters")
+		return
+	}
+
 	// Generate unique agent ID from name
 	agentID := generateAgentID(req.Name)
 
@@ -281,6 +298,11 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		agent.HasAMCPIdentity = true
 		agent.AMCPAID = req.AMCPAID
 		agent.PinningQuotaBytes = AMCPDefaultQuotaBytes // 1 GB free quota
+	}
+
+	// Set KERI public key if provided
+	if req.KERIPublicKey != "" {
+		agent.KERIPublicKey = req.KERIPublicKey
 	}
 
 	if err := h.repo.Create(r.Context(), agent); err != nil {
@@ -709,6 +731,69 @@ func (h *AgentsHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Agent deleted successfully",
 	})
+}
+
+// UpdateIdentity handles PATCH /v1/agents/me/identity — KERI identity management.
+// Per prd-v5: Agent-only endpoint for updating amcp_aid and keri_public_key.
+// Requires API key authentication (agents only). Returns 403 for human JWT callers.
+func (h *AgentsHandler) UpdateIdentity(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Require agent API key auth — reject human JWT callers with 403
+	agent := auth.AgentFromContext(ctx)
+	if agent == nil {
+		writeAgentError(w, http.StatusForbidden, "FORBIDDEN",
+			"Identity endpoint is agent-only. Use API key authentication.")
+		return
+	}
+
+	// Parse request body
+	var req UpdateIdentityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAgentValidationError(w, "invalid JSON body")
+		return
+	}
+
+	// Validate AMCP AID length if provided
+	if req.AMCPAID != nil && len(*req.AMCPAID) > 255 {
+		writeAgentValidationError(w, "amcp_aid must not exceed 255 characters")
+		return
+	}
+
+	// Validate KERI public key length if provided
+	if req.KERIPublicKey != nil && len(*req.KERIPublicKey) > 512 {
+		writeAgentValidationError(w, "keri_public_key must not exceed 512 characters")
+		return
+	}
+
+	// Update identity fields via repository
+	updated, err := h.repo.UpdateIdentity(ctx, agent.ID, req.AMCPAID, req.KERIPublicKey)
+	if err != nil {
+		if errors.Is(err, ErrAgentNotFound) || errors.Is(err, db.ErrAgentNotFound) {
+			writeAgentError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
+			return
+		}
+		if errors.Is(err, ErrDuplicateAMCPAID) || errors.Is(err, db.ErrDuplicateAMCPAID) {
+			writeAgentError(w, http.StatusConflict, "DUPLICATE_AID", "amcp_aid already in use by another agent")
+			return
+		}
+		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update identity")
+		return
+	}
+
+	// Get stats for response
+	stats, err := h.repo.GetAgentStats(ctx, agent.ID)
+	if err != nil {
+		stats = &models.AgentStats{}
+	}
+
+	resp := GetAgentResponse{}
+	resp.Data.Agent = *updated
+	resp.Data.Stats = *stats
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // ActivityResponse is the response structure for the activity endpoint.

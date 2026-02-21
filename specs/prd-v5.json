@@ -2053,7 +2053,7 @@
       "Verify: npm test -- --run hooks/use-users.test.ts passes (all tests green)",
       "Verify: /users page header shows correct platform-wide backed agents count regardless of sort or page"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

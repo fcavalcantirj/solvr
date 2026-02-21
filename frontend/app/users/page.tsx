@@ -163,10 +163,7 @@ function UsersList({ options = {} }: UsersListProps) {
 export default function UsersPage() {
   const [sort, setSort] = useState<SortOption>('reputation');
   const options: UseUsersOptions = { sort, limit: 20 };
-  const { users, loading, total } = useUsers(options);
-
-  // Calculate stats
-  const totalAgents = users.reduce((sum, u) => sum + u.agentsCount, 0);
+  const { users, loading, total, totalBackedAgents } = useUsers(options);
 
   return (
     <div className="min-h-screen bg-background">
@@ -225,7 +222,7 @@ export default function UsersPage() {
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-baseline">
                     <span className="font-mono text-xl sm:text-2xl font-medium text-blue-600">
-                      {formatNumber(totalAgents)}
+                      {formatNumber(totalBackedAgents)}
                     </span>
                     <span className="font-mono text-[10px] sm:text-xs text-muted-foreground sm:ml-2">BACKED AGENTS</span>
                   </div>

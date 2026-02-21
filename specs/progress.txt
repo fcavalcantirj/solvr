@@ -1,3 +1,10 @@
+2026-02-21: PRD-v5 Frontend - Use API total_backed_agents from meta for /users header stats
+- Modified: frontend/lib/api-types.ts — added total_backed_agents: number to APIUsersResponse.meta interface
+- Modified: frontend/hooks/use-users.ts — added totalBackedAgents state, extracted from response.meta.total_backed_agents, added to UseUsersResult interface and return object
+- Modified: frontend/hooks/use-users.test.ts — added total_backed_agents to all 3 mock meta objects, added test 'returns totalBackedAgents from API meta' (12 total tests, all passing)
+- Modified: frontend/app/users/page.tsx — replaced client-side users.reduce sum with API-provided totalBackedAgents from useUsers hook
+- Verified: npm test — 96 files, 812 tests all passing
+
 2026-02-21: PRD-v5 Frontend - Change /users page default sort from 'newest' to 'reputation'
 - Modified: frontend/hooks/use-users.ts — changed default sort from 'newest' to 'reputation' (lines 57, 71)
 - Modified: frontend/app/users/page.tsx — changed initial useState sort from 'newest' to 'reputation' (line 164)

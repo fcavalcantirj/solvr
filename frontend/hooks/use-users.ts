@@ -39,6 +39,7 @@ export interface UseUsersResult {
   loading: boolean;
   error: string | null;
   total: number;
+  totalBackedAgents: number;
   hasMore: boolean;
   page: number;
   refetch: () => void;
@@ -50,6 +51,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  const [totalBackedAgents, setTotalBackedAgents] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
 
@@ -81,6 +83,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersResult {
       }
 
       setTotal(response.meta.total);
+      setTotalBackedAgents(response.meta.total_backed_agents);
       setHasMore(response.meta.has_more);
       setPage(Math.floor(offset / limit) + 1);
     } catch (err) {
@@ -109,6 +112,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersResult {
     loading,
     error,
     total,
+    totalBackedAgents,
     hasMore,
     page,
     refetch,

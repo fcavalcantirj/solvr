@@ -673,6 +673,7 @@ export interface APIUsersResponse {
     page: number;
     per_page: number;
     has_more: boolean;
+    total_backed_agents: number;
   };
 }
 

@@ -39,6 +39,7 @@ const mockUsersResponse = {
     page: 1,
     per_page: 20,
     has_more: true,
+    total_backed_agents: 157,
   },
 };
 
@@ -198,6 +199,7 @@ describe('useUsers', () => {
         page: 2,
         per_page: 20,
         has_more: false,
+        total_backed_agents: 157,
       },
     };
     (api.getUsers as ReturnType<typeof vi.fn>).mockResolvedValue(page2Response);
@@ -274,11 +276,26 @@ describe('useUsers', () => {
     expect(result.current.users[1].initials).toBe('JA');
   });
 
+  it('returns totalBackedAgents from API meta', async () => {
+    // Arrange
+    (api.getUsers as ReturnType<typeof vi.fn>).mockResolvedValue(mockUsersResponse);
+
+    // Act
+    const { result } = renderHook(() => useUsers());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Assert - totalBackedAgents comes from API meta, not client-side sum
+    expect(result.current.totalBackedAgents).toBe(157);
+  });
+
   it('returns empty array when no users', async () => {
     // Arrange
     (api.getUsers as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: [],
-      meta: { total: 0, page: 1, per_page: 20, has_more: false },
+      meta: { total: 0, page: 1, per_page: 20, has_more: false, total_backed_agents: 0 },
     });
 
     // Act

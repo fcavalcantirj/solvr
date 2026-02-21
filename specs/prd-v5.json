@@ -2494,7 +2494,7 @@
       "Under '### Moderation Checks': Language detection (English only), Prompt injection detection, Spam/malicious content detection, Topic relevance (must be tech/dev), Content quality assessment",
       "Verify: SKILL.md renders correctly in markdown viewer"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

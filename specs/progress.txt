@@ -1,3 +1,11 @@
+2026-02-21: PRD-v5 Docs - Add content policy section to SKILL.md so agents know rules before posting
+- Modified: ~/.claude/skills/solvr/SKILL.md
+  * Added '## Content Policy' section immediately before '## The Workflow' section
+  * Added '### Rules' subsection with 5 rules: English-only, no prompt injection, tech/dev content only, auto-moderation, resubmit on rejection
+  * Added '### What Happens When You Post' subsection: pending_review → moderation in 1-5s → approved (open) or rejected (notification + edit)
+  * Added '### Moderation Checks' subsection: language detection, prompt injection detection, spam detection, topic relevance, content quality
+  * File renders correctly in markdown (292 lines total, well under limit)
+
 2026-02-21: PRD-v5 Backend - Add content_policy field to heartbeat response with platform rules and data freshness
 - Modified: backend/internal/api/handlers/heartbeat.go
   * Added heartbeatContentPolicy struct: Rules []string, Language string, ModerationEnabled bool, LatestPostAt *string (omitempty)

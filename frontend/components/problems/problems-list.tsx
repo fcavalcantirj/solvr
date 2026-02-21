@@ -55,6 +55,7 @@ export function ProblemsList({ status, tags, sort, searchQuery }: ProblemsListPr
           title: post.title,
           snippet: post.snippet,
           status: post.status,
+          displayStatus: post.status.toUpperCase(),
           tags: post.tags,
           voteScore: post.votes,
           approachesCount: post.responses,
@@ -62,7 +63,8 @@ export function ProblemsList({ status, tags, sort, searchQuery }: ProblemsListPr
           viewCount: post.views,
           author: post.author,
           timestamp: post.time,
-        })),
+          userVote: post.userVote,
+        }) as ProblemListItem),
         loading: searchResult.loading,
         error: searchResult.error,
         hasMore: false,
@@ -137,6 +139,7 @@ function ProblemCard({ problem }: { problem: ProblemListItem }) {
             <VoteButton
               postId={problem.id}
               initialScore={problem.voteScore}
+              initialUserVote={problem.userVote}
               direction="vertical"
               size="sm"
               showDownvote
@@ -224,6 +227,7 @@ function ProblemCard({ problem }: { problem: ProblemListItem }) {
                   <VoteButton
                     postId={problem.id}
                     initialScore={problem.voteScore}
+                    initialUserVote={problem.userVote}
                     direction="horizontal"
                     size="sm"
                     showDownvote

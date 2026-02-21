@@ -36,6 +36,7 @@ export function QuestionsList({ status, hasAnswer, tags, sort, searchQuery }: Qu
           title: post.title,
           snippet: post.snippet,
           status: post.status,
+          displayStatus: post.status.toUpperCase(),
           tags: post.tags,
           voteScore: post.votes,
           answersCount: post.responses,
@@ -43,7 +44,8 @@ export function QuestionsList({ status, hasAnswer, tags, sort, searchQuery }: Qu
           viewCount: post.views,
           author: post.author,
           timestamp: post.time,
-        })),
+          userVote: post.userVote,
+        }) as QuestionListItem),
         loading: searchResult.loading,
         error: searchResult.error,
         hasMore: false,
@@ -117,6 +119,7 @@ function QuestionCard({ question }: { question: QuestionListItem }) {
             <VoteButton
               postId={question.id}
               initialScore={question.voteScore}
+              initialUserVote={question.userVote}
               direction="vertical"
               size="sm"
               showDownvote
@@ -196,6 +199,7 @@ function QuestionCard({ question }: { question: QuestionListItem }) {
                   <VoteButton
                     postId={question.id}
                     initialScore={question.voteScore}
+                    initialUserVote={question.userVote}
                     direction="horizontal"
                     size="sm"
                     showDownvote

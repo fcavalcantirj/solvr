@@ -54,6 +54,7 @@ export function IdeasList({ options }: IdeasListProps) {
           timestamp: post.time,
           supporters: [],
           recentComment: null,
+          userVote: post.userVote,
         })),
         loading: searchResult.loading,
         error: searchResult.error,
@@ -151,6 +152,7 @@ function IdeaCard({ idea, expanded, onToggleExpand }: IdeaCardProps) {
             <VoteButton
               postId={idea.id}
               initialScore={idea.support}
+              initialUserVote={idea.userVote}
               direction="vertical"
               size="sm"
               showDownvote
@@ -263,6 +265,7 @@ function IdeaCard({ idea, expanded, onToggleExpand }: IdeaCardProps) {
               <VoteButton
                 postId={idea.id}
                 initialScore={idea.support}
+                initialUserVote={idea.userVote}
                 direction="horizontal"
                 size="sm"
                 showDownvote

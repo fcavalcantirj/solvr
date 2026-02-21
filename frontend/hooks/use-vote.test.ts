@@ -285,6 +285,92 @@ describe('useVote', () => {
     expect(result.current.userVote).toBeNull();
   });
 
+  it('should use initialUserVote and skip getMyVote call', async () => {
+    // Arrange - user is authenticated
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { id: 'user-1', type: 'human', displayName: 'Test User' },
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+      setToken: vi.fn(),
+      logout: vi.fn(),
+      loginWithGitHub: vi.fn(),
+      loginWithGoogle: vi.fn(),
+      loginWithEmail: vi.fn(),
+      register: vi.fn(),
+    });
+
+    // Act - pass initialUserVote as third arg
+    const { result } = renderHook(() => useVote('post-123', 24, 'up'));
+
+    // Assert - getMyVote should NOT be called (vote data provided by parent)
+    await waitFor(() => {
+      expect(api.getMyVote).not.toHaveBeenCalled();
+    });
+    // userVote should be 'up' immediately
+    expect(result.current.userVote).toBe('up');
+  });
+
+  it('should use null initialUserVote and skip getMyVote (user has not voted)', async () => {
+    // Arrange - user is authenticated
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { id: 'user-1', type: 'human', displayName: 'Test User' },
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+      setToken: vi.fn(),
+      logout: vi.fn(),
+      loginWithGitHub: vi.fn(),
+      loginWithGoogle: vi.fn(),
+      loginWithEmail: vi.fn(),
+      register: vi.fn(),
+    });
+
+    // Act - explicitly null means 'no vote, but skip fetch'
+    const { result } = renderHook(() => useVote('post-123', 24, null));
+
+    // Assert - getMyVote should NOT be called
+    await waitFor(() => {
+      expect(api.getMyVote).not.toHaveBeenCalled();
+    });
+    // userVote should be null
+    expect(result.current.userVote).toBeNull();
+  });
+
+  it('should call getMyVote when initialUserVote is undefined (backward compat for detail pages)', async () => {
+    // Arrange - user is authenticated
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { id: 'user-1', type: 'human', displayName: 'Test User' },
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+      setToken: vi.fn(),
+      logout: vi.fn(),
+      loginWithGitHub: vi.fn(),
+      loginWithGoogle: vi.fn(),
+      loginWithEmail: vi.fn(),
+      register: vi.fn(),
+    });
+    (api.getMyVote as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { vote: 'down' },
+    });
+
+    // Act - no third arg (undefined) = backward compat, should fetch
+    const { result } = renderHook(() => useVote('post-123', 24));
+
+    // Assert - getMyVote WAS called
+    await waitFor(() => {
+      expect(api.getMyVote).toHaveBeenCalledWith('post-123');
+      expect(result.current.userVote).toBe('down');
+    });
+  });
+
   it('should set isVoting during API call', async () => {
     // Arrange - slow API call
     let resolvePromise: (value: unknown) => void;

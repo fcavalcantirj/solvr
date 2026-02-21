@@ -21,6 +21,7 @@ export interface ProblemListItem {
   tags: string[];
   timestamp: string;
   crystallizationCid?: string;
+  userVote?: 'up' | 'down' | null;
 }
 
 function transformProblem(post: APIPost): ProblemListItem {
@@ -44,6 +45,7 @@ function transformProblem(post: APIPost): ProblemListItem {
     tags: post.tags || [],
     timestamp: formatRelativeTime(post.created_at),
     crystallizationCid: post.crystallization_cid,
+    userVote: post.user_vote ?? undefined,
   };
 }
 

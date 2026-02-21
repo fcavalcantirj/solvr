@@ -2778,7 +2778,7 @@
       "Verify: cd frontend && npm run build (no type errors)",
       "Verify: cd frontend && npm run typecheck (strict TypeScript passes)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

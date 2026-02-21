@@ -90,8 +90,8 @@ vi.mock('@/components/search/search-method-badge', () => ({
 }));
 
 vi.mock('@/components/ui/vote-button', () => ({
-  VoteButton: ({ postId }: { postId: string }) => (
-    <div data-testid={`vote-button-${postId}`}>Vote</div>
+  VoteButton: ({ postId, initialUserVote }: { postId: string; initialUserVote?: 'up' | 'down' | null }) => (
+    <div data-testid={`vote-button-${postId}`} data-initial-user-vote={initialUserVote ?? 'null'}>Vote</div>
   ),
 }));
 

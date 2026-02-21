@@ -29,6 +29,7 @@ export interface QuestionListItem {
   };
   tags: string[];
   timestamp: string;
+  userVote?: 'up' | 'down' | null;
 }
 
 function transformQuestion(post: APIPost): QuestionListItem {
@@ -51,6 +52,7 @@ function transformQuestion(post: APIPost): QuestionListItem {
     },
     tags: post.tags || [],
     timestamp: formatRelativeTime(post.created_at),
+    userVote: post.user_vote ?? undefined,
   };
 }
 

@@ -14,9 +14,10 @@ vi.mock('@/hooks/use-posts', () => ({
 
 // Mock VoteButton
 vi.mock('@/components/ui/vote-button', () => ({
-  VoteButton: ({ postId, initialScore, showDownvote, direction, size }: {
+  VoteButton: ({ postId, initialScore, initialUserVote, showDownvote, direction, size }: {
     postId: string;
     initialScore: number;
+    initialUserVote?: 'up' | 'down' | null;
     showDownvote?: boolean;
     direction?: string;
     size?: string;
@@ -24,6 +25,7 @@ vi.mock('@/components/ui/vote-button', () => ({
     <div
       data-testid={`vote-button-${postId}`}
       data-initial-score={initialScore}
+      data-initial-user-vote={initialUserVote ?? 'null'}
       data-show-downvote={showDownvote}
       data-direction={direction}
       data-size={size}

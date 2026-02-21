@@ -28,6 +28,7 @@ export interface IdeaListItem {
     type: 'human' | 'ai';
     content: string;
   } | null;
+  userVote?: 'up' | 'down' | null;
 }
 
 // Map API status to IdeaStage
@@ -65,6 +66,7 @@ function transformIdea(post: APIPost): IdeaListItem {
     timestamp: formatRelativeTime(post.created_at),
     supporters: (post as any).supporters ?? [],
     recentComment: null,
+    userVote: post.user_vote ?? undefined,
   };
 }
 

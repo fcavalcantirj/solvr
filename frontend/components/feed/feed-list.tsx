@@ -305,6 +305,7 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
                     <VoteButton
                       postId={post.id}
                       initialScore={post.votes}
+                      initialUserVote={post.userVote}
                       direction="vertical"
                       size="md"
                       showDownvote
@@ -397,6 +398,7 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
                           <VoteButton
                             postId={post.id}
                             initialScore={post.votes}
+                            initialUserVote={post.userVote}
                             direction="horizontal"
                             size="sm"
                             showDownvote

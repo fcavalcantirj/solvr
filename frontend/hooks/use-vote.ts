@@ -22,15 +22,16 @@ export interface UseVoteResult {
  * @param initialScore - The initial vote score
  * @returns Vote state and actions
  */
-export function useVote(postId: string, initialScore: number): UseVoteResult {
+export function useVote(postId: string, initialScore: number, initialUserVote?: 'up' | 'down' | null): UseVoteResult {
   const { isAuthenticated } = useAuth();
   const [score, setScore] = useState(initialScore);
   const [isVoting, setIsVoting] = useState(false);
-  const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
+  const [userVote, setUserVote] = useState<'up' | 'down' | null>(initialUserVote !== undefined ? initialUserVote : null);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch user's vote on mount (only when authenticated)
+  // Fetch user's vote on mount (only when initialUserVote not provided and authenticated)
   useEffect(() => {
+    if (initialUserVote !== undefined) return; // Vote data provided by parent — skip fetch
     if (!isAuthenticated) return;
 
     const fetchUserVote = async () => {
@@ -46,7 +47,7 @@ export function useVote(postId: string, initialScore: number): UseVoteResult {
     };
 
     fetchUserVote();
-  }, [postId, isAuthenticated]);
+  }, [postId, isAuthenticated, initialUserVote]);
 
   const vote = useCallback(async (direction: 'up' | 'down') => {
     if (isVoting) return;

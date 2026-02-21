@@ -28,6 +28,7 @@ export interface APIPost {
   evolved_into?: string[];
   crystallization_cid?: string;
   crystallized_at?: string;
+  user_vote?: 'up' | 'down' | null;
 }
 
 export interface APIPostsResponse {

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 interface VoteButtonProps {
   postId: string;
   initialScore: number;
+  initialUserVote?: 'up' | 'down' | null;
   direction?: 'vertical' | 'horizontal';
   size?: 'sm' | 'md' | 'lg';
   showDownvote?: boolean;
@@ -16,12 +17,13 @@ interface VoteButtonProps {
 export function VoteButton({
   postId,
   initialScore,
+  initialUserVote,
   direction = 'vertical',
   size = 'md',
   showDownvote = false,
   className,
 }: VoteButtonProps) {
-  const { score, userVote, isVoting, error, upvote, downvote } = useVote(postId, initialScore);
+  const { score, userVote, isVoting, error, upvote, downvote } = useVote(postId, initialScore, initialUserVote);
 
   const sizeConfig = {
     sm: { button: 'w-6 h-6', icon: 12, text: 'text-xs' },

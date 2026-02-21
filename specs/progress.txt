@@ -3926,3 +3926,48 @@ Tests (23 new, TDD approach):
   * validates title minimum length
 - Fixed existing tests: added useAuth mock to problem-header.test.tsx, question-header.test.tsx, idea-header.test.tsx
 - Verified: npm test -- --run passes (100 files, 872 tests, 0 failures)
+
+2026-02-21: PRD-v5 Frontend - Consume user_vote from posts list API and pass to VoteButton to eliminate N+1 calls
+- Modified: frontend/hooks/use-vote.ts
+  * Added optional third parameter: initialUserVote?: 'up' | 'down' | null
+  * Initialize userVote state from initialUserVote when provided
+  * Skip getMyVote fetch when initialUserVote !== undefined (vote data from parent)
+  * Backward compat: no third arg (undefined) = fetch as before (detail pages)
+- Modified: frontend/hooks/use-vote.test.ts (+3 tests, total 13)
+  * Test: 'should use initialUserVote and skip getMyVote call' — passes 'up', asserts no fetch
+  * Test: 'should use null initialUserVote and skip getMyVote' — passes null, asserts no fetch
+  * Test: 'should call getMyVote when initialUserVote is undefined' — backward compat
+- Modified: frontend/lib/api-types.ts
+  * Added user_vote?: 'up' | 'down' | null to APIPost interface
+- Modified: frontend/components/ui/vote-button.tsx
+  * Added initialUserVote prop to VoteButtonProps interface
+  * Passes initialUserVote to useVote hook
+- Modified: frontend/hooks/use-posts.ts
+  * Added userVote field to FeedPost interface
+  * Added userVote: post.user_vote ?? undefined to transformPost()
+- Modified: frontend/components/feed/feed-list.tsx
+  * Desktop VoteButton: added initialUserVote={post.userVote}
+  * Mobile VoteButton: added initialUserVote={post.userVote}
+- Modified: frontend/hooks/use-problems.ts
+  * Added userVote field to ProblemListItem interface
+  * Added userVote mapping in transformProblem()
+- Modified: frontend/components/problems/problems-list.tsx
+  * Both VoteButtons: added initialUserVote={problem.userVote}
+  * Search transform: added userVote and displayStatus fields
+- Modified: frontend/hooks/use-questions.ts
+  * Added userVote field to QuestionListItem interface
+  * Added userVote mapping in transformQuestion()
+- Modified: frontend/components/questions/questions-list.tsx
+  * Both VoteButtons: added initialUserVote={question.userVote}
+  * Search transform: added userVote and displayStatus fields
+- Modified: frontend/hooks/use-ideas.ts
+  * Added userVote field to IdeaListItem interface
+  * Added userVote mapping in transformIdea()
+- Modified: frontend/components/ideas/ideas-list.tsx
+  * Both VoteButtons: added initialUserVote={idea.userVote}
+  * Search transform: added userVote field
+- Updated VoteButton mocks in 4 test files to accept initialUserVote prop:
+  * feed-list.test.tsx, problems-list.test.tsx, questions-list.test.tsx, ideas-list.test.tsx
+- Verified: npm test passes (100 files, 881 tests, 0 failures)
+- Verified: npm run build succeeds
+- Verified: npm run typecheck — no non-test errors

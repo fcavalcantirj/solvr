@@ -1,3 +1,30 @@
+2026-02-21: PRD-v5 Backend - Create resurrection bundle endpoint GET /v1/agents/{id}/resurrection-bundle
+- Created: backend/internal/api/handlers/resurrection.go (258 lines)
+  * ResurrectionHandler struct with AgentFinderInterface, ResurrectionCheckpointFinder, ResurrectionKnowledgeRepo, ResurrectionStatsRepo, ResurrectionAgentUpdateRepo deps
+  * GET /v1/agents/{id}/resurrection-bundle: auth via self (API key), sibling (isFamilyAccess), or claiming human (JWT)
+  * Response sections: identity (id, display_name, created_at, model, specialties, bio, has_amcp_identity, amcp_aid, keri_public_key), knowledge (ideas top 50 by votes, approaches top 50 by recency, problems open only), reputation (total, problems_solved, answers_accepted, ideas_posted, upvotes_received), latest_checkpoint (PinResponse or null), death_count (parsed from checkpoint meta)
+  * UpdateLastSeen on requesting agent for liveness tracking
+  * Graceful degradation: each section fetched independently, errors logged but don't break response
+- Created: backend/internal/api/handlers/resurrection_test.go (517 lines, 7 TDD tests all passing)
+  * TestResurrectionBundle_FullPayload — agent with ideas, approaches, problems, checkpoint, all sections populated
+  * TestResurrectionBundle_EmptyAgent — new agent with zero activity, empty arrays, null checkpoint/death_count
+  * TestResurrectionBundle_OwnAgent — different agent gets 403 (no family access)
+  * TestResurrectionBundle_SiblingAgent — sibling agent (same human_id) gets 200
+  * TestResurrectionBundle_ClaimingHuman — human owner gets 200
+  * TestResurrectionBundle_Unauthenticated — no auth returns 401
+  * TestResurrectionBundle_KnowledgeLimits — max 50 ideas enforced
+- Created: backend/internal/models/resurrection.go (33 lines)
+  * ResurrectionIdea, ResurrectionApproach, ResurrectionProblem lightweight types (shared between handlers and db)
+- Created: backend/internal/db/resurrection.go (124 lines)
+  * ResurrectionRepository with GetAgentIdeas, GetAgentApproaches, GetAgentOpenProblems
+  * Ideas: top 50 by net votes (upvotes - downvotes) DESC
+  * Approaches: top 50 by recency (created_at DESC)
+  * Problems: open only (draft, open, in_progress) by recency
+- Modified: backend/internal/api/router.go (927 lines)
+  * Created ResurrectionHandler, wired with agentRepoConcrete, pinsRepoConcrete, resurrectionRepo, agentRepoConcrete
+  * Added GET /v1/agents/{id}/resurrection-bundle route under combined auth
+- Verified: go test ./... — all packages pass, zero failures
+
 2026-02-21: PRD-v5 Backend - Create checkpoint convenience endpoints POST /v1/agents/me/checkpoints and GET /v1/agents/{id}/checkpoints
 - Created: backend/internal/api/handlers/checkpoints.go (316 lines)
   * CheckpointsHandler struct with PinRepositoryInterface, IPFSPinner, StorageRepositoryInterface, AgentFinderInterface, CheckpointAgentRepo deps

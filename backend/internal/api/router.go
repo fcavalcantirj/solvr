@@ -250,6 +250,16 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	checkpointsHandler.SetAgentFinderRepo(agentRepoConcrete)
 	checkpointsHandler.SetAgentRepo(agentRepoConcrete)
 
+	// Create resurrection bundle handler
+	resurrectionRepo := db.NewResurrectionRepository(pool)
+	resurrectionHandler := handlers.NewResurrectionHandler(
+		agentRepoConcrete,
+		pinsRepoConcrete,
+		resurrectionRepo,
+		agentRepoConcrete,
+	)
+	resurrectionHandler.SetAgentRepo(agentRepoConcrete)
+
 	// Create IPFS upload handler
 	// Max upload size: configurable via env, defaults to 100MB
 	maxUploadSize := int64(handlers.DefaultMaxUploadSize)
@@ -608,6 +618,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/agents/{id}/checkpoints", func(w http.ResponseWriter, req *http.Request) {
 				agentID := chi.URLParam(req, "id")
 				checkpointsHandler.ListCheckpoints(w, req, agentID)
+			})
+
+			// GET /v1/agents/{id}/resurrection-bundle - agent rehydration after death
+			r.Get("/agents/{id}/resurrection-bundle", func(w http.ResponseWriter, req *http.Request) {
+				agentID := chi.URLParam(req, "id")
+				resurrectionHandler.GetBundle(w, req, agentID)
 			})
 
 			// GET /v1/agents/{id}/storage - agent storage for human owners or agent self

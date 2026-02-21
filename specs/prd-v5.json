@@ -2186,7 +2186,7 @@
       "TDD GREEN: Run all tests \u2014 confirm all passing",
       "Verify: go test ./internal/api/handlers/resurrection_test.go -v passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

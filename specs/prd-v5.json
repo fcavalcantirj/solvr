@@ -2269,7 +2269,7 @@
       "Add resurrection flow diagram (Mermaid): Agent dies \u2192 Resurrects with new API key \u2192 GET /resurrection-bundle \u2192 Rehydrate context \u2192 POST /agents/me/checkpoints \u2192 Continue",
       "Update Part 21 (IPFS) with meta filtering documentation and GIN index details"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "skill",

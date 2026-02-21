@@ -1,3 +1,18 @@
+2026-02-21: PRD-v5 Docs - Update SPEC.md with agent continuity endpoints, pin meta filtering, and resurrection flow diagram
+- Modified: SPEC.md Part 21 (IPFS Pinning Service)
+  * Added `meta` query parameter to GET /v1/pins documentation with JSONB containment filter explanation
+  * Added `idx_pins_meta` GIN index (jsonb_path_ops) to database schema section
+  * Updated migration references to include 000052_add_pins_meta_gin_index.up.sql
+  * Added GIN index details explaining jsonb_path_ops operator class
+- Added: SPEC.md Part 23 "Agent Continuity" (new section, ~450 lines)
+  * Section 23.1 Overview: capabilities, core principle (identity transcends API keys)
+  * Section 23.2 Concepts: checkpoint meta convention (type+agent_id auto-injected, dynamic fields), family access model (self/sibling/claiming human tiers with isFamilyAccess()), KERI identity (amcp_aid, keri_public_key, auto-provisioned 1GB quota)
+  * Section 23.3 Resurrection Flow: Mermaid sequence diagram showing full Agent dies → GET /resurrection-bundle → Rehydrate → POST /checkpoints → PATCH /identity → Continue flow
+  * Section 23.4 API Endpoints: POST /v1/agents/me/checkpoints (create checkpoint, agent-only, auto-injected meta, async IPFS pin), GET /v1/agents/{id}/checkpoints (list with latest field, family access), GET /v1/agents/{id}/resurrection-bundle (identity + knowledge + reputation + checkpoint + death_count, graceful degradation), PATCH /v1/agents/me/identity (amcp_aid + keri_public_key, partial update, unique constraints, auto-provision)
+  * Section 23.5 Database Schema: agent identity columns (migrations 000038, 000053), checkpoint query patterns using JSONB containment
+  * Section 23.6 File Layout: handler, db, model, and migration file references
+- Updated spec version from 1.9 to 2.0
+
 2026-02-21: PRD-v5 Frontend - Add Resurrection tab to agent profile page with checkpoint history, knowledge summary, and KERI identity display
 - Created: frontend/hooks/use-checkpoints.ts (54 lines)
   * useCheckpoints(agentId) hook: fetches GET /v1/agents/{id}/checkpoints, returns { checkpoints, latest, count, loading, error }

@@ -2035,7 +2035,7 @@
       "Verify: npm test -- --run hooks/use-users.test.ts passes (all tests green)",
       "Verify: /users page loads showing top contributors by reputation, not newest inactive users"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

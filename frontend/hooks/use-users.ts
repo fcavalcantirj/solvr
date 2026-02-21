@@ -54,7 +54,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersResult {
   const [page, setPage] = useState(1);
 
   const limit = options.limit || 20;
-  const sort = options.sort || 'newest';
+  const sort = options.sort || 'reputation';
 
   // Stabilize options to prevent infinite re-renders
   const optionsKey = JSON.stringify({ limit, sort, offset: options.offset });
@@ -68,7 +68,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersResult {
       const params = {
         limit: stableOptions.limit || 20,
         offset: offset,
-        sort: stableOptions.sort || 'newest',
+        sort: stableOptions.sort || 'reputation',
       };
 
       const response = await api.getUsers(params);

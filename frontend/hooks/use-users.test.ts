@@ -139,11 +139,30 @@ describe('useUsers', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // Assert
+    // Assert - default sort is 'reputation' when not explicitly provided
     expect(api.getUsers).toHaveBeenCalledWith({
       limit: 10,
       offset: 20,
-      sort: 'newest',
+      sort: 'reputation',
+    });
+  });
+
+  it('defaults to reputation sort when no sort option provided', async () => {
+    // Arrange
+    (api.getUsers as ReturnType<typeof vi.fn>).mockResolvedValue(mockUsersResponse);
+
+    // Act
+    const { result } = renderHook(() => useUsers());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Assert
+    expect(api.getUsers).toHaveBeenCalledWith({
+      limit: 20,
+      offset: 0,
+      sort: 'reputation',
     });
   });
 

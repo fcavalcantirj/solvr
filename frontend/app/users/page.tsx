@@ -161,7 +161,7 @@ function UsersList({ options = {} }: UsersListProps) {
 }
 
 export default function UsersPage() {
-  const [sort, setSort] = useState<SortOption>('newest');
+  const [sort, setSort] = useState<SortOption>('reputation');
   const options: UseUsersOptions = { sort, limit: 20 };
   const { users, loading, total } = useUsers(options);
 

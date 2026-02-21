@@ -1,3 +1,10 @@
+2026-02-21: PRD-v5 Frontend - Change /users page default sort from 'newest' to 'reputation'
+- Modified: frontend/hooks/use-users.ts — changed default sort from 'newest' to 'reputation' (lines 57, 71)
+- Modified: frontend/app/users/page.tsx — changed initial useState sort from 'newest' to 'reputation' (line 164)
+- Modified: frontend/hooks/use-users.test.ts — updated 'passes limit and offset' test to expect 'reputation' default
+- Added: new test 'defaults to reputation sort when no sort option provided' (11 total tests, all passing)
+- Verified: npm test — 96 files, 811 tests all passing
+
 2026-02-21: PRD-v5 Backend - Add platform-wide total_backed_agents to GET /v1/users response meta
 - Already implemented: Interface GetAggregateStats in UsersUserListRepositoryInterface (users.go:43)
 - Already implemented: TotalBackedAgents field in UsersListResponse.Meta (users.go:171)

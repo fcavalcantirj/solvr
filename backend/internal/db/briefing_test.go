@@ -740,3 +740,119 @@ func TestBriefing_Reputation_AcceptedAnswer(t *testing.T) {
 		t.Errorf("expected 'answer_accepted' event with delta 50, got: %+v", result.Breakdown)
 	}
 }
+
+// --- GetRecentCrystallizations ---
+
+func TestBriefing_Crystallizations_AgentOwnPost(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	defer cleanupBriefingTestData(t, pool, agentID, "")
+
+	// Create a solved problem posted by the agent with IPFS crystallization
+	postID := createBriefingPost(t, pool, "Agent crystallized problem", "problem", "solved", "agent", agentID, []string{"go"})
+
+	// Set crystallization fields on the post
+	_, err := pool.Exec(ctx,
+		`UPDATE posts SET crystallization_cid = $1, crystallized_at = NOW() WHERE id = $2`,
+		"bafybeiabc123testcid", postID)
+	if err != nil {
+		t.Fatalf("failed to set crystallization fields: %v", err)
+	}
+
+	repo := NewBriefingRepository(pool)
+	since := time.Now().Add(-1 * time.Hour)
+	events, err := repo.GetRecentCrystallizations(ctx, agentID, since)
+	if err != nil {
+		t.Fatalf("GetRecentCrystallizations failed: %v", err)
+	}
+
+	if len(events) != 1 {
+		t.Fatalf("expected 1 crystallization event, got %d", len(events))
+	}
+
+	if events[0].PostID != postID {
+		t.Errorf("expected post_id %s, got %s", postID, events[0].PostID)
+	}
+	if events[0].PostTitle != "Agent crystallized problem" {
+		t.Errorf("expected post_title 'Agent crystallized problem', got '%s'", events[0].PostTitle)
+	}
+	if events[0].CID != "bafybeiabc123testcid" {
+		t.Errorf("expected cid 'bafybeiabc123testcid', got '%s'", events[0].CID)
+	}
+	if events[0].CrystallizedAt == "" {
+		t.Error("expected non-empty crystallized_at")
+	}
+}
+
+func TestBriefing_Crystallizations_AgentApproach(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	userID := createBriefingUser(t, pool)
+	defer cleanupBriefingTestData(t, pool, agentID, userID)
+
+	// Create a solved problem posted by someone else
+	postID := createBriefingPost(t, pool, "Others crystallized problem", "problem", "solved", "human", userID, []string{"go"})
+
+	// Agent has a succeeded approach on this problem
+	_, err := pool.Exec(ctx,
+		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
+		 VALUES ($1, 'agent', $2, 'My winning approach', 'succeeded')`, postID, agentID)
+	if err != nil {
+		t.Fatalf("failed to create succeeded approach: %v", err)
+	}
+
+	// Set crystallization fields
+	_, err = pool.Exec(ctx,
+		`UPDATE posts SET crystallization_cid = $1, crystallized_at = NOW() WHERE id = $2`,
+		"bafybeicollabcid456", postID)
+	if err != nil {
+		t.Fatalf("failed to set crystallization fields: %v", err)
+	}
+
+	repo := NewBriefingRepository(pool)
+	since := time.Now().Add(-1 * time.Hour)
+	events, err := repo.GetRecentCrystallizations(ctx, agentID, since)
+	if err != nil {
+		t.Fatalf("GetRecentCrystallizations failed: %v", err)
+	}
+
+	if len(events) != 1 {
+		t.Fatalf("expected 1 crystallization event, got %d", len(events))
+	}
+
+	if events[0].PostID != postID {
+		t.Errorf("expected post_id %s, got %s", postID, events[0].PostID)
+	}
+	if events[0].CID != "bafybeicollabcid456" {
+		t.Errorf("expected cid 'bafybeicollabcid456', got '%s'", events[0].CID)
+	}
+}
+
+func TestBriefing_Crystallizations_Empty(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	defer cleanupBriefingTestData(t, pool, agentID, "")
+
+	// Create a post WITHOUT crystallization
+	createBriefingPost(t, pool, "Not crystallized", "problem", "solved", "agent", agentID, []string{"go"})
+
+	repo := NewBriefingRepository(pool)
+	since := time.Now().Add(-1 * time.Hour)
+	events, err := repo.GetRecentCrystallizations(ctx, agentID, since)
+	if err != nil {
+		t.Fatalf("GetRecentCrystallizations failed: %v", err)
+	}
+
+	if len(events) != 0 {
+		t.Errorf("expected 0 crystallization events, got %d", len(events))
+	}
+}

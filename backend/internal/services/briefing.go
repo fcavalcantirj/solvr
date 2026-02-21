@@ -76,6 +76,11 @@ type BriefingInferredSpecialtiesRepo interface {
 	InferSpecialtiesForAgent(ctx context.Context, agentID string) ([]string, error)
 }
 
+// BriefingCrystallizationsRepo fetches recent crystallization events for agent briefing.
+type BriefingCrystallizationsRepo interface {
+	GetRecentCrystallizations(ctx context.Context, agentID string, since time.Time) ([]models.CrystallizationEvent, error)
+}
+
 // BriefingDeps holds all repository dependencies for BriefingService.
 // New repos can be nil — sections are skipped when repo is nil.
 type BriefingDeps struct {
@@ -92,6 +97,7 @@ type BriefingDeps struct {
 	VictoriesRepo           BriefingVictoriesRepo
 	RecommendationsRepo     BriefingRecommendationsRepo
 	InferredSpecialtiesRepo BriefingInferredSpecialtiesRepo
+	CrystallizationsRepo   BriefingCrystallizationsRepo
 }
 
 // BriefingService aggregates inbox, open items, suggested actions, opportunities,
@@ -111,6 +117,7 @@ type BriefingService struct {
 	victoriesRepo           BriefingVictoriesRepo
 	recommendationsRepo     BriefingRecommendationsRepo
 	inferredSpecialtiesRepo BriefingInferredSpecialtiesRepo
+	crystallizationsRepo    BriefingCrystallizationsRepo
 }
 
 // NewBriefingService creates a new BriefingService with all required repositories.
@@ -149,6 +156,7 @@ func NewBriefingServiceWithDeps(deps BriefingDeps) *BriefingService {
 		victoriesRepo:           deps.VictoriesRepo,
 		recommendationsRepo:     deps.RecommendationsRepo,
 		inferredSpecialtiesRepo: deps.InferredSpecialtiesRepo,
+		crystallizationsRepo:    deps.CrystallizationsRepo,
 	}
 }
 
@@ -302,6 +310,16 @@ func (s *BriefingService) GetBriefingForAgent(ctx context.Context, agent *models
 			slog.Warn("briefing: recommendations fetch failed", "agent_id", agent.ID, "error", err)
 		} else {
 			briefing.YouMightLike = recs
+		}
+	}
+
+	// Section 12: Crystallizations
+	if s.crystallizationsRepo != nil {
+		crysts, err := s.crystallizationsRepo.GetRecentCrystallizations(ctx, agent.ID, since)
+		if err != nil {
+			slog.Warn("briefing: crystallizations fetch failed", "agent_id", agent.ID, "error", err)
+		} else {
+			briefing.Crystallizations = crysts
 		}
 	}
 

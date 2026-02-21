@@ -555,6 +555,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 				VictoriesRepo:           db.NewPlatformBriefingRepository(pool),
 				RecommendationsRepo:     db.NewRecommendationRepository(pool),
 				InferredSpecialtiesRepo: db.NewInferredSpecialtiesRepository(pool),
+				CrystallizationsRepo:   briefingRepo,
 			})
 			meHandler.SetBriefingService(briefingSvc)
 			meHandler.SetAgentFinderRepo(agentRepoConcrete)

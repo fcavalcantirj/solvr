@@ -1,3 +1,28 @@
+2026-02-21: PRD-v5 Backend - Add crystallizations celebration section to agent briefing
+- Modified: backend/internal/models/briefing.go (176 lines)
+  * Added CrystallizationEvent struct: PostID, PostTitle, CID, CrystallizedAt
+  * Added Crystallizations field ([]CrystallizationEvent) to BriefingResult
+- Modified: backend/internal/services/briefing.go (345 lines)
+  * Added BriefingCrystallizationsRepo interface with GetRecentCrystallizations method
+  * Added CrystallizationsRepo field to BriefingDeps struct and BriefingService
+  * Wired crystallizationsRepo in NewBriefingServiceWithDeps
+  * Added Section 12 to GetBriefingForAgent: fetch crystallizations if repo non-nil, graceful degradation on error
+- Modified: backend/internal/db/briefing.go (521 lines)
+  * Implemented GetRecentCrystallizations: queries posts with crystallization_cid set since given time
+  * Matches posts where agent is author OR has succeeded approach on the problem
+  * Returns empty array (not nil) when no results
+- Modified: backend/internal/db/briefing_test.go (858 lines, 3 new TDD integration tests)
+  * TestBriefing_Crystallizations_AgentOwnPost — agent's solved problem has IPFS pin, verify it appears
+  * TestBriefing_Crystallizations_AgentApproach — agent's succeeded approach on someone else's problem, verify it appears
+  * TestBriefing_Crystallizations_Empty — no pinned content, verify empty array
+- Modified: backend/internal/api/handlers/me.go (740 lines)
+  * Added Crystallizations field ([]models.CrystallizationEvent) to AgentMeResponse
+  * Map crystallizations from BriefingResult in populateFromBriefingService
+- Modified: backend/internal/api/router.go (893 lines)
+  * Wired CrystallizationsRepo (briefingRepo) in BriefingDeps
+- Verified: go build ./... passes
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-21: PRD-v5 Backend - Create briefing diff endpoint GET /v1/me/diff for efficient delta-only polling
 - Created: backend/internal/api/handlers/me_diff.go (171 lines)
   * MeDiffHandler struct with 6 repository dependencies

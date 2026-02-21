@@ -455,6 +455,57 @@ func formatDaysAgo(days int) string {
 	return fmt.Sprintf("%d days ago", days)
 }
 
+// GetRecentCrystallizations returns posts crystallized (pinned to IPFS) since the given time
+// where the agent is either the post author or has a succeeded approach on the problem.
+func (r *BriefingRepository) GetRecentCrystallizations(ctx context.Context, agentID string, since time.Time) ([]models.CrystallizationEvent, error) {
+	query := `
+		SELECT p.id, p.title, p.crystallization_cid, p.crystallized_at
+		FROM posts p
+		WHERE p.crystallized_at > $1
+			AND p.crystallization_cid IS NOT NULL
+			AND p.deleted_at IS NULL
+			AND (
+				p.posted_by_id = $2
+				OR EXISTS (
+					SELECT 1 FROM approaches a
+					WHERE a.problem_id = p.id
+						AND a.author_id = $2
+						AND a.status = 'succeeded'
+						AND a.deleted_at IS NULL
+				)
+			)
+		ORDER BY p.crystallized_at DESC
+	`
+
+	rows, err := r.pool.Query(ctx, query, since, agentID)
+	if err != nil {
+		LogQueryError(ctx, "GetRecentCrystallizations", "posts", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []models.CrystallizationEvent
+	for rows.Next() {
+		var event models.CrystallizationEvent
+		var crystallizedAt time.Time
+		if err := rows.Scan(&event.PostID, &event.PostTitle, &event.CID, &crystallizedAt); err != nil {
+			LogQueryError(ctx, "GetRecentCrystallizations.scan", "posts", err)
+			return nil, err
+		}
+		event.CrystallizedAt = crystallizedAt.Format(time.RFC3339)
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if events == nil {
+		events = []models.CrystallizationEvent{}
+	}
+
+	return events, nil
+}
+
 // sortByAgeDesc sorts OpenItem slice by AgeHours descending (oldest first).
 func sortByAgeDesc(items []models.OpenItem) {
 	// Simple insertion sort — items list is small (typically <30)

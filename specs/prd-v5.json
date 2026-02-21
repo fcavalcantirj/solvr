@@ -1907,7 +1907,7 @@
       "Verify: go test ./internal/db/briefing_test.go passes",
       "Verify: go test ./internal/services/... passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "skill",

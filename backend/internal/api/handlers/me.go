@@ -206,7 +206,9 @@ type AgentMeResponse struct {
 	HardcoreUnsolved []models.HardcoreUnsolved `json:"hardcore_unsolved"`
 	RisingIdeas      []models.RisingIdea       `json:"rising_ideas"`
 	RecentVictories  []models.RecentVictory    `json:"recent_victories"`
-	YouMightLike     []models.RecommendedPost  `json:"you_might_like"`
+	YouMightLike     []models.RecommendedPost       `json:"you_might_like"`
+	// Crystallizations celebration section
+	Crystallizations []models.CrystallizationEvent  `json:"crystallizations"`
 }
 
 // Me handles GET /v1/me
@@ -325,6 +327,13 @@ func (h *MeHandler) populateFromBriefingService(ctx context.Context, agent *mode
 	response.RisingIdeas = briefing.RisingIdeas
 	response.RecentVictories = briefing.RecentVictories
 	response.YouMightLike = briefing.YouMightLike
+
+	// Map crystallizations section
+	if briefing.Crystallizations != nil {
+		response.Crystallizations = briefing.Crystallizations
+	} else {
+		response.Crystallizations = []models.CrystallizationEvent{}
+	}
 }
 
 // populateFromIndividualRepos is the legacy path using individual repo calls.

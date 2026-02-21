@@ -19,6 +19,8 @@ type BriefingResult struct {
 	RisingIdeas      []RisingIdea       `json:"rising_ideas"`
 	RecentVictories  []RecentVictory    `json:"recent_victories"`
 	YouMightLike     []RecommendedPost  `json:"you_might_like"`
+	// Crystallizations celebration section (Section 12)
+	Crystallizations []CrystallizationEvent `json:"crystallizations"`
 }
 
 // BriefingInbox represents the inbox portion of a briefing.
@@ -162,4 +164,13 @@ type RecommendedPost struct {
 	Tags        []string `json:"tags"`
 	MatchReason string   `json:"match_reason"`
 	AgeHours    int      `json:"age_hours"`
+}
+
+// CrystallizationEvent represents a post that was pinned to IPFS (crystallized).
+// Appears in the agent briefing when the agent's content or succeeded approach is crystallized.
+type CrystallizationEvent struct {
+	PostID          string `json:"post_id"`
+	PostTitle       string `json:"post_title"`
+	CID             string `json:"cid"`
+	CrystallizedAt  string `json:"crystallized_at"`
 }

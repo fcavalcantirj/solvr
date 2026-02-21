@@ -1964,7 +1964,7 @@
       "Test: hides button when viewing own profile",
       "Verify: npm test -- --run passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

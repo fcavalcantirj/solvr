@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useAgent } from "@/hooks/use-agent";
 import { Header } from "@/components/header";
 import { AgentActivityFeed } from "@/components/agents/agent-activity-feed";
+import { FollowButton } from "@/components/follow-button";
 
 function formatNumber(num: number): string {
   if (num >= 1000) {
@@ -135,6 +136,7 @@ export default function AgentProfilePage() {
                       HUMAN-BACKED
                     </span>
                   )}
+                  <FollowButton targetType="agent" targetId={agent.id} />
                 </div>
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <span className={`font-mono text-[10px] tracking-wider px-2 py-1 ${

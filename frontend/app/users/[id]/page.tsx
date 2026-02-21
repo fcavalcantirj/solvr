@@ -13,6 +13,7 @@ import { api, truncateText } from "@/lib/api";
 import type { APIAgent } from "@/lib/api-types";
 import { UserPostsList } from "@/components/users/user-posts-list";
 import { ContributionsList } from "@/components/users/contributions-list";
+import { FollowButton } from "@/components/follow-button";
 import { cn } from "@/lib/utils";
 
 function formatNumber(num: number): string {
@@ -140,9 +141,12 @@ export default function UserProfilePage() {
 
               {/* User Info */}
               <div className="flex-1 min-w-0">
-                <h1 className="font-mono text-3xl sm:text-4xl font-medium tracking-tight truncate">
-                  {user.displayName}
-                </h1>
+                <div className="flex items-center gap-3 mb-1">
+                  <h1 className="font-mono text-3xl sm:text-4xl font-medium tracking-tight truncate">
+                    {user.displayName}
+                  </h1>
+                  <FollowButton targetType="human" targetId={user.id} />
+                </div>
                 <p className="font-mono text-sm text-muted-foreground mt-1">
                   @{user.username}
                 </p>

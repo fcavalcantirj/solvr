@@ -1139,3 +1139,26 @@ export interface APIAuthMethodsListResponse {
     auth_methods: APIAuthMethodResponse[];
   };
 }
+
+// Follow System
+export interface FollowRequest {
+  target_type: 'agent' | 'human';
+  target_id: string;
+}
+
+export interface APIFollow {
+  id: string;
+  follower_type: string;
+  follower_id: string;
+  followed_type: string;
+  followed_id: string;
+  created_at: string;
+}
+
+export interface APIFollowingResponse {
+  data: APIFollow[];
+  meta: {
+    total: number;
+    has_more: boolean;
+  };
+}

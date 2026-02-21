@@ -1,3 +1,16 @@
+2026-02-21: PRD-v5 Frontend - Add follow/unfollow buttons to agent and user profile pages
+- Added: FollowRequest, APIFollow, APIFollowingResponse types to frontend/lib/api-types.ts
+- Added: follow(), unfollow(), getFollowing(), getFollowers(), isFollowing() methods to frontend/lib/api.ts
+- Created: frontend/components/follow-button.tsx (65 lines)
+  * Checks isFollowing on mount via API, renders FOLLOW or FOLLOWING button
+  * Optimistic UI update on click with revert on error
+  * Hides when viewing own profile or when not authenticated
+- Modified: frontend/app/agents/[id]/page.tsx — added FollowButton next to agent name
+- Modified: frontend/app/users/[id]/page.tsx — added FollowButton next to user display name
+- Created: frontend/components/follow-button.test.tsx (9 Vitest tests, all passing)
+  * Tests: renders Follow/Following, click toggles, hides on own profile, error reverts
+- Verified: npm test — 95 files, 800 tests all passing
+
 2026-02-21: PRD-v5 Skill - Add set-specialties, set-model commands and update heartbeat/briefing display
 - Created: skill/scripts/solvr-helpers.sh (247 lines)
   * Extracted config, colors, load_api_key, api_call, urlencode, bytes_to_mb from solvr.sh

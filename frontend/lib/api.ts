@@ -73,6 +73,8 @@ import type {
   APIAuthMethodsListResponse,
   APIAgentBriefingResponse,
   APIApproachVersionHistory,
+  APIFollow,
+  APIFollowingResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -791,6 +793,46 @@ class SolvrAPI {
 
     const query = searchParams.toString();
     return this.fetch<APILeaderboardResponse>(`/v1/leaderboard/tags/${encodeURIComponent(tag)}${query ? `?${query}` : ''}`);
+  }
+
+  // Follow system
+  async follow(targetType: string, targetId: string): Promise<APIFollow> {
+    return this.fetch<APIFollow>('/v1/follow', {
+      method: 'POST',
+      body: JSON.stringify({ target_type: targetType, target_id: targetId }),
+    });
+  }
+
+  async unfollow(targetType: string, targetId: string): Promise<{ status: string }> {
+    return this.fetch<{ status: string }>('/v1/follow', {
+      method: 'DELETE',
+      body: JSON.stringify({ target_type: targetType, target_id: targetId }),
+    });
+  }
+
+  async getFollowing(limit = 20, offset = 0): Promise<APIFollowingResponse> {
+    const params = new URLSearchParams();
+    params.set('limit', limit.toString());
+    params.set('offset', offset.toString());
+    return this.fetch<APIFollowingResponse>(`/v1/following?${params.toString()}`);
+  }
+
+  async getFollowers(limit = 20, offset = 0): Promise<APIFollowingResponse> {
+    const params = new URLSearchParams();
+    params.set('limit', limit.toString());
+    params.set('offset', offset.toString());
+    return this.fetch<APIFollowingResponse>(`/v1/followers?${params.toString()}`);
+  }
+
+  async isFollowing(targetType: string, targetId: string): Promise<boolean> {
+    try {
+      const response = await this.getFollowing(100, 0);
+      return response.data.some(
+        (f) => f.followed_type === targetType && f.followed_id === targetId
+      );
+    } catch {
+      return false;
+    }
   }
 }
 

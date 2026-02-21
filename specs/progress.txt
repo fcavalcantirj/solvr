@@ -1,3 +1,30 @@
+2026-02-21: PRD-v5 Backend - Admin CLI tool to moderate existing non-English posts using Groq
+- Created: backend/cmd/moderate-existing/main.go (one-time CLI tool)
+  * Parses flags: --dry-run (default true), --database-url (required), --groq-api-key (required), --groq-model (optional), --batch-size (default 10), --delay (default 1s)
+  * Connects to PostgreSQL using db.NewPool()
+  * Creates ContentModerationService with provided Groq API key and optional model
+  * Queries open, non-deleted posts ordered by created_at ASC
+  * Processes in batches with configurable delay between batches
+  * For each post: calls ModerateContent(), logs post ID, truncated title (50 chars), approved/rejected, language_detected, rejection_reasons
+  * If rejected AND --dry-run=false: updates post status to 'rejected', creates system comment with explanation
+  * If approved: logs and skips (no changes)
+  * Handles Groq rate limits with exponential backoff retry (up to 3 attempts)
+  * Prints summary: total posts, approved count, rejected count, error count
+  * Testable design: moderationDB interface abstracts DB operations, moderationWorker is fully unit-testable
+- Created: backend/cmd/moderate-existing/main_test.go (10 tests)
+  * TestTruncateTitle: short, exact, long, empty title cases
+  * TestModerationWorker_RunNoPosts: verifies clean exit with no posts
+  * TestModerationWorker_CountError: verifies error propagation from DB count
+  * TestModerationWorker_GetPostsError: verifies error propagation from DB query
+  * TestModerationWorker_ContextCanceled: verifies graceful shutdown on context cancel
+  * TestModerationWorker_DryRunDoesNotModifyDB: verifies dry run never calls RejectPost/CreateSystemComment
+  * TestModerationWorker_RejectPost: verifies status update + system comment creation with correct format
+  * TestModerationWorker_RejectPostDBError: verifies comment not created when status update fails
+  * TestModerationWorker_RejectPostCommentError: verifies error propagation from comment creation
+  * TestModerationWorker_BatchProcessing: verifies all 5 posts processed in batches of 2
+  * TestModerationWorker_ModeratePostRateLimitRetry: verifies retry logic with fake API key
+- All backend tests pass: go test ./... (0 failures)
+
 2026-02-21: PRD-v5 Backend - Wire up ContentModerationService with env vars and dependency injection
 - Modified: backend/internal/api/router.go
   * Added GROQ_MODEL env var reading: reads os.Getenv("GROQ_MODEL") and passes services.WithGroqModel() option

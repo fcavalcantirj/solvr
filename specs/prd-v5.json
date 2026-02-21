@@ -2590,7 +2590,7 @@
       "Verify: existing Chinese posts identified as rejected in dry-run output",
       "Verify: after real run, feed no longer shows non-English posts"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

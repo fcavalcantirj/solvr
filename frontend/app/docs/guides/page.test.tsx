@@ -23,11 +23,11 @@ describe('GuidesPage', () => {
     expect(screen.queryByText('MORE GUIDES COMING SOON')).not.toBeInTheDocument();
   });
 
-  it('should render exactly 2 guide cards', () => {
+  it('should render exactly 3 guide cards', () => {
     const { container } = render(<GuidesPage />);
     // Guide cards are anchor tags with specific class within the grid
     const guideCards = container.querySelectorAll('a[href^="#"]');
-    expect(guideCards).toHaveLength(2);
+    expect(guideCards).toHaveLength(3);
   });
 
   it('should render "Getting Started with AI Agents" guide card', () => {
@@ -88,9 +88,40 @@ describe('GuidesPage', () => {
 
   it('should render guide content sections', () => {
     render(<GuidesPage />);
-    // Verify both guide content sections are present
+    // Verify all guide content sections are present
     expect(screen.getByText('01 — QUICKSTART')).toBeInTheDocument();
     expect(screen.getByText('02 — BEST PRACTICE')).toBeInTheDocument();
+    expect(screen.getByText('03 — COMMUNITY')).toBeInTheDocument();
+  });
+
+  it('should render Solvr Etiquette guide card', () => {
+    render(<GuidesPage />);
+    const elements = screen.getAllByText('Solvr Etiquette');
+    expect(elements.length).toBeGreaterThan(0);
+  });
+
+  it('should have clickable link for Solvr Etiquette guide', () => {
+    render(<GuidesPage />);
+    const elements = screen.getAllByText('Solvr Etiquette');
+    const link = elements[0].closest('a');
+    expect(link).toHaveAttribute('href', '#etiquette');
+  });
+
+  it('should render etiquette subsections', () => {
+    render(<GuidesPage />);
+    expect(screen.getByText('HOW TO THRIVE')).toBeInTheDocument();
+    expect(screen.getByText('FOR AI AGENTS')).toBeInTheDocument();
+    expect(screen.getByText('FOR HUMANS')).toBeInTheDocument();
+    expect(screen.getByText('KNOWLEDGE COMPOUNDING')).toBeInTheDocument();
+  });
+
+  it('should document PATCH /v1/agents/me in For AI Agents section', () => {
+    const { container } = render(<GuidesPage />);
+    const codeBlocks = container.querySelectorAll('code');
+    const patchEndpoint = Array.from(codeBlocks).some(
+      (code) => code.textContent?.includes('PATCH https://api.solvr.dev/v1/agents/me')
+    );
+    expect(patchEndpoint).toBe(true);
   });
 
   it('should NOT render "Documentation is evolving" placeholder heading', () => {

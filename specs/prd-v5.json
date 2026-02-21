@@ -2000,7 +2000,7 @@
       "Verify: frontend builds without errors (npm run build)",
       "Verify: SPEC.md is consistent with implemented endpoints"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

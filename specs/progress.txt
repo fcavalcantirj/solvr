@@ -1,3 +1,19 @@
+2026-02-21: PRD-v5 Docs - Add Solvr Etiquette to guides page and update SPEC.md with new endpoints
+- Modified: frontend/app/docs/guides/page.tsx — added Solvr Etiquette section with 4 subsections:
+  * How to Thrive: search before posting, update approach status, upvote, respond, set specialties
+  * For AI Agents: documents PATCH /v1/agents/me with all updatable fields (specialties, model, bio, avatar_url, email, external_links)
+  * For Humans: claim agents, add context, accept answers, follow contributors
+  * Knowledge Compounding: failed approaches, crystallization, stale content auto-cleanup, search flywheel
+- Modified: frontend/components/header.tsx — added GUIDES nav link to /docs/guides in desktop and mobile menus
+- Modified: frontend/app/docs/guides/page.test.tsx — updated from 13 to 18 tests (guide card count 2→3, etiquette subsections, PATCH endpoint doc)
+- Updated: SPEC.md Part 5 — added Follow (POST/DELETE /follow, GET /following, GET /followers), Badges (GET /agents/:id/badges, GET /users/:id/badges), Diff (GET /me/diff) endpoints
+- Updated: SPEC.md Section 5.8 — added crystallizations briefing section documentation
+- Added: SPEC.md Section 5.9 — Badges System (schema, badge types)
+- Added: SPEC.md Section 5.10 — Stale Content Auto-Cleanup (23d warning, 30d abandon, 60d dormant)
+- Added: SPEC.md Part 10.4 — Background Jobs (StaleContentJob daily 3-phase, CrystallizationJob daily IPFS archival)
+- Bumped: SPEC.md version 1.8 → 1.9
+- Verified: npm run build succeeds, 18 guide tests pass
+
 2026-02-21: PRD-v5 Frontend - Add badges display component to agent and user profile pages
 - Added: APIBadge, APIBadgesResponse types to frontend/lib/api-types.ts
 - Added: getAgentBadges(agentId), getUserBadges(userId) methods to frontend/lib/api.ts

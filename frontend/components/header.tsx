@@ -69,6 +69,12 @@ export function Header() {
             >
               SKILL
             </Link>
+            <Link
+              href="/docs/guides"
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              GUIDES
+            </Link>
             {isAuthenticated && user && (
               <Link
                 href="/dashboard"
@@ -140,6 +146,9 @@ export function Header() {
             </Link>
             <Link href="/skill" className="font-mono text-sm tracking-wider">
               SKILL
+            </Link>
+            <Link href="/docs/guides" className="font-mono text-sm tracking-wider">
+              GUIDES
             </Link>
             {isAuthenticated && user && (
               <Link href="/dashboard" className="font-mono text-sm tracking-wider">

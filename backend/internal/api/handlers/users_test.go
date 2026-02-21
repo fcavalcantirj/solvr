@@ -241,8 +241,9 @@ func TestGetUserAgents_MissingUserID(t *testing.T) {
 
 // MockUserListRepository implements user repository interface for list tests.
 type MockUserListRepository struct {
-	users []models.UserListItem
-	total int
+	users             []models.UserListItem
+	total             int
+	totalBackedAgents int
 }
 
 func NewMockUserListRepository() *MockUserListRepository {
@@ -262,6 +263,10 @@ func (m *MockUserListRepository) List(ctx context.Context, opts models.PublicUse
 		end = len(m.users)
 	}
 	return m.users[start:end], m.total, nil
+}
+
+func (m *MockUserListRepository) GetAggregateStats(ctx context.Context) (int, error) {
+	return m.totalBackedAgents, nil
 }
 
 // ============================================================================
@@ -777,5 +782,56 @@ func TestGetUserAgents_OrderedByComputedReputation(t *testing.T) {
 	}
 	if resp.Data[1].ID != "agent_low_rep" {
 		t.Errorf("expected second agent to be 'agent_low_rep' (rep 80), got '%s'", resp.Data[1].ID)
+	}
+}
+
+// ============================================================================
+// Tests for total_backed_agents in GET /v1/users response meta (prd-v5)
+// ============================================================================
+
+// TestListUsers_AggregateStats tests that the response meta includes total_backed_agents.
+// Per prd-v5: API must return platform-wide total_backed_agents in meta so frontend
+// can show accurate stats without summing the current page.
+func TestListUsers_AggregateStats(t *testing.T) {
+	userListRepo := NewMockUserListRepository()
+	handler := NewUsersHandler(nil, nil)
+	handler.SetUserListRepository(userListRepo)
+
+	now := time.Now()
+	userListRepo.users = []models.UserListItem{
+		{
+			ID:          "user-1",
+			Username:    "alice",
+			DisplayName: "Alice",
+			Reputation:  100,
+			AgentsCount: 2,
+			CreatedAt:   now,
+		},
+	}
+	userListRepo.total = 1
+	userListRepo.totalBackedAgents = 42
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/users", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ListUsers(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Data []models.UserListItem `json:"data"`
+		Meta struct {
+			Total             int `json:"total"`
+			TotalBackedAgents int `json:"total_backed_agents"`
+		} `json:"meta"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Meta.TotalBackedAgents != 42 {
+		t.Errorf("expected total_backed_agents 42, got %d", resp.Meta.TotalBackedAgents)
 	}
 }

@@ -37,8 +37,10 @@ type UsersAgentRepositoryInterface interface {
 
 // UsersUserListRepositoryInterface defines the user list repository operations.
 // Per prd-v4: GET /v1/users endpoint to list all users with pagination.
+// Per prd-v5: GetAggregateStats returns platform-wide total_backed_agents count.
 type UsersUserListRepositoryInterface interface {
 	List(ctx context.Context, opts models.PublicUserListOptions) ([]models.UserListItem, int, error)
+	GetAggregateStats(ctx context.Context) (int, error)
 }
 
 // UsersHandler handles user profile endpoints.
@@ -158,13 +160,15 @@ type UserAgentsResponse struct {
 
 // UsersListResponse is the response for GET /v1/users.
 // Per prd-v4: Return user list with public info, reputation, agents_count.
+// Per prd-v5: Meta includes total_backed_agents for platform-wide stats.
 type UsersListResponse struct {
 	Data []models.UserListItem `json:"data"`
 	Meta struct {
-		Total   int  `json:"total"`
-		Limit   int  `json:"limit"`
-		Offset  int  `json:"offset"`
-		HasMore bool `json:"has_more"`
+		Total             int  `json:"total"`
+		Limit             int  `json:"limit"`
+		Offset            int  `json:"offset"`
+		HasMore           bool `json:"has_more"`
+		TotalBackedAgents int  `json:"total_backed_agents"`
 	} `json:"meta"`
 }
 
@@ -294,6 +298,11 @@ func (h *UsersHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	resp.Meta.Limit = opts.Limit
 	resp.Meta.Offset = opts.Offset
 	resp.Meta.HasMore = total > opts.Offset+opts.Limit
+
+	// Per prd-v5: Include platform-wide total_backed_agents in meta
+	if totalBacked, err := h.userListRepo.GetAggregateStats(ctx); err == nil {
+		resp.Meta.TotalBackedAgents = totalBacked
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

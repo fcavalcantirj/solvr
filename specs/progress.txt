@@ -1,3 +1,12 @@
+2026-02-21: PRD-v5 Backend - Add platform-wide total_backed_agents to GET /v1/users response meta
+- Already implemented: Interface GetAggregateStats in UsersUserListRepositoryInterface (users.go:43)
+- Already implemented: TotalBackedAgents field in UsersListResponse.Meta (users.go:171)
+- Already implemented: Handler calls GetAggregateStats and sets meta (users.go:303-305)
+- Already implemented: DB query SELECT COUNT(*) FROM agents WHERE human_id IS NOT NULL (db/users.go:525-534)
+- Already implemented: Mock with totalBackedAgents field (users_test.go:246,268-270)
+- Already implemented: TestListUsers_AggregateStats test (users_test.go:795-837)
+- Verified: go test ./internal/api/handlers/ -run TestListUsers — all 7 tests passing
+
 2026-02-21: PRD-v5 Docs - Add Solvr Etiquette to guides page and update SPEC.md with new endpoints
 - Modified: frontend/app/docs/guides/page.tsx — added Solvr Etiquette section with 4 subsections:
   * How to Thrive: search before posting, update approach status, upvote, respond, set specialties

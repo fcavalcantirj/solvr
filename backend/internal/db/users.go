@@ -518,3 +518,17 @@ func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOpt
 
 	return users, total, nil
 }
+
+// GetAggregateStats returns platform-wide aggregate statistics.
+// Per prd-v5: Returns total number of agents with a claimed human (human_id IS NOT NULL).
+// Consistent with per-user subquery in List() which uses WHERE human_id = u.id.
+func (r *UserRepository) GetAggregateStats(ctx context.Context) (int, error) {
+	var total int
+	query := `SELECT COUNT(*) FROM agents WHERE human_id IS NOT NULL`
+	err := r.pool.QueryRow(ctx, query).Scan(&total)
+	if err != nil {
+		LogQueryError(ctx, "GetAggregateStats", "agents", err)
+		return 0, err
+	}
+	return total, nil
+}

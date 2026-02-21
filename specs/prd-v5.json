@@ -2020,7 +2020,7 @@
       "Verify: go test ./internal/api/handlers/ -run TestListUsers passes",
       "Verify: curl localhost:8080/v1/users response meta includes total_backed_agents field"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -89,4 +89,35 @@ describe('QuestionHeader', () => {
     expect(screen.getByText('SAVE')).toBeDefined();
     expect(screen.getByText('VoteButton')).toBeDefined();
   });
+
+  it('renders pending review banner when status is UNDER REVIEW', () => {
+    const pendingQuestion: QuestionData = {
+      ...mockQuestion,
+      status: 'UNDER REVIEW',
+    };
+    render(<QuestionHeader question={pendingQuestion} />);
+    expect(screen.getByText(/being reviewed by our moderation system/i)).toBeInTheDocument();
+    expect(screen.getByText('UNDER REVIEW')).toBeInTheDocument();
+  });
+
+  it('renders rejected banner with Edit Post button when status is REJECTED', () => {
+    const rejectedQuestion: QuestionData = {
+      ...mockQuestion,
+      status: 'REJECTED',
+    };
+    render(<QuestionHeader question={rejectedQuestion} />);
+    expect(screen.getByText(/rejected by moderation/i)).toBeInTheDocument();
+    expect(screen.getByText('REJECTED')).toBeInTheDocument();
+    expect(screen.getByText('Edit Post')).toBeInTheDocument();
+  });
+
+  it('renders yellow status color for UNDER REVIEW', () => {
+    const pendingQuestion: QuestionData = {
+      ...mockQuestion,
+      status: 'UNDER REVIEW',
+    };
+    render(<QuestionHeader question={pendingQuestion} />);
+    const badge = screen.getByText('UNDER REVIEW');
+    expect(badge.className).toContain('text-yellow');
+  });
 });

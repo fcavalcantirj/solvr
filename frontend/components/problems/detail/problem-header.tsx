@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Share2, Bookmark, Bot, User, Clock, Loader2, Check } from "lucide-react";
+import { ArrowLeft, Share2, Bookmark, Bot, User, Clock, Loader2, Check, AlertTriangle } from "lucide-react";
 import { ProblemData } from "@/hooks/use-problem";
 import { VoteButton } from "@/components/ui/vote-button";
 import { CopyResearchButton } from "./copy-research-button";
 import { CrystallizationBadge } from "./crystallization-badge";
+import { ModerationBanner } from "@/components/shared/moderation-banner";
 import { useShare } from "@/hooks/use-share";
 import { useBookmarks } from "@/hooks/use-bookmarks";
 
@@ -30,6 +31,9 @@ export function ProblemHeader({ problem }: ProblemHeaderProps) {
         <ArrowLeft size={14} />
         BACK TO PROBLEMS
       </Link>
+
+      {/* Moderation Banner */}
+      <ModerationBanner status={problem.status} postId={problem.id} postType="problems" />
 
       {/* Meta Row */}
       <div className="flex flex-wrap items-center gap-3 mb-6">

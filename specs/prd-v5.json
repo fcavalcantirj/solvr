@@ -2512,7 +2512,7 @@
       "Test: renders Edit Post button for rejected posts",
       "Verify: npm test -- --run passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

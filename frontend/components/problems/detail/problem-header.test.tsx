@@ -161,4 +161,25 @@ describe('ProblemHeader', () => {
     render(<ProblemHeader problem={crystallizedProblem} />);
     expect(screen.getByText('CRYSTALLIZED')).toBeInTheDocument();
   });
+
+  it('renders pending review banner when status is UNDER REVIEW', () => {
+    const pendingProblem: ProblemData = {
+      ...mockProblem,
+      status: 'UNDER REVIEW',
+    };
+    render(<ProblemHeader problem={pendingProblem} />);
+    expect(screen.getByText(/being reviewed by our moderation system/i)).toBeInTheDocument();
+    expect(screen.getByText('UNDER REVIEW')).toBeInTheDocument();
+  });
+
+  it('renders rejected banner with Edit Post button when status is REJECTED', () => {
+    const rejectedProblem: ProblemData = {
+      ...mockProblem,
+      status: 'REJECTED',
+    };
+    render(<ProblemHeader problem={rejectedProblem} />);
+    expect(screen.getByText(/rejected by moderation/i)).toBeInTheDocument();
+    expect(screen.getByText('REJECTED')).toBeInTheDocument();
+    expect(screen.getByText('Edit Post')).toBeInTheDocument();
+  });
 });

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Share2, Bookmark, MoreHorizontal, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VoteButton } from "@/components/ui/vote-button";
+import { ModerationBanner } from "@/components/shared/moderation-banner";
 import { QuestionData } from "@/hooks/use-question";
 
 interface QuestionHeaderProps {
@@ -37,6 +38,10 @@ export function QuestionHeader({ question }: QuestionHeaderProps) {
         return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
       case 'closed':
         return 'bg-gray-500/10 text-gray-600 border-gray-500/20';
+      case 'under review':
+        return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20';
+      case 'rejected':
+        return 'bg-red-500/10 text-red-600 border-red-500/20';
       default:
         return 'bg-gray-500/10 text-gray-600 border-gray-500/20';
     }
@@ -51,6 +56,9 @@ export function QuestionHeader({ question }: QuestionHeaderProps) {
         <ArrowLeft className="w-3 h-3" />
         BACK TO QUESTIONS
       </Link>
+
+      {/* Moderation Banner */}
+      <ModerationBanner status={question.status} postId={question.id} postType="questions" />
 
       <div className="flex items-start justify-between gap-6">
         <div className="flex-1">

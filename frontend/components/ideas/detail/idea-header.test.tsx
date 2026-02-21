@@ -187,4 +187,25 @@ describe('IdeaHeader', () => {
     expect(svg).toBeTruthy();
     expect(bookmarkButton.classList.toString()).toContain('text-foreground');
   });
+
+  it('renders pending review banner when status is UNDER REVIEW', () => {
+    const pendingIdea: IdeaData = {
+      ...mockIdea,
+      status: 'UNDER REVIEW',
+    };
+    render(<IdeaHeader idea={pendingIdea} />);
+    expect(screen.getByText(/being reviewed by our moderation system/i)).toBeInTheDocument();
+    expect(screen.getByText('UNDER REVIEW')).toBeInTheDocument();
+  });
+
+  it('renders rejected banner with Edit Post button when status is REJECTED', () => {
+    const rejectedIdea: IdeaData = {
+      ...mockIdea,
+      status: 'REJECTED',
+    };
+    render(<IdeaHeader idea={rejectedIdea} />);
+    expect(screen.getByText(/rejected by moderation/i)).toBeInTheDocument();
+    expect(screen.getByText('REJECTED')).toBeInTheDocument();
+    expect(screen.getByText('Edit Post')).toBeInTheDocument();
+  });
 });

@@ -1,3 +1,37 @@
+2026-02-21: PRD-v5 Frontend - Display pending_review and rejected post statuses in feed and post detail pages
+- Modified: frontend/lib/api.ts
+  * Added 'pending_review' → 'UNDER REVIEW' and 'rejected' → 'REJECTED' to mapStatus()
+- Modified: frontend/components/feed/feed-list.tsx
+  * Added 'UNDER REVIEW' (yellow-500 dot, text-yellow-600) and 'REJECTED' (red-500 dot, text-red-600 font-medium) to statusConfig
+- Created: frontend/components/shared/moderation-banner.tsx
+  * Shared ModerationBanner component for all post detail pages
+  * Pending review: yellow border, clock icon, "being reviewed by our moderation system" message
+  * Rejected: red border, alert icon, "rejected by moderation" message with Edit Post link
+- Modified: frontend/components/problems/detail/problem-header.tsx
+  * Added ModerationBanner import and rendering after breadcrumb
+- Modified: frontend/components/questions/detail/question-header.tsx
+  * Added ModerationBanner import and rendering after breadcrumb
+  * Added 'under review' (yellow) and 'rejected' (red) cases to getStatusColor()
+- Modified: frontend/components/ideas/detail/idea-header.tsx
+  * Added ModerationBanner import and rendering after breadcrumb
+  * Added getIdeaStatusColor() function for status-based badge coloring (previously hardcoded blue)
+- Created: frontend/components/feed/__tests__/moderation-status.test.tsx (4 tests)
+  * renders 'UNDER REVIEW' badge for pending_review status
+  * renders 'REJECTED' badge for rejected status
+  * renders yellow dot for UNDER REVIEW status
+  * renders red dot for REJECTED status
+- Modified: frontend/components/problems/detail/problem-header.test.tsx (+2 tests)
+  * renders pending review banner when status is UNDER REVIEW
+  * renders rejected banner with Edit Post button when status is REJECTED
+- Modified: frontend/components/questions/detail/question-header.test.tsx (+3 tests)
+  * renders pending review banner when status is UNDER REVIEW
+  * renders rejected banner with Edit Post button when status is REJECTED
+  * renders yellow status color for UNDER REVIEW
+- Modified: frontend/components/ideas/detail/idea-header.test.tsx (+2 tests)
+  * renders pending review banner when status is UNDER REVIEW
+  * renders rejected banner with Edit Post button when status is REJECTED
+- All frontend tests pass: npm test (99 files, 860 tests, 0 failures)
+
 2026-02-21: PRD-v5 Docs - Add content policy section to SKILL.md so agents know rules before posting
 - Modified: ~/.claude/skills/solvr/SKILL.md
   * Added '## Content Policy' section immediately before '## The Workflow' section

@@ -902,6 +902,8 @@ export function mapStatus(status: string): string {
     'solved': 'SOLVED',
     'stuck': 'STUCK',
     'answered': 'ANSWERED',
+    'pending_review': 'UNDER REVIEW',
+    'rejected': 'REJECTED',
   };
   return statusMap[status.toLowerCase()] || status.toUpperCase();
 }

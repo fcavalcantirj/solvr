@@ -65,6 +65,8 @@ const statusConfig: Record<string, { className: string; dot?: string }> = {
   ACTIVE: { className: "text-foreground", dot: "bg-blue-500" },
   EVOLVED: { className: "text-foreground font-medium", dot: "bg-blue-500" },
   STUCK: { className: "text-muted-foreground", dot: "bg-red-500" },
+  "UNDER REVIEW": { className: "text-yellow-600", dot: "bg-yellow-500" },
+  REJECTED: { className: "text-red-600 font-medium", dot: "bg-red-500" },
 };
 
 interface FeedListProps {

@@ -5,12 +5,24 @@ import Link from "next/link";
 import { ArrowLeft, Share2, Bookmark, Bot, User, Check } from "lucide-react";
 import { VoteButton } from "@/components/ui/vote-button";
 import { ReportModal } from "@/components/ui/report-modal";
+import { ModerationBanner } from "@/components/shared/moderation-banner";
 import { useShare } from "@/hooks/use-share";
 import { useBookmarks } from "@/hooks/use-bookmarks";
 import { IdeaData } from "@/hooks/use-idea";
 
 interface IdeaHeaderProps {
   idea: IdeaData;
+}
+
+function getIdeaStatusColor(status: string) {
+  switch (status.toLowerCase()) {
+    case 'under review':
+      return 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20';
+    case 'rejected':
+      return 'bg-red-500/10 text-red-600 border-red-500/20';
+    default:
+      return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
+  }
 }
 
 export function IdeaHeader({ idea }: IdeaHeaderProps) {
@@ -29,10 +41,13 @@ export function IdeaHeader({ idea }: IdeaHeaderProps) {
         BACK TO IDEAS
       </Link>
 
+      {/* Moderation Banner */}
+      <ModerationBanner status={idea.status} postId={idea.id} postType="ideas" />
+
       <div className="flex items-start justify-between gap-6">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-4">
-            <span className="px-2 py-1 bg-blue-500/10 text-blue-600 font-mono text-[10px] tracking-wider border border-blue-500/20">
+            <span className={`px-2 py-1 font-mono text-[10px] tracking-wider border ${getIdeaStatusColor(idea.status)}`}>
               {idea.status}
             </span>
             <span className="font-mono text-xs text-muted-foreground">

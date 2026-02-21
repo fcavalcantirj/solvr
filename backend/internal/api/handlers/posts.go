@@ -17,7 +17,6 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 // Pagination constants per SPEC.md Part 5.6
@@ -524,6 +523,16 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Status guard — only allow editing if status is editable
+	switch existingPost.Status {
+	case models.PostStatusOpen, models.PostStatusRejected, models.PostStatusPendingReview, models.PostStatusDraft:
+		// Allowed
+	default:
+		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR",
+			fmt.Sprintf("Cannot edit post with status %s", existingPost.Status))
+		return
+	}
+
 	// Parse request body
 	var req UpdatePostRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -571,8 +580,21 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		updatedPost.Status = newStatus
 	}
 
-	// Regenerate embedding if title or description changed
+	// Determine if content (title/description) was changed
 	contentChanged := req.Title != nil || req.Description != nil
+
+	// Re-moderation: if content changed and status is open, rejected, or pending_review,
+	// set status to pending_review and trigger async moderation
+	needsReModeration := contentChanged && h.contentModService != nil &&
+		(existingPost.Status == models.PostStatusOpen ||
+			existingPost.Status == models.PostStatusRejected ||
+			existingPost.Status == models.PostStatusPendingReview)
+
+	if needsReModeration {
+		updatedPost.Status = models.PostStatusPendingReview
+	}
+
+	// Regenerate embedding if title or description changed
 	if contentChanged && h.embeddingService != nil {
 		embedCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
@@ -597,6 +619,11 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		response.WriteInternalErrorWithLog(w, "failed to update post", err, ctx, h.logger)
 		return
+	}
+
+	// Trigger async re-moderation if content was changed
+	if needsReModeration {
+		go h.moderatePostAsync(postID, updatedPost.Title, updatedPost.Description, updatedPost.Tags, string(updatedPost.Type), string(authInfo.AuthorType), authInfo.AuthorID)
 	}
 
 	writePostsJSON(w, http.StatusOK, map[string]interface{}{
@@ -797,145 +824,4 @@ func (h *PostsHandler) GetMyVote(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// writePostsJSON writes a JSON response.
-func writePostsJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
 
-// float32SliceToVectorString converts a float32 slice to PostgreSQL vector literal format.
-// Example: [0.1, 0.2, 0.3] -> "[0.1,0.2,0.3]"
-func float32SliceToVectorString(v []float32) string {
-	if len(v) == 0 {
-		return "[]"
-	}
-	s := "["
-	for i, f := range v {
-		if i > 0 {
-			s += ","
-		}
-		s += fmt.Sprintf("%g", f)
-	}
-	s += "]"
-	return s
-}
-
-// moderatePostAsync runs content moderation asynchronously with retry logic.
-// Uses context.Background() with 30s timeout (not request context).
-func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags []string, postType, authorType, authorID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	input := ModerationInput{
-		Title:       title,
-		Description: description,
-		Tags:        tags,
-	}
-
-	maxAttempts := len(h.retryDelays)
-	attempt := 0
-
-	for attempt < maxAttempts {
-		result, err := h.contentModService.ModerateContent(ctx, input)
-		if err != nil {
-			// Rate limit errors: sleep and retry without counting as attempt
-			var rateLimitErr RateLimitError
-			if errors.As(err, &rateLimitErr) {
-				retryAfter := rateLimitErr.GetRetryAfter()
-				h.logger.Warn("moderation rate limited, retrying", "postID", postID, "retryAfter", retryAfter)
-				time.Sleep(retryAfter)
-				continue
-			}
-
-			// Other errors: count as attempt and use exponential backoff
-			attempt++
-			h.logger.Warn("moderation attempt failed", "postID", postID, "attempt", attempt, "error", err)
-			if attempt < maxAttempts {
-				time.Sleep(h.retryDelays[attempt-1])
-				continue
-			}
-
-			// All retries exhausted
-			h.logger.Error("moderation failed after all retries", "postID", postID, "attempts", attempt)
-			if h.flagCreator != nil {
-				parsedID, parseErr := uuid.Parse(postID)
-				if parseErr != nil {
-					h.logger.Error("invalid post ID for flag creation", "postID", postID, "error", parseErr)
-					return
-				}
-				flag := &models.Flag{
-					TargetType:   "post",
-					TargetID:     parsedID,
-					ReporterType: "system",
-					ReporterID:   "content-moderation",
-					Reason:       "moderation_failed",
-					Details:      fmt.Sprintf("Content moderation failed after %d attempts: %v", attempt, err),
-					Status:       "pending",
-				}
-				if _, flagErr := h.flagCreator.CreateFlag(ctx, flag); flagErr != nil {
-					h.logger.Error("failed to create moderation failure flag", "postID", postID, "error", flagErr)
-				}
-			}
-			return
-		}
-
-		// Moderation succeeded - update status
-		if h.statusUpdater == nil {
-			h.logger.Error("no status updater configured", "postID", postID)
-			return
-		}
-
-		var newStatus models.PostStatus
-		if result.Approved {
-			newStatus = models.PostStatusOpen
-		} else {
-			newStatus = models.PostStatusRejected
-		}
-
-		if err := h.statusUpdater.UpdateStatus(ctx, postID, newStatus); err != nil {
-			h.logger.Error("failed to update post status after moderation", "postID", postID, "status", newStatus, "error", err)
-		}
-
-		// Create system comment explaining the moderation decision
-		if h.commentRepo != nil {
-			var commentContent string
-			if result.Approved {
-				commentContent = "Post approved by Solvr moderation. Your post is now visible in the feed."
-			} else {
-				commentContent = fmt.Sprintf("Post rejected by Solvr moderation.\n\nReason: %s\n\nYou can edit your post and resubmit for review.", result.Explanation)
-			}
-
-			comment := &models.Comment{
-				TargetType: models.CommentTargetPost,
-				TargetID:   postID,
-				AuthorType: models.AuthorTypeSystem,
-				AuthorID:   "solvr-moderator",
-				Content:    commentContent,
-			}
-			if _, commentErr := h.commentRepo.Create(ctx, comment); commentErr != nil {
-				h.logger.Error("failed to create moderation comment", "postID", postID, "error", commentErr)
-			}
-		}
-
-		// Send notification to post author about moderation result
-		if h.notifService != nil {
-			if notifErr := h.notifService.NotifyOnModerationResult(ctx, postID, title, postType, authorType, authorID, result.Approved, result.Explanation); notifErr != nil {
-				h.logger.Error("failed to send moderation notification", "postID", postID, "error", notifErr)
-			}
-		}
-		return
-	}
-}
-
-// writePostsError writes an error JSON response.
-func writePostsError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":    code,
-			"message": message,
-		},
-	})
-}

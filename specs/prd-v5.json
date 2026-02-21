@@ -2461,7 +2461,7 @@
       "Test: TestUpdatePost_OpenTagsOnlyNoReModeration \u2014 edit only tags on open post, verify no re-moderation triggered (tags-only change stays open)",
       "Verify: go test ./internal/api/handlers/... -run TestUpdatePost passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

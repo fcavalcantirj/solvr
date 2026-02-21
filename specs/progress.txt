@@ -1,3 +1,22 @@
+2026-02-21: PRD-v5 Backend - Add re-moderation on content edit and status guard to PATCH /v1/posts/:id
+- Modified: backend/internal/api/handlers/posts.go
+  * Added status guard after ownership check: only allow editing if status in (open, rejected, pending_review, draft)
+  * Returns 400 "Cannot edit post with status {status}" for solved/answered/closed/stale/etc
+  * Added re-moderation logic: if title or description changed AND status was open/rejected/pending_review, sets status to pending_review and triggers moderatePostAsync goroutine
+  * Tags-only changes do NOT trigger re-moderation (status stays unchanged)
+- Created: backend/internal/api/handlers/posts_helpers.go (extracted from posts.go)
+  * Moved writePostsJSON, writePostsError, float32SliceToVectorString helper functions
+  * Keeps posts.go under ~900 line limit
+- Created: backend/internal/api/handlers/posts_moderation.go (extracted from posts.go)
+  * Moved moderatePostAsync function to separate file
+- Modified: backend/internal/api/handlers/posts_update_test.go (5 new tests)
+  * TestUpdatePost_CannotEditSolved — editing solved post returns 400
+  * TestUpdatePost_CannotEditAnswered — editing answered question returns 400
+  * TestUpdatePost_RejectedTriggersReModeration — edit rejected post, status becomes pending_review, moderation triggered
+  * TestUpdatePost_OpenContentChangeTriggersReModeration — edit open post title, status becomes pending_review, moderation triggered
+  * TestUpdatePost_OpenTagsOnlyNoReModeration — tags-only edit on open post, status stays open, no moderation triggered
+- All backend tests pass: go test ./...
+
 2026-02-21: PRD-v5 Backend - Send notifications to post authors on moderation approval/rejection
 - Modified: backend/internal/services/notification.go
   * Added NotificationTypePostApproved = "post.approved" constant

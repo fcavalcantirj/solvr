@@ -35,6 +35,8 @@ type MockPinRepository struct {
 	updatedSizeID    string
 	updatedSizeBytes int64
 	updatedSizeSt    models.PinStatus
+	// List options tracking
+	lastListOpts *models.PinListOptions
 }
 
 func NewMockPinRepository() *MockPinRepository {
@@ -76,6 +78,7 @@ func (m *MockPinRepository) GetByCID(ctx context.Context, cid, ownerID string) (
 }
 
 func (m *MockPinRepository) ListByOwner(ctx context.Context, ownerID, ownerType string, opts models.PinListOptions) ([]models.Pin, int, error) {
+	m.lastListOpts = &opts
 	if m.listErr != nil {
 		return nil, 0, m.listErr
 	}

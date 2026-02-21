@@ -70,11 +70,12 @@ type Pin struct {
 
 // PinListOptions contains options for listing pins.
 type PinListOptions struct {
-	CID    string    // Filter by CID
-	Name   string    // Filter by name (exact match)
-	Status PinStatus // Filter by status
-	Limit  int       // Max results (default 10, max 1000)
-	Offset int       // Offset for pagination
+	CID    string            // Filter by CID
+	Name   string            // Filter by name (exact match)
+	Status PinStatus         // Filter by status
+	Meta   map[string]string // Filter by meta JSONB containment (@>)
+	Limit  int               // Max results (default 10, max 1000)
+	Offset int               // Offset for pagination
 }
 
 // PinResponse represents the Pinning Service API response format.

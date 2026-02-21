@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
 	"github.com/fcavalcantirj/solvr/internal/auth"
@@ -112,6 +114,17 @@ func (h *PinsHandler) ListAgentPins(w http.ResponseWriter, r *http.Request, agen
 		Name:   r.URL.Query().Get("name"),
 		Status: models.PinStatus(r.URL.Query().Get("status")),
 	}
+
+	// Parse meta filter (JSON-encoded string per IPFS Pinning Service API spec)
+	if metaStr := r.URL.Query().Get("meta"); metaStr != "" {
+		meta, err := parseMetaParam(metaStr)
+		if err != nil {
+			response.WriteError(w, http.StatusBadRequest, response.ErrCodeValidation, err.Error())
+			return
+		}
+		opts.Meta = meta
+	}
+
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		limit, err := strconv.Atoi(limitStr)
 		if err != nil || limit < 1 {
@@ -193,11 +206,21 @@ func (h *PinsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Auto-generate pin name if not provided
+	name := req.Name
+	if name == "" {
+		cidPrefix := req.CID
+		if len(cidPrefix) > 8 {
+			cidPrefix = cidPrefix[:8]
+		}
+		name = fmt.Sprintf("pin_%s_%s", cidPrefix, time.Now().UTC().Format("20060102"))
+	}
+
 	// Build pin model
 	pin := &models.Pin{
 		CID:       req.CID,
 		Status:    models.PinStatusQueued,
-		Name:      req.Name,
+		Name:      name,
 		Origins:   req.Origins,
 		Meta:      req.Meta,
 		Delegates: []string{},
@@ -327,6 +350,16 @@ func (h *PinsHandler) List(w http.ResponseWriter, r *http.Request) {
 		CID:    r.URL.Query().Get("cid"),
 		Name:   r.URL.Query().Get("name"),
 		Status: models.PinStatus(r.URL.Query().Get("status")),
+	}
+
+	// Parse meta filter (JSON-encoded string per IPFS Pinning Service API spec)
+	if metaStr := r.URL.Query().Get("meta"); metaStr != "" {
+		meta, err := parseMetaParam(metaStr)
+		if err != nil {
+			response.WriteError(w, http.StatusBadRequest, response.ErrCodeValidation, err.Error())
+			return
+		}
+		opts.Meta = meta
 	}
 
 	// Parse limit (default 10, max 1000)
@@ -476,4 +509,32 @@ func isAlnumLower(s string) bool {
 		}
 	}
 	return true
+}
+
+// parseMetaParam parses a JSON-encoded meta query parameter into a map.
+// Validates: must be valid JSON object with string-only values, max 10 keys,
+// max 256 chars per value.
+func parseMetaParam(metaStr string) (map[string]string, error) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(metaStr), &raw); err != nil {
+		return nil, fmt.Errorf("meta must be a valid JSON object")
+	}
+
+	if len(raw) > 10 {
+		return nil, fmt.Errorf("meta must have at most 10 keys")
+	}
+
+	meta := make(map[string]string, len(raw))
+	for k, v := range raw {
+		str, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("meta values must be strings")
+		}
+		if len(str) > 256 {
+			return nil, fmt.Errorf("meta values must be at most 256 characters")
+		}
+		meta[k] = str
+	}
+
+	return meta, nil
 }

@@ -3,6 +3,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -137,6 +138,14 @@ func (r *PinRepository) ListByOwner(ctx context.Context, ownerID, ownerType stri
 		conditions = append(conditions, fmt.Sprintf("status = $%d", argNum))
 		args = append(args, string(opts.Status))
 		argNum++
+	}
+	if len(opts.Meta) > 0 {
+		metaJSON, err := json.Marshal(opts.Meta)
+		if err == nil {
+			conditions = append(conditions, fmt.Sprintf("meta @> $%d::jsonb", argNum))
+			args = append(args, string(metaJSON))
+			argNum++
+		}
 	}
 
 	whereClause := strings.Join(conditions, " AND ")

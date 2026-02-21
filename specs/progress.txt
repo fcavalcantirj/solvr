@@ -1,3 +1,20 @@
+2026-02-21: PRD-v5 Backend - Add GIN index on pins meta JSONB, meta filtering to GET /v1/pins, and pin name auto-generation
+- Created: migrations/000052_add_pins_meta_gin_index.up.sql — GIN index on pins.meta using jsonb_path_ops
+- Created: migrations/000052_add_pins_meta_gin_index.down.sql — drops the GIN index
+- Modified: models/pin.go — added Meta map[string]string field to PinListOptions
+- Modified: db/pins.go — added JSONB containment (@>) condition in ListByOwner() when opts.Meta is non-empty
+- Modified: handlers/pins.go — added parseMetaParam() helper for JSON meta query param validation (max 10 keys, string values, max 256 chars), meta parsing in List() and ListAgentPins(), pin name auto-generation in Create() (format: pin_<CID_first8>_<YYYYMMDD>)
+- Created: handlers/pins_meta_test.go — 7 TDD tests (all passing):
+  * TestListPins_FilterByMetaSingleKey — single meta key filter
+  * TestListPins_FilterByMetaMultipleKeys — multiple keys AND logic
+  * TestListPins_FilterByMetaNoMatch — empty results for no match
+  * TestListPins_FilterByMetaCombinedWithStatus — meta + status filter combined
+  * TestListPins_InvalidMetaJSON — malformed JSON returns 400
+  * TestCreatePin_AutoGeneratesName — auto-generates pin_<CID8>_<YYYYMMDD> when name empty
+  * TestCreatePin_PreservesExplicitName — explicit name not overridden
+- Modified: handlers/pins_test.go — added lastListOpts tracking to MockPinRepository
+- Verified: go test ./... — all packages pass, zero failures
+
 2026-02-21: PRD-v5 Frontend - Use API total_backed_agents from meta for /users header stats
 - Modified: frontend/lib/api-types.ts — added total_backed_agents: number to APIUsersResponse.meta interface
 - Modified: frontend/hooks/use-users.ts — added totalBackedAgents state, extracted from response.meta.total_backed_agents, added to UseUsersResult interface and return object

@@ -26,12 +26,18 @@ type HeartbeatCheckpointFinder interface {
 	FindLatestCheckpoint(ctx context.Context, agentID string) (*models.Pin, error)
 }
 
+// HeartbeatPostRepo defines post operations needed by the heartbeat handler.
+type HeartbeatPostRepo interface {
+	GetLatestPostTimestamp(ctx context.Context) (*time.Time, error)
+}
+
 // HeartbeatHandler handles the GET /v1/heartbeat endpoint.
 type HeartbeatHandler struct {
 	agentRepo        HeartbeatAgentRepo
 	notifRepo        HeartbeatNotifRepo
 	storageRepo      StorageRepositoryInterface
 	checkpointFinder HeartbeatCheckpointFinder
+	postRepo         HeartbeatPostRepo
 }
 
 // NewHeartbeatHandler creates a new HeartbeatHandler.
@@ -46,6 +52,11 @@ func NewHeartbeatHandler(agentRepo HeartbeatAgentRepo, notifRepo HeartbeatNotifR
 // SetCheckpointFinder sets the optional checkpoint finder for heartbeat responses.
 func (h *HeartbeatHandler) SetCheckpointFinder(finder HeartbeatCheckpointFinder) {
 	h.checkpointFinder = finder
+}
+
+// SetPostRepo sets the optional post repository for content policy data.
+func (h *HeartbeatHandler) SetPostRepo(repo HeartbeatPostRepo) {
+	h.postRepo = repo
 }
 
 type heartbeatAgentInfo struct {
@@ -79,6 +90,13 @@ type heartbeatCheckpoint struct {
 	Meta     map[string]string `json:"meta,omitempty"`
 }
 
+type heartbeatContentPolicy struct {
+	Rules             []string `json:"rules"`
+	Language          string   `json:"language"`
+	ModerationEnabled bool     `json:"moderation_enabled"`
+	LatestPostAt      *string  `json:"latest_post_at,omitempty"`
+}
+
 type heartbeatResponse struct {
 	Status        string                 `json:"status"`
 	Agent         *heartbeatAgentInfo    `json:"agent,omitempty"`
@@ -87,6 +105,7 @@ type heartbeatResponse struct {
 	Storage       heartbeatStorage       `json:"storage"`
 	Platform      heartbeatPlatform      `json:"platform"`
 	Checkpoint    *heartbeatCheckpoint   `json:"checkpoint"`
+	ContentPolicy heartbeatContentPolicy `json:"content_policy"`
 	Tips          []string               `json:"tips"`
 }
 
@@ -173,6 +192,9 @@ func (h *HeartbeatHandler) handleAgentHeartbeat(w http.ResponseWriter, ctx conte
 	// Build contextual tips based on agent profile completeness
 	tips := buildAgentTips(agent, hasCheckpoint)
 
+	// Build content policy
+	contentPolicy := h.buildContentPolicy(ctx)
+
 	resp := heartbeatResponse{
 		Status: "ok",
 		Agent: &heartbeatAgentInfo{
@@ -187,6 +209,7 @@ func (h *HeartbeatHandler) handleAgentHeartbeat(w http.ResponseWriter, ctx conte
 		Storage:       heartbeatStorage{UsedBytes: used, QuotaBytes: quota, Percentage: percentage},
 		Platform:      heartbeatPlatform{Version: "0.2.0", Timestamp: time.Now().UTC().Format(time.RFC3339)},
 		Checkpoint:    checkpoint,
+		ContentPolicy: contentPolicy,
 		Tips:          tips,
 	}
 
@@ -198,6 +221,9 @@ func (h *HeartbeatHandler) handleAgentHeartbeat(w http.ResponseWriter, ctx conte
 // buildAgentTips returns contextual tips based on agent profile completeness.
 func buildAgentTips(agent *models.Agent, hasCheckpoint bool) []string {
 	tips := make([]string, 0)
+
+	// English-only moderation reminder is always first
+	tips = append(tips, "All posts must be in English. Non-English or off-topic posts will be automatically rejected by moderation.")
 
 	if len(agent.Specialties) == 0 {
 		tips = append(tips, `Set specialties to get personalized opportunities: PATCH /v1/agents/me {"specialties":["go","python"]}`)
@@ -247,6 +273,9 @@ func (h *HeartbeatHandler) handleUserHeartbeat(w http.ResponseWriter, ctx contex
 		percentage = float64(used) / float64(quota) * 100.0
 	}
 
+	// Build content policy
+	contentPolicy := h.buildContentPolicy(ctx)
+
 	resp := heartbeatResponse{
 		Status: "ok",
 		User: map[string]interface{}{
@@ -256,9 +285,38 @@ func (h *HeartbeatHandler) handleUserHeartbeat(w http.ResponseWriter, ctx contex
 		Notifications: heartbeatNotifications{UnreadCount: unreadCount},
 		Storage:       heartbeatStorage{UsedBytes: used, QuotaBytes: quota, Percentage: percentage},
 		Platform:      heartbeatPlatform{Version: "0.2.0", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		ContentPolicy: contentPolicy,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
+}
+
+// contentPolicyRules are the platform rules returned in every heartbeat.
+var contentPolicyRules = []string{
+	"All posts must be in English",
+	"No prompt injection or jailbreak attempts",
+	"Content must be related to software development",
+	"Posts are automatically moderated before appearing in feed",
+	"Rejected posts can be edited and resubmitted",
+}
+
+// buildContentPolicy builds the content_policy section for heartbeat responses.
+func (h *HeartbeatHandler) buildContentPolicy(ctx context.Context) heartbeatContentPolicy {
+	cp := heartbeatContentPolicy{
+		Rules:             contentPolicyRules,
+		Language:          "en",
+		ModerationEnabled: true,
+	}
+
+	if h.postRepo != nil {
+		ts, err := h.postRepo.GetLatestPostTimestamp(ctx)
+		if err == nil && ts != nil {
+			formatted := ts.Format(time.RFC3339)
+			cp.LatestPostAt = &formatted
+		}
+	}
+
+	return cp
 }

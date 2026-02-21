@@ -650,6 +650,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// Heartbeat endpoint — agent/user check-in with aggregated status
 			heartbeatHandler := handlers.NewHeartbeatHandler(agentRepo, notificationsRepo, storageRepo)
 			heartbeatHandler.SetCheckpointFinder(pinsRepoConcrete)
+			if pr, ok := postsRepo.(handlers.HeartbeatPostRepo); ok {
+				heartbeatHandler.SetPostRepo(pr)
+			}
 			r.Get("/heartbeat", heartbeatHandler.Heartbeat)
 
 			// BE-003: User profile endpoints

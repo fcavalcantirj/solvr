@@ -849,3 +849,18 @@ func (r *PostRepository) UpdateStatus(ctx context.Context, postID string, status
 
 	return nil
 }
+
+// GetLatestPostTimestamp returns the most recent created_at timestamp from open, non-deleted posts.
+// Returns nil if no posts exist.
+func (r *PostRepository) GetLatestPostTimestamp(ctx context.Context) (*time.Time, error) {
+	query := `SELECT MAX(created_at) FROM posts WHERE status = 'open' AND deleted_at IS NULL`
+
+	var ts *time.Time
+	err := r.pool.QueryRow(ctx, query).Scan(&ts)
+	if err != nil {
+		LogQueryError(ctx, "GetLatestPostTimestamp", "posts", err)
+		return nil, fmt.Errorf("get latest post timestamp failed: %w", err)
+	}
+
+	return ts, nil
+}

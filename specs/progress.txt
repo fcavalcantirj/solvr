@@ -1,3 +1,30 @@
+2026-02-21: PRD-v5 Backend - Add content_policy field to heartbeat response with platform rules and data freshness
+- Modified: backend/internal/api/handlers/heartbeat.go
+  * Added heartbeatContentPolicy struct: Rules []string, Language string, ModerationEnabled bool, LatestPostAt *string (omitempty)
+  * Added ContentPolicy field to heartbeatResponse struct
+  * Added HeartbeatPostRepo interface: GetLatestPostTimestamp(ctx) (*time.Time, error)
+  * Added postRepo field to HeartbeatHandler, SetPostRepo() setter
+  * Added buildContentPolicy() method: builds content policy with 5 rules, language='en', moderation_enabled=true
+  * Queries LatestPostAt via postRepo (graceful degradation if nil or error)
+  * Both handleAgentHeartbeat and handleUserHeartbeat now populate ContentPolicy
+  * Added English-only moderation reminder as FIRST tip in buildAgentTips() (unconditional)
+  * Added contentPolicyRules package-level var for the 5 platform rules
+- Modified: backend/internal/db/posts.go
+  * Added GetLatestPostTimestamp(): SELECT MAX(created_at) FROM posts WHERE status='open' AND deleted_at IS NULL
+- Modified: backend/internal/api/router.go
+  * Wired postsRepo to heartbeatHandler via SetPostRepo when type assertion succeeds
+- Modified: backend/internal/api/handlers/heartbeat_test.go (7 new tests + 1 updated)
+  * Added MockHeartbeatPostRepo mock
+  * TestHeartbeat_HasContentPolicy — content_policy with 5 rules
+  * TestHeartbeat_ModerationEnabled — moderation_enabled is true
+  * TestHeartbeat_LanguageEN — language is 'en'
+  * TestHeartbeat_EnglishTipFirst — first agent tip is English-only moderation reminder
+  * TestHeartbeat_ContentPolicy_LatestPostAt — latest_post_at present when postRepo returns timestamp
+  * TestHeartbeat_ContentPolicy_LatestPostAtNil — latest_post_at omitted when nil
+  * TestHeartbeat_UserHeartbeat_HasContentPolicy — user heartbeat also includes content_policy
+  * Updated TestHeartbeat_Agent_NoTipsWhenFullyConfigured — expects 1 tip (English moderation) instead of 0
+- All backend tests pass: go test ./...
+
 2026-02-21: PRD-v5 Backend - Add re-moderation on content edit and status guard to PATCH /v1/posts/:id
 - Modified: backend/internal/api/handlers/posts.go
   * Added status guard after ownership check: only allow editing if status in (open, rejected, pending_review, draft)

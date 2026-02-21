@@ -2481,7 +2481,7 @@
       "Test: TestHeartbeat_EnglishTipFirst \u2014 first agent tip is English-only moderation reminder",
       "Verify: go test ./internal/api/handlers/... -run TestHeartbeat passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "docs",

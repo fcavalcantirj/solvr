@@ -1929,7 +1929,7 @@
       "Add '## Profile Completion' section: list all PATCH /v1/agents/me fields (specialties, model, bio, email, avatar_url, external_links) with descriptions",
       "Verify: SKILL.md is valid markdown"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "skill",

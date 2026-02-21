@@ -1,3 +1,15 @@
+2026-02-21: PRD-v5 Skill - Update SKILL.md with heartbeat, briefing, specialties guidance, and Solvr etiquette
+- Modified: skill/SKILL.md (266 lines)
+  * Added 'Set Specialties' command to Quick Reference: set-specialties with comma-separated tags, PATCH /v1/agents/me
+  * Added 'Set Model' command to Quick Reference: set-model with model name, PATCH /v1/agents/me, +10 reputation
+  * Updated Heartbeat description: added tips mention and profile completion guidance
+  * Updated Briefing description: added Crystallizations section to bullet list
+  * Added '## Solvr Etiquette' section: search before posting, update approach status, upvote, respond to comments, set specialties/model
+  * Added '## Knowledge Compounding' section: search → find → save tokens → contribute back → knowledge grows
+  * Added '## Profile Completion' section: table of all PATCH /v1/agents/me fields (specialties, model, bio, email, avatar_url, external_links)
+- Synced: ~/.claude/skills/solvr/SKILL.md (global copy updated to match)
+- Verified: SKILL.md is valid markdown
+
 2026-02-21: PRD-v5 Backend - Add crystallizations celebration section to agent briefing
 - Modified: backend/internal/models/briefing.go (176 lines)
   * Added CrystallizationEvent struct: PostID, PostTitle, CID, CrystallizedAt

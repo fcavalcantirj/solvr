@@ -2675,7 +2675,7 @@
       "Verify: cd backend && go test ./internal/db/... -run TestFindByID_WithViewerVote",
       "Verify: cd backend && go test ./... (ALL existing tests pass — no regressions)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

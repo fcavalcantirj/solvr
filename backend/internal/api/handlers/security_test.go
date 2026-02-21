@@ -371,6 +371,10 @@ func (m *mockPostsRepo) FindByID(ctx context.Context, id string) (*models.PostWi
 	return nil, db.ErrPostNotFound
 }
 
+func (m *mockPostsRepo) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error) {
+	return m.FindByID(ctx, id)
+}
+
 func (m *mockPostsRepo) Create(ctx context.Context, post *models.Post) (*models.Post, error) {
 	if m.createFunc != nil {
 		return m.createFunc(ctx, post)

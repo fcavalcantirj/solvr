@@ -3546,3 +3546,183 @@ func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
 		t.Errorf("Ideas: expected CommentsCount = 1, got %d", foundIdea.CommentsCount)
 	}
 }
+
+func TestPostRepository_List_WithViewerVote(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	ctx := context.Background()
+
+	// Create a post
+	post := &models.Post{
+		Type:         models.PostTypeProblem,
+		Title:        "List ViewerVote Test",
+		Description:  "Testing user_vote in List results",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent_viewer_vote",
+		Status:       models.PostStatusOpen,
+	}
+
+	createdPost, err := repo.Create(ctx, post)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM votes WHERE target_id = $1", createdPost.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", createdPost.ID)
+	}()
+
+	// Vote on it as voter-A (upvote)
+	err = repo.Vote(ctx, createdPost.ID, "agent", "viewer_vote_agent_a", "up")
+	if err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
+
+	// List with viewer info — should show user_vote = "up"
+	posts, _, err := repo.List(ctx, models.PostListOptions{
+		Page:       1,
+		PerPage:    100,
+		ViewerType: models.AuthorTypeAgent,
+		ViewerID:   "viewer_vote_agent_a",
+	})
+	if err != nil {
+		t.Fatalf("List() with viewer error = %v", err)
+	}
+
+	var found *models.PostWithAuthor
+	for i := range posts {
+		if posts[i].ID == createdPost.ID {
+			found = &posts[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("expected to find created post in list results")
+	}
+	if found.UserVote == nil {
+		t.Fatal("expected UserVote to be non-nil for authenticated viewer who voted")
+	}
+	if *found.UserVote != "up" {
+		t.Errorf("expected UserVote = 'up', got '%s'", *found.UserVote)
+	}
+
+	// List without viewer info — should have nil UserVote
+	postsAnon, _, err := repo.List(ctx, models.PostListOptions{
+		Page:    1,
+		PerPage: 100,
+	})
+	if err != nil {
+		t.Fatalf("List() anonymous error = %v", err)
+	}
+
+	var foundAnon *models.PostWithAuthor
+	for i := range postsAnon {
+		if postsAnon[i].ID == createdPost.ID {
+			foundAnon = &postsAnon[i]
+			break
+		}
+	}
+	if foundAnon == nil {
+		t.Fatal("expected to find created post in anonymous list results")
+	}
+	if foundAnon.UserVote != nil {
+		t.Errorf("expected UserVote to be nil for anonymous viewer, got '%s'", *foundAnon.UserVote)
+	}
+
+	// List with a different viewer — should have nil UserVote
+	postsOther, _, err := repo.List(ctx, models.PostListOptions{
+		Page:       1,
+		PerPage:    100,
+		ViewerType: models.AuthorTypeAgent,
+		ViewerID:   "viewer_vote_agent_b",
+	})
+	if err != nil {
+		t.Fatalf("List() other viewer error = %v", err)
+	}
+
+	var foundOther *models.PostWithAuthor
+	for i := range postsOther {
+		if postsOther[i].ID == createdPost.ID {
+			foundOther = &postsOther[i]
+			break
+		}
+	}
+	if foundOther == nil {
+		t.Fatal("expected to find created post for other viewer")
+	}
+	if foundOther.UserVote != nil {
+		t.Errorf("expected UserVote to be nil for non-voter, got '%s'", *foundOther.UserVote)
+	}
+}
+
+func TestPostRepository_FindByID_WithViewerVote(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	ctx := context.Background()
+
+	// Create a post
+	post := &models.Post{
+		Type:         models.PostTypeQuestion,
+		Title:        "FindByID ViewerVote Test",
+		Description:  "Testing user_vote in FindByID result",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent_findbyid_vote",
+		Status:       models.PostStatusOpen,
+	}
+
+	createdPost, err := repo.Create(ctx, post)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM votes WHERE target_id = $1", createdPost.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", createdPost.ID)
+	}()
+
+	// Vote as user-A (downvote)
+	err = repo.Vote(ctx, createdPost.ID, "human", "findbyid_voter_human", "down")
+	if err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
+
+	// FindByID with viewer info — should show user_vote = "down"
+	found, err := repo.FindByIDForViewer(ctx, createdPost.ID, models.AuthorTypeHuman, "findbyid_voter_human")
+	if err != nil {
+		t.Fatalf("FindByIDForViewer() error = %v", err)
+	}
+	if found.UserVote == nil {
+		t.Fatal("expected UserVote to be non-nil for viewer who voted")
+	}
+	if *found.UserVote != "down" {
+		t.Errorf("expected UserVote = 'down', got '%s'", *found.UserVote)
+	}
+
+	// FindByID without viewer info — should have nil UserVote
+	foundAnon, err := repo.FindByID(ctx, createdPost.ID)
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+	if foundAnon.UserVote != nil {
+		t.Errorf("expected UserVote to be nil for anonymous FindByID, got '%s'", *foundAnon.UserVote)
+	}
+
+	// FindByID with non-voter — should have nil UserVote
+	foundOther, err := repo.FindByIDForViewer(ctx, createdPost.ID, models.AuthorTypeAgent, "some_other_agent")
+	if err != nil {
+		t.Fatalf("FindByIDForViewer() other error = %v", err)
+	}
+	if foundOther.UserVote != nil {
+		t.Errorf("expected UserVote to be nil for non-voter, got '%s'", *foundOther.UserVote)
+	}
+}

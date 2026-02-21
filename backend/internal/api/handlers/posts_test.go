@@ -54,6 +54,10 @@ func (m *MockPostsRepository) FindByID(ctx context.Context, id string) (*models.
 	return m.post, nil
 }
 
+func (m *MockPostsRepository) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error) {
+	return m.FindByID(ctx, id)
+}
+
 func (m *MockPostsRepository) Create(ctx context.Context, post *models.Post) (*models.Post, error) {
 	if m.err != nil {
 		return nil, m.err

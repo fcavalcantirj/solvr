@@ -148,6 +148,7 @@ type PostWithAuthor struct {
 	AnswersCount    int        `json:"answers_count"`
 	ApproachesCount int        `json:"approaches_count"`
 	CommentsCount   int        `json:"comments_count"`
+	UserVote        *string    `json:"user_vote,omitempty"`
 }
 
 // PostListOptions contains options for listing posts.
@@ -162,6 +163,8 @@ type PostListOptions struct {
 	Sort          string     // Sort order: "newest" (default), "votes", "approaches"
 	Page          int        // Page number (1-indexed)
 	PerPage       int        // Results per page
+	ViewerType    AuthorType // Optional: authenticated viewer's type for user_vote lookup
+	ViewerID      string     // Optional: authenticated viewer's ID for user_vote lookup
 }
 
 // ValidPostTypes returns all valid post types.

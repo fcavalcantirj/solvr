@@ -660,6 +660,10 @@ func (m *MockPostsRepositoryForIntegration) FindByID(ctx context.Context, id str
 	return post, nil
 }
 
+func (m *MockPostsRepositoryForIntegration) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error) {
+	return m.FindByID(ctx, id)
+}
+
 func (m *MockPostsRepositoryForIntegration) Create(ctx context.Context, post *models.Post) (*models.Post, error) {
 	m.postCounter++
 	post.ID = "integration-post-" + string(rune('0'+m.postCounter))

@@ -1,3 +1,28 @@
+2026-02-21: PRD-v5 Backend - Add user_vote field to PostWithAuthor and extend List/FindByID with LEFT JOIN on votes
+- Modified: backend/internal/models/post.go
+  * Added UserVote *string `json:"user_vote,omitempty"` field to PostWithAuthor struct
+  * Added ViewerType AuthorType and ViewerID string fields to PostListOptions struct
+- Modified: backend/internal/db/posts.go
+  * Updated List() query: conditionally adds LEFT JOIN votes when ViewerType+ViewerID provided, otherwise SELECT NULL::text
+  * Updated scanPostWithAuthorRows() to scan 26th column (user_vote_direction) into post.UserVote
+  * Refactored FindByID() into findByIDInternal() shared by FindByID() and new FindByIDForViewer()
+  * Added FindByIDForViewer(ctx, id, viewerType, viewerID) method with LEFT JOIN votes
+  * Both methods return UserVote=nil when no viewer info provided (backward compatible)
+- Modified: backend/internal/api/handlers/posts.go
+  * Added FindByIDForViewer to PostsRepositoryInterface
+- Modified: backend/internal/api/handlers/posts_test.go (mock)
+  * Added FindByIDForViewer method to MockPostsRepository
+- Modified: backend/internal/api/handlers/security_test.go (mock)
+  * Added FindByIDForViewer method to mockPostsRepo
+- Modified: backend/internal/api/handlers/posts_integration_test.go (mock)
+  * Added FindByIDForViewer method to MockPostsRepositoryForIntegration
+- Modified: backend/internal/api/handlers/questions_test.go (mock)
+  * Added FindByIDForViewer method to MockPostsRepositoryForQuestions
+- Added: backend/internal/db/posts_test.go
+  * TestPostRepository_List_WithViewerVote: integration test for List with viewer vote (up vote, anonymous, non-voter)
+  * TestPostRepository_FindByID_WithViewerVote: integration test for FindByIDForViewer (down vote, anonymous, non-voter)
+- All backend tests pass: go test ./... (0 failures)
+
 2026-02-21: PRD-v5 Frontend - Skip getMyVote API calls when user is not authenticated
 - Modified: frontend/hooks/use-vote.ts
   * Imported useAuth from '@/hooks/use-auth'

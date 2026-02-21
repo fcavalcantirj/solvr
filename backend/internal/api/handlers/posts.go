@@ -71,6 +71,9 @@ type PostsRepositoryInterface interface {
 	// FindByID returns a single post by ID.
 	FindByID(ctx context.Context, id string) (*models.PostWithAuthor, error)
 
+	// FindByIDForViewer returns a single post by ID with the viewer's vote direction.
+	FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error)
+
 	// Create creates a new post and returns it.
 	Create(ctx context.Context, post *models.Post) (*models.Post, error)
 

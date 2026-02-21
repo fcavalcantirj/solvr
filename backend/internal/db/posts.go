@@ -174,6 +174,18 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		orderClause = "COALESCE(ans_cnt.cnt, 0) DESC, p.created_at DESC"
 	}
 
+	// Build viewer vote column and JOIN
+	var viewerVoteColumn, viewerVoteJoin string
+	if opts.ViewerType != "" && opts.ViewerID != "" {
+		viewerVoteColumn = "v.direction as user_vote_direction"
+		viewerVoteJoin = fmt.Sprintf(`LEFT JOIN votes v ON v.target_type = 'post' AND v.target_id = p.id AND v.voter_type = $%d AND v.voter_id = $%d`, argNum, argNum+1)
+		args = append(args, string(opts.ViewerType), opts.ViewerID)
+		argNum += 2
+	} else {
+		viewerVoteColumn = "NULL::text as user_vote_direction"
+		viewerVoteJoin = ""
+	}
+
 	// Main query with LEFT JOINs for author information and pre-aggregated counts.
 	// Uses LEFT JOIN subqueries instead of correlated subqueries to avoid per-row execution.
 	query := fmt.Sprintf(`
@@ -188,7 +200,8 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
 			COALESCE(ans_cnt.cnt, 0) as answers_count,
 			COALESCE(app_cnt.cnt, 0) as approaches_count,
-			COALESCE(cmt_cnt.cnt, 0) as comments_count
+			COALESCE(cmt_cnt.cnt, 0) as comments_count,
+			%s
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
@@ -208,10 +221,11 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			WHERE target_type = 'post' AND deleted_at IS NULL
 			GROUP BY target_id
 		) cmt_cnt ON cmt_cnt.target_id = p.id
+		%s
 		WHERE %s%s
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, whereClause, answerCountFilter, orderClause, argNum, argNum+1)
+	`, viewerVoteColumn, viewerVoteJoin, whereClause, answerCountFilter, orderClause, argNum, argNum+1)
 
 	args = append(args, perPage, offset)
 
@@ -247,6 +261,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 
 // scanPostWithAuthorRows scans a row into a PostWithAuthor struct.
 // Used for queries that include LEFT JOINs for author information.
+// Expects 26 columns: 20 post fields + 2 author fields + 3 counts + 1 user_vote_direction.
 func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWithAuthor, error) {
 	var post models.PostWithAuthor
 	var authorDisplayName, authorAvatarURL string
@@ -277,6 +292,7 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 		&post.AnswersCount,
 		&post.ApproachesCount,
 		&post.CommentsCount,
+		&post.UserVote,
 	)
 	if err != nil {
 		return nil, err
@@ -420,8 +436,33 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 
 // FindByID returns a single post by ID with author information.
 // Returns ErrPostNotFound if the post doesn't exist or is soft-deleted.
+// UserVote is always nil (no viewer context). Use FindByIDForViewer for authenticated lookups.
 func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {
-	query := `
+	return r.findByIDInternal(ctx, id, "", "")
+}
+
+// FindByIDForViewer returns a single post by ID with the viewer's vote included.
+// If viewerType/viewerID are empty, behaves identically to FindByID.
+func (r *PostRepository) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error) {
+	return r.findByIDInternal(ctx, id, viewerType, viewerID)
+}
+
+// findByIDInternal is the shared implementation for FindByID and FindByIDForViewer.
+func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error) {
+	var viewerVoteColumn, viewerVoteJoin string
+	var args []any
+
+	if viewerType != "" && viewerID != "" {
+		viewerVoteColumn = "v.direction as user_vote_direction"
+		viewerVoteJoin = "LEFT JOIN votes v ON v.target_type = 'post' AND v.target_id = p.id AND v.voter_type = $2 AND v.voter_id = $3"
+		args = []any{id, string(viewerType), viewerID}
+	} else {
+		viewerVoteColumn = "NULL::text as user_vote_direction"
+		viewerVoteJoin = ""
+		args = []any{id}
+	}
+
+	query := fmt.Sprintf(`
 		SELECT
 			p.id, p.type, p.title, p.description, p.tags,
 			p.posted_by_type, p.posted_by_id, p.status,
@@ -433,7 +474,8 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
 			COALESCE(ans_cnt.cnt, 0) as answers_count,
 			COALESCE(app_cnt.cnt, 0) as approaches_count,
-			COALESCE(cmt_cnt.cnt, 0) as comments_count
+			COALESCE(cmt_cnt.cnt, 0) as comments_count,
+			%s
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
@@ -453,10 +495,11 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 			WHERE target_type = 'post' AND deleted_at IS NULL
 			GROUP BY target_id
 		) cmt_cnt ON cmt_cnt.target_id = p.id
+		%s
 		WHERE p.id = $1 AND p.deleted_at IS NULL
-	`
+	`, viewerVoteColumn, viewerVoteJoin)
 
-	row := r.pool.QueryRow(ctx, query, id)
+	row := r.pool.QueryRow(ctx, query, args...)
 
 	var post models.PostWithAuthor
 	var authorDisplayName, authorAvatarURL string
@@ -487,6 +530,7 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 		&post.AnswersCount,
 		&post.ApproachesCount,
 		&post.CommentsCount,
+		&post.UserVote,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -494,7 +538,6 @@ func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostW
 			return nil, ErrPostNotFound
 		}
 		// FIX-007: Invalid UUID format should return ErrPostNotFound (404), not 500.
-		// This makes behavior consistent: any invalid or non-existent post ID returns 404.
 		if isInvalidUUIDError(err) {
 			slog.Debug("invalid UUID format", "op", "FindByID", "table", "posts", "id", id)
 			return nil, ErrPostNotFound

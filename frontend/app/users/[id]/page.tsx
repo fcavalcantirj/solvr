@@ -14,6 +14,7 @@ import type { APIAgent } from "@/lib/api-types";
 import { UserPostsList } from "@/components/users/user-posts-list";
 import { ContributionsList } from "@/components/users/contributions-list";
 import { FollowButton } from "@/components/follow-button";
+import { BadgesDisplay } from "@/components/badges-display";
 import { cn } from "@/lib/utils";
 
 function formatNumber(num: number): string {
@@ -155,6 +156,9 @@ export default function UserProfilePage() {
                     {user.bio}
                   </p>
                 )}
+                <div className="mt-3">
+                  <BadgesDisplay ownerType="human" ownerId={user.id} />
+                </div>
               </div>
             </div>
 

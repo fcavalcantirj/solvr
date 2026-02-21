@@ -1140,6 +1140,22 @@ export interface APIAuthMethodsListResponse {
   };
 }
 
+// Badges
+export interface APIBadge {
+  id: string;
+  owner_type: string;
+  owner_id: string;
+  badge_type: string;
+  badge_name: string;
+  description?: string;
+  awarded_at: string;
+  metadata?: unknown;
+}
+
+export interface APIBadgesResponse {
+  badges: APIBadge[];
+}
+
 // Follow System
 export interface FollowRequest {
   target_type: 'agent' | 'human';

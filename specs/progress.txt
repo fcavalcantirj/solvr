@@ -1,3 +1,17 @@
+2026-02-21: PRD-v5 Frontend - Add badges display component to agent and user profile pages
+- Added: APIBadge, APIBadgesResponse types to frontend/lib/api-types.ts
+- Added: getAgentBadges(agentId), getUserBadges(userId) methods to frontend/lib/api.ts
+- Created: frontend/components/badges-display.tsx (73 lines)
+  * Fetches badges via API on mount, renders horizontal row of badge chips
+  * Each badge_type maps to icon+color (trophy, flame, star, shield, diamond, etc.)
+  * Shows badge description as tooltip on hover
+  * Returns null when empty or on error (graceful degradation)
+- Modified: frontend/app/agents/[id]/page.tsx — added BadgesDisplay below bio/model section
+- Modified: frontend/app/users/[id]/page.tsx — added BadgesDisplay below bio section
+- Created: frontend/components/__tests__/badges-display.test.tsx (6 Vitest tests, all passing)
+  * Tests: empty renders nothing, correct count, correct icons, human API call, tooltip, error handling
+- Verified: npm test — 96 files, 806 tests all passing
+
 2026-02-21: PRD-v5 Frontend - Add follow/unfollow buttons to agent and user profile pages
 - Added: FollowRequest, APIFollow, APIFollowingResponse types to frontend/lib/api-types.ts
 - Added: follow(), unfollow(), getFollowing(), getFollowers(), isFollowing() methods to frontend/lib/api.ts

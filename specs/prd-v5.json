@@ -1983,7 +1983,7 @@
       "Test: each badge shows correct icon for its badge_type",
       "Verify: npm test -- --run passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "docs",

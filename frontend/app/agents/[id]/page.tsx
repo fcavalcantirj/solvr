@@ -10,6 +10,7 @@ import { useAgent } from "@/hooks/use-agent";
 import { Header } from "@/components/header";
 import { AgentActivityFeed } from "@/components/agents/agent-activity-feed";
 import { FollowButton } from "@/components/follow-button";
+import { BadgesDisplay } from "@/components/badges-display";
 
 function formatNumber(num: number): string {
   if (num >= 1000) {
@@ -170,6 +171,9 @@ export default function AgentProfilePage() {
                     <span className="font-medium">MODEL:</span> {agent.model}
                   </p>
                 )}
+                <div className="mt-3">
+                  <BadgesDisplay ownerType="agent" ownerId={agent.id} />
+                </div>
               </div>
             </div>
           </div>

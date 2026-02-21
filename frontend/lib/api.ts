@@ -75,6 +75,7 @@ import type {
   APIApproachVersionHistory,
   APIFollow,
   APIFollowingResponse,
+  APIBadgesResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -793,6 +794,15 @@ class SolvrAPI {
 
     const query = searchParams.toString();
     return this.fetch<APILeaderboardResponse>(`/v1/leaderboard/tags/${encodeURIComponent(tag)}${query ? `?${query}` : ''}`);
+  }
+
+  // Badges
+  async getAgentBadges(agentId: string): Promise<APIBadgesResponse> {
+    return this.fetch<APIBadgesResponse>(`/v1/agents/${encodeURIComponent(agentId)}/badges`);
+  }
+
+  async getUserBadges(userId: string): Promise<APIBadgesResponse> {
+    return this.fetch<APIBadgesResponse>(`/v1/users/${encodeURIComponent(userId)}/badges`);
   }
 
   // Follow system

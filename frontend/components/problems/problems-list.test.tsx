@@ -184,6 +184,33 @@ describe('ProblemsList', () => {
     expect(screen.getAllByText('VoteButton').length).toBeGreaterThan(0);
   });
 
+  it('passes userVote to VoteButton from problem data', () => {
+    const problemWithVote = {
+      ...mockProblem,
+      userVote: 'up' as const,
+    };
+
+    vi.mocked(useProblems).mockReturnValue({
+      problems: [problemWithVote],
+      loading: false,
+      error: null,
+      total: 1,
+      hasMore: false,
+      page: 1,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<ProblemsList />);
+
+    // Both VoteButtons (desktop + mobile) should receive userVote='up'
+    const voteButtons = screen.getAllByTestId('vote-button-problem-123');
+    expect(voteButtons.length).toBe(2);
+    for (const btn of voteButtons) {
+      expect(btn.getAttribute('data-initial-user-vote')).toBe('up');
+    }
+  });
+
   it('renders VoteButton for each problem in the list', () => {
     const secondProblem = {
       ...mockProblem,

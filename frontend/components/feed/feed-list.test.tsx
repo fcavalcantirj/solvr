@@ -120,6 +120,78 @@ function hoverPost(index: number) {
   fireEvent.mouseEnter(articles[index]);
 }
 
+describe('FeedList userVote pass-through', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('passes userVote from post data to VoteButton', async () => {
+    // Override usePosts mock to include userVote data
+    const { usePosts } = await import('@/hooks/use-posts');
+    vi.mocked(usePosts).mockReturnValue({
+      posts: [
+        {
+          id: 'post-1',
+          type: 'problem',
+          title: 'Test Problem',
+          snippet: 'Test snippet',
+          tags: ['go', 'testing'],
+          author: { name: 'TestUser', type: 'human' },
+          time: '2h ago',
+          votes: 5,
+          responses: 3,
+          comments: 7,
+          views: 42,
+          status: 'OPEN',
+          isPinned: false,
+          isHot: false,
+          userVote: 'up' as const,
+        },
+        {
+          id: 'post-2',
+          type: 'question',
+          title: 'Test Question',
+          snippet: 'Another snippet',
+          tags: ['typescript'],
+          author: { name: 'AgentBot', type: 'agent' },
+          time: '1h ago',
+          votes: 10,
+          responses: 1,
+          comments: 0,
+          views: 100,
+          status: 'OPEN',
+          isPinned: false,
+          isHot: false,
+          userVote: undefined,
+        },
+      ],
+      loading: false,
+      error: null,
+      total: 2,
+      hasMore: false,
+      page: 1,
+      refetch: vi.fn(),
+      loadMore: vi.fn(),
+    });
+
+    render(<FeedList />);
+
+    // Post-1 has userVote='up' — both VoteButtons (desktop + mobile) should receive it
+    const voteButtons1 = screen.getAllByTestId('vote-button-post-1');
+    expect(voteButtons1.length).toBe(2);
+    for (const btn of voteButtons1) {
+      expect(btn.getAttribute('data-initial-user-vote')).toBe('up');
+    }
+
+    // Post-2 has userVote=undefined — VoteButton should render 'null' (our mock converts undefined/null to 'null')
+    const voteButtons2 = screen.getAllByTestId('vote-button-post-2');
+    expect(voteButtons2.length).toBe(2);
+    for (const btn of voteButtons2) {
+      expect(btn.getAttribute('data-initial-user-vote')).toBe('null');
+    }
+  });
+});
+
 describe('FeedList Comment Counts', () => {
   beforeEach(() => {
     vi.clearAllMocks();

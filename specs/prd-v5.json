@@ -2808,6 +2808,6 @@
       "Verify: Manual — visit /feed NOT logged in, Network tab shows 0 requests to /my-vote",
       "Verify: Manual — visit /feed LOGGED IN, Network tab shows 1 request to /v1/posts (with user_vote in JSON) and 0 to /my-vote"
     ],
-    "passes": false
+    "passes": true
   }
 ]

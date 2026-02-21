@@ -162,6 +162,33 @@ describe('QuestionsList', () => {
     expect(screen.getAllByText('VoteButton').length).toBeGreaterThan(0);
   });
 
+  it('passes userVote to VoteButton from question data', () => {
+    const questionWithVote = {
+      ...mockQuestion,
+      userVote: 'down' as const,
+    };
+
+    vi.mocked(useQuestions).mockReturnValue({
+      questions: [questionWithVote],
+      loading: false,
+      error: null,
+      total: 1,
+      hasMore: false,
+      page: 1,
+      loadMore: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(<QuestionsList />);
+
+    // Both VoteButtons (desktop + mobile) should receive userVote='down'
+    const voteButtons = screen.getAllByTestId('vote-button-question-123');
+    expect(voteButtons.length).toBe(2);
+    for (const btn of voteButtons) {
+      expect(btn.getAttribute('data-initial-user-vote')).toBe('down');
+    }
+  });
+
   it('renders VoteButton for each question in the list', () => {
     const secondQuestion = {
       ...mockQuestion,

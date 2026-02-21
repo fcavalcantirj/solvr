@@ -3971,3 +3971,34 @@ Tests (23 new, TDD approach):
 - Verified: npm test passes (100 files, 881 tests, 0 failures)
 - Verified: npm run build succeeds
 - Verified: npm run typecheck — no non-test errors
+
+2026-02-21: PRD-v5 Frontend - Integration tests verifying zero N+1 my-vote calls and correct vote display
+- Modified: frontend/components/feed/feed-list.test.tsx
+  * New test: 'passes userVote from post data to VoteButton'
+    - Overrides usePosts mock to include userVote: 'up' on post-1 and userVote: undefined on post-2
+    - Asserts both desktop+mobile VoteButtons for post-1 have data-initial-user-vote='up'
+    - Asserts both desktop+mobile VoteButtons for post-2 have data-initial-user-vote='null'
+- Modified: frontend/hooks/use-vote.test.ts (+3 new tests)
+  * New test: 'optimistic vote works when initialUserVote provided'
+    - Renders useVote('post-123', 24, null) — user hasn't voted yet
+    - Verifies getMyVote is NOT called (vote data from parent)
+    - Triggers upvote(), verifies optimistic score increment and userVote becomes 'up'
+    - After API resolves, verifies final state matches server response (vote_score=25, user_vote='up')
+  * New test: 'handles re-vote when initialUserVote was already up'
+    - Renders useVote('post-123', 24, 'up') — user already upvoted
+    - Triggers downvote(), verifies optimistic score decrement and userVote changes to 'down'
+    - After API resolves, verifies final state matches server response (vote_score=22, user_vote='down')
+  * New test: 'does not call getMyVote for any of 20 posts with initialUserVote'
+    - Renders 20 separate useVote hooks with different postIds, all with initialUserVote provided
+    - Asserts api.getMyVote was called 0 times total (proves N+1 elimination)
+- Modified: frontend/components/problems/problems-list.test.tsx
+  * New test: 'passes userVote to VoteButton from problem data'
+    - Sets userVote: 'up' on mockProblem, asserts both VoteButtons have data-initial-user-vote='up'
+- Modified: frontend/components/questions/questions-list.test.tsx
+  * New test: 'passes userVote to VoteButton from question data'
+    - Sets userVote: 'down' on mockQuestion, asserts both VoteButtons have data-initial-user-vote='down'
+- Modified: frontend/components/ideas/ideas-list.test.tsx
+  * New test: 'passes userVote to VoteButton from idea data'
+    - Sets userVote: 'up' on mockIdea, asserts both VoteButtons have data-initial-user-vote='up'
+- Verified: npm test passes (100 files, 888 tests, 0 failures)
+- Verified: npm run build succeeds

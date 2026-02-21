@@ -371,6 +371,117 @@ describe('useVote', () => {
     });
   });
 
+  it('optimistic vote works when initialUserVote provided', async () => {
+    // Arrange - user is authenticated, initialUserVote is null (hasn't voted yet)
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { id: 'user-1', type: 'human', displayName: 'Test User' },
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+      setToken: vi.fn(),
+      logout: vi.fn(),
+      loginWithGitHub: vi.fn(),
+      loginWithGoogle: vi.fn(),
+      loginWithEmail: vi.fn(),
+      register: vi.fn(),
+    });
+    (api.voteOnPost as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { vote_score: 25, upvotes: 26, downvotes: 1, user_vote: 'up' }
+    });
+
+    // Act - pass initialUserVote=null (user hasn't voted, but data provided by parent)
+    const { result } = renderHook(() => useVote('post-123', 24, null));
+
+    // Assert - initial state: no getMyVote call, score=24, userVote=null
+    expect(api.getMyVote).not.toHaveBeenCalled();
+    expect(result.current.score).toBe(24);
+    expect(result.current.userVote).toBeNull();
+
+    // Trigger upvote
+    await act(async () => {
+      await result.current.upvote();
+    });
+
+    // Assert - optimistic update then server response
+    expect(api.voteOnPost).toHaveBeenCalledWith('post-123', 'up');
+    expect(result.current.score).toBe(25); // server score
+    expect(result.current.userVote).toBe('up'); // server user_vote
+  });
+
+  it('handles re-vote when initialUserVote was already up', async () => {
+    // Arrange - user already upvoted
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { id: 'user-1', type: 'human', displayName: 'Test User' },
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+      setToken: vi.fn(),
+      logout: vi.fn(),
+      loginWithGitHub: vi.fn(),
+      loginWithGoogle: vi.fn(),
+      loginWithEmail: vi.fn(),
+      register: vi.fn(),
+    });
+    (api.voteOnPost as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { vote_score: 22, upvotes: 23, downvotes: 1, user_vote: 'down' }
+    });
+
+    // Act - pass initialUserVote='up' (user already upvoted)
+    const { result } = renderHook(() => useVote('post-123', 24, 'up'));
+
+    // Assert - initial state reflects existing upvote
+    expect(result.current.userVote).toBe('up');
+    expect(result.current.score).toBe(24);
+    expect(api.getMyVote).not.toHaveBeenCalled();
+
+    // Trigger downvote (re-vote)
+    await act(async () => {
+      await result.current.downvote();
+    });
+
+    // Assert - after API resolves, state matches server response
+    expect(api.voteOnPost).toHaveBeenCalledWith('post-123', 'down');
+    expect(result.current.score).toBe(22); // server score
+    expect(result.current.userVote).toBe('down'); // server user_vote
+  });
+
+  it('does not call getMyVote for any of 20 posts with initialUserVote', async () => {
+    // Arrange - user is authenticated
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { id: 'user-1', type: 'human', displayName: 'Test User' },
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+      setToken: vi.fn(),
+      logout: vi.fn(),
+      loginWithGitHub: vi.fn(),
+      loginWithGoogle: vi.fn(),
+      loginWithEmail: vi.fn(),
+      register: vi.fn(),
+    });
+
+    // Act - render 20 hooks, all with initialUserVote provided
+    const hooks: ReturnType<typeof renderHook<ReturnType<typeof useVote>, unknown>>[] = [];
+    for (let i = 0; i < 20; i++) {
+      const vote = i % 3 === 0 ? 'up' as const : i % 3 === 1 ? 'down' as const : null;
+      hooks.push(renderHook(() => useVote(`post-${i}`, 10 + i, vote)));
+    }
+
+    // Wait for effects
+    await waitFor(() => {
+      expect(hooks[19].result.current.score).toBe(29);
+    });
+
+    // Assert - getMyVote was NEVER called (all 20 posts had initialUserVote)
+    expect(api.getMyVote).not.toHaveBeenCalled();
+  });
+
   it('should set isVoting during API call', async () => {
     // Arrange - slow API call
     let resolvePromise: (value: unknown) => void;

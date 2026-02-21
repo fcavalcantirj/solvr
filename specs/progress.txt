@@ -1,3 +1,19 @@
+2026-02-21: PRD-v5 Backend - Migration: Add pending_review/rejected post statuses and system comment author type
+- Created: backend/migrations/000054_content_moderation_statuses.up.sql
+  * ALTER TABLE posts: expanded posts_status_check to include 'pending_review' and 'rejected'
+  * ALTER TABLE comments: expanded comments_author_type_check to include 'system'
+- Created: backend/migrations/000054_content_moderation_statuses.down.sql (reversible)
+- Modified: backend/internal/models/post.go
+  * Added PostStatusPendingReview = "pending_review" and PostStatusRejected = "rejected" constants
+  * Added AuthorTypeSystem = "system" constant
+  * Updated IsValidPostStatus() to accept pending_review and rejected for all post types
+- Created: backend/internal/models/post_test.go (4 tests)
+  * TestIsValidPostStatus_PendingReview — validates for all post types
+  * TestIsValidPostStatus_Rejected — validates for all post types
+  * TestAuthorTypeSystem — verifies constant value
+  * TestIsValidPostStatus_ExistingStatusesStillValid — regression test
+- All models tests passing (10 total)
+
 2026-02-21: PRD-v5 Skill - Update solvr.sh with checkpoint, resurrection, and enhanced heartbeat/briefing output
 - Modified: skill/scripts/solvr-helpers.sh (+152 lines, now 400)
   * Added cmd_checkpoint(): POST /v1/agents/me/checkpoints with --name, --death-count, --memory-hash flags

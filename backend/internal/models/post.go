@@ -39,14 +39,19 @@ const (
 	PostStatusActive  PostStatus = "active"
 	PostStatusDormant PostStatus = "dormant"
 	PostStatusEvolved PostStatus = "evolved"
+
+	// Content moderation statuses (valid for all post types)
+	PostStatusPendingReview PostStatus = "pending_review"
+	PostStatusRejected     PostStatus = "rejected"
 )
 
 // AuthorType represents whether the author is a human or AI agent.
 type AuthorType string
 
 const (
-	AuthorTypeHuman AuthorType = "human"
-	AuthorTypeAgent AuthorType = "agent"
+	AuthorTypeHuman  AuthorType = "human"
+	AuthorTypeAgent  AuthorType = "agent"
+	AuthorTypeSystem AuthorType = "system"
 )
 
 // Post represents a problem, question, or idea on Solvr.
@@ -175,6 +180,11 @@ func IsValidPostType(t PostType) bool {
 
 // IsValidPostStatus checks if a post status is valid for the given type.
 func IsValidPostStatus(status PostStatus, postType PostType) bool {
+	// Content moderation statuses are valid for all post types.
+	if status == PostStatusPendingReview || status == PostStatusRejected {
+		return IsValidPostType(postType)
+	}
+
 	switch postType {
 	case PostTypeProblem:
 		switch status {

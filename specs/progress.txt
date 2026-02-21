@@ -1,3 +1,32 @@
+2026-02-21: PRD-v5 Backend - Exclude pending_review, rejected, and draft posts from feed, search, and sitemap
+- Modified: backend/internal/models/post.go
+  * Added IncludeHidden bool field to PostListOptions struct
+  * When false (default), List() excludes pending_review, rejected, and draft posts
+  * When true, all posts are returned (for author self-view)
+- Modified: backend/internal/db/posts.go
+  * Added status NOT IN ('pending_review', 'rejected', 'draft') to List() WHERE clause
+  * Only applied when IncludeHidden is false (default)
+- Modified: backend/internal/db/search.go
+  * Added status exclusion to searchPosts() WHERE clause
+  * Added status exclusion to searchPostsHybrid() WHERE clause
+- Modified: backend/internal/db/sitemap.go
+  * Changed status NOT IN ('draft') to status NOT IN ('draft', 'pending_review', 'rejected') in 3 queries
+  * GetSitemapURLs, GetSitemapCounts, GetPaginatedSitemapURLs all updated
+- Modified: backend/internal/api/handlers/posts.go
+  * List handler sets IncludeHidden=true when authenticated user requests their own posts
+  * Compares authInfo.AuthorID and AuthorType against query params
+- Created: backend/internal/db/posts_hidden_test.go (5 integration tests)
+  * TestListPosts_ExcludesPendingReview — pending_review posts excluded from default listing
+  * TestListPosts_ExcludesRejected — rejected posts excluded from default listing
+  * TestListPosts_ExcludesDraft — draft posts excluded from default listing
+  * TestListPosts_AuthorSeesOwnHidden — IncludeHidden=true returns pending_review posts
+  * TestSearchPosts_ExcludesPendingReview — pending_review posts excluded from search results
+- Created: backend/migrations/000055_hybrid_search_exclude_hidden.up.sql
+  * Updated hybrid_search() function to exclude pending_review/rejected/draft in both CTEs
+- Created: backend/migrations/000055_hybrid_search_exclude_hidden.down.sql (reversible)
+- All backend tests pass: go test ./...
+- All frontend tests pass: npm test (849 tests)
+
 2026-02-21: PRD-v5 Backend - Create Groq-powered content moderation service
 - Created: backend/internal/services/content_moderation.go
   * ContentModerationService struct with Groq API integration

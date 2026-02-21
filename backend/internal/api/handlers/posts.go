@@ -203,6 +203,15 @@ func (h *PostsHandler) List(w http.ResponseWriter, r *http.Request) {
 		opts.AuthorID = authorID
 	}
 
+	// Allow authenticated users to see their own hidden posts (pending_review, rejected, draft)
+	if opts.AuthorID != "" {
+		if authInfo := GetAuthInfo(r); authInfo != nil {
+			if authInfo.AuthorID == opts.AuthorID && string(authInfo.AuthorType) == string(opts.AuthorType) {
+				opts.IncludeHidden = true
+			}
+		}
+	}
+
 	// Execute query
 	posts, total, err := h.repo.List(r.Context(), opts)
 	if err != nil {

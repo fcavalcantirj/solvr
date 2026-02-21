@@ -77,6 +77,11 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	// Always exclude deleted posts
 	conditions = append(conditions, "p.deleted_at IS NULL")
 
+	// Exclude hidden statuses (pending_review, rejected, draft) unless IncludeHidden is set
+	if !opts.IncludeHidden {
+		conditions = append(conditions, "p.status NOT IN ('pending_review', 'rejected', 'draft')")
+	}
+
 	// Filter by type
 	if opts.Type != "" {
 		conditions = append(conditions, fmt.Sprintf("p.type = $%d", argNum))

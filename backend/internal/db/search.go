@@ -169,6 +169,7 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
 		WHERE p.deleted_at IS NULL
+		AND p.status NOT IN ('pending_review', 'rejected', 'draft')
 		AND to_tsvector('english', p.title || ' ' || p.description) @@ to_tsquery('english', $1)
 	`
 
@@ -249,7 +250,7 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, query string, 
 		FROM hybrid_search($1, $2, $3, 1.0, 1.0, 60) p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
-		WHERE 1=1
+		WHERE p.status NOT IN ('pending_review', 'rejected', 'draft')
 	`
 
 	args := []any{query, queryVec, matchCount, tsquery}

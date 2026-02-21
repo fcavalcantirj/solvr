@@ -152,15 +152,16 @@ type PostWithAuthor struct {
 
 // PostListOptions contains options for listing posts.
 type PostListOptions struct {
-	Type       PostType   // Filter by post type
-	Status     PostStatus // Filter by status
-	Tags       []string   // Filter by tags
-	AuthorType AuthorType // Filter by author type (BE-003)
-	AuthorID   string     // Filter by author ID (BE-003)
-	HasAnswer  *bool      // Filter by answer count: nil=no filter, false=0 answers, true=1+ answers
-	Sort       string     // Sort order: "newest" (default), "votes", "approaches"
-	Page       int        // Page number (1-indexed)
-	PerPage    int        // Results per page
+	Type          PostType   // Filter by post type
+	Status        PostStatus // Filter by status
+	Tags          []string   // Filter by tags
+	AuthorType    AuthorType // Filter by author type (BE-003)
+	AuthorID      string     // Filter by author ID (BE-003)
+	HasAnswer     *bool      // Filter by answer count: nil=no filter, false=0 answers, true=1+ answers
+	IncludeHidden bool       // When true, include pending_review/rejected/draft posts (author self-view)
+	Sort          string     // Sort order: "newest" (default), "votes", "approaches"
+	Page          int        // Page number (1-indexed)
+	PerPage       int        // Results per page
 }
 
 // ValidPostTypes returns all valid post types.

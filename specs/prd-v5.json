@@ -2371,7 +2371,7 @@
       "Verify: go test ./internal/db/... passes",
       "Verify: migrate -path migrations -database $DATABASE_URL up succeeds"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

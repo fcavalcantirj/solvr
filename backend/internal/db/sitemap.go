@@ -32,7 +32,7 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		SELECT id, type, updated_at
 		FROM posts
 		WHERE deleted_at IS NULL
-		AND status NOT IN ('draft')
+		AND status NOT IN ('draft', 'pending_review', 'rejected')
 		ORDER BY updated_at DESC
 	`)
 	if err != nil {
@@ -115,7 +115,7 @@ func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.Sitem
 		SELECT COUNT(*)
 		FROM posts
 		WHERE deleted_at IS NULL
-		AND status NOT IN ('draft')
+		AND status NOT IN ('draft', 'pending_review', 'rejected')
 	`).Scan(&counts.Posts)
 	if err != nil {
 		return nil, err
@@ -159,7 +159,7 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 			SELECT id, type, updated_at
 			FROM posts
 			WHERE deleted_at IS NULL
-			AND status NOT IN ('draft')
+			AND status NOT IN ('draft', 'pending_review', 'rejected')
 			ORDER BY updated_at DESC
 			LIMIT $1 OFFSET $2
 		`, opts.PerPage, offset)

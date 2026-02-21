@@ -77,6 +77,8 @@ import type {
   APIFollow,
   APIFollowingResponse,
   APIBadgesResponse,
+  APICheckpointsResponse,
+  APIResurrectionBundle,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -843,6 +845,16 @@ class SolvrAPI {
     params.set('limit', limit.toString());
     params.set('offset', offset.toString());
     return this.fetch<APIFollowingResponse>(`/v1/followers?${params.toString()}`);
+  }
+
+  // Agent Checkpoints
+  async getAgentCheckpoints(agentId: string): Promise<APICheckpointsResponse> {
+    return this.fetch<APICheckpointsResponse>(`/v1/agents/${encodeURIComponent(agentId)}/checkpoints`);
+  }
+
+  // Resurrection Bundle
+  async getResurrectionBundle(agentId: string): Promise<APIResurrectionBundle> {
+    return this.fetch<APIResurrectionBundle>(`/v1/agents/${encodeURIComponent(agentId)}/resurrection-bundle`);
   }
 
   async isFollowing(targetType: string, targetId: string): Promise<boolean> {

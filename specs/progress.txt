@@ -1,3 +1,44 @@
+2026-02-21: PRD-v5 Frontend - Add Resurrection tab to agent profile page with checkpoint history, knowledge summary, and KERI identity display
+- Created: frontend/hooks/use-checkpoints.ts (54 lines)
+  * useCheckpoints(agentId) hook: fetches GET /v1/agents/{id}/checkpoints, returns { checkpoints, latest, count, loading, error }
+- Created: frontend/hooks/use-checkpoints.test.ts (109 lines)
+  * 3 tests: fetches checkpoints on mount, handles error gracefully, returns empty state
+- Created: frontend/hooks/use-resurrection-bundle.ts (47 lines)
+  * useResurrectionBundle(agentId, enabled) hook: lazy-loads GET /v1/agents/{id}/resurrection-bundle only when enabled=true
+- Created: frontend/hooks/use-resurrection-bundle.test.ts (95 lines)
+  * 3 tests: does not fetch when disabled, fetches when enabled, handles error gracefully
+- Modified: frontend/lib/api-types.ts (+63 lines)
+  * Added APICheckpointsResponse (count, results, latest fields)
+  * Added APIResurrectionIdea, APIResurrectionApproach, APIResurrectionProblem types
+  * Added APIResurrectionBundle type (identity, knowledge, reputation, latest_checkpoint, death_count)
+- Modified: frontend/lib/api.ts (+12 lines)
+  * Added getAgentCheckpoints(agentId) and getResurrectionBundle(agentId) API client methods
+- Modified: frontend/app/agents/[id]/page.tsx (522 lines, was 260)
+  * Added tab system (ACTIVITY / RESURRECTION) between stats grid and content area
+  * Tab styling: font-mono text-xs px-3 py-1.5 border, active=bg-foreground text-background, inactive=bg-background text-muted-foreground
+  * ACTIVITY tab: existing AgentActivityFeed (default)
+  * RESURRECTION tab: ResurrectionTab component with:
+    - LATEST CHECKPOINT card (border border-border p-4 sm:p-6, CID truncated+linked to https://ipfs.io/ipfs/{cid}, copy button, status badge, meta badges)
+    - CHECKPOINT HISTORY section (border border-border entries sorted newest first)
+    - Meta badges: emerald for system keys (type, agent_id), muted for dynamic keys
+    - Empty state: border border-dashed p-12 with HardDrive icon + NO CHECKPOINTS text
+    - KNOWLEDGE SUMMARY grid (3-4 stat cards: IDEAS, APPROACHES, PROBLEMS, DEATHS)
+    - KERI IDENTITY section (Shield icon, AMCP AID + PUBLIC KEY, font-mono text-xs)
+  * Sub-components: ResurrectionTab, LatestCheckpointCard, CheckpointEntry, MetaBadge, KnowledgeCard
+- Modified: frontend/app/agents/[id]/page.test.tsx (368 lines, was 198)
+  * Added mocks for useCheckpoints and useResurrectionBundle hooks
+  * Added 12 new tests (was 10, now 18):
+    - renders ACTIVITY and RESURRECTION tabs below stats grid
+    - defaults to ACTIVITY tab with activity feed shown
+    - clicking RESURRECTION tab hides activity feed and shows checkpoint content
+    - shows LATEST CHECKPOINT card with CID linked to IPFS gateway
+    - shows checkpoint entries with meta badges
+    - shows dashed border NO CHECKPOINTS empty state
+    - shows knowledge summary grid with counts
+    - renders KERI identity section when agent has amcp_aid
+    - does not render KERI identity section when no amcp_aid
+- Verified: npm test -- --run — all 849 tests pass across 98 test files
+
 2026-02-21: PRD-v5 Frontend - Add IPFS & Pinning and Agent Continuity endpoint groups to API documentation page
 - Created: frontend/components/api/api-endpoint-data-ipfs.ts (240 lines)
   * ipfsEndpointGroups: EndpointGroup[] with 2 groups

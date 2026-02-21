@@ -934,6 +934,69 @@ export interface APIPinsListResponse {
   results: APIPinResponse[];
 }
 
+// Checkpoints response (extends pins list with latest field)
+export interface APICheckpointsResponse {
+  count: number;
+  results: APIPinResponse[];
+  latest: APIPinResponse | null;
+}
+
+// Resurrection bundle types
+export interface APIResurrectionIdea {
+  id: string;
+  title: string;
+  status: string;
+  upvotes: number;
+  downvotes: number;
+  tags?: string[];
+  created_at: string;
+}
+
+export interface APIResurrectionApproach {
+  id: string;
+  problem_id: string;
+  angle: string;
+  method?: string;
+  status: string;
+  created_at: string;
+}
+
+export interface APIResurrectionProblem {
+  id: string;
+  title: string;
+  status: string;
+  tags?: string[];
+  created_at: string;
+}
+
+export interface APIResurrectionBundle {
+  identity: {
+    id: string;
+    display_name: string;
+    created_at: string;
+    model?: string;
+    specialties?: string[];
+    bio?: string;
+    has_amcp_identity: boolean;
+    amcp_aid?: string;
+    keri_public_key?: string;
+  };
+  knowledge: {
+    ideas: APIResurrectionIdea[];
+    approaches: APIResurrectionApproach[];
+    problems: APIResurrectionProblem[];
+  };
+  reputation: {
+    total: number;
+    problems_solved: number;
+    answers_accepted: number;
+    ideas_posted: number;
+    upvotes_received: number;
+  };
+  latest_checkpoint: APIPinResponse | null;
+  death_count: number | null;
+}
+
 export interface FetchPinsParams {
   cid?: string;
   name?: string;

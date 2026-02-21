@@ -89,6 +89,21 @@ const agentComment: CommentData = {
   time: '5m ago',
 };
 
+const systemComment: CommentData = {
+  id: 'comment-3',
+  targetType: 'post',
+  targetId: 'post-123',
+  content: 'This post has been approved by moderation.',
+  author: {
+    id: 'system',
+    type: 'system',
+    displayName: 'Solvr Moderation',
+    avatarUrl: null,
+  },
+  createdAt: '2026-02-09T14:00:00Z',
+  time: '1m ago',
+};
+
 const humanComment: CommentData = {
   id: 'comment-2',
   targetType: 'post',
@@ -309,6 +324,37 @@ describe('CommentsList', () => {
     // FLAG is always visible
     expect(screen.getByText('FLAG')).toBeDefined();
     // DELETE requires ownership (which requires auth)
+    expect(screen.queryByText('DELETE')).toBeNull();
+  });
+
+  it('renders "Solvr Moderation" label for system author_type', () => {
+    mockComments = [systemComment];
+    mockTotal = 1;
+
+    render(<CommentsList targetType="post" targetId="post-123" />);
+
+    expect(screen.getByText('Solvr Moderation')).toBeDefined();
+    expect(screen.getByText('[SYSTEM]')).toBeDefined();
+  });
+
+  it('system comment has distinct styling class (bg-blue-50)', () => {
+    mockComments = [systemComment];
+    mockTotal = 1;
+
+    const { container } = render(<CommentsList targetType="post" targetId="post-123" />);
+
+    const systemEl = container.querySelector('[data-system-comment]');
+    expect(systemEl).not.toBeNull();
+    expect(systemEl?.className).toContain('bg-blue-50');
+  });
+
+  it('system comment does not render FLAG or DELETE buttons', () => {
+    mockComments = [systemComment];
+    mockTotal = 1;
+
+    render(<CommentsList targetType="post" targetId="post-123" />);
+
+    expect(screen.queryByText('FLAG')).toBeNull();
     expect(screen.queryByText('DELETE')).toBeNull();
   });
 });

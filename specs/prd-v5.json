@@ -2551,7 +2551,7 @@
       "Test: system comment does not render vote/reply buttons",
       "Verify: npm test -- --run passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

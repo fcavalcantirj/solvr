@@ -157,6 +157,40 @@ describe('useComments', () => {
     });
   });
 
+  it('should transform system author type correctly', async () => {
+    const systemResponse = {
+      data: [
+        {
+          id: 'comment-sys',
+          target_type: 'post',
+          target_id: 'post-123',
+          author_type: 'system' as const,
+          author_id: 'system',
+          content: 'Moderation comment',
+          created_at: '2026-02-09T14:00:00Z',
+          author: {
+            id: 'system',
+            type: 'system' as const,
+            display_name: 'Solvr Moderation',
+            avatar_url: null,
+          },
+        },
+      ],
+      meta: { total: 1, page: 1, per_page: 20, has_more: false },
+    };
+
+    (api.getComments as ReturnType<typeof vi.fn>).mockResolvedValue(systemResponse);
+
+    const { result } = renderHook(() => useComments('post', 'post-123'));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.comments[0].author.type).toBe('system');
+    expect(result.current.comments[0].author.displayName).toBe('Solvr Moderation');
+  });
+
   it('should load more comments in append mode', async () => {
     const page1Response = {
       data: [mockCommentsResponse.data[0]],

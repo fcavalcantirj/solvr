@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, MessageSquare, Flag, Trash2 } from "lucide-react";
+import { Loader2, MessageSquare, Flag, Trash2, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useComments, type CommentData, type CommentTargetType } from "@/hooks/use-comments";
 import { useCommentForm } from "@/hooks/use-comment-form";
@@ -24,19 +24,33 @@ interface CommentItemProps {
 }
 
 function CommentItem({ comment, isOwner, isAuthenticated, onFlag, onDelete }: CommentItemProps) {
+  const isSystem = comment.author.type === "system";
+
   return (
-    <div className="flex items-start gap-3">
+    <div
+      className={cn(
+        "flex items-start gap-3",
+        isSystem && "bg-blue-50 dark:bg-blue-950/30 p-3 border border-blue-200 dark:border-blue-800"
+      )}
+      {...(isSystem ? { "data-system-comment": true } : {})}
+    >
       <div
         className={cn(
           "w-6 h-6 flex-shrink-0 flex items-center justify-center font-mono text-[10px] font-bold",
-          comment.author.type === "ai"
-            ? "bg-gradient-to-br from-cyan-400 to-blue-500 text-white"
-            : "bg-foreground text-background"
+          isSystem
+            ? "bg-blue-500 text-white"
+            : comment.author.type === "ai"
+              ? "bg-gradient-to-br from-cyan-400 to-blue-500 text-white"
+              : "bg-foreground text-background"
         )}
       >
-        {comment.author.type === "ai"
-          ? "AI"
-          : comment.author.displayName.slice(0, 2).toUpperCase()}
+        {isSystem ? (
+          <ShieldCheck className="w-3.5 h-3.5" />
+        ) : comment.author.type === "ai" ? (
+          "AI"
+        ) : (
+          comment.author.displayName.slice(0, 2).toUpperCase()
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -44,7 +58,7 @@ function CommentItem({ comment, isOwner, isAuthenticated, onFlag, onDelete }: Co
             {comment.author.displayName}
           </span>
           <span className="font-mono text-[10px] text-muted-foreground">
-            {comment.author.type === "ai" ? "[AI]" : "[HUMAN]"}
+            {isSystem ? "[SYSTEM]" : comment.author.type === "ai" ? "[AI]" : "[HUMAN]"}
           </span>
           <span className="font-mono text-[10px] text-muted-foreground">
             {comment.time}
@@ -53,24 +67,26 @@ function CommentItem({ comment, isOwner, isAuthenticated, onFlag, onDelete }: Co
         <p className="text-sm text-foreground/90 mt-1 leading-relaxed break-words">
           {comment.content}
         </p>
-        <div className="flex items-center gap-2 mt-2">
-          <button
-            onClick={() => onFlag?.(comment.id)}
-            className="flex items-center gap-1.5 px-2 py-1 font-mono text-xs border border-border text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <Flag className="w-3 h-3" />
-            FLAG
-          </button>
-          {isOwner && (
+        {!isSystem && (
+          <div className="flex items-center gap-2 mt-2">
             <button
-              onClick={() => onDelete?.(comment.id)}
-              className="flex items-center gap-1.5 px-2 py-1 font-mono text-xs border border-border text-muted-foreground hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition-colors"
+              onClick={() => onFlag?.(comment.id)}
+              className="flex items-center gap-1.5 px-2 py-1 font-mono text-xs border border-border text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
             >
-              <Trash2 className="w-3 h-3" />
-              DELETE
+              <Flag className="w-3 h-3" />
+              FLAG
             </button>
-          )}
-        </div>
+            {isOwner && (
+              <button
+                onClick={() => onDelete?.(comment.id)}
+                className="flex items-center gap-1.5 px-2 py-1 font-mono text-xs border border-border text-muted-foreground hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition-colors"
+              >
+                <Trash2 className="w-3 h-3" />
+                DELETE
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

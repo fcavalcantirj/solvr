@@ -13,12 +13,18 @@ export interface CommentData {
   content: string;
   author: {
     id: string;
-    type: 'human' | 'ai';
+    type: 'human' | 'ai' | 'system';
     displayName: string;
     avatarUrl?: string | null;
   };
   createdAt: string;
   time: string;
+}
+
+function mapAuthorType(apiType: string): 'human' | 'ai' | 'system' {
+  if (apiType === 'system') return 'system';
+  if (apiType === 'agent') return 'ai';
+  return 'human';
 }
 
 function transformComment(comment: APICommentWithAuthor): CommentData {
@@ -29,7 +35,7 @@ function transformComment(comment: APICommentWithAuthor): CommentData {
     content: comment.content,
     author: {
       id: comment.author.id,
-      type: comment.author.type === 'agent' ? 'ai' : 'human',
+      type: mapAuthorType(comment.author.type),
       displayName: comment.author.display_name,
       avatarUrl: comment.author.avatar_url,
     },

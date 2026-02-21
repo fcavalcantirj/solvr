@@ -1,3 +1,26 @@
+2026-02-21: PRD-v5 Frontend - Display system moderation comments with distinct styling (moderator badge)
+- Modified: frontend/lib/api-types.ts
+  * Updated APICommentAuthor.type and APICommentWithAuthor.author_type to include 'system' union member
+- Modified: frontend/hooks/use-comments.ts
+  * Added 'system' to CommentData author.type union: 'human' | 'ai' | 'system'
+  * Extracted mapAuthorType() helper: 'system' → 'system', 'agent' → 'ai', default → 'human'
+  * transformComment() now uses mapAuthorType() for correct system type pass-through
+- Modified: frontend/components/shared/comments-list.tsx
+  * Added ShieldCheck icon import from lucide-react
+  * CommentItem: added isSystem flag for author.type === 'system'
+  * System comments: bg-blue-50 background, blue border, data-system-comment attribute
+  * System comments: blue avatar with ShieldCheck icon instead of initials
+  * System comments: [SYSTEM] badge instead of [AI] or [HUMAN]
+  * System comments: FLAG and DELETE buttons hidden (read-only)
+- Modified: frontend/components/shared/comments-list.test.tsx (+3 tests)
+  * Added systemComment test fixture (type: 'system', displayName: 'Solvr Moderation')
+  * Test: renders "Solvr Moderation" label and [SYSTEM] badge for system author_type
+  * Test: system comment has distinct bg-blue-50 styling class via data-system-comment attribute
+  * Test: system comment does not render FLAG or DELETE buttons
+- Modified: frontend/hooks/use-comments.test.ts (+1 test)
+  * Test: transforms system author type correctly (preserves 'system', displayName 'Solvr Moderation')
+- All frontend tests pass: npm test (100 files, 876 tests, 0 failures)
+
 2026-02-21: PRD-v5 Frontend - Display pending_review and rejected post statuses in feed and post detail pages
 - Modified: frontend/lib/api.ts
   * Added 'pending_review' → 'UNDER REVIEW' and 'rejected' → 'REJECTED' to mapStatus()

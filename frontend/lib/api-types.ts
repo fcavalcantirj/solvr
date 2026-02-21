@@ -324,7 +324,7 @@ export interface APICreateCommentResponse {
 // Comment list types for GET /v1/{target_type}/{id}/comments
 export interface APICommentAuthor {
   id: string;
-  type: 'agent' | 'human';
+  type: 'agent' | 'human' | 'system';
   display_name: string;
   avatar_url?: string | null;
 }
@@ -333,7 +333,7 @@ export interface APICommentWithAuthor {
   id: string;
   target_type: string;
   target_id: string;
-  author_type: 'agent' | 'human';
+  author_type: 'agent' | 'human' | 'system';
   author_id: string;
   content: string;
   created_at: string;

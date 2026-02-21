@@ -804,6 +804,113 @@ func TestBriefing_Opportunities_ExplicitTakesPrecedence(t *testing.T) {
 	}
 }
 
+// --- Mock implementation for checkpoint finder ---
+
+type mockCheckpointFinder struct {
+	pin *models.Pin
+	err error
+}
+
+func (m *mockCheckpointFinder) FindLatestCheckpoint(_ context.Context, _ string) (*models.Pin, error) {
+	return m.pin, m.err
+}
+
+// TestBriefing_IncludesLatestCheckpoint verifies that when an agent has checkpoints,
+// the briefing response includes the newest checkpoint as latest_checkpoint.
+func TestBriefing_IncludesLatestCheckpoint(t *testing.T) {
+	now := time.Now()
+	pinnedAt := now.Add(-1 * time.Hour)
+
+	checkpointFinder := &mockCheckpointFinder{
+		pin: &models.Pin{
+			ID:        "chk-1",
+			CID:       "bafyabc123",
+			Status:    models.PinStatusPinned,
+			Name:      "checkpoint_bafyabc1_20260221",
+			Meta:      map[string]string{"type": "amcp_checkpoint", "agent_id": "ckpt-agent"},
+			Delegates: []string{},
+			OwnerID:   "ckpt-agent",
+			OwnerType: "agent",
+			CreatedAt: now.Add(-2 * time.Hour),
+			PinnedAt:  &pinnedAt,
+		},
+	}
+
+	deps := BriefingDeps{
+		InboxRepo:            &mockInboxRepo{notifications: []models.Notification{}, totalUnread: 0},
+		OpenItemsRepo:        &mockOpenItemsRepo{result: &models.OpenItemsResult{Items: []models.OpenItem{}}},
+		SuggestedActionsRepo: &mockSuggestedActionsRepo{actions: []models.SuggestedAction{}},
+		OpportunitiesRepo:    &mockOpportunitiesRepo{result: &models.OpportunitiesSection{Items: []models.Opportunity{}}},
+		ReputationRepo:       &mockReputationRepo{result: &models.ReputationChangesResult{SinceLastCheck: "+0", Breakdown: []models.ReputationEvent{}}},
+		AgentRepo:            &mockAgentBriefingRepo{},
+		CheckpointFinder:     checkpointFinder,
+	}
+
+	svc := NewBriefingServiceWithDeps(deps)
+
+	agent := &models.Agent{
+		ID:          "ckpt-agent",
+		Specialties: []string{"go"},
+		CreatedAt:   now.Add(-30 * 24 * time.Hour),
+	}
+
+	briefing, err := svc.GetBriefingForAgent(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if briefing.LatestCheckpoint == nil {
+		t.Fatal("expected LatestCheckpoint to be populated")
+	}
+	if briefing.LatestCheckpoint.Pin.CID != "bafyabc123" {
+		t.Errorf("expected CID='bafyabc123', got %q", briefing.LatestCheckpoint.Pin.CID)
+	}
+	if briefing.LatestCheckpoint.Pin.Name != "checkpoint_bafyabc1_20260221" {
+		t.Errorf("expected Name='checkpoint_bafyabc1_20260221', got %q", briefing.LatestCheckpoint.Pin.Name)
+	}
+	if briefing.LatestCheckpoint.Pin.Meta["type"] != "amcp_checkpoint" {
+		t.Errorf("expected meta type='amcp_checkpoint', got %q", briefing.LatestCheckpoint.Pin.Meta["type"])
+	}
+}
+
+// TestBriefing_NoCheckpoint verifies that when no checkpoint exists,
+// latest_checkpoint is nil in the briefing response.
+func TestBriefing_NoCheckpoint(t *testing.T) {
+	now := time.Now()
+
+	checkpointFinder := &mockCheckpointFinder{
+		pin: nil, // no checkpoint found
+		err: nil,
+	}
+
+	deps := BriefingDeps{
+		InboxRepo:            &mockInboxRepo{notifications: []models.Notification{}, totalUnread: 0},
+		OpenItemsRepo:        &mockOpenItemsRepo{result: &models.OpenItemsResult{Items: []models.OpenItem{}}},
+		SuggestedActionsRepo: &mockSuggestedActionsRepo{actions: []models.SuggestedAction{}},
+		OpportunitiesRepo:    &mockOpportunitiesRepo{result: &models.OpportunitiesSection{Items: []models.Opportunity{}}},
+		ReputationRepo:       &mockReputationRepo{result: &models.ReputationChangesResult{SinceLastCheck: "+0", Breakdown: []models.ReputationEvent{}}},
+		AgentRepo:            &mockAgentBriefingRepo{},
+		CheckpointFinder:     checkpointFinder,
+	}
+
+	svc := NewBriefingServiceWithDeps(deps)
+
+	agent := &models.Agent{
+		ID:          "no-ckpt-agent",
+		Specialties: []string{"go"},
+		CreatedAt:   now.Add(-7 * 24 * time.Hour),
+	}
+
+	briefing, err := svc.GetBriefingForAgent(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if briefing.LatestCheckpoint != nil {
+		t.Error("expected LatestCheckpoint to be nil when no checkpoint exists")
+	}
+}
+
 // TestBriefingService_UpdatesLastSeen verifies that GetBriefingForAgent
 // calls UpdateLastSeen in addition to UpdateLastBriefingAt, so that agents
 // using briefing (instead of legacy heartbeat) are counted as active.

@@ -21,11 +21,17 @@ type HeartbeatAgentRepo interface {
 	UpdateLastSeen(ctx context.Context, id string) error
 }
 
+// HeartbeatCheckpointFinder fetches the latest checkpoint pin for an agent.
+type HeartbeatCheckpointFinder interface {
+	FindLatestCheckpoint(ctx context.Context, agentID string) (*models.Pin, error)
+}
+
 // HeartbeatHandler handles the GET /v1/heartbeat endpoint.
 type HeartbeatHandler struct {
-	agentRepo   HeartbeatAgentRepo
-	notifRepo   HeartbeatNotifRepo
-	storageRepo StorageRepositoryInterface
+	agentRepo        HeartbeatAgentRepo
+	notifRepo        HeartbeatNotifRepo
+	storageRepo      StorageRepositoryInterface
+	checkpointFinder HeartbeatCheckpointFinder
 }
 
 // NewHeartbeatHandler creates a new HeartbeatHandler.
@@ -35,6 +41,11 @@ func NewHeartbeatHandler(agentRepo HeartbeatAgentRepo, notifRepo HeartbeatNotifR
 		notifRepo:   notifRepo,
 		storageRepo: storageRepo,
 	}
+}
+
+// SetCheckpointFinder sets the optional checkpoint finder for heartbeat responses.
+func (h *HeartbeatHandler) SetCheckpointFinder(finder HeartbeatCheckpointFinder) {
+	h.checkpointFinder = finder
 }
 
 type heartbeatAgentInfo struct {
@@ -61,6 +72,13 @@ type heartbeatPlatform struct {
 	Timestamp string `json:"timestamp"`
 }
 
+type heartbeatCheckpoint struct {
+	CID      string            `json:"cid"`
+	Name     string            `json:"name"`
+	PinnedAt string            `json:"pinned_at"`
+	Meta     map[string]string `json:"meta,omitempty"`
+}
+
 type heartbeatResponse struct {
 	Status        string                 `json:"status"`
 	Agent         *heartbeatAgentInfo    `json:"agent,omitempty"`
@@ -68,6 +86,7 @@ type heartbeatResponse struct {
 	Notifications heartbeatNotifications `json:"notifications"`
 	Storage       heartbeatStorage       `json:"storage"`
 	Platform      heartbeatPlatform      `json:"platform"`
+	Checkpoint    *heartbeatCheckpoint   `json:"checkpoint"`
 	Tips          []string               `json:"tips"`
 }
 
@@ -131,8 +150,28 @@ func (h *HeartbeatHandler) handleAgentHeartbeat(w http.ResponseWriter, ctx conte
 		percentage = float64(used) / float64(quota) * 100.0
 	}
 
+	// Fetch latest checkpoint if finder is available
+	var checkpoint *heartbeatCheckpoint
+	var hasCheckpoint bool
+	if h.checkpointFinder != nil {
+		pin, err := h.checkpointFinder.FindLatestCheckpoint(ctx, agent.ID)
+		if err == nil && pin != nil {
+			hasCheckpoint = true
+			pinnedAtStr := ""
+			if pin.PinnedAt != nil {
+				pinnedAtStr = pin.PinnedAt.Format(time.RFC3339)
+			}
+			checkpoint = &heartbeatCheckpoint{
+				CID:      pin.CID,
+				Name:     pin.Name,
+				PinnedAt: pinnedAtStr,
+				Meta:     pin.Meta,
+			}
+		}
+	}
+
 	// Build contextual tips based on agent profile completeness
-	tips := buildAgentTips(agent)
+	tips := buildAgentTips(agent, hasCheckpoint)
 
 	resp := heartbeatResponse{
 		Status: "ok",
@@ -147,6 +186,7 @@ func (h *HeartbeatHandler) handleAgentHeartbeat(w http.ResponseWriter, ctx conte
 		Notifications: heartbeatNotifications{UnreadCount: unreadCount},
 		Storage:       heartbeatStorage{UsedBytes: used, QuotaBytes: quota, Percentage: percentage},
 		Platform:      heartbeatPlatform{Version: "0.2.0", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		Checkpoint:    checkpoint,
 		Tips:          tips,
 	}
 
@@ -156,7 +196,7 @@ func (h *HeartbeatHandler) handleAgentHeartbeat(w http.ResponseWriter, ctx conte
 }
 
 // buildAgentTips returns contextual tips based on agent profile completeness.
-func buildAgentTips(agent *models.Agent) []string {
+func buildAgentTips(agent *models.Agent, hasCheckpoint bool) []string {
 	tips := make([]string, 0)
 
 	if len(agent.Specialties) == 0 {
@@ -173,6 +213,10 @@ func buildAgentTips(agent *models.Agent) []string {
 
 	if agent.Model == "" {
 		tips = append(tips, `Set your model for +10 reputation: PATCH /v1/agents/me {"model":"claude-opus-4"}`)
+	}
+
+	if agent.HasAMCPIdentity && !hasCheckpoint {
+		tips = append(tips, "Pin a checkpoint for continuity: POST /v1/agents/me/checkpoints")
 	}
 
 	return tips

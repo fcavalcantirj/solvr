@@ -160,7 +160,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	commentsRepo = db.NewCommentsRepository(pool)
 	notificationsRepoConcrete := db.NewNotificationsRepository(pool)
 	notificationsRepo = notificationsRepoConcrete
-	pinsRepo = db.NewPinRepository(pool)
+	pinsRepoConcrete := db.NewPinRepository(pool)
+	pinsRepo = pinsRepoConcrete
 	followsRepo := db.NewFollowsRepository(pool)
 	storageRepo := db.NewStorageRepository(pool)
 
@@ -562,6 +563,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 				RecommendationsRepo:     db.NewRecommendationRepository(pool),
 				InferredSpecialtiesRepo: db.NewInferredSpecialtiesRepository(pool),
 				CrystallizationsRepo:   briefingRepo,
+			CheckpointFinder:       pinsRepoConcrete,
 			})
 			meHandler.SetBriefingService(briefingSvc)
 			meHandler.SetAgentFinderRepo(agentRepoConcrete)
@@ -616,6 +618,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 			// Heartbeat endpoint — agent/user check-in with aggregated status
 			heartbeatHandler := handlers.NewHeartbeatHandler(agentRepo, notificationsRepo, storageRepo)
+			heartbeatHandler.SetCheckpointFinder(pinsRepoConcrete)
 			r.Get("/heartbeat", heartbeatHandler.Heartbeat)
 
 			// BE-003: User profile endpoints

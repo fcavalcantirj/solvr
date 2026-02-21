@@ -81,6 +81,11 @@ type BriefingCrystallizationsRepo interface {
 	GetRecentCrystallizations(ctx context.Context, agentID string, since time.Time) ([]models.CrystallizationEvent, error)
 }
 
+// BriefingCheckpointFinder fetches the latest checkpoint pin for an agent.
+type BriefingCheckpointFinder interface {
+	FindLatestCheckpoint(ctx context.Context, agentID string) (*models.Pin, error)
+}
+
 // BriefingDeps holds all repository dependencies for BriefingService.
 // New repos can be nil — sections are skipped when repo is nil.
 type BriefingDeps struct {
@@ -98,6 +103,7 @@ type BriefingDeps struct {
 	RecommendationsRepo     BriefingRecommendationsRepo
 	InferredSpecialtiesRepo BriefingInferredSpecialtiesRepo
 	CrystallizationsRepo   BriefingCrystallizationsRepo
+	CheckpointFinder       BriefingCheckpointFinder
 }
 
 // BriefingService aggregates inbox, open items, suggested actions, opportunities,
@@ -118,6 +124,7 @@ type BriefingService struct {
 	recommendationsRepo     BriefingRecommendationsRepo
 	inferredSpecialtiesRepo BriefingInferredSpecialtiesRepo
 	crystallizationsRepo    BriefingCrystallizationsRepo
+	checkpointFinder        BriefingCheckpointFinder
 }
 
 // NewBriefingService creates a new BriefingService with all required repositories.
@@ -157,6 +164,7 @@ func NewBriefingServiceWithDeps(deps BriefingDeps) *BriefingService {
 		recommendationsRepo:     deps.RecommendationsRepo,
 		inferredSpecialtiesRepo: deps.InferredSpecialtiesRepo,
 		crystallizationsRepo:    deps.CrystallizationsRepo,
+		checkpointFinder:        deps.CheckpointFinder,
 	}
 }
 
@@ -320,6 +328,17 @@ func (s *BriefingService) GetBriefingForAgent(ctx context.Context, agent *models
 			slog.Warn("briefing: crystallizations fetch failed", "agent_id", agent.ID, "error", err)
 		} else {
 			briefing.Crystallizations = crysts
+		}
+	}
+
+	// Section 13: Latest Checkpoint
+	if s.checkpointFinder != nil {
+		pin, err := s.checkpointFinder.FindLatestCheckpoint(ctx, agent.ID)
+		if err != nil {
+			slog.Warn("briefing: latest checkpoint fetch failed", "agent_id", agent.ID, "error", err)
+		} else if pin != nil {
+			resp := pin.ToPinResponse()
+			briefing.LatestCheckpoint = &resp
 		}
 	}
 

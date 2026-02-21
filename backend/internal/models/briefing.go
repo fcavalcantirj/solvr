@@ -21,6 +21,8 @@ type BriefingResult struct {
 	YouMightLike     []RecommendedPost  `json:"you_might_like"`
 	// Crystallizations celebration section (Section 12)
 	Crystallizations []CrystallizationEvent `json:"crystallizations"`
+	// Latest checkpoint section (Section 13)
+	LatestCheckpoint *PinResponse `json:"latest_checkpoint"`
 }
 
 // BriefingInbox represents the inbox portion of a briefing.

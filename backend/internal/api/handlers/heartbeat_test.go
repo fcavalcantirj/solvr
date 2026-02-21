@@ -396,6 +396,182 @@ func TestHeartbeat_Agent_NoTipsWhenFullyConfigured(t *testing.T) {
 	}
 }
 
+// MockHeartbeatCheckpointFinder mocks checkpoint lookups for heartbeat tests.
+type MockHeartbeatCheckpointFinder struct {
+	pin *models.Pin
+	err error
+}
+
+func (m *MockHeartbeatCheckpointFinder) FindLatestCheckpoint(ctx context.Context, agentID string) (*models.Pin, error) {
+	return m.pin, m.err
+}
+
+func TestHeartbeat_ShowsCheckpointInfo(t *testing.T) {
+	agentRepo := &MockHeartbeatAgentRepo{MockAgentRepository: NewMockAgentRepository()}
+	humanID := "owner-123"
+	now := time.Now()
+	agent := &models.Agent{
+		ID:             "ckpt_agent",
+		DisplayName:    "Checkpoint Agent",
+		Status:         "active",
+		Reputation:     100,
+		HumanID:        &humanID,
+		Specialties:    []string{"go"},
+		Model:          "claude-opus-4",
+		LastBriefingAt: &now,
+	}
+	agentRepo.agents["ckpt_agent"] = agent
+
+	pinnedAt := now.Add(-1 * time.Hour)
+	checkpointFinder := &MockHeartbeatCheckpointFinder{
+		pin: &models.Pin{
+			ID:        "chk-1",
+			CID:       "bafyabc123",
+			Status:    models.PinStatusPinned,
+			Name:      "checkpoint_bafyabc1_20260221",
+			Meta:      map[string]string{"type": "amcp_checkpoint", "agent_id": "ckpt_agent"},
+			Delegates: []string{},
+			OwnerID:   "ckpt_agent",
+			OwnerType: "agent",
+			CreatedAt: now.Add(-2 * time.Hour),
+			PinnedAt:  &pinnedAt,
+		},
+	}
+
+	handler := NewHeartbeatHandler(agentRepo, &MockHeartbeatNotifRepo{}, &MockHeartbeatStorageRepo{})
+	handler.SetCheckpointFinder(checkpointFinder)
+
+	req := httptest.NewRequest("GET", "/v1/heartbeat", nil)
+	ctx := context.WithValue(req.Context(), auth.AgentContextKey, agent)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	handler.Heartbeat(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	ckpt, ok := resp["checkpoint"]
+	if !ok {
+		t.Fatal("expected 'checkpoint' field in response")
+	}
+	if ckpt == nil {
+		t.Fatal("expected checkpoint to be non-nil")
+	}
+
+	ckptData := ckpt.(map[string]interface{})
+	if ckptData["cid"] != "bafyabc123" {
+		t.Errorf("expected checkpoint cid 'bafyabc123', got %v", ckptData["cid"])
+	}
+	if ckptData["name"] != "checkpoint_bafyabc1_20260221" {
+		t.Errorf("expected checkpoint name 'checkpoint_bafyabc1_20260221', got %v", ckptData["name"])
+	}
+	if ckptData["pinned_at"] == "" {
+		t.Error("expected checkpoint pinned_at to be non-empty")
+	}
+}
+
+func TestHeartbeat_NoCheckpoint(t *testing.T) {
+	agentRepo := &MockHeartbeatAgentRepo{MockAgentRepository: NewMockAgentRepository()}
+	humanID := "owner-123"
+	now := time.Now()
+	agent := &models.Agent{
+		ID:             "no_ckpt_agent",
+		Status:         "active",
+		HumanID:        &humanID,
+		Specialties:    []string{"go"},
+		Model:          "claude-opus-4",
+		LastBriefingAt: &now,
+	}
+	agentRepo.agents["no_ckpt_agent"] = agent
+
+	checkpointFinder := &MockHeartbeatCheckpointFinder{
+		pin: nil,
+		err: nil,
+	}
+
+	handler := NewHeartbeatHandler(agentRepo, &MockHeartbeatNotifRepo{}, &MockHeartbeatStorageRepo{})
+	handler.SetCheckpointFinder(checkpointFinder)
+
+	req := httptest.NewRequest("GET", "/v1/heartbeat", nil)
+	ctx := context.WithValue(req.Context(), auth.AgentContextKey, agent)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	handler.Heartbeat(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	// checkpoint field should be null
+	if resp["checkpoint"] != nil {
+		t.Errorf("expected checkpoint to be nil when no checkpoint exists, got %v", resp["checkpoint"])
+	}
+}
+
+func TestHeartbeat_CheckpointTip(t *testing.T) {
+	agentRepo := &MockHeartbeatAgentRepo{MockAgentRepository: NewMockAgentRepository()}
+	humanID := "owner-123"
+	now := time.Now()
+	agent := &models.Agent{
+		ID:              "amcp_no_ckpt_agent",
+		Status:          "active",
+		HumanID:         &humanID,
+		Specialties:     []string{"go"},
+		Model:           "claude-opus-4",
+		LastBriefingAt:  &now,
+		HasAMCPIdentity: true, // Has AMCP identity
+	}
+	agentRepo.agents["amcp_no_ckpt_agent"] = agent
+
+	// No checkpoint found
+	checkpointFinder := &MockHeartbeatCheckpointFinder{pin: nil, err: nil}
+
+	handler := NewHeartbeatHandler(agentRepo, &MockHeartbeatNotifRepo{}, &MockHeartbeatStorageRepo{})
+	handler.SetCheckpointFinder(checkpointFinder)
+
+	req := httptest.NewRequest("GET", "/v1/heartbeat", nil)
+	ctx := context.WithValue(req.Context(), auth.AgentContextKey, agent)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	handler.Heartbeat(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	tipsRaw, ok := resp["tips"]
+	if !ok {
+		t.Fatal("expected 'tips' field in response")
+	}
+	tips := tipsRaw.([]interface{})
+
+	found := false
+	for _, tip := range tips {
+		if tipStr, ok := tip.(string); ok {
+			if contains(tipStr, "checkpoint") && contains(tipStr, "POST /v1/agents/me/checkpoints") {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected checkpoint continuity tip, got %v", tips)
+	}
+}
+
 func TestHeartbeat_Unauthenticated_Returns401(t *testing.T) {
 	handler := NewHeartbeatHandler(
 		&MockHeartbeatAgentRepo{MockAgentRepository: NewMockAgentRepository()},

@@ -263,6 +263,24 @@ func (r *PinRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// FindLatestCheckpoint returns the most recent checkpoint pin for the given agent.
+// Returns nil, nil if no checkpoint exists.
+func (r *PinRepository) FindLatestCheckpoint(ctx context.Context, agentID string) (*models.Pin, error) {
+	query := `SELECT ` + pinColumns + ` FROM pins WHERE owner_id = $1 AND owner_type = 'agent' AND meta @> '{"type":"amcp_checkpoint"}'::jsonb ORDER BY created_at DESC LIMIT 1`
+
+	pin := &models.Pin{}
+	err := r.scanPin(r.pool.QueryRow(ctx, query, agentID), pin)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		LogQueryError(ctx, "FindLatestCheckpoint", "pins", err)
+		return nil, err
+	}
+
+	return pin, nil
+}
+
 // scanPin scans a single row into a Pin struct.
 func (r *PinRepository) scanPin(row pgx.Row, pin *models.Pin) error {
 	return row.Scan(

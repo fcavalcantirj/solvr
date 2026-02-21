@@ -2164,7 +2164,7 @@
       "TDD GREEN: Run all tests \u2014 confirm all passing",
       "Verify: go test ./internal/services/ -run TestBriefing_.*Checkpoint -v && go test ./internal/api/handlers/ -run TestHeartbeat_.*Checkpoint -v"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

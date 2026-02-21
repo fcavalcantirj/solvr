@@ -3285,3 +3285,36 @@ Tests (23 new, TDD approach):
 - Modified: backend/internal/api/handlers/me_agent_briefing_test.go
   * Updated mock PlatformPulse to include new fields
 - Verified: go build ./... succeeds, go test ./... passes all packages
+
+2026-02-21: PRD-v5 Backend - Add latest_checkpoint to briefing (/me) AND heartbeat, with checkpoint continuity tip
+- Modified: backend/internal/models/briefing.go — added LatestCheckpoint *PinResponse field to BriefingResult (Section 13)
+- Modified: backend/internal/services/briefing.go:
+  * Added BriefingCheckpointFinder interface with FindLatestCheckpoint(ctx, agentID) (*models.Pin, error)
+  * Added CheckpointFinder field to BriefingDeps struct and BriefingService struct
+  * Added Section 13 in GetBriefingForAgent: if checkpointFinder set, query latest checkpoint, convert to PinResponse
+  * Wired into NewBriefingServiceWithDeps constructor
+- Modified: backend/internal/services/briefing_test.go — added 2 tests:
+  * TestBriefing_IncludesLatestCheckpoint — agent has checkpoint, verify briefing includes PinResponse with CID, name, meta
+  * TestBriefing_NoCheckpoint — no checkpoint, verify latest_checkpoint is nil
+- Modified: backend/internal/api/handlers/heartbeat.go:
+  * Added HeartbeatCheckpointFinder interface
+  * Added checkpointFinder field and SetCheckpointFinder() method to HeartbeatHandler
+  * Added heartbeatCheckpoint struct with CID, Name, PinnedAt, Meta fields
+  * Added Checkpoint *heartbeatCheckpoint to heartbeatResponse
+  * In handleAgentHeartbeat(): if checkpointFinder set, query latest checkpoint, include in response
+  * Updated buildAgentTips() to accept hasCheckpoint bool parameter
+  * Added AMCP checkpoint tip: "Pin a checkpoint for continuity: POST /v1/agents/me/checkpoints" (when HasAMCPIdentity && !hasCheckpoint)
+- Modified: backend/internal/api/handlers/heartbeat_test.go — added 3 tests:
+  * TestHeartbeat_ShowsCheckpointInfo — agent with checkpoint, verify checkpoint section with cid, name, pinned_at
+  * TestHeartbeat_NoCheckpoint — no checkpoint, verify checkpoint is null
+  * TestHeartbeat_CheckpointTip — agent with AMCP identity but no checkpoints, verify checkpoint continuity tip
+- Modified: backend/internal/db/pins.go — added FindLatestCheckpoint(ctx, agentID) (*models.Pin, error):
+  * Query: SELECT FROM pins WHERE owner_id=$1 AND owner_type='agent' AND meta @> '{"type":"amcp_checkpoint"}'::jsonb ORDER BY created_at DESC LIMIT 1
+  * Returns nil, nil when no checkpoint exists (not ErrPinNotFound)
+- Modified: backend/internal/api/router.go:
+  * Saved concrete *db.PinRepository reference (pinsRepoConcrete)
+  * Wired CheckpointFinder to BriefingDeps (pinsRepoConcrete)
+  * Wired SetCheckpointFinder to HeartbeatHandler (pinsRepoConcrete)
+- Modified: frontend/lib/api-types.ts — added latest_checkpoint?: APIPinResponse | null to APIAgentMeResponse
+- Verified: go test ./... — all backend packages pass
+- Verified: npm test — all 820 frontend tests pass across 96 test files

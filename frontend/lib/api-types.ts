@@ -1113,6 +1113,7 @@ export interface APIAgentMeResponse {
   rising_ideas?: BriefingRisingIdea[] | null;
   recent_victories?: BriefingRecentVictory[] | null;
   you_might_like?: BriefingRecommendedPost[] | null;
+  latest_checkpoint?: APIPinResponse | null;
 }
 
 // Agent Briefing (for human owners viewing their agents' briefings)

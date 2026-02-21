@@ -1,3 +1,18 @@
+2026-02-21: PRD-v5 Frontend - Skip getMyVote API calls when user is not authenticated
+- Modified: frontend/hooks/use-vote.ts
+  * Imported useAuth from '@/hooks/use-auth'
+  * Added `const { isAuthenticated } = useAuth()` at top of useVote hook
+  * Added `if (!isAuthenticated) return` guard in useEffect before calling getMyVote
+  * Added isAuthenticated to useEffect dependency array: [postId, isAuthenticated]
+  * Existing try/catch for getMyVote kept as defense in depth
+- Modified: frontend/hooks/use-vote.test.ts
+  * Added vi.mock('@/hooks/use-auth') with default mock returning { isAuthenticated: false }
+  * All existing 8 tests updated to work with useAuth mock
+  * Tests that need voting behavior now mock isAuthenticated: true
+  * New test: 'should NOT call getMyVote when user is not authenticated' (asserts api.getMyVote not called)
+  * New test: 'should call getMyVote when user IS authenticated' (asserts api.getMyVote called with postId, userVote set to 'up')
+- All frontend tests pass: npm test (100 files, 878 tests, 0 failures)
+
 2026-02-21: PRD-v5 Backend - Admin CLI tool to moderate existing non-English posts using Groq
 - Created: backend/cmd/moderate-existing/main.go (one-time CLI tool)
   * Parses flags: --dry-run (default true), --database-url (required), --groq-api-key (required), --groq-model (optional), --batch-size (default 10), --delay (default 1s)

@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { isUnauthorizedError } from '@/lib/api-error';
+import { useAuth } from '@/hooks/use-auth';
 
 export interface UseVoteResult {
   score: number;
@@ -22,13 +23,16 @@ export interface UseVoteResult {
  * @returns Vote state and actions
  */
 export function useVote(postId: string, initialScore: number): UseVoteResult {
+  const { isAuthenticated } = useAuth();
   const [score, setScore] = useState(initialScore);
   const [isVoting, setIsVoting] = useState(false);
   const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch user's vote on mount
+  // Fetch user's vote on mount (only when authenticated)
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const fetchUserVote = async () => {
       try {
         const response = await api.getMyVote(postId);
@@ -42,7 +46,7 @@ export function useVote(postId: string, initialScore: number): UseVoteResult {
     };
 
     fetchUserVote();
-  }, [postId]);
+  }, [postId, isAuthenticated]);
 
   const vote = useCallback(async (direction: 'up' | 'down') => {
     if (isVoting) return;

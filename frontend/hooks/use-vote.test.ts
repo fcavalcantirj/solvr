@@ -13,9 +13,46 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
+// Mock the useAuth hook
+vi.mock('@/hooks/use-auth', () => ({
+  useAuth: vi.fn(() => ({
+    isAuthenticated: false,
+    user: null,
+    isLoading: false,
+    showAuthModal: false,
+    authModalMessage: '',
+    setShowAuthModal: vi.fn(),
+    setToken: vi.fn(),
+    logout: vi.fn(),
+    loginWithGitHub: vi.fn(),
+    loginWithGoogle: vi.fn(),
+    loginWithEmail: vi.fn(),
+    register: vi.fn(),
+  })),
+}));
+
+import { useAuth } from '@/hooks/use-auth';
+
+const mockUseAuth = vi.mocked(useAuth);
+
 describe('useVote', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: user is NOT authenticated
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: false,
+      user: null,
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+      setToken: vi.fn(),
+      logout: vi.fn(),
+      loginWithGitHub: vi.fn(),
+      loginWithGoogle: vi.fn(),
+      loginWithEmail: vi.fn(),
+      register: vi.fn(),
+    });
     // Mock getMyVote to return null vote by default (user not voted yet or not logged in)
     (api.getMyVote as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not authenticated'));
   });
@@ -24,8 +61,69 @@ describe('useVote', () => {
     vi.restoreAllMocks();
   });
 
+  it('should NOT call getMyVote when user is not authenticated', async () => {
+    // Arrange - user is not authenticated (default mock)
+
+    // Act
+    const { result } = renderHook(() => useVote('post-123', 24));
+
+    // Wait for effects to settle
+    await waitFor(() => {
+      expect(result.current.score).toBe(24);
+    });
+
+    // Assert - getMyVote should NOT have been called
+    expect(api.getMyVote).not.toHaveBeenCalled();
+    expect(result.current.userVote).toBeNull();
+  });
+
+  it('should call getMyVote when user IS authenticated', async () => {
+    // Arrange - user is authenticated
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { id: 'user-1', type: 'human', displayName: 'Test User' },
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+      setToken: vi.fn(),
+      logout: vi.fn(),
+      loginWithGitHub: vi.fn(),
+      loginWithGoogle: vi.fn(),
+      loginWithEmail: vi.fn(),
+      register: vi.fn(),
+    });
+    (api.getMyVote as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { vote: 'up' },
+    });
+
+    // Act
+    const { result } = renderHook(() => useVote('post-123', 24));
+
+    // Assert - getMyVote should have been called
+    await waitFor(() => {
+      expect(api.getMyVote).toHaveBeenCalledWith('post-123');
+      expect(result.current.userVote).toBe('up');
+    });
+  });
+
   it('should upvote and update score optimistically', async () => {
-    // Arrange - API returns new score
+    // Arrange - user must be authenticated to vote
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { id: 'user-1', type: 'human', displayName: 'Test User' },
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+      setToken: vi.fn(),
+      logout: vi.fn(),
+      loginWithGitHub: vi.fn(),
+      loginWithGoogle: vi.fn(),
+      loginWithEmail: vi.fn(),
+      register: vi.fn(),
+    });
+    (api.getMyVote as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not authenticated'));
     (api.voteOnPost as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: { vote_score: 25, upvotes: 26, downvotes: 1 }
     });
@@ -49,6 +147,21 @@ describe('useVote', () => {
 
   it('should downvote and update score optimistically', async () => {
     // Arrange
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { id: 'user-1', type: 'human', displayName: 'Test User' },
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+      setToken: vi.fn(),
+      logout: vi.fn(),
+      loginWithGitHub: vi.fn(),
+      loginWithGoogle: vi.fn(),
+      loginWithEmail: vi.fn(),
+      register: vi.fn(),
+    });
+    (api.getMyVote as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not authenticated'));
     (api.voteOnPost as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: { vote_score: 23, upvotes: 24, downvotes: 1 }
     });
@@ -122,7 +235,22 @@ describe('useVote', () => {
   });
 
   it('should track userVote after successful vote', async () => {
-    // Arrange - API returns user_vote
+    // Arrange - user is authenticated, API returns user_vote
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { id: 'user-1', type: 'human', displayName: 'Test User' },
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+      setToken: vi.fn(),
+      logout: vi.fn(),
+      loginWithGitHub: vi.fn(),
+      loginWithGoogle: vi.fn(),
+      loginWithEmail: vi.fn(),
+      register: vi.fn(),
+    });
+    (api.getMyVote as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not authenticated'));
     (api.voteOnPost as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: { vote_score: 25, upvotes: 26, downvotes: 1, user_vote: 'up' }
     });

@@ -873,3 +873,108 @@ func TestDeleteComment_AgentCannotDeleteOthersComment(t *testing.T) {
 		t.Errorf("expected status 403, got %d; body: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// ============================================================================
+// System Comments in List
+// ============================================================================
+
+func TestListComments_IncludesSystem(t *testing.T) {
+	now := time.Now()
+	mockRepo := &MockCommentsRepository{
+		comments: []models.CommentWithAuthor{
+			{
+				Comment: models.Comment{
+					ID:         "comment-human",
+					TargetType: models.CommentTargetPost,
+					TargetID:   "post-123",
+					AuthorType: models.AuthorTypeHuman,
+					AuthorID:   "user-1",
+					Content:    "Nice post!",
+					CreatedAt:  now,
+				},
+				Author: models.CommentAuthor{
+					ID:          "user-1",
+					Type:        models.AuthorTypeHuman,
+					DisplayName: "Test User",
+				},
+			},
+			{
+				Comment: models.Comment{
+					ID:         "comment-system",
+					TargetType: models.CommentTargetPost,
+					TargetID:   "post-123",
+					AuthorType: models.AuthorTypeSystem,
+					AuthorID:   "solvr-moderator",
+					Content:    "Post approved by Solvr moderation. Your post is now visible in the feed.",
+					CreatedAt:  now.Add(time.Second),
+				},
+				Author: models.CommentAuthor{
+					ID:          "solvr-moderator",
+					Type:        models.AuthorTypeSystem,
+					DisplayName: "Solvr Moderator",
+				},
+			},
+		},
+		targetExists: true,
+	}
+
+	handler := NewCommentsHandler(mockRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts/post-123/comments", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("target_type", "post")
+	rctx.URLParams.Add("id", "post-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rec := httptest.NewRecorder()
+	handler.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response struct {
+		Data []struct {
+			ID         string `json:"id"`
+			AuthorType string `json:"author_type"`
+			AuthorID   string `json:"author_id"`
+			Content    string `json:"content"`
+			Author     struct {
+				Type        string `json:"type"`
+				DisplayName string `json:"display_name"`
+			} `json:"author"`
+		} `json:"data"`
+		Meta struct {
+			Total int `json:"total"`
+		} `json:"meta"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should include both human and system comments
+	if len(response.Data) != 2 {
+		t.Fatalf("expected 2 comments, got %d", len(response.Data))
+	}
+	if response.Meta.Total != 2 {
+		t.Fatalf("expected total 2, got %d", response.Meta.Total)
+	}
+
+	// Find the system comment
+	var found bool
+	for _, c := range response.Data {
+		if c.AuthorType == "system" {
+			found = true
+			if c.AuthorID != "solvr-moderator" {
+				t.Errorf("expected system author_id 'solvr-moderator', got %q", c.AuthorID)
+			}
+			if c.Author.Type != "system" {
+				t.Errorf("expected author.type 'system', got %q", c.Author.Type)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("expected system comment to be included in list results")
+	}
+}

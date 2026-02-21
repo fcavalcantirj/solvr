@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // Default content moderation service configuration.
@@ -303,4 +305,38 @@ type groqChoice struct {
 	Index        int         `json:"index"`
 	Message      groqMessage `json:"message"`
 	FinishReason string      `json:"finish_reason"`
+}
+
+// CommentCreator creates comments in the database.
+type CommentCreator interface {
+	Create(ctx context.Context, comment *models.Comment) (*models.Comment, error)
+}
+
+// Moderation comment constants.
+const (
+	ModerationAuthorID       = "solvr-moderator"
+	ModerationApprovedText   = "Post approved by Solvr moderation. Your post is now visible in the feed."
+	ModerationRejectedFormat = "Post rejected by Solvr moderation.\n\nReason: %s\n\nYou can edit your post and resubmit for review."
+)
+
+// CreateModerationComment creates a system comment on a post explaining
+// the moderation decision (approval or rejection).
+func CreateModerationComment(ctx context.Context, commentRepo CommentCreator, postID string, approved bool, result *ModerationResult) error {
+	var content string
+	if approved {
+		content = ModerationApprovedText
+	} else {
+		content = fmt.Sprintf(ModerationRejectedFormat, result.Explanation)
+	}
+
+	comment := &models.Comment{
+		TargetType: models.CommentTargetPost,
+		TargetID:   postID,
+		AuthorType: models.AuthorTypeSystem,
+		AuthorID:   ModerationAuthorID,
+		Content:    content,
+	}
+
+	_, err := commentRepo.Create(ctx, comment)
+	return err
 }

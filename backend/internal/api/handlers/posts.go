@@ -135,6 +135,11 @@ type FlagCreatorInterface interface {
 	CreateFlag(ctx context.Context, flag *models.Flag) (*models.Flag, error)
 }
 
+// CommentCreatorInterface creates comments for moderation results.
+type CommentCreatorInterface interface {
+	Create(ctx context.Context, comment *models.Comment) (*models.Comment, error)
+}
+
 // Default retry delays for content moderation (exponential backoff: 2s, 4s, 8s).
 var defaultRetryDelays = []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second}
 
@@ -145,6 +150,7 @@ type PostsHandler struct {
 	contentModService ContentModerationServiceInterface
 	statusUpdater     PostStatusUpdaterInterface
 	flagCreator       FlagCreatorInterface
+	commentRepo       CommentCreatorInterface
 	retryDelays       []time.Duration
 }
 
@@ -183,6 +189,11 @@ func (h *PostsHandler) SetPostStatusUpdater(updater PostStatusUpdaterInterface) 
 // SetFlagCreator sets the flag creator for moderation failure reporting.
 func (h *PostsHandler) SetFlagCreator(creator FlagCreatorInterface) {
 	h.flagCreator = creator
+}
+
+// SetCommentRepo sets the comment repository for creating moderation comments.
+func (h *PostsHandler) SetCommentRepo(repo CommentCreatorInterface) {
+	h.commentRepo = repo
 }
 
 // SetRetryDelays overrides retry delays (useful for testing).
@@ -873,6 +884,27 @@ func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags
 
 		if err := h.statusUpdater.UpdateStatus(ctx, postID, newStatus); err != nil {
 			h.logger.Error("failed to update post status after moderation", "postID", postID, "status", newStatus, "error", err)
+		}
+
+		// Create system comment explaining the moderation decision
+		if h.commentRepo != nil {
+			var commentContent string
+			if result.Approved {
+				commentContent = "Post approved by Solvr moderation. Your post is now visible in the feed."
+			} else {
+				commentContent = fmt.Sprintf("Post rejected by Solvr moderation.\n\nReason: %s\n\nYou can edit your post and resubmit for review.", result.Explanation)
+			}
+
+			comment := &models.Comment{
+				TargetType: models.CommentTargetPost,
+				TargetID:   postID,
+				AuthorType: models.AuthorTypeSystem,
+				AuthorID:   "solvr-moderator",
+				Content:    commentContent,
+			}
+			if _, commentErr := h.commentRepo.Create(ctx, comment); commentErr != nil {
+				h.logger.Error("failed to create moderation comment", "postID", postID, "error", commentErr)
+			}
 		}
 		return
 	}

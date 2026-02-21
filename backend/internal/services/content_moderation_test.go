@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // Helper to create a valid Groq JSON response.
@@ -361,5 +364,113 @@ func TestModerateContent_StrictSchema(t *testing.T) {
 	}
 	if capturedRequest.Messages[0].Content != contentModerationSystemPrompt {
 		t.Error("expected system message to be the static moderation prompt")
+	}
+}
+
+// ============================================================================
+// CreateModerationComment Tests
+// ============================================================================
+
+// mockCommentCreator implements CommentCreator for testing.
+type mockCommentCreator struct {
+	comments []*models.Comment
+	err      error
+}
+
+func (m *mockCommentCreator) Create(ctx context.Context, comment *models.Comment) (*models.Comment, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	comment.ID = "comment-mod-123"
+	comment.CreatedAt = time.Now()
+	m.comments = append(m.comments, comment)
+	return comment, nil
+}
+
+func TestCreateModerationComment_Approved(t *testing.T) {
+	repo := &mockCommentCreator{}
+	result := &ModerationResult{
+		Approved:    true,
+		Explanation: "Content is appropriate and relevant",
+	}
+
+	err := CreateModerationComment(context.Background(), repo, "post-uuid-123", true, result)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(repo.comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(repo.comments))
+	}
+
+	c := repo.comments[0]
+
+	// Verify author fields
+	if c.AuthorType != models.AuthorTypeSystem {
+		t.Errorf("expected author_type %q, got %q", models.AuthorTypeSystem, c.AuthorType)
+	}
+	if c.AuthorID != "solvr-moderator" {
+		t.Errorf("expected author_id 'solvr-moderator', got %q", c.AuthorID)
+	}
+
+	// Verify target fields
+	if c.TargetType != models.CommentTargetPost {
+		t.Errorf("expected target_type %q, got %q", models.CommentTargetPost, c.TargetType)
+	}
+	if c.TargetID != "post-uuid-123" {
+		t.Errorf("expected target_id 'post-uuid-123', got %q", c.TargetID)
+	}
+
+	// Verify approved comment text
+	expectedText := "Post approved by Solvr moderation. Your post is now visible in the feed."
+	if c.Content != expectedText {
+		t.Errorf("expected content %q, got %q", expectedText, c.Content)
+	}
+}
+
+func TestCreateModerationComment_Rejected(t *testing.T) {
+	repo := &mockCommentCreator{}
+	result := &ModerationResult{
+		Approved:         false,
+		Explanation:      "Content is not in English",
+		RejectionReasons: []string{"not_english"},
+	}
+
+	err := CreateModerationComment(context.Background(), repo, "post-uuid-456", false, result)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(repo.comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(repo.comments))
+	}
+
+	c := repo.comments[0]
+
+	// Verify author fields
+	if c.AuthorType != models.AuthorTypeSystem {
+		t.Errorf("expected author_type %q, got %q", models.AuthorTypeSystem, c.AuthorType)
+	}
+	if c.AuthorID != "solvr-moderator" {
+		t.Errorf("expected author_id 'solvr-moderator', got %q", c.AuthorID)
+	}
+
+	// Verify target fields
+	if c.TargetType != models.CommentTargetPost {
+		t.Errorf("expected target_type %q, got %q", models.CommentTargetPost, c.TargetType)
+	}
+	if c.TargetID != "post-uuid-456" {
+		t.Errorf("expected target_id 'post-uuid-456', got %q", c.TargetID)
+	}
+
+	// Verify rejected comment text includes explanation
+	if !strings.Contains(c.Content, "Post rejected by Solvr moderation.") {
+		t.Errorf("expected content to contain rejection header, got %q", c.Content)
+	}
+	if !strings.Contains(c.Content, "Content is not in English") {
+		t.Errorf("expected content to contain explanation, got %q", c.Content)
+	}
+	if !strings.Contains(c.Content, "You can edit your post and resubmit for review.") {
+		t.Errorf("expected content to contain resubmit instructions, got %q", c.Content)
 	}
 }

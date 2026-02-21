@@ -1,3 +1,32 @@
+2026-02-21: PRD-v5 Backend - Create system moderation comments on posts explaining approval/rejection decisions
+- Modified: backend/internal/services/content_moderation.go
+  * Added import for models package
+  * Added CommentCreator interface: Create(ctx, comment) (*Comment, error)
+  * Added ModerationAuthorID, ModerationApprovedText, ModerationRejectedFormat constants
+  * Added CreateModerationComment() function: creates system comment with author_type='system', author_id='solvr-moderator'
+  * Approved text: "Post approved by Solvr moderation. Your post is now visible in the feed."
+  * Rejected text includes Groq explanation and resubmit instructions
+- Modified: backend/internal/api/handlers/posts.go
+  * Added CommentCreatorInterface with Create method
+  * Added commentRepo field to PostsHandler struct
+  * Added SetCommentRepo() setter method
+  * Updated moderatePostAsync() to create system comment after status update
+  * Comment created with target_type='post', author_type='system', author_id='solvr-moderator'
+- Modified: backend/internal/api/router.go
+  * Wire commentsRepo to postsHandler via SetCommentRepo when GROQ_API_KEY is configured
+- Modified: backend/internal/services/content_moderation_test.go (2 new tests)
+  * TestCreateModerationComment_Approved — verifies system comment with approved text
+  * TestCreateModerationComment_Rejected — verifies system comment with rejection reason from Groq
+- Modified: backend/internal/api/handlers/posts_moderation_test.go
+  * Added MockCommentCreator for testing
+  * Updated TestModeratePostAsync_Approved — now verifies system comment creation
+  * Updated TestModeratePostAsync_Rejected — now verifies rejection comment with explanation
+- Modified: backend/internal/api/handlers/comments_test.go (1 new test)
+  * TestListComments_IncludesSystem — GET /v1/posts/{id}/comments returns system comments
+- Verified: db/comments.go Create() has no author_type validation (accepts 'system' via DB constraint)
+- Verified: comments handler List/FindByID do not filter by author_type (system comments returned)
+- All backend tests pass: go test ./...
+
 2026-02-21: PRD-v5 Backend - Exclude pending_review, rejected, and draft posts from feed, search, and sitemap
 - Modified: backend/internal/models/post.go
   * Added IncludeHidden bool field to PostListOptions struct

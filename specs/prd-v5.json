@@ -2423,7 +2423,7 @@
       "Test: TestListComments_IncludesSystem \u2014 GET /v1/posts/{id}/comments returns system comments",
       "Verify: go test ./internal/services/... -run TestCreateModeration passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

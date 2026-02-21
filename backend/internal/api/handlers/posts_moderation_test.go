@@ -88,6 +88,30 @@ func (m *MockContentModerationService) GetCalls() int {
 	return m.calls
 }
 
+// MockCommentCreator implements CommentCreatorInterface for testing.
+type MockCommentCreator struct {
+	mu       sync.Mutex
+	comments []*models.Comment
+	err      error
+}
+
+func (m *MockCommentCreator) Create(ctx context.Context, comment *models.Comment) (*models.Comment, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	comment.ID = fmt.Sprintf("comment-%d", len(m.comments)+1)
+	m.comments = append(m.comments, comment)
+	return comment, nil
+}
+
+func (m *MockCommentCreator) GetComments() []*models.Comment {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.comments
+}
+
 // MockFlagCreator implements FlagCreatorInterface for testing.
 type MockFlagCreator struct {
 	mu    sync.Mutex
@@ -228,6 +252,7 @@ func TestCreatePost_NoModerationService(t *testing.T) {
 func TestModeratePostAsync_Approved(t *testing.T) {
 	repo := NewMockPostsRepository()
 	statusUpdater := NewMockPostStatusUpdater()
+	commentCreator := &MockCommentCreator{}
 	modService := NewMockContentModerationService()
 	modService.SetResult(&ModerationResult{
 		Approved:    true,
@@ -237,6 +262,7 @@ func TestModeratePostAsync_Approved(t *testing.T) {
 	handler := NewPostsHandler(repo)
 	handler.SetContentModerationService(modService)
 	handler.SetPostStatusUpdater(statusUpdater)
+	handler.SetCommentRepo(commentCreator)
 
 	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description content", []string{"go"}, "human", "user-123")
 
@@ -248,11 +274,32 @@ func TestModeratePostAsync_Approved(t *testing.T) {
 	if status != models.PostStatusOpen {
 		t.Errorf("expected status %q, got %q", models.PostStatusOpen, status)
 	}
+
+	// Verify system comment was created
+	comments := commentCreator.GetComments()
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(comments))
+	}
+	c := comments[0]
+	if c.AuthorType != models.AuthorTypeSystem {
+		t.Errorf("expected author_type %q, got %q", models.AuthorTypeSystem, c.AuthorType)
+	}
+	if c.AuthorID != "solvr-moderator" {
+		t.Errorf("expected author_id 'solvr-moderator', got %q", c.AuthorID)
+	}
+	if c.TargetType != models.CommentTargetPost {
+		t.Errorf("expected target_type %q, got %q", models.CommentTargetPost, c.TargetType)
+	}
+	expectedText := "Post approved by Solvr moderation. Your post is now visible in the feed."
+	if c.Content != expectedText {
+		t.Errorf("expected content %q, got %q", expectedText, c.Content)
+	}
 }
 
 func TestModeratePostAsync_Rejected(t *testing.T) {
 	repo := NewMockPostsRepository()
 	statusUpdater := NewMockPostStatusUpdater()
+	commentCreator := &MockCommentCreator{}
 	modService := NewMockContentModerationService()
 	modService.SetResult(&ModerationResult{
 		Approved:         false,
@@ -263,6 +310,7 @@ func TestModeratePostAsync_Rejected(t *testing.T) {
 	handler := NewPostsHandler(repo)
 	handler.SetContentModerationService(modService)
 	handler.SetPostStatusUpdater(statusUpdater)
+	handler.SetCommentRepo(commentCreator)
 
 	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description content", []string{"go"}, "human", "user-123")
 
@@ -273,6 +321,28 @@ func TestModeratePostAsync_Rejected(t *testing.T) {
 	}
 	if status != models.PostStatusRejected {
 		t.Errorf("expected status %q, got %q", models.PostStatusRejected, status)
+	}
+
+	// Verify system comment was created with rejection reason
+	comments := commentCreator.GetComments()
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(comments))
+	}
+	c := comments[0]
+	if c.AuthorType != models.AuthorTypeSystem {
+		t.Errorf("expected author_type %q, got %q", models.AuthorTypeSystem, c.AuthorType)
+	}
+	if c.AuthorID != "solvr-moderator" {
+		t.Errorf("expected author_id 'solvr-moderator', got %q", c.AuthorID)
+	}
+	if !strings.Contains(c.Content, "Post rejected by Solvr moderation.") {
+		t.Errorf("expected content to contain rejection header, got %q", c.Content)
+	}
+	if !strings.Contains(c.Content, "Content is not in English") {
+		t.Errorf("expected content to contain explanation, got %q", c.Content)
+	}
+	if !strings.Contains(c.Content, "You can edit your post and resubmit for review.") {
+		t.Errorf("expected content to contain resubmit instructions, got %q", c.Content)
 	}
 }
 

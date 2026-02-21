@@ -181,6 +181,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		if pr, ok := postsRepo.(*db.PostRepository); ok {
 			postsHandler.SetPostStatusUpdater(pr)
 		}
+		postsHandler.SetCommentRepo(commentsRepo)
 	}
 
 	// Create search handler (per SPEC.md Part 5.5)

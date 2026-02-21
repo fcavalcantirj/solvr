@@ -1945,7 +1945,7 @@
       "Verify: bash SKILL_DIR/scripts/solvr.sh help shows set-specialties and set-model commands",
       "Verify: bash SKILL_DIR/scripts/solvr.sh heartbeat displays tips if present in response"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

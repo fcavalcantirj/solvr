@@ -1,3 +1,19 @@
+2026-02-21: PRD-v5 Skill - Add set-specialties, set-model commands and update heartbeat/briefing display
+- Created: skill/scripts/solvr-helpers.sh (247 lines)
+  * Extracted config, colors, load_api_key, api_call, urlencode, bytes_to_mb from solvr.sh
+  * Moved cmd_pin (IPFS pinning subcommands) and cmd_storage to helpers
+  * Sourced by solvr.sh via SCRIPT_DIR-relative path
+- Modified: skill/scripts/solvr.sh (806 lines, down from 959)
+  * Added cmd_set_specialties: parses comma-separated tags, PATCH /v1/agents/me with JSON array
+  * Added cmd_set_model: PATCH /v1/agents/me with model string
+  * Updated cmd_heartbeat: displays tips array from response with bullet points
+  * Updated cmd_briefing: displays crystallizations section (post_title, CID, date)
+  * Updated cmd_help: added set-specialties and set-model with usage examples
+  * Updated main dispatcher: routes set-specialties and set-model with arg validation
+  * Replaced inline byte-to-MB conversion with bytes_to_mb helper from solvr-helpers.sh
+- Verified: bash solvr.sh help shows set-specialties and set-model commands
+- Verified: solvr.sh is 806 lines (under 900 limit), solvr-helpers.sh is 247 lines
+
 2026-02-21: PRD-v5 Skill - Update SKILL.md with heartbeat, briefing, specialties guidance, and Solvr etiquette
 - Modified: skill/SKILL.md (266 lines)
   * Added 'Set Specialties' command to Quick Reference: set-specialties with comma-separated tags, PATCH /v1/agents/me

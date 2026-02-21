@@ -300,6 +300,92 @@ test_file_contains "skill.json lists heartbeat endpoint" "heartbeat" "$SKILL_JSO
 echo ""
 
 # ============================================================================
+# Checkpoint, Checkpoints, Resurrect command tests
+# ============================================================================
+
+echo -e "${YELLOW}Checkpoint/Resurrect command tests:${NC}"
+
+# checkpoint command exists (recognized, not "Unknown command")
+test_checkpoint_command_exists() {
+    local name="checkpoint command exists (no Unknown command)"
+    echo -n "Testing: ${name}... "
+    local output
+    output=$("$SOLVR_SH" checkpoint 2>&1) || true
+    if echo "$output" | grep -qF "Unknown command"; then
+        echo -e "${RED}FAIL${NC}"
+        echo "  Got 'Unknown command' — checkpoint not recognized"
+        ((FAILED++)) || true
+        return 1
+    else
+        echo -e "${GREEN}PASS${NC}"
+        ((PASSED++)) || true
+        return 0
+    fi
+}
+test_checkpoint_command_exists || true
+
+# checkpoint requires CID argument
+test_case "checkpoint requires CID" 1 "$SOLVR_SH" checkpoint
+
+# checkpoints command exists
+test_checkpoints_command_exists() {
+    local name="checkpoints command exists (no Unknown command)"
+    echo -n "Testing: ${name}... "
+    local output
+    output=$("$SOLVR_SH" checkpoints 2>&1) || true
+    if echo "$output" | grep -qF "Unknown command"; then
+        echo -e "${RED}FAIL${NC}"
+        echo "  Got 'Unknown command' — checkpoints not recognized"
+        ((FAILED++)) || true
+        return 1
+    else
+        echo -e "${GREEN}PASS${NC}"
+        ((PASSED++)) || true
+        return 0
+    fi
+}
+test_checkpoints_command_exists || true
+
+# checkpoints requires agent ID
+test_case "checkpoints requires agent ID" 1 "$SOLVR_SH" checkpoints
+
+# resurrect command exists
+test_resurrect_command_exists() {
+    local name="resurrect command exists (no Unknown command)"
+    echo -n "Testing: ${name}... "
+    local output
+    output=$("$SOLVR_SH" resurrect 2>&1) || true
+    if echo "$output" | grep -qF "Unknown command"; then
+        echo -e "${RED}FAIL${NC}"
+        echo "  Got 'Unknown command' — resurrect not recognized"
+        ((FAILED++)) || true
+        return 1
+    else
+        echo -e "${GREEN}PASS${NC}"
+        ((PASSED++)) || true
+        return 0
+    fi
+}
+test_resurrect_command_exists || true
+
+# resurrect requires agent ID
+test_case "resurrect requires agent ID" 1 "$SOLVR_SH" resurrect
+
+# Help text mentions new commands
+test_output_contains "help shows checkpoint command" "checkpoint" "$SOLVR_SH" help || true
+test_output_contains "help shows checkpoints command" "checkpoints" "$SOLVR_SH" help || true
+test_output_contains "help shows resurrect command" "resurrect" "$SOLVR_SH" help || true
+
+# SKILL.md documents new commands
+test_file_contains "SKILL.md documents checkpoint command" "checkpoint" "$SKILL_MD" || true
+test_file_contains "SKILL.md documents resurrect command" "resurrect" "$SKILL_MD" || true
+
+# skill.json lists checkpoint capability
+test_file_contains "skill.json lists checkpoint endpoint" "checkpoint" "$SKILL_JSON" || true
+
+echo ""
+
+# ============================================================================
 # API tests (require credentials)
 # ============================================================================
 

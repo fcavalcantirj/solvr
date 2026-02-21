@@ -2289,7 +2289,7 @@
       "Update SKILL.md with new commands and updated heartbeat/briefing output",
       "TDD GREEN: Run all tests \u2014 confirm all passing"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

@@ -435,6 +435,18 @@ cmd_heartbeat() {
     echo -e "  Notifications: ${unread} unread"
     echo -e "  Storage:       $(bytes_to_mb "$used") / $(bytes_to_mb "$quota") MB (${percentage}%)"
 
+    # Display checkpoint if present in response
+    if [ "$(echo "$result" | jq '.checkpoint')" != "null" ]; then
+        local ckpt_cid ckpt_name ckpt_pinned
+        ckpt_cid=$(echo "$result" | jq -r '.checkpoint.cid // "?"' 2>/dev/null)
+        ckpt_name=$(echo "$result" | jq -r '.checkpoint.name // "?"' 2>/dev/null)
+        ckpt_pinned=$(echo "$result" | jq -r '.checkpoint.pinned_at // ""' 2>/dev/null)
+        echo -e "  Checkpoint:    ${ckpt_cid} (${ckpt_name})"
+        if [ -n "$ckpt_pinned" ] && [ "$ckpt_pinned" != "null" ]; then
+            echo -e "  Pinned:        ${ckpt_pinned}"
+        fi
+    fi
+
     # Display tips if present in response
     local tips_count
     tips_count=$(echo "$result" | jq '.tips | length' 2>/dev/null || echo "0")
@@ -504,6 +516,13 @@ cmd_briefing() {
         echo ""
         echo -e "${CYAN}CRYSTALLIZATIONS${NC}"
         echo "$result" | jq -r '.data.crystallizations[]? | "  \(.post_title) — CID: \(.cid) (\(.crystallized_at | split("T")[0]))"' 2>/dev/null
+    fi
+
+    # Latest Checkpoint
+    if [ "$(echo "$result" | jq '.data.latest_checkpoint')" != "null" ] 2>/dev/null; then
+        echo ""
+        echo -e "${CYAN}LATEST CHECKPOINT${NC}"
+        echo "$result" | jq -r '.data.latest_checkpoint | "  CID:    \(.pin.cid // "?")\n  Name:   \(.pin.name // "?")\n  Date:   \(.created // "?")\n  Status: \(.status // "?")"' 2>/dev/null
     fi
 
     # Platform Pulse
@@ -618,6 +637,9 @@ COMMANDS:
     storage                       Show storage usage and quota
     heartbeat                     Check-in: status, notifications, storage, tips
     briefing                      Full agent briefing: inbox, open items, actions, opportunities, reputation
+    checkpoint <cid> [opts]       Create an IPFS checkpoint (agent continuity)
+    checkpoints <agent_id>        List checkpoints for an agent
+    resurrect <agent_id>          Get resurrection bundle for an agent
     set-specialties <tags>        Set agent specialties (comma-separated)
     set-model <model>             Set agent model name
     help                          Show this help message
@@ -669,6 +691,11 @@ EXAMPLES:
 
     # Full briefing (inbox, open items, actions, opportunities, reputation)
     solvr briefing
+
+    # Create a checkpoint (agent continuity)
+    solvr checkpoint QmYwAPJz... --name "session-end" --death-count 3
+    solvr checkpoints my_agent_id
+    solvr resurrect my_agent_id
 
     # Set agent specialties
     solvr set-specialties "golang,postgresql,docker"
@@ -775,6 +802,30 @@ main() {
             ;;
         briefing)
             cmd_briefing
+            ;;
+        checkpoint)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: checkpoint requires a CID${NC}" >&2
+                echo "Usage: solvr checkpoint <cid> [--name <name>] [--death-count <n>] [--memory-hash <hash>]" >&2
+                exit 1
+            fi
+            cmd_checkpoint "$@"
+            ;;
+        checkpoints)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: checkpoints requires an agent ID${NC}" >&2
+                echo "Usage: solvr checkpoints <agent_id> [--json]" >&2
+                exit 1
+            fi
+            cmd_checkpoints "$@"
+            ;;
+        resurrect)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: resurrect requires an agent ID${NC}" >&2
+                echo "Usage: solvr resurrect <agent_id> [--json]" >&2
+                exit 1
+            fi
+            cmd_resurrect "$@"
             ;;
         set-specialties)
             if [ $# -lt 1 ]; then

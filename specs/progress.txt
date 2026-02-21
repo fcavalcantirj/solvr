@@ -1,3 +1,25 @@
+2026-02-21: PRD-v5 Skill - Update solvr.sh with checkpoint, resurrection, and enhanced heartbeat/briefing output
+- Modified: skill/scripts/solvr-helpers.sh (+152 lines, now 400)
+  * Added cmd_checkpoint(): POST /v1/agents/me/checkpoints with --name, --death-count, --memory-hash flags
+  * Added cmd_checkpoints(): GET /v1/agents/{id}/checkpoints with formatted table (CID, name, date, deaths)
+  * Added cmd_resurrect(): GET /v1/agents/{id}/resurrection-bundle with formatted sections (identity, knowledge, reputation, checkpoint)
+- Modified: skill/scripts/solvr.sh (806→857 lines)
+  * Updated cmd_heartbeat(): displays checkpoint CID, name, and pinned_at when present in response
+  * Updated cmd_briefing(): added LATEST CHECKPOINT section when latest_checkpoint present in /me response
+  * Added checkpoint, checkpoints, resurrect to main() routing with argument validation
+  * Updated help text with new commands and examples
+- Modified: skill/SKILL.md (+24 lines, now 290)
+  * Added Checkpoint, List Checkpoints, and Resurrect command documentation
+  * Updated Heartbeat description to mention checkpoint info
+  * Updated Briefing section list to include Latest Checkpoint
+- Modified: skill/skill.json (version 3.2.0→3.3.0)
+  * Added checkpoints and resurrection endpoints
+- Modified: skill/scripts/test.sh (+85 lines, now 459)
+  * Added 12 new tests for checkpoint/checkpoints/resurrect commands
+  * Tests: command existence, argument validation, help text, SKILL.md docs, skill.json endpoints
+- Copied: frontend/public/SKILL.md (synced with skill/SKILL.md)
+- All 69 tests passing (was 57)
+
 2026-02-21: PRD-v5 Docs - Update SPEC.md with agent continuity endpoints, pin meta filtering, and resurrection flow diagram
 - Modified: SPEC.md Part 21 (IPFS Pinning Service)
   * Added `meta` query parameter to GET /v1/pins documentation with JSONB containment filter explanation

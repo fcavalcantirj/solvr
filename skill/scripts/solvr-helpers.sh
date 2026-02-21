@@ -228,6 +228,159 @@ cmd_pin() {
 }
 
 # ============================================================================
+# Checkpoint Commands
+# ============================================================================
+
+cmd_checkpoint() {
+    local cid="${1:-}"
+    if [ -z "$cid" ]; then
+        echo -e "${RED}Error: checkpoint requires a CID${NC}" >&2
+        echo "Usage: solvr checkpoint <cid> [--name <name>] [--death-count <n>] [--memory-hash <hash>]" >&2
+        return 1
+    fi
+    shift
+
+    local name=""
+    local death_count=""
+    local memory_hash=""
+    local json_output=false
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --name) name="${2:-}"; shift 2 || break ;;
+            --death-count) death_count="${2:-}"; shift 2 || break ;;
+            --memory-hash) memory_hash="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    local payload
+    payload=$(jq -n --arg cid "$cid" '{cid: $cid}')
+    [ -n "$name" ] && payload=$(echo "$payload" | jq --arg n "$name" '. + {name: $n}')
+    [ -n "$death_count" ] && payload=$(echo "$payload" | jq --arg dc "$death_count" '. + {death_count: $dc}')
+    [ -n "$memory_hash" ] && payload=$(echo "$payload" | jq --arg mh "$memory_hash" '. + {memory_hash: $mh}')
+
+    local result
+    result=$(api_call POST "/agents/me/checkpoints" "$payload") || return 1
+
+    if [ "$json_output" = true ]; then
+        echo "$result"
+        return 0
+    fi
+
+    echo -e "${GREEN}Checkpoint created!${NC}"
+    echo "$result" | jq -r '"  Request ID: \(.requestid // "unknown")\n  Status: \(.status // "queued")\n  CID: \(.pin.cid // "unknown")\n  Name: \(.pin.name // "auto")"' 2>/dev/null || echo "$result"
+}
+
+cmd_checkpoints() {
+    local agent_id="${1:-}"
+    if [ -z "$agent_id" ]; then
+        echo -e "${RED}Error: checkpoints requires an agent ID${NC}" >&2
+        echo "Usage: solvr checkpoints <agent_id> [--json]" >&2
+        return 1
+    fi
+    shift
+
+    local json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    local result
+    result=$(api_call GET "/agents/${agent_id}/checkpoints") || return 1
+
+    if [ "$json_output" = true ]; then
+        echo "$result"
+        return 0
+    fi
+
+    local count
+    count=$(echo "$result" | jq -r '.count // 0' 2>/dev/null)
+    echo -e "${CYAN}Checkpoints for ${agent_id}: ${count} total${NC}"
+    echo ""
+
+    # Show latest checkpoint
+    if [ "$(echo "$result" | jq '.latest')" != "null" ]; then
+        echo -e "${GREEN}LATEST:${NC}"
+        echo "$result" | jq -r '.latest | "  CID:  \(.pin.cid // "?")\n  Name: \(.pin.name // "?")\n  Date: \(.created // "?")\n  Status: \(.status // "?")\n  Deaths: \(.pin.meta.death_count // "n/a")"' 2>/dev/null
+        echo ""
+    fi
+
+    # Show all checkpoints
+    echo "$result" | jq -r '.results[]? | "  \(.pin.cid // "?")  \(.pin.name // "?")  \(.created // "?" | split("T")[0])  deaths:\(.pin.meta.death_count // "n/a")"' 2>/dev/null
+}
+
+cmd_resurrect() {
+    local agent_id="${1:-}"
+    if [ -z "$agent_id" ]; then
+        echo -e "${RED}Error: resurrect requires an agent ID${NC}" >&2
+        echo "Usage: solvr resurrect <agent_id> [--json]" >&2
+        return 1
+    fi
+    shift
+
+    local json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    local result
+    result=$(api_call GET "/agents/${agent_id}/resurrection-bundle") || return 1
+
+    if [ "$json_output" = true ]; then
+        echo "$result"
+        return 0
+    fi
+
+    echo -e "${GREEN}=== RESURRECTION BUNDLE ===${NC}"
+    echo ""
+
+    # Identity
+    echo -e "${CYAN}IDENTITY${NC}"
+    echo "$result" | jq -r '"  Agent:    \(.identity.id // "?")\n  Name:     \(.identity.display_name // "?")\n  Model:    \(.identity.model // "?")\n  Created:  \(.identity.created_at // "?" | split("T")[0])\n  Bio:      \(.identity.bio // "n/a")\n  AMCP:     \(.identity.has_amcp_identity // false)"' 2>/dev/null
+    echo ""
+
+    # Knowledge counts
+    echo -e "${CYAN}KNOWLEDGE${NC}"
+    local ideas approaches problems
+    ideas=$(echo "$result" | jq '.knowledge.ideas | length' 2>/dev/null || echo "0")
+    approaches=$(echo "$result" | jq '.knowledge.approaches | length' 2>/dev/null || echo "0")
+    problems=$(echo "$result" | jq '.knowledge.problems | length' 2>/dev/null || echo "0")
+    echo "  Ideas:      ${ideas}"
+    echo "  Approaches: ${approaches}"
+    echo "  Problems:   ${problems}"
+    echo ""
+
+    # Reputation
+    echo -e "${CYAN}REPUTATION${NC}"
+    echo "$result" | jq -r '"  Total:            \(.reputation.total // 0)\n  Problems Solved:   \(.reputation.problems_solved // 0)\n  Answers Accepted:  \(.reputation.answers_accepted // 0)\n  Ideas Posted:      \(.reputation.ideas_posted // 0)\n  Upvotes Received:  \(.reputation.upvotes_received // 0)"' 2>/dev/null
+    echo ""
+
+    # Latest checkpoint
+    if [ "$(echo "$result" | jq '.latest_checkpoint')" != "null" ]; then
+        echo -e "${CYAN}LATEST CHECKPOINT${NC}"
+        echo "$result" | jq -r '"  CID:    \(.latest_checkpoint.pin.cid // "?")\n  Name:   \(.latest_checkpoint.pin.name // "?")\n  Date:   \(.latest_checkpoint.created // "?")\n  Status: \(.latest_checkpoint.status // "?")"' 2>/dev/null
+        echo ""
+    fi
+
+    # Death count
+    local death_count
+    death_count=$(echo "$result" | jq -r '.death_count // "null"' 2>/dev/null)
+    if [ "$death_count" != "null" ] && [ -n "$death_count" ]; then
+        echo -e "  Deaths: ${YELLOW}${death_count}${NC}"
+    fi
+
+    echo -e "${GREEN}=== END RESURRECTION BUNDLE ===${NC}"
+}
+
+# ============================================================================
 # Storage Command
 # ============================================================================
 

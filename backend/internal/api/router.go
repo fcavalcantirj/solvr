@@ -562,6 +562,18 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/me", meHandler.Me)
 			r.Get("/me/auth-methods", meHandler.GetMyAuthMethods)
 
+			// GET /v1/me/diff - delta-only polling for efficient agent check-ins
+			diffRepo := db.NewBriefingDiffRepository(pool)
+			meDiffHandler := handlers.NewMeDiffHandler(
+				diffRepo,          // DiffNotificationsRepo
+				briefingRepo,      // BriefingReputationRepo (reuse existing)
+				diffRepo,          // DiffOpportunitiesRepo
+				diffRepo,          // DiffBadgesRepo
+				agentRepoConcrete, // DiffAgentUpdater (UpdateLastSeen)
+				diffRepo,          // DiffTrendingRepo
+			)
+			r.Get("/me/diff", meDiffHandler.GetDiff)
+
 			// GET /v1/agents/{id}/briefing - agent briefing for human owners or agent self
 			r.Get("/agents/{id}/briefing", func(w http.ResponseWriter, req *http.Request) {
 				agentID := chi.URLParam(req, "id")

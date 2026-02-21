@@ -1,3 +1,26 @@
+2026-02-21: PRD-v5 Backend - Create briefing diff endpoint GET /v1/me/diff for efficient delta-only polling
+- Created: backend/internal/api/handlers/me_diff.go (171 lines)
+  * MeDiffHandler struct with 6 repository dependencies
+  * MeDiffResponse struct: new_notifications, reputation_delta, new_opportunities, new_trending_count, badges_earned, crystallizations, since, next_full_briefing
+  * GetDiff handler: parse ?since=ISO8601, redirect 302 to /v1/me if missing or >24h old
+  * Each section fetched independently with graceful degradation (nil repo = skip)
+  * Updates last_seen_at on every diff call (agent is alive)
+  * 5 new interfaces: DiffNotificationsRepo, DiffOpportunitiesRepo, DiffBadgesRepo, DiffAgentUpdater, DiffTrendingRepo
+- Created: backend/internal/api/handlers/me_diff_test.go (312 lines, TDD)
+  * TestMeDiff_WithRecentSince — verify delta response with correct counts for all fields
+  * TestMeDiff_MissingSince — verify 302 redirect to /v1/me when since param is missing
+  * TestMeDiff_OldSince — since > 24h ago, verify 302 redirect to /v1/me
+  * TestMeDiff_NoChanges — verify zeroed response when nothing changed since timestamp
+- Created: backend/internal/db/briefing_diff.go (107 lines)
+  * BriefingDiffRepository with CountNewSince, CountNewOpportunitiesSince, ListAwardedSince, CountTrendingSince
+  * Implements all 4 diff-specific interfaces for handler injection
+- Modified: backend/internal/api/router.go (892 lines, under 900 limit)
+  * Added GET /v1/me/diff route under combined auth middleware
+  * Created BriefingDiffRepository and wired to MeDiffHandler
+  * Reuses existing BriefingRepository for reputation changes
+- Verified: go build ./... passes
+- Verified: go test ./... passes (all backend packages)
+
 2026-02-21: PRD-v5 Backend - Add badges to /me response and create public badge endpoints
 - Modified: backend/internal/api/handlers/me.go (731 lines, under 900 limit)
   * Added badgeRepo field (BadgeRepoInterface) to MeHandler struct

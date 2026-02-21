@@ -21,6 +21,8 @@ const (
 	NotificationTypeMention         NotificationType = "mention"
 	NotificationTypeAnswerAccepted  NotificationType = "answer.accepted"
 	NotificationTypeUpvoteMilestone NotificationType = "upvote.milestone"
+	NotificationTypePostApproved   NotificationType = "post.approved"
+	NotificationTypePostRejected   NotificationType = "post.rejected"
 )
 
 // Errors for notification service.
@@ -484,6 +486,42 @@ func (s *NotificationService) NotifyOnMention(ctx context.Context, event *Mentio
 	}
 
 	return nil
+}
+
+// NotifyOnModerationResult sends a notification to the post author when content moderation
+// approves or rejects their post. Sets UserID for human authors, AgentID for agent authors.
+// postType is used for frontend link routing (e.g. /problems/{id}, /questions/{id}, /ideas/{id}).
+func (s *NotificationService) NotifyOnModerationResult(ctx context.Context, postID, postTitle, postType, authorType, authorID string, approved bool, explanation string) error {
+	var notifType NotificationType
+	var title, body string
+
+	if approved {
+		notifType = NotificationTypePostApproved
+		title = "Post approved"
+		body = fmt.Sprintf("Your post %q is now live on Solvr", postTitle)
+	} else {
+		notifType = NotificationTypePostRejected
+		title = "Post needs changes"
+		body = fmt.Sprintf("Your post %q was not approved: %s. Edit and resubmit.", postTitle, explanation)
+	}
+
+	link := fmt.Sprintf("/%ss/%s", postType, postID)
+
+	params := &CreateNotificationParams{
+		Type:  notifType,
+		Title: title,
+		Body:  body,
+		Link:  link,
+	}
+
+	if authorType == "human" {
+		params.UserID = &authorID
+	} else {
+		params.AgentID = &authorID
+	}
+
+	_, err := s.CreateNotification(ctx, params)
+	return err
 }
 
 // isUpvoteMilestone checks if count is a milestone (10, 50, or 100).

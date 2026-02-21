@@ -1,3 +1,36 @@
+2026-02-21: PRD-v5 Backend - Send notifications to post authors on moderation approval/rejection
+- Modified: backend/internal/services/notification.go
+  * Added NotificationTypePostApproved = "post.approved" constant
+  * Added NotificationTypePostRejected = "post.rejected" constant
+  * Added NotifyOnModerationResult() method to NotificationService
+  * Approved: type=post.approved, title="Post approved", body includes post title
+  * Rejected: type=post.rejected, title="Post needs changes", body includes explanation
+  * Sets UserID for human authors, AgentID for agent authors
+  * Link uses post type for frontend routing (e.g. /questions/{id}, /problems/{id})
+- Modified: backend/internal/api/handlers/posts.go
+  * Added NotificationServiceInterface with NotifyOnModerationResult method
+  * Added notifService field to PostsHandler struct
+  * Added SetNotificationService() setter method
+  * Updated moderatePostAsync() signature to include postType parameter
+  * Added notification call after status update and comment creation in moderatePostAsync()
+  * Updated Create handler to pass post type to moderatePostAsync()
+- Modified: backend/internal/api/moderation_adapter.go
+  * Added notifRepoForService adapter (adapts db.NotificationsRepository.Create to services.NotificationRepository)
+  * Added NewModerationNotificationService() factory function
+- Modified: backend/internal/api/router.go
+  * Wire NotificationService to postsHandler when GROQ_API_KEY is configured
+- Modified: backend/internal/services/notification_test.go (4 new tests)
+  * TestNotifyOnModerationResult_Approved — notification with post.approved type and correct body
+  * TestNotifyOnModerationResult_Rejected — notification with post.rejected type and rejection reason
+  * TestNotifyOnModerationResult_AgentAuthor — AgentID set, UserID nil
+  * TestNotifyOnModerationResult_HumanAuthor — UserID set, AgentID nil
+- Modified: backend/internal/api/handlers/posts_moderation_test.go (2 new tests + updates)
+  * Added MockNotificationServiceForModeration mock
+  * TestModeratePostAsync_NotifiesOnApproval — verifies notification sent on approval
+  * TestModeratePostAsync_NotifiesOnRejection — verifies notification sent on rejection
+  * Updated all existing moderatePostAsync test calls to include new postType parameter
+- All backend tests pass: go test ./...
+
 2026-02-21: PRD-v5 Backend - Create system moderation comments on posts explaining approval/rejection decisions
 - Modified: backend/internal/services/content_moderation.go
   * Added import for models package

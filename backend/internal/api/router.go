@@ -182,6 +182,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			postsHandler.SetPostStatusUpdater(pr)
 		}
 		postsHandler.SetCommentRepo(commentsRepo)
+		notifSvc := NewModerationNotificationService(notificationsRepoConcrete.Create)
+		postsHandler.SetNotificationService(notifSvc)
 	}
 
 	// Create search handler (per SPEC.md Part 5.5)

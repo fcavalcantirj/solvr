@@ -425,3 +425,171 @@ func TestIsUpvoteMilestone(t *testing.T) {
 		}
 	}
 }
+
+// TestNotifyOnModerationResult_Approved tests notification creation for approved posts.
+func TestNotifyOnModerationResult_Approved(t *testing.T) {
+	var captured *NotificationInput
+	repo := &MockNotificationRepository{
+		createFunc: func(ctx context.Context, n *NotificationInput) (*NotificationRecord, error) {
+			captured = n
+			return &NotificationRecord{
+				ID:        uuid.New().String(),
+				UserID:    n.UserID,
+				AgentID:   n.AgentID,
+				Type:      n.Type,
+				Title:     n.Title,
+				Body:      n.Body,
+				Link:      n.Link,
+				CreatedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	svc := NewNotificationService(repo, nil, nil, nil, nil)
+
+	err := svc.NotifyOnModerationResult(context.Background(), "post-uuid-123", "My Question", "question", "human", "user-uuid-456", true, "Content is appropriate")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if captured == nil {
+		t.Fatal("expected notification to be created")
+	}
+	if captured.Type != NotificationTypePostApproved {
+		t.Errorf("expected type %q, got %q", NotificationTypePostApproved, captured.Type)
+	}
+	if captured.Title != "Post approved" {
+		t.Errorf("expected title 'Post approved', got %q", captured.Title)
+	}
+	expectedBody := `Your post "My Question" is now live on Solvr`
+	if captured.Body != expectedBody {
+		t.Errorf("expected body %q, got %q", expectedBody, captured.Body)
+	}
+	expectedLink := "/questions/post-uuid-123"
+	if captured.Link != expectedLink {
+		t.Errorf("expected link %q, got %q", expectedLink, captured.Link)
+	}
+}
+
+// TestNotifyOnModerationResult_Rejected tests notification creation for rejected posts.
+func TestNotifyOnModerationResult_Rejected(t *testing.T) {
+	var captured *NotificationInput
+	repo := &MockNotificationRepository{
+		createFunc: func(ctx context.Context, n *NotificationInput) (*NotificationRecord, error) {
+			captured = n
+			return &NotificationRecord{
+				ID:        uuid.New().String(),
+				UserID:    n.UserID,
+				AgentID:   n.AgentID,
+				Type:      n.Type,
+				Title:     n.Title,
+				Body:      n.Body,
+				Link:      n.Link,
+				CreatedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	svc := NewNotificationService(repo, nil, nil, nil, nil)
+
+	err := svc.NotifyOnModerationResult(context.Background(), "post-uuid-789", "My Problem", "problem", "human", "user-uuid-456", false, "Content is not in English")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if captured == nil {
+		t.Fatal("expected notification to be created")
+	}
+	if captured.Type != NotificationTypePostRejected {
+		t.Errorf("expected type %q, got %q", NotificationTypePostRejected, captured.Type)
+	}
+	if captured.Title != "Post needs changes" {
+		t.Errorf("expected title 'Post needs changes', got %q", captured.Title)
+	}
+	expectedBody := `Your post "My Problem" was not approved: Content is not in English. Edit and resubmit.`
+	if captured.Body != expectedBody {
+		t.Errorf("expected body %q, got %q", expectedBody, captured.Body)
+	}
+	expectedLink := "/problems/post-uuid-789"
+	if captured.Link != expectedLink {
+		t.Errorf("expected link %q, got %q", expectedLink, captured.Link)
+	}
+}
+
+// TestNotifyOnModerationResult_AgentAuthor tests that AgentID is set and UserID is nil for agent authors.
+func TestNotifyOnModerationResult_AgentAuthor(t *testing.T) {
+	var captured *NotificationInput
+	repo := &MockNotificationRepository{
+		createFunc: func(ctx context.Context, n *NotificationInput) (*NotificationRecord, error) {
+			captured = n
+			return &NotificationRecord{
+				ID:        uuid.New().String(),
+				AgentID:   n.AgentID,
+				Type:      n.Type,
+				Title:     n.Title,
+				Body:      n.Body,
+				Link:      n.Link,
+				CreatedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	svc := NewNotificationService(repo, nil, nil, nil, nil)
+
+	err := svc.NotifyOnModerationResult(context.Background(), "post-uuid-100", "Agent Idea", "idea", "agent", "claude_assistant", true, "OK")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if captured == nil {
+		t.Fatal("expected notification to be created")
+	}
+	if captured.AgentID == nil {
+		t.Fatal("expected AgentID to be set")
+	}
+	if *captured.AgentID != "claude_assistant" {
+		t.Errorf("expected AgentID 'claude_assistant', got %q", *captured.AgentID)
+	}
+	if captured.UserID != nil {
+		t.Errorf("expected UserID to be nil, got %v", captured.UserID)
+	}
+}
+
+// TestNotifyOnModerationResult_HumanAuthor tests that UserID is set and AgentID is nil for human authors.
+func TestNotifyOnModerationResult_HumanAuthor(t *testing.T) {
+	var captured *NotificationInput
+	repo := &MockNotificationRepository{
+		createFunc: func(ctx context.Context, n *NotificationInput) (*NotificationRecord, error) {
+			captured = n
+			return &NotificationRecord{
+				ID:        uuid.New().String(),
+				UserID:    n.UserID,
+				Type:      n.Type,
+				Title:     n.Title,
+				Body:      n.Body,
+				Link:      n.Link,
+				CreatedAt: time.Now(),
+			}, nil
+		},
+	}
+
+	svc := NewNotificationService(repo, nil, nil, nil, nil)
+
+	err := svc.NotifyOnModerationResult(context.Background(), "post-uuid-200", "Human Question", "question", "human", "user-uuid-789", false, "Spam detected")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if captured == nil {
+		t.Fatal("expected notification to be created")
+	}
+	if captured.UserID == nil {
+		t.Fatal("expected UserID to be set")
+	}
+	if *captured.UserID != "user-uuid-789" {
+		t.Errorf("expected UserID 'user-uuid-789', got %q", *captured.UserID)
+	}
+	if captured.AgentID != nil {
+		t.Errorf("expected AgentID to be nil, got %v", captured.AgentID)
+	}
+}

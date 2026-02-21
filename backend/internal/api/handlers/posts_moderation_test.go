@@ -264,7 +264,7 @@ func TestModeratePostAsync_Approved(t *testing.T) {
 	handler.SetPostStatusUpdater(statusUpdater)
 	handler.SetCommentRepo(commentCreator)
 
-	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description content", []string{"go"}, "human", "user-123")
+	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description content", []string{"go"}, "question", "human", "user-123")
 
 	// Verify status was updated to open
 	status, ok := statusUpdater.GetStatus(testPostID)
@@ -312,7 +312,7 @@ func TestModeratePostAsync_Rejected(t *testing.T) {
 	handler.SetPostStatusUpdater(statusUpdater)
 	handler.SetCommentRepo(commentCreator)
 
-	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description content", []string{"go"}, "human", "user-123")
+	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description content", []string{"go"}, "question", "human", "user-123")
 
 	// Verify status was updated to rejected
 	status, ok := statusUpdater.GetStatus(testPostID)
@@ -362,7 +362,7 @@ func TestModeratePostAsync_RetryOnError(t *testing.T) {
 	// Use short retry delays for testing
 	handler.SetRetryDelays([]time.Duration{10 * time.Millisecond, 20 * time.Millisecond, 40 * time.Millisecond})
 
-	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description content", []string{"go"}, "human", "user-123")
+	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description content", []string{"go"}, "question", "human", "user-123")
 
 	// Should have been called twice (1 error + 1 success)
 	if calls := modService.GetCalls(); calls != 2 {
@@ -400,7 +400,7 @@ func TestModeratePostAsync_AllRetriesFail(t *testing.T) {
 	handler.SetFlagCreator(flagCreator)
 	handler.SetRetryDelays([]time.Duration{10 * time.Millisecond, 20 * time.Millisecond, 40 * time.Millisecond})
 
-	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description content", []string{"go"}, "human", "user-123")
+	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description content", []string{"go"}, "question", "human", "user-123")
 
 	// Should have been called 3 times
 	if calls := modService.GetCalls(); calls != 3 {
@@ -444,7 +444,7 @@ func TestModeratePostAsync_RateLimitRetry(t *testing.T) {
 	handler.SetPostStatusUpdater(statusUpdater)
 	handler.SetRetryDelays([]time.Duration{10 * time.Millisecond, 20 * time.Millisecond, 40 * time.Millisecond})
 
-	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description", []string{"go"}, "human", "user-123")
+	handler.moderatePostAsync(testPostID, "Test Title Here", "Test description", []string{"go"}, "question", "human", "user-123")
 
 	// Rate limit retries do NOT count as attempts, so we should have exactly 2 calls
 	if calls := modService.GetCalls(); calls != 2 {
@@ -458,6 +458,130 @@ func TestModeratePostAsync_RateLimitRetry(t *testing.T) {
 	}
 	if status != models.PostStatusOpen {
 		t.Errorf("expected status %q, got %q", models.PostStatusOpen, status)
+	}
+}
+
+// MockNotificationServiceForModeration implements NotificationServiceInterface for testing moderation notifications.
+type MockNotificationServiceForModeration struct {
+	mu            sync.Mutex
+	notifications []moderationNotifCall
+	err           error
+}
+
+type moderationNotifCall struct {
+	PostID      string
+	PostTitle   string
+	PostType    string
+	AuthorType  string
+	AuthorID    string
+	Approved    bool
+	Explanation string
+}
+
+func (m *MockNotificationServiceForModeration) NotifyOnModerationResult(ctx context.Context, postID, postTitle, postType, authorType, authorID string, approved bool, explanation string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.err != nil {
+		return m.err
+	}
+	m.notifications = append(m.notifications, moderationNotifCall{
+		PostID:      postID,
+		PostTitle:   postTitle,
+		PostType:    postType,
+		AuthorType:  authorType,
+		AuthorID:    authorID,
+		Approved:    approved,
+		Explanation: explanation,
+	})
+	return nil
+}
+
+func (m *MockNotificationServiceForModeration) GetNotifications() []moderationNotifCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.notifications
+}
+
+// TestModeratePostAsync_NotifiesOnApproval verifies that moderatePostAsync sends an approval notification.
+func TestModeratePostAsync_NotifiesOnApproval(t *testing.T) {
+	repo := NewMockPostsRepository()
+	statusUpdater := NewMockPostStatusUpdater()
+	commentCreator := &MockCommentCreator{}
+	notifService := &MockNotificationServiceForModeration{}
+	modService := NewMockContentModerationService()
+	modService.SetResult(&ModerationResult{
+		Approved:    true,
+		Explanation: "Content is appropriate",
+	})
+
+	handler := NewPostsHandler(repo)
+	handler.SetContentModerationService(modService)
+	handler.SetPostStatusUpdater(statusUpdater)
+	handler.SetCommentRepo(commentCreator)
+	handler.SetNotificationService(notifService)
+
+	handler.moderatePostAsync(testPostID, "Test Title", "Test description", []string{"go"}, "question", "human", "user-123")
+
+	// Verify notification was sent
+	notifs := notifService.GetNotifications()
+	if len(notifs) != 1 {
+		t.Fatalf("expected 1 notification, got %d", len(notifs))
+	}
+	n := notifs[0]
+	if !n.Approved {
+		t.Error("expected approved=true")
+	}
+	if n.PostID != testPostID {
+		t.Errorf("expected postID %q, got %q", testPostID, n.PostID)
+	}
+	if n.PostTitle != "Test Title" {
+		t.Errorf("expected postTitle 'Test Title', got %q", n.PostTitle)
+	}
+	if n.PostType != "question" {
+		t.Errorf("expected postType 'question', got %q", n.PostType)
+	}
+	if n.AuthorType != "human" {
+		t.Errorf("expected authorType 'human', got %q", n.AuthorType)
+	}
+	if n.AuthorID != "user-123" {
+		t.Errorf("expected authorID 'user-123', got %q", n.AuthorID)
+	}
+}
+
+// TestModeratePostAsync_NotifiesOnRejection verifies that moderatePostAsync sends a rejection notification.
+func TestModeratePostAsync_NotifiesOnRejection(t *testing.T) {
+	repo := NewMockPostsRepository()
+	statusUpdater := NewMockPostStatusUpdater()
+	commentCreator := &MockCommentCreator{}
+	notifService := &MockNotificationServiceForModeration{}
+	modService := NewMockContentModerationService()
+	modService.SetResult(&ModerationResult{
+		Approved:    false,
+		Explanation: "Content is not in English",
+	})
+
+	handler := NewPostsHandler(repo)
+	handler.SetContentModerationService(modService)
+	handler.SetPostStatusUpdater(statusUpdater)
+	handler.SetCommentRepo(commentCreator)
+	handler.SetNotificationService(notifService)
+
+	handler.moderatePostAsync(testPostID, "Test Title", "Test description", []string{"go"}, "problem", "agent", "claude_bot")
+
+	// Verify notification was sent
+	notifs := notifService.GetNotifications()
+	if len(notifs) != 1 {
+		t.Fatalf("expected 1 notification, got %d", len(notifs))
+	}
+	n := notifs[0]
+	if n.Approved {
+		t.Error("expected approved=false")
+	}
+	if n.PostType != "problem" {
+		t.Errorf("expected postType 'problem', got %q", n.PostType)
+	}
+	if n.Explanation != "Content is not in English" {
+		t.Errorf("expected explanation 'Content is not in English', got %q", n.Explanation)
 	}
 }
 

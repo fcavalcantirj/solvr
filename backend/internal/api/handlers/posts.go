@@ -140,6 +140,11 @@ type CommentCreatorInterface interface {
 	Create(ctx context.Context, comment *models.Comment) (*models.Comment, error)
 }
 
+// NotificationServiceInterface sends notifications on moderation decisions.
+type NotificationServiceInterface interface {
+	NotifyOnModerationResult(ctx context.Context, postID, postTitle, postType, authorType, authorID string, approved bool, explanation string) error
+}
+
 // Default retry delays for content moderation (exponential backoff: 2s, 4s, 8s).
 var defaultRetryDelays = []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second}
 
@@ -151,6 +156,7 @@ type PostsHandler struct {
 	statusUpdater     PostStatusUpdaterInterface
 	flagCreator       FlagCreatorInterface
 	commentRepo       CommentCreatorInterface
+	notifService      NotificationServiceInterface
 	retryDelays       []time.Duration
 }
 
@@ -194,6 +200,11 @@ func (h *PostsHandler) SetFlagCreator(creator FlagCreatorInterface) {
 // SetCommentRepo sets the comment repository for creating moderation comments.
 func (h *PostsHandler) SetCommentRepo(repo CommentCreatorInterface) {
 	h.commentRepo = repo
+}
+
+// SetNotificationService sets the notification service for moderation notifications.
+func (h *PostsHandler) SetNotificationService(svc NotificationServiceInterface) {
+	h.notifService = svc
 }
 
 // SetRetryDelays overrides retry delays (useful for testing).
@@ -465,7 +476,7 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger async content moderation if service is configured
 	if h.contentModService != nil {
-		go h.moderatePostAsync(createdPost.ID, post.Title, post.Description, post.Tags, string(authInfo.AuthorType), authInfo.AuthorID)
+		go h.moderatePostAsync(createdPost.ID, post.Title, post.Description, post.Tags, string(post.Type), string(authInfo.AuthorType), authInfo.AuthorID)
 	}
 
 	writePostsJSON(w, http.StatusCreated, map[string]interface{}{
@@ -812,7 +823,7 @@ func float32SliceToVectorString(v []float32) string {
 
 // moderatePostAsync runs content moderation asynchronously with retry logic.
 // Uses context.Background() with 30s timeout (not request context).
-func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags []string, authorType, authorID string) {
+func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags []string, postType, authorType, authorID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -904,6 +915,13 @@ func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags
 			}
 			if _, commentErr := h.commentRepo.Create(ctx, comment); commentErr != nil {
 				h.logger.Error("failed to create moderation comment", "postID", postID, "error", commentErr)
+			}
+		}
+
+		// Send notification to post author about moderation result
+		if h.notifService != nil {
+			if notifErr := h.notifService.NotifyOnModerationResult(ctx, postID, title, postType, authorType, authorID, result.Approved, result.Explanation); notifErr != nil {
+				h.logger.Error("failed to send moderation notification", "postID", postID, "error", notifErr)
 			}
 		}
 		return

@@ -2443,7 +2443,7 @@
       "Test: TestNotifyOnModerationResult_HumanAuthor \u2014 UserID set, AgentID nil",
       "Verify: go test ./internal/services/... -run TestNotifyOnModeration passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

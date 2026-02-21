@@ -1,3 +1,15 @@
+2026-02-21: PRD-v5 Backend - Enable family access to pins (self, sibling agents, claiming human)
+- Modified: handlers/pins.go — extracted isFamilyAccess(caller, target *models.Agent) bool helper (reusable by checkpoints/resurrection)
+- Modified: handlers/pins.go — updated ListAgentPins() agent auth branch: self-access allowed directly, non-self looks up target via agentFinder.FindByID() and checks isFamilyAccess()
+- Modified: handlers/pins_agent_test.go — added 5 new TDD tests (all passing):
+  * TestListAgentPins_SiblingAgentAccess — two agents claimed by same human, sibling access returns 200
+  * TestListAgentPins_SiblingAccessUnclaimedCaller — unclaimed caller accessing claimed target returns 403
+  * TestListAgentPins_SiblingAccessUnclaimedTarget — claimed caller accessing unclaimed target returns 403
+  * TestListAgentPins_SiblingAccessDifferentHuman — agents claimed by different humans returns 403
+  * TestListAgentPins_SiblingAccessBothUnclaimed — two unclaimed agents returns 403
+- Existing tests preserved: self access (200), different agent no family (403), human owner (200), not owner (403), unclaimed (403), not found (404), no auth (401)
+- Verified: go test ./... — all packages pass, zero failures
+
 2026-02-21: PRD-v5 Backend - Add GIN index on pins meta JSONB, meta filtering to GET /v1/pins, and pin name auto-generation
 - Created: migrations/000052_add_pins_meta_gin_index.up.sql — GIN index on pins.meta using jsonb_path_ops
 - Created: migrations/000052_add_pins_meta_gin_index.down.sql — drops the GIN index

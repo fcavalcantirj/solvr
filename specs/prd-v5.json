@@ -2094,7 +2094,7 @@
       "TDD GREEN: Run all tests — confirm all passing",
       "Verify: go test ./internal/api/handlers/ -run TestListAgentPins_ -v passes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -233,7 +233,7 @@ func TestListAgentPins_AgentDifferentID_Returns403(t *testing.T) {
 		},
 	})
 
-	// Agent trying to access a different agent's pins
+	// Agent trying to access a different agent's pins (no HumanID on either)
 	agent := &models.Agent{ID: "agent_a"}
 	req := httptest.NewRequest(http.MethodGet, "/v1/agents/other_agent/pins", nil)
 	ctx := auth.ContextWithAgent(req.Context(), agent)
@@ -244,5 +244,175 @@ func TestListAgentPins_AgentDifferentID_Returns403(t *testing.T) {
 
 	if rr.Code != http.StatusForbidden {
 		t.Errorf("expected 403, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestListAgentPins_SiblingAgentAccess(t *testing.T) {
+	humanID := "human_shared_owner"
+	agentAID := "agent_a"
+	agentBID := "agent_b"
+
+	agentFinderRepo := &MockAgentFinderRepo{
+		agents: map[string]*models.Agent{
+			agentAID: {ID: agentAID, HumanID: &humanID},
+			agentBID: {ID: agentBID, HumanID: &humanID},
+		},
+	}
+
+	pinRepo := &MockPinRepo{
+		pins: []models.Pin{
+			{
+				ID:        "pin-b-1",
+				CID:       "QmTestCID123456789012345678901234567890123",
+				Status:    models.PinStatusPinned,
+				Name:      "agent-b-pin",
+				OwnerID:   agentBID,
+				OwnerType: "agent",
+				CreatedAt: time.Now(),
+			},
+		},
+		total: 1,
+	}
+
+	handler := NewPinsHandler(pinRepo, nil)
+	handler.SetAgentFinderRepo(agentFinderRepo)
+
+	// Agent-A (claimed by humanID) requests Agent-B's pins
+	callerAgent := &models.Agent{ID: agentAID, HumanID: &humanID}
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents/"+agentBID+"/pins", nil)
+	ctx := auth.ContextWithAgent(req.Context(), callerAgent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ListAgentPins(rr, req, agentBID)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for sibling access, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	count, ok := resp["count"].(float64)
+	if !ok || count != 1 {
+		t.Errorf("expected count=1, got %v", resp["count"])
+	}
+}
+
+func TestListAgentPins_SiblingAccessUnclaimedCaller(t *testing.T) {
+	targetHumanID := "human_target_owner"
+	callerID := "agent_unclaimed_caller"
+	targetID := "agent_claimed_target"
+
+	agentFinderRepo := &MockAgentFinderRepo{
+		agents: map[string]*models.Agent{
+			callerID: {ID: callerID, HumanID: nil},
+			targetID: {ID: targetID, HumanID: &targetHumanID},
+		},
+	}
+
+	handler := NewPinsHandler(&MockPinRepo{}, nil)
+	handler.SetAgentFinderRepo(agentFinderRepo)
+
+	// Unclaimed caller agent tries to access claimed target's pins
+	callerAgent := &models.Agent{ID: callerID, HumanID: nil}
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents/"+targetID+"/pins", nil)
+	ctx := auth.ContextWithAgent(req.Context(), callerAgent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ListAgentPins(rr, req, targetID)
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for unclaimed caller, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestListAgentPins_SiblingAccessUnclaimedTarget(t *testing.T) {
+	callerHumanID := "human_caller_owner"
+	callerID := "agent_claimed_caller"
+	targetID := "agent_unclaimed_target"
+
+	agentFinderRepo := &MockAgentFinderRepo{
+		agents: map[string]*models.Agent{
+			callerID: {ID: callerID, HumanID: &callerHumanID},
+			targetID: {ID: targetID, HumanID: nil},
+		},
+	}
+
+	handler := NewPinsHandler(&MockPinRepo{}, nil)
+	handler.SetAgentFinderRepo(agentFinderRepo)
+
+	// Claimed caller tries to access unclaimed target's pins
+	callerAgent := &models.Agent{ID: callerID, HumanID: &callerHumanID}
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents/"+targetID+"/pins", nil)
+	ctx := auth.ContextWithAgent(req.Context(), callerAgent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ListAgentPins(rr, req, targetID)
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for unclaimed target, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestListAgentPins_SiblingAccessDifferentHuman(t *testing.T) {
+	humanX := "human_x"
+	humanY := "human_y"
+	callerID := "agent_of_human_x"
+	targetID := "agent_of_human_y"
+
+	agentFinderRepo := &MockAgentFinderRepo{
+		agents: map[string]*models.Agent{
+			callerID: {ID: callerID, HumanID: &humanX},
+			targetID: {ID: targetID, HumanID: &humanY},
+		},
+	}
+
+	handler := NewPinsHandler(&MockPinRepo{}, nil)
+	handler.SetAgentFinderRepo(agentFinderRepo)
+
+	// Agent claimed by Human-X tries to access agent claimed by Human-Y
+	callerAgent := &models.Agent{ID: callerID, HumanID: &humanX}
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents/"+targetID+"/pins", nil)
+	ctx := auth.ContextWithAgent(req.Context(), callerAgent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ListAgentPins(rr, req, targetID)
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for different human owners, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestListAgentPins_SiblingAccessBothUnclaimed(t *testing.T) {
+	callerID := "agent_unclaimed_1"
+	targetID := "agent_unclaimed_2"
+
+	agentFinderRepo := &MockAgentFinderRepo{
+		agents: map[string]*models.Agent{
+			callerID: {ID: callerID, HumanID: nil},
+			targetID: {ID: targetID, HumanID: nil},
+		},
+	}
+
+	handler := NewPinsHandler(&MockPinRepo{}, nil)
+	handler.SetAgentFinderRepo(agentFinderRepo)
+
+	// Two unclaimed agents — no family without human_id
+	callerAgent := &models.Agent{ID: callerID, HumanID: nil}
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents/"+targetID+"/pins", nil)
+	ctx := auth.ContextWithAgent(req.Context(), callerAgent)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ListAgentPins(rr, req, targetID)
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for both unclaimed, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

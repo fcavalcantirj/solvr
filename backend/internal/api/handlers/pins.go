@@ -74,17 +74,32 @@ func (h *PinsHandler) SetAgentFinderRepo(repo AgentFinderInterface) {
 	h.agentFinder = repo
 }
 
+// isFamilyAccess checks whether two agents belong to the same "family" —
+// both must have a non-nil HumanID and those IDs must match.
+// Reusable by checkpoints, resurrection, and other family-scoped handlers.
+func isFamilyAccess(caller, target *models.Agent) bool {
+	return caller.HumanID != nil && target.HumanID != nil && *caller.HumanID == *target.HumanID
+}
+
 // ListAgentPins handles GET /v1/agents/{id}/pins — list an agent's pins.
-// Accessible by the agent itself (API key) or by the human who claimed the agent (JWT).
+// Accessible by the agent itself, sibling agents (same human), or the claiming human (JWT).
 func (h *PinsHandler) ListAgentPins(w http.ResponseWriter, r *http.Request, agentID string) {
 	ctx := r.Context()
 
-	// Check agent API key auth first (agent accessing own pins)
+	// Check agent API key auth first
 	authAgent := auth.AgentFromContext(ctx)
 	if authAgent != nil {
 		if authAgent.ID != agentID {
-			response.WriteForbidden(w, "agents can only access their own pins")
-			return
+			// Not self — check sibling (family) access
+			targetAgent, err := h.agentFinder.FindByID(ctx, agentID)
+			if err != nil {
+				response.WriteNotFound(w, "agent not found")
+				return
+			}
+			if !isFamilyAccess(authAgent, targetAgent) {
+				response.WriteForbidden(w, "agents can only access their own or sibling agents' pins")
+				return
+			}
 		}
 	} else {
 		// Check human JWT auth

@@ -1,3 +1,31 @@
+2026-02-21: PRD-v5 Backend - Create checkpoint convenience endpoints POST /v1/agents/me/checkpoints and GET /v1/agents/{id}/checkpoints
+- Created: backend/internal/api/handlers/checkpoints.go (316 lines)
+  * CheckpointsHandler struct with PinRepositoryInterface, IPFSPinner, StorageRepositoryInterface, AgentFinderInterface, CheckpointAgentRepo deps
+  * POST /v1/agents/me/checkpoints: agent API key only, humans get 403, auto-injects meta.type=amcp_checkpoint and meta.agent_id, auto-generates name checkpoint_<CID8>_<YYYYMMDD>, quota check, async IPFS pin, UpdateLastSeen, returns 202 + PinResponse
+  * GET /v1/agents/{id}/checkpoints: auth via self, sibling (isFamilyAccess), or claiming human, filters pins by meta @> '{"type":"amcp_checkpoint"}', returns {count, results, latest} where latest = first result
+  * Dynamic meta fields (death_count, memory_hash, etc.) preserved from request body alongside auto-injected fixed meta
+- Created: backend/internal/api/handlers/checkpoints_test.go (591 lines, 15 TDD tests all passing)
+  * TestCreateCheckpoint_Success — agent creates checkpoint, verifies auto-injected meta and dynamic fields preserved
+  * TestCreateCheckpoint_AutoName — auto-generates checkpoint_<CID8>_<YYYYMMDD> when no name provided
+  * TestCreateCheckpoint_QuotaExceeded — agent at quota limit gets 402
+  * TestCreateCheckpoint_Unauthenticated — no auth returns 401
+  * TestCreateCheckpoint_HumanCannotCreate — human JWT returns 403
+  * TestListCheckpoints_OwnAgent — self-access returns 200 with 3 checkpoints
+  * TestListCheckpoints_ClaimingHuman — claiming human gets 200
+  * TestListCheckpoints_SiblingAgent — sibling agent (same human) gets 200
+  * TestListCheckpoints_LatestField — response has latest pointing to most recent checkpoint
+  * TestListCheckpoints_Empty — empty returns {count: 0, results: [], latest: null}
+  * TestListCheckpoints_Unauthorized — no auth returns 401
+  * TestListCheckpoints_NonFamilyAgent_Returns403 — non-family agent gets 403
+  * TestCreateCheckpoint_WithExplicitName — explicit name preserved
+  * TestCreateCheckpoint_MetaInjectionsCannotBeOverridden — auto-injected meta overrides user values
+  * TestListCheckpoints_MetaFilterApplied — verifies meta filter type=amcp_checkpoint passed to repo
+- Modified: backend/internal/api/router.go (908 lines)
+  * Created CheckpointsHandler, wired with pinsRepo, ipfsService, storageRepo, agentRepoConcrete
+  * Added POST /v1/agents/me/checkpoints route under combined auth
+  * Added GET /v1/agents/{id}/checkpoints route under combined auth
+- Verified: go test ./... — all packages pass, zero failures
+
 2026-02-21: PRD-v5 Frontend - Pin meta support: CreatePinParams, meta badges, CHECKPOINTS filter
 - Modified: lib/api-types.ts — added CreatePinParams interface, added meta field to FetchPinsParams
 - Modified: lib/api.ts — changed createPin(cid, name?) to createPin(params: CreatePinParams), added meta JSON filter to listPins/getAgentPins

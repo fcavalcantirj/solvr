@@ -243,6 +243,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	pinsHandler.SetStorageRepo(storageRepo)
 	pinsHandler.SetAgentFinderRepo(agentRepoConcrete)
 
+	// Create checkpoints handler (reuses pin repo, same IPFS service)
+	checkpointsHandler := handlers.NewCheckpointsHandler(pinsRepo, ipfsService)
+	checkpointsHandler.SetStorageRepo(storageRepo)
+	checkpointsHandler.SetAgentFinderRepo(agentRepoConcrete)
+	checkpointsHandler.SetAgentRepo(agentRepoConcrete)
+
 	// Create IPFS upload handler
 	// Max upload size: configurable via env, defaults to 100MB
 	maxUploadSize := int64(handlers.DefaultMaxUploadSize)
@@ -591,6 +597,15 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/agents/{id}/pins", func(w http.ResponseWriter, req *http.Request) {
 				agentID := chi.URLParam(req, "id")
 				pinsHandler.ListAgentPins(w, req, agentID)
+			})
+
+			// AMCP Checkpoint endpoints
+			// POST /v1/agents/me/checkpoints - create checkpoint (agent API key only)
+			r.Post("/agents/me/checkpoints", checkpointsHandler.Create)
+			// GET /v1/agents/{id}/checkpoints - list agent's checkpoints (self, sibling, or claiming human)
+			r.Get("/agents/{id}/checkpoints", func(w http.ResponseWriter, req *http.Request) {
+				agentID := chi.URLParam(req, "id")
+				checkpointsHandler.ListCheckpoints(w, req, agentID)
 			})
 
 			// GET /v1/agents/{id}/storage - agent storage for human owners or agent self

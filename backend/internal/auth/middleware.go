@@ -291,6 +291,68 @@ func APIKeyTierFromContext(ctx context.Context) string {
 	return tier
 }
 
+// OptionalAuthMiddleware creates middleware that tries all three authentication types
+// (user API key, agent API key, JWT) but NEVER returns 401.
+// If any auth method succeeds, the context is populated with the identity.
+// If all fail or no auth header is present, the request continues without auth context.
+// This is safe to apply to public routes where auth is optional.
+func OptionalAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, userValidator *UserAPIKeyValidator) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token, err := extractBearerToken(r)
+			if err != nil {
+				// No valid auth header — continue without auth
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Try user API key first (solvr_sk_...) - more specific prefix
+			if IsUserAPIKey(token) && userValidator != nil {
+				user, apiKey, err := userValidator.ValidateUserAPIKey(r.Context(), token)
+				if err == nil && user != nil {
+					claims := &Claims{
+						UserID: user.ID,
+						Email:  user.Email,
+						Role:   "user",
+					}
+					ctx := ContextWithClaims(r.Context(), claims)
+					ctx = ContextWithAPIKeyID(ctx, apiKey.ID)
+					_ = userValidator.db.UpdateLastUsed(r.Context(), apiKey.ID)
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+				// User API key validation failed — continue without auth
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Try agent API key (solvr_... but not solvr_sk_)
+			if IsAPIKey(token) {
+				agent, err := agentValidator.ValidateAPIKey(r.Context(), token)
+				if err == nil && agent != nil {
+					ctx := ContextWithAgent(r.Context(), agent)
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+				// Agent API key validation failed — continue without auth
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Try JWT
+			claims, err := ValidateJWT(jwtSecret, token)
+			if err == nil && claims != nil {
+				ctx := ContextWithClaims(r.Context(), claims)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			// All methods failed — continue without auth
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // UnifiedAuthMiddleware creates middleware that accepts all three authentication types:
 // 1. User API keys (solvr_sk_...) - for humans using API programmatically
 // 2. Agent API keys (solvr_...) - for AI agents

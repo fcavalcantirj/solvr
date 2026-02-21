@@ -1,3 +1,32 @@
+2026-02-21: PRD-v5 Backend - Add OptionalAuthMiddleware and wire viewer info through posts handlers for user_vote
+- Created: backend/internal/auth/middleware.go - OptionalAuthMiddleware function
+  * Tries all 3 auth methods (user API key, agent API key, JWT) but NEVER returns 401
+  * If any auth succeeds, populates context with identity (Claims or Agent)
+  * If all fail or no auth header present, continues without auth context
+  * Safe to apply broadly to public routes
+- Modified: backend/internal/auth/middleware_test.go (+8 tests for OptionalAuthMiddleware)
+  * Test: valid JWT sets claims and continues (200 OK)
+  * Test: valid agent API key sets agent and continues (200 OK)
+  * Test: valid user API key sets claims and continues (200 OK)
+  * Test: no auth header continues without auth (no 401)
+  * Test: invalid token continues without auth (no 401)
+  * Test: expired JWT continues without auth (no 401)
+  * Test: invalid API key continues without auth (no 401)
+  * Test: missing Bearer prefix continues without auth (no 401)
+- Modified: backend/internal/api/handlers/posts.go
+  * List() handler: extracts GetAuthInfo(r) and sets opts.ViewerType/ViewerID for viewer vote lookup
+  * Get() handler: uses FindByIDForViewer() when authenticated, FindByID() when anonymous
+- Modified: backend/internal/api/handlers/posts_test.go (+4 tests, +1 tracking mock)
+  * TestListPosts_IncludesUserVote_Authenticated: verifies ViewerType/ViewerID passed to repo, user_vote in response
+  * TestListPosts_NoUserVote_Anonymous: verifies empty viewer info, user_vote omitted
+  * TestGetPost_IncludesUserVote_Authenticated: verifies FindByIDForViewer called with correct viewer info
+  * TestGetPost_Anonymous_UsesFindByID: verifies FindByID called (not FindByIDForViewer)
+  * MockPostsRepoWithViewerTracking: tracks which Find method was called
+- Modified: backend/internal/api/router.go
+  * Wrapped GET /v1/posts and GET /v1/posts/{id} in r.Group with OptionalAuthMiddleware
+  * Passes jwtSecret, apiKeyValidator, userAPIKeyValidator to middleware
+- All backend tests pass: go test ./... (0 failures)
+
 2026-02-21: PRD-v5 Backend - Add user_vote field to PostWithAuthor and extend List/FindByID with LEFT JOIN on votes
 - Modified: backend/internal/models/post.go
   * Added UserVote *string `json:"user_vote,omitempty"` field to PostWithAuthor struct

@@ -454,10 +454,14 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		}
 
 		// Posts endpoints (API-CRITICAL requirement)
-		// Per SPEC.md Part 5.6: GET /v1/posts - list posts (no auth required)
-		r.Get("/posts", postsHandler.List)
-		// Per SPEC.md Part 5.6: GET /v1/posts/:id - single post (no auth required)
-		r.Get("/posts/{id}", postsHandler.Get)
+		// Per SPEC.md Part 5.6: GET /v1/posts - list posts (no auth required, optional auth for user_vote)
+		// OptionalAuthMiddleware parses auth if present (for user_vote in response) but never returns 401
+		r.Group(func(r chi.Router) {
+			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
+			r.Get("/posts", postsHandler.List)
+			// Per SPEC.md Part 5.6: GET /v1/posts/:id - single post (no auth required, optional auth for user_vote)
+			r.Get("/posts/{id}", postsHandler.Get)
+		})
 		// FE-013: View tracking endpoints
 		// POST /v1/posts/:id/view - record a view (optional auth)
 		r.Post("/posts/{id}/view", viewsHandler.RecordView)

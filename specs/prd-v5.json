@@ -2718,7 +2718,7 @@
       "Verify: curl -H 'Authorization: Bearer <token>' /v1/posts | jq '.data[0].user_vote'",
       "Verify: curl /v1/posts | jq '.data[0]' — no user_vote field present"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

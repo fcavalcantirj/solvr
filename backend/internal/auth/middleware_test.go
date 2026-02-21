@@ -626,3 +626,158 @@ func TestUnifiedAuthMiddleware(t *testing.T) {
 		})
 	}
 }
+
+// TestOptionalAuthMiddleware tests the middleware that tries all three auth types
+// (user API key, agent API key, JWT) but NEVER returns 401.
+// If auth succeeds → context populated. If fails → request continues without auth.
+func TestOptionalAuthMiddleware(t *testing.T) {
+	secret := "test-secret-key-for-testing-purposes-only"
+
+	// Create mock database for agents
+	agentDB := NewMockAgentDB()
+	testAgentAPIKey := "solvr_testkey123456789012345678901234567890"
+	_, err := agentDB.AddTestAgent("test_agent", "Test Agent", testAgentAPIKey)
+	if err != nil {
+		t.Fatalf("failed to add test agent: %v", err)
+	}
+	agentValidator := NewAPIKeyValidator(agentDB)
+
+	// Create mock database for user API keys
+	userDB := NewMockUserAPIKeyDB()
+	testUserID := "user-456"
+	testUserKeyID := "key-789"
+	testUserAPIKey := "solvr_sk_userkey123456789012345678901234567890"
+	userDB.AddTestUser(testUserID, "testuser", "test@example.com")
+	_, err = userDB.AddTestUserAPIKey(testUserKeyID, testUserID, "Test User Key", testUserAPIKey)
+	if err != nil {
+		t.Fatalf("failed to add test user API key: %v", err)
+	}
+	userValidator := NewUserAPIKeyValidator(userDB)
+
+	// Generate valid JWT
+	validJWT, _ := GenerateJWT(secret, "jwt-user-123", "jwt@example.com", "user", 15*time.Minute)
+
+	// Generate expired JWT
+	expiredJWT, _ := GenerateJWT(secret, "user-123", "test@example.com", "user", -1*time.Minute)
+
+	tests := []struct {
+		name          string
+		authHeader    string
+		wantClaims    bool
+		wantAgent     bool
+		expectUserID  string
+		expectAgentID string
+	}{
+		{
+			name:         "valid JWT sets claims and continues",
+			authHeader:   "Bearer " + validJWT,
+			wantClaims:   true,
+			wantAgent:    false,
+			expectUserID: "jwt-user-123",
+		},
+		{
+			name:          "valid agent API key sets agent and continues",
+			authHeader:    "Bearer " + testAgentAPIKey,
+			wantClaims:    false,
+			wantAgent:     true,
+			expectAgentID: "test_agent",
+		},
+		{
+			name:         "valid user API key sets claims and continues",
+			authHeader:   "Bearer " + testUserAPIKey,
+			wantClaims:   true,
+			wantAgent:    false,
+			expectUserID: testUserID,
+		},
+		{
+			name:       "no auth header continues without auth (no 401)",
+			authHeader: "",
+			wantClaims: false,
+			wantAgent:  false,
+		},
+		{
+			name:       "invalid token continues without auth (no 401)",
+			authHeader: "Bearer invalid_token_here",
+			wantClaims: false,
+			wantAgent:  false,
+		},
+		{
+			name:       "expired JWT continues without auth (no 401)",
+			authHeader: "Bearer " + expiredJWT,
+			wantClaims: false,
+			wantAgent:  false,
+		},
+		{
+			name:       "invalid API key format continues without auth (no 401)",
+			authHeader: "Bearer solvr_invalidkey1234567890123456789012345",
+			wantClaims: false,
+			wantAgent:  false,
+		},
+		{
+			name:       "missing Bearer prefix continues without auth (no 401)",
+			authHeader: validJWT,
+			wantClaims: false,
+			wantAgent:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotClaims *Claims
+			var gotAgent *models.Agent
+			handlerCalled := false
+			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handlerCalled = true
+				gotClaims = ClaimsFromContext(r.Context())
+				gotAgent = AgentFromContext(r.Context())
+				w.WriteHeader(http.StatusOK)
+			})
+
+			middleware := OptionalAuthMiddleware(secret, agentValidator, userValidator)(nextHandler)
+
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+
+			// CRITICAL: handler must ALWAYS be called (never 401)
+			if !handlerCalled {
+				t.Error("handler was not called — OptionalAuthMiddleware must never block requests")
+			}
+
+			// CRITICAL: status must ALWAYS be 200 (never 401)
+			if rr.Code != http.StatusOK {
+				t.Errorf("status code = %v, want %v — OptionalAuthMiddleware must never return 401", rr.Code, http.StatusOK)
+			}
+
+			if tt.wantClaims && gotClaims == nil {
+				t.Error("expected claims in context but got nil")
+			}
+			if !tt.wantClaims && gotClaims != nil {
+				t.Error("expected no claims but got some")
+			}
+
+			if tt.wantAgent && gotAgent == nil {
+				t.Error("expected agent in context but got nil")
+			}
+			if !tt.wantAgent && gotAgent != nil {
+				t.Error("expected no agent but got some")
+			}
+
+			// Verify specific identities
+			if tt.expectUserID != "" && gotClaims != nil {
+				if gotClaims.UserID != tt.expectUserID {
+					t.Errorf("claims.UserID = %v, want %v", gotClaims.UserID, tt.expectUserID)
+				}
+			}
+			if tt.expectAgentID != "" && gotAgent != nil {
+				if gotAgent.ID != tt.expectAgentID {
+					t.Errorf("agent.ID = %v, want %v", gotAgent.ID, tt.expectAgentID)
+				}
+			}
+		})
+	}
+}

@@ -305,6 +305,12 @@ func (h *PostsHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Pass viewer info for user_vote lookup (works when OptionalAuthMiddleware is applied)
+	if authInfo := GetAuthInfo(r); authInfo != nil {
+		opts.ViewerType = authInfo.AuthorType
+		opts.ViewerID = authInfo.AuthorID
+	}
+
 	// Execute query
 	posts, total, err := h.repo.List(r.Context(), opts)
 	if err != nil {
@@ -341,7 +347,14 @@ func (h *PostsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	post, err := h.repo.FindByID(r.Context(), postID)
+	// Use FindByIDForViewer when authenticated to include user_vote
+	var post *models.PostWithAuthor
+	var err error
+	if authInfo := GetAuthInfo(r); authInfo != nil {
+		post, err = h.repo.FindByIDForViewer(r.Context(), postID, authInfo.AuthorType, authInfo.AuthorID)
+	} else {
+		post, err = h.repo.FindByID(r.Context(), postID)
+	}
 	if err != nil {
 		if errors.Is(err, db.ErrPostNotFound) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")

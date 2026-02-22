@@ -1,16 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Clock } from "lucide-react";
+import { AlertTriangle, Clock, Languages } from "lucide-react";
 
 interface ModerationBannerProps {
   status: string;
   postId: string;
   postType: "problems" | "questions" | "ideas";
+  originalLanguage?: string;
 }
 
-export function ModerationBanner({ status, postId, postType }: ModerationBannerProps) {
+export function ModerationBanner({ status, postId, postType, originalLanguage }: ModerationBannerProps) {
   const normalizedStatus = status.toUpperCase();
+
+  // Draft with original_language set = awaiting auto-translation
+  if (normalizedStatus === "DRAFT" && originalLanguage) {
+    return (
+      <div className="mb-6 p-4 border border-blue-500/30 bg-blue-500/5">
+        <div className="flex items-start gap-3">
+          <Languages size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
+          <p className="font-mono text-xs text-blue-700">
+            Your post was detected as {originalLanguage}. We&apos;ll auto-translate it to English and resubmit for review — usually within 24 hours.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (normalizedStatus === "UNDER REVIEW") {
     return (

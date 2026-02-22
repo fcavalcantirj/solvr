@@ -122,6 +122,20 @@ type Post struct {
 	// CrystallizedAt is when the problem was crystallized to IPFS.
 	CrystallizedAt *time.Time `json:"crystallized_at,omitempty"`
 
+	// OriginalLanguage is set when a post was saved as draft due to a language-only
+	// moderation rejection. Identifies the source language (e.g., "Portuguese").
+	OriginalLanguage string `json:"original_language,omitempty"`
+
+	// OriginalTitle preserves the pre-translation title after auto-translation.
+	OriginalTitle string `json:"original_title,omitempty"`
+
+	// OriginalDescription preserves the pre-translation description after auto-translation.
+	OriginalDescription string `json:"original_description,omitempty"`
+
+	// TranslationAttempts tracks how many times auto-translation has been attempted.
+	// Capped at 3 to prevent infinite retries.
+	TranslationAttempts int `json:"translation_attempts,omitempty"`
+
 	// EmbeddingStr is the PostgreSQL vector literal for the post embedding.
 	// Set during creation/update for semantic search. Not returned in JSON responses.
 	EmbeddingStr *string `json:"-"`

@@ -130,6 +130,9 @@ type ContentModerationServiceInterface interface {
 // PostStatusUpdaterInterface updates post status without requiring full PostsRepositoryInterface.
 type PostStatusUpdaterInterface interface {
 	UpdateStatus(ctx context.Context, postID string, status models.PostStatus) error
+	// UpdateOriginalLanguage sets status='draft' and records the detected language.
+	// Called when a post is rejected solely for language, queuing it for auto-translation.
+	UpdateOriginalLanguage(ctx context.Context, postID, language string) error
 }
 
 // FlagCreatorInterface creates admin flags for moderation failures.
@@ -212,6 +215,15 @@ func (h *PostsHandler) SetNotificationService(svc NotificationServiceInterface) 
 // SetRetryDelays overrides retry delays (useful for testing).
 func (h *PostsHandler) SetRetryDelays(delays []time.Duration) {
 	h.retryDelays = delays
+}
+
+// TriggerModerationAsync implements jobs.PostModerationTrigger.
+// Fires off moderatePostAsync in a goroutine so the translation job can trigger re-moderation.
+func (h *PostsHandler) TriggerAsync(postID, title, description string, tags []string, postType, authorType, authorID string) {
+	if h.contentModService == nil {
+		return
+	}
+	go h.moderatePostAsync(postID, title, description, tags, postType, authorType, authorID)
 }
 
 // CreatePostRequest is the request body for creating a post.

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -15,8 +16,45 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/config"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/jobs"
+	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/fcavalcantirj/solvr/internal/services"
 )
+
+// translationModTrigger implements jobs.PostModerationTrigger for use by the translation job.
+// After a post is translated, it fires a single moderation call to determine if the
+// translated content should be approved or rejected.
+type translationModTrigger struct {
+	modSvc   *services.ContentModerationService
+	postRepo *db.PostRepository
+}
+
+func (t *translationModTrigger) TriggerAsync(postID, title, description string, tags []string, postType, authorType, authorID string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		result, err := t.modSvc.ModerateContent(ctx, services.ModerationInput{
+			Title:       title,
+			Description: description,
+			Tags:        tags,
+		})
+		if err != nil {
+			log.Printf("translation job: post-translation moderation failed for %s: %v", postID, err)
+			return
+		}
+
+		status := models.PostStatusRejected
+		if result.Approved {
+			status = models.PostStatusOpen
+		}
+
+		if updateErr := t.postRepo.UpdateStatus(ctx, postID, status); updateErr != nil {
+			log.Printf("translation job: failed to update post %s status after moderation: %v", postID, updateErr)
+		} else {
+			log.Printf("translation job: post %s moderation result approved=%v (language: %s)", postID, result.Approved, result.LanguageDetected)
+		}
+	}()
+}
 
 func main() {
 	// Load configuration
@@ -129,6 +167,41 @@ func main() {
 		log.Println("Stale content cleanup job started (runs every 24 hours)")
 	}
 
+	// Start auto-translation job if database and Groq API key are available.
+	// Runs twice daily (every 12 hours) to translate non-English draft posts.
+	var translationCancel context.CancelFunc
+	if pool != nil && os.Getenv("GROQ_API_KEY") != "" {
+		translationSvc := services.NewTranslationService(os.Getenv("GROQ_API_KEY"))
+		if model := os.Getenv("TRANSLATION_MODEL"); model != "" {
+			translationSvc = services.NewTranslationService(os.Getenv("GROQ_API_KEY"), services.WithTranslationModel(model))
+		}
+		translationPostRepo := db.NewPostRepository(pool)
+		translationModSvc := services.NewContentModerationService(os.Getenv("GROQ_API_KEY"))
+		trigger := &translationModTrigger{
+			modSvc:   translationModSvc,
+			postRepo: translationPostRepo,
+		}
+
+		batchSize := jobs.DefaultTranslationBatchSize
+		if v := os.Getenv("TRANSLATION_BATCH_SIZE"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				batchSize = n
+			}
+		}
+		delayMs := jobs.DefaultTranslationDelayMs
+		if v := os.Getenv("TRANSLATION_DELAY_MS"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				delayMs = n
+			}
+		}
+
+		translationJob := jobs.NewTranslationJob(translationPostRepo, translationPostRepo, translationSvc, trigger, batchSize, delayMs)
+		var translationCtx context.Context
+		translationCtx, translationCancel = context.WithCancel(context.Background())
+		go translationJob.RunScheduled(translationCtx, jobs.DefaultTranslationInterval)
+		log.Println("Translation job started (runs every 12 hours)")
+	}
+
 	// Create server
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -162,6 +235,9 @@ func main() {
 	}
 	if staleContentCancel != nil {
 		staleContentCancel()
+	}
+	if translationCancel != nil {
+		translationCancel()
 	}
 
 	// Create shutdown context with timeout

@@ -139,14 +139,16 @@ func (m *MockFlagCreator) GetFlags() []*models.Flag {
 
 // MockPostStatusUpdater extends MockPostsRepository with UpdateStatus support.
 type MockPostStatusUpdater struct {
-	mu        sync.Mutex
-	statusMap map[string]models.PostStatus // postID -> status
-	err       error
+	mu           sync.Mutex
+	statusMap    map[string]models.PostStatus // postID -> status
+	languageMap  map[string]string            // postID -> original_language (set via UpdateOriginalLanguage)
+	err          error
 }
 
 func NewMockPostStatusUpdater() *MockPostStatusUpdater {
 	return &MockPostStatusUpdater{
-		statusMap: make(map[string]models.PostStatus),
+		statusMap:   make(map[string]models.PostStatus),
+		languageMap: make(map[string]string),
 	}
 }
 
@@ -160,11 +162,29 @@ func (m *MockPostStatusUpdater) UpdateStatus(ctx context.Context, postID string,
 	return nil
 }
 
+func (m *MockPostStatusUpdater) UpdateOriginalLanguage(ctx context.Context, postID, language string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.err != nil {
+		return m.err
+	}
+	m.statusMap[postID] = models.PostStatusDraft
+	m.languageMap[postID] = language
+	return nil
+}
+
 func (m *MockPostStatusUpdater) GetStatus(postID string) (models.PostStatus, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s, ok := m.statusMap[postID]
 	return s, ok
+}
+
+func (m *MockPostStatusUpdater) GetLanguage(postID string) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	l, ok := m.languageMap[postID]
+	return l, ok
 }
 
 // ============================================================================
@@ -630,5 +650,184 @@ func TestModeratePostAsync_SpawnsGoroutine(t *testing.T) {
 	}
 	if status != models.PostStatusOpen {
 		t.Errorf("expected status %q, got %q", models.PostStatusOpen, status)
+	}
+}
+
+// ============================================================================
+// isLanguageOnlyRejection Tests
+// ============================================================================
+
+func TestIsLanguageOnlyRejection_TrueForSingleLanguageReason(t *testing.T) {
+	result := &ModerationResult{
+		Approved:         false,
+		LanguageDetected: "Portuguese",
+		RejectionReasons: []string{"LANGUAGE"},
+	}
+	if !isLanguageOnlyRejection(result) {
+		t.Error("expected isLanguageOnlyRejection=true for single LANGUAGE reason")
+	}
+}
+
+func TestIsLanguageOnlyRejection_CaseInsensitive(t *testing.T) {
+	cases := []string{"LANGUAGE", "language", "Language"}
+	for _, reason := range cases {
+		result := &ModerationResult{
+			Approved:         false,
+			LanguageDetected: "Spanish",
+			RejectionReasons: []string{reason},
+		}
+		if !isLanguageOnlyRejection(result) {
+			t.Errorf("expected isLanguageOnlyRejection=true for reason %q", reason)
+		}
+	}
+}
+
+func TestIsLanguageOnlyRejection_FalseWhenApproved(t *testing.T) {
+	result := &ModerationResult{
+		Approved:         true,
+		LanguageDetected: "Portuguese",
+		RejectionReasons: []string{"LANGUAGE"},
+	}
+	if isLanguageOnlyRejection(result) {
+		t.Error("expected isLanguageOnlyRejection=false when approved")
+	}
+}
+
+func TestIsLanguageOnlyRejection_FalseWhenNoLanguage(t *testing.T) {
+	result := &ModerationResult{
+		Approved:         false,
+		LanguageDetected: "",
+		RejectionReasons: []string{"LANGUAGE"},
+	}
+	if isLanguageOnlyRejection(result) {
+		t.Error("expected isLanguageOnlyRejection=false when no language detected")
+	}
+}
+
+func TestIsLanguageOnlyRejection_FalseWhenEnglish(t *testing.T) {
+	for _, lang := range []string{"en", "EN", "english", "English", "ENGLISH"} {
+		result := &ModerationResult{
+			Approved:         false,
+			LanguageDetected: lang,
+			RejectionReasons: []string{"LANGUAGE"},
+		}
+		if isLanguageOnlyRejection(result) {
+			t.Errorf("expected isLanguageOnlyRejection=false for English language %q", lang)
+		}
+	}
+}
+
+func TestIsLanguageOnlyRejection_FalseWhenMultipleReasons(t *testing.T) {
+	result := &ModerationResult{
+		Approved:         false,
+		LanguageDetected: "Portuguese",
+		RejectionReasons: []string{"LANGUAGE", "SPAM"},
+	}
+	if isLanguageOnlyRejection(result) {
+		t.Error("expected isLanguageOnlyRejection=false when multiple rejection reasons")
+	}
+}
+
+func TestIsLanguageOnlyRejection_FalseWhenNonLanguageReason(t *testing.T) {
+	result := &ModerationResult{
+		Approved:         false,
+		LanguageDetected: "Portuguese",
+		RejectionReasons: []string{"SPAM"},
+	}
+	if isLanguageOnlyRejection(result) {
+		t.Error("expected isLanguageOnlyRejection=false for non-LANGUAGE reason")
+	}
+}
+
+func TestIsLanguageOnlyRejection_FalseWhenNoReasons(t *testing.T) {
+	result := &ModerationResult{
+		Approved:         false,
+		LanguageDetected: "Portuguese",
+		RejectionReasons: []string{},
+	}
+	if isLanguageOnlyRejection(result) {
+		t.Error("expected isLanguageOnlyRejection=false when no rejection reasons")
+	}
+}
+
+// ============================================================================
+// Language-only rejection → draft + translation comment
+// ============================================================================
+
+func TestModeratePostAsync_LanguageOnlyRejection_SetsDraft(t *testing.T) {
+	repo := NewMockPostsRepository()
+	statusUpdater := NewMockPostStatusUpdater()
+	commentCreator := &MockCommentCreator{}
+	modService := NewMockContentModerationService()
+	modService.SetResult(&ModerationResult{
+		Approved:         false,
+		LanguageDetected: "Portuguese",
+		RejectionReasons: []string{"LANGUAGE"},
+		Explanation:      "Content is in Portuguese, not English",
+	})
+
+	handler := NewPostsHandler(repo)
+	handler.SetContentModerationService(modService)
+	handler.SetPostStatusUpdater(statusUpdater)
+	handler.SetCommentRepo(commentCreator)
+
+	handler.moderatePostAsync(testPostID, "Título de teste", "Descrição de teste", []string{"go"}, "question", "human", "user-123")
+
+	// Status should be draft (not rejected)
+	status, ok := statusUpdater.GetStatus(testPostID)
+	if !ok {
+		t.Fatal("expected UpdateOriginalLanguage to set status")
+	}
+	if status != models.PostStatusDraft {
+		t.Errorf("expected status %q, got %q", models.PostStatusDraft, status)
+	}
+
+	// Language should be recorded
+	lang, langOK := statusUpdater.GetLanguage(testPostID)
+	if !langOK {
+		t.Fatal("expected original language to be recorded")
+	}
+	if lang != "Portuguese" {
+		t.Errorf("expected language 'Portuguese', got %q", lang)
+	}
+
+	// Comment should mention translation
+	comments := commentCreator.GetComments()
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(comments))
+	}
+	c := comments[0]
+	if !strings.Contains(c.Content, "Portuguese") {
+		t.Errorf("expected comment to mention 'Portuguese', got %q", c.Content)
+	}
+	if !strings.Contains(c.Content, "translat") {
+		t.Errorf("expected comment to mention translation, got %q", c.Content)
+	}
+}
+
+func TestModeratePostAsync_MultipleReasonsNotDraft(t *testing.T) {
+	repo := NewMockPostsRepository()
+	statusUpdater := NewMockPostStatusUpdater()
+	modService := NewMockContentModerationService()
+	modService.SetResult(&ModerationResult{
+		Approved:         false,
+		LanguageDetected: "Portuguese",
+		RejectionReasons: []string{"LANGUAGE", "SPAM"},
+		Explanation:      "Content is in Portuguese and is spam",
+	})
+
+	handler := NewPostsHandler(repo)
+	handler.SetContentModerationService(modService)
+	handler.SetPostStatusUpdater(statusUpdater)
+
+	handler.moderatePostAsync(testPostID, "Título de teste", "Descrição de teste", []string{"go"}, "question", "human", "user-123")
+
+	// Multiple reasons → regular rejection, not draft
+	status, ok := statusUpdater.GetStatus(testPostID)
+	if !ok {
+		t.Fatal("expected status to be set")
+	}
+	if status != models.PostStatusRejected {
+		t.Errorf("expected status %q for multi-reason rejection, got %q", models.PostStatusRejected, status)
 	}
 }

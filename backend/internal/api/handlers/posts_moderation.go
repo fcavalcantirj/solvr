@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -76,14 +77,26 @@ func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags
 		}
 
 		var newStatus models.PostStatus
+		var languageOnlyRejection bool
 		if result.Approved {
 			newStatus = models.PostStatusOpen
+		} else if isLanguageOnlyRejection(result) {
+			// Language-only rejection → save as draft for auto-translation
+			newStatus = models.PostStatusDraft
+			languageOnlyRejection = true
 		} else {
 			newStatus = models.PostStatusRejected
 		}
 
-		if err := h.statusUpdater.UpdateStatus(ctx, postID, newStatus); err != nil {
-			h.logger.Error("failed to update post status after moderation", "postID", postID, "status", newStatus, "error", err)
+		if languageOnlyRejection {
+			// Use UpdateOriginalLanguage to set status=draft and record the language in one call.
+			if err := h.statusUpdater.UpdateOriginalLanguage(ctx, postID, result.LanguageDetected); err != nil {
+				h.logger.Error("failed to set original language after language rejection", "postID", postID, "language", result.LanguageDetected, "error", err)
+			}
+		} else {
+			if err := h.statusUpdater.UpdateStatus(ctx, postID, newStatus); err != nil {
+				h.logger.Error("failed to update post status after moderation", "postID", postID, "status", newStatus, "error", err)
+			}
 		}
 
 		// Create system comment explaining the moderation decision
@@ -91,6 +104,11 @@ func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags
 			var commentContent string
 			if result.Approved {
 				commentContent = "Post approved by Solvr moderation. Your post is now visible in the feed."
+			} else if languageOnlyRejection {
+				commentContent = fmt.Sprintf(
+					"Your post appears to be in %s. We'll automatically translate it to English and resubmit for review — this typically takes up to 24 hours.",
+					result.LanguageDetected,
+				)
 			} else {
 				commentContent = fmt.Sprintf("Post rejected by Solvr moderation.\n\nReason: %s\n\nYou can edit your post and resubmit for review.", result.Explanation)
 			}
@@ -115,4 +133,20 @@ func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags
 		}
 		return
 	}
+}
+
+// isLanguageOnlyRejection returns true when the post was rejected exclusively
+// because of language (not spam, injection, or relevance).
+// Only triggers auto-translation when LANGUAGE is the sole rejection reason.
+func isLanguageOnlyRejection(result *ModerationResult) bool {
+	if result.Approved || result.LanguageDetected == "" {
+		return false
+	}
+	lang := strings.ToLower(result.LanguageDetected)
+	if lang == "en" || lang == "english" {
+		return false
+	}
+	// Only trigger translation if LANGUAGE is the sole rejection reason
+	return len(result.RejectionReasons) == 1 &&
+		strings.ToUpper(result.RejectionReasons[0]) == "LANGUAGE"
 }

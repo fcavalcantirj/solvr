@@ -196,6 +196,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			p.accepted_answer_id, p.evolved_into,
 			p.created_at, p.updated_at, p.deleted_at,
 			p.crystallization_cid, p.crystallized_at,
+			COALESCE(p.original_language, '') as original_language,
 			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
 			COALESCE(ans_cnt.cnt, 0) as answers_count,
@@ -261,7 +262,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 
 // scanPostWithAuthorRows scans a row into a PostWithAuthor struct.
 // Used for queries that include LEFT JOINs for author information.
-// Expects 26 columns: 20 post fields + 2 author fields + 3 counts + 1 user_vote_direction.
+// Expects 27 columns: 20 post fields + 1 original_language + 2 author fields + 3 counts + 1 user_vote_direction.
 func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWithAuthor, error) {
 	var post models.PostWithAuthor
 	var authorDisplayName, authorAvatarURL string
@@ -287,6 +288,7 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 		&post.DeletedAt,
 		&post.CrystallizationCID,
 		&post.CrystallizedAt,
+		&post.OriginalLanguage,
 		&authorDisplayName,
 		&authorAvatarURL,
 		&post.AnswersCount,
@@ -470,6 +472,7 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 			p.accepted_answer_id, p.evolved_into,
 			p.created_at, p.updated_at, p.deleted_at,
 			p.crystallization_cid, p.crystallized_at,
+			COALESCE(p.original_language, '') as original_language,
 			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
 			COALESCE(ans_cnt.cnt, 0) as answers_count,

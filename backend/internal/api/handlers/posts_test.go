@@ -769,15 +769,18 @@ func TestListPosts_NoUserVote_Anonymous(t *testing.T) {
 		t.Errorf("expected empty ViewerID for anonymous, got '%s'", repo.listOpts.ViewerID)
 	}
 
-	// Verify user_vote is NOT in response (omitempty)
+	// Verify user_vote is present and null (anonymous = no vote, field always serialized)
 	var resp map[string]interface{}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	data := resp["data"].([]interface{})
 	first := data[0].(map[string]interface{})
-	if _, ok := first["user_vote"]; ok {
-		t.Error("expected user_vote to be omitted for anonymous request, but it was present")
+	if _, ok := first["user_vote"]; !ok {
+		t.Error("expected user_vote key to be present (as null) for anonymous request")
+	}
+	if first["user_vote"] != nil {
+		t.Errorf("expected user_vote to be null for anonymous request, got %v", first["user_vote"])
 	}
 }
 

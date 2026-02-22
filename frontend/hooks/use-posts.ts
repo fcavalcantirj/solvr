@@ -55,7 +55,7 @@ function transformPost(post: APIPost): FeedPost {
     comments: post.comments_count || 0,
     views: post.view_count || 0,
     status: mapStatus(post.status),
-    userVote: post.user_vote ?? undefined,
+    userVote: post.user_vote,
     isHot: post.vote_score > 10, // Simple heuristic for now
     isPinned: false,
   };

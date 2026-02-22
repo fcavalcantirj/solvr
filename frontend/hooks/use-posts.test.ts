@@ -171,6 +171,33 @@ describe('usePosts - avatar and pinned field resolution', () => {
     expect(result.current.posts[1].comments).toBe(0);
   });
 
+  it('preserves null user_vote from API (does not convert to undefined)', async () => {
+    // When backend sends "user_vote": null (authenticated user, no vote),
+    // the frontend must preserve null — not convert it to undefined via ?? undefined.
+    // If userVote is undefined, use-vote.ts fires a /my-vote fetch (N+1 bug).
+    // If userVote is null, use-vote.ts skips the fetch (correct behavior).
+    const postWithNullVote = {
+      ...mockPostWithAvatar,
+      id: 'p-null-vote',
+      user_vote: null,
+    };
+
+    (api.getPosts as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [postWithNullVote],
+      meta: { total: 1, page: 1, per_page: 20, has_more: false },
+    });
+
+    const { result } = renderHook(() => usePosts());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // null user_vote must remain null, NOT be converted to undefined
+    expect(result.current.posts[0].userVote).toBeNull();
+    expect(result.current.posts[0].userVote).not.toBeUndefined();
+  });
+
   it('handles null comments_count from production API', async () => {
     // Production API returns null when comments table doesn't exist or query fails
     const postWithNullComments = {

@@ -327,6 +327,62 @@ func TestGetMyVote_Unauthorized(t *testing.T) {
 	}
 }
 
+// TestPostsHandler_List_UserVoteNullExplicit tests that GET /v1/posts for an
+// authenticated user who has NOT voted includes "user_vote": null explicitly
+// in the JSON response (field present with null value, NOT omitted).
+// This prevents N+1 /my-vote calls on the frontend.
+func TestPostsHandler_List_UserVoteNullExplicit(t *testing.T) {
+	repo := NewMockPostsRepository()
+
+	// Post with UserVote = nil (user hasn't voted)
+	post := createTestPost("post-xyz", "Some Post", models.PostTypeProblem)
+	post.PostedByID = "other-user-456"
+	post.UserVote = nil // Explicitly no vote
+	repo.SetPosts([]models.PostWithAuthor{post}, 1)
+
+	handler := NewPostsHandler(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/posts", nil)
+	req = addAuthContext(req, "viewer-user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	// Parse response
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	data, ok := resp["data"].([]interface{})
+	if !ok {
+		t.Fatal("expected data array in response")
+	}
+	if len(data) != 1 {
+		t.Fatalf("expected 1 post, got %d", len(data))
+	}
+
+	postData, ok := data[0].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected post object in data array")
+	}
+
+	// The "user_vote" key MUST be present in the JSON (even if null).
+	// If the field is omitempty and nil, it will be absent — that's the bug.
+	if _, exists := postData["user_vote"]; !exists {
+		t.Error("expected 'user_vote' key to be present in post JSON (even when null) to prevent N+1 frontend fetches; field was absent (omitempty bug)")
+	}
+
+	// And its value must be null (not some stale vote value)
+	if postData["user_vote"] != nil {
+		t.Errorf("expected 'user_vote' to be null, got %v", postData["user_vote"])
+	}
+}
+
 // TestGetMyVote_PostNotFound tests 404 when post doesn't exist.
 func TestGetMyVote_PostNotFound(t *testing.T) {
 	repo := NewMockPostsRepository()

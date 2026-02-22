@@ -148,7 +148,7 @@ type PostWithAuthor struct {
 	AnswersCount    int        `json:"answers_count"`
 	ApproachesCount int        `json:"approaches_count"`
 	CommentsCount   int        `json:"comments_count"`
-	UserVote        *string    `json:"user_vote,omitempty"`
+	UserVote        *string    `json:"user_vote"`
 }
 
 // PostListOptions contains options for listing posts.

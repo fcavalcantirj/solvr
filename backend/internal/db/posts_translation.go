@@ -37,7 +37,10 @@ func (r *PostRepository) UpdateOriginalLanguage(ctx context.Context, postID, lan
 func (r *PostRepository) ListPostsNeedingTranslation(ctx context.Context, limit int) ([]*models.Post, error) {
 	query := `
 		SELECT id, type, title, description, tags, posted_by_type, posted_by_id,
-		       status, original_language, original_title, original_description, translation_attempts
+		       status, original_language,
+		       COALESCE(original_title, '') as original_title,
+		       COALESCE(original_description, '') as original_description,
+		       translation_attempts
 		FROM posts
 		WHERE status = 'draft'
 		  AND original_language IS NOT NULL

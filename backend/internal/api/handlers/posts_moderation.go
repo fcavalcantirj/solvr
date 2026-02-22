@@ -138,6 +138,13 @@ func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags
 // isLanguageOnlyRejection returns true when the post was rejected exclusively
 // because of language (not spam, injection, or relevance).
 // Only triggers auto-translation when LANGUAGE is the sole rejection reason.
+//
+// Groq may return the language reason with varying phrasing (e.g., "Non-English language",
+// "LANGUAGE", "not_english"), so we check that:
+//   - exactly one rejection reason exists
+//   - the language detected is non-English
+//   - the single reason does NOT mention injection, spam, malicious, or relevance keywords
+//     (i.e., it's safe to assume it's a language-only rejection)
 func isLanguageOnlyRejection(result *ModerationResult) bool {
 	if result.Approved || result.LanguageDetected == "" {
 		return false
@@ -146,7 +153,16 @@ func isLanguageOnlyRejection(result *ModerationResult) bool {
 	if lang == "en" || lang == "english" {
 		return false
 	}
-	// Only trigger translation if LANGUAGE is the sole rejection reason
-	return len(result.RejectionReasons) == 1 &&
-		strings.ToUpper(result.RejectionReasons[0]) == "LANGUAGE"
+	if len(result.RejectionReasons) != 1 {
+		return false
+	}
+	// Ensure the single reason is language-related, not a dangerous rejection
+	reason := strings.ToLower(result.RejectionReasons[0])
+	dangerousKeywords := []string{"inject", "spam", "malicious", "phish", "relevance", "quality", "gibberish"}
+	for _, kw := range dangerousKeywords {
+		if strings.Contains(reason, kw) {
+			return false
+		}
+	}
+	return true
 }

@@ -18,7 +18,8 @@ const (
 )
 
 // translationSystemPrompt is the static system prompt for technical content translation.
-const translationSystemPrompt = `You are a technical translator for a developer Q&A platform. Translate the given title and description to English. Keep code snippets, technical terms, URLs, variable names, and identifiers unchanged. Return only valid JSON with keys "title" and "description".`
+// Uses plain JSON instruction instead of json_schema response_format for broader model compatibility.
+const translationSystemPrompt = `You are a technical translator for a developer Q&A platform. Translate the given title and description to English. Keep code snippets, technical terms, URLs, variable names, and identifiers unchanged. Respond ONLY with a valid JSON object with exactly two keys: "title" and "description". No markdown, no explanation, just the JSON object.`
 
 // TranslationRateLimitError is returned when the Groq API returns a 429 for translation.
 type TranslationRateLimitError struct {
@@ -115,7 +116,8 @@ func (s *TranslationService) TranslateContent(ctx context.Context, input Transla
 			{Role: "system", Content: translationSystemPrompt},
 			{Role: "user", Content: userMessage},
 		},
-		ResponseFormat:      buildTranslationResponseFormat(),
+		// No ResponseFormat: llama-3.3-70b-versatile does not support json_schema.
+		// JSON output is enforced via the system prompt instead.
 		Temperature:         0.2,
 		MaxCompletionTokens: 1024,
 	}
@@ -187,28 +189,4 @@ func parseRetryAfterSeconds(value string) time.Duration {
 		return 60 * time.Second
 	}
 	return time.Duration(seconds) * time.Second
-}
-
-// buildTranslationResponseFormat constructs the json_schema response format for translation.
-func buildTranslationResponseFormat() *groqResponseFormat {
-	return &groqResponseFormat{
-		Type: "json_schema",
-		JSONSchema: &groqJSONSchema{
-			Name:   "translation_result",
-			Strict: true,
-			Schema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"title": map[string]interface{}{
-						"type": "string",
-					},
-					"description": map[string]interface{}{
-						"type": "string",
-					},
-				},
-				"required":             []string{"title", "description"},
-				"additionalProperties": false,
-			},
-		},
-	}
 }

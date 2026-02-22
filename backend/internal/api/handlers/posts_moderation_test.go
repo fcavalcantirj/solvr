@@ -668,6 +668,20 @@ func TestIsLanguageOnlyRejection_TrueForSingleLanguageReason(t *testing.T) {
 	}
 }
 
+// TestIsLanguageOnlyRejection_RealGroqPhrasing ensures the real Groq output
+// "Non-English language" is treated as a language-only rejection.
+func TestIsLanguageOnlyRejection_RealGroqPhrasing(t *testing.T) {
+	// Real Groq moderation returns this exact phrase (confirmed via live API test)
+	result := &ModerationResult{
+		Approved:         false,
+		LanguageDetected: "Portuguese",
+		RejectionReasons: []string{"Non-English language"},
+	}
+	if !isLanguageOnlyRejection(result) {
+		t.Error("expected isLanguageOnlyRejection=true for real Groq reason 'Non-English language'")
+	}
+}
+
 func TestIsLanguageOnlyRejection_CaseInsensitive(t *testing.T) {
 	cases := []string{"LANGUAGE", "language", "Language"}
 	for _, reason := range cases {

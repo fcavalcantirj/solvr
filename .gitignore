@@ -2,6 +2,7 @@
 *~
 /backend/api
 /backend/cmd/api/api
+/backend/backfill-embeddings
 # Binaries for programs and plugins
 build/
 # Build outputs

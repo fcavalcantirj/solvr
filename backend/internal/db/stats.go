@@ -224,6 +224,7 @@ func (r *StatsRepository) GetTrendingPosts(ctx context.Context, limit int) ([]an
 		) app_cnt ON app_cnt.problem_id = p.id
 		WHERE p.created_at > NOW() - INTERVAL '7 days'
 			AND p.deleted_at IS NULL
+			AND p.status NOT IN ('pending_review', 'rejected', 'draft')
 		ORDER BY
 			LOG(GREATEST(ABS(COALESCE(p.upvotes, 0) - COALESCE(p.downvotes, 0)), 1) + 1)
 			+ EXTRACT(EPOCH FROM (p.created_at - (NOW() - INTERVAL '7 days'))) / 45000.0

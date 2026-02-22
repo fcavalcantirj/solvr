@@ -528,6 +528,7 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 		&post.DeletedAt,
 		&post.CrystallizationCID,
 		&post.CrystallizedAt,
+		&post.OriginalLanguage,
 		&authorDisplayName,
 		&authorAvatarURL,
 		&post.AnswersCount,

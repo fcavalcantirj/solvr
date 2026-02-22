@@ -3726,3 +3726,43 @@ func TestPostRepository_FindByID_WithViewerVote(t *testing.T) {
 		t.Errorf("expected UserVote to be nil for non-voter, got '%s'", *foundOther.UserVote)
 	}
 }
+
+// TestPostRepository_FindByID_OriginalLanguage is a regression test for the bug where
+// &post.OriginalLanguage was missing from findByIDInternal's inline Scan call,
+// causing "number of field descriptions must equal number of destinations, got 27 and 26".
+func TestPostRepository_FindByID_OriginalLanguage(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	ctx := context.Background()
+
+	timestamp := time.Now().Format("150405")
+	postID := "findbyid_lang_" + timestamp
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, tags, posted_by_type, posted_by_id,
+			status, upvotes, downvotes, original_language)
+		VALUES ($1, 'problem', 'OriginalLanguage Test', 'Test', $2, 'agent', 'test_agent_lang',
+			'open', 0, 0, 'pt')
+	`, postID, []string{"test"})
+	if err != nil {
+		t.Fatalf("failed to insert test post: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", postID)
+	}()
+
+	// This call would panic with "got 27 and 26" before the fix.
+	post, err := repo.FindByID(ctx, postID)
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+
+	if post.OriginalLanguage != "pt" {
+		t.Errorf("expected original_language 'pt', got %q", post.OriginalLanguage)
+	}
+}

@@ -319,6 +319,58 @@ func TestTranslateContent_SystemPromptContainsTechnicalTranslator(t *testing.T) 
 	}
 }
 
+func TestTranslateContent_StripsMarkdownFences(t *testing.T) {
+	// llama-3.3-70b-versatile wraps JSON in ```json...``` for complex titles
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fencedContent := "```json\n{\"title\":\"AI Assistant\",\"description\":\"desc\"}\n```"
+		resp := map[string]interface{}{
+			"id":      "chatcmpl-fenced",
+			"object":  "chat.completion",
+			"created": 1700000000,
+			"model":   DefaultTranslationModel,
+			"choices": []map[string]interface{}{
+				{
+					"index":         0,
+					"message":       map[string]interface{}{"role": "assistant", "content": fencedContent},
+					"finish_reason": "stop",
+				},
+			},
+		}
+		respBytes, _ := json.Marshal(resp)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respBytes)
+	}))
+	defer server.Close()
+
+	svc := NewTranslationService("test-key", WithTranslationBaseURL(server.URL))
+	result, err := svc.TranslateContent(context.Background(), TranslationInput{Title: "AI助手", Language: "Chinese"})
+	if err != nil {
+		t.Fatalf("expected fence-wrapped JSON to parse successfully, got: %v", err)
+	}
+	if result.Title != "AI Assistant" {
+		t.Errorf("expected title 'AI Assistant', got %q", result.Title)
+	}
+}
+
+func TestStripMarkdownFences(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{`{"title":"t","description":"d"}`, `{"title":"t","description":"d"}`},
+		{"```json\n{\"title\":\"t\"}\n```", `{"title":"t"}`},
+		{"```\n{\"title\":\"t\"}\n```", `{"title":"t"}`},
+		{"  ```json\n{\"title\":\"t\"}\n```  ", `{"title":"t"}`},
+	}
+	for _, c := range cases {
+		got := stripMarkdownFences(c.input)
+		if got != c.want {
+			t.Errorf("stripMarkdownFences(%q) = %q, want %q", c.input, got, c.want)
+		}
+	}
+}
+
 func TestTranslationRateLimitError_Interface(t *testing.T) {
 	err := &TranslationRateLimitError{
 		RetryAfter: 30 * time.Second,

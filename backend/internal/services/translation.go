@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -170,12 +171,31 @@ func (s *TranslationService) TranslateContent(ctx context.Context, input Transla
 	}
 
 	// Parse the translation result from the message content.
+	// Strip markdown fences if the model wraps the JSON (e.g. ```json\n{...}\n```).
+	content := stripMarkdownFences(chatResp.Choices[0].Message.Content)
 	var result TranslationResult
-	if err := json.Unmarshal([]byte(chatResp.Choices[0].Message.Content), &result); err != nil {
+	if err := json.Unmarshal([]byte(content), &result); err != nil {
 		return nil, fmt.Errorf("translation: failed to parse translation result: %w", err)
 	}
 
 	return &result, nil
+}
+
+// stripMarkdownFences removes leading ```json or ``` and trailing ``` from a string.
+// llama-3.3-70b-versatile occasionally wraps JSON responses in markdown fences
+// despite system prompt instructions not to.
+func stripMarkdownFences(s string) string {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "```") {
+		if idx := strings.Index(s, "\n"); idx != -1 {
+			s = s[idx+1:]
+		}
+		if idx := strings.LastIndex(s, "```"); idx != -1 {
+			s = s[:idx]
+		}
+		s = strings.TrimSpace(s)
+	}
+	return s
 }
 
 // parseRetryAfterSeconds parses a Retry-After header value as seconds.

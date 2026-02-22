@@ -395,6 +395,90 @@ func TestAdminHandler_ListDeletedAgents_Unauthorized(t *testing.T) {
 	}
 }
 
+// TestAdminHandler_RunTranslationJob_Unauthorized verifies that missing X-Admin-API-Key returns 401.
+func TestAdminHandler_RunTranslationJob_Unauthorized(t *testing.T) {
+	os.Setenv("ADMIN_API_KEY", "test-admin-key")
+	defer os.Unsetenv("ADMIN_API_KEY")
+
+	handler := NewAdminHandler(nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/jobs/translation/run", nil)
+	// No X-Admin-API-Key header
+	w := httptest.NewRecorder()
+	handler.RunTranslationJob(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+// TestAdminHandler_RunTranslationJob_NotConfigured verifies that a missing runner returns 503.
+// This covers both the no-GROQ-key and no-database cases since neither allows runner injection.
+func TestAdminHandler_RunTranslationJob_NotConfigured(t *testing.T) {
+	os.Setenv("ADMIN_API_KEY", "test-admin-key")
+	defer os.Unsetenv("ADMIN_API_KEY")
+
+	handler := NewAdminHandler(nil) // nil pool, no runner injected
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/jobs/translation/run", nil)
+	req.Header.Set("X-Admin-API-Key", "test-admin-key")
+	w := httptest.NewRecorder()
+	handler.RunTranslationJob(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	errObj, ok := resp["error"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected error object in response, got: %v", resp)
+	}
+	if errObj["code"] != "TRANSLATION_NOT_CONFIGURED" {
+		t.Errorf("expected code TRANSLATION_NOT_CONFIGURED, got %v", errObj["code"])
+	}
+}
+
+// TestAdminHandler_RunTranslationJob_Success verifies that with a configured runner,
+// the endpoint returns 200 with translated/failed counts.
+func TestAdminHandler_RunTranslationJob_Success(t *testing.T) {
+	os.Setenv("ADMIN_API_KEY", "test-admin-key")
+	defer os.Unsetenv("ADMIN_API_KEY")
+
+	handler := NewAdminHandler(nil)
+	// Inject a mock runner that returns known counts
+	handler.SetTranslationJobRunner(&mockTranslationJobRunner{translated: 3, failed: 1})
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/jobs/translation/run", nil)
+	req.Header.Set("X-Admin-API-Key", "test-admin-key")
+	w := httptest.NewRecorder()
+	handler.RunTranslationJob(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["translated"].(float64) != 3 {
+		t.Errorf("expected translated=3, got %v", resp["translated"])
+	}
+	if resp["failed"].(float64) != 1 {
+		t.Errorf("expected failed=1, got %v", resp["failed"])
+	}
+}
+
+// mockTranslationJobRunner is a test double for TranslationJobRunner.
+type mockTranslationJobRunner struct {
+	translated int
+	failed     int
+}
+
+func (m *mockTranslationJobRunner) RunOnce(ctx context.Context) (int, int) {
+	return m.translated, m.failed
+}
+
 // getTestPool returns a test database pool or skips the test if DATABASE_URL is not set.
 func getTestPool(t *testing.T) *db.Pool {
 	t.Helper()

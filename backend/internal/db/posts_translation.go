@@ -90,8 +90,8 @@ func (r *PostRepository) ListPostsNeedingTranslation(ctx context.Context, limit 
 func (r *PostRepository) ApplyTranslation(ctx context.Context, postID, translatedTitle, translatedDescription string) error {
 	query := `
 		UPDATE posts
-		SET original_title       = title,
-		    original_description = description,
+		SET original_title       = COALESCE(original_title, title),
+		    original_description = COALESCE(original_description, description),
 		    title                = $2,
 		    description          = $3,
 		    status               = 'pending_review',

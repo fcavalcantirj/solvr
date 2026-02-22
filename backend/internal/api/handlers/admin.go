@@ -15,14 +15,27 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// TranslationJobRunner is an interface for triggering the translation job.
+// Using an interface here avoids an import cycle: services/oauth_adapter.go imports handlers,
+// so handlers cannot import services or jobs.
+type TranslationJobRunner interface {
+	RunOnce(ctx context.Context) (translated, failed int)
+}
+
 // AdminHandler handles admin operations like raw SQL queries.
 type AdminHandler struct {
-	pool *db.Pool
+	pool                 *db.Pool
+	translationJobRunner TranslationJobRunner
 }
 
 // NewAdminHandler creates a new AdminHandler.
 func NewAdminHandler(pool *db.Pool) *AdminHandler {
 	return &AdminHandler{pool: pool}
+}
+
+// SetTranslationJobRunner injects the translation job runner dependency.
+func (h *AdminHandler) SetTranslationJobRunner(runner TranslationJobRunner) {
+	h.translationJobRunner = runner
 }
 
 // QueryRequest represents a raw SQL query request.
@@ -175,6 +188,28 @@ func writeAdminError(w http.ResponseWriter, status int, code, message string) {
 			"code":    code,
 			"message": message,
 		},
+	})
+}
+
+// RunTranslationJob handles POST /admin/jobs/translation/run
+// Manually triggers one batch of the translation job. Returns translated/failed counts.
+// The runner is injected via SetTranslationJobRunner (wired in router.go).
+// Returns 503 if not configured (no GROQ key or no database).
+func (h *AdminHandler) RunTranslationJob(w http.ResponseWriter, r *http.Request) {
+	if !h.checkAdminAuth(w, r) {
+		return
+	}
+
+	if h.translationJobRunner == nil {
+		writeAdminError(w, http.StatusServiceUnavailable, "TRANSLATION_NOT_CONFIGURED", "translation job not configured (GROQ_API_KEY may be missing)")
+		return
+	}
+
+	translated, failed := h.translationJobRunner.RunOnce(r.Context())
+
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+		"translated": translated,
+		"failed":     failed,
 	})
 }
 

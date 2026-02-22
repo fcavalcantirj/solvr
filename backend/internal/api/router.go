@@ -21,6 +21,8 @@ import (
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/jobs"
+	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/fcavalcantirj/solvr/internal/services"
 )
 
@@ -104,6 +106,18 @@ func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *ch
 	r.Delete("/admin/agents/{id}", adminHandler.HardDeleteAgent)
 	r.Get("/admin/users/deleted", adminHandler.ListDeletedUsers)
 	r.Get("/admin/agents/deleted", adminHandler.ListDeletedAgents)
+
+	// Admin manual translation trigger — wire the job if GROQ and DB are available
+	if groqKey := os.Getenv("GROQ_API_KEY"); groqKey != "" && pool != nil {
+		adminPostRepo := db.NewPostRepository(pool)
+		translationSvc := services.NewTranslationService(groqKey)
+		modSvc := services.NewContentModerationService(groqKey)
+		adminTrigger := &routerModTrigger{modSvc: modSvc, postRepo: adminPostRepo}
+		translationJob := jobs.NewTranslationJob(adminPostRepo, adminPostRepo, translationSvc, adminTrigger,
+			jobs.DefaultTranslationBatchSize, 0)
+		adminHandler.SetTranslationJobRunner(translationJob)
+	}
+	r.Post("/admin/jobs/translation/run", adminHandler.RunTranslationJob)
 
 	// Discovery endpoints (SPEC.md Part 18.3)
 	r.Get("/.well-known/ai-agent.json", wellKnownAIAgentHandler)
@@ -846,6 +860,38 @@ func wrapCommentsCreateWithType(h *handlers.CommentsHandler, targetType string) 
 		rctx.URLParams.Add("target_type", targetType)
 		h.Create(w, r)
 	}
+}
+
+// routerModTrigger implements jobs.PostModerationTrigger for use by the admin translation endpoint.
+// Mirrors the translationModTrigger in cmd/api/main.go for scheduled job use.
+type routerModTrigger struct {
+	modSvc   *services.ContentModerationService
+	postRepo *db.PostRepository
+}
+
+func (t *routerModTrigger) TriggerAsync(postID, title, description string, tags []string, postType, authorType, authorID string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		result, err := t.modSvc.ModerateContent(ctx, services.ModerationInput{
+			Title: title, Description: description, Tags: tags,
+		})
+		if err != nil {
+			log.Printf("admin translation trigger: moderation failed for %s: %v", postID, err)
+			return
+		}
+		if err := t.postRepo.UpdateStatus(ctx, postID, moderationStatus(result.Approved)); err != nil {
+			log.Printf("admin translation trigger: failed to update %s: %v", postID, err)
+		}
+	}()
+}
+
+// moderationStatus converts a moderation approval boolean to a PostStatus.
+func moderationStatus(approved bool) models.PostStatus {
+	if approved {
+		return models.PostStatusOpen
+	}
+	return models.PostStatusRejected
 }
 
 // ipfsHealthAdapter wraps KuboIPFSService to satisfy handlers.IPFSHealthChecker.

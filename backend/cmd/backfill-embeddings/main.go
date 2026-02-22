@@ -73,7 +73,7 @@ type backfillWorker struct {
 	embeddingService services.EmbeddingService
 	batchSize        int
 	dryRun           bool
-	rateLimit        int      // items per second
+	delayBetweenItems time.Duration
 	contentTypes     []string // which content types to process
 }
 
@@ -159,52 +159,65 @@ func (w *backfillWorker) runPosts(ctx context.Context, result *backfillResult) e
 		return nil
 	}
 
-	slog.Info("Starting posts backfill", "total", total, "batch_size", w.batchSize)
+	slog.Info("Starting posts backfill", "total", total, "batch_size", w.batchSize, "delay", w.delayBetweenItems)
 
-	var delay time.Duration
-	if w.rateLimit > 0 {
-		delay = time.Second / time.Duration(w.rateLimit)
-	}
-
-	offset := 0
+	// Track IDs attempted this run so failed items don't loop forever.
+	attempted := make(map[string]bool)
 	for {
 		if ctx.Err() != nil {
 			slog.Info("Context canceled, stopping posts backfill")
 			break
 		}
 
-		batch, err := w.db.GetPostsWithoutEmbedding(ctx, w.batchSize, offset)
+		// Always fetch from OFFSET 0: successfully embedded items drop out of the query.
+		batch, err := w.db.GetPostsWithoutEmbedding(ctx, w.batchSize, 0)
 		if err != nil {
-			return fmt.Errorf("fetch posts batch at offset %d: %w", offset, err)
+			return fmt.Errorf("fetch posts batch: %w", err)
 		}
 		if len(batch) == 0 {
 			break
 		}
 
+		madeProgress := false
 		for _, post := range batch {
 			if ctx.Err() != nil {
 				break
 			}
+			if attempted[post.ID] {
+				continue
+			}
+			attempted[post.ID] = true
+			madeProgress = true
 
 			text := post.Title + " " + post.Description
 			embedding, err := w.embeddingService.GenerateEmbedding(ctx, text)
 			if err != nil {
 				slog.Error("Failed to generate embedding", "post_id", post.ID, "error", err)
 				result.postsErrors++
+				if w.delayBetweenItems > 0 {
+					time.Sleep(w.delayBetweenItems)
+				}
 				continue
 			}
 
 			if err := w.db.UpdatePostEmbedding(ctx, post.ID, embedding); err != nil {
 				slog.Error("Failed to update embedding", "post_id", post.ID, "error", err)
 				result.postsErrors++
+				if w.delayBetweenItems > 0 {
+					time.Sleep(w.delayBetweenItems)
+				}
 				continue
 			}
 
 			result.postsEmbedded++
 
-			if delay > 0 {
-				time.Sleep(delay)
+			if w.delayBetweenItems > 0 {
+				time.Sleep(w.delayBetweenItems)
 			}
+		}
+
+		if !madeProgress {
+			break // All remaining items already attempted; exit cleanly.
 		}
 
 		processed := result.postsEmbedded + result.postsErrors
@@ -213,8 +226,6 @@ func (w *backfillWorker) runPosts(ctx context.Context, result *backfillResult) e
 			pct = processed * 100 / total
 		}
 		slog.Info(fmt.Sprintf("Processed %d/%d posts (%d%%)", processed, total, pct))
-
-		offset += w.batchSize
 	}
 
 	return nil
@@ -242,51 +253,62 @@ func (w *backfillWorker) runAnswers(ctx context.Context, result *backfillResult)
 		return nil
 	}
 
-	slog.Info("Starting answers backfill", "total", total, "batch_size", w.batchSize)
+	slog.Info("Starting answers backfill", "total", total, "batch_size", w.batchSize, "delay", w.delayBetweenItems)
 
-	var delay time.Duration
-	if w.rateLimit > 0 {
-		delay = time.Second / time.Duration(w.rateLimit)
-	}
-
-	offset := 0
+	attempted := make(map[string]bool)
 	for {
 		if ctx.Err() != nil {
 			slog.Info("Context canceled, stopping answers backfill")
 			break
 		}
 
-		batch, err := w.db.GetAnswersWithoutEmbedding(ctx, w.batchSize, offset)
+		batch, err := w.db.GetAnswersWithoutEmbedding(ctx, w.batchSize, 0)
 		if err != nil {
-			return fmt.Errorf("fetch answers batch at offset %d: %w", offset, err)
+			return fmt.Errorf("fetch answers batch: %w", err)
 		}
 		if len(batch) == 0 {
 			break
 		}
 
+		madeProgress := false
 		for _, answer := range batch {
 			if ctx.Err() != nil {
 				break
 			}
+			if attempted[answer.ID] {
+				continue
+			}
+			attempted[answer.ID] = true
+			madeProgress = true
 
 			embedding, err := w.embeddingService.GenerateEmbedding(ctx, answer.Content)
 			if err != nil {
 				slog.Error("Failed to generate embedding", "answer_id", answer.ID, "error", err)
 				result.answersErrors++
+				if w.delayBetweenItems > 0 {
+					time.Sleep(w.delayBetweenItems)
+				}
 				continue
 			}
 
 			if err := w.db.UpdateAnswerEmbedding(ctx, answer.ID, embedding); err != nil {
 				slog.Error("Failed to update embedding", "answer_id", answer.ID, "error", err)
 				result.answersErrors++
+				if w.delayBetweenItems > 0 {
+					time.Sleep(w.delayBetweenItems)
+				}
 				continue
 			}
 
 			result.answersEmbedded++
 
-			if delay > 0 {
-				time.Sleep(delay)
+			if w.delayBetweenItems > 0 {
+				time.Sleep(w.delayBetweenItems)
 			}
+		}
+
+		if !madeProgress {
+			break
 		}
 
 		processed := result.answersEmbedded + result.answersErrors
@@ -295,8 +317,6 @@ func (w *backfillWorker) runAnswers(ctx context.Context, result *backfillResult)
 			pct = processed * 100 / total
 		}
 		slog.Info(fmt.Sprintf("Processed %d/%d answers (%d%%)", processed, total, pct))
-
-		offset += w.batchSize
 	}
 
 	return nil
@@ -337,52 +357,63 @@ func (w *backfillWorker) runApproaches(ctx context.Context, result *backfillResu
 		return nil
 	}
 
-	slog.Info("Starting approaches backfill", "total", total, "batch_size", w.batchSize)
+	slog.Info("Starting approaches backfill", "total", total, "batch_size", w.batchSize, "delay", w.delayBetweenItems)
 
-	var delay time.Duration
-	if w.rateLimit > 0 {
-		delay = time.Second / time.Duration(w.rateLimit)
-	}
-
-	offset := 0
+	attempted := make(map[string]bool)
 	for {
 		if ctx.Err() != nil {
 			slog.Info("Context canceled, stopping approaches backfill")
 			break
 		}
 
-		batch, err := w.db.GetApproachesWithoutEmbedding(ctx, w.batchSize, offset)
+		batch, err := w.db.GetApproachesWithoutEmbedding(ctx, w.batchSize, 0)
 		if err != nil {
-			return fmt.Errorf("fetch approaches batch at offset %d: %w", offset, err)
+			return fmt.Errorf("fetch approaches batch: %w", err)
 		}
 		if len(batch) == 0 {
 			break
 		}
 
+		madeProgress := false
 		for _, approach := range batch {
 			if ctx.Err() != nil {
 				break
 			}
+			if attempted[approach.ID] {
+				continue
+			}
+			attempted[approach.ID] = true
+			madeProgress = true
 
 			text := buildApproachText(approach)
 			embedding, err := w.embeddingService.GenerateEmbedding(ctx, text)
 			if err != nil {
 				slog.Error("Failed to generate embedding", "approach_id", approach.ID, "error", err)
 				result.approachesErrors++
+				if w.delayBetweenItems > 0 {
+					time.Sleep(w.delayBetweenItems)
+				}
 				continue
 			}
 
 			if err := w.db.UpdateApproachEmbedding(ctx, approach.ID, embedding); err != nil {
 				slog.Error("Failed to update embedding", "approach_id", approach.ID, "error", err)
 				result.approachesErrors++
+				if w.delayBetweenItems > 0 {
+					time.Sleep(w.delayBetweenItems)
+				}
 				continue
 			}
 
 			result.approachesEmbedded++
 
-			if delay > 0 {
-				time.Sleep(delay)
+			if w.delayBetweenItems > 0 {
+				time.Sleep(w.delayBetweenItems)
 			}
+		}
+
+		if !madeProgress {
+			break
 		}
 
 		processed := result.approachesEmbedded + result.approachesErrors
@@ -391,8 +422,6 @@ func (w *backfillWorker) runApproaches(ctx context.Context, result *backfillResu
 			pct = processed * 100 / total
 		}
 		slog.Info(fmt.Sprintf("Processed %d/%d approaches (%d%%)", processed, total, pct))
-
-		offset += w.batchSize
 	}
 
 	return nil
@@ -544,6 +573,7 @@ func float32SliceToVectorString(v []float32) string {
 func main() {
 	batchSize := flag.Int("batch-size", 100, "Number of items to process per batch")
 	dryRun := flag.Bool("dry-run", false, "Show what would be embedded without making changes")
+	delayMs := flag.Int("delay-ms", 20, "Delay in milliseconds between each embedding API call (default 20ms ≈ 50/sec; use 22000 for ~3 RPM free tier)")
 	contentTypesFlag := flag.String("content-types", "all", "Content types to embed: posts, answers, approaches, all (comma-separated)")
 	flag.Parse()
 
@@ -590,11 +620,11 @@ func main() {
 
 	worker := &backfillWorker{
 		db:               &pgBackfillDB{pool: pool},
-		embeddingService: embeddingService,
-		batchSize:        *batchSize,
-		dryRun:           *dryRun,
-		rateLimit:        50,
-		contentTypes:     contentTypes,
+		embeddingService:  embeddingService,
+		batchSize:         *batchSize,
+		dryRun:            *dryRun,
+		delayBetweenItems: time.Duration(*delayMs) * time.Millisecond,
+		contentTypes:      contentTypes,
 	}
 
 	result, err := worker.run(ctx)

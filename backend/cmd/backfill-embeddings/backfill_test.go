@@ -56,6 +56,14 @@ func (m *mockDB) CountPostsWithoutEmbedding(ctx context.Context) (int, error) {
 
 func (m *mockDB) UpdatePostEmbedding(ctx context.Context, id string, embedding []float32) error {
 	m.updateCalls++
+	if m.updateErr == nil {
+		for i, p := range m.posts {
+			if p.ID == id {
+				m.posts = append(m.posts[:i], m.posts[i+1:]...)
+				break
+			}
+		}
+	}
 	return m.updateErr
 }
 
@@ -76,6 +84,14 @@ func (m *mockDB) CountAnswersWithoutEmbedding(ctx context.Context) (int, error) 
 
 func (m *mockDB) UpdateAnswerEmbedding(ctx context.Context, id string, embedding []float32) error {
 	m.updateAnswerCalls++
+	if m.updateAnswerErr == nil {
+		for i, a := range m.answers {
+			if a.ID == id {
+				m.answers = append(m.answers[:i], m.answers[i+1:]...)
+				break
+			}
+		}
+	}
 	return m.updateAnswerErr
 }
 
@@ -96,6 +112,14 @@ func (m *mockDB) CountApproachesWithoutEmbedding(ctx context.Context) (int, erro
 
 func (m *mockDB) UpdateApproachEmbedding(ctx context.Context, id string, embedding []float32) error {
 	m.updateApprCalls++
+	if m.updateApprErr == nil {
+		for i, a := range m.approaches {
+			if a.ID == id {
+				m.approaches = append(m.approaches[:i], m.approaches[i+1:]...)
+				break
+			}
+		}
+	}
 	return m.updateApprErr
 }
 
@@ -114,7 +138,7 @@ func TestBackfillWorker_DryRun(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        2,
 		dryRun:           true,
-		rateLimit:        50,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"posts"},
 	}
 
@@ -161,7 +185,7 @@ func TestBackfillWorker_ProcessesBatches(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        2,
 		dryRun:           false,
-		rateLimit:        1000, // high limit to avoid delays
+		delayBetweenItems: 0, // no delay in tests
 		contentTypes:     []string{"posts"},
 	}
 
@@ -212,7 +236,7 @@ func TestBackfillWorker_ContinuesOnEmbeddingError(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        10,
 		dryRun:           false,
-		rateLimit:        1000,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"posts"},
 	}
 
@@ -257,7 +281,7 @@ func TestBackfillWorker_ContinuesOnDBError(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        10,
 		dryRun:           false,
-		rateLimit:        1000,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"posts"},
 	}
 
@@ -284,7 +308,7 @@ func TestBackfillWorker_EmptyDatabase(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        100,
 		dryRun:           false,
-		rateLimit:        50,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"posts"},
 	}
 
@@ -323,7 +347,7 @@ func TestBackfillWorker_ContextCanceled(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        10,
 		dryRun:           false,
-		rateLimit:        1000,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"posts"},
 	}
 
@@ -359,7 +383,7 @@ func TestBackfillWorker_AnswersOnly(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        10,
 		dryRun:           false,
-		rateLimit:        1000,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"answers"},
 	}
 
@@ -403,7 +427,7 @@ func TestBackfillWorker_ApproachesOnly(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        10,
 		dryRun:           false,
-		rateLimit:        1000,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"approaches"},
 	}
 
@@ -449,7 +473,7 @@ func TestBackfillWorker_ApproachTextCombination(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        10,
 		dryRun:           false,
-		rateLimit:        1000,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"approaches"},
 	}
 
@@ -484,7 +508,7 @@ func TestBackfillWorker_ApproachTextOmitsEmptyFields(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        10,
 		dryRun:           false,
-		rateLimit:        1000,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"approaches"},
 	}
 
@@ -518,7 +542,7 @@ func TestBackfillWorker_AllContentTypes(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        10,
 		dryRun:           false,
-		rateLimit:        1000,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"posts", "answers", "approaches"},
 	}
 
@@ -568,7 +592,7 @@ func TestBackfillWorker_DryRunAllTypes(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        10,
 		dryRun:           true,
-		rateLimit:        50,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"posts", "answers", "approaches"},
 	}
 
@@ -619,7 +643,7 @@ func TestBackfillWorker_AnswerEmbeddingError(t *testing.T) {
 		embeddingService: embSvc,
 		batchSize:        10,
 		dryRun:           false,
-		rateLimit:        1000,
+		delayBetweenItems: 0,
 		contentTypes:     []string{"answers"},
 	}
 

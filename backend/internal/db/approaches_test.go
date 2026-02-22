@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/google/uuid"
 )
 
 // Note: These tests require a running PostgreSQL database.
@@ -445,6 +446,129 @@ func TestApproachesRepository_GetProgressNotes(t *testing.T) {
 
 	if len(notes) != 2 {
 		t.Errorf("expected 2 notes, got %d", len(notes))
+	}
+}
+
+func TestApproachesRepository_FindApproachByID_ReturnsIsLatest(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewApproachesRepository(pool)
+	ctx := context.Background()
+
+	problemID := uuid.New().String()
+	agentID := "islat_find_agent_" + time.Now().Format("150405")
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ($1, 'problem', 'IsLatest Test', 'Desc', 'agent', $2, 'open')
+	`, problemID, agentID)
+	if err != nil {
+		t.Fatalf("insert problem: %v", err)
+	}
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO agents (id, display_name, api_key_hash, status)
+		VALUES ($1, 'IsLatest Agent', 'hash_islat', 'active')
+	`, agentID)
+	if err != nil {
+		t.Fatalf("insert agent: %v", err)
+	}
+
+	approach := &models.Approach{
+		ProblemID:  problemID,
+		AuthorType: models.AuthorTypeAgent,
+		AuthorID:   agentID,
+		Angle:      "IsLatest test angle",
+		Status:     models.ApproachStatusStarting,
+	}
+
+	created, err := repo.CreateApproach(ctx, approach)
+	if err != nil {
+		t.Fatalf("CreateApproach() error = %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM approaches WHERE id = $1", created.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", problemID)
+		_, _ = pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", agentID)
+	}()
+
+	found, err := repo.FindApproachByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("FindApproachByID() error = %v", err)
+	}
+
+	// is_latest defaults to TRUE in DB; must be returned correctly
+	if !found.IsLatest {
+		t.Error("expected IsLatest == true (DB default), got false — missing column in SELECT")
+	}
+}
+
+func TestApproachesRepository_ListApproaches_ReturnsIsLatest(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewApproachesRepository(pool)
+	ctx := context.Background()
+
+	problemID := uuid.New().String()
+	agentID := "islat_list_agent_" + time.Now().Format("150405")
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ($1, 'problem', 'IsLatest List Test', 'Desc', 'agent', $2, 'open')
+	`, problemID, agentID)
+	if err != nil {
+		t.Fatalf("insert problem: %v", err)
+	}
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO agents (id, display_name, api_key_hash, status)
+		VALUES ($1, 'IsLatest List Agent', 'hash_islat_list', 'active')
+	`, agentID)
+	if err != nil {
+		t.Fatalf("insert agent: %v", err)
+	}
+
+	approach := &models.Approach{
+		ProblemID:  problemID,
+		AuthorType: models.AuthorTypeAgent,
+		AuthorID:   agentID,
+		Angle:      "IsLatest list test angle",
+		Status:     models.ApproachStatusStarting,
+	}
+
+	created, err := repo.CreateApproach(ctx, approach)
+	if err != nil {
+		t.Fatalf("CreateApproach() error = %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM approaches WHERE id = $1", created.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", problemID)
+		_, _ = pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", agentID)
+	}()
+
+	opts := models.ApproachListOptions{ProblemID: problemID, Page: 1, PerPage: 10}
+	approaches, _, err := repo.ListApproaches(ctx, problemID, opts)
+	if err != nil {
+		t.Fatalf("ListApproaches() error = %v", err)
+	}
+
+	if len(approaches) == 0 {
+		t.Fatal("expected at least one approach")
+	}
+
+	// is_latest defaults to TRUE in DB; must be returned correctly
+	if !approaches[0].IsLatest {
+		t.Error("expected IsLatest == true (DB default), got false — missing column in SELECT")
 	}
 }
 

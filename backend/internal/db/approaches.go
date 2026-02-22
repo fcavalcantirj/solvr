@@ -71,6 +71,10 @@ func (r *ApproachesRepository) FindApproachByID(ctx context.Context, id string) 
 			a.angle, a.method, a.assumptions, a.differs_from,
 			a.status, a.outcome, a.solution,
 			a.created_at, a.updated_at, a.deleted_at,
+			a.is_latest,
+			a.forget_after,
+			a.archived_at,
+			COALESCE(a.archived_cid, '') as archived_cid,
 			COALESCE(
 				CASE WHEN a.author_type = 'agent' THEN ag.display_name
 				     WHEN a.author_type = 'human' THEN u.display_name
@@ -95,6 +99,9 @@ func (r *ApproachesRepository) FindApproachByID(ctx context.Context, id string) 
 	var assumptions, differsFrom []string
 	var createdAt, updatedAt pgtype.Timestamptz
 	var deletedAt pgtype.Timestamptz
+	var isLatest bool
+	var forgetAfter, archivedAt pgtype.Timestamptz
+	var archivedCID string
 
 	err := row.Scan(
 		&approach.ID,
@@ -111,6 +118,10 @@ func (r *ApproachesRepository) FindApproachByID(ctx context.Context, id string) 
 		&createdAt,
 		&updatedAt,
 		&deletedAt,
+		&isLatest,
+		&forgetAfter,
+		&archivedAt,
+		&archivedCID,
 		&displayName,
 		&avatarURL,
 	)
@@ -131,6 +142,14 @@ func (r *ApproachesRepository) FindApproachByID(ctx context.Context, id string) 
 	approach.UpdatedAt = updatedAt.Time
 	if deletedAt.Valid {
 		approach.DeletedAt = &deletedAt.Time
+	}
+	approach.IsLatest = isLatest
+	approach.ArchivedCID = archivedCID
+	if forgetAfter.Valid {
+		approach.ForgetAfter = &forgetAfter.Time
+	}
+	if archivedAt.Valid {
+		approach.ArchivedAt = &archivedAt.Time
 	}
 
 	approach.Author = models.ApproachAuthor{
@@ -176,6 +195,10 @@ func (r *ApproachesRepository) ListApproaches(ctx context.Context, problemID str
 			a.angle, a.method, a.assumptions, a.differs_from,
 			a.status, a.outcome, a.solution,
 			a.created_at, a.updated_at,
+			a.is_latest,
+			a.forget_after,
+			a.archived_at,
+			COALESCE(a.archived_cid, '') as archived_cid,
 			COALESCE(
 				CASE WHEN a.author_type = 'agent' THEN ag.display_name
 				     WHEN a.author_type = 'human' THEN u.display_name
@@ -207,6 +230,9 @@ func (r *ApproachesRepository) ListApproaches(ctx context.Context, problemID str
 		var displayName, avatarURL string
 		var assumptions, differsFrom []string
 		var createdAt, updatedAt pgtype.Timestamptz
+		var isLatest bool
+		var forgetAfter, archivedAt pgtype.Timestamptz
+		var archivedCID string
 
 		err := rows.Scan(
 			&approach.ID,
@@ -222,6 +248,10 @@ func (r *ApproachesRepository) ListApproaches(ctx context.Context, problemID str
 			&approach.Solution,
 			&createdAt,
 			&updatedAt,
+			&isLatest,
+			&forgetAfter,
+			&archivedAt,
+			&archivedCID,
 			&displayName,
 			&avatarURL,
 		)
@@ -233,6 +263,14 @@ func (r *ApproachesRepository) ListApproaches(ctx context.Context, problemID str
 		approach.DiffersFrom = differsFrom
 		approach.CreatedAt = createdAt.Time
 		approach.UpdatedAt = updatedAt.Time
+		approach.IsLatest = isLatest
+		approach.ArchivedCID = archivedCID
+		if forgetAfter.Valid {
+			approach.ForgetAfter = &forgetAfter.Time
+		}
+		if archivedAt.Valid {
+			approach.ArchivedAt = &archivedAt.Time
+		}
 
 		approach.Author = models.ApproachAuthor{
 			Type:        approach.AuthorType,
@@ -340,6 +378,10 @@ func (r *ApproachesRepository) ListByAuthor(ctx context.Context, authorType, aut
 			a.angle, a.method, a.assumptions, a.differs_from,
 			a.status, a.outcome, a.solution,
 			a.created_at, a.updated_at,
+			a.is_latest,
+			a.forget_after,
+			a.archived_at,
+			COALESCE(a.archived_cid, '') as archived_cid,
 			COALESCE(
 				CASE WHEN a.author_type = 'agent' THEN ag.display_name
 				     WHEN a.author_type = 'human' THEN u.display_name
@@ -369,12 +411,16 @@ func (r *ApproachesRepository) ListByAuthor(ctx context.Context, authorType, aut
 		var displayName, avatarURL string
 		var assumptions, differsFrom []string
 		var createdAt, updatedAt pgtype.Timestamptz
+		var isLatest bool
+		var forgetAfter, archivedAt pgtype.Timestamptz
+		var archivedCID string
 
 		err := rows.Scan(
 			&item.ID, &item.ProblemID, &item.AuthorType, &item.AuthorID,
 			&item.Angle, &item.Method, &assumptions, &differsFrom,
 			&item.Status, &item.Outcome, &item.Solution,
 			&createdAt, &updatedAt,
+			&isLatest, &forgetAfter, &archivedAt, &archivedCID,
 			&displayName, &avatarURL, &item.ProblemTitle,
 		)
 		if err != nil {
@@ -385,6 +431,14 @@ func (r *ApproachesRepository) ListByAuthor(ctx context.Context, authorType, aut
 		item.DiffersFrom = differsFrom
 		item.CreatedAt = createdAt.Time
 		item.UpdatedAt = updatedAt.Time
+		item.IsLatest = isLatest
+		item.ArchivedCID = archivedCID
+		if forgetAfter.Valid {
+			item.ForgetAfter = &forgetAfter.Time
+		}
+		if archivedAt.Valid {
+			item.ArchivedAt = &archivedAt.Time
+		}
 
 		item.Author = models.ApproachAuthor{
 			Type:        item.AuthorType,

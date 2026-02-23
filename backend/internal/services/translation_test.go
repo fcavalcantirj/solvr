@@ -355,19 +355,29 @@ func TestTranslateContent_StripsMarkdownFences(t *testing.T) {
 
 func TestStripMarkdownFences(t *testing.T) {
 	cases := []struct {
+		name  string
 		input string
 		want  string
 	}{
-		{`{"title":"t","description":"d"}`, `{"title":"t","description":"d"}`},
-		{"```json\n{\"title\":\"t\"}\n```", `{"title":"t"}`},
-		{"```\n{\"title\":\"t\"}\n```", `{"title":"t"}`},
-		{"  ```json\n{\"title\":\"t\"}\n```  ", `{"title":"t"}`},
+		// Previously passing cases
+		{"plain json", `{"title":"t","description":"d"}`, `{"title":"t","description":"d"}`},
+		{"triple backtick json fence", "```json\n{\"title\":\"t\"}\n```", `{"title":"t"}`},
+		{"triple backtick plain fence", "```\n{\"title\":\"t\"}\n```", `{"title":"t"}`},
+		{"triple backtick with surrounding whitespace", "  ```json\n{\"title\":\"t\"}\n```  ", `{"title":"t"}`},
+		// Production failure cases — single backtick wrapping
+		{"single backtick wrap", "`{\"title\":\"t\"}`", `{"title":"t"}`},
+		{"single backtick with json hint", "`json\n{\"title\":\"t\"}\n`", `{"title":"t"}`},
+		// Text before the opening fence
+		{"preamble before triple fence", "Here is the JSON:\n```json\n{\"title\":\"t\"}\n```", `{"title":"t"}`},
+		{"preamble before plain fence", "Sure:\n```\n{\"title\":\"t\"}\n```", `{"title":"t"}`},
 	}
 	for _, c := range cases {
-		got := stripMarkdownFences(c.input)
-		if got != c.want {
-			t.Errorf("stripMarkdownFences(%q) = %q, want %q", c.input, got, c.want)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			got := stripMarkdownFences(c.input)
+			if got != c.want {
+				t.Errorf("stripMarkdownFences(%q) = %q, want %q", c.input, got, c.want)
+			}
+		})
 	}
 }
 

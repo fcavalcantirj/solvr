@@ -181,20 +181,41 @@ func (s *TranslationService) TranslateContent(ctx context.Context, input Transla
 	return &result, nil
 }
 
-// stripMarkdownFences removes leading ```json or ``` and trailing ``` from a string.
-// llama-3.3-70b-versatile occasionally wraps JSON responses in markdown fences
-// despite system prompt instructions not to.
+// stripMarkdownFences removes markdown code fences from LLM responses.
+// Handles all observed variants: triple-backtick fences (```json...```),
+// single-backtick wrapping (`...`), and preamble text before the first fence.
 func stripMarkdownFences(s string) string {
 	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "```") {
-		if idx := strings.Index(s, "\n"); idx != -1 {
-			s = s[idx+1:]
+
+	// Case 1: triple-backtick fence anywhere in the string (including after preamble text)
+	if idx := strings.Index(s, "```"); idx != -1 {
+		// Advance past the opening fence line (```json or ```)
+		s = s[idx:]
+		if nl := strings.Index(s, "\n"); nl != -1 {
+			s = s[nl+1:]
 		}
-		if idx := strings.LastIndex(s, "```"); idx != -1 {
-			s = s[:idx]
+		// Strip trailing ```
+		if end := strings.LastIndex(s, "```"); end != -1 {
+			s = s[:end]
 		}
-		s = strings.TrimSpace(s)
+		return strings.TrimSpace(s)
 	}
+
+	// Case 2: single-backtick wrapping — strip leading/trailing backtick(s)
+	if strings.HasPrefix(s, "`") {
+		s = strings.TrimLeft(s, "`")
+		// Strip optional language hint on first line (e.g. "json\n")
+		if nl := strings.Index(s, "\n"); nl != -1 {
+			firstLine := strings.TrimSpace(s[:nl])
+			// If the first line is a word with no braces/brackets, it's a lang hint
+			if len(firstLine) > 0 && !strings.ContainsAny(firstLine, "{}[]\"") {
+				s = s[nl+1:]
+			}
+		}
+		s = strings.TrimRight(s, "`")
+		return strings.TrimSpace(s)
+	}
+
 	return s
 }
 

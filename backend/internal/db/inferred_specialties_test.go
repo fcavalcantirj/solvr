@@ -3,6 +3,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -15,7 +16,11 @@ func createInferTestAgent(t *testing.T, pool *Pool, suffix string) *models.Agent
 	ctx := context.Background()
 	agentRepo := NewAgentRepository(pool)
 
-	agentID := "infer_agent_" + suffix + "_" + time.Now().Format("20060102150405.000000000")
+	agentID := fmt.Sprintf("ia_%s_%d", suffix, time.Now().UnixNano())
+	// Truncate to 50 chars max (agents.id is VARCHAR(50))
+	if len(agentID) > 50 {
+		agentID = agentID[:50]
+	}
 	agent := &models.Agent{
 		ID:          agentID,
 		DisplayName: "Infer Test Agent " + suffix,
@@ -33,7 +38,9 @@ func createInferTestUser(t *testing.T, pool *Pool, suffix string) *models.User {
 	ctx := context.Background()
 	userRepo := NewUserRepository(pool)
 
-	username := "infer_user_" + suffix + "_" + time.Now().Format("150405.000000000")
+	// Username must be <= 30 chars. Use last 16 digits of UnixNano for uniqueness.
+	nano := fmt.Sprintf("%d", time.Now().UnixNano())
+	username := "iu" + nano[len(nano)-16:]
 	user := &models.User{
 		Username:       username,
 		DisplayName:    "Infer Test User " + suffix,
@@ -127,15 +134,17 @@ func TestInferSpecialties_AgentWithActivity(t *testing.T) {
 
 	agent := createInferTestAgent(t, pool, "activity")
 
-	// Create 3 go-tagged posts by agent (weight 2 each = 6 total for 'go')
-	createInferTestPost(t, pool, "agent", agent.ID, []string{"go", "testing"})
-	createInferTestPost(t, pool, "agent", agent.ID, []string{"go", "concurrency"})
+	// Create 3 go-tagged posts by agent (weight 2 each = 6 total for 'go').
+	// Use only the 'go' tag to avoid crowding out 'rust' from the top-5 limit.
+	createInferTestPost(t, pool, "agent", agent.ID, []string{"go"})
+	createInferTestPost(t, pool, "agent", agent.ID, []string{"go"})
 	createInferTestPost(t, pool, "agent", agent.ID, []string{"go"})
 
 	// Create 2 docker-tagged problems by another author, then approaches by our agent
-	// (approaches inherit tags from parent post, weight 2 each = 4 total for 'docker')
+	// (approaches inherit tags from parent post, weight 2 each = 4 total for 'docker').
+	// Use only the 'docker' tag to avoid crowding out 'rust' from the top-5 limit.
 	otherAgent := createInferTestAgent(t, pool, "other")
-	dockerProblem1 := createInferTestPost(t, pool, "agent", otherAgent.ID, []string{"docker", "kubernetes"})
+	dockerProblem1 := createInferTestPost(t, pool, "agent", otherAgent.ID, []string{"docker"})
 	dockerProblem2 := createInferTestPost(t, pool, "agent", otherAgent.ID, []string{"docker"})
 	createInferTestApproach(t, pool, dockerProblem1, agent.ID)
 	createInferTestApproach(t, pool, dockerProblem2, agent.ID)

@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -14,12 +15,14 @@ func createNotificationTestUser(t *testing.T, pool *Pool) *models.User {
 	ctx := context.Background()
 	userRepo := NewUserRepository(pool)
 
+	now := time.Now()
+	ts := now.Format("150405.000000")
 	user := &models.User{
-		Username:       "notifuser" + time.Now().Format("20060102150405.000000000"),
+		Username:       "nf" + now.Format("0405") + fmt.Sprintf("%06d", now.Nanosecond()/1000)[:4],
 		DisplayName:    "Notification Test User",
-		Email:          "notif" + time.Now().Format("20060102150405.000000000") + "@example.com",
+		Email:          "notif_" + ts + "@example.com",
 		AuthProvider:   "github",
-		AuthProviderID: "github_notif_" + time.Now().Format("20060102150405.000000000"),
+		AuthProviderID: "github_notif_" + ts,
 		Role:           "user",
 	}
 
@@ -85,10 +88,12 @@ func TestNotificationsRepository_GetNotificationsForAgent(t *testing.T) {
 
 	// Create an agent for the test
 	agentRepo := NewAgentRepository(pool)
-	agentID := "notif_test_agent_" + time.Now().Format("20060102150405")
+	nowA := time.Now()
+	nsA := fmt.Sprintf("%04d", nowA.Nanosecond()/100000)
+	agentID := "nta_" + nowA.Format("150405") + nsA
 	agent := &models.Agent{
 		ID:          agentID,
-		DisplayName: "Notification Test Agent",
+		DisplayName: "Notif Agent " + nowA.Format("150405") + nsA,
 		Status:      "active",
 	}
 	if err := agentRepo.Create(context.Background(), agent); err != nil {
@@ -185,10 +190,12 @@ func TestNotificationsRepository_MarkAllReadForAgent(t *testing.T) {
 
 	// Create an agent
 	agentRepo := NewAgentRepository(pool)
-	agentID := "notif_markall_agent_" + time.Now().Format("20060102150405")
+	nowB := time.Now()
+	nsB := fmt.Sprintf("%04d", nowB.Nanosecond()/100000)
+	agentID := "nma_" + nowB.Format("150405") + nsB
 	agent := &models.Agent{
 		ID:          agentID,
-		DisplayName: "MarkAll Test Agent",
+		DisplayName: "MarkAll Agent " + nowB.Format("150405") + nsB,
 		Status:      "active",
 	}
 	if err := agentRepo.Create(context.Background(), agent); err != nil {
@@ -254,10 +261,12 @@ func TestNotificationsRepository_Create(t *testing.T) {
 
 	// Create a test agent to receive the notification
 	agentRepo := NewAgentRepository(pool)
-	agentID := "notif_create_agent_" + time.Now().Format("20060102150405")
+	nowC := time.Now()
+	nsC := fmt.Sprintf("%04d", nowC.Nanosecond()/100000)
+	agentID := "nca_" + nowC.Format("150405") + nsC
 	agent := &models.Agent{
 		ID:          agentID,
-		DisplayName: "Create Notification Test Agent",
+		DisplayName: "Create Notif Agent " + nowC.Format("150405") + nsC,
 		Status:      "active",
 	}
 	if err := agentRepo.Create(context.Background(), agent); err != nil {

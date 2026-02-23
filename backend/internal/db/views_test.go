@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -12,12 +13,15 @@ func createViewsTestUser(t *testing.T, repo *UserRepository) *models.User {
 	t.Helper()
 	ctx := context.Background()
 
+	now := time.Now()
+	ts := now.Format("150405.000000")
+	username := "vw" + now.Format("0405") + fmt.Sprintf("%06d", now.Nanosecond()/1000)[:4]
 	user := &models.User{
-		Username:       "viewsuser" + time.Now().Format("20060102150405.000000000"),
+		Username:       username,
 		DisplayName:    "Views Test User",
-		Email:          "views" + time.Now().Format("20060102150405.000000000") + "@example.com",
+		Email:          "views" + ts + "@example.com",
 		AuthProvider:   "github",
-		AuthProviderID: "github_views_" + time.Now().Format("20060102150405.000000000"),
+		AuthProviderID: "github_views_" + ts,
 		Role:           "user",
 	}
 

@@ -24,7 +24,6 @@ func TestListApproachesByAuthor(t *testing.T) {
 
 	timestamp := time.Now().Format("20060102150405")
 	agentID := "app_by_author_agent_" + timestamp
-	problemID := "app_by_author_p_" + timestamp
 
 	// Create test agent
 	_, err := pool.Exec(ctx, `
@@ -39,10 +38,12 @@ func TestListApproachesByAuthor(t *testing.T) {
 	}
 
 	// Create test problem
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'My Test Problem Title', 'Description', 'agent', $2, 'open')
-	`, problemID, agentID)
+	var problemID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'My Test Problem Title', 'Description', 'agent', $1, 'open')
+		RETURNING id::text
+	`, agentID).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert problem: %v", err)
 	}

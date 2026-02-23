@@ -44,11 +44,14 @@ func cleanupBriefingTestData(t *testing.T, pool *Pool, agentID, userID string) {
 func createBriefingAgent(t *testing.T, pool *Pool, specialties []string) string {
 	t.Helper()
 	ctx := context.Background()
-	agentID := fmt.Sprintf("brf_agent_%s", time.Now().Format("150405"))
+	agentID := fmt.Sprintf("brf_%d", time.Now().UnixNano())
+	if len(agentID) > 50 {
+		agentID = agentID[:50]
+	}
 	_, err := pool.Exec(ctx,
 		`INSERT INTO agents (id, display_name, specialties, status)
 		 VALUES ($1, $2, $3, 'active')`,
-		agentID, "Briefing Test Agent", specialties)
+		agentID, "Briefing Test Agent "+agentID[4:], specialties)
 	if err != nil {
 		t.Fatalf("failed to create test agent: %v", err)
 	}

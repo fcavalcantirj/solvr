@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -175,10 +176,10 @@ func TestLeaderboardByTag_Pagination(t *testing.T) {
 	tag := "rust"
 	agentIDs := make([]string, 3)
 	for i := 0; i < 3; i++ {
-		suffix := time.Now().Format("150405.000000") + string(rune(i))
+		suffix := time.Now().Format("150405.000000") + fmt.Sprintf("%d", i)
 		agent := &models.Agent{
 			ID:          "test_rust_agent_" + suffix,
-			DisplayName: "Rust Expert",
+			DisplayName: "Rust Expert " + suffix,
 			APIKeyHash:  mustHashTag(t, "test-key-"+suffix),
 			Status:      "active",
 		}

@@ -138,6 +138,15 @@ func TestUserRepository_FindByAuthProvider(t *testing.T) {
 		t.Fatalf("Create() error = %v", err)
 	}
 
+	// Insert auth_methods record (FindByAuthProvider queries this table via INNER JOIN)
+	_, err = pool.Exec(ctx,
+		`INSERT INTO auth_methods (user_id, auth_provider, auth_provider_id) VALUES ($1, $2, $3)`,
+		created.ID, models.AuthProviderGitHub, "github_123",
+	)
+	if err != nil {
+		t.Fatalf("failed to insert auth_methods: %v", err)
+	}
+
 	// Find by auth provider
 	found, err := repo.FindByAuthProvider(ctx, models.AuthProviderGitHub, "github_123")
 	if err != nil {
@@ -683,6 +692,15 @@ func TestUserRepository_FindByAuthProvider_NullPasswordHash(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("Failed to insert OAuth user with NULL password_hash: %v", err)
+	}
+
+	// Insert auth_methods record (FindByAuthProvider queries this table via INNER JOIN)
+	_, err = pool.Exec(ctx,
+		`INSERT INTO auth_methods (user_id, auth_provider, auth_provider_id) VALUES ($1, $2, $3)`,
+		userID, models.AuthProviderGoogle, "google_null_123",
+	)
+	if err != nil {
+		t.Fatalf("Failed to insert auth_methods record: %v", err)
 	}
 
 	// Now try to find this user by auth provider

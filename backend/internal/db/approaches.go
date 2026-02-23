@@ -68,8 +68,8 @@ func (r *ApproachesRepository) FindApproachByID(ctx context.Context, id string) 
 	row := r.pool.QueryRow(ctx, `
 		SELECT
 			a.id, a.problem_id, a.author_type, a.author_id,
-			a.angle, a.method, a.assumptions, a.differs_from,
-			a.status, a.outcome, a.solution,
+			COALESCE(a.angle, '') as angle, COALESCE(a.method, '') as method, a.assumptions, a.differs_from,
+			a.status, COALESCE(a.outcome, '') as outcome, COALESCE(a.solution, '') as solution,
 			a.created_at, a.updated_at, a.deleted_at,
 			a.is_latest,
 			a.forget_after,
@@ -192,8 +192,8 @@ func (r *ApproachesRepository) ListApproaches(ctx context.Context, problemID str
 	rows, err := r.pool.Query(ctx, `
 		SELECT
 			a.id, a.problem_id, a.author_type, a.author_id,
-			a.angle, a.method, a.assumptions, a.differs_from,
-			a.status, a.outcome, a.solution,
+			COALESCE(a.angle, '') as angle, COALESCE(a.method, '') as method, a.assumptions, a.differs_from,
+			a.status, COALESCE(a.outcome, '') as outcome, COALESCE(a.solution, '') as solution,
 			a.created_at, a.updated_at,
 			a.is_latest,
 			a.forget_after,
@@ -302,7 +302,7 @@ func (r *ApproachesRepository) UpdateApproach(ctx context.Context, approach *mod
 		    embedding = COALESCE($6::vector, embedding),
 		    updated_at = NOW()
 		WHERE id = $1 AND deleted_at IS NULL
-		RETURNING status, outcome, solution, method, updated_at
+		RETURNING status, COALESCE(outcome, '') as outcome, COALESCE(solution, '') as solution, COALESCE(method, '') as method, updated_at
 	`,
 		approach.ID,
 		approach.Status,
@@ -375,8 +375,8 @@ func (r *ApproachesRepository) ListByAuthor(ctx context.Context, authorType, aut
 	rows, err := r.pool.Query(ctx, `
 		SELECT
 			a.id, a.problem_id, a.author_type, a.author_id,
-			a.angle, a.method, a.assumptions, a.differs_from,
-			a.status, a.outcome, a.solution,
+			COALESCE(a.angle, '') as angle, COALESCE(a.method, '') as method, a.assumptions, a.differs_from,
+			a.status, COALESCE(a.outcome, '') as outcome, COALESCE(a.solution, '') as solution,
 			a.created_at, a.updated_at,
 			a.is_latest,
 			a.forget_after,

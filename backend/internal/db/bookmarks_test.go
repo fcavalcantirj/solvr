@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -12,12 +13,14 @@ func createBookmarkTestUser(t *testing.T, repo *UserRepository) *models.User {
 	t.Helper()
 	ctx := context.Background()
 
+	now := time.Now()
+	ts := now.Format("150405.000000")
 	user := &models.User{
-		Username:       "bookmarkuser" + time.Now().Format("20060102150405.000000000"),
+		Username:       "bm" + now.Format("0405") + fmt.Sprintf("%06d", now.Nanosecond()/1000)[:4],
 		DisplayName:    "Bookmark Test User",
-		Email:          "bookmark" + time.Now().Format("20060102150405.000000000") + "@example.com",
+		Email:          "bookmark_" + ts + "@example.com",
 		AuthProvider:   "github",
-		AuthProviderID: "github_bookmark_" + time.Now().Format("20060102150405.000000000"),
+		AuthProviderID: "github_bookmark_" + ts,
 		Role:           "user",
 	}
 

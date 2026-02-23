@@ -24,8 +24,6 @@ func TestListAnswersByAuthor(t *testing.T) {
 
 	timestamp := time.Now().Format("20060102150405")
 	agentID := "ans_by_author_agent_" + timestamp
-	questionID := "ans_by_author_q_" + timestamp
-	answerID := "ans_by_author_a_" + timestamp
 
 	// Create test agent
 	_, err := pool.Exec(ctx, `
@@ -40,19 +38,23 @@ func TestListAnswersByAuthor(t *testing.T) {
 	}
 
 	// Create test question
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'question', 'My Test Question Title', 'Description', 'agent', $2, 'open')
-	`, questionID, agentID)
+	var questionID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('question', 'My Test Question Title', 'Description', 'agent', $1, 'open')
+		RETURNING id::text
+	`, agentID).Scan(&questionID)
 	if err != nil {
 		t.Fatalf("failed to insert question: %v", err)
 	}
 
 	// Create answer by the agent
-	_, err = pool.Exec(ctx, `
-		INSERT INTO answers (id, question_id, author_type, author_id, content)
-		VALUES ($1, $2, 'agent', $3, 'Agent answer content')
-	`, answerID, questionID, agentID)
+	var answerID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO answers (question_id, author_type, author_id, content)
+		VALUES ($1, 'agent', $2, 'Agent answer content')
+		RETURNING id::text
+	`, questionID, agentID).Scan(&answerID)
 	if err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
 			t.Skip("answers table does not exist, skipping")

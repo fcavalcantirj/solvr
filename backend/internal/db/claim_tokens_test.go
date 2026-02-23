@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -25,27 +26,43 @@ func TestClaimTokenRepository_DeleteExpiredTokens(t *testing.T) {
 	// First, clean up any existing test data
 	_, _ = pool.Exec(ctx, "DELETE FROM claim_tokens WHERE agent_id LIKE 'cleanup_test_%'")
 
-	// Create an agent for testing (required for FK constraint)
-	agentID := "cleanup_test_" + time.Now().Format("20060102150405")
-	_, err := pool.Exec(ctx, `
-		INSERT INTO agents (id, display_name)
-		VALUES ($1, 'Cleanup Test Agent')
-	`, agentID)
-	if err != nil {
-		t.Fatalf("failed to create test agent: %v", err)
+	// Create agents for testing (required for FK constraint).
+	// The unique partial index allows only ONE unused token per agent, so we
+	// use separate agents for each expired token.
+	ts := time.Now().Format("20060102150405")
+	agentID1 := "cleanup_test_1_" + ts
+	agentID2 := "cleanup_test_2_" + ts
+	agentID3 := "cleanup_test_3_" + ts
+	for i, id := range []string{agentID1, agentID2, agentID3} {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO agents (id, display_name)
+			VALUES ($1, $2)
+		`, id, fmt.Sprintf("Cleanup Test Agent %d", i+1))
+		if err != nil {
+			t.Fatalf("failed to create test agent %d: %v", i+1, err)
+		}
+		defer pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", id)
 	}
-	defer pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", agentID)
+	// Clean up any leftover tokens for these agents
+	for _, id := range []string{agentID1, agentID2, agentID3} {
+		_, _ = pool.Exec(ctx, "DELETE FROM claim_tokens WHERE agent_id = $1", id)
+	}
 
-	// Insert expired tokens (should be deleted)
+	// Insert expired tokens (should be deleted), one per agent to satisfy the unique index
 	expiredTime := time.Now().Add(-1 * time.Hour)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO claim_tokens (token, agent_id, expires_at, used_at)
+		VALUES ('expired_token_1', $1, $2, NULL)
+	`, agentID1, expiredTime)
+	if err != nil {
+		t.Fatalf("failed to insert expired token 1: %v", err)
+	}
 	_, err = pool.Exec(ctx, `
 		INSERT INTO claim_tokens (token, agent_id, expires_at, used_at)
-		VALUES
-			('expired_token_1', $1, $2, NULL),
-			('expired_token_2', $1, $2, NULL)
-	`, agentID, expiredTime)
+		VALUES ('expired_token_2', $1, $2, NULL)
+	`, agentID2, expiredTime)
 	if err != nil {
-		t.Fatalf("failed to insert expired tokens: %v", err)
+		t.Fatalf("failed to insert expired token 2: %v", err)
 	}
 
 	// Insert non-expired tokens (should NOT be deleted)
@@ -53,7 +70,7 @@ func TestClaimTokenRepository_DeleteExpiredTokens(t *testing.T) {
 	_, err = pool.Exec(ctx, `
 		INSERT INTO claim_tokens (token, agent_id, expires_at, used_at)
 		VALUES ('active_token', $1, $2, NULL)
-	`, agentID, futureTime)
+	`, agentID3, futureTime)
 	if err != nil {
 		t.Fatalf("failed to insert active token: %v", err)
 	}
@@ -62,7 +79,7 @@ func TestClaimTokenRepository_DeleteExpiredTokens(t *testing.T) {
 	_, err = pool.Exec(ctx, `
 		INSERT INTO claim_tokens (token, agent_id, expires_at, used_at)
 		VALUES ('used_token', $1, $2, NOW())
-	`, agentID, expiredTime)
+	`, agentID3, expiredTime)
 	if err != nil {
 		t.Fatalf("failed to insert used token: %v", err)
 	}
@@ -521,8 +538,8 @@ func TestClaimTokenRepository_MarkUsed_NotFound(t *testing.T) {
 	repo := NewClaimTokenRepository(pool)
 	ctx := context.Background()
 
-	// Try to mark a non-existent token
-	err := repo.MarkUsed(ctx, "non_existent_token_id", "some_human_id")
+	// Try to mark a non-existent token (must be valid UUID format)
+	err := repo.MarkUsed(ctx, "00000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000000")
 	if err == nil {
 		t.Error("expected error for non-existent token, got nil")
 	}

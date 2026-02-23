@@ -264,10 +264,13 @@ func TestSearchRepository_Search_SortNewest(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPostWithTime(t, pool, ctx, "problem", "Test old", "Description", []string{}, "open", time.Now().Add(-24*time.Hour))
-	postNewID := insertTestPostWithTime(t, pool, ctx, "problem", "Test new", "Description", []string{}, "open", time.Now())
+	// Use a unique term to avoid interference from production data
+	uniqueTerm := fmt.Sprintf("xqzsortnewest%d", time.Now().UnixNano())
 
-	results, _, _, err := repo.Search(ctx, "test", models.SearchOptions{
+	insertTestPostWithTime(t, pool, ctx, "problem", uniqueTerm+" old", "Description", []string{}, "open", time.Now().Add(-24*time.Hour))
+	postNewID := insertTestPostWithTime(t, pool, ctx, "problem", uniqueTerm+" new", "Description", []string{}, "open", time.Now())
+
+	results, _, _, err := repo.Search(ctx, uniqueTerm, models.SearchOptions{
 		Sort:    "newest",
 		Page:    1,
 		PerPage: 20,
@@ -292,10 +295,13 @@ func TestSearchRepository_Search_SortVotes(t *testing.T) {
 	repo := NewSearchRepository(pool)
 	ctx := context.Background()
 
-	insertTestPostWithVotes(t, pool, ctx, "problem", "Test low votes", "Description", []string{}, "open", 5, 3)   // Score: 2
-	postHighID := insertTestPostWithVotes(t, pool, ctx, "problem", "Test high votes", "Description", []string{}, "open", 10, 1) // Score: 9
+	// Use a unique term to avoid interference from production data
+	uniqueTerm := fmt.Sprintf("xqzsortvotes%d", time.Now().UnixNano())
 
-	results, _, _, err := repo.Search(ctx, "test", models.SearchOptions{
+	insertTestPostWithVotes(t, pool, ctx, "problem", uniqueTerm+" low votes", "Description", []string{}, "open", 5, 3)    // Score: 2
+	postHighID := insertTestPostWithVotes(t, pool, ctx, "problem", uniqueTerm+" high votes", "Description", []string{}, "open", 10, 1) // Score: 9
+
+	results, _, _, err := repo.Search(ctx, uniqueTerm, models.SearchOptions{
 		Sort:    "votes",
 		Page:    1,
 		PerPage: 20,
@@ -490,6 +496,12 @@ func cleanupTestData(t *testing.T, pool *Pool, ctx context.Context) {
 	if err != nil {
 		t.Logf("cleanup warning: %v", err)
 	}
+	// Clean up posts and agents created by inferred-specialties and stale-content test helpers.
+	// posted_by_id and author_id are text columns — prefix match is safe.
+	_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id LIKE 'ia_%' OR posted_by_id LIKE 'stale_agent_%'")
+	_, _ = pool.Exec(ctx, "DELETE FROM approaches WHERE author_id LIKE 'ia_%' OR author_id LIKE 'stale_agent_%'")
+	_, _ = pool.Exec(ctx, "DELETE FROM agents WHERE id LIKE 'ia_%' OR id LIKE 'stale_agent_%'")
+	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'iu%'")
 }
 
 // insertTestPost inserts a test post and returns the generated UUID.

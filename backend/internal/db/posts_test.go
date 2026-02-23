@@ -150,19 +150,16 @@ func TestPostRepository_List_WithPosts(t *testing.T) {
 
 	// Create test posts directly in the database
 	timestamp := time.Now().Format("20060102150405")
-	postIDs := []string{
-		"list_test_1_" + timestamp,
-		"list_test_2_" + timestamp,
-		"list_test_3_" + timestamp,
-	}
 
 	// Insert test posts
-	for i, postID := range postIDs {
-		_, err := pool.Exec(ctx, `
-			INSERT INTO posts (id, type, title, description, tags, posted_by_type, posted_by_id, status)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	var postIDs []string
+	for i := 0; i < 3; i++ {
+		var id string
+		err := pool.QueryRow(ctx, `
+			INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id, status)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			RETURNING id::text
 		`,
-			postID,
 			models.PostTypeProblem,
 			"Test Post "+string(rune('A'+i)),
 			"Description "+string(rune('A'+i)),
@@ -170,10 +167,11 @@ func TestPostRepository_List_WithPosts(t *testing.T) {
 			models.AuthorTypeAgent,
 			"test_agent_"+timestamp,
 			models.PostStatusOpen,
-		)
+		).Scan(&id)
 		if err != nil {
 			t.Fatalf("failed to insert test post: %v", err)
 		}
+		postIDs = append(postIDs, id)
 	}
 
 	// Clean up after test
@@ -223,33 +221,32 @@ func TestPostRepository_List_FilterByType(t *testing.T) {
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-
 	// Insert posts of different types
-	problemID := "type_problem_" + timestamp
-	questionID := "type_question_" + timestamp
-	ideaID := "type_idea_" + timestamp
+	var problemID, questionID, ideaID string
 
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Problem Title', 'Description', 'agent', 'test_agent', 'open')
-	`, problemID)
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Problem Title', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert problem: %v", err)
 	}
 
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'question', 'Question Title', 'Description', 'agent', 'test_agent', 'open')
-	`, questionID)
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('question', 'Question Title', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&questionID)
 	if err != nil {
 		t.Fatalf("failed to insert question: %v", err)
 	}
 
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Idea Title', 'Description', 'agent', 'test_agent', 'open')
-	`, ideaID)
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Idea Title', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&ideaID)
 	if err != nil {
 		t.Fatalf("failed to insert idea: %v", err)
 	}
@@ -288,24 +285,23 @@ func TestPostRepository_List_FilterByStatus(t *testing.T) {
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-
 	// Insert posts with different statuses
-	openID := "status_open_" + timestamp
-	solvedID := "status_solved_" + timestamp
+	var openID, solvedID string
 
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Open Problem', 'Description', 'agent', 'test_agent', 'open')
-	`, openID)
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Open Problem', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&openID)
 	if err != nil {
 		t.Fatalf("failed to insert open post: %v", err)
 	}
 
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Solved Problem', 'Description', 'agent', 'test_agent', 'solved')
-	`, solvedID)
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Solved Problem', 'Description', 'agent', 'test_agent', 'solved')
+		RETURNING id::text
+	`).Scan(&solvedID)
 	if err != nil {
 		t.Fatalf("failed to insert solved post: %v", err)
 	}
@@ -344,24 +340,23 @@ func TestPostRepository_List_FilterByTags(t *testing.T) {
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-
 	// Insert posts with different tags
-	goPostID := "tags_go_" + timestamp
-	rustPostID := "tags_rust_" + timestamp
+	var goPostID, rustPostID string
 
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, tags, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Go Post', 'Description', $2, 'agent', 'test_agent', 'open')
-	`, goPostID, []string{"go", "backend"})
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Go Post', 'Description', $1, 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`, []string{"go", "backend"}).Scan(&goPostID)
 	if err != nil {
 		t.Fatalf("failed to insert go post: %v", err)
 	}
 
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, tags, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Rust Post', 'Description', $2, 'agent', 'test_agent', 'open')
-	`, rustPostID, []string{"rust", "backend"})
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Rust Post', 'Description', $1, 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`, []string{"rust", "backend"}).Scan(&rustPostID)
 	if err != nil {
 		t.Fatalf("failed to insert rust post: %v", err)
 	}
@@ -415,20 +410,19 @@ func TestPostRepository_List_Pagination(t *testing.T) {
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-
 	// Insert multiple posts
 	var postIDs []string
 	for i := 0; i < 5; i++ {
-		postID := "page_test_" + timestamp + "_" + string(rune('a'+i))
-		postIDs = append(postIDs, postID)
-		_, err := pool.Exec(ctx, `
-			INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-			VALUES ($1, 'problem', $2, 'Description', 'agent', 'test_agent', 'open')
-		`, postID, "Post "+string(rune('A'+i)))
+		var id string
+		err := pool.QueryRow(ctx, `
+			INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+			VALUES ('problem', $1, 'Description', 'agent', 'test_agent', 'open')
+			RETURNING id::text
+		`, "Post "+string(rune('A'+i))).Scan(&id)
 		if err != nil {
 			t.Fatalf("failed to insert post: %v", err)
 		}
+		postIDs = append(postIDs, id)
 	}
 
 	defer func() {
@@ -478,25 +472,24 @@ func TestPostRepository_List_ExcludesDeleted(t *testing.T) {
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-
-	activeID := "deleted_test_active_" + timestamp
-	deletedID := "deleted_test_deleted_" + timestamp
+	var activeID, deletedID string
 
 	// Insert active post
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Active Post', 'Description', 'agent', 'test_agent', 'open')
-	`, activeID)
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Active Post', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&activeID)
 	if err != nil {
 		t.Fatalf("failed to insert active post: %v", err)
 	}
 
 	// Insert deleted post
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status, deleted_at)
-		VALUES ($1, 'problem', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
-	`, deletedID)
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, deleted_at)
+		VALUES ('problem', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
+		RETURNING id::text
+	`).Scan(&deletedID)
 	if err != nil {
 		t.Fatalf("failed to insert deleted post: %v", err)
 	}
@@ -534,14 +527,14 @@ func TestPostRepository_List_IncludesVoteScore(t *testing.T) {
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-	postID := "votescore_test_" + timestamp
+	var postID string
 
 	// Insert post with votes
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status, upvotes, downvotes)
-		VALUES ($1, 'problem', 'Voted Post', 'Description', 'agent', 'test_agent', 'open', 10, 3)
-	`, postID)
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, upvotes, downvotes)
+		VALUES ('problem', 'Voted Post', 'Description', 'agent', 'test_agent', 'open', 10, 3)
+		RETURNING id::text
+	`).Scan(&postID)
 	if err != nil {
 		t.Fatalf("failed to insert post: %v", err)
 	}
@@ -584,16 +577,16 @@ func TestPostRepository_FindByID_Success(t *testing.T) {
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-	postID := "findbyid_test_" + timestamp
+	var postID string
 
 	// Insert a test post with all fields populated
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, tags, posted_by_type, posted_by_id,
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id,
 			status, upvotes, downvotes, success_criteria, weight)
-		VALUES ($1, 'problem', 'Find By ID Test', 'Test Description', $2, 'agent', 'test_agent_findbyid',
-			'open', 5, 2, $3, 3)
-	`, postID, []string{"go", "testing"}, []string{"Criterion 1", "Criterion 2"})
+		VALUES ('problem', 'Find By ID Test', 'Test Description', $1, 'agent', 'test_agent_findbyid',
+			'open', 5, 2, $2, 3)
+		RETURNING id::text
+	`, []string{"go", "testing"}, []string{"Criterion 1", "Criterion 2"}).Scan(&postID)
 	if err != nil {
 		t.Fatalf("failed to insert test post: %v", err)
 	}
@@ -700,14 +693,14 @@ func TestPostRepository_FindByID_ExcludesDeleted(t *testing.T) {
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-	postID := "findbyid_deleted_" + timestamp
+	var postID string
 
 	// Insert a soft-deleted post
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status, deleted_at)
-		VALUES ($1, 'problem', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
-	`, postID)
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, deleted_at)
+		VALUES ('problem', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
+		RETURNING id::text
+	`).Scan(&postID)
 	if err != nil {
 		t.Fatalf("failed to insert deleted post: %v", err)
 	}
@@ -1242,14 +1235,14 @@ func TestPostRepository_Update_Deleted(t *testing.T) {
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-	postID := "update_deleted_" + timestamp
+	var postID string
 
 	// Insert a soft-deleted post
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status, deleted_at)
-		VALUES ($1, 'problem', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
-	`, postID)
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, deleted_at)
+		VALUES ('problem', 'Deleted Post', 'Description', 'agent', 'test_agent', 'open', NOW())
+		RETURNING id::text
+	`).Scan(&postID)
 	if err != nil {
 		t.Fatalf("failed to insert deleted post: %v", err)
 	}
@@ -1440,14 +1433,14 @@ func TestPostRepository_Delete_AlreadyDeleted(t *testing.T) {
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-	postID := "delete_already_deleted_" + timestamp
+	var postID string
 
 	// Insert a soft-deleted post
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status, deleted_at)
-		VALUES ($1, 'problem', 'Already Deleted', 'Description', 'agent', 'test_agent', 'open', NOW())
-	`, postID)
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, deleted_at)
+		VALUES ('problem', 'Already Deleted', 'Description', 'agent', 'test_agent', 'open', NOW())
+		RETURNING id::text
+	`).Scan(&postID)
 	if err != nil {
 		t.Fatalf("failed to insert deleted post: %v", err)
 	}
@@ -3740,15 +3733,14 @@ func TestPostRepository_FindByID_OriginalLanguage(t *testing.T) {
 	repo := NewPostRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("150405")
-	postID := "findbyid_lang_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, tags, posted_by_type, posted_by_id,
+	var postID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, tags, posted_by_type, posted_by_id,
 			status, upvotes, downvotes, original_language)
-		VALUES ($1, 'problem', 'OriginalLanguage Test', 'Test', $2, 'agent', 'test_agent_lang',
+		VALUES ('problem', 'OriginalLanguage Test', 'Test', $1, 'agent', 'test_agent_lang',
 			'open', 0, 0, 'pt')
-	`, postID, []string{"test"})
+		RETURNING id::text
+	`, []string{"test"}).Scan(&postID)
 	if err != nil {
 		t.Fatalf("failed to insert test post: %v", err)
 	}

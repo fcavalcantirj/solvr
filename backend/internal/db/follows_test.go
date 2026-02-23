@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -12,10 +13,12 @@ func createFollowsTestAgent(t *testing.T, repo *AgentRepository, suffix string) 
 	t.Helper()
 	ctx := context.Background()
 
-	agentID := "follow_agent_" + suffix + "_" + time.Now().Format("20060102150405.000000000")
+	now := time.Now()
+	ns := fmt.Sprintf("%04d", now.Nanosecond()/100000)
+	agentID := "fa_" + suffix + "_" + now.Format("150405") + ns
 	agent := &models.Agent{
 		ID:          agentID,
-		DisplayName: "Follow Test Agent " + suffix,
+		DisplayName: "FA " + suffix + " " + now.Format("150405") + ns,
 	}
 
 	err := repo.Create(ctx, agent)
@@ -29,9 +32,10 @@ func createFollowsTestUser(t *testing.T, repo *UserRepository, suffix string) *m
 	t.Helper()
 	ctx := context.Background()
 
-	ts := time.Now().Format("20060102150405.000000000")
+	now := time.Now()
+	ts := now.Format("150405.000000")
 	user := &models.User{
-		Username:       "followuser_" + suffix + "_" + ts,
+		Username:       "fw" + now.Format("0405") + fmt.Sprintf("%06d", now.Nanosecond()/1000)[:4],
 		DisplayName:    "Follow Test User " + suffix,
 		Email:          "follow_" + suffix + "_" + ts + "@example.com",
 		AuthProvider:   "github",

@@ -24,12 +24,12 @@ func TestApproachRelationships_CreateRelationship(t *testing.T) {
 
 	// Create test problem and two approaches
 	ts := time.Now().Format("150405")
-	problemID := "rel_create_problem_" + ts
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Test Problem', 'Description for test', 'agent', 'test_agent', 'open')
-	`, problemID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Test Problem', 'Description for test', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert test problem: %v", err)
 	}
@@ -116,12 +116,12 @@ func TestApproachRelationships_GetVersionChain(t *testing.T) {
 	ctx := context.Background()
 
 	ts := time.Now().Format("150405")
-	problemID := "rel_chain_problem_" + ts
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Chain Test', 'Description for chain test', 'agent', 'test_agent', 'open')
-	`, problemID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Chain Test', 'Description for chain test', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert test problem: %v", err)
 	}
@@ -215,12 +215,12 @@ func TestApproachRelationships_GetVersionChain_WithDepth(t *testing.T) {
 	ctx := context.Background()
 
 	ts := time.Now().Format("150405")
-	problemID := "rel_depth_problem_" + ts
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Depth Test', 'Description for depth test', 'agent', 'test_agent', 'open')
-	`, problemID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Depth Test', 'Description for depth test', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert test problem: %v", err)
 	}
@@ -280,12 +280,12 @@ func TestApproachRelationships_ListStaleApproaches(t *testing.T) {
 	ctx := context.Background()
 
 	ts := time.Now().Format("150405")
-	problemID := "rel_stale_problem_" + ts
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Stale Test', 'Description for stale test', 'agent', 'test_agent', 'open')
-	`, problemID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Stale Test', 'Description for stale test', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert test problem: %v", err)
 	}

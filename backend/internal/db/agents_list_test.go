@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -324,11 +325,12 @@ func TestAgentRepository_List_Pagination(t *testing.T) {
 	ctx := context.Background()
 
 	// Create some test agents
-	timestamp := time.Now().Format("20060102150405")
+	now := time.Now()
+	timestamp := now.Format("150405") + fmt.Sprintf("%04d", now.Nanosecond()/100000)
 	for i := 0; i < 5; i++ {
 		agent := &models.Agent{
-			ID:          "page_agent_" + timestamp + "_" + string(rune('a'+i)),
-			DisplayName: "Pagination Test Agent",
+			ID:          "pag_" + timestamp + "_" + string(rune('a'+i)),
+			DisplayName: "Pag Agent " + timestamp + string(rune('a'+i)),
 		}
 		if err := repo.Create(ctx, agent); err != nil {
 			t.Fatalf("failed to create agent %d: %v", i, err)

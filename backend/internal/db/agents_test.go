@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -13,6 +14,28 @@ import (
 // Set DATABASE_URL environment variable to run integration tests.
 // Tests will be skipped if DATABASE_URL is not set.
 
+// createAgentTestUser creates a real user in the database to use as a humanID FK reference.
+func createAgentTestUser(t *testing.T, pool *Pool) string {
+	t.Helper()
+	ctx := context.Background()
+	userRepo := NewUserRepository(pool)
+	now := time.Now()
+	ts := now.Format("150405.000000")
+	user := &models.User{
+		Username:       "ag" + now.Format("0405") + fmt.Sprintf("%06d", now.Nanosecond()/1000)[:4],
+		DisplayName:    "Agent Test User",
+		Email:          "agenttest_" + ts + "@example.com",
+		AuthProvider:   "github",
+		AuthProviderID: "github_agenttest_" + ts,
+		Role:           "user",
+	}
+	created, err := userRepo.Create(ctx, user)
+	if err != nil {
+		t.Fatalf("failed to create agent test user: %v", err)
+	}
+	return created.ID
+}
+
 func TestAgentRepository_Create(t *testing.T) {
 	pool := getTestPool(t)
 	if pool == nil {
@@ -23,10 +46,12 @@ func TestAgentRepository_Create(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	humanID := "test-user-id"
+	humanID := createAgentTestUser(t, pool)
+	now := time.Now()
+	ns := fmt.Sprintf("%04d", now.Nanosecond()/100000)
 	agent := &models.Agent{
-		ID:          "test_agent_" + time.Now().Format("20060102150405"),
-		DisplayName: "Test Agent",
+		ID:          "test_agent_" + now.Format("20060102150405") + ns,
+		DisplayName: "Test Agent " + now.Format("150405") + ns,
 		HumanID:     &humanID,
 		Bio:         "A test agent",
 		Specialties: []string{"testing", "golang"},
@@ -41,8 +66,8 @@ func TestAgentRepository_Create(t *testing.T) {
 	if agent.ID == "" {
 		t.Error("expected ID to be set")
 	}
-	if agent.DisplayName != "Test Agent" {
-		t.Errorf("expected display name 'Test Agent', got %s", agent.DisplayName)
+	if agent.DisplayName == "" {
+		t.Error("expected display name to be set")
 	}
 	if agent.CreatedAt.IsZero() {
 		t.Error("expected created_at to be set")
@@ -59,11 +84,13 @@ func TestAgentRepository_Create_Duplicate(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	humanID := "test-user-id"
-	agentID := "duplicate_test_" + time.Now().Format("20060102150405")
+	humanID := createAgentTestUser(t, pool)
+	now2 := time.Now()
+	ns2 := fmt.Sprintf("%04d", now2.Nanosecond()/100000)
+	agentID := "dup_test_" + now2.Format("150405") + ns2
 	agent := &models.Agent{
 		ID:          agentID,
-		DisplayName: "Test Agent",
+		DisplayName: "Dup Agent " + now2.Format("150405") + ns2,
 		HumanID:     &humanID,
 	}
 
@@ -73,10 +100,10 @@ func TestAgentRepository_Create_Duplicate(t *testing.T) {
 		t.Fatalf("failed to create first agent: %v", err)
 	}
 
-	// Try to create duplicate
+	// Try to create duplicate (same ID, different display name)
 	duplicate := &models.Agent{
 		ID:          agentID,
-		DisplayName: "Test Agent Duplicate",
+		DisplayName: "Dup Agent Alt " + now2.Format("150405") + ns2,
 		HumanID:     &humanID,
 	}
 	err = repo.Create(ctx, duplicate)
@@ -95,10 +122,12 @@ func TestAgentRepository_FindByID(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	humanID := "test-user-id"
+	humanID := createAgentTestUser(t, pool)
+	now3 := time.Now()
+	ns3 := fmt.Sprintf("%04d", now3.Nanosecond()/100000)
 	agent := &models.Agent{
-		ID:          "findbyid_test_" + time.Now().Format("20060102150405"),
-		DisplayName: "Test Agent",
+		ID:          "fbi_test_" + now3.Format("150405") + ns3,
+		DisplayName: "FBI Agent " + now3.Format("150405") + ns3,
 		HumanID:     &humanID,
 		Bio:         "Bio here",
 	}
@@ -147,7 +176,7 @@ func TestAgentRepository_Update(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	humanID := "test-user-id"
+	humanID := createAgentTestUser(t, pool)
 	agent := &models.Agent{
 		ID:          "update_test_" + time.Now().Format("20060102150405"),
 		DisplayName: "Original Name",
@@ -188,7 +217,7 @@ func TestAgentRepository_GetAgentStats(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	humanID := "test-user-id"
+	humanID := createAgentTestUser(t, pool)
 	agent := &models.Agent{
 		ID:          "stats_test_" + time.Now().Format("20060102150405"),
 		DisplayName: "Stats Agent",
@@ -224,7 +253,7 @@ func TestAgentRepository_UpdateAPIKeyHash(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	humanID := "test-user-id"
+	humanID := createAgentTestUser(t, pool)
 	agent := &models.Agent{
 		ID:          "apikey_test_" + time.Now().Format("20060102150405"),
 		DisplayName: "API Key Agent",
@@ -263,7 +292,7 @@ func TestAgentRepository_RevokeAPIKey(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	humanID := "test-user-id"
+	humanID := createAgentTestUser(t, pool)
 	agent := &models.Agent{
 		ID:          "revoke_test_" + time.Now().Format("20060102150405"),
 		DisplayName: "Revoke Agent",
@@ -302,15 +331,17 @@ func TestAgentRepository_FindByHumanID(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	humanID := "human_agents_test_" + time.Now().Format("20060102150405")
+	humanID := createAgentTestUser(t, pool)
+	now4 := time.Now()
+	ns4 := fmt.Sprintf("%04d", now4.Nanosecond()/100000)
 	agent1 := &models.Agent{
-		ID:          "agent1_" + time.Now().Format("20060102150405"),
-		DisplayName: "Agent 1",
+		ID:          "agt1_" + now4.Format("150405") + ns4,
+		DisplayName: "Agt1 " + now4.Format("150405") + ns4,
 		HumanID:     &humanID,
 	}
 	agent2 := &models.Agent{
-		ID:          "agent2_" + time.Now().Format("20060102150405"),
-		DisplayName: "Agent 2",
+		ID:          "agt2_" + now4.Format("150405") + ns4 + "b",
+		DisplayName: "Agt2 " + now4.Format("150405") + ns4,
 		HumanID:     &humanID,
 	}
 
@@ -480,9 +511,11 @@ func TestAgentRepository_LinkHuman_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Create agent without human_id
+	now5 := time.Now()
+	ns5 := fmt.Sprintf("%04d", now5.Nanosecond()/100000)
 	agent := &models.Agent{
-		ID:          "linktest_" + time.Now().Format("20060102150405"),
-		DisplayName: "Link Test Agent",
+		ID:          "lnktest_" + now5.Format("150405") + ns5,
+		DisplayName: "Link Agent " + now5.Format("150405") + ns5,
 	}
 
 	err := repo.Create(ctx, agent)
@@ -490,8 +523,8 @@ func TestAgentRepository_LinkHuman_Success(t *testing.T) {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	// Link to human
-	humanID := "test-human-id-123"
+	// Link to human (must be real UUID since human_id is FK to users)
+	humanID := createAgentTestUser(t, pool)
 	err = repo.LinkHuman(ctx, agent.ID, humanID)
 	if err != nil {
 		t.Fatalf("failed to link human: %v", err)
@@ -521,9 +554,11 @@ func TestAgentRepository_LinkHuman_RejectReclaim(t *testing.T) {
 	ctx := context.Background()
 
 	// Create agent without human_id
+	now6 := time.Now()
+	ns6 := fmt.Sprintf("%04d", now6.Nanosecond()/100000)
 	agent := &models.Agent{
-		ID:          "reclaim_test_" + time.Now().Format("20060102150405"),
-		DisplayName: "Reclaim Test Agent",
+		ID:          "rclaim_" + now6.Format("150405") + ns6,
+		DisplayName: "Reclaim Agent " + now6.Format("150405") + ns6,
 	}
 
 	err := repo.Create(ctx, agent)
@@ -531,15 +566,15 @@ func TestAgentRepository_LinkHuman_RejectReclaim(t *testing.T) {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	// First claim succeeds
-	firstHumanID := "first-human-123"
+	// First claim succeeds (must be real UUIDs — FK to users)
+	firstHumanID := createAgentTestUser(t, pool)
 	err = repo.LinkHuman(ctx, agent.ID, firstHumanID)
 	if err != nil {
 		t.Fatalf("first claim failed: %v", err)
 	}
 
 	// Second claim should fail with ErrAgentAlreadyClaimed
-	secondHumanID := "second-human-456"
+	secondHumanID := createAgentTestUser(t, pool)
 	err = repo.LinkHuman(ctx, agent.ID, secondHumanID)
 	if err != ErrAgentAlreadyClaimed {
 		t.Errorf("expected ErrAgentAlreadyClaimed, got %v", err)
@@ -565,7 +600,7 @@ func TestAgentRepository_LinkHuman_AgentNotFound(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	err := repo.LinkHuman(ctx, "nonexistent_agent", "human-123")
+	err := repo.LinkHuman(ctx, "nonexistent_agent", "00000000-0000-0000-0000-000000000000")
 	if err != ErrAgentNotFound {
 		t.Errorf("expected ErrAgentNotFound, got %v", err)
 	}
@@ -830,7 +865,7 @@ func TestAgentRepository_Create_WithModel(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	humanID := "test-user-id"
+	humanID := createAgentTestUser(t, pool)
 	agent := &models.Agent{
 		ID:          "model_test_" + time.Now().Format("20060102150405"),
 		DisplayName: "Model Test Agent",
@@ -865,7 +900,7 @@ func TestAgentRepository_Create_WithoutModel(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	humanID := "test-user-id"
+	humanID := createAgentTestUser(t, pool)
 	agent := &models.Agent{
 		ID:          "no_model_test_" + time.Now().Format("20060102150405"),
 		DisplayName: "No Model Test Agent",
@@ -898,7 +933,7 @@ func TestAgentRepository_Update_WithModel(t *testing.T) {
 	repo := NewAgentRepository(pool)
 	ctx := context.Background()
 
-	humanID := "test-user-id"
+	humanID := createAgentTestUser(t, pool)
 	agent := &models.Agent{
 		ID:          "update_model_test_" + time.Now().Format("20060102150405"),
 		DisplayName: "Update Model Test Agent",

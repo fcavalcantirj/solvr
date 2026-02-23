@@ -99,13 +99,14 @@ func TestTagsRepository_AddTagsToPost(t *testing.T) {
 	ctx := context.Background()
 
 	timestamp := time.Now().Format("20060102150405")
-	postID := "tags_post_" + timestamp
 
-	// Create test post
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Post', 'Description', 'agent', 'test_agent', 'open')
-	`, postID)
+	// Create test post — let DB generate a proper UUID
+	var postID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Post', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&postID)
 	if err != nil {
 		t.Fatalf("failed to insert post: %v", err)
 	}
@@ -162,13 +163,14 @@ func TestTagsRepository_GetTagsForPost(t *testing.T) {
 	ctx := context.Background()
 
 	timestamp := time.Now().Format("20060102150405")
-	postID := "tags_getfor_post_" + timestamp
 
-	// Create test post
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Post', 'Description', 'agent', 'test_agent', 'open')
-	`, postID)
+	// Create test post — let DB generate a proper UUID
+	var postID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Post', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&postID)
 	if err != nil {
 		t.Fatalf("failed to insert post: %v", err)
 	}

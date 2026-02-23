@@ -623,7 +623,7 @@ func TestUserAPIKeyRepository_Regenerate_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	newHash, _ := auth.HashAPIKey(auth.GenerateAPIKey())
-	_, err := repo.Regenerate(ctx, "00000000-0000-0000-0000-000000000000", "fake-user", newHash)
+	_, err := repo.Regenerate(ctx, "00000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000000", newHash)
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("Regenerate() non-existent key error = %v, want ErrNotFound", err)
 	}

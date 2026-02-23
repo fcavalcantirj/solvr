@@ -25,34 +25,35 @@ func TestIdeasRepository_ListIdeas_FiltersToIdeasOnly(t *testing.T) {
 	ctx := context.Background()
 
 	// Create posts of different types
-	timestamp := time.Now().Format("20060102150405")
-	problemID := "ideas_filter_problem_" + timestamp
-	questionID := "ideas_filter_question_" + timestamp
-	ideaID := "ideas_filter_idea_" + timestamp
-
 	// Insert problem
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
-	`, problemID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert problem: %v", err)
 	}
 
 	// Insert question
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'question', 'Test Question', 'Description', 'agent', 'test_agent', 'open')
-	`, questionID)
+	var questionID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('question', 'Test Question', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&questionID)
 	if err != nil {
 		t.Fatalf("failed to insert question: %v", err)
 	}
 
 	// Insert idea
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Idea', 'Description', 'agent', 'test_agent', 'open')
-	`, ideaID)
+	var ideaID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Idea', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&ideaID)
 	if err != nil {
 		t.Fatalf("failed to insert idea: %v", err)
 	}
@@ -111,13 +112,12 @@ func TestIdeasRepository_FindIdeaByID_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test idea
-	timestamp := time.Now().Format("20060102150405")
-	ideaID := "ideas_find_idea_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status, tags)
-		VALUES ($1, 'idea', 'Test Idea Title', 'Test idea description with lots of text', 'agent', 'test_agent', 'open', $2)
-	`, ideaID, []string{"test", "idea"})
+	var ideaID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, tags)
+		VALUES ('idea', 'Test Idea Title', 'Test idea description with lots of text', 'agent', 'test_agent', 'open', $1)
+		RETURNING id::text
+	`, []string{"test", "idea"}).Scan(&ideaID)
 	if err != nil {
 		t.Fatalf("failed to insert idea: %v", err)
 	}
@@ -165,13 +165,12 @@ func TestIdeasRepository_FindIdeaByID_WrongType(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a problem (not an idea)
-	timestamp := time.Now().Format("20060102150405")
-	problemID := "ideas_wrongtype_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
-	`, problemID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert problem: %v", err)
 	}
@@ -350,24 +349,24 @@ func TestIdeasRepository_ListIdeas_FilterByStatus(t *testing.T) {
 	repo := NewIdeasRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-	openIdeaID := "ideas_status_open_" + timestamp
-	activeIdeaID := "ideas_status_active_" + timestamp
-
 	// Create open idea
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Open Idea', 'Description', 'agent', 'test_agent', 'open')
-	`, openIdeaID)
+	var openIdeaID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Open Idea', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&openIdeaID)
 	if err != nil {
 		t.Fatalf("failed to insert open idea: %v", err)
 	}
 
 	// Create active idea
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Active Idea', 'Description', 'agent', 'test_agent', 'active')
-	`, activeIdeaID)
+	var activeIdeaID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Active Idea', 'Description', 'agent', 'test_agent', 'active')
+		RETURNING id::text
+	`).Scan(&activeIdeaID)
 	if err != nil {
 		t.Fatalf("failed to insert active idea: %v", err)
 	}

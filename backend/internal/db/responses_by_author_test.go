@@ -24,7 +24,6 @@ func TestListResponsesByAuthor(t *testing.T) {
 
 	timestamp := time.Now().Format("20060102150405")
 	agentID := "resp_by_author_agent_" + timestamp
-	ideaID := "resp_by_author_idea_" + timestamp
 
 	// Create test agent
 	_, err := pool.Exec(ctx, `
@@ -39,10 +38,12 @@ func TestListResponsesByAuthor(t *testing.T) {
 	}
 
 	// Create test idea
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'My Test Idea Title', 'Description', 'agent', $2, 'open')
-	`, ideaID, agentID)
+	var ideaID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'My Test Idea Title', 'Description', 'agent', $1, 'open')
+		RETURNING id::text
+	`, agentID).Scan(&ideaID)
 	if err != nil {
 		t.Fatalf("failed to insert idea: %v", err)
 	}

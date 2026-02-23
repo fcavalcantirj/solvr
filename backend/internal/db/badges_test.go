@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -29,9 +30,10 @@ func createBadgesTestUser(t *testing.T, repo *UserRepository, suffix string) *mo
 	t.Helper()
 	ctx := context.Background()
 
-	ts := time.Now().Format("20060102150405.000000000")
+	now := time.Now()
+	ts := now.Format("150405.000000")
 	user := &models.User{
-		Username:       "badgeuser_" + suffix + "_" + ts,
+		Username:       "bg" + now.Format("0405") + fmt.Sprintf("%06d", now.Nanosecond()/1000)[:4],
 		DisplayName:    "Badge Test User " + suffix,
 		Email:          "badge_" + suffix + "_" + ts + "@example.com",
 		AuthProvider:   "github",

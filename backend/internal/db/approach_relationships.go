@@ -178,7 +178,7 @@ func (r *ApproachRelationshipsRepository) ArchiveApproach(ctx context.Context, a
 // Excludes already-archived approaches.
 func (r *ApproachRelationshipsRepository) ListStaleApproaches(ctx context.Context, failedDays int, supersededDays int) ([]models.Approach, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, problem_id, author_type, author_id, angle, method, status, is_latest,
+		SELECT id, problem_id, author_type, author_id, COALESCE(angle, ''), COALESCE(method, ''), status, is_latest,
 		       created_at, updated_at
 		FROM approaches
 		WHERE deleted_at IS NULL

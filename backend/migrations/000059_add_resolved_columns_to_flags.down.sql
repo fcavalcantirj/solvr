@@ -1,0 +1,2 @@
+ALTER TABLE flags DROP COLUMN IF EXISTS resolved_at;
+ALTER TABLE flags DROP COLUMN IF EXISTS resolved_by;

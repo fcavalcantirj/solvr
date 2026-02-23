@@ -3,6 +3,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -29,13 +30,15 @@ func TestUserProfile_GetUserStats_Integration(t *testing.T) {
 	postRepo := NewPostRepository(pool)
 
 	// Create a test user
-	suffix := time.Now().Format("20060102150405.000000000")
+	now := time.Now()
+	ts := now.Format("150405.000000")
+	username := "pt" + now.Format("0405") + fmt.Sprintf("%06d", now.Nanosecond()/1000)[:4]
 	user := &models.User{
-		Username:       "profiletest" + suffix,
+		Username:       username,
 		DisplayName:    "Profile Test User",
-		Email:          "profiletest" + suffix + "@example.com",
+		Email:          "profiletest" + ts + "@example.com",
 		AuthProvider:   models.AuthProviderGitHub,
-		AuthProviderID: "github_profile_" + suffix,
+		AuthProviderID: "github_profile_" + ts,
 		Role:           models.UserRoleUser,
 	}
 
@@ -96,13 +99,15 @@ func TestUserProfile_Update_Integration(t *testing.T) {
 	userRepo := NewUserRepository(pool)
 
 	// Create a test user
-	suffix := time.Now().Format("20060102150405.000000000")
+	now := time.Now()
+	ts := now.Format("150405.000000")
+	username := "up" + now.Format("0405") + fmt.Sprintf("%06d", now.Nanosecond()/1000)[:4]
 	user := &models.User{
-		Username:       "updatetest" + suffix,
+		Username:       username,
 		DisplayName:    "Update Test User",
-		Email:          "updatetest" + suffix + "@example.com",
+		Email:          "updatetest" + ts + "@example.com",
 		AuthProvider:   models.AuthProviderGitHub,
-		AuthProviderID: "github_update_" + suffix,
+		AuthProviderID: "github_update_" + ts,
 		Role:           models.UserRoleUser,
 		Bio:            "Original bio",
 	}
@@ -165,21 +170,24 @@ func TestPostListByAuthor_Integration(t *testing.T) {
 	postRepo := NewPostRepository(pool)
 
 	// Create two test users
-	suffix := time.Now().Format("20060102150405.000000000")
+	now := time.Now()
+	ts := now.Format("150405.000000")
+	u1name := "l1" + now.Format("0405") + fmt.Sprintf("%06d", now.Nanosecond()/1000)[:4]
+	u2name := "l2" + now.Format("0405") + fmt.Sprintf("%06d", now.Nanosecond()/1000)[:4]
 	user1 := &models.User{
-		Username:       "listtest1" + suffix,
+		Username:       u1name,
 		DisplayName:    "List Test User 1",
-		Email:          "listtest1" + suffix + "@example.com",
+		Email:          "listtest1" + ts + "@example.com",
 		AuthProvider:   models.AuthProviderGitHub,
-		AuthProviderID: "github_list1_" + suffix,
+		AuthProviderID: "github_list1_" + ts,
 		Role:           models.UserRoleUser,
 	}
 	user2 := &models.User{
-		Username:       "listtest2" + suffix,
+		Username:       u2name,
 		DisplayName:    "List Test User 2",
-		Email:          "listtest2" + suffix + "@example.com",
+		Email:          "listtest2" + ts + "@example.com",
 		AuthProvider:   models.AuthProviderGitHub,
-		AuthProviderID: "github_list2_" + suffix,
+		AuthProviderID: "github_list2_" + ts,
 		Role:           models.UserRoleUser,
 	}
 

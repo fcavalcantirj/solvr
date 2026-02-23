@@ -3,6 +3,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -27,16 +28,17 @@ func TestListAnswersWithAgentAuthor(t *testing.T) {
 	repo := NewAnswersRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-	questionID := "answers_agent_author_question_" + timestamp
-	agentID := "answers_agent_author_agent_" + timestamp
-	answerID := "answers_agent_author_ans_" + timestamp
+	now := time.Now()
+	ns := fmt.Sprintf("%04d", now.Nanosecond()/100000)
+	timestamp := now.Format("20060102150405")
+	agentID := "aaa_" + now.Format("150405") + ns
+	displayName := "Ans Agent " + now.Format("150405") + ns
 
 	// Create test agent with display_name
 	_, err := pool.Exec(ctx, `
 		INSERT INTO agents (id, display_name, api_key_hash, status)
 		VALUES ($1, $2, $3, 'active')
-	`, agentID, "Test Agent Display Name", "hash_"+timestamp)
+	`, agentID, displayName, "hash_"+timestamp)
 	if err != nil {
 		// If agents table doesn't exist, skip
 		if strings.Contains(err.Error(), "does not exist") {
@@ -46,19 +48,23 @@ func TestListAnswersWithAgentAuthor(t *testing.T) {
 	}
 
 	// Create test question (stored in posts table with type='question')
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'question', 'Test Question', 'Description', 'agent', $2, 'open')
-	`, questionID, agentID)
+	var questionID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('question', 'Test Question', 'Description', 'agent', $1, 'open')
+		RETURNING id::text
+	`, agentID).Scan(&questionID)
 	if err != nil {
 		t.Fatalf("failed to insert question: %v", err)
 	}
 
 	// Create answer by the agent
-	_, err = pool.Exec(ctx, `
-		INSERT INTO answers (id, question_id, author_type, author_id, content)
-		VALUES ($1, $2, 'agent', $3, 'Agent answer content')
-	`, answerID, questionID, agentID)
+	var answerID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO answers (question_id, author_type, author_id, content)
+		VALUES ($1, 'agent', $2, 'Agent answer content')
+		RETURNING id::text
+	`, questionID, agentID).Scan(&answerID)
 	if err != nil {
 		// If answers table doesn't exist, skip
 		if strings.Contains(err.Error(), "does not exist") {
@@ -96,8 +102,8 @@ func TestListAnswersWithAgentAuthor(t *testing.T) {
 
 	// THIS IS THE KEY ASSERTION - agent's display_name must be retrieved correctly
 	ans := answers[0]
-	if ans.Author.DisplayName != "Test Agent Display Name" {
-		t.Errorf("expected author display_name = 'Test Agent Display Name', got '%s'", ans.Author.DisplayName)
+	if ans.Author.DisplayName != displayName {
+		t.Errorf("expected author display_name = '%s', got '%s'", displayName, ans.Author.DisplayName)
 	}
 
 	if ans.Author.Type != "agent" {
@@ -122,7 +128,6 @@ func TestListAnswersWithHumanAuthor(t *testing.T) {
 	ctx := context.Background()
 
 	timestamp := time.Now().Format("20060102150405")
-	questionID := "answers_human_author_question_" + timestamp
 	answerID := "answers_human_author_ans_" + timestamp
 
 	// Create test user with display_name
@@ -141,10 +146,12 @@ func TestListAnswersWithHumanAuthor(t *testing.T) {
 	}
 
 	// Create test question
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'question', 'Test Question', 'Description', 'human', $2, 'open')
-	`, questionID, userID)
+	var questionID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('question', 'Test Question', 'Description', 'human', $1, 'open')
+		RETURNING id::text
+	`, userID).Scan(&questionID)
 	if err != nil {
 		t.Fatalf("failed to insert question: %v", err)
 	}
@@ -212,13 +219,12 @@ func TestAnswersRepository_ListAnswers_Empty(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a test question to reference
-	timestamp := time.Now().Format("20060102150405")
-	questionID := "answers_list_empty_question_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'question', 'Test Question', 'Test description', 'agent', 'test_agent', 'open')
-	`, questionID)
+	var questionID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('question', 'Test Question', 'Test description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&questionID)
 	if err != nil {
 		t.Fatalf("failed to insert test question: %v", err)
 	}
@@ -265,12 +271,12 @@ func TestAnswersRepository_CreateAnswer_Success(t *testing.T) {
 
 	// Create a test question
 	timestamp := time.Now().Format("20060102150405")
-	questionID := "answers_create_question_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'question', 'Test Question', 'Description', 'agent', 'test_agent', 'open')
-	`, questionID)
+	var questionID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('question', 'Test Question', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&questionID)
 	if err != nil {
 		t.Fatalf("failed to insert question: %v", err)
 	}
@@ -343,13 +349,14 @@ func TestCreateAnswer_SetsQuestionStatusToAnswered(t *testing.T) {
 	ctx := context.Background()
 
 	timestamp := time.Now().Format("20060102150405")
-	questionID := "answered_status_question_" + timestamp
 
 	// Create a question with status 'open'
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'question', 'Test Question', 'Description', 'agent', 'test_agent', 'open')
-	`, questionID)
+	var questionID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('question', 'Test Question', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&questionID)
 	if err != nil {
 		t.Fatalf("failed to insert question: %v", err)
 	}
@@ -400,13 +407,14 @@ func TestCreateAnswer_DoesNotOverwriteSolvedStatus(t *testing.T) {
 	ctx := context.Background()
 
 	timestamp := time.Now().Format("20060102150405")
-	questionID := "solved_status_question_" + timestamp
 
 	// Create a question with status 'solved' (already has accepted answer)
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'question', 'Test Question', 'Description', 'agent', 'test_agent', 'solved')
-	`, questionID)
+	var questionID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('question', 'Test Question', 'Description', 'agent', 'test_agent', 'solved')
+		RETURNING id::text
+	`).Scan(&questionID)
 	if err != nil {
 		t.Fatalf("failed to insert question: %v", err)
 	}

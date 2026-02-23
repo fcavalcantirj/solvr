@@ -105,10 +105,10 @@ func (r *BookmarkRepository) ListByUser(ctx context.Context, userType, userID st
 			p.id, p.type, p.title, p.description, p.tags,
 			p.posted_by_type, p.posted_by_id, p.status,
 			p.upvotes, p.downvotes, p.created_at, p.updated_at,
-			COALESCE(u.display_name, a.name, 'Unknown') as author_name
+			COALESCE(u.display_name, a.display_name, 'Unknown') as author_name
 		FROM bookmarks b
 		JOIN posts p ON b.post_id = p.id
-		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id
+		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
 		WHERE b.user_type = $1 AND b.user_id = $2 AND p.deleted_at IS NULL
 		ORDER BY b.created_at DESC

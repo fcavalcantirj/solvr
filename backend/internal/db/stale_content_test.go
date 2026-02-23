@@ -15,6 +15,10 @@ func createStaleTestAgent(t *testing.T, pool *Pool, suffix string) *models.Agent
 	agentRepo := NewAgentRepository(pool)
 
 	agentID := "stale_agent_" + suffix + "_" + time.Now().Format("20060102150405.000000000")
+	// Truncate to 50 chars max (agents.id is VARCHAR(50))
+	if len(agentID) > 50 {
+		agentID = agentID[:50]
+	}
 	agent := &models.Agent{
 		ID:          agentID,
 		DisplayName: "Stale Test Agent " + suffix,

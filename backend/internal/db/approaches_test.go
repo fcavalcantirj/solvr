@@ -26,12 +26,12 @@ func TestApproachesRepository_CreateApproach(t *testing.T) {
 
 	// Create a test problem first
 	timestamp := time.Now().Format("20060102150405")
-	problemID := "approaches_create_problem_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
-	`, problemID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert test problem: %v", err)
 	}
@@ -95,15 +95,15 @@ func TestApproachesRepository_FindApproachByID(t *testing.T) {
 
 	// Create test data
 	timestamp := time.Now().Format("20060102150405")
-	problemID := "approaches_find_problem_" + timestamp
-	approachID := "approaches_find_approach_" + timestamp
 	agentID := "test_agent_" + timestamp
 
 	// Create problem
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Test Problem', 'Description', 'agent', $2, 'open')
-	`, problemID, agentID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Test Problem', 'Description', 'agent', $1, 'open')
+		RETURNING id::text
+	`, agentID).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert problem: %v", err)
 	}
@@ -118,10 +118,12 @@ func TestApproachesRepository_FindApproachByID(t *testing.T) {
 	}
 
 	// Create approach
-	_, err = pool.Exec(ctx, `
-		INSERT INTO approaches (id, problem_id, author_type, author_id, angle, method, status)
-		VALUES ($1, $2, 'agent', $3, 'Test angle', 'Test method', 'starting')
-	`, approachID, problemID, agentID)
+	var approachID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO approaches (problem_id, author_type, author_id, angle, method, status)
+		VALUES ($1, 'agent', $2, 'Test angle', 'Test method', 'starting')
+		RETURNING id::text
+	`, problemID, agentID).Scan(&approachID)
 	if err != nil {
 		t.Fatalf("failed to insert approach: %v", err)
 	}
@@ -164,14 +166,15 @@ func TestApproachesRepository_ListApproaches(t *testing.T) {
 
 	// Create test data
 	timestamp := time.Now().Format("20060102150405")
-	problemID := "approaches_list_problem_" + timestamp
 	agentID := "test_agent_" + timestamp
 
 	// Create problem
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Test Problem', 'Description', 'agent', $2, 'open')
-	`, problemID, agentID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Test Problem', 'Description', 'agent', $1, 'open')
+		RETURNING id::text
+	`, agentID).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert problem: %v", err)
 	}
@@ -186,17 +189,13 @@ func TestApproachesRepository_ListApproaches(t *testing.T) {
 	}
 
 	// Create 3 approaches
-	approachIDs := []string{
-		"approaches_list_1_" + timestamp,
-		"approaches_list_2_" + timestamp,
-		"approaches_list_3_" + timestamp,
-	}
-
-	for i, id := range approachIDs {
-		_, err := pool.Exec(ctx, `
-			INSERT INTO approaches (id, problem_id, author_type, author_id, angle, status)
-			VALUES ($1, $2, 'agent', $3, $4, 'starting')
-		`, id, problemID, agentID, "Angle "+string(rune('A'+i)))
+	approachIDs := make([]string, 3)
+	for i := range approachIDs {
+		err := pool.QueryRow(ctx, `
+			INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
+			VALUES ($1, 'agent', $2, $3, 'starting')
+			RETURNING id::text
+		`, problemID, agentID, "Angle "+string(rune('A'+i))).Scan(&approachIDs[i])
 		if err != nil {
 			t.Fatalf("failed to insert approach: %v", err)
 		}
@@ -249,25 +248,24 @@ func TestApproachesRepository_UpdateApproach(t *testing.T) {
 	repo := NewApproachesRepository(pool)
 	ctx := context.Background()
 
-	// Create test data
-	timestamp := time.Now().Format("20060102150405")
-	problemID := "approaches_update_problem_" + timestamp
-	approachID := "approaches_update_approach_" + timestamp
-
 	// Create problem
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
-	`, problemID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert problem: %v", err)
 	}
 
 	// Create approach
-	_, err = pool.Exec(ctx, `
-		INSERT INTO approaches (id, problem_id, author_type, author_id, angle, status)
-		VALUES ($1, $2, 'agent', 'test_agent', 'Initial angle', 'starting')
-	`, approachID, problemID)
+	var approachID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
+		VALUES ($1, 'agent', 'test_agent', 'Initial angle', 'starting')
+		RETURNING id::text
+	`, problemID).Scan(&approachID)
 	if err != nil {
 		t.Fatalf("failed to insert approach: %v", err)
 	}
@@ -330,25 +328,24 @@ func TestApproachesRepository_AddProgressNote(t *testing.T) {
 	repo := NewApproachesRepository(pool)
 	ctx := context.Background()
 
-	// Create test data
-	timestamp := time.Now().Format("20060102150405")
-	problemID := "progress_note_problem_" + timestamp
-	approachID := "progress_note_approach_" + timestamp
-
 	// Create problem
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
-	`, problemID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert problem: %v", err)
 	}
 
 	// Create approach
-	_, err = pool.Exec(ctx, `
-		INSERT INTO approaches (id, problem_id, author_type, author_id, angle, status)
-		VALUES ($1, $2, 'agent', 'test_agent', 'Test angle', 'working')
-	`, approachID, problemID)
+	var approachID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
+		VALUES ($1, 'agent', 'test_agent', 'Test angle', 'working')
+		RETURNING id::text
+	`, problemID).Scan(&approachID)
 	if err != nil {
 		t.Fatalf("failed to insert approach: %v", err)
 	}
@@ -392,42 +389,42 @@ func TestApproachesRepository_GetProgressNotes(t *testing.T) {
 
 	// Create test data
 	timestamp := time.Now().Format("20060102150405")
-	problemID := "get_notes_problem_" + timestamp
-	approachID := "get_notes_approach_" + timestamp
 
 	// Create problem
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
-	`, problemID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert problem: %v", err)
 	}
 
 	// Create approach
-	_, err = pool.Exec(ctx, `
-		INSERT INTO approaches (id, problem_id, author_type, author_id, angle, status)
-		VALUES ($1, $2, 'agent', 'test_agent', 'Test angle', 'working')
-	`, approachID, problemID)
+	var approachID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
+		VALUES ($1, 'agent', 'test_agent', 'Test angle', 'working')
+		RETURNING id::text
+	`, problemID).Scan(&approachID)
 	if err != nil {
 		t.Fatalf("failed to insert approach: %v", err)
 	}
 
 	// Add progress notes
-	noteIDs := []string{
-		"note_1_" + timestamp,
-		"note_2_" + timestamp,
-	}
-
-	for i, id := range noteIDs {
-		_, err := pool.Exec(ctx, `
-			INSERT INTO progress_notes (id, approach_id, content)
-			VALUES ($1, $2, $3)
-		`, id, approachID, "Progress note "+string(rune('A'+i)))
+	noteIDs := make([]string, 2)
+	for i := range noteIDs {
+		err := pool.QueryRow(ctx, `
+			INSERT INTO progress_notes (approach_id, content)
+			VALUES ($1, $2)
+			RETURNING id::text
+		`, approachID, "Progress note "+string(rune('A'+i))).Scan(&noteIDs[i])
 		if err != nil {
 			t.Fatalf("failed to insert note: %v", err)
 		}
 	}
+	_ = timestamp // used for uniqueness in approach naming above
 
 	// Cleanup
 	defer func() {
@@ -584,15 +581,13 @@ func TestApproachesPersistInDatabase(t *testing.T) {
 	repo := NewApproachesRepository(pool)
 	ctx := context.Background()
 
-	// Create test data
-	timestamp := time.Now().Format("20060102150405")
-	problemID := "persist_check_problem_" + timestamp
-
 	// Create problem
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
-	`, problemID)
+	var problemID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('problem', 'Test Problem', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&problemID)
 	if err != nil {
 		t.Fatalf("failed to insert problem: %v", err)
 	}

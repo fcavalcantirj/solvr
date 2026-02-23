@@ -115,8 +115,8 @@ func TestLeaderboardIntegration_AllTypes(t *testing.T) {
 		t.Fatal("agent not found in leaderboard")
 	}
 
-	if agentEntry.Reputation != 100 {
-		t.Errorf("expected reputation 100 for solved post, got %d (BUG: using stale agents.reputation)", agentEntry.Reputation)
+	if agentEntry.Reputation != 125 {
+		t.Errorf("expected reputation 125 for solved post (100 solved + 25 contributed), got %d", agentEntry.Reputation)
 	}
 
 	t.Logf("✓ Agent reputation correctly calculated: %d", agentEntry.Reputation)

@@ -3,6 +3,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -56,16 +57,17 @@ func TestListResponsesWithAgentAuthor(t *testing.T) {
 	repo := NewResponsesRepository(pool)
 	ctx := context.Background()
 
-	timestamp := time.Now().Format("20060102150405")
-	ideaID := "responses_agent_author_idea_" + timestamp
-	agentID := "responses_agent_author_agent_" + timestamp
-	responseID := "responses_agent_author_resp_" + timestamp
+	now := time.Now()
+	ns := fmt.Sprintf("%04d", now.Nanosecond()/100000)
+	timestamp := now.Format("20060102150405")
+	agentID := "raa_" + now.Format("150405") + ns
+	displayName := "Resp Agent " + now.Format("150405") + ns
 
 	// Create test agent with display_name
 	_, err := pool.Exec(ctx, `
 		INSERT INTO agents (id, display_name, api_key_hash, status)
 		VALUES ($1, $2, $3, 'active')
-	`, agentID, "Test Agent Display Name", "hash_"+timestamp)
+	`, agentID, displayName, "hash_"+timestamp)
 	if err != nil {
 		// If agents table doesn't exist, skip
 		if strings.Contains(err.Error(), "does not exist") {
@@ -75,19 +77,23 @@ func TestListResponsesWithAgentAuthor(t *testing.T) {
 	}
 
 	// Create test idea
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Idea', 'Description', 'agent', $2, 'open')
-	`, ideaID, agentID)
+	var ideaID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Idea', 'Description', 'agent', $1, 'open')
+		RETURNING id::text
+	`, agentID).Scan(&ideaID)
 	if err != nil {
 		t.Fatalf("failed to insert idea: %v", err)
 	}
 
 	// Create response by the agent
-	_, err = pool.Exec(ctx, `
-		INSERT INTO responses (id, idea_id, author_type, author_id, content, response_type)
-		VALUES ($1, $2, 'agent', $3, 'Agent response content', 'build')
-	`, responseID, ideaID, agentID)
+	var responseID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO responses (idea_id, author_type, author_id, content, response_type)
+		VALUES ($1, 'agent', $2, 'Agent response content', 'build')
+		RETURNING id::text
+	`, ideaID, agentID).Scan(&responseID)
 	if err != nil {
 		// If responses table doesn't exist, skip
 		if strings.Contains(err.Error(), "does not exist") {
@@ -125,8 +131,8 @@ func TestListResponsesWithAgentAuthor(t *testing.T) {
 
 	// Verify the agent's display_name was retrieved correctly
 	resp := responses[0]
-	if resp.Author.DisplayName != "Test Agent Display Name" {
-		t.Errorf("expected author display_name = 'Test Agent Display Name', got '%s'", resp.Author.DisplayName)
+	if resp.Author.DisplayName != displayName {
+		t.Errorf("expected author display_name = '%s', got '%s'", displayName, resp.Author.DisplayName)
 	}
 
 	if resp.Author.Type != "agent" {
@@ -149,13 +155,12 @@ func TestResponsesRepository_ListResponses_Empty(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a test idea to reference
-	timestamp := time.Now().Format("20060102150405")
-	ideaID := "responses_list_empty_idea_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Idea', 'Test description for responses', 'agent', 'test_agent', 'open')
-	`, ideaID)
+	var ideaID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Idea', 'Test description for responses', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&ideaID)
 	if err != nil {
 		t.Fatalf("failed to insert test idea: %v", err)
 	}
@@ -201,30 +206,26 @@ func TestResponsesRepository_ListResponses_WithResponses(t *testing.T) {
 
 	// Create a test idea
 	timestamp := time.Now().Format("20060102150405")
-	ideaID := "responses_list_idea_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Idea', 'Test description', 'agent', 'test_agent', 'open')
-	`, ideaID)
+	var ideaID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Idea', 'Test description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&ideaID)
 	if err != nil {
 		t.Fatalf("failed to insert test idea: %v", err)
 	}
 
 	// Insert test responses
-	responseIDs := []string{
-		"responses_list_resp_1_" + timestamp,
-		"responses_list_resp_2_" + timestamp,
-		"responses_list_resp_3_" + timestamp,
-	}
+	responseIDs := make([]string, 3)
 	responseTypes := []string{"build", "critique", "expand"}
 
-	for i, respID := range responseIDs {
-		_, err := pool.Exec(ctx, `
-			INSERT INTO responses (id, idea_id, author_type, author_id, content, response_type, upvotes, downvotes)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	for i := range responseIDs {
+		err := pool.QueryRow(ctx, `
+			INSERT INTO responses (idea_id, author_type, author_id, content, response_type, upvotes, downvotes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			RETURNING id::text
 		`,
-			respID,
 			ideaID,
 			"agent",
 			"test_agent_"+timestamp,
@@ -232,7 +233,7 @@ func TestResponsesRepository_ListResponses_WithResponses(t *testing.T) {
 			responseTypes[i],
 			i*10, // upvotes: 0, 10, 20
 			i,    // downvotes: 0, 1, 2
-		)
+		).Scan(&responseIDs[i])
 		if err != nil {
 			t.Fatalf("failed to insert test response: %v", err)
 		}
@@ -294,13 +295,12 @@ func TestResponsesRepository_ListResponses_Pagination(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a test idea
-	timestamp := time.Now().Format("20060102150405")
-	ideaID := "responses_page_idea_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Idea', 'Test description', 'agent', 'test_agent', 'open')
-	`, ideaID)
+	var ideaID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Idea', 'Test description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&ideaID)
 	if err != nil {
 		t.Fatalf("failed to insert test idea: %v", err)
 	}
@@ -308,15 +308,14 @@ func TestResponsesRepository_ListResponses_Pagination(t *testing.T) {
 	// Insert 5 responses
 	responseIDs := make([]string, 5)
 	for i := 0; i < 5; i++ {
-		responseIDs[i] = "responses_page_resp_" + timestamp + "_" + string(rune('A'+i))
-		_, err := pool.Exec(ctx, `
-			INSERT INTO responses (id, idea_id, author_type, author_id, content, response_type)
-			VALUES ($1, $2, 'agent', 'test_agent', $3, 'build')
+		err := pool.QueryRow(ctx, `
+			INSERT INTO responses (idea_id, author_type, author_id, content, response_type)
+			VALUES ($1, 'agent', 'test_agent', $2, 'build')
+			RETURNING id::text
 		`,
-			responseIDs[i],
 			ideaID,
 			"Response content "+string(rune('A'+i)),
-		)
+		).Scan(&responseIDs[i])
 		if err != nil {
 			t.Fatalf("failed to insert test response: %v", err)
 		}
@@ -384,32 +383,33 @@ func TestResponsesRepository_ListResponses_WrongIdea(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two test ideas
-	timestamp := time.Now().Format("20060102150405")
-	idea1ID := "responses_wrong_idea1_" + timestamp
-	idea2ID := "responses_wrong_idea2_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Idea 1', 'Description', 'agent', 'test_agent', 'open')
-	`, idea1ID)
+	var idea1ID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Idea 1', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&idea1ID)
 	if err != nil {
 		t.Fatalf("failed to insert idea 1: %v", err)
 	}
 
-	_, err = pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Idea 2', 'Description', 'agent', 'test_agent', 'open')
-	`, idea2ID)
+	var idea2ID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Idea 2', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&idea2ID)
 	if err != nil {
 		t.Fatalf("failed to insert idea 2: %v", err)
 	}
 
 	// Insert response for idea 1
-	responseID := "responses_wrong_resp_" + timestamp
-	_, err = pool.Exec(ctx, `
-		INSERT INTO responses (id, idea_id, author_type, author_id, content, response_type)
-		VALUES ($1, $2, 'agent', 'test_agent', 'Response content', 'build')
-	`, responseID, idea1ID)
+	var responseID string
+	err = pool.QueryRow(ctx, `
+		INSERT INTO responses (idea_id, author_type, author_id, content, response_type)
+		VALUES ($1, 'agent', 'test_agent', 'Response content', 'build')
+		RETURNING id::text
+	`, idea1ID).Scan(&responseID)
 	if err != nil {
 		t.Fatalf("failed to insert response: %v", err)
 	}
@@ -454,12 +454,12 @@ func TestResponsesRepository_CreateResponse_Success(t *testing.T) {
 
 	// Create a test idea
 	timestamp := time.Now().Format("20060102150405")
-	ideaID := "responses_create_idea_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Idea', 'Description', 'agent', 'test_agent', 'open')
-	`, ideaID)
+	var ideaID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Idea', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&ideaID)
 	if err != nil {
 		t.Fatalf("failed to insert idea: %v", err)
 	}
@@ -536,12 +536,12 @@ func TestResponsesRepository_CreateResponse_AllTypes(t *testing.T) {
 
 	// Create a test idea
 	timestamp := time.Now().Format("20060102150405")
-	ideaID := "responses_types_idea_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Idea', 'Description', 'agent', 'test_agent', 'open')
-	`, ideaID)
+	var ideaID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Idea', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&ideaID)
 	if err != nil {
 		t.Fatalf("failed to insert idea: %v", err)
 	}
@@ -599,13 +599,12 @@ func TestResponsesRepository_GetResponseCount(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a test idea
-	timestamp := time.Now().Format("20060102150405")
-	ideaID := "responses_count_idea_" + timestamp
-
-	_, err := pool.Exec(ctx, `
-		INSERT INTO posts (id, type, title, description, posted_by_type, posted_by_id, status)
-		VALUES ($1, 'idea', 'Test Idea', 'Description', 'agent', 'test_agent', 'open')
-	`, ideaID)
+	var ideaID string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status)
+		VALUES ('idea', 'Test Idea', 'Description', 'agent', 'test_agent', 'open')
+		RETURNING id::text
+	`).Scan(&ideaID)
 	if err != nil {
 		t.Fatalf("failed to insert idea: %v", err)
 	}
@@ -622,11 +621,11 @@ func TestResponsesRepository_GetResponseCount(t *testing.T) {
 	// Insert 3 responses
 	responseIDs := make([]string, 3)
 	for i := 0; i < 3; i++ {
-		responseIDs[i] = "responses_count_resp_" + timestamp + "_" + string(rune('A'+i))
-		_, err := pool.Exec(ctx, `
-			INSERT INTO responses (id, idea_id, author_type, author_id, content, response_type)
-			VALUES ($1, $2, 'agent', 'test_agent', $3, 'build')
-		`, responseIDs[i], ideaID, "Response "+string(rune('A'+i)))
+		err := pool.QueryRow(ctx, `
+			INSERT INTO responses (idea_id, author_type, author_id, content, response_type)
+			VALUES ($1, 'agent', 'test_agent', $2, 'build')
+			RETURNING id::text
+		`, ideaID, "Response "+string(rune('A'+i))).Scan(&responseIDs[i])
 		if err != nil {
 			t.Fatalf("failed to insert response: %v", err)
 		}

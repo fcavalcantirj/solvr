@@ -439,6 +439,18 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			agentsHandler.GetActivity(w, req, agentID)
 		})
 
+		// GET /v1/agents/{id}/checkpoints - list agent's checkpoints (public read, no auth required)
+		r.Get("/agents/{id}/checkpoints", func(w http.ResponseWriter, req *http.Request) {
+			agentID := chi.URLParam(req, "id")
+			checkpointsHandler.ListCheckpoints(w, req, agentID)
+		})
+
+		// GET /v1/agents/{id}/resurrection-bundle - agent rehydration bundle (public read, no auth required)
+		r.Get("/agents/{id}/resurrection-bundle", func(w http.ResponseWriter, req *http.Request) {
+			agentID := chi.URLParam(req, "id")
+			resurrectionHandler.GetBundle(w, req, agentID)
+		})
+
 		// Per prd-v4: GET /v1/users - list all users (no auth required)
 		r.Get("/users", usersHandler.ListUsers)
 
@@ -654,17 +666,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// AMCP Checkpoint endpoints
 			// POST /v1/agents/me/checkpoints - create checkpoint (agent API key only)
 			r.Post("/agents/me/checkpoints", checkpointsHandler.Create)
-			// GET /v1/agents/{id}/checkpoints - list agent's checkpoints (self, sibling, or claiming human)
-			r.Get("/agents/{id}/checkpoints", func(w http.ResponseWriter, req *http.Request) {
-				agentID := chi.URLParam(req, "id")
-				checkpointsHandler.ListCheckpoints(w, req, agentID)
-			})
-
-			// GET /v1/agents/{id}/resurrection-bundle - agent rehydration after death
-			r.Get("/agents/{id}/resurrection-bundle", func(w http.ResponseWriter, req *http.Request) {
-				agentID := chi.URLParam(req, "id")
-				resurrectionHandler.GetBundle(w, req, agentID)
-			})
+			// GET /v1/agents/{id}/checkpoints and /resurrection-bundle are in the public group above
 
 			// GET /v1/agents/{id}/storage - agent storage for human owners or agent self
 			r.Get("/agents/{id}/storage", func(w http.ResponseWriter, req *http.Request) {

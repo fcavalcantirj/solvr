@@ -449,19 +449,38 @@ func TestListCheckpoints_Empty(t *testing.T) {
 	}
 }
 
-func TestListCheckpoints_Unauthorized(t *testing.T) {
+func TestListCheckpoints_PublicAccess(t *testing.T) {
 	repo := NewMockPinRepository()
 	ipfs := NewMockIPFSPinner()
 	handler := NewCheckpointsHandler(repo, ipfs)
 
+	repo.SetPins([]models.Pin{}, 0)
+
 	req := httptest.NewRequest(http.MethodGet, "/v1/agents/agent-test-001/checkpoints", nil)
-	// No auth
+	// No auth context — public access should be allowed
 
 	w := httptest.NewRecorder()
 	handler.ListCheckpoints(w, req, "agent-test-001")
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for public access, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	count := resp["count"].(float64)
+	if int(count) != 0 {
+		t.Errorf("expected count 0, got %v", count)
+	}
+
+	results := resp["results"].([]interface{})
+	if len(results) != 0 {
+		t.Errorf("expected 0 results, got %d", len(results))
+	}
+
+	if resp["latest"] != nil {
+		t.Errorf("expected latest=null, got %v", resp["latest"])
 	}
 }
 

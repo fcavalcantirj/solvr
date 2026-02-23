@@ -662,6 +662,74 @@ func TestGetUserProfile_ValidUUID(t *testing.T) {
 	}
 }
 
+// TestGetUserProfile_StatsShape verifies the response stats field names match
+// what the frontend APIUserStats type and transformUser() expect.
+// Field contract: posts_created, contributions, reputation (must be present).
+func TestGetUserProfile_StatsShape(t *testing.T) {
+	userRepo := NewMockUsersUserRepository()
+	handler := NewUsersHandler(userRepo, nil)
+
+	validID := "9fa1c3d4-e5f6-7890-abcd-ef1234567890"
+	userRepo.users[validID] = &models.User{
+		ID:          validID,
+		Username:    "statuser",
+		DisplayName: "Stats User",
+	}
+	userRepo.stats[validID] = &models.UserStats{
+		PostsCreated:  5,
+		Contributions: 12,
+		Reputation:    100,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/"+validID, nil)
+	rr := httptest.NewRecorder()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", validID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	handler.GetUserProfile(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&resp)
+
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected data object in response")
+	}
+
+	stats, ok := data["stats"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected data.stats object in response")
+	}
+
+	// Verify field names match frontend APIUserStats contract
+	if _, exists := stats["posts_created"]; !exists {
+		t.Error("expected data.stats.posts_created field (frontend APIUserStats requires this)")
+	}
+	if _, exists := stats["contributions"]; !exists {
+		t.Error("expected data.stats.contributions field (frontend APIUserStats requires this)")
+	}
+	if _, exists := stats["reputation"]; !exists {
+		t.Error("expected data.stats.reputation field (frontend APIUserStats requires this)")
+	}
+
+	// Verify values are correctly populated
+	if int(stats["posts_created"].(float64)) != 5 {
+		t.Errorf("expected posts_created=5, got %v", stats["posts_created"])
+	}
+	if int(stats["contributions"].(float64)) != 12 {
+		t.Errorf("expected contributions=12, got %v", stats["contributions"])
+	}
+	if int(stats["reputation"].(float64)) != 100 {
+		t.Errorf("expected reputation=100, got %v", stats["reputation"])
+	}
+}
+
 // ============================================================================
 // Tests for computed reputation in GET /v1/users/{id}/agents
 // ============================================================================

@@ -253,27 +253,8 @@ func (h *CheckpointsHandler) ListCheckpoints(w http.ResponseWriter, r *http.Requ
 				return
 			}
 		}
-	} else {
-		// Check human JWT auth
-		claims := auth.ClaimsFromContext(ctx)
-		if claims == nil {
-			response.WriteUnauthorized(w, "authentication required")
-			return
-		}
-
-		// Look up the agent
-		agent, err := h.agentFinder.FindByID(ctx, agentID)
-		if err != nil {
-			response.WriteNotFound(w, "agent not found")
-			return
-		}
-
-		// Verify the human is the claiming owner
-		if agent.HumanID == nil || *agent.HumanID != claims.UserID {
-			response.WriteForbidden(w, "you must be the claiming owner of this agent")
-			return
-		}
 	}
+	// else: no agent API key — public access allowed (anyone can view checkpoints)
 
 	// Always filter by meta type=amcp_checkpoint
 	opts := models.PinListOptions{

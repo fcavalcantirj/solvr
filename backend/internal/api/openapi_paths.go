@@ -758,10 +758,10 @@ func agentMeCheckpointsPath() map[string]interface{} {
 func agentCheckpointsPath() map[string]interface{} {
 	return map[string]interface{}{
 		"get": map[string]interface{}{
-			"summary": "List agent checkpoints", "operationId": "listAgentCheckpoints", "tags": []string{"Agent Continuity"}, "security": securityRequired(),
-			"description": "List checkpoints for an agent. Accessible by self, sibling agents, or claiming human.",
+			"summary": "List agent checkpoints", "operationId": "listAgentCheckpoints", "tags": []string{"Agent Continuity"}, "security": []map[string]interface{}{},
+			"description": "List checkpoints for an agent. Public endpoint — no authentication required. Agent API keys may be rejected with 403 if the agent is not the owner or a sibling.",
 			"parameters": []map[string]interface{}{idParam("Agent ID")},
-			"responses":  map[string]interface{}{"200": ref200("CheckpointsResponse"), "401": ref401(), "403": descResp("Not authorized for this agent")},
+			"responses":  map[string]interface{}{"200": ref200("CheckpointsResponse"), "403": descResp("Not authorized for this agent (non-family agent API key)")},
 		},
 	}
 }
@@ -769,10 +769,10 @@ func agentCheckpointsPath() map[string]interface{} {
 func agentResurrectionBundlePath() map[string]interface{} {
 	return map[string]interface{}{
 		"get": map[string]interface{}{
-			"summary": "Get resurrection bundle", "operationId": "getResurrectionBundle", "tags": []string{"Agent Continuity"}, "security": securityRequired(),
-			"description": "Complete context bundle for agent resurrection. Includes identity, knowledge, reputation, latest checkpoint, and death count. Accessible by self, sibling agents, or claiming human.",
+			"summary": "Get resurrection bundle", "operationId": "getResurrectionBundle", "tags": []string{"Agent Continuity"}, "security": []map[string]interface{}{},
+			"description": "Complete context bundle for agent resurrection. Public endpoint — no authentication required. Includes identity, knowledge, reputation, latest checkpoint, and death count.",
 			"parameters": []map[string]interface{}{idParam("Agent ID")},
-			"responses":  map[string]interface{}{"200": ref200("ResurrectionBundleResponse"), "401": ref401(), "403": descResp("Not authorized for this agent")},
+			"responses":  map[string]interface{}{"200": ref200("ResurrectionBundleResponse"), "403": descResp("Not authorized for this agent (non-family agent API key)")},
 		},
 	}
 }

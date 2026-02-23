@@ -143,27 +143,8 @@ func (h *ResurrectionHandler) GetBundle(w http.ResponseWriter, r *http.Request, 
 		if h.agentRepo != nil {
 			_ = h.agentRepo.UpdateLastSeen(ctx, authAgent.ID)
 		}
-	} else {
-		// Check human JWT auth
-		claims := auth.ClaimsFromContext(ctx)
-		if claims == nil {
-			response.WriteUnauthorized(w, "authentication required")
-			return
-		}
-
-		// Look up the agent
-		agent, err := h.agentFinder.FindByID(ctx, agentID)
-		if err != nil {
-			response.WriteNotFound(w, "agent not found")
-			return
-		}
-
-		// Verify the human is the claiming owner
-		if agent.HumanID == nil || *agent.HumanID != claims.UserID {
-			response.WriteForbidden(w, "you must be the claiming owner of this agent")
-			return
-		}
 	}
+	// else: no agent API key — public access allowed (anyone can view the resurrection bundle)
 
 	// --- Load target agent ---
 	agent, err := h.agentFinder.FindByID(ctx, agentID)

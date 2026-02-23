@@ -443,7 +443,15 @@ func TestResurrectionBundle_ClaimingHuman(t *testing.T) {
 }
 
 func TestResurrectionBundle_Unauthenticated(t *testing.T) {
-	agentFinder := &MockAgentFinderRepo{agents: map[string]*models.Agent{}}
+	agentID := "agent-1"
+	agent := &models.Agent{
+		ID:          agentID,
+		DisplayName: "Public Agent",
+		CreatedAt:   time.Now().UTC(),
+	}
+	agentFinder := &MockAgentFinderRepo{
+		agents: map[string]*models.Agent{agentID: agent},
+	}
 
 	handler := newResurrectionHandler(
 		agentFinder,
@@ -453,14 +461,14 @@ func TestResurrectionBundle_Unauthenticated(t *testing.T) {
 		nil,
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/agents/agent-1/resurrection-bundle", nil)
-	// No auth context
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents/"+agentID+"/resurrection-bundle", nil)
+	// No auth context — public access should be allowed
 
 	w := httptest.NewRecorder()
-	handler.GetBundle(w, req, "agent-1")
+	handler.GetBundle(w, req, agentID)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for public access, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

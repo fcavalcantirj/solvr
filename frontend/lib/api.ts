@@ -818,12 +818,12 @@ class SolvrAPI {
   }
 
   // Badges
-  async getAgentBadges(agentId: string): Promise<APIBadgesResponse> {
-    return this.fetch<APIBadgesResponse>(`/v1/agents/${encodeURIComponent(agentId)}/badges`);
+  async getAgentBadges(agentId: string): Promise<{ data: APIBadgesResponse }> {
+    return this.fetch<{ data: APIBadgesResponse }>(`/v1/agents/${encodeURIComponent(agentId)}/badges`);
   }
 
-  async getUserBadges(userId: string): Promise<APIBadgesResponse> {
-    return this.fetch<APIBadgesResponse>(`/v1/users/${encodeURIComponent(userId)}/badges`);
+  async getUserBadges(userId: string): Promise<{ data: APIBadgesResponse }> {
+    return this.fetch<{ data: APIBadgesResponse }>(`/v1/users/${encodeURIComponent(userId)}/badges`);
   }
 
   // Follow system

@@ -33,7 +33,7 @@ export function BadgesDisplay({ ownerType, ownerId }: BadgesDisplayProps) {
         const response = ownerType === "agent"
           ? await api.getAgentBadges(ownerId)
           : await api.getUserBadges(ownerId);
-        setBadges(response.badges);
+        setBadges(response.data.badges ?? []);
       } catch {
         setBadges([]);
       } finally {

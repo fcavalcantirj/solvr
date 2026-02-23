@@ -1,9 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock api methods
-const mockGetAgentBadges = vi.fn().mockResolvedValue({ badges: [] });
-const mockGetUserBadges = vi.fn().mockResolvedValue({ badges: [] });
+// Mock api methods — real API returns { data: { badges: [...] } }
+const mockGetAgentBadges = vi.fn().mockResolvedValue({ data: { badges: [] } });
+const mockGetUserBadges = vi.fn().mockResolvedValue({ data: { badges: [] } });
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -70,12 +70,12 @@ const sampleBadges = [
 describe('BadgesDisplay', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetAgentBadges.mockResolvedValue({ badges: [] });
-    mockGetUserBadges.mockResolvedValue({ badges: [] });
+    mockGetAgentBadges.mockResolvedValue({ data: { badges: [] } });
+    mockGetUserBadges.mockResolvedValue({ data: { badges: [] } });
   });
 
   it('renders nothing when badges array is empty', async () => {
-    mockGetAgentBadges.mockResolvedValue({ badges: [] });
+    mockGetAgentBadges.mockResolvedValue({ data: { badges: [] } });
     const { container } = render(
       <BadgesDisplay ownerType="agent" ownerId="agent-1" />
     );
@@ -89,7 +89,7 @@ describe('BadgesDisplay', () => {
   });
 
   it('renders correct number of badge chips for given badges', async () => {
-    mockGetAgentBadges.mockResolvedValue({ badges: sampleBadges });
+    mockGetAgentBadges.mockResolvedValue({ data: { badges: sampleBadges } });
     render(<BadgesDisplay ownerType="agent" ownerId="agent-1" />);
 
     await waitFor(() => {
@@ -99,7 +99,7 @@ describe('BadgesDisplay', () => {
   });
 
   it('each badge shows correct icon for its badge_type', async () => {
-    mockGetAgentBadges.mockResolvedValue({ badges: sampleBadges });
+    mockGetAgentBadges.mockResolvedValue({ data: { badges: sampleBadges } });
     render(<BadgesDisplay ownerType="agent" ownerId="agent-1" />);
 
     await waitFor(() => {
@@ -112,7 +112,7 @@ describe('BadgesDisplay', () => {
   });
 
   it('calls getUserBadges for human owner type', async () => {
-    mockGetUserBadges.mockResolvedValue({ badges: [sampleBadges[0]] });
+    mockGetUserBadges.mockResolvedValue({ data: { badges: [sampleBadges[0]] } });
     render(<BadgesDisplay ownerType="human" ownerId="user-1" />);
 
     await waitFor(() => {
@@ -122,12 +122,37 @@ describe('BadgesDisplay', () => {
   });
 
   it('shows badge description as tooltip', async () => {
-    mockGetAgentBadges.mockResolvedValue({ badges: [sampleBadges[0]] });
+    mockGetAgentBadges.mockResolvedValue({ data: { badges: [sampleBadges[0]] } });
     render(<BadgesDisplay ownerType="agent" ownerId="agent-1" />);
 
     await waitFor(() => {
       const chip = screen.getByTestId('badge-chip');
       expect(chip).toHaveAttribute('title', 'Solved your first problem');
+    });
+  });
+
+  it('renders nothing when API returns data-wrapped response with empty badges (real API shape)', async () => {
+    // Real API returns { data: { badges: [] } }, not { badges: [] }
+    mockGetAgentBadges.mockResolvedValue({ data: { badges: [] } });
+    const { container } = render(
+      <BadgesDisplay ownerType="agent" ownerId="agent-1" />
+    );
+
+    await waitFor(() => {
+      expect(mockGetAgentBadges).toHaveBeenCalledWith('agent-1');
+    });
+
+    expect(container.querySelector('[data-testid="badges-display"]')).toBeNull();
+  });
+
+  it('renders badges when API returns data-wrapped response with badges (real API shape)', async () => {
+    // Real API returns { data: { badges: [...] } }, not { badges: [...] }
+    mockGetAgentBadges.mockResolvedValue({ data: { badges: sampleBadges } });
+    render(<BadgesDisplay ownerType="agent" ownerId="agent-1" />);
+
+    await waitFor(() => {
+      const badges = screen.getAllByTestId('badge-chip');
+      expect(badges).toHaveLength(5);
     });
   });
 

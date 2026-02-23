@@ -369,9 +369,9 @@ function ResurrectionTab({ checkpoints, latest, checkpointCount, checkpointsLoad
             KNOWLEDGE SUMMARY
           </h3>
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-            <KnowledgeCard label="IDEAS" count={bundle.knowledge.ideas.length} />
-            <KnowledgeCard label="APPROACHES" count={bundle.knowledge.approaches.length} />
-            <KnowledgeCard label="PROBLEMS" count={bundle.knowledge.problems.length} />
+            <KnowledgeCard label="IDEAS" count={bundle.knowledge?.ideas?.length ?? 0} />
+            <KnowledgeCard label="APPROACHES" count={bundle.knowledge?.approaches?.length ?? 0} />
+            <KnowledgeCard label="PROBLEMS" count={bundle.knowledge?.problems?.length ?? 0} />
             {bundle.death_count !== null && (
               <KnowledgeCard label="DEATHS" count={bundle.death_count} />
             )}

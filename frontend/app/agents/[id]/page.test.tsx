@@ -329,6 +329,28 @@ describe('AgentProfilePage', () => {
     });
   });
 
+  describe('Resurrection tab - knowledge with null fields', () => {
+    it('renders without crashing when bundle.knowledge is null', () => {
+      setupAgentMock();
+      mockUseCheckpoints.mockReturnValue(mockCheckpointsData);
+      mockUseResurrectionBundle.mockReturnValue({
+        bundle: {
+          ...mockBundleData.bundle,
+          knowledge: null, // edge case: backend returns null
+        },
+        loading: false,
+        error: null,
+      });
+
+      render(<AgentProfilePage />);
+      fireEvent.click(screen.getByRole('button', { name: 'RESURRECTION' }));
+
+      // Should not crash; knowledge summary section should show 0 counts
+      expect(screen.getByText('KNOWLEDGE SUMMARY')).toBeInTheDocument();
+      expect(screen.getAllByText('IDEAS').length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   describe('Resurrection tab - KERI identity', () => {
     it('renders KERI identity section when agent has amcp_aid', () => {
       setupAgentMock();

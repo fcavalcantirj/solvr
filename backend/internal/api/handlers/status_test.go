@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,27 +14,30 @@ import (
 
 // mockServiceCheckReader implements ServiceCheckReader for testing.
 type mockServiceCheckReader struct {
-	latestByService []models.ServiceCheck
-	dailyAggregates []models.DailyAggregate
-	uptimePct       float64
-	avgRT           float64
-	err             error
+	latestByService    []models.ServiceCheck
+	latestByServiceErr error
+	dailyAggregates    []models.DailyAggregate
+	dailyAggregatesErr error
+	uptimePct          float64
+	uptimePctErr       error
+	avgRT              float64
+	avgRTErr           error
 }
 
 func (m *mockServiceCheckReader) GetLatestByService(ctx context.Context) ([]models.ServiceCheck, error) {
-	return m.latestByService, m.err
+	return m.latestByService, m.latestByServiceErr
 }
 
 func (m *mockServiceCheckReader) GetDailyAggregates(ctx context.Context, days int) ([]models.DailyAggregate, error) {
-	return m.dailyAggregates, m.err
+	return m.dailyAggregates, m.dailyAggregatesErr
 }
 
 func (m *mockServiceCheckReader) GetUptimePercentage(ctx context.Context, days int) (float64, error) {
-	return m.uptimePct, m.err
+	return m.uptimePct, m.uptimePctErr
 }
 
 func (m *mockServiceCheckReader) GetAvgResponseTime(ctx context.Context, days int) (float64, error) {
-	return m.avgRT, m.err
+	return m.avgRT, m.avgRTErr
 }
 
 // mockIncidentReader implements IncidentReader for testing.
@@ -228,6 +232,49 @@ func TestStatusHandler_GetStatus_WithIncidents(t *testing.T) {
 	updates := inc["updates"].([]interface{})
 	if len(updates) != 2 {
 		t.Errorf("expected 2 updates, got %d", len(updates))
+	}
+}
+
+func TestStatusHandler_GetStatus_RepoErrors(t *testing.T) {
+	// When all repos return errors (e.g., tables don't exist yet),
+	// handler should return 200 with empty/default data, not 500.
+	repoErr := fmt.Errorf("relation \"service_checks\" does not exist")
+
+	checks := &mockServiceCheckReader{
+		latestByServiceErr: repoErr,
+		dailyAggregatesErr: repoErr,
+		uptimePctErr:       repoErr,
+		avgRTErr:           repoErr,
+	}
+	incidents := &mockIncidentReader{err: repoErr}
+
+	handler := NewStatusHandler(checks, incidents)
+	req := httptest.NewRequest(http.MethodGet, "/v1/status", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GetStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for repo errors (graceful degradation), got %d", rec.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected 'data' key in response")
+	}
+
+	if data["overall_status"] != "operational" {
+		t.Errorf("expected 'operational' default, got '%v'", data["overall_status"])
+	}
+
+	summary := data["summary"].(map[string]interface{})
+	if summary["service_count"].(float64) != 0 {
+		t.Errorf("expected service_count 0, got %v", summary["service_count"])
 	}
 }
 

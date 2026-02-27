@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"time"
@@ -100,35 +101,36 @@ var serviceCategoryMap = map[string]string{
 func (h *StatusHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Fetch all data concurrently would be better, but sequential is fine for 4 queries
+	// Graceful degradation: log errors, continue with defaults.
+	// This avoids 500s when tables don't exist yet or DB is temporarily down.
 	latestChecks, err := h.checks.GetLatestByService(ctx)
 	if err != nil {
-		writeStatusError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get service checks")
-		return
+		slog.Error("status: failed to get service checks", "error", err)
+		latestChecks = nil
 	}
 
 	history, err := h.checks.GetDailyAggregates(ctx, 30)
 	if err != nil {
-		writeStatusError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get uptime history")
-		return
+		slog.Error("status: failed to get uptime history", "error", err)
+		history = nil
 	}
 
-	uptimePct, err := h.checks.GetUptimePercentage(ctx, 30)
+	var uptimePct float64
+	uptimePct, err = h.checks.GetUptimePercentage(ctx, 30)
 	if err != nil {
-		writeStatusError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get uptime percentage")
-		return
+		slog.Error("status: failed to get uptime percentage", "error", err)
 	}
 
-	avgRT, err := h.checks.GetAvgResponseTime(ctx, 30)
+	var avgRT float64
+	avgRT, err = h.checks.GetAvgResponseTime(ctx, 30)
 	if err != nil {
-		writeStatusError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get avg response time")
-		return
+		slog.Error("status: failed to get avg response time", "error", err)
 	}
 
 	recentIncidents, err := h.incidents.ListRecent(ctx, 10)
 	if err != nil {
-		writeStatusError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get incidents")
-		return
+		slog.Error("status: failed to get incidents", "error", err)
+		recentIncidents = nil
 	}
 
 	// Build service categories from latest checks
@@ -251,13 +253,3 @@ func serviceDisplayName(slug string) string {
 	return slug
 }
 
-func writeStatusError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": map[string]string{
-			"code":    code,
-			"message": message,
-		},
-	})
-}

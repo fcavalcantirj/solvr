@@ -66,7 +66,7 @@ func (r *ServiceCheckRepository) GetDailyAggregates(ctx context.Context, days in
 				ELSE 'operational'
 			END AS worst_status
 		FROM service_checks
-		WHERE checked_at >= NOW() - ($1 || ' days')::interval
+		WHERE checked_at >= NOW() - $1 * INTERVAL '1 day'
 		GROUP BY checked_at::date
 		ORDER BY checked_at::date DESC
 	`, days)
@@ -99,7 +99,7 @@ func (r *ServiceCheckRepository) GetUptimePercentage(ctx context.Context, days i
 			ELSE (COUNT(*) FILTER (WHERE status = 'operational'))::float / COUNT(*)::float * 100
 			END
 		FROM service_checks
-		WHERE checked_at >= NOW() - ($1 || ' days')::interval
+		WHERE checked_at >= NOW() - $1 * INTERVAL '1 day'
 	`, days).Scan(&pct)
 	if err != nil {
 		return 0, fmt.Errorf("get uptime percentage: %w", err)
@@ -117,7 +117,7 @@ func (r *ServiceCheckRepository) GetAvgResponseTime(ctx context.Context, days in
 	err := r.pool.QueryRow(ctx, `
 		SELECT AVG(response_time_ms)::float
 		FROM service_checks
-		WHERE checked_at >= NOW() - ($1 || ' days')::interval
+		WHERE checked_at >= NOW() - $1 * INTERVAL '1 day'
 			AND response_time_ms IS NOT NULL
 	`, days).Scan(&avg)
 	if err != nil {

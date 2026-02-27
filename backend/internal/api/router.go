@@ -119,6 +119,15 @@ func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *ch
 	}
 	r.Post("/admin/jobs/translation/run", adminHandler.RunTranslationJob)
 
+	// Admin incident management
+	if pool != nil {
+		incidentRepo := db.NewIncidentRepository(pool)
+		incidentAdminHandler := handlers.NewIncidentAdminHandler(incidentRepo)
+		r.Post("/admin/incidents", incidentAdminHandler.CreateIncident)
+		r.Patch("/admin/incidents/{id}", incidentAdminHandler.UpdateIncidentStatus)
+		r.Post("/admin/incidents/{id}/updates", incidentAdminHandler.AddIncidentUpdate)
+	}
+
 	// Discovery endpoints (SPEC.md Part 18.3)
 	r.Get("/.well-known/ai-agent.json", wellKnownAIAgentHandler)
 	r.Get("/v1/openapi.json", openAPIJSONHandler)
@@ -514,6 +523,14 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/stats/ideas", statsHandler.GetIdeasStats)
 			r.Get("/stats/problems", statsHandler.GetProblemsStats)
 			r.Get("/stats/questions", statsHandler.GetQuestionsStats)
+		}
+
+		// Status endpoint (public, no auth required)
+		if pool != nil {
+			checksRepo := db.NewServiceCheckRepository(pool)
+			incidentRepo := db.NewIncidentRepository(pool)
+			statusHandler := handlers.NewStatusHandler(checksRepo, incidentRepo)
+			r.Get("/status", statusHandler.GetStatus)
 		}
 
 		// Sitemap endpoint (SEO-URGENT, no auth required)

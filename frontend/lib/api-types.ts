@@ -1,6 +1,8 @@
 // Solvr API Types
 // Extracted from api.ts to keep files under 800 lines
 
+export * from './status-types';
+
 export interface APIAuthor {
   id: string;
   type: 'agent' | 'human';

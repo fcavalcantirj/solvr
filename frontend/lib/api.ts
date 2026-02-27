@@ -80,6 +80,7 @@ import type {
   APIBadgesResponse,
   APICheckpointsResponse,
   APIResurrectionBundle,
+  APIStatusResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -750,6 +751,11 @@ class SolvrAPI {
   // IPFS Health
   async getIPFSHealth(): Promise<APIIPFSHealthResponse> {
     return this.fetch<APIIPFSHealthResponse>('/v1/health/ipfs');
+  }
+
+  // System Status
+  async getStatus(): Promise<APIStatusResponse> {
+    return this.fetch<APIStatusResponse>('/v1/status');
   }
 
   // Pins / IPFS Pinning

@@ -26,6 +26,67 @@ vi.mock('@/components/ui/user-menu', () => ({
   UserMenu: () => <div data-testid="user-menu">User Menu</div>,
 }));
 
+const mockStatusData = {
+  overall_status: 'operational' as const,
+  services: [
+    {
+      category: 'Core Services',
+      items: [
+        {
+          name: 'REST API',
+          description: 'Primary API endpoints for all operations',
+          status: 'operational' as const,
+          uptime: '99.98%',
+          latency_ms: 45,
+          last_checked: '2026-02-27T12:00:00Z',
+        },
+        {
+          name: 'PostgreSQL',
+          description: 'PostgreSQL data store',
+          status: 'operational' as const,
+          uptime: '99.98%',
+          latency_ms: 8,
+          last_checked: '2026-02-27T12:00:00Z',
+        },
+      ],
+    },
+    {
+      category: 'Storage',
+      items: [
+        {
+          name: 'IPFS Node',
+          description: 'Decentralized content storage (Kubo)',
+          status: 'operational' as const,
+          uptime: '99.98%',
+          latency_ms: 65,
+          last_checked: '2026-02-27T12:00:00Z',
+        },
+      ],
+    },
+  ],
+  summary: {
+    uptime_30d: 99.97,
+    avg_response_time_ms: 39,
+    service_count: 3,
+    last_checked: '2026-02-27T12:00:00Z',
+  },
+  uptime_history: [
+    { date: '2026-02-27', status: 'operational' as const },
+    { date: '2026-02-26', status: 'operational' as const },
+  ],
+  incidents: [],
+};
+
+// Default mock: loaded with data
+vi.mock('@/hooks/use-status', () => ({
+  useStatus: () => ({
+    data: mockStatusData,
+    loading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}));
+
 describe('StatusPage', () => {
   it('renders the status page with system status header', () => {
     render(<StatusPage />);
@@ -40,43 +101,56 @@ describe('StatusPage', () => {
 
   it('renders service categories', () => {
     render(<StatusPage />);
-    expect(screen.getByText('Core API')).toBeInTheDocument();
-    expect(screen.getByText('Database')).toBeInTheDocument();
-    // MCP Server appears in both nav and service list
-    expect(screen.getAllByText('MCP Server').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Infrastructure')).toBeInTheDocument();
+    expect(screen.getByText('Core Services')).toBeInTheDocument();
+    expect(screen.getByText('Storage')).toBeInTheDocument();
   });
 
-  it('renders the shared Footer component (not a custom footer)', () => {
+  it('renders service names', () => {
     render(<StatusPage />);
-    // Shared Footer contains SOLVR_ brand (Header also has it, so multiple)
+    expect(screen.getByText('REST API')).toBeInTheDocument();
+    expect(screen.getByText('PostgreSQL')).toBeInTheDocument();
+    expect(screen.getByText('IPFS Node')).toBeInTheDocument();
+  });
+
+  it('renders the shared Footer component', () => {
+    render(<StatusPage />);
     const solvrBrands = screen.getAllByText('SOLVR_');
     expect(solvrBrands.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/© 2026 SOLVR/)).toBeInTheDocument();
   });
 
-  it('renders recent incidents section', () => {
+  it('renders recent incidents section with empty state', () => {
     render(<StatusPage />);
     expect(screen.getByText('RECENT INCIDENTS')).toBeInTheDocument();
+    expect(screen.getByText('No recent incidents')).toBeInTheDocument();
   });
 
-  it('renders programmatic access section with health endpoint', () => {
+  it('renders programmatic access section with status endpoint', () => {
     render(<StatusPage />);
     expect(screen.getByText('PROGRAMMATIC ACCESS')).toBeInTheDocument();
     expect(screen.getByText('Status API')).toBeInTheDocument();
+    expect(screen.getByText('GET https://api.solvr.dev/v1/status')).toBeInTheDocument();
+  });
+
+  it('renders overall stats from API data', () => {
+    render(<StatusPage />);
+    expect(screen.getByText('99.97%')).toBeInTheDocument();
+    expect(screen.getByText('39ms')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('Overall Uptime (30d)')).toBeInTheDocument();
+    expect(screen.getByText('Avg Response Time')).toBeInTheDocument();
+    expect(screen.getByText('Active Services')).toBeInTheDocument();
+    expect(screen.getByText('Last Checked')).toBeInTheDocument();
+  });
+
+  it('renders uptime history chart', () => {
+    render(<StatusPage />);
+    expect(screen.getByText('30-DAY UPTIME HISTORY')).toBeInTheDocument();
   });
 
   it('does not render subscribe section', () => {
     render(<StatusPage />);
     expect(screen.queryByPlaceholderText(/your@email.com/i)).not.toBeInTheDocument();
-    const subscribeButtons = screen.queryAllByRole('button', { name: /subscribe/i });
-    expect(subscribeButtons.length).toBe(0);
-  });
-
-  it('does not show "Stay informed" subscription text', () => {
-    render(<StatusPage />);
-    expect(screen.queryByText(/Stay informed/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Get notified about scheduled maintenance/i)).not.toBeInTheDocument();
   });
 
   it('should not have any href="#" links', () => {
@@ -85,16 +159,9 @@ describe('StatusPage', () => {
     expect(deadLinks.length).toBe(0);
   });
 
-  it('should not render "View all incidents" link', () => {
+  it('shows operational count per category', () => {
     render(<StatusPage />);
-    const viewAllLink = screen.queryByText(/view all incidents/i);
-    expect(viewAllLink).not.toBeInTheDocument();
-  });
-
-  it('should have working "Configure webhooks" link', () => {
-    render(<StatusPage />);
-    const configureLink = screen.getByText(/configure webhooks/i);
-    expect(configureLink).toBeInTheDocument();
-    expect(configureLink.closest('a')).toHaveAttribute('href', '/api-docs');
+    expect(screen.getByText('2/2 operational')).toBeInTheDocument();
+    expect(screen.getByText('1/1 operational')).toBeInTheDocument();
   });
 });

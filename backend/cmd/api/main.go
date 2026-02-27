@@ -202,6 +202,23 @@ func main() {
 		log.Println("Translation job started (runs every 12 hours)")
 	}
 
+	// Start health check monitoring job if database is available
+	var healthCheckCancel context.CancelFunc
+	if pool != nil {
+		ipfsURL := os.Getenv("IPFS_API_URL")
+		if ipfsURL == "" {
+			ipfsURL = "http://localhost:5001"
+		}
+		checksRepo := db.NewServiceCheckRepository(pool)
+		ipfsChecker := services.NewKuboIPFSService(ipfsURL)
+		healthSvc := services.NewHealthCheckerService(pool, ipfsChecker)
+		healthCheckJob := jobs.NewHealthCheckJob(healthSvc, checksRepo)
+		var healthCheckCtx context.Context
+		healthCheckCtx, healthCheckCancel = context.WithCancel(context.Background())
+		go healthCheckJob.RunScheduled(healthCheckCtx, jobs.DefaultHealthCheckInterval)
+		log.Println("Health check monitoring job started (runs every 5 minutes)")
+	}
+
 	// Create server
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -238,6 +255,9 @@ func main() {
 	}
 	if translationCancel != nil {
 		translationCancel()
+	}
+	if healthCheckCancel != nil {
+		healthCheckCancel()
 	}
 
 	// Create shutdown context with timeout

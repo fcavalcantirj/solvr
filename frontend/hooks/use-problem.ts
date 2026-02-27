@@ -167,12 +167,15 @@ interface APIApproachesResponse {
 /**
  * Hook to fetch a problem and its approaches from the API.
  * @param id - The problem ID to fetch
+ * @param initialPost - Optional server-side fetched post data (for SSR/SEO)
  * @returns Problem data, approaches, loading state, error, and refetch function
  */
-export function useProblem(id: string): UseProblemResult {
-  const [problem, setProblem] = useState<ProblemData | null>(null);
+export function useProblem(id: string, initialPost?: APIPost): UseProblemResult {
+  const [problem, setProblem] = useState<ProblemData | null>(
+    initialPost ? transformProblem(initialPost) : null
+  );
   const [approaches, setApproaches] = useState<ProblemApproach[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialPost);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -186,27 +189,35 @@ export function useProblem(id: string): UseProblemResult {
       setLoading(true);
       setError(null);
 
-      // Fetch problem and approaches in parallel
-      const [problemResponse, approachesResponse] = await Promise.all([
-        api.getPost(id),
-        api.getProblemApproaches(id),
-      ]);
+      // If we have initialPost, only fetch approaches (problem already loaded)
+      if (initialPost) {
+        const approachesResponse = await api.getProblemApproaches(id);
+        const approachesData = approachesResponse?.data ?? [];
+        setApproaches(approachesData.map(transformApproach));
+      } else {
+        // Fetch problem and approaches in parallel
+        const [problemResponse, approachesResponse] = await Promise.all([
+          api.getPost(id),
+          api.getProblemApproaches(id),
+        ]);
 
-      // Transform and set problem data
-      setProblem(transformProblem(problemResponse.data));
+        // Transform and set problem data
+        setProblem(transformProblem(problemResponse.data));
 
-      // FE-021: Defensive check - handle undefined/null data array
-      const approachesData = approachesResponse?.data ?? [];
-      const transformedApproaches = approachesData.map(transformApproach);
-      setApproaches(transformedApproaches);
+        // FE-021: Defensive check - handle undefined/null data array
+        const approachesData = approachesResponse?.data ?? [];
+        setApproaches(approachesData.map(transformApproach));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch problem');
-      setProblem(null);
+      if (!initialPost) {
+        setProblem(null);
+      }
       setApproaches([]);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, initialPost]);
 
   useEffect(() => {
     fetchData();

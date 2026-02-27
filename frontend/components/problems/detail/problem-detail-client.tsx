@@ -9,18 +9,20 @@ import { ProblemSidePanel } from "./problem-side-panel";
 import { CommentsList } from "@/components/shared/comments-list";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
+import { APIPost } from "@/lib/api-types";
 
 interface ProblemDetailClientProps {
   id: string;
+  initialPost?: APIPost; // Server-side fetched post data — avoids loading spinner for SEO
 }
 
-export function ProblemDetailClient({ id }: ProblemDetailClientProps) {
-  const { problem, approaches, loading, error, refetch } = useProblem(id);
+export function ProblemDetailClient({ id, initialPost }: ProblemDetailClientProps) {
+  const { problem, approaches, loading, error, refetch } = useProblem(id, initialPost);
 
   // Track view when problem is loaded
   useViewTracking(id, problem?.views ?? 0, { enabled: !!problem });
 
-  if (loading) {
+  if (loading && !initialPost) {
     return (
       <div className="flex items-center justify-center py-20">
         <Spinner className="w-8 h-8" />

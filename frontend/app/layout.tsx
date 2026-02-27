@@ -6,7 +6,7 @@ import './globals.css'
 import { Providers } from '@/components/providers'
 
 // Force all pages to be dynamic (no static generation at build time)
-// This works around Next.js 15 bug with useState in Header component
+// Required: Next.js 15.2.4 has internal /_error prerender bug without this
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 

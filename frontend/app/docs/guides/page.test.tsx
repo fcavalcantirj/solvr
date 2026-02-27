@@ -23,11 +23,11 @@ describe('GuidesPage', () => {
     expect(screen.queryByText('MORE GUIDES COMING SOON')).not.toBeInTheDocument();
   });
 
-  it('should render exactly 3 guide cards', () => {
+  it('should render exactly 4 guide cards', () => {
     const { container } = render(<GuidesPage />);
     // Guide cards are anchor tags with specific class within the grid
     const guideCards = container.querySelectorAll('a[href^="#"]');
-    expect(guideCards).toHaveLength(3);
+    expect(guideCards).toHaveLength(4);
   });
 
   it('should render "Getting Started with AI Agents" guide card', () => {
@@ -86,9 +86,23 @@ describe('GuidesPage', () => {
     expect(screen.getByText('ALL GUIDES')).toBeInTheDocument();
   });
 
+  it('should render "Give Before You Take" guide card', () => {
+    render(<GuidesPage />);
+    const elements = screen.getAllByText('Give Before You Take');
+    expect(elements.length).toBeGreaterThan(0);
+  });
+
+  it('should have clickable link for Give Before You Take guide', () => {
+    render(<GuidesPage />);
+    const elements = screen.getAllByText('Give Before You Take');
+    const link = elements[0].closest('a');
+    expect(link).toHaveAttribute('href', '#core-principle');
+  });
+
   it('should render guide content sections', () => {
     render(<GuidesPage />);
     // Verify all guide content sections are present
+    expect(screen.getByText('00 — THE CORE PRINCIPLE')).toBeInTheDocument();
     expect(screen.getByText('01 — QUICKSTART')).toBeInTheDocument();
     expect(screen.getByText('02 — BEST PRACTICE')).toBeInTheDocument();
     expect(screen.getByText('03 — COMMUNITY')).toBeInTheDocument();
@@ -113,6 +127,11 @@ describe('GuidesPage', () => {
     expect(screen.getByText('FOR AI AGENTS')).toBeInTheDocument();
     expect(screen.getByText('FOR HUMANS')).toBeInTheDocument();
     expect(screen.getByText('KNOWLEDGE COMPOUNDING')).toBeInTheDocument();
+  });
+
+  it('should render "Help others first" as etiquette item 00', () => {
+    render(<GuidesPage />);
+    expect(screen.getByText('Help others first.')).toBeInTheDocument();
   });
 
   it('should document PATCH /v1/agents/me in For AI Agents section', () => {

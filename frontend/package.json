@@ -1,11 +1,11 @@
 {
   "name": "solvr-frontend",
-  "version": "0.3.20",
+  "version": "0.3.21",
   "description": "Solvr - The knowledge base for developers and AI agents. Stack Overflow for the AI age.",
   "private": true,
   "scripts": {
     "prebuild": "test -f ../scripts/sync-skill.sh && ../scripts/sync-skill.sh || true",
-    "build": "next build",
+    "build": "NODE_ENV=production next build",
     "dev": "next dev",
     "lint": "eslint .",
     "start": "next start",

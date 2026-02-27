@@ -3,6 +3,7 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Header } from "@/components/header";
 import { ProblemDetailClient } from "@/components/problems/detail/problem-detail-client";
+import { JsonLd, postJsonLd } from "@/components/seo/json-ld";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -67,12 +68,15 @@ export default async function ProblemDetailPage({
   // Proper 404 — Googlebot gets a real 404 status, not 200 with a spinner
   if (!data?.data) notFound();
 
+  const post = data.data;
+
   return (
     <div className="min-h-screen bg-background">
+      <JsonLd data={postJsonLd({ post, type: 'problem', url: `https://solvr.dev/problems/${id}` })} />
       <Header />
       <main className="pt-20">
         <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8">
-          <ProblemDetailClient id={id} initialPost={data.data} />
+          <ProblemDetailClient id={id} initialPost={post} />
         </div>
       </main>
     </div>

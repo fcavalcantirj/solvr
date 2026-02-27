@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import AgentProfilePage from './page';
+import { AgentProfileClient } from '@/components/agents/agent-profile-client';
 
 // Mock Next.js navigation
 vi.mock('next/navigation', () => ({
@@ -26,7 +26,7 @@ vi.mock('@/hooks/use-auth', () => ({
 // Mock the useAgent hook
 const mockUseAgent = vi.fn();
 vi.mock('@/hooks/use-agent', () => ({
-  useAgent: () => mockUseAgent(),
+  useAgent: (...args: unknown[]) => mockUseAgent(...args),
 }));
 
 // Mock the useCheckpoints hook
@@ -146,7 +146,7 @@ function setupAgentMock(agentOverrides = {}) {
   });
 }
 
-describe('AgentProfilePage', () => {
+describe('AgentProfileClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseCheckpoints.mockReturnValue(emptyCheckpoints);
@@ -156,26 +156,26 @@ describe('AgentProfilePage', () => {
   describe('Model field display', () => {
     it('displays model when agent has model set', () => {
       setupAgentMock({ model: 'claude-opus-4' });
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       expect(screen.getByText('MODEL:')).toBeInTheDocument();
       expect(screen.getByText('claude-opus-4')).toBeInTheDocument();
     });
 
     it('does not display model section when model is null', () => {
       setupAgentMock({ model: null });
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       expect(screen.queryByText('MODEL:')).not.toBeInTheDocument();
     });
 
     it('does not display model section when model is empty string', () => {
       setupAgentMock({ model: '' });
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       expect(screen.queryByText('MODEL:')).not.toBeInTheDocument();
     });
 
     it('does not display model section when model is undefined', () => {
       setupAgentMock();
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       expect(screen.queryByText('MODEL:')).not.toBeInTheDocument();
     });
   });
@@ -188,7 +188,7 @@ describe('AgentProfilePage', () => {
         error: null,
         refetch: vi.fn(),
       });
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       expect(screen.getByText('Loading agent profile...')).toBeInTheDocument();
     });
   });
@@ -201,7 +201,7 @@ describe('AgentProfilePage', () => {
         error: 'Failed to fetch agent',
         refetch: vi.fn(),
       });
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       expect(screen.getByText('Failed to load agent profile')).toBeInTheDocument();
       expect(screen.getByText('Failed to fetch agent')).toBeInTheDocument();
     });
@@ -215,7 +215,7 @@ describe('AgentProfilePage', () => {
         error: null,
         refetch: vi.fn(),
       });
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       expect(screen.getByText('Agent not found')).toBeInTheDocument();
     });
   });
@@ -223,14 +223,14 @@ describe('AgentProfilePage', () => {
   describe('Agent display', () => {
     it('displays agent name and bio', () => {
       setupAgentMock();
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       expect(screen.getByText('Test Agent')).toBeInTheDocument();
       expect(screen.getByText('A test agent for testing')).toBeInTheDocument();
     });
 
     it('displays Human-Backed badge when hasHumanBackedBadge is true', () => {
       setupAgentMock({ hasHumanBackedBadge: true });
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       expect(screen.getByText('HUMAN-BACKED')).toBeInTheDocument();
     });
   });
@@ -238,14 +238,14 @@ describe('AgentProfilePage', () => {
   describe('Tab system', () => {
     it('renders ACTIVITY and RESURRECTION tabs below stats grid', () => {
       setupAgentMock();
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       expect(screen.getByRole('button', { name: 'ACTIVITY' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'RESURRECTION' })).toBeInTheDocument();
     });
 
     it('defaults to ACTIVITY tab with activity feed shown', () => {
       setupAgentMock();
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
 
       const activityTab = screen.getByRole('button', { name: 'ACTIVITY' });
       // Active tab should have bg-foreground styling
@@ -257,7 +257,7 @@ describe('AgentProfilePage', () => {
       mockUseCheckpoints.mockReturnValue(mockCheckpointsData);
       mockUseResurrectionBundle.mockReturnValue(mockBundleData);
 
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
 
       const resurrectionTab = screen.getByRole('button', { name: 'RESURRECTION' });
       fireEvent.click(resurrectionTab);
@@ -279,7 +279,7 @@ describe('AgentProfilePage', () => {
       mockUseCheckpoints.mockReturnValue(mockCheckpointsData);
       mockUseResurrectionBundle.mockReturnValue(mockBundleData);
 
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       fireEvent.click(screen.getByRole('button', { name: 'RESURRECTION' }));
 
       expect(screen.getByText('LATEST CHECKPOINT')).toBeInTheDocument();
@@ -292,7 +292,7 @@ describe('AgentProfilePage', () => {
       mockUseCheckpoints.mockReturnValue(mockCheckpointsData);
       mockUseResurrectionBundle.mockReturnValue(mockBundleData);
 
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       fireEvent.click(screen.getByRole('button', { name: 'RESURRECTION' }));
 
       // System meta keys (type, agent_id) should have emerald styling
@@ -304,7 +304,7 @@ describe('AgentProfilePage', () => {
       mockUseCheckpoints.mockReturnValue(emptyCheckpoints);
       mockUseResurrectionBundle.mockReturnValue(emptyBundle);
 
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       fireEvent.click(screen.getByRole('button', { name: 'RESURRECTION' }));
 
       expect(screen.getByText('NO CHECKPOINTS')).toBeInTheDocument();
@@ -317,7 +317,7 @@ describe('AgentProfilePage', () => {
       mockUseCheckpoints.mockReturnValue(mockCheckpointsData);
       mockUseResurrectionBundle.mockReturnValue(mockBundleData);
 
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       fireEvent.click(screen.getByRole('button', { name: 'RESURRECTION' }));
 
       expect(screen.getByText('KNOWLEDGE SUMMARY')).toBeInTheDocument();
@@ -342,7 +342,7 @@ describe('AgentProfilePage', () => {
         error: null,
       });
 
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       fireEvent.click(screen.getByRole('button', { name: 'RESURRECTION' }));
 
       // Should not crash; knowledge summary section should show 0 counts
@@ -357,7 +357,7 @@ describe('AgentProfilePage', () => {
       mockUseCheckpoints.mockReturnValue(mockCheckpointsData);
       mockUseResurrectionBundle.mockReturnValue(mockBundleData);
 
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       fireEvent.click(screen.getByRole('button', { name: 'RESURRECTION' }));
 
       expect(screen.getByText('KERI IDENTITY')).toBeInTheDocument();
@@ -381,7 +381,7 @@ describe('AgentProfilePage', () => {
         error: null,
       });
 
-      render(<AgentProfilePage />);
+      render(<AgentProfileClient id="test-agent-1" />);
       fireEvent.click(screen.getByRole('button', { name: 'RESURRECTION' }));
 
       expect(screen.queryByText('KERI IDENTITY')).not.toBeInTheDocument();

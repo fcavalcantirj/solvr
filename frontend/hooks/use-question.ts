@@ -127,16 +127,18 @@ interface APIAnswersResponse {
 /**
  * Hook to fetch a question and its answers from the API.
  * @param id - The question ID to fetch
+ * @param initialPost - Optional server-side fetched post data (for SSR/SEO)
  * @returns Question data, answers, loading state, error, and refetch function
  */
-export function useQuestion(id: string): UseQuestionResult {
-  const [question, setQuestion] = useState<QuestionData | null>(null);
+export function useQuestion(id: string, initialPost?: APIPost): UseQuestionResult {
+  const [question, setQuestion] = useState<QuestionData | null>(
+    initialPost ? transformQuestion(initialPost) : null
+  );
   const [answers, setAnswers] = useState<QuestionAnswer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialPost);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    // Don't fetch if no ID provided
     if (!id) {
       setLoading(false);
       return;
@@ -146,27 +148,34 @@ export function useQuestion(id: string): UseQuestionResult {
       setLoading(true);
       setError(null);
 
-      // Fetch question and answers in parallel
-      const [questionResponse, answersResponse] = await Promise.all([
-        api.getPost(id),
-        api.getQuestionAnswers(id),
-      ]);
+      if (initialPost) {
+        // Only fetch answers (question already loaded from SSR)
+        const answersResponse = await api.getQuestionAnswers(id);
+        const answersData = answersResponse?.data ?? [];
+        setAnswers(answersData.map(transformAnswer));
+      } else {
+        // Fetch question and answers in parallel
+        const [questionResponse, answersResponse] = await Promise.all([
+          api.getPost(id),
+          api.getQuestionAnswers(id),
+        ]);
 
-      // Transform and set question data
-      setQuestion(transformQuestion(questionResponse.data));
+        setQuestion(transformQuestion(questionResponse.data));
 
-      // FE-021: Defensive check - handle undefined/null data array
-      const answersData = answersResponse?.data ?? [];
-      const transformedAnswers = answersData.map(transformAnswer);
-      setAnswers(transformedAnswers);
+        // FE-021: Defensive check - handle undefined/null data array
+        const answersData = answersResponse?.data ?? [];
+        setAnswers(answersData.map(transformAnswer));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch question');
-      setQuestion(null);
+      if (!initialPost) {
+        setQuestion(null);
+      }
       setAnswers([]);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, initialPost]);
 
   useEffect(() => {
     fetchData();

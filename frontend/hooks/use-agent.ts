@@ -92,15 +92,18 @@ function transformAgent(
 /**
  * Hook to fetch a single agent profile from the API.
  * @param id - The agent ID to fetch
+ * @param initialAgentData - Optional server-side fetched agent data (for SSR/SEO)
  * @returns Agent data, loading state, error, and refetch function
  */
-export function useAgent(id: string): UseAgentResult {
-  const [agent, setAgent] = useState<AgentData | null>(null);
-  const [loading, setLoading] = useState(true);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function useAgent(id: string, initialAgentData?: any): UseAgentResult {
+  const [agent, setAgent] = useState<AgentData | null>(
+    initialAgentData ? transformAgent(initialAgentData.agent, initialAgentData.stats) : null
+  );
+  const [loading, setLoading] = useState(!initialAgentData);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    // Don't fetch if no ID provided
     if (!id) {
       setLoading(false);
       return;
@@ -114,15 +117,21 @@ export function useAgent(id: string): UseAgentResult {
       setAgent(transformAgent(response.data.agent, response.data.stats));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch agent');
-      setAgent(null);
+      if (!initialAgentData) {
+        setAgent(null);
+      }
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, initialAgentData]);
 
   useEffect(() => {
+    if (initialAgentData) {
+      setLoading(false);
+      return;
+    }
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, initialAgentData]);
 
   const refetch = useCallback(() => {
     fetchData();

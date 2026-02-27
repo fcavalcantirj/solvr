@@ -57,15 +57,17 @@ function transformIdea(post: APIPost): IdeaData {
 /**
  * Hook to fetch an idea from the API.
  * @param id - The idea ID to fetch
+ * @param initialPost - Optional server-side fetched post data (for SSR/SEO)
  * @returns Idea data, loading state, error, and refetch function
  */
-export function useIdea(id: string): UseIdeaResult {
-  const [idea, setIdea] = useState<IdeaData | null>(null);
-  const [loading, setLoading] = useState(true);
+export function useIdea(id: string, initialPost?: APIPost): UseIdeaResult {
+  const [idea, setIdea] = useState<IdeaData | null>(
+    initialPost ? transformIdea(initialPost) : null
+  );
+  const [loading, setLoading] = useState(!initialPost);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    // Don't fetch if no ID provided
     if (!id) {
       setLoading(false);
       return;
@@ -75,22 +77,25 @@ export function useIdea(id: string): UseIdeaResult {
       setLoading(true);
       setError(null);
 
-      // Fetch idea
       const response = await api.getPost(id);
-
-      // Transform and set idea data
       setIdea(transformIdea(response.data));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch idea');
-      setIdea(null);
+      if (!initialPost) {
+        setIdea(null);
+      }
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, initialPost]);
 
   useEffect(() => {
+    if (initialPost) {
+      setLoading(false);
+      return;
+    }
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, initialPost]);
 
   const refetch = useCallback(() => {
     fetchData();

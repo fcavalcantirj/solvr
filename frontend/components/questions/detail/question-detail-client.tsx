@@ -9,18 +9,20 @@ import { QuestionSidePanel } from "./question-side-panel";
 import { CommentsList } from "@/components/shared/comments-list";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
+import type { APIPost } from "@/lib/api-types";
 
 interface QuestionDetailClientProps {
   id: string;
+  initialPost?: APIPost;
 }
 
-export function QuestionDetailClient({ id }: QuestionDetailClientProps) {
-  const { question, answers, loading, error, refetch } = useQuestion(id);
+export function QuestionDetailClient({ id, initialPost }: QuestionDetailClientProps) {
+  const { question, answers, loading, error, refetch } = useQuestion(id, initialPost);
 
   // Track view when question is loaded
   useViewTracking(id, question?.views ?? 0, { enabled: !!question });
 
-  if (loading) {
+  if (loading && !initialPost) {
     return (
       <div className="flex items-center justify-center py-20">
         <Spinner className="w-8 h-8" />

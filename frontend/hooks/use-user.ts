@@ -89,12 +89,16 @@ function transformPost(post: APIPost): UserPostData {
 /**
  * Hook to fetch a user profile and their posts from the API.
  * @param id - The user ID to fetch
+ * @param initialUserData - Optional server-side fetched user data (for SSR/SEO)
  * @returns User data, posts, loading state, error, and refetch function
  */
-export function useUser(id: string): UseUserResult {
-  const [user, setUser] = useState<UserData | null>(null);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function useUser(id: string, initialUserData?: any): UseUserResult {
+  const [user, setUser] = useState<UserData | null>(
+    initialUserData ? transformUser(initialUserData) : null
+  );
   const [posts, setPosts] = useState<UserPostData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialUserData);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -108,27 +112,31 @@ export function useUser(id: string): UseUserResult {
       setLoading(true);
       setError(null);
 
-      // Fetch user profile and posts in parallel
-      const [profileResponse, postsResponse] = await Promise.all([
-        api.getUserProfile(id),
-        api.getUserPosts(id),
-      ]);
-
-      // Transform and set user data
-      setUser(transformUser(profileResponse.data));
-
-      // Defensive check - handle undefined/null data array
-      const postsData = postsResponse?.data ?? [];
-      const transformedPosts = postsData.map(transformPost);
-      setPosts(transformedPosts);
+      if (initialUserData) {
+        // SSR already provided user data — only fetch posts
+        const postsResponse = await api.getUserPosts(id);
+        const postsData = postsResponse?.data ?? [];
+        setPosts(postsData.map(transformPost));
+      } else {
+        // Fetch user profile and posts in parallel
+        const [profileResponse, postsResponse] = await Promise.all([
+          api.getUserProfile(id),
+          api.getUserPosts(id),
+        ]);
+        setUser(transformUser(profileResponse.data));
+        const postsData = postsResponse?.data ?? [];
+        setPosts(postsData.map(transformPost));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch user');
-      setUser(null);
+      if (!initialUserData) {
+        setUser(null);
+      }
       setPosts([]);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, initialUserData]);
 
   useEffect(() => {
     fetchData();

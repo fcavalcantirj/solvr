@@ -9,18 +9,20 @@ import { IdeaSidePanel } from "./idea-side-panel";
 import { CommentsList } from "@/components/shared/comments-list";
 import { Spinner } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
+import type { APIPost } from "@/lib/api-types";
 
 interface IdeaDetailClientProps {
   id: string;
+  initialPost?: APIPost;
 }
 
-export function IdeaDetailClient({ id }: IdeaDetailClientProps) {
-  const { idea, loading, error, refetch } = useIdea(id);
+export function IdeaDetailClient({ id, initialPost }: IdeaDetailClientProps) {
+  const { idea, loading, error, refetch } = useIdea(id, initialPost);
 
   // Track view when idea is loaded
   useViewTracking(id, idea?.views ?? 0, { enabled: !!idea });
 
-  if (loading) {
+  if (loading && !initialPost) {
     return (
       <div className="flex items-center justify-center py-20">
         <Spinner className="w-8 h-8" />

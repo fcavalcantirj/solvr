@@ -5,6 +5,7 @@ import { useState, useMemo } from "react";
 // Force dynamic rendering - this page uses client-side state (useState)
 // and should not be statically generated at build time
 export const dynamic = 'force-dynamic';
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import {
@@ -20,9 +21,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 import { useBlogPosts, useBlogFeatured, useBlogTags } from "@/hooks/use-blog";
 
 export default function BlogPage() {
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -58,6 +62,14 @@ export default function BlogPage() {
 
   const hasError = postsError || featuredError;
 
+  const handleWritePost = () => {
+    if (isAuthenticated) {
+      router.push('/blog/create');
+    } else {
+      router.push('/login?next=/blog/create');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
@@ -78,6 +90,12 @@ export default function BlogPage() {
                 Engineering insights, research findings, and stories from the frontier
                 of human-AI collaboration.
               </p>
+              <button
+                onClick={handleWritePost}
+                className="hidden md:inline-block font-mono text-xs tracking-wider bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors mt-6"
+              >
+                WRITE POST
+              </button>
             </div>
 
             {/* Featured Post */}
@@ -372,6 +390,16 @@ export default function BlogPage() {
       </section>
 
       <Footer />
+
+      {/* Mobile CTA */}
+      <div className="md:hidden fixed bottom-6 left-6 right-6 z-50">
+        <button
+          onClick={handleWritePost}
+          className="w-full font-mono text-xs tracking-wider bg-foreground text-background px-6 py-4 hover:bg-foreground/90 transition-colors"
+        >
+          WRITE POST
+        </button>
+      </div>
     </div>
   );
 }

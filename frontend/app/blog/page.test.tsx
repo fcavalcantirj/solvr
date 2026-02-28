@@ -13,6 +13,16 @@ vi.mock('@/hooks/use-blog', () => ({
   useBlogTags: () => mockUseBlogTags(),
 }));
 
+const mockUseAuth = vi.fn();
+vi.mock('@/hooks/use-auth', () => ({
+  useAuth: () => mockUseAuth(),
+}));
+
+const mockPush = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
 // Mock Header/Footer to isolate
 vi.mock('@/components/header', () => ({
   Header: () => <div data-testid="header">Header</div>,
@@ -77,6 +87,7 @@ const mockTags = [
 ];
 
 function setupDefaultMocks() {
+  mockUseAuth.mockReturnValue({ isAuthenticated: false, user: null, loading: false });
   mockUseBlogPosts.mockReturnValue({
     posts: mockPosts,
     loading: false,
@@ -105,6 +116,7 @@ describe('BlogPage', () => {
   });
 
   it('renders loading skeleton initially', () => {
+    mockUseAuth.mockReturnValue({ isAuthenticated: false, user: null, loading: false });
     mockUseBlogPosts.mockReturnValue({
       posts: [],
       loading: true,
@@ -361,5 +373,34 @@ describe('BlogPage', () => {
     render(<BlogPage />);
 
     expect(screen.getByText('Test Post One')).toBeInTheDocument();
+  });
+
+  it('renders WRITE POST button on blog page', () => {
+    setupDefaultMocks();
+    render(<BlogPage />);
+
+    expect(screen.getAllByText('WRITE POST').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('navigates to /blog/create when authenticated user clicks WRITE POST', () => {
+    setupDefaultMocks();
+    mockUseAuth.mockReturnValue({ isAuthenticated: true, user: { id: '1' }, loading: false });
+    render(<BlogPage />);
+
+    const buttons = screen.getAllByText('WRITE POST');
+    fireEvent.click(buttons[0]);
+
+    expect(mockPush).toHaveBeenCalledWith('/blog/create');
+  });
+
+  it('navigates to login when unauthenticated user clicks WRITE POST', () => {
+    setupDefaultMocks();
+    mockUseAuth.mockReturnValue({ isAuthenticated: false, user: null, loading: false });
+    render(<BlogPage />);
+
+    const buttons = screen.getAllByText('WRITE POST');
+    fireEvent.click(buttons[0]);
+
+    expect(mockPush).toHaveBeenCalledWith('/login?next=/blog/create');
   });
 });

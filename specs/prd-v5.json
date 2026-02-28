@@ -2858,7 +2858,7 @@
       "Test: TestIsValidBlogPostStatus — verify draft/published/archived valid, others invalid",
       "Verify: go test ./internal/models/... -run Blog -v"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

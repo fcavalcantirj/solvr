@@ -87,6 +87,52 @@ export function agentJsonLd({
   };
 }
 
+/** Schema for blog post pages */
+export function blogPostJsonLd({
+  post,
+  url,
+}: {
+  post: {
+    title: string;
+    body: string;
+    excerpt?: string;
+    created_at: string;
+    updated_at: string;
+    published_at?: string;
+    tags?: string[];
+    author?: { display_name: string };
+  };
+  url: string;
+}) {
+  const description = post.excerpt
+    ? post.excerpt
+    : post.body
+      ? post.body.replace(/[#*`\[\]]/g, '').slice(0, 300)
+      : 'A blog post on Solvr';
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: post.title,
+    description,
+    datePublished: post.published_at || post.created_at,
+    dateModified: post.updated_at,
+    author: post.author
+      ? { '@type': 'Person', name: post.author.display_name }
+      : undefined,
+    keywords: post.tags?.join(', '),
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': url,
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Solvr',
+      url: 'https://solvr.dev',
+    },
+  };
+}
+
 /** Schema for user profile pages */
 export function userJsonLd({
   user,

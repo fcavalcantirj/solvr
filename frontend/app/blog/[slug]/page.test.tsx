@@ -1,18 +1,11 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import BlogPostPage from './page';
+import { BlogPostContent } from './blog-post-content';
 
 // Mock next/navigation
-const mockUseParams = vi.fn();
 vi.mock('next/navigation', () => ({
-  useParams: () => mockUseParams(),
+  useParams: () => ({ slug: 'test-blog-post' }),
   notFound: vi.fn(),
-}));
-
-// Mock blog hooks
-const mockUseBlogPost = vi.fn();
-vi.mock('@/hooks/use-blog', () => ({
-  useBlogPost: (...args: unknown[]) => mockUseBlogPost(...args),
 }));
 
 // Mock Header/Footer
@@ -82,12 +75,6 @@ const mockAIPost = {
 };
 
 function setupDefaults() {
-  mockUseParams.mockReturnValue({ slug: 'test-blog-post' });
-  mockUseBlogPost.mockReturnValue({
-    post: mockPost,
-    loading: false,
-    error: null,
-  });
   mockUseAuth.mockReturnValue({
     user: { id: 'user-1', username: 'alice' },
     isAuthenticated: true,
@@ -100,14 +87,14 @@ function setupDefaults() {
   mockVoteBlogPost.mockResolvedValue({ data: { vote_score: 43, upvotes: 43, downvotes: 0, user_vote: 'up' } });
 }
 
-describe('BlogPostPage', () => {
+describe('BlogPostContent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('renders blog post title and body', () => {
     setupDefaults();
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     expect(screen.getByText('Test Blog Post Title')).toBeInTheDocument();
     expect(screen.getByTestId('markdown-content')).toBeInTheDocument();
@@ -115,19 +102,14 @@ describe('BlogPostPage', () => {
 
   it('renders author info with type badge', () => {
     setupDefaults();
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     expect(screen.getByText('Alice Developer')).toBeInTheDocument();
   });
 
   it('renders AI author with AI badge', () => {
     setupDefaults();
-    mockUseBlogPost.mockReturnValue({
-      post: mockAIPost,
-      loading: false,
-      error: null,
-    });
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockAIPost} />);
 
     expect(screen.getByText('Claudius')).toBeInTheDocument();
     // AI type badge
@@ -137,7 +119,7 @@ describe('BlogPostPage', () => {
 
   it('renders tags as links', () => {
     setupDefaults();
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     const tagLinks = screen.getAllByRole('link').filter(
       (link) => link.getAttribute('href')?.startsWith('/blog?tag=')
@@ -150,57 +132,15 @@ describe('BlogPostPage', () => {
 
   it('renders read time and date', () => {
     setupDefaults();
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     expect(screen.getByText('5 min read')).toBeInTheDocument();
     expect(screen.getByText('Feb 15, 2026')).toBeInTheDocument();
   });
 
-  it('renders loading skeleton when loading', () => {
-    mockUseParams.mockReturnValue({ slug: 'test-blog-post' });
-    mockUseBlogPost.mockReturnValue({
-      post: null,
-      loading: true,
-      error: null,
-    });
-    mockUseAuth.mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      showAuthModal: false,
-      authModalMessage: '',
-      setShowAuthModal: vi.fn(),
-    });
-
-    render(<BlogPostPage />);
-
-    expect(screen.getByTestId('blog-post-skeleton')).toBeInTheDocument();
-  });
-
-  it('renders error state when post not found', () => {
-    mockUseParams.mockReturnValue({ slug: 'nonexistent-slug' });
-    mockUseBlogPost.mockReturnValue({
-      post: null,
-      loading: false,
-      error: 'Not found',
-    });
-    mockUseAuth.mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      showAuthModal: false,
-      authModalMessage: '',
-      setShowAuthModal: vi.fn(),
-    });
-
-    render(<BlogPostPage />);
-
-    expect(screen.getByText(/not found|error/i)).toBeInTheDocument();
-  });
-
   it('renders Back to Blog link', () => {
     setupDefaults();
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     const backLink = screen.getByRole('link', { name: /back to blog/i });
     expect(backLink).toHaveAttribute('href', '/blog');
@@ -208,7 +148,7 @@ describe('BlogPostPage', () => {
 
   it('renders vote buttons', () => {
     setupDefaults();
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     expect(screen.getByTestId('vote-up')).toBeInTheDocument();
     expect(screen.getByTestId('vote-down')).toBeInTheDocument();
@@ -217,7 +157,7 @@ describe('BlogPostPage', () => {
 
   it('handles vote up click', async () => {
     setupDefaults();
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     const upButton = screen.getByTestId('vote-up');
     fireEvent.click(upButton);
@@ -229,7 +169,7 @@ describe('BlogPostPage', () => {
 
   it('records view on mount', async () => {
     setupDefaults();
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     await waitFor(() => {
       expect(mockRecordBlogView).toHaveBeenCalledWith('test-blog-post');
@@ -238,26 +178,20 @@ describe('BlogPostPage', () => {
 
   it('renders view count', () => {
     setupDefaults();
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     expect(screen.getByText(/256/)).toBeInTheDocument();
   });
 
   it('renders share button', () => {
     setupDefaults();
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     expect(screen.getByTestId('share-button')).toBeInTheDocument();
   });
 
   it('shows auth modal when unauthenticated user votes', async () => {
     const mockSetShowAuthModal = vi.fn();
-    mockUseParams.mockReturnValue({ slug: 'test-blog-post' });
-    mockUseBlogPost.mockReturnValue({
-      post: mockPost,
-      loading: false,
-      error: null,
-    });
     mockUseAuth.mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -268,7 +202,7 @@ describe('BlogPostPage', () => {
     });
     mockRecordBlogView.mockResolvedValue(undefined);
 
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     const upButton = screen.getByTestId('vote-up');
     fireEvent.click(upButton);
@@ -286,7 +220,7 @@ describe('BlogPostPage', () => {
       clipboard: { writeText: mockWriteText },
     });
 
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     const shareBtn = screen.getByTestId('share-button');
     fireEvent.click(shareBtn);
@@ -304,7 +238,7 @@ describe('BlogPostPage', () => {
     setupDefaults();
     mockVoteBlogPost.mockResolvedValue({ data: { vote_score: 41, upvotes: 42, downvotes: 1, user_vote: 'down' } });
 
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     const downButton = screen.getByTestId('vote-down');
     fireEvent.click(downButton);
@@ -318,7 +252,7 @@ describe('BlogPostPage', () => {
     setupDefaults();
     mockVoteBlogPost.mockRejectedValue(new Error('Vote failed'));
 
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={mockPost} />);
 
     const upButton = screen.getByTestId('vote-up');
     fireEvent.click(upButton);
@@ -334,34 +268,8 @@ describe('BlogPostPage', () => {
   it('renders post without cover image', () => {
     setupDefaults();
     const noCoverPost = { ...mockPost, coverImageUrl: undefined };
-    mockUseBlogPost.mockReturnValue({
-      post: noCoverPost,
-      loading: false,
-      error: null,
-    });
-    render(<BlogPostPage />);
+    render(<BlogPostContent post={noCoverPost} />);
 
     expect(screen.getByText('Test Blog Post Title')).toBeInTheDocument();
-  });
-
-  it('renders null post state (no post and no error)', () => {
-    mockUseParams.mockReturnValue({ slug: 'test-slug' });
-    mockUseBlogPost.mockReturnValue({
-      post: null,
-      loading: false,
-      error: null,
-    });
-    mockUseAuth.mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      showAuthModal: false,
-      authModalMessage: '',
-      setShowAuthModal: vi.fn(),
-    });
-
-    render(<BlogPostPage />);
-
-    expect(screen.getByText('Post not found')).toBeInTheDocument();
   });
 });

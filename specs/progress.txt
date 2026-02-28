@@ -1,3 +1,15 @@
+2026-02-27: PRD-v5 Backend - Register blog endpoints in router.go
+- Modified: backend/internal/api/router.go (+26 lines, 1021→1047)
+  * Added blogHandler instantiation: db.NewBlogPostRepository(pool) + handlers.NewBlogHandler
+  * Wired content moderation service (GROQ_API_KEY check, reuse pattern)
+  * Public routes with OptionalAuthMiddleware: GET /blog, GET /blog/{slug}
+  * Public routes (no auth): GET /blog/featured, GET /blog/tags, POST /blog/{slug}/view
+  * Authenticated routes inside UnifiedAuthMiddleware group: POST /blog, PATCH /blog/{slug}, DELETE /blog/{slug}, POST /blog/{slug}/vote
+  * /blog/featured and /blog/tags registered BEFORE /blog/{slug} to avoid slug collision
+- Verified: go build ./cmd/api — builds successfully
+- Verified: go test ./... — full suite passes
+- Verified: go run ./cmd/api — starts without errors
+
 2026-02-27: PRD-v5 Backend - Create BlogHandler + TDD tests for blog HTTP endpoints
 - Created: backend/internal/api/handlers/blog.go (~600 lines)
   * BlogPostRepositoryInterface with 11 methods (List, FindBySlug, FindBySlugForViewer, Create, Update, Delete, Vote, IncrementViewCount, ListTags, GetFeatured, SlugExists)

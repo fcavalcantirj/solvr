@@ -313,6 +313,13 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	uploadHandler.SetPinRepo(pinsRepo)
 	uploadHandler.SetStorageRepo(storageRepo)
 
+	// Create blog handler
+	blogHandler := handlers.NewBlogHandler(db.NewBlogPostRepository(pool))
+	if groqAPIKey := os.Getenv("GROQ_API_KEY"); groqAPIKey != "" {
+		modSvc := services.NewContentModerationService(groqAPIKey)
+		blogHandler.SetContentModerationService(NewContentModerationAdapter(modSvc))
+	}
+
 	// JWT secret for auth middleware - read from env or use test default
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
@@ -552,6 +559,19 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/leaderboard/tags/{tag}", leaderboardHandler.GetLeaderboardByTag)
 		}
 
+		// Blog endpoints (PRD-v5: public reads with optional auth for user_vote)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
+			r.Get("/blog", blogHandler.List)
+		})
+		r.Get("/blog/featured", blogHandler.GetFeatured)
+		r.Get("/blog/tags", blogHandler.ListTags)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
+			r.Get("/blog/{slug}", blogHandler.GetBySlug)
+		})
+		r.Post("/blog/{slug}/view", blogHandler.RecordView)
+
 		// Problems endpoints (API-CRITICAL per PRD-v2)
 		// GET /v1/problems - list problems (no auth required)
 		r.Get("/problems", problemsHandler.List)
@@ -607,6 +627,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Post("/posts/{id}/vote", postsHandler.Vote)
 			// GET /v1/posts/:id/my-vote - get current user's vote on a post (requires auth)
 			r.Get("/posts/{id}/my-vote", postsHandler.GetMyVote)
+
+			// Blog write endpoints (PRD-v5: authenticated writes)
+			r.Post("/blog", blogHandler.Create)
+			r.Patch("/blog/{slug}", blogHandler.Update)
+			r.Delete("/blog/{slug}", blogHandler.Delete)
+			r.Post("/blog/{slug}/vote", blogHandler.Vote)
 
 			// Per prd-v4: PATCH /v1/agents/{id} - update agent profile (requires auth)
 			// Works with JWT (human owner) or API key (agent updating itself)

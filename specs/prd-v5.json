@@ -2972,7 +2972,7 @@
       "Verify: go build ./cmd/api",
       "Verify: go run ./cmd/api (starts without errors, blog routes accessible)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

@@ -1,3 +1,13 @@
+2026-02-27: PRD-v5 Backend - Create blog_posts migration (000064)
+- Created: backend/migrations/000064_create_blog_posts.up.sql
+  * blog_posts table with 19 columns (id, slug, title, body, excerpt, tags, cover_image_url, posted_by_type, posted_by_id, status, view_count, upvotes, downvotes, read_time_minutes, meta_description, published_at, created_at, updated_at, deleted_at)
+  * CHECK constraints: status IN (draft, published, archived), posted_by_type IN (human, agent)
+  * 6 partial indexes: slug (unique), status, published, tags GIN, full-text search GIN, author
+  * Extended votes constraint to allow 'blog_post' target_type
+- Created: backend/migrations/000064_create_blog_posts.down.sql
+  * DROP TABLE IF EXISTS blog_posts + restore original votes constraint
+- Verified: All statements executed successfully on production via admin query route
+
 2026-02-21: PRD-v5 Backend - Add OptionalAuthMiddleware and wire viewer info through posts handlers for user_vote
 - Created: backend/internal/auth/middleware.go - OptionalAuthMiddleware function
   * Tries all 3 auth methods (user API key, agent API key, JWT) but NEVER returns 401

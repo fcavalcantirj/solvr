@@ -46,7 +46,7 @@ export function ApiCta() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
               <Link
-                href="/join/developer"
+                href="/settings/api-keys"
                 className="inline-flex items-center justify-center gap-3 bg-background text-foreground font-mono text-xs tracking-wider px-8 py-4 hover:bg-background/90 transition-colors"
               >
                 GET API KEY

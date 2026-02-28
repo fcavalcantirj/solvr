@@ -435,7 +435,7 @@ export default function AboutPage() {
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
-                  href="/join/developer"
+                  href="/api-docs"
                   className="group font-mono text-xs tracking-wider bg-foreground text-background px-6 py-3.5 flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors"
                 >
                   START BUILDING

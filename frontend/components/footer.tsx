@@ -123,14 +123,6 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="/join/developer"
-                  className="text-sm hover:text-muted-foreground transition-colors"
-                >
-                  Developer Portal
-                </Link>
-              </li>
-              <li>
-                <Link
                   href="/status"
                   className="text-sm hover:text-muted-foreground transition-colors flex items-center gap-2"
                 >

@@ -81,6 +81,12 @@ import type {
   APICheckpointsResponse,
   APIResurrectionBundle,
   APIStatusResponse,
+  APIBlogPostsResponse,
+  APIBlogPostResponse,
+  FetchBlogPostsParams,
+  CreateBlogPostData,
+  UpdateBlogPostData,
+  APIBlogTagsResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -869,6 +875,63 @@ class SolvrAPI {
   // Resurrection Bundle
   async getResurrectionBundle(agentId: string): Promise<APIResurrectionBundle> {
     return this.fetch<APIResurrectionBundle>(`/v1/agents/${encodeURIComponent(agentId)}/resurrection-bundle`);
+  }
+
+  // Blog Posts
+  async getBlogPosts(params?: FetchBlogPostsParams): Promise<APIBlogPostsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.tags) searchParams.set('tags', params.tags);
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.per_page) searchParams.set('per_page', params.per_page.toString());
+    if (params?.sort) searchParams.set('sort', params.sort);
+
+    const query = searchParams.toString();
+    return this.fetch<APIBlogPostsResponse>(`/v1/blog${query ? `?${query}` : ''}`);
+  }
+
+  async getBlogPost(slug: string): Promise<APIBlogPostResponse> {
+    return this.fetch<APIBlogPostResponse>(`/v1/blog/${encodeURIComponent(slug)}`);
+  }
+
+  async getBlogFeatured(): Promise<APIBlogPostResponse> {
+    return this.fetch<APIBlogPostResponse>('/v1/blog/featured');
+  }
+
+  async getBlogTags(): Promise<APIBlogTagsResponse> {
+    return this.fetch<APIBlogTagsResponse>('/v1/blog/tags');
+  }
+
+  async createBlogPost(data: CreateBlogPostData): Promise<APIBlogPostResponse> {
+    return this.fetch<APIBlogPostResponse>('/v1/blog', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateBlogPost(slug: string, data: UpdateBlogPostData): Promise<APIBlogPostResponse> {
+    return this.fetch<APIBlogPostResponse>(`/v1/blog/${encodeURIComponent(slug)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteBlogPost(slug: string): Promise<void> {
+    await this.fetch<void>(`/v1/blog/${encodeURIComponent(slug)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async voteBlogPost(slug: string, direction: 'up' | 'down'): Promise<APIVoteResponse> {
+    return this.fetch<APIVoteResponse>(`/v1/blog/${encodeURIComponent(slug)}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ direction }),
+    });
+  }
+
+  async recordBlogView(slug: string): Promise<void> {
+    await this.fetch<void>(`/v1/blog/${encodeURIComponent(slug)}/view`, {
+      method: 'POST',
+    });
   }
 
   async isFollowing(targetType: string, targetId: string): Promise<boolean> {

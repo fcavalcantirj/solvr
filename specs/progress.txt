@@ -1,3 +1,27 @@
+2026-02-28: PRD-v5 Frontend - Add BlogPost types and API client methods
+- Added to lib/api-types.ts:
+  * APIBlogPost interface with all 21 fields matching backend model
+  * APIBlogPostsResponse with paginated meta
+  * APIBlogPostResponse for single post
+  * FetchBlogPostsParams (tags, page, per_page, sort)
+  * CreateBlogPostData (title, slug, body, excerpt, tags, cover_image_url, status, meta_description)
+  * UpdateBlogPostData (partial update fields)
+  * APIBlogTagsResponse with name/count array
+  * APISitemapBlogPost (slug, updated_at) for sitemap
+  * Updated APISitemapResponse to include optional blog_posts array
+  * Updated APISitemapCountsResponse to include optional blog_posts count
+- Added to lib/api.ts (SolvrAPI class):
+  * getBlogPosts(params?) — GET /v1/blog with query params
+  * getBlogPost(slug) — GET /v1/blog/{slug}
+  * getBlogFeatured() — GET /v1/blog/featured
+  * getBlogTags() — GET /v1/blog/tags
+  * createBlogPost(data) — POST /v1/blog
+  * updateBlogPost(slug, data) — PATCH /v1/blog/{slug}
+  * deleteBlogPost(slug) — DELETE /v1/blog/{slug}
+  * voteBlogPost(slug, direction) — POST /v1/blog/{slug}/vote
+  * recordBlogView(slug) — POST /v1/blog/{slug}/view
+- Verified: npx tsc --noEmit — no new errors (only pre-existing test file errors)
+
 2026-02-28: PRD-v5 Backend - Add blog_posts to sitemap URLs, counts, and paginated queries
 - Added SitemapBlogPost model (slug, updated_at) to models/sitemap.go
 - Added BlogPosts field to SitemapURLs and SitemapCounts structs

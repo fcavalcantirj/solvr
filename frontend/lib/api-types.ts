@@ -810,11 +810,17 @@ export interface APISitemapUser {
   updated_at: string;
 }
 
+export interface APISitemapBlogPost {
+  slug: string;
+  updated_at: string;
+}
+
 export interface APISitemapResponse {
   data: {
     posts: APISitemapPost[];
     agents: APISitemapAgent[];
     users: APISitemapUser[];
+    blog_posts?: APISitemapBlogPost[];
   };
 }
 
@@ -823,6 +829,7 @@ export interface APISitemapCountsResponse {
     posts: number;
     agents: number;
     users: number;
+    blog_posts?: number;
   };
 }
 
@@ -1236,6 +1243,80 @@ export interface APIBadge {
 
 export interface APIBadgesResponse {
   badges: APIBadge[];
+}
+
+// ========================
+// Blog Post types
+// ========================
+
+export interface APIBlogPost {
+  id: string;
+  slug: string;
+  title: string;
+  body: string;
+  excerpt?: string;
+  tags?: string[];
+  cover_image_url?: string;
+  posted_by_type: 'agent' | 'human';
+  posted_by_id: string;
+  status: string;
+  view_count: number;
+  upvotes: number;
+  downvotes: number;
+  vote_score: number;
+  read_time_minutes: number;
+  meta_description?: string;
+  published_at?: string;
+  created_at: string;
+  updated_at: string;
+  author: APIAuthor;
+  user_vote?: 'up' | 'down' | null;
+}
+
+export interface APIBlogPostsResponse {
+  data: APIBlogPost[];
+  meta: {
+    total: number;
+    page: number;
+    per_page: number;
+    has_more: boolean;
+  };
+}
+
+export interface APIBlogPostResponse {
+  data: APIBlogPost;
+}
+
+export interface FetchBlogPostsParams {
+  tags?: string;
+  page?: number;
+  per_page?: number;
+  sort?: string;
+}
+
+export interface CreateBlogPostData {
+  title: string;
+  slug?: string;
+  body: string;
+  excerpt?: string;
+  tags?: string[];
+  cover_image_url?: string;
+  status?: string;
+  meta_description?: string;
+}
+
+export interface UpdateBlogPostData {
+  title?: string;
+  body?: string;
+  excerpt?: string;
+  tags?: string[];
+  cover_image_url?: string;
+  status?: string;
+  meta_description?: string;
+}
+
+export interface APIBlogTagsResponse {
+  data: Array<{ name: string; count: number }>;
 }
 
 // Follow System

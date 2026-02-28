@@ -3019,7 +3019,7 @@
       "Add recordBlogView(slug) method",
       "Verify: npx tsc --noEmit passes with no type errors"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

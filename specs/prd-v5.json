@@ -2892,7 +2892,7 @@
       "Test: TestBlogPostRepository_ListTags — verify tag aggregation",
       "Verify: go test ./internal/db/... -run BlogPost -v"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

@@ -1,3 +1,34 @@
+2026-02-27: PRD-v5 Backend - Create BlogPostRepository with CRUD, list, featured, voting, view tracking, tags
+- Created: backend/internal/db/blog_posts.go (~490 lines)
+  * BlogPostRepository struct with pool *Pool, NewBlogPostRepository constructor
+  * Create(ctx, post) — INSERT with auto UUID, auto read_time, auto excerpt, default draft status
+  * FindBySlug(ctx, slug) / FindBySlugForViewer(ctx, slug, viewerType, viewerID) — with author JOINs
+  * Update(ctx, post) — UPDATE mutable fields, auto-set published_at on publish transition
+  * Delete(ctx, slug) — soft delete (SET deleted_at = NOW())
+  * List(ctx, opts) — dynamic filters (status, tags &&, author), pagination, sorting (newest/popular/published)
+  * Vote(ctx, blogPostID, voterType, voterID, direction) — atomic insert/update with counter adjustment
+  * IncrementViewCount(ctx, slug) — view_count + 1
+  * GetFeatured(ctx) — engagement score formula with time decay
+  * ListTags(ctx) — UNNEST(tags) GROUP BY with counts from published posts
+  * SlugExists(ctx, slug) — SELECT EXISTS check
+  * Error sentinels: ErrBlogPostNotFound, ErrDuplicateSlug
+- Created: backend/internal/db/blog_posts_test.go (~400 lines, 13 integration tests)
+  * TestBlogPostRepository_Create — insert and verify returned fields
+  * TestBlogPostRepository_Create_DuplicateSlug — unique constraint violation
+  * TestBlogPostRepository_FindBySlug — fetch with author join + not found
+  * TestBlogPostRepository_FindBySlugForViewer — viewer vote context
+  * TestBlogPostRepository_Update — field update + published_at auto-set
+  * TestBlogPostRepository_Delete — soft delete + double delete
+  * TestBlogPostRepository_List — pagination and sorting
+  * TestBlogPostRepository_ListFilterByTag — tag overlap filtering
+  * TestBlogPostRepository_GetFeatured — engagement score ranking
+  * TestBlogPostRepository_Vote — insert, idempotent, switch direction, invalid inputs
+  * TestBlogPostRepository_IncrementViewCount — counter increment + not found
+  * TestBlogPostRepository_ListTags — tag aggregation from published posts
+  * TestBlogPostRepository_SlugExists — existence check before/after creation
+- Verified: go test ./internal/db/... -run BlogPost -v — all 13 tests pass
+- Verified: go test ./... — full suite passes (only pre-existing GitHub OAuth failures)
+
 2026-02-27: PRD-v5 Backend - Create BlogPost model with TDD tests
 - Created: backend/internal/models/blog_post.go
   * BlogPostStatus type with constants: Draft, Published, Archived

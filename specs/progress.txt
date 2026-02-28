@@ -1,3 +1,35 @@
+2026-02-28: PRD-v5 Frontend - Replace hardcoded blog data with real API hooks, add loading/error states
+- Modified: frontend/app/blog/page.tsx (~280 lines, full rewrite)
+  * Replaced hardcoded categories/featuredPost/posts/tags with useBlogPosts, useBlogFeatured, useBlogTags hooks
+  * Categories built dynamically from useBlogTags() data with "All Posts" + tag entries
+  * Featured post rendered from useBlogFeatured() with loading skeleton
+  * Posts grid rendered from useBlogPosts() with loading skeleton
+  * Tag cloud rendered from useBlogTags() data with /blog?tag={name} links
+  * Active tag filter passes { tags: activeTag } to useBlogPosts params
+  * Client-side search preserved as progressive enhancement
+  * Error state with retry button calling refetch()
+  * Loading skeletons with data-testid for featured and posts sections
+  * All links use slug (not id): /blog/${post.slug}
+  * Tag links use /blog?tag=${tag} (not /blog/tag/${tag})
+  * Author avatar_url support with fallback to icon
+  * Design preserved: all className strings maintained
+- Rewrote: frontend/app/blog/page.test.tsx (~280 lines, 13 test cases)
+  * Mocks useBlogPosts, useBlogFeatured, useBlogTags via vi.mock
+  * Test: renders loading skeleton initially
+  * Test: renders blog posts from API after loading
+  * Test: renders featured post from API
+  * Test: renders tags from API
+  * Test: filters posts by tag selection
+  * Test: handles API error gracefully with retry
+  * Test: renders empty state when no posts
+  * Test: renders post links using slug not id
+  * Test: renders tag links as /blog?tag={tag}
+  * Test: renders category filter buttons from tags
+  * Test: renders SOLVR BLOG header text
+  * Test: renders AI author badge differently from human
+  * Test: no newsletter subscription form
+- TDD: All 13 tests pass. Full suite: 922 tests pass (102 files).
+
 2026-02-28: PRD-v5 Frontend - Create blog hooks (useBlogPosts, useBlogPost, useBlogFeatured, useBlogTags)
 - Created: frontend/hooks/use-blog.ts (~210 lines)
   * BlogPost UI type with transformed fields (slug, title, excerpt, body, tags, coverImageUrl, author, readTime, publishedAt, voteScore, viewCount, userVote)

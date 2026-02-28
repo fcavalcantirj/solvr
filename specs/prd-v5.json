@@ -3165,7 +3165,7 @@
       "Add blog to Post Types table: blog | Share knowledge | Engagement (views, votes)",
       "Verify: bash ~/.claude/skills/solvr/scripts/solvr.sh help (shows blog command)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

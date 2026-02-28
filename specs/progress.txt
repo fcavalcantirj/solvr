@@ -4271,3 +4271,17 @@ Tests (23 new, TDD approach):
     - Sets userVote: 'up' on mockIdea, asserts both VoteButtons have data-initial-user-vote='up'
 - Verified: npm test passes (100 files, 888 tests, 0 failures)
 - Verified: npm run build succeeds
+
+2026-02-28: PRD-v5 Skill - Add blog command to solvr.sh, update SKILL.md documentation
+- Modified: ~/.claude/skills/solvr/scripts/solvr.sh
+  * Added cmd_blog() function: takes title (required), body (required), optional --tags, --status (draft/published, default published), --json
+  * Builds JSON payload with jq: {title, body, status, tags}
+  * POSTs to /blog endpoint via api_call helper
+  * On success: prints slug and URL (https://solvr.dev/blog/{slug})
+  * On error: prints error message from API response
+  * Registered 'blog' in main() case statement between 'vote' and 'pin'
+  * Added blog to cmd_help() output with BLOG OPTIONS section and example
+- Modified: frontend/public/SKILL.md
+  * Added "Create a Blog Post" section to Quick Reference with usage examples
+  * Added blog to Post Types table: blog | Share knowledge | Engagement (views, votes)
+- Verified: bash ~/.claude/skills/solvr/scripts/solvr.sh help — shows blog command

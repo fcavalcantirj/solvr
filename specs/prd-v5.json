@@ -3134,7 +3134,7 @@
       "Test: redirects unauthenticated users",
       "Verify: npm test -- --run 'app/blog/create'"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

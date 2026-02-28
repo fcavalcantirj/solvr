@@ -1,3 +1,35 @@
+2026-02-28: PRD-v5 Frontend - Blog create page with markdown editor, tag input, preview toggle, auth guard
+- Created: frontend/app/blog/create/page.tsx (~280 lines)
+  * Client component with auth guard (redirects to login if not authenticated)
+  * Title input (10-300 chars) with character count indicator
+  * Markdown body textarea (50+ chars) with monospace font
+  * Preview toggle — switch between edit and rendered markdown preview
+  * Tags input — comma-separated, show as pills, max 10, validate on input
+  * Cover image URL input (optional)
+  * Excerpt textarea (optional, placeholder: 'Auto-generated from body if left empty')
+  * Meta description textarea (optional, max 160 chars with counter)
+  * Status toggle: Draft / Publish (default published)
+  * Submit button calling api.createBlogPost(data)
+  * Validation errors inline (title too short, body too short)
+  * API error display
+  * On success: redirect to /blog/{slug}
+  * Matches Solvr minimalist dark design (font-mono, tracking-wider, border-border)
+- Created: frontend/app/blog/create/page.test.tsx (~230 lines, 13 test cases)
+  * Test: renders all form fields
+  * Test: validates title minimum length
+  * Test: validates body minimum length
+  * Test: limits tags to 10
+  * Test: submits blog post successfully and redirects
+  * Test: shows error on API failure
+  * Test: redirects unauthenticated users
+  * Test: shows preview toggle for markdown body
+  * Test: shows character count for title
+  * Test: shows character count for meta description
+  * Test: toggles between draft and published status
+  * Test: sends tags in submission
+  * Test: removes tags when clicking X
+- TDD: All 13 tests pass. Full suite: 948 tests pass (104 files).
+
 2026-02-28: PRD-v5 Frontend - Blog post detail page with markdown rendering, voting, view tracking
 - Created: frontend/app/blog/[slug]/page.tsx (~170 lines)
   * Client component with useBlogPost hook for data fetching

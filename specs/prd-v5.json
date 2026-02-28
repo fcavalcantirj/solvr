@@ -3198,6 +3198,6 @@
       "Verify blog-related coverage is 80%+ in coverage report",
       "Fix any coverage gaps found"
     ],
-    "passes": false
+    "passes": true
   }
 ]

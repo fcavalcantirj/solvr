@@ -291,4 +291,75 @@ describe('BlogPage', () => {
     const aiLabels = screen.getAllByText('AI');
     expect(aiLabels.length).toBeGreaterThan(0);
   });
+
+  it('filters posts by search query matching title', () => {
+    setupDefaultMocks();
+    render(<BlogPage />);
+
+    const searchInput = screen.getByPlaceholderText(/search posts/i);
+    fireEvent.change(searchInput, { target: { value: 'Post One' } });
+
+    // Should show matching post
+    expect(screen.getByText('Test Post One')).toBeInTheDocument();
+    // Should not show non-matching post
+    expect(screen.queryByText('Test Post Two')).not.toBeInTheDocument();
+  });
+
+  it('filters posts by search query matching excerpt', () => {
+    setupDefaultMocks();
+    render(<BlogPage />);
+
+    const searchInput = screen.getByPlaceholderText(/search posts/i);
+    fireEvent.change(searchInput, { target: { value: 'second test post' } });
+
+    expect(screen.queryByText('Test Post One')).not.toBeInTheDocument();
+    expect(screen.getByText('Test Post Two')).toBeInTheDocument();
+  });
+
+  it('clears filters when clicking clear filters button', () => {
+    setupDefaultMocks();
+    render(<BlogPage />);
+
+    // Type a search query that matches nothing
+    const searchInput = screen.getByPlaceholderText(/search posts/i);
+    fireEvent.change(searchInput, { target: { value: 'xyznonexistent' } });
+
+    // Should show empty state with clear filters button
+    expect(screen.getByText(/no posts found/i)).toBeInTheDocument();
+    const clearBtn = screen.getByRole('button', { name: /clear filters/i });
+    fireEvent.click(clearBtn);
+
+    // After clearing, posts should be visible again
+    expect(screen.getByText('Test Post One')).toBeInTheDocument();
+    expect(screen.getByText('Test Post Two')).toBeInTheDocument();
+  });
+
+  it('renders featured post without cover image', () => {
+    setupDefaultMocks();
+    mockUseBlogFeatured.mockReturnValue({
+      post: { ...mockFeaturedPost, coverImageUrl: undefined, tags: [] },
+      loading: false,
+      error: null,
+    });
+    render(<BlogPage />);
+
+    expect(screen.getByText('Featured Post Title')).toBeInTheDocument();
+  });
+
+  it('renders post without cover image showing tag placeholder', () => {
+    setupDefaultMocks();
+    mockUseBlogPosts.mockReturnValue({
+      posts: [{ ...mockPosts[0], coverImageUrl: undefined }],
+      loading: false,
+      error: null,
+      total: 1,
+      hasMore: false,
+      page: 1,
+      refetch: vi.fn(),
+      loadMore: vi.fn(),
+    });
+    render(<BlogPage />);
+
+    expect(screen.getByText('Test Post One')).toBeInTheDocument();
+  });
 });

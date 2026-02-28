@@ -249,4 +249,119 @@ describe('BlogPostPage', () => {
 
     expect(screen.getByTestId('share-button')).toBeInTheDocument();
   });
+
+  it('shows auth modal when unauthenticated user votes', async () => {
+    const mockSetShowAuthModal = vi.fn();
+    mockUseParams.mockReturnValue({ slug: 'test-blog-post' });
+    mockUseBlogPost.mockReturnValue({
+      post: mockPost,
+      loading: false,
+      error: null,
+    });
+    mockUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: mockSetShowAuthModal,
+    });
+    mockRecordBlogView.mockResolvedValue(undefined);
+
+    render(<BlogPostPage />);
+
+    const upButton = screen.getByTestId('vote-up');
+    fireEvent.click(upButton);
+
+    await waitFor(() => {
+      expect(mockSetShowAuthModal).toHaveBeenCalledWith(true);
+    });
+    expect(mockVoteBlogPost).not.toHaveBeenCalled();
+  });
+
+  it('handles share button click with clipboard', async () => {
+    setupDefaults();
+    const mockWriteText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText: mockWriteText },
+    });
+
+    render(<BlogPostPage />);
+
+    const shareBtn = screen.getByTestId('share-button');
+    fireEvent.click(shareBtn);
+
+    await waitFor(() => {
+      expect(mockWriteText).toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Copied!')).toBeInTheDocument();
+    });
+  });
+
+  it('handles vote down click', async () => {
+    setupDefaults();
+    mockVoteBlogPost.mockResolvedValue({ data: { vote_score: 41, upvotes: 42, downvotes: 1, user_vote: 'down' } });
+
+    render(<BlogPostPage />);
+
+    const downButton = screen.getByTestId('vote-down');
+    fireEvent.click(downButton);
+
+    await waitFor(() => {
+      expect(mockVoteBlogPost).toHaveBeenCalledWith('test-blog-post', 'down');
+    });
+  });
+
+  it('handles vote API failure gracefully', async () => {
+    setupDefaults();
+    mockVoteBlogPost.mockRejectedValue(new Error('Vote failed'));
+
+    render(<BlogPostPage />);
+
+    const upButton = screen.getByTestId('vote-up');
+    fireEvent.click(upButton);
+
+    await waitFor(() => {
+      expect(mockVoteBlogPost).toHaveBeenCalledWith('test-blog-post', 'up');
+    });
+
+    // Vote score should remain unchanged on failure
+    expect(screen.getByTestId('vote-score')).toHaveTextContent('42');
+  });
+
+  it('renders post without cover image', () => {
+    setupDefaults();
+    const noCoverPost = { ...mockPost, coverImageUrl: undefined };
+    mockUseBlogPost.mockReturnValue({
+      post: noCoverPost,
+      loading: false,
+      error: null,
+    });
+    render(<BlogPostPage />);
+
+    expect(screen.getByText('Test Blog Post Title')).toBeInTheDocument();
+  });
+
+  it('renders null post state (no post and no error)', () => {
+    mockUseParams.mockReturnValue({ slug: 'test-slug' });
+    mockUseBlogPost.mockReturnValue({
+      post: null,
+      loading: false,
+      error: null,
+    });
+    mockUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      showAuthModal: false,
+      authModalMessage: '',
+      setShowAuthModal: vi.fn(),
+    });
+
+    render(<BlogPostPage />);
+
+    expect(screen.getByText('Post not found')).toBeInTheDocument();
+  });
 });

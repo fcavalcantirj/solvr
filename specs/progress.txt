@@ -1,3 +1,27 @@
+2026-02-28: PRD-v5 Frontend - Ensure 80%+ test coverage for all blog frontend files
+- Updated: frontend/app/blog/page.test.tsx
+  * Added test: filters posts by search query matching title (covers filteredPosts useMemo)
+  * Added test: filters posts by search query matching excerpt
+  * Added test: clears filters when clicking clear filters button (covers setActiveTag/setSearchQuery)
+  * Added test: renders featured post without cover image
+  * Added test: renders post without cover image showing tag placeholder
+  * Total: 18 tests (was 13)
+- Updated: frontend/app/blog/[slug]/page.test.tsx
+  * Added test: shows auth modal when unauthenticated user votes (covers lines 39-40)
+  * Added test: handles share button click with clipboard (covers lines 56-59)
+  * Added test: handles vote down click
+  * Added test: handles vote API failure gracefully (covers catch block)
+  * Added test: renders post without cover image
+  * Added test: renders null post state (no post and no error)
+  * Total: 19 tests (was 13)
+- Coverage results (lines):
+  * hooks/use-blog.ts: 94%
+  * app/blog/page.tsx: 100% (was 82.75%)
+  * app/blog/[slug]/blog-post-client.tsx: 100% (was 69.56%)
+  * app/blog/[slug]/page.tsx: 100%
+  * app/blog/create/page.tsx: 91.8%
+- All 961 frontend tests passing (104 files)
+
 2026-02-28: PRD-v5 Backend - Add blog_posts_published to platform pulse and blog tip to heartbeat
 - Updated: backend/internal/models/briefing.go
   * Added BlogPostsPublished int field to PlatformPulse struct

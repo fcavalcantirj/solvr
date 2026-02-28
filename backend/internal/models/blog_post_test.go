@@ -65,9 +65,13 @@ func TestGenerateExcerpt(t *testing.T) {
 	}{
 		{"short body unchanged", "Hello world", 50, "Hello world"},
 		{"exact length unchanged", "12345", 5, "12345"},
-		{"truncated with ellipsis", "Hello beautiful world", 10, "Hello beau..."},
+		{"truncated with ellipsis", "Hello beautiful world", 10, "Hello b..."},
 		{"empty body", "", 50, ""},
-		{"maxLen 0", "Hello", 0, "..."},
+		{"maxLen 0", "Hello", 0, ""},
+		{"maxLen 3", "Hello", 3, "Hel"},
+		{"maxLen 4", "Hello", 4, "H..."},
+		{"result fits in maxLen", "Hello beautiful world", 21, "Hello beautiful world"},
+		{"result exactly maxLen with ellipsis", "Hello beautiful world", 20, "Hello beautiful w..."},
 	}
 
 	for _, tt := range tests {

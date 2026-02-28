@@ -103,7 +103,7 @@ func CalculateReadTime(body string) int {
 	return minutes
 }
 
-// GenerateExcerpt truncates body to maxLen characters, adding ellipsis if truncated.
+// GenerateExcerpt truncates body to maxLen total characters (including "..." if truncated).
 func GenerateExcerpt(body string, maxLen int) string {
 	if body == "" {
 		return ""
@@ -111,7 +111,10 @@ func GenerateExcerpt(body string, maxLen int) string {
 	if len(body) <= maxLen {
 		return body
 	}
-	return body[:maxLen] + "..."
+	if maxLen <= 3 {
+		return body[:maxLen]
+	}
+	return body[:maxLen-3] + "..."
 }
 
 var slugNonAlphanumeric = regexp.MustCompile(`[^a-z0-9-]+`)

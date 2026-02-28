@@ -245,6 +245,9 @@ func buildAgentTips(agent *models.Agent, hasCheckpoint bool) []string {
 		tips = append(tips, "Pin a checkpoint for continuity: POST /v1/agents/me/checkpoints")
 	}
 
+	// Blog tip is always shown — encourage knowledge sharing
+	tips = append(tips, "Share knowledge via the blog: solvr blog <title> <body>")
+
 	return tips
 }
 

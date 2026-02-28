@@ -820,4 +820,90 @@ func TestGetHardcoreUnsolved_NoQualifyingProblems(t *testing.T) {
 	}
 }
 
+// --- GetPlatformPulse: blog_posts_published ---
+
+func TestGetPlatformPulse_BlogPostsPublished(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	defer cleanupBriefingTestData(t, pool, agentID, "")
+
+	repo := NewPlatformBriefingRepository(pool)
+
+	// Get baseline count
+	pulse, err := repo.GetPlatformPulse(ctx)
+	if err != nil {
+		t.Fatalf("GetPlatformPulse failed: %v", err)
+	}
+	baseline := pulse.BlogPostsPublished
+
+	// Create 2 published blog posts and 1 draft
+	_, err = pool.Exec(ctx,
+		`INSERT INTO blog_posts (slug, title, body, posted_by_type, posted_by_id, status, published_at)
+		 VALUES ('test-blog-1', 'Test Blog Post 1', 'Body 1', 'agent', $1, 'published', NOW()),
+		        ('test-blog-2', 'Test Blog Post 2', 'Body 2', 'agent', $1, 'published', NOW()),
+		        ('test-blog-draft', 'Draft Blog Post', 'Draft body', 'agent', $1, 'draft', NULL)`,
+		agentID)
+	if err != nil {
+		t.Fatalf("failed to create test blog posts: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM blog_posts WHERE posted_by_id = $1", agentID)
+	}()
+
+	pulse2, err := repo.GetPlatformPulse(ctx)
+	if err != nil {
+		t.Fatalf("GetPlatformPulse (second call) failed: %v", err)
+	}
+
+	// Should have increased by exactly 2 (the 2 published posts, not the draft)
+	if pulse2.BlogPostsPublished != baseline+2 {
+		t.Errorf("expected blog_posts_published to increase by 2 (from %d to %d), got %d",
+			baseline, baseline+2, pulse2.BlogPostsPublished)
+	}
+}
+
+func TestGetPlatformPulse_BlogPostsPublished_ExcludesDeleted(t *testing.T) {
+	pool := briefingTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agentID := createBriefingAgent(t, pool, []string{"go"})
+	defer cleanupBriefingTestData(t, pool, agentID, "")
+
+	repo := NewPlatformBriefingRepository(pool)
+
+	// Get baseline
+	pulse, err := repo.GetPlatformPulse(ctx)
+	if err != nil {
+		t.Fatalf("GetPlatformPulse failed: %v", err)
+	}
+	baseline := pulse.BlogPostsPublished
+
+	// Create a published blog post and then soft-delete it
+	_, err = pool.Exec(ctx,
+		`INSERT INTO blog_posts (slug, title, body, posted_by_type, posted_by_id, status, published_at, deleted_at)
+		 VALUES ('test-deleted-blog', 'Deleted Blog Post', 'Body', 'agent', $1, 'published', NOW(), NOW())`,
+		agentID)
+	if err != nil {
+		t.Fatalf("failed to create deleted blog post: %v", err)
+	}
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM blog_posts WHERE posted_by_id = $1", agentID)
+	}()
+
+	pulse2, err := repo.GetPlatformPulse(ctx)
+	if err != nil {
+		t.Fatalf("GetPlatformPulse (second call) failed: %v", err)
+	}
+
+	// Soft-deleted published blog post should NOT be counted
+	if pulse2.BlogPostsPublished != baseline {
+		t.Errorf("expected blog_posts_published to remain %d (deleted post excluded), got %d",
+			baseline, pulse2.BlogPostsPublished)
+	}
+}
+
 // Rising Ideas tests are in briefing_rising_ideas_test.go

@@ -3182,7 +3182,7 @@
       "Verify: go test ./internal/api/handlers/... -run Heartbeat -v",
       "Verify: go test ./internal/api/handlers/... -run Briefing -v"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -48,6 +48,10 @@ func (r *PlatformBriefingRepository) GetPlatformPulse(ctx context.Context) (*mod
 		contributors_week AS (
 			SELECT COUNT(DISTINCT posted_by_id) AS cnt FROM posts
 			WHERE created_at > date_trunc('week', NOW()) AND deleted_at IS NULL
+		),
+		blog_published AS (
+			SELECT COUNT(*) AS cnt FROM blog_posts
+			WHERE status = 'published' AND deleted_at IS NULL
 		)
 		SELECT
 			(SELECT cnt FROM open_problems),
@@ -56,7 +60,8 @@ func (r *PlatformBriefingRepository) GetPlatformPulse(ctx context.Context) (*mod
 			(SELECT cnt FROM new_posts_24h),
 			(SELECT cnt FROM solved_7d),
 			(SELECT cnt FROM active_agents_24h),
-			(SELECT cnt FROM contributors_week)`
+			(SELECT cnt FROM contributors_week),
+			(SELECT cnt FROM blog_published)`
 
 	p := &models.PlatformPulse{}
 	err := r.pool.QueryRow(ctx, query).Scan(
@@ -67,6 +72,7 @@ func (r *PlatformBriefingRepository) GetPlatformPulse(ctx context.Context) (*mod
 		&p.SolvedLast7d,
 		&p.ActiveAgentsLast24h,
 		&p.ContributorsThisWeek,
+		&p.BlogPostsPublished,
 	)
 	if err != nil {
 		LogQueryError(ctx, "GetPlatformPulse", "posts", err)

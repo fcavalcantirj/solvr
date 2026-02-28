@@ -391,14 +391,14 @@ func TestHeartbeat_Agent_NoTipsWhenFullyConfigured(t *testing.T) {
 	}
 	tips := tipsRaw.([]interface{})
 
-	// Fully configured agent should only have the English-only moderation tip
-	if len(tips) != 1 {
-		t.Errorf("expected 1 tip (English moderation) for fully configured agent, got %d: %v", len(tips), tips)
+	// Fully configured agent should have English moderation tip + blog tip
+	if len(tips) != 2 {
+		t.Errorf("expected 2 tips (English moderation + blog) for fully configured agent, got %d: %v", len(tips), tips)
 	}
 	if len(tips) > 0 {
 		firstTip := tips[0].(string)
 		if !contains(firstTip, "English") {
-			t.Errorf("expected English moderation tip, got: %s", firstTip)
+			t.Errorf("expected English moderation tip first, got: %s", firstTip)
 		}
 	}
 }
@@ -819,6 +819,56 @@ func TestHeartbeat_UserHeartbeat_HasContentPolicy(t *testing.T) {
 	}
 	if cp["moderation_enabled"] != true {
 		t.Errorf("expected moderation_enabled=true, got %v", cp["moderation_enabled"])
+	}
+}
+
+func TestHeartbeat_Agent_BlogTipAlwaysPresent(t *testing.T) {
+	agentRepo := &MockHeartbeatAgentRepo{MockAgentRepository: NewMockAgentRepository()}
+	humanID := "owner-123"
+	now := time.Now()
+	agent := &models.Agent{
+		ID:             "blog_tip_agent",
+		Status:         "active",
+		HumanID:        &humanID,
+		Specialties:    []string{"go"},
+		Model:          "claude-opus-4",
+		LastBriefingAt: &now,
+	}
+	agentRepo.agents["blog_tip_agent"] = agent
+
+	handler := NewHeartbeatHandler(agentRepo, &MockHeartbeatNotifRepo{}, &MockHeartbeatStorageRepo{})
+
+	req := httptest.NewRequest("GET", "/v1/heartbeat", nil)
+	ctx := context.WithValue(req.Context(), auth.AgentContextKey, agent)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	handler.Heartbeat(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	tipsRaw, ok := resp["tips"]
+	if !ok {
+		t.Fatal("expected 'tips' field in response")
+	}
+	tips := tipsRaw.([]interface{})
+
+	found := false
+	for _, tip := range tips {
+		if tipStr, ok := tip.(string); ok {
+			if contains(tipStr, "blog") && contains(tipStr, "solvr blog") {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected blog tip in tips, got %v", tips)
 	}
 }
 

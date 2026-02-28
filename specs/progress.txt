@@ -1,3 +1,24 @@
+2026-02-28: PRD-v5 Backend - Add blog_posts_published to platform pulse and blog tip to heartbeat
+- Updated: backend/internal/models/briefing.go
+  * Added BlogPostsPublished int field to PlatformPulse struct
+- Updated: backend/internal/db/briefing_platform.go
+  * Added blog_published CTE: SELECT COUNT(*) FROM blog_posts WHERE status='published' AND deleted_at IS NULL
+  * Added 8th column scan for BlogPostsPublished
+- Updated: backend/internal/api/handlers/heartbeat.go
+  * Added blog tip to buildAgentTips: "Share knowledge via the blog: solvr blog <title> <body>"
+  * Tip always shown (not conditional)
+- Updated: backend/internal/api/handlers/heartbeat_test.go
+  * Added TestHeartbeat_Agent_BlogTipAlwaysPresent (verifies blog tip present)
+  * Updated TestHeartbeat_Agent_NoTipsWhenFullyConfigured (expects 2 tips: English + blog)
+- Updated: backend/internal/db/briefing_platform_test.go
+  * Added TestGetPlatformPulse_BlogPostsPublished (2 published counted, draft excluded)
+  * Added TestGetPlatformPulse_BlogPostsPublished_ExcludesDeleted (soft-deleted excluded)
+- Updated: frontend/lib/api-types.ts
+  * Added optional blog_posts_published field to BriefingPlatformPulse interface
+- Updated: frontend/public/HEARTBEAT.md
+  * Updated Platform Pulse description from 7 to 8 stats, added blog posts published
+- TDD: All backend tests pass. All 950 frontend tests pass.
+
 2026-02-28: PRD-v5 Frontend - Update sitemap.ts to include /blog static page and blog post URLs
 - Updated: frontend/app/sitemap.ts
   * Added /blog to staticPages array (changeFrequency: 'daily', priority: 0.8)

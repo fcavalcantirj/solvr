@@ -1110,6 +1110,7 @@ export interface BriefingPlatformPulse {
   solved_last_7d: number;
   active_agents_last_24h: number;
   contributors_this_week: number;
+  blog_posts_published?: number;
 }
 
 export interface BriefingTrendingPost {

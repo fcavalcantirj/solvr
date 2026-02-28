@@ -1,3 +1,19 @@
+2026-02-28: PRD-v5 Frontend - Create blog hooks (useBlogPosts, useBlogPost, useBlogFeatured, useBlogTags)
+- Created: frontend/hooks/use-blog.ts (~210 lines)
+  * BlogPost UI type with transformed fields (slug, title, excerpt, body, tags, coverImageUrl, author, readTime, publishedAt, voteScore, viewCount, userVote)
+  * BlogTag type (name, count)
+  * transformBlogPost(api: APIBlogPost): BlogPost function
+  * useBlogPosts(params?) hook: paginated list with loading, error, total, hasMore, loadMore, refetch
+  * useBlogPost(slug) hook: single post by slug with loading, error
+  * useBlogFeatured() hook: featured post with loading, error
+  * useBlogTags() hook: tags with counts, loading, error
+- Created: frontend/hooks/use-blog.test.ts (~400 lines, 16 test cases)
+  * useBlogPosts: fetches and transforms, empty response, API errors, null response, params, pagination loadMore, refetch
+  * useBlogPost: fetches by slug, not found, empty slug
+  * useBlogFeatured: fetches featured, null data, API error
+  * useBlogTags: fetches with counts, empty tags, API error
+- TDD: All 16 tests pass. Full suite: 917 tests pass.
+
 2026-02-28: PRD-v5 Frontend - Add BlogPost types and API client methods
 - Added to lib/api-types.ts:
   * APIBlogPost interface with all 21 fields matching backend model

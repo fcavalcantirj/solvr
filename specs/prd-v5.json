@@ -3042,7 +3042,7 @@
       "Test: useBlogTags fetches tags with counts",
       "Verify: npm test -- --run hooks/use-blog.test.ts"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

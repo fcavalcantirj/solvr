@@ -1,3 +1,38 @@
+2026-02-27: PRD-v5 Backend - Create BlogHandler + TDD tests for blog HTTP endpoints
+- Created: backend/internal/api/handlers/blog.go (~600 lines)
+  * BlogPostRepositoryInterface with 11 methods (List, FindBySlug, FindBySlugForViewer, Create, Update, Delete, Vote, IncrementViewCount, ListTags, GetFeatured, SlugExists)
+  * BlogHandler struct with repo, logger, contentModService fields
+  * NewBlogHandler(repo) constructor — 1-param, creates default logger
+  * SetContentModerationService setter for optional moderation
+  * List handler: GET /v1/blog — pagination, tags filter, sort, viewer vote lookup
+  * GetBySlug handler: GET /v1/blog/{slug} — with FindBySlugForViewer when authenticated
+  * Create handler: POST /v1/blog — auth required, validates title (10-300), body (50+), tags (max 10), auto-slug, auto-readtime, auto-excerpt
+  * Update handler: PATCH /v1/blog/{slug} — auth + ownership check, partial update, published_at on publish transition
+  * Delete handler: DELETE /v1/blog/{slug} — auth + ownership check, soft delete, returns 204
+  * Vote handler: POST /v1/blog/{slug}/vote — auth required, prevents self-vote, direction up/down
+  * RecordView handler: POST /v1/blog/{slug}/view — no auth, increments view count
+  * GetFeatured handler: GET /v1/blog/featured — no auth, returns highest engagement post
+  * ListTags handler: GET /v1/blog/tags — no auth, returns tags with counts
+- Created: backend/internal/api/handlers/blog_helpers.go (~37 lines)
+  * writeBlogJSON, writeBlogError, validateSlug helper functions
+- Created: backend/internal/api/handlers/blog_test.go (~930 lines, 27 test cases)
+  * MockBlogPostRepository with all 11 interface methods
+  * createTestBlogPost, addBlogAuthContext, addBlogAgentAuthContext helpers
+  * TestCreateBlogPost_Success, _NoAuth, _TitleTooShort, _TitleTooLong, _BodyTooShort, _TooManyTags
+  * TestCreateBlogPost_AutoSlugGeneration, _AutoExcerptGeneration, _ReadTimeCalculation
+  * TestCreateBlogPost_PublishedAtSetOnPublish, _AgentAuth
+  * TestListBlogPosts_Success, _FilterByTag, _Pagination, _EmptyResult
+  * TestGetBlogPost_Success, _NotFound
+  * TestUpdateBlogPost_Success, _NotOwner, _StatusTransition
+  * TestDeleteBlogPost_Success, _NotOwner
+  * TestVoteBlogPost_Success
+  * TestGetFeatured_Success, _NoPublished
+  * TestRecordView_Success
+  * TestListTags_Success
+- Verified: go test ./internal/api/handlers/... -run Blog -v — all 27 tests pass
+- Verified: go build ./cmd/api — builds successfully
+- Verified: go test ./... — full suite passes
+
 2026-02-27: PRD-v5 Backend - Create BlogPostRepository with CRUD, list, featured, voting, view tracking, tags
 - Created: backend/internal/db/blog_posts.go (~490 lines)
   * BlogPostRepository struct with pool *Pool, NewBlogPostRepository constructor

@@ -3103,7 +3103,7 @@
       "Test: returns 404 for non-existent slug",
       "Verify: npm test -- --run 'app/blog/\\[slug\\]'"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

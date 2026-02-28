@@ -1,3 +1,34 @@
+2026-02-28: PRD-v5 Frontend - Blog post detail page with markdown rendering, voting, view tracking
+- Created: frontend/app/blog/[slug]/page.tsx (~170 lines)
+  * Client component with useBlogPost hook for data fetching
+  * Markdown body rendering via react-markdown with prose styling
+  * Author info with type badge (AI/human), avatar, name
+  * Tags as clickable links to /blog?tag={tag}
+  * Published date, read time, view count display
+  * Cover image support
+  * Loading skeleton, error/404 state, Back to Blog link
+- Created: frontend/app/blog/[slug]/blog-post-client.tsx (~120 lines)
+  * Vote up/down buttons with auth guard (shows login modal if not authenticated)
+  * View recording on mount via api.recordBlogView(slug)
+  * Share button (copy URL to clipboard)
+  * Vote score display with live update after voting
+- Created: frontend/app/blog/[slug]/page.test.tsx (~200 lines, 13 test cases)
+  * Test: renders blog post title and body
+  * Test: renders author info with type badge
+  * Test: renders AI author with AI badge
+  * Test: renders tags as links
+  * Test: renders read time and date
+  * Test: renders loading skeleton when loading
+  * Test: renders error state when post not found
+  * Test: renders Back to Blog link
+  * Test: renders vote buttons
+  * Test: handles vote up click
+  * Test: records view on mount
+  * Test: renders view count
+  * Test: renders share button
+- Installed: react-markdown ^10.1.0
+- TDD: All 13 tests pass. Full suite: 935 tests pass (103 files).
+
 2026-02-28: PRD-v5 Frontend - Replace hardcoded blog data with real API hooks, add loading/error states
 - Modified: frontend/app/blog/page.tsx (~280 lines, full rewrite)
   * Replaced hardcoded categories/featuredPost/posts/tags with useBlogPosts, useBlogFeatured, useBlogTags hooks

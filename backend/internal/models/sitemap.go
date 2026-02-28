@@ -21,18 +21,26 @@ type SitemapUser struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// SitemapBlogPost represents a blog post URL for the sitemap.
+type SitemapBlogPost struct {
+	Slug      string    `json:"slug"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // SitemapURLs holds all URL data for sitemap generation.
 type SitemapURLs struct {
-	Posts  []SitemapPost  `json:"posts"`
-	Agents []SitemapAgent `json:"agents"`
-	Users  []SitemapUser  `json:"users"`
+	Posts     []SitemapPost     `json:"posts"`
+	Agents    []SitemapAgent    `json:"agents"`
+	Users     []SitemapUser     `json:"users"`
+	BlogPosts []SitemapBlogPost `json:"blog_posts"`
 }
 
 // SitemapCounts holds counts of indexable content per type.
 type SitemapCounts struct {
-	Posts  int `json:"posts"`
-	Agents int `json:"agents"`
-	Users  int `json:"users"`
+	Posts     int `json:"posts"`
+	Agents    int `json:"agents"`
+	Users     int `json:"users"`
+	BlogPosts int `json:"blog_posts"`
 }
 
 // SitemapURLsOptions holds pagination options for paginated sitemap URL queries.

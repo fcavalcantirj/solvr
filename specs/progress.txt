@@ -1,3 +1,15 @@
+2026-02-28: PRD-v5 Backend - Add blog_posts to sitemap URLs, counts, and paginated queries
+- Added SitemapBlogPost model (slug, updated_at) to models/sitemap.go
+- Added BlogPosts field to SitemapURLs and SitemapCounts structs
+- Updated db/sitemap.go: GetSitemapURLs queries published blog_posts
+- Updated db/sitemap.go: GetSitemapCounts counts published blog_posts
+- Updated db/sitemap.go: GetPaginatedSitemapURLs adds "blog_posts" case
+- Updated handlers/sitemap.go: validTypes includes "blog_posts"
+- Updated handlers/sitemap.go: writeSitemapURLsResponse includes blog_posts
+- Updated handlers/sitemap.go: GetSitemapCounts response includes blog_posts
+- TDD: 3 new test cases (IncludesBlogPosts URLs, Counts, Pagination)
+- Verified: go test ./... — all tests pass
+
 2026-02-27: PRD-v5 Backend - Register blog endpoints in router.go
 - Modified: backend/internal/api/router.go (+26 lines, 1021→1047)
   * Added blogHandler instantiation: db.NewBlogPostRepository(pool) + handlers.NewBlogHandler

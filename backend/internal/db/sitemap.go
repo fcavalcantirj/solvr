@@ -22,9 +22,10 @@ func NewSitemapRepository(pool *Pool) *SitemapRepository {
 // Excludes drafts and soft-deleted content.
 func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.SitemapURLs, error) {
 	result := &models.SitemapURLs{
-		Posts:  []models.SitemapPost{},
-		Agents: []models.SitemapAgent{},
-		Users:  []models.SitemapUser{},
+		Posts:     []models.SitemapPost{},
+		Agents:    []models.SitemapAgent{},
+		Users:     []models.SitemapUser{},
+		BlogPosts: []models.SitemapBlogPost{},
 	}
 
 	// Get all non-draft, non-deleted posts
@@ -102,6 +103,32 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		return nil, err
 	}
 
+	// Get all published, non-deleted blog posts
+	blogRows, err := r.pool.Query(ctx, `
+		SELECT slug, updated_at
+		FROM blog_posts
+		WHERE deleted_at IS NULL
+		AND status = 'published'
+		ORDER BY updated_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer blogRows.Close()
+
+	for blogRows.Next() {
+		var bp models.SitemapBlogPost
+		var updatedAt time.Time
+		if err := blogRows.Scan(&bp.Slug, &updatedAt); err != nil {
+			return nil, err
+		}
+		bp.UpdatedAt = updatedAt
+		result.BlogPosts = append(result.BlogPosts, bp)
+	}
+	if err := blogRows.Err(); err != nil {
+		return nil, err
+	}
+
 	return result, nil
 }
 
@@ -140,15 +167,27 @@ func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.Sitem
 		return nil, err
 	}
 
+	// Count published, non-deleted blog posts
+	err = r.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM blog_posts
+		WHERE deleted_at IS NULL
+		AND status = 'published'
+	`).Scan(&counts.BlogPosts)
+	if err != nil {
+		return nil, err
+	}
+
 	return counts, nil
 }
 
 // GetPaginatedSitemapURLs returns paginated sitemap URLs for a single content type.
 func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts models.SitemapURLsOptions) (*models.SitemapURLs, error) {
 	result := &models.SitemapURLs{
-		Posts:  []models.SitemapPost{},
-		Agents: []models.SitemapAgent{},
-		Users:  []models.SitemapUser{},
+		Posts:     []models.SitemapPost{},
+		Agents:    []models.SitemapAgent{},
+		Users:     []models.SitemapUser{},
+		BlogPosts: []models.SitemapBlogPost{},
 	}
 
 	offset := (opts.Page - 1) * opts.PerPage
@@ -224,6 +263,32 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 			}
 			u.UpdatedAt = updatedAt
 			result.Users = append(result.Users, u)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
+	case "blog_posts":
+		rows, err := r.pool.Query(ctx, `
+			SELECT slug, updated_at
+			FROM blog_posts
+			WHERE deleted_at IS NULL
+			AND status = 'published'
+			ORDER BY updated_at DESC
+			LIMIT $1 OFFSET $2
+		`, opts.PerPage, offset)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var bp models.SitemapBlogPost
+			var updatedAt time.Time
+			if err := rows.Scan(&bp.Slug, &updatedAt); err != nil {
+				return nil, err
+			}
+			bp.UpdatedAt = updatedAt
+			result.BlogPosts = append(result.BlogPosts, bp)
 		}
 		if err := rows.Err(); err != nil {
 			return nil, err

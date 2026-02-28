@@ -13,10 +13,11 @@ import (
 
 // MockSitemapRepository implements SitemapRepositoryInterface for testing
 type MockSitemapRepository struct {
-	Posts  []models.SitemapPost
-	Agents []models.SitemapAgent
-	Users  []models.SitemapUser
-	Err    error
+	Posts     []models.SitemapPost
+	Agents    []models.SitemapAgent
+	Users     []models.SitemapUser
+	BlogPosts []models.SitemapBlogPost
+	Err       error
 
 	// For GetSitemapCounts
 	Counts    *models.SitemapCounts
@@ -33,9 +34,10 @@ func (m *MockSitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sit
 		return nil, m.Err
 	}
 	return &models.SitemapURLs{
-		Posts:  m.Posts,
-		Agents: m.Agents,
-		Users:  m.Users,
+		Posts:     m.Posts,
+		Agents:    m.Agents,
+		Users:     m.Users,
+		BlogPosts: m.BlogPosts,
 	}, nil
 }
 
@@ -549,6 +551,214 @@ func TestSitemapHandler_GetSitemapURLs_Pagination(t *testing.T) {
 			ct := rec.Header().Get("Content-Type")
 			if ct != "application/json" {
 				t.Errorf("expected Content-Type 'application/json', got '%s'", ct)
+			}
+
+			var body map[string]interface{}
+			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			if tt.checkResponse != nil {
+				tt.checkResponse(t, body)
+			}
+
+			if tt.checkOpts != nil {
+				tt.checkOpts(t, tt.mockRepo.PaginatedOpts)
+			}
+		})
+	}
+}
+
+func TestGetSitemapURLs_IncludesBlogPosts(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+
+	mockRepo := &MockSitemapRepository{
+		Posts:  []models.SitemapPost{{ID: "p1", Type: "problem", UpdatedAt: now}},
+		Agents: []models.SitemapAgent{{ID: "a1", UpdatedAt: now}},
+		Users:  []models.SitemapUser{{ID: "u1", UpdatedAt: now}},
+		BlogPosts: []models.SitemapBlogPost{
+			{Slug: "hello-world", UpdatedAt: now},
+			{Slug: "go-tips", UpdatedAt: now},
+		},
+	}
+
+	handler := NewSitemapHandler(mockRepo)
+	req := httptest.NewRequest("GET", "/v1/sitemap/urls", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GetSitemapURLs(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	data := body["data"].(map[string]interface{})
+
+	// blog_posts must be present in response
+	blogPostsRaw, ok := data["blog_posts"]
+	if !ok {
+		t.Fatal("expected 'blog_posts' key in response data")
+	}
+
+	blogPosts := blogPostsRaw.([]interface{})
+	if len(blogPosts) != 2 {
+		t.Fatalf("expected 2 blog posts, got %d", len(blogPosts))
+	}
+
+	// Verify blog post fields
+	bp := blogPosts[0].(map[string]interface{})
+	if bp["slug"] != "hello-world" {
+		t.Errorf("expected slug 'hello-world', got '%v'", bp["slug"])
+	}
+	if _, ok := bp["updated_at"]; !ok {
+		t.Error("expected updated_at field on blog post")
+	}
+
+	bp2 := blogPosts[1].(map[string]interface{})
+	if bp2["slug"] != "go-tips" {
+		t.Errorf("expected slug 'go-tips', got '%v'", bp2["slug"])
+	}
+
+	// Other types still present
+	posts := data["posts"].([]interface{})
+	if len(posts) != 1 {
+		t.Errorf("expected 1 post, got %d", len(posts))
+	}
+}
+
+func TestGetSitemapCounts_IncludesBlogPosts(t *testing.T) {
+	mockRepo := &MockSitemapRepository{
+		Counts: &models.SitemapCounts{
+			Posts:     42,
+			Agents:    15,
+			Users:     8,
+			BlogPosts: 7,
+		},
+	}
+
+	handler := NewSitemapHandler(mockRepo)
+	req := httptest.NewRequest("GET", "/v1/sitemap/counts", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GetSitemapCounts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	data := body["data"].(map[string]interface{})
+
+	blogPostsCount, ok := data["blog_posts"]
+	if !ok {
+		t.Fatal("expected 'blog_posts' key in counts response")
+	}
+	if int(blogPostsCount.(float64)) != 7 {
+		t.Errorf("expected blog_posts=7, got %v", blogPostsCount)
+	}
+
+	// Other counts still correct
+	if int(data["posts"].(float64)) != 42 {
+		t.Errorf("expected posts=42, got %v", data["posts"])
+	}
+}
+
+func TestGetPaginatedSitemapURLs_BlogPosts(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+
+	tests := []struct {
+		name           string
+		queryString    string
+		mockRepo       *MockSitemapRepository
+		expectedStatus int
+		checkResponse  func(t *testing.T, body map[string]interface{})
+		checkOpts      func(t *testing.T, opts *models.SitemapURLsOptions)
+	}{
+		{
+			name:        "type=blog_posts returns blog posts",
+			queryString: "?type=blog_posts&page=1&per_page=100",
+			mockRepo: &MockSitemapRepository{
+				PaginatedResult: &models.SitemapURLs{
+					Posts:     []models.SitemapPost{},
+					Agents:    []models.SitemapAgent{},
+					Users:     []models.SitemapUser{},
+					BlogPosts: []models.SitemapBlogPost{{Slug: "test-post", UpdatedAt: now}},
+				},
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, body map[string]interface{}) {
+				data := body["data"].(map[string]interface{})
+				blogPosts := data["blog_posts"].([]interface{})
+				if len(blogPosts) != 1 {
+					t.Errorf("expected 1 blog post, got %d", len(blogPosts))
+				}
+				bp := blogPosts[0].(map[string]interface{})
+				if bp["slug"] != "test-post" {
+					t.Errorf("expected slug 'test-post', got '%v'", bp["slug"])
+				}
+				// Other arrays should be empty
+				posts := data["posts"].([]interface{})
+				if len(posts) != 0 {
+					t.Errorf("expected 0 posts, got %d", len(posts))
+				}
+			},
+			checkOpts: func(t *testing.T, opts *models.SitemapURLsOptions) {
+				if opts == nil {
+					t.Fatal("expected paginated opts to be set")
+				}
+				if opts.Type != "blog_posts" {
+					t.Errorf("expected type 'blog_posts', got '%s'", opts.Type)
+				}
+				if opts.Page != 1 {
+					t.Errorf("expected page 1, got %d", opts.Page)
+				}
+				if opts.PerPage != 100 {
+					t.Errorf("expected per_page 100, got %d", opts.PerPage)
+				}
+			},
+		},
+		{
+			name:        "type=blog_posts with defaults",
+			queryString: "?type=blog_posts",
+			mockRepo: &MockSitemapRepository{
+				PaginatedResult: &models.SitemapURLs{
+					Posts:     []models.SitemapPost{},
+					Agents:    []models.SitemapAgent{},
+					Users:     []models.SitemapUser{},
+					BlogPosts: []models.SitemapBlogPost{},
+				},
+			},
+			expectedStatus: http.StatusOK,
+			checkOpts: func(t *testing.T, opts *models.SitemapURLsOptions) {
+				if opts.Page != 1 {
+					t.Errorf("expected default page 1, got %d", opts.Page)
+				}
+				if opts.PerPage != 2500 {
+					t.Errorf("expected default per_page 2500, got %d", opts.PerPage)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewSitemapHandler(tt.mockRepo)
+			req := httptest.NewRequest("GET", "/v1/sitemap/urls"+tt.queryString, nil)
+			rec := httptest.NewRecorder()
+
+			handler.GetSitemapURLs(rec, req)
+
+			if rec.Code != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, rec.Code)
 			}
 
 			var body map[string]interface{}

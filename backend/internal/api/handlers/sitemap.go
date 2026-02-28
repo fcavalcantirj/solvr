@@ -59,9 +59,9 @@ func (h *SitemapHandler) GetSitemapURLs(w http.ResponseWriter, r *http.Request) 
 
 func (h *SitemapHandler) getSitemapURLsPaginated(w http.ResponseWriter, r *http.Request, ctx context.Context, typeParam string) {
 	// Validate type
-	validTypes := map[string]bool{"posts": true, "agents": true, "users": true}
+	validTypes := map[string]bool{"posts": true, "agents": true, "users": true, "blog_posts": true}
 	if !validTypes[typeParam] {
-		writeSitemapError(w, http.StatusBadRequest, "INVALID_PARAM", "type must be one of: posts, agents, users")
+		writeSitemapError(w, http.StatusBadRequest, "INVALID_PARAM", "type must be one of: posts, agents, users, blog_posts")
 		return
 	}
 
@@ -116,9 +116,10 @@ func writeSitemapError(w http.ResponseWriter, status int, code, message string) 
 func writeSitemapURLsResponse(w http.ResponseWriter, urls *models.SitemapURLs) {
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"posts":  urls.Posts,
-			"agents": urls.Agents,
-			"users":  urls.Users,
+			"posts":      urls.Posts,
+			"agents":     urls.Agents,
+			"users":      urls.Users,
+			"blog_posts": urls.BlogPosts,
 		},
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -147,9 +148,10 @@ func (h *SitemapHandler) GetSitemapCounts(w http.ResponseWriter, r *http.Request
 
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"posts":  counts.Posts,
-			"agents": counts.Agents,
-			"users":  counts.Users,
+			"posts":      counts.Posts,
+			"agents":     counts.Agents,
+			"users":      counts.Users,
+			"blog_posts": counts.BlogPosts,
 		},
 	}
 

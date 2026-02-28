@@ -1,3 +1,16 @@
+2026-02-28: PRD-v5 Frontend - Update sitemap.ts to include /blog static page and blog post URLs
+- Updated: frontend/app/sitemap.ts
+  * Added /blog to staticPages array (changeFrequency: 'daily', priority: 0.8)
+  * Added blog_posts handling from API response with graceful fallback (response.data.blog_posts || [])
+  * Maps blog_posts to sitemap URLs: url = BASE_URL/blog/{slug}, lastModified = updated_at, changeFrequency = 'weekly', priority = 0.7
+  * Spreads blogUrls into return array alongside postUrls, agentUrls, userUrls
+- Updated: frontend/app/sitemap.test.ts (9 tests, all passing)
+  * Updated existing tests for 12 static pages (was 11)
+  * Added test: handles missing blog_posts gracefully for backwards compatibility
+  * Added test: sets weekly changeFrequency and correct lastModified for blog posts
+  * Added blog_posts to existing test fixtures
+- All 950 frontend tests passing (104 files)
+
 2026-02-28: PRD-v5 Frontend - Blog create page with markdown editor, tag input, preview toggle, auth guard
 - Created: frontend/app/blog/create/page.tsx (~280 lines)
   * Client component with auth guard (redirects to login if not authenticated)

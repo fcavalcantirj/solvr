@@ -3147,7 +3147,7 @@
       "Spread blogUrls into the return array alongside postUrls, agentUrls, userUrls",
       "Verify: npm run build (sitemap generation succeeds)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "skill",

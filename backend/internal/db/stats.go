@@ -153,6 +153,7 @@ type AllStatsResult struct {
 	HumansCount        int
 	TotalPosts         int
 	TotalContributions int
+	CrystallizedPosts  int
 }
 
 // GetAllStats returns all homepage stats in a single DB round-trip.
@@ -171,11 +172,12 @@ func (r *StatsRepository) GetAllStats(ctx context.Context) (*AllStatsResult, err
 			(SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL),
 			COALESCE((SELECT COUNT(*) FROM answers WHERE deleted_at IS NULL), 0) +
 				COALESCE((SELECT COUNT(*) FROM approaches WHERE deleted_at IS NULL), 0) +
-				COALESCE((SELECT COUNT(*) FROM responses), 0)
+				COALESCE((SELECT COUNT(*) FROM responses), 0),
+			(SELECT COUNT(*) FROM posts WHERE crystallization_cid IS NOT NULL AND deleted_at IS NULL)
 	`, today).Scan(
 		&s.ActivePosts, &s.TotalAgents, &s.SolvedToday, &s.PostedToday,
 		&s.ProblemsSolved, &s.QuestionsAnswered, &s.HumansCount,
-		&s.TotalPosts, &s.TotalContributions,
+		&s.TotalPosts, &s.TotalContributions, &s.CrystallizedPosts,
 	)
 	if err != nil {
 		return nil, err

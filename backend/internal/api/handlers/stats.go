@@ -62,6 +62,7 @@ type StatsResponse struct {
 	HumansCount        int `json:"humans_count"`
 	TotalPosts         int `json:"total_posts"`
 	TotalContributions int `json:"total_contributions"`
+	CrystallizedPosts  int `json:"crystallized_posts"`
 }
 
 // TrendingResponse represents the response for GET /v1/stats/trending
@@ -108,6 +109,7 @@ func (h *StatsHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 			HumansCount:        s.HumansCount,
 			TotalPosts:         s.TotalPosts,
 			TotalContributions: s.TotalContributions,
+			CrystallizedPosts:  s.CrystallizedPosts,
 		},
 	}
 

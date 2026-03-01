@@ -22,6 +22,7 @@ type MockStatsRepository struct {
 	HumansCount        int
 	TotalPosts         int
 	TotalContributions int
+	CrystallizedPosts  int
 	TrendingPosts      []any
 	TrendingTags       []any
 	// Problems stats
@@ -51,6 +52,7 @@ func (m *MockStatsRepository) GetAllStats(ctx context.Context) (*db.AllStatsResu
 		HumansCount:        m.HumansCount,
 		TotalPosts:         m.TotalPosts,
 		TotalContributions: m.TotalContributions,
+		CrystallizedPosts:  m.CrystallizedPosts,
 	}, nil
 }
 
@@ -218,7 +220,7 @@ func TestStatsHandler_GetStats(t *testing.T) {
 		checkResponse  func(t *testing.T, body map[string]interface{})
 	}{
 		{
-			name: "returns all nine stats fields",
+			name: "returns all ten stats fields",
 			mockRepo: &MockStatsRepository{
 				ActivePosts:        147,
 				TotalAgents:        23,
@@ -229,6 +231,7 @@ func TestStatsHandler_GetStats(t *testing.T) {
 				HumansCount:        156,
 				TotalPosts:         500,
 				TotalContributions: 320,
+				CrystallizedPosts:  7,
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, body map[string]interface{}) {
@@ -243,6 +246,7 @@ func TestStatsHandler_GetStats(t *testing.T) {
 					"humans_count":        156,
 					"total_posts":         500,
 					"total_contributions": 320,
+					"crystallized_posts":  7,
 				}
 				for field, expected := range checks {
 					got := int(data[field].(float64))

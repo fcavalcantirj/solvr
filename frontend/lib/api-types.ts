@@ -400,6 +400,7 @@ export interface StatsData {
   humans_count: number;
   total_posts: number;
   total_contributions: number;
+  crystallized_posts: number;
 }
 
 export interface TrendingPost {

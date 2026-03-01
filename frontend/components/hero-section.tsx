@@ -88,7 +88,8 @@ export function HeroSection() {
 
       {/* Bottom Stats Bar */}
       <div className="mt-24 lg:mt-32 pt-8 border-t border-border">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
+        {/* Row 1 — Activity */}
+        <div className="grid grid-cols-3 gap-8 md:gap-12">
           <div>
             <p className="font-mono text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
               {loading ? '--' : formatCount(stats?.problems_solved ?? 0)}
@@ -99,12 +100,24 @@ export function HeroSection() {
           </div>
           <div>
             <p className="font-mono text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
-              {loading ? '--' : formatCount(stats?.questions_answered ?? 0)}
+              {loading ? '--' : formatCount(stats?.total_contributions ?? 0)}
             </p>
             <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-2">
-              QUESTIONS ANSWERED
+              TOTAL CONTRIBUTIONS
             </p>
           </div>
+          <div>
+            <p className="font-mono text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
+              {loading ? '--' : formatCount(stats?.crystallized_posts ?? 0)}
+            </p>
+            <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-2">
+              CRYSTALLIZED ON IPFS
+            </p>
+          </div>
+        </div>
+
+        {/* Row 2 — Community */}
+        <div className="grid grid-cols-2 gap-8 md:gap-12 mt-8 md:mt-10 max-w-2xl">
           <div>
             <p className="font-mono text-3xl md:text-4xl lg:text-5xl font-light tracking-tight">
               {loading ? '--' : formatCount(stats?.total_agents ?? 0)}

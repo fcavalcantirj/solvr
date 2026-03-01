@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -20,40 +21,95 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/services"
 )
 
+// translationModerationService abstracts content moderation for testability.
+type translationModerationService interface {
+	ModerateContent(ctx context.Context, input services.ModerationInput) (*services.ModerationResult, error)
+}
+
+// translationStatusUpdater abstracts post status updates for testability.
+type translationStatusUpdater interface {
+	UpdateStatus(ctx context.Context, postID string, status models.PostStatus) error
+}
+
+// translationCommentCreator abstracts comment creation for testability.
+type translationCommentCreator interface {
+	Create(ctx context.Context, comment *models.Comment) (*models.Comment, error)
+}
+
+// translationNotifService abstracts notification sending for testability.
+type translationNotifService interface {
+	NotifyOnModerationResult(ctx context.Context, postID, postTitle, postType, authorType, authorID string, approved bool, explanation string) error
+}
+
 // translationModTrigger implements jobs.PostModerationTrigger for use by the translation job.
 // After a post is translated, it fires a single moderation call to determine if the
-// translated content should be approved or rejected.
+// translated content should be approved or rejected, then creates a system comment
+// and sends a notification to the author.
 type translationModTrigger struct {
-	modSvc   *services.ContentModerationService
-	postRepo *db.PostRepository
+	modSvc         translationModerationService
+	postRepo       translationStatusUpdater
+	commentCreator translationCommentCreator
+	notifService   translationNotifService
 }
 
 func (t *translationModTrigger) TriggerAsync(postID, title, description string, tags []string, postType, authorType, authorID string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-
-		result, err := t.modSvc.ModerateContent(ctx, services.ModerationInput{
-			Title:       title,
-			Description: description,
-			Tags:        tags,
-		})
-		if err != nil {
-			log.Printf("translation job: post-translation moderation failed for %s: %v", postID, err)
-			return
-		}
-
-		status := models.PostStatusRejected
-		if result.Approved {
-			status = models.PostStatusOpen
-		}
-
-		if updateErr := t.postRepo.UpdateStatus(ctx, postID, status); updateErr != nil {
-			log.Printf("translation job: failed to update post %s status after moderation: %v", postID, updateErr)
-		} else {
-			log.Printf("translation job: post %s moderation result approved=%v (language: %s)", postID, result.Approved, result.LanguageDetected)
-		}
+		t.triggerModeration(ctx, postID, title, description, tags, postType, authorType, authorID)
 	}()
+}
+
+// triggerModeration runs content moderation synchronously and updates status, comments, notifications.
+func (t *translationModTrigger) triggerModeration(ctx context.Context, postID, title, description string, tags []string, postType, authorType, authorID string) {
+	result, err := t.modSvc.ModerateContent(ctx, services.ModerationInput{
+		Title:       title,
+		Description: description,
+		Tags:        tags,
+	})
+	if err != nil {
+		log.Printf("translation job: post-translation moderation failed for %s: %v", postID, err)
+		return
+	}
+
+	status := models.PostStatusRejected
+	if result.Approved {
+		status = models.PostStatusOpen
+	}
+
+	if updateErr := t.postRepo.UpdateStatus(ctx, postID, status); updateErr != nil {
+		log.Printf("translation job: failed to update post %s status after moderation: %v", postID, updateErr)
+		return
+	}
+	log.Printf("translation job: post %s moderation result approved=%v (language: %s)", postID, result.Approved, result.LanguageDetected)
+
+	// Create system comment explaining the moderation decision
+	if t.commentCreator != nil {
+		var commentContent string
+		if result.Approved {
+			commentContent = "Post approved by Solvr moderation. Your post is now visible in the feed."
+		} else {
+			commentContent = fmt.Sprintf("Post rejected by Solvr moderation.\n\nReason: %s\n\nYou can edit your post and resubmit for review.", result.Explanation)
+		}
+
+		comment := &models.Comment{
+			TargetType: models.CommentTargetPost,
+			TargetID:   postID,
+			AuthorType: models.AuthorTypeSystem,
+			AuthorID:   "solvr-moderator",
+			Content:    commentContent,
+		}
+		if _, commentErr := t.commentCreator.Create(ctx, comment); commentErr != nil {
+			log.Printf("translation job: failed to create moderation comment for %s: %v", postID, commentErr)
+		}
+	}
+
+	// Send notification to post author about moderation result
+	if t.notifService != nil {
+		if notifErr := t.notifService.NotifyOnModerationResult(ctx, postID, title, postType, authorType, authorID, result.Approved, result.Explanation); notifErr != nil {
+			log.Printf("translation job: failed to send moderation notification for %s: %v", postID, notifErr)
+		}
+	}
 }
 
 func main() {
@@ -177,9 +233,14 @@ func main() {
 		}
 		translationPostRepo := db.NewPostRepository(pool)
 		translationModSvc := services.NewContentModerationService(os.Getenv("GROQ_API_KEY"))
+		translationCommentRepo := db.NewCommentsRepository(pool)
+		translationNotifRepo := db.NewNotificationsRepository(pool)
+		translationNotifSvc := api.NewModerationNotificationService(translationNotifRepo.Create)
 		trigger := &translationModTrigger{
-			modSvc:   translationModSvc,
-			postRepo: translationPostRepo,
+			modSvc:         translationModSvc,
+			postRepo:       translationPostRepo,
+			commentCreator: translationCommentRepo,
+			notifService:   translationNotifSvc,
 		}
 
 		batchSize := jobs.DefaultTranslationBatchSize

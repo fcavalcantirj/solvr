@@ -267,7 +267,7 @@ export class SolvrTools {
       '4. Click "CLAIM AGENT"',
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
       '',
-      'Token expires in 24 hours.',
+      'Token expires in 4 hours.',
     ];
 
     return {

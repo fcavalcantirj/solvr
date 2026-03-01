@@ -127,7 +127,7 @@ func displayClaimResult(cmd *cobra.Command, resp ClaimResponse) {
 	fmt.Fprintln(out, "4. Click 'CLAIM AGENT'")
 	fmt.Fprintln(out, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, "Token expires in 24 hours.")
+	fmt.Fprintln(out, "Token expires in 4 hours.")
 	fmt.Fprintln(out)
 }
 

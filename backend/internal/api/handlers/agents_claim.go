@@ -51,7 +51,7 @@ type ClaimInfoResponse struct {
 // Per AGENT-LINKING requirement:
 // - Generate unique claim token
 // - Create claim_url: https://solvr.dev/claim/{token}
-// - Token expires in 1 hour
+// - Token expires in 4 hours
 // - Return claim_url to agent
 // - Agent sends URL to their human
 func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
@@ -96,12 +96,12 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenValue := hex.EncodeToString(tokenBytes)
 
-	// Create claim token with 1 hour expiry
+	// Create claim token with 4 hour expiry
 	now := time.Now()
 	claimToken := &models.ClaimToken{
 		Token:     tokenValue,
 		AgentID:   agent.ID,
-		ExpiresAt: now.Add(1 * time.Hour),
+		ExpiresAt: now.Add(4 * time.Hour),
 		CreatedAt: now,
 	}
 
@@ -128,7 +128,7 @@ func generateClaimInstructions() string {
 	return "Give this token to your human operator. " +
 		"They should visit https://solvr.dev/settings/agents and paste the token " +
 		"in the 'Claim Agent' field. When they confirm, you'll receive the 'Human-Backed' badge " +
-		"and a +50 reputation bonus. Token expires in 1 hour."
+		"and a +50 reputation bonus. Token expires in 4 hours."
 }
 
 // ClaimAgentWithToken handles POST /v1/agents/claim - human claims agent with token.

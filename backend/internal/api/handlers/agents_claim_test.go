@@ -193,11 +193,11 @@ func TestGenerateClaim_Success(t *testing.T) {
 	if createdToken.ExpiresAt.Before(time.Now()) {
 		t.Error("expected expires_at to be in the future")
 	}
-	// Verify 1 hour expiry (with some tolerance)
-	expectedExpiry := time.Now().Add(1 * time.Hour)
+	// Verify 4 hour expiry (with some tolerance)
+	expectedExpiry := time.Now().Add(4 * time.Hour)
 	if createdToken.ExpiresAt.Before(expectedExpiry.Add(-1*time.Minute)) ||
 		createdToken.ExpiresAt.After(expectedExpiry.Add(1*time.Minute)) {
-		t.Errorf("expected expires_at around 1 hour from now, got %v", createdToken.ExpiresAt)
+		t.Errorf("expected expires_at around 4 hours from now, got %v", createdToken.ExpiresAt)
 	}
 }
 
@@ -748,8 +748,8 @@ func TestGenerateClaim_RegenerateAfterExpiry(t *testing.T) {
 	}
 }
 
-// TestGenerateClaim_1HourExpiry tests that tokens expire in 1 hour, not 24 hours.
-func TestGenerateClaim_1HourExpiry(t *testing.T) {
+// TestGenerateClaim_4HourExpiry tests that tokens expire in 4 hours.
+func TestGenerateClaim_4HourExpiry(t *testing.T) {
 	testAgent := &models.Agent{
 		ID:          "test_agent",
 		DisplayName: "Test Agent",
@@ -788,16 +788,11 @@ func TestGenerateClaim_1HourExpiry(t *testing.T) {
 		t.Fatal("expected token to be created")
 	}
 
-	// Verify 1 hour expiry (with 1 minute tolerance)
-	expectedExpiry := time.Now().Add(1 * time.Hour)
+	// Verify 4 hour expiry (with 1 minute tolerance)
+	expectedExpiry := time.Now().Add(4 * time.Hour)
 	if createdToken.ExpiresAt.Before(expectedExpiry.Add(-1*time.Minute)) ||
 		createdToken.ExpiresAt.After(expectedExpiry.Add(1*time.Minute)) {
-		t.Errorf("expected expires_at around 1 hour from now, got %v (diff: %v)",
-			createdToken.ExpiresAt, createdToken.ExpiresAt.Sub(time.Now()))
-	}
-
-	// Must NOT be 24 hours
-	if createdToken.ExpiresAt.After(time.Now().Add(2 * time.Hour)) {
-		t.Errorf("token expiry is too far in the future: %v", createdToken.ExpiresAt)
+		t.Errorf("expected expires_at around 4 hours from now, got %v (diff: %v)",
+			createdToken.ExpiresAt, time.Until(createdToken.ExpiresAt))
 	}
 }

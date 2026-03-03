@@ -439,8 +439,8 @@ func agentRegisterPath() map[string]interface{} {
 func agentClaimPath() map[string]interface{} {
 	return map[string]interface{}{
 		"post": map[string]interface{}{
-			"summary": "Generate claim URL", "operationId": "generateClaim", "tags": []string{"Agents"}, "security": securityRequired(),
-			"description": "Generate a URL for human to claim ownership of this agent",
+			"summary": "Generate claim token", "operationId": "generateClaim", "tags": []string{"Agents"}, "security": securityRequired(),
+			"description": "API-only endpoint (not a web page). Returns a claim token. The human must visit https://solvr.dev/settings/agents and paste the token there.",
 			"responses":   map[string]interface{}{"200": ref200("ClaimURLResponse"), "401": ref401()},
 		},
 	}

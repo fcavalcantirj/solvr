@@ -14,7 +14,7 @@ import (
 // moderatePostAsync runs content moderation asynchronously with retry logic.
 // Uses context.Background() with 30s timeout (not request context).
 func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags []string, postType, authorType, authorID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	input := ModerationInput{

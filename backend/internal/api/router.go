@@ -22,7 +22,6 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/jobs"
-	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/fcavalcantirj/solvr/internal/services"
 )
 
@@ -112,7 +111,11 @@ func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *ch
 		adminPostRepo := db.NewPostRepository(pool)
 		translationSvc := services.NewTranslationService(groqKey)
 		modSvc := services.NewContentModerationService(groqKey)
-		adminTrigger := &routerModTrigger{modSvc: modSvc, postRepo: adminPostRepo}
+		adminTrigger := handlers.NewModerationTrigger(
+			NewContentModerationAdapter(modSvc),
+			adminPostRepo,
+			slog.Default(),
+		)
 		translationJob := jobs.NewTranslationJob(adminPostRepo, adminPostRepo, translationSvc, adminTrigger,
 			jobs.DefaultTranslationBatchSize, 0)
 		adminHandler.SetTranslationJobRunner(translationJob)
@@ -907,37 +910,6 @@ func wrapCommentsCreateWithType(h *handlers.CommentsHandler, targetType string) 
 	}
 }
 
-// routerModTrigger implements jobs.PostModerationTrigger for use by the admin translation endpoint.
-// Mirrors the translationModTrigger in cmd/api/main.go for scheduled job use.
-type routerModTrigger struct {
-	modSvc   *services.ContentModerationService
-	postRepo *db.PostRepository
-}
-
-func (t *routerModTrigger) TriggerAsync(postID, title, description string, tags []string, postType, authorType, authorID string) {
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		result, err := t.modSvc.ModerateContent(ctx, services.ModerationInput{
-			Title: title, Description: description, Tags: tags,
-		})
-		if err != nil {
-			log.Printf("admin translation trigger: moderation failed for %s: %v", postID, err)
-			return
-		}
-		if err := t.postRepo.UpdateStatus(ctx, postID, moderationStatus(result.Approved)); err != nil {
-			log.Printf("admin translation trigger: failed to update %s: %v", postID, err)
-		}
-	}()
-}
-
-// moderationStatus converts a moderation approval boolean to a PostStatus.
-func moderationStatus(approved bool) models.PostStatus {
-	if approved {
-		return models.PostStatusOpen
-	}
-	return models.PostStatusRejected
-}
 
 // ipfsHealthAdapter wraps KuboIPFSService to satisfy handlers.IPFSHealthChecker.
 type ipfsHealthAdapter struct {

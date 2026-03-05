@@ -5,6 +5,8 @@ import { JsonLd, blogPostJsonLd } from "@/components/seo/json-ld";
 import { BlogPostContent } from "./blog-post-content";
 import { formatRelativeTime } from "@/lib/api";
 
+export const revalidate = 3600; // ISR: cache page for 1 hour
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
 // Deduplicated server-side fetch — shared between generateMetadata and page component

@@ -35,6 +35,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
+# Create writable ISR cache directory
+RUN mkdir -p .next/cache && chown nextjs:nodejs .next/cache
+
 # Set ownership
 USER nextjs
 

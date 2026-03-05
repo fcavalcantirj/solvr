@@ -5,6 +5,8 @@ import { Header } from "@/components/header";
 import { IdeaDetailClient } from "@/components/ideas/detail/idea-detail-client";
 import { JsonLd, postJsonLd } from "@/components/seo/json-ld";
 
+export const revalidate = 3600; // ISR: cache page for 1 hour
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
 const getPost = cache(async (id: string) => {

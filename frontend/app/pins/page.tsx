@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/header";
 import { useAuth } from "@/hooks/use-auth";
@@ -79,7 +79,7 @@ function formatDate(dateStr: string): string {
   });
 }
 
-export default function PinsPage() {
+function PinsContent() {
   const { user, isAuthenticated } = useAuth();
   const searchParams = useSearchParams();
   const agentId = searchParams.get("agent") || undefined;
@@ -577,6 +577,23 @@ export default function PinsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PinsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="pt-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 text-center">
+            <span className="font-mono text-xs text-muted-foreground">Loading...</span>
+          </div>
+        </main>
+      </div>
+    }>
+      <PinsContent />
+    </Suspense>
   );
 }
 

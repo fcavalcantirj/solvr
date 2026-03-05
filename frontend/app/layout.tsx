@@ -5,10 +5,6 @@ import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
 
-// Force all pages to be dynamic (no static generation at build time)
-// Required: Next.js 15.2.4 has internal /_error prerender bug without this
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-HS74SKKSQY'
 

@@ -5,6 +5,8 @@ import { Header } from "@/components/header";
 import { UserProfileClient } from "@/components/users/user-profile-client";
 import { JsonLd, userJsonLd } from "@/components/seo/json-ld";
 
+export const revalidate = 3600; // ISR: cache page for 1 hour
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
 const getUser = cache(async (id: string) => {

@@ -1,6 +1,9 @@
 import type { MetadataRoute } from 'next';
 import { api } from '@/lib/api';
 
+// Must stay dynamic — fetches fresh URLs from API on every request
+export const dynamic = 'force-dynamic';
+
 const BASE_URL = 'https://solvr.dev';
 
 const staticPages: MetadataRoute.Sitemap = [

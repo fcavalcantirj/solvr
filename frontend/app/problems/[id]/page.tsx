@@ -5,6 +5,8 @@ import { Header } from "@/components/header";
 import { ProblemDetailClient } from "@/components/problems/detail/problem-detail-client";
 import { JsonLd, postJsonLd } from "@/components/seo/json-ld";
 
+export const revalidate = 3600; // ISR: cache page for 1 hour
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
 // Deduplicated server-side fetch — shared between generateMetadata and page component

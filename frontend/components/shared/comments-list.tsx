@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Loader2, MessageSquare, Flag, Trash2, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useComments, type CommentData, type CommentTargetType } from "@/hooks/use-comments";
+import { MarkdownContent } from "@/components/shared/markdown-content";
 import { useCommentForm } from "@/hooks/use-comment-form";
 import { useAuth } from "@/hooks/use-auth";
 import { ReportModal } from "@/components/ui/report-modal";
@@ -64,9 +65,9 @@ function CommentItem({ comment, isOwner, isAuthenticated, onFlag, onDelete }: Co
             {comment.time}
           </span>
         </div>
-        <p className="text-sm text-foreground/90 mt-1 leading-relaxed break-words">
-          {comment.content}
-        </p>
+        <div className="mt-1">
+          <MarkdownContent content={comment.content} variant="compact" />
+        </div>
         {!isSystem && (
           <div className="flex items-center gap-2 mt-2">
             <button

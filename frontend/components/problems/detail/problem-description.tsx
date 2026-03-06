@@ -1,6 +1,7 @@
 "use client";
 
 import { ProblemData } from "@/hooks/use-problem";
+import { MarkdownContent } from "@/components/shared/markdown-content";
 
 interface ProblemDescriptionProps {
   problem: ProblemData;
@@ -10,11 +11,7 @@ export function ProblemDescription({ problem }: ProblemDescriptionProps) {
   return (
     <div className="space-y-6">
       {/* Description */}
-      <div className="prose prose-sm max-w-none">
-        <div className="text-foreground/90 leading-relaxed whitespace-pre-wrap">
-          {problem.description}
-        </div>
-      </div>
+      <MarkdownContent content={problem.description} />
 
       {/* Tags */}
       {problem.tags.length > 0 && (

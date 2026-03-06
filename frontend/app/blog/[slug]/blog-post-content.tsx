@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Markdown from "react-markdown";
 import {
   ArrowLeft,
   Calendar,
@@ -10,6 +9,7 @@ import {
   Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MarkdownContent } from "@/components/shared/markdown-content";
 import { BlogPostClient } from "./blog-post-client";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -127,9 +127,7 @@ export function BlogPostContent({ post }: { post: BlogPostData }) {
             )}
 
             {/* Body */}
-            <div className="prose prose-invert prose-sm sm:prose-base max-w-none mb-8 [&_h1]:text-2xl [&_h1]:font-light [&_h1]:tracking-tight [&_h2]:text-xl [&_h2]:font-light [&_h3]:text-lg [&_h3]:font-light [&_p]:text-muted-foreground [&_p]:leading-relaxed [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-4 [&_code]:font-mono [&_code]:text-sm [&_code]:bg-secondary [&_code]:px-1.5 [&_code]:py-0.5 [&_pre]:bg-secondary [&_pre]:border [&_pre]:border-border [&_blockquote]:border-l-2 [&_blockquote]:border-foreground [&_blockquote]:pl-4 [&_blockquote]:italic [&_ul]:list-disc [&_ol]:list-decimal [&_li]:text-muted-foreground">
-              <Markdown>{post.body}</Markdown>
-            </div>
+            <MarkdownContent content={post.body} className="mb-8" />
 
             {/* Interactive elements */}
             <div className="pt-6 border-t border-border">

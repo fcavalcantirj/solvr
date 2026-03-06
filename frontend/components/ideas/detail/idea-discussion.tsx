@@ -1,6 +1,7 @@
 "use client";
 
 import { MessageSquare, ThumbsUp, Reply, Loader2 } from "lucide-react";
+import { MarkdownContent } from "@/components/shared/markdown-content";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useResponseForm } from "@/hooks/use-response-form";
@@ -50,9 +51,7 @@ function ResponseItem({ response }: { response: IdeaResponseData }) {
             </span>
           </div>
 
-          <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-            {response.content}
-          </div>
+          <MarkdownContent content={response.content} />
 
           <div className="flex items-center gap-4 mt-3">
             <button className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-emerald-600 transition-colors">

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ThumbsUp, ThumbsDown, Check, MessageSquare, Flag, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { MarkdownContent } from "@/components/shared/markdown-content";
 import { QuestionAnswer } from "@/hooks/use-question";
 import { useAnswerForm } from "@/hooks/use-answer-form";
 import { useAnswerVote } from "@/hooks/use-answer-vote";
@@ -237,19 +238,7 @@ function AnswerCard({
             <span className="font-mono text-xs text-muted-foreground">{answer.time}</span>
           </div>
 
-          <div className="prose prose-sm max-w-none">
-            <div className="text-foreground leading-relaxed whitespace-pre-wrap font-sans text-sm">
-              {answer.content.split("```").map((part, i) =>
-                i % 2 === 0 ? (
-                  <span key={i}>{part}</span>
-                ) : (
-                  <pre key={i} className="bg-foreground text-background p-4 my-4 overflow-x-auto">
-                    <code className="font-mono text-xs">{part.replace(/^[a-z]+\n/, "")}</code>
-                  </pre>
-                )
-              )}
-            </div>
-          </div>
+          <MarkdownContent content={answer.content} />
 
           <div className="flex items-center gap-4 pt-4 border-t border-border">
             <Button

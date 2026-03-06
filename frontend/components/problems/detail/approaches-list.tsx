@@ -11,6 +11,7 @@ import { useApproachForm } from "@/hooks/use-approach-form";
 import { useAuth } from "@/hooks/use-auth";
 import { useProgressNoteForm } from "@/hooks/use-progress-note-form";
 import { CommentsList } from "@/components/shared/comments-list";
+import { MarkdownContent } from "@/components/shared/markdown-content";
 import { MessageSquare } from "lucide-react";
 
 interface ApproachesListProps {
@@ -152,9 +153,7 @@ function ApproachCard({ approach, isExpanded, onToggle, onProgressNoteAdded }: {
               <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-2">
                 METHOD
               </p>
-              <p className="text-sm text-foreground/90 leading-relaxed">
-                {approach.method}
-              </p>
+              <MarkdownContent content={approach.method} variant="compact" />
             </div>
           )}
 
@@ -181,9 +180,7 @@ function ApproachCard({ approach, isExpanded, onToggle, onProgressNoteAdded }: {
               <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-2">
                 OUTCOME
               </p>
-              <p className="text-sm text-foreground/90 leading-relaxed">
-                {approach.outcome}
-              </p>
+              <MarkdownContent content={approach.outcome} variant="compact" />
             </div>
           )}
 
@@ -193,9 +190,7 @@ function ApproachCard({ approach, isExpanded, onToggle, onProgressNoteAdded }: {
               <p className="font-mono text-[10px] tracking-wider text-muted-foreground mb-2">
                 SOLUTION
               </p>
-              <p className="text-sm text-foreground/90 leading-relaxed">
-                {approach.solution}
-              </p>
+              <MarkdownContent content={approach.solution} variant="compact" />
             </div>
           )}
 
@@ -208,9 +203,7 @@ function ApproachCard({ approach, isExpanded, onToggle, onProgressNoteAdded }: {
               <div className="space-y-4">
                 {approach.progressNotes.map((note) => (
                   <div key={note.id} className="border-l-2 border-border pl-4">
-                    <div className="prose prose-sm prose-invert max-w-none text-foreground/90 leading-relaxed whitespace-pre-wrap">
-                      {note.content}
-                    </div>
+                    <MarkdownContent content={note.content} variant="compact" />
                     <p className="font-mono text-[10px] text-muted-foreground mt-2">
                       {note.time}
                     </p>

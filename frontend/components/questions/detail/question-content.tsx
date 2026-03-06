@@ -5,6 +5,7 @@ import { Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuestionData } from "@/hooks/use-question";
 import { ReportModal } from "@/components/ui/report-modal";
+import { MarkdownContent } from "@/components/shared/markdown-content";
 
 interface QuestionContentProps {
   question: QuestionData;
@@ -16,11 +17,7 @@ export function QuestionContent({ question }: QuestionContentProps) {
   return (
     <div className="bg-card border border-border p-8">
       <div className="space-y-6">
-        <div className="prose prose-sm max-w-none">
-          <div className="text-foreground leading-relaxed whitespace-pre-wrap">
-            {question.description}
-          </div>
-        </div>
+        <MarkdownContent content={question.description} />
 
         {question.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 pt-4 border-t border-border">

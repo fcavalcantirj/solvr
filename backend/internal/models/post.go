@@ -163,6 +163,7 @@ type PostWithAuthor struct {
 	ApproachesCount int        `json:"approaches_count"`
 	CommentsCount   int        `json:"comments_count"`
 	UserVote        *string    `json:"user_vote"`
+	AgentHumanID    string     `json:"-"` // agent's owning human UUID, never in JSON
 }
 
 // PostListOptions contains options for listing posts.

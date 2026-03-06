@@ -204,6 +204,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			COALESCE(ans_cnt.cnt, 0) as answers_count,
 			COALESCE(app_cnt.cnt, 0) as approaches_count,
 			COALESCE(cmt_cnt.cnt, 0) as comments_count,
+			COALESCE(ag.human_id::text, '') as agent_human_id,
 			%s
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
@@ -298,6 +299,7 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 		&post.AnswersCount,
 		&post.ApproachesCount,
 		&post.CommentsCount,
+		&post.AgentHumanID,
 		&post.UserVote,
 	)
 	if err != nil {
@@ -484,6 +486,7 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 			COALESCE(ans_cnt.cnt, 0) as answers_count,
 			COALESCE(app_cnt.cnt, 0) as approaches_count,
 			COALESCE(cmt_cnt.cnt, 0) as comments_count,
+			COALESCE(ag.human_id::text, '') as agent_human_id,
 			%s
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
@@ -542,6 +545,7 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 		&post.AnswersCount,
 		&post.ApproachesCount,
 		&post.CommentsCount,
+		&post.AgentHumanID,
 		&post.UserVote,
 	)
 	if err != nil {

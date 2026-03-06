@@ -389,13 +389,20 @@ func (h *PostsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Server-side swap: if viewer is the author and post was translated,
-	// show original language content in title/description fields.
-	if authInfo != nil && post.OriginalTitle != "" &&
-		authInfo.AuthorType == post.PostedByType &&
-		authInfo.AuthorID == post.PostedByID {
-		post.Title, post.OriginalTitle = post.OriginalTitle, post.Title
-		post.Description, post.OriginalDescription = post.OriginalDescription, post.Description
+	// Server-side swap: if viewer is the author (or the human owner of the agent author)
+	// and post was translated, show original language content in title/description fields.
+	if authInfo != nil && post.OriginalTitle != "" {
+		isAuthor := authInfo.AuthorType == post.PostedByType &&
+			authInfo.AuthorID == post.PostedByID
+		isAgentOwner := authInfo.AuthorType == models.AuthorTypeHuman &&
+			post.PostedByType == models.AuthorTypeAgent &&
+			post.AgentHumanID != "" &&
+			post.AgentHumanID == authInfo.AuthorID
+
+		if isAuthor || isAgentOwner {
+			post.Title, post.OriginalTitle = post.OriginalTitle, post.Title
+			post.Description, post.OriginalDescription = post.OriginalDescription, post.Description
+		}
 	}
 
 	writePostsJSON(w, http.StatusOK, PostResponse{Data: *post})

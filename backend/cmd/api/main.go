@@ -132,6 +132,19 @@ func main() {
 		log.Println("Stale content cleanup job started (runs every 24 hours)")
 	}
 
+	// Start auto-solve job if database is available.
+	// Auto-solves problems with succeeded approaches after 14 days (warns at 7 days).
+	var autoSolveCancel context.CancelFunc
+	if pool != nil {
+		autoSolveNotifRepo := db.NewNotificationsRepository(pool)
+		autoSolveRepo := db.NewAutoSolveRepository(pool, autoSolveNotifRepo)
+		autoSolveJob := jobs.NewAutoSolveJob(autoSolveRepo, autoSolveRepo)
+		var autoSolveCtx context.Context
+		autoSolveCtx, autoSolveCancel = context.WithCancel(context.Background())
+		go autoSolveJob.RunScheduled(autoSolveCtx, jobs.DefaultAutoSolveInterval)
+		log.Println("Auto-solve job started (runs every 24 hours)")
+	}
+
 	// Start auto-translation job if database and Groq API key are available.
 	// Runs twice daily (every 12 hours) to translate non-English draft posts.
 	var translationCancel context.CancelFunc
@@ -223,6 +236,9 @@ func main() {
 	}
 	if staleContentCancel != nil {
 		staleContentCancel()
+	}
+	if autoSolveCancel != nil {
+		autoSolveCancel()
 	}
 	if translationCancel != nil {
 		translationCancel()

@@ -378,6 +378,8 @@ func TestSanitizeJSONNewlines(t *testing.T) {
 		{"already escaped newline", `{"title":"line1\nline2"}`, `{"title":"line1\nline2"}`},
 		{"newline between fields", "{\"title\":\"a\",\n\"description\":\"b\"}", "{\"title\":\"a\",\n\"description\":\"b\"}"},
 		{"carriage return in string", "{\"title\":\"a\rb\"}", `{"title":"a\rb"}`},
+		{"backslash then literal newline", "{\"title\":\"a\\\nb\"}", `{"title":"a\nb"}`},
+		{"backslash then literal tab", "{\"title\":\"a\\\tb\"}", `{"title":"a\tb"}`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

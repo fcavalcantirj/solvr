@@ -185,7 +185,8 @@ func (s *TranslationService) TranslateContent(ctx context.Context, input Transla
 
 // sanitizeJSONNewlines escapes literal newlines and tabs inside JSON strings.
 // Groq's llama-3.3-70b sometimes returns JSON with unescaped newlines in string values,
-// which Go's json.Unmarshal rejects with "invalid character '\n' in string literal".
+// which Go's json.Unmarshal rejects with "invalid character '\n' in string literal"
+// or "invalid character '\n' in string escape code" (backslash followed by literal newline).
 func sanitizeJSONNewlines(s string) string {
 	var buf strings.Builder
 	buf.Grow(len(s))
@@ -194,7 +195,18 @@ func sanitizeJSONNewlines(s string) string {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		if escaped {
-			buf.WriteByte(c)
+			// Handle backslash followed by a literal control character (e.g., `\` + newline).
+			// This is invalid JSON — convert `\` + literal newline to the `\n` escape sequence.
+			switch c {
+			case '\n':
+				buf.WriteString("n")
+			case '\r':
+				buf.WriteString("r")
+			case '\t':
+				buf.WriteString("t")
+			default:
+				buf.WriteByte(c)
+			}
 			escaped = false
 			continue
 		}

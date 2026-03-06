@@ -362,7 +362,8 @@ func (h *PostsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Use FindByIDForViewer when authenticated to include user_vote
 	var post *models.PostWithAuthor
 	var err error
-	if authInfo := GetAuthInfo(r); authInfo != nil {
+	authInfo := GetAuthInfo(r)
+	if authInfo != nil {
 		post, err = h.repo.FindByIDForViewer(r.Context(), postID, authInfo.AuthorType, authInfo.AuthorID)
 	} else {
 		post, err = h.repo.FindByID(r.Context(), postID)
@@ -386,6 +387,15 @@ func (h *PostsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if post.DeletedAt != nil {
 		writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
 		return
+	}
+
+	// Server-side swap: if viewer is the author and post was translated,
+	// show original language content in title/description fields.
+	if authInfo != nil && post.OriginalTitle != "" &&
+		authInfo.AuthorType == post.PostedByType &&
+		authInfo.AuthorID == post.PostedByID {
+		post.Title, post.OriginalTitle = post.OriginalTitle, post.Title
+		post.Description, post.OriginalDescription = post.OriginalDescription, post.Description
 	}
 
 	writePostsJSON(w, http.StatusOK, PostResponse{Data: *post})

@@ -173,12 +173,57 @@ func (s *TranslationService) TranslateContent(ctx context.Context, input Transla
 	// Parse the translation result from the message content.
 	// Strip markdown fences if the model wraps the JSON (e.g. ```json\n{...}\n```).
 	content := stripMarkdownFences(chatResp.Choices[0].Message.Content)
+	// Sanitize literal newlines/tabs that Groq sometimes puts inside JSON string values.
+	content = sanitizeJSONNewlines(content)
 	var result TranslationResult
 	if err := json.Unmarshal([]byte(content), &result); err != nil {
 		return nil, fmt.Errorf("translation: failed to parse translation result: %w", err)
 	}
 
 	return &result, nil
+}
+
+// sanitizeJSONNewlines escapes literal newlines and tabs inside JSON strings.
+// Groq's llama-3.3-70b sometimes returns JSON with unescaped newlines in string values,
+// which Go's json.Unmarshal rejects with "invalid character '\n' in string literal".
+func sanitizeJSONNewlines(s string) string {
+	var buf strings.Builder
+	buf.Grow(len(s))
+	inString := false
+	escaped := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if escaped {
+			buf.WriteByte(c)
+			escaped = false
+			continue
+		}
+		if c == '\\' && inString {
+			buf.WriteByte(c)
+			escaped = true
+			continue
+		}
+		if c == '"' {
+			inString = !inString
+			buf.WriteByte(c)
+			continue
+		}
+		if inString {
+			switch c {
+			case '\n':
+				buf.WriteString(`\n`)
+			case '\r':
+				buf.WriteString(`\r`)
+			case '\t':
+				buf.WriteString(`\t`)
+			default:
+				buf.WriteByte(c)
+			}
+		} else {
+			buf.WriteByte(c)
+		}
+	}
+	return buf.String()
 }
 
 // stripMarkdownFences removes markdown code fences from LLM responses.

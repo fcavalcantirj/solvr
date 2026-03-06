@@ -36,7 +36,7 @@ export function ProblemHeader({ problem }: ProblemHeaderProps) {
       </Link>
 
       {/* Moderation Banner */}
-      <ModerationBanner status={problem.status} postId={problem.id} postType="problems" />
+      <ModerationBanner status={problem.status} postId={problem.id} postType="problems" originalLanguage={problem.originalLanguage} />
 
       {/* Meta Row */}
       <div className="flex flex-wrap items-center gap-3 mb-6">

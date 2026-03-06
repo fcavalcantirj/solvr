@@ -319,6 +319,76 @@ func TestTranslateContent_SystemPromptContainsTechnicalTranslator(t *testing.T) 
 	}
 }
 
+func TestTranslateContent_LiteralNewlinesInJSON(t *testing.T) {
+	// Groq sometimes returns JSON with literal newlines inside string values,
+	// e.g. {"title": "line1\nline2"} with actual newline bytes.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Build response with literal newlines inside JSON string values
+		rawContent := "{\"title\":\"How to fix\\nthis error\",\"description\":\"Step 1\\nStep 2\\nStep 3\"}"
+		// Replace the escaped \\n with actual newline bytes to simulate Groq's output
+		rawContent = strings.ReplaceAll(rawContent, "\\n", "\n")
+
+		resp := map[string]interface{}{
+			"id":      "chatcmpl-newline",
+			"object":  "chat.completion",
+			"created": 1700000000,
+			"model":   DefaultTranslationModel,
+			"choices": []map[string]interface{}{
+				{
+					"index":         0,
+					"message":       map[string]interface{}{"role": "assistant", "content": rawContent},
+					"finish_reason": "stop",
+				},
+			},
+		}
+		// Marshal the envelope — Go's json.Marshal will escape the newlines in the
+		// outer envelope, but the inner content string preserves them.
+		respBytes, _ := json.Marshal(resp)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(respBytes)
+	}))
+	defer server.Close()
+
+	svc := NewTranslationService("test-key", WithTranslationBaseURL(server.URL))
+	result, err := svc.TranslateContent(context.Background(), TranslationInput{
+		Title:    "如何修复此错误",
+		Language: "Chinese",
+	})
+	if err != nil {
+		t.Fatalf("expected literal newlines to be sanitized, got: %v", err)
+	}
+	if !strings.Contains(result.Title, "How to fix") {
+		t.Errorf("expected title to contain 'How to fix', got %q", result.Title)
+	}
+	if !strings.Contains(result.Description, "Step 1") {
+		t.Errorf("expected description to contain 'Step 1', got %q", result.Description)
+	}
+}
+
+func TestSanitizeJSONNewlines(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no newlines", `{"title":"hello"}`, `{"title":"hello"}`},
+		{"literal newline in string", "{\"title\":\"line1\nline2\"}", `{"title":"line1\nline2"}`},
+		{"literal tab in string", "{\"title\":\"col1\tcol2\"}", `{"title":"col1\tcol2"}`},
+		{"already escaped newline", `{"title":"line1\nline2"}`, `{"title":"line1\nline2"}`},
+		{"newline between fields", "{\"title\":\"a\",\n\"description\":\"b\"}", "{\"title\":\"a\",\n\"description\":\"b\"}"},
+		{"carriage return in string", "{\"title\":\"a\rb\"}", `{"title":"a\rb"}`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := sanitizeJSONNewlines(c.input)
+			if got != c.want {
+				t.Errorf("sanitizeJSONNewlines(%q) = %q, want %q", c.input, got, c.want)
+			}
+		})
+	}
+}
+
 func TestTranslateContent_StripsMarkdownFences(t *testing.T) {
 	// llama-3.3-70b-versatile wraps JSON in ```json...``` for complex titles
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

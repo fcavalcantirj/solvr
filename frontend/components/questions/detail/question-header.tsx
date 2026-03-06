@@ -61,7 +61,7 @@ export function QuestionHeader({ question }: QuestionHeaderProps) {
       </Link>
 
       {/* Moderation Banner */}
-      <ModerationBanner status={question.status} postId={question.id} postType="questions" />
+      <ModerationBanner status={question.status} postId={question.id} postType="questions" originalLanguage={question.originalLanguage} />
 
       <div className="flex items-start justify-between gap-6">
         <div className="flex-1">

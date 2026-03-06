@@ -54,6 +54,9 @@ export interface ProblemData {
   views: number;
   crystallizationCid?: string;
   crystallizedAt?: string;
+  originalLanguage?: string;
+  originalTitle?: string;
+  originalDescription?: string;
 }
 
 export interface UseProblemResult {
@@ -87,6 +90,9 @@ function transformProblem(post: APIPost): ProblemData {
     views: post.view_count || 0,
     crystallizationCid: post.crystallization_cid,
     crystallizedAt: post.crystallized_at,
+    originalLanguage: post.original_language,
+    originalTitle: post.original_title,
+    originalDescription: post.original_description,
   };
 }
 

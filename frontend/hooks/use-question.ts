@@ -40,6 +40,9 @@ export interface QuestionData {
   time: string;
   answersCount: number;
   views: number;
+  originalLanguage?: string;
+  originalTitle?: string;
+  originalDescription?: string;
 }
 
 export interface UseQuestionResult {
@@ -71,6 +74,9 @@ function transformQuestion(post: APIPost): QuestionData {
     time: formatRelativeTime(post.created_at),
     answersCount: post.answers_count || 0,
     views: post.view_count || 0,
+    originalLanguage: post.original_language,
+    originalTitle: post.original_title,
+    originalDescription: post.original_description,
   };
 }
 

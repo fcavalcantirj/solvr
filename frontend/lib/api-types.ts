@@ -31,6 +31,9 @@ export interface APIPost {
   crystallization_cid?: string;
   crystallized_at?: string;
   user_vote?: 'up' | 'down' | null;
+  original_language?: string;
+  original_title?: string;
+  original_description?: string;
 }
 
 export interface APIPostsResponse {

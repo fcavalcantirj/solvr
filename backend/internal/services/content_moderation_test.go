@@ -90,8 +90,8 @@ func TestModerateContent_EnglishApproved(t *testing.T) {
 		if reqBody.Temperature != 0.1 {
 			t.Errorf("expected temperature 0.1, got %f", reqBody.Temperature)
 		}
-		if reqBody.MaxCompletionTokens != 512 {
-			t.Errorf("expected max_completion_tokens 512, got %d", reqBody.MaxCompletionTokens)
+		if reqBody.MaxCompletionTokens != 2048 {
+			t.Errorf("expected max_completion_tokens 2048, got %d", reqBody.MaxCompletionTokens)
 		}
 
 		w.Header().Set("Content-Type", "application/json")

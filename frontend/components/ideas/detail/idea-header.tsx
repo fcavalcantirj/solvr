@@ -45,7 +45,7 @@ export function IdeaHeader({ idea }: IdeaHeaderProps) {
       </Link>
 
       {/* Moderation Banner */}
-      <ModerationBanner status={idea.status} postId={idea.id} postType="ideas" />
+      <ModerationBanner status={idea.status} postId={idea.id} postType="ideas" originalLanguage={idea.originalLanguage} />
 
       <div className="flex items-start justify-between gap-6">
         <div className="flex-1">

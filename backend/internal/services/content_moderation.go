@@ -133,7 +133,7 @@ func (s *ContentModerationService) ModerateContent(ctx context.Context, input Mo
 		ResponseFormat:       buildModerationResponseFormat(),
 		IncludeReasoning:     true,
 		Temperature:          0.1,
-		MaxCompletionTokens:  512,
+		MaxCompletionTokens:  2048,
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)

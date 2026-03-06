@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -172,70 +173,52 @@ func (s *TranslationService) TranslateContent(ctx context.Context, input Transla
 
 	// Parse the translation result from the message content.
 	// Strip markdown fences if the model wraps the JSON (e.g. ```json\n{...}\n```).
-	content := stripMarkdownFences(chatResp.Choices[0].Message.Content)
-	// Sanitize literal newlines/tabs that Groq sometimes puts inside JSON string values.
-	content = sanitizeJSONNewlines(content)
+	rawContent := chatResp.Choices[0].Message.Content
+	content := sanitizeJSONControlChars(stripMarkdownFences(rawContent))
 	var result TranslationResult
 	if err := json.Unmarshal([]byte(content), &result); err != nil {
-		return nil, fmt.Errorf("translation: failed to parse translation result: %w", err)
+		// Phase 2: aggressive fallback — replace ALL control chars with spaces.
+		// Handles literal newlines inside JSON strings that Phase 1 can't fix.
+		content = aggressiveSanitizeJSON(stripMarkdownFences(rawContent))
+		if err2 := json.Unmarshal([]byte(content), &result); err2 != nil {
+			return nil, fmt.Errorf("translation: failed to parse translation result: %w", err)
+		}
 	}
 
 	return &result, nil
 }
 
-// sanitizeJSONNewlines escapes literal newlines and tabs inside JSON strings.
-// Groq's llama-3.3-70b sometimes returns JSON with unescaped newlines in string values,
-// which Go's json.Unmarshal rejects with "invalid character '\n' in string literal"
-// or "invalid character '\n' in string escape code" (backslash followed by literal newline).
-func sanitizeJSONNewlines(s string) string {
-	var buf strings.Builder
-	buf.Grow(len(s))
-	inString := false
-	escaped := false
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if escaped {
-			// Handle backslash followed by a literal control character (e.g., `\` + newline).
-			// This is invalid JSON — convert `\` + literal newline to the `\n` escape sequence.
-			switch c {
-			case '\n':
-				buf.WriteString("n")
-			case '\r':
-				buf.WriteString("r")
-			case '\t':
-				buf.WriteString("t")
-			default:
-				buf.WriteByte(c)
-			}
-			escaped = false
-			continue
+// controlCharPattern matches ASCII control characters that are never valid in JSON,
+// excluding \t (0x09), \n (0x0A), and \r (0x0D) which are valid JSON whitespace.
+var controlCharPattern = regexp.MustCompile(`[\x00-\x08\x0b\x0c\x0e-\x1f]`)
+
+// sanitizeJSONControlChars escapes rare control characters (null, bell, form feed, etc.)
+// in JSON using \uXXXX sequences. This is Phase 1 of sanitization — it handles exotic
+// control chars while preserving valid JSON whitespace (newlines, tabs, carriage returns).
+func sanitizeJSONControlChars(s string) string {
+	return controlCharPattern.ReplaceAllStringFunc(s, func(match string) string {
+		return fmt.Sprintf(`\u%04x`, match[0])
+	})
+}
+
+// invalidEscapePattern matches a backslash followed by a character that is NOT
+// a valid JSON escape (valid: " \ / b f n r t u).
+var invalidEscapePattern = regexp.MustCompile(`\\([^"\\/bfnrtu])`)
+
+// aggressiveSanitizeJSON replaces ALL bytes < 0x20 with spaces, then strips
+// invalid JSON escape sequences (e.g. `\ ` or `\:` → just the char).
+// This is Phase 2 — a fallback when Phase 1 fails. Emojis, CJK, and all
+// UTF-8 multibyte characters (bytes 0x80+) are untouched.
+func aggressiveSanitizeJSON(s string) string {
+	// Step 1: replace all control characters with spaces
+	s = strings.Map(func(r rune) rune {
+		if r < 0x20 {
+			return ' '
 		}
-		if c == '\\' && inString {
-			buf.WriteByte(c)
-			escaped = true
-			continue
-		}
-		if c == '"' {
-			inString = !inString
-			buf.WriteByte(c)
-			continue
-		}
-		if inString {
-			switch c {
-			case '\n':
-				buf.WriteString(`\n`)
-			case '\r':
-				buf.WriteString(`\r`)
-			case '\t':
-				buf.WriteString(`\t`)
-			default:
-				buf.WriteByte(c)
-			}
-		} else {
-			buf.WriteByte(c)
-		}
-	}
-	return buf.String()
+		return r
+	}, s)
+	// Step 2: strip backslashes before invalid escape characters (e.g. `\ ` → ` `)
+	return invalidEscapePattern.ReplaceAllString(s, "$1")
 }
 
 // stripMarkdownFences removes markdown code fences from LLM responses.

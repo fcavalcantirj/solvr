@@ -320,8 +320,8 @@ func TestTranslateContent_SystemPromptContainsTechnicalTranslator(t *testing.T) 
 }
 
 func TestTranslateContent_LiteralNewlinesInJSON(t *testing.T) {
-	// Groq sometimes returns JSON with literal newlines inside string values,
-	// e.g. {"title": "line1\nline2"} with actual newline bytes.
+	// Groq sometimes returns JSON with literal newlines inside string values.
+	// Phase 2 (aggressive sanitizer) should recover by replacing newlines with spaces.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Build response with literal newlines inside JSON string values
 		rawContent := "{\"title\":\"How to fix\\nthis error\",\"description\":\"Step 1\\nStep 2\\nStep 3\"}"
@@ -341,8 +341,6 @@ func TestTranslateContent_LiteralNewlinesInJSON(t *testing.T) {
 				},
 			},
 		}
-		// Marshal the envelope — Go's json.Marshal will escape the newlines in the
-		// outer envelope, but the inner content string preserves them.
 		respBytes, _ := json.Marshal(resp)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -356,7 +354,7 @@ func TestTranslateContent_LiteralNewlinesInJSON(t *testing.T) {
 		Language: "Chinese",
 	})
 	if err != nil {
-		t.Fatalf("expected literal newlines to be sanitized, got: %v", err)
+		t.Fatalf("expected literal newlines to be sanitized via fallback, got: %v", err)
 	}
 	if !strings.Contains(result.Title, "How to fix") {
 		t.Errorf("expected title to contain 'How to fix', got %q", result.Title)
@@ -366,26 +364,86 @@ func TestTranslateContent_LiteralNewlinesInJSON(t *testing.T) {
 	}
 }
 
-func TestSanitizeJSONNewlines(t *testing.T) {
+func TestTranslateContent_BackslashLiteralNewlineFallback(t *testing.T) {
+	// Groq returns backslash followed by literal newline (the "string escape code" error).
+	// Phase 2 should recover this by replacing the newline with space.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Build the outer JSON envelope manually so we can embed a content string
+		// that contains backslash + literal newline (which json.Marshal would double-escape).
+		// The inner content after outer unmarshal will be: {"title":"line1\<newline>line2","description":"desc"}
+		// We use \\ in the outer JSON for the backslash and \n for the literal newline.
+		raw := `{"id":"chatcmpl-bsnl","object":"chat.completion","created":1700000000,` +
+			`"model":"` + DefaultTranslationModel + `",` +
+			`"choices":[{"index":0,"message":{"role":"assistant",` +
+			`"content":"{\"title\":\"line1\\\nline2\",\"description\":\"desc\"}"},` +
+			`"finish_reason":"stop"}]}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(raw))
+	}))
+	defer server.Close()
+
+	svc := NewTranslationService("test-key", WithTranslationBaseURL(server.URL))
+	result, err := svc.TranslateContent(context.Background(), TranslationInput{
+		Title:    "测试",
+		Language: "Chinese",
+	})
+	if err != nil {
+		t.Fatalf("expected backslash+newline to be recovered via fallback, got: %v", err)
+	}
+	if !strings.Contains(result.Title, "line1") {
+		t.Errorf("expected title to contain 'line1', got %q", result.Title)
+	}
+}
+
+func TestSanitizeJSONControlChars(t *testing.T) {
 	cases := []struct {
 		name  string
 		input string
 		want  string
 	}{
-		{"no newlines", `{"title":"hello"}`, `{"title":"hello"}`},
-		{"literal newline in string", "{\"title\":\"line1\nline2\"}", `{"title":"line1\nline2"}`},
-		{"literal tab in string", "{\"title\":\"col1\tcol2\"}", `{"title":"col1\tcol2"}`},
-		{"already escaped newline", `{"title":"line1\nline2"}`, `{"title":"line1\nline2"}`},
-		{"newline between fields", "{\"title\":\"a\",\n\"description\":\"b\"}", "{\"title\":\"a\",\n\"description\":\"b\"}"},
-		{"carriage return in string", "{\"title\":\"a\rb\"}", `{"title":"a\rb"}`},
-		{"backslash then literal newline", "{\"title\":\"a\\\nb\"}", `{"title":"a\nb"}`},
-		{"backslash then literal tab", "{\"title\":\"a\\\tb\"}", `{"title":"a\tb"}`},
+		{"no control chars", `{"title":"hello"}`, `{"title":"hello"}`},
+		{"null byte", "{\"title\":\"a\x00b\"}", `{"title":"a\u0000b"}`},
+		{"bell char", "{\"title\":\"a\x07b\"}", `{"title":"a\u0007b"}`},
+		{"preserves newlines", "{\"title\":\"a\",\n\"desc\":\"b\"}", "{\"title\":\"a\",\n\"desc\":\"b\"}"},
+		{"preserves tabs", "{\"title\":\t\"a\"}", "{\"title\":\t\"a\"}"},
+		{"preserves emojis", `{"title":"✅ ok 🎯"}`, `{"title":"✅ ok 🎯"}`},
+		{"preserves CJK", `{"title":"你好世界"}`, `{"title":"你好世界"}`},
+		{"form feed", "{\"title\":\"a\x0cb\"}", `{"title":"a\u000cb"}`},
+		{"vertical tab", "{\"title\":\"a\x0bb\"}", `{"title":"a\u000bb"}`},
+		{"multiple control chars", "{\"title\":\"a\x00b\x07c\x0bd\"}", `{"title":"a\u0000b\u0007c\u000bd"}`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := sanitizeJSONNewlines(c.input)
+			got := sanitizeJSONControlChars(c.input)
 			if got != c.want {
-				t.Errorf("sanitizeJSONNewlines(%q) = %q, want %q", c.input, got, c.want)
+				t.Errorf("sanitizeJSONControlChars(%q) = %q, want %q", c.input, got, c.want)
+			}
+		})
+	}
+}
+
+func TestAggressiveSanitizeJSON(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no control chars", `{"title":"hello"}`, `{"title":"hello"}`},
+		{"newlines become spaces", "{\"title\":\"a\nb\"}", "{\"title\":\"a b\"}"},
+		{"tabs become spaces", "{\"title\":\"a\tb\"}", "{\"title\":\"a b\"}"},
+		{"null becomes space", "{\"title\":\"a\x00b\"}", "{\"title\":\"a b\"}"},
+		{"carriage return becomes space", "{\"title\":\"a\rb\"}", "{\"title\":\"a b\"}"},
+		{"preserves emojis", `{"title":"🎯 done ✅"}`, `{"title":"🎯 done ✅"}`},
+		{"preserves CJK", `{"title":"你好"}`, `{"title":"你好"}`},
+		{"preserves escaped seqs", `{"title":"a\nb"}`, `{"title":"a\nb"}`},
+		{"multiple mixed", "{\"title\":\"a\nb\tc\x00d\"}", "{\"title\":\"a b c d\"}"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := aggressiveSanitizeJSON(c.input)
+			if got != c.want {
+				t.Errorf("aggressiveSanitizeJSON(%q) = %q, want %q", c.input, got, c.want)
 			}
 		})
 	}

@@ -42,25 +42,40 @@ type MockNotificationsRepository struct {
 	findByIDNotification *Notification
 	findByIDErr          error
 
+	// Delete returns
+	deleteErr error
+
+	// DeleteAllReadForUser returns
+	deleteAllReadForUserCount int
+	deleteAllReadForUserErr   error
+
+	// DeleteAllReadForAgent returns
+	deleteAllReadForAgentCount int
+	deleteAllReadForAgentErr   error
+
 	// Track calls
-	lastUserID      string
-	lastAgentID     string
-	lastPage        int
-	lastPerPage     int
-	lastMarkReadID  string
+	lastUserID     string
+	lastAgentID    string
+	lastPage       int
+	lastPerPage    int
+	lastMarkReadID string
+	lastDeleteID   string
+	lastFilters    models.NotificationFilters
 }
 
-func (m *MockNotificationsRepository) GetNotificationsForUser(ctx context.Context, userID string, page, perPage int) ([]Notification, int, error) {
+func (m *MockNotificationsRepository) GetNotificationsForUser(ctx context.Context, userID string, page, perPage int, filters models.NotificationFilters) ([]Notification, int, error) {
 	m.lastUserID = userID
 	m.lastPage = page
 	m.lastPerPage = perPage
+	m.lastFilters = filters
 	return m.userNotifications, m.userNotificationsTotal, m.userNotificationsErr
 }
 
-func (m *MockNotificationsRepository) GetNotificationsForAgent(ctx context.Context, agentID string, page, perPage int) ([]Notification, int, error) {
+func (m *MockNotificationsRepository) GetNotificationsForAgent(ctx context.Context, agentID string, page, perPage int, filters models.NotificationFilters) ([]Notification, int, error) {
 	m.lastAgentID = agentID
 	m.lastPage = page
 	m.lastPerPage = perPage
+	m.lastFilters = filters
 	return m.agentNotifications, m.agentNotificationsTotal, m.agentNotificationsErr
 }
 
@@ -93,6 +108,21 @@ func (m *MockNotificationsRepository) GetUnreadCountForUser(ctx context.Context,
 
 func (m *MockNotificationsRepository) GetRecentUnreadForAgent(ctx context.Context, agentID string, limit int) ([]Notification, int, error) {
 	return nil, 0, nil
+}
+
+func (m *MockNotificationsRepository) Delete(ctx context.Context, id string) error {
+	m.lastDeleteID = id
+	return m.deleteErr
+}
+
+func (m *MockNotificationsRepository) DeleteAllReadForUser(ctx context.Context, userID string) (int, error) {
+	m.lastUserID = userID
+	return m.deleteAllReadForUserCount, m.deleteAllReadForUserErr
+}
+
+func (m *MockNotificationsRepository) DeleteAllReadForAgent(ctx context.Context, agentID string) (int, error) {
+	m.lastAgentID = agentID
+	return m.deleteAllReadForAgentCount, m.deleteAllReadForAgentErr
 }
 
 func createTestNotification(id, title, nType string, userID, agentID *string) Notification {

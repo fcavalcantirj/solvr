@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/services"
 )
 
 // mockCandidateLister implements CrystallizationCandidateLister for testing.
@@ -49,13 +51,16 @@ func TestCrystallizationJob_RunOnce_CrystallizesCandidates(t *testing.T) {
 	crystallizer := &mockCrystallizer{}
 
 	job := NewCrystallizationJob(lister, crystallizer, DefaultCrystallizationStabilityPeriod)
-	crystallized, failed := job.RunOnce(context.Background())
+	result := job.RunOnce(context.Background())
 
-	if crystallized != 3 {
-		t.Errorf("RunOnce() crystallized = %d, want 3", crystallized)
+	if result.Crystallized != 3 {
+		t.Errorf("RunOnce() crystallized = %d, want 3", result.Crystallized)
 	}
-	if failed != 0 {
-		t.Errorf("RunOnce() failed = %d, want 0", failed)
+	if result.Failed != 0 {
+		t.Errorf("RunOnce() failed = %d, want 0", result.Failed)
+	}
+	if result.Skipped != 0 {
+		t.Errorf("RunOnce() skipped = %d, want 0", result.Skipped)
 	}
 	if len(crystallizer.crystallizedIDs) != 3 {
 		t.Errorf("Expected 3 IDs crystallized, got %d", len(crystallizer.crystallizedIDs))
@@ -70,13 +75,13 @@ func TestCrystallizationJob_RunOnce_NoCandidates(t *testing.T) {
 	crystallizer := &mockCrystallizer{}
 
 	job := NewCrystallizationJob(lister, crystallizer, DefaultCrystallizationStabilityPeriod)
-	crystallized, failed := job.RunOnce(context.Background())
+	result := job.RunOnce(context.Background())
 
-	if crystallized != 0 {
-		t.Errorf("RunOnce() crystallized = %d, want 0", crystallized)
+	if result.Crystallized != 0 {
+		t.Errorf("RunOnce() crystallized = %d, want 0", result.Crystallized)
 	}
-	if failed != 0 {
-		t.Errorf("RunOnce() failed = %d, want 0", failed)
+	if result.Failed != 0 {
+		t.Errorf("RunOnce() failed = %d, want 0", result.Failed)
 	}
 }
 
@@ -88,14 +93,13 @@ func TestCrystallizationJob_RunOnce_ListError(t *testing.T) {
 	crystallizer := &mockCrystallizer{}
 
 	job := NewCrystallizationJob(lister, crystallizer, DefaultCrystallizationStabilityPeriod)
-	crystallized, failed := job.RunOnce(context.Background())
+	result := job.RunOnce(context.Background())
 
-	// When listing fails, we crystallize 0 and report 0 failures (listing error logged)
-	if crystallized != 0 {
-		t.Errorf("RunOnce() crystallized = %d, want 0", crystallized)
+	if result.Crystallized != 0 {
+		t.Errorf("RunOnce() crystallized = %d, want 0", result.Crystallized)
 	}
-	if failed != 0 {
-		t.Errorf("RunOnce() failed = %d, want 0", failed)
+	if result.Failed != 0 {
+		t.Errorf("RunOnce() failed = %d, want 0", result.Failed)
 	}
 }
 
@@ -111,13 +115,13 @@ func TestCrystallizationJob_RunOnce_PartialFailure(t *testing.T) {
 	}
 
 	job := NewCrystallizationJob(lister, crystallizer, DefaultCrystallizationStabilityPeriod)
-	crystallized, failed := job.RunOnce(context.Background())
+	result := job.RunOnce(context.Background())
 
-	if crystallized != 2 {
-		t.Errorf("RunOnce() crystallized = %d, want 2", crystallized)
+	if result.Crystallized != 2 {
+		t.Errorf("RunOnce() crystallized = %d, want 2", result.Crystallized)
 	}
-	if failed != 1 {
-		t.Errorf("RunOnce() failed = %d, want 1", failed)
+	if result.Failed != 1 {
+		t.Errorf("RunOnce() failed = %d, want 1", result.Failed)
 	}
 }
 
@@ -192,12 +196,38 @@ func TestCrystallizationJob_AllFail(t *testing.T) {
 	}
 
 	job := NewCrystallizationJob(lister, crystallizer, DefaultCrystallizationStabilityPeriod)
-	crystallized, failed := job.RunOnce(context.Background())
+	result := job.RunOnce(context.Background())
 
-	if crystallized != 0 {
-		t.Errorf("RunOnce() crystallized = %d, want 0", crystallized)
+	if result.Crystallized != 0 {
+		t.Errorf("RunOnce() crystallized = %d, want 0", result.Crystallized)
 	}
-	if failed != 2 {
-		t.Errorf("RunOnce() failed = %d, want 2", failed)
+	if result.Failed != 2 {
+		t.Errorf("RunOnce() failed = %d, want 2", result.Failed)
+	}
+}
+
+// TestCrystallizationJob_SkipsNoVerifiedApproach tests that RunOnce skips
+// problems with ErrNoVerifiedApproach instead of counting them as failures.
+func TestCrystallizationJob_SkipsNoVerifiedApproach(t *testing.T) {
+	lister := &mockCandidateLister{
+		candidateIDs: []string{"problem-no-approach", "problem-ok"},
+	}
+	crystallizer := &mockCrystallizer{
+		errMap: map[string]error{
+			"problem-no-approach": services.ErrNoVerifiedApproach,
+		},
+	}
+
+	job := NewCrystallizationJob(lister, crystallizer, DefaultCrystallizationStabilityPeriod)
+	result := job.RunOnce(context.Background())
+
+	if result.Crystallized != 1 {
+		t.Errorf("RunOnce() crystallized = %d, want 1", result.Crystallized)
+	}
+	if result.Failed != 0 {
+		t.Errorf("RunOnce() failed = %d, want 0 (no-approach should be skipped, not failed)", result.Failed)
+	}
+	if result.Skipped != 1 {
+		t.Errorf("RunOnce() skipped = %d, want 1", result.Skipped)
 	}
 }

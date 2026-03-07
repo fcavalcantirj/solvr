@@ -198,6 +198,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 	// Create posts handler
 	postsHandler := handlers.NewPostsHandler(postsRepo)
+	postsHandler.SetApproachChecker(db.NewApproachesRepository(pool))
 	if embeddingService != nil {
 		postsHandler.SetEmbeddingService(embeddingService)
 	}
@@ -774,6 +775,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			})
 			// Per SPEC.md Part 5.6: POST /notifications/read-all - mark all as read
 			r.Post("/notifications/read-all", notificationsHandler.MarkAllRead)
+			// DELETE /notifications/{id} - delete a single notification
+			r.Delete("/notifications/{id}", notificationsHandler.Delete)
+			// DELETE /notifications - bulk delete all read notifications
+			r.Delete("/notifications", notificationsHandler.DeleteAllRead)
 
 			// User API keys endpoints (API-CRITICAL per PRD-v2)
 			// Per prd-v2.json: GET /users/me/api-keys - list user's API keys

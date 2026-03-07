@@ -333,6 +333,13 @@ class SolvrAPI {
     });
   }
 
+  async verifyApproach(approachId: string, verified: boolean = true): Promise<{ message: string; verified: boolean }> {
+    return this.fetch<{ message: string; verified: boolean }>(`/v1/approaches/${approachId}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ verified }),
+    });
+  }
+
   async getMe(): Promise<APIMeResponse> {
     return this.fetch<APIMeResponse>('/v1/me');
   }

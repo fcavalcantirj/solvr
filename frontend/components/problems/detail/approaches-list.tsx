@@ -10,6 +10,7 @@ import { ProblemApproach } from "@/hooks/use-problem";
 import { useApproachForm } from "@/hooks/use-approach-form";
 import { useAuth } from "@/hooks/use-auth";
 import { useProgressNoteForm } from "@/hooks/use-progress-note-form";
+import { useVerifyApproach } from "@/hooks/use-verify-approach";
 import { CommentsList } from "@/components/shared/comments-list";
 import { MarkdownContent } from "@/components/shared/markdown-content";
 import { MessageSquare } from "lucide-react";
@@ -17,6 +18,7 @@ import { MessageSquare } from "lucide-react";
 interface ApproachesListProps {
   approaches: ProblemApproach[];
   problemId: string;
+  problemAuthorId?: string;
   onApproachPosted?: () => void;
 }
 
@@ -64,7 +66,7 @@ function formatRelativeTime(dateString: string): string {
   return date.toLocaleDateString().toUpperCase();
 }
 
-function ApproachCard({ approach, isExpanded, onToggle, onProgressNoteAdded }: { approach: ProblemApproach; isExpanded: boolean; onToggle: () => void; onProgressNoteAdded?: () => void }) {
+function ApproachCard({ approach, isExpanded, onToggle, onProgressNoteAdded, isOwner, onVerify, isVerifying }: { approach: ProblemApproach; isExpanded: boolean; onToggle: () => void; onProgressNoteAdded?: () => void; isOwner?: boolean; onVerify?: (approachId: string) => void; isVerifying?: boolean }) {
   const statusKey = approach.status.toLowerCase();
   const config = statusConfig[statusKey] || statusConfig.starting;
   const StatusIcon = config.icon;
@@ -260,9 +262,19 @@ function ApproachCard({ approach, isExpanded, onToggle, onProgressNoteAdded }: {
                 <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
                   TOOK {formatDuration(approach.createdAt, approach.updatedAt)}
                 </span>
-                <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
-                  UPDATED {formatRelativeTime(approach.updatedAt)}
-                </span>
+                {isOwner && statusKey === 'succeeded' && onVerify ? (
+                  <button
+                    onClick={() => onVerify(approach.id)}
+                    disabled={isVerifying}
+                    className="font-mono text-[10px] tracking-wider bg-foreground text-background px-4 py-2 hover:bg-foreground/90 transition-colors disabled:opacity-50"
+                  >
+                    {isVerifying ? 'VERIFYING...' : 'VERIFY & MARK SOLVED'}
+                  </button>
+                ) : (
+                  <span className="font-mono text-[10px] tracking-wider text-muted-foreground">
+                    UPDATED {formatRelativeTime(approach.updatedAt)}
+                  </span>
+                )}
               </>
             )}
           </div>
@@ -294,12 +306,17 @@ function ApproachCard({ approach, isExpanded, onToggle, onProgressNoteAdded }: {
   );
 }
 
-export function ApproachesList({ approaches, problemId, onApproachPosted }: ApproachesListProps) {
+export function ApproachesList({ approaches, problemId, problemAuthorId, onApproachPosted }: ApproachesListProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     () => new Set(approaches.length > 0 ? [approaches[0].id] : [])
   );
   const [showForm, setShowForm] = useState(false);
   const [assumptionInput, setAssumptionInput] = useState('');
+  const { user } = useAuth();
+  const isOwner = user?.id === problemAuthorId;
+  const { isVerifying, verify } = useVerifyApproach(() => {
+    onApproachPosted?.();
+  });
 
   const form = useApproachForm(problemId, () => {
     setShowForm(false);
@@ -487,6 +504,9 @@ export function ApproachesList({ approaches, problemId, onApproachPosted }: Appr
               isExpanded={expandedIds.has(approach.id)}
               onToggle={() => toggleExpanded(approach.id)}
               onProgressNoteAdded={onApproachPosted}
+              isOwner={isOwner}
+              onVerify={verify}
+              isVerifying={isVerifying}
             />
           ))}
         </div>
@@ -505,6 +525,9 @@ export function ApproachesList({ approaches, problemId, onApproachPosted }: Appr
               isExpanded={expandedIds.has(approach.id)}
               onToggle={() => toggleExpanded(approach.id)}
               onProgressNoteAdded={onApproachPosted}
+              isOwner={isOwner}
+              onVerify={verify}
+              isVerifying={isVerifying}
             />
           ))}
         </div>

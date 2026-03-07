@@ -60,7 +60,7 @@ func TestNotificationsRepository_GetNotificationsForUser(t *testing.T) {
 	insertTestNotification(t, pool, &user.ID, nil, "answer.created", "Someone answered your question")
 	insertTestNotification(t, pool, &user.ID, nil, "comment.created", "New comment on your post")
 
-	notifications, total, err := repo.GetNotificationsForUser(context.Background(), user.ID, 1, 20)
+	notifications, total, err := repo.GetNotificationsForUser(context.Background(), user.ID, 1, 20, models.NotificationFilters{})
 	if err != nil {
 		t.Fatalf("GetNotificationsForUser failed: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestNotificationsRepository_GetNotificationsForAgent(t *testing.T) {
 	// Insert test notifications for agent
 	insertTestNotification(t, pool, nil, &agentID, "post.mentioned", "You were mentioned")
 
-	notifications, total, err := repo.GetNotificationsForAgent(context.Background(), agentID, 1, 20)
+	notifications, total, err := repo.GetNotificationsForAgent(context.Background(), agentID, 1, 20, models.NotificationFilters{})
 	if err != nil {
 		t.Fatalf("GetNotificationsForAgent failed: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestNotificationsRepository_Create(t *testing.T) {
 	}
 
 	// Verify the notification appears in GetNotificationsForAgent
-	notifications, total, err := repo.GetNotificationsForAgent(context.Background(), agentID, 1, 20)
+	notifications, total, err := repo.GetNotificationsForAgent(context.Background(), agentID, 1, 20, models.NotificationFilters{})
 	if err != nil {
 		t.Fatalf("GetNotificationsForAgent failed: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestNotificationsRepository_Pagination(t *testing.T) {
 	}
 
 	// Get page 1 with perPage=2
-	notifications, total, err := repo.GetNotificationsForUser(context.Background(), user.ID, 1, 2)
+	notifications, total, err := repo.GetNotificationsForUser(context.Background(), user.ID, 1, 2, models.NotificationFilters{})
 	if err != nil {
 		t.Fatalf("GetNotificationsForUser page 1 failed: %v", err)
 	}
@@ -350,5 +350,164 @@ func TestNotificationsRepository_Pagination(t *testing.T) {
 	}
 	if total < 5 {
 		t.Errorf("expected total >= 5, got %d", total)
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
+
+func TestNotificationsRepository_GetNotificationsForUser_FilterUnread(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewNotificationsRepository(pool)
+	user := createNotificationTestUser(t, pool)
+
+	// Insert 3 notifications
+	id1 := insertTestNotification(t, pool, &user.ID, nil, "answer.created", "Unread 1")
+	insertTestNotification(t, pool, &user.ID, nil, "comment.created", "Unread 2")
+	// Mark one as read
+	_, err := repo.MarkRead(context.Background(), id1)
+	if err != nil {
+		t.Fatalf("MarkRead failed: %v", err)
+	}
+
+	// Filter unread only
+	notifications, total, err := repo.GetNotificationsForUser(context.Background(), user.ID, 1, 20, models.NotificationFilters{Unread: boolPtr(true)})
+	if err != nil {
+		t.Fatalf("GetNotificationsForUser with unread filter failed: %v", err)
+	}
+
+	if total != 1 {
+		t.Errorf("expected total 1 unread, got %d", total)
+	}
+	if len(notifications) != 1 {
+		t.Errorf("expected 1 unread notification, got %d", len(notifications))
+	}
+}
+
+func TestNotificationsRepository_GetNotificationsForUser_FilterType(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewNotificationsRepository(pool)
+	user := createNotificationTestUser(t, pool)
+
+	insertTestNotification(t, pool, &user.ID, nil, "auto_solve_warning", "Warning 1")
+	insertTestNotification(t, pool, &user.ID, nil, "auto_solve_warning", "Warning 2")
+	insertTestNotification(t, pool, &user.ID, nil, "answer.created", "Answer notif")
+
+	// Filter by type
+	notifications, total, err := repo.GetNotificationsForUser(context.Background(), user.ID, 1, 20, models.NotificationFilters{Type: "auto_solve_warning"})
+	if err != nil {
+		t.Fatalf("GetNotificationsForUser with type filter failed: %v", err)
+	}
+
+	if total != 2 {
+		t.Errorf("expected total 2 for type filter, got %d", total)
+	}
+	if len(notifications) != 2 {
+		t.Errorf("expected 2 notifications, got %d", len(notifications))
+	}
+	for _, n := range notifications {
+		if n.Type != "auto_solve_warning" {
+			t.Errorf("expected type auto_solve_warning, got %q", n.Type)
+		}
+	}
+}
+
+func TestNotificationsRepository_GetNotificationsForUser_FilterBoth(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewNotificationsRepository(pool)
+	user := createNotificationTestUser(t, pool)
+
+	id1 := insertTestNotification(t, pool, &user.ID, nil, "auto_solve_warning", "Warning read")
+	insertTestNotification(t, pool, &user.ID, nil, "auto_solve_warning", "Warning unread")
+	insertTestNotification(t, pool, &user.ID, nil, "answer.created", "Answer unread")
+
+	// Mark first as read
+	repo.MarkRead(context.Background(), id1)
+
+	// Filter: unread + type
+	notifications, total, err := repo.GetNotificationsForUser(context.Background(), user.ID, 1, 20, models.NotificationFilters{Unread: boolPtr(true), Type: "auto_solve_warning"})
+	if err != nil {
+		t.Fatalf("combined filter failed: %v", err)
+	}
+
+	if total != 1 {
+		t.Errorf("expected total 1, got %d", total)
+	}
+	if len(notifications) != 1 {
+		t.Errorf("expected 1 notification, got %d", len(notifications))
+	}
+}
+
+func TestNotificationsRepository_Delete(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewNotificationsRepository(pool)
+	user := createNotificationTestUser(t, pool)
+
+	notifID := insertTestNotification(t, pool, &user.ID, nil, "answer.created", "Delete me")
+
+	err := repo.Delete(context.Background(), notifID)
+	if err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+
+	// Verify it's gone
+	_, err = repo.FindByID(context.Background(), notifID)
+	if err == nil {
+		t.Fatal("expected error after deleting notification")
+	}
+}
+
+func TestNotificationsRepository_Delete_NotFound(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewNotificationsRepository(pool)
+
+	err := repo.Delete(context.Background(), "00000000-0000-0000-0000-000000000000")
+	if err == nil {
+		t.Fatal("expected error for non-existent notification")
+	}
+}
+
+func TestNotificationsRepository_DeleteAllReadForUser(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	repo := NewNotificationsRepository(pool)
+	user := createNotificationTestUser(t, pool)
+
+	// Insert 3, mark 2 as read
+	id1 := insertTestNotification(t, pool, &user.ID, nil, "answer.created", "Read 1")
+	id2 := insertTestNotification(t, pool, &user.ID, nil, "comment.created", "Read 2")
+	insertTestNotification(t, pool, &user.ID, nil, "mention", "Still unread")
+
+	repo.MarkRead(context.Background(), id1)
+	repo.MarkRead(context.Background(), id2)
+
+	count, err := repo.DeleteAllReadForUser(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("DeleteAllReadForUser failed: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 deleted, got %d", count)
+	}
+
+	// Verify 1 unread remains
+	notifications, total, err := repo.GetNotificationsForUser(context.Background(), user.ID, 1, 20, models.NotificationFilters{})
+	if err != nil {
+		t.Fatalf("GetNotificationsForUser failed: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("expected 1 remaining, got %d", total)
+	}
+	if len(notifications) != 1 {
+		t.Errorf("expected 1 notification, got %d", len(notifications))
 	}
 }

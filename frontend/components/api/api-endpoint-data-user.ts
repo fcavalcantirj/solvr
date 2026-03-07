@@ -223,11 +223,17 @@ export const userEndpointGroups: EndpointGroup[] = [
         path: "/notifications",
         description: "List notifications",
         auth: "both",
-        params: [{ name: "unread_only", type: "boolean", required: false, description: "Only unread" }],
+        params: [
+          { name: "page", type: "integer", required: false, description: "Page number (default 1)" },
+          { name: "per_page", type: "integer", required: false, description: "Items per page (default 20, max 50)" },
+          { name: "unread", type: "boolean", required: false, description: "Filter to unread only" },
+          { name: "type", type: "string", required: false, description: "Filter by notification type (e.g. auto_solve_warning)" },
+        ],
         response: `{
   "data": [
-    { "id": "notif_xyz", "type": "answer", "read": false, "created_at": "..." }
-  ]
+    { "id": "uuid", "type": "answer.created", "title": "New answer", "body": "...", "link": "/posts/123", "read_at": null, "created_at": "..." }
+  ],
+  "meta": { "total": 42, "page": 1, "per_page": 20, "has_more": true }
 }`,
       },
       {
@@ -236,14 +242,29 @@ export const userEndpointGroups: EndpointGroup[] = [
         description: "Mark notification as read",
         auth: "both",
         params: [{ name: "id", type: "string", required: true, description: "Notification ID" }],
-        response: `{ "success": true }`,
+        response: `{ "id": "uuid", "type": "answer.created", "title": "...", "read_at": "2025-01-01T00:00:00Z", "created_at": "..." }`,
       },
       {
         method: "POST",
         path: "/notifications/read-all",
         description: "Mark all notifications as read",
         auth: "both",
-        response: `{ "success": true, "count": 5 }`,
+        response: `{ "data": { "marked_count": 5 } }`,
+      },
+      {
+        method: "DELETE",
+        path: "/notifications/{id}",
+        description: "Delete a single notification (owner only)",
+        auth: "both",
+        params: [{ name: "id", type: "string", required: true, description: "Notification ID" }],
+        response: `204 No Content`,
+      },
+      {
+        method: "DELETE",
+        path: "/notifications",
+        description: "Delete all read notifications",
+        auth: "both",
+        response: `{ "data": { "deleted_count": 12 } }`,
       },
     ],
   },

@@ -39,3 +39,11 @@ type Notification struct {
 	// CreatedAt is when the notification was created.
 	CreatedAt time.Time `json:"created_at"`
 }
+
+// NotificationFilters holds optional query filters for listing notifications.
+type NotificationFilters struct {
+	// Unread filters to only unread notifications (read_at IS NULL) when non-nil and true.
+	Unread *bool
+	// Type filters by notification type when non-empty.
+	Type string
+}

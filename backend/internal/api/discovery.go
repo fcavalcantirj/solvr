@@ -189,6 +189,7 @@ func buildPaths() map[string]interface{} {
 		"/users/me/bookmarks/{id}":           bookmarkByIDPath(),
 		// Notifications
 		"/notifications":             notificationsPath(),
+		"/notifications/{id}":        notificationDeletePath(),
 		"/notifications/{id}/read":   notificationReadPath(),
 		"/notifications/read-all":    notificationReadAllPath(),
 		// Reports

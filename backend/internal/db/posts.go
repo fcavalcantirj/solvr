@@ -825,6 +825,10 @@ func (r *PostRepository) ListCrystallizationCandidates(ctx context.Context, stab
 		  AND deleted_at IS NULL
 		  AND crystallization_cid IS NULL
 		  AND updated_at < NOW() - $1::interval
+		  AND EXISTS (
+		    SELECT 1 FROM approaches
+		    WHERE problem_id = posts.id AND status = 'succeeded' AND deleted_at IS NULL
+		  )
 		ORDER BY updated_at ASC
 		LIMIT $2
 	`

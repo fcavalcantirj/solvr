@@ -3,8 +3,11 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/services"
 )
 
 // Default crystallization job configuration values.
@@ -31,6 +34,13 @@ type ProblemCrystallizer interface {
 	CrystallizeProblem(ctx context.Context, problemID string) (string, error)
 }
 
+// CrystallizationResult holds the results of a single crystallization job run.
+type CrystallizationResult struct {
+	Crystallized int
+	Failed       int
+	Skipped      int
+}
+
 // CrystallizationJob handles periodic scanning and crystallization of solved problems.
 type CrystallizationJob struct {
 	lister          CrystallizationCandidateLister
@@ -52,18 +62,19 @@ func NewCrystallizationJob(
 }
 
 // RunOnce scans for crystallization candidates and crystallizes them.
-// Returns the number of successfully crystallized and failed attempts.
-func (j *CrystallizationJob) RunOnce(ctx context.Context) (crystallized, failed int) {
+func (j *CrystallizationJob) RunOnce(ctx context.Context) CrystallizationResult {
+	var result CrystallizationResult
+
 	candidates, err := j.lister.ListCrystallizationCandidates(
 		ctx, j.stabilityPeriod, DefaultCrystallizationCandidateLimit,
 	)
 	if err != nil {
 		log.Printf("Crystallization job: failed to list candidates: %v", err)
-		return 0, 0
+		return result
 	}
 
 	if len(candidates) == 0 {
-		return 0, 0
+		return result
 	}
 
 	log.Printf("Crystallization job: found %d candidates", len(candidates))
@@ -71,15 +82,20 @@ func (j *CrystallizationJob) RunOnce(ctx context.Context) (crystallized, failed 
 	for _, problemID := range candidates {
 		cid, err := j.crystallizer.CrystallizeProblem(ctx, problemID)
 		if err != nil {
+			if errors.Is(err, services.ErrNoVerifiedApproach) {
+				log.Printf("Crystallization job: skipping %s (no succeeded approach)", problemID)
+				result.Skipped++
+				continue
+			}
 			log.Printf("Crystallization job: failed to crystallize %s: %v", problemID, err)
-			failed++
+			result.Failed++
 			continue
 		}
 		log.Printf("Crystallization job: crystallized %s → %s", problemID, cid)
-		crystallized++
+		result.Crystallized++
 	}
 
-	return crystallized, failed
+	return result
 }
 
 // RunScheduled runs the crystallization job on a schedule.
@@ -87,10 +103,8 @@ func (j *CrystallizationJob) RunOnce(ctx context.Context) (crystallized, failed 
 // The job stops when the context is cancelled.
 func (j *CrystallizationJob) RunScheduled(ctx context.Context, interval time.Duration) {
 	// Run immediately on start
-	crystallized, failed := j.RunOnce(ctx)
-	if crystallized > 0 || failed > 0 {
-		log.Printf("Crystallization job: %d crystallized, %d failed", crystallized, failed)
-	}
+	result := j.RunOnce(ctx)
+	logCrystallizationResult(result)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -101,10 +115,15 @@ func (j *CrystallizationJob) RunScheduled(ctx context.Context, interval time.Dur
 			log.Println("Crystallization job stopped")
 			return
 		case <-ticker.C:
-			crystallized, failed := j.RunOnce(ctx)
-			if crystallized > 0 || failed > 0 {
-				log.Printf("Crystallization job: %d crystallized, %d failed", crystallized, failed)
-			}
+			result := j.RunOnce(ctx)
+			logCrystallizationResult(result)
 		}
+	}
+}
+
+func logCrystallizationResult(result CrystallizationResult) {
+	if result.Crystallized > 0 || result.Failed > 0 || result.Skipped > 0 {
+		log.Printf("Crystallization job: %d crystallized, %d failed, %d skipped",
+			result.Crystallized, result.Failed, result.Skipped)
 	}
 }

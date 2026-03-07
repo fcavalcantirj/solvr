@@ -38,10 +38,10 @@ type NotificationsRepositoryInterface interface {
 	// GetNotificationsForUser returns notifications for a user.
 	// Per SPEC.md Part 5.6: GET /notifications - List
 	// Ordered by created_at DESC.
-	GetNotificationsForUser(ctx context.Context, userID string, page, perPage int) ([]Notification, int, error)
+	GetNotificationsForUser(ctx context.Context, userID string, page, perPage int, filters models.NotificationFilters) ([]Notification, int, error)
 
 	// GetNotificationsForAgent returns notifications for an agent.
-	GetNotificationsForAgent(ctx context.Context, agentID string, page, perPage int) ([]Notification, int, error)
+	GetNotificationsForAgent(ctx context.Context, agentID string, page, perPage int, filters models.NotificationFilters) ([]Notification, int, error)
 
 	// MarkRead marks a notification as read.
 	// Per SPEC.md Part 5.6: POST /notifications/:id/read - Mark read
@@ -66,6 +66,15 @@ type NotificationsRepositoryInterface interface {
 
 	// GetRecentUnreadForAgent returns recent unread notifications for agent briefing.
 	GetRecentUnreadForAgent(ctx context.Context, agentID string, limit int) ([]Notification, int, error)
+
+	// Delete hard-deletes a notification by ID.
+	Delete(ctx context.Context, id string) error
+
+	// DeleteAllReadForUser deletes all read notifications for a user.
+	DeleteAllReadForUser(ctx context.Context, userID string) (int, error)
+
+	// DeleteAllReadForAgent deletes all read notifications for an agent.
+	DeleteAllReadForAgent(ctx context.Context, agentID string) (int, error)
 }
 
 // NotificationsHandler handles notification-related HTTP requests.
@@ -191,15 +200,25 @@ func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	page, perPage := parseNotificationsPagination(r)
 
+	// Parse optional filters
+	var filters models.NotificationFilters
+	if r.URL.Query().Get("unread") == "true" {
+		unread := true
+		filters.Unread = &unread
+	}
+	if t := r.URL.Query().Get("type"); t != "" {
+		filters.Type = t
+	}
+
 	// Get notifications based on authentication type
 	var notifications []Notification
 	var total int
 	var err error
 
 	if authInfo.isAgent {
-		notifications, total, err = h.repo.GetNotificationsForAgent(r.Context(), authInfo.id, page, perPage)
+		notifications, total, err = h.repo.GetNotificationsForAgent(r.Context(), authInfo.id, page, perPage, filters)
 	} else {
-		notifications, total, err = h.repo.GetNotificationsForUser(r.Context(), authInfo.id, page, perPage)
+		notifications, total, err = h.repo.GetNotificationsForUser(r.Context(), authInfo.id, page, perPage, filters)
 	}
 	if err != nil {
 		writeNotificationsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get notifications")
@@ -308,6 +327,84 @@ func (h *NotificationsHandler) MarkAllRead(w http.ResponseWriter, r *http.Reques
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
 			"marked_count": count,
+		},
+	}
+
+	writeNotificationsJSON(w, http.StatusOK, response)
+}
+
+// Delete handles DELETE /v1/notifications/{id} - delete a single notification.
+// Requires authentication (owner). Hard delete. Returns 204 No Content.
+func (h *NotificationsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	authInfo := getNotificationsAuthInfo(r)
+	if authInfo == nil {
+		writeNotificationsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	notificationID := getURLParam(r, "id")
+	if notificationID == "" {
+		writeNotificationsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "notification ID required")
+		return
+	}
+
+	// Find notification to check ownership
+	notification, err := h.repo.FindByID(r.Context(), notificationID)
+	if err != nil {
+		if errors.Is(err, ErrNotificationNotFound) {
+			writeNotificationsError(w, http.StatusNotFound, "NOT_FOUND", "notification not found")
+			return
+		}
+		writeNotificationsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to find notification")
+		return
+	}
+
+	// Check ownership (same pattern as MarkRead)
+	if authInfo.isAgent {
+		if notification.AgentID == nil || *notification.AgentID != authInfo.id {
+			writeNotificationsError(w, http.StatusForbidden, "FORBIDDEN", "not authorized to delete this notification")
+			return
+		}
+	} else {
+		if notification.UserID == nil || *notification.UserID != authInfo.id {
+			writeNotificationsError(w, http.StatusForbidden, "FORBIDDEN", "not authorized to delete this notification")
+			return
+		}
+	}
+
+	if err := h.repo.Delete(r.Context(), notificationID); err != nil {
+		writeNotificationsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete notification")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeleteAllRead handles DELETE /v1/notifications - bulk delete all read notifications.
+// Requires authentication. Only deletes notifications where read_at IS NOT NULL.
+func (h *NotificationsHandler) DeleteAllRead(w http.ResponseWriter, r *http.Request) {
+	authInfo := getNotificationsAuthInfo(r)
+	if authInfo == nil {
+		writeNotificationsError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	var count int
+	var err error
+
+	if authInfo.isAgent {
+		count, err = h.repo.DeleteAllReadForAgent(r.Context(), authInfo.id)
+	} else {
+		count, err = h.repo.DeleteAllReadForUser(r.Context(), authInfo.id)
+	}
+	if err != nil {
+		writeNotificationsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete notifications")
+		return
+	}
+
+	response := map[string]interface{}{
+		"data": map[string]interface{}{
+			"deleted_count": count,
 		},
 	}
 

@@ -125,7 +125,7 @@ func TestStaleContent_WarnApproaches_Integration(t *testing.T) {
 	}
 
 	// Verify a warning notification was created for the agent
-	notifications, _, err := notifRepo.GetNotificationsForAgent(ctx, agent.ID, 1, 20)
+	notifications, _, err := notifRepo.GetNotificationsForAgent(ctx, agent.ID, 1, 20, models.NotificationFilters{})
 	if err != nil {
 		t.Fatalf("failed to get notifications: %v", err)
 	}

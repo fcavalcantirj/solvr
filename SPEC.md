@@ -889,9 +889,11 @@ GET /feed/unanswered               → Unanswered questions
 ### Notifications
 
 ```
-GET  /notifications                → List
-POST /notifications/:id/read       → Mark read
-POST /notifications/read-all       → Mark all read
+GET    /notifications                → List (query: page, per_page, unread, type)
+POST   /notifications/:id/read      → Mark read
+POST   /notifications/read-all      → Mark all read
+DELETE /notifications/:id            → Delete single (owner only, 204)
+DELETE /notifications                → Delete all read (200, {deleted_count})
 ```
 
 ### Social Graph (Follow)

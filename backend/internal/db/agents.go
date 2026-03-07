@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -833,43 +834,79 @@ func (r *AgentRepository) FindByName(ctx context.Context, name string) (*models.
 }
 
 // GetAgentByAPIKeyHash finds an agent by validating the raw API key against stored hashes.
-// Uses bcrypt.CompareHashAndPassword to securely compare the key against stored hashes.
+// Uses SHA256 for O(1) indexed lookup. Falls back to O(n) bcrypt scan for agents
+// that haven't been backfilled yet, and lazy-backfills their SHA256 on match.
 // Returns the matching agent if found, or (nil, nil) if no agent matches.
-// Per SPEC.md Part 8.1: API keys are hashed with bcrypt and never stored plain.
 func (r *AgentRepository) GetAgentByAPIKeyHash(ctx context.Context, key string) (*models.Agent, error) {
-	// Query all agents that have an API key hash set
-	// Filters out soft-deleted agents
-	query := `SELECT ` + agentColumns + ` FROM agents WHERE api_key_hash IS NOT NULL AND api_key_hash != '' AND deleted_at IS NULL`
+	keySHA256 := auth.SHA256APIKey(key)
+
+	// Fast path: O(1) lookup by SHA256 index
+	agent, err := r.getAgentByKeySHA256(ctx, keySHA256)
+	if err != nil {
+		return nil, err
+	}
+	if agent != nil {
+		return agent, nil
+	}
+
+	// Slow path: bcrypt scan for agents without SHA256 (lazy backfill)
+	return r.getAgentByKeyBcryptFallback(ctx, key, keySHA256)
+}
+
+// getAgentByKeySHA256 does an O(1) indexed lookup by SHA256 hash.
+func (r *AgentRepository) getAgentByKeySHA256(ctx context.Context, keySHA256 string) (*models.Agent, error) {
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE key_sha256 = $1 AND deleted_at IS NULL`
+
+	row := r.pool.QueryRow(ctx, query, keySHA256)
+	agent, err := r.scanAgent(row)
+	if err != nil {
+		if errors.Is(err, ErrAgentNotFound) {
+			return nil, nil // Not found via SHA256, try fallback
+		}
+		return nil, err
+	}
+	return agent, nil
+}
+
+// getAgentByKeyBcryptFallback scans agents without SHA256 and compares via bcrypt.
+// On match, lazy-backfills the SHA256 for future O(1) lookups.
+func (r *AgentRepository) getAgentByKeyBcryptFallback(ctx context.Context, key, keySHA256 string) (*models.Agent, error) {
+	query := `SELECT ` + agentColumns + ` FROM agents WHERE api_key_hash IS NOT NULL AND api_key_hash != '' AND deleted_at IS NULL AND key_sha256 IS NULL`
 
 	rows, err := r.pool.Query(ctx, query)
 	if err != nil {
-		LogQueryError(ctx, "GetAgentByAPIKeyHash", "agents", err)
+		LogQueryError(ctx, "getAgentByKeyBcryptFallback", "agents", err)
 		return nil, err
 	}
 	defer rows.Close()
 
-	// Iterate through agents and compare the key against each hash
 	for rows.Next() {
 		agent, err := r.scanAgentRows(rows)
 		if err != nil {
 			return nil, err
 		}
 
-		// Use bcrypt to compare the raw key against the stored hash
 		if err := bcrypt.CompareHashAndPassword([]byte(agent.APIKeyHash), []byte(key)); err == nil {
-			// Match found
+			// Match found — lazy backfill SHA256
+			r.backfillAgentKeySHA256(ctx, agent.ID, keySHA256)
 			return agent, nil
 		}
-		// If comparison fails, continue to next agent
 	}
 
 	if err := rows.Err(); err != nil {
-		LogQueryError(ctx, "GetAgentByAPIKeyHash.Rows", "agents", err)
+		LogQueryError(ctx, "getAgentByKeyBcryptFallback.Rows", "agents", err)
 		return nil, err
 	}
 
-	// No matching agent found
 	return nil, nil
+}
+
+// backfillAgentKeySHA256 stores the SHA256 hash for an agent key matched via bcrypt.
+func (r *AgentRepository) backfillAgentKeySHA256(ctx context.Context, agentID, keySHA256 string) {
+	query := `UPDATE agents SET key_sha256 = $1 WHERE id = $2 AND key_sha256 IS NULL`
+	if _, err := r.pool.Exec(ctx, query, keySHA256, agentID); err != nil {
+		slog.Warn("failed to backfill agent key_sha256", "agentID", agentID, "error", err)
+	}
 }
 
 // List returns a paginated list of agents with post counts.

@@ -197,24 +197,72 @@ func (r *UserAPIKeyRepository) scanUserAPIKeyFromRows(rows pgx.Rows) (*models.Us
 }
 
 // GetUserByAPIKey validates a plain text API key and returns the associated user and key.
-// This method iterates through all active keys and compares using bcrypt.
+// Uses SHA256 for O(1) indexed lookup. Falls back to O(n) bcrypt scan for keys
+// that haven't been backfilled yet, and lazy-backfills their SHA256 on match.
 // Returns nil, nil, nil if no matching key is found.
-// Per prd-v2.json: "Hash and lookup in database, Attach user context to request, Update last_used_at"
 func (r *UserAPIKeyRepository) GetUserByAPIKey(ctx context.Context, plainKey string) (*models.User, *models.UserAPIKey, error) {
-	// Get all active API keys
-	// Note: For production scale, consider adding a key identifier prefix for faster lookup
+	keySHA256 := auth.SHA256APIKey(plainKey)
+
+	// Fast path: O(1) lookup by SHA256 index
+	user, key, err := r.getUserByKeySHA256(ctx, keySHA256)
+	if err != nil {
+		return nil, nil, err
+	}
+	if user != nil {
+		return user, key, nil
+	}
+
+	// Slow path: bcrypt scan for keys without SHA256 (lazy backfill)
+	return r.getUserByKeyBcryptFallback(ctx, plainKey, keySHA256)
+}
+
+// getUserByKeySHA256 does an O(1) indexed lookup by SHA256 hash.
+func (r *UserAPIKeyRepository) getUserByKeySHA256(ctx context.Context, keySHA256 string) (*models.User, *models.UserAPIKey, error) {
 	query := `
 		SELECT k.id, k.user_id, k.name, k.key_hash, k.last_used_at, k.revoked_at, k.created_at, k.updated_at,
 		       u.id, u.username, u.display_name, u.email, u.auth_provider, u.auth_provider_id,
 		       u.avatar_url, u.bio, u.role, u.created_at, u.updated_at
 		FROM user_api_keys k
 		JOIN users u ON k.user_id = u.id
-		WHERE k.revoked_at IS NULL
+		WHERE k.key_sha256 = $1 AND k.revoked_at IS NULL
+	`
+
+	key := &models.UserAPIKey{}
+	user := &models.User{}
+
+	err := r.pool.QueryRow(ctx, query, keySHA256).Scan(
+		&key.ID, &key.UserID, &key.Name, &key.KeyHash,
+		&key.LastUsedAt, &key.RevokedAt, &key.CreatedAt, &key.UpdatedAt,
+		&user.ID, &user.Username, &user.DisplayName, &user.Email,
+		&user.AuthProvider, &user.AuthProviderID, &user.AvatarURL,
+		&user.Bio, &user.Role, &user.CreatedAt, &user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, nil // Not found via SHA256, try fallback
+		}
+		LogQueryError(ctx, "getUserByKeySHA256", "user_api_keys", err)
+		return nil, nil, err
+	}
+
+	return user, key, nil
+}
+
+// getUserByKeyBcryptFallback scans all keys without SHA256 and compares via bcrypt.
+// On match, lazy-backfills the SHA256 for future O(1) lookups.
+func (r *UserAPIKeyRepository) getUserByKeyBcryptFallback(ctx context.Context, plainKey, keySHA256 string) (*models.User, *models.UserAPIKey, error) {
+	query := `
+		SELECT k.id, k.user_id, k.name, k.key_hash, k.last_used_at, k.revoked_at, k.created_at, k.updated_at,
+		       u.id, u.username, u.display_name, u.email, u.auth_provider, u.auth_provider_id,
+		       u.avatar_url, u.bio, u.role, u.created_at, u.updated_at
+		FROM user_api_keys k
+		JOIN users u ON k.user_id = u.id
+		WHERE k.revoked_at IS NULL AND k.key_sha256 IS NULL
 	`
 
 	rows, err := r.pool.Query(ctx, query)
 	if err != nil {
-		LogQueryError(ctx, "GetUserByAPIKey", "user_api_keys", err)
+		LogQueryError(ctx, "getUserByKeyBcryptFallback", "user_api_keys", err)
 		return nil, nil, err
 	}
 	defer rows.Close()
@@ -224,45 +272,36 @@ func (r *UserAPIKeyRepository) GetUserByAPIKey(ctx context.Context, plainKey str
 		user := &models.User{}
 
 		err := rows.Scan(
-			&key.ID,
-			&key.UserID,
-			&key.Name,
-			&key.KeyHash,
-			&key.LastUsedAt,
-			&key.RevokedAt,
-			&key.CreatedAt,
-			&key.UpdatedAt,
-			&user.ID,
-			&user.Username,
-			&user.DisplayName,
-			&user.Email,
-			&user.AuthProvider,
-			&user.AuthProviderID,
-			&user.AvatarURL,
-			&user.Bio,
-			&user.Role,
-			&user.CreatedAt,
-			&user.UpdatedAt,
+			&key.ID, &key.UserID, &key.Name, &key.KeyHash,
+			&key.LastUsedAt, &key.RevokedAt, &key.CreatedAt, &key.UpdatedAt,
+			&user.ID, &user.Username, &user.DisplayName, &user.Email,
+			&user.AuthProvider, &user.AuthProviderID, &user.AvatarURL,
+			&user.Bio, &user.Role, &user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
-			LogQueryError(ctx, "GetUserByAPIKey.Scan", "user_api_keys", err)
+			LogQueryError(ctx, "getUserByKeyBcryptFallback.Scan", "user_api_keys", err)
 			return nil, nil, err
 		}
 
-		// Compare the plain key with the stored hash
-		err = auth.CompareAPIKey(plainKey, key.KeyHash)
-		if err == nil {
-			// Found matching key
+		if auth.CompareAPIKey(plainKey, key.KeyHash) == nil {
+			// Match found — lazy backfill SHA256 for future O(1) lookups
+			r.backfillKeySHA256(ctx, key.ID, keySHA256)
 			return user, key, nil
 		}
-		// Key doesn't match, continue to next
 	}
 
 	if err := rows.Err(); err != nil {
-		LogQueryError(ctx, "GetUserByAPIKey.Rows", "user_api_keys", err)
+		LogQueryError(ctx, "getUserByKeyBcryptFallback.Rows", "user_api_keys", err)
 		return nil, nil, err
 	}
 
-	// No matching key found
 	return nil, nil, nil
+}
+
+// backfillKeySHA256 stores the SHA256 hash for a key that was matched via bcrypt.
+func (r *UserAPIKeyRepository) backfillKeySHA256(ctx context.Context, keyID, keySHA256 string) {
+	query := `UPDATE user_api_keys SET key_sha256 = $1 WHERE id = $2 AND key_sha256 IS NULL`
+	if _, err := r.pool.Exec(ctx, query, keySHA256, keyID); err != nil {
+		slog.Warn("failed to backfill key_sha256", "keyID", keyID, "error", err)
+	}
 }

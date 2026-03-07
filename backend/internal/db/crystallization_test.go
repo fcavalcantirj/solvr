@@ -318,6 +318,7 @@ func TestCrystallization_ListCandidates(t *testing.T) {
 		t.Fatalf("Failed to create test user: %v", err)
 	}
 	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM approaches WHERE problem_id IN (SELECT id FROM posts WHERE posted_by_id = $1)", userID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id = $1", userID)
 		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1::uuid", userID)
 	}()
@@ -332,6 +333,14 @@ func TestCrystallization_ListCandidates(t *testing.T) {
 	_, err = pool.Exec(ctx, `UPDATE posts SET updated_at = NOW() - INTERVAL '10 days' WHERE id = $1`, stableID)
 	if err != nil {
 		t.Fatalf("Failed to set updated_at: %v", err)
+	}
+	// Add a succeeded approach (required by EXISTS filter)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO approaches (problem_id, author_type, author_id, angle, method, assumptions, differs_from, status)
+		VALUES ($1, 'human', $2, 'test angle', 'test method', '{}', '', 'succeeded')
+	`, stableID, userID)
+	if err != nil {
+		t.Fatalf("Failed to create succeeded approach: %v", err)
 	}
 
 	// 2. Create a solved problem that is NOT stable (updated_at 3 days ago)
@@ -430,19 +439,27 @@ func TestCrystallization_ListCandidates_Limit(t *testing.T) {
 		t.Fatalf("Failed to create test user: %v", err)
 	}
 	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM approaches WHERE problem_id IN (SELECT id FROM posts WHERE posted_by_id = $1)", userID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE posted_by_id = $1", userID)
 		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1::uuid", userID)
 	}()
 
 	postRepo := db.NewPostRepository(pool)
 
-	// Create 3 stable solved problems
+	// Create 3 stable solved problems with succeeded approaches
 	for i := 0; i < 3; i++ {
 		id := createTestPost(t, pool, ctx, userID,
 			fmt.Sprintf("Limit Test Problem %d", i), models.PostTypeProblem, models.PostStatusSolved)
 		_, err = pool.Exec(ctx, `UPDATE posts SET updated_at = NOW() - INTERVAL '10 days' WHERE id = $1`, id)
 		if err != nil {
 			t.Fatalf("Failed to set updated_at: %v", err)
+		}
+		_, err = pool.Exec(ctx, `
+			INSERT INTO approaches (problem_id, author_type, author_id, angle, method, assumptions, differs_from, status)
+			VALUES ($1, 'human', $2, 'test angle', 'test method', '{}', '', 'succeeded')
+		`, id, userID)
+		if err != nil {
+			t.Fatalf("Failed to create succeeded approach: %v", err)
 		}
 	}
 

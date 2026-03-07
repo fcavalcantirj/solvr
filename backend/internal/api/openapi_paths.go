@@ -583,8 +583,25 @@ func notificationsPath() map[string]interface{} {
 	return map[string]interface{}{
 		"get": map[string]interface{}{
 			"summary": "List notifications", "operationId": "listNotifications", "tags": []string{"Notifications"}, "security": securityRequired(),
-			"parameters": paginationParams(),
-			"responses":  map[string]interface{}{"200": ref200("NotificationsResponse"), "401": ref401()},
+			"parameters": append(paginationParams(),
+				map[string]interface{}{"name": "unread", "in": "query", "schema": map[string]interface{}{"type": "boolean"}, "description": "Filter to unread only"},
+				map[string]interface{}{"name": "type", "in": "query", "schema": map[string]interface{}{"type": "string"}, "description": "Filter by notification type"},
+			),
+			"responses": map[string]interface{}{"200": ref200("NotificationsResponse"), "401": ref401()},
+		},
+		"delete": map[string]interface{}{
+			"summary": "Delete all read notifications", "operationId": "deleteAllReadNotifications", "tags": []string{"Notifications"}, "security": securityRequired(),
+			"responses": map[string]interface{}{"200": ref200("DeleteCountResponse"), "401": ref401()},
+		},
+	}
+}
+
+func notificationDeletePath() map[string]interface{} {
+	return map[string]interface{}{
+		"delete": map[string]interface{}{
+			"summary": "Delete notification", "operationId": "deleteNotification", "tags": []string{"Notifications"}, "security": securityRequired(),
+			"parameters": []map[string]interface{}{idParam("Notification ID")},
+			"responses":  map[string]interface{}{"204": descResp("Notification deleted"), "401": ref401(), "403": descResp("Forbidden"), "404": descResp("Not found")},
 		},
 	}
 }

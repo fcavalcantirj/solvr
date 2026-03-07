@@ -447,3 +447,131 @@ func TestUpdatePost_OpenTagsOnlyNoReModeration(t *testing.T) {
 		t.Errorf("expected 0 moderation calls for tags-only update, got %d", calls)
 	}
 }
+
+// ============================================================================
+// Solved-Status Guard Tests
+// ============================================================================
+
+// MockApproachChecker implements ApproachCheckerInterface for testing.
+type MockApproachChecker struct {
+	hasSucceeded bool
+	err          error
+}
+
+func (m *MockApproachChecker) HasSucceededApproach(ctx context.Context, problemID string) (bool, error) {
+	return m.hasSucceeded, m.err
+}
+
+// TestUpdatePost_SolvedBlockedWithoutSucceededApproach tests that setting status=solved
+// on a problem is rejected when no succeeded approach exists.
+func TestUpdatePost_SolvedBlockedWithoutSucceededApproach(t *testing.T) {
+	repo := NewMockPostsRepository()
+	post := createTestPostWithStatus("post-123", "Open Problem Title Here", models.PostTypeProblem, models.PostStatusOpen)
+	repo.SetPost(&post)
+
+	handler := NewPostsHandler(repo)
+	handler.SetApproachChecker(&MockApproachChecker{hasSucceeded: false})
+
+	body := map[string]interface{}{
+		"status": "solved",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "post-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.Update(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	errObj := resp["error"].(map[string]interface{})
+	msg := errObj["message"].(string)
+	if !strings.Contains(msg, "no succeeded approach") {
+		t.Errorf("expected error message to mention 'no succeeded approach', got %q", msg)
+	}
+}
+
+// TestUpdatePost_SolvedAllowedWithSucceededApproach tests that setting status=solved
+// on a problem is allowed when a succeeded approach exists.
+func TestUpdatePost_SolvedAllowedWithSucceededApproach(t *testing.T) {
+	repo := NewMockPostsRepository()
+	post := createTestPostWithStatus("post-123", "Open Problem Title Here", models.PostTypeProblem, models.PostStatusOpen)
+	repo.SetPost(&post)
+
+	handler := NewPostsHandler(repo)
+	handler.SetApproachChecker(&MockApproachChecker{hasSucceeded: true})
+
+	body := map[string]interface{}{
+		"status": "solved",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "post-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.Update(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if repo.updatedPost == nil {
+		t.Fatal("expected post to be updated")
+	}
+	if repo.updatedPost.Status != models.PostStatusSolved {
+		t.Errorf("expected status 'solved', got '%s'", repo.updatedPost.Status)
+	}
+}
+
+// TestUpdatePost_SolvedAllowedWhenCheckerNil tests that setting status=solved
+// is allowed when no approach checker is configured (nil = no guard).
+func TestUpdatePost_SolvedAllowedWhenCheckerNil(t *testing.T) {
+	repo := NewMockPostsRepository()
+	post := createTestPostWithStatus("post-123", "Open Problem Title Here", models.PostTypeProblem, models.PostStatusOpen)
+	repo.SetPost(&post)
+
+	handler := NewPostsHandler(repo)
+	// Intentionally NOT calling handler.SetApproachChecker()
+
+	body := map[string]interface{}{
+		"status": "solved",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "post-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.Update(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if repo.updatedPost == nil {
+		t.Fatal("expected post to be updated")
+	}
+	if repo.updatedPost.Status != models.PostStatusSolved {
+		t.Errorf("expected status 'solved', got '%s'", repo.updatedPost.Status)
+	}
+}

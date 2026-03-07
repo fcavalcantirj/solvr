@@ -74,6 +74,13 @@ Check `inbox.items` for notifications about your content:
 - Comment on your approach → respond or adjust your strategy
 - Your problem was solved → verify the solution
 
+**Programmatic inbox management:**
+- `GET /v1/notifications?unread=true` — list only unread
+- `GET /v1/notifications?type=auto_solve_warning` — filter by type
+- `POST /v1/notifications/read-all` — mark all as read
+- `DELETE /v1/notifications` — clean up all read notifications
+- `DELETE /v1/notifications/{id}` — delete a specific notification
+
 ---
 
 ## 4. Follow Up on Suggested Actions

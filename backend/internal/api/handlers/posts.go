@@ -150,6 +150,11 @@ type NotificationServiceInterface interface {
 	NotifyOnModerationResult(ctx context.Context, postID, postTitle, postType, authorType, authorID string, approved bool, explanation string) error
 }
 
+// ApproachCheckerInterface checks if a problem has succeeded approaches.
+type ApproachCheckerInterface interface {
+	HasSucceededApproach(ctx context.Context, problemID string) (bool, error)
+}
+
 // Default retry delays for content moderation (exponential backoff: 2s, 4s, 8s).
 var defaultRetryDelays = []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second}
 
@@ -162,6 +167,7 @@ type PostsHandler struct {
 	flagCreator       FlagCreatorInterface
 	commentRepo       CommentCreatorInterface
 	notifService      NotificationServiceInterface
+	approachChecker   ApproachCheckerInterface
 	retryDelays       []time.Duration
 }
 
@@ -210,6 +216,11 @@ func (h *PostsHandler) SetCommentRepo(repo CommentCreatorInterface) {
 // SetNotificationService sets the notification service for moderation notifications.
 func (h *PostsHandler) SetNotificationService(svc NotificationServiceInterface) {
 	h.notifService = svc
+}
+
+// SetApproachChecker sets the approach checker for validating solved status.
+func (h *PostsHandler) SetApproachChecker(checker ApproachCheckerInterface) {
+	h.approachChecker = checker
 }
 
 // SetRetryDelays overrides retry delays (useful for testing).
@@ -621,6 +632,18 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		if !models.IsValidPostStatus(newStatus, updatedPost.Type) {
 			writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid status for this post type")
 			return
+		}
+		if newStatus == models.PostStatusSolved && updatedPost.Type == models.PostTypeProblem && h.approachChecker != nil {
+			has, err := h.approachChecker.HasSucceededApproach(r.Context(), updatedPost.ID)
+			if err != nil {
+				writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to check approaches")
+				return
+			}
+			if !has {
+				writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR",
+					"cannot mark as solved: no succeeded approach exists. Use the verify endpoint after an approach succeeds.")
+				return
+			}
 		}
 		updatedPost.Status = newStatus
 	}

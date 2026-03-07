@@ -44,7 +44,7 @@ export function ProblemDetailClient({ id, initialPost }: ProblemDetailClientProp
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           <ProblemDescription problem={problem} />
-          <ApproachesList approaches={approaches} problemId={problem.id} onApproachPosted={refetch} />
+          <ApproachesList approaches={approaches} problemId={problem.id} problemAuthorId={problem.author.id} onApproachPosted={refetch} />
           <CommentsList targetType="post" targetId={problem.id} onCommentPosted={refetch} />
         </div>
         <div className="lg:col-span-1">

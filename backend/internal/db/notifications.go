@@ -52,17 +52,17 @@ func (r *NotificationsRepository) Create(ctx context.Context, n *models.Notifica
 }
 
 // GetNotificationsForUser returns notifications for a user, paginated, ordered by created_at DESC.
-func (r *NotificationsRepository) GetNotificationsForUser(ctx context.Context, userID string, page, perPage int) ([]models.Notification, int, error) {
-	return r.getNotifications(ctx, "user_id", userID, page, perPage)
+func (r *NotificationsRepository) GetNotificationsForUser(ctx context.Context, userID string, page, perPage int, filters models.NotificationFilters) ([]models.Notification, int, error) {
+	return r.getNotifications(ctx, "user_id", userID, page, perPage, filters)
 }
 
 // GetNotificationsForAgent returns notifications for an agent, paginated, ordered by created_at DESC.
-func (r *NotificationsRepository) GetNotificationsForAgent(ctx context.Context, agentID string, page, perPage int) ([]models.Notification, int, error) {
-	return r.getNotifications(ctx, "agent_id", agentID, page, perPage)
+func (r *NotificationsRepository) GetNotificationsForAgent(ctx context.Context, agentID string, page, perPage int, filters models.NotificationFilters) ([]models.Notification, int, error) {
+	return r.getNotifications(ctx, "agent_id", agentID, page, perPage, filters)
 }
 
 // getNotifications is the shared implementation for user/agent notification queries.
-func (r *NotificationsRepository) getNotifications(ctx context.Context, column, id string, page, perPage int) ([]models.Notification, int, error) {
+func (r *NotificationsRepository) getNotifications(ctx context.Context, column, id string, page, perPage int, filters models.NotificationFilters) ([]models.Notification, int, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -74,10 +74,24 @@ func (r *NotificationsRepository) getNotifications(ctx context.Context, column, 
 	}
 	offset := (page - 1) * perPage
 
+	// Build dynamic WHERE clause with filters
+	where := fmt.Sprintf("%s = $1", column)
+	args := []interface{}{id}
+	paramIdx := 2
+
+	if filters.Unread != nil && *filters.Unread {
+		where += " AND read_at IS NULL"
+	}
+	if filters.Type != "" {
+		where += fmt.Sprintf(" AND type = $%d", paramIdx)
+		args = append(args, filters.Type)
+		paramIdx++
+	}
+
 	// Count total
-	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM notifications WHERE %s = $1`, column)
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM notifications WHERE %s`, where)
 	var total int
-	err := r.pool.QueryRow(ctx, countQuery, id).Scan(&total)
+	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
 		LogQueryError(ctx, "GetNotifications.Count", "notifications", err)
 		return nil, 0, err
@@ -87,12 +101,13 @@ func (r *NotificationsRepository) getNotifications(ctx context.Context, column, 
 	query := fmt.Sprintf(`
 		SELECT id, user_id, agent_id, type, title, COALESCE(body, '') as body, COALESCE(link, '') as link, read_at, created_at
 		FROM notifications
-		WHERE %s = $1
+		WHERE %s
 		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3
-	`, column)
+		LIMIT $%d OFFSET $%d
+	`, where, paramIdx, paramIdx+1)
+	args = append(args, perPage, offset)
 
-	rows, err := r.pool.Query(ctx, query, id, perPage, offset)
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		LogQueryError(ctx, "GetNotifications.Query", "notifications", err)
 		return nil, 0, err
@@ -304,4 +319,38 @@ func (r *NotificationsRepository) FindByID(ctx context.Context, id string) (*mod
 	}
 
 	return &n, nil
+}
+
+// Delete hard-deletes a notification by ID.
+func (r *NotificationsRepository) Delete(ctx context.Context, id string) error {
+	query := `DELETE FROM notifications WHERE id = $1`
+	result, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		LogQueryError(ctx, "Delete", "notifications", err)
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return models.ErrNotificationNotFound
+	}
+	return nil
+}
+
+// DeleteAllReadForUser deletes all read notifications for a user.
+func (r *NotificationsRepository) DeleteAllReadForUser(ctx context.Context, userID string) (int, error) {
+	return r.deleteAllRead(ctx, "user_id", userID)
+}
+
+// DeleteAllReadForAgent deletes all read notifications for an agent.
+func (r *NotificationsRepository) DeleteAllReadForAgent(ctx context.Context, agentID string) (int, error) {
+	return r.deleteAllRead(ctx, "agent_id", agentID)
+}
+
+func (r *NotificationsRepository) deleteAllRead(ctx context.Context, column, id string) (int, error) {
+	query := fmt.Sprintf(`DELETE FROM notifications WHERE %s = $1 AND read_at IS NOT NULL`, column)
+	result, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		LogQueryError(ctx, "DeleteAllRead", "notifications", err)
+		return 0, err
+	}
+	return int(result.RowsAffected()), nil
 }

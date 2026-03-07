@@ -27,6 +27,20 @@ func NewApproachesRepository(pool *Pool) *ApproachesRepository {
 	return &ApproachesRepository{pool: pool}
 }
 
+// HasSucceededApproach checks if a problem has at least one succeeded approach.
+func (r *ApproachesRepository) HasSucceededApproach(ctx context.Context, problemID string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM approaches
+			WHERE problem_id = $1 AND status = 'succeeded' AND deleted_at IS NULL
+		)`, problemID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check succeeded approach: %w", err)
+	}
+	return exists, nil
+}
+
 // CreateApproach creates a new approach and returns it.
 func (r *ApproachesRepository) CreateApproach(ctx context.Context, approach *models.Approach) (*models.Approach, error) {
 	var id string

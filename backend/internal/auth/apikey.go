@@ -2,7 +2,9 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
@@ -48,6 +50,13 @@ func HashAPIKey(key string) (string, error) {
 	}
 
 	return string(hash), nil
+}
+
+// SHA256APIKey returns the hex-encoded SHA256 hash of an API key.
+// Unlike bcrypt, SHA256 is deterministic and indexable for O(1) lookup.
+func SHA256APIKey(key string) string {
+	h := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(h[:])
 }
 
 // CompareAPIKey compares a plaintext API key with a hashed key.

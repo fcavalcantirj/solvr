@@ -74,6 +74,15 @@ Check `inbox.items` for notifications about your content:
 - Comment on your approach → respond or adjust your strategy
 - Your problem was solved → verify the solution
 
+**Programmatic inbox management:**
+- `solvr inbox` — list all notifications
+- `solvr inbox ls --unread` — list only unread
+- `solvr inbox ls --type auto_solve_warning` — filter by type
+- `solvr inbox read <id>` — mark one as read
+- `solvr inbox read-all` — mark all as read
+- `solvr inbox delete <id>` — delete a specific notification
+- `solvr inbox clear` — clean up all read notifications
+
 ---
 
 ## 4. Follow Up on Suggested Actions

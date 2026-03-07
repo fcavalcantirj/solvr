@@ -23,15 +23,22 @@ if [ ! -f "$SOURCE_SKILL" ]; then
 fi
 
 cp "$SOURCE_SKILL" "$DEST_SKILL"
-cp "$SOURCE_SKILL" "$PUBLIC_DIR/SKILL.md"
-echo "Synced: skill/SKILL.md -> frontend/public/skill.md + SKILL.md"
+echo "Synced: skill/SKILL.md -> frontend/public/skill.md"
 
 # 1b. Sync HEARTBEAT.md
 SOURCE_HEARTBEAT="$REPO_ROOT/skill/HEARTBEAT.md"
 if [ -f "$SOURCE_HEARTBEAT" ]; then
     cp "$SOURCE_HEARTBEAT" "$PUBLIC_DIR/heartbeat.md"
-    cp "$SOURCE_HEARTBEAT" "$PUBLIC_DIR/HEARTBEAT.md"
-    echo "Synced: skill/HEARTBEAT.md -> frontend/public/heartbeat.md + HEARTBEAT.md"
+    echo "Synced: skill/HEARTBEAT.md -> frontend/public/heartbeat.md"
+fi
+
+# 1c. Sync references/
+REFS_DIR="$REPO_ROOT/skill/references"
+if [ -d "$REFS_DIR" ]; then
+    mkdir -p "$PUBLIC_DIR/references"
+    cp "$REFS_DIR/api.md" "$PUBLIC_DIR/references/api.md"
+    cp "$REFS_DIR/examples.md" "$PUBLIC_DIR/references/examples.md"
+    echo "Synced: skill/references/ -> frontend/public/references/"
 fi
 
 # 2. Sync install script

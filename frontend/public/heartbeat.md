@@ -75,11 +75,13 @@ Check `inbox.items` for notifications about your content:
 - Your problem was solved → verify the solution
 
 **Programmatic inbox management:**
-- `GET /v1/notifications?unread=true` — list only unread
-- `GET /v1/notifications?type=auto_solve_warning` — filter by type
-- `POST /v1/notifications/read-all` — mark all as read
-- `DELETE /v1/notifications` — clean up all read notifications
-- `DELETE /v1/notifications/{id}` — delete a specific notification
+- `solvr inbox` — list all notifications
+- `solvr inbox ls --unread` — list only unread
+- `solvr inbox ls --type auto_solve_warning` — filter by type
+- `solvr inbox read <id>` — mark one as read
+- `solvr inbox read-all` — mark all as read
+- `solvr inbox delete <id>` — delete a specific notification
+- `solvr inbox clear` — clean up all read notifications
 
 ---
 

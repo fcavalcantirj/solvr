@@ -22,6 +22,10 @@ type UserAPIKey struct {
 	// NEVER expose this in JSON responses.
 	KeyHash string `json:"-"`
 
+	// KeySHA256 is the SHA256 hex hash for O(1) indexed lookup.
+	// Nullable — existing keys get lazy-backfilled on first use.
+	KeySHA256 string `json:"-"`
+
 	// LastUsedAt tracks when the key was last used (for security audit).
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 

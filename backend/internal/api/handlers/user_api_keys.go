@@ -17,7 +17,7 @@ type UserAPIKeyRepositoryInterface interface {
 	FindByID(ctx context.Context, id string) (*models.UserAPIKey, error)
 	Revoke(ctx context.Context, id, userID string) error
 	UpdateLastUsed(ctx context.Context, id string) error
-	Regenerate(ctx context.Context, id, userID, newKeyHash string) (*models.UserAPIKey, error)
+	Regenerate(ctx context.Context, id, userID, newKeyHash, newKeySHA256 string) (*models.UserAPIKey, error)
 }
 
 // UserAPIKeysHandler handles user API key management endpoints.
@@ -179,9 +179,10 @@ func (h *UserAPIKeysHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request
 
 	// Create the key in database
 	key := &models.UserAPIKey{
-		UserID:  claims.UserID,
-		Name:    req.Name,
-		KeyHash: keyHash,
+		UserID:    claims.UserID,
+		Name:      req.Name,
+		KeyHash:   keyHash,
+		KeySHA256: auth.SHA256APIKey(plainKey),
 	}
 
 	created, err := h.repo.Create(ctx, key)
@@ -313,9 +314,10 @@ func (h *UserAPIKeysHandler) RegenerateAPIKey(w http.ResponseWriter, r *http.Req
 		writeAPIKeyInternalError(w, "Failed to regenerate API key")
 		return
 	}
+	keySHA256 := auth.SHA256APIKey(plainKey)
 
 	// Regenerate the key in database (verifies ownership and not revoked)
-	updated, err := h.repo.Regenerate(ctx, keyID, claims.UserID, keyHash)
+	updated, err := h.repo.Regenerate(ctx, keyID, claims.UserID, keyHash, keySHA256)
 	if err != nil {
 		// Regenerate returns error for: key doesn't exist, wrong user, already revoked
 		// We intentionally don't distinguish to avoid information leakage

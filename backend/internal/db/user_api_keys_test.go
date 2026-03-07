@@ -492,7 +492,7 @@ func TestUserAPIKeyRepository_Regenerate(t *testing.T) {
 	newHash, _ := auth.HashAPIKey(newRawKey)
 
 	// Regenerate the key
-	regenerated, err := repo.Regenerate(ctx, created.ID, user.ID, newHash)
+	regenerated, err := repo.Regenerate(ctx, created.ID, user.ID, newHash, auth.SHA256APIKey(newRawKey))
 	if err != nil {
 		t.Fatalf("Regenerate() error = %v", err)
 	}
@@ -561,8 +561,9 @@ func TestUserAPIKeyRepository_Regenerate_WrongUser(t *testing.T) {
 	})
 
 	// Try to regenerate user1's key as user2 - should fail
-	newHash, _ := auth.HashAPIKey(auth.GenerateAPIKey())
-	_, err := repo.Regenerate(ctx, created.ID, user2.ID, newHash)
+	newKey := auth.GenerateAPIKey()
+	newHash, _ := auth.HashAPIKey(newKey)
+	_, err := repo.Regenerate(ctx, created.ID, user2.ID, newHash, auth.SHA256APIKey(newKey))
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("Regenerate() with wrong user error = %v, want ErrNotFound", err)
 	}
@@ -604,8 +605,9 @@ func TestUserAPIKeyRepository_Regenerate_Revoked(t *testing.T) {
 	_ = repo.Revoke(ctx, created.ID, user.ID)
 
 	// Try to regenerate revoked key - should fail
-	newHash, _ := auth.HashAPIKey(auth.GenerateAPIKey())
-	_, err = repo.Regenerate(ctx, created.ID, user.ID, newHash)
+	newKey2 := auth.GenerateAPIKey()
+	newHash, _ := auth.HashAPIKey(newKey2)
+	_, err = repo.Regenerate(ctx, created.ID, user.ID, newHash, auth.SHA256APIKey(newKey2))
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("Regenerate() revoked key error = %v, want ErrNotFound", err)
 	}
@@ -622,8 +624,9 @@ func TestUserAPIKeyRepository_Regenerate_NotFound(t *testing.T) {
 	repo := NewUserAPIKeyRepository(pool)
 	ctx := context.Background()
 
-	newHash, _ := auth.HashAPIKey(auth.GenerateAPIKey())
-	_, err := repo.Regenerate(ctx, "00000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000000", newHash)
+	newKey3 := auth.GenerateAPIKey()
+	newHash, _ := auth.HashAPIKey(newKey3)
+	_, err := repo.Regenerate(ctx, "00000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000000", newHash, auth.SHA256APIKey(newKey3))
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("Regenerate() non-existent key error = %v, want ErrNotFound", err)
 	}

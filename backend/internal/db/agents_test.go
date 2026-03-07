@@ -267,7 +267,7 @@ func TestAgentRepository_UpdateAPIKeyHash(t *testing.T) {
 	}
 
 	// Update API key hash
-	err = repo.UpdateAPIKeyHash(ctx, agent.ID, "new_hash")
+	err = repo.UpdateAPIKeyHash(ctx, agent.ID, "new_hash", "new_sha256")
 	if err != nil {
 		t.Fatalf("failed to update API key hash: %v", err)
 	}

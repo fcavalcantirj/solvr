@@ -111,7 +111,7 @@ func (m *MockAgentRepositoryWithDelete) Update(ctx context.Context, agent *model
 	return nil
 }
 
-func (m *MockAgentRepositoryWithDelete) UpdateAPIKeyHash(ctx context.Context, agentID, hash string) error {
+func (m *MockAgentRepositoryWithDelete) UpdateAPIKeyHash(ctx context.Context, agentID, hash, keySHA256 string) error {
 	return nil
 }
 

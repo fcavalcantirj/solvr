@@ -34,7 +34,7 @@ type AgentRepositoryInterface interface {
 	FindByHumanID(ctx context.Context, humanID string) ([]*models.Agent, error)
 	Update(ctx context.Context, agent *models.Agent) error
 	GetAgentStats(ctx context.Context, agentID string) (*models.AgentStats, error)
-	UpdateAPIKeyHash(ctx context.Context, agentID, hash string) error
+	UpdateAPIKeyHash(ctx context.Context, agentID, hash, keySHA256 string) error
 	RevokeAPIKey(ctx context.Context, agentID string) error
 	GetActivity(ctx context.Context, agentID string, page, perPage int) ([]models.ActivityItem, int, error)
 	// Agent-Human Linking methods (AGENT-LINKING requirement)
@@ -285,6 +285,7 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		Specialties:   []string{},
 		AvatarURL:     "",
 		APIKeyHash:    apiKeyHash,
+		KeySHA256:     auth.SHA256APIKey(apiKey),
 		Model:         req.Model,
 		Email:         req.Email,
 		ExternalLinks: req.ExternalLinks,
@@ -417,6 +418,7 @@ func (h *AgentsHandler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		Specialties: req.Specialties,
 		AvatarURL:   req.AvatarURL,
 		APIKeyHash:  apiKeyHash,
+		KeySHA256:   auth.SHA256APIKey(apiKey),
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -635,7 +637,7 @@ func (h *AgentsHandler) RegenerateAPIKey(w http.ResponseWriter, r *http.Request,
 	}
 
 	// Update hash in database (invalidates old key)
-	if err := h.repo.UpdateAPIKeyHash(r.Context(), agentID, apiKeyHash); err != nil {
+	if err := h.repo.UpdateAPIKeyHash(r.Context(), agentID, apiKeyHash, auth.SHA256APIKey(apiKey)); err != nil {
 		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update API key")
 		return
 	}

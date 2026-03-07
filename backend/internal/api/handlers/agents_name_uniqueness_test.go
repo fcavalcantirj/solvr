@@ -81,7 +81,7 @@ func (m *MockAgentRepoWithSuggestions) GetAgentStats(ctx context.Context, agentI
 	return &models.AgentStats{}, nil
 }
 
-func (m *MockAgentRepoWithSuggestions) UpdateAPIKeyHash(ctx context.Context, agentID, hash string) error {
+func (m *MockAgentRepoWithSuggestions) UpdateAPIKeyHash(ctx context.Context, agentID, hash, keySHA256 string) error {
 	agent, exists := m.agents[agentID]
 	if !exists {
 		return ErrAgentNotFound

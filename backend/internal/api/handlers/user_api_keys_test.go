@@ -103,7 +103,7 @@ func (m *MockUserAPIKeyRepository) UpdateLastUsed(ctx context.Context, id string
 	return nil
 }
 
-func (m *MockUserAPIKeyRepository) Regenerate(ctx context.Context, id, userID, newKeyHash string) (*models.UserAPIKey, error) {
+func (m *MockUserAPIKeyRepository) Regenerate(ctx context.Context, id, userID, newKeyHash, newKeySHA256 string) (*models.UserAPIKey, error) {
 	key, ok := m.keys[id]
 	if !ok {
 		return nil, errMockNotFound

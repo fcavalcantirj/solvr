@@ -44,8 +44,8 @@ func NewAgentRepository(pool *Pool) *AgentRepository {
 // The agent struct is populated with timestamps after successful creation.
 func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error {
 	query := `
-		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, moltbook_id, model, email, external_links, has_amcp_identity, amcp_aid, keri_public_key)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		INSERT INTO agents (id, display_name, human_id, bio, specialties, avatar_url, api_key_hash, key_sha256, moltbook_id, model, email, external_links, has_amcp_identity, amcp_aid, keri_public_key)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING ` + agentColumns
 
 	// Convert empty AMCP AID to nil for nullable column
@@ -60,6 +60,11 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		keriPubKey = &agent.KERIPublicKey
 	}
 
+	var keySHA256 *string
+	if agent.KeySHA256 != "" {
+		keySHA256 = &agent.KeySHA256
+	}
+
 	row := r.pool.QueryRow(ctx, query,
 		agent.ID,
 		agent.DisplayName,
@@ -68,6 +73,7 @@ func (r *AgentRepository) Create(ctx context.Context, agent *models.Agent) error
 		agent.Specialties,
 		agent.AvatarURL,
 		agent.APIKeyHash,
+		keySHA256,
 		agent.MoltbookID,
 		agent.Model,
 		agent.Email,
@@ -309,16 +315,16 @@ func (r *AgentRepository) ListDeleted(ctx context.Context, page, perPage int) ([
 	return agents, total, nil
 }
 
-// UpdateAPIKeyHash updates the API key hash for an agent.
+// UpdateAPIKeyHash updates the API key hash and SHA256 for an agent.
 // Used when regenerating API keys.
-func (r *AgentRepository) UpdateAPIKeyHash(ctx context.Context, agentID, hash string) error {
+func (r *AgentRepository) UpdateAPIKeyHash(ctx context.Context, agentID, hash, keySHA256 string) error {
 	query := `
 		UPDATE agents
-		SET api_key_hash = $2, updated_at = NOW()
+		SET api_key_hash = $2, key_sha256 = $3, updated_at = NOW()
 		WHERE id = $1
 	`
 
-	result, err := r.pool.Exec(ctx, query, agentID, hash)
+	result, err := r.pool.Exec(ctx, query, agentID, hash, keySHA256)
 	if err != nil {
 		LogQueryError(ctx, "UpdateAPIKeyHash", "agents", err)
 		return err

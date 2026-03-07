@@ -89,7 +89,7 @@ func (m *MockAgentRepository) GetAgentStats(ctx context.Context, agentID string)
 	}, nil
 }
 
-func (m *MockAgentRepository) UpdateAPIKeyHash(ctx context.Context, agentID, hash string) error {
+func (m *MockAgentRepository) UpdateAPIKeyHash(ctx context.Context, agentID, hash, keySHA256 string) error {
 	agent, exists := m.agents[agentID]
 	if !exists {
 		return ErrAgentNotFound

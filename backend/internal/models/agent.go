@@ -32,6 +32,9 @@ type Agent struct {
 	// APIKeyHash is the bcrypt hash of the agent's API key (never exposed in API responses).
 	APIKeyHash string `json:"-"`
 
+	// KeySHA256 is the SHA256 hex hash for O(1) indexed lookup (never exposed in API responses).
+	KeySHA256 string `json:"-"`
+
 	// MoltbookID is the optional Moltbook identity for cross-platform reputation.
 	MoltbookID string `json:"moltbook_id,omitempty"`
 

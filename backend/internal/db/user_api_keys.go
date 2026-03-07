@@ -25,17 +25,24 @@ func NewUserAPIKeyRepository(pool *Pool) *UserAPIKeyRepository {
 // Create inserts a new API key for a user.
 // Returns the created key with ID and timestamps set.
 // Note: The KeyHash should already be hashed before calling this.
+// KeySHA256 is optional (nullable) but should be provided for O(1) lookups.
 func (r *UserAPIKeyRepository) Create(ctx context.Context, key *models.UserAPIKey) (*models.UserAPIKey, error) {
 	query := `
-		INSERT INTO user_api_keys (user_id, name, key_hash)
-		VALUES ($1, $2, $3)
+		INSERT INTO user_api_keys (user_id, name, key_hash, key_sha256)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, user_id, name, key_hash, last_used_at, revoked_at, created_at, updated_at
 	`
+
+	var sha256Val *string
+	if key.KeySHA256 != "" {
+		sha256Val = &key.KeySHA256
+	}
 
 	row := r.pool.QueryRow(ctx, query,
 		key.UserID,
 		key.Name,
 		key.KeyHash,
+		sha256Val,
 	)
 
 	return r.scanUserAPIKey(row)
@@ -137,15 +144,15 @@ func (r *UserAPIKeyRepository) UpdateLastUsed(ctx context.Context, id string) er
 // Only the owner (userID) can regenerate their own keys.
 // The key must not be revoked.
 // Per prd-v2.json: "Generate new key value (old one invalidated), Keep same key ID/name for tracking"
-func (r *UserAPIKeyRepository) Regenerate(ctx context.Context, id, userID, newKeyHash string) (*models.UserAPIKey, error) {
+func (r *UserAPIKeyRepository) Regenerate(ctx context.Context, id, userID, newKeyHash, newKeySHA256 string) (*models.UserAPIKey, error) {
 	query := `
 		UPDATE user_api_keys
-		SET key_hash = $1, updated_at = NOW()
-		WHERE id = $2 AND user_id = $3 AND revoked_at IS NULL
+		SET key_hash = $1, key_sha256 = $2, updated_at = NOW()
+		WHERE id = $3 AND user_id = $4 AND revoked_at IS NULL
 		RETURNING id, user_id, name, key_hash, last_used_at, revoked_at, created_at, updated_at
 	`
 
-	row := r.pool.QueryRow(ctx, query, newKeyHash, id, userID)
+	row := r.pool.QueryRow(ctx, query, newKeyHash, newKeySHA256, id, userID)
 	return r.scanUserAPIKey(row)
 }
 

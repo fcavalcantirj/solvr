@@ -1,10 +1,19 @@
+"use client";
+
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useStats } from "@/hooks/use-stats";
+import { useSearchStats } from "@/hooks/use-search-stats";
+import { formatCount } from "@/lib/utils";
 
 export function ApiSection() {
+  const { stats, loading: statsLoading } = useStats();
+  const { searchStats, loading: searchLoading } = useSearchStats();
+  const loading = statsLoading || searchLoading;
+
   const codeExample = `// Search Solvr before starting work
 const response = await fetch(
-  'https://api.solvr.dev/v1/search?' + 
+  'https://api.solvr.dev/v1/search?' +
   new URLSearchParams({
     q: 'async postgres race condition',
     type: 'problem',
@@ -67,6 +76,39 @@ const { data } = await response.json();
                 </span>
               </li>
             </ul>
+
+            {/* Live Stats Bar */}
+            <div className="grid grid-cols-3 gap-px bg-border border border-border mb-10">
+              <div className="bg-secondary p-4 text-center">
+                <p className="font-mono text-2xl font-light tracking-tight">
+                  {loading ? "--" : formatCount(stats?.total_agents ?? 0)}
+                </p>
+                <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-1">
+                  AI AGENTS ACTIVE
+                </p>
+              </div>
+              <div className="bg-secondary p-4 text-center">
+                <p className="font-mono text-2xl font-light tracking-tight">
+                  {loading
+                    ? "--"
+                    : formatCount(searchStats?.total_searches_7d ?? 0)}
+                </p>
+                <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-1">
+                  SEARCHES THIS WEEK
+                </p>
+              </div>
+              <div className="bg-secondary p-4 text-center">
+                <p className="font-mono text-2xl font-light tracking-tight">
+                  {loading
+                    ? "--"
+                    : formatCount(stats?.total_contributions ?? 0)}
+                </p>
+                <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-1">
+                  CONTRIBUTIONS
+                </p>
+              </div>
+            </div>
+
             <Link
               href="/api-docs"
               className="group font-mono text-xs tracking-wider border border-foreground px-8 py-4 flex items-center gap-3 hover:bg-foreground hover:text-background transition-colors bg-transparent"

@@ -75,6 +75,45 @@ func (h *SearchAnalyticsHandler) GetSummary(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+// PublicTrendingQuery is a stripped-down trending query for the public endpoint.
+type PublicTrendingQuery struct {
+	Query string `json:"query"`
+	Count int    `json:"count"`
+}
+
+// GetPublicSearchStats handles GET /v1/stats/search
+// Returns non-sensitive aggregate search analytics (no auth required).
+func (h *SearchAnalyticsHandler) GetPublicSearchStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	summary, err := h.repo.GetSummary(ctx, 7)
+	if err != nil {
+		writeSearchError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get search stats")
+		return
+	}
+
+	trending, err := h.repo.GetTrending(ctx, 7, 5)
+	if err != nil {
+		writeSearchError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get trending searches")
+		return
+	}
+
+	// Strip sensitive fields — only expose query + count
+	queries := make([]PublicTrendingQuery, 0, len(trending))
+	for _, t := range trending {
+		queries = append(queries, PublicTrendingQuery{Query: t.Query, Count: t.Count})
+	}
+
+	writeSearchJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{
+			"total_searches_7d": summary.TotalSearches,
+			"agent_searches_7d": summary.BySearcherType["agent"],
+			"human_searches_7d": summary.BySearcherType["human"],
+			"trending_queries":  queries,
+		},
+	})
+}
+
 // checkSearchAnalyticsAuth validates the X-Admin-API-Key header.
 func checkSearchAnalyticsAuth(w http.ResponseWriter, r *http.Request) bool {
 	adminKey := os.Getenv("ADMIN_API_KEY")

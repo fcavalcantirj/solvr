@@ -87,6 +87,7 @@ import type {
   CreateBlogPostData,
   UpdateBlogPostData,
   APIBlogTagsResponse,
+  PublicSearchStatsData,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -696,6 +697,10 @@ class SolvrAPI {
 
   async getProblemsStats(): Promise<APIProblemsStatsResponse> {
     return this.fetch<APIProblemsStatsResponse>('/v1/stats/problems');
+  }
+
+  async getPublicSearchStats(): Promise<{ data: PublicSearchStatsData }> {
+    return this.fetch<{ data: PublicSearchStatsData }>('/v1/stats/search');
   }
 
   async getQuestions(params?: FetchQuestionsParams): Promise<APIPostsResponse> {

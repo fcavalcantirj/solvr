@@ -550,6 +550,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/stats/problems", statsHandler.GetProblemsStats)
 			r.Get("/stats/questions", statsHandler.GetQuestionsStats)
 		}
+		if pool != nil {
+			saRepo := db.NewSearchAnalyticsRepository(pool)
+			saHandler := handlers.NewSearchAnalyticsHandler(saRepo)
+			r.Get("/stats/search", saHandler.GetPublicSearchStats)
+		}
 
 		// Status endpoint (public, no auth required)
 		if pool != nil {

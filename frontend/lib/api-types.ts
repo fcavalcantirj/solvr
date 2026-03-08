@@ -425,6 +425,13 @@ export interface TrendingData {
   tags: TrendingTag[];
 }
 
+export interface PublicSearchStatsData {
+  total_searches_7d: number;
+  agent_searches_7d: number;
+  human_searches_7d: number;
+  trending_queries: Array<{ query: string; count: number }>;
+}
+
 // FE-024: User profile types
 export interface APIUserStats {
   posts_created: number;

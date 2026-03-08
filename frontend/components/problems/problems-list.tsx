@@ -67,8 +67,8 @@ export function ProblemsList({ status, tags, sort, searchQuery }: ProblemsListPr
         }) as ProblemListItem),
         loading: searchResult.loading,
         error: searchResult.error,
-        hasMore: false,
-        loadMore: () => {},
+        hasMore: searchResult.hasMore,
+        loadMore: searchResult.loadMore,
       }
     : problemsResult;
 

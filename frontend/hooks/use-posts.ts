@@ -152,53 +152,102 @@ export function usePosts(params?: FetchPostsParams): UsePostsResult {
 // Search method type: 'hybrid' (semantic + keyword) or 'fulltext' (keyword only)
 export type SearchMethod = 'hybrid' | 'fulltext';
 
-// Hook for search
-export function useSearch(query: string, type?: PostType | 'all') {
+// Search result with pagination
+export interface UseSearchResult {
+  posts: FeedPost[];
+  loading: boolean;
+  error: string | null;
+  searchMethod: SearchMethod | undefined;
+  total: number;
+  hasMore: boolean;
+  page: number;
+  refetch: () => void;
+  loadMore: () => void;
+}
+
+// Hook for search with pagination
+export function useSearch(query: string, type?: PostType | 'all'): UseSearchResult {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchMethod, setSearchMethod] = useState<SearchMethod | undefined>(undefined);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
 
+  const searchFn = useCallback(async (pageNum: number, append: boolean = false) => {
+    if (!query.trim()) {
+      setPosts([]);
+      setSearchMethod(undefined);
+      setTotal(0);
+      setHasMore(false);
+      setPage(1);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await api.search({ q: query, type, page: pageNum, per_page: 20 });
+
+      // Defensive: handle null/undefined data
+      if (!response || !response.data) {
+        console.warn('[useSearch] Received empty response:', response);
+        setPosts([]);
+        setSearchMethod(undefined);
+        setTotal(0);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
+      const transformedPosts = response.data.map(post => transformPost(post as APIPost));
+
+      if (append) {
+        setPosts(prev => [...prev, ...transformedPosts]);
+      } else {
+        setPosts(transformedPosts);
+      }
+
+      setSearchMethod(response.meta?.method);
+      setTotal(response.meta?.total ?? 0);
+      setHasMore(response.meta?.has_more ?? false);
+      setPage(pageNum);
+    } catch (err) {
+      console.error('[useSearch] Error:', err);
+      if (err && typeof err === 'object') {
+        console.error('[useSearch] Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      }
+      setError(err instanceof Error ? err.message : 'Search failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [query, type]);
+
+  // Debounce initial search and query/type changes (reset to page 1)
   useEffect(() => {
     if (!query.trim()) {
       setPosts([]);
       setSearchMethod(undefined);
+      setTotal(0);
+      setHasMore(false);
+      setPage(1);
       return;
     }
 
-    const search = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await api.search({ q: query, type });
-
-        // Defensive: handle null/undefined data
-        if (!response || !response.data) {
-          console.warn('[useSearch] Received empty response:', response);
-          setPosts([]);
-          setSearchMethod(undefined);
-          setLoading(false);
-          return;
-        }
-
-        const transformedPosts = response.data.map(post => transformPost(post as APIPost));
-        setPosts(transformedPosts);
-        setSearchMethod(response.meta?.method);
-      } catch (err) {
-        console.error('[useSearch] Error:', err);
-        if (err && typeof err === 'object') {
-          console.error('[useSearch] Full error:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
-        }
-        setError(err instanceof Error ? err.message : 'Search failed');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Debounce search
-    const timer = setTimeout(search, 300);
+    const timer = setTimeout(() => searchFn(1), 300);
     return () => clearTimeout(timer);
-  }, [query, type]);
+  }, [query, type, searchFn]);
 
-  return { posts, loading, error, searchMethod };
+  const refetch = useCallback(() => {
+    searchFn(1);
+  }, [searchFn]);
+
+  const loadMore = useCallback(() => {
+    if (hasMore && !loading) {
+      searchFn(page + 1, true);
+    }
+  }, [hasMore, loading, page, searchFn]);
+
+  return { posts, loading, error, searchMethod, total, hasMore, page, refetch, loadMore };
 }

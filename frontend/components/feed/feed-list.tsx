@@ -130,11 +130,11 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
         posts: searchResult.posts,
         loading: searchResult.loading,
         error: searchResult.error,
-        total: searchResult.posts.length,
-        hasMore: false,
-        page: 1,
-        refetch: () => {},
-        loadMore: () => {},
+        total: searchResult.total,
+        hasMore: searchResult.hasMore,
+        page: searchResult.page,
+        refetch: searchResult.refetch,
+        loadMore: searchResult.loadMore,
       }
     : postsResult;
 

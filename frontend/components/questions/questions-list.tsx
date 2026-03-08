@@ -48,8 +48,8 @@ export function QuestionsList({ status, hasAnswer, tags, sort, searchQuery }: Qu
         }) as QuestionListItem),
         loading: searchResult.loading,
         error: searchResult.error,
-        hasMore: false,
-        loadMore: () => {},
+        hasMore: searchResult.hasMore,
+        loadMore: searchResult.loadMore,
       }
     : questionsResult;
 

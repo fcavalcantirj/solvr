@@ -58,9 +58,9 @@ export function IdeasList({ options }: IdeasListProps) {
         })),
         loading: searchResult.loading,
         error: searchResult.error,
-        total: searchResult.posts.length,
-        hasMore: false,
-        loadMore: () => {},
+        total: searchResult.total,
+        hasMore: searchResult.hasMore,
+        loadMore: searchResult.loadMore,
       }
     : ideasResult;
 

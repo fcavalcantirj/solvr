@@ -47,6 +47,9 @@ func (r *SearchRepository) SetEmbeddingService(svc QueryEmbedder) {
 func (r *SearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error) {
 	start := time.Now()
 	tsquery := buildTsQuery(query)
+	if tsquery == "" {
+		return []models.SearchResult{}, 0, "", nil
+	}
 
 	// Try to generate query embedding for hybrid search
 	var queryEmbedding []float32
@@ -76,7 +79,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 		var posts []models.SearchResult
 		var err error
 		if queryEmbedding != nil {
-			posts, err = r.searchPostsHybrid(ctx, query, queryEmbedding, tsquery, opts)
+			posts, err = r.searchPostsHybrid(ctx, queryEmbedding, tsquery, opts)
 		} else {
 			posts, err = r.searchPosts(ctx, tsquery, opts)
 		}
@@ -208,7 +211,7 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 // vector similarity search using Reciprocal Rank Fusion (RRF).
 // The hybrid_search function returns SETOF posts, so we query it and format
 // results into SearchResult the same way searchPosts does.
-func (r *SearchRepository) searchPostsHybrid(ctx context.Context, query string, embedding []float32, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
+func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []float32, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
 	queryVec := pgvector.NewVector(embedding)
 
 	limit := opts.PerPage
@@ -253,7 +256,7 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, query string, 
 		WHERE p.status NOT IN ('pending_review', 'rejected', 'draft')
 	`
 
-	args := []any{query, queryVec, matchCount, tsquery}
+	args := []any{tsquery, queryVec, matchCount, tsquery}
 	argNum := 5
 
 	// Apply filters (reuse the same filter builder, but need to adjust field references)
@@ -262,9 +265,8 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, query string, 
 		baseQuery += " " + filters
 	}
 
-	// For hybrid search, the ordering is already handled by the SQL function (RRF score)
-	// but we preserve it through the query
-	baseQuery += " LIMIT " + fmt.Sprintf("%d", limit)
+	// Preserve hybrid_search RRF ordering deterministically after JOINs
+	baseQuery += " ORDER BY score DESC"
 
 	rows, err := r.pool.Query(ctx, baseQuery, args...)
 	if err != nil {

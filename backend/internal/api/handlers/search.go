@@ -4,11 +4,14 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
@@ -19,14 +22,25 @@ type SearchRepositoryInterface interface {
 	Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error)
 }
 
+// SearchAnalyticsInserter defines the interface for recording search analytics.
+type SearchAnalyticsInserter interface {
+	Insert(ctx context.Context, sq models.SearchQuery) error
+}
+
 // SearchHandler handles search-related HTTP requests.
 type SearchHandler struct {
-	repo SearchRepositoryInterface
+	repo          SearchRepositoryInterface
+	analyticsRepo SearchAnalyticsInserter
 }
 
 // NewSearchHandler creates a new SearchHandler.
 func NewSearchHandler(repo SearchRepositoryInterface) *SearchHandler {
 	return &SearchHandler{repo: repo}
+}
+
+// SetAnalyticsRepo injects the analytics repository for search query tracking.
+func (h *SearchHandler) SetAnalyticsRepo(repo SearchAnalyticsInserter) {
+	h.analyticsRepo = repo
 }
 
 // SearchResponse is the response structure for search results.
@@ -176,6 +190,58 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeSearchJSON(w, http.StatusOK, response)
+
+	// Async search analytics insert (fire-and-forget, no latency impact)
+	if h.analyticsRepo != nil {
+		// Extract searcher identity from auth context
+		searcherType := "anonymous"
+		var searcherID *string
+		if claims := auth.ClaimsFromContext(r.Context()); claims != nil {
+			searcherType = "human"
+			searcherID = &claims.UserID
+		} else if agent := auth.AgentFromContext(r.Context()); agent != nil {
+			searcherType = "agent"
+			searcherID = &agent.ID
+		}
+
+		// Truncate query to 500 chars (matches DB CHECK constraint)
+		q := query
+		if len(q) > 500 {
+			q = q[:500]
+		}
+
+		sq := models.SearchQuery{
+			Query:           q,
+			QueryNormalized: strings.ToLower(strings.TrimSpace(q)),
+			ResultsCount:    total,
+			SearchMethod:    searchMethod,
+			DurationMs:      int(tookMs),
+			SearcherType:    searcherType,
+			SearcherID:      searcherID,
+			Page:            opts.Page,
+			UserAgent:       r.Header.Get("User-Agent"),
+			SearchedAt:      start,
+		}
+		if opts.Type != "" {
+			sq.TypeFilter = &opts.Type
+		}
+
+		// Defensive IP extraction: RealIP middleware may strip port
+		ip := r.RemoteAddr
+		if host, _, err := net.SplitHostPort(ip); err == nil {
+			ip = host
+		}
+		sq.IPAddress = ip
+
+		go func() {
+			defer func() { recover() }()
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			if err := h.analyticsRepo.Insert(ctx, sq); err != nil {
+				slog.Warn("search analytics insert failed", "error", err)
+			}
+		}()
+	}
 }
 
 // parseIntParam parses a string to int with a default value.

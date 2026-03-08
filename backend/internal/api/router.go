@@ -122,6 +122,14 @@ func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *ch
 	}
 	r.Post("/admin/jobs/translation/run", adminHandler.RunTranslationJob)
 
+	// Admin search analytics endpoints
+	if pool != nil {
+		saRepo := db.NewSearchAnalyticsRepository(pool)
+		saHandler := handlers.NewSearchAnalyticsHandler(saRepo)
+		r.Get("/admin/search-analytics/trending", saHandler.GetTrending)
+		r.Get("/admin/search-analytics/summary", saHandler.GetSummary)
+	}
+
 	// Admin incident management
 	if pool != nil {
 		incidentRepo := db.NewIncidentRepository(pool)
@@ -228,6 +236,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		}
 	}
 	searchHandler := handlers.NewSearchHandler(searchRepo)
+
+	// Wire search analytics repository
+	searchAnalyticsRepo := db.NewSearchAnalyticsRepository(pool)
+	searchHandler.SetAnalyticsRepo(searchAnalyticsRepo)
 
 	// Create feed handler (per SPEC.md Part 5.6: GET /feed endpoints)
 	feedHandler := handlers.NewFeedHandler(feedRepo)
@@ -433,8 +445,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 		// Search endpoint (API-CRITICAL per SPEC.md Part 5.5)
 		// GET /v1/search - search the knowledge base (public access per SPEC.md Part 5.6)
-		// No auth required - all content should be publicly discoverable and readable
-		r.Get("/search", searchHandler.Search)
+		// OptionalAuth: never returns 401, but populates context for analytics identity
+		r.Group(func(r chi.Router) {
+			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
+			r.Get("/search", searchHandler.Search)
+		})
 
 		// MCP endpoint (MCP-005: HTTP transport for MCP)
 		// POST /v1/mcp - Model Context Protocol over HTTP (no auth required for tools/list)

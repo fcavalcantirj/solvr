@@ -180,8 +180,8 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	switch opts.Sort {
 	case "votes", "top": // "top" is frontend alias for vote-based sorting
 		orderClause = "(p.upvotes - p.downvotes) DESC, p.created_at DESC"
-	case "hot": // trending: recency-weighted vote score
-		orderClause = "LOG(GREATEST(ABS(p.upvotes - p.downvotes), 1) + 1) + EXTRACT(EPOCH FROM (p.created_at - (NOW() - INTERVAL '7 days'))) / 45000.0 DESC"
+	case "hot": // trending: engagement-weighted score + recency decay
+		orderClause = "(LOG(GREATEST(ABS(COALESCE(p.upvotes,0) - COALESCE(p.downvotes,0)) + COALESCE(cmt_cnt.cnt,0) * 2 + COALESCE(ans_cnt.cnt,0) * 3 + COALESCE(app_cnt.cnt,0) * 3 + COALESCE(p.view_count,0) * 0.01, 1) + 1) + EXTRACT(EPOCH FROM (p.created_at - (NOW() - INTERVAL '7 days'))) / 45000.0) DESC"
 	case "new": // frontend alias for newest
 		orderClause = "p.created_at DESC"
 	case "approaches":

@@ -99,6 +99,109 @@ func TestPostRepository_List_SortByHot(t *testing.T) {
 	}
 }
 
+// TestPostRepository_List_SortByHot_EngagementMatters tests that the hot formula
+// differentiates posts with engagement (comments, views) from posts with zero engagement,
+// even when both have 0 votes and the same creation time.
+func TestPostRepository_List_SortByHot_EngagementMatters(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer pool.Close()
+
+	repo := NewPostRepository(pool)
+	ctx := context.Background()
+
+	// Create two posts at the same time with 0 votes
+	postEngaged, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeProblem,
+		Title:        "Engaged Post Zero Votes",
+		Description:  "Post with comments and views but no votes",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent_hot_engage",
+		Status:       models.PostStatusOpen,
+		Tags:         []string{"hot_engage_test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create engaged post: %v", err)
+	}
+
+	postDead, err := repo.Create(ctx, &models.Post{
+		Type:         models.PostTypeProblem,
+		Title:        "Dead Post Zero Everything",
+		Description:  "Post with zero engagement",
+		PostedByType: models.AuthorTypeAgent,
+		PostedByID:   "test_agent_hot_engage",
+		Status:       models.PostStatusOpen,
+		Tags:         []string{"hot_engage_test"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create dead post: %v", err)
+	}
+
+	// Engaged post: older (2 hours ago), 0 votes, but has views + comments
+	// Dead post: newer (1 hour ago), 0 votes, zero engagement
+	// With pure recency formula: dead post wins (newer)
+	// With engagement formula: engaged post wins (comments + views outweigh 1 hour)
+	engagedTime := time.Now().Add(-2 * time.Hour)
+	deadTime := time.Now().Add(-1 * time.Hour)
+	_, err = pool.Exec(ctx, "UPDATE posts SET upvotes = 0, downvotes = 0, view_count = 50, created_at = $2 WHERE id = $1",
+		postEngaged.ID, engagedTime)
+	if err != nil {
+		t.Fatalf("failed to update engaged post: %v", err)
+	}
+	_, err = pool.Exec(ctx, "UPDATE posts SET upvotes = 0, downvotes = 0, view_count = 0, created_at = $2 WHERE id = $1",
+		postDead.ID, deadTime)
+	if err != nil {
+		t.Fatalf("failed to update dead post: %v", err)
+	}
+
+	// Add comments to the engaged post
+	_, err = pool.Exec(ctx, `INSERT INTO comments (id, target_type, target_id, content, author_type, author_id)
+		VALUES (gen_random_uuid(), 'post', $1, 'Great post!', 'agent', 'test_agent_hot_engage'),
+		       (gen_random_uuid(), 'post', $1, 'Very helpful', 'agent', 'test_agent_hot_engage')`, postEngaged.ID)
+	if err != nil {
+		t.Fatalf("failed to add comments: %v", err)
+	}
+
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM comments WHERE target_id = $1", postEngaged.ID)
+		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2)", postEngaged.ID, postDead.ID)
+	}()
+
+	// Execute: List with sort="hot"
+	posts, _, err := repo.List(ctx, models.PostListOptions{
+		Sort:    "hot",
+		Tags:    []string{"hot_engage_test"},
+		PerPage: 10,
+	})
+	if err != nil {
+		t.Fatalf("List() with sort=hot error = %v", err)
+	}
+
+	if len(posts) < 2 {
+		t.Fatalf("expected at least 2 posts, got %d", len(posts))
+	}
+
+	// The engaged post (comments + views) should rank higher than the dead post
+	var foundEngaged, foundDead int = -1, -1
+	for i, post := range posts {
+		if post.ID == postEngaged.ID {
+			foundEngaged = i
+		} else if post.ID == postDead.ID {
+			foundDead = i
+		}
+	}
+
+	if foundEngaged == -1 || foundDead == -1 {
+		t.Fatalf("not all test posts found: engaged=%d, dead=%d", foundEngaged, foundDead)
+	}
+
+	if foundEngaged > foundDead {
+		t.Errorf("engaged post (2 comments, 50 views) should rank higher than dead post (0 engagement): engaged at %d, dead at %d", foundEngaged, foundDead)
+	}
+}
+
 // TestPostRepository_List_SortByNew tests that sort="new" (frontend alias for newest) works.
 func TestPostRepository_List_SortByNew(t *testing.T) {
 	pool := getTestPool(t)

@@ -814,8 +814,108 @@ func TestModeratePostAsync_LanguageOnlyRejection_SetsDraft(t *testing.T) {
 	if !strings.Contains(c.Content, "Portuguese") {
 		t.Errorf("expected comment to mention 'Portuguese', got %q", c.Content)
 	}
-	if !strings.Contains(c.Content, "translat") {
+	if !strings.Contains(strings.ToLower(c.Content), "translat") {
 		t.Errorf("expected comment to mention translation, got %q", c.Content)
+	}
+}
+
+// mockTranslationTrigger records calls to TranslateAndModerateAsync.
+type mockTranslationTrigger struct {
+	calls []mockTranslationCall
+}
+
+type mockTranslationCall struct {
+	postID   string
+	language string
+}
+
+func (m *mockTranslationTrigger) TranslateAndModerateAsync(postID, title, description string, tags []string, language, postType, authorType, authorID string) {
+	m.calls = append(m.calls, mockTranslationCall{postID: postID, language: language})
+}
+
+func TestModeratePostAsync_LanguageOnlyRejection_TriggersInlineTranslation(t *testing.T) {
+	repo := NewMockPostsRepository()
+	statusUpdater := NewMockPostStatusUpdater()
+	commentCreator := &MockCommentCreator{}
+	modService := NewMockContentModerationService()
+	modService.SetResult(&ModerationResult{
+		Approved:         false,
+		LanguageDetected: "Chinese",
+		RejectionReasons: []string{"LANGUAGE"},
+		Explanation:      "Content is in Chinese",
+	})
+
+	trigger := &mockTranslationTrigger{}
+
+	handler := NewPostsHandler(repo)
+	handler.SetContentModerationService(modService)
+	handler.SetPostStatusUpdater(statusUpdater)
+	handler.SetCommentRepo(commentCreator)
+	handler.SetTranslationTrigger(trigger)
+
+	handler.moderatePostAsync(testPostID, "中文标题", "中文描述", []string{"go"}, "problem", "agent", "agent-1")
+
+	// Translation trigger should have been called exactly once
+	if len(trigger.calls) != 1 {
+		t.Fatalf("expected 1 translation trigger call, got %d", len(trigger.calls))
+	}
+	if trigger.calls[0].postID != testPostID {
+		t.Errorf("expected postID %q, got %q", testPostID, trigger.calls[0].postID)
+	}
+	if trigger.calls[0].language != "Chinese" {
+		t.Errorf("expected language 'Chinese', got %q", trigger.calls[0].language)
+	}
+}
+
+func TestModeratePostAsync_NoTranslationTrigger_StillWorks(t *testing.T) {
+	// When no translation trigger is set, language-only rejection still sets draft
+	repo := NewMockPostsRepository()
+	statusUpdater := NewMockPostStatusUpdater()
+	modService := NewMockContentModerationService()
+	modService.SetResult(&ModerationResult{
+		Approved:         false,
+		LanguageDetected: "Spanish",
+		RejectionReasons: []string{"LANGUAGE"},
+		Explanation:      "Content is in Spanish",
+	})
+
+	handler := NewPostsHandler(repo)
+	handler.SetContentModerationService(modService)
+	handler.SetPostStatusUpdater(statusUpdater)
+	// No translation trigger set
+
+	handler.moderatePostAsync(testPostID, "Título", "Descripción", []string{}, "question", "human", "user-1")
+
+	// Status should still be draft
+	status, ok := statusUpdater.GetStatus(testPostID)
+	if !ok {
+		t.Fatal("expected status to be set")
+	}
+	if status != models.PostStatusDraft {
+		t.Errorf("expected status %q, got %q", models.PostStatusDraft, status)
+	}
+}
+
+func TestModeratePostAsync_ApprovedPost_NoTranslationTrigger(t *testing.T) {
+	repo := NewMockPostsRepository()
+	statusUpdater := NewMockPostStatusUpdater()
+	modService := NewMockContentModerationService()
+	modService.SetResult(&ModerationResult{
+		Approved: true,
+	})
+
+	trigger := &mockTranslationTrigger{}
+
+	handler := NewPostsHandler(repo)
+	handler.SetContentModerationService(modService)
+	handler.SetPostStatusUpdater(statusUpdater)
+	handler.SetTranslationTrigger(trigger)
+
+	handler.moderatePostAsync(testPostID, "English title", "English desc", []string{}, "question", "human", "user-1")
+
+	// Approved → no translation trigger
+	if len(trigger.calls) != 0 {
+		t.Errorf("expected 0 translation trigger calls for approved post, got %d", len(trigger.calls))
 	}
 }
 

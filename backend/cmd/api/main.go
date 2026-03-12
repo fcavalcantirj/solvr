@@ -183,7 +183,7 @@ func main() {
 		var translationCtx context.Context
 		translationCtx, translationCancel = context.WithCancel(context.Background())
 		go translationJob.RunScheduled(translationCtx, jobs.DefaultTranslationInterval)
-		log.Println("Translation job started (runs every 12 hours)")
+		log.Println("Translation sweep job started (runs every hour, primary translation is inline)")
 	}
 
 	// Start health check monitoring job if database is available

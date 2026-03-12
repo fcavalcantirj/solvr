@@ -20,7 +20,7 @@ export function ModerationBanner({ status, postId, postType, originalLanguage }:
         <div className="flex items-start gap-3">
           <Languages size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
           <p className="font-mono text-xs text-blue-700">
-            Your post was detected as {originalLanguage}. We&apos;ll auto-translate it to English and resubmit for review — usually within 24 hours.
+            Your post was detected as {originalLanguage}. Translating to English now — your post should be live within minutes.
           </p>
         </div>
       </div>

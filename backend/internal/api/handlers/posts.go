@@ -155,6 +155,13 @@ type ApproachCheckerInterface interface {
 	HasSucceededApproach(ctx context.Context, problemID string) (bool, error)
 }
 
+// PostTranslationTrigger triggers immediate translation + re-moderation
+// for posts that were rejected solely for language. Called inline from
+// moderatePostAsync when a language-only rejection is detected.
+type PostTranslationTrigger interface {
+	TranslateAndModerateAsync(postID, title, description string, tags []string, language, postType, authorType, authorID string)
+}
+
 // Default retry delays for content moderation (exponential backoff: 2s, 4s, 8s).
 var defaultRetryDelays = []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second}
 
@@ -167,8 +174,9 @@ type PostsHandler struct {
 	flagCreator       FlagCreatorInterface
 	commentRepo       CommentCreatorInterface
 	notifService      NotificationServiceInterface
-	approachChecker   ApproachCheckerInterface
-	retryDelays       []time.Duration
+	approachChecker      ApproachCheckerInterface
+	translationTrigger   PostTranslationTrigger
+	retryDelays          []time.Duration
 }
 
 // NewPostsHandler creates a new PostsHandler.
@@ -221,6 +229,13 @@ func (h *PostsHandler) SetNotificationService(svc NotificationServiceInterface) 
 // SetApproachChecker sets the approach checker for validating solved status.
 func (h *PostsHandler) SetApproachChecker(checker ApproachCheckerInterface) {
 	h.approachChecker = checker
+}
+
+// SetTranslationTrigger sets the inline translation trigger.
+// When set, language-only rejections trigger immediate translation
+// instead of waiting for the hourly sweep.
+func (h *PostsHandler) SetTranslationTrigger(trigger PostTranslationTrigger) {
+	h.translationTrigger = trigger
 }
 
 // SetRetryDelays overrides retry delays (useful for testing).

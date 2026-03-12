@@ -224,6 +224,25 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		postsHandler.SetCommentRepo(commentsRepo)
 		notifSvc := NewModerationNotificationService(notificationsRepoConcrete.Create)
 		postsHandler.SetNotificationService(notifSvc)
+
+		// Wire inline translation trigger for immediate translation on language-only rejection.
+		// Reuses the same Groq key and creates a ModerationTrigger for post-translation re-moderation.
+		if pr, ok := postsRepo.(*db.PostRepository); ok {
+			translationSvc := services.NewTranslationService(groqAPIKey)
+			if translationModel := os.Getenv("TRANSLATION_MODEL"); translationModel != "" {
+				translationSvc = services.NewTranslationService(groqAPIKey, services.WithTranslationModel(translationModel))
+			}
+			reModSvc := services.NewContentModerationService(groqAPIKey, modOpts...)
+			reModTrigger := handlers.NewModerationTrigger(
+				NewContentModerationAdapter(reModSvc),
+				pr,
+				slog.Default(),
+			)
+			reModTrigger.SetCommentRepo(commentsRepo)
+			reModTrigger.SetNotificationService(notifSvc)
+			translationTrigger := NewTranslationTriggerAdapter(translationSvc, pr, reModTrigger, slog.Default())
+			postsHandler.SetTranslationTrigger(translationTrigger)
+		}
 	} else {
 		slog.Warn("GROQ_API_KEY not set - content moderation disabled, posts created as pending_review without auto-moderation")
 	}

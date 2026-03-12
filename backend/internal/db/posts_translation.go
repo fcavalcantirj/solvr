@@ -33,7 +33,8 @@ func (r *PostRepository) UpdateOriginalLanguage(ctx context.Context, postID, lan
 }
 
 // ListPostsNeedingTranslation returns draft posts that have a detected language set
-// and have been attempted fewer than 3 times. Ordered by creation time (oldest first).
+// and have been attempted fewer than 5 times. Ordered by creation time (oldest first).
+// NOTE: The limit must match the partial index in migration 000068.
 func (r *PostRepository) ListPostsNeedingTranslation(ctx context.Context, limit int) ([]*models.Post, error) {
 	query := `
 		SELECT id, type, title, description, tags, posted_by_type, posted_by_id,
@@ -44,7 +45,7 @@ func (r *PostRepository) ListPostsNeedingTranslation(ctx context.Context, limit 
 		FROM posts
 		WHERE status = 'draft'
 		  AND original_language IS NOT NULL
-		  AND translation_attempts < 3
+		  AND translation_attempts < 5
 		  AND deleted_at IS NULL
 		ORDER BY created_at ASC
 		LIMIT $1

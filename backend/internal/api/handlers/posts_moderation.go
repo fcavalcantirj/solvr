@@ -93,6 +93,10 @@ func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags
 			if err := h.statusUpdater.UpdateOriginalLanguage(ctx, postID, result.LanguageDetected); err != nil {
 				h.logger.Error("failed to set original language after language rejection", "postID", postID, "language", result.LanguageDetected, "error", err)
 			}
+			// Trigger inline translation immediately instead of waiting for the hourly sweep.
+			if h.translationTrigger != nil {
+				h.translationTrigger.TranslateAndModerateAsync(postID, title, description, tags, result.LanguageDetected, postType, authorType, authorID)
+			}
 		} else {
 			if err := h.statusUpdater.UpdateStatus(ctx, postID, newStatus); err != nil {
 				h.logger.Error("failed to update post status after moderation", "postID", postID, "status", newStatus, "error", err)
@@ -106,7 +110,7 @@ func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags
 				commentContent = "Post approved by Solvr moderation. Your post is now visible in the feed."
 			} else if languageOnlyRejection {
 				commentContent = fmt.Sprintf(
-					"Your post appears to be in %s. We'll automatically translate it to English and resubmit for review — this typically takes up to 24 hours.",
+					"Your post appears to be in %s. Translating to English now — your post should be live within minutes.",
 					result.LanguageDetected,
 				)
 			} else {

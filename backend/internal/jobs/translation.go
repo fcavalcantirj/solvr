@@ -11,15 +11,18 @@ import (
 )
 
 // Default translation job configuration.
+// The cron is now a sweep/retry safety net — primary translation happens inline
+// at moderation time via PostTranslationTrigger.
 const (
-	// DefaultTranslationInterval runs the job twice daily to stay within Groq limits.
-	DefaultTranslationInterval = 12 * time.Hour
+	// DefaultTranslationInterval sweeps hourly for any posts that failed inline translation.
+	DefaultTranslationInterval = 1 * time.Hour
 
-	// DefaultTranslationBatchSize is the max posts to translate per run.
-	DefaultTranslationBatchSize = 5
+	// DefaultTranslationBatchSize is the max posts to translate per sweep.
+	DefaultTranslationBatchSize = 20
 
 	// DefaultTranslationDelayMs is the milliseconds to sleep between API calls.
-	DefaultTranslationDelayMs = 10_000 // 10 seconds
+	// 3s keeps us under 30 RPM when combined with async moderation calls.
+	DefaultTranslationDelayMs = 3_000 // 3 seconds
 )
 
 // TranslationPostLister lists draft posts that need translation.

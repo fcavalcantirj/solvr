@@ -301,10 +301,10 @@ func TestTranslationJob_RunScheduled_StopsOnCancel(t *testing.T) {
 	}
 }
 
-func TestTranslationJob_DefaultInterval_TwiceDaily(t *testing.T) {
-	expected := 12 * time.Hour
+func TestTranslationJob_DefaultInterval_Hourly(t *testing.T) {
+	expected := 1 * time.Hour
 	if DefaultTranslationInterval != expected {
-		t.Errorf("DefaultTranslationInterval = %v, want %v (twice daily)", DefaultTranslationInterval, expected)
+		t.Errorf("DefaultTranslationInterval = %v, want %v (hourly sweep)", DefaultTranslationInterval, expected)
 	}
 }
 

@@ -82,7 +82,7 @@ func TestApplyTranslation_PreservesOriginalTitle(t *testing.T) {
 }
 
 // TestListPostsNeedingTranslation_ReturnsOnlyEligible verifies the query
-// correctly filters by status='draft' AND original_language IS NOT NULL AND attempts < 3.
+// correctly filters by status='draft' AND original_language IS NOT NULL AND attempts < 5.
 func TestListPostsNeedingTranslation_ReturnsOnlyEligible(t *testing.T) {
 	pool := setupTestDB(t)
 	defer pool.Close()
@@ -117,8 +117,8 @@ func TestListPostsNeedingTranslation_ReturnsOnlyEligible(t *testing.T) {
 	}
 	t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", id3) })
 
-	// Post 4: draft + original_language set + attempts=3 → should NOT appear (maxed out)
-	maxedID := insertTestPostWithOriginalLanguage(t, pool, ctx, "已达最大翻译次数", "最大次数描述", "Chinese", 3)
+	// Post 4: draft + original_language set + attempts=5 → should NOT appear (maxed out)
+	maxedID := insertTestPostWithOriginalLanguage(t, pool, ctx, "已达最大翻译次数", "最大次数描述", "Chinese", 5)
 
 	posts, err := repo.ListPostsNeedingTranslation(ctx, 100)
 	if err != nil {

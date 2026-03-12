@@ -74,6 +74,13 @@ func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *ch
 	r.NotFound(notFoundHandler)
 	r.MethodNotAllowed(methodNotAllowedHandler)
 
+	// Robots.txt — tell crawlers not to index the API
+	r.Get("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("User-agent: *\nDisallow: /\n"))
+	})
+
 	// Health endpoints
 	r.Get("/health", healthHandler)
 	r.Get("/health/live", healthLiveHandler)

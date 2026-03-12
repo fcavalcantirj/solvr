@@ -352,6 +352,32 @@ func TestOpenAPISpec_PinSchemas(t *testing.T) {
 	}
 }
 
+// TestRobotsTxtEndpoint verifies GET /robots.txt returns Disallow all
+func TestRobotsTxtEndpoint(t *testing.T) {
+	router := NewRouter(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "text/plain") {
+		t.Errorf("expected Content-Type 'text/plain', got '%s'", contentType)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "User-agent: *") {
+		t.Error("expected 'User-agent: *' in robots.txt")
+	}
+	if !strings.Contains(body, "Disallow: /") {
+		t.Error("expected 'Disallow: /' in robots.txt")
+	}
+}
+
 // TestDiscoveryEndpointsNoCORS verifies discovery endpoints work without CORS preflight
 func TestDiscoveryEndpointsNoCORS(t *testing.T) {
 	router := NewRouter(nil)

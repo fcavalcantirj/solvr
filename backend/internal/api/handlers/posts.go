@@ -326,6 +326,22 @@ func (h *PostsHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse sort parameter
+	if sortParam := r.URL.Query().Get("sort"); sortParam != "" {
+		switch sortParam {
+		case "newest", "new", "votes", "top", "hot", "approaches", "answers":
+			opts.Sort = sortParam
+		}
+	}
+
+	// Parse timeframe filter
+	if tf := r.URL.Query().Get("timeframe"); tf != "" {
+		switch tf {
+		case "today", "week", "month":
+			opts.Timeframe = tf
+		}
+	}
+
 	// FE-024: Parse author filter for user profile pages
 	if authorType := r.URL.Query().Get("author_type"); authorType != "" {
 		opts.AuthorType = models.AuthorType(authorType)

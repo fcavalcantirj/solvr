@@ -110,6 +110,18 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		argNum += 2
 	}
 
+	// Filter by timeframe
+	if opts.Timeframe != "" {
+		switch opts.Timeframe {
+		case "today":
+			conditions = append(conditions, "p.created_at > NOW() - INTERVAL '1 day'")
+		case "week":
+			conditions = append(conditions, "p.created_at > NOW() - INTERVAL '7 days'")
+		case "month":
+			conditions = append(conditions, "p.created_at > NOW() - INTERVAL '30 days'")
+		}
+	}
+
 	whereClause := strings.Join(conditions, " AND ")
 
 	// Build answer count filter condition for main query
@@ -168,6 +180,10 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	switch opts.Sort {
 	case "votes", "top": // "top" is frontend alias for vote-based sorting
 		orderClause = "(p.upvotes - p.downvotes) DESC, p.created_at DESC"
+	case "hot": // trending: recency-weighted vote score
+		orderClause = "LOG(GREATEST(ABS(p.upvotes - p.downvotes), 1) + 1) + EXTRACT(EPOCH FROM (p.created_at - (NOW() - INTERVAL '7 days'))) / 45000.0 DESC"
+	case "new": // frontend alias for newest
+		orderClause = "p.created_at DESC"
 	case "approaches":
 		orderClause = "COALESCE(app_cnt.cnt, 0) DESC, p.created_at DESC"
 	case "answers":

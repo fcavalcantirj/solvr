@@ -175,7 +175,8 @@ type PostListOptions struct {
 	AuthorID      string     // Filter by author ID (BE-003)
 	HasAnswer     *bool      // Filter by answer count: nil=no filter, false=0 answers, true=1+ answers
 	IncludeHidden bool       // When true, include pending_review/rejected/draft posts (author self-view)
-	Sort          string     // Sort order: "newest" (default), "votes", "approaches"
+	Sort          string     // Sort order: "newest" (default), "votes", "top", "hot", "approaches", "answers"
+	Timeframe     string     // Timeframe filter: "today", "week", "month"
 	Page          int        // Page number (1-indexed)
 	PerPage       int        // Results per page
 	ViewerType    AuthorType // Optional: authenticated viewer's type for user_vote lookup

@@ -158,6 +158,67 @@ func TestOAuthUserService_FindOrCreateUser_NewUser(t *testing.T) {
 	}
 }
 
+// TestOAuthUserService_FindOrCreateUser_NewUser_SetsAuthProvider tests that new OAuth users
+// have AuthProvider and AuthProviderID set on the User model (not just in auth_methods).
+func TestOAuthUserService_FindOrCreateUser_NewUser_SetsAuthProvider(t *testing.T) {
+	repo := NewMockUserRepository()
+	authMethodRepo := NewMockAuthMethodRepository()
+	service := NewOAuthUserService(repo, authMethodRepo)
+
+	info := &OAuthUserInfo{
+		Provider:    models.AuthProviderGoogle,
+		ProviderID:  "google_99999",
+		Email:       "newgoogle@example.com",
+		DisplayName: "Google User",
+		AvatarURL:   "https://google.com/photo.png",
+	}
+
+	user, isNew, err := service.FindOrCreateUser(context.Background(), info)
+	if err != nil {
+		t.Fatalf("FindOrCreateUser() error = %v", err)
+	}
+	if !isNew {
+		t.Error("expected isNew = true")
+	}
+
+	if user.AuthProvider != models.AuthProviderGoogle {
+		t.Errorf("user.AuthProvider = %q, want %q", user.AuthProvider, models.AuthProviderGoogle)
+	}
+	if user.AuthProviderID != "google_99999" {
+		t.Errorf("user.AuthProviderID = %q, want %q", user.AuthProviderID, "google_99999")
+	}
+}
+
+// TestOAuthUserService_FindOrCreateUser_NewUser_SetsAuthProvider_GitHub same test for GitHub.
+func TestOAuthUserService_FindOrCreateUser_NewUser_SetsAuthProvider_GitHub(t *testing.T) {
+	repo := NewMockUserRepository()
+	authMethodRepo := NewMockAuthMethodRepository()
+	service := NewOAuthUserService(repo, authMethodRepo)
+
+	info := &OAuthUserInfo{
+		Provider:    models.AuthProviderGitHub,
+		ProviderID:  "github_88888",
+		Email:       "newgithub@example.com",
+		DisplayName: "GitHub User",
+		AvatarURL:   "https://github.com/photo.png",
+	}
+
+	user, isNew, err := service.FindOrCreateUser(context.Background(), info)
+	if err != nil {
+		t.Fatalf("FindOrCreateUser() error = %v", err)
+	}
+	if !isNew {
+		t.Error("expected isNew = true")
+	}
+
+	if user.AuthProvider != models.AuthProviderGitHub {
+		t.Errorf("user.AuthProvider = %q, want %q", user.AuthProvider, models.AuthProviderGitHub)
+	}
+	if user.AuthProviderID != "github_88888" {
+		t.Errorf("user.AuthProviderID = %q, want %q", user.AuthProviderID, "github_88888")
+	}
+}
+
 // TestOAuthUserService_FindOrCreateUser_ExistingByProvider tests finding existing user by provider.
 func TestOAuthUserService_FindOrCreateUser_ExistingByProvider(t *testing.T) {
 	repo := NewMockUserRepository()

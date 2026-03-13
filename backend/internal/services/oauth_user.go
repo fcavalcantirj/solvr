@@ -122,14 +122,15 @@ func (s *OAuthUserService) FindOrCreateUser(ctx context.Context, info *OAuthUser
 
 	// Step 3: Create new user + auth_method (no existing user found)
 	newUser := &models.User{
-		Username:    s.generateUsername(ctx, info.DisplayName, info.Email),
-		DisplayName: info.DisplayName,
-		Email:       info.Email,
-		AvatarURL:   info.AvatarURL,
-		Role:        models.UserRoleUser,
+		Username:       s.generateUsername(ctx, info.DisplayName, info.Email),
+		DisplayName:    info.DisplayName,
+		Email:          info.Email,
+		AuthProvider:   info.Provider,
+		AuthProviderID: info.ProviderID,
+		AvatarURL:      info.AvatarURL,
+		Role:           models.UserRoleUser,
 	}
 
-	// Create user (Note: auth_provider and auth_provider_id are no longer on User model)
 	createdUser, err := s.repo.Create(ctx, newUser)
 	if err != nil {
 		if errors.Is(err, db.ErrDuplicateEmail) {

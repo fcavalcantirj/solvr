@@ -1,0 +1,250 @@
+[
+  {
+    "category": "backend",
+    "description": "SOL-001: Add msv_pod_id and msv_endpoint columns to agents table",
+    "steps": [
+      "Create migration file: backend/migrations/000069_agents_msv_fields.up.sql",
+      "Add column: ALTER TABLE agents ADD COLUMN msv_pod_id BIGINT;",
+      "Add column: ALTER TABLE agents ADD COLUMN msv_endpoint TEXT;",
+      "Add column: ALTER TABLE agents ADD COLUMN msv_status TEXT DEFAULT 'not_provisioned';",
+      "Add column: ALTER TABLE agents ADD COLUMN msv_provisioned_at TIMESTAMPTZ;",
+      "Add index: CREATE INDEX idx_agents_msv_pod_id ON agents(msv_pod_id) WHERE msv_pod_id IS NOT NULL;",
+      "Create down migration: 000069_agents_msv_fields.down.sql",
+      "Update backend/internal/models/agent.go with new fields",
+      "Update backend/internal/db/agents.go queries to include new fields",
+      "Run migration locally: make migrate-up",
+      "Verify columns exist: psql -c '\\d agents'"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-002: Create MSV client service for pod provisioning",
+    "steps": [
+      "Create backend/internal/services/msv_client.go",
+      "Add config: MSV_API_URL, MSV_SECRET from environment",
+      "Create MSVClient struct with httpClient, baseURL, secret",
+      "Add method: ProvisionPod(ctx, humanID, agentID, displayName, solvrAPIKey) (*PodInfo, error)",
+      "Construct request to POST {MSV_API_URL}/api/v1/pods/provision",
+      "Add X-Solvr-Secret header",
+      "Parse response: telegram_id, bot_link, status",
+      "Add method: GetPodStatus(ctx, telegramID) (*PodStatus, error)",
+      "Add method: TerminatePod(ctx, telegramID) error",
+      "Add method: SendCommand(ctx, telegramID, tool string, params map) (*Result, error)",
+      "Create backend/internal/services/msv_client_test.go with mocked HTTP",
+      "Test: provision success",
+      "Test: provision failure (MSV unavailable)",
+      "Test: status check",
+      "Test: command forwarding"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-003: Auto-create agent on OAuth signup (Google/GitHub)",
+    "steps": [
+      "Open backend/internal/services/oauth_user.go",
+      "Find CreateOrGetUser function",
+      "After user creation, check if user has an agent: SELECT id FROM agents WHERE human_id = $1",
+      "If no agent exists, create one automatically:",
+      "Generate agent ID: agent_{username} or agent_{uuid}",
+      "Generate API key using existing key generation logic",
+      "Insert agent: INSERT INTO agents (id, display_name, human_id, status, api_key_hash) VALUES (...)",
+      "Log agent creation for debugging",
+      "Update backend/internal/services/oauth_user_test.go",
+      "Test: new user signup creates agent",
+      "Test: existing user login does not create duplicate agent",
+      "Test: agent is linked to user via human_id"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-004: Provision MSV pod after agent creation",
+    "steps": [
+      "Open backend/internal/services/oauth_user.go (or create agent_provisioner.go)",
+      "After agent creation (SOL-003), call MSV provisioning",
+      "Create provisionAgentPod(ctx, user, agent) error function",
+      "Generate Solvr API key for the agent",
+      "Call msvClient.ProvisionPod(ctx, user.ID, agent.ID, agent.DisplayName, solvrAPIKey)",
+      "Update agent record with msv_pod_id, msv_endpoint, msv_status='provisioning'",
+      "Handle provisioning failure gracefully (agent still works, just no pod)",
+      "Consider async provisioning with goroutine or job queue",
+      "Log provisioning result",
+      "Create tests for provisioning flow",
+      "Test: successful provision updates agent record",
+      "Test: failed provision sets msv_status='failed'",
+      "Test: user can still use Solvr even if pod fails"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-005: Add webhook endpoint for MSV status updates",
+    "steps": [
+      "Create backend/internal/api/handlers/msv_webhook.go",
+      "Create MSVWebhookHandler struct",
+      "Add handler: HandleStatusUpdate(w http.ResponseWriter, r *http.Request)",
+      "Validate X-Webhook-Signature header using HMAC-SHA256",
+      "Parse payload: telegram_id, status, timestamp, metadata",
+      "Find agent by msv_pod_id: SELECT * FROM agents WHERE msv_pod_id = $1",
+      "Update agent msv_status based on webhook status",
+      "Create notification for user if status is 'error'",
+      "Return 200 OK on success",
+      "Register route in router.go: r.Post('/webhooks/msv/status', h.HandleStatusUpdate)",
+      "Add MSV_WEBHOOK_SECRET to environment config",
+      "Create msv_webhook_test.go",
+      "Test: valid signature updates agent",
+      "Test: invalid signature returns 401",
+      "Test: unknown pod returns 404"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-006: Add agent status to user profile and agent profile endpoints",
+    "steps": [
+      "Open backend/internal/api/handlers/agents.go",
+      "Update GetAgent to include msv_status, msv_endpoint fields in response",
+      "Add computed field: bot_link = 'https://t.me/SolvrAgent_bot?start={msv_pod_id}'",
+      "Open backend/internal/api/handlers/users.go",
+      "Update GetUserProfile to include linked agent with msv_status",
+      "Open frontend/app/agents/[id]/page.tsx",
+      "Add MSV status indicator (online/offline/provisioning)",
+      "Add 'Open in Telegram' button if msv_endpoint exists",
+      "Open frontend/app/users/[id]/page.tsx",
+      "Add 'Your Agent' section showing agent status",
+      "Create tests for updated endpoints",
+      "Test: agent profile includes msv_status",
+      "Test: user profile includes agent info"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-007: Add agent lineage tracking for swarm prevention",
+    "steps": [
+      "Create migration: backend/migrations/000070_agent_lineage.up.sql",
+      "Add column: ALTER TABLE agents ADD COLUMN parent_agent_id TEXT REFERENCES agents(id);",
+      "Add column: ALTER TABLE agents ADD COLUMN depth INT NOT NULL DEFAULT 1;",
+      "Add column: ALTER TABLE agents ADD COLUMN spawned_at TIMESTAMPTZ;",
+      "Add index: CREATE INDEX idx_agents_parent ON agents(parent_agent_id) WHERE parent_agent_id IS NOT NULL;",
+      "Add check constraint: ALTER TABLE agents ADD CONSTRAINT max_depth CHECK (depth <= 2);",
+      "Update models/agent.go with ParentAgentID, Depth fields",
+      "Update db/agents.go to handle lineage on creation",
+      "When agent creates sub-agent: depth = parent.depth + 1",
+      "Reject if depth would exceed 2",
+      "Create down migration",
+      "Create tests for lineage enforcement",
+      "Test: human creates agent (depth=1)",
+      "Test: agent creates sub-agent (depth=2)",
+      "Test: sub-agent cannot create sub-sub-agent (rejected)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-008: Add spawn rate limiting (max 1 agent per week)",
+    "steps": [
+      "Create migration: backend/migrations/000071_agent_spawn_limits.up.sql",
+      "Create table: agent_spawn_log (id, human_id, agent_id, spawned_at, PRIMARY KEY(id))",
+      "Add index: CREATE INDEX idx_spawn_log_human ON agent_spawn_log(human_id, spawned_at);",
+      "Create backend/internal/db/agent_spawn.go",
+      "Add method: CanSpawnAgent(ctx, humanID) (bool, time.Time, error)",
+      "Query: SELECT spawned_at FROM agent_spawn_log WHERE human_id = $1 AND spawned_at > NOW() - INTERVAL '7 days' ORDER BY spawned_at DESC LIMIT 1",
+      "If row exists, return false + next_available_at",
+      "Add method: RecordSpawn(ctx, humanID, agentID) error",
+      "Update agent creation flow to check CanSpawnAgent first",
+      "Return 429 with retry-after header if rate limited",
+      "Create tests for rate limiting",
+      "Test: first spawn allowed",
+      "Test: second spawn within 7 days rejected",
+      "Test: spawn after 7 days allowed"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-009: Add agent control panel API endpoints",
+    "steps": [
+      "Create backend/internal/api/handlers/agent_control.go",
+      "Add handler: GetMyAgent(w, r) - returns user's agent with full status",
+      "Add handler: SendAgentCommand(w, r) - forwards command to MSV pod",
+      "Validate user owns the agent (human_id check)",
+      "Create AgentCommandRequest: tool string, params map[string]interface{}",
+      "Call msvClient.SendCommand(ctx, agent.MSVPodID, req.Tool, req.Params)",
+      "Return command result or error",
+      "Add handler: RestartAgent(w, r) - restart pod via MSV API",
+      "Add handler: GetAgentLogs(w, r) - fetch recent logs from MSV",
+      "Register routes (authenticated):",
+      "  GET /v1/me/agent - GetMyAgent",
+      "  POST /v1/me/agent/command - SendAgentCommand",
+      "  POST /v1/me/agent/restart - RestartAgent",
+      "  GET /v1/me/agent/logs - GetAgentLogs",
+      "Create agent_control_test.go",
+      "Test: owner can send command",
+      "Test: non-owner rejected"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "SOL-010: Add agent control panel to user dashboard",
+    "steps": [
+      "Create frontend/components/dashboard/agent-panel.tsx",
+      "Fetch agent data: GET /v1/me/agent",
+      "Display agent status: online/offline/provisioning/error",
+      "Display agent stats: messages today, last active",
+      "Add 'Open in Telegram' button linking to bot",
+      "Add command input field for quick commands",
+      "Add restart button with confirmation",
+      "Show recent agent activity/logs",
+      "Create frontend/app/dashboard/agent/page.tsx",
+      "Add navigation link to dashboard sidebar",
+      "Style with existing Solvr design system",
+      "Create __tests__/agent-panel.test.tsx",
+      "Test: renders agent status",
+      "Test: command submission works",
+      "Test: handles offline agent gracefully"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-011: Add quota inheritance for sub-agents",
+    "steps": [
+      "Update Poken balance queries to check parent agent",
+      "When sub-agent spends Pokens, deduct from parent's balance",
+      "When checking sub-agent's balance, return parent's balance",
+      "Open backend/internal/db/pokens.go (or equivalent)",
+      "Add method: GetEffectiveBalance(ctx, agentID) (int64, error)",
+      "If agent has parent_agent_id, return parent's balance",
+      "Otherwise return agent's own balance",
+      "Update all balance checks to use GetEffectiveBalance",
+      "Update balance mutations to target parent if depth > 1",
+      "Create tests for quota inheritance",
+      "Test: sub-agent sees parent's balance",
+      "Test: sub-agent spend deducts from parent",
+      "Test: root agent uses own balance"
+    ],
+    "passes": false
+  },
+  {
+    "category": "infrastructure",
+    "description": "SOL-012: Add MSV environment config and secrets",
+    "steps": [
+      "Add to backend/.env.example:",
+      "  MSV_API_URL=https://solvr-msv.example.com",
+      "  MSV_SECRET=<shared secret with MSV>",
+      "  MSV_WEBHOOK_SECRET=<for validating incoming webhooks>",
+      "Add to production environment (Railway/Fly/etc):",
+      "  MSV_API_URL pointing to deployed Solvr MSV instance",
+      "  MSV_SECRET matching MSV's SOLVR_WEBHOOK_SECRET",
+      "Update backend/internal/config/config.go to load MSV config",
+      "Validate MSV config on startup (warn if missing)",
+      "Document MSV integration in README.md",
+      "Add health check that pings MSV API"
+    ],
+    "passes": false
+  }
+]

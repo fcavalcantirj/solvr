@@ -14,99 +14,117 @@
       "Update backend/internal/models/agent.go with new fields: MSVPodID, MSVEndpoint, MSVStatus, MSVProvisionedAt, BotLink",
       "Update backend/internal/db/agents.go queries to include new fields",
       "Run migration locally: make migrate-up",
-      "Verify columns exist: psql -c '\\d agents'"
+      "Verify columns exist: psql -c '\\d agents'",
+      "Test: migration applies without error",
+      "Test: rollback works correctly"
+    ],
+    "passes": false
+  },
+  {
+    "category": "infrastructure",
+    "description": "SOL-002: Add MSV environment config and secrets",
+    "steps": [
+      "Add to backend/.env.example:",
+      "  MSV_API_URL=https://solvr-msv.example.com",
+      "  MSV_SECRET=<shared secret with MSV>",
+      "  MSV_WEBHOOK_SECRET=<for validating incoming webhooks>",
+      "Add to production environment (Railway/Fly/etc):",
+      "  MSV_API_URL pointing to deployed Solvr MSV instance",
+      "  MSV_SECRET matching MSV's SOLVR_WEBHOOK_SECRET",
+      "Update backend/internal/config/config.go to load MSV config",
+      "Validate MSV config on startup (warn if missing)",
+      "Document MSV integration in README.md",
+      "Add health check that pings MSV API"
     ],
     "passes": false
   },
   {
     "category": "backend",
-    "description": "SOL-002: Create MSV client service for pod provisioning",
+    "description": "SOL-003: Create MSV client service for pod provisioning",
     "steps": [
-      "Create backend/internal/services/msv_client.go",
+      "Create backend/internal/services/msv_client_test.go FIRST (TDD)",
+      "Test: ProvisionPod returns PodInfo on success",
+      "Test: ProvisionPod returns error when MSV unavailable",
+      "Test: GetPodStatus returns status for valid pod",
+      "Test: TerminatePod calls correct endpoint",
+      "Now implement: Create backend/internal/services/msv_client.go",
       "Add config: MSV_API_URL, MSV_SECRET from environment",
       "Create MSVClient struct with httpClient, baseURL, secret",
-      "Add method: ProvisionPod(ctx, humanID, agentID, displayName, solvrAPIKey) (*PodInfo, error)",
-      "Construct request to POST {MSV_API_URL}/api/v1/pods/provision",
-      "Add X-Solvr-Secret header",
+      "Implement ProvisionPod(ctx, humanID, agentID, displayName, solvrAPIKey) (*PodInfo, error)",
+      "Add X-Solvr-Secret header to requests",
       "Parse response: telegram_id, bot_link, status",
-      "Add method: GetPodStatus(ctx, telegramID) (*PodStatus, error)",
-      "Add method: TerminatePod(ctx, telegramID) error",
-      "Add method: SendCommand(ctx, telegramID, tool string, params map) (*Result, error)",
-      "Create backend/internal/services/msv_client_test.go with mocked HTTP",
-      "Test: provision success",
-      "Test: provision failure (MSV unavailable)",
-      "Test: status check",
-      "Test: command forwarding"
+      "Implement GetPodStatus(ctx, telegramID) (*PodStatus, error)",
+      "Implement TerminatePod(ctx, telegramID) error",
+      "Implement SendCommand(ctx, telegramID, tool, params) (*Result, error)",
+      "Run tests: go test ./internal/services/... -run MSV"
     ],
     "passes": false
   },
   {
     "category": "backend",
-    "description": "SOL-003: Auto-create agent on OAuth signup (Google/GitHub)",
+    "description": "SOL-004: Auto-create agent on OAuth signup (Google/GitHub)",
     "steps": [
-      "Open backend/internal/services/oauth_user.go",
-      "Find CreateOrGetUser function",
-      "After user creation, check if user has an agent: SELECT id FROM agents WHERE human_id = $1",
-      "If no agent exists, create one automatically:",
-      "Generate agent ID: agent_{username} or agent_{uuid}",
-      "Generate API key: plaintext key + SHA256 hash",
-      "Insert agent: INSERT INTO agents (id, display_name, human_id, status, api_key_hash) VALUES (...)",
-      "CRITICAL: Return plaintext API key in response struct (needed for MSV provisioning in SOL-004)",
-      "Create AgentCreationResult struct: { Agent, PlaintextAPIKey }",
-      "Log agent creation for debugging",
-      "Update backend/internal/services/oauth_user_test.go",
-      "Test: new user signup creates agent",
+      "Create backend/internal/services/oauth_user_agent_test.go FIRST (TDD)",
+      "Test: new user signup creates agent record",
+      "Test: agent ID format is agent_{username}",
+      "Test: agent API key hash is stored correctly",
+      "Test: plaintext API key is returned for MSV provisioning",
       "Test: existing user login does not create duplicate agent",
-      "Test: agent is linked to user via human_id",
-      "Test: plaintext API key is returned (not stored)"
+      "Now implement in oauth_user.go:",
+      "Find CreateOrGetUser function",
+      "After user creation, check if user has agent: SELECT id FROM agents WHERE human_id = $1",
+      "If no agent, generate agent ID: agent_{username}",
+      "Generate API key: plaintext + SHA256 hash",
+      "Insert agent record with api_key_hash",
+      "Return AgentCreationResult { Agent, PlaintextAPIKey }",
+      "Run tests: go test ./internal/services/... -run Agent"
     ],
     "passes": false
   },
   {
     "category": "backend",
-    "description": "SOL-004: Provision MSV pod after agent creation",
+    "description": "SOL-005: Provision MSV pod after agent creation",
     "steps": [
-      "Open backend/internal/services/oauth_user.go (or create agent_provisioner.go)",
-      "After agent creation (SOL-003), call MSV provisioning",
-      "Create provisionAgentPod(ctx, user, agent) error function",
-      "Generate Solvr API key for the agent",
-      "Call msvClient.ProvisionPod(ctx, user.ID, agent.ID, agent.DisplayName, solvrAPIKey)",
-      "Update agent record with msv_pod_id, msv_endpoint, msv_status='provisioning'",
-      "Handle provisioning failure gracefully (agent still works, just no pod)",
-      "Consider async provisioning with goroutine or job queue",
-      "Log provisioning result",
-      "Create tests for provisioning flow",
-      "Test: successful provision updates agent record",
-      "Test: failed provision sets msv_status='failed'",
-      "Test: user can still use Solvr even if pod fails"
+      "Create backend/internal/services/agent_provisioner_test.go FIRST (TDD)",
+      "Test: provisionAgentPod calls MSV client with correct params",
+      "Test: success updates agent record with msv_pod_id, msv_status=provisioning",
+      "Test: failure sets msv_status=failed but agent still usable",
+      "Test: async provisioning doesnt block signup",
+      "Now implement in agent_provisioner.go:",
+      "Create provisionAgentPod(ctx, user, agent, plaintextKey) error",
+      "Call msvClient.ProvisionPod()",
+      "Update agent: msv_pod_id, msv_endpoint, msv_status, bot_link",
+      "Handle errors gracefully (log, set status, continue)",
+      "Consider goroutine for async (with recovery)",
+      "Run tests: go test ./internal/services/... -run Provision"
     ],
     "passes": false
   },
   {
     "category": "backend",
-    "description": "SOL-005: Add webhook endpoint for MSV status updates",
+    "description": "SOL-006: Add webhook endpoint for MSV status updates",
     "steps": [
-      "Create backend/internal/api/handlers/msv_webhook.go",
-      "Create MSVWebhookHandler struct",
-      "Add handler: HandleStatusUpdate(w http.ResponseWriter, r *http.Request)",
-      "Validate X-Webhook-Signature header using HMAC-SHA256",
-      "Parse payload: telegram_id, status, timestamp, metadata",
-      "Find agent by msv_pod_id: SELECT * FROM agents WHERE msv_pod_id = $1",
-      "Update agent msv_status based on webhook status",
-      "Create notification for user if status is 'error'",
-      "Return 200 OK on success",
-      "Register route in router.go: r.Post('/webhooks/msv/status', h.HandleStatusUpdate)",
-      "Add MSV_WEBHOOK_SECRET to environment config",
-      "Create msv_webhook_test.go",
-      "Test: valid signature updates agent",
+      "Create backend/internal/api/handlers/msv_webhook_test.go FIRST (TDD)",
+      "Test: valid HMAC signature updates agent status",
       "Test: invalid signature returns 401",
-      "Test: unknown pod returns 404"
+      "Test: unknown msv_pod_id returns 404",
+      "Test: error status creates user notification",
+      "Now implement in msv_webhook.go:",
+      "Create MSVWebhookHandler struct",
+      "Add HandleStatusUpdate(w, r) handler",
+      "Validate X-Webhook-Signature using HMAC-SHA256",
+      "Parse payload: telegram_id, status, timestamp, metadata",
+      "Find agent by msv_pod_id",
+      "Update msv_status",
+      "Create notification if status=error",
+      "Register route: r.Post(\"/webhooks/msv/status\", h.HandleStatusUpdate)",
+      "Run tests: go test ./internal/api/handlers/... -run MSVWebhook"
     ],
     "passes": false
   },
   {
     "category": "backend",
-    "description": "SOL-006: Add agent status to user profile and agent profile endpoints",
+    "description": "SOL-007: Add agent status to user profile and agent profile endpoints",
     "steps": [
       "Open backend/internal/api/handlers/agents.go",
       "Update GetAgent to include msv_status, msv_endpoint fields in response",
@@ -126,7 +144,7 @@
   },
   {
     "category": "backend",
-    "description": "SOL-007: Add agent lineage tracking for swarm prevention",
+    "description": "SOL-008: Add agent lineage tracking for swarm prevention",
     "steps": [
       "Create migration: backend/migrations/000070_agent_lineage.up.sql",
       "Add column: ALTER TABLE agents ADD COLUMN parent_agent_id TEXT REFERENCES agents(id);",
@@ -148,7 +166,7 @@
   },
   {
     "category": "backend",
-    "description": "SOL-008: Add spawn rate limiting (max 1 agent per week)",
+    "description": "SOL-009: Add spawn rate limiting (max 1 agent per week)",
     "steps": [
       "Create migration: backend/migrations/000071_agent_spawn_limits.up.sql",
       "Create table: agent_spawn_log (id, human_id, agent_id, spawned_at, PRIMARY KEY(id))",
@@ -168,32 +186,49 @@
     "passes": false
   },
   {
-    "category": "backend",
-    "description": "SOL-009: Add agent control panel API endpoints",
+    "category": "frontend",
+    "description": "SOL-010: Add MSV agent types to api-types.ts",
     "steps": [
-      "Create backend/internal/api/handlers/agent_control.go",
-      "Add handler: GetMyAgent(w, r) - returns user's agent with full status",
+      "Open frontend/lib/api-types.ts",
+      "Add to APIAgent interface: msv_pod_id?: number",
+      "Add to APIAgent interface: msv_endpoint?: string",
+      "Add to APIAgent interface: msv_status?: string (not_provisioned|provisioning|running|failed|stopped)",
+      "Add to APIAgent interface: bot_link?: string",
+      "Create new interface: AgentControlResponse { result: any, error?: string }",
+      "Create new interface: AgentLogsResponse { logs: LogEntry[] }",
+      "Add LogEntry interface: { timestamp: string, level: string, message: string }",
+      "Export all new types",
+      "Test: TypeScript compiles without errors"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-011: Add agent control panel API endpoints",
+    "steps": [
+      "Create backend/internal/api/handlers/agent_control_test.go FIRST (TDD)",
+      "Test: GetMyAgent returns agent with MSV status",
+      "Test: GetMyAgent returns 404 if no agent",
+      "Test: SendAgentCommand forwards to MSV and returns result",
+      "Test: SendAgentCommand returns error for offline pod",
+      "Test: RestartAgent calls MSV restart endpoint",
+      "Test: GetAgentLogs returns recent logs",
+      "Now implement: Create backend/internal/api/handlers/agent_control.go",
+      "Add handler: GetMyAgent(w, r) - returns users agent with full status",
       "Add handler: SendAgentCommand(w, r) - forwards command to MSV pod",
       "Validate user owns the agent (human_id check)",
       "Create AgentCommandRequest: tool string, params map[string]interface{}",
       "Call msvClient.SendCommand(ctx, agent.MSVPodID, req.Tool, req.Params)",
-      "Return command result or error",
       "Add handler: RestartAgent(w, r) - restart pod via MSV API",
       "Add handler: GetAgentLogs(w, r) - fetch recent logs from MSV",
-      "Register routes (authenticated):",
-      "  GET /v1/me/agent - GetMyAgent",
-      "  POST /v1/me/agent/command - SendAgentCommand",
-      "  POST /v1/me/agent/restart - RestartAgent",
-      "  GET /v1/me/agent/logs - GetAgentLogs",
-      "Create agent_control_test.go",
-      "Test: owner can send command",
-      "Test: non-owner rejected"
+      "Register routes in router.go",
+      "Run tests: go test ./internal/api/handlers/... -run AgentControl"
     ],
     "passes": false
   },
   {
     "category": "frontend",
-    "description": "SOL-010: Add agent control panel to user dashboard",
+    "description": "SOL-012: Add agent control panel to user dashboard",
     "steps": [
       "Add \"My Agent 🦞\" link to user dropdown menu (frontend/components/nav/user-menu.tsx)",
       "Add \"My Agent\" item to dashboard sidebar (frontend/components/dashboard/sidebar.tsx)",
@@ -220,7 +255,7 @@
   },
   {
     "category": "backend",
-    "description": "SOL-011: Add quota inheritance for sub-agents",
+    "description": "SOL-013: Add quota inheritance for sub-agents",
     "steps": [
       "Update Poken balance queries to check parent agent",
       "When sub-agent spends Pokens, deduct from parent's balance",
@@ -239,26 +274,8 @@
     "passes": false
   },
   {
-    "category": "infrastructure",
-    "description": "SOL-012: Add MSV environment config and secrets",
-    "steps": [
-      "Add to backend/.env.example:",
-      "  MSV_API_URL=https://solvr-msv.example.com",
-      "  MSV_SECRET=<shared secret with MSV>",
-      "  MSV_WEBHOOK_SECRET=<for validating incoming webhooks>",
-      "Add to production environment (Railway/Fly/etc):",
-      "  MSV_API_URL pointing to deployed Solvr MSV instance",
-      "  MSV_SECRET matching MSV's SOLVR_WEBHOOK_SECRET",
-      "Update backend/internal/config/config.go to load MSV config",
-      "Validate MSV config on startup (warn if missing)",
-      "Document MSV integration in README.md",
-      "Add health check that pings MSV API"
-    ],
-    "passes": false
-  },
-  {
     "category": "backend",
-    "description": "SOL-013: Handle provisioning failure gracefully",
+    "description": "SOL-014: Handle provisioning failure gracefully",
     "steps": [
       "If MSV provisioning fails, set msv_status=failed",
       "Create notification for user: Your agent could not be provisioned",
@@ -275,7 +292,7 @@
   },
   {
     "category": "backend",
-    "description": "SOL-014: Sync agent tier with user subscription",
+    "description": "SOL-015: Sync agent tier with user subscription",
     "steps": [
       "When user upgrades tier on Solvr, notify MSV",
       "Create POST /v1/me/agent/sync-tier endpoint (internal)",
@@ -289,7 +306,7 @@
   },
   {
     "category": "backend",
-    "description": "SOL-015: Handle agent/user deletion cascade",
+    "description": "SOL-016: Handle agent/user deletion cascade",
     "steps": [
       "When user deletes account, terminate their agent pod",
       "Call MSV: DELETE /api/v1/pods/{tid}",
@@ -299,23 +316,6 @@
       "Test: user deletion terminates pod",
       "Test: agent deletion terminates pod",
       "Test: orphan pods are cleaned up"
-    ],
-    "passes": false
-  },
-  {
-    "category": "frontend",
-    "description": "SOL-016: Add MSV agent types to api-types.ts",
-    "steps": [
-      "Open frontend/lib/api-types.ts",
-      "Add to APIAgent interface: msv_pod_id?: number",
-      "Add to APIAgent interface: msv_endpoint?: string",
-      "Add to APIAgent interface: msv_status?: string (not_provisioned|provisioning|running|failed|stopped)",
-      "Add to APIAgent interface: bot_link?: string",
-      "Create new interface: AgentControlResponse { result: any, error?: string }",
-      "Create new interface: AgentLogsResponse { logs: LogEntry[] }",
-      "Add LogEntry interface: { timestamp: string, level: string, message: string }",
-      "Export all new types",
-      "Test: TypeScript compiles without errors"
     ],
     "passes": false
   },
@@ -357,8 +357,27 @@
     "passes": false
   },
   {
+    "category": "backend",
+    "description": "SOL-019: Add GET /v1/me/agent/activity endpoint",
+    "steps": [
+      "Open backend/internal/api/handlers/agent_control.go",
+      "Add handler: GetAgentActivity(w, r)",
+      "Query MSV for agent activity: GET /api/v1/pods/{tid}/activity",
+      "Transform response for frontend consumption",
+      "Support query params: since, until, type, limit, offset",
+      "Cache results for 1 minute (reduce MSV load)",
+      "Return: { activities: [], total: int, page: int }",
+      "Register route: r.Get(\"/v1/me/agent/activity\", h.GetAgentActivity)",
+      "Create tests",
+      "Test: returns activity list",
+      "Test: filters work",
+      "Test: handles MSV errors"
+    ],
+    "passes": false
+  },
+  {
     "category": "frontend",
-    "description": "SOL-019: Add agent activity history page",
+    "description": "SOL-020: Add agent activity history page",
     "steps": [
       "Create frontend/app/dashboard/agent/activity/page.tsx",
       "Fetch activity: GET /v1/me/agent/activity",
@@ -377,37 +396,18 @@
   },
   {
     "category": "backend",
-    "description": "SOL-020: Add GET /v1/me/agent/activity endpoint",
-    "steps": [
-      "Open backend/internal/api/handlers/agent_control.go",
-      "Add handler: GetAgentActivity(w, r)",
-      "Query MSV for agent activity: GET /api/v1/pods/{tid}/activity",
-      "Transform response for frontend consumption",
-      "Support query params: since, until, type, limit, offset",
-      "Cache results for 1 minute (reduce MSV load)",
-      "Return: { activities: [], total: int, page: int }",
-      "Register route: r.Get(\"/v1/me/agent/activity\", h.GetAgentActivity)",
-      "Create tests",
-      "Test: returns activity list",
-      "Test: filters work",
-      "Test: handles MSV errors"
-    ],
-    "passes": false
-  },
-  {
-    "category": "backend",
     "description": "SOL-021: Create proactive-solvr skill for agent pods",
     "steps": [
-      "Create skills/proactive-solvr/SKILL.md",
-      "Document Solvr API endpoints agent should use",
-      "Add curl examples for: search, post problem, add approach, update approach",
-      "Create skills/proactive-solvr/scripts/solvr-search.sh",
-      "Create skills/proactive-solvr/scripts/solvr-post.sh",
-      "Add skill manifest with triggers",
-      "Document authentication (SOLVR_API_KEY env var)",
-      "Add to MSV AGENTS-solvr.md template",
-      "Test skill locally",
-      "Package for MSV pod deployment"
+      "Create skills/proactive-solvr/ directory",
+      "Create SKILL.md with description and triggers",
+      "Document authentication: SOLVR_API_KEY env var required",
+      "Create scripts/solvr-search.sh with curl example",
+      "Create scripts/solvr-post.sh with curl example",
+      "Create scripts/solvr-approach.sh with curl example",
+      "Test: solvr-search.sh returns results (manual test with real API)",
+      "Test: solvr-post.sh creates draft post",
+      "Add skill to MSV AGENTS-solvr.md template reference",
+      "Package skill for pod deployment"
     ],
     "passes": false
   },
@@ -432,24 +432,25 @@
     "category": "backend",
     "description": "SOL-023: Add Telegram OAuth login endpoint",
     "steps": [
-      "Study existing OAuth pattern in backend/internal/api/handlers/oauth.go",
-      "Add TelegramBotToken, TelegramBotUsername to OAuthConfig struct",
-      "Create backend/internal/api/handlers/telegram_auth.go",
-      "Create TelegramLoginData struct: { id, first_name, last_name, username, photo_url, auth_date, hash }",
-      "Create handler: TelegramCallback(w, r) - receives POST with login data",
-      "Implement hash verification: SHA256(data-check-string, SHA256(bot_token))",
-      "Data check string: sorted key=value pairs joined by newline (excluding hash)",
-      "Verify auth_date is within 24 hours",
-      "Call userService.FindOrCreateUser with provider=telegram",
-      "Generate JWT and refresh token (same as Google/GitHub)",
-      "Return tokens in response",
-      "Register route: r.Post(\"/auth/telegram/callback\", h.TelegramCallback)",
-      "Create backend/internal/api/handlers/telegram_auth_test.go",
-      "Test: valid hash authenticates",
+      "Create backend/internal/api/handlers/telegram_auth_test.go FIRST (TDD)",
+      "Test: valid hash with correct bot token authenticates",
       "Test: invalid hash returns 401",
-      "Test: expired auth_date returns 401",
-      "Test: creates new user on first login",
-      "Test: finds existing user on subsequent login"
+      "Test: expired auth_date (>24h) returns 401",
+      "Test: new user is created with provider=telegram",
+      "Test: existing user is found and JWT returned",
+      "Test: user gets agent provisioned on first login",
+      "Now implement in telegram_auth.go:",
+      "Add TelegramBotToken to OAuthConfig",
+      "Create TelegramLoginData struct",
+      "Create TelegramCallback(w, r) handler",
+      "Build data-check-string: sort keys, join with newlines",
+      "Compute hash: HMAC-SHA256(data-check-string, SHA256(bot_token))",
+      "Verify hash matches request hash",
+      "Verify auth_date < 24 hours ago",
+      "Call userService.FindOrCreateUser(provider=telegram)",
+      "Generate JWT and refresh token",
+      "Register route: r.Post(\"/auth/telegram/callback\", h.TelegramCallback)",
+      "Run tests: go test ./internal/api/handlers/... -run Telegram"
     ],
     "passes": false
   },

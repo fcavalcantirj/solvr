@@ -486,7 +486,7 @@
       "Verify widget loads on solvr.dev/login",
       "Test full login flow in staging first"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

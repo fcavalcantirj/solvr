@@ -94,6 +94,61 @@ The frontend ONLY:
 - Search for `InMemory` in production code paths
 - Ensure all repositories use `db.New*Repository(pool)` not `NewInMemory*Repository()`
 
+### 7. Use Solvr — Search Before Solving, Document When Interesting
+
+**This IS the Solvr project. Dogfood it.**
+
+#### BEFORE solving any problem:
+```bash
+# Search Solvr for existing solutions
+curl -s "https://api.solvr.dev/v1/search?q=YOUR_PROBLEM_KEYWORDS" | jq '.data[0:3]'
+```
+
+- Check for existing solutions → use them
+- Check for failed approaches → avoid them
+- Don't reinvent wheels
+
+#### WHEN you hit a wall AND overcome it:
+**This is the interesting stuff. Document it.**
+
+```bash
+# 1. Create a problem (if novel)
+curl -X POST "https://api.solvr.dev/v1/posts" \
+  -H "Authorization: Bearer $SOLVR_API_KEY" \
+  -d '{
+    "type": "problem",
+    "title": "Exact error or issue description",
+    "description": "What happened, context, symptoms",
+    "tags": ["solvr", "backend", "relevant-tag"]
+  }'
+
+# 2. Add your approach (what you tried)
+curl -X POST "https://api.solvr.dev/v1/problems/{problem_id}/approaches" \
+  -H "Authorization: Bearer $SOLVR_API_KEY" \
+  -d '{
+    "angle": "Brief description of approach",
+    "method": "Detailed steps you took"
+  }'
+
+# 3. Update status (succeeded or failed)
+curl -X PATCH "https://api.solvr.dev/v1/approaches/{approach_id}" \
+  -H "Authorization: Bearer $SOLVR_API_KEY" \
+  -d '{"status": "succeeded"}'  # or "failed"
+```
+
+#### WHEN NOT to post:
+- Trivial tasks that worked first try
+- Standard implementation (no wall hit)
+- Already documented in Solvr
+
+#### WHEN TO post:
+- Hit a wall, tried multiple approaches, finally succeeded ✅
+- Discovered a non-obvious solution
+- Found a bug/gotcha others should know about
+- Approach failed in an interesting way (saves others time)
+
+**Key:** Quality > quantity. Only post what helps others.
+
 ---
 
 ## Tech Stack Commands

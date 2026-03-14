@@ -18,7 +18,7 @@
       "Test: migration applies without error",
       "Test: rollback works correctly"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "infrastructure",
@@ -36,7 +36,7 @@
       "Document MSV integration in README.md",
       "Add health check that pings MSV API"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -58,7 +58,7 @@
       "Implement SendCommand(ctx, telegramID, tool, params) (*Result, error)",
       "Run tests: go test ./internal/services/... -run MSV"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -79,7 +79,7 @@
       "Return AgentCreationResult { Agent, PlaintextAPIKey }",
       "Run tests: go test ./internal/services/... -run Agent"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -98,7 +98,7 @@
       "Consider goroutine for async (with recovery)",
       "Run tests: go test ./internal/services/... -run Provision"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -120,7 +120,7 @@
       "Register route: r.Post(\"/webhooks/msv/status\", h.HandleStatusUpdate)",
       "Run tests: go test ./internal/api/handlers/... -run MSVWebhook"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -140,7 +140,7 @@
       "Test: agent profile includes msv_status",
       "Test: user profile includes agent info"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -162,7 +162,7 @@
       "Test: agent creates sub-agent (depth=2)",
       "Test: sub-agent cannot create sub-sub-agent (rejected)"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -183,7 +183,7 @@
       "Test: second spawn within 7 days rejected",
       "Test: spawn after 7 days allowed"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "frontend",
@@ -200,7 +200,7 @@
       "Export all new types",
       "Test: TypeScript compiles without errors"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -224,22 +224,22 @@
       "Register routes in router.go",
       "Run tests: go test ./internal/api/handlers/... -run AgentControl"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "frontend",
     "description": "SOL-012: Add agent control panel to user dashboard",
     "steps": [
-      "Add \"My Agent 🦞\" link to user dropdown menu (frontend/components/nav/user-menu.tsx)",
+      "Add \"My Agent \ud83e\udd9e\" link to user dropdown menu (frontend/components/nav/user-menu.tsx)",
       "Add \"My Agent\" item to dashboard sidebar (frontend/components/dashboard/sidebar.tsx)",
       "Create frontend/app/dashboard/agent/page.tsx - main agent control page",
       "Create frontend/components/dashboard/agent-panel.tsx - reusable panel component",
       "Fetch agent data: GET /v1/me/agent (status, stats, bot_link)",
-      "Display status indicator: 🟢 Online / 🟡 Provisioning / 🔴 Offline / ❌ Error",
+      "Display status indicator: \ud83d\udfe2 Online / \ud83d\udfe1 Provisioning / \ud83d\udd34 Offline / \u274c Error",
       "Display stats row: messages today (7/10), Pokens balance, last active time",
       "Add prominent \"Open in Telegram\" button with deep link (t.me/SolvrClaw_bot?start={pod_id})",
       "Add quick command input with Send button - calls POST /v1/me/agent/command",
-      "Add preset buttons: [🔍 Search Solvr] [📝 Post Problem] [🔄 Restart Agent]",
+      "Add preset buttons: [\ud83d\udd0d Search Solvr] [\ud83d\udcdd Post Problem] [\ud83d\udd04 Restart Agent]",
       "Show recent activity feed from agent (last 10 actions)",
       "Add restart confirmation modal with warning text",
       "Handle loading states with skeleton UI",
@@ -251,7 +251,7 @@
       "Test: Telegram button has correct deep link",
       "Test: restart shows confirmation modal"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -271,7 +271,7 @@
       "Test: sub-agent spend deducts from parent",
       "Test: root agent uses own balance"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -288,7 +288,7 @@
       "Test: retry endpoint works",
       "Test: max retries enforced"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -302,7 +302,7 @@
       "Test: tier change propagates to MSV",
       "Test: agent respects new tier limits"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -317,7 +317,7 @@
       "Test: agent deletion terminates pod",
       "Test: orphan pods are cleaned up"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "frontend",
@@ -335,7 +335,7 @@
       "Test: signup flow shows agent messaging",
       "Test: loading state displays during provisioning"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "frontend",
@@ -354,7 +354,7 @@
       "Test: new user sees onboarding",
       "Test: returning user skips onboarding"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -373,7 +373,7 @@
       "Test: filters work",
       "Test: handles MSV errors"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "frontend",
@@ -392,7 +392,7 @@
       "Test: activity loads and displays",
       "Test: filters work correctly"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -409,7 +409,7 @@
       "Add skill to MSV AGENTS-solvr.md template reference",
       "Package skill for pod deployment"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "frontend",
@@ -426,7 +426,7 @@
       "Test: badge updates on status change",
       "Test: tooltip shows correct info"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "backend",
@@ -452,7 +452,7 @@
       "Register route: r.Post(\"/auth/telegram/callback\", h.TelegramCallback)",
       "Run tests: go test ./internal/api/handlers/... -run Telegram"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "frontend",
@@ -472,7 +472,7 @@
       "Test: widget loads correctly",
       "Test: login flow works end-to-end"
     ],
-    "passes": true
+    "passes": false
   },
   {
     "category": "infrastructure",
@@ -503,6 +503,6 @@
       "Test: existing Google user linking Telegram finds same account",
       "Test: agent pod recognizes user from Telegram"
     ],
-    "passes": true
+    "passes": false
   }
 ]

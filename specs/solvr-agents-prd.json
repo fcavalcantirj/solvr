@@ -8,9 +8,10 @@
       "Add column: ALTER TABLE agents ADD COLUMN msv_endpoint TEXT;",
       "Add column: ALTER TABLE agents ADD COLUMN msv_status TEXT DEFAULT 'not_provisioned';",
       "Add column: ALTER TABLE agents ADD COLUMN msv_provisioned_at TIMESTAMPTZ;",
+      "Add column: ALTER TABLE agents ADD COLUMN bot_link TEXT;",
       "Add index: CREATE INDEX idx_agents_msv_pod_id ON agents(msv_pod_id) WHERE msv_pod_id IS NOT NULL;",
       "Create down migration: 000069_agents_msv_fields.down.sql",
-      "Update backend/internal/models/agent.go with new fields",
+      "Update backend/internal/models/agent.go with new fields: MSVPodID, MSVEndpoint, MSVStatus, MSVProvisionedAt, BotLink",
       "Update backend/internal/db/agents.go queries to include new fields",
       "Run migration locally: make migrate-up",
       "Verify columns exist: psql -c '\\d agents'"
@@ -48,13 +49,16 @@
       "After user creation, check if user has an agent: SELECT id FROM agents WHERE human_id = $1",
       "If no agent exists, create one automatically:",
       "Generate agent ID: agent_{username} or agent_{uuid}",
-      "Generate API key using existing key generation logic",
+      "Generate API key: plaintext key + SHA256 hash",
       "Insert agent: INSERT INTO agents (id, display_name, human_id, status, api_key_hash) VALUES (...)",
+      "CRITICAL: Return plaintext API key in response struct (needed for MSV provisioning in SOL-004)",
+      "Create AgentCreationResult struct: { Agent, PlaintextAPIKey }",
       "Log agent creation for debugging",
       "Update backend/internal/services/oauth_user_test.go",
       "Test: new user signup creates agent",
       "Test: existing user login does not create duplicate agent",
-      "Test: agent is linked to user via human_id"
+      "Test: agent is linked to user via human_id",
+      "Test: plaintext API key is returned (not stored)"
     ],
     "passes": false
   },
@@ -254,37 +258,7 @@
   },
   {
     "category": "backend",
-    "description": "SOL-013: Generate Solvr API key for agent during creation",
-    "steps": [
-      "Open backend/internal/services/oauth_user.go",
-      "After creating agent record, generate API key using existing key generation logic",
-      "Store hashed key in agents.api_key_hash (already exists)",
-      "Return plaintext key ONCE for injection into MSV pod",
-      "Key format: solvr_{random_32_chars}",
-      "Create backend/internal/services/agent_api_key.go if needed",
-      "Test: agent creation generates valid API key",
-      "Test: API key authenticates correctly on /v1/search",
-      "Test: plaintext key only available at creation time"
-    ],
-    "passes": false
-  },
-  {
-    "category": "backend",
-    "description": "SOL-014: Store bot_link after MSV provisioning callback",
-    "steps": [
-      "Update webhook handler (SOL-005) to extract bot_link from MSV response",
-      "Add agents.bot_link column: ALTER TABLE agents ADD COLUMN bot_link TEXT;",
-      "On provision success webhook, store: UPDATE agents SET bot_link = $1 WHERE msv_pod_id = $2",
-      "Return bot_link in GET /v1/me/agent response",
-      "Return bot_link in GET /v1/agents/{id} response",
-      "Test: bot_link stored after provision",
-      "Test: bot_link returned in API responses"
-    ],
-    "passes": false
-  },
-  {
-    "category": "backend",
-    "description": "SOL-015: Handle provisioning failure gracefully",
+    "description": "SOL-013: Handle provisioning failure gracefully",
     "steps": [
       "If MSV provisioning fails, set msv_status=failed",
       "Create notification for user: Your agent could not be provisioned",
@@ -301,7 +275,7 @@
   },
   {
     "category": "backend",
-    "description": "SOL-016: Sync agent tier with user subscription",
+    "description": "SOL-014: Sync agent tier with user subscription",
     "steps": [
       "When user upgrades tier on Solvr, notify MSV",
       "Create POST /v1/me/agent/sync-tier endpoint (internal)",
@@ -315,7 +289,7 @@
   },
   {
     "category": "backend",
-    "description": "SOL-017: Handle agent/user deletion cascade",
+    "description": "SOL-015: Handle agent/user deletion cascade",
     "steps": [
       "When user deletes account, terminate their agent pod",
       "Call MSV: DELETE /api/v1/pods/{tid}",

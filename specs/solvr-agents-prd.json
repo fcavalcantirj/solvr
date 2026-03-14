@@ -106,7 +106,7 @@
     "steps": [
       "Open backend/internal/api/handlers/agents.go",
       "Update GetAgent to include msv_status, msv_endpoint fields in response",
-      "Add computed field: bot_link = 'https://t.me/SolvrAgent_bot?start={msv_pod_id}'",
+      "Add computed field: bot_link = 'https://t.me/SolvrClaw_bot?start={msv_pod_id}'",
       "Open backend/internal/api/handlers/users.go",
       "Update GetUserProfile to include linked agent with msv_status",
       "Open frontend/app/agents/[id]/page.tsx",

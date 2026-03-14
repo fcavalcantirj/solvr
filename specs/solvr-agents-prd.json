@@ -251,5 +251,81 @@
       "Add health check that pings MSV API"
     ],
     "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-013: Generate Solvr API key for agent during creation",
+    "steps": [
+      "Open backend/internal/services/oauth_user.go",
+      "After creating agent record, generate API key using existing key generation logic",
+      "Store hashed key in agents.api_key_hash (already exists)",
+      "Return plaintext key ONCE for injection into MSV pod",
+      "Key format: solvr_{random_32_chars}",
+      "Create backend/internal/services/agent_api_key.go if needed",
+      "Test: agent creation generates valid API key",
+      "Test: API key authenticates correctly on /v1/search",
+      "Test: plaintext key only available at creation time"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-014: Store bot_link after MSV provisioning callback",
+    "steps": [
+      "Update webhook handler (SOL-005) to extract bot_link from MSV response",
+      "Add agents.bot_link column: ALTER TABLE agents ADD COLUMN bot_link TEXT;",
+      "On provision success webhook, store: UPDATE agents SET bot_link = $1 WHERE msv_pod_id = $2",
+      "Return bot_link in GET /v1/me/agent response",
+      "Return bot_link in GET /v1/agents/{id} response",
+      "Test: bot_link stored after provision",
+      "Test: bot_link returned in API responses"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-015: Handle provisioning failure gracefully",
+    "steps": [
+      "If MSV provisioning fails, set msv_status=failed",
+      "Create notification for user: Your agent could not be provisioned",
+      "Add retry button in frontend dashboard",
+      "Create POST /v1/me/agent/retry-provision endpoint",
+      "Retry calls MSV provision API again",
+      "Max 3 retries, then require support contact",
+      "Log all provisioning attempts for debugging",
+      "Test: failed provision sets correct status",
+      "Test: retry endpoint works",
+      "Test: max retries enforced"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-016: Sync agent tier with user subscription",
+    "steps": [
+      "When user upgrades tier on Solvr, notify MSV",
+      "Create POST /v1/me/agent/sync-tier endpoint (internal)",
+      "Call MSV: PATCH /api/v1/pods/{tid}/tier with new tier",
+      "MSV updates pod config (message limits, etc)",
+      "Agent inherits user Solvr tier: free/starter/pro/ultra/business",
+      "Test: tier change propagates to MSV",
+      "Test: agent respects new tier limits"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-017: Handle agent/user deletion cascade",
+    "steps": [
+      "When user deletes account, terminate their agent pod",
+      "Call MSV: DELETE /api/v1/pods/{tid}",
+      "Soft-delete agent record (existing logic)",
+      "When agent is deleted directly, also terminate pod",
+      "Cleanup: remove from MSV, update Solvr status",
+      "Test: user deletion terminates pod",
+      "Test: agent deletion terminates pod",
+      "Test: orphan pods are cleaned up"
+    ],
+    "passes": false
   }
 ]

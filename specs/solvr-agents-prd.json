@@ -427,5 +427,81 @@
       "Test: tooltip shows correct info"
     ],
     "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-023: Add Telegram OAuth login endpoint",
+    "steps": [
+      "Study existing OAuth pattern in backend/internal/api/handlers/oauth.go",
+      "Add TelegramBotToken, TelegramBotUsername to OAuthConfig struct",
+      "Create backend/internal/api/handlers/telegram_auth.go",
+      "Create TelegramLoginData struct: { id, first_name, last_name, username, photo_url, auth_date, hash }",
+      "Create handler: TelegramCallback(w, r) - receives POST with login data",
+      "Implement hash verification: SHA256(data-check-string, SHA256(bot_token))",
+      "Data check string: sorted key=value pairs joined by newline (excluding hash)",
+      "Verify auth_date is within 24 hours",
+      "Call userService.FindOrCreateUser with provider=telegram",
+      "Generate JWT and refresh token (same as Google/GitHub)",
+      "Return tokens in response",
+      "Register route: r.Post(\"/auth/telegram/callback\", h.TelegramCallback)",
+      "Create backend/internal/api/handlers/telegram_auth_test.go",
+      "Test: valid hash authenticates",
+      "Test: invalid hash returns 401",
+      "Test: expired auth_date returns 401",
+      "Test: creates new user on first login",
+      "Test: finds existing user on subsequent login"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "SOL-024: Add Telegram Login Widget to login page",
+    "steps": [
+      "Create frontend/components/auth/telegram-login-button.tsx",
+      "Add Telegram Login Widget script: https://telegram.org/js/telegram-widget.js",
+      "Configure widget: bot_username=SolvrClaw_bot, request_access=write",
+      "Handle onTelegramAuth callback from widget",
+      "POST login data to /v1/auth/telegram/callback",
+      "On success, store JWT and redirect to dashboard",
+      "On error, show error message",
+      "Add to login page: frontend/app/login/page.tsx",
+      "Add to signup page: frontend/app/join/page.tsx",
+      "Style button to match existing OAuth buttons",
+      "Add Telegram icon",
+      "Test: widget loads correctly",
+      "Test: login flow works end-to-end"
+    ],
+    "passes": false
+  },
+  {
+    "category": "infrastructure",
+    "description": "SOL-025: Configure Telegram bot for Web Login",
+    "steps": [
+      "Open BotFather settings for @SolvrClaw_bot",
+      "Set Web Login URL: https://solvr.dev",
+      "Set Privacy Policy URL: https://solvr.dev/privacy (optional)",
+      "Add TELEGRAM_BOT_TOKEN to backend environment",
+      "Add TELEGRAM_BOT_USERNAME=SolvrClaw_bot to backend environment",
+      "Verify widget loads on solvr.dev/login",
+      "Test full login flow in staging first"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-026: Link Telegram login to existing agent pod",
+    "steps": [
+      "When user logs in via Telegram, check if they have an MSV pod",
+      "If user has no agent yet, create agent + provision pod (same as OAuth signup)",
+      "If user already has agent (from other OAuth), link Telegram ID",
+      "Store Telegram user ID in users table: ALTER TABLE users ADD COLUMN telegram_id BIGINT",
+      "Create migration: backend/migrations/000070_users_telegram_id.up.sql",
+      "When pod exists, Telegram ID should match pod routing",
+      "If mismatch, update pod routing to recognize both IDs",
+      "Test: new Telegram user gets agent provisioned",
+      "Test: existing Google user linking Telegram finds same account",
+      "Test: agent pod recognizes user from Telegram"
+    ],
+    "passes": false
   }
 ]

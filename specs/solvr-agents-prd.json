@@ -301,5 +301,131 @@
       "Test: orphan pods are cleaned up"
     ],
     "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "SOL-016: Add MSV agent types to api-types.ts",
+    "steps": [
+      "Open frontend/lib/api-types.ts",
+      "Add to APIAgent interface: msv_pod_id?: number",
+      "Add to APIAgent interface: msv_endpoint?: string",
+      "Add to APIAgent interface: msv_status?: string (not_provisioned|provisioning|running|failed|stopped)",
+      "Add to APIAgent interface: bot_link?: string",
+      "Create new interface: AgentControlResponse { result: any, error?: string }",
+      "Create new interface: AgentLogsResponse { logs: LogEntry[] }",
+      "Add LogEntry interface: { timestamp: string, level: string, message: string }",
+      "Export all new types",
+      "Test: TypeScript compiles without errors"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "SOL-017: Enhance signup flow with agent messaging",
+    "steps": [
+      "Open frontend/app/join/page.tsx (or signup page)",
+      "Add hero section: \"Sign up and get your AI agent\"",
+      "Add agent preview card showing what user will get",
+      "Add bullet points: Search Solvr, Document approaches, Persistent memory",
+      "Add Telegram bot preview icon",
+      "After OAuth success, show \"Creating your agent...\" loading state",
+      "On provision success, show \"Your agent is ready!\" with bot_link button",
+      "On provision failure, show retry option",
+      "Style with existing design system",
+      "Test: signup flow shows agent messaging",
+      "Test: loading state displays during provisioning"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "SOL-018: Create agent onboarding flow for new users",
+    "steps": [
+      "Create frontend/app/onboarding/agent/page.tsx",
+      "Step 1: Welcome screen with agent capabilities",
+      "Step 2: Open Telegram button (deep link to bot)",
+      "Step 3: Send first message tutorial",
+      "Step 4: Quick commands cheatsheet",
+      "Step 5: Link to dashboard",
+      "Add skip button for experienced users",
+      "Store onboarding_completed in user preferences",
+      "Redirect new users to onboarding after signup",
+      "Add progress indicator",
+      "Test: new user sees onboarding",
+      "Test: returning user skips onboarding"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "SOL-019: Add agent activity history page",
+    "steps": [
+      "Create frontend/app/dashboard/agent/activity/page.tsx",
+      "Fetch activity: GET /v1/me/agent/activity",
+      "Display timeline of agent actions",
+      "Show: searches, posts, approaches, errors",
+      "Add date filters (today, week, month)",
+      "Add action type filters",
+      "Pagination for long history",
+      "Link each item to relevant Solvr content",
+      "Add export to CSV option",
+      "Style as timeline component",
+      "Test: activity loads and displays",
+      "Test: filters work correctly"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-020: Add GET /v1/me/agent/activity endpoint",
+    "steps": [
+      "Open backend/internal/api/handlers/agent_control.go",
+      "Add handler: GetAgentActivity(w, r)",
+      "Query MSV for agent activity: GET /api/v1/pods/{tid}/activity",
+      "Transform response for frontend consumption",
+      "Support query params: since, until, type, limit, offset",
+      "Cache results for 1 minute (reduce MSV load)",
+      "Return: { activities: [], total: int, page: int }",
+      "Register route: r.Get(\"/v1/me/agent/activity\", h.GetAgentActivity)",
+      "Create tests",
+      "Test: returns activity list",
+      "Test: filters work",
+      "Test: handles MSV errors"
+    ],
+    "passes": false
+  },
+  {
+    "category": "backend",
+    "description": "SOL-021: Create proactive-solvr skill for agent pods",
+    "steps": [
+      "Create skills/proactive-solvr/SKILL.md",
+      "Document Solvr API endpoints agent should use",
+      "Add curl examples for: search, post problem, add approach, update approach",
+      "Create skills/proactive-solvr/scripts/solvr-search.sh",
+      "Create skills/proactive-solvr/scripts/solvr-post.sh",
+      "Add skill manifest with triggers",
+      "Document authentication (SOLVR_API_KEY env var)",
+      "Add to MSV AGENTS-solvr.md template",
+      "Test skill locally",
+      "Package for MSV pod deployment"
+    ],
+    "passes": false
+  },
+  {
+    "category": "frontend",
+    "description": "SOL-022: Add real-time agent status indicator",
+    "steps": [
+      "Create frontend/components/agent/agent-status-badge.tsx",
+      "Show status dot: green=online, yellow=provisioning, red=error, gray=offline",
+      "Add tooltip with last seen time",
+      "Poll status every 30 seconds (or use websocket)",
+      "Add to dashboard header",
+      "Add to agent profile pages",
+      "Show in user dropdown menu",
+      "Animate status changes",
+      "Test: badge updates on status change",
+      "Test: tooltip shows correct info"
+    ],
+    "passes": false
   }
 ]

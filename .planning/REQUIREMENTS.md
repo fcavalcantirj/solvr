@@ -70,27 +70,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | — | Pending |
-| INFRA-02 | — | Pending |
-| INFRA-03 | — | Pending |
-| EMAIL-01 | — | Pending |
-| EMAIL-02 | — | Pending |
-| EMAIL-03 | — | Pending |
-| EMAIL-04 | — | Pending |
-| EMAIL-05 | — | Pending |
-| EMAIL-06 | — | Pending |
-| AUDIT-01 | — | Pending |
-| AUDIT-02 | — | Pending |
-| TOOL-01 | — | Pending |
-| TOOL-02 | — | Pending |
-| TOOL-03 | — | Pending |
-| TOOL-04 | — | Pending |
+| INFRA-01 | 1 | Pending |
+| INFRA-02 | 1 | Pending |
+| INFRA-03 | 2 | Pending |
+| EMAIL-01 | 3 | Pending |
+| EMAIL-02 | 3 | Pending |
+| EMAIL-03 | 3 | Pending |
+| EMAIL-04 | 2 | Pending |
+| EMAIL-05 | 2 | Pending |
+| EMAIL-06 | 3 | Pending |
+| AUDIT-01 | 2 | Pending |
+| AUDIT-02 | 4 | Pending |
+| TOOL-01 | 5 | Pending |
+| TOOL-02 | 5 | Pending |
+| TOOL-03 | 5 | Pending |
+| TOOL-04 | 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after initial definition*
+*Last updated: 2026-03-17 after roadmap creation (5 phases)*

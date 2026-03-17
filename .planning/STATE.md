@@ -1,9 +1,9 @@
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 1 (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-03-17 — Milestone v1.0 started
+Status: Roadmap complete, ready to plan Phase 1
+Last activity: 2026-03-17 — Roadmap created (5 phases)
 
 ## Project Reference
 
@@ -15,7 +15,12 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Accumulated Context
 
 - EmailService + SMTPClient exist in backend/internal/services/ but are not wired up
-- Config already loads SMTP env vars
+- Config already loads SMTP env vars (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FROM_EMAIL)
 - Admin auth uses X-Admin-API-Key header (inline in handlers, not middleware)
 - All users have email (UNIQUE NOT NULL)
 - solvr.dev has no email infrastructure yet (no DNS records, no provider)
+- Provider is Resend (not Mailgun) — REQUIREMENTS.md specifies RESEND_API_KEY
+- Dead code has bugs: quoted-printable encoding bug in smtp.go, SMTPPort type mismatch — do NOT reuse for production
+- Build a fresh ResendClient satisfying an EmailSender interface; bypass smtp.go entirely
+- HTTP WriteTimeout is 15s — use per-request 5-minute context deadline inside broadcast handler
+- Phase 1 is critical path (DNS propagation 24–48h) — start before code work

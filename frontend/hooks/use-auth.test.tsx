@@ -269,7 +269,7 @@ describe('useAuth', () => {
       );
     });
 
-    expect(api.register).toHaveBeenCalledWith('new@example.com', 'password123', 'newuser', 'New User');
+    expect(api.register).toHaveBeenCalledWith('new@example.com', 'password123', 'newuser', 'New User', undefined);
     expect(localStorageMock.setItem).toHaveBeenCalledWith('auth_token', 'new-jwt-token');
     expect(api.setAuthToken).toHaveBeenCalledWith('new-jwt-token');
     expect(registerResult).toEqual({ success: true });
@@ -298,7 +298,7 @@ describe('useAuth', () => {
       );
     });
 
-    expect(api.register).toHaveBeenCalledWith('existing@example.com', 'password123', 'testuser', 'Test User');
+    expect(api.register).toHaveBeenCalledWith('existing@example.com', 'password123', 'testuser', 'Test User', undefined);
     expect(registerResult).toEqual({
       success: false,
       error: 'Email already registered'

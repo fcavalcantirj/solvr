@@ -1,12 +1,16 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import JoinPage from './page';
 
-// Mock Next.js router
+// Mock Next.js router and searchParams
 const mockPush = vi.fn();
+const mockGetSearchParam = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: mockPush,
+  }),
+  useSearchParams: () => ({
+    get: mockGetSearchParam,
   }),
 }));
 
@@ -19,6 +23,8 @@ vi.mock('@/hooks/use-auth', () => ({
 describe('JoinPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: no ref param
+    mockGetSearchParam.mockReturnValue(null);
   });
 
   describe('AI Agent Account button', () => {
@@ -136,6 +142,93 @@ describe('JoinPage', () => {
 
       fireEvent.click(screen.getByText('CONTINUE WITH GOOGLE'));
       expect(mockLoginWithGoogle).toHaveBeenCalled();
+    });
+  });
+
+  describe('Referral code forwarding', () => {
+    it('passes ref to register when URL has ?ref=ABC123', async () => {
+      mockGetSearchParam.mockImplementation((key: string) => key === 'ref' ? 'ABC123' : null);
+
+      const mockRegister = vi.fn().mockResolvedValue({ success: true });
+      mockUseAuth.mockReturnValue({
+        isAuthenticated: false,
+        isLoading: false,
+        user: null,
+        loginWithGitHub: vi.fn(),
+        loginWithGoogle: vi.fn(),
+        register: mockRegister,
+      });
+
+      render(<JoinPage />);
+
+      // Navigate to step 2
+      fireEvent.click(screen.getByText('CONTINUE WITH EMAIL'));
+
+      // Fill in required fields
+      fireEvent.change(screen.getByPlaceholderText('Jane'), { target: { value: 'Jane' } });
+      fireEvent.change(screen.getByPlaceholderText('Doe'), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByPlaceholderText('janedoe'), { target: { value: 'janedoe' } });
+      fireEvent.change(screen.getByPlaceholderText('you@example.com'), { target: { value: 'jane@example.com' } });
+      fireEvent.change(screen.getByPlaceholderText('Min. 8 characters'), { target: { value: 'password123' } });
+
+      // Accept terms
+      fireEvent.click(screen.getByRole('checkbox'));
+
+      // Submit form
+      fireEvent.click(screen.getByText('CREATE ACCOUNT'));
+
+      await waitFor(() => {
+        expect(mockRegister).toHaveBeenCalledWith(
+          'jane@example.com',
+          'password123',
+          'janedoe',
+          'Jane Doe',
+          'ABC123'
+        );
+      });
+    });
+
+    it('does not pass ref when URL has no ?ref param', async () => {
+      // Default: mockGetSearchParam returns null
+      mockGetSearchParam.mockReturnValue(null);
+
+      const mockRegister = vi.fn().mockResolvedValue({ success: true });
+      mockUseAuth.mockReturnValue({
+        isAuthenticated: false,
+        isLoading: false,
+        user: null,
+        loginWithGitHub: vi.fn(),
+        loginWithGoogle: vi.fn(),
+        register: mockRegister,
+      });
+
+      render(<JoinPage />);
+
+      // Navigate to step 2
+      fireEvent.click(screen.getByText('CONTINUE WITH EMAIL'));
+
+      // Fill in required fields
+      fireEvent.change(screen.getByPlaceholderText('Jane'), { target: { value: 'Jane' } });
+      fireEvent.change(screen.getByPlaceholderText('Doe'), { target: { value: 'Doe' } });
+      fireEvent.change(screen.getByPlaceholderText('janedoe'), { target: { value: 'janedoe' } });
+      fireEvent.change(screen.getByPlaceholderText('you@example.com'), { target: { value: 'jane@example.com' } });
+      fireEvent.change(screen.getByPlaceholderText('Min. 8 characters'), { target: { value: 'password123' } });
+
+      // Accept terms
+      fireEvent.click(screen.getByRole('checkbox'));
+
+      // Submit form
+      fireEvent.click(screen.getByText('CREATE ACCOUNT'));
+
+      await waitFor(() => {
+        expect(mockRegister).toHaveBeenCalledWith(
+          'jane@example.com',
+          'password123',
+          'janedoe',
+          'Jane Doe',
+          undefined
+        );
+      });
     });
   });
 });

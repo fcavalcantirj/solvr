@@ -381,7 +381,7 @@ class SolvrAPI {
     });
   }
 
-  async register(email: string, password: string, username: string, displayName: string): Promise<{
+  async register(email: string, password: string, username: string, displayName: string, ref?: string): Promise<{
     access_token: string;
     refresh_token: string;
     user: {
@@ -404,7 +404,7 @@ class SolvrAPI {
       };
     }>('/v1/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password, username, display_name: displayName }),
+      body: JSON.stringify({ email, password, username, display_name: displayName, ...(ref && { ref }) }),
     });
   }
 

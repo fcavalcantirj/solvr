@@ -23,7 +23,7 @@ interface AuthContextType {
   loginWithGitHub: () => void;
   loginWithGoogle: () => void;
   loginWithEmail: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string, username: string, displayName: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, password: string, username: string, displayName: string, ref?: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -164,10 +164,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string,
     password: string,
     username: string,
-    displayName: string
+    displayName: string,
+    ref?: string
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await api.register(email, password, username, displayName);
+      const response = await api.register(email, password, username, displayName, ref);
       await setToken(response.access_token);
       return { success: true };
     } catch (error: unknown) {

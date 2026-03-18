@@ -1,20 +1,20 @@
 "use client";
 
-// Force dynamic rendering - this page uses client-side state (useState)
+// Force dynamic rendering - this page uses client-side state (useState) and useSearchParams
 export const dynamic = 'force-dynamic';
 
-import React from "react"
+import React, { Suspense } from "react"
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, Github, Mail, Check, Bot, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
 
-export default function JoinPage() {
+function JoinPageInner() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(1);
@@ -26,6 +26,8 @@ export default function JoinPage() {
   const [error, setError] = useState("");
   const { loginWithGitHub, loginWithGoogle, isAuthenticated, register } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const ref = searchParams.get('ref') || undefined;
 
   const handleAgentAccountClick = () => {
     if (isAuthenticated) {
@@ -45,7 +47,7 @@ export default function JoinPage() {
     setError("");
 
     const displayName = `${firstName} ${lastName}`.trim();
-    const result = await register(email, password, username, displayName);
+    const result = await register(email, password, username, displayName, ref);
 
     if (result.success) {
       // Redirect to home or saved return URL
@@ -441,5 +443,13 @@ export default function JoinPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={null}>
+      <JoinPageInner />
+    </Suspense>
   );
 }

@@ -73,6 +73,122 @@ func (h *AdminHandler) SetUserEmailRepo(repo UserEmailRepo) {
 	h.userEmailRepo = repo
 }
 
+// broadcastRequest is the JSON body for POST /admin/email/broadcast.
+type broadcastRequest struct {
+	Subject  string `json:"subject"`
+	BodyHTML string `json:"body_html"`
+	BodyText string `json:"body_text"`
+	DryRun   bool   `json:"dry_run"`
+}
+
+// BroadcastEmail handles POST /admin/email/broadcast
+// Sends email to all active users, or previews recipients in dry-run mode.
+// Requires X-Admin-API-Key header.
+// Returns 400 if subject or body_html is missing.
+// Returns 503 if email service is not configured.
+// With dry_run=true, returns recipient list without sending.
+// With dry_run=false, sends emails synchronously and returns counts.
+func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
+	if !h.checkAdminAuth(w, r) {
+		return
+	}
+
+	// Parse request body
+	var req broadcastRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAdminError(w, http.StatusBadRequest, "INVALID_JSON", "invalid JSON body")
+		return
+	}
+
+	// Validate required fields
+	if strings.TrimSpace(req.Subject) == "" {
+		writeAdminError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELD", "subject is required")
+		return
+	}
+	if strings.TrimSpace(req.BodyHTML) == "" {
+		writeAdminError(w, http.StatusBadRequest, "MISSING_REQUIRED_FIELD", "body_html is required")
+		return
+	}
+
+	// Check email service configured
+	if h.emailSender == nil {
+		writeAdminJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "EMAIL_NOT_CONFIGURED",
+		})
+		return
+	}
+
+	// Get recipients
+	recipients, err := h.userEmailRepo.ListActiveEmails(r.Context())
+	if err != nil {
+		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list recipients")
+		return
+	}
+
+	// Dry-run mode: return recipient list, no sends
+	if req.DryRun {
+		writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+			"would_send": len(recipients),
+			"recipients": recipients,
+		})
+		return
+	}
+
+	// Live broadcast: create log, send emails, update log
+	// Per-request 5-minute context deadline
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+
+	// Create broadcast log entry
+	broadcast := &models.EmailBroadcast{
+		Subject:         req.Subject,
+		BodyHTML:        req.BodyHTML,
+		BodyText:        req.BodyText,
+		TotalRecipients: len(recipients),
+		Status:          "sending",
+	}
+
+	logEntry, err := h.emailBroadcastRepo.CreateLog(ctx, broadcast)
+	if err != nil {
+		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create broadcast log")
+		return
+	}
+
+	startTime := time.Now()
+	sentCount := 0
+	failedCount := 0
+
+	// List-Unsubscribe header for Gmail 2024 bulk sender requirements
+	unsubHeaders := map[string]string{
+		"List-Unsubscribe": "<mailto:unsubscribe@solvr.dev>",
+	}
+
+	// Send emails synchronously and sequentially
+	for _, recipient := range recipients {
+		err := h.emailSender.Send(ctx, recipient.Email, req.Subject, req.BodyHTML, req.BodyText, unsubHeaders)
+		if err != nil {
+			failedCount++
+			// Log error but continue with next recipient
+			continue
+		}
+		sentCount++
+	}
+
+	// Update broadcast log with final counts
+	completedAt := time.Now()
+	durationMs := completedAt.Sub(startTime).Milliseconds()
+
+	_ = h.emailBroadcastRepo.UpdateStatusAndCounts(ctx, logEntry.ID, "completed", sentCount, failedCount, &completedAt)
+
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+		"broadcast_id": logEntry.ID,
+		"sent":         sentCount,
+		"failed":       failedCount,
+		"total":        len(recipients),
+		"duration_ms":  durationMs,
+	})
+}
+
 // QueryRequest represents a raw SQL query request.
 type QueryRequest struct {
 	Query string `json:"query"`

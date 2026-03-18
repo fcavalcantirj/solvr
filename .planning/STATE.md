@@ -1,9 +1,9 @@
 ## Current Position
 
-Phase: Phase 6 — Plan 06-01 complete
+Phase: Phase 6 — Plan 06-02 complete
 Plan: .planning/ROADMAP.md
-Status: Plan 06-01 done — migration 000070, referral package, User model updated, all tests pass
-Last activity: 2026-03-17 — Completed 06-01: Migration + Code Generation + Auto-Assign
+Status: Plan 06-02 done — ReferralRepository, ReferralHandler (5 tests), GET /v1/users/me/referral wired; all tests pass
+Last activity: 2026-03-17 — Completed 06-02: Referral API Endpoint
 
 ## Project Reference
 

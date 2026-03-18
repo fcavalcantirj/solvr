@@ -11,6 +11,7 @@
 
 **Goal:** Add referral infrastructure to the database and expose the user's code via API.
 **Requirements:** REF-01, REF-02, REF-04
+**Status:** ✅ COMPLETE (06-01 complete 2026-03-17, 06-02 complete 2026-03-17)
 
 ### Success Criteria
 

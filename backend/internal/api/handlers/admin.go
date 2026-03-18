@@ -32,6 +32,7 @@ type EmailSender interface {
 type EmailBroadcastRepo interface {
 	CreateLog(ctx context.Context, broadcast *models.EmailBroadcast) (*models.EmailBroadcast, error)
 	UpdateStatusAndCounts(ctx context.Context, id string, status string, sentCount, failedCount int, completedAt *time.Time) error
+	List(ctx context.Context) ([]models.EmailBroadcast, error)
 }
 
 // UserEmailRepo provides user email listing for broadcasts.

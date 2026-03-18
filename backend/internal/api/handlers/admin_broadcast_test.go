@@ -49,6 +49,8 @@ type mockEmailBroadcastRepo struct {
 	updateStatus    string
 	updateSent      int
 	updateFailed    int
+	listResult      []models.EmailBroadcast
+	listErr         error
 }
 
 func (m *mockEmailBroadcastRepo) CreateLog(ctx context.Context, broadcast *models.EmailBroadcast) (*models.EmailBroadcast, error) {
@@ -68,6 +70,10 @@ func (m *mockEmailBroadcastRepo) UpdateStatusAndCounts(ctx context.Context, id s
 	m.updateSent = sentCount
 	m.updateFailed = failedCount
 	return nil
+}
+
+func (m *mockEmailBroadcastRepo) List(ctx context.Context) ([]models.EmailBroadcast, error) {
+	return m.listResult, m.listErr
 }
 
 // mockUserEmailRepo returns a fixed list of recipients.
@@ -370,5 +376,94 @@ func TestBroadcastEmail_PartialFailure(t *testing.T) {
 	}
 	if broadcastRepo.updateFailed != 1 {
 		t.Errorf("expected updateFailed == 1, got %d", broadcastRepo.updateFailed)
+	}
+}
+
+func TestListBroadcasts_Unauthorized(t *testing.T) {
+	os.Setenv("ADMIN_API_KEY", "test-admin-key")
+	defer os.Unsetenv("ADMIN_API_KEY")
+
+	handler := NewAdminHandler(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/email/history", nil)
+	// NO X-Admin-API-Key header
+	w := httptest.NewRecorder()
+	handler.ListBroadcasts(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestListBroadcasts_ReturnsBroadcasts(t *testing.T) {
+	os.Setenv("ADMIN_API_KEY", "test-admin-key")
+	defer os.Unsetenv("ADMIN_API_KEY")
+
+	now := time.Now().UTC()
+	completedAt := now.Add(12 * time.Second)
+	broadcastRepo := &mockEmailBroadcastRepo{
+		listResult: []models.EmailBroadcast{
+			{
+				ID:              "550e8400-e29b-41d4-a716-446655440000",
+				Subject:         "Solvr Newsletter — March 2026",
+				TotalRecipients: 87,
+				SentCount:       85,
+				FailedCount:     2,
+				Status:          "completed",
+				StartedAt:       now,
+				CompletedAt:     &completedAt,
+			},
+			{
+				ID:        "another-broadcast-id",
+				Subject:   "Earlier Newsletter",
+				SentCount: 10,
+				Status:    "completed",
+				StartedAt: now.Add(-24 * time.Hour),
+			},
+		},
+	}
+
+	handler := NewAdminHandler(nil)
+	handler.SetEmailBroadcastRepo(broadcastRepo)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/email/history", nil)
+	req.Header.Set("X-Admin-API-Key", "test-admin-key")
+	w := httptest.NewRecorder()
+	handler.ListBroadcasts(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	broadcastsRaw, ok := resp["broadcasts"]
+	if !ok {
+		t.Fatal("expected 'broadcasts' key in response")
+	}
+	broadcastList, ok := broadcastsRaw.([]interface{})
+	if !ok {
+		t.Fatalf("expected broadcasts to be array, got %T", broadcastsRaw)
+	}
+	if len(broadcastList) != 2 {
+		t.Errorf("expected 2 broadcasts, got %d", len(broadcastList))
+	}
+
+	first, ok := broadcastList[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected first broadcast to be object, got %T", broadcastList[0])
+	}
+
+	if first["broadcast_id"] != "550e8400-e29b-41d4-a716-446655440000" {
+		t.Errorf("expected broadcast_id == '550e8400-e29b-41d4-a716-446655440000', got %v", first["broadcast_id"])
+	}
+
+	for _, key := range []string{"subject", "sent_count", "failed_count", "status", "started_at"} {
+		if _, exists := first[key]; !exists {
+			t.Errorf("expected key %q in first broadcast, not found", key)
+		}
 	}
 }

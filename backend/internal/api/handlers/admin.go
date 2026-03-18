@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -27,11 +28,24 @@ type EmailSender interface {
 	Send(ctx context.Context, to, subject, htmlBody, textBody string, headers ...map[string]string) error
 }
 
+// EmailBroadcastRepo persists broadcast log entries.
+type EmailBroadcastRepo interface {
+	CreateLog(ctx context.Context, broadcast *models.EmailBroadcast) (*models.EmailBroadcast, error)
+	UpdateStatusAndCounts(ctx context.Context, id string, status string, sentCount, failedCount int, completedAt *time.Time) error
+}
+
+// UserEmailRepo provides user email listing for broadcasts.
+type UserEmailRepo interface {
+	ListActiveEmails(ctx context.Context) ([]models.EmailRecipient, error)
+}
+
 // AdminHandler handles admin operations like raw SQL queries.
 type AdminHandler struct {
 	pool                 *db.Pool
 	translationJobRunner TranslationJobRunner
 	emailSender          EmailSender
+	emailBroadcastRepo   EmailBroadcastRepo
+	userEmailRepo        UserEmailRepo
 }
 
 // NewAdminHandler creates a new AdminHandler.
@@ -47,6 +61,16 @@ func (h *AdminHandler) SetTranslationJobRunner(runner TranslationJobRunner) {
 // SetEmailSender injects the email sender dependency.
 func (h *AdminHandler) SetEmailSender(sender EmailSender) {
 	h.emailSender = sender
+}
+
+// SetEmailBroadcastRepo injects the email broadcast repository dependency.
+func (h *AdminHandler) SetEmailBroadcastRepo(repo EmailBroadcastRepo) {
+	h.emailBroadcastRepo = repo
+}
+
+// SetUserEmailRepo injects the user email repository dependency.
+func (h *AdminHandler) SetUserEmailRepo(repo UserEmailRepo) {
+	h.userEmailRepo = repo
 }
 
 // QueryRequest represents a raw SQL query request.

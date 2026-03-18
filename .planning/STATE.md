@@ -1,9 +1,9 @@
 ## Current Position
 
-Phase: Phase 6 (not started)
+Phase: Phase 6 — Plan 06-01 complete
 Plan: .planning/ROADMAP.md
-Status: Roadmap created — ready to begin Phase 6: Referral Codes + DB Foundation
-Last activity: 2026-03-17 — Roadmap created for v1.1 Growth Engine (4 phases, 16 requirements)
+Status: Plan 06-01 done — migration 000070, referral package, User model updated, all tests pass
+Last activity: 2026-03-17 — Completed 06-01: Migration + Code Generation + Auto-Assign
 
 ## Project Reference
 

@@ -413,6 +413,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	var oauthHandlers *handlers.OAuthHandlers
 	var authUserRepo handlers.UserRepositoryForAuth
 	var authMethodRepo handlers.AuthMethodRepository
+	var authReferralRepo handlers.ReferralRepositoryForAuth
 	if pool != nil {
 		userRepoForOAuth := db.NewUserRepository(pool)
 		authMethodRepoForOAuth := db.NewAuthMethodRepository(pool)
@@ -421,10 +422,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		oauthHandlers = handlers.NewOAuthHandlersWithUserService(oauthConfig, pool, nil, oauthUserAdapter)
 		authUserRepo = db.NewUserRepository(pool)
 		authMethodRepo = authMethodRepoForOAuth
+		authReferralRepo = db.NewReferralRepository(pool)
 	} else {
 		// Fallback for testing when pool is nil
 		oauthHandlers = handlers.NewOAuthHandlers(oauthConfig, pool, nil)
-		authMethodRepo = nil // Will be nil for testing
+		authMethodRepo = nil    // Will be nil for testing
+		authReferralRepo = nil  // Will be nil for testing
 	}
 
 	// Create API key validator for agent authentication
@@ -477,7 +480,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// Email/password authentication (API-CRITICAL per PRD Task 48 & 49)
 		// SECURITY: Wrapped with BlockAgentAPIKeys middleware to prevent agents from
 		// registering as humans (see SPEC.md Part 21: Security)
-		authHandler := handlers.NewAuthHandlers(oauthConfig, authUserRepo, authMethodRepo)
+		authHandler := handlers.NewAuthHandlers(oauthConfig, authUserRepo, authMethodRepo, authReferralRepo)
 		r.With(apimiddleware.BlockAgentAPIKeys).Post("/auth/register", authHandler.Register)
 		r.With(apimiddleware.BlockAgentAPIKeys).Post("/auth/login", authHandler.Login)
 

@@ -1321,6 +1321,81 @@ func TestUserRepository_List_ReputationCalculation(t *testing.T) {
 	}
 }
 
+// TestUserRepository_ListActiveEmails tests that ListActiveEmails returns only non-deleted users.
+func TestUserRepository_ListActiveEmails(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("Skipping test: no database connection available")
+	}
+	defer cleanupTestDB(t, pool)
+
+	ctx := context.Background()
+	repo := NewUserRepository(pool)
+
+	// Create a unique test suffix to avoid collisions
+	suffix := time.Now().Format("150405")
+
+	// Create an active user
+	activeUser, err := repo.Create(ctx, &models.User{
+		Username:    "active_email_" + suffix,
+		DisplayName: "Active User",
+		Email:       "active_email_" + suffix + "@test.com",
+	})
+	if err != nil {
+		t.Fatalf("failed to create active user: %v", err)
+	}
+
+	// Create a user that will be soft-deleted
+	deletedUser, err := repo.Create(ctx, &models.User{
+		Username:    "deleted_email_" + suffix,
+		DisplayName: "Deleted User",
+		Email:       "deleted_email_" + suffix + "@test.com",
+	})
+	if err != nil {
+		t.Fatalf("failed to create user to delete: %v", err)
+	}
+
+	// Soft-delete the second user
+	err = repo.Delete(ctx, deletedUser.ID)
+	if err != nil {
+		t.Fatalf("failed to soft-delete user: %v", err)
+	}
+
+	// Call ListActiveEmails
+	recipients, err := repo.ListActiveEmails(ctx)
+	if err != nil {
+		t.Fatalf("ListActiveEmails() error = %v", err)
+	}
+
+	// Assert: active user IS in the result
+	foundActive := false
+	foundDeleted := false
+	for _, r := range recipients {
+		if r.ID == activeUser.ID {
+			foundActive = true
+			if r.Email != activeUser.Email {
+				t.Errorf("expected email %q, got %q", activeUser.Email, r.Email)
+			}
+			if r.DisplayName != activeUser.DisplayName {
+				t.Errorf("expected display_name %q, got %q", activeUser.DisplayName, r.DisplayName)
+			}
+		}
+		if r.ID == deletedUser.ID {
+			foundDeleted = true
+		}
+	}
+
+	if !foundActive {
+		t.Error("active user was NOT found in ListActiveEmails result")
+	}
+	if foundDeleted {
+		t.Error("soft-deleted user WAS found in ListActiveEmails result (should be excluded)")
+	}
+
+	// Cleanup: hard-delete test users
+	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'active_email_%' OR username LIKE 'deleted_email_%'")
+}
+
 // cleanupTestDB cleans up test data.
 func cleanupTestDB(t *testing.T, pool *Pool) {
 	t.Helper()

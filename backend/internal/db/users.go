@@ -532,3 +532,38 @@ func (r *UserRepository) GetAggregateStats(ctx context.Context) (int, error) {
 	}
 	return total, nil
 }
+
+// ListActiveEmails returns email info for all non-deleted users.
+// Used by the admin email broadcast to get the recipient list.
+// Selects only id, email, display_name — no SELECT *.
+// Filters: deleted_at IS NULL (excludes soft-deleted users).
+func (r *UserRepository) ListActiveEmails(ctx context.Context) ([]models.EmailRecipient, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, email, display_name
+		FROM users
+		WHERE deleted_at IS NULL
+		ORDER BY created_at ASC
+	`)
+	if err != nil {
+		LogQueryError(ctx, "ListActiveEmails", "users", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var recipients []models.EmailRecipient
+	for rows.Next() {
+		var rec models.EmailRecipient
+		if err := rows.Scan(&rec.ID, &rec.Email, &rec.DisplayName); err != nil {
+			LogQueryError(ctx, "ListActiveEmails.Scan", "users", err)
+			return nil, err
+		}
+		recipients = append(recipients, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if recipients == nil {
+		recipients = []models.EmailRecipient{}
+	}
+	return recipients, nil
+}

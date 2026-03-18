@@ -1,9 +1,9 @@
 ## Current Position
 
-Phase: Phase 6 — Plan 06-02 complete
+Phase: Phase 7 — Plan 07-01 complete
 Plan: .planning/ROADMAP.md
-Status: Plan 06-02 done — ReferralRepository, ReferralHandler (5 tests), GET /v1/users/me/referral wired; all tests pass
-Last activity: 2026-03-17 — Completed 06-02: Referral API Endpoint
+Status: Plan 07-01 done — per-recipient template substitution ({name}, {referral_code}, {referral_link}) in BroadcastEmail; 11 new tests; all tests pass
+Last activity: 2026-03-17 — Completed 07-01: Email Personalization
 
 ## Project Reference
 

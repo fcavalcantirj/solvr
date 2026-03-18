@@ -101,10 +101,11 @@
 
 ---
 
-## Phase 5: Admin CLI Skill (solvr-admin.sh)
+## Phase 5: Admin CLI Skill (solvr-admin.sh) ✓ COMPLETE
 
 **Goal:** Provide a Claude Code-callable bash skill for email broadcasts, wrapping the HTTP API with proper credential handling.
 **Requirements:** TOOL-01, TOOL-02, TOOL-03, TOOL-04
+**Status:** Plan 05-01 complete (2026-03-17) — solvr-admin.sh + skill.json created, syntax/help/key-error tests pass
 
 ### Success Criteria
 

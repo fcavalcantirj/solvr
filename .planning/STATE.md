@@ -1,9 +1,9 @@
 ## Current Position
 
-Phase: 4 (complete)
+Phase: 5 (complete)
 Plan: 01
-Status: Phase 4 Plan 01 complete — GET /admin/email/history wired and all tests passing
-Last activity: 2026-03-17 — Phase 4 Plan 01 executed (ListBroadcasts handler + route)
+Status: Phase 5 Plan 01 complete — solvr-admin.sh + skill.json created, all acceptance criteria passing
+Last activity: 2026-03-17 — Phase 5 Plan 01 executed (Admin CLI skill: solvr-admin.sh + solvr-admin/skill.json)
 
 ## Project Reference
 

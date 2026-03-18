@@ -225,6 +225,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	pinsRepo = pinsRepoConcrete
 	followsRepo := db.NewFollowsRepository(pool)
 	storageRepo := db.NewStorageRepository(pool)
+	referralRepo := db.NewReferralRepository(pool)
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
 	agentsHandler.SetClaimTokenRepository(claimTokenRepo)
@@ -870,6 +871,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/users/me/bookmarks/{id}", bookmarksHandler.Check)
 			// DELETE /users/me/bookmarks/:id - remove a bookmark
 			r.Delete("/users/me/bookmarks/{id}", bookmarksHandler.Remove)
+
+			// Referral endpoint (REF-04)
+			// GET /v1/users/me/referral — returns user's referral code and count
+			referralHandler := handlers.NewReferralHandler(referralRepo)
+			r.Get("/users/me/referral", referralHandler.GetMyReferral)
 
 			// Reports endpoints (FE-018)
 			// POST /reports - create a new report (requires auth)

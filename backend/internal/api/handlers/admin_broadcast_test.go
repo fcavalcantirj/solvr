@@ -645,3 +645,92 @@ func TestBroadcastEmail_TemplateSubstitution(t *testing.T) {
 		}
 	}
 }
+
+func TestBroadcastEmail_DryRunShowsSubstitutedPreview(t *testing.T) {
+	os.Setenv("ADMIN_API_KEY", "test-admin-key")
+	defer os.Unsetenv("ADMIN_API_KEY")
+
+	sender := &mockEmailSender{failOnIdx: -1}
+	broadcastRepo := &mockEmailBroadcastRepo{}
+	userRepo := &mockUserEmailRepo{
+		recipients: []models.EmailRecipient{
+			{ID: "u1", Email: "alice@example.com", DisplayName: "Alice", ReferralCode: "ALICE123"},
+			{ID: "u2", Email: "bob@example.com", DisplayName: "Bob", ReferralCode: "BOB456"},
+		},
+	}
+
+	handler := NewAdminHandler(nil)
+	handler.SetEmailSender(sender)
+	handler.SetEmailBroadcastRepo(broadcastRepo)
+	handler.SetUserEmailRepo(userRepo)
+
+	bodyHTML := `<p>Hi {name}, use {referral_link} (code: {referral_code})</p>`
+	bodyText := `Hi {name}, ref: {referral_link}`
+	body := `{"subject":"Test","body_html":"` + bodyHTML + `","body_text":"` + bodyText + `","dry_run":true}`
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/email/broadcast", bytes.NewBufferString(body))
+	req.Header.Set("X-Admin-API-Key", "test-admin-key")
+	w := httptest.NewRecorder()
+	handler.BroadcastEmail(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// No emails should be sent in dry-run
+	if len(sender.calls) != 0 {
+		t.Errorf("expected 0 email sends in dry-run, got %d", len(sender.calls))
+	}
+
+	// Preview must be present
+	previewRaw, ok := resp["preview"]
+	if !ok {
+		t.Fatal("expected 'preview' key in dry-run response")
+	}
+	preview, ok := previewRaw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected preview to be object, got %T", previewRaw)
+	}
+
+	// preview.body_html should have Alice's substituted values
+	previewHTML, ok := preview["body_html"].(string)
+	if !ok {
+		t.Fatal("expected preview.body_html to be a string")
+	}
+	if !bytes.Contains([]byte(previewHTML), []byte("Alice")) {
+		t.Errorf("preview.body_html should contain 'Alice', got: %s", previewHTML)
+	}
+	if !bytes.Contains([]byte(previewHTML), []byte("ALICE123")) {
+		t.Errorf("preview.body_html should contain 'ALICE123', got: %s", previewHTML)
+	}
+	if !bytes.Contains([]byte(previewHTML), []byte("https://solvr.dev/join?ref=ALICE123")) {
+		t.Errorf("preview.body_html should contain referral link for ALICE123, got: %s", previewHTML)
+	}
+
+	// preview.body_text should have Alice's substituted values
+	previewText, ok := preview["body_text"].(string)
+	if !ok {
+		t.Fatal("expected preview.body_text to be a string")
+	}
+	if !bytes.Contains([]byte(previewText), []byte("Alice")) {
+		t.Errorf("preview.body_text should contain 'Alice', got: %s", previewText)
+	}
+	if !bytes.Contains([]byte(previewText), []byte("https://solvr.dev/join?ref=ALICE123")) {
+		t.Errorf("preview.body_text should contain referral link for ALICE123, got: %s", previewText)
+	}
+
+	// Raw template vars must NOT appear in preview
+	for _, token := range []string{"{name}", "{referral_code}", "{referral_link}"} {
+		if bytes.Contains([]byte(previewHTML), []byte(token)) {
+			t.Errorf("preview.body_html should NOT contain raw token %q, got: %s", token, previewHTML)
+		}
+		if bytes.Contains([]byte(previewText), []byte(token)) {
+			t.Errorf("preview.body_text should NOT contain raw token %q, got: %s", token, previewText)
+		}
+	}
+}

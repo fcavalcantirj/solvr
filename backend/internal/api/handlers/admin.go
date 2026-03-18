@@ -150,11 +150,22 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 		recipients = filtered
 	}
 
-	// Dry-run mode: return recipient list, no sends
+	// Dry-run mode: return recipient list and substituted preview for first recipient
 	if req.DryRun {
+		preview := map[string]string{}
+		if len(recipients) > 0 {
+			first := recipients[0]
+			referralLink := ""
+			if first.ReferralCode != "" {
+				referralLink = "https://solvr.dev/join?ref=" + first.ReferralCode
+			}
+			preview["body_html"] = substituteTemplateVars(req.BodyHTML, first.DisplayName, first.ReferralCode, referralLink)
+			preview["body_text"] = substituteTemplateVars(req.BodyText, first.DisplayName, first.ReferralCode, referralLink)
+		}
 		writeAdminJSON(w, http.StatusOK, map[string]interface{}{
 			"would_send": len(recipients),
 			"recipients": recipients,
+			"preview":    preview,
 		})
 		return
 	}

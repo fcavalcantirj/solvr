@@ -5,10 +5,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/fcavalcantirj/solvr/internal/referral"
 	"github.com/fcavalcantirj/solvr/internal/reputation"
 	"github.com/jackc/pgx/v5"
 )
@@ -34,10 +36,19 @@ func NewUserRepository(pool *Pool) *UserRepository {
 // Create inserts a new user into the database.
 // Returns the created user with ID and timestamps set.
 func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models.User, error) {
+	// Auto-generate referral code if not provided
+	if user.ReferralCode == "" {
+		code, err := referral.GenerateCode()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate referral code: %w", err)
+		}
+		user.ReferralCode = code
+	}
+
 	query := `
-		INSERT INTO users (username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
+		INSERT INTO users (username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, referral_code)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, referral_code, created_at, updated_at
 	`
 
 	row := r.pool.QueryRow(ctx, query,
@@ -50,12 +61,13 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 		user.AvatarURL,
 		user.Bio,
 		user.Role,
+		user.ReferralCode,
 	)
 
 	created := &models.User{}
 
 	// Use sql.NullString for nullable fields
-	var passwordHash, avatarURL, bio, authProvider, authProviderID, role sql.NullString
+	var passwordHash, avatarURL, bio, authProvider, authProviderID, role, referralCode sql.NullString
 
 	err := row.Scan(
 		&created.ID,
@@ -68,6 +80,7 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 		&avatarURL,
 		&bio,
 		&role,
+		&referralCode,
 		&created.CreatedAt,
 		&created.UpdatedAt,
 	)
@@ -79,6 +92,7 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 	created.AvatarURL = avatarURL.String
 	created.Bio = bio.String
 	created.Role = role.String
+	created.ReferralCode = referralCode.String
 
 	if err != nil {
 		// Check for unique constraint violations
@@ -101,7 +115,7 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 // Filters out soft-deleted users (WHERE deleted_at IS NULL).
 func (r *UserRepository) FindByID(ctx context.Context, id string) (*models.User, error) {
 	query := `
-		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
+		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, referral_code, created_at, updated_at
 		FROM users
 		WHERE id = $1 AND deleted_at IS NULL
 	`
@@ -125,7 +139,7 @@ func (r *UserRepository) FindByAuthProvider(ctx context.Context, provider, provi
 	query := `
 		SELECT u.id, u.username, u.display_name, u.email, u.auth_provider,
 		       u.auth_provider_id, u.password_hash, u.avatar_url, u.bio,
-		       u.role, u.created_at, u.updated_at
+		       u.role, u.referral_code, u.created_at, u.updated_at
 		FROM users u
 		INNER JOIN auth_methods am ON u.id = am.user_id
 		WHERE am.auth_provider = $1 AND am.auth_provider_id = $2
@@ -141,7 +155,7 @@ func (r *UserRepository) FindByAuthProvider(ctx context.Context, provider, provi
 // Filters out soft-deleted users (WHERE deleted_at IS NULL).
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := `
-		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
+		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, referral_code, created_at, updated_at
 		FROM users
 		WHERE email = $1 AND deleted_at IS NULL
 	`
@@ -155,7 +169,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models
 // Filters out soft-deleted users (WHERE deleted_at IS NULL).
 func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*models.User, error) {
 	query := `
-		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
+		SELECT id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, referral_code, created_at, updated_at
 		FROM users
 		WHERE username = $1 AND deleted_at IS NULL
 	`
@@ -171,7 +185,7 @@ func (r *UserRepository) Update(ctx context.Context, user *models.User) (*models
 		UPDATE users
 		SET display_name = $2, avatar_url = $3, bio = $4, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, created_at, updated_at
+		RETURNING id, username, display_name, email, auth_provider, auth_provider_id, password_hash, avatar_url, bio, role, referral_code, created_at, updated_at
 	`
 
 	row := r.pool.QueryRow(ctx, query,
@@ -230,7 +244,7 @@ func (r *UserRepository) ListDeleted(ctx context.Context, page, perPage int) ([]
 
 	query := `
 		SELECT id, username, display_name, email, auth_provider, auth_provider_id,
-		       password_hash, avatar_url, bio, role, created_at, updated_at, deleted_at
+		       password_hash, avatar_url, bio, role, referral_code, created_at, updated_at, deleted_at
 		FROM users
 		WHERE deleted_at IS NOT NULL
 		ORDER BY deleted_at DESC
@@ -247,7 +261,7 @@ func (r *UserRepository) ListDeleted(ctx context.Context, page, perPage int) ([]
 	var users []models.User
 	for rows.Next() {
 		var user models.User
-		var passwordHash, avatarURL, bio, authProvider, authProviderID, role sql.NullString
+		var passwordHash, avatarURL, bio, authProvider, authProviderID, role, referralCode sql.NullString
 		var deletedAt sql.NullTime
 
 		err := rows.Scan(
@@ -261,6 +275,7 @@ func (r *UserRepository) ListDeleted(ctx context.Context, page, perPage int) ([]
 			&avatarURL,
 			&bio,
 			&role,
+			&referralCode,
 			&user.CreatedAt,
 			&user.UpdatedAt,
 			&deletedAt,
@@ -277,6 +292,7 @@ func (r *UserRepository) ListDeleted(ctx context.Context, page, perPage int) ([]
 		user.AvatarURL = avatarURL.String
 		user.Bio = bio.String
 		user.Role = role.String
+		user.ReferralCode = referralCode.String
 		if deletedAt.Valid {
 			user.DeletedAt = &deletedAt.Time
 		}
@@ -302,12 +318,16 @@ func (r *UserRepository) ListDeleted(ctx context.Context, page, perPage int) ([]
 }
 
 // scanUser scans a user row into a User struct.
+// Expects 13 columns in order: id, username, display_name, email,
+// auth_provider, auth_provider_id, password_hash, avatar_url, bio, role,
+// referral_code, created_at, updated_at.
 func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 	user := &models.User{}
 
 	// Use sql.NullString for nullable fields (per schema: auth_provider, auth_provider_id,
-	// password_hash, avatar_url, bio, role are all nullable)
-	var passwordHash, avatarURL, bio, authProvider, authProviderID, role sql.NullString
+	// password_hash, avatar_url, bio, role are all nullable; referral_code nullable for
+	// users created before migration backfill runs)
+	var passwordHash, avatarURL, bio, authProvider, authProviderID, role, referralCode sql.NullString
 
 	err := row.Scan(
 		&user.ID,
@@ -320,6 +340,7 @@ func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 		&avatarURL,
 		&bio,
 		&role,
+		&referralCode,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -331,6 +352,7 @@ func (r *UserRepository) scanUser(row pgx.Row) (*models.User, error) {
 	user.AvatarURL = avatarURL.String
 	user.Bio = bio.String
 	user.Role = role.String
+	user.ReferralCode = referralCode.String
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

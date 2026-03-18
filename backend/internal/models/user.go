@@ -42,6 +42,10 @@ type User struct {
 	// Role is the user's role (user, admin).
 	Role string `json:"role"`
 
+	// ReferralCode is the user's unique 8-char alphanumeric referral code.
+	// Auto-generated on user creation. Used for referral tracking.
+	ReferralCode string `json:"referral_code,omitempty"`
+
 	// Status is the account status (active, suspended, banned).
 	Status string `json:"status"`
 

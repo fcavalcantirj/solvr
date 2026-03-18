@@ -1,9 +1,9 @@
 ## Current Position
 
-Phase: 1 (not started)
-Plan: —
-Status: Roadmap complete, ready to plan Phase 1
-Last activity: 2026-03-17 — Roadmap created (5 phases)
+Phase: 2 (in progress)
+Plan: 02-02 (complete)
+Status: Phase 2 plan 02-02 done — ResendClient implemented, 4 tests passing, build compiles
+Last activity: 2026-03-17 — Plan 02-02 complete (resend-go/v3 + ResendClient + tests)
 
 ## Project Reference
 
@@ -24,3 +24,6 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 - Build a fresh ResendClient satisfying an EmailSender interface; bypass smtp.go entirely
 - HTTP WriteTimeout is 15s — use per-request 5-minute context deadline inside broadcast handler
 - Phase 1 is critical path (DNS propagation 24–48h) — start before code work
+- ResendClient in backend/internal/services/resend.go wraps resend-go/v3 SDK
+- SetBaseURL(url) method enables test injection via httptest (BaseURL is *url.URL in SDK)
+- From field formatted as "Solvr <fromEmail>" per RFC 5322 display name convention

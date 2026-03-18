@@ -80,11 +80,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EMAIL-05 | 2 | Complete |
 | EMAIL-06 | 3 | Complete |
 | AUDIT-01 | 2 | Complete |
-| AUDIT-02 | 4 | Pending |
-| TOOL-01 | 5 | Pending |
-| TOOL-02 | 5 | Pending |
-| TOOL-03 | 5 | Pending |
-| TOOL-04 | 5 | Pending |
+| AUDIT-02 | 4 | Complete |
+| TOOL-01 | 5 | Complete |
+| TOOL-02 | 5 | Complete |
+| TOOL-03 | 5 | Complete |
+| TOOL-04 | 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 15 total

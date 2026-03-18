@@ -1353,3 +1353,9 @@ export interface APIFollowingResponse {
     has_more: boolean;
   };
 }
+
+// Referral
+export interface APIReferralResponse {
+  referral_code: string;
+  referral_count: number;
+}

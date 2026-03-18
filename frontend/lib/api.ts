@@ -88,6 +88,7 @@ import type {
   UpdateBlogPostData,
   APIBlogTagsResponse,
   PublicSearchStatsData,
+  APIReferralResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -944,6 +945,11 @@ class SolvrAPI {
     await this.fetch<void>(`/v1/blog/${encodeURIComponent(slug)}/view`, {
       method: 'POST',
     });
+  }
+
+  // Referrals
+  async getMyReferral(): Promise<APIReferralResponse> {
+    return this.fetch<APIReferralResponse>('/v1/users/me/referral');
   }
 
   async isFollowing(targetType: string, targetId: string): Promise<boolean> {

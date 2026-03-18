@@ -1,13 +1,13 @@
 ## Current Position
 
-Phase: Phase 7 — Plan 07-01 complete
+Phase: Phase 8 — Plan 08-01 complete
 Plan: .planning/ROADMAP.md
-Status: Plan 07-01 done — per-recipient template substitution ({name}, {referral_code}, {referral_link}) in BroadcastEmail; 11 new tests; all tests pass
-Last activity: 2026-03-17 — Completed 07-01: Email Personalization
+Status: Plan 08-01 done — referral tracking wired into registration: CreateReferral + FindUserIDByReferralCode on ReferralRepository; auth handler accepts optional ref field with silent-ignore semantics; /join page reads ?ref=CODE and forwards to API; 11 new tests (4 backend integration, 5 handler unit, 2 frontend)
+Last activity: 2026-03-18 — Completed 08-01: Referral Tracking + Join Flow
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-17)
+See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Developers and AI agents can find solutions to programming problems faster than searching the web
 **Current focus:** Admin Email System

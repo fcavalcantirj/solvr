@@ -1,96 +1,91 @@
-# Requirements: Solvr Admin Email System
+# Requirements: Solvr Growth Engine
 
 **Defined:** 2026-03-17
 **Core Value:** Developers and AI agents can find solutions to programming problems faster than searching the web
 
-## v1 Requirements
+## v1.1 Requirements
 
-Requirements for admin email broadcast capability. Each maps to roadmap phases.
+Requirements for growth hack email campaign infrastructure. Each maps to roadmap phases.
 
-### Infrastructure
+### Email Personalization
 
-- [ ] **INFRA-01**: Admin can create Resend account and verify solvr.dev domain (DNS: SPF, DKIM)
-- [ ] **INFRA-02**: Admin can send a test email from Resend dashboard to verify deliverability
-- [ ] **INFRA-03**: API loads Resend API key from `RESEND_API_KEY` env var and initializes email client
+- [ ] **EML-01**: Admin can send broadcast with `{name}` template var replaced per-recipient with display_name
+- [ ] **EML-02**: Admin can send broadcast with `{referral_code}` template var replaced per-recipient
+- [ ] **EML-03**: Template vars work in both `body_html` and `body_text` fields
+- [ ] **EML-04**: Admin can send broadcast with `{referral_link}` template var (full URL: `solvr.dev/join?ref=CODE`)
 
-### Email Sending
+### Referral System
 
-- [ ] **EMAIL-01**: Admin can broadcast email to all active users via `POST /admin/email/broadcast`
-- [ ] **EMAIL-02**: Broadcast endpoint requires `X-Admin-API-Key` header (same as other admin routes)
-- [ ] **EMAIL-03**: Broadcast accepts subject, HTML body, and optional plain text body
-- [ ] **EMAIL-04**: Broadcast sends from `noreply@solvr.dev` (configurable via `FROM_EMAIL` env var)
-- [ ] **EMAIL-05**: Broadcast skips soft-deleted users (`WHERE deleted_at IS NULL`)
-- [ ] **EMAIL-06**: Admin can preview broadcast via dry-run mode (returns recipient count + list, sends nothing)
+- [ ] **REF-01**: Each user has a unique referral code (8-char alphanumeric, stored in users table)
+- [ ] **REF-02**: Referral codes are auto-generated for all existing users via migration/backfill
+- [ ] **REF-03**: New users signing up via `/join?ref=CODE` are tracked in a `referrals` table
+- [ ] **REF-04**: API endpoint `GET /v1/users/me/referral` returns user's code and referral count
+- [ ] **REF-05**: Authenticated user can see their referral code on the frontend
 
-### Audit
+### Landing Pages
 
-- [ ] **AUDIT-01**: Each broadcast creates an `email_broadcasts` record (subject, body, recipient count, status, sent_at)
-- [ ] **AUDIT-02**: Admin can list past broadcasts via `GET /admin/email/history`
+- [ ] **PAGE-01**: `/join?ref=CODE` page passes ref param to registration API and attributes signup
+- [ ] **PAGE-02**: `/zh/promote` page shows Chinese-language promotion guide with share links
+- [ ] **PAGE-03**: Frontend generates pre-filled tweet link with user's referral URL
 
-### Tooling
+### Referral Dashboard
 
-- [ ] **TOOL-01**: Admin can send broadcast email via `solvr-admin email send` CLI command
-- [ ] **TOOL-02**: Admin can preview broadcast via `solvr-admin email dry-run` CLI command
-- [ ] **TOOL-03**: Admin can view past broadcasts via `solvr-admin email history` CLI command
-- [ ] **TOOL-04**: CLI authenticates via `ADMIN_API_KEY` env var or `~/.config/solvr/admin-credentials.json`
+- [ ] **DASH-01**: Authenticated user can view their referral dashboard at `/referrals`
+- [ ] **DASH-02**: Dashboard shows referral code with copy button
+- [ ] **DASH-03**: Dashboard shows count of successful referrals
+- [ ] **DASH-04**: Dashboard shows share links (X/Twitter, copy URL)
 
 ## v2 Requirements
 
-Deferred to future release. Tracked but not in current roadmap.
+Deferred to future release.
 
-### User Preferences
+### Rewards
 
-- **PREF-01**: User can opt out of broadcast emails via unsubscribe link
-- **PREF-02**: User can configure email notification preferences (never/weekly/immediate)
-
-### Targeted Sending
-
-- **TARG-01**: Admin can send email to filtered user subset (by role, join date, activity)
-- **TARG-02**: Admin can send email to specific user(s) by email or ID
+- **RWD-01**: Top 10 referrers get SolvrClaw Pro tier
+- **RWD-02**: Top referrer's agent featured on solvr.dev homepage
+- **RWD-03**: Referral milestone badges (3, 10, 25 referrals)
 
 ### Analytics
 
-- **ANAL-01**: Admin can view email open rates and bounce rates
-- **ANAL-02**: Admin can view delivery statistics over time
+- **ANL-01**: Admin can view referral funnel (codes generated → clicks → signups)
+- **ANL-02**: Admin can view top referrers leaderboard
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Email template builder UI | Over-engineering for admin-only CLI tool |
-| Async email queue/worker | ~100 users, synchronous send is fine |
-| Open/click tracking pixels | Privacy concern, unnecessary for announcements |
-| POP3/IMAP inbox for solvr.dev | Send-only domain, no need to receive email |
-| User-facing email management | Admin-only for v1, user preferences in v2 |
-| Per-email Resend webhooks | Audit log is sufficient for v1 |
+| SolvrClaw product | Separate project, promised as future reward |
+| Reward fulfillment automation | Track referrals now, fulfill manually when 1K hit |
+| Referral leaderboard page | Existing leaderboard infra exists, extend later |
+| Email unsubscribe/preferences | Admin-only broadcasts, not needed yet |
+| Referral link analytics (click tracking) | Simple attribution is enough for v1.1 |
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | 1 | Pending |
-| INFRA-02 | 1 | Pending |
-| INFRA-03 | 2 | Complete |
-| EMAIL-01 | 3 | Complete |
-| EMAIL-02 | 3 | Complete |
-| EMAIL-03 | 3 | Complete |
-| EMAIL-04 | 2 | Complete |
-| EMAIL-05 | 2 | Complete |
-| EMAIL-06 | 3 | Complete |
-| AUDIT-01 | 2 | Complete |
-| AUDIT-02 | 4 | Complete |
-| TOOL-01 | 5 | Complete |
-| TOOL-02 | 5 | Complete |
-| TOOL-03 | 5 | Complete |
-| TOOL-04 | 5 | Complete |
+| EML-01 | — | Pending |
+| EML-02 | — | Pending |
+| EML-03 | — | Pending |
+| EML-04 | — | Pending |
+| REF-01 | — | Pending |
+| REF-02 | — | Pending |
+| REF-03 | — | Pending |
+| REF-04 | — | Pending |
+| REF-05 | — | Pending |
+| PAGE-01 | — | Pending |
+| PAGE-02 | — | Pending |
+| PAGE-03 | — | Pending |
+| DASH-01 | — | Pending |
+| DASH-02 | — | Pending |
+| DASH-03 | — | Pending |
+| DASH-04 | — | Pending |
 
 **Coverage:**
-- v1 requirements: 15 total
-- Mapped to phases: 15
-- Unmapped: 0
+- v1.1 requirements: 16 total
+- Mapped to phases: 0
+- Unmapped: 16
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after roadmap creation (5 phases)*
+*Last updated: 2026-03-17 after initial definition*

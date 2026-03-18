@@ -73,12 +73,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-01 | 1 | Pending |
 | INFRA-02 | 1 | Pending |
 | INFRA-03 | 2 | Complete |
-| EMAIL-01 | 3 | Pending |
-| EMAIL-02 | 3 | Pending |
-| EMAIL-03 | 3 | Pending |
+| EMAIL-01 | 3 | Complete |
+| EMAIL-02 | 3 | Complete |
+| EMAIL-03 | 3 | Complete |
 | EMAIL-04 | 2 | Complete |
 | EMAIL-05 | 2 | Complete |
-| EMAIL-06 | 3 | Pending |
+| EMAIL-06 | 3 | Complete |
 | AUDIT-01 | 2 | Complete |
 | AUDIT-02 | 4 | Pending |
 | TOOL-01 | 5 | Pending |

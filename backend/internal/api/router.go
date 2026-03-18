@@ -129,7 +129,7 @@ func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *ch
 	}
 	r.Post("/admin/jobs/translation/run", adminHandler.RunTranslationJob)
 
-	// Wire Resend email client if API key is available
+	// Wire Resend email client and broadcast endpoint if API key is available
 	if resendKey := os.Getenv("RESEND_API_KEY"); resendKey != "" {
 		fromEmail := os.Getenv("FROM_EMAIL")
 		if fromEmail == "" {
@@ -139,6 +139,13 @@ func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *ch
 		adminHandler.SetEmailSender(resendClient)
 		slog.Info("Resend email client configured", "from", fromEmail)
 	}
+
+	// Wire email broadcast repos (needed even without Resend key for 503 response)
+	if pool != nil {
+		adminHandler.SetEmailBroadcastRepo(db.NewEmailBroadcastRepository(pool))
+		adminHandler.SetUserEmailRepo(db.NewUserRepository(pool))
+	}
+	r.Post("/admin/email/broadcast", adminHandler.BroadcastEmail)
 
 	// Admin search analytics endpoints
 	if pool != nil {

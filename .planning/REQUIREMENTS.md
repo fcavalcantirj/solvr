@@ -15,7 +15,7 @@ Requirements for admin email broadcast capability. Each maps to roadmap phases.
 
 ### Email Sending
 
-- [ ] **EMAIL-01**: Admin can broadcast email to all active users via `POST /admin/email/send`
+- [ ] **EMAIL-01**: Admin can broadcast email to all active users via `POST /admin/email/broadcast`
 - [ ] **EMAIL-02**: Broadcast endpoint requires `X-Admin-API-Key` header (same as other admin routes)
 - [ ] **EMAIL-03**: Broadcast accepts subject, HTML body, and optional plain text body
 - [ ] **EMAIL-04**: Broadcast sends from `noreply@solvr.dev` (configurable via `FROM_EMAIL` env var)

@@ -18,11 +18,18 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// ReferralRepositoryForAuth defines the referral DB methods needed during registration.
+type ReferralRepositoryForAuth interface {
+	FindUserIDByReferralCode(ctx context.Context, code string) (string, error)
+	CreateReferral(ctx context.Context, referrerID, referredID string) error
+}
+
 // AuthHandlers handles email/password authentication.
 type AuthHandlers struct {
 	config         *OAuthConfig
 	userRepo       UserRepositoryForAuth
 	authMethodRepo AuthMethodRepository
+	referralRepo   ReferralRepositoryForAuth
 }
 
 // UserRepositoryForAuth defines required DB methods for auth operations.
@@ -49,6 +56,7 @@ type RegisterRequest struct {
 	Password    string `json:"password"`
 	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
+	Ref         string `json:"ref,omitempty"` // optional referral code
 }
 
 // RegisterResponse is the success response for registration.
@@ -93,11 +101,12 @@ type LoginUserResponse struct {
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]{3,30}$`)
 
 // NewAuthHandlers creates a new AuthHandlers instance.
-func NewAuthHandlers(config *OAuthConfig, userRepo UserRepositoryForAuth, authMethodRepo AuthMethodRepository) *AuthHandlers {
+func NewAuthHandlers(config *OAuthConfig, userRepo UserRepositoryForAuth, authMethodRepo AuthMethodRepository, referralRepo ReferralRepositoryForAuth) *AuthHandlers {
 	return &AuthHandlers{
 		config:         config,
 		userRepo:       userRepo,
 		authMethodRepo: authMethodRepo,
+		referralRepo:   referralRepo,
 	}
 }
 
@@ -211,6 +220,32 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, http.StatusInternalServerError, "REGISTRATION_FAILED",
 			"Failed to complete registration. Please try again.")
 		return
+	}
+
+	// Step 6.6: Handle optional referral code (silent — never fails registration)
+	if req.Ref != "" && h.referralRepo != nil {
+		referrerID, findErr := h.referralRepo.FindUserIDByReferralCode(ctx, req.Ref)
+		if findErr != nil {
+			// Code not found or DB error — log and continue silently
+			slog.Warn("referral code lookup failed or not found",
+				"ref", req.Ref,
+				"error", findErr,
+				"op", "Register")
+		} else if referrerID == createdUser.ID {
+			// Self-referral — ignore silently
+			slog.Warn("self-referral attempt ignored",
+				"user_id", createdUser.ID,
+				"op", "Register")
+		} else {
+			if createErr := h.referralRepo.CreateReferral(ctx, referrerID, createdUser.ID); createErr != nil {
+				// Referral creation failed — log warning, do NOT fail registration
+				slog.Warn("referral creation failed, continuing registration",
+					"error", createErr,
+					"referrer_id", referrerID,
+					"referred_id", createdUser.ID,
+					"op", "Register")
+			}
+		}
 	}
 
 	// Step 7: Generate JWT

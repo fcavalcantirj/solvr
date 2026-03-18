@@ -744,7 +744,7 @@ func TestIntegration_EmailThenOAuth_LinkProviders(t *testing.T) {
 		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, userRepo, authMethodRepo)
+	handler := NewAuthHandlers(config, userRepo, authMethodRepo, nil)
 	// TODO: After implementing, need to pass authMethodRepo to handler
 
 	// Step 1: Register with email/password
@@ -845,7 +845,7 @@ func TestIntegration_LoginAfterLinking(t *testing.T) {
 		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, userRepo, authMethodRepo)
+	handler := NewAuthHandlers(config, userRepo, authMethodRepo, nil)
 
 	// Step 1: Register with email/password
 	registerReq := RegisterRequest{
@@ -922,7 +922,7 @@ func TestIntegration_LoginWithOAuthOnly(t *testing.T) {
 		JWTExpiry:     "15m",
 		RefreshExpiry: "168h",
 	}
-	handler := NewAuthHandlers(config, userRepo, authMethodRepo)
+	handler := NewAuthHandlers(config, userRepo, authMethodRepo, nil)
 
 	// Try to login with email/password (should fail with helpful message)
 	loginReq := LoginRequest{

@@ -193,7 +193,7 @@ func TestRegister_ValidRequest(t *testing.T) {
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
 
 	reqBody := RegisterRequest{
 		Email:       "newuser@example.com",
@@ -288,7 +288,7 @@ func TestRegister_DuplicateEmail(t *testing.T) {
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
 
 	// Create existing user
 	existingUser := &models.User{
@@ -344,7 +344,7 @@ func TestRegister_WeakPassword(t *testing.T) {
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
 
 	testCases := []struct {
 		name     string
@@ -406,7 +406,7 @@ func TestRegister_InvalidEmail(t *testing.T) {
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
 
 	testCases := []struct {
 		name  string
@@ -463,7 +463,7 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
 
 	// Create existing user
 	existingUser := &models.User{
@@ -519,7 +519,7 @@ func TestRegister_InvalidUsername(t *testing.T) {
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
 
 	testCases := []struct {
 		name     string
@@ -582,7 +582,7 @@ func TestLogin_ValidCredentials(t *testing.T) {
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
 
 	// Create a user with password
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.DefaultCost)
@@ -668,7 +668,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
 
 	// Create a user with password
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.DefaultCost)
@@ -732,7 +732,7 @@ func TestLogin_NonExistentEmail(t *testing.T) {
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
 
 	// Attempt login with non-existent email
 	reqBody := LoginRequest{
@@ -775,7 +775,7 @@ func TestLogin_OAuthOnlyUser(t *testing.T) {
 		RefreshExpiry: "168h",
 	}
 	mockAuthMethodRepo := newMockAuthMethodRepoStub()
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
 
 	// Create an OAuth-only user (no password_hash)
 	oauthUser := &models.User{
@@ -831,6 +831,250 @@ func TestLogin_OAuthOnlyUser(t *testing.T) {
 	}
 }
 
+// mockReferralRepoForAuth is a mock implementation of ReferralRepositoryForAuth.
+type mockReferralRepoForAuth struct {
+	findByCodeFn    func(ctx context.Context, code string) (string, error)
+	createFn        func(ctx context.Context, referrerID, referredID string) error
+	findCalled      bool
+	createCalled    bool
+	lastReferrerID  string
+	lastReferredID  string
+}
+
+func (m *mockReferralRepoForAuth) FindUserIDByReferralCode(ctx context.Context, code string) (string, error) {
+	m.findCalled = true
+	if m.findByCodeFn != nil {
+		return m.findByCodeFn(ctx, code)
+	}
+	return "", db.ErrNotFound
+}
+
+func (m *mockReferralRepoForAuth) CreateReferral(ctx context.Context, referrerID, referredID string) error {
+	m.createCalled = true
+	m.lastReferrerID = referrerID
+	m.lastReferredID = referredID
+	if m.createFn != nil {
+		return m.createFn(ctx, referrerID, referredID)
+	}
+	return nil
+}
+
+// TestRegister_WithValidRef tests registration with a valid ref field creates a referral.
+func TestRegister_WithValidRef(t *testing.T) {
+	mockRepo := newMockUserRepoForAuth()
+	config := &OAuthConfig{
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
+		RefreshExpiry: "168h",
+	}
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+
+	referrerID := "referrer-user-id"
+	mockRefRepo := &mockReferralRepoForAuth{
+		findByCodeFn: func(ctx context.Context, code string) (string, error) {
+			if code == "ABC12345" {
+				return referrerID, nil
+			}
+			return "", db.ErrNotFound
+		},
+	}
+
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, mockRefRepo)
+
+	reqBody := RegisterRequest{
+		Email:       "referred@example.com",
+		Password:    "securepass123",
+		Username:    "referreduser",
+		DisplayName: "Referred User",
+		Ref:         "ABC12345",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.Register(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	if !mockRefRepo.createCalled {
+		t.Error("expected CreateReferral to be called, but it was not")
+	}
+
+	if mockRefRepo.lastReferrerID != referrerID {
+		t.Errorf("expected referrer ID %q, got %q", referrerID, mockRefRepo.lastReferrerID)
+	}
+}
+
+// TestRegister_WithUnknownRef tests registration with unknown ref ignores it and returns 201.
+func TestRegister_WithUnknownRef(t *testing.T) {
+	mockRepo := newMockUserRepoForAuth()
+	config := &OAuthConfig{
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
+		RefreshExpiry: "168h",
+	}
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	mockRefRepo := &mockReferralRepoForAuth{
+		// findByCodeFn returns ErrNotFound for any code (default behavior)
+	}
+
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, mockRefRepo)
+
+	reqBody := RegisterRequest{
+		Email:       "newuser2@example.com",
+		Password:    "securepass123",
+		Username:    "newuser2",
+		DisplayName: "New User 2",
+		Ref:         "UNKNOWN1",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.Register(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201 with unknown ref, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	if mockRefRepo.createCalled {
+		t.Error("expected CreateReferral NOT to be called for unknown ref")
+	}
+}
+
+// TestRegister_WithEmptyRef tests registration with empty ref does not invoke referral logic.
+func TestRegister_WithEmptyRef(t *testing.T) {
+	mockRepo := newMockUserRepoForAuth()
+	config := &OAuthConfig{
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
+		RefreshExpiry: "168h",
+	}
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+	mockRefRepo := &mockReferralRepoForAuth{}
+
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, mockRefRepo)
+
+	reqBody := RegisterRequest{
+		Email:       "newuser3@example.com",
+		Password:    "securepass123",
+		Username:    "newuser3",
+		DisplayName: "New User 3",
+		Ref:         "",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.Register(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201 with empty ref, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	if mockRefRepo.findCalled {
+		t.Error("expected FindUserIDByReferralCode NOT to be called for empty ref")
+	}
+
+	if mockRefRepo.createCalled {
+		t.Error("expected CreateReferral NOT to be called for empty ref")
+	}
+}
+
+// TestRegister_SelfReferral tests that a user cannot refer themselves (no referral created).
+func TestRegister_SelfReferral(t *testing.T) {
+	mockRepo := newMockUserRepoForAuth()
+	config := &OAuthConfig{
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
+		RefreshExpiry: "168h",
+	}
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+
+	// FindUserIDByReferralCode returns the same ID as the user being created
+	// In the mock, Create sets ID to "mock-user-id"
+	mockRefRepo := &mockReferralRepoForAuth{
+		findByCodeFn: func(ctx context.Context, code string) (string, error) {
+			return "mock-user-id", nil // same as the newly created user
+		},
+	}
+
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, mockRefRepo)
+
+	reqBody := RegisterRequest{
+		Email:       "selfref@example.com",
+		Password:    "securepass123",
+		Username:    "selfrefuser",
+		DisplayName: "Self Ref User",
+		Ref:         "OWNCODE1",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.Register(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201 for self-referral, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	if mockRefRepo.createCalled {
+		t.Error("expected CreateReferral NOT to be called for self-referral")
+	}
+}
+
+// TestRegister_ReferralCreateFailure tests that a referral creation failure does not block registration.
+func TestRegister_ReferralCreateFailure(t *testing.T) {
+	mockRepo := newMockUserRepoForAuth()
+	config := &OAuthConfig{
+		JWTSecret:     "test-secret",
+		JWTExpiry:     "15m",
+		RefreshExpiry: "168h",
+	}
+	mockAuthMethodRepo := newMockAuthMethodRepoStub()
+
+	mockRefRepo := &mockReferralRepoForAuth{
+		findByCodeFn: func(ctx context.Context, code string) (string, error) {
+			return "referrer-id-456", nil
+		},
+		createFn: func(ctx context.Context, referrerID, referredID string) error {
+			return errors.New("database error")
+		},
+	}
+
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, mockRefRepo)
+
+	reqBody := RegisterRequest{
+		Email:       "failref@example.com",
+		Password:    "securepass123",
+		Username:    "failrefuser",
+		DisplayName: "Fail Ref User",
+		Ref:         "VALIDREF1",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.Register(w, req)
+
+	// Registration must succeed even if referral creation fails
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201 even when referral creation fails, got %d. Body: %s", w.Code, w.Body.String())
+	}
+}
+
 // TestRegister_AuthMethodFailure_RollsBackUser tests that if auth_method creation fails,
 // the user is deleted (compensating transaction).
 func TestRegister_AuthMethodFailure_RollsBackUser(t *testing.T) {
@@ -847,7 +1091,7 @@ func TestRegister_AuthMethodFailure_RollsBackUser(t *testing.T) {
 		createErr: errors.New("database constraint violation"),
 	}
 
-	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo)
+	handler := NewAuthHandlers(config, mockRepo, mockAuthMethodRepo, nil)
 
 	reqBody := RegisterRequest{
 		Email:       "rollback@example.com",

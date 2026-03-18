@@ -199,7 +199,7 @@ func setupAuthTestHandler(t *testing.T) *AuthHandlers {
 	config := &OAuthConfig{
 		JWTSecret: "test-secret-key",
 	}
-	return NewAuthHandlers(config, mockUserRepo, mockAuthMethodRepo)
+	return NewAuthHandlers(config, mockUserRepo, mockAuthMethodRepo, nil)
 }
 
 // setupOAuthTestHandler creates a test OAuth handler using minimal config

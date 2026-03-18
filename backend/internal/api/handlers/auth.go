@@ -444,3 +444,54 @@ func writeErrorResponse(w http.ResponseWriter, status int, code, message string)
 		},
 	})
 }
+
+// ClaimReferral handles POST /v1/auth/claim-referral
+// Called after OAuth signup to attribute a referral that was stored in localStorage.
+// Requires JWT authentication. Silently succeeds if ref is invalid or user already has a referral.
+func (h *AuthHandlers) ClaimReferral(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get authenticated user ID from JWT context
+	claims := auth.ClaimsFromContext(ctx)
+	if claims == nil {
+		writeErrorResponse(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
+		return
+	}
+
+	var req struct {
+		Ref string `json:"ref"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Ref == "" {
+		w.WriteHeader(http.StatusOK) // Silently succeed
+		json.NewEncoder(w).Encode(map[string]string{"status": "skipped"})
+		return
+	}
+
+	if h.referralRepo == nil {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "skipped"})
+		return
+	}
+
+	// Look up referrer by code
+	referrerID, err := h.referralRepo.FindUserIDByReferralCode(ctx, req.Ref)
+	if err != nil {
+		// Unknown code — silently succeed
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "skipped"})
+		return
+	}
+
+	// Don't allow self-referral
+	if referrerID == claims.UserID {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "skipped"})
+		return
+	}
+
+	// Create referral (silently ignore duplicates — referred_id is UNIQUE)
+	_ = h.referralRepo.CreateReferral(ctx, referrerID, claims.UserID)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "claimed"})
+}

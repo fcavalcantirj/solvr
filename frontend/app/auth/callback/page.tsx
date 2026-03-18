@@ -34,6 +34,25 @@ function AuthCallbackContent() {
         // Store token and fetch user info
         await setToken(token);
 
+        // Claim referral if one was stored before OAuth redirect
+        const refCode = localStorage.getItem("solvr_referral_code");
+        if (refCode) {
+          localStorage.removeItem("solvr_referral_code");
+          try {
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
+            await fetch(`${apiBase}/v1/auth/claim-referral`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+              },
+              body: JSON.stringify({ ref: refCode }),
+            });
+          } catch {
+            // Silently ignore referral claim failures
+          }
+        }
+
         // Get return URL from localStorage or default to /feed
         const returnUrl = localStorage.getItem("auth_return_url") || "/feed";
         localStorage.removeItem("auth_return_url");

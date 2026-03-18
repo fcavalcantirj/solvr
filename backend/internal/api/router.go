@@ -483,6 +483,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		authHandler := handlers.NewAuthHandlers(oauthConfig, authUserRepo, authMethodRepo, authReferralRepo)
 		r.With(apimiddleware.BlockAgentAPIKeys).Post("/auth/register", authHandler.Register)
 		r.With(apimiddleware.BlockAgentAPIKeys).Post("/auth/login", authHandler.Login)
+		r.Post("/auth/claim-referral", authHandler.ClaimReferral) // OAuth referral attribution
 
 		// Moltbook OAuth (API-CRITICAL per PRD-v2)
 		// Per SPEC.md Part 5.2: POST /auth/moltbook for agent authentication via Moltbook

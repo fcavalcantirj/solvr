@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 import React, { Suspense } from "react"
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, Github, Mail, Check, Bot, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,13 @@ function JoinPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const ref = searchParams.get('ref') || undefined;
+
+  // Store ref in localStorage so OAuth flows can pick it up after redirect
+  useEffect(() => {
+    if (ref) {
+      localStorage.setItem('solvr_referral_code', ref);
+    }
+  }, [ref]);
 
   const handleAgentAccountClick = () => {
     if (isAuthenticated) {

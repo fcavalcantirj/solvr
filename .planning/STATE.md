@@ -1,9 +1,9 @@
 ## Current Position
 
-Phase: Phase 8 — Plan 08-01 complete
+Phase: Phase 9 — Plan 09-01 complete
 Plan: .planning/ROADMAP.md
-Status: Plan 08-01 done — referral tracking wired into registration: CreateReferral + FindUserIDByReferralCode on ReferralRepository; auth handler accepts optional ref field with silent-ignore semantics; /join page reads ?ref=CODE and forwards to API; 11 new tests (4 backend integration, 5 handler unit, 2 frontend)
-Last activity: 2026-03-18 — Completed 08-01: Referral Tracking + Join Flow
+Status: Plan 09-01 done — /referrals dashboard page (auth-gated, shows code + count + copy + tweet share); /zh/promote Chinese promotion page (static, optional auth for personalized link, feedback section); APIReferralResponse type + getMyReferral() API method; 17 new tests (9 referrals page, 8 zh/promote); 1019 tests total passing; build clean
+Last activity: 2026-03-18 — Completed 09-01: Frontend Dashboard + Chinese Promotion Page
 
 ## Project Reference
 

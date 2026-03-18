@@ -62,30 +62,30 @@ Deferred to future release.
 
 ## Traceability
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| EML-01 | — | Pending |
-| EML-02 | — | Pending |
-| EML-03 | — | Pending |
-| EML-04 | — | Pending |
-| REF-01 | — | Pending |
-| REF-02 | — | Pending |
-| REF-03 | — | Pending |
-| REF-04 | — | Pending |
-| REF-05 | — | Pending |
-| PAGE-01 | — | Pending |
-| PAGE-02 | — | Pending |
-| PAGE-03 | — | Pending |
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
-| DASH-03 | — | Pending |
-| DASH-04 | — | Pending |
+| Requirement | Phase | Phase Name | Status |
+|-------------|-------|------------|--------|
+| EML-01 | Phase 7 | Email Personalization | Pending |
+| EML-02 | Phase 7 | Email Personalization | Pending |
+| EML-03 | Phase 7 | Email Personalization | Pending |
+| EML-04 | Phase 7 | Email Personalization | Pending |
+| REF-01 | Phase 6 | Referral Codes + DB Foundation | Pending |
+| REF-02 | Phase 6 | Referral Codes + DB Foundation | Pending |
+| REF-03 | Phase 8 | Referral Tracking + Join Flow | Pending |
+| REF-04 | Phase 6 | Referral Codes + DB Foundation | Pending |
+| REF-05 | Phase 9 | Frontend — Dashboard + Pages | Pending |
+| PAGE-01 | Phase 8 | Referral Tracking + Join Flow | Pending |
+| PAGE-02 | Phase 9 | Frontend — Dashboard + Pages | Pending |
+| PAGE-03 | Phase 9 | Frontend — Dashboard + Pages | Pending |
+| DASH-01 | Phase 9 | Frontend — Dashboard + Pages | Pending |
+| DASH-02 | Phase 9 | Frontend — Dashboard + Pages | Pending |
+| DASH-03 | Phase 9 | Frontend — Dashboard + Pages | Pending |
+| DASH-04 | Phase 9 | Frontend — Dashboard + Pages | Pending |
 
 **Coverage:**
 - v1.1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after initial definition*
+*Last updated: 2026-03-17 after roadmap creation (all 16 requirements mapped to phases 6–9)*

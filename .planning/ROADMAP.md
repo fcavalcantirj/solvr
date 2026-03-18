@@ -1,158 +1,155 @@
-# Roadmap: Solvr Admin Email System
+# Roadmap: Solvr Growth Engine
 
-**Milestone:** v1.0
+**Milestone:** v1.1
 **Created:** 2026-03-17
-**Phases:** 5
-**Requirements:** 15
+**Phases:** 4 (phases 6–9)
+**Requirements:** 16
 
 ---
 
-## Phase 1: DNS + Resend Infrastructure
+## Phase 6: Referral Codes + DB Foundation
 
-**Goal:** Establish verified email sending infrastructure for solvr.dev with zero code changes.
-**Requirements:** INFRA-01, INFRA-02
+**Goal:** Add referral infrastructure to the database and expose the user's code via API.
+**Requirements:** REF-01, REF-02, REF-04
 
 ### Success Criteria
 
-1. Resend account is created and solvr.dev domain is added with SPF and DKIM DNS records live and validated by Resend's dashboard.
-2. A test email sent from the Resend dashboard reaches a real inbox without landing in spam, confirming end-to-end deliverability.
-3. `RESEND_API_KEY` is available in the production environment (`.env` or secrets manager) and staging environment.
+1. Migration adds `referral_code VARCHAR(8) UNIQUE NOT NULL` to `users` table and creates `referrals` table (referrer_id, referred_id FK to users, created_at).
+2. All existing users have a unique 8-char alphanumeric code after the migration backfill runs — verified by querying `SELECT COUNT(*) FROM users WHERE referral_code IS NULL` returning 0.
+3. New user registrations automatically receive a generated code on account creation — verified by an integration test that registers a user and checks `referral_code IS NOT NULL`.
+4. `GET /v1/users/me/referral` returns `{"referral_code": "...", "referral_count": N}` for the authenticated caller.
+5. Integration tests cover code uniqueness enforcement, backfill idempotency, and the API endpoint returning correct counts.
 
 ### Notes
 
-- DNS propagation takes up to 48 hours — start this phase before any code work begins.
-- Run `dig TXT solvr.dev` before touching DNS to check for existing SPF records; merge rather than add a second TXT record (RFC 7208 prohibits multiple SPF records).
-- Run `dig TXT pic._domainkey.solvr.dev` to check for DKIM selector conflicts before adding Mailgun's DKIM.
-- Resend DNS records required: SPF (`v=spf1 include:amazonses.com ~all` per Resend docs), DKIM (Resend-generated TXT on `resend._domainkey.solvr.dev`), and optionally DMARC (`_dmarc.solvr.dev` — start with `p=none`).
-- INFRA-01 and INFRA-02 are purely manual admin actions; no Go code is written in this phase.
+- 8-char alphanumeric codes: use `crypto/rand` with charset `[A-Z0-9]` — ~1.7 trillion combinations, collision probability negligible.
+- Backfill in the migration itself (DO $$...$$) to keep it atomic with the schema change; no separate script needed.
+- `referrals` table columns: `id UUID PK`, `referrer_id UUID NOT NULL REFERENCES users(id)`, `referred_id UUID NOT NULL UNIQUE REFERENCES users(id)`, `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`.
+- `referred_id` is UNIQUE — one user can only be referred once (prevents double-attribution).
+- `GET /v1/users/me/referral` counts rows in `referrals WHERE referrer_id = $1` for the referral_count.
 
 ---
 
-## Phase 2: Backend Foundation — DB Migration + Resend Client + ListActiveEmails
+## Phase 7: Email Personalization
 
-**Goal:** Build the complete Go backend foundation: database table, Resend HTTP client, and user email query.
-**Requirements:** INFRA-03, EMAIL-04, EMAIL-05, AUDIT-01
+**Goal:** Make the existing admin broadcast handler substitute per-recipient template variables before sending each email.
+**Requirements:** EML-01, EML-02, EML-03, EML-04
 
 ### Success Criteria
 
-1. Running `go test ./internal/db/...` passes, including an integration test that inserts a row into `email_broadcast_logs` and reads it back.
-2. Running `go test ./internal/services/...` passes, including a unit test where a mock Resend HTTP server receives a well-formed API request with the correct `Authorization: Bearer` header and `from` field matching `FROM_EMAIL`.
-3. `UserRepository.ListActiveEmails()` returns only non-deleted users (those with `deleted_at IS NULL`) — verified by a unit test that seeds one active and one deleted user, then asserts only the active user is returned.
-4. Migration `000069_create_email_broadcast_logs` runs `up` and `down` without error against a local PostgreSQL instance.
-5. The API server starts without error when `RESEND_API_KEY` is set, and the `resend-go/v2` package is compiled into the binary (verified by `go build ./cmd/api`).
+1. `{name}` in `body_html` and `body_text` is replaced with recipient's `display_name` before each send.
+2. `{referral_code}` is replaced with the recipient's unique referral code per email.
+3. `{referral_link}` is replaced with the full URL `https://solvr.dev/join?ref=CODE` per email.
+4. Substitution is applied to both `body_html` and `body_text` fields — verified by a unit test checking both fields after substitution.
+5. Dry-run mode shows the substituted body for the first recipient so the admin can verify before live send.
 
 ### Notes
 
-- Use `resend-go/v2` SDK (`github.com/resend/resend-go/v2`) or direct HTTP to `api.resend.com` — SDK preferred for error handling.
-- Existing `EmailService`/`SMTPClient` are dead code with bugs (quoted-printable encoding bug, SMTPPort type mismatch). Do NOT reuse `smtp.go` for production. Build a fresh `ResendClient` struct that satisfies a new `EmailSender` interface.
-- `EmailSender` interface should be minimal: `Send(ctx, to, subject, htmlBody, textBody string) error`.
-- `email_broadcast_logs` schema: `id UUID PK`, `subject TEXT NOT NULL`, `body_html TEXT NOT NULL`, `body_text TEXT`, `total_recipients INT NOT NULL`, `sent_count INT NOT NULL DEFAULT 0`, `failed_count INT NOT NULL DEFAULT 0`, `status VARCHAR(20) NOT NULL DEFAULT 'sending'`, `started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`, `completed_at TIMESTAMPTZ`, `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`.
-- `EmailBroadcastRepository` needs: `CreateLog()`, `UpdateStatusAndCounts()`, `List()` — all in a new file `backend/internal/db/email_broadcast.go`.
-- Sender address `noreply@solvr.dev` is controlled by `FROM_EMAIL` env var (already loaded by `config/env.go`).
-- `ListActiveEmails` must query only the `users` table (not agents), selecting only `id`, `email`, `display_name` — no `SELECT *`.
-- AUDIT-01 is included here because the `email_broadcast_logs` table and `CreateLog()`/`UpdateStatusAndCounts()` methods are the audit mechanism — they must exist before the handler can use them.
+- Use `strings.NewReplacer("{name}", name, "{referral_code}", code, "{referral_link}", link)` per recipient — simple, zero deps.
+- Fetch `referral_code` alongside `email` + `display_name` in the existing bulk-query loop (update `ListActiveEmails` query or add a new method).
+- If `referral_code` is NULL for any user during transition, substitute empty string to avoid literal `{referral_code}` in sent email.
+- Extract substitution into a pure helper function `substituteTemplateVars(body, name, code, link string) string` for easy unit testing.
+- Phase 6 must be complete before this phase (referral_code column must exist on users).
 
 ---
 
-## Phase 3: Admin Broadcast Handler + Dry-Run
+## Phase 8: Referral Tracking + Join Flow
 
-**Goal:** Implement the protected HTTP handler for broadcast sends, including dry-run preview mode, wired into the router.
-**Requirements:** EMAIL-01, EMAIL-02, EMAIL-03, EMAIL-06
+**Goal:** Track signups that arrive via a referral link and attribute them to the referring user.
+**Requirements:** REF-03, PAGE-01
 
 ### Success Criteria
 
-1. `POST /admin/email/broadcast` with a valid `X-Admin-API-Key` header returns `200` with `{ "broadcast_id": "...", "sent": N, "failed": 0, "total": N, "duration_ms": ... }`.
-2. `POST /admin/email/broadcast` without or with an invalid `X-Admin-API-Key` header returns `401` — verified by handler unit test.
-3. `POST /admin/email/broadcast` with `"dry_run": true` returns `{ "would_send": N, "recipients": [...] }` and does NOT call the email sender — verified by a mock `EmailSender` that asserts zero calls.
-4. `POST /admin/email/broadcast` with missing `subject` or `body_html` returns `400` with a descriptive error — verified by handler unit test.
-5. When `emailService` is nil (email not configured), the endpoint returns `503` with `{ "error": "EMAIL_NOT_CONFIGURED" }`.
+1. Registration API accepts an optional `ref` field (referral code) in the request body.
+2. On successful registration with a valid `ref`, exactly one row is inserted into `referrals` table linking referrer and new user.
+3. Invalid or unknown `ref` values are silently ignored — registration still returns 201 with no error.
+4. `/join?ref=CODE` frontend page extracts the `ref` query param and forwards it to the registration API call.
+5. Integration test: register via the API with a valid `ref` → query `referrals` table → exactly one row for that pair.
 
 ### Notes
 
-- Extend existing `AdminHandler` struct in `backend/internal/api/handlers/admin.go` (currently ~386 lines; adding ~100 lines stays under 900-line limit).
-- Add `emailService EmailSender`, `emailBroadcastRepo EmailBroadcastRepo`, and `userEmailRepo UserEmailRepo` fields (interfaces) to `AdminHandler`.
-- Add `SetEmailService()` and `SetEmailBroadcastRepo()` setters following the existing `SetTranslationJobRunner()` pattern.
-- Broadcast loop must be synchronous and sequential — do NOT use `SendEmailAsync` (causes goroutine leak + Resend 429s). Failed individual sends are logged and counted; broadcast continues.
-- HTTP `WriteTimeout` is 15s. At ~100 users, synchronous is safe today. Use a per-request context with a 5-minute deadline inside the handler to avoid connection drop during broadcast.
-- Add `List-Unsubscribe` header (at minimum a `mailto:` value) to all broadcast emails to satisfy Gmail 2024 bulk sender requirements and prevent Resend domain suspension.
-- Wire in `router.go` behind `if resendKey := os.Getenv("RESEND_API_KEY"); resendKey != ""` guard — consistent with how optional services are wired.
-- Dry-run response must include a recipient list so the admin can verify targeting before live send.
+- Pass `ref` as a JSON field in the registration body (cleaner than threading it as a URL param through the API).
+- Use a DB transaction: insert user row + insert referral row atomically; if referral insert fails (e.g. invalid code), log and continue — do not roll back the user creation.
+- `/join` page is a thin wrapper over the existing registration UI — only change is reading `?ref=CODE` from URL and including it in the API request payload.
+- Phase 6 must be complete before this phase (referrals table must exist).
 
 ---
 
-## Phase 4: Email Audit History Endpoint
+## Phase 9: Frontend — Dashboard + Pages
 
-**Goal:** Expose past broadcast records via a queryable history endpoint so the admin can review what was sent.
-**Requirements:** AUDIT-02
-
-### Success Criteria
-
-1. `GET /admin/email/history` with a valid `X-Admin-API-Key` header returns a JSON array of past broadcasts, each including `broadcast_id`, `subject`, `sent_count`, `failed_count`, `status`, `started_at`, and `completed_at`.
-2. `GET /admin/email/history` without a valid `X-Admin-API-Key` returns `401`.
-3. After a broadcast completes, its record appears in `GET /admin/email/history` with the correct `sent_count`, `failed_count`, and `status: "completed"` — verified by an integration test or handler test that seeds a log row.
-
-### Notes
-
-- `List()` method on `EmailBroadcastRepository` is already built in Phase 2 — this phase only adds the handler method and route registration.
-- Add `ListBroadcasts(w, r)` to `AdminHandler` in `admin.go`.
-- Register `GET /admin/email/history` in `router.go` alongside the broadcast route.
-- Default to descending sort by `started_at` — most recent first.
-- No pagination required for v1 (broadcasts are infrequent admin-only actions).
-
----
-
-## Phase 5: Admin CLI Skill (solvr-admin.sh) ✓ COMPLETE
-
-**Goal:** Provide a Claude Code-callable bash skill for email broadcasts, wrapping the HTTP API with proper credential handling.
-**Requirements:** TOOL-01, TOOL-02, TOOL-03, TOOL-04
-**Status:** Plan 05-01 complete (2026-03-17) — solvr-admin.sh + skill.json created, syntax/help/key-error tests pass
+**Goal:** Give authenticated users a referral dashboard, build the Chinese promotion page, and add pre-filled share links.
+**Requirements:** REF-05, PAGE-02, PAGE-03, DASH-01, DASH-02, DASH-03, DASH-04
 
 ### Success Criteria
 
-1. Running `solvr-admin email send --subject "Test" --body "Hello"` calls `POST /admin/email/broadcast` and prints a human-readable summary (`Sent: N, Failed: 0`).
-2. Running `solvr-admin email dry-run --subject "Test" --body "Hello"` calls the endpoint with `"dry_run": true` and prints the recipient count and email list without sending.
-3. Running `solvr-admin email history` calls `GET /admin/email/history` and prints a formatted table of past broadcasts.
-4. The skill reads `ADMIN_API_KEY` from the environment variable `ADMIN_API_KEY` and, if not set, falls back to `~/.config/solvr/admin-credentials.json` — the key is never printed, logged, or passed as a CLI positional argument.
-5. If `ADMIN_API_KEY` is not found in either location, the script exits with a clear error message and non-zero exit code.
+1. `/referrals` route renders the referral dashboard for authenticated users; unauthenticated visitors are redirected to login.
+2. Dashboard displays the user's referral code with a one-click copy-to-clipboard button that shows a "Copied!" confirmation state.
+3. Dashboard displays the count of successful referrals fetched from `GET /v1/users/me/referral`.
+4. Dashboard shows a pre-filled X/Twitter share link and a copyable referral URL (`https://solvr.dev/join?ref=CODE`).
+5. `/zh/promote` page renders a Chinese-language promotion guide; authenticated users see their personal referral link embedded, unauthenticated visitors see the generic `/join` link.
+6. Pre-filled tweet link correctly encodes the referral URL and a default message via `encodeURIComponent`.
 
 ### Notes
 
-- Place at `.claude/skills/solvr/scripts/solvr-admin.sh` (follows the existing `solvr.sh` skill location).
-- Follow the existing `solvr.sh` pattern: `api_call()` wrapper function, subcommand dispatch via `case`, `jq` for JSON parsing and formatting.
-- The `--body` flag accepts plain text; the script sends it as `body_text` and also wraps it in `<p>` tags for `body_html` (or admin can pass `--body-html` for rich HTML).
-- Never expose `ADMIN_API_KEY` in shell history — pass via header, not as a URL parameter.
-- Phase 5 depends on Phase 3's endpoint being deployed to `api.solvr.dev`. Test against production after deployment.
+- Tweet intent URL: `https://twitter.com/intent/tweet?text=...&url=https%3A%2F%2Fsolvr.dev%2Fjoin%3Fref%3DCODE`
+- Copy button: use `navigator.clipboard.writeText()` with a brief "Copied!" state toggle (setTimeout reset).
+- Dashboard fetches `GET /v1/users/me/referral` on mount; show skeleton loader during fetch.
+- `/zh/promote` content should be static Chinese text with a dynamic ref link section for logged-in users.
+- Vitest tests: copy button interaction, tweet link construction with correct encoding, referral count rendering.
+- REF-05 is satisfied by the dashboard — it is the primary surface where users see their code.
+- Phase 6 must be complete before this phase (API endpoint must exist); Phase 8 must be complete for `/join` page wiring.
 
 ---
 
 ## Phase Summary
 
-| # | Phase | Goal | Requirements | Criteria |
-|---|-------|------|--------------|----------|
-| 1 | DNS + Resend Infrastructure | Verified email sending for solvr.dev | INFRA-01, INFRA-02 | 3 |
-| 2 | Backend Foundation | DB migration + Resend client + user query | INFRA-03, EMAIL-04, EMAIL-05, AUDIT-01 | 5 |
-| 3 | Admin Broadcast Handler + Dry-Run | Protected HTTP broadcast endpoint | EMAIL-01, EMAIL-02, EMAIL-03, EMAIL-06 | 5 |
-| 4 | Email Audit History Endpoint | Past broadcast history via HTTP | AUDIT-02 | 3 |
-| 5 | Admin CLI Skill | solvr-admin.sh for Claude Code | TOOL-01, TOOL-02, TOOL-03, TOOL-04 | 5 |
+| Phase | Name | Layer | Requirements | Count |
+|-------|------|-------|--------------|-------|
+| 6 | Referral Codes + DB Foundation | Backend | REF-01, REF-02, REF-04 | 3 |
+| 7 | Email Personalization | Backend | EML-01, EML-02, EML-03, EML-04 | 4 |
+| 8 | Referral Tracking + Join Flow | Backend + Frontend | REF-03, PAGE-01 | 2 |
+| 9 | Frontend — Dashboard + Pages | Frontend | REF-05, PAGE-02, PAGE-03, DASH-01, DASH-02, DASH-03, DASH-04 | 7 |
+
+**Total:** 16 requirements across 4 phases
+
+---
 
 ## Coverage
 
-All 15 requirements mapped. No gaps.
+All 16 v1.1 requirements mapped:
 
 | Requirement | Phase |
 |-------------|-------|
-| INFRA-01 | 1 |
-| INFRA-02 | 1 |
-| INFRA-03 | 2 |
-| EMAIL-01 | 3 |
-| EMAIL-02 | 3 |
-| EMAIL-03 | 3 |
-| EMAIL-04 | 2 |
-| EMAIL-05 | 2 |
-| EMAIL-06 | 3 |
-| AUDIT-01 | 2 |
-| AUDIT-02 | 4 |
-| TOOL-01 | 5 |
-| TOOL-02 | 5 |
-| TOOL-03 | 5 |
-| TOOL-04 | 5 |
+| EML-01 | Phase 7 |
+| EML-02 | Phase 7 |
+| EML-03 | Phase 7 |
+| EML-04 | Phase 7 |
+| REF-01 | Phase 6 |
+| REF-02 | Phase 6 |
+| REF-03 | Phase 8 |
+| REF-04 | Phase 6 |
+| REF-05 | Phase 9 |
+| PAGE-01 | Phase 8 |
+| PAGE-02 | Phase 9 |
+| PAGE-03 | Phase 9 |
+| DASH-01 | Phase 9 |
+| DASH-02 | Phase 9 |
+| DASH-03 | Phase 9 |
+| DASH-04 | Phase 9 |
+
+Coverage: **16/16 (100%)**
+
+---
+
+## Dependency Order
+
+Phases must execute in order:
+
+- Phase 6 must precede Phase 7 — email personalization needs `referral_code` column on `users`
+- Phase 6 must precede Phase 8 — referral tracking needs `referrals` table
+- Phase 6 must precede Phase 9 — dashboard API endpoint (`GET /v1/users/me/referral`) is Phase 6
+- Phase 8 must precede Phase 9 — `/join` page behavior depends on tracking being wired in the API
+
+---
+*Roadmap created: 2026-03-17*
+*Milestone: v1.1 Growth Engine*

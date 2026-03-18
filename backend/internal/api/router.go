@@ -129,6 +129,17 @@ func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *ch
 	}
 	r.Post("/admin/jobs/translation/run", adminHandler.RunTranslationJob)
 
+	// Wire Resend email client if API key is available
+	if resendKey := os.Getenv("RESEND_API_KEY"); resendKey != "" {
+		fromEmail := os.Getenv("FROM_EMAIL")
+		if fromEmail == "" {
+			fromEmail = "noreply@solvr.dev"
+		}
+		resendClient := services.NewResendClient(resendKey, fromEmail)
+		adminHandler.SetEmailSender(resendClient)
+		slog.Info("Resend email client configured", "from", fromEmail)
+	}
+
 	// Admin search analytics endpoints
 	if pool != nil {
 		saRepo := db.NewSearchAnalyticsRepository(pool)

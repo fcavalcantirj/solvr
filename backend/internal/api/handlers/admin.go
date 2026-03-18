@@ -22,10 +22,16 @@ type TranslationJobRunner interface {
 	RunOnce(ctx context.Context) (translated, failed int)
 }
 
+// EmailSender sends a single email. Implemented by services.ResendClient.
+type EmailSender interface {
+	Send(ctx context.Context, to, subject, htmlBody, textBody string) error
+}
+
 // AdminHandler handles admin operations like raw SQL queries.
 type AdminHandler struct {
 	pool                 *db.Pool
 	translationJobRunner TranslationJobRunner
+	emailSender          EmailSender
 }
 
 // NewAdminHandler creates a new AdminHandler.
@@ -36,6 +42,11 @@ func NewAdminHandler(pool *db.Pool) *AdminHandler {
 // SetTranslationJobRunner injects the translation job runner dependency.
 func (h *AdminHandler) SetTranslationJobRunner(runner TranslationJobRunner) {
 	h.translationJobRunner = runner
+}
+
+// SetEmailSender injects the email sender dependency.
+func (h *AdminHandler) SetEmailSender(sender EmailSender) {
+	h.emailSender = sender
 }
 
 // QueryRequest represents a raw SQL query request.

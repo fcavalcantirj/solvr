@@ -24,23 +24,30 @@ Developers and AI agents can find solutions to programming problems faster than 
 - ✓ In-app notification system (9 notification types)
 - ✓ Content moderation and translation
 - ✓ ISR caching, sitemap, SEO
+- ✓ Admin email broadcast (Resend, POST /admin/email/broadcast, dry-run, --to flag)
+- ✓ Admin email CLI skill (solvr-admin.sh)
+- ✓ Email audit log (email_broadcast_logs table)
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] Email provider infrastructure (Mailgun + DNS for solvr.dev)
-- [ ] Admin email broadcast to all active users
-- [ ] Admin email skill for Claude Code (solvr-admin.sh)
-- [ ] Email audit logging
+- [ ] Per-user email personalization ({name}, {referral_code} template vars)
+- [ ] Referral code generation + storage (per-user unique codes)
+- [ ] Referral tracking (who referred whom, count per user)
+- [ ] /join?ref=CODE signup attribution
+- [ ] Referral dashboard (user sees code, share links, referral count)
+- [ ] /zh/promote Chinese promotion guide page
+- [ ] Pre-filled tweet link construction
 
 ### Out of Scope
 
-- User-facing email preferences/unsubscribe — not needed for admin-only broadcasts yet
-- Per-user targeted emails — announcements only for v1
-- Email templates UI — admin provides subject + body inline
-- Stats/analytics dashboard — audit log is sufficient for now
-- POP3/IMAP inbox — solvr.dev doesn't need to receive email, only send
+- SolvrClaw product (separate project, promised as future reward)
+- Referral reward fulfillment (pro tier, homepage feature — track referrals now, reward later)
+- Referral leaderboard ranking (existing leaderboard infra exists, extend later)
+- Email templates UI — admin provides subject + body with template vars inline
+- User-facing email preferences/unsubscribe — admin-only broadcasts
+- POP3/IMAP inbox — send-only domain
 
 ## Context
 
@@ -58,25 +65,27 @@ Developers and AI agents can find solutions to programming problems faster than 
 - **Simplicity**: No email queue/worker system — synchronous send is fine for admin broadcasts
 - **Domain**: Must use solvr.dev domain for sender credibility (SPF, DKIM)
 
-## Current Milestone: v1.0 Admin Email System
+## Current Milestone: v1.1 Growth Engine
 
-**Goal:** Enable admin to send email announcements to all Solvr users via Claude Code skill, with proper email infrastructure for solvr.dev.
+**Goal:** Build referral system + email personalization so the growth hack email can be sent with working links, per-user codes, and tracking.
 
 **Target features:**
-- Email provider setup (Mailgun + DNS)
-- Wire existing EmailService into production
-- Admin broadcast endpoint
-- Admin email skill (solvr-admin.sh)
-- Email audit log
+- Per-user email personalization (template vars in broadcast)
+- Referral code system (generate, store, attribute on signup)
+- /join?ref=CODE tracking
+- Referral dashboard for users
+- /zh/promote Chinese guide
+- Pre-filled tweet links
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Mailgun over SES/SendGrid | Cheapest for low-volume transactional, simple API, generous free tier | — Pending |
-| Separate admin skill (not extend solvr.sh) | Keep admin tools isolated from agent tools, different auth model | — Pending |
-| Broadcast only (no targeting) | Start simple, all active users, add filtering later if needed | — Pending |
-| Sync send (no queue) | Admin broadcasts are infrequent, no need for worker infrastructure | — Pending |
+| Resend over Mailgun | Cheaper, better DX, user confirmed | ✓ Good |
+| Separate admin skill (solvr-admin.sh) | Keep admin tools isolated from agent tools | ✓ Good |
+| --to flag for single-user sends | Admin can target individual users | ✓ Good |
+| Referral codes on users table | Simple, no separate table needed for codes | — Pending |
+| Template vars in broadcast handler | Minimal change, Go strings.Replace per user | — Pending |
 
 ---
-*Last updated: 2026-03-17 after milestone v1.0 initialization*
+*Last updated: 2026-03-17 after milestone v1.1 initialization*

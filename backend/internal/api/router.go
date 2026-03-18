@@ -146,6 +146,7 @@ func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *ch
 		adminHandler.SetUserEmailRepo(db.NewUserRepository(pool))
 	}
 	r.Post("/admin/email/broadcast", adminHandler.BroadcastEmail)
+	r.Get("/admin/email/history", adminHandler.ListBroadcasts)
 
 	// Admin search analytics endpoints
 	if pool != nil {

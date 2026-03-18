@@ -80,6 +80,7 @@ type broadcastRequest struct {
 	BodyHTML string `json:"body_html"`
 	BodyText string `json:"body_text"`
 	DryRun   bool   `json:"dry_run"`
+	To       string `json:"to"` // optional: single email address (skips broadcast, sends to one user)
 }
 
 // BroadcastEmail handles POST /admin/email/broadcast
@@ -124,6 +125,22 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list recipients")
 		return
+	}
+
+	// Filter to single recipient if "to" is specified
+	if req.To != "" {
+		var filtered []models.EmailRecipient
+		for _, r := range recipients {
+			if r.Email == req.To {
+				filtered = append(filtered, r)
+				break
+			}
+		}
+		if len(filtered) == 0 {
+			writeAdminError(w, http.StatusNotFound, "RECIPIENT_NOT_FOUND", "no active user with email: "+req.To)
+			return
+		}
+		recipients = filtered
 	}
 
 	// Dry-run mode: return recipient list, no sends

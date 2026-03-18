@@ -24,7 +24,7 @@ type TranslationJobRunner interface {
 
 // EmailSender sends a single email. Implemented by services.ResendClient.
 type EmailSender interface {
-	Send(ctx context.Context, to, subject, htmlBody, textBody string) error
+	Send(ctx context.Context, to, subject, htmlBody, textBody string, headers ...map[string]string) error
 }
 
 // AdminHandler handles admin operations like raw SQL queries.

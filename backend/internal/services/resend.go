@@ -43,13 +43,17 @@ func (c *ResendClient) SetBaseURL(rawURL string) {
 // Send sends a single email via the Resend API.
 // Parameters: to (recipient), subject, htmlBody, textBody (can be empty).
 // The from address is set at construction time as "Solvr <fromEmail>".
-func (c *ResendClient) Send(ctx context.Context, to, subject, htmlBody, textBody string) error {
+// Optional variadic headers map allows passing custom headers (e.g., List-Unsubscribe).
+func (c *ResendClient) Send(ctx context.Context, to, subject, htmlBody, textBody string, headers ...map[string]string) error {
 	params := &resend.SendEmailRequest{
 		From:    fmt.Sprintf("Solvr <%s>", c.fromEmail),
 		To:      []string{to},
 		Subject: subject,
 		Html:    htmlBody,
 		Text:    textBody,
+	}
+	if len(headers) > 0 && headers[0] != nil {
+		params.Headers = headers[0]
 	}
 
 	_, err := c.client.Emails.SendWithContext(ctx, params)

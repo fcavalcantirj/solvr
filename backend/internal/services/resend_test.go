@@ -155,3 +155,54 @@ func TestResendClient_Send_CustomFromEmail(t *testing.T) {
 		t.Errorf("expected no error, got: %v", err)
 	}
 }
+
+func TestResendClient_Send_WithHeaders(t *testing.T) {
+	var capturedBody map[string]interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
+		if err := json.Unmarshal(body, &capturedBody); err != nil {
+			t.Fatalf("failed to unmarshal request body: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id": "test-id-headers"}`))
+	}))
+	defer server.Close()
+
+	client := NewResendClient("test-api-key", "noreply@solvr.dev")
+	client.SetBaseURL(server.URL)
+
+	ctx := context.Background()
+	customHeaders := map[string]string{
+		"List-Unsubscribe": "<mailto:unsubscribe@solvr.dev>",
+	}
+	err := client.Send(ctx, "user@example.com", "Newsletter", "<p>Hello</p>", "Hello", customHeaders)
+	if err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+
+	// Verify the headers field was included in the request body
+	headersVal, ok := capturedBody["headers"]
+	if !ok {
+		t.Fatal("expected 'headers' field in request body, got none")
+	}
+
+	headersMap, ok := headersVal.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected 'headers' to be a map, got %T", headersVal)
+	}
+
+	unsubscribe, ok := headersMap["List-Unsubscribe"]
+	if !ok {
+		t.Fatal("expected 'List-Unsubscribe' key in headers map")
+	}
+
+	if unsubscribe != "<mailto:unsubscribe@solvr.dev>" {
+		t.Errorf("expected List-Unsubscribe == '<mailto:unsubscribe@solvr.dev>', got %q", unsubscribe)
+	}
+}

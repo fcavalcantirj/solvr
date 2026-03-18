@@ -190,6 +190,58 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// listBroadcastItem is the JSON shape returned by GET /admin/email/history.
+// Omits body_html and body_text (potentially large, not needed for history view).
+type listBroadcastItem struct {
+	BroadcastID     string     `json:"broadcast_id"`
+	Subject         string     `json:"subject"`
+	TotalRecipients int        `json:"total_recipients"`
+	SentCount       int        `json:"sent_count"`
+	FailedCount     int        `json:"failed_count"`
+	Status          string     `json:"status"`
+	StartedAt       time.Time  `json:"started_at"`
+	CompletedAt     *time.Time `json:"completed_at,omitempty"`
+}
+
+// ListBroadcasts handles GET /admin/email/history
+// Returns past broadcast log entries ordered by started_at DESC.
+// Requires X-Admin-API-Key header.
+// Returns 503 if emailBroadcastRepo is not configured.
+func (h *AdminHandler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
+	if !h.checkAdminAuth(w, r) {
+		return
+	}
+
+	if h.emailBroadcastRepo == nil {
+		writeAdminError(w, http.StatusServiceUnavailable, "REPO_NOT_CONFIGURED", "email broadcast repository not configured")
+		return
+	}
+
+	broadcasts, err := h.emailBroadcastRepo.List(r.Context())
+	if err != nil {
+		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list broadcasts")
+		return
+	}
+
+	items := make([]listBroadcastItem, len(broadcasts))
+	for i, b := range broadcasts {
+		items[i] = listBroadcastItem{
+			BroadcastID:     b.ID,
+			Subject:         b.Subject,
+			TotalRecipients: b.TotalRecipients,
+			SentCount:       b.SentCount,
+			FailedCount:     b.FailedCount,
+			Status:          b.Status,
+			StartedAt:       b.StartedAt,
+			CompletedAt:     b.CompletedAt,
+		}
+	}
+
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+		"broadcasts": items,
+	})
+}
+
 // QueryRequest represents a raw SQL query request.
 type QueryRequest struct {
 	Query string `json:"query"`

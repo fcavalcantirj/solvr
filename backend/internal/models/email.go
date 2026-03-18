@@ -5,9 +5,10 @@ import "time"
 // EmailRecipient holds the minimum user data needed for email broadcasts.
 // Used by UserRepository.ListActiveEmails and the broadcast handler.
 type EmailRecipient struct {
-	ID          string `json:"id"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
+	ID           string `json:"id"`
+	Email        string `json:"email"`
+	DisplayName  string `json:"display_name"`
+	ReferralCode string `json:"referral_code"`
 }
 
 // EmailBroadcast represents a record in the email_broadcast_logs table.

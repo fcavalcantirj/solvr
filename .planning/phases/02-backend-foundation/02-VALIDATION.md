@@ -2,7 +2,7 @@
 phase: 2
 slug: backend-foundation
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-03-17
 ---
@@ -39,9 +39,9 @@ created: 2026-03-17
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
 | 02-01-01 | 01 | 1 | AUDIT-01 | integration | `go test ./internal/db/... -run TestEmailBroadcast` | ❌ W0 | ⬜ pending |
-| 02-01-02 | 01 | 1 | EMAIL-05 | integration | `go test ./internal/db/... -run TestListActiveEmails` | ❌ W0 | ⬜ pending |
+| 02-03-01 | 03 | 2 | EMAIL-05 | integration | `go test ./internal/db/... -run TestUserRepository_ListActiveEmails` | ❌ W0 | ⬜ pending |
 | 02-02-01 | 02 | 1 | INFRA-03 | unit | `go test ./internal/services/... -run TestResendClient` | ❌ W0 | ⬜ pending |
-| 02-03-01 | 03 | 2 | INFRA-03 | build | `cd backend && go build ./cmd/api` | ✅ | ⬜ pending |
+| 02-03-02 | 03 | 2 | INFRA-03 | build | `cd backend && go build ./cmd/api` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -51,9 +51,11 @@ created: 2026-03-17
 
 - [ ] `backend/internal/db/email_broadcast_test.go` — stubs for AUDIT-01 (CreateLog, UpdateStatusAndCounts, List)
 - [ ] `backend/internal/db/users_test.go` — add ListActiveEmails test (file exists, new test function)
-- [ ] `backend/internal/services/resend_client_test.go` — stubs for INFRA-03 (Send with mock HTTP)
+- [ ] `backend/internal/services/resend_test.go` — stubs for INFRA-03 (Send with mock HTTP)
 
 *Existing Go test infrastructure covers all framework requirements.*
+
+> **Test isolation note:** Integration tests use pre-run cleanup (`DELETE FROM ... WHERE subject LIKE 'test_%'`) plus deferred cleanup. This is sufficient for isolation — tests create uniquely-prefixed data and clean up after themselves. No additional test isolation infrastructure is needed.
 
 ---
 
@@ -68,11 +70,11 @@ created: 2026-03-17
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved (post-revision)

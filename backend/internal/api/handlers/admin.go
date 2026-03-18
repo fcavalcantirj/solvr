@@ -188,9 +188,16 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 		"List-Unsubscribe": "<mailto:unsubscribe@solvr.dev>",
 	}
 
-	// Send emails synchronously and sequentially
+	// Send emails synchronously and sequentially with per-recipient template substitution
 	for _, recipient := range recipients {
-		err := h.emailSender.Send(ctx, recipient.Email, req.Subject, req.BodyHTML, req.BodyText, unsubHeaders)
+		referralLink := ""
+		if recipient.ReferralCode != "" {
+			referralLink = "https://solvr.dev/join?ref=" + recipient.ReferralCode
+		}
+		personalHTML := substituteTemplateVars(req.BodyHTML, recipient.DisplayName, recipient.ReferralCode, referralLink)
+		personalText := substituteTemplateVars(req.BodyText, recipient.DisplayName, recipient.ReferralCode, referralLink)
+
+		err := h.emailSender.Send(ctx, recipient.Email, req.Subject, personalHTML, personalText, unsubHeaders)
 		if err != nil {
 			failedCount++
 			// Log error but continue with next recipient

@@ -561,3 +561,87 @@ func TestListBroadcasts_ReturnsBroadcasts(t *testing.T) {
 		}
 	}
 }
+
+func TestBroadcastEmail_TemplateSubstitution(t *testing.T) {
+	os.Setenv("ADMIN_API_KEY", "test-admin-key")
+	defer os.Unsetenv("ADMIN_API_KEY")
+
+	sender := &mockEmailSender{failOnIdx: -1}
+	broadcastRepo := &mockEmailBroadcastRepo{}
+	userRepo := &mockUserEmailRepo{
+		recipients: []models.EmailRecipient{
+			{ID: "u1", Email: "alice@example.com", DisplayName: "Alice", ReferralCode: "ALICE123"},
+			{ID: "u2", Email: "bob@example.com", DisplayName: "Bob", ReferralCode: "BOB456"},
+		},
+	}
+
+	handler := NewAdminHandler(nil)
+	handler.SetEmailSender(sender)
+	handler.SetEmailBroadcastRepo(broadcastRepo)
+	handler.SetUserEmailRepo(userRepo)
+
+	bodyHTML := `<p>Hi {name}, share {referral_link} (code: {referral_code})</p>`
+	bodyText := `Hi {name}, share {referral_link}`
+	body := `{"subject":"Test","body_html":"` + bodyHTML + `","body_text":"` + bodyText + `","dry_run":false}`
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/email/broadcast", bytes.NewBufferString(body))
+	req.Header.Set("X-Admin-API-Key", "test-admin-key")
+	w := httptest.NewRecorder()
+	handler.BroadcastEmail(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if len(sender.calls) != 2 {
+		t.Fatalf("expected 2 email sends, got %d", len(sender.calls))
+	}
+
+	// Verify recipient 1 (Alice)
+	call0 := sender.calls[0]
+	if !bytes.Contains([]byte(call0.HTML), []byte("Alice")) {
+		t.Errorf("call[0].HTML should contain 'Alice', got: %s", call0.HTML)
+	}
+	if !bytes.Contains([]byte(call0.HTML), []byte("ALICE123")) {
+		t.Errorf("call[0].HTML should contain 'ALICE123', got: %s", call0.HTML)
+	}
+	if !bytes.Contains([]byte(call0.HTML), []byte("https://solvr.dev/join?ref=ALICE123")) {
+		t.Errorf("call[0].HTML should contain full referral link for ALICE123, got: %s", call0.HTML)
+	}
+	if !bytes.Contains([]byte(call0.Text), []byte("Alice")) {
+		t.Errorf("call[0].Text should contain 'Alice', got: %s", call0.Text)
+	}
+	if !bytes.Contains([]byte(call0.Text), []byte("https://solvr.dev/join?ref=ALICE123")) {
+		t.Errorf("call[0].Text should contain full referral link for ALICE123, got: %s", call0.Text)
+	}
+
+	// Verify recipient 2 (Bob)
+	call1 := sender.calls[1]
+	if !bytes.Contains([]byte(call1.HTML), []byte("Bob")) {
+		t.Errorf("call[1].HTML should contain 'Bob', got: %s", call1.HTML)
+	}
+	if !bytes.Contains([]byte(call1.HTML), []byte("BOB456")) {
+		t.Errorf("call[1].HTML should contain 'BOB456', got: %s", call1.HTML)
+	}
+	if !bytes.Contains([]byte(call1.HTML), []byte("https://solvr.dev/join?ref=BOB456")) {
+		t.Errorf("call[1].HTML should contain full referral link for BOB456, got: %s", call1.HTML)
+	}
+	if !bytes.Contains([]byte(call1.Text), []byte("Bob")) {
+		t.Errorf("call[1].Text should contain 'Bob', got: %s", call1.Text)
+	}
+	if !bytes.Contains([]byte(call1.Text), []byte("https://solvr.dev/join?ref=BOB456")) {
+		t.Errorf("call[1].Text should contain full referral link for BOB456, got: %s", call1.Text)
+	}
+
+	// Verify raw template vars do NOT appear in sent bodies (EML-01, EML-02, EML-04)
+	for i, call := range sender.calls {
+		for _, token := range []string{"{name}", "{referral_code}", "{referral_link}"} {
+			if bytes.Contains([]byte(call.HTML), []byte(token)) {
+				t.Errorf("call[%d].HTML should NOT contain raw token %q, got: %s", i, token, call.HTML)
+			}
+			if bytes.Contains([]byte(call.Text), []byte(token)) {
+				t.Errorf("call[%d].Text should NOT contain raw token %q, got: %s", i, token, call.Text)
+			}
+		}
+	}
+}

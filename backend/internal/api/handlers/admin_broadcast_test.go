@@ -379,6 +379,100 @@ func TestBroadcastEmail_PartialFailure(t *testing.T) {
 	}
 }
 
+func TestSubstituteTemplateVars(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		nameVal  string
+		code     string
+		link     string
+		expected string
+	}{
+		{
+			name:     "name only",
+			body:     "Hello {name}!",
+			nameVal:  "Alice",
+			code:     "ABC123",
+			link:     "https://solvr.dev/join?ref=ABC123",
+			expected: "Hello Alice!",
+		},
+		{
+			name:     "referral_code only",
+			body:     "Code: {referral_code}",
+			nameVal:  "Bob",
+			code:     "XYZ789",
+			link:     "https://solvr.dev/join?ref=XYZ789",
+			expected: "Code: XYZ789",
+		},
+		{
+			name:     "referral_link only",
+			body:     "Click {referral_link}",
+			nameVal:  "Carol",
+			code:     "DEF456",
+			link:     "https://solvr.dev/join?ref=DEF456",
+			expected: "Click https://solvr.dev/join?ref=DEF456",
+		},
+		{
+			name:     "all three vars",
+			body:     "Hi {name}, share {referral_link} (code {referral_code})",
+			nameVal:  "Dave",
+			code:     "GHI012",
+			link:     "https://solvr.dev/join?ref=GHI012",
+			expected: "Hi Dave, share https://solvr.dev/join?ref=GHI012 (code GHI012)",
+		},
+		{
+			name:     "no vars",
+			body:     "Plain text email",
+			nameVal:  "Eve",
+			code:     "JKL345",
+			link:     "https://solvr.dev/join?ref=JKL345",
+			expected: "Plain text email",
+		},
+		{
+			name:     "empty name",
+			body:     "Hello {name}!",
+			nameVal:  "",
+			code:     "MNO678",
+			link:     "https://solvr.dev/join?ref=MNO678",
+			expected: "Hello !",
+		},
+		{
+			name:     "empty code",
+			body:     "Code: {referral_code}",
+			nameVal:  "Frank",
+			code:     "",
+			link:     "",
+			expected: "Code: ",
+		},
+		{
+			name:     "multiple occurrences",
+			body:     "{name} and {name}",
+			nameVal:  "Grace",
+			code:     "PQR901",
+			link:     "https://solvr.dev/join?ref=PQR901",
+			expected: "Grace and Grace",
+		},
+		{
+			name:     "HTML body",
+			body:     `<p>Hi {name}, use <a href="{referral_link}">link</a></p>`,
+			nameVal:  "Hank",
+			code:     "STU234",
+			link:     "https://solvr.dev/join?ref=STU234",
+			expected: `<p>Hi Hank, use <a href="https://solvr.dev/join?ref=STU234">link</a></p>`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := substituteTemplateVars(tt.body, tt.nameVal, tt.code, tt.link)
+			if got != tt.expected {
+				t.Errorf("substituteTemplateVars(%q, %q, %q, %q) = %q, want %q",
+					tt.body, tt.nameVal, tt.code, tt.link, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestListBroadcasts_Unauthorized(t *testing.T) {
 	os.Setenv("ADMIN_API_KEY", "test-admin-key")
 	defer os.Unsetenv("ADMIN_API_KEY")

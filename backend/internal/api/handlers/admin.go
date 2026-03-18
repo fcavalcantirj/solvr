@@ -74,6 +74,13 @@ func (h *AdminHandler) SetUserEmailRepo(repo UserEmailRepo) {
 	h.userEmailRepo = repo
 }
 
+// substituteTemplateVars replaces {name}, {referral_code}, and {referral_link}
+// in the given body string with the provided per-recipient values.
+func substituteTemplateVars(body, name, code, link string) string {
+	r := strings.NewReplacer("{name}", name, "{referral_code}", code, "{referral_link}", link)
+	return r.Replace(body)
+}
+
 // broadcastRequest is the JSON body for POST /admin/email/broadcast.
 type broadcastRequest struct {
 	Subject  string `json:"subject"`

@@ -200,7 +200,11 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send emails synchronously and sequentially with per-recipient template substitution
-	for _, recipient := range recipients {
+	// 150ms delay between sends to respect Resend's 10 req/s rate limit
+	for i, recipient := range recipients {
+		if i > 0 {
+			time.Sleep(150 * time.Millisecond)
+		}
 		referralLink := ""
 		if recipient.ReferralCode != "" {
 			referralLink = "https://solvr.dev/join?ref=" + recipient.ReferralCode

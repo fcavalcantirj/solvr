@@ -1,10 +1,10 @@
 ---
 phase: 12
 name: api-docs-accuracy-audit
-status: gaps_found
+status: passed
 verified_at: 2026-03-19
 verifier: gsd-verifier
-score: 4/5 must-haves verified
+score: 5/5 must-haves verified
 ---
 
 # Phase 12 Verification: API Docs Accuracy Audit
@@ -31,27 +31,9 @@ Docs show `{"data": {"auth_methods": [...]}}`. Handler calls `writeMeJSON(w, 200
 
 Docs show `{"data": {"used": ..., "quota": ..., "percentage": ...}}`. Handler encodes `map[string]interface{}{"data": resp}` where `StorageResponse` has fields `used`, `quota`, `percentage`. Auth: both (agent API key or claiming human JWT). Accurate.
 
-### 5. POST /ideas/{id}/evolve (content.ts vs ideas.go) — GAP FOUND
+### 5. POST /ideas/{id}/evolve (content.ts vs ideas.go) — PASS (fixed)
 
-**Discrepancy:** The docs show the response wrapped in a `"data"` key:
-```json
-{
-  "data": {
-    "message": "idea evolution linked",
-    "idea_id": "...",
-    "evolved_post_id": "..."
-  }
-}
-```
-The actual handler (`ideas.go` line 511) calls `writeIdeasJSON(w, http.StatusOK, map[string]interface{}{"message": ..., "idea_id": ..., "evolved_post_id": ...})`. The `writeIdeasJSON` helper does NOT add a `"data"` wrapper — it encodes the map directly. The actual response is:
-```json
-{
-  "message": "idea evolution linked",
-  "idea_id": "...",
-  "evolved_post_id": "..."
-}
-```
-The `"data"` wrapper in the docs is incorrect.
+Initially found a `"data"` wrapper discrepancy — docs showed `{"data": {...}}` but handler returns bare `{"message": ..., "idea_id": ..., "evolved_post_id": ...}`. Fixed in commit `af6076a`.
 
 ### TypeScript Compilation — PASS
 
@@ -65,12 +47,8 @@ Other TS errors exist project-wide but all are in test files and predate this ph
 
 ## Gaps Found
 
-| # | File | Endpoint | Issue | Severity |
-|---|------|----------|-------|----------|
-| 1 | api-endpoint-data-content.ts | POST /ideas/{id}/evolve | Response docs show `{"data": {...}}` wrapper but handler returns bare `{"message": ..., "idea_id": ..., "evolved_post_id": ...}` | Minor |
+None — all gaps resolved during verification.
 
-## Recommendation
+## Result
 
-The gap is minor and doc-only. It does not affect runtime behavior. The fix is to remove the `"data"` wrapper from the evolve endpoint's response example in `api-endpoint-data-content.ts`. This can be fixed in a follow-up or as a quick patch — it does not block phase completion.
-
-Overall, the phase achieved its goal: all 25+ missing endpoints were added across 4 files, all known accuracy discrepancies were fixed, and the docs are now agent-first. The one remaining gap is a response wrapper inconsistency on a single endpoint.
+Phase achieved its goal: all 25+ missing endpoints added across 4 files, all known accuracy discrepancies fixed, docs are now agent-first. All 1022 frontend tests pass. All 5 spot-checked endpoints verified accurate against backend handlers.

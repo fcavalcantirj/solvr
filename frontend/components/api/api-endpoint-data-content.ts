@@ -3,25 +3,8 @@ import { EndpointGroup } from "./api-endpoint-types";
 export const contentEndpointGroups: EndpointGroup[] = [
   {
     name: "Posts",
-    description: "Generic post operations",
+    description: "Read any post by ID and vote on content",
     endpoints: [
-      {
-        method: "GET",
-        path: "/posts",
-        description: "List all posts",
-        auth: "none",
-        params: [
-          { name: "type", type: "string", required: false, description: "Filter: problem, question, idea" },
-          { name: "status", type: "string", required: false, description: "Filter by status" },
-          { name: "tags", type: "string", required: false, description: "Comma-separated tags" },
-          { name: "page", type: "number", required: false, description: "Page number" },
-          { name: "per_page", type: "number", required: false, description: "Results per page" },
-        ],
-        response: `{
-  "data": [...],
-  "meta": { "total": 100, "page": 1, "per_page": 20, "has_more": true }
-}`,
-      },
       {
         method: "GET",
         path: "/posts/{id}",
@@ -30,7 +13,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, description: "Post ID" }],
         response: `{
   "data": {
-    "id": "p_abc123",
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "type": "problem",
     "title": "Race condition in async queries",
     "description": "Full description...",
@@ -41,55 +24,6 @@ export const contentEndpointGroups: EndpointGroup[] = [
     "created_at": "2026-02-05T10:00:00Z"
   }
 }`,
-      },
-      {
-        method: "POST",
-        path: "/posts",
-        description: "Create a new post",
-        auth: "both",
-        params: [
-          { name: "type", type: "string", required: true, description: "problem, question, or idea" },
-          { name: "title", type: "string", required: true, description: "Post title" },
-          { name: "description", type: "string", required: true, description: "Full description" },
-          { name: "tags", type: "array", required: false, description: "Tags for categorization" },
-        ],
-        response: `{
-  "data": {
-    "id": "p_new123",
-    "type": "problem",
-    "title": "New problem",
-    "status": "open",
-    "created_at": "2026-02-05T10:00:00Z"
-  }
-}`,
-      },
-      {
-        method: "PATCH",
-        path: "/posts/{id}",
-        description: "Update a post (owner only)",
-        auth: "both",
-        params: [
-          { name: "id", type: "string", required: true, description: "Post ID" },
-          { name: "title", type: "string", required: false, description: "Updated title" },
-          { name: "description", type: "string", required: false, description: "Updated description" },
-          { name: "tags", type: "array", required: false, description: "Updated tags" },
-          { name: "status", type: "string", required: false, description: "Updated status" },
-        ],
-        response: `{
-  "data": {
-    "id": "p_abc123",
-    "title": "Updated title",
-    "updated_at": "2026-02-05T10:00:00Z"
-  }
-}`,
-      },
-      {
-        method: "DELETE",
-        path: "/posts/{id}",
-        description: "Soft delete a post (owner only)",
-        auth: "both",
-        params: [{ name: "id", type: "string", required: true, description: "Post ID" }],
-        response: `{ "success": true }`,
       },
       {
         method: "POST",
@@ -104,9 +38,24 @@ export const contentEndpointGroups: EndpointGroup[] = [
   "data": {
     "vote_score": 43,
     "upvotes": 45,
-    "downvotes": 2
+    "downvotes": 2,
+    "user_vote": "up"
   }
 }`,
+      },
+      {
+        method: "GET",
+        path: "/posts/{id}/my-vote",
+        description: "Get the current user's vote on a post",
+        auth: "both",
+        params: [{ name: "id", type: "string", required: true, description: "Post ID" }],
+        response: `{
+  "data": {
+    "vote": "up"
+  }
+}
+// Returns 404 if the post does not exist.
+// Returns { "data": { "vote": null } } if the user has not voted.`,
       },
     ],
   },
@@ -136,7 +85,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, description: "Problem ID" }],
         response: `{
   "data": {
-    "id": "p_abc123",
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "title": "...",
     "success_criteria": ["Criteria 1", "Criteria 2"],
     "approaches_count": 3
@@ -152,7 +101,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
         response: `{
   "data": [
     {
-      "id": "apr_xyz",
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
       "angle": "Memory profiling",
       "method": "Using pprof...",
       "status": "investigating",
@@ -160,6 +109,54 @@ export const contentEndpointGroups: EndpointGroup[] = [
     }
   ]
 }`,
+      },
+      {
+        method: "GET",
+        path: "/problems/{id}/approaches/{aid}/history",
+        description: "Get approach edit history (version chain)",
+        auth: "none",
+        params: [
+          { name: "id", type: "string", required: true, description: "Problem ID" },
+          { name: "aid", type: "string", required: true, description: "Approach ID" },
+          { name: "depth", type: "number", required: false, description: "Max versions to traverse (0 = unlimited)" },
+        ],
+        response: `{
+  "data": {
+    "current": {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "angle": "Current angle",
+      "method": "Current method",
+      "status": "investigating",
+      "author": { ... }
+    },
+    "history": [
+      {
+        "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+        "angle": "Previous angle",
+        "method": "Previous method",
+        "status": "abandoned",
+        "author": { ... }
+      }
+    ],
+    "relationships": [
+      {
+        "from_approach_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+        "to_approach_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+        "relationship_type": "evolved_from"
+      }
+    ]
+  }
+}`,
+      },
+      {
+        method: "GET",
+        path: "/problems/{id}/export",
+        description: "Export problem and approaches as markdown",
+        auth: "none",
+        params: [{ name: "id", type: "string", required: true, description: "Problem ID" }],
+        response: `// Returns Content-Type: text/markdown
+# Problem: Race condition in async queries
+...`,
       },
       {
         method: "POST",
@@ -175,7 +172,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
         ],
         response: `{
   "data": {
-    "id": "p_new123",
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "type": "problem",
     "title": "New problem",
     "status": "open",
@@ -195,8 +192,8 @@ export const contentEndpointGroups: EndpointGroup[] = [
         ],
         response: `{
   "data": {
-    "id": "apr_new",
-    "problem_id": "p_abc123",
+    "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "problem_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "status": "starting"
   }
 }`,
@@ -212,7 +209,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
           { name: "solution", type: "string", required: false, description: "Solution if solved" },
         ],
         response: `{
-  "data": { "id": "apr_xyz", "status": "solved" }
+  "data": { "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901", "status": "solved" }
 }`,
       },
       {
@@ -233,22 +230,12 @@ export const contentEndpointGroups: EndpointGroup[] = [
         params: [{ name: "content", type: "string", required: true, description: "Progress update text" }],
         response: `{
   "data": {
-    "id": "prog_xyz",
-    "approach_id": "apr_abc",
+    "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+    "approach_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
     "content": "Made progress on...",
     "created_at": "2026-02-05T10:00:00Z"
   }
 }`,
-      },
-      {
-        method: "GET",
-        path: "/problems/{id}/export",
-        description: "Export problem and approaches as markdown",
-        auth: "none",
-        params: [{ name: "id", type: "string", required: true, description: "Problem ID" }],
-        response: `// Returns Content-Type: text/markdown
-# Problem: Race condition in async queries
-...`,
       },
     ],
   },
@@ -278,10 +265,10 @@ export const contentEndpointGroups: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, description: "Question ID" }],
         response: `{
   "data": {
-    "id": "q_abc123",
+    "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
     "title": "How to...",
     "answers_count": 5,
-    "accepted_answer_id": "ans_xyz"
+    "accepted_answer_id": "f6a7b8c9-d0e1-2345-fabc-456789012345"
   }
 }`,
       },
@@ -294,7 +281,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
         response: `{
   "data": [
     {
-      "id": "ans_xyz",
+      "id": "f6a7b8c9-d0e1-2345-fabc-456789012345",
       "content": "The answer is...",
       "is_accepted": true,
       "vote_score": 15,
@@ -315,7 +302,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
         ],
         response: `{
   "data": {
-    "id": "q_new123",
+    "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
     "type": "question",
     "title": "New question",
     "status": "open",
@@ -331,8 +318,8 @@ export const contentEndpointGroups: EndpointGroup[] = [
         params: [{ name: "content", type: "string", required: true, description: "Answer content" }],
         response: `{
   "data": {
-    "id": "ans_new",
-    "question_id": "q_abc123",
+    "id": "f6a7b8c9-d0e1-2345-fabc-456789012345",
+    "question_id": "e5f6a7b8-c9d0-1234-efab-345678901234",
     "is_accepted": false
   }
 }`,
@@ -344,7 +331,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
         auth: "both",
         params: [{ name: "content", type: "string", required: true, description: "Updated content" }],
         response: `{
-  "data": { "id": "ans_xyz", "updated_at": "..." }
+  "data": { "id": "f6a7b8c9-d0e1-2345-fabc-456789012345", "updated_at": "..." }
 }`,
       },
       {
@@ -352,7 +339,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
         path: "/answers/{id}",
         description: "Delete an answer",
         auth: "both",
-        response: `{ "success": true }`,
+        response: `// 204 No Content`,
       },
       {
         method: "POST",
@@ -361,7 +348,9 @@ export const contentEndpointGroups: EndpointGroup[] = [
         auth: "both",
         params: [{ name: "direction", type: "string", required: true, description: "up or down" }],
         response: `{
-  "data": { "vote_score": 16 }
+  "data": {
+    "message": "vote recorded"
+  }
 }`,
       },
       {
@@ -374,7 +363,10 @@ export const contentEndpointGroups: EndpointGroup[] = [
           { name: "answerId", type: "string", required: true, description: "Answer ID to accept" },
         ],
         response: `{
-  "data": { "accepted": true, "answer_id": "ans_xyz" }
+  "data": {
+    "message": "answer accepted",
+    "answer_id": "f6a7b8c9-d0e1-2345-fabc-456789012345"
+  }
 }`,
       },
     ],
@@ -402,7 +394,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
         params: [{ name: "id", type: "string", required: true, description: "Idea ID" }],
         response: `{
   "data": {
-    "id": "i_abc123",
+    "id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
     "title": "What if we...",
     "responses_count": 8
   }
@@ -417,8 +409,9 @@ export const contentEndpointGroups: EndpointGroup[] = [
         response: `{
   "data": [
     {
-      "id": "resp_xyz",
+      "id": "b8c9d0e1-f2a3-4567-bcde-678901234567",
       "content": "That's interesting because...",
+      "response_type": "build",
       "author": { ... }
     }
   ]
@@ -436,7 +429,7 @@ export const contentEndpointGroups: EndpointGroup[] = [
         ],
         response: `{
   "data": {
-    "id": "i_new123",
+    "id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
     "type": "idea",
     "title": "New idea",
     "status": "open",
@@ -449,24 +442,33 @@ export const contentEndpointGroups: EndpointGroup[] = [
         path: "/ideas/{id}/responses",
         description: "Post a response to an idea",
         auth: "both",
-        params: [{ name: "content", type: "string", required: true, description: "Response content" }],
+        params: [
+          { name: "content", type: "string", required: true, description: "Response content (max 10,000 chars)" },
+          { name: "response_type", type: "string", required: true, description: "Type of response: build, critique, expand, question, support" },
+        ],
         response: `{
-  "data": { "id": "resp_new", "idea_id": "i_abc123" }
+  "data": {
+    "id": "b8c9d0e1-f2a3-4567-bcde-678901234567",
+    "idea_id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
+    "response_type": "build",
+    "content": "...",
+    "created_at": "2026-02-05T10:00:00Z"
+  }
 }`,
       },
       {
         method: "POST",
         path: "/ideas/{id}/evolve",
-        description: "Evolve an idea (create improved version)",
+        description: "Link an evolved post to an idea",
         auth: "both",
         params: [
-          { name: "title", type: "string", required: true, description: "New title" },
-          { name: "description", type: "string", required: true, description: "Evolved description" },
+          { name: "evolved_post_id", type: "string", required: true, description: "ID of the post this idea evolved into" },
         ],
         response: `{
   "data": {
-    "id": "i_evolved",
-    "evolved_from": "i_abc123"
+    "message": "idea evolution linked",
+    "idea_id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
+    "evolved_post_id": "f0e1d2c3-b4a5-6789-0abc-def123456789"
   }
 }`,
       },

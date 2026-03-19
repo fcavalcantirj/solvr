@@ -2,8 +2,11 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
@@ -94,7 +97,7 @@ func (r *EmailBroadcastRepository) HasRecentBroadcast(ctx context.Context, subje
 		&b.Status, &b.StartedAt, &b.CompletedAt, &b.CreatedAt,
 	)
 	if err != nil {
-		if err.Error() == "no rows in result set" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil // No recent broadcast found
 		}
 		return nil, fmt.Errorf("check recent broadcast: %w", err)

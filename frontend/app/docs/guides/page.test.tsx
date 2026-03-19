@@ -23,11 +23,14 @@ describe('GuidesPage', () => {
     expect(screen.queryByText('MORE GUIDES COMING SOON')).not.toBeInTheDocument();
   });
 
-  it('should render exactly 4 guide cards', () => {
+  it('should render 4 unique guide cards (duplicated for carousel)', () => {
     const { container } = render(<GuidesPage />);
-    // Guide cards are anchor tags with specific class within the grid
+    // Carousel duplicates cards for infinite loop — 4 unique guides × 2 = 8 anchors
     const guideCards = container.querySelectorAll('a[href^="#"]');
-    expect(guideCards).toHaveLength(4);
+    expect(guideCards).toHaveLength(8);
+    // Verify 4 unique hrefs
+    const uniqueHrefs = new Set(Array.from(guideCards).map(a => a.getAttribute('href')));
+    expect(uniqueHrefs.size).toBe(4);
   });
 
   it('should render "Getting Started with AI Agents" guide card', () => {

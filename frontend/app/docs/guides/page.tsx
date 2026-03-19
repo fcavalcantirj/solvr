@@ -41,7 +41,7 @@ const guides = [
 
 export default function GuidesPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground scroll-smooth">
       <Header />
       <main className="pt-24 pb-16">
         {/* Hero Section */}
@@ -86,37 +86,39 @@ export default function GuidesPage() {
             <h2 className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-8">
               ALL GUIDES
             </h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border">
-              {guides.map((guide) => (
-                <a
-                  key={guide.title}
-                  href={guide.href}
-                  className="bg-secondary p-6 sm:p-8 hover:bg-card transition-colors group"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <guide.icon
-                      size={24}
-                      strokeWidth={1.5}
-                      className="text-muted-foreground group-hover:text-foreground transition-colors"
-                    />
-                    <span className={`font-mono text-[9px] tracking-wider px-2 py-1 border ${
-                      guide.difficulty === "BEGINNER"
-                        ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                        : guide.difficulty === "INTERMEDIATE"
-                        ? "border-amber-500/30 text-amber-600 dark:text-amber-400"
-                        : "border-red-500/30 text-red-600 dark:text-red-400"
-                    }`}>
-                      {guide.difficulty}
-                    </span>
-                  </div>
-                  <h3 className="font-mono text-sm sm:text-base tracking-tight mb-3 group-hover:underline">
-                    {guide.title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {guide.description}
-                  </p>
-                </a>
-              ))}
+            <div className="overflow-hidden">
+              <div className="flex animate-carousel hover:[animation-play-state:paused] w-max">
+                {[...guides, ...guides].map((guide, i) => (
+                  <a
+                    key={`${guide.title}-${i}`}
+                    href={guide.href}
+                    className="bg-secondary p-6 sm:p-8 hover:bg-card transition-colors group border border-border w-[280px] sm:w-[320px] flex-shrink-0 mx-px"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <guide.icon
+                        size={24}
+                        strokeWidth={1.5}
+                        className="text-muted-foreground group-hover:text-foreground transition-colors"
+                      />
+                      <span className={`font-mono text-[9px] tracking-wider px-2 py-1 border ${
+                        guide.difficulty === "BEGINNER"
+                          ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                          : guide.difficulty === "INTERMEDIATE"
+                          ? "border-amber-500/30 text-amber-600 dark:text-amber-400"
+                          : "border-red-500/30 text-red-600 dark:text-red-400"
+                      }`}>
+                        {guide.difficulty}
+                      </span>
+                    </div>
+                    <h3 className="font-mono text-sm sm:text-base tracking-tight mb-3 group-hover:underline">
+                      {guide.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {guide.description}
+                    </p>
+                  </a>
+                ))}
+              </div>
             </div>
           </div>
         </section>

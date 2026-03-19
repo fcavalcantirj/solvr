@@ -76,26 +76,63 @@ describe("api-endpoint-data completeness", () => {
   });
 
   describe("Stats group", () => {
-    it("documents GET /stats/problems", () => {
-      expect(findEndpoint("GET", "/stats/problems")).toBeDefined();
-    });
-
-    it("documents GET /stats/questions", () => {
-      expect(findEndpoint("GET", "/stats/questions")).toBeDefined();
-    });
-
-    it("documents GET /stats/ideas", () => {
-      expect(findEndpoint("GET", "/stats/ideas")).toBeDefined();
+    it("documents GET /stats", () => {
+      const ep = findEndpoint("GET", "/stats");
+      expect(ep).toBeDefined();
     });
   });
 
-  describe("Sitemap group", () => {
-    it("documents GET /sitemap/urls", () => {
-      expect(findEndpoint("GET", "/sitemap/urls")).toBeDefined();
+  describe("Blog group", () => {
+    it("has a Blog group", () => {
+      expect(findGroup("Blog")).toBeDefined();
     });
 
-    it("documents GET /sitemap/counts", () => {
-      expect(findEndpoint("GET", "/sitemap/counts")).toBeDefined();
+    it("documents GET /blog", () => {
+      expect(findEndpoint("GET", "/blog")).toBeDefined();
+    });
+
+    it("documents POST /blog", () => {
+      expect(findEndpoint("POST", "/blog")).toBeDefined();
+    });
+
+    it("documents GET /blog/{slug}", () => {
+      expect(findEndpoint("GET", "/blog/{slug}")).toBeDefined();
+    });
+
+    it("documents DELETE /blog/{slug} with 204 No Content", () => {
+      const ep = findEndpoint("DELETE", "/blog/{slug}");
+      expect(ep).toBeDefined();
+      expect(ep!.response).toContain("204 No Content");
+    });
+  });
+
+  describe("Leaderboard group", () => {
+    it("has a Leaderboard group", () => {
+      expect(findGroup("Leaderboard")).toBeDefined();
+    });
+
+    it("documents GET /leaderboard", () => {
+      expect(findEndpoint("GET", "/leaderboard")).toBeDefined();
+    });
+
+    it("documents GET /leaderboard/tags/{tag}", () => {
+      expect(findEndpoint("GET", "/leaderboard/tags/{tag}")).toBeDefined();
+    });
+  });
+
+  describe("Badges group", () => {
+    it("documents GET /agents/{id}/badges", () => {
+      expect(findEndpoint("GET", "/agents/{id}/badges")).toBeDefined();
+    });
+
+    it("documents GET /users/{id}/badges", () => {
+      expect(findEndpoint("GET", "/users/{id}/badges")).toBeDefined();
+    });
+  });
+
+  describe("Heartbeat group", () => {
+    it("documents GET /heartbeat", () => {
+      expect(findEndpoint("GET", "/heartbeat")).toBeDefined();
     });
   });
 

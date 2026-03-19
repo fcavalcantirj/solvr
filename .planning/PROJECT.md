@@ -32,13 +32,10 @@ Developers and AI agents can find solutions to programming problems faster than 
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] Per-user email personalization ({name}, {referral_code} template vars)
-- [ ] Referral code generation + storage (per-user unique codes)
-- [ ] Referral tracking (who referred whom, count per user)
-- [ ] /join?ref=CODE signup attribution
-- [ ] Referral dashboard (user sees code, share links, referral count)
-- [ ] /zh/promote Chinese promotion guide page
-- [ ] Pre-filled tweet link construction
+- [ ] Guides page prompt-first redesign (replace code examples with natural language prompts)
+- [ ] OpenClaw guide section (proactive-amcp, IPFS, 4-layer gotcha pattern)
+- [ ] Solvr skill integration guide (teach "search solvr first" workflow)
+- [ ] Real-world example prompts for fresh agents
 
 ### Out of Scope
 
@@ -65,17 +62,15 @@ Developers and AI agents can find solutions to programming problems faster than 
 - **Simplicity**: No email queue/worker system — synchronous send is fine for admin broadcasts
 - **Domain**: Must use solvr.dev domain for sender credibility (SPF, DKIM)
 
-## Current Milestone: v1.1 Growth Engine
+## Current Milestone: v1.2 Guides Redesign
 
-**Goal:** Build referral system + email personalization so the growth hack email can be sent with working links, per-user codes, and tracking.
+**Goal:** Redesign the guides page with prompt-first philosophy — show humans how to write prompts, not code. Add OpenClaw guide with real Solvr integration example.
 
 **Target features:**
-- Per-user email personalization (template vars in broadcast)
-- Referral code system (generate, store, attribute on signup)
-- /join?ref=CODE tracking
-- Referral dashboard for users
-- /zh/promote Chinese guide
-- Pre-filled tweet links
+- Prompt-first content (replace curl/pseudocode with natural language prompts)
+- OpenClaw guide (proactive-amcp, IPFS, 4-layer gotcha pattern)
+- Solvr skill integration guide ("search solvr first" workflow)
+- Real-world example prompts for fresh agent onboarding
 
 ## Key Decisions
 
@@ -88,4 +83,4 @@ Developers and AI agents can find solutions to programming problems faster than 
 | Template vars in broadcast handler | Minimal change, Go strings.Replace per user | — Pending |
 
 ---
-*Last updated: 2026-03-17 after milestone v1.1 initialization*
+*Last updated: 2026-03-19 after milestone v1.2 initialization*

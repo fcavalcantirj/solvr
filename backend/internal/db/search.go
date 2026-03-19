@@ -209,8 +209,8 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 
 // searchPostsHybrid uses the hybrid_search SQL function to combine full-text and
 // vector similarity search using Reciprocal Rank Fusion (RRF).
-// The hybrid_search function returns SETOF posts, so we query it and format
-// results into SearchResult the same way searchPosts does.
+// The hybrid_search function returns TABLE(post_id, rrf_score) with real RRF scores,
+// which we JOIN with posts to get full data and format into SearchResult.
 func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []float32, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
 	queryVec := pgvector.NewVector(embedding)
 
@@ -227,7 +227,10 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 		matchCount = 60
 	}
 
-	// Use hybrid_search SQL function, then apply the same formatting as searchPosts
+	// Use hybrid_search SQL function which returns (post_id, rrf_score),
+	// then JOIN with posts to get full data. The rrf_score is the real
+	// Reciprocal Rank Fusion score — no need to re-derive from ROW_NUMBER.
+	// FTS weight 2.0 > VEC weight 1.0 so keyword matches outrank semantic-only.
 	baseQuery := `
 		SELECT
 			p.id,
@@ -245,12 +248,13 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 				END,
 				p.posted_by_id
 			) as author_name,
-			1.0 / (ROW_NUMBER() OVER() + 1)::float as score,
+			hs.rrf_score as score,
 			(p.upvotes - p.downvotes) as vote_score,
 			COALESCE((SELECT COUNT(*) FROM answers WHERE question_id = p.id AND deleted_at IS NULL), 0) as answers_count,
 			p.created_at,
 			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at
-		FROM hybrid_search($1, $2, $3, 1.0, 1.0, 60) p
+		FROM hybrid_search($1, $2, $3, 2.0, 1.0, 60) hs
+		JOIN posts p ON p.id = hs.post_id
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
 		WHERE p.status NOT IN ('pending_review', 'rejected', 'draft')
@@ -265,8 +269,8 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 		baseQuery += " " + filters
 	}
 
-	// Preserve hybrid_search RRF ordering deterministically after JOINs
-	baseQuery += " ORDER BY score DESC"
+	// Order by real RRF score from hybrid_search (deterministic, survives JOINs)
+	baseQuery += " ORDER BY hs.rrf_score DESC"
 
 	rows, err := r.pool.Query(ctx, baseQuery, args...)
 	if err != nil {

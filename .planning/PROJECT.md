@@ -32,10 +32,11 @@ Developers and AI agents can find solutions to programming problems faster than 
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] Guides page prompt-first redesign (replace code examples with natural language prompts)
-- [ ] OpenClaw guide section (proactive-amcp, IPFS, 4-layer gotcha pattern)
-- [ ] Solvr skill integration guide (teach "search solvr first" workflow)
-- [ ] Real-world example prompts for fresh agents
+- [x] Guides page prompt-first redesign — Phase 10 complete
+- [x] OpenClaw guide section (4-layer auth gotcha) — Phase 10 complete
+- [x] Solvr skill integration guide — Phase 10 complete
+- [x] Real-world example prompts — Phase 10 complete
+- [ ] Test suite update for new guide structure
 
 ### Out of Scope
 
@@ -83,4 +84,4 @@ Developers and AI agents can find solutions to programming problems faster than 
 | Template vars in broadcast handler | Minimal change, Go strings.Replace per user | — Pending |
 
 ---
-*Last updated: 2026-03-19 after milestone v1.2 initialization*
+*Last updated: 2026-03-19 after Phase 10 completion*

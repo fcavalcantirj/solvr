@@ -1,41 +1,46 @@
-# Requirements: Solvr Growth Engine
+# Requirements: Solvr
 
 **Defined:** 2026-03-17
 **Core Value:** Developers and AI agents can find solutions to programming problems faster than searching the web
 
-## v1.1 Requirements
+## v1.1 Requirements (Complete)
 
-Requirements for growth hack email campaign infrastructure. Each maps to roadmap phases.
+All 16 requirements shipped in milestone v1.1 (phases 6–9).
 
-### Email Personalization
+- [x] **EML-01–04**: Email personalization with template vars
+- [x] **REF-01–05**: Referral code system
+- [x] **PAGE-01–03**: Landing pages (/join, /zh/promote, tweet links)
+- [x] **DASH-01–04**: Referral dashboard
 
-- [ ] **EML-01**: Admin can send broadcast with `{name}` template var replaced per-recipient with display_name
-- [ ] **EML-02**: Admin can send broadcast with `{referral_code}` template var replaced per-recipient
-- [ ] **EML-03**: Template vars work in both `body_html` and `body_text` fields
-- [ ] **EML-04**: Admin can send broadcast with `{referral_link}` template var (full URL: `solvr.dev/join?ref=CODE`)
+## v1.2 Requirements
 
-### Referral System
+Requirements for guides page redesign. Prompt-first philosophy, OpenClaw guide, Solvr skill integration.
 
-- [ ] **REF-01**: Each user has a unique referral code (8-char alphanumeric, stored in users table)
-- [ ] **REF-02**: Referral codes are auto-generated for all existing users via migration/backfill
-- [ ] **REF-03**: New users signing up via `/join?ref=CODE` are tracked in a `referrals` table
-- [ ] **REF-04**: API endpoint `GET /v1/users/me/referral` returns user's code and referral count
-- [ ] **REF-05**: Authenticated user can see their referral code on the frontend
+### Content Transformation
 
-### Landing Pages
+- [ ] **CONT-01**: Existing guide code examples (curl, pseudocode) are replaced with natural language prompts that humans write for agents
+- [ ] **CONT-02**: Each guide balances both audiences — prompt examples for humans, API references still accessible
+- [ ] **CONT-03**: Existing look & feel preserved (layout, typography, design system, difficulty badges)
 
-- [ ] **PAGE-01**: `/join?ref=CODE` page passes ref param to registration API and attributes signup
-- [ ] **PAGE-02**: `/zh/promote` page shows Chinese-language promotion guide with share links
-- [ ] **PAGE-03**: Frontend generates pre-filled tweet link with user's referral URL
+### OpenClaw Guide
 
-### Referral Dashboard
+- [ ] **CLAW-01**: OpenClaw guide section replaces Solvr Etiquette as 4th guide card
+- [ ] **CLAW-02**: Guide explains proactive-amcp and IPFS architecture
+- [ ] **CLAW-03**: Guide covers the 4-layer gotcha pattern (gateway override, OAuth override) with the "search solvr first" workflow
+- [ ] **CLAW-04**: Guide includes real example prompt: search Solvr for gotcha post → only work after finding it → restart gateway → verify OAuth tokens across all layers
 
-- [ ] **DASH-01**: Authenticated user can view their referral dashboard at `/referrals`
-- [ ] **DASH-02**: Dashboard shows referral code with copy button
-- [ ] **DASH-03**: Dashboard shows count of successful referrals
-- [ ] **DASH-04**: Dashboard shows share links (X/Twitter, copy URL)
+### Solvr Skill Integration
 
-## v2 Requirements
+- [ ] **SKILL-01**: "Search Before You Solve" guide is updated to show the Solvr skill workflow (skill.md) instead of pseudocode
+- [ ] **SKILL-02**: Fresh agent onboarding example shown — how to install and use the Solvr skill from zero
+- [ ] **SKILL-03**: At least one complete real-world example prompt demonstrating the full search → find → act cycle
+
+### Tests
+
+- [ ] **TEST-01**: Updated test suite covers new guide structure (4 guides, OpenClaw replaces Etiquette)
+- [ ] **TEST-02**: Tests verify prompt examples are present (not curl commands)
+
+## Future Requirements
 
 Deferred to future release.
 
@@ -54,38 +59,34 @@ Deferred to future release.
 
 | Feature | Reason |
 |---------|--------|
-| SolvrClaw product | Separate project, promised as future reward |
-| Reward fulfillment automation | Track referrals now, fulfill manually when 1K hit |
-| Referral leaderboard page | Existing leaderboard infra exists, extend later |
-| Email unsubscribe/preferences | Admin-only broadcasts, not needed yet |
-| Referral link analytics (click tracking) | Simple attribution is enough for v1.1 |
+| Backend API changes | This is a frontend content-only redesign |
+| New page routes | Redesign happens on existing /docs/guides route |
+| Etiquette content preservation | Etiquette guide is being replaced, not relocated |
+| OpenClaw product documentation | This is a usage example, not full docs |
+| Internationalization | English-only for v1.2 |
 
 ## Traceability
 
 | Requirement | Phase | Phase Name | Status |
 |-------------|-------|------------|--------|
-| EML-01 | Phase 7 | Email Personalization | Pending |
-| EML-02 | Phase 7 | Email Personalization | Pending |
-| EML-03 | Phase 7 | Email Personalization | Pending |
-| EML-04 | Phase 7 | Email Personalization | Pending |
-| REF-01 | Phase 6 | Referral Codes + DB Foundation | Pending |
-| REF-02 | Phase 6 | Referral Codes + DB Foundation | Pending |
-| REF-03 | Phase 8 | Referral Tracking + Join Flow | Pending |
-| REF-04 | Phase 6 | Referral Codes + DB Foundation | Pending |
-| REF-05 | Phase 9 | Frontend — Dashboard + Pages | Pending |
-| PAGE-01 | Phase 8 | Referral Tracking + Join Flow | Pending |
-| PAGE-02 | Phase 9 | Frontend — Dashboard + Pages | Pending |
-| PAGE-03 | Phase 9 | Frontend — Dashboard + Pages | Pending |
-| DASH-01 | Phase 9 | Frontend — Dashboard + Pages | Pending |
-| DASH-02 | Phase 9 | Frontend — Dashboard + Pages | Pending |
-| DASH-03 | Phase 9 | Frontend — Dashboard + Pages | Pending |
-| DASH-04 | Phase 9 | Frontend — Dashboard + Pages | Pending |
+| CONT-01 | — | — | Pending |
+| CONT-02 | — | — | Pending |
+| CONT-03 | — | — | Pending |
+| CLAW-01 | — | — | Pending |
+| CLAW-02 | — | — | Pending |
+| CLAW-03 | — | — | Pending |
+| CLAW-04 | — | — | Pending |
+| SKILL-01 | — | — | Pending |
+| SKILL-02 | — | — | Pending |
+| SKILL-03 | — | — | Pending |
+| TEST-01 | — | — | Pending |
+| TEST-02 | — | — | Pending |
 
 **Coverage:**
-- v1.1 requirements: 16 total
-- Mapped to phases: 16
-- Unmapped: 0
+- v1.2 requirements: 12 total
+- Mapped to phases: 0
+- Unmapped: 12 ⚠️
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after roadmap creation (all 16 requirements mapped to phases 6–9)*
+*Last updated: 2026-03-19 after milestone v1.2 requirements definition*

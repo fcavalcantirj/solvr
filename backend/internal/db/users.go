@@ -555,16 +555,16 @@ func (r *UserRepository) GetAggregateStats(ctx context.Context) (int, error) {
 	return total, nil
 }
 
-// ListActiveEmails returns email info for all non-deleted users.
+// ListActiveEmails returns email info for all non-deleted, non-unsubscribed users.
 // Used by the admin email broadcast to get the recipient list.
 // Selects id, email, display_name, referral_code — no SELECT *.
-// COALESCE handles any NULL referral_code values for users created before Phase 6 migration.
-// Filters: deleted_at IS NULL (excludes soft-deleted users).
+// Filters: deleted_at IS NULL, email_unsubscribed_at IS NULL.
 func (r *UserRepository) ListActiveEmails(ctx context.Context) ([]models.EmailRecipient, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, email, display_name, COALESCE(referral_code, '')
 		FROM users
 		WHERE deleted_at IS NULL
+		AND email_unsubscribed_at IS NULL
 		ORDER BY created_at ASC
 	`)
 	if err != nil {
@@ -589,4 +589,16 @@ func (r *UserRepository) ListActiveEmails(ctx context.Context) ([]models.EmailRe
 		recipients = []models.EmailRecipient{}
 	}
 	return recipients, nil
+}
+
+// UnsubscribeByEmail sets email_unsubscribed_at on the user with the given email.
+// Idempotent — calling again on an already-unsubscribed user is a no-op.
+func (r *UserRepository) UnsubscribeByEmail(ctx context.Context, email string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE users
+		SET email_unsubscribed_at = NOW()
+		WHERE email = $1
+		AND email_unsubscribed_at IS NULL
+	`, email)
+	return err
 }

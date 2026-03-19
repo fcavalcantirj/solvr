@@ -579,6 +579,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// GET /v1/posts/:id/views - get view count (no auth required)
 		r.Get("/posts/{id}/views", viewsHandler.GetViewCount)
 
+		// Email unsubscribe — public endpoint, HMAC-signed token validates identity
+		if pool != nil {
+			unsubHandler := handlers.NewUnsubscribeHandler(db.NewUserRepository(pool), jwtSecret)
+			r.Get("/email/unsubscribe", unsubHandler.Unsubscribe)
+		}
+
 		// Feed endpoints (per SPEC.md Part 5.6 and FIX-004)
 		// GET /v1/feed - recent activity (no auth required)
 		r.Get("/feed", feedHandler.Feed)

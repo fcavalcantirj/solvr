@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,15 +43,17 @@ func (m *mockEmailSender) Send(ctx context.Context, to, subject, htmlBody, textB
 
 // mockEmailBroadcastRepo tracks CreateLog and UpdateStatusAndCounts calls.
 type mockEmailBroadcastRepo struct {
-	createLogCalled bool
-	createLogInput  *models.EmailBroadcast
-	updateCalled    bool
-	updateID        string
-	updateStatus    string
-	updateSent      int
-	updateFailed    int
-	listResult      []models.EmailBroadcast
-	listErr         error
+	createLogCalled      bool
+	createLogInput       *models.EmailBroadcast
+	updateCalled         bool
+	updateID             string
+	updateStatus         string
+	updateSent           int
+	updateFailed         int
+	listResult           []models.EmailBroadcast
+	listErr              error
+	recentBroadcast      *models.EmailBroadcast // returned by HasRecentBroadcast
+	recentBroadcastErr   error
 }
 
 func (m *mockEmailBroadcastRepo) CreateLog(ctx context.Context, broadcast *models.EmailBroadcast) (*models.EmailBroadcast, error) {
@@ -74,6 +77,10 @@ func (m *mockEmailBroadcastRepo) UpdateStatusAndCounts(ctx context.Context, id s
 
 func (m *mockEmailBroadcastRepo) List(ctx context.Context) ([]models.EmailBroadcast, error) {
 	return m.listResult, m.listErr
+}
+
+func (m *mockEmailBroadcastRepo) HasRecentBroadcast(ctx context.Context, subject string, window time.Duration) (*models.EmailBroadcast, error) {
+	return m.recentBroadcast, m.recentBroadcastErr
 }
 
 // mockUserEmailRepo returns a fixed list of recipients.
@@ -732,5 +739,100 @@ func TestBroadcastEmail_DryRunShowsSubstitutedPreview(t *testing.T) {
 		if bytes.Contains([]byte(previewText), []byte(token)) {
 			t.Errorf("preview.body_text should NOT contain raw token %q, got: %s", token, previewText)
 		}
+	}
+}
+
+// TestBroadcastEmail_Deduplication_BlocksDuplicate tests that a broadcast
+// with the same subject as a recent completed broadcast is blocked.
+func TestBroadcastEmail_Deduplication_BlocksDuplicate(t *testing.T) {
+	os.Setenv("ADMIN_API_KEY", "test-admin-key")
+	defer os.Unsetenv("ADMIN_API_KEY")
+
+	sender := &mockEmailSender{failOnIdx: -1}
+	broadcastRepo := &mockEmailBroadcastRepo{
+		recentBroadcast: &models.EmailBroadcast{
+			ID:              "prev-broadcast-id",
+			Subject:         "Newsletter",
+			TotalRecipients: 315,
+			SentCount:       315,
+			Status:          "completed",
+			StartedAt:       time.Now().Add(-30 * time.Minute),
+		},
+	}
+	userRepo := &mockUserEmailRepo{
+		recipients: []models.EmailRecipient{
+			{ID: "u1", Email: "alice@example.com", DisplayName: "Alice"},
+		},
+	}
+
+	handler := NewAdminHandler(nil)
+	handler.SetEmailSender(sender)
+	handler.SetEmailBroadcastRepo(broadcastRepo)
+	handler.SetUserEmailRepo(userRepo)
+
+	body := `{"subject":"Newsletter","body_html":"<p>Hello</p>","dry_run":false}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/email/broadcast", strings.NewReader(body))
+	req.Header.Set("X-Admin-API-Key", "test-admin-key")
+	rr := httptest.NewRecorder()
+
+	handler.BroadcastEmail(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Errorf("expected 409 Conflict, got %d", rr.Code)
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(rr.Body).Decode(&resp)
+	if resp["error"] != "DUPLICATE_BROADCAST" {
+		t.Errorf("expected DUPLICATE_BROADCAST error, got %v", resp["error"])
+	}
+
+	// No emails should be sent
+	if len(sender.calls) != 0 {
+		t.Errorf("expected 0 email sends, got %d", len(sender.calls))
+	}
+}
+
+// TestBroadcastEmail_Deduplication_ForceOverride tests that force=true bypasses dedup.
+func TestBroadcastEmail_Deduplication_ForceOverride(t *testing.T) {
+	os.Setenv("ADMIN_API_KEY", "test-admin-key")
+	defer os.Unsetenv("ADMIN_API_KEY")
+
+	sender := &mockEmailSender{failOnIdx: -1}
+	broadcastRepo := &mockEmailBroadcastRepo{
+		recentBroadcast: &models.EmailBroadcast{
+			ID:              "prev-broadcast-id",
+			Subject:         "Newsletter",
+			TotalRecipients: 315,
+			SentCount:       315,
+			Status:          "completed",
+			StartedAt:       time.Now().Add(-30 * time.Minute),
+		},
+	}
+	userRepo := &mockUserEmailRepo{
+		recipients: []models.EmailRecipient{
+			{ID: "u1", Email: "alice@example.com", DisplayName: "Alice"},
+		},
+	}
+
+	handler := NewAdminHandler(nil)
+	handler.SetEmailSender(sender)
+	handler.SetEmailBroadcastRepo(broadcastRepo)
+	handler.SetUserEmailRepo(userRepo)
+
+	body := `{"subject":"Newsletter","body_html":"<p>Hello</p>","dry_run":false,"force":true}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/email/broadcast", strings.NewReader(body))
+	req.Header.Set("X-Admin-API-Key", "test-admin-key")
+	rr := httptest.NewRecorder()
+
+	handler.BroadcastEmail(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200 OK with force=true, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// Email SHOULD be sent with force=true
+	if len(sender.calls) != 1 {
+		t.Errorf("expected 1 email send with force=true, got %d", len(sender.calls))
 	}
 }

@@ -4,6 +4,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"regexp"
@@ -33,6 +34,7 @@ type EmailBroadcastRepo interface {
 	CreateLog(ctx context.Context, broadcast *models.EmailBroadcast) (*models.EmailBroadcast, error)
 	UpdateStatusAndCounts(ctx context.Context, id string, status string, sentCount, failedCount int, completedAt *time.Time) error
 	List(ctx context.Context) ([]models.EmailBroadcast, error)
+	HasRecentBroadcast(ctx context.Context, subject string, window time.Duration) (*models.EmailBroadcast, error)
 }
 
 // UserEmailRepo provides user email listing for broadcasts.
@@ -87,7 +89,8 @@ type broadcastRequest struct {
 	BodyHTML string `json:"body_html"`
 	BodyText string `json:"body_text"`
 	DryRun   bool   `json:"dry_run"`
-	To       string `json:"to"` // optional: single email address (skips broadcast, sends to one user)
+	Force    bool   `json:"force"` // skip deduplication check
+	To       string `json:"to"`    // optional: single email address (skips broadcast, sends to one user)
 }
 
 // BroadcastEmail handles POST /admin/email/broadcast
@@ -168,6 +171,21 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 			"preview":    preview,
 		})
 		return
+	}
+
+	// Deduplication: check if same subject was sent in last 24h (unless force=true or single recipient)
+	if !req.Force && req.To == "" && h.emailBroadcastRepo != nil {
+		recent, err := h.emailBroadcastRepo.HasRecentBroadcast(r.Context(), req.Subject, 24*time.Hour)
+		if err == nil && recent != nil {
+			writeAdminJSON(w, http.StatusConflict, map[string]interface{}{
+				"error":              "DUPLICATE_BROADCAST",
+				"message":            fmt.Sprintf("A broadcast with this subject was already sent %d/%d recipients. Use force=true to send anyway.", recent.SentCount, recent.TotalRecipients),
+				"previous_broadcast": recent.ID,
+				"previous_sent":      recent.SentCount,
+				"previous_started":   recent.StartedAt,
+			})
+			return
+		}
 	}
 
 	// Live broadcast: create log, send emails, update log

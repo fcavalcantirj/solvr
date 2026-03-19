@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Guides Redesign
 status: milestone_complete
-last_updated: "2026-03-19T17:50:00.000Z"
+last_updated: "2026-03-19T20:07:00.000Z"
 progress:
   total_phases: 3
   completed_phases: 3
@@ -28,3 +28,9 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 - 1022 frontend tests passing
 - 12/12 v1.2 requirements satisfied
 - API docs now verified against actual Go handlers
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260319-nr0 | Smooth scroll + infinite carousel for guides page | 2026-03-19 | 38b3cd3 | [260319-nr0](./quick/260319-nr0-smooth-scroll-infinite-carousel-for-guid/) |

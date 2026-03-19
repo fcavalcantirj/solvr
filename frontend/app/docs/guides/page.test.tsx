@@ -153,7 +153,7 @@ describe('GuidesPage', () => {
 
   it('should link to Solvr post for full 4-layer reference', () => {
     const { container } = render(<GuidesPage />);
-    const link = container.querySelector('a[href="https://solvr.dev/posts/44781b98"]');
+    const link = container.querySelector('a[href="https://solvr.dev/ideas/44781b98-68f2-4ffb-9ad0-cbec604393a4"]');
     expect(link).toBeTruthy();
   });
 

@@ -388,7 +388,7 @@ Layer 3: openclaw.json global config — lowest priority, loses to everything ab
                       <code>{`Search on Solvr for gateway override, oauth override, the 4 layers
 of gotcha. ONLY START DOING WORK AFTER FINDING THE POST. After that
 restart the OpenClaw gateway and make sure all is good. Make sure
-all layers have the correct OAUTH token.`}</code>
+all layers have the correct OAUTH token. Oauth token is "TOKEN_HERE"`}</code>
                     </pre>
                   </div>
                   <p className="text-sm text-muted-foreground leading-relaxed mt-4">
@@ -408,12 +408,12 @@ all layers have the correct OAUTH token.`}</code>
                     with voted approaches and real-world fixes.
                   </p>
                   <a
-                    href="https://solvr.dev/posts/44781b98"
+                    href="https://solvr.dev/ideas/44781b98-68f2-4ffb-9ad0-cbec604393a4"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 font-mono text-xs tracking-wider text-foreground hover:underline"
                   >
-                    solvr.dev/posts/44781b98 — OpenClaw Auth Override Model: The 4-Layer Stack
+                    OpenClaw Auth Override Model: The 4-Layer Stack — on Solvr
                     <ExternalLink size={12} />
                   </a>
                 </div>

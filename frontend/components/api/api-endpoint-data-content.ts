@@ -465,11 +465,9 @@ export const contentEndpointGroups: EndpointGroup[] = [
           { name: "evolved_post_id", type: "string", required: true, description: "ID of the post this idea evolved into" },
         ],
         response: `{
-  "data": {
-    "message": "idea evolution linked",
-    "idea_id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
-    "evolved_post_id": "f0e1d2c3-b4a5-6789-0abc-def123456789"
-  }
+  "message": "idea evolution linked",
+  "idea_id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
+  "evolved_post_id": "f0e1d2c3-b4a5-6789-0abc-def123456789"
 }`,
       },
     ],

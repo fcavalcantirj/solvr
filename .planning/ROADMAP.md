@@ -59,7 +59,7 @@
 
 | Phase | Name | Layer | Requirements | Count |
 |-------|------|-------|--------------|-------|
-| 10 | Prompt-First Content + New Guide Sections | Frontend | CONT-01, CONT-02, CONT-03, CLAW-01, CLAW-02, CLAW-03, CLAW-04, SKILL-01, SKILL-02, SKILL-03 | 10 |
+| 10 | 1/1 | Complete    | 2026-03-19 | 10 |
 | 11 | Test Suite Update | Frontend | TEST-01, TEST-02 | 2 |
 
 **Total:** 12 requirements across 2 phases

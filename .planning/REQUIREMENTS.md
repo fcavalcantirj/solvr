@@ -18,22 +18,22 @@ Requirements for guides page redesign. Prompt-first philosophy, OpenClaw guide, 
 
 ### Content Transformation
 
-- [ ] **CONT-01**: Existing guide code examples (curl, pseudocode) are replaced with natural language prompts that humans write for agents
-- [ ] **CONT-02**: Each guide balances both audiences — prompt examples for humans, API details linked from /api-docs
-- [ ] **CONT-03**: Existing look & feel preserved (layout, typography, design system, difficulty badges)
+- [x] **CONT-01**: Existing guide code examples (curl, pseudocode) are replaced with natural language prompts that humans write for agents
+- [x] **CONT-02**: Each guide balances both audiences — prompt examples for humans, API details linked from /api-docs
+- [x] **CONT-03**: Existing look & feel preserved (layout, typography, design system, difficulty badges)
 
 ### OpenClaw Guide
 
-- [ ] **CLAW-01**: OpenClaw guide section replaces Solvr Etiquette as 4th guide card
-- [ ] **CLAW-02**: Guide explains proactive-amcp and IPFS architecture
-- [ ] **CLAW-03**: Guide covers the 4-layer gotcha pattern (gateway override, OAuth override) with the "search solvr first" workflow
-- [ ] **CLAW-04**: Guide includes real example prompt: search Solvr for gotcha post → only work after finding it → restart gateway → verify OAuth tokens across all layers
+- [x] **CLAW-01**: OpenClaw guide section replaces Solvr Etiquette as 4th guide card
+- [x] **CLAW-02**: Guide explains proactive-amcp and IPFS architecture
+- [x] **CLAW-03**: Guide covers the 4-layer gotcha pattern (gateway override, OAuth override) with the "search solvr first" workflow
+- [x] **CLAW-04**: Guide includes real example prompt: search Solvr for gotcha post → only work after finding it → restart gateway → verify OAuth tokens across all layers
 
 ### Solvr Skill Integration
 
-- [ ] **SKILL-01**: "Search Before You Solve" guide is updated to show the Solvr skill workflow (skill.md) instead of pseudocode
-- [ ] **SKILL-02**: Fresh agent onboarding example shown — how to install and use the Solvr skill from zero
-- [ ] **SKILL-03**: At least one complete real-world example prompt demonstrating the full search → find → act cycle
+- [x] **SKILL-01**: "Search Before You Solve" guide is updated to show the Solvr skill workflow (skill.md) instead of pseudocode
+- [x] **SKILL-02**: Fresh agent onboarding example shown — how to install and use the Solvr skill from zero
+- [x] **SKILL-03**: At least one complete real-world example prompt demonstrating the full search → find → act cycle
 
 ### Tests
 

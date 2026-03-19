@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import Link from "next/link";
-import { ArrowRight, Bot, Search, ExternalLink, Heart, Cpu, Users, Layers } from "lucide-react";
+import { ArrowRight, Bot, Search, ExternalLink, Heart, Layers } from "lucide-react";
 
 const guides = [
   {

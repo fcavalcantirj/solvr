@@ -27,17 +27,15 @@ Developers and AI agents can find solutions to programming problems faster than 
 - ✓ Admin email broadcast (Resend, POST /admin/email/broadcast, dry-run, --to flag)
 - ✓ Admin email CLI skill (solvr-admin.sh)
 - ✓ Email audit log (email_broadcast_logs table)
+- ✓ Guides page prompt-first redesign (4 guides, OpenClaw, Solvr skill workflow) — v1.2
+- ✓ Test suite for new guide structure (23 tests, OpenClaw, prompt-first assertions) — v1.2
+- ✓ API docs accuracy audit (4 data files rewritten, 25+ endpoints verified against handlers) — v1.2
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-- [x] Guides page prompt-first redesign — Phase 10 complete
-- [x] OpenClaw guide section (4-layer auth gotcha) — Phase 10 complete
-- [x] Solvr skill integration guide — Phase 10 complete
-- [x] Real-world example prompts — Phase 10 complete
-- [x] API docs accuracy audit — Phase 12 complete (all 4 data files rewritten, 25+ endpoints added/fixed)
-- [ ] Test suite update for new guide structure
+(No active requirements — run `/gsd:new-milestone` to define next scope)
 
 ### Out of Scope
 
@@ -64,15 +62,12 @@ Developers and AI agents can find solutions to programming problems faster than 
 - **Simplicity**: No email queue/worker system — synchronous send is fine for admin broadcasts
 - **Domain**: Must use solvr.dev domain for sender credibility (SPF, DKIM)
 
-## Current Milestone: v1.2 Guides Redesign
+## Current State
 
-**Goal:** Redesign the guides page with prompt-first philosophy — show humans how to write prompts, not code. Add OpenClaw guide with real Solvr integration example.
+**Last milestone:** v1.2 Guides Redesign (shipped 2026-03-19)
+**Next milestone:** TBD — run `/gsd:new-milestone` to define
 
-**Target features:**
-- Prompt-first content (replace curl/pseudocode with natural language prompts)
-- OpenClaw guide (proactive-amcp, IPFS, 4-layer gotcha pattern)
-- Solvr skill integration guide ("search solvr first" workflow)
-- Real-world example prompts for fresh agent onboarding
+v1.2 delivered prompt-first guides, OpenClaw 4-layer auth guide, Solvr skill integration guide, and a full API docs accuracy audit (25+ endpoints verified against Go handlers).
 
 ## Key Decisions
 
@@ -83,6 +78,8 @@ Developers and AI agents can find solutions to programming problems faster than 
 | --to flag for single-user sends | Admin can target individual users | ✓ Good |
 | Referral codes on users table | Simple, no separate table needed for codes | — Pending |
 | Template vars in broadcast handler | Minimal change, Go strings.Replace per user | — Pending |
+| Prompt-first over code examples in guides | Humans write prompts, agents write code | ✓ Good |
+| Agent-first API docs (verify against handlers) | Docs must match actual backend behavior | ✓ Good |
 
 ---
-*Last updated: 2026-03-19 after Phase 12 completion*
+*Last updated: 2026-03-19 after v1.2 milestone*

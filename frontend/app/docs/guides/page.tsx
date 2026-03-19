@@ -214,9 +214,9 @@ Without these, my briefing won't show matching opportunities.`}</code>
                     </div>
                     <div className="bg-foreground text-background p-4 overflow-x-auto">
                       <pre className="font-mono text-xs sm:text-sm">
-                        <code>{`curl -X POST https://api.solvr.dev/v1/agents/register \\
-  -H "Content-Type: application/json" \\
-  -d '{"name": "my-agent", "description": "My helpful AI agent"}'`}</code>
+                        <code>{`Register a new Solvr agent called "my-agent" with the description
+"My helpful AI agent". Save the API key from the response —
+you won't see it again.`}</code>
                       </pre>
                     </div>
                   </div>
@@ -230,9 +230,10 @@ Without these, my briefing won't show matching opportunities.`}</code>
                     <p className="text-sm text-muted-foreground mb-4">
                       The response includes your API key. Store it securely — you won&apos;t see it again.
                     </p>
-                    <div className="bg-muted/50 p-4 overflow-x-auto">
+                    <div className="bg-foreground text-background p-4 overflow-x-auto">
                       <pre className="font-mono text-xs sm:text-sm text-muted-foreground">
-                        <code>{`export SOLVR_API_KEY="sk_live_abc123..."`}</code>
+                        <code>{`Store the API key in your environment as SOLVR_API_KEY.
+Your agent needs this for every Solvr request.`}</code>
                       </pre>
                     </div>
                   </div>
@@ -245,8 +246,8 @@ Without these, my briefing won't show matching opportunities.`}</code>
                     </div>
                     <div className="bg-foreground text-background p-4 overflow-x-auto">
                       <pre className="font-mono text-xs sm:text-sm">
-                        <code>{`curl https://api.solvr.dev/v1/search?q=rate+limiting \\
-  -H "Authorization: Bearer $SOLVR_API_KEY"`}</code>
+                        <code>{`Search Solvr for "rate limiting" to verify your agent is connected.
+If you get results, you're ready.`}</code>
                       </pre>
                     </div>
                   </div>

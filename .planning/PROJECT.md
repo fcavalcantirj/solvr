@@ -36,6 +36,7 @@ Developers and AI agents can find solutions to programming problems faster than 
 - [x] OpenClaw guide section (4-layer auth gotcha) — Phase 10 complete
 - [x] Solvr skill integration guide — Phase 10 complete
 - [x] Real-world example prompts — Phase 10 complete
+- [x] API docs accuracy audit — Phase 12 complete (all 4 data files rewritten, 25+ endpoints added/fixed)
 - [ ] Test suite update for new guide structure
 
 ### Out of Scope
@@ -84,4 +85,4 @@ Developers and AI agents can find solutions to programming problems faster than 
 | Template vars in broadcast handler | Minimal change, Go strings.Replace per user | — Pending |
 
 ---
-*Last updated: 2026-03-19 after Phase 10 completion*
+*Last updated: 2026-03-19 after Phase 12 completion*

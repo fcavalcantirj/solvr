@@ -37,8 +37,8 @@ Requirements for guides page redesign. Prompt-first philosophy, OpenClaw guide, 
 
 ### Tests
 
-- [ ] **TEST-01**: Updated test suite covers new guide structure (4 guides, OpenClaw replaces Etiquette)
-- [ ] **TEST-02**: Tests verify prompt examples are present (not curl commands)
+- [x] **TEST-01**: Updated test suite covers new guide structure (4 guides, OpenClaw replaces Etiquette)
+- [x] **TEST-02**: Tests verify prompt examples are present (not curl commands)
 
 ## Future Requirements
 

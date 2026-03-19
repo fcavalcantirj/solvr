@@ -19,7 +19,7 @@ Requirements for guides page redesign. Prompt-first philosophy, OpenClaw guide, 
 ### Content Transformation
 
 - [ ] **CONT-01**: Existing guide code examples (curl, pseudocode) are replaced with natural language prompts that humans write for agents
-- [ ] **CONT-02**: Each guide balances both audiences — prompt examples for humans, API references still accessible
+- [ ] **CONT-02**: Each guide balances both audiences — prompt examples for humans, API details linked from /api-docs
 - [ ] **CONT-03**: Existing look & feel preserved (layout, typography, design system, difficulty badges)
 
 ### OpenClaw Guide

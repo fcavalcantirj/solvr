@@ -36,3 +36,6 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 - v1.2 roadmap: 2 phases (10-11), 12 requirements, all frontend-only
 - Phase 10 has 10 requirements (all content work in a single phase due to tight coupling)
 - Phase 11 has 2 requirements (test suite update, depends on Phase 10)
+
+### Roadmap Evolution
+- Phase 12 added: API Docs Accuracy Audit — fix all discrepancies between /api-docs frontend and backend (missing 25+ endpoints, wrong search description, missing params, incorrect response examples)

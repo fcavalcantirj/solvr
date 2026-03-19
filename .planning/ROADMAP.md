@@ -93,6 +93,16 @@ Coverage: **12/12 (100%)**
 
 - Phase 10 must precede Phase 11 — tests verify the content changes from Phase 10
 
+### Phase 12: API Docs Accuracy Audit — fix all discrepancies between /api-docs frontend and backend
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 11
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 12 to break down)
+
 ---
 *Roadmap created: 2026-03-19*
 *Milestone: v1.2 Guides Redesign*

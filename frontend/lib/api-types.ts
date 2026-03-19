@@ -159,6 +159,7 @@ export interface SearchParams {
   q: string;
   type?: 'problem' | 'question' | 'idea' | 'all';
   status?: string;
+  tags?: string;
   page?: number;
   per_page?: number;
 }

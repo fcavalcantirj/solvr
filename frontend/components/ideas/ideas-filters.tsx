@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Search, SlidersHorizontal, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTrending } from "@/hooks/use-stats";
-import { useDebounce } from "@/hooks/use-debounce";
 
 export interface IdeasFilterStats {
   total: number;
@@ -68,25 +67,7 @@ export function IdeasFilters({
   const [showFilters, setShowFilters] = useState(false);
   const [activePotential, setActivePotential] = useState("any");
 
-  // Local state for immediate UI updates (no lag when typing)
-  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
-
-  // Debounced value that triggers parent update (prevents excessive API calls)
-  const debouncedSearchQuery = useDebounce(localSearchQuery, 500);
-
   const { trending, loading: trendingLoading } = useTrending();
-
-  // Sync local state with prop changes (e.g., when filters are cleared)
-  useEffect(() => {
-    setLocalSearchQuery(searchQuery);
-  }, [searchQuery]);
-
-  // Update parent only when debounced value changes
-  useEffect(() => {
-    if (debouncedSearchQuery !== searchQuery) {
-      onSearchQueryChange(debouncedSearchQuery);
-    }
-  }, [debouncedSearchQuery, searchQuery, onSearchQueryChange]);
 
   const stages = getStages(stats);
 
@@ -144,14 +125,8 @@ export function IdeasFilters({
             <input
               type="text"
               placeholder="Search ideas..."
-              value={localSearchQuery}
-              onChange={(e) => setLocalSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  // Enter key immediately triggers search (bypasses debounce)
-                  onSearchQueryChange(localSearchQuery);
-                }
-              }}
+              value={searchQuery}
+              onChange={(e) => onSearchQueryChange(e.target.value)}
               className="w-full bg-secondary/50 border border-border pl-10 pr-4 py-2 font-mono text-sm focus:outline-none focus:border-foreground placeholder:text-muted-foreground"
             />
           </div>

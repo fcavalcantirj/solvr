@@ -151,6 +151,7 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 			p.id,
 			p.type,
 			p.title,
+			p.description,
 			ts_headline('english', p.description, to_tsquery('english', $1),
 				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=30, MaxFragments=1') as snippet,
 			p.tags,
@@ -166,6 +167,9 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 			ts_rank(to_tsvector('english', p.title || ' ' || p.description), to_tsquery('english', $1)) as score,
 			(p.upvotes - p.downvotes) as vote_score,
 			COALESCE((SELECT COUNT(*) FROM answers WHERE question_id = p.id AND deleted_at IS NULL), 0) as answers_count,
+			COALESCE((SELECT COUNT(*) FROM approaches WHERE problem_id = p.id AND deleted_at IS NULL), 0) as approaches_count,
+			COALESCE((SELECT COUNT(*) FROM comments WHERE target_id = p.id::text AND target_type = 'post' AND deleted_at IS NULL), 0) as comments_count,
+			COALESCE(p.view_count, 0) as view_count,
 			p.created_at,
 			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at
 		FROM posts p
@@ -236,6 +240,7 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 			p.id,
 			p.type,
 			p.title,
+			p.description,
 			ts_headline('english', p.description, to_tsquery('english', $4),
 				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=30, MaxFragments=1') as snippet,
 			p.tags,
@@ -251,6 +256,9 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 			hs.rrf_score as score,
 			(p.upvotes - p.downvotes) as vote_score,
 			COALESCE((SELECT COUNT(*) FROM answers WHERE question_id = p.id AND deleted_at IS NULL), 0) as answers_count,
+			COALESCE((SELECT COUNT(*) FROM approaches WHERE problem_id = p.id AND deleted_at IS NULL), 0) as approaches_count,
+			COALESCE((SELECT COUNT(*) FROM comments WHERE target_id = p.id::text AND target_type = 'post' AND deleted_at IS NULL), 0) as comments_count,
+			COALESCE(p.view_count, 0) as view_count,
 			p.created_at,
 			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at
 		FROM hybrid_search($1, $2, $3, 2.0, 1.0, 60) hs
@@ -303,6 +311,7 @@ func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string) ([
 			'answer' as type,
 			ts_headline('english', a.content, to_tsquery('english', $1),
 				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=30, MaxFragments=1') as title,
+			a.content as description,
 			ts_headline('english', a.content, to_tsquery('english', $1),
 				'StartSel=<mark>, StopSel=</mark>, MaxWords=80, MinWords=40, MaxFragments=1') as snippet,
 			COALESCE(p.tags, ARRAY[]::text[]) as tags,
@@ -318,6 +327,9 @@ func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string) ([
 			ts_rank(to_tsvector('english', a.content), to_tsquery('english', $1)) as score,
 			(a.upvotes - a.downvotes) as vote_score,
 			0 as answers_count,
+			0 as approaches_count,
+			0 as comments_count,
+			0 as view_count,
 			a.created_at,
 			NULL::timestamptz as solved_at
 		FROM answers a
@@ -361,6 +373,7 @@ func (r *SearchRepository) searchApproaches(ctx context.Context, tsquery string)
 				COALESCE(a.angle, '') || ' ' || COALESCE(a.method, ''),
 				to_tsquery('english', $1),
 				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20, MaxFragments=1') as title,
+			COALESCE(a.angle, '') || ' ' || COALESCE(a.method, '') as description,
 			ts_headline('english',
 				COALESCE(a.angle, '') || ' ' || COALESCE(a.method, '') || ' ' ||
 				COALESCE(a.outcome, '') || ' ' || COALESCE(a.solution, ''),
@@ -382,6 +395,9 @@ func (r *SearchRepository) searchApproaches(ctx context.Context, tsquery string)
 				to_tsquery('english', $1)) as score,
 			0 as vote_score,
 			0 as answers_count,
+			0 as approaches_count,
+			0 as comments_count,
+			0 as view_count,
 			a.created_at,
 			NULL::timestamptz as solved_at
 		FROM approaches a
@@ -541,6 +557,7 @@ func scanSearchResults(rows pgx.Rows) ([]models.SearchResult, error) {
 			&r.ID,
 			&r.Type,
 			&r.Title,
+			&r.Description,
 			&r.Snippet,
 			&r.Tags,
 			&r.Status,
@@ -550,6 +567,9 @@ func scanSearchResults(rows pgx.Rows) ([]models.SearchResult, error) {
 			&r.Score,
 			&r.VoteScore,
 			&r.AnswersCount,
+			&r.ApproachesCount,
+			&r.CommentsCount,
+			&r.ViewCount,
 			&r.CreatedAt,
 			&r.SolvedAt,
 		)

@@ -45,7 +45,7 @@ export function ProblemsList({ status, tags, sort, searchQuery }: ProblemsListPr
 
   const options: UseProblemsOptions = { status, tags, sort };
   const problemsResult = useProblems(options);
-  const searchResult = useSearch(searchQuery || '', 'problem');
+  const searchResult = useSearch(searchQuery || '', 'problem', { status, tags, sort });
 
   // Select appropriate result based on whether we're searching
   const { problems, loading, error, hasMore, loadMore } = isSearching

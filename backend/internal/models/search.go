@@ -6,39 +6,47 @@ import "time"
 // SearchResult represents a single search result item.
 // This struct is used by the search repository and handler.
 type SearchResult struct {
-	ID           string    `json:"id"`
-	Type         string    `json:"type"`
-	Title        string    `json:"title"`
-	Snippet      string    `json:"snippet"`
-	Tags         []string  `json:"tags"`
-	Status       string    `json:"status"`
-	AuthorID     string    `json:"-"` // Internal field
-	AuthorType   string    `json:"-"` // Internal field
-	AuthorName   string    `json:"-"` // Internal field
-	Score        float64   `json:"score"`
-	VoteScore    int       `json:"vote_score"`
-	AnswersCount int       `json:"answers_count"`
-	CreatedAt    time.Time `json:"created_at"`
-	SolvedAt     *time.Time `json:"solved_at,omitempty"`
-	Source       string    `json:"source"` // "post", "answer", or "approach"
+	ID               string    `json:"id"`
+	Type             string    `json:"type"`
+	Title            string    `json:"title"`
+	Description      string    `json:"description"`
+	Snippet          string    `json:"snippet"`
+	Tags             []string  `json:"tags"`
+	Status           string    `json:"status"`
+	AuthorID         string    `json:"-"` // Internal field
+	AuthorType       string    `json:"-"` // Internal field
+	AuthorName       string    `json:"-"` // Internal field
+	Score            float64   `json:"score"`
+	VoteScore        int       `json:"vote_score"`
+	AnswersCount     int       `json:"answers_count"`
+	ApproachesCount  int       `json:"approaches_count"`
+	CommentsCount    int       `json:"comments_count"`
+	ViewCount        int       `json:"view_count"`
+	CreatedAt        time.Time `json:"created_at"`
+	SolvedAt         *time.Time `json:"solved_at,omitempty"`
+	Source           string    `json:"source"` // "post", "answer", or "approach"
 }
 
 // SearchResultResponse is the JSON response format for a search result.
 // It includes the author as a nested object per SPEC.md Part 5.5.
 type SearchResultResponse struct {
-	ID           string        `json:"id"`
-	Type         string        `json:"type"`
-	Title        string        `json:"title"`
-	Snippet      string        `json:"snippet"`
-	Tags         []string      `json:"tags"`
-	Status       string        `json:"status"`
-	Author       SearchAuthor  `json:"author"`
-	Score        float64       `json:"score"`
-	VoteScore    int           `json:"vote_score"`
-	AnswersCount int           `json:"answers_count"`
-	CreatedAt    time.Time     `json:"created_at"`
-	SolvedAt     *time.Time    `json:"solved_at,omitempty"`
-	Source       string        `json:"source"` // "post", "answer", or "approach"
+	ID              string        `json:"id"`
+	Type            string        `json:"type"`
+	Title           string        `json:"title"`
+	Description     string        `json:"description"`
+	Snippet         string        `json:"snippet"`
+	Tags            []string      `json:"tags"`
+	Status          string        `json:"status"`
+	Author          SearchAuthor  `json:"author"`
+	Score           float64       `json:"score"`
+	VoteScore       int           `json:"vote_score"`
+	AnswersCount    int           `json:"answers_count"`
+	ApproachesCount int           `json:"approaches_count"`
+	CommentsCount   int           `json:"comments_count"`
+	ViewCount       int           `json:"view_count"`
+	CreatedAt       time.Time     `json:"created_at"`
+	SolvedAt        *time.Time    `json:"solved_at,omitempty"`
+	Source          string        `json:"source"` // "post", "answer", or "approach"
 }
 
 // SearchAuthor represents the author info in search results.
@@ -66,22 +74,26 @@ type SearchOptions struct {
 // ToResponse converts a SearchResult to a SearchResultResponse.
 func (r *SearchResult) ToResponse() SearchResultResponse {
 	return SearchResultResponse{
-		ID:           r.ID,
-		Type:         r.Type,
-		Title:        r.Title,
-		Snippet:      r.Snippet,
-		Tags:         r.Tags,
-		Status:       r.Status,
+		ID:              r.ID,
+		Type:            r.Type,
+		Title:           r.Title,
+		Description:     r.Description,
+		Snippet:         r.Snippet,
+		Tags:            r.Tags,
+		Status:          r.Status,
 		Author: SearchAuthor{
 			ID:          r.AuthorID,
 			Type:        r.AuthorType,
 			DisplayName: r.AuthorName,
 		},
-		Score:        r.Score,
-		VoteScore:    r.VoteScore,
-		AnswersCount: r.AnswersCount,
-		CreatedAt:    r.CreatedAt,
-		SolvedAt:     r.SolvedAt,
-		Source:       r.Source,
+		Score:           r.Score,
+		VoteScore:       r.VoteScore,
+		AnswersCount:    r.AnswersCount,
+		ApproachesCount: r.ApproachesCount,
+		CommentsCount:   r.CommentsCount,
+		ViewCount:       r.ViewCount,
+		CreatedAt:       r.CreatedAt,
+		SolvedAt:        r.SolvedAt,
+		Source:          r.Source,
 	}
 }

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
-import { useDebounce } from "@/hooks/use-debounce";
 
 const statuses = [
   { key: "all", label: "ALL", hasAnswer: undefined, status: undefined },
@@ -55,12 +54,6 @@ export function QuestionsFilters({
 }: QuestionsFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
 
-  // Local state for immediate UI updates (no lag when typing)
-  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
-
-  // Debounced value that triggers parent update (prevents excessive API calls)
-  const debouncedSearchQuery = useDebounce(localSearchQuery, 500);
-
   // Find active status key from status and hasAnswer values
   const activeStatusKey = statuses.find((s) => {
     // Match if both status and hasAnswer match (or both are undefined)
@@ -68,18 +61,6 @@ export function QuestionsFilters({
     const hasAnswerMatches = s.hasAnswer === hasAnswer || (s.hasAnswer === undefined && hasAnswer === undefined);
     return statusMatches && hasAnswerMatches;
   })?.key || "all";
-
-  // Sync local state with prop changes (e.g., when filters are cleared)
-  useEffect(() => {
-    setLocalSearchQuery(searchQuery);
-  }, [searchQuery]);
-
-  // Update parent only when debounced value changes
-  useEffect(() => {
-    if (debouncedSearchQuery !== searchQuery) {
-      onSearchQueryChange(debouncedSearchQuery);
-    }
-  }, [debouncedSearchQuery, searchQuery, onSearchQueryChange]);
 
   const handleStatusChange = (key: string) => {
     const selected = statuses.find((s) => s.key === key);
@@ -134,14 +115,8 @@ export function QuestionsFilters({
               <input
                 type="text"
                 placeholder="Search questions..."
-                value={localSearchQuery}
-                onChange={(e) => setLocalSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    // Enter key immediately triggers search (bypasses debounce)
-                    onSearchQueryChange(localSearchQuery);
-                  }
-                }}
+                value={searchQuery}
+                onChange={(e) => onSearchQueryChange(e.target.value)}
                 className="w-full bg-background border border-border pl-11 pr-4 py-2.5 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors"
               />
             </div>

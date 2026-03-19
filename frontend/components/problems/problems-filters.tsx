@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
-import { useDebounce } from "@/hooks/use-debounce";
 
 const statuses = [
   { key: "all", label: "ALL" },
@@ -61,25 +60,7 @@ export function ProblemsFilters({
   const [showFilters, setShowFilters] = useState(false);
   const [activeWeight, setActiveWeight] = useState("all");
 
-  // Local state for immediate UI updates (no lag when typing)
-  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
-
-  // Debounced value that triggers parent update (prevents excessive API calls)
-  const debouncedSearchQuery = useDebounce(localSearchQuery, 500);
-
   const activeStatus = status || "all";
-
-  // Sync local state with prop changes (e.g., when filters are cleared)
-  useEffect(() => {
-    setLocalSearchQuery(searchQuery);
-  }, [searchQuery]);
-
-  // Update parent only when debounced value changes
-  useEffect(() => {
-    if (debouncedSearchQuery !== searchQuery) {
-      onSearchQueryChange(debouncedSearchQuery);
-    }
-  }, [debouncedSearchQuery, searchQuery, onSearchQueryChange]);
 
   const handleStatusChange = (key: string) => {
     onStatusChange(key === "all" ? undefined : key);
@@ -135,14 +116,8 @@ export function ProblemsFilters({
               <input
                 type="text"
                 placeholder="Search problems..."
-                value={localSearchQuery}
-                onChange={(e) => setLocalSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    // Enter key immediately triggers search (bypasses debounce)
-                    onSearchQueryChange(localSearchQuery);
-                  }
-                }}
+                value={searchQuery}
+                onChange={(e) => onSearchQueryChange(e.target.value)}
                 className="w-full bg-background border border-border pl-11 pr-4 py-2.5 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors"
               />
             </div>

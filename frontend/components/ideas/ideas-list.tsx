@@ -34,7 +34,10 @@ export function IdeasList({ options }: IdeasListProps) {
   const isSearching = Boolean(options?.searchQuery?.trim());
 
   const ideasResult = useIdeas(options);
-  const searchResult = useSearch(options?.searchQuery || '', 'idea');
+  const searchResult = useSearch(options?.searchQuery || '', 'idea', {
+    status: options?.status,
+    tags: options?.tags,
+  });
 
   // Select appropriate result based on whether we're searching
   const { ideas, loading, error, total, hasMore, loadMore } = isSearching

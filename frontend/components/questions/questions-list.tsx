@@ -26,7 +26,7 @@ export function QuestionsList({ status, hasAnswer, tags, sort, searchQuery }: Qu
 
   const options: UseQuestionsOptions = { status, hasAnswer, tags, sort };
   const questionsResult = useQuestions(options);
-  const searchResult = useSearch(searchQuery || '', 'question');
+  const searchResult = useSearch(searchQuery || '', 'question', { status, tags, sort });
 
   // Select appropriate result based on whether we're searching
   const { questions, loading, error, hasMore, loadMore } = isSearching

@@ -170,6 +170,7 @@ class SolvrAPI {
     searchParams.set('q', params.q);
     if (params.type && params.type !== 'all') searchParams.set('type', params.type);
     if (params.status) searchParams.set('status', params.status);
+    if (params.tags) searchParams.set('tags', params.tags);
     if (params.page) searchParams.set('page', params.page.toString());
     if (params.per_page) searchParams.set('per_page', params.per_page.toString());
 

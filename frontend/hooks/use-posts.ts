@@ -165,8 +165,14 @@ export interface UseSearchResult {
   loadMore: () => void;
 }
 
+export interface UseSearchOptions {
+  status?: string;
+  tags?: string[];
+  sort?: string;
+}
+
 // Hook for search with pagination
-export function useSearch(query: string, type?: PostType | 'all'): UseSearchResult {
+export function useSearch(query: string, type?: PostType | 'all', options?: UseSearchOptions): UseSearchResult {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,6 +180,9 @@ export function useSearch(query: string, type?: PostType | 'all'): UseSearchResu
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
+
+  // Stabilize options to prevent infinite re-renders
+  const optionsKey = JSON.stringify(options ?? {});
 
   const searchFn = useCallback(async (pageNum: number, append: boolean = false) => {
     if (!query.trim()) {
@@ -188,7 +197,15 @@ export function useSearch(query: string, type?: PostType | 'all'): UseSearchResu
     try {
       setLoading(true);
       setError(null);
-      const response = await api.search({ q: query, type, page: pageNum, per_page: 20 });
+      const stableOptions: UseSearchOptions = JSON.parse(optionsKey);
+      const response = await api.search({
+        q: query,
+        type,
+        status: stableOptions.status,
+        tags: stableOptions.tags ? stableOptions.tags.join(',') : undefined,
+        page: pageNum,
+        per_page: 20,
+      });
 
       // Defensive: handle null/undefined data
       if (!response || !response.data) {
@@ -201,7 +218,14 @@ export function useSearch(query: string, type?: PostType | 'all'): UseSearchResu
         return;
       }
 
-      const transformedPosts = response.data.map(post => transformPost(post as APIPost));
+      const transformedPosts = response.data.map(post => {
+        const feedPost = transformPost(post as APIPost);
+        // Search API returns snippet with highlighted <mark> tags; use it over truncated description
+        if (post.snippet) {
+          feedPost.snippet = post.snippet;
+        }
+        return feedPost;
+      });
 
       if (append) {
         setPosts(prev => [...prev, ...transformedPosts]);
@@ -222,7 +246,7 @@ export function useSearch(query: string, type?: PostType | 'all'): UseSearchResu
     } finally {
       setLoading(false);
     }
-  }, [query, type]);
+  }, [query, type, optionsKey]);
 
   // Debounce initial search and query/type changes (reset to page 1)
   useEffect(() => {
@@ -237,7 +261,7 @@ export function useSearch(query: string, type?: PostType | 'all'): UseSearchResu
 
     const timer = setTimeout(() => searchFn(1), 300);
     return () => clearTimeout(timer);
-  }, [query, type, searchFn]);
+  }, [query, type, optionsKey, searchFn]);
 
   const refetch = useCallback(() => {
     searchFn(1);

@@ -338,7 +338,7 @@ describe('ProblemsList - Search Integration', () => {
     render(<ProblemsList searchQuery="test search" />);
 
     // Both hooks are called (React rules), but useSearch result is used
-    expect(useSearch).toHaveBeenCalledWith('test search', 'problem');
+    expect(useSearch).toHaveBeenCalledWith('test search', 'problem', { status: undefined, tags: undefined, sort: undefined });
     expect(screen.getByText('Search Result')).toBeInTheDocument();
   });
 
@@ -370,7 +370,7 @@ describe('ProblemsList - Search Integration', () => {
 
     // Both hooks are called (React rules), but useProblems result is used
     expect(useProblems).toHaveBeenCalled();
-    expect(useSearch).toHaveBeenCalledWith('', 'problem');
+    expect(useSearch).toHaveBeenCalledWith('', 'problem', { status: undefined, tags: undefined, sort: undefined });
     expect(screen.getByText('Test Problem')).toBeInTheDocument();
   });
 
@@ -402,7 +402,7 @@ describe('ProblemsList - Search Integration', () => {
 
     // Both hooks are called (React rules), but useProblems result is used
     expect(useProblems).toHaveBeenCalled();
-    expect(useSearch).toHaveBeenCalledWith('', 'problem');
+    expect(useSearch).toHaveBeenCalledWith('', 'problem', { status: undefined, tags: undefined, sort: undefined });
     expect(screen.getByText('Test Problem')).toBeInTheDocument();
   });
 

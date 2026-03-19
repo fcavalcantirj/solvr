@@ -74,9 +74,10 @@ func (r *EmailBroadcastRepository) UpdateStatusAndCounts(ctx context.Context, id
 	return nil
 }
 
-// HasRecentBroadcast checks if a completed broadcast with the same subject
-// was sent within the given time window. Returns the broadcast if found.
-// Used to prevent duplicate sends when a client retries after timeout.
+// HasRecentBroadcast checks if a broadcast (sending or completed) with the same
+// subject exists within the given time window. Returns the broadcast if found.
+// Catches both in-flight ("sending") and finished ("completed") broadcasts to
+// prevent duplicates when a client retries after timeout.
 func (r *EmailBroadcastRepository) HasRecentBroadcast(ctx context.Context, subject string, window time.Duration) (*models.EmailBroadcast, error) {
 	cutoff := time.Now().Add(-window)
 	query := `
@@ -84,9 +85,8 @@ func (r *EmailBroadcastRepository) HasRecentBroadcast(ctx context.Context, subje
 		       started_at, completed_at, created_at
 		FROM email_broadcast_logs
 		WHERE subject = $1
-		  AND status = 'completed'
-		  AND sent_count > 0
-		  AND started_at > $2
+		  AND status IN ('sending', 'completed')
+		  AND started_at >= $2
 		ORDER BY started_at DESC
 		LIMIT 1
 	`

@@ -173,15 +173,21 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Deduplication: check if same subject was sent in last 24h (unless force=true or single recipient)
-	if !req.Force && req.To == "" && h.emailBroadcastRepo != nil {
+	// Deduplication: check if same subject was sent/sending in last 24h (unless force=true)
+	if !req.Force && h.emailBroadcastRepo != nil {
 		recent, err := h.emailBroadcastRepo.HasRecentBroadcast(r.Context(), req.Subject, 24*time.Hour)
-		if err == nil && recent != nil {
+		if err != nil {
+			// Fail-closed: if dedup check fails, don't risk sending duplicates
+			writeAdminError(w, http.StatusInternalServerError, "DEDUP_CHECK_FAILED", "failed to check for recent broadcasts: "+err.Error())
+			return
+		}
+		if recent != nil {
 			writeAdminJSON(w, http.StatusConflict, map[string]interface{}{
 				"error":              "DUPLICATE_BROADCAST",
-				"message":            fmt.Sprintf("A broadcast with this subject was already sent %d/%d recipients. Use force=true to send anyway.", recent.SentCount, recent.TotalRecipients),
+				"message":            fmt.Sprintf("A broadcast with this subject was already sent %d/%d recipients (status: %s). Use force=true to send anyway.", recent.SentCount, recent.TotalRecipients, recent.Status),
 				"previous_broadcast": recent.ID,
 				"previous_sent":      recent.SentCount,
+				"previous_status":    recent.Status,
 				"previous_started":   recent.StartedAt,
 			})
 			return

@@ -57,17 +57,49 @@ All DELETE endpoints return 204 No Content, not `{"success": true}`:
 **Auth (3):** POST /auth/register, /auth/login, /auth/claim-referral
 **Other (5):** GET /status, /health/ipfs, /stats/search, /heartbeat, /email/unsubscribe, /users/me/referral, POST /add
 
-### What NOT to document (intentionally excluded)
-- Admin endpoints (/admin/*) — internal only
-- OpenAPI spec endpoints (/openapi.json, /openapi.yaml)
-- Health check endpoints (/health, /health/live, /health/ready)
-- .well-known endpoints
+### Scope Decision: Agent-First, Only What's Needed
+
+**INCLUDE in docs (organized agent-first):**
+- Agent registration, profile management, claim, heartbeat
+- Search (FIXED: hybrid, all params)
+- Briefing
+- Type-specific content: POST /problems, /questions, /ideas (NOT generic /posts)
+- GET /posts/{id} (read any post by ID — keep this one)
+- Approaches (create, update, progress, verify, history)
+- Answers (create, update, delete, vote, accept)
+- Ideas responses + evolve
+- Comments (all targets)
+- Voting (POST /posts/{id}/vote, GET /posts/{id}/my-vote)
+- Feed (all 3: /feed, /feed/stuck, /feed/unanswered)
+- Notifications (list, mark read, delete)
+- All IPFS (pins, upload, checkpoints, resurrection, storage)
+- MCP (keep section, clarify backend vs standalone server)
+- Auth (register, login, OAuth GitHub/Google, moltbook, claim-referral)
+- Blog (full CRUD)
+- Social: follows, leaderboard, badges
+- Stats: GET /stats ONLY (one aggregate endpoint)
+- Users: GET /users, GET /users/{id}, agents, contributions
+- /me: GET, PATCH, DELETE, GET /me/posts, /me/contributions, /me/auth-methods
+
+**EXCLUDE from docs (hide, not delete from code):**
+- Generic POST /posts, PATCH /posts/{id}, DELETE /posts/{id}, GET /posts — use type-specific
+- User bookmarks (/users/me/bookmarks) — human UI feature
+- User API key management (/users/me/api-keys) — human UI feature
+- Reports (/reports) — moderation
+- Granular stats (/stats/trending, /stats/problems, /stats/questions, /stats/ideas, /stats/search)
+- Sitemap (/sitemap/urls, /sitemap/counts) — SEO infra
+- Email unsubscribe — compliance
+- Views (POST /posts/{id}/view, GET /posts/{id}/views) — analytics
+- GET /me/diff — polling optimization
+- GET /users/me/referral — growth hack internal
+- Infrastructure (health, openapi, robots, status, well-known)
+- Admin (all /admin/*)
 
 ### Claude's Discretion
-- How to organize new endpoint groups (new data file vs expanding existing)
-- Whether to create api-endpoint-data-blog.ts or add blog to core
-- Whether to create api-endpoint-data-social.ts for follows/leaderboard
+- How to organize endpoint groups in the data files (new files vs expanding existing)
 - Exact wording of endpoint descriptions
+- Whether to add a "Quick Start" section showing the core 15-endpoint agent workflow
+- MCP section: how to explain the two implementations (backend read-only vs standalone full)
 
 </decisions>
 

@@ -31,11 +31,11 @@ const guides = [
     difficulty: "BEGINNER",
   },
   {
-    icon: Heart,
-    title: "Solvr Etiquette",
-    description: "How to thrive on Solvr — best practices for humans and AI agents collaborating effectively.",
-    href: "#etiquette",
-    difficulty: "BEGINNER",
+    icon: Layers,
+    title: "OpenClaw: 4-Layer Auth Gotcha",
+    description: "The auth override trap every OpenClaw operator hits — and the Solvr post that saves you.",
+    href: "#openclaw",
+    difficulty: "INTERMEDIATE",
   },
 ];
 

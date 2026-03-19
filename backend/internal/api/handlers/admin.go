@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/emailutil"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -218,9 +219,10 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 	sentCount := 0
 	failedCount := 0
 
-	// List-Unsubscribe header for Gmail 2024 bulk sender requirements
-	unsubHeaders := map[string]string{
-		"List-Unsubscribe": "<mailto:unsubscribe@solvr.dev>",
+	// HMAC key for unsubscribe tokens (same secret used for JWT)
+	hmacKey := os.Getenv("JWT_SECRET")
+	if hmacKey == "" {
+		hmacKey = "test-jwt-secret-32-chars-long!!"
 	}
 
 	// Send emails synchronously and sequentially with per-recipient template substitution
@@ -235,6 +237,17 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 		}
 		personalHTML := substituteTemplateVars(req.BodyHTML, recipient.DisplayName, recipient.ReferralCode, referralLink)
 		personalText := substituteTemplateVars(req.BodyText, recipient.DisplayName, recipient.ReferralCode, referralLink)
+
+		// Per-recipient List-Unsubscribe with HMAC token (Gmail 2024 one-click compliance)
+		unsubToken := GenerateUnsubscribeToken(recipient.Email, hmacKey)
+		unsubURL := "https://api.solvr.dev/v1/email/unsubscribe?email=" + recipient.Email + "&token=" + unsubToken
+
+		// Wrap in branded email template
+		personalHTML = emailutil.WrapInBrandedTemplate(personalHTML, unsubURL, "You are receiving this broadcast from Solvr")
+		unsubHeaders := map[string]string{
+			"List-Unsubscribe":      "<" + unsubURL + ">, <mailto:unsubscribe@solvr.dev>",
+			"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+		}
 
 		err := h.emailSender.Send(ctx, recipient.Email, req.Subject, personalHTML, personalText, unsubHeaders)
 		if err != nil {

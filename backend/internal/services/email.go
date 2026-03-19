@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/emailutil"
 )
 
 // EmailConfig holds SMTP configuration settings.
@@ -188,33 +190,22 @@ type EmailTemplate struct {
 func WelcomeEmailTemplate(displayName, username string) *EmailTemplate {
 	subject := "Welcome to Solvr!"
 
-	html := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Welcome to Solvr</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <h1 style="color: #333;">Welcome to Solvr, %s!</h1>
-    <p>You've joined the knowledge base for developers and AI agents.</p>
-    <p>Your username: <strong>%s</strong></p>
-    <h2 style="color: #666; font-size: 18px;">What you can do:</h2>
-    <ul>
-        <li><strong>Ask Questions</strong> — Get help from humans and AI agents</li>
-        <li><strong>Share Problems</strong> — Collaborate on challenges</li>
-        <li><strong>Post Ideas</strong> — Start discussions and explorations</li>
-        <li><strong>Register AI Agents</strong> — Connect your AI agents to the platform</li>
-    </ul>
-    <p style="margin-top: 30px;">
-        <a href="https://solvr.dev/dashboard" style="background-color: #0066cc; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Go to Dashboard</a>
-    </p>
-    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-    <p style="color: #999; font-size: 12px;">
-        You're receiving this because you signed up for Solvr.<br>
-        Questions? Reply to this email or visit our docs.
-    </p>
-</body>
-</html>`, displayName, username)
+	content := fmt.Sprintf(`
+                            <h1 style="color: #1a1a1a; font-size: 24px; font-weight: 600; margin: 0 0 16px 0;">Welcome to Solvr, %s!</h1>
+                            <p style="color: #3f3f46; font-size: 14px; line-height: 1.6; margin: 0 0 12px 0;">You've joined the knowledge base for developers and AI agents.</p>
+                            <p style="color: #3f3f46; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">Your username: <strong>%s</strong></p>
+                            <h2 style="color: #3f3f46; font-size: 16px; font-weight: 600; margin: 0 0 12px 0;">What you can do:</h2>
+                            <ul style="color: #3f3f46; font-size: 14px; line-height: 1.8; margin: 0 0 24px 0; padding-left: 20px;">
+                                <li><strong>Ask Questions</strong> — Get help from humans and AI agents</li>
+                                <li><strong>Share Problems</strong> — Collaborate on challenges</li>
+                                <li><strong>Post Ideas</strong> — Start discussions and explorations</li>
+                                <li><strong>Register AI Agents</strong> — Connect your AI agents to the platform</li>
+                            </ul>
+                            <p style="margin: 24px 0 0 0;">
+                                <a href="https://solvr.dev/dashboard" style="display: inline-block; background-color: #0a0a0a; color: #ffffff; padding: 12px 24px; text-decoration: none; font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; font-weight: 600;">Go to Dashboard</a>
+                            </p>`, displayName, username)
+
+	html := emailutil.WrapInBrandedTemplate(content, "https://solvr.dev/settings/notifications", "You signed up for Solvr")
 
 	text := fmt.Sprintf(`Welcome to Solvr, %s!
 
@@ -232,7 +223,8 @@ Get started: https://solvr.dev/dashboard
 
 ---
 You're receiving this because you signed up for Solvr.
-Questions? Reply to this email or visit our docs.
+
+Manage notifications: https://solvr.dev/settings/notifications
 `, displayName, username)
 
 	return &EmailTemplate{
@@ -247,28 +239,17 @@ Questions? Reply to this email or visit our docs.
 func NewAnswerEmailTemplate(recipientName, questionTitle, questionURL string) *EmailTemplate {
 	subject := "New answer to your question"
 
-	html := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>New Answer</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <h1 style="color: #333; font-size: 24px;">Hi %s,</h1>
-    <p>Someone answered your question:</p>
-    <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-        <strong style="color: #333;">%s</strong>
-    </div>
-    <p style="margin-top: 20px;">
-        <a href="%s" style="background-color: #0066cc; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">View Answer</a>
-    </p>
-    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-    <p style="color: #999; font-size: 12px;">
-        You're receiving this because you asked a question on Solvr.<br>
-        <a href="https://solvr.dev/settings/notifications" style="color: #999;">Manage notification settings</a>
-    </p>
-</body>
-</html>`, recipientName, questionTitle, questionURL)
+	content := fmt.Sprintf(`
+                            <h1 style="color: #1a1a1a; font-size: 24px; font-weight: 600; margin: 0 0 16px 0;">Hi %s,</h1>
+                            <p style="color: #3f3f46; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">Someone answered your question:</p>
+                            <div style="background: #f4f4f5; padding: 16px; margin: 0 0 20px 0; border-left: 3px solid #0a0a0a;">
+                                <strong style="color: #1a1a1a; font-size: 14px;">%s</strong>
+                            </div>
+                            <p style="margin: 24px 0 0 0;">
+                                <a href="%s" style="display: inline-block; background-color: #0a0a0a; color: #ffffff; padding: 12px 24px; text-decoration: none; font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; font-weight: 600;">View Answer</a>
+                            </p>`, recipientName, questionTitle, questionURL)
+
+	html := emailutil.WrapInBrandedTemplate(content, "https://solvr.dev/settings/notifications", "You asked a question on Solvr")
 
 	text := fmt.Sprintf(`Hi %s,
 
@@ -280,6 +261,7 @@ View the answer: %s
 
 ---
 You're receiving this because you asked a question on Solvr.
+
 Manage notifications: https://solvr.dev/settings/notifications
 `, recipientName, questionTitle, questionURL)
 
@@ -307,28 +289,17 @@ func ApproachUpdateEmailTemplate(recipientName, problemTitle, newStatus, problem
 
 	subject := fmt.Sprintf("Approach %s on your problem", newStatus)
 
-	html := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Approach Update</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <h1 style="color: #333; font-size: 24px;">Hi %s,</h1>
-    <p>An approach to your problem %s</p>
-    <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-        <strong style="color: #333;">%s</strong>
-    </div>
-    <p style="margin-top: 20px;">
-        <a href="%s" style="background-color: #0066cc; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">View Problem</a>
-    </p>
-    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-    <p style="color: #999; font-size: 12px;">
-        You're receiving this because you posted a problem on Solvr.<br>
-        <a href="https://solvr.dev/settings/notifications" style="color: #999;">Manage notification settings</a>
-    </p>
-</body>
-</html>`, recipientName, statusMessage, problemTitle, problemURL)
+	content := fmt.Sprintf(`
+                            <h1 style="color: #1a1a1a; font-size: 24px; font-weight: 600; margin: 0 0 16px 0;">Hi %s,</h1>
+                            <p style="color: #3f3f46; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">An approach to your problem %s</p>
+                            <div style="background: #f4f4f5; padding: 16px; margin: 0 0 20px 0; border-left: 3px solid #0a0a0a;">
+                                <strong style="color: #1a1a1a; font-size: 14px;">%s</strong>
+                            </div>
+                            <p style="margin: 24px 0 0 0;">
+                                <a href="%s" style="display: inline-block; background-color: #0a0a0a; color: #ffffff; padding: 12px 24px; text-decoration: none; font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; font-weight: 600;">View Problem</a>
+                            </p>`, recipientName, statusMessage, problemTitle, problemURL)
+
+	html := emailutil.WrapInBrandedTemplate(content, "https://solvr.dev/settings/notifications", "You posted a problem on Solvr")
 
 	var statusText string
 	switch newStatus {
@@ -352,6 +323,7 @@ View the problem: %s
 
 ---
 You're receiving this because you posted a problem on Solvr.
+
 Manage notifications: https://solvr.dev/settings/notifications
 `, recipientName, statusText, problemTitle, problemURL)
 
@@ -366,29 +338,18 @@ Manage notifications: https://solvr.dev/settings/notifications
 func AcceptedAnswerEmailTemplate(recipientName, questionTitle, answerURL string) *EmailTemplate {
 	subject := "Your answer was accepted!"
 
-	html := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Answer Accepted</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <h1 style="color: #333; font-size: 24px;">Congratulations, %s! 🎉</h1>
-    <p>Your answer was accepted on:</p>
-    <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-        <strong style="color: #333;">%s</strong>
-    </div>
-    <p>Thank you for helping the community!</p>
-    <p style="margin-top: 20px;">
-        <a href="%s" style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">View Your Answer</a>
-    </p>
-    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-    <p style="color: #999; font-size: 12px;">
-        You're receiving this because you answered a question on Solvr.<br>
-        <a href="https://solvr.dev/settings/notifications" style="color: #999;">Manage notification settings</a>
-    </p>
-</body>
-</html>`, recipientName, questionTitle, answerURL)
+	content := fmt.Sprintf(`
+                            <h1 style="color: #1a1a1a; font-size: 24px; font-weight: 600; margin: 0 0 16px 0;">Congratulations, %s!</h1>
+                            <p style="color: #3f3f46; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">Your answer was accepted on:</p>
+                            <div style="background: #f4f4f5; padding: 16px; margin: 0 0 16px 0; border-left: 3px solid #0a0a0a;">
+                                <strong style="color: #1a1a1a; font-size: 14px;">%s</strong>
+                            </div>
+                            <p style="color: #3f3f46; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">Thank you for helping the community!</p>
+                            <p style="margin: 0;">
+                                <a href="%s" style="display: inline-block; background-color: #0a0a0a; color: #ffffff; padding: 12px 24px; text-decoration: none; font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; font-weight: 600;">View Your Answer</a>
+                            </p>`, recipientName, questionTitle, answerURL)
+
+	html := emailutil.WrapInBrandedTemplate(content, "https://solvr.dev/settings/notifications", "You answered a question on Solvr")
 
 	text := fmt.Sprintf(`Congratulations, %s!
 
@@ -402,6 +363,7 @@ View your answer: %s
 
 ---
 You're receiving this because you answered a question on Solvr.
+
 Manage notifications: https://solvr.dev/settings/notifications
 `, recipientName, questionTitle, answerURL)
 
@@ -416,29 +378,18 @@ Manage notifications: https://solvr.dev/settings/notifications
 func UpvoteMilestoneEmailTemplate(recipientName, postTitle string, milestone int, postURL string) *EmailTemplate {
 	subject := fmt.Sprintf("Your post reached %d upvotes!", milestone)
 
-	html := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Milestone Reached</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <h1 style="color: #333; font-size: 24px;">🎉 Milestone reached, %s!</h1>
-    <p>Your post has reached <strong style="color: #28a745;">%d upvotes</strong>:</p>
-    <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-        <strong style="color: #333;">%s</strong>
-    </div>
-    <p>Keep up the great work!</p>
-    <p style="margin-top: 20px;">
-        <a href="%s" style="background-color: #0066cc; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">View Post</a>
-    </p>
-    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-    <p style="color: #999; font-size: 12px;">
-        You're receiving this because your content on Solvr reached a milestone.<br>
-        <a href="https://solvr.dev/settings/notifications" style="color: #999;">Manage notification settings</a>
-    </p>
-</body>
-</html>`, recipientName, milestone, postTitle, postURL)
+	content := fmt.Sprintf(`
+                            <h1 style="color: #1a1a1a; font-size: 24px; font-weight: 600; margin: 0 0 16px 0;">Milestone reached, %s!</h1>
+                            <p style="color: #3f3f46; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">Your post has reached <strong style="color: #16a34a;">%d upvotes</strong>:</p>
+                            <div style="background: #f4f4f5; padding: 16px; margin: 0 0 16px 0; border-left: 3px solid #0a0a0a;">
+                                <strong style="color: #1a1a1a; font-size: 14px;">%s</strong>
+                            </div>
+                            <p style="color: #3f3f46; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">Keep up the great work!</p>
+                            <p style="margin: 0;">
+                                <a href="%s" style="display: inline-block; background-color: #0a0a0a; color: #ffffff; padding: 12px 24px; text-decoration: none; font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; font-weight: 600;">View Post</a>
+                            </p>`, recipientName, milestone, postTitle, postURL)
+
+	html := emailutil.WrapInBrandedTemplate(content, "https://solvr.dev/settings/notifications", "Your content on Solvr reached a milestone")
 
 	text := fmt.Sprintf(`Milestone reached, %s!
 
@@ -452,6 +403,7 @@ View your post: %s
 
 ---
 You're receiving this because your content on Solvr reached a milestone.
+
 Manage notifications: https://solvr.dev/settings/notifications
 `, recipientName, milestone, postTitle, postURL)
 

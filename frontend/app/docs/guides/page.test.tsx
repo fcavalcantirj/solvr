@@ -105,42 +105,56 @@ describe('GuidesPage', () => {
     expect(screen.getByText('00 — THE CORE PRINCIPLE')).toBeInTheDocument();
     expect(screen.getByText('01 — QUICKSTART')).toBeInTheDocument();
     expect(screen.getByText('02 — BEST PRACTICE')).toBeInTheDocument();
-    expect(screen.getByText('03 — COMMUNITY')).toBeInTheDocument();
+    expect(screen.getByText('03 — OPENCLAW')).toBeInTheDocument();
   });
 
-  it('should render Solvr Etiquette guide card', () => {
+  it('should render OpenClaw guide card', () => {
     render(<GuidesPage />);
-    const elements = screen.getAllByText('Solvr Etiquette');
+    const elements = screen.getAllByText('OpenClaw: 4-Layer Auth Gotcha');
     expect(elements.length).toBeGreaterThan(0);
   });
 
-  it('should have clickable link for Solvr Etiquette guide', () => {
+  it('should have clickable link for OpenClaw guide', () => {
     render(<GuidesPage />);
-    const elements = screen.getAllByText('Solvr Etiquette');
+    const elements = screen.getAllByText('OpenClaw: 4-Layer Auth Gotcha');
     const link = elements[0].closest('a');
-    expect(link).toHaveAttribute('href', '#etiquette');
+    expect(link).toHaveAttribute('href', '#openclaw');
   });
 
-  it('should render etiquette subsections', () => {
+  it('should render OpenClaw section content', () => {
     render(<GuidesPage />);
-    expect(screen.getByText('HOW TO THRIVE')).toBeInTheDocument();
-    expect(screen.getByText('FOR AI AGENTS')).toBeInTheDocument();
-    expect(screen.getByText('FOR HUMANS')).toBeInTheDocument();
-    expect(screen.getByText('KNOWLEDGE COMPOUNDING')).toBeInTheDocument();
+    expect(screen.getByText('THE 4 LAYERS (HIGHEST PRIORITY FIRST)')).toBeInTheDocument();
+    expect(screen.getByText('THE FIX: SEARCH SOLVR FIRST')).toBeInTheDocument();
+    expect(screen.getByText('FULL REFERENCE ON SOLVR')).toBeInTheDocument();
   });
 
-  it('should render "Help others first" as etiquette item 00', () => {
-    render(<GuidesPage />);
-    expect(screen.getByText('Help others first.')).toBeInTheDocument();
-  });
-
-  it('should document PATCH /v1/agents/me in For AI Agents section', () => {
+  it('should render the 4-layer auth override example prompt', () => {
     const { container } = render(<GuidesPage />);
     const codeBlocks = container.querySelectorAll('code');
-    const patchEndpoint = Array.from(codeBlocks).some(
-      (code) => code.textContent?.includes('PATCH https://api.solvr.dev/v1/agents/me')
+    const hasPrompt = Array.from(codeBlocks).some(
+      (code) => code.textContent?.includes('ONLY START DOING WORK AFTER FINDING THE POST')
     );
-    expect(patchEndpoint).toBe(true);
+    expect(hasPrompt).toBe(true);
+  });
+
+  it('should use prompt-first content instead of curl commands', () => {
+    const { container } = render(<GuidesPage />);
+    const codeBlocks = container.querySelectorAll('code');
+    const hasCurl = Array.from(codeBlocks).some(
+      (code) => code.textContent?.includes('curl')
+    );
+    expect(hasCurl).toBe(false);
+  });
+
+  it('should render Solvr skill install reference', () => {
+    render(<GuidesPage />);
+    expect(screen.getByText('INSTALL THE SOLVR SKILL')).toBeInTheDocument();
+  });
+
+  it('should link to Solvr post for full 4-layer reference', () => {
+    const { container } = render(<GuidesPage />);
+    const link = container.querySelector('a[href="https://solvr.dev/posts/44781b98"]');
+    expect(link).toBeTruthy();
   });
 
   it('should NOT render "Documentation is evolving" placeholder heading', () => {

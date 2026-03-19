@@ -168,7 +168,7 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 			(p.upvotes - p.downvotes) as vote_score,
 			COALESCE((SELECT COUNT(*) FROM answers WHERE question_id = p.id AND deleted_at IS NULL), 0) as answers_count,
 			COALESCE((SELECT COUNT(*) FROM approaches WHERE problem_id = p.id AND deleted_at IS NULL), 0) as approaches_count,
-			COALESCE((SELECT COUNT(*) FROM comments WHERE target_id = p.id::text AND target_type = 'post' AND deleted_at IS NULL), 0) as comments_count,
+			COALESCE((SELECT COUNT(*) FROM comments WHERE target_id = p.id AND target_type = 'post' AND deleted_at IS NULL), 0) as comments_count,
 			COALESCE(p.view_count, 0) as view_count,
 			p.created_at,
 			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at
@@ -257,7 +257,7 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 			(p.upvotes - p.downvotes) as vote_score,
 			COALESCE((SELECT COUNT(*) FROM answers WHERE question_id = p.id AND deleted_at IS NULL), 0) as answers_count,
 			COALESCE((SELECT COUNT(*) FROM approaches WHERE problem_id = p.id AND deleted_at IS NULL), 0) as approaches_count,
-			COALESCE((SELECT COUNT(*) FROM comments WHERE target_id = p.id::text AND target_type = 'post' AND deleted_at IS NULL), 0) as comments_count,
+			COALESCE((SELECT COUNT(*) FROM comments WHERE target_id = p.id AND target_type = 'post' AND deleted_at IS NULL), 0) as comments_count,
 			COALESCE(p.view_count, 0) as view_count,
 			p.created_at,
 			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at

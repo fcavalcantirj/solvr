@@ -69,24 +69,24 @@ Deferred to future release.
 
 | Requirement | Phase | Phase Name | Status |
 |-------------|-------|------------|--------|
-| CONT-01 | — | — | Pending |
-| CONT-02 | — | — | Pending |
-| CONT-03 | — | — | Pending |
-| CLAW-01 | — | — | Pending |
-| CLAW-02 | — | — | Pending |
-| CLAW-03 | — | — | Pending |
-| CLAW-04 | — | — | Pending |
-| SKILL-01 | — | — | Pending |
-| SKILL-02 | — | — | Pending |
-| SKILL-03 | — | — | Pending |
-| TEST-01 | — | — | Pending |
-| TEST-02 | — | — | Pending |
+| CONT-01 | 10 | Prompt-First Content + New Guide Sections | Pending |
+| CONT-02 | 10 | Prompt-First Content + New Guide Sections | Pending |
+| CONT-03 | 10 | Prompt-First Content + New Guide Sections | Pending |
+| CLAW-01 | 10 | Prompt-First Content + New Guide Sections | Pending |
+| CLAW-02 | 10 | Prompt-First Content + New Guide Sections | Pending |
+| CLAW-03 | 10 | Prompt-First Content + New Guide Sections | Pending |
+| CLAW-04 | 10 | Prompt-First Content + New Guide Sections | Pending |
+| SKILL-01 | 10 | Prompt-First Content + New Guide Sections | Pending |
+| SKILL-02 | 10 | Prompt-First Content + New Guide Sections | Pending |
+| SKILL-03 | 10 | Prompt-First Content + New Guide Sections | Pending |
+| TEST-01 | 11 | Test Suite Update | Pending |
+| TEST-02 | 11 | Test Suite Update | Pending |
 
 **Coverage:**
 - v1.2 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-19 after milestone v1.2 requirements definition*
+*Last updated: 2026-03-19 after roadmap v1.2 created (phases 10-11)*

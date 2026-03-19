@@ -1,16 +1,16 @@
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-19 — Milestone v1.2 started
+Phase: 10 — Prompt-First Content + New Guide Sections
+Plan: ROADMAP.md (v1.2, phases 10–11, 12 requirements)
+Status: Not started
+Last activity: 2026-03-19 — Roadmap v1.2 created
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Developers and AI agents can find solutions to programming problems faster than searching the web
-**Current focus:** Guides Redesign
+**Current focus:** Guides Redesign — Phase 10 (content transformation, OpenClaw guide, Solvr skill integration)
 
 ## Accumulated Context
 
@@ -22,3 +22,6 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 - Page uses Tailwind, lucide-react icons, 12-col grid layout (4-col sidebar + 8-col content)
 - Design: monospace labels, dark code blocks, bordered cards, emerald/amber/red difficulty badges
 - No external content files — all guide content is hardcoded inline JSX
+- v1.2 roadmap: 2 phases (10-11), 12 requirements, all frontend-only
+- Phase 10 has 10 requirements (all content work in a single phase due to tight coupling)
+- Phase 11 has 2 requirements (test suite update, depends on Phase 10)

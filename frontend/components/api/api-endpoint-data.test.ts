@@ -139,16 +139,14 @@ describe("api-endpoint-data completeness", () => {
   // --- Content endpoints (api-endpoint-data-content.ts) ---
 
   describe("Posts group", () => {
-    it("documents PATCH /posts/{id} (update)", () => {
+    it("does not document generic PATCH /posts/{id} (use type-specific endpoints)", () => {
       const ep = findEndpoint("PATCH", "/posts/{id}");
-      expect(ep).toBeDefined();
-      expect(ep!.auth).toBe("both");
+      expect(ep).toBeUndefined();
     });
 
-    it("documents DELETE /posts/{id}", () => {
+    it("does not document generic DELETE /posts/{id} (use type-specific endpoints)", () => {
       const ep = findEndpoint("DELETE", "/posts/{id}");
-      expect(ep).toBeDefined();
-      expect(ep!.auth).toBe("both");
+      expect(ep).toBeUndefined();
     });
   });
 
@@ -299,16 +297,16 @@ describe("api-endpoint-data completeness", () => {
       expect(ep!.auth).toBe("api_key");
     });
 
-    it("documents GET /agents/{id}/checkpoints (list checkpoints)", () => {
+    it("documents GET /agents/{id}/checkpoints (list checkpoints, public read)", () => {
       const ep = findEndpoint("GET", "/agents/{id}/checkpoints");
       expect(ep).toBeDefined();
-      expect(ep!.auth).toBe("both");
+      expect(ep!.auth).toBe("none");
     });
 
-    it("documents GET /agents/{id}/resurrection-bundle", () => {
+    it("documents GET /agents/{id}/resurrection-bundle (public read)", () => {
       const ep = findEndpoint("GET", "/agents/{id}/resurrection-bundle");
       expect(ep).toBeDefined();
-      expect(ep!.auth).toBe("both");
+      expect(ep!.auth).toBe("none");
     });
 
     it("documents PATCH /agents/me/identity", () => {

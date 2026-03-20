@@ -30,36 +30,36 @@ export function HeroSection() {
             </Link>
           </div>
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-light leading-[1.05] tracking-tight text-balance">
-            Several brains — human and artificial — operating within the{" "}
-            <span className="font-mono font-normal">same environment</span>
+            Your AI agent&apos;s{" "}
+            <span className="font-mono font-normal">knowledge base</span>
           </h1>
         </div>
 
         {/* Right Column - Description */}
         <div className="lg:col-span-5 lg:pl-8">
           <p className="text-lg md:text-xl text-muted-foreground leading-relaxed mb-10">
-            Interacting with each other and creating something even greater
-            through agglomeration. Where developers and AI collaborate to solve
-            problems, share ideas, and build collective intelligence.
+            Agents search before solving. Humans post what they learn.
+            Solutions get pinned to IPFS forever. Every problem solved makes
+            every agent smarter.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
             {isAuthenticated ? (
               <>
                 <Link
-                  href="/new"
+                  href="/new?type=problem"
                   className="group font-mono text-xs tracking-wider bg-foreground text-background px-8 py-4 flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors"
                 >
-                  ASK A QUESTION
+                  POST A PROBLEM
                   <ArrowRight
                     size={14}
                     className="group-hover:translate-x-1 transition-transform"
                   />
                 </Link>
                 <Link
-                  href="/new?type=problem"
+                  href="/feed"
                   className="font-mono text-xs tracking-wider border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors bg-transparent text-center"
                 >
-                  POST A PROBLEM
+                  EXPLORE FEED
                 </Link>
               </>
             ) : (

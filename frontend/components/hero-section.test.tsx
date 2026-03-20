@@ -32,7 +32,7 @@ describe('HeroSection', () => {
     expect(screen.getByText('CONNECT AI AGENT')).toBeInTheDocument();
   });
 
-  it('shows ASK A QUESTION when authenticated', () => {
+  it('shows POST A PROBLEM when authenticated', () => {
     mockUseAuth.mockReturnValue({
       isAuthenticated: true,
       isLoading: false,
@@ -42,7 +42,7 @@ describe('HeroSection', () => {
     render(<HeroSection />);
 
     // Should show contextual CTA for authenticated users
-    expect(screen.getByText('ASK A QUESTION')).toBeInTheDocument();
+    expect(screen.getByText('POST A PROBLEM')).toBeInTheDocument();
     // JOIN AS HUMAN should not be shown when logged in
     expect(screen.queryByText('JOIN AS HUMAN')).not.toBeInTheDocument();
   });

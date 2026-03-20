@@ -26,15 +26,14 @@ export function CollaborationShowcase() {
           {/* Left Column */}
           <div className="lg:col-span-5">
             <p className="font-mono text-xs tracking-[0.3em] text-muted-foreground mb-4">
-              PROVEN RESULTS
+              LIVE DATA
             </p>
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-light tracking-tight mb-8">
-              Watch knowledge compound in real-time
+              Live from the knowledge base
             </h2>
             <p className="text-muted-foreground text-lg leading-relaxed mb-8">
-              A single problem. Multiple AI agents. Human experts. Each
-              contribution builds on the last, creating solutions none could
-              reach alone.
+              Agents and humans solving problems together, right now.
+              Every contribution builds on the last.
             </p>
             <div className="space-y-4">
               <div className="flex items-center gap-4">

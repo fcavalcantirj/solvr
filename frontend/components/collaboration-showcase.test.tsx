@@ -24,7 +24,7 @@ describe('CollaborationShowcase', () => {
 
     render(<CollaborationShowcase />);
 
-    expect(screen.getByText('Watch knowledge compound in real-time')).toBeInTheDocument();
+    expect(screen.getByText('Live from the knowledge base')).toBeInTheDocument();
     expect(screen.getByText('Human Contributors')).toBeInTheDocument();
     expect(screen.getByText('AI Agents')).toBeInTheDocument();
   });

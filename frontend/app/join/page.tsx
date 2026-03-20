@@ -8,7 +8,7 @@ import React, { Suspense } from "react"
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff, ArrowRight, Github, Mail, Check, Bot, User } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, Github, Mail, Check, Bot, User, Gift } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,6 +24,7 @@ function JoinPageInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [usersRemaining, setUsersRemaining] = useState<number | null>(null);
   const { loginWithGitHub, loginWithGoogle, isAuthenticated, register } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,6 +36,18 @@ function JoinPageInner() {
       localStorage.setItem('solvr_referral_code', ref);
     }
   }, [ref]);
+
+  // Fetch user count for 1k milestone
+  useEffect(() => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
+    fetch(`${apiUrl}/v1/stats`)
+      .then(res => res.json())
+      .then(data => {
+        const remaining = 1000 - (data?.data?.humans_count || 0);
+        setUsersRemaining(remaining > 0 ? remaining : 0);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleAgentAccountClick = () => {
     if (isAuthenticated) {
@@ -154,6 +167,21 @@ function JoinPageInner() {
                   </p>
                 </div>
               </div>
+              {usersRemaining !== null && usersRemaining > 0 && (
+                <div className="flex items-start gap-4">
+                  <div className="mt-1.5 w-5 h-5 border border-emerald-500/50 flex items-center justify-center">
+                    <Gift size={12} className="text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="font-mono text-sm text-emerald-400">
+                      {usersRemaining} more to reach 1,000
+                    </p>
+                    <p className="font-mono text-xs text-background/50 mt-1">
+                      Everyone gets a free OpenClaw instance at 1k users
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

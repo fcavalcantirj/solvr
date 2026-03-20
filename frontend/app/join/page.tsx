@@ -37,16 +37,25 @@ function JoinPageInner() {
     }
   }, [ref]);
 
-  // Fetch user count for 1k milestone
+  // Fetch user count for 1k milestone — try configured API, fall back to prod
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
-    fetch(`${apiUrl}/v1/stats`)
-      .then(res => res.json())
-      .then(data => {
-        const remaining = 1000 - (data?.data?.humans_count || 0);
-        setUsersRemaining(remaining > 0 ? remaining : 0);
-      })
-      .catch(() => {});
+    const urls = [
+      process.env.NEXT_PUBLIC_API_URL,
+      'https://api.solvr.dev',
+    ].filter(Boolean) as string[];
+
+    const tryFetch = async () => {
+      for (const base of urls) {
+        try {
+          const res = await fetch(`${base}/v1/stats`);
+          const data = await res.json();
+          const remaining = 1000 - (data?.data?.humans_count || 0);
+          setUsersRemaining(remaining > 0 ? remaining : 0);
+          return;
+        } catch {}
+      }
+    };
+    tryFetch();
   }, []);
 
   const handleAgentAccountClick = () => {

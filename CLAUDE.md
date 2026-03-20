@@ -334,6 +334,52 @@ curl -X POST https://api.solvr.dev/admin/query \
 
 ---
 
+## Email Broadcasts
+
+Send emails to users via the admin broadcast system. Backend handles branded template wrapping, HMAC unsubscribe links, `List-Unsubscribe` headers, and 150ms rate limiting between sends.
+
+**Skill:** `~/.claude/skills/solvr/scripts/solvr-admin.sh`
+
+**Template variables:** `{name}`, `{referral_code}`, `{referral_link}` — substituted per-recipient by the backend.
+
+```bash
+# Load admin key
+export $(grep ADMIN_API_KEY .env | xargs)
+
+# Preview recipients without sending (dry-run)
+bash ~/.claude/skills/solvr/scripts/solvr-admin.sh email dry-run \
+  --subject "Subject line" \
+  --body-html "<p>Hey {name}, check {referral_link}</p>"
+
+# Send to ALL active users (branded template + unsubscribe added automatically)
+bash ~/.claude/skills/solvr/scripts/solvr-admin.sh email send \
+  --subject "Subject line" \
+  --body-html "<p>Hey {name}, your content here</p>"
+
+# Send to ONE user
+bash ~/.claude/skills/solvr/scripts/solvr-admin.sh email send \
+  --to "user@example.com" \
+  --subject "Subject line" \
+  --body-html "<p>Hey {name}, your content here</p>"
+
+# View past broadcasts
+bash ~/.claude/skills/solvr/scripts/solvr-admin.sh email history
+```
+
+**Segmented sends:** The broadcast endpoint sends to all users or one user (`--to`). For different emails per segment, loop with `--to` per user. See `/tmp/solvr_segmented_send.sh` for a working example that queries user segments from the DB and sends per-segment templates.
+
+**Key files:**
+- **Skill script:** `~/.claude/skills/solvr/scripts/solvr-admin.sh`
+- **Handler:** `backend/internal/api/handlers/admin.go` (`BroadcastEmail`)
+- **Template wrapper:** `backend/internal/emailutil/template.go` (`WrapInBrandedTemplate`)
+- **Unsubscribe:** `backend/internal/api/handlers/unsubscribe.go` (HMAC-signed one-click)
+- **Broadcast log:** `backend/internal/db/email_broadcast.go` (audit trail)
+- **API endpoint:** `POST /admin/email/broadcast` (requires `X-Admin-API-Key`, needs `RESEND_API_KEY` on server)
+
+**Deduplication:** Same subject within 24h is blocked unless `force: true` is set in the JSON payload.
+
+---
+
 ## Deployment Constraints
 
 - Frontend uses `output: 'standalone'` in `next.config.mjs` for Docker deployment

@@ -55,6 +55,8 @@ describe('AgentsList', () => {
       total: 0,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -74,6 +76,8 @@ describe('AgentsList', () => {
       total: 2,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -93,6 +97,8 @@ describe('AgentsList', () => {
       total: 2,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -111,6 +117,8 @@ describe('AgentsList', () => {
       total: 2,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -145,6 +153,8 @@ describe('AgentsList', () => {
       total: 1,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -164,6 +174,8 @@ describe('AgentsList', () => {
       total: 2,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -181,6 +193,8 @@ describe('AgentsList', () => {
       total: 0,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -198,6 +212,8 @@ describe('AgentsList', () => {
       total: 0,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -215,6 +231,8 @@ describe('AgentsList', () => {
       total: 10,
       hasMore: true,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -233,6 +251,8 @@ describe('AgentsList', () => {
       total: 10,
       hasMore: true,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore,
     });
@@ -253,6 +273,8 @@ describe('AgentsList', () => {
       total: 2,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -272,6 +294,8 @@ describe('AgentsList', () => {
       total: 2,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });

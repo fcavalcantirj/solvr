@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -258,6 +259,11 @@ func (r *UserAPIKeyRepository) getUserByKeySHA256(ctx context.Context, keySHA256
 // getUserByKeyBcryptFallback scans all keys without SHA256 and compares via bcrypt.
 // On match, lazy-backfills the SHA256 for future O(1) lookups.
 func (r *UserAPIKeyRepository) getUserByKeyBcryptFallback(ctx context.Context, plainKey, keySHA256 string) (*models.User, *models.UserAPIKey, error) {
+	// Cap the total time spent on bcrypt fallback scanning to prevent CPU spin
+	// on invalid keys that would otherwise compare against every row.
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
 	query := `
 		SELECT k.id, k.user_id, k.name, k.key_hash, k.last_used_at, k.revoked_at, k.created_at, k.updated_at,
 		       u.id, u.username, u.display_name, u.email, u.auth_provider, u.auth_provider_id,
@@ -275,6 +281,11 @@ func (r *UserAPIKeyRepository) getUserByKeyBcryptFallback(ctx context.Context, p
 	defer rows.Close()
 
 	for rows.Next() {
+		if ctx.Err() != nil {
+			rows.Close()
+			return nil, nil, nil
+		}
+
 		key := &models.UserAPIKey{}
 		user := &models.User{}
 

@@ -66,6 +66,8 @@ describe('AgentsSidebar', () => {
       total: 3,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -84,6 +86,8 @@ describe('AgentsSidebar', () => {
       total: 3,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -102,6 +106,8 @@ describe('AgentsSidebar', () => {
       total: 3,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -122,6 +128,8 @@ describe('AgentsSidebar', () => {
       total: 3,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -144,6 +152,8 @@ describe('AgentsSidebar', () => {
       total: 3,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -163,6 +173,8 @@ describe('AgentsSidebar', () => {
       total: 0,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -181,6 +193,8 @@ describe('AgentsSidebar', () => {
       total: 0,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -198,6 +212,8 @@ describe('AgentsSidebar', () => {
       total: 3,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -217,6 +233,8 @@ describe('AgentsSidebar', () => {
       total: 3,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -239,6 +257,8 @@ describe('AgentsSidebar', () => {
       total: 3,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
@@ -257,6 +277,8 @@ describe('AgentsSidebar', () => {
       total: 3,
       hasMore: false,
       page: 1,
+      activeCount: 0,
+      humanBackedCount: 0,
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });

@@ -877,6 +877,11 @@ func (r *AgentRepository) getAgentByKeySHA256(ctx context.Context, keySHA256 str
 // getAgentByKeyBcryptFallback scans agents without SHA256 and compares via bcrypt.
 // On match, lazy-backfills the SHA256 for future O(1) lookups.
 func (r *AgentRepository) getAgentByKeyBcryptFallback(ctx context.Context, key, keySHA256 string) (*models.Agent, error) {
+	// Cap the total time spent on bcrypt fallback scanning to prevent CPU spin
+	// on invalid keys that would otherwise compare against every row.
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
 	query := `SELECT ` + agentColumns + ` FROM agents WHERE api_key_hash IS NOT NULL AND api_key_hash != '' AND deleted_at IS NULL AND key_sha256 IS NULL`
 
 	rows, err := r.pool.Query(ctx, query)
@@ -887,6 +892,11 @@ func (r *AgentRepository) getAgentByKeyBcryptFallback(ctx context.Context, key, 
 	defer rows.Close()
 
 	for rows.Next() {
+		if ctx.Err() != nil {
+			rows.Close()
+			return nil, nil
+		}
+
 		agent, err := r.scanAgentRows(rows)
 		if err != nil {
 			return nil, err

@@ -8,7 +8,7 @@ describe('SolvrAPI Configuration', () => {
 
   beforeEach(() => {
     fetchMock = vi.fn();
-    global.fetch = fetchMock;
+    global.fetch = fetchMock as unknown as typeof global.fetch;
   });
 
   afterEach(() => {
@@ -45,16 +45,16 @@ describe('SolvrAPI Auth Event Handling', () => {
   beforeEach(() => {
     // Create a mock auth handler
     authHandler = vi.fn();
-    api.onAuthError(authHandler);
+    api.onAuthError(authHandler as (error: APIError) => void);
 
     // Mock global fetch
     fetchMock = vi.fn();
-    global.fetch = fetchMock;
+    global.fetch = fetchMock as unknown as typeof global.fetch;
   });
 
   afterEach(() => {
     // Clean up
-    api.offAuthError(authHandler);
+    api.offAuthError(authHandler as (error: APIError) => void);
     vi.restoreAllMocks();
   });
 

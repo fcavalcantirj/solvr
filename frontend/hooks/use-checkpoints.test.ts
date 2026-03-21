@@ -33,7 +33,7 @@ const mockCheckpointsResponse = {
       pin: {
         cid: 'QmOlderCheckpoint456',
         name: 'checkpoint_QmOlder_20260219',
-        meta: { type: 'amcp_checkpoint', agent_id: 'test-agent' },
+        meta: { type: 'amcp_checkpoint', agent_id: 'test-agent', death_count: '0' },
       },
       delegates: [],
     },

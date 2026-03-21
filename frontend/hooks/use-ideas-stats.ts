@@ -114,8 +114,8 @@ export function useIdeasStats(): UseIdeasStatsResult {
   useEffect(() => {
     fetchStats();
 
-    // Refresh stats every 60 seconds
-    const interval = setInterval(fetchStats, 60000);
+    // Refresh stats every 120 seconds
+    const interval = setInterval(fetchStats, 120000);
     return () => clearInterval(interval);
   }, [fetchStats]);
 

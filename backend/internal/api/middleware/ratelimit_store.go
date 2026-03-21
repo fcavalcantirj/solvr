@@ -68,12 +68,44 @@ func (s *InMemoryRateLimitStore) cleanup() {
 	defer ticker.Stop()
 
 	for range ticker.C {
+		s.doCleanup()
+	}
+}
+
+// doCleanup removes expired records using a two-phase approach to minimize lock contention.
+// Phase 1: collect expired keys under a read lock (fast, doesn't block other readers).
+// Phase 2: delete expired keys in small batches with brief write locks, allowing
+// IncrementAndGet calls to interleave between batches.
+func (s *InMemoryRateLimitStore) doCleanup() {
+	// Phase 1: Snapshot expired keys under read lock
+	s.mu.RLock()
+	now := time.Now()
+	expired := make([]string, 0)
+	for key, record := range s.records {
+		if now.Sub(record.WindowStart) > time.Hour {
+			expired = append(expired, key)
+		}
+	}
+	s.mu.RUnlock()
+
+	if len(expired) == 0 {
+		return
+	}
+
+	// Phase 2: Delete expired keys in small batches with brief write locks
+	const batchSize = 50
+	for i := 0; i < len(expired); i += batchSize {
+		end := i + batchSize
+		if end > len(expired) {
+			end = len(expired)
+		}
 		s.mu.Lock()
-		now := time.Now()
-		for key, record := range s.records {
-			// Remove records older than 1 hour
-			if now.Sub(record.WindowStart) > time.Hour {
-				delete(s.records, key)
+		for _, key := range expired[i:end] {
+			// Re-verify expiry (record may have been refreshed between phases)
+			if record, exists := s.records[key]; exists {
+				if time.Since(record.WindowStart) > time.Hour {
+					delete(s.records, key)
+				}
 			}
 		}
 		s.mu.Unlock()

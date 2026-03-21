@@ -47,6 +47,8 @@ const mockQuestion = {
   displayStatus: 'Unanswered',
   voteScore: 15,
   answersCount: 3,
+  commentsCount: 0,
+  viewCount: 0,
   author: { id: 'user-1', name: 'testuser', type: 'human' as const },
   tags: ['typescript', 'react'],
   timestamp: '3h ago',

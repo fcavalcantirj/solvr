@@ -23,8 +23,8 @@ export function useStats() {
 
     fetchStats();
     
-    // Refresh stats every 30 seconds
-    const interval = setInterval(fetchStats, 30000);
+    // Refresh stats every 120 seconds
+    const interval = setInterval(fetchStats, 120000);
     return () => clearInterval(interval);
   }, []);
 
@@ -51,8 +51,8 @@ export function useTrending() {
 
     fetchTrending();
     
-    // Refresh every 60 seconds
-    const interval = setInterval(fetchTrending, 60000);
+    // Refresh every 120 seconds
+    const interval = setInterval(fetchTrending, 120000);
     return () => clearInterval(interval);
   }, []);
 

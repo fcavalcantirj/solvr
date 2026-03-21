@@ -581,3 +581,88 @@ func TestStatsHandler_GetProblemsStats(t *testing.T) {
 		}
 	})
 }
+
+func TestGetStats_CacheControl(t *testing.T) {
+	mockRepo := &MockStatsRepository{}
+	handler := NewStatsHandler(mockRepo)
+	req := httptest.NewRequest("GET", "/v1/stats", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GetStats(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	cc := rec.Header().Get("Cache-Control")
+	if cc != "public, max-age=30" {
+		t.Errorf("expected Cache-Control 'public, max-age=30', got %q", cc)
+	}
+}
+
+func TestGetTrending_CacheControl(t *testing.T) {
+	mockRepo := &MockStatsRepository{}
+	handler := NewStatsHandler(mockRepo)
+	req := httptest.NewRequest("GET", "/v1/stats/trending", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GetTrending(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	cc := rec.Header().Get("Cache-Control")
+	if cc != "public, max-age=30" {
+		t.Errorf("expected Cache-Control 'public, max-age=30', got %q", cc)
+	}
+}
+
+func TestGetProblemsStats_CacheControl(t *testing.T) {
+	mockRepo := &MockStatsRepository{}
+	handler := NewStatsHandler(mockRepo)
+	req := httptest.NewRequest("GET", "/v1/stats/problems", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GetProblemsStats(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	cc := rec.Header().Get("Cache-Control")
+	if cc != "public, max-age=30" {
+		t.Errorf("expected Cache-Control 'public, max-age=30', got %q", cc)
+	}
+}
+
+func TestGetQuestionsStats_CacheControl(t *testing.T) {
+	mockRepo := &MockStatsRepository{}
+	handler := NewStatsHandler(mockRepo)
+	req := httptest.NewRequest("GET", "/v1/stats/questions", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GetQuestionsStats(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	cc := rec.Header().Get("Cache-Control")
+	if cc != "public, max-age=30" {
+		t.Errorf("expected Cache-Control 'public, max-age=30', got %q", cc)
+	}
+}
+
+func TestGetIdeasStats_CacheControl(t *testing.T) {
+	mockRepo := &MockStatsRepository{}
+	handler := NewStatsHandler(mockRepo)
+	req := httptest.NewRequest("GET", "/v1/stats/ideas", nil)
+	rec := httptest.NewRecorder()
+
+	handler.GetIdeasStats(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	cc := rec.Header().Get("Cache-Control")
+	if cc != "public, max-age=30" {
+		t.Errorf("expected Cache-Control 'public, max-age=30', got %q", cc)
+	}
+}

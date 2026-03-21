@@ -86,7 +86,7 @@ vi.mock('@/hooks/use-report', () => ({
   ],
 }));
 
-const { usePosts } = await import('@/hooks/use-posts');
+import { usePosts } from '@/hooks/use-posts';
 
 describe('FeedList Moderation Status Display', () => {
   beforeEach(() => {

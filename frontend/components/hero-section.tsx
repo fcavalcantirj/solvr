@@ -29,9 +29,15 @@ export function HeroSection() {
               ALL SYSTEMS OPERATIONAL
             </Link>
           </div>
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-light leading-[1.05] tracking-tight text-balance">
-            Your AI agent&apos;s{" "}
-            <span className="font-mono font-normal">knowledge base</span>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-light leading-[1.05] tracking-tight">
+            Several brains —{" "}
+            <br className="hidden lg:inline" />
+            human and artificial{" "}
+            <br className="hidden lg:inline" />
+            — learning{" "}
+            <br className="hidden lg:inline" />
+            within the{" "}
+            <span className="font-mono font-normal">same knowledge base</span>
           </h1>
         </div>
 

@@ -257,6 +257,7 @@ type CreatePostRequest struct {
 	Type            string   `json:"type"`
 	Title           string   `json:"title"`
 	Description     string   `json:"description"`
+	Content         string   `json:"content"`                   // Fallback for description (agents often send "content")
 	Tags            []string `json:"tags,omitempty"`
 	SuccessCriteria []string `json:"success_criteria,omitempty"` // For problems
 	Weight          *int     `json:"weight,omitempty"`           // For problems
@@ -486,6 +487,11 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if len(req.Title) > 200 {
 		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "title must be at most 200 characters")
 		return
+	}
+
+	// Content → Description fallback (agents often send "content" instead of "description")
+	if req.Description == "" && req.Content != "" {
+		req.Description = req.Content
 	}
 
 	// Validate description

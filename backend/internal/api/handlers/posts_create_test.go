@@ -312,3 +312,66 @@ func TestCreatePost_InvalidJSON(t *testing.T) {
 		t.Errorf("expected status 400, got %d", w.Code)
 	}
 }
+
+// TestCreatePost_ContentFallbackToDescription tests that "content" field is used as "description" when description is missing.
+func TestCreatePost_ContentFallbackToDescription(t *testing.T) {
+	repo := NewMockPostsRepository()
+	handler := NewPostsHandler(repo)
+
+	body := map[string]interface{}{
+		"type":    "problem",
+		"title":   "Test Problem Title That Is Long Enough",
+		"content": "This is content sent instead of description, needs to be at least fifty characters long to pass.",
+		"tags":    []string{"go", "testing"},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/posts", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.Create(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201, got %d; body: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestCreatePost_DescriptionTakesPrecedenceOverContent tests that "description" wins when both fields are sent.
+func TestCreatePost_DescriptionTakesPrecedenceOverContent(t *testing.T) {
+	repo := NewMockPostsRepository()
+	handler := NewPostsHandler(repo)
+
+	body := map[string]interface{}{
+		"type":        "idea",
+		"title":       "Test Idea Title That Is Long Enough",
+		"description": "This is the real description field and it should be used over content field value.",
+		"content":     "This content field should be ignored because description is already provided here.",
+		"tags":        []string{"test"},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/posts", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.Create(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201, got %d; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	data, _ := resp["data"].(map[string]interface{})
+	if data != nil {
+		desc, _ := data["description"].(string)
+		if desc != "This is the real description field and it should be used over content field value." {
+			t.Errorf("expected description field to take precedence, got: %s", desc)
+		}
+	}
+}

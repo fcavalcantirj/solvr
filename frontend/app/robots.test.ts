@@ -18,7 +18,7 @@ describe('robots', () => {
     expect(allRule!.allow).toBe('/');
   });
 
-  it('disallows settings, auth, login, join, new, and admin paths', () => {
+  it('disallows settings, auth, login, join, new, admin, and dashboard paths', () => {
     const result = robots();
 
     const rules = Array.isArray(result.rules) ? result.rules : [result.rules];
@@ -32,6 +32,19 @@ describe('robots', () => {
     expect(disallowed).toContain('/join');
     expect(disallowed).toContain('/new');
     expect(disallowed).toContain('/admin/');
+    expect(disallowed).toContain('/dashboard/');
+  });
+
+  it('blocks SEO crawler bots to save crawl budget', () => {
+    const result = robots();
+
+    const rules = Array.isArray(result.rules) ? result.rules : [result.rules];
+    const blockedBots = ['semrushbot', 'ahrefsbot', 'MJ12bot'];
+    for (const bot of blockedBots) {
+      const rule = rules.find((r) => r.userAgent === bot);
+      expect(rule, `expected rule for ${bot}`).toBeDefined();
+      expect(rule!.disallow).toBe('/');
+    }
   });
 
   it('sets host to https://solvr.dev', () => {

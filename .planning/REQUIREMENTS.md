@@ -71,4 +71,30 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| (filled by roadmapper) | | |
+| MERGE-01 | Phase 13 | Pending |
+| COMMENT-02 | Phase 13 | Pending |
+| MERGE-02 | Phase 14 | Pending |
+| MERGE-03 | Phase 14 | Pending |
+| MERGE-04 | Phase 14 | Pending |
+| MERGE-05 | Phase 14 | Pending |
+| MERGE-06 | Phase 14 | Pending |
+| MERGE-07 | Phase 14 | Pending |
+| DATA-01 | Phase 15 | Pending |
+| DATA-02 | Phase 15 | Pending |
+| DATA-03 | Phase 15 | Pending |
+| ROOMS-01 | Phase 16 | Pending |
+| ROOMS-02 | Phase 16 | Pending |
+| ROOMS-03 | Phase 16 | Pending |
+| ROOMS-04 | Phase 16 | Pending |
+| COMMENT-01 | Phase 16 | Pending |
+| COMMENT-03 | Phase 16 | Pending |
+| SIMPLIFY-01 | Phase 17 | Pending |
+| SIMPLIFY-02 | Phase 17 | Pending |
+| SIMPLIFY-03 | Phase 17 | Pending |
+| SEARCH-01 | Phase 17 | Pending |
+| SEARCH-02 | Phase 17 | Pending |
+| SEARCH-03 | Phase 17 | Pending |
+| SEARCH-04 | Phase 17 | Pending |
+| SITEMAP-01 | Phase 17 | Pending |
+| SITEMAP-02 | Phase 17 | Pending |
+| SITEMAP-03 | Phase 17 | Pending |

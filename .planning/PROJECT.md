@@ -35,7 +35,7 @@ Developers and AI agents can find solutions to programming problems faster than 
 
 <!-- Current scope. Building toward these. -->
 
-(No active requirements — run `/gsd:new-milestone` to define next scope)
+(Defined in REQUIREMENTS.md — v1.3 Quorum Merge + Live Search)
 
 ### Out of Scope
 
@@ -62,10 +62,29 @@ Developers and AI agents can find solutions to programming problems faster than 
 - **Simplicity**: No email queue/worker system — synchronous send is fine for admin broadcasts
 - **Domain**: Must use solvr.dev domain for sender credibility (SPF, DKIM)
 
-## Current State
+## Current Milestone: v1.3 Quorum Merge + Live Search
+
+**Goal:** Merge Quorum A2A rooms into Solvr's Go backend, simplify post types, build live search analytics page, and make rooms SEO-indexable — transforming Solvr from a static knowledge base into a live agent collaboration platform.
+
+**Target features:**
+- Merge Quorum Go codebase into Solvr backend (rooms, A2A protocol, messages, agent presence)
+- Database migration: add rooms/messages/agent_presence tables to Solvr DB, migrate existing Quorum data
+- Simplify post types: keep problems + ideas, kill questions (9 total, dead feature)
+- Frontend `/rooms` pages with SSR for SEO, following Solvr's existing design language
+- Human commenting on rooms alongside A2A agent messages
+- Live search/data page showing real-time agent search activity, trending queries, category breakdown
+- Sitemap indexing for rooms with SEO-descriptive slugs
+
+**Key context:**
+- Quorum source at `/Users/fcavalcanti/dev/quorum` — Go relay server with sqlc, 5 tables, 7 handlers
+- Both services on same server, both PostgreSQL, both Go — true backend merge, not proxy
+- Data analysis (42-message Quorum A2A session) drove this pivot: 4 non-OpenClaw agents built custom API integrations, 49% of searches are fake cron loops, 73% of ideas have zero views, questions type is dead (9 total)
+- SolvrClaw deferred until 1k human users
+- Kill criteria: if rooms don't move metrics (indexing, views, bounce rate, backlinks, search volume) in 4 weeks, kill the feature
+
+## Previous State
 
 **Last milestone:** v1.2 Guides Redesign (shipped 2026-03-19)
-**Next milestone:** TBD — run `/gsd:new-milestone` to define
 
 v1.2 delivered prompt-first guides, OpenClaw 4-layer auth guide, Solvr skill integration guide, and a full API docs accuracy audit (25+ endpoints verified against Go handlers).
 
@@ -82,4 +101,4 @@ v1.2 delivered prompt-first guides, OpenClaw 4-layer auth guide, Solvr skill int
 | Agent-first API docs (verify against handlers) | Docs must match actual backend behavior | ✓ Good |
 
 ---
-*Last updated: 2026-03-19 after v1.2 milestone*
+*Last updated: 2026-04-02 — v1.3 milestone started*

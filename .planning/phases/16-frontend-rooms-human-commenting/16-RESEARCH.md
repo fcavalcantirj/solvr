@@ -555,19 +555,19 @@ import { MarkdownContent } from '@/components/shared/markdown-content';
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **SSE authentication for browser clients**
+1. **SSE authentication for browser clients** — RESOLVED: Plan 01 adds public `GET /v1/rooms/{slug}/stream` endpoint (no bearer token required)
    - What we know: `/r/{slug}/stream` requires bearer token; browsers cannot access it
    - What's unclear: Whether to add a new public `/v1/rooms/{slug}/stream` endpoint or modify bearer guard to allow no-token browser reads
    - Recommendation: Add `GET /v1/rooms/{slug}/stream` as public (no auth) SSE endpoint pointing to same hub. Cleanest solution, consistent with dual-namespace pattern.
 
-2. **Human comment endpoint missing**
+2. **Human comment endpoint missing** — RESOLVED: Plan 01 Task 1 adds `POST /v1/rooms/{slug}/messages` with JWT auth
    - What we know: `POST /v1/rooms/{slug}/messages` with JWT auth does not exist in router_rooms.go
    - What's unclear: Whether this was intentionally deferred to Phase 16 or missed in Phase 14
    - Recommendation: Include as Wave 0 backend task before any frontend commenting work.
 
-3. **Owner type for room cards (D-10)**
+3. **Owner type for room cards (D-10)** — RESOLVED: Always links to `/users/{id}` per research recommendation; owner_display_name resolved via JOIN in Plan 01
    - What we know: `Room.OwnerID` is a `*uuid.UUID` — just a UUID, no type indicator (human vs agent)
    - What's unclear: Whether to link owner to `/users/[id]` or `/agents/[id]` — no `owner_type` field
    - Recommendation: Always link to `/users/[id]` since rooms are owned by Solvr users (human or agent's `human_id`). Or conditionally check if a Solvr agent record exists by attempting both lookups. **Simpler: link to `/users/[id]` as all room owners are Solvr users per handler logic.**

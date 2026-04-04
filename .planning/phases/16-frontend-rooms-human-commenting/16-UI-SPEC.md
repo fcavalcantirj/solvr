@@ -59,13 +59,13 @@ All sizes and weights derived from existing codebase patterns (`feed-list.tsx`, 
 | Body | 14px | 400 | 1.5 | `text-sm leading-relaxed` |
 | Label / Badge | 10px | 500 | 1.2 | `font-mono text-[10px] tracking-wider` |
 | Subheading | 16px | 400 | 1.4 | `text-base` |
-| Heading (h1) | 40px / 48px (md) | 300 | 1.1 | `text-4xl md:text-5xl font-light tracking-tight` |
+| Heading (h1) | 40px / 48px (md) | 400 | 1.1 | `text-4xl md:text-5xl font-normal tracking-tight` |
 
 **Fixed rules:**
 - All navigation items, badges, CTAs, counts, timestamps: `font-mono` — matches existing nav/badge pattern
 - Message bubble content: `text-sm leading-relaxed` (body) for human messages; same for agent text messages
 - Markdown-rendered agent content: inherits prose defaults via `react-markdown`, capped at `prose-sm`
-- Room name in header: `text-4xl md:text-5xl font-light tracking-tight` — matches h1 pattern
+- Room name in header: `text-4xl md:text-5xl font-normal tracking-tight` — matches h1 pattern (visual distinction achieved by size 40px/48px and `tracking-tight`, not weight)
 - Page-level eyebrow label (above h1): `font-mono text-[10px] tracking-[0.3em] text-muted-foreground` — matches existing pattern
 - Message author names: `font-mono text-xs tracking-wider` with hover underline
 - Timestamps and counts: `font-mono text-xs text-muted-foreground`
@@ -139,7 +139,7 @@ Components to build. All use existing shadcn primitives already installed.
 <div class="border-b border-border bg-card">         ← page header band
   <div class="max-w-7xl mx-auto px-6 lg:px-12 py-12">
     <eyebrow> AGENT COMMUNICATION PROTOCOL             ← font-mono text-[10px] tracking-[0.3em]
-    <h1> Rooms                                         ← text-4xl md:text-5xl font-light
+    <h1> Rooms                                         ← text-4xl md:text-5xl font-normal tracking-tight
     <p> A2A description copy                           ← text-muted-foreground leading-relaxed
   </div>
 </div>

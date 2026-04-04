@@ -101,4 +101,4 @@ v1.2 delivered prompt-first guides, OpenClaw 4-layer auth guide, Solvr skill int
 | Agent-first API docs (verify against handlers) | Docs must match actual backend behavior | ✓ Good |
 
 ---
-*Last updated: 2026-04-02 — v1.3 milestone started*
+*Last updated: 2026-04-04 — Phase 13 (Database Foundation) complete: rooms/agent_presence/messages tables migrated*

@@ -4,8 +4,8 @@
 
 - [x] **MERGE-01**: Rooms, agent_presence, and messages tables exist in Solvr DB (migrations 000073-075)
 - [x] **MERGE-02**: Quorum's 20 sqlc queries are ported as Solvr-style pgx repository methods
-- [ ] **MERGE-03**: A2A protocol routes mounted at `/r/{slug}/*` preserving existing agent integration URLs
-- [ ] **MERGE-04**: REST room management endpoints available at `/v1/rooms/*`
+- [x] **MERGE-03**: A2A protocol routes mounted at `/r/{slug}/*` preserving existing agent integration URLs
+- [x] **MERGE-04**: REST room management endpoints available at `/v1/rooms/*`
 - [ ] **MERGE-05**: SSE hub manager runs alongside Solvr API with clean shutdown on SIGTERM
 - [ ] **MERGE-06**: WriteTimeout removed and `X-Accel-Buffering: no` header set for SSE routes
 - [ ] **MERGE-07**: Agent presence with TTL-based expiry (default 10min) and reaper goroutine integrated
@@ -74,8 +74,8 @@
 | MERGE-01 | Phase 13 | Complete |
 | COMMENT-02 | Phase 13 | Complete |
 | MERGE-02 | Phase 14 | Complete |
-| MERGE-03 | Phase 14 | Pending |
-| MERGE-04 | Phase 14 | Pending |
+| MERGE-03 | Phase 14 | Complete |
+| MERGE-04 | Phase 14 | Complete |
 | MERGE-05 | Phase 14 | Pending |
 | MERGE-06 | Phase 14 | Pending |
 | MERGE-07 | Phase 14 | Pending |

@@ -57,7 +57,7 @@ Plans:
 
 Plans:
 - [ ] 14-01-PLAN.md — Port hub package + token package + model structs from Quorum
-- [ ] 14-02-PLAN.md — Create pgx repositories (rooms, messages, agent_presence)
+- [x] 14-02-PLAN.md — Create pgx repositories (rooms, messages, agent_presence)
 - [ ] 14-03-PLAN.md — Room CRUD handlers + message/presence handlers + bearer guard middleware
 - [ ] 14-04-PLAN.md — SSE streaming handler + SSE buffering middleware + presence reaper job
 - [ ] 14-05-PLAN.md — Router wiring + main.go modifications + integration tests + human verification
@@ -106,7 +106,7 @@ Plans:
 | 11. Test Suite Update | v1.2 | 1/1 | Complete | 2026-03-19 |
 | 12. API Docs Accuracy Audit | v1.2 | 4/4 | Complete | 2026-03-19 |
 | 13. Database Foundation | v1.3 | 1/1 | Complete   | 2026-04-04 |
-| 14. Backend Service Merge | v1.3 | 0/5 | Planned | - |
+| 14. Backend Service Merge | v1.3 | 1/5 | In Progress | - |
 | 15. Data Migration | v1.3 | 0/? | Not started | - |
 | 16. Frontend Rooms + Commenting | v1.3 | 0/? | Not started | - |
 | 17. Simplification + Live Search + Sitemap | v1.3 | 0/? | Not started | - |

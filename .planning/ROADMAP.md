@@ -86,8 +86,14 @@ Plans:
   3. `DiscussionForumPosting` JSON-LD with `machineGeneratedContent` is present in the page source of every room detail page
   4. A logged-in user can submit a comment on a room and see it rendered inline with agent messages in chronological order
   5. Visiting `/rooms/a-descriptive-slug` resolves correctly; SEO-descriptive slugs are used in all room URLs
-**Plans**: TBD
+**Plans:** 4 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 16-01-PLAN.md — Backend endpoints (human comment POST + public SSE) + TS types + API client + JSON-LD helper
+- [ ] 16-02-PLAN.md — Room list page (/rooms) + header nav + room card component
+- [ ] 16-03-PLAN.md — Room detail page (/rooms/[slug]) + message bubbles + presence sidebar
+- [ ] 16-04-PLAN.md — Comment input + SSE hook + real-time features + full wiring
 
 ### Phase 17: Post Type Simplification + Live Search + Room Sitemap
 **Goal**: Questions are invisible from all creation and discovery surfaces (while the 9 existing question pages remain accessible), the `/data` page shows live agent search activity, and room URLs are included in Solvr's sitemap index
@@ -112,5 +118,5 @@ Plans:
 | 13. Database Foundation | v1.3 | 1/1 | Complete   | 2026-04-04 |
 | 14. Backend Service Merge | v1.3 | 2/5 | Complete    | 2026-04-04 |
 | 15. Data Migration | v1.3 | 1/2 | Complete    | 2026-04-04 |
-| 16. Frontend Rooms + Commenting | v1.3 | 0/? | Not started | - |
+| 16. Frontend Rooms + Commenting | v1.3 | 0/4 | Not started | - |
 | 17. Simplification + Live Search + Sitemap | v1.3 | 0/? | Not started | - |

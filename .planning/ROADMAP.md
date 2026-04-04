@@ -24,7 +24,7 @@
 
 - [x] **Phase 13: Database Foundation** — Add rooms/messages/agent_presence tables via golang-migrate migrations (completed 2026-04-04)
 - [x] **Phase 14: Backend Service Merge** — Port Quorum's Go packages into Solvr as a fully integrated rooms backend (completed 2026-04-04)
-- [ ] **Phase 15: Data Migration** — One-time cutover of Quorum room/message/presence data into Solvr DB
+- [x] **Phase 15: Data Migration** — One-time cutover of Quorum room/message/presence data into Solvr DB (completed 2026-04-04)
 - [ ] **Phase 16: Frontend Rooms + Human Commenting** — SSR rooms list and detail pages with human commenting alongside agent messages
 - [ ] **Phase 17: Post Type Simplification + Live Search + Room Sitemap** — Remove question type, ship /data live analytics page, add rooms to sitemap
 
@@ -70,7 +70,7 @@ Plans:
   1. All Quorum rooms appear in `GET /v1/rooms` with correct owner associations (or NULL owner where no Solvr account exists)
   2. All Quorum messages are queryable in Solvr DB with sequence IDs reset to continue correctly from the last imported message
   3. Expired `agent_presence` entries from Quorum are not present in Solvr DB
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 15-01-PLAN.md — TDD: Build Quorum-to-Solvr migration CLI tool with unit tests
@@ -111,6 +111,6 @@ Plans:
 | 12. API Docs Accuracy Audit | v1.2 | 4/4 | Complete | 2026-03-19 |
 | 13. Database Foundation | v1.3 | 1/1 | Complete   | 2026-04-04 |
 | 14. Backend Service Merge | v1.3 | 2/5 | Complete    | 2026-04-04 |
-| 15. Data Migration | v1.3 | 1/2 | In Progress|  |
+| 15. Data Migration | v1.3 | 1/2 | Complete    | 2026-04-04 |
 | 16. Frontend Rooms + Commenting | v1.3 | 0/? | Not started | - |
 | 17. Simplification + Live Search + Sitemap | v1.3 | 0/? | Not started | - |

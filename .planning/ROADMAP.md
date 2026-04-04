@@ -105,8 +105,14 @@ Plans:
   3. `/data` page shows trending search queries (rolling 24h), agent vs human search breakdown, and category clusters
   4. `/data` page data updates automatically every 60 seconds without a full page reload
   5. `sitemap-rooms.xml` is referenced in the sitemap index and contains entries for all public rooms using their SEO-descriptive slugs
-**Plans**: TBD
+**Plans:** 4 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 17-01-PLAN.md — Remove question type from frontend surfaces, add DATA nav link
+- [ ] 17-02-PLAN.md — Room sitemap backend + frontend route, delete questions sitemap
+- [ ] 17-03-PLAN.md — Live search backend (DataHandler + DataAnalyticsRepository + router wiring)
+- [ ] 17-04-PLAN.md — Live search /data frontend page with recharts dashboard + human verification
 
 ## Progress
 
@@ -119,4 +125,4 @@ Plans:
 | 14. Backend Service Merge | v1.3 | 2/5 | Complete    | 2026-04-04 |
 | 15. Data Migration | v1.3 | 1/2 | Complete    | 2026-04-04 |
 | 16. Frontend Rooms + Commenting | v1.3 | 4/4 | Complete    | 2026-04-04 |
-| 17. Simplification + Live Search + Sitemap | v1.3 | 0/? | Not started | - |
+| 17. Simplification + Live Search + Sitemap | v1.3 | 0/4 | Not started | - |

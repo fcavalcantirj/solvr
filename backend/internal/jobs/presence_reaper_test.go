@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -11,6 +12,11 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
+
+// testLogger returns a discard logger suitable for unit tests.
+func testLogger() *slog.Logger {
+	return slog.New(slog.DiscardHandler)
+}
 
 // --- Mocks ---
 
@@ -59,7 +65,7 @@ type unsubscribeCall struct {
 // TestPresenceReaper_RunOnce_NoExpired tests that RunOnce returns zero counts when nothing expired.
 func TestPresenceReaper_RunOnce_NoExpired(t *testing.T) {
 	registry := hub.NewPresenceRegistry()
-	hubMgr := hub.NewHubManager(registry, nil, 0)
+	hubMgr := hub.NewHubManager(registry, testLogger(), 0)
 
 	pe := &mockPresenceExpirer{expired: []models.ExpiredPresence{}}
 	re := &mockRoomExpirer{expiredCount: 0}
@@ -85,7 +91,7 @@ func TestPresenceReaper_RunOnce_NoExpired(t *testing.T) {
 // by removing them from registry and unsubscribing from hub.
 func TestPresenceReaper_RunOnce_WithExpiredAgents(t *testing.T) {
 	registry := hub.NewPresenceRegistry()
-	hubMgr := hub.NewHubManager(registry, nil, 0)
+	hubMgr := hub.NewHubManager(registry, testLogger(), 0)
 
 	roomID1 := uuid.New()
 	roomID2 := uuid.New()
@@ -121,7 +127,7 @@ func TestPresenceReaper_RunOnce_WithExpiredAgents(t *testing.T) {
 // TestPresenceReaper_RunOnce_WithExpiredRooms tests that RunOnce reports expired room count.
 func TestPresenceReaper_RunOnce_WithExpiredRooms(t *testing.T) {
 	registry := hub.NewPresenceRegistry()
-	hubMgr := hub.NewHubManager(registry, nil, 0)
+	hubMgr := hub.NewHubManager(registry, testLogger(), 0)
 
 	pe := &mockPresenceExpirer{expired: []models.ExpiredPresence{}}
 	re := &mockRoomExpirer{expiredCount: 3}
@@ -141,7 +147,7 @@ func TestPresenceReaper_RunOnce_WithExpiredRooms(t *testing.T) {
 // presence_leave events through hub.Unsubscribe when agents expire (D-27).
 func TestPresenceReaper_RunOnce_PresenceLeaveEvent(t *testing.T) {
 	registry := hub.NewPresenceRegistry()
-	hubMgr := hub.NewHubManager(registry, nil, 0)
+	hubMgr := hub.NewHubManager(registry, testLogger(), 0)
 
 	roomID := uuid.New()
 	roomIDHub := hub.NewRoomID(roomID)
@@ -191,7 +197,7 @@ func TestPresenceReaper_RunOnce_PresenceLeaveEvent(t *testing.T) {
 // TestPresenceReaper_RunOnce_ErrorsDoNotCrash tests that errors in one step don't prevent others.
 func TestPresenceReaper_RunOnce_ErrorsDoNotCrash(t *testing.T) {
 	registry := hub.NewPresenceRegistry()
-	hubMgr := hub.NewHubManager(registry, nil, 0)
+	hubMgr := hub.NewHubManager(registry, testLogger(), 0)
 
 	pe := &mockPresenceExpirer{err: errors.New("db connection lost")}
 	re := &mockRoomExpirer{expiredCount: 2}
@@ -212,7 +218,7 @@ func TestPresenceReaper_RunOnce_ErrorsDoNotCrash(t *testing.T) {
 // stops cleanly when its context is canceled.
 func TestPresenceReaper_RunScheduled_ContextCancellation(t *testing.T) {
 	registry := hub.NewPresenceRegistry()
-	hubMgr := hub.NewHubManager(registry, nil, 0)
+	hubMgr := hub.NewHubManager(registry, testLogger(), 0)
 
 	pe := &mockPresenceExpirer{expired: []models.ExpiredPresence{}}
 	re := &mockRoomExpirer{expiredCount: 0}

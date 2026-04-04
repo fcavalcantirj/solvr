@@ -2,13 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Quorum Merge + Live Search
-status: roadmap_ready
-last_updated: "2026-04-02T23:00:00.000Z"
+status: planning
+stopped_at: Phase 13 context gathered
+last_updated: "2026-04-04T00:37:43.722Z"
+last_activity: 2026-04-02 — Roadmap created (5 phases, 22 requirements mapped)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
+  percent: 0
 ---
 
 ## Current Position
@@ -30,6 +33,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0 (v1.3)
 - Average duration: —
 - Total execution time: —
@@ -41,6 +45,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 ### Session 2026-04-02 — Major Analysis + Milestone Setup
 
 #### Bug Fix (completed)
+
 - approaches_status_check constraint was missing 'abandoned' on production
 - Migration 000049 was comment-only (no SQL), migration 000061 never applied to prod
 - Fixed via admin query route: DROP + recreate constraint with 6 values
@@ -48,11 +53,13 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 - No deployment needed — DB-only fix
 
 #### Solvr Usage Analysis (42-message Quorum A2A session)
+
 - Room: https://web-flowcoders.vercel.app/explore/solvr-usage-analysys
 - Participants: solvr-data-scientist (this agent) + ClaudiusThePirateEmperor
 - 21 production DB queries executed, GA4+GSC data from Claudius
 
 **Key data points:**
+
 - 916 posts: 696 ideas (76%), 211 problems (23%), 9 questions (1% — DEAD)
 - 333 users: 264 (79%) are ghosts (never posted), 212 never even searched
 - 147 agents: only ~4 truly active (Claudius, openclaw_mack, claude_code_agent_msv, claude_opus_eval)
@@ -64,6 +71,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 - GSC: 4 pages indexed out of 1,255 submitted (99.7% not indexed)
 
 **Silent searcher discovery (the content roadmap):**
+
 - 19 ghost users with API keys who search but never post
 - 4 use curl/python-requests (API-first, programmatic agents)
   - 95302115: Chinese social media agent (xiaohongshu, kuaishou) — 25 searches
@@ -73,12 +81,14 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 - These represent unmet demand OUTSIDE OpenClaw ecosystem
 
 **Growth story:**
+
 - Feb 23 - Mar 2 spike: 182 users in 2 weeks (ClawHub referrals)
 - ClawHub account BANNED — growth channel killed
 - Auth providers: Google 202 (59%), GitHub 93 (27%), Email 50 (14%)
 - Chinese users 37% of GA4 traffic, MORE engaged than Western users
 
 **Strategic decisions made:**
+
 - Vision: Stack Overflow for agents (all agents, all domains)
 - Model: Hybrid — API for agents (fast, programmatic), Quorum rooms for humans (discovery, SEO)
 - North star metric: unique searching agents per week
@@ -90,6 +100,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 - Kill criteria: if rooms don't move metrics in 4 weeks, kill the feature
 
 #### Research Findings (4 parallel researchers)
+
 - **Stack**: No new architecture needed. 3 new deps (a2a-go, httprate, version bumps). Do NOT adopt sqlc.
 - **Features**: DiscussionForumPosting JSON-LD is Google-approved for agent content. Live search needs zero new backend endpoints. Post type simplification is independent (12 touch points).
 - **Architecture**: 3 tables to create, 2 to skip (users/refresh_tokens). Dual-namespace routes: /v1/rooms (REST) + /r/{slug} (A2A). WriteTimeout must be 0 for SSE. X-Accel-Buffering: no for Traefik.
@@ -98,6 +109,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 ### Decisions
 
 Recent decisions affecting current work:
+
 - Phase 13: Write 3 net-new migrations only (no users/refresh_tokens from Quorum)
 - Phase 13: messages table must include author_type/author_id from migration 000075 (no schema change later)
 - Phase 13: room_comments table created in same phase (Phase 16 depends on it)
@@ -118,6 +130,7 @@ Recent decisions affecting current work:
 
 Location: /Users/fcavalcanti/dev/quorum
 Structure:
+
 - relay/cmd/server/main.go — entry point
 - relay/internal/handler/ — 7 handlers (discovery, auth, sse, messages, stats, agent, room)
 - relay/internal/middleware/ — 5 middleware (jwtauth, anonsession, ssebuffering, a2aversion, bearerguard)
@@ -131,6 +144,6 @@ Structure:
 
 ## Session Continuity
 
-Last session: 2026-04-02
-Stopped at: Roadmap approved — 5 phases (13-17), 22/22 requirements mapped. Ready to plan Phase 13.
+Last session: 2026-04-04T00:37:43.718Z
+Stopped at: Phase 13 context gathered
 Resume with: /gsd:plan-phase 13

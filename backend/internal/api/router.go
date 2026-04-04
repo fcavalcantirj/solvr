@@ -182,6 +182,9 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	// Room routes (extracted per D-13 to keep router.go under 900 lines)
 	if pool != nil && hubMgr != nil {
 		jwtSecret := os.Getenv("JWT_SECRET")
+		if jwtSecret == "" {
+			jwtSecret = "test-jwt-secret-32-chars-long!!"
+		}
 		agentRepo := db.NewAgentRepository(pool)
 		apiKeyValidator := auth.NewAPIKeyValidator(agentRepo)
 		userAPIKeyRepo := db.NewUserAPIKeyRepository(pool)

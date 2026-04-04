@@ -57,8 +57,8 @@ func mountRoomRoutes(
 
 	// -- A2A protocol routes: /r/{slug}/* (D-17: bearer token auth) --
 	r.Route("/r/{slug}", func(r chi.Router) {
+		r.Use(apimiddleware.SSENoBuffering) // Must be before BearerGuard so header is set even on 401
 		r.Use(apimiddleware.BearerGuard(roomRepo))
-		r.Use(apimiddleware.SSENoBuffering)
 
 		// D-32: Per-room rate limiting on message posting (60 req/min per IP).
 		// Applied only to POST /message, not to read endpoints or SSE stream.

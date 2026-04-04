@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -29,11 +30,17 @@ func (r *AgentPresenceRepository) Upsert(ctx context.Context, params models.Upse
 		RETURNING id, room_id, agent_name, card_json, joined_at, last_seen, ttl_seconds
 	`
 
+	// Default card_json to empty JSON object if nil (DB column is NOT NULL)
+	cardJSON := params.CardJSON
+	if cardJSON == nil {
+		cardJSON = json.RawMessage(`{}`)
+	}
+
 	var record models.AgentPresenceRecord
 	err := r.pool.QueryRow(ctx, query,
 		params.RoomID,
 		params.AgentName,
-		params.CardJSON,
+		cardJSON,
 		params.TTLSeconds,
 	).Scan(
 		&record.ID,

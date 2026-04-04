@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -30,6 +31,12 @@ func (r *MessageRepository) Create(ctx context.Context, params models.CreateMess
 		RETURNING id, room_id, author_type, author_id, agent_name, content, content_type, metadata, sequence_num, created_at, deleted_at
 	`
 
+	// Default metadata to empty JSON object if nil (DB column is NOT NULL DEFAULT '{}')
+	metadata := params.Metadata
+	if metadata == nil {
+		metadata = json.RawMessage(`{}`)
+	}
+
 	var msg models.Message
 	err := r.pool.QueryRow(ctx, query,
 		params.RoomID,
@@ -38,7 +45,7 @@ func (r *MessageRepository) Create(ctx context.Context, params models.CreateMess
 		params.AgentName,
 		params.Content,
 		params.ContentType,
-		params.Metadata,
+		metadata,
 	).Scan(
 		&msg.ID,
 		&msg.RoomID,

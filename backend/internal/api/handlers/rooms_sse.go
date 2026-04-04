@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -72,7 +73,9 @@ func NewRoomSSEHandler(hubMgr *hub.HubManager, msgRepo *db.MessageRepository) *R
 //   - room_update: room metadata changed
 func (h *RoomSSEHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	// The room must be set in context by bearer guard middleware (Plan 03).
-	room := SSERoomFromContext(r.Context())
+	// Uses apimiddleware.RoomFromContext to read from the same context key
+	// that BearerGuard sets (middleware.RoomContextKey).
+	room := apimiddleware.RoomFromContext(r.Context())
 	if room == nil {
 		http.Error(w, `{"error":{"code":"NOT_FOUND","message":"room not found in context"}}`, http.StatusNotFound)
 		return
@@ -93,11 +96,14 @@ func (h *RoomSSEHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 3: Set SSE headers (D-02).
+	// Step 3: Set SSE headers (D-02) and flush immediately so the client
+	// receives the 200 status + headers before any events arrive.
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
 
 	// Step 4: Last-Event-ID replay (D-07).
 	// If the client reconnects with a Last-Event-ID header, replay missed messages

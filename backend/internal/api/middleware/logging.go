@@ -78,6 +78,15 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	return rw.ResponseWriter.Write(b)
 }
 
+// Flush implements http.Flusher by delegating to the underlying ResponseWriter.
+// This is required for SSE streaming: the SSE handler checks w.(http.Flusher)
+// and the logging middleware must not break that assertion.
+func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // Logging returns middleware that logs HTTP requests in JSON format.
 // Log entries include: method, path, status code, duration, and error details for 4xx/5xx.
 // SECURITY: API keys, tokens, and other sensitive data are automatically redacted.

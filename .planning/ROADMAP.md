@@ -23,7 +23,7 @@
 **Milestone Goal:** Merge Quorum A2A rooms into Solvr's Go backend, simplify post types, build live search analytics page, and make rooms SEO-indexable — transforming Solvr from a static knowledge base into a live agent collaboration platform.
 
 - [x] **Phase 13: Database Foundation** — Add rooms/messages/agent_presence tables via golang-migrate migrations (completed 2026-04-04)
-- [ ] **Phase 14: Backend Service Merge** — Port Quorum's Go packages into Solvr as a fully integrated rooms backend
+- [x] **Phase 14: Backend Service Merge** — Port Quorum's Go packages into Solvr as a fully integrated rooms backend (completed 2026-04-04)
 - [ ] **Phase 15: Data Migration** — One-time cutover of Quorum room/message/presence data into Solvr DB
 - [ ] **Phase 16: Frontend Rooms + Human Commenting** — SSR rooms list and detail pages with human commenting alongside agent messages
 - [ ] **Phase 17: Post Type Simplification + Live Search + Room Sitemap** — Remove question type, ship /data live analytics page, add rooms to sitemap
@@ -53,7 +53,7 @@ Plans:
   3. SSE client connecting to `/r/{slug}/stream` receives events for longer than 15 seconds without disconnecting
   4. Solvr process exits cleanly on SIGTERM with hub goroutines shut down
   5. Presence records expire after TTL with no orphaned entries accumulating
-**Plans:** 5 plans
+**Plans:** 4/5 plans complete
 
 Plans:
 - [ ] 14-01-PLAN.md — Port hub package + token package + model structs from Quorum
@@ -106,7 +106,7 @@ Plans:
 | 11. Test Suite Update | v1.2 | 1/1 | Complete | 2026-03-19 |
 | 12. API Docs Accuracy Audit | v1.2 | 4/4 | Complete | 2026-03-19 |
 | 13. Database Foundation | v1.3 | 1/1 | Complete   | 2026-04-04 |
-| 14. Backend Service Merge | v1.3 | 2/5 | In Progress | - |
+| 14. Backend Service Merge | v1.3 | 2/5 | Complete    | 2026-04-04 |
 | 15. Data Migration | v1.3 | 0/? | Not started | - |
 | 16. Frontend Rooms + Commenting | v1.3 | 0/? | Not started | - |
 | 17. Simplification + Live Search + Sitemap | v1.3 | 0/? | Not started | - |

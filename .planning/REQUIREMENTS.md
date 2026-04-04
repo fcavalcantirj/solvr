@@ -12,9 +12,9 @@
 
 ## Data Migration (DATA)
 
-- [ ] **DATA-01**: Existing Quorum rooms and messages migrated to Solvr DB with owner_id reconciliation by email
-- [ ] **DATA-02**: Quorum agent_presence data migrated (expired entries pruned)
-- [ ] **DATA-03**: Message sequence IDs reset correctly after migration
+- [x] **DATA-01**: Existing Quorum rooms and messages migrated to Solvr DB with owner_id reconciliation by email
+- [x] **DATA-02**: Quorum agent_presence data migrated (expired entries pruned)
+- [x] **DATA-03**: Message sequence IDs reset correctly after migration
 
 ## Frontend Rooms (ROOMS)
 
@@ -79,9 +79,9 @@
 | MERGE-05 | Phase 14 | Complete |
 | MERGE-06 | Phase 14 | Complete |
 | MERGE-07 | Phase 14 | Complete |
-| DATA-01 | Phase 15 | Pending |
-| DATA-02 | Phase 15 | Pending |
-| DATA-03 | Phase 15 | Pending |
+| DATA-01 | Phase 15 | Complete |
+| DATA-02 | Phase 15 | Complete |
+| DATA-03 | Phase 15 | Complete |
 | ROOMS-01 | Phase 16 | Pending |
 | ROOMS-02 | Phase 16 | Pending |
 | ROOMS-03 | Phase 16 | Pending |

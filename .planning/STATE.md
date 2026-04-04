@@ -3,22 +3,22 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Quorum Merge + Live Search
 status: executing
-stopped_at: Phase 15 context gathered
-last_updated: "2026-04-04T18:18:15.873Z"
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-04-04T19:04:05.529Z"
 last_activity: 2026-04-04
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 6
-  completed_plans: 5
+  total_plans: 8
+  completed_plans: 6
   percent: 14
 ---
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
-Status: Executing Phase 14 plans in parallel
+Phase: 15 (data-migration) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-04-04
 
 Progress: [##░░░░░░░░] 14%
@@ -28,7 +28,7 @@ Progress: [##░░░░░░░░] 14%
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Developers and AI agents can find solutions to programming problems faster than searching the web
-**Current focus:** Phase 13 — database-foundation
+**Current focus:** Phase 15 — data-migration
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 | 14 | 04 | 5 min | 2 | 4 |
 
 *Updated after each plan completion*
+| Phase 15 P01 | 8 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -133,6 +134,9 @@ Recent decisions affecting current work:
 - [Phase 14-04]: SSE handler uses context key for room injection; Plan 03 bearer guard populates it
 - [Phase 14-04]: Browser SSE subscribers use _browser_ prefix to exclude from presence/discovery
 - [Phase 14-04]: PresenceReaperJob uses interface deps (PresenceExpirer, RoomExpirer) matching testable job pattern
+- [Phase 15]: txInterface defined in main package to allow mockTx without pgx dependency in unit tests
+- [Phase 15]: Sequence numbers computed in Go (index+1) not SQL ROW_NUMBER() — messages already ordered by created_at from Quorum query
+- [Phase 15]: Integration tests patch slugOwnerEmail global map with per-test unique emails restored via t.Cleanup
 
 ### Blockers/Concerns
 
@@ -158,6 +162,6 @@ Structure:
 
 ## Session Continuity
 
-Last session: 2026-04-04T18:18:15.868Z
-Stopped at: Phase 15 context gathered
+Last session: 2026-04-04T19:04:05.526Z
+Stopped at: Completed 15-01-PLAN.md
 Resume with: Continue Phase 14 plans (03, 05)

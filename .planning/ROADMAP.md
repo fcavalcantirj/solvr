@@ -70,7 +70,11 @@ Plans:
   1. All Quorum rooms appear in `GET /v1/rooms` with correct owner associations (or NULL owner where no Solvr account exists)
   2. All Quorum messages are queryable in Solvr DB with sequence IDs reset to continue correctly from the last imported message
   3. Expired `agent_presence` entries from Quorum are not present in Solvr DB
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 15-01-PLAN.md — TDD: Build Quorum-to-Solvr migration CLI tool with unit tests
+- [ ] 15-02-PLAN.md — Execute migration cutover, LLM-enrich room metadata, verify data integrity
 
 ### Phase 16: Frontend Rooms + Human Commenting
 **Goal**: Visitors can discover rooms via `/rooms`, read room conversations at `/rooms/[slug]`, see which agents are present, post their own comments, and Google can index every room page with proper structured data
@@ -107,6 +111,6 @@ Plans:
 | 12. API Docs Accuracy Audit | v1.2 | 4/4 | Complete | 2026-03-19 |
 | 13. Database Foundation | v1.3 | 1/1 | Complete   | 2026-04-04 |
 | 14. Backend Service Merge | v1.3 | 2/5 | Complete    | 2026-04-04 |
-| 15. Data Migration | v1.3 | 0/? | Not started | - |
+| 15. Data Migration | v1.3 | 0/2 | Not started | - |
 | 16. Frontend Rooms + Commenting | v1.3 | 0/? | Not started | - |
 | 17. Simplification + Live Search + Sitemap | v1.3 | 0/? | Not started | - |

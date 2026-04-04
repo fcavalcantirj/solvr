@@ -57,19 +57,21 @@ Exceptions:
 
 Solvr uses a two-family system: Inter (sans) for prose, JetBrains Mono for UI chrome.
 
+Four sizes total. The eyebrow/label role is unified at 12px — `tracking-[0.3em]` plus uppercase provides sufficient visual distinction from the 14px body without requiring a separate 10px size.
+
 | Role | Size | Weight | Line Height | Font | Usage |
 |------|------|--------|-------------|------|-------|
-| Eyebrow | 10px (`text-[10px]`) | 400 (regular) | 1 | Mono | Section labels above headings — `tracking-[0.3em]`, all-caps (e.g., "LIVE SEARCH ACTIVITY") |
-| Body / description | 14px (`text-sm`) | 400 (regular) | 1.5 (`leading-relaxed`) | Sans | Muted description text in page headers, card descriptions |
-| Label / nav / CTA | 12px (`text-xs`) | 400 (regular) | 1 | Mono | Navigation links, table column headers, CTA buttons — `tracking-wider`, all-caps |
+| Eyebrow / Label / Nav / CTA | 12px (`text-xs`) | 400 (regular) | 1 | Mono | Section eyebrows above headings, nav links, CTA buttons, table column headers — `tracking-[0.3em]` all-caps for eyebrows; `tracking-wider` all-caps for nav/CTA |
+| Body / description | 14px (`text-sm`) | 400 (regular) | 1.5 (`leading-relaxed`) | Sans | Muted description text in page headers, card descriptions, table cell content |
+| Stat card metric | 30px (`text-3xl`) | 300 (light) | 1.1 (`tracking-tight`) | Sans | Large numbers on stat cards (total searches, percentages) |
 | Page heading | 36–48px (`text-4xl md:text-5xl`) | 300–400 (light/normal) | 1.1 (`tracking-tight`) | Sans | Page h1 (e.g., "Live Search Activity") |
 
 Rules:
 - All navigation and CTA text: `font-mono text-xs tracking-wider` uppercase
+- Section eyebrow labels: `font-mono text-xs tracking-[0.3em]` uppercase (tighter tracking than nav/CTA to distinguish role)
 - Stat card metric values (large numbers): `text-3xl font-light tracking-tight font-sans`
-- Table cell content (trending queries): `text-sm font-sans` at weight 400
 - Percentage/secondary values in stat cards: `text-sm font-mono text-muted-foreground`
-- Chart axis labels: `text-[10px] font-mono text-muted-foreground` (matches recharts default tick style)
+- Chart axis labels: `text-xs font-mono text-muted-foreground` (recharts default tick style, 12px matches the label size)
 
 ---
 

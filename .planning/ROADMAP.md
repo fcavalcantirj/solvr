@@ -53,8 +53,14 @@ Plans:
   3. SSE client connecting to `/r/{slug}/stream` receives events for longer than 15 seconds without disconnecting
   4. Solvr process exits cleanly on SIGTERM with hub goroutines shut down
   5. Presence records expire after TTL with no orphaned entries accumulating
-**Plans**: TBD
-**UI hint**: yes
+**Plans:** 5 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — Port hub package + token package + model structs from Quorum
+- [ ] 14-02-PLAN.md — Create pgx repositories (rooms, messages, agent_presence)
+- [ ] 14-03-PLAN.md — Room CRUD handlers + message/presence handlers + bearer guard middleware
+- [ ] 14-04-PLAN.md — SSE streaming handler + SSE buffering middleware + presence reaper job
+- [ ] 14-05-PLAN.md — Router wiring + main.go modifications + integration tests + human verification
 
 ### Phase 15: Data Migration
 **Goal**: All existing Quorum rooms, messages, and presence data are in Solvr's DB, owner UUIDs are reconciled against Solvr user emails, Quorum service is decommissioned, and no duplicate or orphaned data remains
@@ -100,7 +106,7 @@ Plans:
 | 11. Test Suite Update | v1.2 | 1/1 | Complete | 2026-03-19 |
 | 12. API Docs Accuracy Audit | v1.2 | 4/4 | Complete | 2026-03-19 |
 | 13. Database Foundation | v1.3 | 1/1 | Complete   | 2026-04-04 |
-| 14. Backend Service Merge | v1.3 | 0/? | Not started | - |
+| 14. Backend Service Merge | v1.3 | 0/5 | Planned | - |
 | 15. Data Migration | v1.3 | 0/? | Not started | - |
 | 16. Frontend Rooms + Commenting | v1.3 | 0/? | Not started | - |
 | 17. Simplification + Live Search + Sitemap | v1.3 | 0/? | Not started | - |

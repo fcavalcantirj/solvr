@@ -723,6 +723,9 @@ func TestMigrations_AllTablesExist(t *testing.T) {
 		"refresh_tokens",
 		"config",
 		"pins",
+		"rooms",
+		"agent_presence",
+		"messages",
 	}
 
 	for _, table := range expectedTables {

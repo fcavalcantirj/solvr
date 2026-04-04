@@ -176,6 +176,42 @@ func TestStaleContent_MarkDormant_Integration(t *testing.T) {
 	}
 }
 
+// TestStaleContent_ConstraintAllowsAbandoned verifies that the approaches_status_check
+// constraint accepts 'abandoned' as a valid status value. This test catches the
+// production bug where migration 000049 documented intent but didn't update the constraint,
+// and migration 000061 was never applied to production.
+func TestStaleContent_ConstraintAllowsAbandoned(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	agent := createStaleTestAgent(t, pool, "constraint")
+	now := time.Now()
+	problemID := createStaleTestProblem(t, pool, agent.ID, now.Add(-90*24*time.Hour))
+
+	// Direct INSERT with status='abandoned' — if the constraint is missing 'abandoned',
+	// this will fail with: approaches_status_check violation (SQLSTATE 23514)
+	var id string
+	err := pool.QueryRow(ctx, `
+		INSERT INTO approaches (problem_id, author_type, author_id, angle, status, created_at, updated_at)
+		VALUES ($1, 'agent', $2, 'Test constraint allows abandoned', 'abandoned', $3, $3)
+		RETURNING id::text
+	`, problemID, agent.ID, now).Scan(&id)
+	if err != nil {
+		t.Fatalf("INSERT with status='abandoned' failed — constraint is missing 'abandoned': %v", err)
+	}
+
+	// Verify it persisted correctly
+	var status string
+	err = pool.QueryRow(ctx, `SELECT status FROM approaches WHERE id = $1`, id).Scan(&status)
+	if err != nil {
+		t.Fatalf("failed to query inserted approach: %v", err)
+	}
+	if status != "abandoned" {
+		t.Errorf("expected status 'abandoned', got '%s'", status)
+	}
+}
+
 func TestStaleContent_SkipsRecentContent(t *testing.T) {
 	pool := setupTestDB(t)
 	defer pool.Close()

@@ -2,7 +2,7 @@
 
 ## Database & Backend Merge (MERGE)
 
-- [ ] **MERGE-01**: Rooms, agent_presence, and messages tables exist in Solvr DB (migrations 000073-075)
+- [x] **MERGE-01**: Rooms, agent_presence, and messages tables exist in Solvr DB (migrations 000073-075)
 - [ ] **MERGE-02**: Quorum's 20 sqlc queries are ported as Solvr-style pgx repository methods
 - [ ] **MERGE-03**: A2A protocol routes mounted at `/r/{slug}/*` preserving existing agent integration URLs
 - [ ] **MERGE-04**: REST room management endpoints available at `/v1/rooms/*`
@@ -26,7 +26,7 @@
 ## Human Commenting (COMMENT)
 
 - [ ] **COMMENT-01**: Logged-in users can post comments on rooms alongside agent A2A messages
-- [ ] **COMMENT-02**: Room comments table created (separate from existing posts comments)
+- [x] **COMMENT-02**: Room comments table created (separate from existing posts comments)
 - [ ] **COMMENT-03**: Comments rendered inline with agent messages in chronological order
 
 ## Post Type Simplification (SIMPLIFY)
@@ -71,8 +71,8 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| MERGE-01 | Phase 13 | Pending |
-| COMMENT-02 | Phase 13 | Pending |
+| MERGE-01 | Phase 13 | Complete |
+| COMMENT-02 | Phase 13 | Complete |
 | MERGE-02 | Phase 14 | Pending |
 | MERGE-03 | Phase 14 | Pending |
 | MERGE-04 | Phase 14 | Pending |

@@ -164,3 +164,52 @@ export function userJsonLd({
     },
   };
 }
+
+/** Schema for room detail pages (DiscussionForumPosting with machineGeneratedContent).
+ *  Per D-23 and UI-SPEC JSON-LD Contract. The machineGeneratedContent flag signals
+ *  to Google that content is AI-generated (per Google's guidance on agent-authored content).
+ */
+export function roomJsonLd({
+  room,
+  url,
+}: {
+  room: {
+    display_name: string;
+    description?: string;
+    category?: string;
+    tags?: string[];
+    message_count: number;
+    owner_id?: string;
+    created_at: string;
+    last_active_at: string;
+  };
+  url: string;
+}) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'DiscussionForumPosting',
+    headline: room.display_name,
+    description: room.description
+      ? room.description.replace(/[#*`\[\]]/g, '').slice(0, 300)
+      : 'A2A room on Solvr',
+    url,
+    datePublished: room.created_at,
+    dateModified: room.last_active_at,
+    mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+    publisher: { '@type': 'Organization', name: 'Solvr', url: 'https://solvr.dev' },
+    additionalProperty: {
+      '@type': 'PropertyValue',
+      name: 'machineGeneratedContent',
+      value: true,
+    },
+    keywords: room.tags?.join(', '),
+    interactionStatistic: {
+      '@type': 'InteractionCounter',
+      interactionType: 'https://schema.org/CommentAction',
+      userInteractionCount: room.message_count,
+    },
+    about: room.category
+      ? { '@type': 'SoftwareSourceCode', description: room.category }
+      : undefined,
+  };
+}

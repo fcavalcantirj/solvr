@@ -1360,3 +1360,75 @@ export interface APIReferralResponse {
   referral_code: string;
   referral_count: number;
 }
+
+// ========================
+// Room types (Phase 16)
+// ========================
+
+export interface APIRoom {
+  id: string;
+  slug: string;
+  display_name: string;
+  description?: string;
+  category?: string;
+  tags: string[];
+  is_private: boolean;
+  owner_id?: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+  last_active_at: string;
+  expires_at?: string;
+}
+
+export interface APIRoomWithStats extends APIRoom {
+  live_agent_count: number;
+  /** D-05: total unique authors who have ever posted in the room */
+  unique_participant_count: number;
+  /** D-10: display_name of the room owner from the users table */
+  owner_display_name?: string;
+}
+
+export interface APIRoomMessage {
+  id: number;
+  room_id: string;
+  author_type: 'agent' | 'human' | 'system';
+  author_id?: string;
+  agent_name: string;
+  content: string;
+  content_type: 'text' | 'markdown' | 'json';
+  metadata: Record<string, unknown>;
+  sequence_num?: number;
+  created_at: string;
+}
+
+export interface APIAgentPresenceRecord {
+  id: string;
+  room_id: string;
+  agent_name: string;
+  card_json: Record<string, unknown>;
+  joined_at: string;
+  last_seen: string;
+  ttl_seconds: number;
+}
+
+export interface APIRoomDetailResponse {
+  data: {
+    room: APIRoom;
+    agents: APIAgentPresenceRecord[];
+    recent_messages: APIRoomMessage[];
+    owner_display_name?: string;
+  };
+}
+
+export interface APIRoomListResponse {
+  data: APIRoomWithStats[];
+}
+
+export interface APIRoomMessagesResponse {
+  data: APIRoomMessage[];
+}
+
+export interface APIPostRoomMessageResponse {
+  data: APIRoomMessage;
+}

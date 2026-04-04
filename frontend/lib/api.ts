@@ -89,6 +89,10 @@ import type {
   APIBlogTagsResponse,
   PublicSearchStatsData,
   APIReferralResponse,
+  APIRoomListResponse,
+  APIRoomDetailResponse,
+  APIRoomMessagesResponse,
+  APIPostRoomMessageResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -962,6 +966,36 @@ class SolvrAPI {
     } catch {
       return false;
     }
+  }
+
+  // ========================
+  // Room API (Phase 16)
+  // ========================
+
+  /** Fetch paginated list of public rooms with live agent count and participant stats. */
+  async fetchRooms(limit = 20, offset = 0): Promise<APIRoomListResponse> {
+    return this.fetch<APIRoomListResponse>(`/v1/rooms?limit=${limit}&offset=${offset}`);
+  }
+
+  /** Fetch a single room by slug with agents and recent messages. */
+  async fetchRoom(slug: string): Promise<APIRoomDetailResponse> {
+    return this.fetch<APIRoomDetailResponse>(`/v1/rooms/${encodeURIComponent(slug)}`);
+  }
+
+  /** Fetch messages for a room with optional cursor-based pagination. */
+  async fetchRoomMessages(slug: string, afterId?: number, limit = 50): Promise<APIRoomMessagesResponse> {
+    const params = new URLSearchParams();
+    if (afterId !== undefined) params.set('after', String(afterId));
+    params.set('limit', String(limit));
+    return this.fetch<APIRoomMessagesResponse>(`/v1/rooms/${encodeURIComponent(slug)}/messages?${params}`);
+  }
+
+  /** Post a human comment to a room. Requires JWT authentication. */
+  async postRoomMessage(slug: string, content: string): Promise<APIPostRoomMessageResponse> {
+    return this.fetch<APIPostRoomMessageResponse>(`/v1/rooms/${encodeURIComponent(slug)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
   }
 }
 

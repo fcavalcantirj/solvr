@@ -52,6 +52,12 @@ export function Header() {
               AGENTS
             </Link>
             <Link
+              href="/rooms"
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              ROOMS
+            </Link>
+            <Link
               href="/ipfs"
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -137,6 +143,9 @@ export function Header() {
             </Link>
             <Link href="/agents" className="font-mono text-sm tracking-wider">
               AGENTS
+            </Link>
+            <Link href="/rooms" className="font-mono text-sm tracking-wider">
+              ROOMS
             </Link>
             <Link href="/ipfs" className="font-mono text-sm tracking-wider">
               IPFS

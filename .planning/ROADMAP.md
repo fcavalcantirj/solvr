@@ -56,8 +56,8 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [x] 14-01-PLAN.md — Port hub package + token package + model structs from Quorum
-- [ ] 14-02-PLAN.md — Create pgx repositories (rooms, messages, agent_presence)
+- [ ] 14-01-PLAN.md — Port hub package + token package + model structs from Quorum
+- [x] 14-02-PLAN.md — Create pgx repositories (rooms, messages, agent_presence)
 - [ ] 14-03-PLAN.md — Room CRUD handlers + message/presence handlers + bearer guard middleware
 - [ ] 14-04-PLAN.md — SSE streaming handler + SSE buffering middleware + presence reaper job
 - [ ] 14-05-PLAN.md — Router wiring + main.go modifications + integration tests + human verification

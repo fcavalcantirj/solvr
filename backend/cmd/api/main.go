@@ -77,10 +77,9 @@ func main() {
 	var hubCancel context.CancelFunc
 	if pool != nil {
 		presenceRegistry = hub.NewPresenceRegistry()
-		hubMgr = hub.NewHubManager(presenceRegistry, slog.Default(), 0) // 0 = no per-room limit per D-05
 		var hubCtx context.Context
 		hubCtx, hubCancel = context.WithCancel(context.Background())
-		_ = hubCtx // hub goroutines use their own contexts; cancel propagates via hubCancel
+		hubMgr = hub.NewHubManager(hubCtx, presenceRegistry, slog.Default(), 0) // 0 = no per-room limit per D-05
 	}
 
 	// Create router with database pool, hub, and embedding service

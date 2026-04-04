@@ -15,17 +15,21 @@ import (
 type HubManager struct {
 	mu            sync.RWMutex
 	hubs          map[RoomID]*RoomHub
+	ctx           context.Context // long-lived context for hub goroutines
 	registry      *PresenceRegistry
 	logger        *slog.Logger
 	maxSSEPerRoom int // per-room SSE subscriber limit passed to each new RoomHub
 }
 
 // NewHubManager creates an empty HubManager backed by the given PresenceRegistry.
+// ctx is the long-lived context that all hub goroutines inherit — cancel it to shut
+// down every hub (typically at server shutdown).
 // maxSSEPerRoom is the per-room SSE subscriber limit enforced by each RoomHub
 // (see ErrRoomAtCapacity). Pass 0 to disable the limit (not recommended for production).
-func NewHubManager(registry *PresenceRegistry, logger *slog.Logger, maxSSEPerRoom int) *HubManager {
+func NewHubManager(ctx context.Context, registry *PresenceRegistry, logger *slog.Logger, maxSSEPerRoom int) *HubManager {
 	return &HubManager{
 		hubs:          make(map[RoomID]*RoomHub),
+		ctx:           ctx,
 		registry:      registry,
 		logger:        logger,
 		maxSSEPerRoom: maxSSEPerRoom,
@@ -33,11 +37,11 @@ func NewHubManager(registry *PresenceRegistry, logger *slog.Logger, maxSSEPerRoo
 }
 
 // GetOrCreate returns the RoomHub for the given room, creating and starting it
-// if it does not yet exist. The hub goroutine is bound to the provided context --
-// canceling ctx shuts down the hub (and all subscriber channels).
+// if it does not yet exist. The hub goroutine is bound to the manager's long-lived
+// context (not the caller's request context) so it survives individual HTTP requests.
 //
 // The returned hub is guaranteed to have its Run goroutine already started.
-func (m *HubManager) GetOrCreate(ctx context.Context, id RoomID) *RoomHub {
+func (m *HubManager) GetOrCreate(_ context.Context, id RoomID) *RoomHub {
 	// Fast path: hub already exists.
 	m.mu.RLock()
 	if h, ok := m.hubs[id]; ok {
@@ -57,7 +61,7 @@ func (m *HubManager) GetOrCreate(ctx context.Context, id RoomID) *RoomHub {
 
 	h := NewRoomHub(id, m.registry, m.logger, m.maxSSEPerRoom)
 	m.hubs[id] = h
-	go h.Run(ctx, m.registry)
+	go h.Run(m.ctx, m.registry)
 	m.logger.Info("hub created", "room", id.String())
 	return h
 }

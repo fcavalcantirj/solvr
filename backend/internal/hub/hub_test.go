@@ -303,10 +303,9 @@ func TestPresenceRegistryFilterBySkillID(t *testing.T) {
 // Test 8: HubManager GetOrCreate returns same instance on repeated calls.
 func TestHubManagerGetOrCreate(t *testing.T) {
 	registry := hub.NewPresenceRegistry()
-	manager := hub.NewHubManager(registry, makeLogger(), 100)
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	manager := hub.NewHubManager(ctx, registry, makeLogger(), 100)
 
 	roomID := hub.NewRoomID(uuid.New())
 

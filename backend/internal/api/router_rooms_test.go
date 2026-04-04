@@ -35,7 +35,7 @@ func setupRoomTestServer(t *testing.T) (*httptest.Server, *db.Pool, func()) {
 	require.NoError(t, err)
 
 	registry := hub.NewPresenceRegistry()
-	hubMgr := hub.NewHubManager(registry, slog.Default(), 0)
+	hubMgr := hub.NewHubManager(context.Background(), registry, slog.Default(), 0)
 
 	router := NewRouter(pool, hubMgr, registry)
 	ts := httptest.NewServer(router)

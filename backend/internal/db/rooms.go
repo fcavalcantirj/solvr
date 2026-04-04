@@ -149,8 +149,9 @@ func (r *RoomRepository) GetByTokenHash(ctx context.Context, hash string) (*mode
 	return r.scanRoom(ctx, "GetByTokenHash", query, hash)
 }
 
-// List returns public rooms with live agent count, ordered by last_active_at DESC.
-// Uses a single query with a correlated subquery for live_agent_count (no N+1 per D-34).
+// List returns public rooms with live agent count, unique participant count, and owner display name,
+// ordered by last_active_at DESC. Uses correlated subqueries (no N+1 per D-34).
+// Includes unique_participant_count (D-05) and owner_display_name (D-10) per Phase 16 Plan 01.
 func (r *RoomRepository) List(ctx context.Context, limit, offset int) ([]models.RoomWithStats, error) {
 	query := `
 		SELECT r.id, r.slug, r.display_name, r.description, r.category, r.tags,
@@ -159,8 +160,13 @@ func (r *RoomRepository) List(ctx context.Context, limit, offset int) ([]models.
 			(SELECT COUNT(DISTINCT agent_name) FROM agent_presence ap
 			 WHERE ap.room_id = r.id
 			   AND ap.last_seen > NOW() - (ap.ttl_seconds || ' seconds')::interval
-			) AS live_agent_count
+			) AS live_agent_count,
+			(SELECT COUNT(DISTINCT author_id) FROM messages m
+			 WHERE m.room_id = r.id AND m.deleted_at IS NULL AND m.author_id IS NOT NULL
+			) AS unique_participant_count,
+			u.display_name AS owner_display_name
 		FROM rooms r
+		LEFT JOIN users u ON u.id = r.owner_id
 		WHERE r.deleted_at IS NULL AND r.is_private = FALSE
 		ORDER BY r.last_active_at DESC
 		LIMIT $1 OFFSET $2
@@ -191,6 +197,8 @@ func (r *RoomRepository) List(ctx context.Context, limit, offset int) ([]models.
 			&rws.LastActiveAt,
 			&rws.ExpiresAt,
 			&rws.LiveAgentCount,
+			&rws.UniqueParticipantCount,
+			&rws.OwnerDisplayName,
 		)
 		if err != nil {
 			LogQueryError(ctx, "List.Scan", "rooms", err)

@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
 
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
+	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -23,6 +26,11 @@ type RoomMessagesHandler struct {
 	roomRepo     *db.RoomRepository
 	presenceRepo *db.AgentPresenceRepository
 	hubMgr       *hub.HubManager
+
+	// testRoomLookup overrides room-by-slug lookup in unit tests (nil in production).
+	testRoomLookup func(ctx context.Context, slug string) (*models.Room, error)
+	// testMsgCreate overrides message creation in unit tests (nil in production).
+	testMsgCreate func(ctx context.Context, params models.CreateMessageParams) (*models.Message, error)
 }
 
 // NewRoomMessagesHandler creates a new RoomMessagesHandler with all required dependencies.
@@ -47,6 +55,11 @@ type postMessageRequest struct {
 	Content     string          `json:"content"`
 	ContentType string          `json:"content_type,omitempty"`
 	Metadata    json.RawMessage `json:"metadata,omitempty"`
+}
+
+// postHumanMessageRequest is the JSON body for POST /v1/rooms/{slug}/messages (human comment).
+type postHumanMessageRequest struct {
+	Content string `json:"content"`
 }
 
 // PostMessage handles POST /r/{slug}/message.
@@ -141,6 +154,117 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 	roomWriteJSON(w, http.StatusCreated, response)
 }
 
+// PostHumanMessage handles POST /v1/rooms/{slug}/messages.
+// Requires Solvr JWT authentication (not a room bearer token).
+// Allows authenticated human users to post comments in a room.
+// Author identity is extracted from the JWT claims server-side (T-16-03: never trust client).
+// Content type is always "text" (D-26, T-16-01).
+func (h *RoomMessagesHandler) PostHumanMessage(w http.ResponseWriter, r *http.Request) {
+	// T-16-03: Extract user identity from JWT claims (server-side only).
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
+		return
+	}
+
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "slug is required")
+		return
+	}
+
+	// Resolve room by slug (public REST route, not bearer guard).
+	room, err := h.resolveRoomBySlug(r.Context(), slug)
+	if err != nil {
+		if errors.Is(err, db.ErrRoomNotFound) {
+			roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "room not found")
+			return
+		}
+		slog.Error("failed to get room for human message", "error", err, "slug", slug)
+		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get room")
+		return
+	}
+
+	var req postHumanMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		return
+	}
+
+	// T-16-01: Validate content length and enforce text-only content type.
+	if req.Content == "" {
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "content is required")
+		return
+	}
+	if len(req.Content) > maxMessageContentLen {
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "content exceeds maximum length of 65536 characters")
+		return
+	}
+
+	// T-16-03: AuthorID comes from the JWT, never from request body.
+	authorID := claims.UserID
+	params := models.CreateMessageParams{
+		RoomID:      room.ID,
+		AuthorType:  "human",
+		AuthorID:    &authorID,
+		AgentName:   "human:" + claims.UserID, // deterministic, not displayed
+		Content:     req.Content,
+		ContentType: "text", // D-26: human comments are always plain text
+	}
+
+	msg, err := h.createMessage(r.Context(), params)
+	if err != nil {
+		slog.Error("failed to create human message", "error", err, "room_id", room.ID)
+		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create message")
+		return
+	}
+
+	// Increment message count on room (non-fatal if fails).
+	if h.roomRepo != nil {
+		if err := h.roomRepo.IncrementMessageCount(r.Context(), room.ID); err != nil {
+			slog.Error("failed to increment message count", "error", err, "room_id", room.ID)
+		}
+		// Update room activity timestamp (non-fatal).
+		if err := h.roomRepo.UpdateActivity(r.Context(), room.ID); err != nil {
+			slog.Error("failed to update room activity", "error", err, "room_id", room.ID)
+		}
+	}
+
+	// Broadcast to hub for real-time SSE subscribers (non-fatal).
+	if h.hubMgr != nil {
+		roomHub := h.hubMgr.GetOrCreate(r.Context(), hub.NewRoomID(room.ID))
+		roomHub.Broadcast(hub.RoomEvent{
+			ID:        msg.ID,
+			Type:      hub.EventMessage,
+			RoomID:    hub.NewRoomID(room.ID),
+			AgentName: msg.AgentName,
+			Payload:   msg,
+			Timestamp: msg.CreatedAt,
+		})
+	}
+
+	response := map[string]interface{}{
+		"data": msg,
+	}
+	roomWriteJSON(w, http.StatusCreated, response)
+}
+
+// resolveRoomBySlug looks up a room by slug, using testRoomLookup in unit tests.
+func (h *RoomMessagesHandler) resolveRoomBySlug(ctx context.Context, slug string) (*models.Room, error) {
+	if h.testRoomLookup != nil {
+		return h.testRoomLookup(ctx, slug)
+	}
+	return h.roomRepo.GetBySlug(ctx, slug)
+}
+
+// createMessage creates a message, using testMsgCreate in unit tests.
+func (h *RoomMessagesHandler) createMessage(ctx context.Context, params models.CreateMessageParams) (*models.Message, error) {
+	if h.testMsgCreate != nil {
+		return h.testMsgCreate(ctx, params)
+	}
+	return h.msgRepo.Create(ctx, params)
+}
+
 // ListMessages handles GET /r/{slug}/messages and GET /v1/rooms/{slug}/messages.
 // Supports cursor-based pagination per D-35: ?after=<message_id>&limit=<n>.
 func (h *RoomMessagesHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
@@ -202,3 +326,4 @@ func (h *RoomMessagesHandler) ListMessages(w http.ResponseWriter, r *http.Reques
 	}
 	roomWriteJSON(w, http.StatusOK, response)
 }
+

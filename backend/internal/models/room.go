@@ -29,7 +29,9 @@ type Room struct {
 // RoomWithStats extends Room with computed fields for list responses.
 type RoomWithStats struct {
 	Room
-	LiveAgentCount int `json:"live_agent_count"`
+	LiveAgentCount         int     `json:"live_agent_count"`
+	UniqueParticipantCount int     `json:"unique_participant_count"`
+	OwnerDisplayName       *string `json:"owner_display_name,omitempty"`
 }
 
 // CreateRoomParams holds parameters for creating a room.

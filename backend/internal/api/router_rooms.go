@@ -35,7 +35,7 @@ func mountRoomRoutes(
 	roomHandler := handlers.NewRoomHandler(roomRepo, msgRepo, presenceRepo)
 	msgHandler := handlers.NewRoomMessagesHandler(msgRepo, roomRepo, presenceRepo, hubMgr)
 	presenceHandler := handlers.NewRoomPresenceHandler(presenceRepo, roomRepo, hubMgr, registry)
-	sseHandler := handlers.NewRoomSSEHandler(hubMgr, msgRepo)
+	sseHandler := handlers.NewRoomSSEHandler(hubMgr, msgRepo, roomRepo)
 
 	// -- REST routes: /v1/rooms/* (D-18, D-19: public list/detail, auth for write) --
 	r.Route("/v1/rooms", func(r chi.Router) {
@@ -45,6 +45,10 @@ func mountRoomRoutes(
 		r.Get("/{slug}/messages", msgHandler.ListMessages)
 		r.Get("/{slug}/agents", presenceHandler.ListPresence)
 
+		// Public SSE stream for browser clients (no bearer token required, D-33 / T-16-04).
+		// Must be outside the authenticated group so unauthenticated browsers can connect.
+		r.With(apimiddleware.SSENoBuffering).Get("/{slug}/stream", sseHandler.PublicStream)
+
 		// Authenticated endpoints (Solvr JWT or agent API key per D-16)
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
@@ -52,6 +56,8 @@ func mountRoomRoutes(
 			r.Patch("/{slug}", roomHandler.UpdateRoom)
 			r.Delete("/{slug}", roomHandler.DeleteRoom)
 			r.Post("/{slug}/rotate-token", roomHandler.RotateToken)
+			// Human comment endpoint (JWT-authenticated, rate limited per T-16-02).
+			r.With(httprate.LimitByIP(10, time.Minute)).Post("/{slug}/messages", msgHandler.PostHumanMessage)
 		})
 	})
 

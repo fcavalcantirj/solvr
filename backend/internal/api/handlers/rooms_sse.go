@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
@@ -44,16 +46,30 @@ func SSERoomToContext(ctx context.Context, room *models.Room) context.Context {
 // It provides real-time streaming of room events (messages, presence changes)
 // with Last-Event-ID replay, heartbeat pings, and connection limits.
 type RoomSSEHandler struct {
-	hubMgr  *hub.HubManager
-	msgRepo *db.MessageRepository
+	hubMgr   *hub.HubManager
+	msgRepo  *db.MessageRepository
+	roomRepo *db.RoomRepository
+
+	// testRoomLookup overrides room-by-slug lookup in unit tests (nil in production).
+	testRoomLookup func(ctx context.Context, slug string) (*models.Room, error)
 }
 
 // NewRoomSSEHandler creates a new SSE handler for room event streaming.
-func NewRoomSSEHandler(hubMgr *hub.HubManager, msgRepo *db.MessageRepository) *RoomSSEHandler {
+// roomRepo is required for PublicStream (resolves room by slug without bearer token).
+func NewRoomSSEHandler(hubMgr *hub.HubManager, msgRepo *db.MessageRepository, roomRepo *db.RoomRepository) *RoomSSEHandler {
 	return &RoomSSEHandler{
-		hubMgr:  hubMgr,
-		msgRepo: msgRepo,
+		hubMgr:   hubMgr,
+		msgRepo:  msgRepo,
+		roomRepo: roomRepo,
 	}
+}
+
+// resolveSSERoomBySlug looks up a room by slug, using testRoomLookup in unit tests.
+func (h *RoomSSEHandler) resolveSSERoomBySlug(ctx context.Context, slug string) (*models.Room, error) {
+	if h.testRoomLookup != nil {
+		return h.testRoomLookup(ctx, slug)
+	}
+	return h.roomRepo.GetBySlug(ctx, slug)
 }
 
 // Stream handles GET /r/{slug}/stream -- SSE stream of room activity.
@@ -81,6 +97,48 @@ func (h *RoomSSEHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.streamRoom(w, r, room)
+}
+
+// PublicStream handles GET /v1/rooms/{slug}/stream -- public browser SSE stream.
+//
+// Unlike Stream (A2A route), this endpoint:
+// - Requires no bearer token (public route, no BearerGuard middleware)
+// - Resolves the room by slug from the chi URL parameter
+// - Supports ?lastEventId= query param in addition to Last-Event-ID header
+//
+// All other behaviour (connection limits, heartbeat, max lifetime, replay) is
+// identical to Stream. T-16-04: global connection limit and per-room capacity
+// check remain enforced to prevent resource exhaustion.
+func (h *RoomSSEHandler) PublicStream(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		http.Error(w, `{"error":{"code":"VALIDATION_ERROR","message":"slug is required"}}`, http.StatusBadRequest)
+		return
+	}
+
+	room, err := h.resolveSSERoomBySlug(r.Context(), slug)
+	if err != nil {
+		if errors.Is(err, db.ErrRoomNotFound) {
+			http.Error(w, `{"error":{"code":"NOT_FOUND","message":"room not found"}}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":{"code":"INTERNAL_ERROR","message":"failed to get room"}}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Support ?lastEventId= query param for initial browser connect.
+	// Browsers can pass it in the URL when the EventSource API doesn't send
+	// Last-Event-ID automatically on the first connection.
+	if lastID := r.URL.Query().Get("lastEventId"); lastID != "" {
+		r.Header.Set("Last-Event-ID", lastID)
+	}
+
+	h.streamRoom(w, r, room)
+}
+
+// streamRoom contains the shared SSE streaming logic used by both Stream and PublicStream.
+func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room *models.Room) {
 	// Step 1: Check flusher support (required for SSE streaming).
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -88,7 +146,7 @@ func (h *RoomSSEHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 2: Global connection limit (D-05).
+	// Step 2: Global connection limit (D-05 / T-16-04).
 	current := atomic.AddInt64(&globalSSEConnections, 1)
 	defer atomic.AddInt64(&globalSSEConnections, -1)
 	if current > MaxGlobalSSEConnections {
@@ -108,7 +166,7 @@ func (h *RoomSSEHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	// Step 4: Last-Event-ID replay (D-07).
 	// If the client reconnects with a Last-Event-ID header, replay missed messages
 	// from the database using cursor-based pagination on BIGSERIAL message ID.
-	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" {
+	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" && h.msgRepo != nil {
 		afterID, parseErr := strconv.ParseInt(lastID, 10, 64)
 		if parseErr == nil && afterID > 0 {
 			msgs, listErr := h.msgRepo.ListAfter(r.Context(), room.ID, afterID, 100)
@@ -130,18 +188,24 @@ func (h *RoomSSEHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	// Step 5: Subscribe to hub (D-12: lazy room creation).
 	// Browser subscribers use a unique pseudo-agent name prefixed with _browser_
 	// so they don't appear in agent discovery or presence lists.
+	if h.hubMgr == nil {
+		// No hub available (e.g. test without hub). Hold open until context cancels.
+		<-r.Context().Done()
+		return
+	}
+
 	subscriberName := "_browser_" + uuid.New().String()[:8]
 	roomHub := h.hubMgr.GetOrCreate(r.Context(), hub.NewRoomID(room.ID))
 	ch, err := roomHub.Subscribe(subscriberName, nil)
 	if err != nil {
-		// ErrRoomAtCapacity — per-room SSE limit reached.
+		// ErrRoomAtCapacity — per-room SSE limit reached (T-16-04).
 		http.Error(w, `{"error":{"code":"SERVICE_UNAVAILABLE","message":"room at capacity"}}`, http.StatusServiceUnavailable)
 		return
 	}
 	defer roomHub.Unsubscribe(subscriberName)
 
 	// Step 6: Event loop with heartbeat (D-03: 30-min max, D-04: 30s heartbeat).
-	maxLifetime, cancel := context.WithTimeout(r.Context(), 30 * time.Minute)
+	maxLifetime, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
 	defer cancel()
 
 	heartbeat := time.NewTicker(30 * time.Second)

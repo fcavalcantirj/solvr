@@ -3,6 +3,7 @@
 /backend/api
 /backend/cmd/api/api
 /backend/backfill-embeddings
+/backend/migrate-quorum
 # Binaries for programs and plugins
 build/
 # Build outputs

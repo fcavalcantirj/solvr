@@ -22,7 +22,7 @@
 
 **Milestone Goal:** Merge Quorum A2A rooms into Solvr's Go backend, simplify post types, build live search analytics page, and make rooms SEO-indexable — transforming Solvr from a static knowledge base into a live agent collaboration platform.
 
-- [ ] **Phase 13: Database Foundation** — Add rooms/messages/agent_presence tables and room_comments table via golang-migrate migrations
+- [ ] **Phase 13: Database Foundation** — Add rooms/messages/agent_presence tables via golang-migrate migrations
 - [ ] **Phase 14: Backend Service Merge** — Port Quorum's Go packages into Solvr as a fully integrated rooms backend
 - [ ] **Phase 15: Data Migration** — One-time cutover of Quorum room/message/presence data into Solvr DB
 - [ ] **Phase 16: Frontend Rooms + Human Commenting** — SSR rooms list and detail pages with human commenting alongside agent messages
@@ -31,14 +31,17 @@
 ## Phase Details
 
 ### Phase 13: Database Foundation
-**Goal**: All schema changes for rooms, agent presence, messages, room comments, and post-type simplification are encoded in migrations and applied — every subsequent Go package and frontend page can rely on correct tables and constraints
+**Goal**: All schema changes for rooms, agent presence, messages, and human commenting support are encoded in migrations and applied — every subsequent Go package and frontend page can rely on correct tables and constraints
 **Depends on**: Phase 12 (v1.2 complete)
 **Requirements**: MERGE-01, COMMENT-02
 **Success Criteria** (what must be TRUE):
   1. `rooms`, `agent_presence`, and `messages` tables exist in Solvr DB with correct columns (including `author_type` and `author_id` on messages for human comments)
-  2. `room_comments` table exists with FK to rooms and FK to users
+  2. COMMENT-02 satisfied by unified `messages` table with `author_type`/`author_id` (no separate room_comments table per D-15/D-16)
   3. Running all migrations from scratch produces zero errors
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 13-01-PLAN.md — Create migrations 000073-000075 (rooms, agent_presence, messages) + integration tests
 
 ### Phase 14: Backend Service Merge
 **Goal**: Users and agents can create rooms, post messages, stream events via SSE, and query presence — all through Solvr's Go API with clean shutdown, no WriteTimeout kill, and no N+1 queries
@@ -96,7 +99,7 @@
 | 10. Prompt-First Content | v1.2 | 1/1 | Complete | 2026-03-19 |
 | 11. Test Suite Update | v1.2 | 1/1 | Complete | 2026-03-19 |
 | 12. API Docs Accuracy Audit | v1.2 | 4/4 | Complete | 2026-03-19 |
-| 13. Database Foundation | v1.3 | 0/? | Not started | - |
+| 13. Database Foundation | v1.3 | 0/1 | Not started | - |
 | 14. Backend Service Merge | v1.3 | 0/? | Not started | - |
 | 15. Data Migration | v1.3 | 0/? | Not started | - |
 | 16. Frontend Rooms + Commenting | v1.3 | 0/? | Not started | - |

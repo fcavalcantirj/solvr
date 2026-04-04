@@ -10,7 +10,7 @@ import (
 
 // TestWellKnownAIAgentEndpoint verifies GET /.well-known/ai-agent.json
 func TestWellKnownAIAgentEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/ai-agent.json", nil)
 	w := httptest.NewRecorder()
@@ -28,7 +28,7 @@ func TestWellKnownAIAgentEndpoint(t *testing.T) {
 
 // TestWellKnownAIAgentContent verifies the content of /.well-known/ai-agent.json
 func TestWellKnownAIAgentContent(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/ai-agent.json", nil)
 	w := httptest.NewRecorder()
@@ -55,7 +55,7 @@ func TestWellKnownAIAgentContent(t *testing.T) {
 
 // TestWellKnownAIAgentAPISection verifies the api section
 func TestWellKnownAIAgentAPISection(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/ai-agent.json", nil)
 	w := httptest.NewRecorder()
@@ -82,7 +82,7 @@ func TestWellKnownAIAgentAPISection(t *testing.T) {
 
 // TestWellKnownAIAgentMCPSection verifies the mcp section
 func TestWellKnownAIAgentMCPSection(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/ai-agent.json", nil)
 	w := httptest.NewRecorder()
@@ -109,7 +109,7 @@ func TestWellKnownAIAgentMCPSection(t *testing.T) {
 
 // TestWellKnownAIAgentCapabilities verifies the capabilities array
 func TestWellKnownAIAgentCapabilities(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/ai-agent.json", nil)
 	w := httptest.NewRecorder()
@@ -143,7 +143,7 @@ func TestWellKnownAIAgentCapabilities(t *testing.T) {
 
 // TestOpenAPIJSONEndpoint verifies GET /v1/openapi.json
 func TestOpenAPIJSONEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/openapi.json", nil)
 	w := httptest.NewRecorder()
@@ -161,7 +161,7 @@ func TestOpenAPIJSONEndpoint(t *testing.T) {
 
 // TestOpenAPIJSONContent verifies the content is valid OpenAPI 3.0
 func TestOpenAPIJSONContent(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/openapi.json", nil)
 	w := httptest.NewRecorder()
@@ -201,7 +201,7 @@ func TestOpenAPIJSONContent(t *testing.T) {
 
 // TestOpenAPIJSONHasSearchEndpoint verifies search endpoint is documented
 func TestOpenAPIJSONHasSearchEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/openapi.json", nil)
 	w := httptest.NewRecorder()
@@ -225,7 +225,7 @@ func TestOpenAPIJSONHasSearchEndpoint(t *testing.T) {
 
 // TestOpenAPIYAMLEndpoint verifies GET /v1/openapi.yaml
 func TestOpenAPIYAMLEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/openapi.yaml", nil)
 	w := httptest.NewRecorder()
@@ -244,7 +244,7 @@ func TestOpenAPIYAMLEndpoint(t *testing.T) {
 
 // TestOpenAPIYAMLContent verifies YAML content starts correctly
 func TestOpenAPIYAMLContent(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/openapi.yaml", nil)
 	w := httptest.NewRecorder()
@@ -266,7 +266,7 @@ func TestOpenAPIYAMLContent(t *testing.T) {
 
 // TestOpenAPIYAMLHasSearchPath verifies /search is in YAML spec
 func TestOpenAPIYAMLHasSearchPath(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/openapi.yaml", nil)
 	w := httptest.NewRecorder()
@@ -281,7 +281,7 @@ func TestOpenAPIYAMLHasSearchPath(t *testing.T) {
 
 // TestOpenAPISpec_IncludesPinEndpoints verifies pin/checkpoint/resurrection/identity paths are in OpenAPI spec
 func TestOpenAPISpec_IncludesPinEndpoints(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/openapi.json", nil)
 	w := httptest.NewRecorder()
@@ -316,7 +316,7 @@ func TestOpenAPISpec_IncludesPinEndpoints(t *testing.T) {
 
 // TestOpenAPISpec_PinSchemas verifies pin-related schemas exist in OpenAPI components
 func TestOpenAPISpec_PinSchemas(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/openapi.json", nil)
 	w := httptest.NewRecorder()
@@ -354,7 +354,7 @@ func TestOpenAPISpec_PinSchemas(t *testing.T) {
 
 // TestRobotsTxtEndpoint verifies GET /robots.txt returns Disallow all
 func TestRobotsTxtEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
 	w := httptest.NewRecorder()
@@ -380,7 +380,7 @@ func TestRobotsTxtEndpoint(t *testing.T) {
 
 // TestDiscoveryEndpointsNoCORS verifies discovery endpoints work without CORS preflight
 func TestDiscoveryEndpointsNoCORS(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	endpoints := []string{
 		"/.well-known/ai-agent.json",

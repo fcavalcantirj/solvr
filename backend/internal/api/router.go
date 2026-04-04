@@ -21,6 +21,7 @@ import (
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/jobs"
 	"github.com/fcavalcantirj/solvr/internal/services"
 )
@@ -30,8 +31,9 @@ const Version = "0.2.0"
 
 // NewRouter creates and configures a new chi router with all middleware.
 // The pool parameter is optional - if nil, /health/ready will return 503.
+// hubMgr and registry are optional - if nil, room routes are not mounted.
 // The embeddingService parameter is optional - if nil, post creation won't generate embeddings.
-func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *chi.Mux {
+func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegistry, embeddingService ...services.EmbeddingService) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middleware stack
@@ -176,6 +178,17 @@ func NewRouter(pool *db.Pool, embeddingService ...services.EmbeddingService) *ch
 		embedSvc = embeddingService[0]
 	}
 	mountV1Routes(r, pool, ipfsAPIURL, embedSvc)
+
+	// Room routes (extracted per D-13 to keep router.go under 900 lines)
+	if pool != nil && hubMgr != nil {
+		jwtSecret := os.Getenv("JWT_SECRET")
+		agentRepo := db.NewAgentRepository(pool)
+		apiKeyValidator := auth.NewAPIKeyValidator(agentRepo)
+		userAPIKeyRepo := db.NewUserAPIKeyRepository(pool)
+		userAPIKeyValidator := auth.NewUserAPIKeyValidator(userAPIKeyRepo)
+		authMW := auth.UnifiedAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator)
+		mountRoomRoutes(r, pool, hubMgr, registry, authMW)
+	}
 
 	return r
 }

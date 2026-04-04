@@ -11,7 +11,7 @@ import (
 
 // TestNewRouter verifies that NewRouter returns a configured chi.Mux
 func TestNewRouter(t *testing.T) {
-	router := NewRouter(nil) // nil pool for basic tests
+	router := NewRouter(nil, nil, nil) // nil pool for basic tests
 	if router == nil {
 		t.Fatal("NewRouter returned nil")
 	}
@@ -19,7 +19,7 @@ func TestNewRouter(t *testing.T) {
 
 // TestRouterCORSHeaders verifies CORS middleware is configured
 func TestRouterCORSHeaders(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	// Make a preflight request
 	req := httptest.NewRequest(http.MethodOptions, "/health", nil)
@@ -38,7 +38,7 @@ func TestRouterCORSHeaders(t *testing.T) {
 
 // TestRouterJSONContentType verifies JSON content-type middleware
 func TestRouterJSONContentType(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
@@ -52,7 +52,7 @@ func TestRouterJSONContentType(t *testing.T) {
 
 // TestRouterSecurityHeaders verifies security headers are set
 func TestRouterSecurityHeaders(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
@@ -77,7 +77,7 @@ func TestRouterSecurityHeaders(t *testing.T) {
 
 // TestRouterRequestID verifies request ID middleware adds X-Request-ID header
 func TestRouterRequestID(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
@@ -96,7 +96,7 @@ func TestRouterRequestID(t *testing.T) {
 
 // TestHealthEndpoint verifies GET /health returns correct response
 func TestHealthEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
@@ -125,7 +125,7 @@ func TestHealthEndpoint(t *testing.T) {
 
 // TestHealthLiveEndpoint verifies GET /health/live returns correct response
 func TestHealthLiveEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
 	w := httptest.NewRecorder()
@@ -147,7 +147,7 @@ func TestHealthLiveEndpoint(t *testing.T) {
 
 // TestHealthReadyEndpointNoPool verifies GET /health/ready with no pool returns 503
 func TestHealthReadyEndpointNoPool(t *testing.T) {
-	router := NewRouter(nil) // No database pool
+	router := NewRouter(nil, nil, nil) // No database pool
 
 	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
 	w := httptest.NewRecorder()
@@ -161,7 +161,7 @@ func TestHealthReadyEndpointNoPool(t *testing.T) {
 
 // TestNotFoundReturnsJSON verifies 404 responses are JSON formatted
 func TestNotFoundReturnsJSON(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/nonexistent-path", nil)
 	w := httptest.NewRecorder()
@@ -189,7 +189,7 @@ func TestNotFoundReturnsJSON(t *testing.T) {
 
 // TestMethodNotAllowedReturnsJSON verifies 405 responses are JSON formatted
 func TestMethodNotAllowedReturnsJSON(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	// POST to /health should return 405
 	req := httptest.NewRequest(http.MethodPost, "/health", nil)
@@ -208,7 +208,7 @@ func TestMethodNotAllowedReturnsJSON(t *testing.T) {
 
 // TestCORSProductionOrigin verifies CORS allows production domain solvr.dev
 func TestCORSProductionOrigin(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	// Make a preflight request from production origin
 	req := httptest.NewRequest(http.MethodOptions, "/health", nil)
@@ -227,7 +227,7 @@ func TestCORSProductionOrigin(t *testing.T) {
 
 // TestCORSProductionWWWOrigin verifies CORS allows www.solvr.dev
 func TestCORSProductionWWWOrigin(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	// Make a preflight request from production www origin
 	req := httptest.NewRequest(http.MethodOptions, "/health", nil)
@@ -246,7 +246,7 @@ func TestCORSProductionWWWOrigin(t *testing.T) {
 
 // TestCORSLocalhostDevelopment verifies CORS allows localhost:3000 in development
 func TestCORSLocalhostDevelopment(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	// Make a preflight request from localhost
 	req := httptest.NewRequest(http.MethodOptions, "/health", nil)
@@ -265,7 +265,7 @@ func TestCORSLocalhostDevelopment(t *testing.T) {
 
 // TestCORSCredentialsAllowed verifies Access-Control-Allow-Credentials is set to true
 func TestCORSCredentialsAllowed(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	// Make a preflight request
 	req := httptest.NewRequest(http.MethodOptions, "/health", nil)
@@ -284,7 +284,7 @@ func TestCORSCredentialsAllowed(t *testing.T) {
 
 // TestCORSExposedRateLimitHeaders verifies X-RateLimit-* headers are exposed
 func TestCORSExposedRateLimitHeaders(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	// Make an actual GET request (not preflight) - exposed headers are only sent in actual responses
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -314,7 +314,7 @@ func TestCORSExposedRateLimitHeaders(t *testing.T) {
 
 // TestCORSAllowedMethods verifies allowed HTTP methods
 func TestCORSAllowedMethods(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	allowedMethods := []string{"GET", "POST", "PATCH", "DELETE"}
 
@@ -337,7 +337,7 @@ func TestCORSAllowedMethods(t *testing.T) {
 
 // TestCORSDisallowedOrigin verifies CORS rejects unknown origins
 func TestCORSDisallowedOrigin(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	// Make a preflight request from unknown origin
 	req := httptest.NewRequest(http.MethodOptions, "/health", nil)

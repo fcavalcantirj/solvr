@@ -35,7 +35,7 @@ func setupTestRouter(t *testing.T) *chi.Mux {
 		t.Fatalf("failed to connect to database: %v", err)
 	}
 	t.Cleanup(func() { pool.Close() })
-	return NewRouter(pool)
+	return NewRouter(pool, nil, nil)
 }
 
 // waitForPostOpen polls GET /v1/posts/:id until the post status is "open" (moderation approved).

@@ -12,7 +12,7 @@ import (
 // TestIPFSHealthEndpoint verifies GET /v1/health/ipfs returns IPFS health status.
 // Without a real IPFS node, the endpoint should return 503 (service unavailable).
 func TestIPFSHealthEndpoint(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/health/ipfs", nil)
 	w := httptest.NewRecorder()
@@ -38,7 +38,7 @@ func TestIPFSHealthEndpoint(t *testing.T) {
 
 // TestIPFSHealthEndpoint_ResponseFormat verifies the response has required JSON fields.
 func TestIPFSHealthEndpoint_ResponseFormat(t *testing.T) {
-	router := NewRouter(nil)
+	router := NewRouter(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/health/ipfs", nil)
 	w := httptest.NewRecorder()

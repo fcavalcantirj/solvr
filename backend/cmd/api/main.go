@@ -16,6 +16,7 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	"github.com/fcavalcantirj/solvr/internal/config"
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/jobs"
 	"github.com/fcavalcantirj/solvr/internal/services"
 )
@@ -70,8 +71,20 @@ func main() {
 		}
 	}
 
-	// Create router with database pool and embedding service
-	router := api.NewRouter(pool, embeddingService)
+	// Initialize hub manager for real-time room features
+	var hubMgr *hub.HubManager
+	var presenceRegistry *hub.PresenceRegistry
+	var hubCancel context.CancelFunc
+	if pool != nil {
+		presenceRegistry = hub.NewPresenceRegistry()
+		hubMgr = hub.NewHubManager(presenceRegistry, slog.Default(), 0) // 0 = no per-room limit per D-05
+		var hubCtx context.Context
+		hubCtx, hubCancel = context.WithCancel(context.Background())
+		_ = hubCtx // hub goroutines use their own contexts; cancel propagates via hubCancel
+	}
+
+	// Create router with database pool, hub, and embedding service
+	router := api.NewRouter(pool, hubMgr, presenceRegistry, embeddingService)
 
 	// Note: API routes are now mounted directly in api.NewRouter() via mountV1Routes()
 	// The previous call to api.MountAPIRoutes() was removed per FIX-001 because
@@ -203,13 +216,28 @@ func main() {
 		log.Println("Health check monitoring job started (runs every 5 minutes)")
 	}
 
+	// 7. Presence reaper job (D-26: every 60s, evicts expired agents and rooms)
+	var reaperCancel context.CancelFunc
+	if pool != nil && hubMgr != nil {
+		presenceRepo := db.NewAgentPresenceRepository(pool)
+		roomRepo := db.NewRoomRepository(pool)
+		reaperJob := jobs.NewPresenceReaperJob(presenceRepo, roomRepo, presenceRegistry, hubMgr)
+		var reaperCtx context.Context
+		reaperCtx, reaperCancel = context.WithCancel(context.Background())
+		go reaperJob.RunScheduled(reaperCtx, jobs.DefaultPresenceReaperInterval)
+		log.Println("Presence reaper job started (runs every 60 seconds)")
+	}
+
 	// Create server
 	server := &http.Server{
-		Addr:         ":" + port,
-		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:        ":" + port,
+		Handler:     router,
+		ReadTimeout: 15 * time.Second,
+		// WriteTimeout intentionally omitted: SSE connections are long-lived.
+		// BodyLimit(64KB) middleware prevents slow-body write attacks.
+		// ReadTimeout remains, protecting against slow-header attacks.
+		// Matches Quorum's production configuration on the same Traefik/Easypanel stack.
+		IdleTimeout: 60 * time.Second,
 	}
 
 	// Start server in goroutine
@@ -245,6 +273,12 @@ func main() {
 	}
 	if healthCheckCancel != nil {
 		healthCheckCancel()
+	}
+	if reaperCancel != nil {
+		reaperCancel()
+	}
+	if hubCancel != nil {
+		hubCancel() // D-10: cancels all hub goroutines
 	}
 
 	// Create shutdown context with timeout

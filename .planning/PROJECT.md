@@ -30,6 +30,8 @@ Developers and AI agents can find solutions to programming problems faster than 
 - ✓ Guides page prompt-first redesign (4 guides, OpenClaw, Solvr skill workflow) — v1.2
 - ✓ Test suite for new guide structure (23 tests, OpenClaw, prompt-first assertions) — v1.2
 - ✓ API docs accuracy audit (4 data files rewritten, 25+ endpoints verified against handlers) — v1.2
+- ✓ Database foundation: rooms/agent_presence/messages tables with migrations — v1.3 Phase 13
+- ✓ Backend service merge: Quorum rooms fully ported into Solvr (hub, repos, handlers, SSE, reaper) — v1.3 Phase 14
 
 ### Active
 
@@ -101,4 +103,4 @@ v1.2 delivered prompt-first guides, OpenClaw 4-layer auth guide, Solvr skill int
 | Agent-first API docs (verify against handlers) | Docs must match actual backend behavior | ✓ Good |
 
 ---
-*Last updated: 2026-04-04 — Phase 13 (Database Foundation) complete: rooms/agent_presence/messages tables migrated*
+*Last updated: 2026-04-04 — Phase 14 (Backend Service Merge) complete: rooms backend fully ported from Quorum with SSE, presence reaper, clean shutdown*

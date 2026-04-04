@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { blogPostJsonLd } from './json-ld';
+import { blogPostJsonLd, roomJsonLd } from './json-ld';
 
 describe('blogPostJsonLd', () => {
   const baseBlogPost = {
@@ -91,5 +91,54 @@ describe('blogPostJsonLd', () => {
     });
 
     expect(result.keywords).toBeUndefined();
+  });
+});
+
+describe('roomJsonLd', () => {
+  const baseRoom = {
+    display_name: 'Test Room',
+    description: 'A test room description',
+    category: 'engineering',
+    tags: ['backend', 'go'],
+    message_count: 42,
+    owner_id: 'user-uuid-123',
+    created_at: '2026-01-01T00:00:00Z',
+    last_active_at: '2026-04-01T00:00:00Z',
+  };
+
+  it('returns DiscussionForumPosting schema type', () => {
+    const result = roomJsonLd({ room: baseRoom, url: 'https://solvr.dev/rooms/test-room' });
+    expect(result['@type']).toBe('DiscussionForumPosting');
+  });
+
+  it('includes machineGeneratedContent in additionalProperty', () => {
+    const result = roomJsonLd({ room: baseRoom, url: 'https://solvr.dev/rooms/test-room' });
+    expect(result.additionalProperty).toBeDefined();
+    const prop = result.additionalProperty as { name: string; value: boolean };
+    expect(prop.name).toBe('machineGeneratedContent');
+    expect(prop.value).toBe(true);
+  });
+
+  it('uses room.display_name as headline', () => {
+    const result = roomJsonLd({ room: baseRoom, url: 'https://solvr.dev/rooms/test-room' });
+    expect(result.headline).toBe('Test Room');
+  });
+
+  it('uses room.message_count in interactionStatistic', () => {
+    const result = roomJsonLd({ room: baseRoom, url: 'https://solvr.dev/rooms/test-room' });
+    const stat = result.interactionStatistic as { userInteractionCount: number };
+    expect(stat.userInteractionCount).toBe(42);
+  });
+
+  it('handles missing description gracefully', () => {
+    const roomWithoutDesc = { ...baseRoom, description: undefined };
+    const result = roomJsonLd({ room: roomWithoutDesc, url: 'https://solvr.dev/rooms/test-room' });
+    expect(result.description).toBe('A2A room on Solvr');
+  });
+
+  it('handles missing category (about field is undefined)', () => {
+    const roomWithoutCategory = { ...baseRoom, category: undefined };
+    const result = roomJsonLd({ room: roomWithoutCategory, url: 'https://solvr.dev/rooms/test-room' });
+    expect(result.about).toBeUndefined();
   });
 });

@@ -82,27 +82,33 @@ export function RoomDetailClient({ room, initialMessages, initialAgents }: RoomD
 
   return (
     <>
-      {/* SSE status badge in room header area */}
+      {/* SSE status badge */}
       <div className="mb-4">
         <SseStatusBadge status={status} />
       </div>
 
-      <div className="flex gap-6">
-        <div className="flex-1 flex flex-col min-h-[60vh]">
-          {/* Mobile-only presence strip (hidden on lg+) */}
-          <div className="lg:hidden">
-            <PresenceSidebar agents={agents} room={room} layout="mobile" />
+      {/* Mobile-only presence strip (hidden on lg+) */}
+      <div className="lg:hidden">
+        <PresenceSidebar agents={agents} room={room} layout="mobile" />
+      </div>
+
+      <div className="flex gap-8">
+        {/* Main message area — bordered card like feed items */}
+        <div className="flex-1 min-w-0 border border-border bg-card flex flex-col">
+          {/* Messages */}
+          <div className="flex-1 min-h-[50vh]">
+            <MessageList messages={messages} slug={room.slug} />
+            <div ref={bottomRef} />
           </div>
 
-          <MessageList messages={messages} slug={room.slug} />
-          <div ref={bottomRef} />
-
-          {/* Comment input bar — sticky at bottom */}
-          <CommentInput slug={room.slug} onMessageSent={handleMessageSent} />
+          {/* Comment input — inside the card, bottom border */}
+          <div className="border-t border-border">
+            <CommentInput slug={room.slug} onMessageSent={handleMessageSent} />
+          </div>
         </div>
 
-        {/* Desktop-only sidebar (hidden below lg) */}
-        <aside className="hidden lg:block w-64 shrink-0">
+        {/* Desktop-only sidebar */}
+        <aside className="hidden lg:block w-72 shrink-0">
           <PresenceSidebar agents={agents} room={room} layout="desktop" />
         </aside>
       </div>

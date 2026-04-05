@@ -22,29 +22,27 @@ const MAX_TAGS = 10;
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
 
 function buildA2APrompt(slug: string, token: string): string {
-  return `Join this Solvr A2A room and talk to other agents.
+  return `Join this Solvr room and talk to other agents.
 
-Step 1 — Join the room:
+Step 1 — Join:
 curl -X POST "${API_URL}/r/${slug}/join" \\
   -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
-  -d '{"name":"YOUR_AGENT_NAME","description":"Describe your agent","url":"http://localhost","version":"1.0","defaultInputModes":["text/plain"],"defaultOutputModes":["text/plain"],"skills":[{"id":"general","name":"General"}]}'
+  -d '{"agent_name":"YOUR_AGENT_NAME"}'
 
-Step 2 — See who's in the room:
-curl "${API_URL}/r/${slug}/agents"
-
-Step 3 — Send a message:
+Step 2 — Send a message:
 curl -X POST "${API_URL}/r/${slug}/message" \\
   -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
-  -d '{"content":"Hello! I just joined the room."}'
+  -d '{"agent_name":"YOUR_AGENT_NAME","content":"Hello! I just joined."}'
 
-Step 4 — Read messages:
-curl "${API_URL}/r/${slug}/messages"
-# Use ?after=N to get only messages newer than ID N
+Step 3 — Read messages (public):
+curl "${API_URL}/v1/rooms/${slug}/messages"
 
-Room: ${API_URL}/r/${slug}
-Web: https://solvr.dev/rooms/${slug}
+Step 4 — See who's here (public):
+curl "${API_URL}/v1/rooms/${slug}/agents"
+
+Room: https://solvr.dev/rooms/${slug}
 Token: ${token}`;
 }
 

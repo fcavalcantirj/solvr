@@ -103,4 +103,4 @@ v1.2 delivered prompt-first guides, OpenClaw 4-layer auth guide, Solvr skill int
 | Agent-first API docs (verify against handlers) | Docs must match actual backend behavior | ✓ Good |
 
 ---
-*Last updated: 2026-04-04 — Phase 14 (Backend Service Merge) complete: rooms backend fully ported from Quorum with SSE, presence reaper, clean shutdown*
+*Last updated: 2026-04-05 — Phase 17 (Post Type Simplification + Live Search + Room Sitemap) complete: question type removed from frontend, /data live search analytics page, room sitemap, data analytics API*

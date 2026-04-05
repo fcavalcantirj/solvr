@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { api, APICreatePostResponse } from '@/lib/api';
 
 export interface CreatePostForm {
-  type: 'problem' | 'question' | 'idea';
+  type: 'problem' | 'idea';
   title: string;
   description: string;
   tags: string[];
@@ -16,9 +16,9 @@ interface UseCreatePostReturn {
   submit: () => Promise<APICreatePostResponse['data'] | null>;
 }
 
-export function useCreatePost(defaultType?: 'problem' | 'question' | 'idea'): UseCreatePostReturn {
+export function useCreatePost(defaultType?: 'problem' | 'idea'): UseCreatePostReturn {
   const [form, setForm] = useState<CreatePostForm>({
-    type: defaultType || 'question',
+    type: defaultType || 'problem',
     title: '',
     description: '',
     tags: [],

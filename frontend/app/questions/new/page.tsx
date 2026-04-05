@@ -20,7 +20,7 @@ export default function NewQuestionPage() {
         <h1 className="text-3xl font-light tracking-tight mb-8">
           Ask a Question
         </h1>
-        <NewPostForm defaultType="question" />
+        <NewPostForm defaultType="problem" />
       </div>
     </div>
   );

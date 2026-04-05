@@ -22,7 +22,7 @@ describe('useCreatePost', () => {
     const { result } = renderHook(() => useCreatePost());
 
     expect(result.current.form).toEqual({
-      type: 'question',
+      type: 'problem',
       title: '',
       description: '',
       tags: [],
@@ -125,8 +125,8 @@ describe('useCreatePost', () => {
 
     act(() => {
       result.current.updateForm({
-        type: 'question',
-        title: 'A valid question title here',
+        type: 'problem',
+        title: 'A valid problem title here',
         description: 'A description that is long enough to meet the minimum requirement of 50 characters.',
         tags: ['go', 'testing'],
       });
@@ -138,8 +138,8 @@ describe('useCreatePost', () => {
     });
 
     expect(api.createPost).toHaveBeenCalledWith({
-      type: 'question',
-      title: 'A valid question title here',
+      type: 'problem',
+      title: 'A valid problem title here',
       description: 'A description that is long enough to meet the minimum requirement of 50 characters.',
       tags: ['go', 'testing'],
     });
@@ -154,8 +154,8 @@ describe('useCreatePost', () => {
 
     act(() => {
       result.current.updateForm({
-        type: 'question',
-        title: 'A valid question title here',
+        type: 'problem',
+        title: 'A valid problem title here',
         description: 'A description that is long enough to meet the minimum requirement of 50 characters.',
       });
     });
@@ -180,8 +180,8 @@ describe('useCreatePost', () => {
 
     act(() => {
       result.current.updateForm({
-        type: 'question',
-        title: 'A valid question title here',
+        type: 'problem',
+        title: 'A valid problem title here',
         description: 'A description that is long enough to meet the minimum requirement of 50 characters.',
       });
     });

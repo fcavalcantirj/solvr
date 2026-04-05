@@ -284,7 +284,7 @@ export default function DataPage() {
               )}
             >
               {/* Stat cards */}
-              <div className="pt-8 pb-4 grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+              <div className="pt-8 pb-4 grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 <StatCard label="TOTAL SEARCHES" value={totalSearches} />
                 <StatCard
                   label="AGENT"
@@ -299,121 +299,124 @@ export default function DataPage() {
                 <StatCard label="ZERO RESULTS" value={`${zeroResultPct}%`} />
               </div>
 
-              {/* Trending queries table */}
-              <div className="py-8">
-                <p className="font-mono text-xs tracking-[0.3em] uppercase text-muted-foreground mb-1">
-                  TOP QUERIES
-                </p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Most searched terms in the selected window
-                </p>
+              {/* Two-column layout: table left, charts right */}
+              <div className="py-8 grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
+                {/* Left: Trending queries table */}
+                <div>
+                  <p className="font-mono text-xs tracking-[0.3em] uppercase text-muted-foreground mb-1">
+                    TOP QUERIES
+                  </p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Most searched terms in the selected window
+                  </p>
 
-                {trending && trending.length === 0 ? (
-                  <Empty>
-                    <EmptyTitle>No activity in this window</EmptyTitle>
-                    <EmptyDescription>
-                      No searches recorded in the last {timeWindow}. Try the
-                      24h view.
-                    </EmptyDescription>
-                  </Empty>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="font-mono text-xs tracking-[0.3em] uppercase w-12">
-                          #
-                        </TableHead>
-                        <TableHead className="font-mono text-xs tracking-[0.3em] uppercase">
-                          Query
-                        </TableHead>
-                        <TableHead className="font-mono text-xs tracking-[0.3em] uppercase text-right">
-                          Searches
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(trending ?? []).slice(0, 10).map((item, idx) => (
-                        <TableRow key={item.query}>
-                          <TableCell className="font-mono text-xs text-muted-foreground">
-                            {idx + 1}
-                          </TableCell>
-                          <TableCell className="text-sm font-sans truncate max-w-[200px] md:max-w-none">
-                            {item.query}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {item.count}
-                          </TableCell>
+                  {trending && trending.length === 0 ? (
+                    <Empty>
+                      <EmptyTitle>No activity in this window</EmptyTitle>
+                      <EmptyDescription>
+                        No searches recorded in the last {timeWindow}. Try the
+                        24h view.
+                      </EmptyDescription>
+                    </Empty>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="font-mono text-xs tracking-[0.3em] uppercase w-12">
+                            #
+                          </TableHead>
+                          <TableHead className="font-mono text-xs tracking-[0.3em] uppercase">
+                            Query
+                          </TableHead>
+                          <TableHead className="font-mono text-xs tracking-[0.3em] uppercase text-right">
+                            Searches
+                          </TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </div>
+                      </TableHeader>
+                      <TableBody>
+                        {(trending ?? []).slice(0, 10).map((item, idx) => (
+                          <TableRow key={item.query}>
+                            <TableCell className="font-mono text-xs text-muted-foreground">
+                              {idx + 1}
+                            </TableCell>
+                            <TableCell className="text-sm font-sans truncate max-w-[200px] lg:max-w-none">
+                              {item.query}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm">
+                              {item.count}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
 
-              {/* Charts row */}
-              <div className="py-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Searcher Breakdown - PieChart */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="font-mono text-xs tracking-[0.3em] uppercase text-muted-foreground">
-                      Searcher Breakdown
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ChartContainer config={pieChartConfig} className="h-48">
-                      <PieChart>
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Pie
-                          data={pieData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={70}
-                        >
-                          {pieData.map((entry) => (
-                            <Cell key={entry.name} fill={entry.fill} />
-                          ))}
-                        </Pie>
-                        <Legend />
-                      </PieChart>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
+                {/* Right: Charts stacked */}
+                <div className="space-y-6">
+                  {/* Searcher Breakdown - PieChart */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="font-mono text-xs tracking-[0.3em] uppercase text-muted-foreground">
+                        Searcher Breakdown
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer config={pieChartConfig} className="h-48">
+                        <PieChart>
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Pie
+                            data={pieData}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={70}
+                          >
+                            {pieData.map((entry) => (
+                              <Cell key={entry.name} fill={entry.fill} />
+                            ))}
+                          </Pie>
+                          <Legend />
+                        </PieChart>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
 
-                {/* By Content Type - BarChart */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="font-mono text-xs tracking-[0.3em] uppercase text-muted-foreground">
-                      By Content Type
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ChartContainer config={barChartConfig} className="h-48">
-                      <BarChart data={categories ?? []}>
-                        <XAxis
-                          dataKey="category"
-                          tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
-                        />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="search_count" name="Searches">
-                          {(categories ?? []).map((entry) => (
-                            <Cell
-                              key={entry.category}
-                              fill={
-                                categoryColorMap[entry.category] ??
-                                "hsl(var(--chart-5))"
-                              }
-                            />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
+                  {/* By Content Type - BarChart */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="font-mono text-xs tracking-[0.3em] uppercase text-muted-foreground">
+                        By Content Type
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer config={barChartConfig} className="h-48">
+                        <BarChart data={categories ?? []}>
+                          <XAxis
+                            dataKey="category"
+                            tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
+                          />
+                          <YAxis
+                            tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
+                          />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Bar dataKey="search_count" name="Searches">
+                            {(categories ?? []).map((entry) => (
+                              <Cell
+                                key={entry.category}
+                                fill={
+                                  categoryColorMap[entry.category] ??
+                                  "hsl(var(--chart-5))"
+                                }
+                              />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
 
               {/* Last refresh indicator */}

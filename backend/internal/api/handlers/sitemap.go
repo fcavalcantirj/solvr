@@ -59,9 +59,9 @@ func (h *SitemapHandler) GetSitemapURLs(w http.ResponseWriter, r *http.Request) 
 
 func (h *SitemapHandler) getSitemapURLsPaginated(w http.ResponseWriter, r *http.Request, ctx context.Context, typeParam string) {
 	// Validate type
-	validTypes := map[string]bool{"posts": true, "agents": true, "users": true, "blog_posts": true}
+	validTypes := map[string]bool{"posts": true, "agents": true, "users": true, "blog_posts": true, "rooms": true}
 	if !validTypes[typeParam] {
-		writeSitemapError(w, http.StatusBadRequest, "INVALID_PARAM", "type must be one of: posts, agents, users, blog_posts")
+		writeSitemapError(w, http.StatusBadRequest, "INVALID_PARAM", "type must be one of: posts, agents, users, blog_posts, rooms")
 		return
 	}
 
@@ -120,6 +120,7 @@ func writeSitemapURLsResponse(w http.ResponseWriter, urls *models.SitemapURLs) {
 			"agents":     urls.Agents,
 			"users":      urls.Users,
 			"blog_posts": urls.BlogPosts,
+			"rooms":      urls.Rooms,
 		},
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -152,6 +153,7 @@ func (h *SitemapHandler) GetSitemapCounts(w http.ResponseWriter, r *http.Request
 			"agents":     counts.Agents,
 			"users":      counts.Users,
 			"blog_posts": counts.BlogPosts,
+			"rooms":      counts.Rooms,
 		},
 	}
 

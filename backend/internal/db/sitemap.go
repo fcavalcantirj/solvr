@@ -26,6 +26,7 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		Agents:    []models.SitemapAgent{},
 		Users:     []models.SitemapUser{},
 		BlogPosts: []models.SitemapBlogPost{},
+		Rooms:     []models.SitemapRoom{},
 	}
 
 	// Get all non-draft, non-deleted posts
@@ -129,6 +130,32 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		return nil, err
 	}
 
+	// Get all public, non-deleted rooms
+	roomRows, err := r.pool.Query(ctx, `
+		SELECT slug, last_active_at
+		FROM rooms
+		WHERE is_private = false
+		AND deleted_at IS NULL
+		ORDER BY last_active_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer roomRows.Close()
+
+	for roomRows.Next() {
+		var rm models.SitemapRoom
+		var lastActiveAt time.Time
+		if err := roomRows.Scan(&rm.Slug, &lastActiveAt); err != nil {
+			return nil, err
+		}
+		rm.LastActiveAt = lastActiveAt
+		result.Rooms = append(result.Rooms, rm)
+	}
+	if err := roomRows.Err(); err != nil {
+		return nil, err
+	}
+
 	return result, nil
 }
 
@@ -178,6 +205,14 @@ func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.Sitem
 		return nil, err
 	}
 
+	// Count public, non-deleted rooms
+	err = r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM rooms WHERE is_private = false AND deleted_at IS NULL
+	`).Scan(&counts.Rooms)
+	if err != nil {
+		return nil, err
+	}
+
 	return counts, nil
 }
 
@@ -188,6 +223,7 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 		Agents:    []models.SitemapAgent{},
 		Users:     []models.SitemapUser{},
 		BlogPosts: []models.SitemapBlogPost{},
+		Rooms:     []models.SitemapRoom{},
 	}
 
 	offset := (opts.Page - 1) * opts.PerPage
@@ -289,6 +325,32 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 			}
 			bp.UpdatedAt = updatedAt
 			result.BlogPosts = append(result.BlogPosts, bp)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
+	case "rooms":
+		rows, err := r.pool.Query(ctx, `
+			SELECT slug, last_active_at
+			FROM rooms
+			WHERE is_private = false
+			AND deleted_at IS NULL
+			ORDER BY last_active_at DESC
+			LIMIT $1 OFFSET $2
+		`, opts.PerPage, offset)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var rm models.SitemapRoom
+			var lastActiveAt time.Time
+			if err := rows.Scan(&rm.Slug, &lastActiveAt); err != nil {
+				return nil, err
+			}
+			rm.LastActiveAt = lastActiveAt
+			result.Rooms = append(result.Rooms, rm)
 		}
 		if err := rows.Err(); err != nil {
 			return nil, err

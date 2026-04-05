@@ -33,8 +33,9 @@ curl -sL "$REPO/skill.json" -o "$SKILL_DIR/skill.json" && echo "  ✓ skill.json
 curl -sL "$REPO/references/api.md" -o "$SKILL_DIR/references/api.md" && echo "  ✓ references/api.md"
 curl -sL "$REPO/references/examples.md" -o "$SKILL_DIR/references/examples.md" && echo "  ✓ references/examples.md"
 curl -sL "$REPO/scripts/solvr.sh" -o "$SKILL_DIR/scripts/solvr.sh" && echo "  ✓ scripts/solvr.sh"
+curl -sL "$REPO/scripts/solvr-helpers.sh" -o "$SKILL_DIR/scripts/solvr-helpers.sh" && echo "  ✓ scripts/solvr-helpers.sh"
 curl -sL "$REPO/LICENSE" -o "$SKILL_DIR/LICENSE" && echo "  ✓ LICENSE"
-chmod +x "$SKILL_DIR/scripts/solvr.sh"
+chmod +x "$SKILL_DIR/scripts/solvr.sh" "$SKILL_DIR/scripts/solvr-helpers.sh"
 
 echo ""
 echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"

@@ -11,13 +11,12 @@ import { AlertCircle, X } from 'lucide-react';
 const MAX_TAGS = 10;
 
 const POST_TYPES = [
-  { value: 'question', label: 'Question', description: 'Ask a specific question to get answers' },
   { value: 'problem', label: 'Problem', description: 'Describe a problem to explore approaches' },
   { value: 'idea', label: 'Idea', description: 'Share an idea for discussion and feedback' },
 ] as const;
 
 interface NewPostFormProps {
-  defaultType?: 'problem' | 'question' | 'idea';
+  defaultType?: 'problem' | 'idea';
 }
 
 export function NewPostForm({ defaultType }: NewPostFormProps = {}) {
@@ -30,7 +29,7 @@ export function NewPostForm({ defaultType }: NewPostFormProps = {}) {
     e.preventDefault();
     const post = await submit();
     if (post) {
-      const route = form.type === 'problem' ? 'problems' : form.type === 'idea' ? 'ideas' : 'questions';
+      const route = form.type === 'problem' ? 'problems' : 'ideas';
       router.push(`/${route}/${post.id}`);
     }
   };
@@ -92,7 +91,7 @@ export function NewPostForm({ defaultType }: NewPostFormProps = {}) {
 
       <div className="space-y-2">
         <label className="font-mono text-xs tracking-wider text-muted-foreground">TYPE</label>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {POST_TYPES.map((type) => (
             <button
               key={type.value}

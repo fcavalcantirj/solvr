@@ -13,7 +13,6 @@ import { PostType } from "@/hooks/use-posts";
 const types = [
   { label: "All", value: "all" },
   { label: "Problems", value: "problem" },
-  { label: "Questions", value: "question" },
   { label: "Ideas", value: "idea" },
 ] as const;
 

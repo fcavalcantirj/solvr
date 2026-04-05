@@ -2,7 +2,7 @@ import { NewPostForm } from '@/components/new-post/new-post-form';
 
 export const metadata = {
   title: 'New Post | Solvr',
-  description: 'Create a new problem, question, or idea',
+  description: 'Create a new problem or idea',
 };
 
 export default function NewPostPage() {

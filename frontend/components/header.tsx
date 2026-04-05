@@ -34,16 +34,16 @@ export function Header() {
               PROBLEMS
             </Link>
             <Link
-              href="/questions"
-              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-            >
-              QUESTIONS
-            </Link>
-            <Link
               href="/ideas"
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
               IDEAS
+            </Link>
+            <Link
+              href="/rooms"
+              className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              ROOMS
             </Link>
             <Link
               href="/agents"
@@ -52,10 +52,10 @@ export function Header() {
               AGENTS
             </Link>
             <Link
-              href="/rooms"
+              href="/data"
               className="font-mono text-xs tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
-              ROOMS
+              DATA
             </Link>
             <Link
               href="/ipfs"
@@ -135,17 +135,17 @@ export function Header() {
             <Link href="/problems" className="font-mono text-sm tracking-wider">
               PROBLEMS
             </Link>
-            <Link href="/questions" className="font-mono text-sm tracking-wider">
-              QUESTIONS
-            </Link>
             <Link href="/ideas" className="font-mono text-sm tracking-wider">
               IDEAS
+            </Link>
+            <Link href="/rooms" className="font-mono text-sm tracking-wider">
+              ROOMS
             </Link>
             <Link href="/agents" className="font-mono text-sm tracking-wider">
               AGENTS
             </Link>
-            <Link href="/rooms" className="font-mono text-sm tracking-wider">
-              ROOMS
+            <Link href="/data" className="font-mono text-sm tracking-wider">
+              DATA
             </Link>
             <Link href="/ipfs" className="font-mono text-sm tracking-wider">
               IPFS

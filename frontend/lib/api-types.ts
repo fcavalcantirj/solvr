@@ -237,7 +237,7 @@ export interface APICheckReportedResponse {
 }
 
 export interface CreatePostData {
-  type: 'problem' | 'question' | 'idea';
+  type: 'problem' | 'idea';
   title: string;
   description: string;
   tags?: string[];

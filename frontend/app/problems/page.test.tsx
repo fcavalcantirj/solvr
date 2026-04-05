@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import ProblemsPage from './page';
+import { ProblemsPageClient } from '@/components/problems/problems-page-client';
 
 // Mock hooks
 vi.mock('@/hooks/use-auth', () => ({
@@ -43,10 +43,6 @@ vi.mock('@/components/problems/problems-sidebar', () => ({
   ProblemsSidebar: () => <div data-testid="problems-sidebar" />,
 }));
 
-vi.mock('@/components/header', () => ({
-  Header: () => <div data-testid="header" />,
-}));
-
 const mockPush = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -59,14 +55,14 @@ describe('ProblemsPage', () => {
   });
 
   it('defaults to votes sort on initial render', () => {
-    render(<ProblemsPage />);
+    render(<ProblemsPageClient />);
 
     const list = screen.getByTestId('problems-list');
     expect(list.getAttribute('data-sort')).toBe('votes');
   });
 
   it('passes sort=votes to ProblemsList on mount', () => {
-    render(<ProblemsPage />);
+    render(<ProblemsPageClient />);
 
     expect(mockProblemsListProps).toHaveBeenCalled();
     const lastCall = mockProblemsListProps.mock.calls[mockProblemsListProps.mock.calls.length - 1][0];
@@ -74,7 +70,7 @@ describe('ProblemsPage', () => {
   });
 
   it('passes sort=votes to ProblemsFilters on mount', () => {
-    render(<ProblemsPage />);
+    render(<ProblemsPageClient />);
 
     const filters = screen.getByTestId('problems-filters');
     expect(filters.getAttribute('data-sort')).toBe('votes');

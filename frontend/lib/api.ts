@@ -996,7 +996,7 @@ class SolvrAPI {
     description?: string;
     category?: string;
     tags?: string[];
-  }): Promise<{ data: { room: Record<string, unknown>; bearer_token: string } }> {
+  }): Promise<{ data: { slug: string; id: string; display_name: string }; token: string }> {
     return this.fetch(`/v1/rooms`, {
       method: 'POST',
       body: JSON.stringify(data),

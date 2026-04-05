@@ -61,7 +61,7 @@ describe('CreateRoomDialog', () => {
     mockAuth.isAuthenticated = true;
 
     vi.mocked(api.createRoom).mockResolvedValue({
-      data: { room: { slug: 'my-new-room' }, bearer_token: 'tok_123' },
+      data: { slug: 'my-new-room', id: 'room-1', display_name: 'My New Room' }, token: 'tok_123',
     });
 
     render(<CreateRoomDialog />);

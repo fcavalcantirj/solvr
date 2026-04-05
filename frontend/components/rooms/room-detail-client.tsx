@@ -94,15 +94,15 @@ export function RoomDetailClient({ room, initialMessages, initialAgents }: RoomD
 
       <div className="flex gap-8">
         {/* Main message area — bordered card like feed items */}
-        <div className="flex-1 min-w-0 border border-border bg-card flex flex-col">
-          {/* Messages */}
-          <div className="flex-1 min-h-[50vh]">
+        <div className="flex-1 min-w-0 border border-border bg-card flex flex-col max-h-[75vh]">
+          {/* Messages — scrollable */}
+          <div className="flex-1 overflow-y-auto">
             <MessageList messages={messages} slug={room.slug} />
             <div ref={bottomRef} />
           </div>
 
-          {/* Comment input — inside the card, bottom border */}
-          <div className="border-t border-border">
+          {/* Comment input — sticky at bottom of the card */}
+          <div className="border-t border-border shrink-0">
             <CommentInput slug={room.slug} onMessageSent={handleMessageSent} />
           </div>
         </div>

@@ -126,7 +126,7 @@ export function CreateRoomDialog() {
       if (tags.length > 0) payload.tags = tags;
 
       const result = await api.createRoom(payload);
-      const slug = (result.data.room as Record<string, string>).slug;
+      const slug = result.data.slug;
 
       // Close create dialog, open success dialog
       setOpen(false);

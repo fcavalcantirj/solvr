@@ -140,8 +140,13 @@ export function CreateRoomDialog() {
       setCategory('');
       setTags([]);
       setTagInput('');
-    } catch {
-      setError('Failed to create room. Please try again.');
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status;
+      if (status === 409) {
+        setError('A room with this name already exists. Choose a different name.');
+      } else {
+        setError('Failed to create room. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }

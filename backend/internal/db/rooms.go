@@ -2,8 +2,6 @@ package db
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -13,7 +11,11 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/token"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// ErrRoomSlugExists is returned when a room with the same slug already exists.
+var ErrRoomSlugExists = errors.New("room slug already exists")
 
 // ErrRoomNotFound is returned when a room is not found.
 var ErrRoomNotFound = errors.New("room not found")
@@ -28,18 +30,16 @@ func NewRoomRepository(pool *Pool) *RoomRepository {
 	return &RoomRepository{pool: pool}
 }
 
-// slugify generates a URL-safe slug from a display name with a random suffix.
+// slugify generates a URL-safe slug from a display name (no random suffix).
 func slugify(name string) string {
 	s := strings.ToLower(name)
 	re := regexp.MustCompile(`[^a-z0-9]+`)
 	s = re.ReplaceAllString(s, "-")
 	s = strings.Trim(s, "-")
-	if len(s) > 34 {
-		s = s[:34]
+	if len(s) > 40 {
+		s = s[:40]
 	}
-	suffix := make([]byte, 3)
-	rand.Read(suffix) //nolint:errcheck
-	return s + "-" + hex.EncodeToString(suffix)
+	return s
 }
 
 // Create inserts a new room into the database.
@@ -105,6 +105,10 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 		&room.DeletedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, "", ErrRoomSlugExists
+		}
 		LogQueryError(ctx, "Create", "rooms", err)
 		return nil, "", err
 	}

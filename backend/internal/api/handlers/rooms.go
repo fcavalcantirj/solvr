@@ -94,6 +94,10 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 
 	room, plainToken, err := h.roomRepo.Create(r.Context(), params)
 	if err != nil {
+		if errors.Is(err, db.ErrRoomSlugExists) {
+			roomWriteError(w, http.StatusConflict, "DUPLICATE_ROOM", "a room with this name already exists")
+			return
+		}
 		slog.Error("failed to create room", "error", err)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create room")
 		return

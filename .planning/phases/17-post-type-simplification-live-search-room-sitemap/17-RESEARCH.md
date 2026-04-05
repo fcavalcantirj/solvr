@@ -516,20 +516,20 @@ const POST_TYPES = [
 | Frontend quick run | `cd frontend && npm test -- --run` |
 | Frontend full suite | `cd frontend && npm test -- --coverage` |
 
-### Phase Requirements → Test Map
+### Phase Requirements -> Test Map
 
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|-------------|
-| SIMPLIFY-01 | POST_TYPES has no 'question' entry | unit | `cd frontend && npm test -- --run` | ❌ Wave 0 |
-| SIMPLIFY-02 | /questions/[id] returns HTTP 200 | manual smoke | manual: `curl https://solvr.dev/questions/{id}` | — |
-| SIMPLIFY-03 | Header has no QUESTIONS link; sitemap-questions.xml deleted | unit | `cd frontend && npm test -- --run` | ❌ Wave 0 |
-| SEARCH-01 | /v1/data/trending returns trending queries | unit (handler) | `cd backend && go test ./internal/api/handlers/... -run TestDataHandler_Trending` | ❌ Wave 0 |
-| SEARCH-02 | /v1/data/breakdown returns agent/human counts | unit (handler) | `cd backend && go test ./internal/api/handlers/... -run TestDataHandler_Breakdown` | ❌ Wave 0 |
-| SEARCH-03 | /v1/data/categories returns type_filter groups | unit (handler) | `cd backend && go test ./internal/api/handlers/... -run TestDataHandler_Categories` | ❌ Wave 0 |
-| SEARCH-04 | /data page polls every 60s | unit (component) | `cd frontend && npm test -- --run` | ❌ Wave 0 |
-| SITEMAP-01 | sitemap-rooms.xml contains public room slugs | unit (route handler) | `cd frontend && npm test -- --run` | ❌ Wave 0 |
-| SITEMAP-02 | sitemap.xml/route.ts references sitemap-rooms.xml | unit | `cd frontend && npm test -- --run` | ❌ Wave 0 |
-| SITEMAP-03 | Room URLs use slug format /rooms/[slug] | unit | `cd frontend && npm test -- --run` | ❌ Wave 0 |
+| SIMPLIFY-01 | POST_TYPES has no 'question' entry | unit | `cd frontend && npm test -- --run` | Wave 0 |
+| SIMPLIFY-02 | /questions/[id] returns HTTP 200 | manual smoke | manual: `curl https://solvr.dev/questions/{id}` | -- |
+| SIMPLIFY-03 | Header has no QUESTIONS link; sitemap-questions.xml deleted | unit | `cd frontend && npm test -- --run` | Wave 0 |
+| SEARCH-01 | /v1/data/trending returns trending queries | unit (handler) | `cd backend && go test ./internal/api/handlers/... -run TestDataHandler_Trending` | Wave 0 |
+| SEARCH-02 | /v1/data/breakdown returns agent/human counts | unit (handler) | `cd backend && go test ./internal/api/handlers/... -run TestDataHandler_Breakdown` | Wave 0 |
+| SEARCH-03 | /v1/data/categories returns type_filter groups | unit (handler) | `cd backend && go test ./internal/api/handlers/... -run TestDataHandler_Categories` | Wave 0 |
+| SEARCH-04 | /data page polls every 60s | unit (component) | `cd frontend && npm test -- --run` | Wave 0 |
+| SITEMAP-01 | sitemap-rooms.xml contains public room slugs | unit (route handler) | `cd frontend && npm test -- --run` | Wave 0 |
+| SITEMAP-02 | sitemap.xml/route.ts references sitemap-rooms.xml | unit | `cd frontend && npm test -- --run` | Wave 0 |
+| SITEMAP-03 | Room URLs use slug format /rooms/[slug] | unit | `cd frontend && npm test -- --run` | Wave 0 |
 
 ### Sampling Rate
 - **Per task commit:** `cd backend && go test ./internal/api/handlers/... && cd ../frontend && npm test -- --run`
@@ -538,6 +538,7 @@ const POST_TYPES = [
 
 ### Wave 0 Gaps
 - [ ] `backend/internal/api/handlers/data_handler_test.go` — covers SEARCH-01, SEARCH-02, SEARCH-03
+- [ ] `backend/internal/db/data_analytics_test.go` — covers repository layer for SEARCH-01, SEARCH-02, SEARCH-03
 - [ ] `frontend/components/new-post/__tests__/new-post-form.test.tsx` — covers SIMPLIFY-01
 - [ ] `frontend/components/__tests__/header.test.tsx` — covers SIMPLIFY-03
 - [ ] `frontend/app/data/__tests__/page.test.tsx` — covers SEARCH-04
@@ -573,25 +574,27 @@ const POST_TYPES = [
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | sync.Map TTL cache is sufficient for 60s data freshness at current traffic | Architecture Patterns — Pattern 1 | Low risk: if traffic spikes, the worst outcome is cache misses, not data corruption. Upgrade to Redis if needed. |
+| A1 | sync.Map TTL cache is sufficient for 60s data freshness at current traffic | Architecture Patterns -- Pattern 1 | Low risk: if traffic spikes, the worst outcome is cache misses, not data corruption. Upgrade to Redis if needed. |
 | A2 | /questions listing page can be hidden by removing nav links only (no redirect needed) | Pitfall 2 | Low risk: D-19 explicitly says HTTP 200 is sufficient. Google will naturally stop crawling once removed from sitemap and nav. |
-| A3 | Hardcoded bot exclusion list (2 known searcher_ids) is sufficient for D-16 | Architecture Patterns — Pattern 2 | Medium risk: new bot IDs may appear. The toggle (`?include_bots=true`) provides an escape hatch. |
+| A3 | Hardcoded bot exclusion list (2 known searcher_ids) is sufficient for D-16 | Architecture Patterns -- Pattern 2 | Medium risk: new bot IDs may appear. The toggle (`?include_bots=true`) provides an escape hatch. |
 
 **All other claims verified directly from codebase source files.**
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does the /questions listing page need to return 404 or stay as HTTP 200?**
    - What we know: D-19 says "hide /questions listing page, keep /questions/[id] individual pages working (HTTP 200)". D-23 says "no redirects for legacy question URLs".
    - What's unclear: "hide" could mean (a) remove from nav only, page still renders, or (b) make the route return 404 or redirect.
    - Recommendation: Interpret as (a) — remove from nav, sitemap-core.xml, and new-post selector, but leave the page rendering. This satisfies SIMPLIFY-02 (no 404s for individual questions) and is the minimal-risk approach.
+   - RESOLVED: Plan 17-01 implements option (a) — removes /questions from nav, feed filters, sitemap-core.xml, and new-post form. The listing page route is left intact (HTTP 200). Individual /questions/[id] pages unchanged.
 
 2. **Static metadata (`export const metadata`) on a CSR page**
    - What we know: D-02 mandates CSR ("use client"). D-11 requires static og:meta. Next.js 15 does not allow `export const metadata` in a `"use client"` file.
    - What's unclear: whether to put metadata in a layout.tsx wrapper or use a server component wrapper around the CSR component.
    - Recommendation: Create `app/data/layout.tsx` (server component) that exports the metadata, with `app/data/page.tsx` being the CSR component. This is the standard Next.js pattern for mixing SSR metadata with CSR pages.
+   - RESOLVED: Plan 17-04 creates `app/data/layout.tsx` (server component) exporting static metadata, with `app/data/page.tsx` as the CSR component. Standard Next.js pattern confirmed.
 
 ---
 

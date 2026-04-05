@@ -645,6 +645,18 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/sitemap/counts", sitemapHandler.GetSitemapCounts)
 		}
 
+		// Public data analytics endpoints (no auth required)
+		// GET /v1/data/trending - top trending search queries
+		// GET /v1/data/breakdown - agent/human/total search breakdown
+		// GET /v1/data/categories - search counts by type_filter category
+		if pool != nil {
+			dataRepo := db.NewDataAnalyticsRepository(pool)
+			dataHandler := handlers.NewDataHandler(dataRepo)
+			r.Get("/data/trending", dataHandler.GetTrending)
+			r.Get("/data/breakdown", dataHandler.GetBreakdown)
+			r.Get("/data/categories", dataHandler.GetCategories)
+		}
+
 		// Leaderboard endpoints (PRD-v5)
 		// GET /v1/leaderboard - global leaderboard (no auth required)
 		// GET /v1/leaderboard/tags/{tag} - tag-specific leaderboard (no auth required)

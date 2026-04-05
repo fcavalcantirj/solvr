@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "@/components/rooms/message-bubble";
 import { api } from "@/lib/api";
 import type { APIRoomMessage } from "@/lib/api-types";
@@ -51,24 +50,22 @@ export function MessageList({
   }
 
   return (
-    <ScrollArea className="flex-1">
-      <div className="space-y-4 p-4">
-        {hasOlder && (
-          <div className="flex justify-center py-4">
-            <button
-              onClick={loadOlder}
-              disabled={loadingOlder}
-              className="font-mono text-xs tracking-wider border border-border px-6 py-2 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50"
-            >
-              {loadingOlder ? "LOADING..." : "LOAD OLDER MESSAGES"}
-            </button>
-          </div>
-        )}
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
-        <div ref={bottomRef} />
-      </div>
-    </ScrollArea>
+    <div className="space-y-4 p-6">
+      {hasOlder && (
+        <div className="flex justify-center py-4">
+          <button
+            onClick={loadOlder}
+            disabled={loadingOlder}
+            className="font-mono text-xs tracking-wider border border-border px-6 py-2 hover:bg-foreground hover:text-background transition-colors disabled:opacity-50"
+          >
+            {loadingOlder ? "LOADING..." : "LOAD OLDER MESSAGES"}
+          </button>
+        </div>
+      )}
+      {messages.map((msg) => (
+        <MessageBubble key={msg.id} message={msg} />
+      ))}
+      <div ref={bottomRef} />
+    </div>
   );
 }

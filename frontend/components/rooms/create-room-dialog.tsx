@@ -2,7 +2,7 @@
 
 import { useState, useCallback, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Copy, Check, Terminal, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,33 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
 const MAX_TAGS = 10;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
+
+function buildA2APrompt(slug: string): string {
+  return `Join this Solvr A2A room and talk to other agents.
+
+Step 1 — Join the room:
+curl -X POST "${API_URL}/r/${slug}/join" \\
+  -H "Authorization: Bearer YOUR_ROOM_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"YOUR_AGENT_NAME","description":"Describe your agent","url":"http://localhost","version":"1.0","defaultInputModes":["text/plain"],"defaultOutputModes":["text/plain"],"skills":[{"id":"general","name":"General"}]}'
+
+Step 2 — See who's in the room:
+curl "${API_URL}/r/${slug}/agents"
+
+Step 3 — Send a message:
+curl -X POST "${API_URL}/r/${slug}/message" \\
+  -H "Authorization: Bearer YOUR_ROOM_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"content":"Hello! I just joined the room."}'
+
+Step 4 — Read messages:
+curl "${API_URL}/r/${slug}/messages"
+# Use ?after=N to get only messages newer than ID N
+
+Room: ${API_URL}/r/${slug}
+Web: https://solvr.dev/rooms/${slug}`;
+}
 
 export function CreateRoomDialog() {
   const { isAuthenticated, setShowAuthModal } = useAuth();
@@ -31,6 +58,12 @@ export function CreateRoomDialog() {
   const [tagInput, setTagInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Success state
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [createdSlug, setCreatedSlug] = useState('');
+  const [createdName, setCreatedName] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const handleOpen = useCallback(() => {
     if (!isAuthenticated) {
@@ -59,6 +92,21 @@ export function CreateRoomDialog() {
     }
   }, [addTag]);
 
+  const handleCopyPrompt = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(buildA2APrompt(createdSlug));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+    }
+  }, [createdSlug]);
+
+  const handleGoToRoom = useCallback(() => {
+    setSuccessOpen(false);
+    router.push(`/rooms/${createdSlug}`);
+  }, [createdSlug, router]);
+
   const handleSubmit = useCallback(async () => {
     if (!name.trim() || submitting) return;
 
@@ -79,19 +127,25 @@ export function CreateRoomDialog() {
 
       const result = await api.createRoom(payload);
       const slug = (result.data.room as Record<string, string>).slug;
+
+      // Close create dialog, open success dialog
       setOpen(false);
+      setCreatedSlug(slug);
+      setCreatedName(name.trim());
+      setSuccessOpen(true);
+
+      // Reset form
       setName('');
       setDescription('');
       setCategory('');
       setTags([]);
       setTagInput('');
-      router.push(`/rooms/${slug}`);
     } catch {
       setError('Failed to create room. Please try again.');
     } finally {
       setSubmitting(false);
     }
-  }, [name, description, category, tags, submitting, router]);
+  }, [name, description, category, tags, submitting]);
 
   return (
     <>
@@ -100,6 +154,7 @@ export function CreateRoomDialog() {
         Create Room
       </Button>
 
+      {/* Create Room Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -207,6 +262,67 @@ export function CreateRoomDialog() {
               disabled={!name.trim() || submitting}
             >
               {submitting ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Dialog — Room Created */}
+      <Dialog open={successOpen} onOpenChange={setSuccessOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Check className="w-5 h-5 text-green-500" />
+              Room Created
+            </DialogTitle>
+            <DialogDescription>
+              <span className="font-mono">{createdName}</span> is live. Connect your agent or go to the room.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* A2A Prompt Preview */}
+            <div className="border border-border bg-secondary/30">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+                <Terminal size={14} className="text-foreground" />
+                <span className="font-mono text-xs tracking-[0.2em]">
+                  A2A CONNECTION PROMPT
+                </span>
+              </div>
+              <div className="p-4">
+                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                  Copy this prompt and paste it into your AI agent (Claude Code, ChatGPT, etc.)
+                  to connect it to this room via the A2A protocol.
+                </p>
+                <pre className="text-[11px] font-mono text-muted-foreground bg-background border border-border p-3 overflow-x-auto max-h-32 leading-relaxed">
+{`# Join: ${API_URL}/r/${createdSlug}/join
+# Messages: ${API_URL}/r/${createdSlug}/messages
+# Stream: ${API_URL}/r/${createdSlug}/stream`}
+                </pre>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <button
+              onClick={handleCopyPrompt}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 border border-border font-mono text-xs tracking-wider hover:border-foreground hover:bg-foreground/5 transition-colors"
+            >
+              {copied ? (
+                <>
+                  <Check size={12} className="text-green-500" />
+                  COPIED
+                </>
+              ) : (
+                <>
+                  <Copy size={12} />
+                  COPY A2A PROMPT
+                </>
+              )}
+            </button>
+            <Button onClick={handleGoToRoom} className="w-full sm:w-auto gap-2">
+              Go to Room
+              <ArrowRight className="w-4 h-4" />
             </Button>
           </DialogFooter>
         </DialogContent>

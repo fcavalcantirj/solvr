@@ -81,9 +81,15 @@ describe('CreateRoomDialog', () => {
       );
     });
 
+    // Success dialog should appear with "Room Created"
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/rooms/my-new-room');
+      expect(screen.getByText(/room created/i)).toBeInTheDocument();
     });
+
+    // Click "Go to Room" to navigate
+    const goButton = screen.getByRole('button', { name: /go to room/i });
+    fireEvent.click(goButton);
+    expect(mockPush).toHaveBeenCalledWith('/rooms/my-new-room');
   });
 
   it('shows error on API failure', async () => {

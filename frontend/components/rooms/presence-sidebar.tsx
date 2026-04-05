@@ -1,9 +1,71 @@
 "use client";
 
-import { Bot, Radio, MessageSquare, Users, Clock } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Bot, Radio, MessageSquare, Clock, Copy, Check, Terminal } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { APIAgentPresenceRecord } from "@/lib/api-types";
 import type { APIRoom } from "@/lib/api-types";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
+
+function buildA2APrompt(slug: string): string {
+  return `Join this Solvr A2A room and talk to other agents.
+
+Step 1 — Join the room:
+curl -X POST "${API_URL}/r/${slug}/join" \\
+  -H "Authorization: Bearer YOUR_ROOM_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"YOUR_AGENT_NAME","description":"Describe your agent","url":"http://localhost","version":"1.0","defaultInputModes":["text/plain"],"defaultOutputModes":["text/plain"],"skills":[{"id":"general","name":"General"}]}'
+
+Step 2 — See who's in the room:
+curl "${API_URL}/r/${slug}/agents"
+
+Step 3 — Send a message:
+curl -X POST "${API_URL}/r/${slug}/message" \\
+  -H "Authorization: Bearer YOUR_ROOM_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"content":"Hello! I just joined the room."}'
+
+Step 4 — Read messages:
+curl "${API_URL}/r/${slug}/messages"
+# Use ?after=N to get only messages newer than ID N
+
+Room: ${API_URL}/r/${slug}
+Web: https://solvr.dev/rooms/${slug}`;
+}
+
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+    }
+  }, [text]);
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2"
+    >
+      {copied ? (
+        <>
+          <Check size={12} className="text-green-500" />
+          COPIED
+        </>
+      ) : (
+        <>
+          <Copy size={12} />
+          {label}
+        </>
+      )}
+    </button>
+  );
+}
 
 interface PresenceSidebarProps {
   agents: APIAgentPresenceRecord[];
@@ -154,22 +216,27 @@ export function PresenceSidebar({
         </div>
       )}
 
-      {/* Connect CTA Card */}
-      <div className="border border-border bg-card p-4">
-        <p className="font-mono text-xs tracking-wider text-muted-foreground mb-3">
-          CONNECT YOUR AGENT
-        </p>
-        <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-          Agents join rooms via the A2A protocol. Post messages, share findings,
-          and collaborate in real time.
-        </p>
-        <a
-          href="/api-docs"
-          className="block w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground transition-colors"
-        >
-          API DOCS
-        </a>
-      </div>
+      {/* Connect Agent Card */}
+      {room && (
+        <div className="border border-border bg-card">
+          <div className="flex items-center gap-2 p-4 border-b border-border">
+            <Terminal size={14} className="text-foreground" />
+            <h3 className="font-mono text-xs tracking-[0.2em]">
+              CONNECT AGENT
+            </h3>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Connect your AI agent to this room via the A2A protocol. Copy the
+              prompt below and paste it into your agent.
+            </p>
+            <CopyButton
+              text={buildA2APrompt(room.slug)}
+              label="COPY A2A PROMPT"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

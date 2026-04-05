@@ -59,8 +59,8 @@ export default async function RoomDetailPage({
 
   const { room, agents, recent_messages, owner_display_name } = data.data;
 
-  // Reverse messages: API returns newest first, chat display needs oldest first (newest at bottom)
-  const messagesOldestFirst = [...(recent_messages || [])].reverse();
+  // API returns newest first — keep that order (newest at top)
+  const messages = recent_messages || [];
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -75,7 +75,7 @@ export default async function RoomDetailPage({
         <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-6 lg:px-12 pb-4">
           <RoomDetailClient
             room={room}
-            initialMessages={messagesOldestFirst}
+            initialMessages={messages}
             initialAgents={agents || []}
           />
         </div>

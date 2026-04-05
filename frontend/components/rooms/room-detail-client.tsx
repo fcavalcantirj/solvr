@@ -40,7 +40,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents }: RoomD
         const unique = newMessages.filter(m => !existingIds.has(m.id));
         if (unique.length === 0) return prev;
         setUnreadCount(c => c + unique.length);
-        return [...prev, ...unique];
+        return [...unique, ...prev];
       });
       clearNewMessages();
     }
@@ -68,21 +68,12 @@ export function RoomDetailClient({ room, initialMessages, initialAgents }: RoomD
   const handleMessageSent = useCallback((msg: APIRoomMessage) => {
     setMessages(prev => {
       if (prev.some(m => m.id === msg.id)) return prev; // Deduplicate
-      return [...prev, msg];
+      return [msg, ...prev];
     });
-    // Auto-scroll to own message (exception to D-34: user's own message)
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  // Click on new-messages badge: scroll messages container to bottom and reset counter
-  const handleScrollToBottom = useCallback(() => {
-    // Find the scrollable messages container and scroll it
-    const scrollContainer = bottomRef.current?.closest('[class*="overflow-y-auto"]');
-    if (scrollContainer) {
-      scrollContainer.scrollTop = scrollContainer.scrollHeight;
-    } else {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+  // Click on new-messages badge: just dismiss — messages are already in the DOM
+  const handleDismissUnread = useCallback(() => {
     setUnreadCount(0);
   }, []);
 
@@ -120,7 +111,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents }: RoomD
       </div>
 
       {/* Floating new messages badge (D-34: user-initiated only) */}
-      <NewMessagesBadge count={unreadCount} onClick={handleScrollToBottom} />
+      <NewMessagesBadge count={unreadCount} onClick={handleDismissUnread} />
     </div>
   );
 }

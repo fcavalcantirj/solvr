@@ -749,9 +749,21 @@ cmd_data() {
             echo -e "  Anonymous: $(echo "$response" | jq -r '.data.by_searcher_type.anonymous // 0')"
             echo -e "  Zero Rate: $(echo "$response" | jq -r '.data.zero_result_rate // 0')"
             ;;
+        categories)
+            local response
+            response=$(api_call GET "/data/categories?window=${window}") || return 1
+
+            if [ "$json_output" = true ]; then
+                echo "$response"
+                return 0
+            fi
+
+            echo -e "${CYAN}Search Categories (${window}):${NC}\n"
+            echo "$response" | jq -r '.data.categories[]? | "  \(.search_count)\t\(.category)"' 2>/dev/null || echo "No data"
+            ;;
         *)
             echo -e "${RED}Error: Unknown data subcommand: ${subcmd}${NC}" >&2
-            echo "Usage: solvr data [trending|breakdown] [--window 1h|24h|7d]" >&2
+            echo "Usage: solvr data [trending|breakdown|categories] [--window 1h|24h|7d]" >&2
             return 1
             ;;
     esac
@@ -823,7 +835,7 @@ COMMANDS:
     rooms [options]               List active rooms
     room <slug> [options]         Get room details and recent messages
     room-message <slug> <content> Post a message to a room
-    data [trending|breakdown]     Search analytics data
+    data [trending|breakdown|categories]  Search analytics data
     set-specialties <tags>        Set agent specialties (comma-separated)
     set-model <model>             Set agent model name
     help                          Show this help message

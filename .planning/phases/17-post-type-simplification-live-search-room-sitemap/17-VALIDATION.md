@@ -38,13 +38,13 @@ created: 2026-04-04
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 17-01-01 | 01 | 1 | SIMPLIFY-01, SIMPLIFY-02, SIMPLIFY-03 | -- | N/A | integration | `cd frontend && npx vitest run --reporter=verbose 2>&1 \| tail -30` | tdd=true | pending |
-| 17-02-01 | 02 | 1 | SITEMAP-01, SITEMAP-02 | -- | N/A | unit | `cd backend && go test ./internal/api/handlers/... -run "Sitemap" -v -count=1 2>&1 \| tail -40` | tdd=true | pending |
-| 17-02-02 | 02 | 1 | SITEMAP-03 | -- | N/A | integration | `cd frontend && test -f app/sitemap-rooms.xml/route.ts && echo "rooms route exists" && ! test -f app/sitemap-questions.xml/route.ts && echo "questions route deleted" && grep -q "sitemap-rooms.xml" app/sitemap.xml/route.ts && echo "rooms in index"` | auto | pending |
-| 17-03-01 | 03 | 1 | SEARCH-01, SEARCH-02 | -- | N/A | unit | `cd backend && go test ./internal/db/... -run "TestDataAnalytics\|TestWindowTo" -v -count=1 2>&1 \| tail -30` | tdd=true | pending |
-| 17-03-02 | 03 | 1 | SEARCH-02, SEARCH-03 | T-17-09 | Cache 60s TTL | unit | `cd backend && go test ./internal/api/handlers/... -run "TestDataHandler" -v -count=1 2>&1 \| tail -40` | tdd=true | pending |
-| 17-04-01 | 04 | 2 | SEARCH-04 | T-17-11 | XSS via JSX auto-escape | unit | `cd frontend && npx vitest run app/data/ --reporter=verbose 2>&1 \| tail -30 && npx next build 2>&1 \| tail -20` | tdd=true | pending |
-| 17-04-02 | 04 | 2 | -- | -- | N/A | manual | `cd frontend && npx vitest run --reporter=verbose 2>&1 \| tail -10 && cd backend && go test ./... -count=1 2>&1 \| tail -10` | checkpoint | pending |
+| 17-01-01 | 01 | 1 | SIMPLIFY-01, SIMPLIFY-02, SIMPLIFY-03 | -- | N/A | integration | `cd frontend && npx vitest run --reporter=verbose 2>&1 \| tail -30` | tdd=true | green |
+| 17-02-01 | 02 | 1 | SITEMAP-01, SITEMAP-02 | -- | N/A | unit | `cd backend && go test ./internal/api/handlers/... -run "Sitemap" -v -count=1 2>&1 \| tail -40` | tdd=true | green |
+| 17-02-02 | 02 | 1 | SITEMAP-03 | -- | N/A | integration | `cd frontend && test -f app/sitemap-rooms.xml/route.ts && echo "rooms route exists" && ! test -f app/sitemap-questions.xml/route.ts && echo "questions route deleted" && grep -q "sitemap-rooms.xml" app/sitemap.xml/route.ts && echo "rooms in index"` | auto | green |
+| 17-03-01 | 03 | 1 | SEARCH-01, SEARCH-02 | -- | N/A | unit | `cd backend && go test ./internal/db/... -run "TestDataAnalytics\|TestWindowTo" -v -count=1 2>&1 \| tail -30` | tdd=true | green |
+| 17-03-02 | 03 | 1 | SEARCH-02, SEARCH-03 | T-17-09 | Cache 60s TTL | unit | `cd backend && go test ./internal/api/handlers/... -run "TestDataHandler" -v -count=1 2>&1 \| tail -40` | tdd=true | green |
+| 17-04-01 | 04 | 2 | SEARCH-04 | T-17-11 | XSS via JSX auto-escape | unit | `cd frontend && npx vitest run app/data/ --reporter=verbose 2>&1 \| tail -30 && npx next build 2>&1 \| tail -20` | tdd=true | green |
+| 17-04-02 | 04 | 2 | -- | -- | N/A | manual | `cd frontend && npx vitest run --reporter=verbose 2>&1 \| tail -10 && cd backend && go test ./... -count=1 2>&1 \| tail -10` | checkpoint | green |
 
 *Status: pending -- ready -- green -- red -- flaky*
 

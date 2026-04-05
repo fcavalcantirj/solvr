@@ -29,12 +29,17 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		Rooms:     []models.SitemapRoom{},
 	}
 
-	// Get all non-draft, non-deleted posts
+	// Get quality posts only: solved problems, ideas with votes/responses
 	postRows, err := r.pool.Query(ctx, `
 		SELECT id, type, updated_at
 		FROM posts
 		WHERE deleted_at IS NULL
 		AND status NOT IN ('draft', 'pending_review', 'rejected')
+		AND (
+			(type = 'problem' AND (status = 'solved' OR upvotes - downvotes >= 1))
+			OR (type = 'idea' AND (upvotes - downvotes >= 2))
+			OR (type = 'question')
+		)
 		ORDER BY updated_at DESC
 	`)
 	if err != nil {
@@ -55,11 +60,11 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		return nil, err
 	}
 
-	// Get all active agents
+	// Get agents with actual contributions (reputation > 0)
 	agentRows, err := r.pool.Query(ctx, `
 		SELECT id, COALESCE(updated_at, created_at) as updated_at
 		FROM agents
-		WHERE status = 'active'
+		WHERE status = 'active' AND reputation > 0
 		ORDER BY COALESCE(updated_at, created_at) DESC
 	`)
 	if err != nil {
@@ -80,29 +85,7 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		return nil, err
 	}
 
-	// Get all users
-	userRows, err := r.pool.Query(ctx, `
-		SELECT id::text, COALESCE(updated_at, created_at) as updated_at
-		FROM users
-		ORDER BY COALESCE(updated_at, created_at) DESC
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer userRows.Close()
-
-	for userRows.Next() {
-		var u models.SitemapUser
-		var updatedAt time.Time
-		if err := userRows.Scan(&u.ID, &updatedAt); err != nil {
-			return nil, err
-		}
-		u.UpdatedAt = updatedAt
-		result.Users = append(result.Users, u)
-	}
-	if err := userRows.Err(); err != nil {
-		return nil, err
-	}
+	// Users excluded from sitemap — profile pages have no SEO value
 
 	// Get all published, non-deleted blog posts
 	blogRows, err := r.pool.Query(ctx, `
@@ -164,32 +147,34 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.SitemapCounts, error) {
 	counts := &models.SitemapCounts{}
 
-	// Count non-draft, non-deleted posts
+	// Count quality posts only
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM posts
 		WHERE deleted_at IS NULL
 		AND status NOT IN ('draft', 'pending_review', 'rejected')
+		AND (
+			(type = 'problem' AND (status = 'solved' OR upvotes - downvotes >= 1))
+			OR (type = 'idea' AND (upvotes - downvotes >= 2))
+			OR (type = 'question')
+		)
 	`).Scan(&counts.Posts)
 	if err != nil {
 		return nil, err
 	}
 
-	// Count active agents
+	// Count agents with contributions
 	err = r.pool.QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM agents
-		WHERE status = 'active'
+		WHERE status = 'active' AND reputation > 0
 	`).Scan(&counts.Agents)
 	if err != nil {
 		return nil, err
 	}
 
-	// Count all users
-	err = r.pool.QueryRow(ctx, `
-		SELECT COUNT(*)
-		FROM users
-	`).Scan(&counts.Users)
+	// Users excluded from sitemap
+	counts.Users = 0
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +220,11 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 			FROM posts
 			WHERE deleted_at IS NULL
 			AND status NOT IN ('draft', 'pending_review', 'rejected')
+			AND (
+				(type = 'problem' AND (status = 'solved' OR upvotes - downvotes >= 1))
+				OR (type = 'idea' AND (upvotes - downvotes >= 2))
+				OR (type = 'question')
+			)
 			ORDER BY updated_at DESC
 			LIMIT $1 OFFSET $2
 		`, opts.PerPage, offset)
@@ -259,7 +249,7 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 		rows, err := r.pool.Query(ctx, `
 			SELECT id, COALESCE(updated_at, created_at) as updated_at
 			FROM agents
-			WHERE status = 'active'
+			WHERE status = 'active' AND reputation > 0
 			ORDER BY COALESCE(updated_at, created_at) DESC
 			LIMIT $1 OFFSET $2
 		`, opts.PerPage, offset)

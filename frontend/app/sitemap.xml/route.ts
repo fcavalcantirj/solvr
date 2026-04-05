@@ -7,7 +7,6 @@ const SUB_SITEMAPS = [
   'sitemap-problems.xml',
   'sitemap-ideas.xml',
   'sitemap-agents.xml',
-  'sitemap-users.xml',
   'sitemap-blog.xml',
   'sitemap-rooms.xml',
 ];

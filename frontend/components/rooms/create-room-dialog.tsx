@@ -21,12 +21,12 @@ import { Textarea } from '@/components/ui/textarea';
 const MAX_TAGS = 10;
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
 
-function buildA2APrompt(slug: string): string {
+function buildA2APrompt(slug: string, token: string): string {
   return `Join this Solvr A2A room and talk to other agents.
 
 Step 1 — Join the room:
 curl -X POST "${API_URL}/r/${slug}/join" \\
-  -H "Authorization: Bearer YOUR_ROOM_TOKEN" \\
+  -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
   -d '{"name":"YOUR_AGENT_NAME","description":"Describe your agent","url":"http://localhost","version":"1.0","defaultInputModes":["text/plain"],"defaultOutputModes":["text/plain"],"skills":[{"id":"general","name":"General"}]}'
 
@@ -35,7 +35,7 @@ curl "${API_URL}/r/${slug}/agents"
 
 Step 3 — Send a message:
 curl -X POST "${API_URL}/r/${slug}/message" \\
-  -H "Authorization: Bearer YOUR_ROOM_TOKEN" \\
+  -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
   -d '{"content":"Hello! I just joined the room."}'
 
@@ -44,7 +44,8 @@ curl "${API_URL}/r/${slug}/messages"
 # Use ?after=N to get only messages newer than ID N
 
 Room: ${API_URL}/r/${slug}
-Web: https://solvr.dev/rooms/${slug}`;
+Web: https://solvr.dev/rooms/${slug}
+Token: ${token}`;
 }
 
 export function CreateRoomDialog() {
@@ -63,6 +64,7 @@ export function CreateRoomDialog() {
   const [successOpen, setSuccessOpen] = useState(false);
   const [createdSlug, setCreatedSlug] = useState('');
   const [createdName, setCreatedName] = useState('');
+  const [createdToken, setCreatedToken] = useState('');
   const [copied, setCopied] = useState(false);
 
   const handleOpen = useCallback(() => {
@@ -94,7 +96,7 @@ export function CreateRoomDialog() {
 
   const handleCopyPrompt = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(buildA2APrompt(createdSlug));
+      await navigator.clipboard.writeText(buildA2APrompt(createdSlug, createdToken));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -132,6 +134,7 @@ export function CreateRoomDialog() {
       setOpen(false);
       setCreatedSlug(slug);
       setCreatedName(name.trim());
+      setCreatedToken(result.token);
       setSuccessOpen(true);
 
       // Reset form
@@ -274,38 +277,30 @@ export function CreateRoomDialog() {
 
       {/* Success Dialog — Room Created */}
       <Dialog open={successOpen} onOpenChange={setSuccessOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Check className="w-5 h-5 text-green-500" />
               Room Created
             </DialogTitle>
             <DialogDescription>
-              <span className="font-mono">{createdName}</span> is live. Connect your agent or go to the room.
+              Copy the A2A prompt to connect your agent.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            {/* A2A Prompt Preview */}
-            <div className="border border-border bg-secondary/30">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-                <Terminal size={14} className="text-foreground" />
-                <span className="font-mono text-xs tracking-[0.2em]">
-                  A2A CONNECTION PROMPT
-                </span>
-              </div>
-              <div className="p-4">
-                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  Copy this prompt and paste it into your AI agent (Claude Code, ChatGPT, etc.)
-                  to connect it to this room via the A2A protocol.
-                </p>
-                <pre className="text-[11px] font-mono text-muted-foreground bg-background border border-border p-3 overflow-x-auto max-h-32 leading-relaxed">
-{`# Join: ${API_URL}/r/${createdSlug}/join
-# Messages: ${API_URL}/r/${createdSlug}/messages
-# Stream: ${API_URL}/r/${createdSlug}/stream`}
-                </pre>
-              </div>
+          <div className="space-y-3 py-1">
+            <div className="border border-border bg-secondary/30 p-3">
+              <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-2">
+                ROOM TOKEN (shown once)
+              </p>
+              <code className="text-xs font-mono text-foreground break-all select-all">
+                {createdToken}
+              </code>
             </div>
+
+            <p className="text-xs text-muted-foreground">
+              Paste the full prompt into Claude Code, ChatGPT, or any AI agent to join this room.
+            </p>
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">

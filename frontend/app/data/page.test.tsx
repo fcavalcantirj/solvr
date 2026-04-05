@@ -168,7 +168,7 @@ describe("DataPage", () => {
     expect(screen.getByText("TOTAL SEARCHES")).toBeInTheDocument();
     expect(screen.getByText("AGENT")).toBeInTheDocument();
     expect(screen.getByText("HUMAN")).toBeInTheDocument();
-    expect(screen.getByText("ZERO RESULTS")).toBeInTheDocument();
+    expect(screen.getByText("GUEST")).toBeInTheDocument();
   });
 
   it("renders trending queries table rows from mock trending data", async () => {

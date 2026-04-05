@@ -61,12 +61,11 @@ interface CategoryData {
 const pieChartConfig: ChartConfig = {
   agent: { label: "Agent", color: "hsl(var(--chart-1))" },
   human: { label: "Human", color: "hsl(var(--chart-2))" },
+  guest: { label: "Guest", color: "hsl(var(--chart-5))" },
 };
 
 const barChartConfig: ChartConfig = {
-  problem: { label: "Problem", color: "hsl(var(--chart-3))" },
-  idea: { label: "Idea", color: "hsl(var(--chart-4))" },
-  unfiltered: { label: "Other", color: "hsl(var(--chart-5))" },
+  count: { label: "Searches", color: "hsl(var(--chart-1))" },
 };
 
 function formatTimeAgo(date: Date): string {
@@ -108,7 +107,7 @@ function StatCard({
 }
 
 export default function DataPage() {
-  const [timeWindow, setTimeWindow] = useState<TimeWindow>("24h");
+  const [timeWindow, setTimeWindow] = useState<TimeWindow>("7d");
   const [includeBots, setIncludeBots] = useState(false);
   const [trending, setTrending] = useState<TrendingQuery[] | null>(null);
   const [breakdown, setBreakdown] = useState<BreakdownData | null>(null);
@@ -162,10 +161,13 @@ export default function DataPage() {
   const totalSearches = breakdown?.total_searches ?? 0;
   const agentCount = breakdown?.by_searcher_type?.agent ?? 0;
   const humanCount = breakdown?.by_searcher_type?.human ?? 0;
+  const guestCount = breakdown?.by_searcher_type?.anonymous ?? 0;
   const agentPct =
-    totalSearches > 0 ? ((agentCount / totalSearches) * 100).toFixed(1) : "0";
+    totalSearches > 0 ? ((agentCount / totalSearches) * 100).toFixed(0) : "0";
   const humanPct =
-    totalSearches > 0 ? ((humanCount / totalSearches) * 100).toFixed(1) : "0";
+    totalSearches > 0 ? ((humanCount / totalSearches) * 100).toFixed(0) : "0";
+  const guestPct =
+    totalSearches > 0 ? ((guestCount / totalSearches) * 100).toFixed(0) : "0";
   const zeroResultPct = breakdown
     ? (breakdown.zero_result_rate * 100).toFixed(1)
     : "0";
@@ -173,12 +175,14 @@ export default function DataPage() {
   const pieData = [
     { name: "agent", value: agentCount, fill: "hsl(var(--chart-1))" },
     { name: "human", value: humanCount, fill: "hsl(var(--chart-2))" },
-  ];
+    { name: "guest", value: guestCount, fill: "hsl(var(--chart-5))" },
+  ].filter((d) => d.value > 0);
 
-  const categoryColorMap: Record<string, string> = {
-    problem: "hsl(var(--chart-3))",
-    idea: "hsl(var(--chart-4))",
-  };
+  const searcherBarData = [
+    { name: "Agent", count: agentCount, fill: "hsl(var(--chart-1))" },
+    { name: "Human", count: humanCount, fill: "hsl(var(--chart-2))" },
+    { name: "Guest", count: guestCount, fill: "hsl(var(--chart-5))" },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -205,7 +209,7 @@ export default function DataPage() {
             {/* Time range toggle */}
             <div className="mt-6">
               <Tabs
-                defaultValue="24h"
+                defaultValue="7d"
                 onValueChange={(v) => setTimeWindow(v as TimeWindow)}
               >
                 <TabsList>
@@ -288,15 +292,19 @@ export default function DataPage() {
                 <StatCard label="TOTAL SEARCHES" value={totalSearches} />
                 <StatCard
                   label="AGENT"
-                  value={`${agentPct}%`}
-                  subValue={`${agentCount} searches`}
+                  value={agentCount}
+                  subValue={`${agentPct}% of total`}
                 />
                 <StatCard
                   label="HUMAN"
-                  value={`${humanPct}%`}
-                  subValue={`${humanCount} searches`}
+                  value={humanCount}
+                  subValue={`${humanPct}% of total`}
                 />
-                <StatCard label="ZERO RESULTS" value={`${zeroResultPct}%`} />
+                <StatCard
+                  label="GUEST"
+                  value={guestCount}
+                  subValue={`${guestPct}% of total`}
+                />
               </div>
 
               {/* Two-column layout: table left, charts right */}
@@ -383,33 +391,30 @@ export default function DataPage() {
                     </CardContent>
                   </Card>
 
-                  {/* By Content Type - BarChart */}
+                  {/* Searcher Volume - BarChart */}
                   <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="font-mono text-xs tracking-[0.3em] uppercase text-muted-foreground">
-                        By Content Type
+                        Search Volume
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <ChartContainer config={barChartConfig} className="h-48">
-                        <BarChart data={categories ?? []}>
+                        <BarChart data={searcherBarData} layout="vertical">
                           <XAxis
-                            dataKey="category"
+                            type="number"
                             tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
                           />
                           <YAxis
+                            type="category"
+                            dataKey="name"
                             tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
+                            width={50}
                           />
                           <ChartTooltip content={<ChartTooltipContent />} />
-                          <Bar dataKey="search_count" name="Searches">
-                            {(categories ?? []).map((entry) => (
-                              <Cell
-                                key={entry.category}
-                                fill={
-                                  categoryColorMap[entry.category] ??
-                                  "hsl(var(--chart-5))"
-                                }
-                              />
+                          <Bar dataKey="count" name="Searches" radius={[0, 4, 4, 0]}>
+                            {searcherBarData.map((entry) => (
+                              <Cell key={entry.name} fill={entry.fill} />
                             ))}
                           </Bar>
                         </BarChart>

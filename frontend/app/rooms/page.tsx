@@ -1,13 +1,8 @@
 import { cache } from 'react';
-import dynamic from 'next/dynamic';
 import { Metadata } from 'next';
 import { Header } from '@/components/header';
 import { RoomListClient } from '@/components/rooms/room-list';
-
-const CreateRoomDialog = dynamic(
-  () => import('@/components/rooms/create-room-dialog').then((m) => m.CreateRoomDialog),
-  { ssr: false }
-);
+import { CreateRoomDialog } from '@/components/rooms/create-room-dialog';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 

@@ -74,9 +74,15 @@ export function RoomDetailClient({ room, initialMessages, initialAgents }: RoomD
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  // Click on new-messages badge: scroll to bottom and reset counter
+  // Click on new-messages badge: scroll messages container to bottom and reset counter
   const handleScrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Find the scrollable messages container and scroll it
+    const scrollContainer = bottomRef.current?.closest('[class*="overflow-y-auto"]');
+    if (scrollContainer) {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
     setUnreadCount(0);
   }, []);
 

@@ -63,18 +63,22 @@ export default async function RoomDetailPage({
   const messagesOldestFirst = [...(recent_messages || [])].reverse();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       <JsonLd
         data={roomJsonLd({ room, url: `https://solvr.dev/rooms/${slug}` })}
       />
       <Header />
-      <main className="pt-24 max-w-7xl mx-auto px-6 lg:px-12">
-        <RoomHeader room={room} ownerDisplayName={owner_display_name} />
-        <RoomDetailClient
-          room={room}
-          initialMessages={messagesOldestFirst}
-          initialAgents={agents || []}
-        />
+      <main className="flex-1 flex flex-col min-h-0 pt-16">
+        <div className="max-w-7xl w-full mx-auto px-6 lg:px-12 py-4 shrink-0">
+          <RoomHeader room={room} ownerDisplayName={owner_display_name} />
+        </div>
+        <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-6 lg:px-12 pb-4">
+          <RoomDetailClient
+            room={room}
+            initialMessages={messagesOldestFirst}
+            initialAgents={agents || []}
+          />
+        </div>
       </main>
     </div>
   );

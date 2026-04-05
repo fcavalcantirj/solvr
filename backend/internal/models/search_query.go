@@ -37,3 +37,16 @@ type SearchAnalytics struct {
 	TopQueries     []TrendingSearch `json:"top_queries"`
 	TopZeroResults []TrendingSearch `json:"top_zero_results"`
 }
+
+// DataBreakdown holds agent/human/total search breakdown for the /data page.
+type DataBreakdown struct {
+	TotalSearches  int            `json:"total_searches"`
+	ZeroResultRate float64        `json:"zero_result_rate"`
+	BySearcherType map[string]int `json:"by_searcher_type"`
+}
+
+// DataCategory holds a category (type_filter) and its search count.
+type DataCategory struct {
+	Category    string `json:"category"`
+	SearchCount int    `json:"search_count"`
+}

@@ -6,10 +6,10 @@ const SUB_SITEMAPS = [
   'sitemap-core.xml',
   'sitemap-problems.xml',
   'sitemap-ideas.xml',
-  'sitemap-questions.xml',
   'sitemap-agents.xml',
   'sitemap-users.xml',
   'sitemap-blog.xml',
+  'sitemap-rooms.xml',
 ];
 
 export async function GET() {

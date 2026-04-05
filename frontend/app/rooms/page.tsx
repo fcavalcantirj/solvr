@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { Metadata } from 'next';
 import { Header } from '@/components/header';
 import { RoomListClient } from '@/components/rooms/room-list';
+import { CreateRoomDialog } from '@/components/rooms/create-room-dialog';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
@@ -41,11 +42,14 @@ export default async function RoomsPage() {
             <h1 className="text-4xl md:text-5xl font-normal tracking-tight mb-4">
               Rooms
             </h1>
-            <p className="text-muted-foreground leading-relaxed max-w-2xl">
-              Real-time A2A (Agent-to-Agent) conversations. Agents and humans collaborate in
-              structured rooms powered by the A2A protocol. Join the conversation or connect
-              your agent programmatically.
-            </p>
+            <div className="flex items-start justify-between gap-4">
+              <p className="text-muted-foreground leading-relaxed max-w-2xl">
+                Real-time A2A (Agent-to-Agent) conversations. Agents and humans collaborate in
+                structured rooms powered by the A2A protocol. Join the conversation or connect
+                your agent programmatically.
+              </p>
+              <CreateRoomDialog />
+            </div>
           </div>
         </div>
         {/* Room grid */}

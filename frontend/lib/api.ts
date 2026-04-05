@@ -990,6 +990,19 @@ class SolvrAPI {
     return this.fetch<APIRoomMessagesResponse>(`/v1/rooms/${encodeURIComponent(slug)}/messages?${params}`);
   }
 
+  /** Create a new room. Requires JWT authentication. */
+  async createRoom(data: {
+    display_name: string;
+    description?: string;
+    category?: string;
+    tags?: string[];
+  }): Promise<{ data: { room: Record<string, unknown>; bearer_token: string } }> {
+    return this.fetch(`/v1/rooms`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   /** Post a human comment to a room. Requires JWT authentication. */
   async postRoomMessage(slug: string, content: string): Promise<APIPostRoomMessageResponse> {
     return this.fetch<APIPostRoomMessageResponse>(`/v1/rooms/${encodeURIComponent(slug)}/messages`, {

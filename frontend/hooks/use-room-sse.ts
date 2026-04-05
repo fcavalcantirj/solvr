@@ -29,11 +29,16 @@ export function useRoomSse(slug: string, lastKnownMessageId?: number): UseRoomSs
 
   useEffect(() => {
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+    let retryCount = 0;
+    const MAX_RETRIES = 5;
 
     const connect = () => {
-      // Build URL with optional lastEventId query param for initial connect.
-      // EventSource sends Last-Event-ID header automatically on browser reconnects,
-      // but for the first connect after SSR we use the query param.
+      // Stop reconnecting after max retries (prevents hammering on deleted rooms)
+      if (retryCount >= MAX_RETRIES) {
+        setStatus('disconnected');
+        return;
+      }
+
       const url = new URL(`${API_BASE_URL}/v1/rooms/${encodeURIComponent(slug)}/stream`);
       if (lastEventIdRef.current) {
         url.searchParams.set('lastEventId', lastEventIdRef.current);
@@ -44,6 +49,7 @@ export function useRoomSse(slug: string, lastKnownMessageId?: number): UseRoomSs
 
       es.onopen = () => {
         setStatus('connected');
+        retryCount = 0; // Reset on successful connect
       };
 
       es.addEventListener('message', (e: MessageEvent) => {
@@ -99,10 +105,16 @@ export function useRoomSse(slug: string, lastKnownMessageId?: number): UseRoomSs
       });
 
       es.onerror = () => {
-        setStatus('reconnecting');
         es.close();
-        // Reconnect after 3 seconds (T-16-17: controlled reconnect delay)
-        reconnectTimeout = setTimeout(connect, 3000);
+        retryCount++;
+        if (retryCount >= MAX_RETRIES) {
+          setStatus('disconnected');
+          return;
+        }
+        setStatus('reconnecting');
+        // Exponential backoff: 3s, 6s, 12s, 24s, 48s
+        const delay = 3000 * Math.pow(2, retryCount - 1);
+        reconnectTimeout = setTimeout(connect, delay);
       };
     };
 

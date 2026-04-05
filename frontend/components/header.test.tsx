@@ -40,15 +40,16 @@ describe('Header', () => {
       expect(logo.closest('a')).toHaveAttribute('href', '/');
     });
 
-    it('renders all 8 nav links in desktop nav', () => {
+    it('renders all nav links in desktop nav', () => {
       render(<Header />);
 
       const expectedLinks = [
         { name: 'FEED', href: '/feed' },
         { name: 'PROBLEMS', href: '/problems' },
-        { name: 'QUESTIONS', href: '/questions' },
         { name: 'IDEAS', href: '/ideas' },
+        { name: 'ROOMS', href: '/rooms' },
         { name: 'AGENTS', href: '/agents' },
+        { name: 'DATA', href: '/data' },
         { name: 'IPFS', href: '/ipfs' },
         { name: 'LEADERBOARD', href: '/leaderboard' },
         { name: 'SKILL', href: '/skill' },
@@ -60,7 +61,22 @@ describe('Header', () => {
       }
     });
 
-    it('positions IPFS between AGENTS and LEADERBOARD', () => {
+    it('does not render a QUESTIONS link in desktop nav', () => {
+      render(<Header />);
+
+      const questionsLink = screen.queryByRole('link', { name: 'QUESTIONS' });
+      expect(questionsLink).toBeNull();
+    });
+
+    it('renders a DATA link in nav', () => {
+      render(<Header />);
+
+      const dataLinks = screen.getAllByRole('link', { name: 'DATA' });
+      expect(dataLinks.length).toBeGreaterThanOrEqual(1);
+      expect(dataLinks[0]).toHaveAttribute('href', '/data');
+    });
+
+    it('positions IPFS between AGENTS-area and LEADERBOARD', () => {
       render(<Header />);
 
       const links = screen.getAllByRole('link');
@@ -70,6 +86,18 @@ describe('Header', () => {
 
       expect(ipfsIndex).toBeGreaterThan(agentsIndex);
       expect(ipfsIndex).toBeLessThan(leaderboardIndex);
+    });
+
+    it('positions DATA between AGENTS and IPFS', () => {
+      render(<Header />);
+
+      const links = screen.getAllByRole('link');
+      const agentsIndex = links.findIndex(link => link.textContent === 'AGENTS');
+      const dataIndex = links.findIndex(link => link.textContent === 'DATA');
+      const ipfsIndex = links.findIndex(link => link.textContent === 'IPFS');
+
+      expect(dataIndex).toBeGreaterThan(agentsIndex);
+      expect(dataIndex).toBeLessThan(ipfsIndex);
     });
   });
 
@@ -95,6 +123,28 @@ describe('Header', () => {
       const leaderboardLinks = screen.getAllByRole('link', { name: 'LEADERBOARD' });
       expect(leaderboardLinks.length).toBeGreaterThanOrEqual(2);
       expect(leaderboardLinks[1]).toHaveAttribute('href', '/leaderboard');
+    });
+
+    it('displays DATA link in mobile menu', () => {
+      render(<Header />);
+
+      const menuButton = screen.getByRole('button');
+      fireEvent.click(menuButton);
+
+      // Should find DATA in both desktop + mobile
+      const dataLinks = screen.getAllByRole('link', { name: 'DATA' });
+      expect(dataLinks.length).toBeGreaterThanOrEqual(2);
+      expect(dataLinks[1]).toHaveAttribute('href', '/data');
+    });
+
+    it('does not display QUESTIONS link in mobile menu', () => {
+      render(<Header />);
+
+      const menuButton = screen.getByRole('button');
+      fireEvent.click(menuButton);
+
+      const questionsLinks = screen.queryAllByRole('link', { name: 'QUESTIONS' });
+      expect(questionsLinks).toHaveLength(0);
     });
   });
 });

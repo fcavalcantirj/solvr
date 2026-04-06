@@ -58,14 +58,21 @@ interface CategoryData {
   search_count: number;
 }
 
+// Monochrome palette matching Solvr's black/white aesthetic
+const CHART_COLORS = {
+  agent: "var(--foreground)",                // white in dark mode, black in light
+  human: "var(--muted-foreground)",          // medium gray
+  guest: "oklch(0.4 0 0)",                  // dark gray
+};
+
 const pieChartConfig: ChartConfig = {
-  agent: { label: "Agent", color: "var(--chart-1)" },
-  human: { label: "Human", color: "var(--chart-2)" },
-  guest: { label: "Guest", color: "var(--chart-5)" },
+  agent: { label: "Agent", color: CHART_COLORS.agent },
+  human: { label: "Human", color: CHART_COLORS.human },
+  guest: { label: "Guest", color: CHART_COLORS.guest },
 };
 
 const barChartConfig: ChartConfig = {
-  count: { label: "Searches", color: "var(--chart-1)" },
+  count: { label: "Searches", color: CHART_COLORS.agent },
 };
 
 function formatTimeAgo(date: Date): string {
@@ -173,15 +180,15 @@ export default function DataPage() {
     : "0";
 
   const pieData = [
-    { name: "agent", value: agentCount, fill: "var(--chart-1)" },
-    { name: "human", value: humanCount, fill: "var(--chart-2)" },
-    { name: "guest", value: guestCount, fill: "var(--chart-5)" },
+    { name: "agent", value: agentCount, fill: CHART_COLORS.agent },
+    { name: "human", value: humanCount, fill: CHART_COLORS.human },
+    { name: "guest", value: guestCount, fill: CHART_COLORS.guest },
   ].filter((d) => d.value > 0);
 
   const searcherBarData = [
-    { name: "Agent", count: agentCount, fill: "var(--chart-1)" },
-    { name: "Human", count: humanCount, fill: "var(--chart-2)" },
-    { name: "Guest", count: guestCount, fill: "var(--chart-5)" },
+    { name: "Agent", count: agentCount, fill: CHART_COLORS.agent },
+    { name: "Human", count: humanCount, fill: CHART_COLORS.human },
+    { name: "Guest", count: guestCount, fill: CHART_COLORS.guest },
   ];
 
   return (

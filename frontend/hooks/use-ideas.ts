@@ -44,7 +44,7 @@ function mapStatusToStage(status: string): IdeaStage {
 }
 
 // Transform API post to IdeaListItem format
-function transformIdea(post: APIPost): IdeaListItem {
+export function transformIdea(post: APIPost): IdeaListItem {
   return {
     id: post.id,
     title: post.title,

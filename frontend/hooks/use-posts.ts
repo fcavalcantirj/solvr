@@ -29,7 +29,7 @@ export interface FeedPost {
 }
 
 // Transform API post to FeedPost format
-function transformPost(post: APIPost): FeedPost {
+export function transformPost(post: APIPost): FeedPost {
   // Map comment counts based on post type:
   // - Problems: use approaches_count
   // - Questions: use answers_count

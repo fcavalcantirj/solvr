@@ -15,7 +15,7 @@ export interface UserListItem {
 }
 
 // Transform API user to UserListItem format
-function transformUser(user: APIUserListItem): UserListItem {
+export function transformUser(user: APIUserListItem): UserListItem {
   return {
     id: user.id,
     username: user.username,

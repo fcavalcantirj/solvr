@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import QuestionsPage from './page';
+import { QuestionsPageClient } from '@/components/questions/questions-page-client';
+
+vi.mock('@/hooks/use-questions', () => ({
+  transformQuestion: vi.fn((post: Record<string, unknown>) => post),
+}));
 
 // Mock hooks
 vi.mock('@/hooks/use-auth', () => ({
@@ -43,10 +47,6 @@ vi.mock('@/components/questions/questions-sidebar', () => ({
   QuestionsSidebar: () => <div data-testid="questions-sidebar" />,
 }));
 
-vi.mock('@/components/header', () => ({
-  Header: () => <div data-testid="header" />,
-}));
-
 const mockPush = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -59,14 +59,14 @@ describe('QuestionsPage', () => {
   });
 
   it('defaults to votes sort on initial render', () => {
-    render(<QuestionsPage />);
+    render(<QuestionsPageClient initialPosts={[]} />);
 
     const list = screen.getByTestId('questions-list');
     expect(list.getAttribute('data-sort')).toBe('votes');
   });
 
   it('passes sort=votes to QuestionsList on mount', () => {
-    render(<QuestionsPage />);
+    render(<QuestionsPageClient initialPosts={[]} />);
 
     expect(mockQuestionsListProps).toHaveBeenCalled();
     const lastCall = mockQuestionsListProps.mock.calls[mockQuestionsListProps.mock.calls.length - 1][0];
@@ -74,7 +74,7 @@ describe('QuestionsPage', () => {
   });
 
   it('passes sort=votes to QuestionsFilters on mount', () => {
-    render(<QuestionsPage />);
+    render(<QuestionsPageClient initialPosts={[]} />);
 
     const filters = screen.getByTestId('questions-filters');
     expect(filters.getAttribute('data-sort')).toBe('votes');

@@ -100,12 +100,17 @@ function AgentCard({ agent, rank }: AgentCardProps) {
 
 interface AgentsListProps {
   options?: UseAgentsOptions;
+  initialAgents?: AgentListItem[];
 }
 
-export function AgentsList({ options = {} }: AgentsListProps) {
+export function AgentsList({ options = {}, initialAgents }: AgentsListProps) {
   const { agents, loading, error, hasMore, loadMore, total } = useAgents(options);
 
-  if (loading && agents.length === 0) {
+  // Show server-fetched initial data while hooks are loading OR if hooks fail
+  const displayAgents = agents.length > 0 ? agents : (initialAgents ?? []);
+  const isInitialLoading = loading && agents.length === 0 && !initialAgents;
+
+  if (isInitialLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -113,7 +118,7 @@ export function AgentsList({ options = {} }: AgentsListProps) {
     );
   }
 
-  if (error) {
+  if (error && displayAgents.length === 0) {
     return (
       <div className="border border-destructive/20 bg-destructive/5 p-6 text-center">
         <p className="text-sm text-destructive">{error}</p>
@@ -121,7 +126,7 @@ export function AgentsList({ options = {} }: AgentsListProps) {
     );
   }
 
-  if (agents.length === 0) {
+  if (displayAgents.length === 0) {
     return (
       <div className="border border-border bg-card p-12 text-center">
         <Bot className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
@@ -135,7 +140,7 @@ export function AgentsList({ options = {} }: AgentsListProps) {
 
   return (
     <div className="space-y-4">
-      {agents.map((agent, index) => (
+      {displayAgents.map((agent, index) => (
         <AgentCard
           key={agent.id}
           agent={agent}

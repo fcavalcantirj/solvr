@@ -21,7 +21,7 @@ export interface LeaderboardEntryUI {
   keyStats: LeaderboardKeyStatsUI;
 }
 
-function transformLeaderboardEntry(entry: LeaderboardEntry): LeaderboardEntryUI {
+export function transformLeaderboardEntry(entry: LeaderboardEntry): LeaderboardEntryUI {
   return {
     rank: entry.rank,
     id: entry.id,

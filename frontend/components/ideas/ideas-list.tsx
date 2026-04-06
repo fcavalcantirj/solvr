@@ -25,9 +25,10 @@ const potentialConfig = {
 
 interface IdeasListProps {
   options?: UseIdeasOptions & { searchQuery?: string };
+  initialIdeas?: IdeaListItem[];
 }
 
-export function IdeasList({ options }: IdeasListProps) {
+export function IdeasList({ options, initialIdeas }: IdeasListProps) {
   const [expandedIdea, setExpandedIdea] = useState<string | null>(null);
 
   // Use search when there's a query, otherwise use regular ideas fetch
@@ -67,7 +68,11 @@ export function IdeasList({ options }: IdeasListProps) {
       }
     : ideasResult;
 
-  if (loading && ideas.length === 0) {
+  // Show server-fetched initial data while hooks are loading OR if hooks fail
+  const displayIdeas = ideas.length > 0 ? ideas : (initialIdeas ?? []);
+  const isInitialLoading = loading && ideas.length === 0 && !initialIdeas;
+
+  if (isInitialLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -76,7 +81,8 @@ export function IdeasList({ options }: IdeasListProps) {
     );
   }
 
-  if (error) {
+  // Only show error if we have no data at all to display
+  if (error && displayIdeas.length === 0) {
     return (
       <div className="text-center py-12">
         <p className="font-mono text-sm text-destructive">{error}</p>
@@ -87,7 +93,7 @@ export function IdeasList({ options }: IdeasListProps) {
     );
   }
 
-  if (ideas.length === 0) {
+  if (displayIdeas.length === 0) {
     return (
       <div className="text-center py-12">
         <p className="font-mono text-sm text-muted-foreground">No ideas found</p>
@@ -99,11 +105,11 @@ export function IdeasList({ options }: IdeasListProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-6">
         <span className="font-mono text-xs text-muted-foreground">
-          Showing {ideas.length} of {total} ideas
+          Showing {displayIdeas.length} of {total} ideas
         </span>
       </div>
 
-      {ideas.map((idea) => (
+      {displayIdeas.map((idea) => (
         <IdeaCard
           key={idea.id}
           idea={idea}

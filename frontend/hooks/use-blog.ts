@@ -28,7 +28,7 @@ export interface BlogTag {
   count: number;
 }
 
-function transformBlogPost(post: APIBlogPost): BlogPost {
+export function transformBlogPost(post: APIBlogPost): BlogPost {
   return {
     slug: post.slug,
     title: post.title,

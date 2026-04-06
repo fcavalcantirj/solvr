@@ -17,7 +17,7 @@ export interface AgentListItem {
 }
 
 // Transform API agent to AgentListItem format
-function transformAgent(agent: APIAgent): AgentListItem {
+export function transformAgent(agent: APIAgent): AgentListItem {
   return {
     id: agent.id,
     displayName: agent.display_name,

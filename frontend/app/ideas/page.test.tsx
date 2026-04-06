@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import IdeasPage from './page';
+import { render, screen, waitFor } from '@testing-library/react';
+import { IdeasPageClient } from '@/components/ideas/ideas-page-client';
+
+vi.mock('@/hooks/use-ideas', () => ({
+  transformIdea: vi.fn((post: Record<string, unknown>) => post),
+}));
 
 // Mock hooks
 vi.mock('@/hooks/use-ideas-stats', () => ({
@@ -29,9 +33,8 @@ vi.mock('@/components/ideas/ideas-list', () => ({
 }));
 
 // Track what props IdeasFilters receives
-const mockFiltersOnChange = vi.fn();
 vi.mock('@/components/ideas/ideas-filters', () => ({
-  IdeasFilters: ({ onFiltersChange, stats, stage, sort, tags, onStageChange, onSortChange, onTagsChange }: Record<string, unknown>) => {
+  IdeasFilters: ({ stage, sort, tags, onStageChange, onSortChange, onTagsChange }: Record<string, unknown>) => {
     // Store the callbacks so tests can invoke them
     if (onStageChange) (window as Record<string, unknown>).__testOnStageChange = onStageChange;
     if (onSortChange) (window as Record<string, unknown>).__testOnSortChange = onSortChange;
@@ -52,10 +55,6 @@ vi.mock('@/components/ideas/ideas-sidebar', () => ({
   IdeasSidebar: () => <div data-testid="ideas-sidebar" />,
 }));
 
-vi.mock('@/components/header', () => ({
-  Header: () => <div data-testid="header" />,
-}));
-
 const mockPush = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -71,7 +70,7 @@ describe('IdeasPage', () => {
   });
 
   it('passes filter state props to IdeasFilters', () => {
-    render(<IdeasPage />);
+    render(<IdeasPageClient initialPosts={[]} />);
 
     const filters = screen.getByTestId('ideas-filters');
     // Initially: stage undefined (all), sort votes, tags empty
@@ -80,7 +79,7 @@ describe('IdeasPage', () => {
   });
 
   it('passes filter state as options to IdeasList', () => {
-    render(<IdeasPage />);
+    render(<IdeasPageClient initialPosts={[]} />);
 
     // IdeasList should receive options with default values
     expect(mockIdeasListOptions).toHaveBeenCalled();
@@ -91,7 +90,7 @@ describe('IdeasPage', () => {
   });
 
   it('changing stage filter updates IdeasList with matching status param', async () => {
-    render(<IdeasPage />);
+    render(<IdeasPageClient initialPosts={[]} />);
 
     // Simulate stage change from IdeasFilters
     const onStageChange = (window as Record<string, unknown>).__testOnStageChange as (stage: string) => void;
@@ -108,7 +107,7 @@ describe('IdeasPage', () => {
   });
 
   it('changing sort filter updates IdeasList with matching sort param', async () => {
-    render(<IdeasPage />);
+    render(<IdeasPageClient initialPosts={[]} />);
 
     const onSortChange = (window as Record<string, unknown>).__testOnSortChange as (sort: string) => void;
     expect(onSortChange).toBeDefined();
@@ -122,7 +121,7 @@ describe('IdeasPage', () => {
   });
 
   it('changing tags updates IdeasList', async () => {
-    render(<IdeasPage />);
+    render(<IdeasPageClient initialPosts={[]} />);
 
     const onTagsChange = (window as Record<string, unknown>).__testOnTagsChange as (tags: string[]) => void;
     expect(onTagsChange).toBeDefined();

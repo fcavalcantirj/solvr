@@ -32,7 +32,7 @@ export interface QuestionListItem {
   userVote?: 'up' | 'down' | null;
 }
 
-function transformQuestion(post: APIPost): QuestionListItem {
+export function transformQuestion(post: APIPost): QuestionListItem {
   return {
     id: post.id,
     title: post.title,

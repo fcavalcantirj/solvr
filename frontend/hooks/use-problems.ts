@@ -24,7 +24,7 @@ export interface ProblemListItem {
   userVote?: 'up' | 'down' | null;
 }
 
-function transformProblem(post: APIPost): ProblemListItem {
+export function transformProblem(post: APIPost): ProblemListItem {
   return {
     id: post.id,
     title: post.title,

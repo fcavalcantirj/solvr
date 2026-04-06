@@ -1,19 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProblemsFilters } from "@/components/problems/problems-filters";
 import { ProblemsList } from "@/components/problems/problems-list";
 import { ProblemsSidebar } from "@/components/problems/problems-sidebar";
 import { useAuth } from "@/hooks/use-auth";
+import { transformProblem } from "@/hooks/use-problems";
+import type { APIPost } from "@/lib/api-types";
 
-export function ProblemsPageClient() {
+interface ProblemsPageClientProps {
+  initialPosts: APIPost[];
+}
+
+export function ProblemsPageClient({ initialPosts }: ProblemsPageClientProps) {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const [status, setStatus] = useState<string | undefined>(undefined);
   const [sort, setSort] = useState<'newest' | 'votes' | 'approaches'>('votes');
   const [tags, setTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Transform server-fetched posts into ProblemListItems (memoized, runs once)
+  const initialProblems = useMemo(() => initialPosts.map(transformProblem), [initialPosts]);
 
   const handlePostProblem = () => {
     if (isAuthenticated) {
@@ -41,7 +50,13 @@ export function ProblemsPageClient() {
       <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <ProblemsList status={status} sort={sort} tags={tags} searchQuery={searchQuery} />
+            <ProblemsList
+              status={status}
+              sort={sort}
+              tags={tags}
+              searchQuery={searchQuery}
+              initialProblems={initialProblems}
+            />
           </div>
           <div className="lg:col-span-1">
             <ProblemsSidebar onTagClick={(tag) => {

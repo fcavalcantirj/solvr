@@ -1,38 +1,40 @@
-"use client";
-
-// Force dynamic rendering - this page imports Header which uses client-side state
-export const dynamic = 'force-dynamic';
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { cache } from 'react';
+import { Metadata } from 'next';
 import { Header } from "@/components/header";
-import { QuestionsFilters } from "@/components/questions/questions-filters";
-import { QuestionsList } from "@/components/questions/questions-list";
-import { QuestionsSidebar } from "@/components/questions/questions-sidebar";
-import { useAuth } from "@/hooks/use-auth";
+import { PostButton } from "@/components/ui/post-button";
+import { QuestionsPageClient } from "@/components/questions/questions-page-client";
 
-export default function QuestionsPage() {
-  const router = useRouter();
-  const { isAuthenticated } = useAuth();
-  const [status, setStatus] = useState<string | undefined>(undefined);
-  const [hasAnswer, setHasAnswer] = useState<boolean | undefined>(undefined);
-  const [sort, setSort] = useState<'newest' | 'votes' | 'answers'>('votes');
-  const [tags, setTags] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
-  const handleAskQuestion = () => {
-    if (isAuthenticated) {
-      router.push('/questions/new');
-    } else {
-      router.push('/login?next=/questions/new');
-    }
-  };
+export const revalidate = 300;
+
+export const metadata: Metadata = {
+  title: 'Questions',
+  description: 'Direct questions seeking factual answers. Ask once, benefit the entire collective. Every answer is searchable forever.',
+  alternates: { canonical: '/questions' },
+};
+
+const getInitialQuestions = cache(async () => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/v1/posts?type=question&sort=votes&per_page=20`, {
+      next: { revalidate: 300 },
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.data ?? [];
+  } catch {
+    return [];
+  }
+});
+
+export default async function QuestionsPage() {
+  const initialPosts = await getInitialQuestions();
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
 
-      {/* Page Header */}
+      {/* Page Header — server-rendered for SEO */}
       <div className="border-b border-border bg-card">
         <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12">
           <div className="flex items-end justify-between gap-8">
@@ -49,48 +51,13 @@ export default function QuestionsPage() {
               </p>
             </div>
             <div className="hidden md:block">
-              <button onClick={handleAskQuestion} className="font-mono text-xs tracking-wider bg-foreground text-background px-6 py-3 hover:bg-foreground/90 transition-colors">
-                ASK QUESTION
-              </button>
+              <PostButton href="/questions/new" label="ASK QUESTION" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <QuestionsFilters
-        status={status}
-        hasAnswer={hasAnswer}
-        sort={sort}
-        tags={tags}
-        searchQuery={searchQuery}
-        onStatusChange={setStatus}
-        onHasAnswerChange={setHasAnswer}
-        onSortChange={setSort}
-        onTagsChange={setTags}
-        onSearchQueryChange={setSearchQuery}
-      />
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            <QuestionsList status={status} hasAnswer={hasAnswer} sort={sort} tags={tags} searchQuery={searchQuery} />
-          </div>
-          <div className="lg:col-span-1">
-            <QuestionsSidebar onTagClick={(tag) => {
-              if (!tags.includes(tag)) setTags([...tags, tag]);
-            }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile CTA */}
-      <div className="md:hidden fixed bottom-6 left-6 right-6">
-        <button onClick={handleAskQuestion} className="w-full font-mono text-xs tracking-wider bg-foreground text-background px-6 py-4 hover:bg-foreground/90 transition-colors">
-          ASK QUESTION
-        </button>
-      </div>
+      <QuestionsPageClient initialPosts={initialPosts} />
     </div>
   );
 }

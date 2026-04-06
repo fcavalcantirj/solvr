@@ -1,7 +1,10 @@
+import { cache } from 'react';
 import { Metadata } from 'next';
 import { Header } from "@/components/header";
 import { PostButton } from "@/components/ui/post-button";
 import { ProblemsPageClient } from "@/components/problems/problems-page-client";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
 export const revalidate = 300; // ISR: revalidate every 5 minutes
 
@@ -11,7 +14,22 @@ export const metadata: Metadata = {
   alternates: { canonical: '/problems' },
 };
 
+const getInitialProblems = cache(async () => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/v1/posts?type=problem&sort=votes&per_page=20`, {
+      next: { revalidate: 300 },
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.data ?? [];
+  } catch {
+    return [];
+  }
+});
+
 export default async function ProblemsPage() {
+  const initialPosts = await getInitialProblems();
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -39,8 +57,8 @@ export default async function ProblemsPage() {
         </div>
       </div>
 
-      {/* Client-side interactive content */}
-      <ProblemsPageClient />
+      {/* Client-side interactive content with server-fetched initial data */}
+      <ProblemsPageClient initialPosts={initialPosts} />
     </div>
   );
 }

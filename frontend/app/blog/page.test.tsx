@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import BlogPage from './page';
+import { BlogPageClient } from '@/components/blog/blog-page-client';
 
 // Mock hooks
 const mockUseBlogPosts = vi.fn();
@@ -11,6 +11,7 @@ vi.mock('@/hooks/use-blog', () => ({
   useBlogPosts: (...args: unknown[]) => mockUseBlogPosts(...args),
   useBlogFeatured: () => mockUseBlogFeatured(),
   useBlogTags: () => mockUseBlogTags(),
+  transformBlogPost: vi.fn((post: Record<string, unknown>) => post),
 }));
 
 const mockUseAuth = vi.fn();
@@ -138,7 +139,7 @@ describe('BlogPage', () => {
       error: null,
     });
 
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     // Should show skeleton placeholders
     expect(screen.getByTestId('featured-skeleton')).toBeInTheDocument();
@@ -147,7 +148,7 @@ describe('BlogPage', () => {
 
   it('renders blog posts from API after loading', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     expect(screen.getByText('Test Post One')).toBeInTheDocument();
     expect(screen.getByText('Test Post Two')).toBeInTheDocument();
@@ -158,7 +159,7 @@ describe('BlogPage', () => {
 
   it('renders featured post from API', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     expect(screen.getByText('Featured Post Title')).toBeInTheDocument();
     expect(screen.getByText('This is the featured post excerpt')).toBeInTheDocument();
@@ -170,7 +171,7 @@ describe('BlogPage', () => {
 
   it('renders tags from API', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     expect(screen.getByText('engineering')).toBeInTheDocument();
     expect(screen.getByText('research')).toBeInTheDocument();
@@ -180,7 +181,7 @@ describe('BlogPage', () => {
 
   it('filters posts by tag selection', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     // Click the "engineering" tag filter button
     const engineeringBtn = screen.getByRole('button', { name: /ENGINEERING/i });
@@ -215,7 +216,7 @@ describe('BlogPage', () => {
       error: null,
     });
 
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     // Should show error message
     expect(screen.getByText(/failed to fetch/i)).toBeInTheDocument();
@@ -248,14 +249,14 @@ describe('BlogPage', () => {
       error: null,
     });
 
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     expect(screen.getByText(/no posts found/i)).toBeInTheDocument();
   });
 
   it('renders post links using slug not id', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     const postLink = screen.getByText('Test Post One').closest('a');
     expect(postLink).toHaveAttribute('href', '/blog/test-post-1');
@@ -263,7 +264,7 @@ describe('BlogPage', () => {
 
   it('renders tag links as /blog?tag={tag}', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     // Tags in the tags cloud section should link to /blog?tag={tag}
     const tagLinks = screen.getAllByRole('link').filter(
@@ -274,13 +275,13 @@ describe('BlogPage', () => {
 
   it('does not render newsletter subscription form', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
     expect(screen.queryByPlaceholderText(/your@email.com/i)).not.toBeInTheDocument();
   });
 
   it('renders category filter buttons from tags', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     // "All Posts" button always present
     expect(screen.getByRole('button', { name: /ALL POSTS/i })).toBeInTheDocument();
@@ -291,13 +292,13 @@ describe('BlogPage', () => {
 
   it('renders SOLVR BLOG header text', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
     expect(screen.getByText('SOLVR BLOG')).toBeInTheDocument();
   });
 
   it('renders AI author badge differently from human', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     // The AI author should have AI badge text
     const aiLabels = screen.getAllByText('AI');
@@ -306,7 +307,7 @@ describe('BlogPage', () => {
 
   it('filters posts by search query matching title', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     const searchInput = screen.getByPlaceholderText(/search posts/i);
     fireEvent.change(searchInput, { target: { value: 'Post One' } });
@@ -319,7 +320,7 @@ describe('BlogPage', () => {
 
   it('filters posts by search query matching excerpt', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     const searchInput = screen.getByPlaceholderText(/search posts/i);
     fireEvent.change(searchInput, { target: { value: 'second test post' } });
@@ -330,7 +331,7 @@ describe('BlogPage', () => {
 
   it('clears filters when clicking clear filters button', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     // Type a search query that matches nothing
     const searchInput = screen.getByPlaceholderText(/search posts/i);
@@ -353,7 +354,7 @@ describe('BlogPage', () => {
       loading: false,
       error: null,
     });
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     expect(screen.getByText('Featured Post Title')).toBeInTheDocument();
   });
@@ -370,14 +371,14 @@ describe('BlogPage', () => {
       refetch: vi.fn(),
       loadMore: vi.fn(),
     });
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     expect(screen.getByText('Test Post One')).toBeInTheDocument();
   });
 
   it('renders WRITE POST button on blog page', () => {
     setupDefaultMocks();
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     expect(screen.getAllByText('WRITE POST').length).toBeGreaterThanOrEqual(1);
   });
@@ -385,7 +386,7 @@ describe('BlogPage', () => {
   it('navigates to /blog/create when authenticated user clicks WRITE POST', () => {
     setupDefaultMocks();
     mockUseAuth.mockReturnValue({ isAuthenticated: true, user: { id: '1' }, loading: false });
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     const buttons = screen.getAllByText('WRITE POST');
     fireEvent.click(buttons[0]);
@@ -396,7 +397,7 @@ describe('BlogPage', () => {
   it('navigates to login when unauthenticated user clicks WRITE POST', () => {
     setupDefaultMocks();
     mockUseAuth.mockReturnValue({ isAuthenticated: false, user: null, loading: false });
-    render(<BlogPage />);
+    render(<BlogPageClient initialBlogPosts={[]} />);
 
     const buttons = screen.getAllByText('WRITE POST');
     fireEvent.click(buttons[0]);

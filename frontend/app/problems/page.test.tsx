@@ -11,6 +11,10 @@ vi.mock('@/hooks/use-auth', () => ({
   })),
 }));
 
+vi.mock('@/hooks/use-problems', () => ({
+  transformProblem: vi.fn((post: Record<string, unknown>) => post),
+}));
+
 // Track what props ProblemsList receives
 const mockProblemsListProps = vi.fn();
 vi.mock('@/components/problems/problems-list', () => ({
@@ -55,14 +59,14 @@ describe('ProblemsPage', () => {
   });
 
   it('defaults to votes sort on initial render', () => {
-    render(<ProblemsPageClient />);
+    render(<ProblemsPageClient initialPosts={[]} />);
 
     const list = screen.getByTestId('problems-list');
     expect(list.getAttribute('data-sort')).toBe('votes');
   });
 
   it('passes sort=votes to ProblemsList on mount', () => {
-    render(<ProblemsPageClient />);
+    render(<ProblemsPageClient initialPosts={[]} />);
 
     expect(mockProblemsListProps).toHaveBeenCalled();
     const lastCall = mockProblemsListProps.mock.calls[mockProblemsListProps.mock.calls.length - 1][0];
@@ -70,7 +74,7 @@ describe('ProblemsPage', () => {
   });
 
   it('passes sort=votes to ProblemsFilters on mount', () => {
-    render(<ProblemsPageClient />);
+    render(<ProblemsPageClient initialPosts={[]} />);
 
     const filters = screen.getByTestId('problems-filters');
     expect(filters.getAttribute('data-sort')).toBe('votes');

@@ -75,11 +75,12 @@ interface FeedListProps {
   status?: string;
   sort?: string;
   timeframe?: string;
+  initialFeedPosts?: FeedPost[];
 }
 
 const POLLING_INTERVAL = 30000; // 30 seconds
 
-export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedListProps) {
+export function FeedList({ type, searchQuery, status, sort, timeframe, initialFeedPosts }: FeedListProps) {
   const [hoveredPost, setHoveredPost] = useState<string | null>(null);
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
   const [newPostsAvailable, setNewPostsAvailable] = useState(false);
@@ -188,8 +189,12 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
     refetch();
   };
 
+  // Show server-fetched initial data while hooks are loading OR if hooks fail
+  const displayPosts = posts.length > 0 ? posts : (initialFeedPosts ?? []);
+  const isInitialLoading = loading && posts.length === 0 && !initialFeedPosts;
+
   // Loading state
-  if (loading && posts.length === 0) {
+  if (isInitialLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mb-4" />
@@ -198,8 +203,8 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
     );
   }
 
-  // Error state
-  if (error && posts.length === 0) {
+  // Error state — only show if no data at all
+  if (error && displayPosts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 border border-border bg-card">
         <AlertCircle className="w-8 h-8 text-muted-foreground mb-4" />
@@ -216,7 +221,7 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
   }
 
   // Empty state
-  if (posts.length === 0) {
+  if (displayPosts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 border border-border bg-card">
         <Lightbulb className="w-8 h-8 text-muted-foreground mb-4" />
@@ -267,7 +272,7 @@ export function FeedList({ type, searchQuery, status, sort, timeframe }: FeedLis
 
       {/* Feed Items */}
       <div className="border border-border divide-y divide-border bg-card">
-        {posts.map((post) => {
+        {displayPosts.map((post) => {
           const TypeIcon = typeConfig[post.type].icon;
           const status = statusConfig[post.status] || statusConfig.OPEN;
 

@@ -12,7 +12,11 @@ const SUB_SITEMAPS = [
 ];
 
 export async function GET() {
-  const now = new Date().toISOString();
+  // Use a stable daily timestamp instead of current time
+  // Prevents telling Google "everything changed" on every request
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const lastmod = today.toISOString();
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -20,7 +24,7 @@ ${SUB_SITEMAPS.map(
   (name) =>
     `  <sitemap>
     <loc>${BASE_URL}/${name}</loc>
-    <lastmod>${now}</lastmod>
+    <lastmod>${lastmod}</lastmod>
   </sitemap>`
 ).join('\n')}
 </sitemapindex>`;

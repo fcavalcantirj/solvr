@@ -37,9 +37,10 @@ interface ProblemsListProps {
   tags?: string[];
   sort?: 'newest' | 'votes' | 'approaches';
   searchQuery?: string;
+  initialProblems?: ProblemListItem[];
 }
 
-export function ProblemsList({ status, tags, sort, searchQuery }: ProblemsListProps) {
+export function ProblemsList({ status, tags, sort, searchQuery, initialProblems }: ProblemsListProps) {
   // Use search when there's a query, otherwise use regular problems fetch
   const isSearching = Boolean(searchQuery?.trim());
 
@@ -72,7 +73,11 @@ export function ProblemsList({ status, tags, sort, searchQuery }: ProblemsListPr
       }
     : problemsResult;
 
-  if (loading && problems.length === 0) {
+  // Show server-fetched initial data while hooks are loading OR if hooks fail
+  const displayProblems = problems.length > 0 ? problems : (initialProblems ?? []);
+  const isInitialLoading = loading && problems.length === 0 && !initialProblems;
+
+  if (isInitialLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="animate-spin text-muted-foreground" size={24} />
@@ -80,7 +85,8 @@ export function ProblemsList({ status, tags, sort, searchQuery }: ProblemsListPr
     );
   }
 
-  if (error) {
+  // Only show error if we have no data at all to display
+  if (error && displayProblems.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
         <p className="font-mono text-sm text-muted-foreground">
@@ -90,7 +96,7 @@ export function ProblemsList({ status, tags, sort, searchQuery }: ProblemsListPr
     );
   }
 
-  if (problems.length === 0) {
+  if (displayProblems.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
         <p className="font-mono text-sm text-muted-foreground">
@@ -102,7 +108,7 @@ export function ProblemsList({ status, tags, sort, searchQuery }: ProblemsListPr
 
   return (
     <div className="space-y-4">
-      {problems.map((problem) => (
+      {displayProblems.map((problem) => (
         <ProblemCard key={problem.id} problem={problem} />
       ))}
 

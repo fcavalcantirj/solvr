@@ -18,9 +18,10 @@ interface QuestionsListProps {
   tags?: string[];
   sort?: 'newest' | 'votes' | 'answers';
   searchQuery?: string;
+  initialQuestions?: QuestionListItem[];
 }
 
-export function QuestionsList({ status, hasAnswer, tags, sort, searchQuery }: QuestionsListProps) {
+export function QuestionsList({ status, hasAnswer, tags, sort, searchQuery, initialQuestions }: QuestionsListProps) {
   // Use search when there's a query, otherwise use regular questions fetch
   const isSearching = Boolean(searchQuery?.trim());
 
@@ -53,7 +54,11 @@ export function QuestionsList({ status, hasAnswer, tags, sort, searchQuery }: Qu
       }
     : questionsResult;
 
-  if (loading && questions.length === 0) {
+  // Show server-fetched initial data while hooks are loading OR if hooks fail
+  const displayQuestions = questions.length > 0 ? questions : (initialQuestions ?? []);
+  const isInitialLoading = loading && questions.length === 0 && !initialQuestions;
+
+  if (isInitialLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="animate-spin text-muted-foreground" size={24} />
@@ -61,7 +66,7 @@ export function QuestionsList({ status, hasAnswer, tags, sort, searchQuery }: Qu
     );
   }
 
-  if (error) {
+  if (error && displayQuestions.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
         <p className="font-mono text-sm text-muted-foreground">
@@ -71,7 +76,7 @@ export function QuestionsList({ status, hasAnswer, tags, sort, searchQuery }: Qu
     );
   }
 
-  if (questions.length === 0) {
+  if (displayQuestions.length === 0) {
     return (
       <div className="flex items-center justify-center py-20">
         <p className="font-mono text-sm text-muted-foreground">
@@ -83,7 +88,7 @@ export function QuestionsList({ status, hasAnswer, tags, sort, searchQuery }: Qu
 
   return (
     <div className="space-y-4">
-      {questions.map((question) => (
+      {displayQuestions.map((question) => (
         <QuestionCard key={question.id} question={question} />
       ))}
 

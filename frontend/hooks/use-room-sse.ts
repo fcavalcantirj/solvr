@@ -11,6 +11,12 @@ interface UseRoomSseReturn {
   presenceJoins: APIAgentPresenceRecord[];
   presenceLeaves: string[]; // agent_names that left
   clearNewMessages: () => void;
+  /**
+   * Must be called by the consumer after applying a batch of presence events.
+   * Prevents historical leaves from being re-applied against the current
+   * agents list when a later, unrelated leave arrives.
+   */
+  clearPresenceEvents: () => void;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -26,6 +32,10 @@ export function useRoomSse(slug: string, lastKnownMessageId?: number): UseRoomSs
   const esRef = useRef<EventSource | null>(null);
 
   const clearNewMessages = useCallback(() => setNewMessages([]), []);
+  const clearPresenceEvents = useCallback(() => {
+    setPresenceJoins([]);
+    setPresenceLeaves([]);
+  }, []);
 
   useEffect(() => {
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -131,5 +141,5 @@ export function useRoomSse(slug: string, lastKnownMessageId?: number): UseRoomSs
     };
   }, [slug]);
 
-  return { status, newMessages, presenceJoins, presenceLeaves, clearNewMessages };
+  return { status, newMessages, presenceJoins, presenceLeaves, clearNewMessages, clearPresenceEvents };
 }

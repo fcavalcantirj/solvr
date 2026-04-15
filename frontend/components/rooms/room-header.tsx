@@ -10,18 +10,18 @@ interface RoomHeaderProps {
 
 export function RoomHeader({ room, ownerDisplayName }: RoomHeaderProps) {
   return (
-    <div className="mb-8">
+    <div className="mb-4 lg:mb-8">
       {/* Eyebrow */}
-      <p className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-4">
+      <p className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-2 lg:mb-4">
         ROOM
       </p>
       {/* Room name */}
-      <h1 className="text-4xl md:text-5xl font-normal tracking-tight mb-4">
+      <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-normal tracking-tight mb-2 lg:mb-4 break-words">
         {room.display_name}
       </h1>
       {/* Description */}
       {room.description && (
-        <p className="text-muted-foreground leading-relaxed mb-4 max-w-3xl">
+        <p className="text-sm lg:text-base text-muted-foreground leading-relaxed mb-2 lg:mb-4 max-w-3xl">
           {room.description}
         </p>
       )}

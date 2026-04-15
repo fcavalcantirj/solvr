@@ -1,25 +1,27 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Bot, Radio, MessageSquare, Clock, Copy, Check, Terminal } from "lucide-react";
+import { Bot, Radio, MessageSquare, Clock, Copy, Check, Terminal, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { api } from "@/lib/api";
+import { useAuth } from "@/hooks/use-auth";
 import type { APIAgentPresenceRecord } from "@/lib/api-types";
 import type { APIRoom } from "@/lib/api-types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
 
-function buildA2APrompt(slug: string): string {
+function buildA2APrompt(slug: string, token: string): string {
   return `Join this Solvr room and talk to other agents.
 
 Step 1 — Join:
 curl -X POST "${API_URL}/r/${slug}/join" \\
-  -H "Authorization: Bearer YOUR_ROOM_TOKEN" \\
+  -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
   -d '{"agent_name":"YOUR_AGENT_NAME"}'
 
 Step 2 — Send a message:
 curl -X POST "${API_URL}/r/${slug}/message" \\
-  -H "Authorization: Bearer YOUR_ROOM_TOKEN" \\
+  -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
   -d '{"agent_name":"YOUR_AGENT_NAME","content":"Hello! I just joined."}'
 
@@ -32,25 +34,45 @@ curl "${API_URL}/v1/rooms/${slug}/agents"
 Room: https://solvr.dev/rooms/${slug}`;
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+function ConnectAgentCopyButton({ slug, isOwner }: { slug: string; isOwner: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleCopy = useCallback(async () => {
+    if (loading) return;
+    setLoading(true);
     try {
-      await navigator.clipboard.writeText(text);
+      // Owners: rotate to get a fresh plain token (D-24 — tokens are one-way
+      // hashed at rest, so rotation is the only retrieval path). This
+      // invalidates the previous token, which is the documented contract.
+      // Non-owners + anonymous: copy the placeholder prompt.
+      let token = "YOUR_ROOM_TOKEN";
+      if (isOwner) {
+        const res = await api.rotateRoomToken(slug);
+        token = res.data.token;
+      }
+      await navigator.clipboard.writeText(buildA2APrompt(slug, token));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // fallback
+      // fallback: silent — user can retry
+    } finally {
+      setLoading(false);
     }
-  }, [text]);
+  }, [slug, isOwner, loading]);
 
   return (
     <button
       onClick={handleCopy}
-      className="w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2"
+      disabled={loading}
+      className="w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
     >
-      {copied ? (
+      {loading ? (
+        <>
+          <Loader2 size={12} className="animate-spin" />
+          ROTATING...
+        </>
+      ) : copied ? (
         <>
           <Check size={12} className="text-green-500" />
           COPIED
@@ -58,7 +80,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       ) : (
         <>
           <Copy size={12} />
-          {label}
+          COPY A2A PROMPT
         </>
       )}
     </button>
@@ -76,6 +98,11 @@ export function PresenceSidebar({
   room,
   layout = "desktop",
 }: PresenceSidebarProps) {
+  const { user } = useAuth();
+  const isOwner = Boolean(
+    user && room?.owner_id && user.id === room.owner_id,
+  );
+
   if (layout === "mobile") {
     return (
       <div className="flex items-center gap-4 overflow-x-auto py-3 border-b border-border mb-4">
@@ -225,13 +252,11 @@ export function PresenceSidebar({
           </div>
           <div className="p-4 space-y-3">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Connect your AI agent to this room via the A2A protocol. Copy the
-              prompt below and paste it into your agent.
+              {isOwner
+                ? "You own this room. Clicking COPY rotates the bearer token and places a ready-to-run prompt on your clipboard. Previous tokens are invalidated — share the new token carefully."
+                : "Connect your AI agent to this room via the A2A protocol. Copy the prompt below and paste it into your agent. You'll need a bearer token from the room owner."}
             </p>
-            <CopyButton
-              text={buildA2APrompt(room.slug)}
-              label="COPY A2A PROMPT"
-            />
+            <ConnectAgentCopyButton slug={room.slug} isOwner={isOwner} />
           </div>
         </div>
       )}

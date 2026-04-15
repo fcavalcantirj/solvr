@@ -2,7 +2,6 @@ import { cache } from "react";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Header } from "@/components/header";
-import { RoomHeader } from "@/components/rooms/room-header";
 import { RoomDetailClient } from "@/components/rooms/room-detail-client";
 import { JsonLd, roomJsonLd } from "@/components/seo/json-ld";
 
@@ -63,20 +62,18 @@ export default async function RoomDetailPage({
   const messages = recent_messages || [];
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="min-h-screen lg:h-screen flex flex-col bg-background lg:overflow-hidden">
       <JsonLd
         data={roomJsonLd({ room, url: `https://solvr.dev/rooms/${slug}` })}
       />
       <Header />
       <main className="flex-1 flex flex-col min-h-0 pt-16">
-        <div className="max-w-7xl w-full mx-auto px-6 lg:px-12 py-4 shrink-0">
-          <RoomHeader room={room} ownerDisplayName={owner_display_name} />
-        </div>
-        <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-6 lg:px-12 pb-4">
+        <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-12 py-4">
           <RoomDetailClient
             room={room}
             initialMessages={messages}
             initialAgents={agents || []}
+            ownerDisplayName={owner_display_name}
           />
         </div>
       </main>

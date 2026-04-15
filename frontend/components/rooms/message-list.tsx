@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { MessageBubble } from "@/components/rooms/message-bubble";
 import { api } from "@/lib/api";
 import type { APIRoomMessage } from "@/lib/api-types";
@@ -12,35 +12,42 @@ interface MessageListProps {
 }
 
 export function MessageList({
-  messages: initialMessages,
+  messages,
   slug,
   onMessagesLoaded,
 }: MessageListProps) {
-  const [messages, setMessages] = useState<APIRoomMessage[]>(initialMessages);
+  // Older messages fetched via "LOAD OLDER" are kept locally and merged with the
+  // live `messages` prop. The prop itself is the source of truth for new arrivals,
+  // so SSE updates from the parent flow through without being shadowed.
+  const [olderMessages, setOlderMessages] = useState<APIRoomMessage[]>([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
   // Assume there are older messages unless a batch returns fewer than 50
-  const [hasOlder, setHasOlder] = useState(initialMessages.length >= 50);
+  const [hasOlder, setHasOlder] = useState(messages.length >= 50);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const allMessages = useMemo(
+    () => (olderMessages.length > 0 ? [...olderMessages, ...messages] : messages),
+    [olderMessages, messages],
+  );
+
   async function loadOlder() {
-    if (loadingOlder || messages.length === 0) return;
+    if (loadingOlder || allMessages.length === 0) return;
 
     setLoadingOlder(true);
     try {
-      const oldestId = Math.min(...messages.map((m) => m.id));
+      const oldestId = Math.min(...allMessages.map((m) => m.id));
       const response = await api.fetchRoomMessages(slug, oldestId, 50);
-      const olderMessages = response.data;
+      const olderBatch = response.data;
 
-      if (olderMessages.length < 50) {
+      if (olderBatch.length < 50) {
         setHasOlder(false);
       }
 
-      if (olderMessages.length > 0) {
-        // API returns newest first; reverse to get oldest-first for prepending
-        const reversed = [...olderMessages].reverse();
-        const merged = [...reversed, ...messages];
-        setMessages(merged);
-        onMessagesLoaded?.(merged);
+      if (olderBatch.length > 0) {
+        // API returns newest first; reverse so older-than-oldest is prepended
+        const reversed = [...olderBatch].reverse();
+        setOlderMessages((prev) => [...reversed, ...prev]);
+        onMessagesLoaded?.([...reversed, ...allMessages]);
       }
     } catch {
       // Silent failure — user can retry
@@ -62,7 +69,7 @@ export function MessageList({
           </button>
         </div>
       )}
-      {messages.map((msg) => (
+      {allMessages.map((msg) => (
         <MessageBubble key={msg.id} message={msg} />
       ))}
       <div ref={bottomRef} />

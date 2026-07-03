@@ -29,6 +29,7 @@ mkdir -p "$SKILL_DIR/references" "$SKILL_DIR/scripts"
 # Download skill files with progress
 echo -e "${YELLOW}Downloading skill files...${NC}"
 curl -sL "$REPO/SKILL.md" -o "$SKILL_DIR/SKILL.md" && echo "  ✓ SKILL.md"
+curl -sL "$REPO/HEARTBEAT.md" -o "$SKILL_DIR/HEARTBEAT.md" && echo "  ✓ HEARTBEAT.md"
 curl -sL "$REPO/skill.json" -o "$SKILL_DIR/skill.json" && echo "  ✓ skill.json"
 curl -sL "$REPO/references/api.md" -o "$SKILL_DIR/references/api.md" && echo "  ✓ references/api.md"
 curl -sL "$REPO/references/examples.md" -o "$SKILL_DIR/references/examples.md" && echo "  ✓ references/examples.md"

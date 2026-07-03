@@ -430,6 +430,76 @@ test_file_contains "SKILL.md documents room-create command" "room-create" "$SKIL
 test_file_contains "api.md documents A2A message route" "/r/.*message|r/\\{slug\\}/message" "$API_MD" || true
 test_file_contains "skill.json lists room_create endpoint" "room_create" "$SKILL_JSON" || true
 
+# room-leave
+test_room_command_exists "room-leave" || true
+test_case "room-leave requires slug" 1 "$SOLVR_SH" room-leave
+
+echo ""
+
+# ============================================================================
+# Blog and Inbox command tests
+# ============================================================================
+
+echo -e "${YELLOW}Blog/Inbox command tests:${NC}"
+
+test_blog_command_exists() {
+    local name="blog command exists (no Unknown command)"
+    echo -n "Testing: ${name}... "
+    local output
+    output=$("$SOLVR_SH" blog 2>&1) || true
+    if echo "$output" | grep -qF "Unknown command"; then
+        echo -e "${RED}FAIL${NC}"
+        echo "  Got 'Unknown command' — blog not recognized"
+        ((FAILED++)) || true
+        return 1
+    else
+        echo -e "${GREEN}PASS${NC}"
+        ((PASSED++)) || true
+        return 0
+    fi
+}
+test_blog_command_exists || true
+
+test_inbox_command_exists() {
+    local name="inbox command exists (no Unknown command)"
+    echo -n "Testing: ${name}... "
+    local output
+    output=$("$SOLVR_SH" inbox bogus-subcmd 2>&1) || true
+    if echo "$output" | grep -qF "Unknown command"; then
+        echo -e "${RED}FAIL${NC}"
+        echo "  Got 'Unknown command' — inbox not recognized"
+        ((FAILED++)) || true
+        return 1
+    else
+        echo -e "${GREEN}PASS${NC}"
+        ((PASSED++)) || true
+        return 0
+    fi
+}
+test_inbox_command_exists || true
+
+# Arg validation (single-token args only — test_case word-splits)
+test_case "blog requires title and body" 1 "$SOLVR_SH" blog
+test_case "blog requires body (title only)" 1 "$SOLVR_SH" blog title-only-token
+test_case "blog rejects invalid status" 1 "$SOLVR_SH" blog a-valid-title-token a-body-token --status bogus
+test_case "inbox read requires id" 1 "$SOLVR_SH" inbox read
+test_case "inbox delete requires id" 1 "$SOLVR_SH" inbox delete
+
+# Help mentions
+test_output_contains "help shows blog command" "blog" "$SOLVR_SH" help || true
+test_output_contains "help shows inbox command" "inbox" "$SOLVR_SH" help || true
+test_output_contains "help shows room-leave command" "room-leave" "$SOLVR_SH" help || true
+
+# Docs mentions
+test_file_contains "SKILL.md documents blog command" "blog" "$SKILL_MD" || true
+test_file_contains "SKILL.md documents inbox command" "inbox" "$SKILL_MD" || true
+test_file_contains "SKILL.md documents install.sh" "install.sh" "$SKILL_MD" || true
+test_file_contains "api.md documents agent registration endpoint" "agents/register" "$API_MD" || true
+test_file_contains "api.md documents blog endpoint" "POST /blog" "$API_MD" || true
+test_file_contains "api.md documents notifications" "notifications" "$API_MD" || true
+test_file_contains "examples.md has rooms examples" "Rooms \\(A2A" "$EXAMPLES_MD" || true
+test_file_contains "skill.json lists blog endpoint" "blog" "$SKILL_JSON" || true
+
 echo ""
 
 # ============================================================================

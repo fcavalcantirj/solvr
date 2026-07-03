@@ -648,6 +648,41 @@ cmd_room_delete() {
     echo -e "${GREEN}Room deleted: ${slug}${NC}"
 }
 
+cmd_room_leave() {
+    local slug="$1"
+    shift
+
+    local agent_name=""
+    local token_flag=""
+    local json_output=false
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --name) agent_name="${2:-}"; shift 2 || break ;;
+            --token) token_flag="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    local token
+    token=$(resolve_room_token "$slug" "$token_flag") || return 1
+    agent_name=$(resolve_agent_name "$agent_name") || return 1
+
+    local payload
+    payload=$(jq -n --arg an "$agent_name" '{agent_name: $an}')
+
+    local response
+    response=$(room_api_call POST "$slug" "/leave" "$token" "$payload") || return 1
+
+    if [ "$json_output" = true ]; then
+        echo "$response"
+        return 0
+    fi
+
+    echo -e "${GREEN}Left room: ${slug} (as ${agent_name})${NC}"
+}
+
 # ============================================================================
 # Storage Command
 # ============================================================================
@@ -665,4 +700,182 @@ cmd_storage() {
     echo "  Used:  $(bytes_to_mb "$used") MB"
     echo "  Quota: $(bytes_to_mb "$quota") MB"
     echo "  Usage: ${percentage}%"
+}
+
+# ============================================================================
+# Blog Command
+# ============================================================================
+
+cmd_blog() {
+    local title="$1"
+    local body="$2"
+    shift 2
+
+    local tags=""
+    local status="published"
+    local json_output=false
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --tags) tags="${2:-}"; shift 2 || break ;;
+            --status) status="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    case "$status" in
+        draft|published|archived) ;;
+        *)
+            echo -e "${RED}Error: invalid status '${status}'${NC}" >&2
+            echo "Usage: solvr blog <title> <body> [--tags <tags>] [--status draft|published] [--json]" >&2
+            return 1
+            ;;
+    esac
+
+    local tags_json="[]"
+    if [ -n "$tags" ]; then
+        tags_json=$(echo "$tags" | jq -R 'split(",")')
+    fi
+
+    local payload
+    payload=$(jq -n \
+        --arg title "$title" \
+        --arg body "$body" \
+        --arg status "$status" \
+        --argjson tags "$tags_json" \
+        '{title: $title, body: $body, status: $status, tags: $tags}')
+
+    local response
+    response=$(api_call POST "/blog" "$payload") || return 1
+
+    if [ "$json_output" = true ]; then
+        echo "$response"
+        return 0
+    fi
+
+    local slug
+    slug=$(echo "$response" | jq -r '.data.slug // .slug')
+    echo -e "${GREEN}Blog post created successfully!${NC}"
+    echo "Slug: ${slug}"
+    echo "URL: https://solvr.dev/blog/${slug}"
+    echo "Title: ${title}"
+    echo "Status: ${status}"
+}
+
+# ============================================================================
+# Inbox / Notifications Commands
+# ============================================================================
+
+cmd_inbox() {
+    local subcmd="${1:-ls}"
+    shift || true
+
+    case "$subcmd" in
+        ls|list)
+            local unread_flag=""
+            local type_filter=""
+            local json_output=false
+            local page=""
+
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --unread) unread_flag="true"; shift ;;
+                    --type) type_filter="${2:-}"; shift 2 || break ;;
+                    --page) page="${2:-}"; shift 2 || break ;;
+                    --json) json_output=true; shift ;;
+                    *) shift ;;
+                esac
+            done
+
+            local endpoint="/notifications"
+            local sep="?"
+            if [ -n "$unread_flag" ]; then
+                endpoint="${endpoint}${sep}unread=true"
+                sep="&"
+            fi
+            if [ -n "$type_filter" ]; then
+                endpoint="${endpoint}${sep}type=$(urlencode "$type_filter")"
+                sep="&"
+            fi
+            if [ -n "$page" ]; then
+                endpoint="${endpoint}${sep}page=${page}"
+            fi
+
+            local result
+            result=$(api_call GET "$endpoint") || return 1
+
+            if [ "$json_output" = true ]; then
+                echo "$result"
+                return 0
+            fi
+
+            local total current_page has_more
+            total=$(echo "$result" | jq -r '.meta.total // 0' 2>/dev/null)
+            current_page=$(echo "$result" | jq -r '.meta.page // 1' 2>/dev/null)
+            has_more=$(echo "$result" | jq -r '.meta.has_more // false' 2>/dev/null)
+            echo -e "${CYAN}Notifications (${total} total, page ${current_page}):${NC}"
+            echo ""
+
+            if [ "$total" = "0" ]; then
+                echo -e "  ${GREEN}Inbox empty.${NC}"
+                return 0
+            fi
+
+            echo "$result" | jq -r '.data[]? | "  \(if .read_at then "○" else "●" end) [\(.type)] \(.title)\n    ID: \(.id)\n    \(.created_at | split("T")[0])\(if (.body // "") != "" then "\n    \((.body // "") | .[0:80])" else "" end)\n"' 2>/dev/null
+
+            if [ "$has_more" = "true" ]; then
+                local next_page=$((current_page + 1))
+                echo -e "  ${YELLOW}More notifications available. Use: solvr inbox ls --page ${next_page}${NC}"
+            fi
+            ;;
+        read)
+            local notif_id="${1:-}"
+            if [ -z "$notif_id" ]; then
+                echo -e "${RED}Error: inbox read requires a notification ID${NC}" >&2
+                echo "Usage: solvr inbox read <id>" >&2
+                return 1
+            fi
+
+            api_call POST "/notifications/${notif_id}/read" > /dev/null || return 1
+            echo -e "${GREEN}Notification marked as read.${NC}"
+            ;;
+        read-all)
+            local result
+            result=$(api_call POST "/notifications/read-all") || return 1
+
+            local count
+            count=$(echo "$result" | jq -r '.data.marked_count // 0' 2>/dev/null)
+            echo -e "${GREEN}${count} notifications marked as read.${NC}"
+            ;;
+        delete|rm)
+            local notif_id="${1:-}"
+            if [ -z "$notif_id" ]; then
+                echo -e "${RED}Error: inbox delete requires a notification ID${NC}" >&2
+                echo "Usage: solvr inbox delete <id>" >&2
+                return 1
+            fi
+
+            api_call DELETE "/notifications/${notif_id}" > /dev/null || return 1
+            echo -e "${GREEN}Notification deleted.${NC}"
+            ;;
+        clear)
+            local result
+            result=$(api_call DELETE "/notifications") || return 1
+
+            local count
+            count=$(echo "$result" | jq -r '.data.deleted_count // 0' 2>/dev/null)
+            echo -e "${GREEN}${count} read notifications deleted.${NC}"
+            ;;
+        *)
+            echo "Usage: solvr inbox <ls|read|read-all|delete|clear>"
+            echo ""
+            echo "Subcommands:"
+            echo "  ls [--unread] [--type <t>] [--page N]  List notifications"
+            echo "  read <id>                   Mark notification as read"
+            echo "  read-all                    Mark all as read"
+            echo "  delete <id>                 Delete a notification"
+            echo "  clear                       Delete all read notifications"
+            ;;
+    esac
 }

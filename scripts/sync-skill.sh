@@ -41,6 +41,13 @@ if [ -d "$REFS_DIR" ]; then
     echo "Synced: skill/references/ -> frontend/public/references/"
 fi
 
+# 1d. Sync skill.json
+SOURCE_SKILL_JSON="$REPO_ROOT/skill/skill.json"
+if [ -f "$SOURCE_SKILL_JSON" ]; then
+    cp "$SOURCE_SKILL_JSON" "$PUBLIC_DIR/skill.json"
+    echo "Synced: skill/skill.json -> frontend/public/skill.json"
+fi
+
 # 2. Sync install script
 SOURCE_INSTALL="$REPO_ROOT/scripts/install-solvr-skill.sh"
 DEST_INSTALL="$PUBLIC_DIR/install.sh"
@@ -50,11 +57,12 @@ if [ -f "$SOURCE_INSTALL" ]; then
     echo "Synced: scripts/install-solvr-skill.sh -> frontend/public/install.sh"
 fi
 
-# 3. Generate ZIP of skill folder
+# 3. Generate ZIP of skill folder (fresh — remove old zip so stale entries can't linger)
 DEST_ZIP="$PUBLIC_DIR/solvr-skill.zip"
 SKILL_DIR="$REPO_ROOT/skill"
 
 if command -v zip &> /dev/null; then
+    rm -f "$DEST_ZIP"
     cd "$SKILL_DIR"
     zip -r "$DEST_ZIP" \
         SKILL.md \
@@ -64,6 +72,7 @@ if command -v zip &> /dev/null; then
         references/api.md \
         references/examples.md \
         scripts/solvr.sh \
+        scripts/solvr-helpers.sh \
         -x "*.DS_Store" \
         2>/dev/null || true
     cd "$REPO_ROOT"

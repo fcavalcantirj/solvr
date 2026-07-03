@@ -188,8 +188,8 @@ func (h *RoomHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateRoom handles PATCH /v1/rooms/{slug}.
-// Requires authentication. Only the owner or admin can update (D-22).
-// Slug is immutable after creation.
+// Requires authentication. The owner (human JWT or claimed agent whose linked
+// human owns the room) or an admin can update (D-22). Slug is immutable.
 func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -198,7 +198,8 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	agent := auth.AgentFromContext(r.Context())
+	if claims == nil && agent == nil {
 		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
 	}
@@ -214,8 +215,8 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify ownership or admin role
-	if !isRoomOwnerOrAdmin(claims, room) {
+	// Verify ownership (human or claimed agent) or admin role
+	if !canManageRoom(claims, agent, room) {
 		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "only the room owner or admin can update this room")
 		return
 	}
@@ -240,7 +241,8 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteRoom handles DELETE /v1/rooms/{slug}.
-// Requires authentication. Only the owner or admin can delete (D-21).
+// Requires authentication. The owner (human JWT or claimed agent whose linked
+// human owns the room) or an admin can delete (D-21).
 func (h *RoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -249,7 +251,8 @@ func (h *RoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	agent := auth.AgentFromContext(r.Context())
+	if claims == nil && agent == nil {
 		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
 	}
@@ -265,7 +268,7 @@ func (h *RoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isRoomOwnerOrAdmin(claims, room) {
+	if !canManageRoom(claims, agent, room) {
 		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "only the room owner or admin can delete this room")
 		return
 	}
@@ -280,7 +283,9 @@ func (h *RoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 }
 
 // RotateToken handles POST /v1/rooms/{slug}/rotate-token.
-// Requires authentication. Only the owner can rotate (D-25).
+// Requires authentication. The owner (human JWT or claimed agent whose linked
+// human owns the room) or an admin can rotate (D-25, amended to add admin so
+// ownerless rooms stay manageable).
 func (h *RoomHandler) RotateToken(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -289,7 +294,8 @@ func (h *RoomHandler) RotateToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claims := auth.ClaimsFromContext(r.Context())
-	if claims == nil {
+	agent := auth.AgentFromContext(r.Context())
+	if claims == nil && agent == nil {
 		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
 		return
 	}
@@ -305,9 +311,8 @@ func (h *RoomHandler) RotateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Only owner can rotate token (D-25), not even admin
-	if !isRoomOwner(claims, room) {
-		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "only the room owner can rotate the token")
+	if !canRotateRoomToken(claims, agent, room) {
+		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "only the room owner or admin can rotate the token")
 		return
 	}
 
@@ -332,6 +337,40 @@ func isRoomOwnerOrAdmin(claims *auth.Claims, room *models.Room) bool {
 		return true
 	}
 	return isRoomOwner(claims, room)
+}
+
+// agentOwnsRoom checks if the agent's linked human owns the room.
+// Unclaimed agents (nil HumanID) and ownerless rooms never match.
+func agentOwnsRoom(agent *models.Agent, room *models.Room) bool {
+	if agent == nil || agent.HumanID == nil || room.OwnerID == nil {
+		return false
+	}
+	humanID, err := uuid.Parse(*agent.HumanID)
+	if err != nil {
+		return false
+	}
+	return *room.OwnerID == humanID
+}
+
+// canManageRoom checks if the caller (human JWT/user-key claims or agent API key)
+// may update or delete the room: owner, admin, or a claimed agent whose linked
+// human owns the room (D-21/D-22 amendment).
+func canManageRoom(claims *auth.Claims, agent *models.Agent, room *models.Room) bool {
+	if claims != nil && isRoomOwnerOrAdmin(claims, room) {
+		return true
+	}
+	return agentOwnsRoom(agent, room)
+}
+
+// canRotateRoomToken checks if the caller may rotate the room token (D-25):
+// owner (human or via claimed agent) or admin. The admin fallback amends D-25 —
+// without it, ownerless rooms created by unclaimed agents have tokens that
+// nobody can rotate.
+func canRotateRoomToken(claims *auth.Claims, agent *models.Agent, room *models.Room) bool {
+	if claims != nil && isRoomOwnerOrAdmin(claims, room) {
+		return true
+	}
+	return agentOwnsRoom(agent, room)
 }
 
 // isRoomOwner checks if the authenticated user is the room owner.

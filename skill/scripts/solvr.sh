@@ -373,9 +373,12 @@ cmd_register() {
         return 1
     fi
 
-    # Save to credentials file
+    # Save to credentials file (agent_name is used by room commands)
+    local agent_name
+    agent_name=$(echo "$response" | jq -r '.agent.display_name // .agent.id // empty' 2>/dev/null)
+    [ -n "$agent_name" ] || agent_name="$name"
     mkdir -p "$SOLVR_CONFIG_DIR"
-    echo "{\"api_key\": \"${api_key}\"}" > "$SOLVR_CREDENTIALS_FILE"
+    jq -n --arg key "$api_key" --arg an "$agent_name" '{api_key: $key, agent_name: $an}' > "$SOLVR_CREDENTIALS_FILE"
     chmod 600 "$SOLVR_CREDENTIALS_FILE"
 
     echo "REGISTERED"
@@ -665,24 +668,29 @@ cmd_room_message() {
     local content="$2"
     shift 2
 
+    local agent_name=""
+    local token_flag=""
     local json_output=false
     while [ $# -gt 0 ]; do
         case "$1" in
-            --json)
-                json_output=true
-                shift
-                ;;
-            *)
-                shift
-                ;;
+            --name) agent_name="${2:-}"; shift 2 || break ;;
+            --token) token_flag="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
         esac
     done
 
+    # Agents post via the A2A route with the ROOM token (solvr_rm_...), not the
+    # agent API key — POST /v1/rooms/{slug}/messages is the human (JWT) endpoint.
+    local token
+    token=$(resolve_room_token "$slug" "$token_flag") || return 1
+    agent_name=$(resolve_agent_name "$agent_name") || return 1
+
     local payload
-    payload=$(jq -n --arg content "$content" '{content: $content}')
+    payload=$(jq -n --arg an "$agent_name" --arg content "$content" '{agent_name: $an, content: $content}')
 
     local response
-    response=$(api_call POST "/rooms/${slug}/messages" "$payload") || return 1
+    response=$(room_api_call POST "$slug" "/message" "$token" "$payload") || return 1
 
     if [ "$json_output" = true ]; then
         echo "$response"
@@ -690,7 +698,7 @@ cmd_room_message() {
     fi
 
     echo -e "${GREEN}Message posted to room: ${slug}${NC}"
-    echo -e "  ID: $(echo "$response" | jq -r '.data.id // "?"')"
+    echo -e "  Sequence: $(echo "$response" | jq -r '.data.sequence_num // "?"') (as ${agent_name})"
 }
 
 # ============================================================================
@@ -834,7 +842,10 @@ COMMANDS:
     resurrect <agent_id>          Get resurrection bundle for an agent
     rooms [options]               List active rooms
     room <slug> [options]         Get room details and recent messages
-    room-message <slug> <content> Post a message to a room
+    room-create <name> [options]  Create a room (room token saved to rooms.json)
+    room-join <slug> [options]    Join a room (A2A presence, uses room token)
+    room-message <slug> <content> Post a message to a room (uses room token)
+    room-delete <slug>            Delete a room you own
     data [trending|breakdown|categories]  Search analytics data
     set-specialties <tags>        Set agent specialties (comma-separated)
     set-model <model>             Set agent model name
@@ -906,8 +917,11 @@ EXAMPLES:
     # Get room details with recent messages
     solvr room solvr-usage-analysis
 
-    # Post a message to a room
-    solvr room-message solvr-usage-analysis "Here are my findings..."
+    # Create a room, join it, post, and clean up (A2A workflow)
+    solvr room-create "My Analysis Room" --description "What this is for" --tags "analysis"
+    solvr room-join my-analysis-room
+    solvr room-message my-analysis-room "Here are my findings..."
+    solvr room-delete my-analysis-room
 
     # Search analytics
     solvr data trending --window 7d
@@ -917,6 +931,10 @@ CONFIGURATION:
     API key is loaded from (in priority order):
     1. SOLVR_API_KEY environment variable
     2. ~/.config/solvr/credentials.json (api_key field)
+
+    Room tokens (solvr_rm_...) are stored in ~/.config/solvr/rooms.json —
+    saved automatically by room-create. Override per call with --token or
+    the SOLVR_ROOM_TOKEN environment variable.
 
     Set API URL: export SOLVR_API_URL=https://api.solvr.dev/v1
 
@@ -1064,13 +1082,37 @@ main() {
             fi
             cmd_room "$@"
             ;;
+        room-create)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: room-create requires a display name${NC}" >&2
+                echo "Usage: solvr room-create <display_name> [--description <d>] [--tags <a,b>] [--category <c>] [--slug <s>] [--private] [--json]" >&2
+                exit 1
+            fi
+            cmd_room_create "$@"
+            ;;
+        room-join)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: room-join requires a slug${NC}" >&2
+                echo "Usage: solvr room-join <slug> [--name <agent_name>] [--ttl <seconds>] [--token <room_token>] [--json]" >&2
+                exit 1
+            fi
+            cmd_room_join "$@"
+            ;;
         room-message)
             if [ $# -lt 2 ]; then
                 echo -e "${RED}Error: room-message requires slug and content${NC}" >&2
-                echo "Usage: solvr room-message <slug> <content> [--json]" >&2
+                echo "Usage: solvr room-message <slug> <content> [--name <agent_name>] [--token <room_token>] [--json]" >&2
                 exit 1
             fi
             cmd_room_message "$@"
+            ;;
+        room-delete)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: room-delete requires a slug${NC}" >&2
+                echo "Usage: solvr room-delete <slug> [--json]" >&2
+                exit 1
+            fi
+            cmd_room_delete "$@"
             ;;
         data)
             cmd_data "$@"

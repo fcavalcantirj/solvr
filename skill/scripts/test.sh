@@ -386,6 +386,53 @@ test_file_contains "skill.json lists checkpoint endpoint" "checkpoint" "$SKILL_J
 echo ""
 
 # ============================================================================
+# Room command tests (A2A)
+# ============================================================================
+
+echo -e "${YELLOW}Room command tests:${NC}"
+
+# room commands exist (recognized, not "Unknown command")
+test_room_command_exists() {
+    local cmd="$1"
+    local name="${cmd} command exists (no Unknown command)"
+    echo -n "Testing: ${name}... "
+    local output
+    output=$("$SOLVR_SH" "$cmd" 2>&1) || true
+    if echo "$output" | grep -qF "Unknown command"; then
+        echo -e "${RED}FAIL${NC}"
+        echo "  Got 'Unknown command' — ${cmd} not recognized"
+        ((FAILED++)) || true
+        return 1
+    else
+        echo -e "${GREEN}PASS${NC}"
+        ((PASSED++)) || true
+        return 0
+    fi
+}
+test_room_command_exists "room-create" || true
+test_room_command_exists "room-join" || true
+test_room_command_exists "room-delete" || true
+
+# Arg validation
+test_case "room-create requires display name" 1 "$SOLVR_SH" room-create
+test_case "room-join requires slug" 1 "$SOLVR_SH" room-join
+test_case "room-message requires slug and content" 1 "$SOLVR_SH" room-message
+test_case "room-delete requires slug" 1 "$SOLVR_SH" room-delete
+
+# Help text mentions room commands
+test_output_contains "help shows room-create command" "room-create" "$SOLVR_SH" help || true
+test_output_contains "help shows room-join command" "room-join" "$SOLVR_SH" help || true
+test_output_contains "help shows room-delete command" "room-delete" "$SOLVR_SH" help || true
+test_output_contains "help mentions room token storage" "rooms.json" "$SOLVR_SH" help || true
+
+# Docs document room commands
+test_file_contains "SKILL.md documents room-create command" "room-create" "$SKILL_MD" || true
+test_file_contains "api.md documents A2A message route" "/r/.*message|r/\\{slug\\}/message" "$API_MD" || true
+test_file_contains "skill.json lists room_create endpoint" "room_create" "$SKILL_JSON" || true
+
+echo ""
+
+# ============================================================================
 # API tests (require credentials)
 # ============================================================================
 

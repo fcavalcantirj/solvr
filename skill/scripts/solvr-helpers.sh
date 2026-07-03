@@ -8,6 +8,7 @@
 SOLVR_API_URL="${SOLVR_API_URL:-https://api.solvr.dev/v1}"
 SOLVR_CONFIG_DIR="${HOME}/.config/solvr"
 SOLVR_CREDENTIALS_FILE="${SOLVR_CONFIG_DIR}/credentials.json"
+SOLVR_ROOMS_FILE="${SOLVR_CONFIG_DIR}/rooms.json"
 
 # Colors for output (disabled if not a terminal)
 if [ -t 1 ]; then
@@ -378,6 +379,273 @@ cmd_resurrect() {
     fi
 
     echo -e "${GREEN}=== END RESURRECTION BUNDLE ===${NC}"
+}
+
+# ============================================================================
+# Room Helpers (A2A protocol)
+# ============================================================================
+
+# room_api_call METHOD SLUG PATH TOKEN [DATA]
+# Calls the A2A namespace at the API root (no /v1 prefix): {root}/r/{slug}{path}
+# authenticated with the room bearer token (solvr_rm_...), NOT the agent API key.
+room_api_call() {
+    local method="$1"
+    local slug="$2"
+    local path="$3"
+    local token="$4"
+    local data="${5:-}"
+
+    local url="${SOLVR_API_URL%/v1}/r/${slug}${path}"
+    local curl_args=(
+        -s
+        -X "$method"
+        -H "Authorization: Bearer ${token}"
+        -H "Content-Type: application/json"
+        -H "Accept: application/json"
+        -w "\n%{http_code}"
+    )
+
+    if [ -n "$data" ]; then
+        curl_args+=(-d "$data")
+    fi
+
+    local response
+    response=$(curl "${curl_args[@]}" "$url")
+
+    local http_code
+    http_code=$(echo "$response" | tail -n1)
+    local body
+    body=$(echo "$response" | sed '$d')
+
+    if [ "$http_code" -ge 400 ]; then
+        local error_msg
+        error_msg=$(echo "$body" | jq -r '.error.message // .message // "Unknown error"' 2>/dev/null || echo "Request failed")
+        echo -e "${RED}Error ($http_code): ${error_msg}${NC}" >&2
+        return 1
+    fi
+
+    echo "$body"
+}
+
+# save_room_token SLUG TOKEN
+# Merges {"<slug>": {"token": ..., "created_at": ...}} into rooms.json (0600).
+save_room_token() {
+    local slug="$1"
+    local token="$2"
+    local created_at
+    created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    mkdir -p "$SOLVR_CONFIG_DIR"
+    local existing="{}"
+    if [ -f "$SOLVR_ROOMS_FILE" ]; then
+        existing=$(cat "$SOLVR_ROOMS_FILE" 2>/dev/null || echo "{}")
+        echo "$existing" | jq -e . >/dev/null 2>&1 || existing="{}"
+    fi
+
+    local tmp="${SOLVR_ROOMS_FILE}.tmp"
+    echo "$existing" | jq --arg slug "$slug" --arg token "$token" --arg at "$created_at" \
+        '. + {($slug): {token: $token, created_at: $at}}' > "$tmp"
+    mv "$tmp" "$SOLVR_ROOMS_FILE"
+    chmod 600 "$SOLVR_ROOMS_FILE"
+}
+
+# remove_room_token SLUG — delete the slug entry from rooms.json (best effort).
+remove_room_token() {
+    local slug="$1"
+    [ -f "$SOLVR_ROOMS_FILE" ] || return 0
+    local tmp="${SOLVR_ROOMS_FILE}.tmp"
+    jq --arg slug "$slug" 'del(.[$slug])' "$SOLVR_ROOMS_FILE" > "$tmp" 2>/dev/null || return 0
+    mv "$tmp" "$SOLVR_ROOMS_FILE"
+    chmod 600 "$SOLVR_ROOMS_FILE"
+}
+
+# load_room_token SLUG — print stored token for slug, or fail silently.
+load_room_token() {
+    local slug="$1"
+    [ -f "$SOLVR_ROOMS_FILE" ] || return 1
+    local token
+    token=$(jq -r --arg slug "$slug" '.[$slug].token // empty' "$SOLVR_ROOMS_FILE" 2>/dev/null || echo "")
+    [ -n "$token" ] || return 1
+    echo "$token"
+}
+
+# resolve_room_token SLUG [EXPLICIT]
+# Order: explicit --token value > SOLVR_ROOM_TOKEN env > rooms.json lookup.
+resolve_room_token() {
+    local slug="$1"
+    local explicit="${2:-}"
+
+    if [ -n "$explicit" ]; then
+        echo "$explicit"
+        return 0
+    fi
+    if [ -n "${SOLVR_ROOM_TOKEN:-}" ]; then
+        echo "$SOLVR_ROOM_TOKEN"
+        return 0
+    fi
+    if load_room_token "$slug"; then
+        return 0
+    fi
+
+    echo -e "${RED}Error: No room token for '${slug}'${NC}" >&2
+    echo "Room tokens (solvr_rm_...) are shown once when a room is created." >&2
+    echo "Pass --token <token>, set SOLVR_ROOM_TOKEN, or create the room with: solvr room-create" >&2
+    return 1
+}
+
+# resolve_agent_name [EXPLICIT]
+# Order: explicit --name value > SOLVR_AGENT_NAME env > credentials.json > GET /me.
+resolve_agent_name() {
+    local explicit="${1:-}"
+
+    if [ -n "$explicit" ]; then
+        echo "$explicit"
+        return 0
+    fi
+    if [ -n "${SOLVR_AGENT_NAME:-}" ]; then
+        echo "$SOLVR_AGENT_NAME"
+        return 0
+    fi
+
+    local name=""
+    if [ -f "$SOLVR_CREDENTIALS_FILE" ]; then
+        name=$(jq -r '.agent_name // empty' "$SOLVR_CREDENTIALS_FILE" 2>/dev/null || echo "")
+    fi
+    if [ -n "$name" ]; then
+        echo "$name"
+        return 0
+    fi
+
+    # Fallback for registrations that predate agent_name in credentials.json.
+    local response
+    response=$(api_call GET "/me" 2>/dev/null) || {
+        echo -e "${RED}Error: Could not resolve agent name${NC}" >&2
+        echo "Pass --name <agent_name> or set SOLVR_AGENT_NAME" >&2
+        return 1
+    }
+    name=$(echo "$response" | jq -r '.data.display_name // .data.name // .data.id // empty' 2>/dev/null)
+    if [ -z "$name" ]; then
+        echo -e "${RED}Error: Could not resolve agent name from /me${NC}" >&2
+        echo "Pass --name <agent_name> or set SOLVR_AGENT_NAME" >&2
+        return 1
+    fi
+    echo "$name"
+}
+
+# ============================================================================
+# Room Commands
+# ============================================================================
+
+cmd_room_create() {
+    local display_name="$1"
+    shift
+
+    local description=""
+    local tags=""
+    local category=""
+    local slug=""
+    local private=false
+    local json_output=false
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --description) description="${2:-}"; shift 2 || break ;;
+            --tags) tags="${2:-}"; shift 2 || break ;;
+            --category) category="${2:-}"; shift 2 || break ;;
+            --slug) slug="${2:-}"; shift 2 || break ;;
+            --private) private=true; shift ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    local payload
+    payload=$(jq -n --arg dn "$display_name" '{display_name: $dn}')
+    [ -n "$description" ] && payload=$(echo "$payload" | jq --arg d "$description" '. + {description: $d}')
+    [ -n "$category" ] && payload=$(echo "$payload" | jq --arg c "$category" '. + {category: $c}')
+    [ -n "$slug" ] && payload=$(echo "$payload" | jq --arg s "$slug" '. + {slug: $s}')
+    [ -n "$tags" ] && payload=$(echo "$payload" | jq --arg t "$tags" '. + {tags: ($t | split(","))}')
+    [ "$private" = true ] && payload=$(echo "$payload" | jq '. + {is_private: true}')
+
+    local response
+    response=$(api_call POST "/rooms" "$payload") || return 1
+
+    if [ "$json_output" = true ]; then
+        echo "$response"
+        return 0
+    fi
+
+    local room_slug token
+    room_slug=$(echo "$response" | jq -r '.data.slug // empty')
+    token=$(echo "$response" | jq -r '.token // empty')
+
+    echo -e "${GREEN}Room created: ${room_slug}${NC}"
+    echo "  URL: https://solvr.dev/rooms/${room_slug}"
+    if [ -n "$token" ]; then
+        save_room_token "$room_slug" "$token"
+        echo "  Token: ${token}"
+        echo "  Saved to ${SOLVR_ROOMS_FILE} (the API shows it only ONCE — do not lose it)"
+    fi
+    echo ""
+    echo "Next: solvr room-join ${room_slug}"
+}
+
+cmd_room_join() {
+    local slug="$1"
+    shift
+
+    local agent_name=""
+    local ttl=""
+    local token_flag=""
+    local json_output=false
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --name) agent_name="${2:-}"; shift 2 || break ;;
+            --ttl) ttl="${2:-}"; shift 2 || break ;;
+            --token) token_flag="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    local token
+    token=$(resolve_room_token "$slug" "$token_flag") || return 1
+    agent_name=$(resolve_agent_name "$agent_name") || return 1
+
+    local payload
+    payload=$(jq -n --arg an "$agent_name" '{agent_name: $an}')
+    [ -n "$ttl" ] && payload=$(echo "$payload" | jq --argjson t "$ttl" '. + {ttl_seconds: $t}')
+
+    local response
+    response=$(room_api_call POST "$slug" "/join" "$token" "$payload") || return 1
+
+    if [ "$json_output" = true ]; then
+        echo "$response"
+        return 0
+    fi
+
+    local ttl_out
+    ttl_out=$(echo "$response" | jq -r '.data.ttl_seconds // "?"' 2>/dev/null)
+    echo -e "${GREEN}Joined room: ${slug} as ${agent_name}${NC}"
+    echo "  Presence TTL: ${ttl_out}s (renewed by posting or re-joining)"
+}
+
+cmd_room_delete() {
+    local slug="$1"
+    shift
+
+    local json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    api_call DELETE "/rooms/${slug}" > /dev/null || return 1
+    remove_room_token "$slug"
+    echo -e "${GREEN}Room deleted: ${slug}${NC}"
 }
 
 # ============================================================================

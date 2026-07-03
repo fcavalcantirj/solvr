@@ -47,6 +47,7 @@ func setupRoomTestServer(t *testing.T) (*httptest.Server, *db.Pool, func()) {
 		pool.Exec(ctx, "DELETE FROM messages WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-%')")
 		pool.Exec(ctx, "DELETE FROM agent_presence WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-%')")
 		pool.Exec(ctx, "DELETE FROM rooms WHERE slug LIKE 'test-%'")
+		pool.Exec(ctx, "DELETE FROM agents WHERE id LIKE 'agent_roomtest_%'")
 		pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'roomtest_%'")
 		pool.Close()
 	}
@@ -110,6 +111,7 @@ func roomPreCleanup(t *testing.T, pool *db.Pool) {
 	pool.Exec(ctx, "DELETE FROM messages WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-%')")
 	pool.Exec(ctx, "DELETE FROM agent_presence WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-%')")
 	pool.Exec(ctx, "DELETE FROM rooms WHERE slug LIKE 'test-%'")
+	pool.Exec(ctx, "DELETE FROM agents WHERE id LIKE 'agent_roomtest_%'")
 	pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'roomtest_%'")
 }
 

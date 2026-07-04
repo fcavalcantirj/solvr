@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -207,6 +208,17 @@ func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Reque
 	if err := h.repo.LinkHuman(r.Context(), agent.ID, claims.UserID); err != nil {
 		writeAgentError(w, http.StatusInternalServerError, "LINK_FAILED", "failed to claim agent")
 		return
+	}
+
+	// Backfill owner_id on rooms this agent created while unclaimed so they join the
+	// human's family scope. Non-fatal: the claim already succeeded and must not fail if
+	// the backfill errors.
+	if h.roomBackfiller != nil {
+		if n, err := h.roomBackfiller.BackfillOwnerFromMembership(r.Context(), agent.ID, claims.UserID); err != nil {
+			slog.Warn("claim: room owner backfill failed", "error", err, "agent", agent.ID)
+		} else if n > 0 {
+			slog.Info("claim: backfilled room ownership", "agent", agent.ID, "rooms", n)
+		}
 	}
 
 	// Grant +50 reputation bonus

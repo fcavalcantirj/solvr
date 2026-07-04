@@ -67,10 +67,18 @@ type ClaimTokenRepositoryInterface interface {
 	DeleteExpiredByAgentID(ctx context.Context, agentID string) (int64, error)
 }
 
+// RoomOwnerBackfiller backfills room ownership when an agent is claimed by a human.
+// Rooms an agent created while unclaimed have owner_id = NULL; after the claim links a
+// human, that human should own those rooms so family-scoped access starts working.
+type RoomOwnerBackfiller interface {
+	BackfillOwnerFromMembership(ctx context.Context, agentID, humanID string) (int64, error)
+}
+
 // AgentsHandler handles agent-related HTTP requests.
 type AgentsHandler struct {
 	repo           AgentRepositoryInterface
 	claimTokenRepo ClaimTokenRepositoryInterface
+	roomBackfiller RoomOwnerBackfiller
 	jwtSecret      string
 	baseURL        string // Base URL for claim URLs (e.g., "https://solvr.dev")
 }
@@ -92,6 +100,11 @@ func (h *AgentsHandler) SetClaimTokenRepository(repo ClaimTokenRepositoryInterfa
 // SetBaseURL sets the base URL for generating claim URLs.
 func (h *AgentsHandler) SetBaseURL(url string) {
 	h.baseURL = url
+}
+
+// SetRoomRepository sets the repository used to backfill room ownership on claim.
+func (h *AgentsHandler) SetRoomRepository(repo RoomOwnerBackfiller) {
+	h.roomBackfiller = repo
 }
 
 // CreateAgentRequest is the request body for creating an agent.

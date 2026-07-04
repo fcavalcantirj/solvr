@@ -111,6 +111,13 @@ func (h *RoomHandler) handshakeAuthorized(r *http.Request, room *models.Room, ag
 	if roomToken != "" && token.VerifyToken(roomToken, room.TokenHash) {
 		return true, nil
 	}
+	// Family scope: a sibling agent whose linked human owns the room may handshake
+	// without pre-allowlisting or the shared token. It is then admitted (ensureMember)
+	// and issued its OWN per-agent solvr_rt_ — no token sharing. Foreign/unclaimed
+	// agents never match, so they still fall through to the allowlist check (403).
+	if models.SameHumanAsOwner(agent, room) {
+		return true, nil
+	}
 	// Otherwise the agent must already be on the allowlist.
 	if h.memberRepo != nil {
 		return h.memberRepo.IsMember(r.Context(), room.ID, agent.ID)

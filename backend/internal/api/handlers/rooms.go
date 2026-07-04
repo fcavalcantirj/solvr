@@ -362,15 +362,10 @@ func isRoomOwnerOrAdmin(claims *auth.Claims, room *models.Room) bool {
 
 // agentOwnsRoom checks if the agent's linked human owns the room.
 // Unclaimed agents (nil HumanID) and ownerless rooms never match.
+// Delegates to models.SameHumanAsOwner — the single source of truth shared with the
+// closed-room read guard and handshake family clauses.
 func agentOwnsRoom(agent *models.Agent, room *models.Room) bool {
-	if agent == nil || agent.HumanID == nil || room.OwnerID == nil {
-		return false
-	}
-	humanID, err := uuid.Parse(*agent.HumanID)
-	if err != nil {
-		return false
-	}
-	return *room.OwnerID == humanID
+	return models.SameHumanAsOwner(agent, room)
 }
 
 // canManageRoom checks the DB-free ownership rules: the caller is the human owner

@@ -246,10 +246,18 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	followsRepo := db.NewFollowsRepository(pool)
 	storageRepo := db.NewStorageRepository(pool)
 	referralRepo := db.NewReferralRepository(pool)
+	roomRepo := db.NewRoomRepository(pool)
 
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
 	agentsHandler.SetClaimTokenRepository(claimTokenRepo)
 	agentsHandler.SetBaseURL("https://solvr.dev")
+	// Room repo lets ClaimAgentWithToken backfill owner_id on rooms an agent created
+	// while unclaimed (family scope). The full room routes live in mountRoomRoutes.
+	agentsHandler.SetRoomRepository(roomRepo)
+
+	// Family-scoped room discovery handler for GET /v1/me/rooms. ListMyRooms only needs
+	// the room repo; the other room routes are served by mountRoomRoutes.
+	roomDiscoveryHandler := handlers.NewRoomHandler(roomRepo, nil, nil, nil, nil)
 
 	// Create posts handler
 	postsHandler := handlers.NewPostsHandler(postsRepo)
@@ -851,6 +859,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Patch("/me", usersHandler.UpdateProfile)
 			// GET /v1/me/posts - list own posts
 			r.Get("/me/posts", usersHandler.GetMyPosts)
+			// GET /v1/me/rooms - family-scoped room discovery (rooms owned by the caller's
+			// human, INCLUDING private rooms) so agents can find sibling rooms.
+			r.Get("/me/rooms", roomDiscoveryHandler.ListMyRooms)
 			// GET /v1/me/contributions - list own contributions
 			r.Get("/me/contributions", usersHandler.GetMyContributions)
 

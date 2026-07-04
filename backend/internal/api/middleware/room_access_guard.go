@@ -90,14 +90,23 @@ func roomMemberAccessAllowed(r *http.Request, room *models.Room, memberRepo *db.
 		}
 	}
 
-	// 3. Authenticated agent (its own agent API key) on the member allowlist.
-	if agent := auth.AgentFromContext(r.Context()); agent != nil && memberRepo != nil {
-		isMember, err := memberRepo.IsMember(r.Context(), room.ID, agent.ID)
-		if err != nil {
-			return false, err
-		}
-		if isMember {
+	// 3. Authenticated agent (its own agent API key): a "family" sibling whose linked
+	//    human owns the room (owner-scoped A2A), OR an agent on the member allowlist.
+	//    Family scope grants ACCESS only — the agent still acts under its own id/token.
+	//    Foreign and unclaimed agents never match SameHumanAsOwner, so the closed-room
+	//    403 holds for non-family callers.
+	if agent := auth.AgentFromContext(r.Context()); agent != nil {
+		if models.SameHumanAsOwner(agent, room) {
 			return true, nil
+		}
+		if memberRepo != nil {
+			isMember, err := memberRepo.IsMember(r.Context(), room.ID, agent.ID)
+			if err != nil {
+				return false, err
+			}
+			if isMember {
+				return true, nil
+			}
 		}
 	}
 

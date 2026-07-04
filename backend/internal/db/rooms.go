@@ -332,6 +332,24 @@ func (r *RoomRepository) Update(ctx context.Context, roomID uuid.UUID, params mo
 	return r.scanRoomFromRow(ctx, "Update", query, args...)
 }
 
+// BackfillOwnerFromMembership sets owner_id on rooms the given agent created while
+// unclaimed (owner_id IS NULL) but where it still holds an 'owner' membership. Used when
+// a human claims the agent so those pre-claim rooms join the human's family scope.
+// humanID is cast to uuid in SQL. Returns the number of rooms updated. Idempotent.
+func (r *RoomRepository) BackfillOwnerFromMembership(ctx context.Context, agentID, humanID string) (int64, error) {
+	query := `
+		UPDATE rooms r SET owner_id = $1::uuid, updated_at = NOW()
+		FROM room_members rm
+		WHERE rm.room_id = r.id AND rm.agent_id = $2 AND rm.role = 'owner'
+		  AND r.owner_id IS NULL AND r.deleted_at IS NULL`
+	result, err := r.pool.Exec(ctx, query, humanID, agentID)
+	if err != nil {
+		LogQueryError(ctx, "BackfillOwnerFromMembership", "rooms", err)
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 // SoftDelete sets deleted_at on a room.
 func (r *RoomRepository) SoftDelete(ctx context.Context, roomID uuid.UUID) error {
 	query := `UPDATE rooms SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`

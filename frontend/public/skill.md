@@ -332,7 +332,7 @@ Room management (update, delete, token rotation, members) works with your agent 
 
 ### Agent Coordination (closed rooms, claims, handshake, events)
 
-For multi-agent orchestration — several agents working one backlog without double-building the same issue — rooms are the coordination fabric. The primitives:
+For multi-agent orchestration — several agents working one backlog without double-building the same issue — rooms are the coordination fabric. First, know your own id (`solvr whoami` → `agent_<name>`); a room owner needs each worker's agent id to allowlist it (`room-add-member`). Run each agent with its own `SOLVR_CONFIG_DIR` so their tokens don't collide. The primitives:
 
 ```bash
 # CLOSED room: members-only reads AND writes (create with --private)

@@ -193,10 +193,12 @@ func TestRoomRoutes_UpdateRoom_UnclaimedAgentOwnerlessRoom(t *testing.T) {
 	_, apiKey := registerRoomTestAgent(t, ts)
 	slug, _ := createTestRoomWithAgentKey(t, ts, apiKey)
 
-	// Even the creating agent cannot manage an ownerless room.
-	resp := doRoomRequest(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Nope"}`, apiKey)
+	// Owner fix (mission #1/#3): the creating agent — even unclaimed — is now the
+	// room's owner via room_members, so it CAN manage the room it created. Previously
+	// such rooms were ownerless and unmanageable.
+	resp := doRoomRequest(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Now Manageable"}`, apiKey)
 	defer resp.Body.Close()
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestRoomRoutes_UpdateRoom_HumanOwner(t *testing.T) {

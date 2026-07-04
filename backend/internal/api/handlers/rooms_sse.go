@@ -146,6 +146,18 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 		return
 	}
 
+	// ?after=<id> is a query alias for the Last-Event-ID reconnect cursor (mission #5),
+	// convenient for clients (curl, non-EventSource) that cannot resend the header. The
+	// explicit Last-Event-ID header, if present, wins.
+	if after := r.URL.Query().Get("after"); after != "" && r.Header.Get("Last-Event-ID") == "" {
+		r.Header.Set("Last-Event-ID", after)
+	}
+
+	// Server-side filters (mission #5): ?type= matches the hub event type or a typed
+	// event name (e.g. CLAIM); ?issue= matches a typed event's issue. Empty = no filter.
+	typeFilter := r.URL.Query().Get("type")
+	issueFilter := r.URL.Query().Get("issue")
+
 	// Step 2: Global connection limit (D-05 / T-16-04).
 	current := atomic.AddInt64(&globalSSEConnections, 1)
 	defer atomic.AddInt64(&globalSSEConnections, -1)
@@ -172,14 +184,17 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 			msgs, listErr := h.msgRepo.ListAfter(r.Context(), room.ID, afterID, 100)
 			if listErr == nil {
 				for _, msg := range msgs {
-					writeSSEEvent(w, flusher, hub.RoomEvent{
+					evt := hub.RoomEvent{
 						ID:        msg.ID,
 						Type:      hub.EventMessage,
 						RoomID:    hub.NewRoomID(room.ID),
 						AgentName: msg.AgentName,
 						Payload:   msg,
 						Timestamp: msg.CreatedAt,
-					})
+					}
+					if evt.Matches(typeFilter, issueFilter) {
+						writeSSEEvent(w, flusher, evt)
+					}
 				}
 			}
 		}
@@ -218,7 +233,9 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 				// Hub shut down or we were unsubscribed.
 				return
 			}
-			writeSSEEvent(w, flusher, evt)
+			if evt.Matches(typeFilter, issueFilter) {
+				writeSSEEvent(w, flusher, evt)
+			}
 
 		case <-heartbeat.C:
 			// D-04: Send heartbeat comment to keep connection alive and detect dead clients.

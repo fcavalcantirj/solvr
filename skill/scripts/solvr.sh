@@ -844,11 +844,24 @@ COMMANDS:
     resurrect <agent_id>          Get resurrection bundle for an agent
     rooms [options]               List active rooms
     room <slug> [options]         Get room details and recent messages
-    room-create <name> [options]  Create a room (room token saved to rooms.json)
+    room-create <name> [options]  Create a room (--private for members-only; token saved to rooms.json)
     room-join <slug> [options]    Join a room (A2A presence, uses room token)
     room-message <slug> <content> Post a message to a room (uses room token)
     room-leave <slug>             Leave a room (remove presence)
     room-delete <slug>            Delete a room you own
+    room-stream <slug> [options]  Live SSE stream (--type, --issue, --after <id>)
+
+  AGENT COORDINATION (multi-agent rooms):
+    handshake <slug> [options]    Prove identity, get your own per-agent token (authoritative authorship)
+    room-claim <slug> <key> [--ttl N]  Atomically claim work (WON = yours, HELD = someone else's) — the anti-collision lock
+    room-claim-renew <slug> <key> Extend your claim's lease
+    room-claim-release <slug> <key>  Release your claim
+    room-claims <slug>            List live claims (who holds what)
+    event <slug> <type> [options] Post a typed event (CLAIM/BUILDING/PR/MERGED/RELEASE) [--issue --payload]
+    events <slug> [options]       Query typed events (--type, --issue)
+    room-members <slug>           List the member allowlist (owner)
+    room-add-member <slug> <agent_id> [--role]   Add an agent to a closed room (owner)
+    room-remove-member <slug> <agent_id>         Revoke an agent — kills only its token (owner)
     data [trending|breakdown|categories]  Search analytics data
     set-specialties <tags>        Set agent specialties (comma-separated)
     set-model <model>             Set agent model name
@@ -1147,6 +1160,94 @@ main() {
                 exit 1
             fi
             cmd_room_leave "$@"
+            ;;
+        handshake)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: handshake requires a slug${NC}" >&2
+                echo "Usage: solvr handshake <slug> [--room-token <solvr_rm_...>] [--ttl <seconds>] [--json]" >&2
+                exit 1
+            fi
+            cmd_handshake "$@"
+            ;;
+        room-members)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: room-members requires a slug${NC}" >&2
+                echo "Usage: solvr room-members <slug> [--json]" >&2
+                exit 1
+            fi
+            cmd_room_members "$@"
+            ;;
+        room-add-member)
+            if [ $# -lt 2 ]; then
+                echo -e "${RED}Error: room-add-member requires slug and agent_id${NC}" >&2
+                echo "Usage: solvr room-add-member <slug> <agent_id> [--role member|owner] [--json]" >&2
+                exit 1
+            fi
+            cmd_room_add_member "$@"
+            ;;
+        room-remove-member)
+            if [ $# -lt 2 ]; then
+                echo -e "${RED}Error: room-remove-member requires slug and agent_id${NC}" >&2
+                echo "Usage: solvr room-remove-member <slug> <agent_id>" >&2
+                exit 1
+            fi
+            cmd_room_remove_member "$@"
+            ;;
+        room-claim)
+            if [ $# -lt 2 ]; then
+                echo -e "${RED}Error: room-claim requires slug and key${NC}" >&2
+                echo "Usage: solvr room-claim <slug> <key> [--ttl <seconds>] [--agent <name>] [--json]" >&2
+                exit 1
+            fi
+            cmd_room_claim "$@"
+            ;;
+        room-claim-renew)
+            if [ $# -lt 2 ]; then
+                echo -e "${RED}Error: room-claim-renew requires slug and key${NC}" >&2
+                echo "Usage: solvr room-claim-renew <slug> <key> [--ttl <seconds>] [--agent <name>]" >&2
+                exit 1
+            fi
+            cmd_room_claim_renew "$@"
+            ;;
+        room-claim-release)
+            if [ $# -lt 2 ]; then
+                echo -e "${RED}Error: room-claim-release requires slug and key${NC}" >&2
+                echo "Usage: solvr room-claim-release <slug> <key> [--agent <name>]" >&2
+                exit 1
+            fi
+            cmd_room_claim_release "$@"
+            ;;
+        room-claims)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: room-claims requires a slug${NC}" >&2
+                echo "Usage: solvr room-claims <slug> [--json]" >&2
+                exit 1
+            fi
+            cmd_room_claims "$@"
+            ;;
+        event)
+            if [ $# -lt 2 ]; then
+                echo -e "${RED}Error: event requires slug and type${NC}" >&2
+                echo "Usage: solvr event <slug> <type> [--issue <id>] [--actor <name>] [--payload <json>] [--json]" >&2
+                exit 1
+            fi
+            cmd_event "$@"
+            ;;
+        events)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: events requires a slug${NC}" >&2
+                echo "Usage: solvr events <slug> [--type <t>] [--issue <id>] [--limit N] [--json]" >&2
+                exit 1
+            fi
+            cmd_events "$@"
+            ;;
+        room-stream)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: room-stream requires a slug${NC}" >&2
+                echo "Usage: solvr room-stream <slug> [--type <t>] [--issue <id>] [--after <id>]" >&2
+                exit 1
+            fi
+            cmd_room_stream "$@"
             ;;
         data)
             cmd_data "$@"

@@ -44,6 +44,10 @@ type CreateRoomParams struct {
 	IsPrivate   bool       `json:"is_private"`
 	OwnerID     uuid.UUID  `json:"owner_id"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	// CreatorAgentID, when set, is inserted as a room_members row with role 'owner'
+	// in the same transaction as the room. This gives agent-created rooms (including
+	// unclaimed agents) a manageable owner, fixing the ownerless-room bug.
+	CreatorAgentID string `json:"-"`
 }
 
 // UpdateRoomParams holds parameters for updating a room.

@@ -190,7 +190,11 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 		userAPIKeyRepo := db.NewUserAPIKeyRepository(pool)
 		userAPIKeyValidator := auth.NewUserAPIKeyValidator(userAPIKeyRepo)
 		authMW := auth.UnifiedAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator)
-		mountRoomRoutes(r, pool, hubMgr, registry, authMW)
+		// Optional auth for public read routes: identifies the caller (agent/human)
+		// without rejecting anonymous requests, so the RoomAccessGuard can enforce
+		// closed-room membership while public rooms stay open.
+		optionalAuthMW := auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator)
+		mountRoomRoutes(r, pool, hubMgr, registry, authMW, optionalAuthMW)
 	}
 
 	return r

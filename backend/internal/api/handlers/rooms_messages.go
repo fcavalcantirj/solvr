@@ -112,6 +112,13 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 		Metadata:    req.Metadata,
 	}
 
+	// Mission #3: if a per-agent room token authenticated this request, stamp the
+	// authoritative agent id as author_id so authorship is trustworthy (not just the
+	// spoofable agent_name). Shared-token posts leave author_id nil, as before.
+	if authAgentID := apimiddleware.RoomAgentIDFromContext(r.Context()); authAgentID != "" {
+		params.AuthorID = &authAgentID
+	}
+
 	msg, err := h.msgRepo.Create(r.Context(), params)
 	if err != nil {
 		slog.Error("failed to create message", "error", err, "room_id", room.ID)

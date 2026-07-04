@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
 
+	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -16,17 +18,27 @@ import (
 
 // RoomHandler handles HTTP requests for room CRUD operations.
 type RoomHandler struct {
-	roomRepo     *db.RoomRepository
-	msgRepo      *db.MessageRepository
-	presenceRepo *db.AgentPresenceRepository
+	roomRepo       *db.RoomRepository
+	msgRepo        *db.MessageRepository
+	presenceRepo   *db.AgentPresenceRepository
+	memberRepo     *db.RoomMemberRepository
+	agentTokenRepo *db.RoomAgentTokenRepository
 }
 
 // NewRoomHandler creates a new RoomHandler with the required repositories.
-func NewRoomHandler(roomRepo *db.RoomRepository, msgRepo *db.MessageRepository, presenceRepo *db.AgentPresenceRepository) *RoomHandler {
+func NewRoomHandler(
+	roomRepo *db.RoomRepository,
+	msgRepo *db.MessageRepository,
+	presenceRepo *db.AgentPresenceRepository,
+	memberRepo *db.RoomMemberRepository,
+	agentTokenRepo *db.RoomAgentTokenRepository,
+) *RoomHandler {
 	return &RoomHandler{
-		roomRepo:     roomRepo,
-		msgRepo:      msgRepo,
-		presenceRepo: presenceRepo,
+		roomRepo:       roomRepo,
+		msgRepo:        msgRepo,
+		presenceRepo:   presenceRepo,
+		memberRepo:     memberRepo,
+		agentTokenRepo: agentTokenRepo,
 	}
 }
 
@@ -49,6 +61,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	agent := auth.AgentFromContext(r.Context())
 
 	var ownerID uuid.UUID
+	var creatorAgentID string
 	if claims != nil {
 		parsed, err := uuid.Parse(claims.UserID)
 		if err != nil {
@@ -57,7 +70,10 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		}
 		ownerID = parsed
 	} else if agent != nil {
-		// Agent creating a room: use agent's human_id if linked, otherwise no owner
+		// Agent creating a room: use agent's human_id if linked, otherwise no human owner.
+		// Either way the agent itself becomes a room_members owner (see creatorAgentID),
+		// so the room is always manageable — no more ownerless rooms.
+		creatorAgentID = agent.ID
 		if agent.HumanID != nil {
 			parsed, err := uuid.Parse(*agent.HumanID)
 			if err != nil {
@@ -83,13 +99,14 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := models.CreateRoomParams{
-		Slug:        req.Slug,
-		DisplayName: req.DisplayName,
-		Description: req.Description,
-		Category:    req.Category,
-		Tags:        req.Tags,
-		IsPrivate:   req.IsPrivate,
-		OwnerID:     ownerID,
+		Slug:           req.Slug,
+		DisplayName:    req.DisplayName,
+		Description:    req.Description,
+		Category:       req.Category,
+		Tags:           req.Tags,
+		IsPrivate:      req.IsPrivate,
+		OwnerID:        ownerID,
+		CreatorAgentID: creatorAgentID,
 	}
 
 	room, plainToken, err := h.roomRepo.Create(r.Context(), params)
@@ -115,21 +132,25 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 // Public endpoint, no authentication required (D-19).
 // Returns room detail with agents and recent messages.
 func (h *RoomHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
-	slug := chi.URLParam(r, "slug")
-	if slug == "" {
-		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "slug is required")
-		return
-	}
-
-	room, err := h.roomRepo.GetBySlug(r.Context(), slug)
-	if err != nil {
-		if errors.Is(err, db.ErrRoomNotFound) {
-			roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "room not found")
+	// Prefer the room resolved (and access-checked) by RoomAccessGuard.
+	room := apimiddleware.RoomFromContext(r.Context())
+	if room == nil {
+		slug := chi.URLParam(r, "slug")
+		if slug == "" {
+			roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "slug is required")
 			return
 		}
-		slog.Error("failed to get room", "error", err, "slug", slug)
-		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get room")
-		return
+		var err error
+		room, err = h.roomRepo.GetBySlug(r.Context(), slug)
+		if err != nil {
+			if errors.Is(err, db.ErrRoomNotFound) {
+				roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "room not found")
+				return
+			}
+			slog.Error("failed to get room", "error", err, "slug", slug)
+			roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get room")
+			return
+		}
 	}
 
 	// Fetch live agents
@@ -215,8 +236,8 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify ownership (human or claimed agent) or admin role
-	if !canManageRoom(claims, agent, room) {
+	// Verify ownership (human, claimed agent, or agent owner-member) or admin role
+	if !h.canManage(r.Context(), claims, agent, room) {
 		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "only the room owner or admin can update this room")
 		return
 	}
@@ -268,7 +289,7 @@ func (h *RoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canManageRoom(claims, agent, room) {
+	if !h.canManage(r.Context(), claims, agent, room) {
 		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "only the room owner or admin can delete this room")
 		return
 	}
@@ -311,7 +332,7 @@ func (h *RoomHandler) RotateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canRotateRoomToken(claims, agent, room) {
+	if !h.canManage(r.Context(), claims, agent, room) {
 		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "only the room owner or admin can rotate the token")
 		return
 	}
@@ -352,9 +373,10 @@ func agentOwnsRoom(agent *models.Agent, room *models.Room) bool {
 	return *room.OwnerID == humanID
 }
 
-// canManageRoom checks if the caller (human JWT/user-key claims or agent API key)
-// may update or delete the room: owner, admin, or a claimed agent whose linked
-// human owns the room (D-21/D-22 amendment).
+// canManageRoom checks the DB-free ownership rules: the caller is the human owner
+// (JWT/user-key claims), an admin, or a claimed agent whose linked human owns the
+// room (D-21/D-22 amendment). Kept as a pure function for straightforward unit
+// testing; h.canManage layers the room_members owner check on top.
 func canManageRoom(claims *auth.Claims, agent *models.Agent, room *models.Room) bool {
 	if claims != nil && isRoomOwnerOrAdmin(claims, room) {
 		return true
@@ -362,15 +384,31 @@ func canManageRoom(claims *auth.Claims, agent *models.Agent, room *models.Room) 
 	return agentOwnsRoom(agent, room)
 }
 
-// canRotateRoomToken checks if the caller may rotate the room token (D-25):
-// owner (human or via claimed agent) or admin. The admin fallback amends D-25 —
-// without it, ownerless rooms created by unclaimed agents have tokens that
-// nobody can rotate.
+// canRotateRoomToken mirrors canManageRoom: token rotation uses the same ownership
+// rules (D-25). Retained as a distinct name for readability at the call sites and
+// for its dedicated unit tests.
 func canRotateRoomToken(claims *auth.Claims, agent *models.Agent, room *models.Room) bool {
-	if claims != nil && isRoomOwnerOrAdmin(claims, room) {
+	return canManageRoom(claims, agent, room)
+}
+
+// canManage checks if the caller may update, delete, or rotate the token for the
+// room. It grants the DB-free ownership cases (canManageRoom) plus an agent holding
+// the 'owner' role in room_members — which every room creator now gets (see the
+// owner fix in RoomRepository.Create). The membership check is what makes
+// agent-created rooms, including those by unclaimed agents, manageable.
+func (h *RoomHandler) canManage(ctx context.Context, claims *auth.Claims, agent *models.Agent, room *models.Room) bool {
+	if canManageRoom(claims, agent, room) {
 		return true
 	}
-	return agentOwnsRoom(agent, room)
+	if agent == nil || h.memberRepo == nil {
+		return false
+	}
+	isOwner, err := h.memberRepo.IsOwner(ctx, room.ID, agent.ID)
+	if err != nil {
+		slog.Error("failed to check room owner membership", "error", err, "room_id", room.ID, "agent", agent.ID)
+		return false
+	}
+	return isOwner
 }
 
 // isRoomOwner checks if the authenticated user is the room owner.

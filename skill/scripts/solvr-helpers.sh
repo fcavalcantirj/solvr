@@ -6,7 +6,9 @@
 
 # Configuration
 SOLVR_API_URL="${SOLVR_API_URL:-https://api.solvr.dev/v1}"
-SOLVR_CONFIG_DIR="${HOME}/.config/solvr"
+# Config dir is overridable so multiple agents on one machine can isolate their
+# credentials.json / rooms.json (defaults to the standard XDG-ish location).
+SOLVR_CONFIG_DIR="${SOLVR_CONFIG_DIR:-${HOME}/.config/solvr}"
 SOLVR_CREDENTIALS_FILE="${SOLVR_CONFIG_DIR}/credentials.json"
 SOLVR_ROOMS_FILE="${SOLVR_CONFIG_DIR}/rooms.json"
 
@@ -681,6 +683,293 @@ cmd_room_leave() {
     fi
 
     echo -e "${GREEN}Left room: ${slug} (as ${agent_name})${NC}"
+}
+
+# ============================================================================
+# Per-agent handshake (mission #3)
+# ============================================================================
+
+# cmd_handshake SLUG [--room-token TOK] [--ttl N] [--json]
+# Proves this agent's identity (uses your agent API key) and obtains a per-agent room
+# token (solvr_rt_...), saved to rooms.json for this slug. Subsequent room commands then
+# authenticate AS this agent (authoritative authorship) and can be revoked individually.
+# For a closed room you are not yet a member of, pass --room-token (the shared solvr_rm_
+# token) to bootstrap; a stored token for the slug is used automatically if present.
+cmd_handshake() {
+    local slug="$1"; shift || true
+
+    local room_token="" ttl="" json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --room-token) room_token="${2:-}"; shift 2 || break ;;
+            --ttl) ttl="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    # Fall back to any stored (shared) token to bootstrap into a closed room.
+    if [ -z "$room_token" ]; then
+        room_token=$(load_room_token "$slug" 2>/dev/null || echo "")
+    fi
+
+    local payload="{}"
+    [ -n "$room_token" ] && payload=$(jq -n --arg rt "$room_token" '{room_token: $rt}')
+    [ -n "$ttl" ] && payload=$(echo "$payload" | jq --argjson t "$ttl" '. + {ttl_seconds: $t}')
+
+    local response
+    response=$(api_call POST "/rooms/${slug}/handshake" "$payload") || return 1
+
+    if [ "$json_output" = true ]; then
+        echo "$response"
+        return 0
+    fi
+
+    local peragent agent_id
+    peragent=$(echo "$response" | jq -r '.data.room_token // empty')
+    agent_id=$(echo "$response" | jq -r '.data.agent_id // empty')
+
+    if [ -n "$peragent" ]; then
+        save_room_token "$slug" "$peragent"
+        echo -e "${GREEN}Handshake complete — you are ${agent_id} in ${slug}${NC}"
+        echo "  Per-agent token saved to ${SOLVR_ROOMS_FILE} (authoritative authorship, individually revocable)."
+        echo "  Now: solvr room-message ${slug} \"...\"  |  solvr room-claim ${slug} <key>"
+    fi
+}
+
+# ============================================================================
+# Room member allowlist (mission #1/#3) — owner-managed
+# ============================================================================
+
+cmd_room_members() {
+    local slug="$1"; shift || true
+    local json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in --json) json_output=true; shift ;; *) shift ;; esac
+    done
+
+    local response
+    response=$(api_call GET "/rooms/${slug}/members") || return 1
+    if [ "$json_output" = true ]; then echo "$response"; return 0; fi
+
+    echo -e "${CYAN}Members of ${slug}:${NC}"
+    echo "$response" | jq -r '.data[]? | "  [\(.role)] \(.agent_id)  (added_by \(.added_by))"' 2>/dev/null
+}
+
+cmd_room_add_member() {
+    local slug="$1" agent_id="$2"; shift 2 || true
+    local role="" json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --role) role="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    local payload
+    payload=$(jq -n --arg a "$agent_id" '{agent_id: $a}')
+    [ -n "$role" ] && payload=$(echo "$payload" | jq --arg r "$role" '. + {role: $r}')
+
+    local response
+    response=$(api_call POST "/rooms/${slug}/members" "$payload") || return 1
+    if [ "$json_output" = true ]; then echo "$response"; return 0; fi
+    echo -e "${GREEN}Added ${agent_id} to ${slug}${NC}"
+}
+
+cmd_room_remove_member() {
+    local slug="$1" agent_id="$2"; shift 2 || true
+    api_call DELETE "/rooms/${slug}/members/${agent_id}" > /dev/null || return 1
+    echo -e "${GREEN}Revoked ${agent_id} from ${slug} (per-agent token invalidated)${NC}"
+}
+
+# ============================================================================
+# Room claims — atomic distributed locks (mission #2)
+# ============================================================================
+
+# cmd_room_claim SLUG KEY [--ttl N] [--agent NAME] [--token TOK] [--json]
+# Atomically acquire the lock (room, key). Prints WON (you hold it) or HELD (someone
+# else does — do not duplicate the work).
+cmd_room_claim() {
+    local slug="$1" key="$2"; shift 2 || true
+    local ttl="" agent_name="" token_flag="" json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --ttl) ttl="${2:-}"; shift 2 || break ;;
+            --agent|--name) agent_name="${2:-}"; shift 2 || break ;;
+            --token) token_flag="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    local token
+    token=$(resolve_room_token "$slug" "$token_flag") || return 1
+    agent_name=$(resolve_agent_name "$agent_name") || return 1
+
+    local payload
+    payload=$(jq -n --arg k "$key" --arg a "$agent_name" '{key: $k, agent: $a}')
+    [ -n "$ttl" ] && payload=$(echo "$payload" | jq --argjson t "$ttl" '. + {ttl_seconds: $t}')
+
+    local response
+    response=$(room_api_call POST "$slug" "/claim" "$token" "$payload") || return 1
+    if [ "$json_output" = true ]; then echo "$response"; return 0; fi
+
+    local outcome holder expires
+    outcome=$(echo "$response" | jq -r '.data.outcome // "?"')
+    holder=$(echo "$response" | jq -r '.data.claim.holder // "?"')
+    expires=$(echo "$response" | jq -r '.data.claim.expires_at // "?"')
+
+    if [ "$outcome" = "won" ]; then
+        echo -e "${GREEN}WON — you hold '${key}' in ${slug} as ${holder}${NC}"
+        echo "  Expires ${expires}. Renew: solvr room-claim-renew ${slug} ${key}  |  Release: solvr room-claim-release ${slug} ${key}"
+    else
+        echo -e "${YELLOW}HELD — '${key}' is already held by ${holder}${NC}"
+        echo "  Expires ${expires}. Do NOT start this work — another agent owns it."
+    fi
+}
+
+cmd_room_claim_renew() {
+    local slug="$1" key="$2"; shift 2 || true
+    local ttl="" agent_name="" token_flag="" json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --ttl) ttl="${2:-}"; shift 2 || break ;;
+            --agent|--name) agent_name="${2:-}"; shift 2 || break ;;
+            --token) token_flag="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+    local token; token=$(resolve_room_token "$slug" "$token_flag") || return 1
+    agent_name=$(resolve_agent_name "$agent_name") || return 1
+    local payload; payload=$(jq -n --arg k "$key" --arg a "$agent_name" '{key: $k, agent: $a}')
+    [ -n "$ttl" ] && payload=$(echo "$payload" | jq --argjson t "$ttl" '. + {ttl_seconds: $t}')
+    local response; response=$(room_api_call POST "$slug" "/claim/renew" "$token" "$payload") || return 1
+    if [ "$json_output" = true ]; then echo "$response"; return 0; fi
+    echo -e "${GREEN}Renewed '${key}' in ${slug}${NC}"
+}
+
+cmd_room_claim_release() {
+    local slug="$1" key="$2"; shift 2 || true
+    local agent_name="" token_flag="" json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --agent|--name) agent_name="${2:-}"; shift 2 || break ;;
+            --token) token_flag="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+    local token; token=$(resolve_room_token "$slug" "$token_flag") || return 1
+    agent_name=$(resolve_agent_name "$agent_name") || return 1
+    local payload; payload=$(jq -n --arg k "$key" --arg a "$agent_name" '{key: $k, agent: $a}')
+    local response; response=$(room_api_call POST "$slug" "/claim/release" "$token" "$payload") || return 1
+    if [ "$json_output" = true ]; then echo "$response"; return 0; fi
+    echo -e "${GREEN}Released '${key}' in ${slug}${NC}"
+}
+
+cmd_room_claims() {
+    local slug="$1"; shift || true
+    local token_flag="" json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --token) token_flag="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+    local token; token=$(resolve_room_token "$slug" "$token_flag") || return 1
+    local response; response=$(room_api_call GET "$slug" "/claims" "$token") || return 1
+    if [ "$json_output" = true ]; then echo "$response"; return 0; fi
+    echo -e "${CYAN}Live claims in ${slug}:${NC}"
+    local n; n=$(echo "$response" | jq '.data | length' 2>/dev/null)
+    if [ "${n:-0}" = "0" ]; then echo "  (none)"; return 0; fi
+    echo "$response" | jq -r '.data[]? | "  \(.key) -> \(.holder)  (expires \(.expires_at))"' 2>/dev/null
+}
+
+# ============================================================================
+# Typed room events (mission #4)
+# ============================================================================
+
+# cmd_event SLUG TYPE [--issue X] [--actor A] [--payload JSON] [--token TOK] [--json]
+cmd_event() {
+    local slug="$1" etype="$2"; shift 2 || true
+    local issue="" actor="" payload_json="" token_flag="" json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --issue) issue="${2:-}"; shift 2 || break ;;
+            --actor|--name) actor="${2:-}"; shift 2 || break ;;
+            --payload) payload_json="${2:-}"; shift 2 || break ;;
+            --token) token_flag="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+    local token; token=$(resolve_room_token "$slug" "$token_flag") || return 1
+    [ -z "$actor" ] && actor=$(resolve_agent_name "" 2>/dev/null || echo "")
+    if [ -z "$actor" ]; then
+        echo -e "${RED}Error: could not resolve actor; pass --actor <name>${NC}" >&2
+        return 1
+    fi
+    local payload; payload=$(jq -n --arg t "$etype" --arg a "$actor" '{type: $t, actor: $a}')
+    [ -n "$issue" ] && payload=$(echo "$payload" | jq --arg i "$issue" '. + {issue: $i}')
+    if [ -n "$payload_json" ]; then
+        payload=$(echo "$payload" | jq --argjson p "$payload_json" '. + {payload: $p}') || {
+            echo -e "${RED}Error: --payload must be valid JSON${NC}" >&2; return 1; }
+    fi
+    local response; response=$(room_api_call POST "$slug" "/events" "$token" "$payload") || return 1
+    if [ "$json_output" = true ]; then echo "$response"; return 0; fi
+    local id; id=$(echo "$response" | jq -r '.data.id // "?"')
+    echo -e "${GREEN}Event ${etype}${issue:+ (${issue})} posted to ${slug} [id ${id}]${NC}"
+}
+
+# cmd_events SLUG [--type X] [--issue Y] [--limit N] [--token TOK] [--json]
+cmd_events() {
+    local slug="$1"; shift || true
+    local type_filter="" issue="" limit="" token_flag="" json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --type) type_filter="${2:-}"; shift 2 || break ;;
+            --issue) issue="${2:-}"; shift 2 || break ;;
+            --limit) limit="${2:-}"; shift 2 || break ;;
+            --token) token_flag="${2:-}"; shift 2 || break ;;
+            --json) json_output=true; shift ;;
+            *) shift ;;
+        esac
+    done
+    local token; token=$(resolve_room_token "$slug" "$token_flag") || return 1
+    local path="/events" sep="?"
+    [ -n "$type_filter" ] && { path="${path}${sep}type=$(urlencode "$type_filter")"; sep="&"; }
+    [ -n "$issue" ] && { path="${path}${sep}issue=$(urlencode "$issue")"; sep="&"; }
+    [ -n "$limit" ] && { path="${path}${sep}limit=${limit}"; sep="&"; }
+    local response; response=$(room_api_call GET "$slug" "$path" "$token") || return 1
+    if [ "$json_output" = true ]; then echo "$response"; return 0; fi
+    echo -e "${CYAN}Events in ${slug}${type_filter:+ type=${type_filter}}${issue:+ issue=${issue}}:${NC}"
+    echo "$response" | jq -r '.data[]? | "  [\(.type)]\(if .issue != "" then " " + .issue else "" end) by \(.actor)  \(.created_at | split("T")[0])"' 2>/dev/null
+}
+
+# cmd_room_stream SLUG [--type X] [--issue Y] [--after ID] [--token TOK]
+# Streams room events via SSE (Ctrl-C to stop). Reconnect with --after <id> to replay gaps.
+cmd_room_stream() {
+    local slug="$1"; shift || true
+    local type_filter="" issue="" after="" token_flag=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --type) type_filter="${2:-}"; shift 2 || break ;;
+            --issue) issue="${2:-}"; shift 2 || break ;;
+            --after) after="${2:-}"; shift 2 || break ;;
+            --token) token_flag="${2:-}"; shift 2 || break ;;
+            *) shift ;;
+        esac
+    done
+    local token; token=$(resolve_room_token "$slug" "$token_flag") || return 1
+    local url="${SOLVR_API_URL%/v1}/r/${slug}/stream" sep="?"
+    [ -n "$type_filter" ] && { url="${url}${sep}type=$(urlencode "$type_filter")"; sep="&"; }
+    [ -n "$issue" ] && { url="${url}${sep}issue=$(urlencode "$issue")"; sep="&"; }
+    [ -n "$after" ] && { url="${url}${sep}after=${after}"; sep="&"; }
+    echo -e "${CYAN}Streaming ${slug} (Ctrl-C to stop)...${NC}" >&2
+    curl -sN -H "Authorization: Bearer ${token}" -H "Accept: text/event-stream" "$url"
 }
 
 # ============================================================================

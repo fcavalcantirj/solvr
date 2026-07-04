@@ -76,41 +76,67 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at
 	`
 
+	// A room and its owner-membership row are created atomically: if the membership
+	// insert fails, the room is rolled back so we never leave an agent-created room
+	// without a manageable owner.
 	var room models.Room
-	err = r.pool.QueryRow(ctx, query,
-		slug,
-		params.DisplayName,
-		params.Description,
-		params.Category,
-		tags,
-		params.IsPrivate,
-		ownerID,
-		hashHex,
-		params.ExpiresAt,
-	).Scan(
-		&room.ID,
-		&room.Slug,
-		&room.DisplayName,
-		&room.Description,
-		&room.Category,
-		&room.Tags,
-		&room.IsPrivate,
-		&room.OwnerID,
-		&room.TokenHash,
-		&room.MessageCount,
-		&room.CreatedAt,
-		&room.UpdatedAt,
-		&room.LastActiveAt,
-		&room.ExpiresAt,
-		&room.DeletedAt,
-	)
-	if err != nil {
+	txErr := r.pool.WithTx(ctx, func(tx Tx) error {
+		scanErr := tx.QueryRow(ctx, query,
+			slug,
+			params.DisplayName,
+			params.Description,
+			params.Category,
+			tags,
+			params.IsPrivate,
+			ownerID,
+			hashHex,
+			params.ExpiresAt,
+		).Scan(
+			&room.ID,
+			&room.Slug,
+			&room.DisplayName,
+			&room.Description,
+			&room.Category,
+			&room.Tags,
+			&room.IsPrivate,
+			&room.OwnerID,
+			&room.TokenHash,
+			&room.MessageCount,
+			&room.CreatedAt,
+			&room.UpdatedAt,
+			&room.LastActiveAt,
+			&room.ExpiresAt,
+			&room.DeletedAt,
+		)
+		if scanErr != nil {
+			return scanErr
+		}
+
+		// Register the creating agent as room owner (mission #1/#3 owner fix).
+		if params.CreatorAgentID != "" {
+			_, mErr := tx.Exec(ctx,
+				`INSERT INTO room_members (room_id, agent_id, role, added_by)
+				 VALUES ($1, $2, 'owner', 'system')
+				 ON CONFLICT (room_id, agent_id) DO UPDATE SET role = 'owner'`,
+				room.ID, params.CreatorAgentID,
+			)
+			if mErr != nil {
+				return mErr
+			}
+		}
+		return nil
+	})
+	if txErr != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if errors.As(txErr, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName != "" && pgErr.TableName == "rooms" {
 			return nil, "", ErrRoomSlugExists
 		}
-		LogQueryError(ctx, "Create", "rooms", err)
-		return nil, "", err
+		// Slug uniqueness violations may surface without table metadata depending on driver path.
+		if errors.As(txErr, &pgErr) && pgErr.Code == "23505" {
+			return nil, "", ErrRoomSlugExists
+		}
+		LogQueryError(ctx, "Create", "rooms", txErr)
+		return nil, "", txErr
 	}
 
 	return &room, plaintext, nil

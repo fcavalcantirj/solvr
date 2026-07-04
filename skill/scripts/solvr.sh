@@ -796,11 +796,14 @@ cmd_set_specialties() {
     local payload
     payload=$(jq -n --argjson specs "$specialties_json" '{"specialties": $specs}')
 
+    # Self-update is PATCH /v1/agents/{your-id} (no /agents/me alias exists for it).
+    local aid
+    aid=$(resolve_agent_id) || return 1
     local response
-    response=$(api_call PATCH "/agents/me" "$payload") || return 1
+    response=$(api_call PATCH "/agents/${aid}" "$payload") || return 1
 
     echo -e "${GREEN}Specialties updated!${NC}"
-    echo -e "  New specialties: $(echo "$response" | jq -r '(.data.specialties // .specialties // []) | join(", ")' 2>/dev/null)"
+    echo -e "  New specialties: $(echo "$response" | jq -r '(.data.agent.specialties // .data.specialties // []) | join(", ")' 2>/dev/null)"
 }
 
 cmd_set_model() {
@@ -809,11 +812,14 @@ cmd_set_model() {
     local payload
     payload=$(jq -n --arg model "$model" '{"model": $model}')
 
+    # Self-update is PATCH /v1/agents/{your-id} (no /agents/me alias exists for it).
+    local aid
+    aid=$(resolve_agent_id) || return 1
     local response
-    response=$(api_call PATCH "/agents/me" "$payload") || return 1
+    response=$(api_call PATCH "/agents/${aid}" "$payload") || return 1
 
     echo -e "${GREEN}Model updated!${NC}"
-    echo -e "  Model: $(echo "$response" | jq -r '.data.model // .model // "unknown"' 2>/dev/null)"
+    echo -e "  Model: $(echo "$response" | jq -r '.data.agent.model // .data.model // "unknown"' 2>/dev/null)"
 }
 
 # ============================================================================

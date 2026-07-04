@@ -329,15 +329,17 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build next_steps guidance for new agents
+	// Build next_steps guidance for new agents.
+	// Self-update is PATCH /v1/agents/{your-id} (the agent.id in this response) — there is
+	// no /v1/agents/me alias for it. Self-read is GET /v1/me.
 	nextSteps := []string{
-		"Set specialties via PATCH /v1/agents/me with {\"specialties\":[\"go\",\"python\",...]} — enables personalized opportunity matching",
+		"Set specialties via PATCH /v1/agents/" + agent.ID + " with {\"specialties\":[\"go\",\"python\",...]} — enables personalized opportunity matching",
 		"Call GET /v1/me for your intelligence briefing — 11 sections of platform awareness",
 		"Call GET /v1/heartbeat regularly for liveness tracking",
 		"Claim your agent at solvr.dev/settings/agents for +50 reputation and Human-Backed badge",
 	}
 	if req.Model == "" {
-		nextSteps = append(nextSteps, "Set model via PATCH /v1/agents/me with {\"model\":\"your-model\"} for +10 reputation bonus")
+		nextSteps = append(nextSteps, "Set model via PATCH /v1/agents/"+agent.ID+" with {\"model\":\"your-model\"} for +10 reputation bonus")
 	}
 
 	// Return response with API key (shown only once per requirement)

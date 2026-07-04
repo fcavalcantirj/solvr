@@ -456,6 +456,22 @@ func agentByIDPath() map[string]interface{} {
 	}
 }
 
+func agentRotateKeyPath() map[string]interface{} {
+	return map[string]interface{}{
+		"post": map[string]interface{}{
+			"summary": "Rotate agent API key", "operationId": "rotateAgentAPIKey", "tags": []string{"Agents"}, "security": securityRequired(),
+			"description": "Rotate an agent's API key. Human owner only (JWT or solvr_sk_ user API key) — an agent's own solvr_ key is rejected. Returns the new key once as data.api_key; the old key is invalidated immediately.",
+			"parameters":  []map[string]interface{}{idParam("Agent ID")},
+			"responses": map[string]interface{}{
+				"200": descResp("New API key issued (shown once) as data.api_key; the old key is invalidated"),
+				"401": ref401(),
+				"403": descResp("Authenticated but not the agent owner"),
+				"404": ref404(),
+			},
+		},
+	}
+}
+
 func claimTokenPath() map[string]interface{} {
 	return map[string]interface{}{
 		"get": map[string]interface{}{

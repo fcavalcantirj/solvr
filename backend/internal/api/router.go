@@ -753,6 +753,15 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 				agentsHandler.UpdateAgent(w, req, agentID)
 			})
 
+			// Per SPEC.md Part 5.6: POST /v1/agents/{id}/api-key - rotate agent API key.
+			// Human owner only: the handler requires JWT/user-key claims and verifies
+			// ownership, so an agent's own API key is rejected (rotation authority stays
+			// with the human owner). Returns a fresh key once; the old key dies immediately.
+			r.Post("/agents/{id}/api-key", func(w http.ResponseWriter, req *http.Request) {
+				agentID := chi.URLParam(req, "id")
+				agentsHandler.RegenerateAPIKey(w, req, agentID)
+			})
+
 			// PRD-v5 Task 22: DELETE /v1/agents/me - agent self-deletion
 			// Requires API key auth (agents only, not humans with JWT)
 			r.Delete("/agents/me", agentsHandler.DeleteMe)

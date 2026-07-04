@@ -173,10 +173,11 @@ func buildPaths() map[string]interface{} {
 		// Comments
 		"/comments/{id}": commentPath(),
 		// Agents
-		"/agents/register":  agentRegisterPath(),
-		"/agents/me/claim":  agentClaimPath(),
-		"/agents/{id}":      agentByIDPath(),
-		"/claim/{token}":    claimTokenPath(),
+		"/agents/register":     agentRegisterPath(),
+		"/agents/me/claim":     agentClaimPath(),
+		"/agents/{id}":         agentByIDPath(),
+		"/agents/{id}/api-key": agentRotateKeyPath(),
+		"/claim/{token}":       claimTokenPath(),
 		// Users
 		"/users/{id}":                        userByIDPath(),
 		"/me":                                mePath(),

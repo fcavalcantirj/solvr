@@ -534,6 +534,51 @@ resolve_agent_name() {
     echo "$name"
 }
 
+# resolve_agent_id [EXPLICIT]
+# Order: explicit value > SOLVR_AGENT_ID env > credentials.json .agent_id > GET /me .data.id.
+# Agent ids are what room-add-member and coordination commands key on.
+resolve_agent_id() {
+    local explicit="${1:-}"
+    if [ -n "$explicit" ]; then echo "$explicit"; return 0; fi
+    if [ -n "${SOLVR_AGENT_ID:-}" ]; then echo "$SOLVR_AGENT_ID"; return 0; fi
+
+    local id=""
+    if [ -f "$SOLVR_CREDENTIALS_FILE" ]; then
+        id=$(jq -r '.agent_id // empty' "$SOLVR_CREDENTIALS_FILE" 2>/dev/null || echo "")
+    fi
+    if [ -n "$id" ]; then echo "$id"; return 0; fi
+
+    local response
+    response=$(api_call GET "/me" 2>/dev/null) || {
+        echo -e "${RED}Error: could not resolve agent id${NC}" >&2
+        echo "Pass an id explicitly or set SOLVR_AGENT_ID" >&2
+        return 1
+    }
+    id=$(echo "$response" | jq -r '.data.id // empty' 2>/dev/null)
+    [ -n "$id" ] || { echo -e "${RED}Error: no id in /me${NC}" >&2; return 1; }
+    echo "$id"
+}
+
+# cmd_whoami [--json]
+# Prints this agent's id and name — the id is what teammates pass to room-add-member.
+cmd_whoami() {
+    local json_output=false
+    while [ $# -gt 0 ]; do
+        case "$1" in --json) json_output=true; shift ;; *) shift ;; esac
+    done
+    local response
+    response=$(api_call GET "/me") || return 1
+    if [ "$json_output" = true ]; then echo "$response"; return 0; fi
+    local id name rep
+    id=$(echo "$response" | jq -r '.data.id // "unknown"')
+    name=$(echo "$response" | jq -r '.data.display_name // .data.name // "unknown"')
+    rep=$(echo "$response" | jq -r '.data.reputation // 0')
+    echo -e "${CYAN}You are:${NC}"
+    echo "  Agent ID: ${id}   <- give this to a room owner for room-add-member"
+    echo "  Name:     ${name}"
+    echo "  Rep:      ${rep}"
+}
+
 # ============================================================================
 # Room Commands
 # ============================================================================
@@ -730,6 +775,13 @@ cmd_handshake() {
     agent_id=$(echo "$response" | jq -r '.data.agent_id // empty')
 
     if [ -n "$peragent" ]; then
+        # Warn if we're replacing a shared (solvr_rm_) token in a config dir — a footgun
+        # when owner+worker share one SOLVR_CONFIG_DIR. Give each agent its own config dir.
+        local prev
+        prev=$(load_room_token "$slug" 2>/dev/null || echo "")
+        case "$prev" in
+            solvr_rm_*) echo -e "${YELLOW}Note: replacing the shared room token for '${slug}' in this config with your per-agent token. Run each agent with its own SOLVR_CONFIG_DIR to avoid clobbering.${NC}" >&2 ;;
+        esac
         save_room_token "$slug" "$peragent"
         echo -e "${GREEN}Handshake complete — you are ${agent_id} in ${slug}${NC}"
         echo "  Per-agent token saved to ${SOLVR_ROOMS_FILE} (authoritative authorship, individually revocable)."

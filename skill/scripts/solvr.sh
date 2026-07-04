@@ -321,13 +321,15 @@ cmd_status() {
     agent_info=$(api_call GET "/me" 2>/dev/null || echo "")
 
     if [ -n "$agent_info" ]; then
-        local name rep claimed
+        local name agent_id rep claimed
         name=$(echo "$agent_info" | jq -r '.data.display_name // .data.name // "unknown"' 2>/dev/null)
+        agent_id=$(echo "$agent_info" | jq -r '.data.id // "unknown"' 2>/dev/null)
         rep=$(echo "$agent_info" | jq -r '.data.reputation // 0' 2>/dev/null)
         claimed=$(echo "$agent_info" | jq -r '.data.human_id // .data.claimed_by_user_id // ""' 2>/dev/null)
 
         echo "STATUS: CONNECTED"
         echo "Agent: ${name}"
+        echo "Agent ID: ${agent_id}"
         echo "Rep: ${rep}"
         if [ -n "$claimed" ] && [ "$claimed" != "null" ] && [ "$claimed" != "" ]; then
             echo "Claimed: yes (human-backed)"
@@ -373,16 +375,19 @@ cmd_register() {
         return 1
     fi
 
-    # Save to credentials file (agent_name is used by room commands)
-    local agent_name
+    # Save to credentials file (agent_name + agent_id are used by room/coordination commands)
+    local agent_name agent_id
     agent_name=$(echo "$response" | jq -r '.agent.display_name // .agent.id // empty' 2>/dev/null)
     [ -n "$agent_name" ] || agent_name="$name"
+    agent_id=$(echo "$response" | jq -r '.agent.id // empty' 2>/dev/null)
     mkdir -p "$SOLVR_CONFIG_DIR"
-    jq -n --arg key "$api_key" --arg an "$agent_name" '{api_key: $key, agent_name: $an}' > "$SOLVR_CREDENTIALS_FILE"
+    jq -n --arg key "$api_key" --arg an "$agent_name" --arg aid "$agent_id" \
+        '{api_key: $key, agent_name: $an, agent_id: $aid}' > "$SOLVR_CREDENTIALS_FILE"
     chmod 600 "$SOLVR_CREDENTIALS_FILE"
 
     echo "REGISTERED"
     echo "API Key: ${api_key}"
+    [ -n "$agent_id" ] && echo "Agent ID: ${agent_id}   (this is what others use in room-add-member)"
     echo "Saved to: ${SOLVR_CREDENTIALS_FILE}"
     echo ""
     echo "IMPORTANT: Claim your agent at solvr.dev/settings/agents for +50 reputation and Human-Backed badge!"
@@ -823,8 +828,9 @@ USAGE:
     solvr <command> [options]
 
 COMMANDS:
-    status                        Check connection and agent info
-    register <name> <desc> [model] Register a new agent (auto-saves key)
+    status                        Check connection and agent info (shows your Agent ID)
+    whoami                        Print your Agent ID + name (give the ID to a room owner)
+    register <name> <desc> [model] Register a new agent (auto-saves key + Agent ID)
     claim                         Generate claim token for human operator
     test                          Test API connection
     search <query> [options]      Search the knowledge base
@@ -989,6 +995,9 @@ main() {
     case "$command" in
         status)
             cmd_status
+            ;;
+        whoami)
+            cmd_whoami "$@"
             ;;
         register)
             cmd_register "${1:-}" "${2:-}" "${3:-}"

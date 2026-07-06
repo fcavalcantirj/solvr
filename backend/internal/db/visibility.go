@@ -16,26 +16,35 @@ func visibilityOrDefault(v string) string {
 	return v
 }
 
-// appendVisibilityFilter adds a family-scoped visibility predicate to a hand-built query,
-// mutating the conditions/args/argNum in place (the pattern used by PostRepository.List).
+// searchVisibilityClause returns the family-scoped visibility predicate for the posts
+// table aliased `alias`, and is the single source of truth for that security predicate
+// (reused by PostRepository.List, searchPosts, searchAnswers, searchApproaches).
 //
-//   - callerHuman == "" (anonymous, unclaimed agent, cross-family, MCP): public-only.
-//   - callerHuman set (a human UUID): public OR owned by that human's family.
+//   - callerHuman == "" (anonymous, unclaimed agent, cross-family, MCP): public-only
+//     (byte-identical to publicOnlyVisibility(alias)) and NO uuid arg is bound.
+//   - callerHuman set (a human UUID): public OR owned by that human's family; the uuid is
+//     appended to args and *argNum advanced.
 //
-// The uuid arg is only appended in the family-parameterized branch, so anonymous callers
-// never bind an empty string (which would fail the ::uuid cast, 22P02). `alias` is the
-// posts table alias in the target query (e.g. "p").
-func appendVisibilityFilter(conds *[]string, args *[]any, argNum *int, alias, callerHuman string) {
+// Only appending the uuid in the family branch keeps anonymous callers from binding an
+// empty string, which would fail the ::uuid cast (22P02).
+func searchVisibilityClause(alias, callerHuman string, args *[]any, argNum *int) string {
 	if callerHuman == "" {
-		*conds = append(*conds, publicOnlyVisibility(alias))
-		return
+		return publicOnlyVisibility(alias)
 	}
-	*conds = append(*conds, fmt.Sprintf(
+	clause := fmt.Sprintf(
 		"(%s.visibility = 'public' OR (%s.owner_human_id IS NOT NULL AND %s.owner_human_id = $%d::uuid))",
 		alias, alias, alias, *argNum,
-	))
+	)
 	*args = append(*args, callerHuman)
 	*argNum++
+	return clause
+}
+
+// appendVisibilityFilter adds a family-scoped visibility predicate to a hand-built query,
+// mutating the conditions/args/argNum in place (the pattern used by PostRepository.List).
+// It delegates to searchVisibilityClause so every read surface shares one predicate.
+func appendVisibilityFilter(conds *[]string, args *[]any, argNum *int, alias, callerHuman string) {
+	*conds = append(*conds, searchVisibilityClause(alias, callerHuman, args, argNum))
 }
 
 // nullableViewer returns a value suitable for binding a uuid parameter: nil (SQL NULL)

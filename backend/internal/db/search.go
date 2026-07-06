@@ -91,7 +91,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 
 	// Search answers if explicitly requested
 	if containsContentType(contentTypes, "answers") {
-		answers, err := r.searchAnswers(ctx, tsquery)
+		answers, err := r.searchAnswers(ctx, tsquery, opts)
 		if err != nil {
 			return nil, 0, "", err
 		}
@@ -100,7 +100,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 
 	// Search approaches if explicitly requested
 	if containsContentType(contentTypes, "approaches") {
-		approaches, err := r.searchApproaches(ctx, tsquery)
+		approaches, err := r.searchApproaches(ctx, tsquery, opts)
 		if err != nil {
 			return nil, 0, "", err
 		}
@@ -183,14 +183,8 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 	args := []any{tsquery}
 	argNum := 2
 
-	// BART-151: family-scoped visibility (public, or the caller's own family).
-	if opts.ViewerHuman != "" {
-		baseQuery += fmt.Sprintf(" AND (p.visibility = 'public' OR (p.owner_human_id IS NOT NULL AND p.owner_human_id = $%d::uuid))", argNum)
-		args = append(args, opts.ViewerHuman)
-		argNum++
-	} else {
-		baseQuery += " AND p.visibility = 'public'"
-	}
+	// BART-151/152: family-scoped visibility (public, or the caller's own family).
+	baseQuery += " AND " + searchVisibilityClause("p", opts.ViewerHuman, &args, &argNum)
 
 	filters, args, _ := buildSearchFilters(opts, args, argNum)
 	if filters != "" {
@@ -315,7 +309,12 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 // searchAnswers searches answers using full-text search on content.
 // TODO: Wire up hybrid_search_answers() SQL function (migration 000045) for semantic search.
 // Currently only full-text; the SQL function exists but is not called from Go code.
-func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string) ([]models.SearchResult, error) {
+func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
+	args := []any{tsquery}
+	argNum := 2
+	// BART-152: family-scoped visibility (public, or the caller's own family) on the
+	// parent question — mirrors post search so an owner can find their own private answers.
+	visibility := searchVisibilityClause("p", opts.ViewerHuman, &args, &argNum)
 	query := `
 		SELECT
 			a.id::text,
@@ -348,12 +347,12 @@ func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string) ([
 		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
 		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
 		WHERE a.deleted_at IS NULL
-		AND p.visibility = 'public'
+		AND ` + visibility + `
 		AND to_tsvector('english', a.content) @@ to_tsquery('english', $1)
 		ORDER BY score DESC
 	`
 
-	rows, err := r.pool.Query(ctx, query, tsquery)
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		LogQueryError(ctx, "Search.Answers", "answers", err)
 		return nil, fmt.Errorf("search answers query failed: %w", err)
@@ -376,7 +375,11 @@ func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string) ([
 // searchApproaches searches approaches using full-text search on angle, method, outcome, solution.
 // TODO: Wire up hybrid_search_approaches() SQL function (migration 000045) for semantic search.
 // Currently only full-text; the SQL function exists but is not called from Go code.
-func (r *SearchRepository) searchApproaches(ctx context.Context, tsquery string) ([]models.SearchResult, error) {
+func (r *SearchRepository) searchApproaches(ctx context.Context, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
+	args := []any{tsquery}
+	argNum := 2
+	// BART-152: family-scoped visibility on the parent problem — mirrors post search.
+	visibility := searchVisibilityClause("p", opts.ViewerHuman, &args, &argNum)
 	query := `
 		SELECT
 			a.id::text,
@@ -417,7 +420,7 @@ func (r *SearchRepository) searchApproaches(ctx context.Context, tsquery string)
 		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
 		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
 		WHERE a.deleted_at IS NULL
-		AND p.visibility = 'public'
+		AND ` + visibility + `
 		AND to_tsvector('english',
 			COALESCE(a.angle, '') || ' ' || COALESCE(a.method, '') || ' ' ||
 			COALESCE(a.outcome, '') || ' ' || COALESCE(a.solution, ''))
@@ -425,7 +428,7 @@ func (r *SearchRepository) searchApproaches(ctx context.Context, tsquery string)
 		ORDER BY score DESC
 	`
 
-	rows, err := r.pool.Query(ctx, query, tsquery)
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		LogQueryError(ctx, "Search.Approaches", "approaches", err)
 		return nil, fmt.Errorf("search approaches query failed: %w", err)

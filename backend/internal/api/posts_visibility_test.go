@@ -81,6 +81,7 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 	require.False(t, bodyContains("/v1/search?q="+kw, "", privTitle), "search: anon must not leak private")
 	require.False(t, bodyContains("/v1/search?q="+kw, agentCKey, privTitle), "search: foreign must not leak private")
 	require.True(t, bodyContains("/v1/search?q="+kw, agentBKey, privTitle), "search: sibling sees private")
+	require.True(t, bodyContains("/v1/search?q="+kw, agentAKey, privTitle), "search: owner sees own private (BART-152)")
 
 	// 4. GET /v1/sitemap/urls — private problem id must never appear (SEO/Google leak)
 	require.False(t, bodyContains("/v1/sitemap/urls", "", privPID), "sitemap: private problem id must be absent")

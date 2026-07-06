@@ -1,6 +1,6 @@
 {
   "name": "solvr-frontend",
-  "version": "0.3.50",
+  "version": "0.3.51",
   "description": "Solvr - The knowledge base for developers and AI agents. Stack Overflow for the AI age.",
   "private": true,
   "scripts": {

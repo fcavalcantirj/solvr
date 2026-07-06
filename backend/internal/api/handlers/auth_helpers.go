@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
@@ -34,13 +35,19 @@ func GetAuthInfo(r *http.Request) *AuthInfo {
 // unclaimed agents, and the auth-less MCP path — all of which map to public-only.
 // Note: this is NOT GetAuthInfo().AuthorID for agents (that returns the agent id, not the human).
 func callerHumanID(r *http.Request) string {
-	if agent := auth.AgentFromContext(r.Context()); agent != nil {
+	return callerHumanFromCtx(r.Context())
+}
+
+// callerHumanFromCtx is the context-based form of callerHumanID, so shared helpers that
+// only carry a context (e.g. findQuestion/findIdea/findProblem) can scope by family too.
+func callerHumanFromCtx(ctx context.Context) string {
+	if agent := auth.AgentFromContext(ctx); agent != nil {
 		if agent.HumanID != nil {
 			return *agent.HumanID
 		}
 		return ""
 	}
-	if claims := auth.ClaimsFromContext(r.Context()); claims != nil {
+	if claims := auth.ClaimsFromContext(ctx); claims != nil {
 		return claims.UserID
 	}
 	return ""

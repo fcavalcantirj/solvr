@@ -98,7 +98,8 @@ func (h *ProblemsHandler) SetApproachRelationshipsRepository(relRepo ApproachRel
 func (h *ProblemsHandler) findProblem(ctx context.Context, id string) (*models.PostWithAuthor, error) {
 	// First try postsRepo if available (this is where POST /v1/posts stores problems)
 	if h.postsRepo != nil {
-		problem, err := h.postsRepo.FindByID(ctx, id)
+		// BART-151: family-scoped — a family caller sees its own private problem; others 404.
+		problem, err := h.postsRepo.FindByIDForViewer(ctx, id, "", "", callerHumanFromCtx(ctx))
 		if err == nil {
 			// Verify it's actually a problem
 			if problem.Type != models.PostTypeProblem {

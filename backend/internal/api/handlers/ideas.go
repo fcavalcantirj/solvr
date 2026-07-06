@@ -63,7 +63,8 @@ func (h *IdeasHandler) SetPostsRepository(postsRepo PostsRepositoryInterface) {
 func (h *IdeasHandler) findIdea(ctx context.Context, id string) (*models.PostWithAuthor, error) {
 	// First try postsRepo if available (this is where POST /v1/posts stores ideas)
 	if h.postsRepo != nil {
-		idea, err := h.postsRepo.FindByID(ctx, id)
+		// BART-151: family-scoped — a family caller sees its own private idea; others 404.
+		idea, err := h.postsRepo.FindByIDForViewer(ctx, id, "", "", callerHumanFromCtx(ctx))
 		if err == nil {
 			// Verify it's actually an idea
 			if idea.Type != models.PostTypeIdea {

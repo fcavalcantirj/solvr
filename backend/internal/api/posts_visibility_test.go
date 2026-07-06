@@ -113,7 +113,13 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 	st, _ := doJSON(t, "POST", ts.URL+"/v1/posts", unclaimedKey, body)
 	require.Equal(t, http.StatusBadRequest, st, "create: unclaimed agent family post -> 400")
 
-	_ = agentBID
+	// 10. Family usability — a sibling reads + answers its OWN private question via the
+	// /v1/questions/{id} alias route (OptionalAuth + ctx-scoped findQuestion); foreign 404s.
+	require.Equal(t, http.StatusOK, getStatus(t, ts.URL+"/v1/questions/"+privQID, agentBKey), "sibling reads own private question via /questions/{id}")
+	require.Equal(t, http.StatusNotFound, getStatus(t, ts.URL+"/v1/questions/"+privQID, agentCKey), "foreign 404 on private question via /questions/{id}")
+	stSib, _ := doJSON(t, "POST", ts.URL+"/v1/questions/"+privQID+"/answers", agentBKey, `{"content":"`+strings.Repeat("z", 60)+`"}`)
+	require.NotEqual(t, http.StatusNotFound, stSib, "sibling can participate on its own private question")
+
 	_ = agentCID
 	_ = pubQID
 }

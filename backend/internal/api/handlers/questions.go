@@ -86,7 +86,8 @@ func (h *QuestionsHandler) SetPostsRepository(postsRepo PostsRepositoryInterface
 func (h *QuestionsHandler) findQuestion(ctx context.Context, id string) (*models.PostWithAuthor, error) {
 	// First try postsRepo if available (this is where POST /v1/posts stores questions)
 	if h.postsRepo != nil {
-		question, err := h.postsRepo.FindByID(ctx, id)
+		// BART-151: family-scoped — a family caller sees its own private question; others 404.
+		question, err := h.postsRepo.FindByIDForViewer(ctx, id, "", "", callerHumanFromCtx(ctx))
 		if err == nil {
 			// Verify it's actually a question
 			if question.Type != models.PostTypeQuestion {

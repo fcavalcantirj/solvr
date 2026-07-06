@@ -454,8 +454,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	} else {
 		// Fallback for testing when pool is nil
 		oauthHandlers = handlers.NewOAuthHandlers(oauthConfig, pool, nil)
-		authMethodRepo = nil    // Will be nil for testing
-		authReferralRepo = nil  // Will be nil for testing
+		authMethodRepo = nil   // Will be nil for testing
+		authReferralRepo = nil // Will be nil for testing
 	}
 
 	// Create API key validator for agent authentication
@@ -692,35 +692,42 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		})
 		r.Post("/blog/{slug}/view", blogHandler.RecordView)
 
-		// Problems endpoints (API-CRITICAL per PRD-v2)
-		// GET /v1/problems - list problems (no auth required)
-		r.Get("/problems", problemsHandler.List)
-		// GET /v1/problems/:id - single problem (no auth required)
-		r.Get("/problems/{id}", problemsHandler.Get)
-		// GET /v1/problems/:id/approaches - list approaches (no auth required)
-		r.Get("/problems/{id}/approaches", problemsHandler.ListApproaches)
-		// GET /v1/problems/:id/approaches/:approachId/history - version chain (no auth required)
-		r.Get("/problems/{id}/approaches/{approachId}/history", problemsHandler.GetApproachHistory)
-		// GET /v1/problems/:id/export - export problem as markdown (no auth required)
-		r.Get("/problems/{id}/export", problemsHandler.Export)
+		// BART-151: wrap the problems/questions/ideas GETs in OptionalAuth so a family
+		// caller's identity reaches findProblem/findQuestion/findIdea and it sees its OWN
+		// private posts here too (anonymous callers still see public-only). Never 401s.
+		r.Group(func(r chi.Router) {
+			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
 
-		// Questions endpoints (API-CRITICAL per PRD-v2)
-		// GET /v1/questions - list questions (no auth required)
-		r.Get("/questions", questionsHandler.List)
-		// GET /v1/questions/:id - single question (no auth required)
-		r.Get("/questions/{id}", questionsHandler.Get)
-		// GET /v1/questions/:id/answers - list answers (no auth required)
-		// Per FIX-022: Allow viewing answers before answering
-		r.Get("/questions/{id}/answers", questionsHandler.ListAnswers)
+			// Problems endpoints (API-CRITICAL per PRD-v2)
+			// GET /v1/problems - list problems (no auth required)
+			r.Get("/problems", problemsHandler.List)
+			// GET /v1/problems/:id - single problem (no auth required)
+			r.Get("/problems/{id}", problemsHandler.Get)
+			// GET /v1/problems/:id/approaches - list approaches (no auth required)
+			r.Get("/problems/{id}/approaches", problemsHandler.ListApproaches)
+			// GET /v1/problems/:id/approaches/:approachId/history - version chain (no auth required)
+			r.Get("/problems/{id}/approaches/{approachId}/history", problemsHandler.GetApproachHistory)
+			// GET /v1/problems/:id/export - export problem as markdown (no auth required)
+			r.Get("/problems/{id}/export", problemsHandler.Export)
 
-		// Ideas endpoints (API-CRITICAL per PRD-v2)
-		// GET /v1/ideas - list ideas (no auth required)
-		r.Get("/ideas", ideasHandler.List)
-		// GET /v1/ideas/:id - single idea (no auth required)
-		r.Get("/ideas/{id}", ideasHandler.Get)
-		// GET /v1/ideas/:id/responses - list responses (no auth required)
-		// Per FIX-024: Allow viewing responses before responding
-		r.Get("/ideas/{id}/responses", ideasHandler.ListResponses)
+			// Questions endpoints (API-CRITICAL per PRD-v2)
+			// GET /v1/questions - list questions (no auth required)
+			r.Get("/questions", questionsHandler.List)
+			// GET /v1/questions/:id - single question (no auth required)
+			r.Get("/questions/{id}", questionsHandler.Get)
+			// GET /v1/questions/:id/answers - list answers (no auth required)
+			// Per FIX-022: Allow viewing answers before answering
+			r.Get("/questions/{id}/answers", questionsHandler.ListAnswers)
+
+			// Ideas endpoints (API-CRITICAL per PRD-v2)
+			// GET /v1/ideas - list ideas (no auth required)
+			r.Get("/ideas", ideasHandler.List)
+			// GET /v1/ideas/:id - single idea (no auth required)
+			r.Get("/ideas/{id}", ideasHandler.Get)
+			// GET /v1/ideas/:id/responses - list responses (no auth required)
+			// Per FIX-024: Allow viewing responses before responding
+			r.Get("/ideas/{id}/responses", ideasHandler.ListResponses)
+		}) // end BART-151 OptionalAuth group for problems/questions/ideas GETs
 
 		// Comments endpoints (API-CRITICAL per PRD-v2)
 		// GET /v1/{target_type}/{id}/comments - list comments (no auth required)
@@ -796,8 +803,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 				VictoriesRepo:           db.NewPlatformBriefingRepository(pool),
 				RecommendationsRepo:     db.NewRecommendationRepository(pool),
 				InferredSpecialtiesRepo: db.NewInferredSpecialtiesRepository(pool),
-				CrystallizationsRepo:   briefingRepo,
-			CheckpointFinder:       pinsRepoConcrete,
+				CrystallizationsRepo:    briefingRepo,
+				CheckpointFinder:        pinsRepoConcrete,
 			})
 			meHandler.SetBriefingService(briefingSvc)
 			meHandler.SetAgentFinderRepo(agentRepoConcrete)
@@ -1047,7 +1054,6 @@ func wrapCommentsCreateWithType(h *handlers.CommentsHandler, targetType string) 
 		h.Create(w, r)
 	}
 }
-
 
 // ipfsHealthAdapter wraps KuboIPFSService to satisfy handlers.IPFSHealthChecker.
 type ipfsHealthAdapter struct {

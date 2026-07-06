@@ -102,6 +102,7 @@ func (r *PlatformBriefingRepository) GetRecentVictories(ctx context.Context, lim
 			LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
 			WHERE p.type = 'problem'
 				AND p.status = 'solved'
+				AND p.visibility = 'public' -- BART-151
 				AND p.updated_at > NOW() - INTERVAL '14 days'
 				AND p.deleted_at IS NULL
 			ORDER BY p.id, a.created_at ASC
@@ -170,6 +171,7 @@ func (r *PlatformBriefingRepository) GetTrendingNow(ctx context.Context, exclude
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
 		WHERE p.deleted_at IS NULL
+		  AND p.visibility = 'public' -- BART-151
 		  AND p.status NOT IN ('draft', 'closed')
 		  AND p.posted_by_id != $1
 		ORDER BY engagement_velocity DESC, p.created_at DESC
@@ -230,6 +232,7 @@ func (r *PlatformBriefingRepository) GetRisingIdeas(ctx context.Context, limit i
 		FROM posts p
 		LEFT JOIN responses r ON r.idea_id = p.id
 		WHERE p.type = 'idea'
+		  AND p.visibility = 'public' -- BART-151
 		  AND p.status NOT IN ('dormant', 'closed')
 		  AND p.deleted_at IS NULL
 		GROUP BY p.id, p.title, p.upvotes, p.evolved_into, p.created_at, p.tags
@@ -291,6 +294,7 @@ func (r *PlatformBriefingRepository) GetHardcoreUnsolved(ctx context.Context, li
 			FROM posts p
 			LEFT JOIN approaches a ON a.problem_id = p.id AND a.deleted_at IS NULL
 			WHERE p.type = 'problem'
+			  AND p.visibility = 'public' -- BART-151
 			  AND p.status NOT IN ('solved', 'closed')
 			  AND p.deleted_at IS NULL
 			GROUP BY p.id, p.title, p.weight, p.tags, p.upvotes, p.downvotes, p.created_at

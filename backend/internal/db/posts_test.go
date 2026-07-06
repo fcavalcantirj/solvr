@@ -3690,7 +3690,7 @@ func TestPostRepository_FindByID_WithViewerVote(t *testing.T) {
 	}
 
 	// FindByID with viewer info — should show user_vote = "down"
-	found, err := repo.FindByIDForViewer(ctx, createdPost.ID, models.AuthorTypeHuman, "findbyid_voter_human")
+	found, err := repo.FindByIDForViewer(ctx, createdPost.ID, models.AuthorTypeHuman, "findbyid_voter_human", "")
 	if err != nil {
 		t.Fatalf("FindByIDForViewer() error = %v", err)
 	}
@@ -3711,7 +3711,7 @@ func TestPostRepository_FindByID_WithViewerVote(t *testing.T) {
 	}
 
 	// FindByID with non-voter — should have nil UserVote
-	foundOther, err := repo.FindByIDForViewer(ctx, createdPost.ID, models.AuthorTypeAgent, "some_other_agent")
+	foundOther, err := repo.FindByIDForViewer(ctx, createdPost.ID, models.AuthorTypeAgent, "some_other_agent", "")
 	if err != nil {
 		t.Fatalf("FindByIDForViewer() other error = %v", err)
 	}

@@ -54,7 +54,7 @@ func (m *MockPostsRepository) FindByID(ctx context.Context, id string) (*models.
 	return m.post, nil
 }
 
-func (m *MockPostsRepository) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error) {
+func (m *MockPostsRepository) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string, callerHuman string) (*models.PostWithAuthor, error) {
 	return m.FindByID(ctx, id)
 }
 
@@ -882,7 +882,7 @@ func (m *MockPostsRepoWithViewerTracking) FindByID(ctx context.Context, id strin
 	return m.post, nil
 }
 
-func (m *MockPostsRepoWithViewerTracking) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error) {
+func (m *MockPostsRepoWithViewerTracking) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string, callerHuman string) (*models.PostWithAuthor, error) {
 	m.findByIDForViewerCalled = true
 	m.calledViewerType = viewerType
 	m.calledViewerID = viewerID

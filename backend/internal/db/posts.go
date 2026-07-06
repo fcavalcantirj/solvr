@@ -82,6 +82,10 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		conditions = append(conditions, "p.status NOT IN ('pending_review', 'rejected', 'draft')")
 	}
 
+	// BART-151: family-scoped visibility — public posts, plus the caller's own family
+	// (ViewerHuman == "" for anonymous/cross-family → public-only).
+	appendVisibilityFilter(&conditions, &args, &argNum, "p", opts.ViewerHuman)
+
 	// Filter by type
 	if opts.Type != "" {
 		conditions = append(conditions, fmt.Sprintf("p.type = $%d", argNum))
@@ -421,9 +425,10 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 			success_criteria, weight,
 			accepted_answer_id, evolved_into,
 			embedding,
+			visibility, owner_human_id,
 			created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::vector, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::vector, $15, $16, NOW(), NOW())
 		RETURNING id, type, title, description, tags,
 			posted_by_type, posted_by_id, status,
 			upvotes, downvotes, view_count, success_criteria, weight,
@@ -453,6 +458,8 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 		post.AcceptedAnswerID,
 		post.EvolvedInto,
 		post.EmbeddingStr,
+		visibilityOrDefault(post.Visibility),
+		post.OwnerHumanID,
 	)
 
 	return r.scanPost(row)
@@ -462,17 +469,19 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 // Returns ErrPostNotFound if the post doesn't exist or is soft-deleted.
 // UserVote is always nil (no viewer context). Use FindByIDForViewer for authenticated lookups.
 func (r *PostRepository) FindByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {
-	return r.findByIDInternal(ctx, id, "", "")
+	return r.findByIDInternal(ctx, id, "", "", "")
 }
 
 // FindByIDForViewer returns a single post by ID with the viewer's vote included.
 // If viewerType/viewerID are empty, behaves identically to FindByID.
-func (r *PostRepository) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error) {
-	return r.findByIDInternal(ctx, id, viewerType, viewerID)
+func (r *PostRepository) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string, callerHuman string) (*models.PostWithAuthor, error) {
+	return r.findByIDInternal(ctx, id, viewerType, viewerID, callerHuman)
 }
 
 // findByIDInternal is the shared implementation for FindByID and FindByIDForViewer.
-func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error) {
+// callerHuman is the caller's family human UUID for visibility scoping ("" = public-only);
+// a family post the caller may not see yields no row → ErrPostNotFound (404, existence hidden).
+func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewerType models.AuthorType, viewerID string, callerHuman string) (*models.PostWithAuthor, error) {
 	var viewerVoteColumn, viewerVoteJoin string
 	var args []any
 
@@ -484,6 +493,13 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 		viewerVoteColumn = "NULL::text as user_vote_direction"
 		viewerVoteJoin = ""
 		args = []any{id}
+	}
+
+	// BART-151: family-scoped visibility gate.
+	visClause := "p.visibility = 'public'"
+	if callerHuman != "" {
+		args = append(args, callerHuman)
+		visClause = fmt.Sprintf("(p.visibility = 'public' OR (p.owner_human_id IS NOT NULL AND p.owner_human_id = $%d::uuid))", len(args))
 	}
 
 	query := fmt.Sprintf(`
@@ -524,8 +540,8 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 			GROUP BY target_id
 		) cmt_cnt ON cmt_cnt.target_id = p.id
 		%s
-		WHERE p.id = $1 AND p.deleted_at IS NULL
-	`, viewerVoteColumn, viewerVoteJoin)
+		WHERE p.id = $1 AND p.deleted_at IS NULL AND %s
+	`, viewerVoteColumn, viewerVoteJoin, visClause)
 
 	row := r.pool.QueryRow(ctx, query, args...)
 
@@ -839,6 +855,7 @@ func (r *PostRepository) ListCrystallizationCandidates(ctx context.Context, stab
 		WHERE type = 'problem'
 		  AND status = 'solved'
 		  AND deleted_at IS NULL
+		  AND visibility = 'public' -- BART-151: never pin family-private posts to public IPFS
 		  AND crystallization_cid IS NULL
 		  AND updated_at < NOW() - $1::interval
 		  AND EXISTS (

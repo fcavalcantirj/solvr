@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
+	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -72,7 +73,8 @@ type PostsRepositoryInterface interface {
 	FindByID(ctx context.Context, id string) (*models.PostWithAuthor, error)
 
 	// FindByIDForViewer returns a single post by ID with the viewer's vote direction.
-	FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error)
+	// callerHuman is the caller's family human UUID for visibility scoping ("" = public-only).
+	FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string, callerHuman string) (*models.PostWithAuthor, error)
 
 	// Create creates a new post and returns it.
 	Create(ctx context.Context, post *models.Post) (*models.Post, error)
@@ -261,6 +263,7 @@ type CreatePostRequest struct {
 	Tags            []string `json:"tags,omitempty"`
 	SuccessCriteria []string `json:"success_criteria,omitempty"` // For problems
 	Weight          *int     `json:"weight,omitempty"`           // For problems
+	Visibility      string   `json:"visibility,omitempty"`       // "public" (default) or "family" (BART-151)
 }
 
 // UpdatePostRequest is the request body for updating a post.
@@ -365,6 +368,8 @@ func (h *PostsHandler) List(w http.ResponseWriter, r *http.Request) {
 		opts.ViewerType = authInfo.AuthorType
 		opts.ViewerID = authInfo.AuthorID
 	}
+	// BART-151: caller's family human for visibility scoping ("" = public-only).
+	opts.ViewerHuman = callerHumanID(r)
 
 	// Execute query
 	posts, total, err := h.repo.List(r.Context(), opts)
@@ -407,7 +412,7 @@ func (h *PostsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var err error
 	authInfo := GetAuthInfo(r)
 	if authInfo != nil {
-		post, err = h.repo.FindByIDForViewer(r.Context(), postID, authInfo.AuthorType, authInfo.AuthorID)
+		post, err = h.repo.FindByIDForViewer(r.Context(), postID, authInfo.AuthorType, authInfo.AuthorID, callerHumanID(r))
 	} else {
 		post, err = h.repo.FindByID(r.Context(), postID)
 	}
@@ -522,6 +527,32 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Visibility (BART-151): default "public". A "family" post is owned by the author's
+	// human and visible only to that family (the human + agents sharing its human_id).
+	visibility := models.VisibilityPublic
+	switch req.Visibility {
+	case "", models.VisibilityPublic:
+		// public
+	case models.VisibilityFamily:
+		visibility = models.VisibilityFamily
+	default:
+		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "visibility must be 'public' or 'family'")
+		return
+	}
+	// Derive the owning human for family scoping: claimed agent → its human_id; human → user id.
+	var ownerHumanID *string
+	if agent := auth.AgentFromContext(r.Context()); agent != nil {
+		ownerHumanID = agent.HumanID // nil for an unclaimed agent
+	} else if authInfo.AuthorType == models.AuthorTypeHuman {
+		id := authInfo.AuthorID
+		ownerHumanID = &id
+	}
+	if visibility == models.VisibilityFamily && ownerHumanID == nil {
+		writePostsError(w, http.StatusBadRequest, "UNCLAIMED_AGENT",
+			"claim your agent to a human before creating family-private posts")
+		return
+	}
+
 	// Create post with author info from authentication
 	post := &models.Post{
 		Type:            postType,
@@ -533,6 +564,8 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Status:          models.PostStatusPendingReview,
 		SuccessCriteria: req.SuccessCriteria,
 		Weight:          req.Weight,
+		Visibility:      visibility,
+		OwnerHumanID:    ownerHumanID,
 	}
 
 	// Synchronous embedding adds ~50-100ms latency but ensures post is immediately searchable

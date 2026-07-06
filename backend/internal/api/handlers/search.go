@@ -148,6 +148,9 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		opts.PerPage = 50 // Cap at 50 per SPEC.md
 	}
 
+	// BART-151: caller's family human for visibility scoping ("" = public-only).
+	opts.ViewerHuman = callerHumanID(r)
+
 	// Execute search
 	results, total, method, err := h.repo.Search(r.Context(), query, opts)
 	if err != nil {

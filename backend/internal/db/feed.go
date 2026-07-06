@@ -89,6 +89,7 @@ func (r *FeedRepository) GetRecentActivity(ctx context.Context, page, perPage in
 			GROUP BY target_id
 		) cmt_cnt ON cmt_cnt.target_id = p.id
 		WHERE p.deleted_at IS NULL
+		AND p.visibility = 'public' -- BART-151: no private posts in the public feed
 		ORDER BY p.created_at DESC
 		LIMIT $1 OFFSET $2
 	`
@@ -140,6 +141,7 @@ func (r *FeedRepository) GetStuckProblems(ctx context.Context, page, perPage int
 		FROM posts p
 		WHERE p.type = 'problem'
 		AND p.deleted_at IS NULL
+		AND p.visibility = 'public' -- BART-151
 		AND (
 			p.status = 'in_progress'
 			OR EXISTS (
@@ -174,6 +176,7 @@ func (r *FeedRepository) GetStuckProblems(ctx context.Context, page, perPage int
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
 		WHERE p.type = 'problem'
 		AND p.deleted_at IS NULL
+		AND p.visibility = 'public' -- BART-151
 		AND (
 			p.status = 'in_progress'
 			OR EXISTS (
@@ -233,6 +236,7 @@ func (r *FeedRepository) GetUnansweredQuestions(ctx context.Context, page, perPa
 		FROM posts p
 		WHERE p.type = 'question'
 		AND p.deleted_at IS NULL
+		AND p.visibility = 'public' -- BART-151
 		AND NOT EXISTS (
 			SELECT 1 FROM answers a
 			WHERE a.question_id = p.id
@@ -263,6 +267,7 @@ func (r *FeedRepository) GetUnansweredQuestions(ctx context.Context, page, perPa
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
 		WHERE p.type = 'question'
 		AND p.deleted_at IS NULL
+		AND p.visibility = 'public' -- BART-151
 		AND NOT EXISTS (
 			SELECT 1 FROM answers ans
 			WHERE ans.question_id = p.id

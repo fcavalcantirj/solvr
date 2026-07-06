@@ -69,6 +69,7 @@ type SearchOptions struct {
 	Page         int       // Page number (1-indexed)
 	PerPage      int       // Results per page
 	ContentTypes []string  // Filter by content source: "posts", "answers", "approaches" (default: all)
+	ViewerHuman  string    // Caller's family human UUID for visibility scoping ("" = public-only)
 }
 
 // ToResponse converts a SearchResult to a SearchResultResponse.

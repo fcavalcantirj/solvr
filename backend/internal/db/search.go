@@ -183,6 +183,15 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 	args := []any{tsquery}
 	argNum := 2
 
+	// BART-151: family-scoped visibility (public, or the caller's own family).
+	if opts.ViewerHuman != "" {
+		baseQuery += fmt.Sprintf(" AND (p.visibility = 'public' OR (p.owner_human_id IS NOT NULL AND p.owner_human_id = $%d::uuid))", argNum)
+		args = append(args, opts.ViewerHuman)
+		argNum++
+	} else {
+		baseQuery += " AND p.visibility = 'public'"
+	}
+
 	filters, args, _ := buildSearchFilters(opts, args, argNum)
 	if filters != "" {
 		baseQuery += " " + filters
@@ -261,15 +270,17 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 			COALESCE(p.view_count, 0) as view_count,
 			p.created_at,
 			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at
-		FROM hybrid_search($1, $2, $3, 2.0, 1.0, 60) hs
+		FROM hybrid_search($1, $2, $3, 2.0, 1.0, 60, $5::uuid) hs
 		JOIN posts p ON p.id = hs.post_id
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
 		WHERE p.status NOT IN ('pending_review', 'rejected', 'draft')
 	`
 
-	args := []any{tsquery, queryVec, matchCount, tsquery}
-	argNum := 5
+	// BART-151: hybrid_search filters visibility inside both CTEs via viewer_human ($5,
+	// NULL for anonymous/cross-family → public-only), so joined post_ids are family-scoped.
+	args := []any{tsquery, queryVec, matchCount, tsquery, nullableViewer(opts.ViewerHuman)}
+	argNum := 6
 
 	// Apply filters (reuse the same filter builder, but need to adjust field references)
 	filters, args, _ := buildSearchFilters(opts, args, argNum)
@@ -337,6 +348,7 @@ func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string) ([
 		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
 		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
 		WHERE a.deleted_at IS NULL
+		AND p.visibility = 'public'
 		AND to_tsvector('english', a.content) @@ to_tsquery('english', $1)
 		ORDER BY score DESC
 	`
@@ -405,6 +417,7 @@ func (r *SearchRepository) searchApproaches(ctx context.Context, tsquery string)
 		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
 		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
 		WHERE a.deleted_at IS NULL
+		AND p.visibility = 'public'
 		AND to_tsvector('english',
 			COALESCE(a.angle, '') || ' ' || COALESCE(a.method, '') || ' ' ||
 			COALESCE(a.outcome, '') || ' ' || COALESCE(a.solution, ''))

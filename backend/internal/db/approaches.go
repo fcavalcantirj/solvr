@@ -230,6 +230,7 @@ func (r *ApproachesRepository) ListApproaches(ctx context.Context, problemID str
 		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
 		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
 		WHERE a.problem_id = $1 AND a.deleted_at IS NULL
+		AND EXISTS (SELECT 1 FROM posts WHERE id = a.problem_id AND visibility = 'public') -- BART-151: approaches inherit the problem's visibility
 		ORDER BY a.created_at DESC
 		LIMIT $2 OFFSET $3
 	`, problemID, perPage, offset)
@@ -405,7 +406,7 @@ func (r *ApproachesRepository) ListByAuthor(ctx context.Context, authorType, aut
 			COALESCE(
 				CASE WHEN a.author_type = 'human' THEN u.avatar_url ELSE '' END, ''
 			) as avatar_url,
-			COALESCE(p.title, '') as problem_title
+			CASE WHEN p.visibility = 'public' THEN COALESCE(p.title, '') ELSE '' END as problem_title
 		FROM approaches a
 		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
 		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text

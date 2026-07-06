@@ -24,6 +24,7 @@ func (r *ResurrectionRepository) GetAgentIdeas(ctx context.Context, agentID stri
 		WHERE type = 'idea'
 		  AND posted_by_type = 'agent'
 		  AND posted_by_id = $1
+		  AND visibility = 'public' -- BART-151: public resurrection bundle
 		  AND deleted_at IS NULL
 		ORDER BY (upvotes - downvotes) DESC, created_at DESC
 		LIMIT $2`
@@ -94,6 +95,7 @@ func (r *ResurrectionRepository) GetAgentOpenProblems(ctx context.Context, agent
 		WHERE type = 'problem'
 		  AND posted_by_type = 'agent'
 		  AND posted_by_id = $1
+		  AND visibility = 'public' -- BART-151: public resurrection bundle
 		  AND status IN ('draft', 'open', 'in_progress')
 		  AND deleted_at IS NULL
 		ORDER BY created_at DESC`

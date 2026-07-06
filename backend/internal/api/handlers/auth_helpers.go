@@ -28,3 +28,20 @@ func GetAuthInfo(r *http.Request) *AuthInfo {
 	}
 	return nil
 }
+
+// callerHumanID returns the caller's family human UUID for BART-151 visibility scoping:
+// a claimed agent's human_id, or a human user's id. Returns "" for anonymous callers,
+// unclaimed agents, and the auth-less MCP path — all of which map to public-only.
+// Note: this is NOT GetAuthInfo().AuthorID for agents (that returns the agent id, not the human).
+func callerHumanID(r *http.Request) string {
+	if agent := auth.AgentFromContext(r.Context()); agent != nil {
+		if agent.HumanID != nil {
+			return *agent.HumanID
+		}
+		return ""
+	}
+	if claims := auth.ClaimsFromContext(r.Context()); claims != nil {
+		return claims.UserID
+	}
+	return ""
+}

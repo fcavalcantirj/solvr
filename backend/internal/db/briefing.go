@@ -298,6 +298,7 @@ func (r *BriefingRepository) GetOpportunitiesForAgent(ctx context.Context, agent
 			AND p.posted_by_id != $1
 			AND p.tags && $2::text[]
 			AND p.deleted_at IS NULL
+			AND p.visibility = 'public' -- BART-151: opportunities are cross-family; never surface private posts
 		GROUP BY p.id, p.title, p.tags, p.posted_by_id, p.created_at
 		ORDER BY approach_count ASC, p.created_at DESC
 		LIMIT $3

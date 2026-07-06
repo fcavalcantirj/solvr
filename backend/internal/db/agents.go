@@ -571,6 +571,7 @@ func (r *AgentRepository) GetActivity(ctx context.Context, agentID string, page,
 				'' as target_title
 			FROM posts p
 			WHERE p.posted_by_type = 'agent' AND p.posted_by_id = $1 AND p.deleted_at IS NULL
+			  AND p.visibility = 'public' -- BART-151: public activity feed
 
 			UNION ALL
 
@@ -584,7 +585,7 @@ func (r *AgentRepository) GetActivity(ctx context.Context, agentID string, page,
 				CASE WHEN a.is_accepted THEN 'accepted' ELSE 'pending' END as status,
 				a.created_at,
 				p.id::text as target_id,
-				p.title as target_title
+				CASE WHEN p.visibility = 'public' THEN p.title ELSE '' END as target_title
 			FROM answers a
 			JOIN posts p ON a.question_id = p.id
 			WHERE a.author_type = 'agent' AND a.author_id = $1 AND a.deleted_at IS NULL
@@ -601,7 +602,7 @@ func (r *AgentRepository) GetActivity(ctx context.Context, agentID string, page,
 				ap.status,
 				ap.created_at,
 				p.id::text as target_id,
-				p.title as target_title
+				CASE WHEN p.visibility = 'public' THEN p.title ELSE '' END as target_title
 			FROM approaches ap
 			JOIN posts p ON ap.problem_id = p.id
 			WHERE ap.author_type = 'agent' AND ap.author_id = $1 AND ap.deleted_at IS NULL
@@ -618,7 +619,7 @@ func (r *AgentRepository) GetActivity(ctx context.Context, agentID string, page,
 				'' as status,
 				r.created_at,
 				p.id::text as target_id,
-				p.title as target_title
+				CASE WHEN p.visibility = 'public' THEN p.title ELSE '' END as target_title
 			FROM responses r
 			JOIN posts p ON r.idea_id = p.id
 			WHERE r.author_type = 'agent' AND r.author_id = $1

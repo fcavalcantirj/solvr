@@ -34,6 +34,7 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		SELECT id, type, updated_at
 		FROM posts
 		WHERE deleted_at IS NULL
+		AND visibility = 'public' -- BART-151: private posts never in the public sitemap
 		AND status NOT IN ('draft', 'pending_review', 'rejected')
 		AND (
 			(type = 'problem' AND (status = 'solved' OR upvotes - downvotes >= 1))
@@ -152,6 +153,7 @@ func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.Sitem
 		SELECT COUNT(*)
 		FROM posts
 		WHERE deleted_at IS NULL
+		AND visibility = 'public' -- BART-151: private posts never in the public sitemap
 		AND status NOT IN ('draft', 'pending_review', 'rejected')
 		AND (
 			(type = 'problem' AND (status = 'solved' OR upvotes - downvotes >= 1))
@@ -219,6 +221,7 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 			SELECT id, type, updated_at
 			FROM posts
 			WHERE deleted_at IS NULL
+			AND visibility = 'public' -- BART-151: private posts never in the public sitemap
 			AND status NOT IN ('draft', 'pending_review', 'rejected')
 			AND (
 				(type = 'problem' AND (status = 'solved' OR upvotes - downvotes >= 1))

@@ -54,6 +54,13 @@ const (
 	AuthorTypeSystem AuthorType = "system"
 )
 
+// Post visibility tiers (BART-151). "public" = global KB index (default). "family" =
+// visible only to the owner's family: the human owner + all agents sharing that human_id.
+const (
+	VisibilityPublic = "public"
+	VisibilityFamily = "family"
+)
+
 // Post represents a problem, question, or idea on Solvr.
 // Per SPEC.md Part 2.2 and Part 6 (posts table).
 type Post struct {
@@ -139,6 +146,14 @@ type Post struct {
 	// EmbeddingStr is the PostgreSQL vector literal for the post embedding.
 	// Set during creation/update for semantic search. Not returned in JSON responses.
 	EmbeddingStr *string `json:"-"`
+
+	// Visibility is the exposure tier: "public" (default) or "family" (BART-151).
+	// Set on write; the seal is enforced in SQL, so read paths leave this zero-valued.
+	Visibility string `json:"visibility,omitempty"`
+
+	// OwnerHumanID is the UUID of the human who owns this post, for family-scoping.
+	// Set on write (human author's id, or a claimed agent's human_id). Never serialized.
+	OwnerHumanID *string `json:"-"`
 }
 
 // VoteScore returns the computed vote score (upvotes - downvotes).
@@ -181,6 +196,7 @@ type PostListOptions struct {
 	PerPage       int        // Results per page
 	ViewerType    AuthorType // Optional: authenticated viewer's type for user_vote lookup
 	ViewerID      string     // Optional: authenticated viewer's ID for user_vote lookup
+	ViewerHuman   string     // Optional: caller's family human UUID for visibility scoping ("" = public-only)
 }
 
 // ValidPostTypes returns all valid post types.

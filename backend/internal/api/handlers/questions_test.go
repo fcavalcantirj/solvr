@@ -802,7 +802,7 @@ func (m *MockPostsRepositoryForQuestions) FindByID(ctx context.Context, id strin
 	return nil, ErrQuestionNotFound // Return not found error
 }
 
-func (m *MockPostsRepositoryForQuestions) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error) {
+func (m *MockPostsRepositoryForQuestions) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string, callerHuman string) (*models.PostWithAuthor, error) {
 	return m.FindByID(ctx, id)
 }
 

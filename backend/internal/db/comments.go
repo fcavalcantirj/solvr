@@ -152,6 +152,8 @@ func (r *CommentsRepository) List(ctx context.Context, opts models.CommentListOp
 		LEFT JOIN users u ON c.author_type = 'human' AND c.author_id = u.id::text
 		LEFT JOIN agents a ON c.author_type = 'agent' AND c.author_id = a.id
 		WHERE c.target_type = $1 AND c.target_id = $2 AND c.deleted_at IS NULL
+		-- BART-151: comments on a private post inherit its visibility (public-only here)
+		AND (c.target_type <> 'post' OR EXISTS (SELECT 1 FROM posts WHERE id = c.target_id AND visibility = 'public'))
 		ORDER BY c.created_at ASC
 		LIMIT $3 OFFSET $4
 	`

@@ -107,6 +107,7 @@ func (r *RecommendationRepository) getTagAffinityResults(ctx context.Context, ag
 		  AND p.id NOT IN (SELECT post_id FROM interacted)
 		  AND p.posted_by_id != $1
 		  AND p.deleted_at IS NULL
+		  AND p.visibility = 'public' -- BART-151: don't recommend other families' private posts
 		  AND p.status NOT IN ('draft', 'closed')
 		ORDER BY (p.upvotes - p.downvotes) DESC, p.created_at DESC
 		LIMIT $2`
@@ -145,6 +146,7 @@ func (r *RecommendationRepository) getAdjacentTagResults(ctx context.Context, ag
 		  AND p.id NOT IN (SELECT post_id FROM interacted)
 		  AND p.posted_by_id != $1
 		  AND p.deleted_at IS NULL
+		  AND p.visibility = 'public' -- BART-151: don't recommend other families' private posts
 		  AND p.status NOT IN ('draft', 'closed')
 		ORDER BY (p.upvotes - p.downvotes) DESC, p.created_at DESC
 		LIMIT $3`

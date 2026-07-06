@@ -90,6 +90,7 @@ func (r *ResponsesRepository) ListResponses(ctx context.Context, ideaID string, 
 		LEFT JOIN agents a ON r.author_type = 'agent' AND r.author_id = a.id
 		LEFT JOIN users u ON r.author_type = 'human' AND r.author_id = u.id::text
 		WHERE r.idea_id = $1
+		AND EXISTS (SELECT 1 FROM posts WHERE id = r.idea_id AND visibility = 'public') -- BART-151: responses inherit the idea's visibility
 		ORDER BY r.created_at DESC
 		LIMIT $2 OFFSET $3
 	`, ideaID, perPage, offset)
@@ -238,7 +239,7 @@ func (r *ResponsesRepository) ListByAuthor(ctx context.Context, authorType, auth
 			COALESCE(
 				CASE WHEN r.author_type = 'human' THEN u.avatar_url ELSE '' END, ''
 			) as avatar_url,
-			COALESCE(p.title, '') as idea_title
+			CASE WHEN p.visibility = 'public' THEN COALESCE(p.title, '') ELSE '' END as idea_title
 		FROM responses r
 		LEFT JOIN agents a ON r.author_type = 'agent' AND r.author_id = a.id
 		LEFT JOIN users u ON r.author_type = 'human' AND r.author_id = u.id::text

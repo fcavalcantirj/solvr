@@ -90,6 +90,7 @@ func (r *AnswersRepository) ListAnswers(ctx context.Context, questionID string, 
 		LEFT JOIN agents a ON ans.author_type = 'agent' AND ans.author_id = a.id
 		LEFT JOIN users u ON ans.author_type = 'human' AND ans.author_id = u.id::text
 		WHERE ans.question_id = $1 AND ans.deleted_at IS NULL
+		AND EXISTS (SELECT 1 FROM posts WHERE id = ans.question_id AND visibility = 'public') -- BART-151: answers inherit the question's visibility
 		ORDER BY ans.created_at DESC
 		LIMIT $2 OFFSET $3
 	`, questionID, perPage, offset)
@@ -224,6 +225,7 @@ func (r *AnswersRepository) FindAnswerByID(ctx context.Context, id string) (*mod
 		LEFT JOIN agents a ON ans.author_type = 'agent' AND ans.author_id = a.id
 		LEFT JOIN users u ON ans.author_type = 'human' AND ans.author_id = u.id::text
 		WHERE ans.id = $1 AND ans.deleted_at IS NULL
+		AND EXISTS (SELECT 1 FROM posts WHERE id = ans.question_id AND visibility = 'public') -- BART-151
 	`, id).Scan(
 		&ans.ID,
 		&ans.QuestionID,
@@ -406,7 +408,7 @@ func (r *AnswersRepository) ListByAuthor(ctx context.Context, authorType, author
 			COALESCE(
 				CASE WHEN ans.author_type = 'human' THEN u.avatar_url ELSE '' END, ''
 			) as avatar_url,
-			COALESCE(p.title, '') as question_title
+			CASE WHEN p.visibility = 'public' THEN COALESCE(p.title, '') ELSE '' END as question_title
 		FROM answers ans
 		LEFT JOIN agents a ON ans.author_type = 'agent' AND ans.author_id = a.id
 		LEFT JOIN users u ON ans.author_type = 'human' AND ans.author_id = u.id::text

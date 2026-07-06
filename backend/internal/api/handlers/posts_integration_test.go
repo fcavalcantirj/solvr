@@ -660,7 +660,7 @@ func (m *MockPostsRepositoryForIntegration) FindByID(ctx context.Context, id str
 	return post, nil
 }
 
-func (m *MockPostsRepositoryForIntegration) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string) (*models.PostWithAuthor, error) {
+func (m *MockPostsRepositoryForIntegration) FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string, callerHuman string) (*models.PostWithAuthor, error) {
 	return m.FindByID(ctx, id)
 }
 

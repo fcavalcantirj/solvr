@@ -171,7 +171,7 @@ List posts with optional filters.
 
 ### GET /posts/:id
 
-Get a single post by ID.
+Get a single post by ID. The response echoes the `visibility` field (`public` or `family`) so you can confirm a post's tier. A `family` post 404s unless you're the owner's family (BART-151). The owner/family may also `PATCH`, `DELETE`, and vote on their own `family` post.
 
 **Query Parameters:**
 

@@ -626,7 +626,7 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get existing post
-	existingPost, err := h.repo.FindByID(r.Context(), postID)
+	existingPost, err := h.repo.FindByIDForViewer(r.Context(), postID, "", "", callerHumanID(r)) // BART-151: owner/family can find their own private post
 	if err != nil {
 		if errors.Is(err, db.ErrPostNotFound) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
@@ -786,7 +786,7 @@ func (h *PostsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get existing post
-	existingPost, err := h.repo.FindByID(r.Context(), postID)
+	existingPost, err := h.repo.FindByIDForViewer(r.Context(), postID, "", "", callerHumanID(r)) // BART-151: owner/family can find their own private post
 	if err != nil {
 		if errors.Is(err, db.ErrPostNotFound) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
@@ -855,7 +855,7 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get post to check it exists
-	post, err := h.repo.FindByID(r.Context(), postID)
+	post, err := h.repo.FindByIDForViewer(r.Context(), postID, "", "", callerHumanID(r)) // BART-151: family can vote on own private post
 	if err != nil {
 		if errors.Is(err, db.ErrPostNotFound) {
 			writePostsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
@@ -900,7 +900,7 @@ func (h *PostsHandler) Vote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Re-fetch post to get updated vote counts
-	updatedPost, fetchErr := h.repo.FindByID(r.Context(), postID)
+	updatedPost, fetchErr := h.repo.FindByIDForViewer(r.Context(), postID, "", "", callerHumanID(r))
 	if fetchErr != nil {
 		// Vote was recorded but re-fetch failed — return success with zeroed scores
 		writePostsJSON(w, http.StatusOK, map[string]interface{}{

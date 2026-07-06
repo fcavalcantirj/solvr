@@ -225,7 +225,8 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			COALESCE(app_cnt.cnt, 0) as approaches_count,
 			COALESCE(cmt_cnt.cnt, 0) as comments_count,
 			COALESCE(ag.human_id::text, '') as agent_human_id,
-			%s
+			%s,
+			p.visibility
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
@@ -321,6 +322,7 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 		&post.CommentsCount,
 		&post.AgentHumanID,
 		&post.UserVote,
+		&post.Visibility,
 	)
 	if err != nil {
 		return nil, err
@@ -365,6 +367,7 @@ func (r *PostRepository) scanPost(row pgx.Row) (*models.Post, error) {
 		&post.DeletedAt,
 		&post.CrystallizationCID,
 		&post.CrystallizedAt,
+		&post.Visibility,
 	)
 
 	if err != nil {
@@ -406,6 +409,7 @@ func (r *PostRepository) scanPostRows(rows pgx.Rows) (*models.Post, error) {
 		&post.DeletedAt,
 		&post.CrystallizationCID,
 		&post.CrystallizedAt,
+		&post.Visibility,
 	)
 	if err != nil {
 		return nil, err
@@ -434,7 +438,7 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 			upvotes, downvotes, view_count, success_criteria, weight,
 			accepted_answer_id, evolved_into,
 			created_at, updated_at, deleted_at,
-			crystallization_cid, crystallized_at
+			crystallization_cid, crystallized_at, visibility
 	`
 
 	// Default status to 'draft' if not provided
@@ -519,7 +523,8 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 			COALESCE(app_cnt.cnt, 0) as approaches_count,
 			COALESCE(cmt_cnt.cnt, 0) as comments_count,
 			COALESCE(ag.human_id::text, '') as agent_human_id,
-			%s
+			%s,
+			p.visibility
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
@@ -579,6 +584,7 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 		&post.CommentsCount,
 		&post.AgentHumanID,
 		&post.UserVote,
+		&post.Visibility,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -632,7 +638,7 @@ func (r *PostRepository) Update(ctx context.Context, post *models.Post) (*models
 			upvotes, downvotes, view_count, success_criteria, weight,
 			accepted_answer_id, evolved_into,
 			created_at, updated_at, deleted_at,
-			crystallization_cid, crystallized_at
+			crystallization_cid, crystallized_at, visibility
 	`
 
 	row := r.pool.QueryRow(ctx, query,

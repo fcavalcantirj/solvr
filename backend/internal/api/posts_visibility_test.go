@@ -23,7 +23,7 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 
 	// Family: userA owns; agent A (author) + agent B (sibling) both claimed to userA.
 	userA, _ := createRoomTestUser(t, pool)
-	agentAID, _ := registerRoomTestAgent(t, ts)
+	agentAID, agentAKey := registerRoomTestAgent(t, ts)
 	claimAgentToUser(t, pool, agentAID, userA)
 	agentBID, agentBKey := registerRoomTestAgent(t, ts)
 	claimAgentToUser(t, pool, agentBID, userA)
@@ -119,6 +119,18 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, getStatus(t, ts.URL+"/v1/questions/"+privQID, agentCKey), "foreign 404 on private question via /questions/{id}")
 	stSib, _ := doJSON(t, "POST", ts.URL+"/v1/questions/"+privQID+"/answers", agentBKey, `{"content":"`+strings.Repeat("z", 60)+`"}`)
 	require.NotEqual(t, http.StatusNotFound, stSib, "sibling can participate on its own private question")
+
+	// 11. Caveat #1 — GET echoes the visibility field (for the owner)
+	require.True(t, bodyContains("/v1/posts/"+privQID, agentAKey, `"visibility":"family"`),
+		"GET /posts/{id} echoes visibility=family for the owner")
+
+	// 12. Caveat #2 — owner/family can mutate their own private post; foreign 404, sibling (non-author) 403
+	stFor, _ := doJSON(t, "DELETE", ts.URL+"/v1/posts/"+privQID, agentCKey, "")
+	require.Equal(t, http.StatusNotFound, stFor, "foreign delete of private post -> 404")
+	stSibDel, _ := doJSON(t, "DELETE", ts.URL+"/v1/posts/"+privQID, agentBKey, "")
+	require.Equal(t, http.StatusForbidden, stSibDel, "sibling (family, non-author) delete -> 403 (found but not owner)")
+	stOwn, _ := doJSON(t, "DELETE", ts.URL+"/v1/posts/"+privQID, agentAKey, "")
+	require.Equal(t, http.StatusNoContent, stOwn, "owner deletes own private post -> 204")
 
 	_ = agentCID
 	_ = pubQID

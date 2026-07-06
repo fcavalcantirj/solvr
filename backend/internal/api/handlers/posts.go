@@ -553,6 +553,14 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// BART-154: family posts skip moderation — created open (instant read-your-write),
+	// never sent to the moderator. Public (and any non-family) posts start pending_review
+	// and go through async moderation below.
+	initialStatus := models.PostStatusPendingReview
+	if visibility == models.VisibilityFamily {
+		initialStatus = models.PostStatusOpen
+	}
+
 	// Create post with author info from authentication
 	post := &models.Post{
 		Type:            postType,
@@ -561,7 +569,7 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Tags:            req.Tags,
 		PostedByType:    authInfo.AuthorType,
 		PostedByID:      authInfo.AuthorID,
-		Status:          models.PostStatusPendingReview,
+		Status:          initialStatus,
 		SuccessCriteria: req.SuccessCriteria,
 		Weight:          req.Weight,
 		Visibility:      visibility,
@@ -599,8 +607,11 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Trigger async content moderation if service is configured
-	if h.contentModService != nil {
+	// Trigger async content moderation for everything EXCEPT family posts (BART-154).
+	// Family/private posts are visible only to their owner's family, so they skip the
+	// moderation gate entirely and are already 'open'. Fail-safe: any non-family visibility
+	// still gets moderated.
+	if h.contentModService != nil && visibility != models.VisibilityFamily {
 		go h.moderatePostAsync(createdPost.ID, post.Title, post.Description, post.Tags, string(post.Type), string(authInfo.AuthorType), authInfo.AuthorID)
 	}
 
@@ -724,6 +735,7 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Re-moderation: if content changed and status is open, rejected, or pending_review,
 	// set status to pending_review and trigger async moderation
 	needsReModeration := contentChanged && h.contentModService != nil &&
+		existingPost.Visibility != models.VisibilityFamily && // BART-154: family posts are never re-moderated
 		(existingPost.Status == models.PostStatusOpen ||
 			existingPost.Status == models.PostStatusRejected ||
 			existingPost.Status == models.PostStatusPendingReview)

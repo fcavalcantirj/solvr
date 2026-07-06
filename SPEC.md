@@ -1673,6 +1673,15 @@ Prevents rapid-fire low-quality content.
 
 ## 8.4 Content Moderation
 
+### Scope (BART-154):
+Automated LLM moderation applies to **public posts only**. A post created with
+`visibility: "family"` (private) skips moderation entirely — it is created `open` and is
+immediately searchable to its owner's family (instant read-your-write), and editing it never
+re-triggers moderation. Rationale: family posts are never publicly visible, so the
+public-index abuse surface moderation guards does not apply. Consequence: a non-English
+family post is **not** auto-translated (it skips the translation pipeline) — acceptable, since
+the family reads that language.
+
 ### Automated Flags:
 - Duplicate content
 - Spam patterns (excessive links, repetitive text)

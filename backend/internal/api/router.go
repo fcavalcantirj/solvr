@@ -20,6 +20,7 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/config"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/jobs"
@@ -311,6 +312,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	}
 	searchHandler := handlers.NewSearchHandler(searchRepo)
 
+	// BART-155: cosine-similarity bar for meta.confident_match + min_similarity default.
+	searchConfidenceThreshold := config.SearchConfidenceThreshold()
+	searchHandler.SetConfidenceThreshold(searchConfidenceThreshold)
+
 	// Wire search analytics repository
 	searchAnalyticsRepo := db.NewSearchAnalyticsRepository(pool)
 	searchHandler.SetAnalyticsRepo(searchAnalyticsRepo)
@@ -532,6 +537,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// MCP endpoint (MCP-005: HTTP transport for MCP)
 		// POST /v1/mcp - Model Context Protocol over HTTP (no auth required for tools/list)
 		mcpHandler := handlers.NewMCPHandler(searchRepo, postsRepo)
+		mcpHandler.SetConfidenceThreshold(searchConfidenceThreshold)
 		r.Post("/mcp", mcpHandler.Handle)
 
 		// Agents list endpoint (API-001)

@@ -12,6 +12,11 @@ const (
 	// Per security audit: HS256 requires at least 256 bits (32 bytes) for adequate security.
 	// This prevents brute-force attacks on the signing key.
 	MinJWTSecretLength = 32
+
+	// DefaultSearchConfidenceThreshold is the fallback cosine-similarity bar (0–1) for
+	// GET /search meta.confident_match and the min_similarity fallback. It is deliberately
+	// high (conservative) to bias the "answered?" decision toward ASK. See BART-155.
+	DefaultSearchConfidenceThreshold = 0.85
 )
 
 // Config holds all configuration values for the application.
@@ -26,9 +31,9 @@ type Config struct {
 	DatabaseURL string
 
 	// JWT
-	JWTSecret           string
-	JWTExpiry           string
-	RefreshTokenExpiry  string
+	JWTSecret          string
+	JWTExpiry          string
+	RefreshTokenExpiry string
 
 	// OAuth - GitHub
 	GitHubClientID     string
@@ -60,13 +65,16 @@ type Config struct {
 	LogLevel  string
 
 	// IPFS
-	IPFSAPIURL        string
+	IPFSAPIURL         string
 	MaxUploadSizeBytes int64
 
 	// Embeddings
 	EmbeddingProvider string // "voyage" or "ollama"
 	VoyageAPIKey      string
 	OllamaBaseURL     string
+
+	// Search
+	SearchConfidenceThreshold float64 // cosine bar for confident_match / min_similarity default (BART-155)
 }
 
 // Load reads configuration from environment variables.
@@ -143,7 +151,22 @@ func Load() (*Config, error) {
 	cfg.VoyageAPIKey = os.Getenv("VOYAGE_API_KEY")
 	cfg.OllamaBaseURL = getEnvOrDefault("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 
+	// Search (BART-155): cosine-similarity bar for the confident_match decision and the
+	// min_similarity fallback. Conservative default biases toward ASK.
+	cfg.SearchConfidenceThreshold = SearchConfidenceThreshold()
+
 	return cfg, nil
+}
+
+// SearchConfidenceThreshold reads SEARCH_CONFIDENCE_THRESHOLD (cosine 0–1) or returns the
+// conservative default. Exposed so the router can wire the search/MCP handlers without a
+// full Config. Out-of-range values fall back to the default. See BART-155.
+func SearchConfidenceThreshold() float64 {
+	v := getEnvOrDefaultFloat("SEARCH_CONFIDENCE_THRESHOLD", DefaultSearchConfidenceThreshold)
+	if v < 0 || v > 1 {
+		return DefaultSearchConfidenceThreshold
+	}
+	return v
 }
 
 // IsDevelopment returns true if running in development mode.
@@ -169,6 +192,16 @@ func getEnvOrDefaultInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intVal, err := strconv.Atoi(value); err == nil {
 			return intVal
+		}
+	}
+	return defaultValue
+}
+
+// getEnvOrDefaultFloat returns the environment variable as float64 or a default.
+func getEnvOrDefaultFloat(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		if f, err := strconv.ParseFloat(value, 64); err == nil {
+			return f
 		}
 	}
 	return defaultValue

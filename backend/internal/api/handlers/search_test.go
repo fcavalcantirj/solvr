@@ -16,6 +16,7 @@ type MockSearchRepository struct {
 	results     []models.SearchResult
 	total       int
 	method      string
+	topSim      *float64
 	searchErr   error
 	searchQuery string
 	searchOpts  models.SearchOptions
@@ -27,17 +28,17 @@ func NewMockSearchRepository() *MockSearchRepository {
 	}
 }
 
-func (m *MockSearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error) {
+func (m *MockSearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, *float64, error) {
 	m.searchQuery = query
 	m.searchOpts = opts
 	if m.searchErr != nil {
-		return nil, 0, "", m.searchErr
+		return nil, 0, "", nil, m.searchErr
 	}
 	method := m.method
 	if method == "" {
 		method = "fulltext"
 	}
-	return m.results, m.total, method, nil
+	return m.results, m.total, method, m.topSim, nil
 }
 
 // SetResults configures mock to return specific results.
@@ -49,6 +50,11 @@ func (m *MockSearchRepository) SetResults(results []models.SearchResult, total i
 // SetMethod configures mock to return a specific search method.
 func (m *MockSearchRepository) SetMethod(method string) {
 	m.method = method
+}
+
+// SetTopSimilarity configures mock to return a specific top similarity (BART-155).
+func (m *MockSearchRepository) SetTopSimilarity(topSim *float64) {
+	m.topSim = topSim
 }
 
 // SetError configures mock to return an error.

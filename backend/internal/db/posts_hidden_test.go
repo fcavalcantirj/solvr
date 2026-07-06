@@ -189,7 +189,7 @@ func TestSearchPosts_ExcludesPendingReview(t *testing.T) {
 		[]string{"postgresql", "optimization"}, "open")
 
 	// Search for "database optimization"
-	results, total, _, err := searchRepo.Search(ctx, "database optimization", models.SearchOptions{
+	results, total, _, _, err := searchRepo.Search(ctx, "database optimization", models.SearchOptions{
 		Page:    1,
 		PerPage: 50,
 	})

@@ -12,16 +12,24 @@ import (
 // MCPHandler handles MCP (Model Context Protocol) HTTP requests.
 // This implements MCP over HTTP transport per the MCP specification.
 type MCPHandler struct {
-	searchRepo SearchRepositoryInterface
-	postsRepo  PostsRepositoryInterface
+	searchRepo          SearchRepositoryInterface
+	postsRepo           PostsRepositoryInterface
+	confidenceThreshold float64
 }
 
 // NewMCPHandler creates a new MCPHandler.
 func NewMCPHandler(searchRepo SearchRepositoryInterface, postsRepo PostsRepositoryInterface) *MCPHandler {
 	return &MCPHandler{
-		searchRepo: searchRepo,
-		postsRepo:  postsRepo,
+		searchRepo:          searchRepo,
+		postsRepo:           postsRepo,
+		confidenceThreshold: DefaultSearchConfidenceThreshold,
 	}
+}
+
+// SetConfidenceThreshold overrides the cosine-similarity bar used to surface the
+// "no confident match" guidance to MCP agents (from SEARCH_CONFIDENCE_THRESHOLD). BART-155.
+func (h *MCPHandler) SetConfidenceThreshold(threshold float64) {
+	h.confidenceThreshold = threshold
 }
 
 // JSON-RPC 2.0 structures
@@ -266,10 +274,13 @@ func (h *MCPHandler) executeSearch(ctx context.Context, args map[string]interfac
 		opts.Type = postType
 	}
 
-	results, total, _, err := h.searchRepo.Search(ctx, query, opts)
+	results, total, _, topSimilarity, err := h.searchRepo.Search(ctx, query, opts)
 	if err != nil {
 		return nil, err
 	}
+
+	// BART-155: server's ASK-biased "answered?" signal — false means no confident match.
+	confident := models.IsConfidentMatch(topSimilarity, h.confidenceThreshold)
 
 	if len(results) == 0 {
 		return map[string]interface{}{
@@ -280,7 +291,7 @@ func (h *MCPHandler) executeSearch(ctx context.Context, args map[string]interfac
 	}
 
 	// Format results as text
-	text := formatSearchResults(results, total)
+	text := formatSearchResults(results, total, confident)
 	return map[string]interface{}{
 		"content": []map[string]interface{}{
 			{"type": "text", "text": text},
@@ -375,14 +386,22 @@ func (e *ValidationError) Error() string {
 }
 
 // Helper functions
-func formatSearchResults(results []models.SearchResult, total int) string {
+func formatSearchResults(results []models.SearchResult, total int, confidentMatch bool) string {
 	text := "Found " + itoa(total) + " results:\n\n"
+	// BART-155: surface the ASK-biased decision up front so an MCP agent knows whether the
+	// top match is trustworthy or it should ask / create a new post instead.
+	if !confidentMatch {
+		text += "⚠️ No confident match: the closest results may not directly answer your query. " +
+			"Consider asking or creating a new post.\n\n"
+	}
 	for _, r := range results {
 		text += "---\n"
 		text += "[" + upper(r.Type) + "] " + r.Title + "\n"
 		text += "ID: " + r.ID + "\n"
-		if r.Score > 0 {
-			text += "Relevance: " + itoa(int(r.Score*100)) + "%\n"
+		// BART-155: report the calibrated cosine similarity (0–1) when the semantic path
+		// produced one; the old int(Score*100)% was a raw ts_rank/RRF number, not a percent.
+		if r.Similarity != nil {
+			text += "Similarity: " + itoa(int(*r.Similarity*100)) + "% (semantic)\n"
 		}
 		if r.Snippet != "" {
 			text += "Preview: " + r.Snippet + "\n"

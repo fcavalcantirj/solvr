@@ -44,11 +44,11 @@ func (r *SearchRepository) SetEmbeddingService(svc QueryEmbedder) {
 // Falls back to full-text only search if embedding service is nil or fails.
 // Supports ContentTypes filter to search specific content sources.
 // When ContentTypes is empty, searches only posts (backwards compatible).
-func (r *SearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error) {
+func (r *SearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, *float64, error) {
 	start := time.Now()
 	tsquery := buildTsQuery(query)
 	if tsquery == "" {
-		return []models.SearchResult{}, 0, "", nil
+		return []models.SearchResult{}, 0, "", nil, nil
 	}
 
 	// Try to generate query embedding for hybrid search
@@ -84,7 +84,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 			posts, err = r.searchPosts(ctx, tsquery, opts)
 		}
 		if err != nil {
-			return nil, 0, "", err
+			return nil, 0, "", nil, err
 		}
 		allResults = append(allResults, posts...)
 	}
@@ -93,7 +93,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	if containsContentType(contentTypes, "answers") {
 		answers, err := r.searchAnswers(ctx, tsquery, opts)
 		if err != nil {
-			return nil, 0, "", err
+			return nil, 0, "", nil, err
 		}
 		allResults = append(allResults, answers...)
 	}
@@ -102,7 +102,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	if containsContentType(contentTypes, "approaches") {
 		approaches, err := r.searchApproaches(ctx, tsquery, opts)
 		if err != nil {
-			return nil, 0, "", err
+			return nil, 0, "", nil, err
 		}
 		allResults = append(allResults, approaches...)
 	}
@@ -111,6 +111,25 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	sort.Slice(allResults, func(i, j int) bool {
 		return allResults[i].Score > allResults[j].Score
 	})
+
+	// BART-155: capture the best cosine similarity across ALL matches BEFORE the opt-in
+	// min_similarity floor or pagination, so meta.top_similarity / confident_match reflect
+	// the true best semantic match even when the page (or the filter) yields nothing.
+	topSimilarity := maxSimilarity(allResults)
+
+	// BART-155: opt-in honest-empty filter. When MinSimilarity > 0, keep only results whose
+	// cosine similarity clears the bar; drop unmeasurable (nil-similarity, keyword-only)
+	// results so an unmeasured match is never presented as confident (bias to ASK). When
+	// nothing clears the bar the result is a true empty (data:[], total:0) — no fuzzy fallbacks.
+	if opts.MinSimilarity > 0 {
+		kept := make([]models.SearchResult, 0, len(allResults))
+		for _, res := range allResults {
+			if res.Similarity != nil && *res.Similarity >= opts.MinSimilarity {
+				kept = append(kept, res)
+			}
+		}
+		allResults = kept
+	}
 
 	// Apply pagination
 	total := len(allResults)
@@ -130,7 +149,7 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	if offset >= total {
 		duration := time.Since(start).Milliseconds()
 		LogSearchCompleted(ctx, query, duration, 0, searchMethod)
-		return []models.SearchResult{}, total, searchMethod, nil
+		return []models.SearchResult{}, total, searchMethod, topSimilarity, nil
 	}
 
 	end := offset + limit
@@ -141,7 +160,25 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 	duration := time.Since(start).Milliseconds()
 	LogSearchCompleted(ctx, query, duration, len(allResults[offset:end]), searchMethod)
 
-	return allResults[offset:end], total, searchMethod, nil
+	return allResults[offset:end], total, searchMethod, topSimilarity, nil
+}
+
+// maxSimilarity returns a pointer to the highest non-nil Similarity across results,
+// or nil when no result carries a semantic (cosine) measure. It is the input to the
+// server's confident_match / top_similarity decision (BART-155).
+func maxSimilarity(results []models.SearchResult) *float64 {
+	var top *float64
+	for i := range results {
+		s := results[i].Similarity
+		if s == nil {
+			continue
+		}
+		if top == nil || *s > *top {
+			v := *s
+			top = &v
+		}
+	}
+	return top
 }
 
 // searchPosts searches posts using full-text search (existing logic).
@@ -171,7 +208,8 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 			COALESCE((SELECT COUNT(*) FROM comments WHERE target_id = p.id AND target_type = 'post' AND deleted_at IS NULL), 0) as comments_count,
 			COALESCE(p.view_count, 0) as view_count,
 			p.created_at,
-			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at
+			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at,
+			NULL::float8 as similarity
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
@@ -263,7 +301,11 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 			COALESCE((SELECT COUNT(*) FROM comments WHERE target_id = p.id AND target_type = 'post' AND deleted_at IS NULL), 0) as comments_count,
 			COALESCE(p.view_count, 0) as view_count,
 			p.created_at,
-			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at
+			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at,
+			-- BART-155: calibrated cosine similarity (0–1) of the post to the query vector.
+			-- $2 is the query embedding (already bound for hybrid_search); NULL when the
+			-- post has no embedding. Ranking still uses hs.rrf_score below.
+			CASE WHEN p.embedding IS NOT NULL THEN 1 - (p.embedding <=> $2::vector) END as similarity
 		FROM hybrid_search($1, $2, $3, 2.0, 1.0, 60, $5::uuid) hs
 		JOIN posts p ON p.id = hs.post_id
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
@@ -341,7 +383,8 @@ func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string, op
 			0 as comments_count,
 			0 as view_count,
 			a.created_at,
-			NULL::timestamptz as solved_at
+			NULL::timestamptz as solved_at,
+			NULL::float8 as similarity
 		FROM answers a
 		LEFT JOIN posts p ON a.question_id = p.id
 		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
@@ -414,7 +457,8 @@ func (r *SearchRepository) searchApproaches(ctx context.Context, tsquery string,
 			0 as comments_count,
 			0 as view_count,
 			a.created_at,
-			NULL::timestamptz as solved_at
+			NULL::timestamptz as solved_at,
+			NULL::float8 as similarity
 		FROM approaches a
 		LEFT JOIN posts p ON a.problem_id = p.id
 		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
@@ -588,6 +632,7 @@ func scanSearchResults(rows pgx.Rows) ([]models.SearchResult, error) {
 			&r.ViewCount,
 			&r.CreatedAt,
 			&r.SolvedAt,
+			&r.Similarity,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan search result: %w", err)

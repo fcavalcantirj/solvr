@@ -37,6 +37,7 @@ cmd_search() {
 
     local type_filter=""
     local limit="10"
+    local min_similarity=""
     local json_output=false
 
     while [ $# -gt 0 ]; do
@@ -47,6 +48,10 @@ cmd_search() {
                 ;;
             --limit)
                 limit="$2"
+                shift 2
+                ;;
+            --min-similarity)
+                min_similarity="$2"
                 shift 2
                 ;;
             --json)
@@ -61,6 +66,7 @@ cmd_search() {
 
     local endpoint="/search?q=$(urlencode "$query")&per_page=${limit}"
     [ -n "$type_filter" ] && endpoint="${endpoint}&type=${type_filter}"
+    [ -n "$min_similarity" ] && endpoint="${endpoint}&min_similarity=${min_similarity}"
 
     local response
     response=$(api_call GET "$endpoint") || return 1
@@ -71,13 +77,17 @@ cmd_search() {
     fi
 
     # Pretty print results
-    local total method took
+    local total method took confident
     total=$(echo "$response" | jq -r '.meta.total // 0')
     method=$(echo "$response" | jq -r '.meta.method // "fulltext"')
     took=$(echo "$response" | jq -r '.meta.took_ms // "?"')
-    echo -e "${CYAN}Found ${total} results:${NC} (${method} search, ${took}ms)\n"
+    # BART-155: confident_match is the server's ASK-biased "answered?" signal.
+    confident=$(echo "$response" | jq -r 'if .meta.confident_match == true then "yes" else "no" end')
+    echo -e "${CYAN}Found ${total} results:${NC} (${method} search, ${took}ms)"
+    echo -e "${CYAN}Confident match:${NC} ${confident}  (no → consider asking / creating a post)\n"
 
-    echo "$response" | jq -r '.data[]? | "[\(.type)] \(.title)\n  ID: \(.id)\n  Score: \(.score // "N/A")\n  Status: \(.status)\n  \(.snippet // .description | .[0:100])...\n"' 2>/dev/null || echo "No results found"
+    # Show calibrated cosine similarity (0–1) when present; raw score is ordering-only.
+    echo "$response" | jq -r '.data[]? | "[\(.type)] \(.title)\n  ID: \(.id)\n  Similarity: \(if .similarity then ((.similarity * 100 | floor | tostring) + "% (semantic)") else "keyword-only" end)\n  Status: \(.status)\n  \(.snippet // .description | .[0:100])...\n"' 2>/dev/null || echo "No results found"
 }
 
 cmd_get() {
@@ -909,9 +919,10 @@ COMMANDS:
     help                          Show this help message
 
 SEARCH OPTIONS:
-    --type <type>     Filter by type: problem, question, idea
-    --limit <n>       Number of results (default: 10)
-    --json            Output raw JSON
+    --type <type>          Filter by type: problem, question, idea
+    --limit <n>            Number of results (default: 10)
+    --min-similarity <f>   Cosine floor 0-1: drop below-bar/keyword-only results, honest empty when none qualify
+    --json                 Output raw JSON (includes similarity, meta.top_similarity, meta.confident_match)
 
 GET OPTIONS:
     --include <what>  Include: approaches, answers, responses
@@ -930,6 +941,7 @@ EXAMPLES:
     # Search for solutions
     solvr search "async postgres race condition"
     solvr search "memory leak" --type problem --limit 5
+    solvr search "how to fix X" --min-similarity 0.85   # only confident semantic matches
 
     # Get post details with approaches
     solvr get post_abc123 --include approaches

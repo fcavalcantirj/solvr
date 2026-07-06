@@ -32,7 +32,7 @@ func TestSearchUnified_PostsAndAnswers(t *testing.T) {
 		"human", "test-user")
 
 	// Search with content_types=posts,answers — should find both
-	results, total, _, err := repo.Search(ctx, "golang concurrency", models.SearchOptions{
+	results, total, _, _, err := repo.Search(ctx, "golang concurrency", models.SearchOptions{
 		ContentTypes: []string{"posts", "answers"},
 		Page:         1,
 		PerPage:      20,
@@ -98,7 +98,7 @@ func TestSearchUnified_PostsOnly(t *testing.T) {
 		"human", "test-user")
 
 	// Search with content_types=posts only
-	results, _, _, err := repo.Search(ctx, "database optimization", models.SearchOptions{
+	results, _, _, _, err := repo.Search(ctx, "database optimization", models.SearchOptions{
 		ContentTypes: []string{"posts"},
 		Page:         1,
 		PerPage:      20,
@@ -131,7 +131,7 @@ func TestSearchUnified_SourceMetadata(t *testing.T) {
 		[]string{"microservices"}, "open")
 
 	// Search for posts only and verify source is "post"
-	results, _, _, err := repo.Search(ctx, "microservices communication", models.SearchOptions{
+	results, _, _, _, err := repo.Search(ctx, "microservices communication", models.SearchOptions{
 		ContentTypes: []string{"posts"},
 		Page:         1,
 		PerPage:      20,

@@ -18,8 +18,11 @@ import (
 // SearchRepositoryInterface defines the database operations for search.
 type SearchRepositoryInterface interface {
 	// Search performs a search with the given query and options.
-	// Returns results, total count, search method used ("hybrid" or "fulltext"), and any error.
-	Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, error)
+	// Returns results (page), total count (post-filter), search method used
+	// ("hybrid_rrf" or "fulltext_only"), the top cosine similarity across ALL matches
+	// before filtering (nil when no semantic measure is available), and any error.
+	// See BART-155 for the similarity/confidence contract.
+	Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, *float64, error)
 }
 
 // SearchAnalyticsInserter defines the interface for recording search analytics.
@@ -27,20 +30,32 @@ type SearchAnalyticsInserter interface {
 	Insert(ctx context.Context, sq models.SearchQuery) error
 }
 
+// DefaultSearchConfidenceThreshold is the fallback cosine-similarity bar for
+// meta.confident_match when the SEARCH_CONFIDENCE_THRESHOLD env override is not wired
+// (e.g. in tests). Conservative (high) to bias toward ASK. See BART-155.
+const DefaultSearchConfidenceThreshold = 0.85
+
 // SearchHandler handles search-related HTTP requests.
 type SearchHandler struct {
-	repo          SearchRepositoryInterface
-	analyticsRepo SearchAnalyticsInserter
+	repo                SearchRepositoryInterface
+	analyticsRepo       SearchAnalyticsInserter
+	confidenceThreshold float64
 }
 
 // NewSearchHandler creates a new SearchHandler.
 func NewSearchHandler(repo SearchRepositoryInterface) *SearchHandler {
-	return &SearchHandler{repo: repo}
+	return &SearchHandler{repo: repo, confidenceThreshold: DefaultSearchConfidenceThreshold}
 }
 
 // SetAnalyticsRepo injects the analytics repository for search query tracking.
 func (h *SearchHandler) SetAnalyticsRepo(repo SearchAnalyticsInserter) {
 	h.analyticsRepo = repo
+}
+
+// SetConfidenceThreshold overrides the cosine-similarity bar for meta.confident_match
+// and the opt-in min_similarity fallback (from SEARCH_CONFIDENCE_THRESHOLD). BART-155.
+func (h *SearchHandler) SetConfidenceThreshold(threshold float64) {
+	h.confidenceThreshold = threshold
 }
 
 // SearchResponse is the response structure for search results.
@@ -58,6 +73,13 @@ type SearchResponseMeta struct {
 	HasMore bool   `json:"has_more"`
 	TookMs  int64  `json:"took_ms"`
 	Method  string `json:"method"` // "hybrid" or "fulltext" - indicates which search method was used
+	// TopSimilarity is the best cosine similarity (0–1) across ALL matches before the
+	// min_similarity filter + pagination; nil when no semantic measure is available
+	// (e.g. fulltext-only method). See BART-155.
+	TopSimilarity *float64 `json:"top_similarity,omitempty"`
+	// ConfidentMatch is the server's ASK-biased "answered?" signal: true when
+	// TopSimilarity clears the confidence threshold. false → the caller should ASK.
+	ConfidentMatch bool `json:"confident_match"`
 }
 
 // Search handles GET /v1/search - search the knowledge base.
@@ -148,11 +170,20 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		opts.PerPage = 50 // Cap at 50 per SPEC.md
 	}
 
+	// BART-155: opt-in cosine-similarity floor (0–1). Absent = no filter (full recall);
+	// invalid/out-of-range values are ignored. When set, the repo returns an honest empty
+	// below the bar and drops keyword-only (unmeasurable) results.
+	if ms := r.URL.Query().Get("min_similarity"); ms != "" {
+		if f, err := strconv.ParseFloat(ms, 64); err == nil && f >= 0 && f <= 1 {
+			opts.MinSimilarity = f
+		}
+	}
+
 	// BART-151: caller's family human for visibility scoping ("" = public-only).
 	opts.ViewerHuman = callerHumanID(r)
 
 	// Execute search
-	results, total, method, err := h.repo.Search(r.Context(), query, opts)
+	results, total, method, topSimilarity, err := h.repo.Search(r.Context(), query, opts)
 	if err != nil {
 		writeSearchError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "search failed")
 		return
@@ -182,13 +213,15 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	response := SearchResponse{
 		Data: responseData,
 		Meta: SearchResponseMeta{
-			Query:   query,
-			Total:   total,
-			Page:    opts.Page,
-			PerPage: opts.PerPage,
-			HasMore: hasMore,
-			TookMs:  tookMs,
-			Method:  searchMethod,
+			Query:          query,
+			Total:          total,
+			Page:           opts.Page,
+			PerPage:        opts.PerPage,
+			HasMore:        hasMore,
+			TookMs:         tookMs,
+			Method:         searchMethod,
+			TopSimilarity:  topSimilarity,
+			ConfidentMatch: models.IsConfidentMatch(topSimilarity, h.confidenceThreshold),
 		},
 	}
 

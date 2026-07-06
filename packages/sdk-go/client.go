@@ -104,11 +104,26 @@ func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) 
 		if opts.Status != "" {
 			params.Set("status", opts.Status)
 		}
-		if opts.Limit > 0 {
-			params.Set("limit", strconv.Itoa(opts.Limit))
+		// Pagination: API is page-based (page + per_page). Prefer PerPage/Page; fall back
+		// to the legacy Limit/Offset (Offset quantized to a page). Previously limit/offset
+		// were sent verbatim and silently ignored by the API.
+		perPage := opts.PerPage
+		if perPage <= 0 {
+			perPage = opts.Limit
 		}
-		if opts.Offset > 0 {
-			params.Set("offset", strconv.Itoa(opts.Offset))
+		if perPage > 0 {
+			params.Set("per_page", strconv.Itoa(perPage))
+		}
+		page := opts.Page
+		if page <= 0 && opts.Offset > 0 {
+			effPerPage := perPage
+			if effPerPage <= 0 {
+				effPerPage = 20 // API default per_page
+			}
+			page = opts.Offset/effPerPage + 1
+		}
+		if page > 0 {
+			params.Set("page", strconv.Itoa(page))
 		}
 		for _, tag := range opts.Tags {
 			params.Add("tags", tag)

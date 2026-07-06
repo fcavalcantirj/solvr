@@ -56,11 +56,11 @@ type Post struct {
 
 // SearchResult represents a search result item.
 type SearchResult struct {
-	ID          string  `json:"id"`
-	Type        string  `json:"type"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Score       float64 `json:"score"`
+	ID          string   `json:"id"`
+	Type        string   `json:"type"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Score       float64  `json:"score"`
 	Tags        []string `json:"tags,omitempty"`
 }
 
@@ -90,14 +90,14 @@ type Answer struct {
 
 // Approach represents an approach to a problem.
 type Approach struct {
-	ID           string    `json:"id"`
-	Content      string    `json:"content"`
-	Author       Author    `json:"author"`
-	VoteScore    int       `json:"vote_score"`
-	Status       string    `json:"status"`
-	Angle        string    `json:"angle,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID        string    `json:"id"`
+	Content   string    `json:"content"`
+	Author    Author    `json:"author"`
+	VoteScore int       `json:"vote_score"`
+	Status    string    `json:"status"`
+	Angle     string    `json:"angle,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // Response types
@@ -138,20 +138,27 @@ type ApproachResponse struct {
 // Request types
 
 // SearchOptions contains optional parameters for search.
+//
+// Pagination: the Solvr API is page-based (page + per_page). Prefer PerPage/Page.
+// Limit/Offset are legacy aliases kept for backwards compatibility — Limit maps to
+// per_page and Offset is quantized to a page number (Offset/PerPage + 1). Previously
+// Limit/Offset were sent as-is and silently ignored by the API (a no-op); this now works.
 type SearchOptions struct {
-	Type   string   // Filter by post type
-	Status string   // Filter by status
-	Tags   []string // Filter by tags
-	Limit  int      // Number of results (default 20, max 100)
-	Offset int      // Pagination offset
+	Type    string   // Filter by post type
+	Status  string   // Filter by status
+	Tags    []string // Filter by tags
+	PerPage int      // Results per page (default 20, max 50)
+	Page    int      // 1-based page number (default 1)
+	Limit   int      // Legacy alias for PerPage
+	Offset  int      // Legacy row offset; quantized to a page (Offset/PerPage + 1)
 }
 
 // ListAgentsOptions contains optional parameters for listing agents.
 type ListAgentsOptions struct {
-	Sort    string // newest, oldest, reputation, posts
-	Status  string // active, pending, all
-	Limit   int
-	Offset  int
+	Sort   string // newest, oldest, reputation, posts
+	Status string // active, pending, all
+	Limit  int
+	Offset int
 }
 
 // CreatePostRequest is the request body for creating a post.

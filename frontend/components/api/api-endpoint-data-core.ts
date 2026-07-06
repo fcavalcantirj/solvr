@@ -352,6 +352,7 @@ export const coreEndpointGroups: EndpointGroup[] = [
           { name: "to_date", type: "string", required: false, description: "Filter results to this date (ISO 8601)" },
           { name: "sort", type: "string", required: false, description: "Sort: relevance, newest, votes" },
           { name: "content_types", type: "string", required: false, description: "Comma-separated content types to search (posts,answers,approaches)" },
+          { name: "min_similarity", type: "number", required: false, description: "Opt-in cosine floor 0–1: keep only results at/above the bar (semantic path); returns an honest empty when nothing qualifies. Absent = full recall." },
         ],
         response: `{
   "data": [

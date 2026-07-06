@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -148,6 +149,87 @@ func TestSearch_MinSimilarity_InvalidIgnored(t *testing.T) {
 
 		if repo.searchOpts.MinSimilarity != 0 {
 			t.Errorf("min_similarity=%q: expected opts.MinSimilarity=0 (ignored), got %v", v, repo.searchOpts.MinSimilarity)
+		}
+	}
+}
+
+// metaWarnings extracts meta.warnings as a []string (nil when absent).
+func metaWarnings(meta map[string]interface{}) []string {
+	raw, ok := meta["warnings"].([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]string, len(raw))
+	for i, w := range raw {
+		out[i], _ = w.(string)
+	}
+	return out
+}
+
+// TestSearch_UnknownParam_Warns: an unrecognized param (the min_score that burned the
+// consuming agent) is ignored but surfaced in meta.warnings with a did-you-mean pointing
+// at min_similarity — never a silent no-op. BART-155 follow-up.
+func TestSearch_UnknownParam_Warns(t *testing.T) {
+	repo := NewMockSearchRepository()
+	repo.SetResults([]models.SearchResult{}, 0)
+	handler := NewSearchHandler(repo)
+
+	_, meta := decodeSearchMeta(t, handler, "/v1/search?q=payment&min_score=0.9")
+
+	warnings := metaWarnings(meta)
+	if len(warnings) != 1 {
+		t.Fatalf("expected exactly 1 warning, got %d: %v", len(warnings), warnings)
+	}
+	if !strings.Contains(warnings[0], "min_score") {
+		t.Errorf("warning should name the offending param, got %q", warnings[0])
+	}
+	if !strings.Contains(warnings[0], "min_similarity") {
+		t.Errorf("warning should suggest 'min_similarity', got %q", warnings[0])
+	}
+}
+
+// TestSearch_KnownParams_NoWarnings: a request using only valid params omits meta.warnings
+// entirely (omitempty), keeping existing responses byte-identical.
+func TestSearch_KnownParams_NoWarnings(t *testing.T) {
+	repo := NewMockSearchRepository()
+	repo.SetResults([]models.SearchResult{}, 0)
+	handler := NewSearchHandler(repo)
+
+	_, meta := decodeSearchMeta(t, handler,
+		"/v1/search?q=x&type=problem&status=solved&tags=go&sort=newest&page=1&per_page=10&min_similarity=0.5&content_types=posts")
+
+	if _, present := meta["warnings"]; present {
+		t.Errorf("expected no warnings key for all-valid params, got %v", meta["warnings"])
+	}
+}
+
+// TestSearch_UnderscoreParam_NotWarned: cache-bust/internal params (leading "_") are ignored
+// without a warning, avoiding false-positive noise.
+func TestSearch_UnderscoreParam_NotWarned(t *testing.T) {
+	repo := NewMockSearchRepository()
+	repo.SetResults([]models.SearchResult{}, 0)
+	handler := NewSearchHandler(repo)
+
+	_, meta := decodeSearchMeta(t, handler, "/v1/search?q=x&_=1736200000")
+
+	if _, present := meta["warnings"]; present {
+		t.Errorf("expected no warning for leading-underscore param, got %v", meta["warnings"])
+	}
+}
+
+// TestSuggestSearchParam: the prefix heuristic maps close names and rejects junk.
+func TestSuggestSearchParam(t *testing.T) {
+	cases := map[string]string{
+		"min_score": "min_similarity", // shared "min_s"
+		"min_sim":   "min_similarity",
+		"pageno":    "page", // shared "page"
+		"per_pages": "per_page",
+		"foobar":    "", // no valid param shares >=3 prefix
+		"z":         "",
+	}
+	for input, want := range cases {
+		if got := suggestSearchParam(input); got != want {
+			t.Errorf("suggestSearchParam(%q) = %q, want %q", input, got, want)
 		}
 	}
 }

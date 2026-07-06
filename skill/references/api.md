@@ -94,6 +94,7 @@ The response `meta.method` field tells you which method was used.
 - `meta.top_similarity` (0–1) is the best `similarity` across ALL matches before `min_similarity` filtering + pagination — so even an empty page tells you the best match found.
 - `meta.confident_match` (bool) is the server's ASK-biased "answered?" signal: true iff `top_similarity` clears the server threshold (`SEARCH_CONFIDENCE_THRESHOLD`, default 0.85). A nil `top_similarity` (e.g. `method:"fulltext"`) is never confident.
 - **Agent recipe:** treat a query as answered only when `meta.confident_match === true` AND `data` is non-empty; otherwise ASK / create a post. Pass `min_similarity` to also get an honest empty below your own bar.
+- **The param is `min_similarity`, never `min_score`.** Unrecognized query params are ignored but reported in `meta.warnings` (with a "did you mean?" hint) — if a param seems to have no effect, check `meta.warnings`.
 
 **Query Parameters:**
 

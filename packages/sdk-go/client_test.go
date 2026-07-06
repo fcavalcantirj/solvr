@@ -87,12 +87,15 @@ func TestSearch(t *testing.T) {
 
 func TestSearchWithOptions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify query params
+		// Verify query params. Legacy Limit maps to the API's per_page (not limit).
 		if r.URL.Query().Get("type") != "problem" {
 			t.Errorf("expected type 'problem', got '%s'", r.URL.Query().Get("type"))
 		}
-		if r.URL.Query().Get("limit") != "10" {
-			t.Errorf("expected limit '10', got '%s'", r.URL.Query().Get("limit"))
+		if r.URL.Query().Get("per_page") != "10" {
+			t.Errorf("expected per_page '10' (from legacy Limit), got '%s'", r.URL.Query().Get("per_page"))
+		}
+		if r.URL.Query().Has("limit") {
+			t.Errorf("legacy 'limit' must not be sent, got '%s'", r.URL.Query().Get("limit"))
 		}
 
 		resp := SearchResponse{Data: []SearchResult{}, Meta: Meta{}}
@@ -362,7 +365,7 @@ func TestListAgents(t *testing.T) {
 				{
 					ID:          "agent-1",
 					DisplayName: "Test Agent",
-					Reputation:       100,
+					Reputation:  100,
 					PostCount:   10,
 				},
 			},
@@ -508,7 +511,7 @@ func TestGetAgent(t *testing.T) {
 			Data: Agent{
 				ID:          "agent-123",
 				DisplayName: "Claude Agent",
-				Reputation:       500,
+				Reputation:  500,
 				PostCount:   25,
 			},
 		}
@@ -578,13 +581,21 @@ func TestRetryOnNetworkError(t *testing.T) {
 
 func TestSearchWithAllOptions(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("status") != "open" {
-			t.Errorf("expected status 'open', got '%s'", r.URL.Query().Get("status"))
+		q := r.URL.Query()
+		if q.Get("status") != "open" {
+			t.Errorf("expected status 'open', got '%s'", q.Get("status"))
 		}
-		if r.URL.Query().Get("offset") != "10" {
-			t.Errorf("expected offset '10', got '%s'", r.URL.Query().Get("offset"))
+		// API is page-based: PerPage/Page must serialize to per_page/page (never limit/offset).
+		if q.Get("per_page") != "25" {
+			t.Errorf("expected per_page '25', got '%s'", q.Get("per_page"))
 		}
-		tags := r.URL.Query()["tags"]
+		if q.Get("page") != "2" {
+			t.Errorf("expected page '2', got '%s'", q.Get("page"))
+		}
+		if q.Has("limit") || q.Has("offset") {
+			t.Errorf("legacy limit/offset must not be sent; got limit=%q offset=%q", q.Get("limit"), q.Get("offset"))
+		}
+		tags := q["tags"]
 		if len(tags) != 2 {
 			t.Errorf("expected 2 tags, got %d", len(tags))
 		}
@@ -596,12 +607,40 @@ func TestSearchWithAllOptions(t *testing.T) {
 
 	client := NewClient("test-api-key", WithBaseURL(server.URL))
 	opts := &SearchOptions{
-		Status: "open",
-		Offset: 10,
-		Tags:   []string{"go", "testing"},
+		Status:  "open",
+		PerPage: 25,
+		Page:    2,
+		Tags:    []string{"go", "testing"},
 	}
 	_, err := client.Search(context.Background(), "query", opts)
 	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+}
+
+// TestSearchLegacyLimitOffset verifies the deprecated Limit/Offset fields map onto the
+// page-based API (Limit→per_page, Offset quantized to a page) instead of the old no-op.
+func TestSearchLegacyLimitOffset(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("per_page") != "10" {
+			t.Errorf("expected per_page '10' (from Limit), got '%s'", q.Get("per_page"))
+		}
+		// Offset 20 with per_page 10 → page 3 (20/10 + 1).
+		if q.Get("page") != "3" {
+			t.Errorf("expected page '3' (Offset 20 / PerPage 10 + 1), got '%s'", q.Get("page"))
+		}
+		if q.Has("limit") || q.Has("offset") {
+			t.Errorf("legacy limit/offset must not be sent; got limit=%q offset=%q", q.Get("limit"), q.Get("offset"))
+		}
+		resp := SearchResponse{Data: []SearchResult{}, Meta: Meta{}}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-api-key", WithBaseURL(server.URL))
+	opts := &SearchOptions{Limit: 10, Offset: 20}
+	if _, err := client.Search(context.Background(), "query", opts); err != nil {
 		t.Fatalf("Search failed: %v", err)
 	}
 }

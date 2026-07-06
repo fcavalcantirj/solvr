@@ -4,9 +4,11 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -80,6 +82,10 @@ type SearchResponseMeta struct {
 	// ConfidentMatch is the server's ASK-biased "answered?" signal: true when
 	// TopSimilarity clears the confidence threshold. false → the caller should ASK.
 	ConfidentMatch bool `json:"confident_match"`
+	// Warnings surfaces non-fatal request issues — notably unrecognized query params
+	// (which are ignored, not errored) so a wrong/typo'd name never silently no-ops.
+	// Omitted entirely when there are none. See BART-155 follow-up.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // Search handles GET /v1/search - search the knowledge base.
@@ -96,6 +102,9 @@ type SearchResponseMeta struct {
 //   - content_types: comma-separated content sources to search (posts,answers,approaches; default: all)
 //   - page: page number (default: 1)
 //   - per_page: results per page (default: 20, max: 50)
+//   - min_similarity: opt-in cosine floor 0–1 (honest empty below the bar; see BART-155)
+//
+// Unrecognized query params are ignored but reported in meta.warnings (never a silent no-op).
 func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
@@ -209,6 +218,10 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	// Calculate took_ms
 	tookMs := time.Since(start).Milliseconds()
 
+	// Surface unrecognized query params (ignored, not errored) so a wrong/typo'd
+	// name never silently no-ops. Non-breaking: still 200 with results.
+	warnings := unknownParamWarnings(r.URL.Query())
+
 	// Build response
 	response := SearchResponse{
 		Data: responseData,
@@ -222,6 +235,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 			Method:         searchMethod,
 			TopSimilarity:  topSimilarity,
 			ConfidentMatch: models.IsConfidentMatch(topSimilarity, h.confidenceThreshold),
+			Warnings:       warnings,
 		},
 	}
 
@@ -278,6 +292,65 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 	}
+}
+
+// validSearchParams is the allow-list of query params GET /search understands. Any other
+// param is ignored and reported in meta.warnings. Keep in sync with the .Get() calls in Search.
+var validSearchParams = map[string]struct{}{
+	"q": {}, "type": {}, "tags": {}, "status": {}, "author": {}, "author_type": {},
+	"from_date": {}, "to_date": {}, "sort": {}, "page": {}, "per_page": {},
+	"content_types": {}, "min_similarity": {},
+}
+
+// unknownParamWarnings returns a warning for each unrecognized query-param name, with a
+// "did you mean" suggestion when a close valid param exists. Params beginning with "_"
+// (conventional cache-bust/internal markers) are skipped to avoid false positives. Returns
+// nil when every param is recognized, so meta.warnings stays omitted. BART-155 follow-up.
+func unknownParamWarnings(params map[string][]string) []string {
+	var warnings []string
+	for name := range params {
+		if name == "" || strings.HasPrefix(name, "_") {
+			continue
+		}
+		if _, ok := validSearchParams[name]; ok {
+			continue
+		}
+		msg := fmt.Sprintf("unknown query parameter '%s' (ignored)", name)
+		if suggestion := suggestSearchParam(name); suggestion != "" {
+			msg += fmt.Sprintf(" — did you mean '%s'?", suggestion)
+		}
+		warnings = append(warnings, msg)
+	}
+	sort.Strings(warnings) // deterministic order (map iteration is random)
+	return warnings
+}
+
+// suggestSearchParam returns the valid param sharing the longest common prefix (≥3 chars)
+// with the unknown name, ties broken alphabetically; "" when none qualifies. Deterministically
+// maps e.g. "min_score" → "min_similarity" (shared "min_s") and junk like "foobar" → "".
+func suggestSearchParam(unknown string) string {
+	best := ""
+	bestLen := 0
+	for valid := range validSearchParams {
+		n := commonPrefixLen(unknown, valid)
+		if n < 3 {
+			continue
+		}
+		if n > bestLen || (n == bestLen && (best == "" || valid < best)) {
+			bestLen = n
+			best = valid
+		}
+	}
+	return best
+}
+
+// commonPrefixLen returns the number of leading characters shared by a and b.
+func commonPrefixLen(a, b string) int {
+	n := 0
+	for n < len(a) && n < len(b) && a[n] == b[n] {
+		n++
+	}
+	return n
 }
 
 // parseIntParam parses a string to int with a default value.

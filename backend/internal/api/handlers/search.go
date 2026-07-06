@@ -188,6 +188,17 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// BART-155 follow-up: per-request confidence bar for meta.confident_match (0–1). Lets a
+	// caller set its OWN "answered?" threshold in one call without a global default change or
+	// touching SEARCH_CONFIDENCE_THRESHOLD on the server. Unlike min_similarity this does NOT
+	// filter results — it only decides confident_match. Absent/invalid → server default.
+	confidenceThreshold := h.confidenceThreshold
+	if ct := r.URL.Query().Get("confidence_threshold"); ct != "" {
+		if f, err := strconv.ParseFloat(ct, 64); err == nil && f >= 0 && f <= 1 {
+			confidenceThreshold = f
+		}
+	}
+
 	// BART-151: caller's family human for visibility scoping ("" = public-only).
 	opts.ViewerHuman = callerHumanID(r)
 
@@ -234,7 +245,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 			TookMs:         tookMs,
 			Method:         searchMethod,
 			TopSimilarity:  topSimilarity,
-			ConfidentMatch: models.IsConfidentMatch(topSimilarity, h.confidenceThreshold),
+			ConfidentMatch: models.IsConfidentMatch(topSimilarity, confidenceThreshold),
 			Warnings:       warnings,
 		},
 	}
@@ -299,7 +310,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 var validSearchParams = map[string]struct{}{
 	"q": {}, "type": {}, "tags": {}, "status": {}, "author": {}, "author_type": {},
 	"from_date": {}, "to_date": {}, "sort": {}, "page": {}, "per_page": {},
-	"content_types": {}, "min_similarity": {},
+	"content_types": {}, "min_similarity": {}, "confidence_threshold": {},
 }
 
 // unknownParamWarnings returns a warning for each unrecognized query-param name, with a

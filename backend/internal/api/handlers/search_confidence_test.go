@@ -234,6 +234,50 @@ func TestSuggestSearchParam(t *testing.T) {
 	}
 }
 
+// TestSearch_ConfidenceThresholdParam_ActivatesConfidentMatch: a per-request
+// ?confidence_threshold lets the caller set its own bar, so the 0.83-style match that is
+// false under the 0.85 default becomes confident_match=true at 0.80 — without a global
+// change. Also confirms the param is on the allow-list (no unknown-param warning). BART-155 follow-up.
+func TestSearch_ConfidenceThresholdParam_ActivatesConfidentMatch(t *testing.T) {
+	repo := NewMockSearchRepository()
+	repo.SetResults([]models.SearchResult{{ID: "p1", Type: "problem", Title: "exact", Similarity: ptrFloat64(0.83)}}, 1)
+	repo.SetMethod("hybrid")
+	repo.SetTopSimilarity(ptrFloat64(0.83))
+	handler := NewSearchHandler(repo) // default threshold 0.85 → 0.83 is NOT confident
+
+	// Without the param: default 0.85 → not confident.
+	_, metaDefault := decodeSearchMeta(t, handler, "/v1/search?q=exact")
+	if metaDefault["confident_match"] != false {
+		t.Errorf("expected confident_match=false at default 0.85 for topSim 0.83, got %v", metaDefault["confident_match"])
+	}
+
+	// With confidence_threshold=0.80: caller's bar → confident, and no unknown-param warning.
+	_, meta := decodeSearchMeta(t, handler, "/v1/search?q=exact&confidence_threshold=0.80")
+	if meta["confident_match"] != true {
+		t.Errorf("expected confident_match=true with confidence_threshold=0.80 and topSim 0.83, got %v", meta["confident_match"])
+	}
+	if w := metaWarnings(meta); len(w) != 0 {
+		t.Errorf("confidence_threshold must be a recognized param (no warning), got %v", w)
+	}
+}
+
+// TestSearch_ConfidenceThresholdParam_InvalidIgnored: out-of-range / non-numeric values fall
+// back to the server default (do not error).
+func TestSearch_ConfidenceThresholdParam_InvalidIgnored(t *testing.T) {
+	for _, v := range []string{"2", "-1", "abc"} {
+		repo := NewMockSearchRepository()
+		repo.SetResults([]models.SearchResult{{ID: "p1", Type: "problem", Title: "x", Similarity: ptrFloat64(0.9)}}, 1)
+		repo.SetMethod("hybrid")
+		repo.SetTopSimilarity(ptrFloat64(0.9)) // clears default 0.85
+		handler := NewSearchHandler(repo)
+
+		_, meta := decodeSearchMeta(t, handler, "/v1/search?q=x&confidence_threshold="+v)
+		if meta["confident_match"] != true {
+			t.Errorf("confidence_threshold=%q: expected fallback to default (topSim 0.9 → true), got %v", v, meta["confident_match"])
+		}
+	}
+}
+
 // TestSearch_ConfidenceThreshold_Override: SetConfidenceThreshold lowers the bar so a
 // mid similarity now counts as confident (env-driven knob, per BART-155 decision #3).
 func TestSearch_ConfidenceThreshold_Override(t *testing.T) {

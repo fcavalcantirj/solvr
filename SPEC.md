@@ -778,9 +778,14 @@ GET /search
                    semantic similarity clears the bar; keyword-only (unmeasurable) results
                    are dropped, and an honest empty (data:[], total:0) is returned when
                    nothing qualifies. Absent = no filter (full recall). See §22.7.
+    confidence_threshold (optional) Float 0–1. Per-request bar for meta.confident_match —
+                   the caller's own "answered?" cutoff. Unlike min_similarity it does NOT
+                   filter results; it only decides confident_match. Absent = server default
+                   (SEARCH_CONFIDENCE_THRESHOLD). See §22.7.
 
   Example: GET /search?q=async+postgres+race+condition&type=problem&status=solved
   Example: GET /search?q=how+to+fix+X&min_similarity=0.85   (decidable "answered?" gate)
+  Example: GET /search?q=how+to+fix+X&confidence_threshold=0.8  (confident_match at caller's bar)
 
 Response:
 {

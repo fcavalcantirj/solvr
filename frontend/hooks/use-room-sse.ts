@@ -53,6 +53,13 @@ export function useRoomSse(slug: string, lastKnownMessageId?: number): UseRoomSs
       if (lastEventIdRef.current) {
         url.searchParams.set('lastEventId', lastEventIdRef.current);
       }
+      // EventSource can't send an Authorization header, so a logged-in human's JWT rides
+      // in ?access_token= — the backend promotes it to a Bearer header, authorizing the
+      // stream of a PRIVATE room the caller owns (BART-156). Public rooms need no token.
+      const authToken = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      if (authToken) {
+        url.searchParams.set('access_token', authToken);
+      }
 
       const es = new EventSource(url.toString());
       esRef.current = es;

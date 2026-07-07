@@ -63,8 +63,11 @@ func mountRoomRoutes(
 		r.With(readGuard).Get("/{slug}/agents", presenceHandler.ListPresence)
 
 		// Public SSE stream for browser clients (no bearer token required, D-33 / T-16-04).
-		// The access guard still gates closed rooms.
-		r.With(apimiddleware.SSENoBuffering, readGuard).Get("/{slug}/stream", sseHandler.PublicStream)
+		// The access guard still gates closed rooms. SSEAccessTokenToHeader promotes an
+		// ?access_token= query param (the only way a browser EventSource can send a
+		// credential) into the Authorization header so a private-room owner's JWT authorizes
+		// the stream (BART-156).
+		r.With(apimiddleware.SSENoBuffering, apimiddleware.SSEAccessTokenToHeader, readGuard).Get("/{slug}/stream", sseHandler.PublicStream)
 
 		// Authenticated endpoints (Solvr JWT or agent API key per D-16)
 		r.Group(func(r chi.Router) {
@@ -74,7 +77,9 @@ func mountRoomRoutes(
 			r.Delete("/{slug}", roomHandler.DeleteRoom)
 			r.Post("/{slug}/rotate-token", roomHandler.RotateToken)
 			// Human comment endpoint (JWT-authenticated, rate limited per T-16-02).
-			r.With(httprate.LimitByIP(10, time.Minute)).Post("/{slug}/messages", msgHandler.PostHumanMessage)
+			// RoomAccessGuard restricts posting to a PRIVATE room to its owner/family/members
+			// (public rooms stay open to any authenticated human) — BART-156 family scope.
+			r.With(apimiddleware.RoomAccessGuard(roomRepo, memberRepo, agentTokenRepo), httprate.LimitByIP(10, time.Minute)).Post("/{slug}/messages", msgHandler.PostHumanMessage)
 
 			// Per-agent handshake + member allowlist management (mission #3).
 			r.Post("/{slug}/handshake", roomHandler.Handshake)

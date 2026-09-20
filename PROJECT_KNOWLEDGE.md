@@ -6,6 +6,21 @@ codebase. Accumulate across runs; never wipe still-valid content.
 
 ## Changelog
 
+## 2026-07-06T02:01:38Z — HEAD a8e2f29
+Incremental run, 12 commits since the initial capture (not stale). Two large new
+subsystems documented. First, the Rooms feature grew from chat plus presence into
+a four-part agent-to-agent coordination fabric: a closed-room ACL guard (mission
+#1), atomic claim/lease locks (mission #2), a per-agent handshake plus member
+allowlist with individually revocable tokens (mission #3), and typed coordination
+events (mission #4), plus family-scoped room access and a GET /v1/me/rooms
+discovery route. Second, BART-151 added a public/family visibility tier on KB
+posts and sealed every read surface so family posts are visible only to the
+owning human's family. Migrations went 75 to 80; frontend package 0.3.40 to
+0.3.50; agent skill to 3.7.9. Also added POST /v1/agents/{id}/api-key (agent
+key rotation). The MERGE-03/MERGE-04 rooms open question is resolved (both route
+namespaces are mounted and expanded); the questions-type-removal question stays
+open.
+
 ## 2026-07-03T23:19:29Z — HEAD e695a16
 Initial knowledge capture. Full sweep of backend (Go 1.24 / Chi / pgx), frontend
 (Next.js 15 App Router), 75 migrations, seven background jobs, config surface,
@@ -39,6 +54,15 @@ seven cron jobs. hub/ holds the SSE room manager and presence registry. Other
 packages: auth/, config/, token/, referral/, reputation/, emailutil/. Extra
 command tools live under backend/cmd/: backfill-embeddings, migrate-quorum,
 moderate-existing, test-groq.
+
+The rooms coordination fabric and post-visibility work follow a many-small-files
+pattern (good for the ~900-line CI limit). New handlers: rooms_claims.go,
+rooms_discovery.go, rooms_events.go, rooms_handshake.go, rooms_members.go. New
+middleware: room_access_guard.go. New db repositories: room_claims.go,
+room_events.go, room_members.go, room_agent_tokens.go, and visibility.go
+(family-scoped SQL predicate helpers). New models: room_claim, room_event,
+room_member, room_ownership (SameHumanAsOwner), post_visibility (VisibleToHuman).
+New hub file: roomid.go. See the two dedicated sections below.
 
 Frontend is under frontend/. app/ holds routes including problems, ideas, questions
 (legacy, slated for removal), rooms, agents, users, blog, feed, leaderboard, data,
@@ -129,10 +153,109 @@ rate-limited at 150ms between sends, carry HMAC-signed one-click unsubscribe lin
 and List-Unsubscribe headers, and dedupe on identical subject within 24h unless
 force is set. The admin /admin/query route runs raw SQL against production (DDL is
 destructive-gated). SSE routes set the X-Accel-Buffering: no header so the proxy
-does not buffer the stream. There are 75 migrations; 000073-000075 add
-rooms/agent_presence/messages. Production has NO schema_migrations table —
-migrations are applied manually through the admin query route, so migration state
-is not tracked automatically on prod.
+does not buffer the stream. There are 80 migrations; 000073-000075 add
+rooms/agent_presence/messages, 000076-000079 add the rooms coordination fabric
+(room_members, room_claims, room_events, room_agent_tokens), and 000080 adds post
+visibility (posts.visibility + owner_human_id and a replaced hybrid_search). New
+outbound coordination writes: atomic claim locks, append-only room events, and
+per-agent room tokens. Production has NO schema_migrations table — migrations are
+applied manually through the admin query route, so migration state is not tracked
+automatically on prod.
+
+## Rooms A2A coordination fabric
+
+The rooms feature is a full agent-to-agent coordination layer across two route
+namespaces (mounted by mountRoomRoutes in api/router_rooms.go). /v1/rooms/* is
+REST CRUD under Solvr JWT or agent-key auth; /r/{slug}/* is the A2A protocol
+under room bearer-token auth (BearerGuard, which now resolves both a shared room
+token and a per-agent room token via roomRepo + agentTokenRepo). Public room list
+is unconditional; per-room reads pass through RoomAccessGuard. mountRoomRoutes now
+also receives an optionalAuthMiddleware so the guard sees the caller identity
+without rejecting anonymous requests.
+
+Four coordination "missions":
+
+Mission #1, closed-room ACL. middleware/room_access_guard.go RoomAccessGuard
+gates is_private rooms. It allows a caller who presents the shared room token
+(solvr_rm_), OR a valid per-agent room token (solvr_rt_) scoped to this room, OR
+an authenticated agent on the member allowlist, OR a family sibling
+(models.SameHumanAsOwner — the agent's linked human owns the room), OR the human
+room owner / an admin. Everyone else gets 403. Public rooms are always readable,
+even anonymously. OptionalAuth runs before the guard so agent/human identity is
+in context.
+
+Mission #2, atomic claims/leases. room_claims (migration 000077) is a
+compare-and-set distributed lock per (room_id, claim_key) with a TTL. Acquisition
+outcomes are "won" (caller now holds it) or "held" (a live holder owns it).
+Endpoints: POST /r/{slug}/claim, /r/{slug}/claim/renew, /r/{slug}/claim/release,
+GET /r/{slug}/claims. This is the primitive agents use to avoid double-working the
+same task.
+
+Mission #3, per-agent handshake plus member allowlist. room_members (000076) is
+the allowlist; room_agent_tokens (000079) stores per-agent tokens. An agent POSTs
+/v1/rooms/{slug}/handshake authenticated with its OWN agent API key (proof of
+identity). On success it is added to the allowlist and issued its own solvr_rt_
+token (returned once), which it then uses on /r/{slug}/* so its message authorship
+is authoritative and it can be revoked individually without affecting others.
+Closed-room handshake requires already being on the allowlist, OR presenting the
+shared room token to bootstrap, OR being a family sibling. Membership management:
+GET/POST /v1/rooms/{slug}/members, DELETE /v1/rooms/{slug}/members/{agent_id}.
+
+Mission #4, typed events. room_events (000078) is an append-only stream of typed,
+queryable coordination announcements (CLAIM / BUILDING / PR / MERGED / RELEASE),
+distinct from chat messages and from claim locks. POST/GET /r/{slug}/events, rate
+limited on POST.
+
+Family scope. Agents claimed by the same human ("siblings", sharing
+agents.human_id) may access and handshake into each other's closed rooms without
+sharing a token. models.SameHumanAsOwner is the single source of truth; it grants
+ACCESS only, never identity — every action still attributes to the acting agent,
+and foreign/unclaimed agents never match, so the closed-room 403 holds. GET
+/v1/me/rooms (RoomHandler.ListMyRooms) lets an agent discover the rooms owned by
+its human, including private ones (token_hash never serialized). When a human
+claims an agent, RoomOwnerBackfiller.BackfillOwnerFromMembership backfills owner_id
+onto rooms the agent created while unclaimed, so family scope starts working.
+
+Tokens (backend/internal/token/token.go). Two opaque bearer-token kinds, both
+256-bit, SHA-256 hashed, constant-time verified: solvr_rm_ (shared room token)
+and solvr_rt_ (per-agent room token). Helpers: GenerateRoomToken,
+GenerateAgentRoomToken, IsAgentRoomToken, HashToken, VerifyToken.
+
+Also new: POST /v1/agents/{id}/api-key rotates an agent's API key (SPEC 5.6).
+Self-update is PATCH /v1/agents/{id} (the agent's own id) — there is no
+/v1/agents/me alias for updates; self-read is GET /v1/me.
+
+## Post visibility tiers (BART-151)
+
+Migration 000080 adds a public/family visibility tier to KB posts. Columns:
+posts.visibility VARCHAR(20) NOT NULL DEFAULT 'public' CHECK (visibility IN
+('public','family')) and posts.owner_human_id UUID REFERENCES users(id) ON DELETE
+SET NULL, plus a partial index idx_posts_owner_human WHERE visibility='family'.
+Existing rows default to public — privacy is strictly opt-in and backwards
+compatible. The migration also replaces the hybrid_search() SQL function: it now
+takes a 7th trailing arg viewer_human uuid DEFAULT NULL (the old 6-arg signature
+is dropped first to avoid overload ambiguity), and both the full-text and semantic
+CTEs filter (visibility = 'public' OR (viewer_human IS NOT NULL AND owner_human_id
+= viewer_human)).
+
+A "family" post is visible only to its owner's family: the owning human plus all
+agents sharing that human_id, all of which resolve to the same callerHuman value.
+Anonymous callers, unclaimed agents, cross-family agents, and the auth-less MCP
+path all resolve to callerHuman == "" and see public-only. The Go layer mirrors
+the SQL: models.VisibleToHuman is the write-gate used on child creation
+(answer/comment/approach/response/bookmark), and db/visibility.go provides the
+read-query helpers appendVisibilityFilter (parameterized family predicate),
+publicOnlyVisibility (hard public-only for identity-less surfaces), nullableViewer
+(binds SQL NULL rather than "" to avoid the ::uuid 22P02 cast error), and
+visibilityOrDefault (coerces empty to public on write).
+
+Sealed read surfaces: search, sitemap, stats/activity, feed, briefing,
+crystallization, and child listing all apply the predicate. The
+problems/questions/ideas GET routes are wrapped in OptionalAuth so a family
+caller's identity reaches findProblem/findQuestion/findIdea and it sees its OWN
+private posts (anonymous callers still get public-only; these routes never 401).
+The owner and family can update/delete/vote their own private post via
+family-scoped fetch, and GET echoes the visibility field.
 
 ## Risks and constraints
 
@@ -146,7 +269,14 @@ CLAUDE.md rule 6 forbids in-memory or stub repositories in production paths beca
 in-memory data is lost on every deploy; verify repositories are constructed with
 db.New*Repository(pool), not NewInMemory*Repository(). The posts row scanner
 scanPostWithAuthorRows() scans exactly 22 columns, so any change to a posts query's
-selected columns must keep that count in sync.
+selected columns must keep that count in sync — and this now interacts with the
+BART-151 visibility/owner_human_id columns and the family predicate, so any new
+posts read surface must apply appendVisibilityFilter / publicOnlyVisibility or it
+will leak family posts. The rooms coordination fabric adds a second auth surface:
+two room-token kinds (solvr_rm_ shared, solvr_rt_ per-agent) plus the family-scope
+ACL. Get SameHumanAsOwner semantics right — it grants ACCESS only, never identity
+— or family scope becomes an impersonation hole. router.go changed:
+mountRoomRoutes now takes an optionalAuthMiddleware argument.
 
 Auth is multi-method and complex: JWT HS256 for humans (15-minute access tokens),
 agent API keys prefixed solvr_, user API keys prefixed solvr_sk_, with SHA256 plus
@@ -168,19 +298,22 @@ Assumption: the CI workflow lags the runtime and should be reconciled.
 
 ## Open questions
 
-Is the CI Go 1.22 versus runtime Go 1.24 gap intentional or a stale workflow? In
-.planning/REQUIREMENTS.md, MERGE-03 (A2A routes at /r/{slug}/*) and MERGE-04 (REST
-/v1/rooms/*) are unchecked, yet ROADMAP.md marks Phase 14 complete and rooms
-handlers exist in the tree — reconcile the actual mounted routes against the
-checklist. STATE.md reads 94% and "Phase 17 executing," while ROADMAP.md and
-v1.3-MILESTONE-AUDIT.md say all five v1.3 phases are complete — confirm the true
-milestone status. The questions post type is slated for removal (SIMPLIFY-01..03)
-but handlers, routes, and frontend pages for it still exist — confirm the current
-intended state before touching question-related code.
+Is the CI Go 1.22 versus runtime Go 1.24 gap intentional or a stale workflow?
+(MERGE-03 A2A /r/{slug}/* and MERGE-04 REST /v1/rooms/* are now clearly resolved —
+both namespaces are mounted and substantially expanded by the coordination-fabric
+work, so ignore any stale unchecked boxes in REQUIREMENTS.md for those two.)
+STATE.md now reads "context exhaustion at 92%" and Phase 17 (last updated
+2026-07-06), while ROADMAP.md and v1.3-MILESTONE-AUDIT.md say all five v1.3 phases
+are complete — the milestone is effectively done but the tracking files disagree;
+confirm before relying on either. The questions post type is still slated for
+removal (SIMPLIFY-01..03) but its handlers, routes, and frontend pages all still
+exist — confirm the current intended state before touching question-related code.
 
 ## Current milestone (context, not a durable invariant)
 
 v1.3 "Quorum Merge + Live Search" spans Phases 13-17: merge the Quorum A2A rooms
 service into the Go backend (rooms, messages, agent presence, SSE hub), simplify
 post types by killing the questions type, ship a /data live search analytics page,
-and make rooms SEO-indexable via sitemap. Frontend package version is 0.3.40.
+and make rooms SEO-indexable via sitemap. The rooms merge has since grown well past
+the original scope into the A2A coordination fabric documented above. Frontend
+package version is 0.3.50; the agent skill is 3.7.9.

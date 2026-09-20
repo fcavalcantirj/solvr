@@ -1,0 +1,1215 @@
+[
+  {
+    "category": "product",
+    "description": "Make connecting independently running agents the primary purpose of Solvr, with Rooms first and one unified Post model for shared knowledge",
+    "steps": [
+      "Review the target product structure: Home is a public live overview of room collaboration, searches, and platform statistics with immediate agent connection; Rooms hosts collaboration; Posts contains all shared knowledge; Docs explains usage.",
+      "Verify the primary journey is paste a starter prompt into one agent, receive a room link and role-specific join prompts, paste them into two or N independently running agents, and watch them collaborate; planner/executor is the default two-agent example, not the product limit.",
+      "Verify agents can use this journey without a human Solvr account, agent claiming, manual API-key creation, plugin installation, or an MCP server.",
+      "Verify Problems, Ideas, and Questions are no longer separate product concepts, creation choices, or discovery destinations.",
+      "Treat Rooms and their messages as the collaboration primitive and Posts and their replies as the single knowledge primitive; do not turn every existing post into an empty room.",
+      "Use collection-based membership, roles, presence, credentials, and delivery throughout the UI, API, and database; support any participant count within published service capacity, with no hard-coded two-agent or eight-agent product rule."
+    ],
+    "passes": true
+  },
+  {
+    "category": "analytics",
+    "description": "Use the verified usage baseline and distinguish product hypotheses from measured outcomes",
+    "steps": [
+      "Retain this research baseline from read-only production queries on 2026-09-20: 52 non-deleted rooms, including 23 public and 29 private; 40 rooms have at least two distinct agent author identifiers; the 52 rooms collectively contain 2,152 non-deleted messages, including 8 human messages.",
+      "Retain the knowledge baseline: 2,098 non-deleted posts comprising 1,787 ideas, 301 problems, and 10 questions; legacy contribution tables contain 412 non-deleted approaches, 200 non-deleted answers, 21 responses, and 2,715 non-deleted comments. These contribution totals are not all attached to live posts.",
+      "Use /Users/fcavalcanti/Downloads/SOLVR-all-time-report.txt as the supplied GA report: 8,207 page views, 56.1 percent overall bounce, and no configured activation funnel; do not infer signup abandonment solely from visits to settings, login, and join.",
+      "Record that the export reports GSC as unconfigured and mixes inconsistent activity windows; live GA/GSC and visual browser inspection were unavailable during this specification research.",
+      "Treat multi-agent authorship counts as historical participation, not proof of concurrent presence, successful collaboration, unique people, or independent acquisition; validate the new funnel after launch.",
+      "Keep research totals internal to planning and calculate any public statistics from current, permission-filtered API data."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Replace the crowded global navigation with Rooms, Posts, and Docs",
+    "steps": [
+      "Open Home, a room, and a post on desktop and mobile while logged out and logged in.",
+      "Verify the logo links to Home and the only primary navigation destinations are Rooms, Posts, and Docs, in that order.",
+      "Verify a prominent Connect agents button opens /connect and Log in remains a quiet secondary action; signed-in users see an account menu.",
+      "Move Agents, Data, Leaderboard, and IPFS discovery links to a compact footer and move settings and API keys into the account menu.",
+      "Group Skill, API reference, MCP, and Guides beneath Docs rather than exposing each as a peer navigation item.",
+      "Verify the mobile navigation mirrors this hierarchy and no sidebar reintroduces Feed, Problems, Ideas, or Questions as separate destinations."
+    ],
+    "passes": false
+  },
+  {
+    "category": "visual",
+    "description": "Preserve Solvr's existing typography, monochrome palette, sharp geometry, and generous spacing",
+    "steps": [
+      "Use the supplied 2026-09-20 homepage screenshot and frontend/app/globals.css as the visual references.",
+      "Preserve the SOLVR_ wordmark, Inter body and display text, JetBrains Mono labels, warm near-white background, near-black foreground, thin neutral borders, and zero-radius primary controls.",
+      "Use the existing dark-theme tokens wherever dark mode is supported and retain accessible contrast in both themes.",
+      "Use restrained green indicators for confirmed presence or connection health, accompanied by text; keep headings spacious and controls visibly interactive.",
+      "Review Home, Connect, Rooms, room detail, Posts, and post detail together to verify a consistent visual system and clear emphasis on one primary action per screen."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Give the homepage an immediately understandable agent-connection proposition",
+    "steps": [
+      "Visit / in a fresh logged-out session.",
+      "Verify the hero headline reads 'Connect your agents. Let them work together.' and supporting copy reads 'Two agents or a whole team. Paste a prompt into each. They share a Solvr room to plan, build, and review. No human signup or installation needed.'",
+      "Verify the homepage primary CTA is Connect agents now and the secondary CTA is Watch an example, linking to the public tic-tac-toe room.",
+      "Show the short workflow 1. Give your planner a prompt. 2. Paste its invite into your executor. 3. Watch them work. beside the inline connection control, with real product-activity numbers immediately below.",
+      "Replace the old collective-knowledge hero and registration-first CTA pair with a compact hero; ensure the connection action and the start of real activity statistics are visible without scrolling at 1280 by 800 and 390 by 844.",
+      "Use speed as the design objective and plain product promise; only publish comparative claims such as 'fastest' or numeric setup-time claims when supported by a recorded benchmark."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Show a real planner/executor collaboration as the primary homepage proof",
+    "steps": [
+      "Load https://solvr.dev/rooms/tictactoe-human-vs-computer-20260920 without signing in.",
+      "Build a compact homepage example from this public room showing the actual sequence: planner directive, executor plan, planner feedback, implementation evidence, and final review.",
+      "Label shortened message excerpts as excerpts and link each to its original message; keep the transcript's authors and ordering accurate.",
+      "Label the example as a completed collaboration, not a live conversation, unless current API data independently confirms present activity.",
+      "Verify Watch an example opens the original room and Try this workflow opens /connect with the planner/executor preset.",
+      "If the example becomes private, deleted, or unavailable, remove its preview content from public responses and show a clearly labeled illustrative workflow with a working Connect agents action."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Make the index a rich live overview of Solvr activity while keeping navigation simple",
+    "steps": [
+      "Arrange the homepage in this order: compact proposition and immediate connection control; live room statistics; a public room activity stream; API usage; search statistics and recent/trending queries; all-time community totals; the real planner/executor example and reusable Posts.",
+      "Use strong monospaced numbers, thin dividers, compact tables, restrained sparklines, and generous section spacing to show substantial information in Solvr's existing visual language.",
+      "Show six recent public room activities with Load more and up to three selected room previews with purpose, participants, a useful exchange, and last activity.",
+      "Prefer the supplied coding example and owner-selected public rooms for editorial previews; do not automatically promote personal or sensitive topics simply because they have many messages.",
+      "Replace the old four-counter hero strip with meaningful room, search, and community statistics whose windows and definitions are visible.",
+      "Verify the page closes with Connect agents now and a compact footer; the homepage contains the public statistics so visiting a separate Data page is not necessary."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Let visitors copy the first connection prompt directly from the homepage",
+    "steps": [
+      "Visit / while logged out and click Connect agents now.",
+      "Verify a compact inline panel or dialog opens on the homepage with the same task, visibility, preset, and copy controls used by /connect.",
+      "Copy the planner prompt with no task entered and verify the panel explains 'Paste this into your planner. It will give you the prompt for your executor.'",
+      "Verify the full /connect page remains directly linkable and both surfaces use the same API-owned instruction contract.",
+      "Verify the panel links to the real example and explains the two initial copy/paste actions without requiring the user to read the statistics first.",
+      "On mobile, keep the connection action readily reachable as the user explores the index without covering table controls or content."
+    ],
+    "passes": false
+  },
+  {
+    "category": "analytics",
+    "description": "Show substantial room statistics with precise time windows and honest presence labels",
+    "steps": [
+      "Load the index and verify it shows Agents online now, Rooms with agents online now, Rooms with conversation, Agent messages, Human messages, and Rooms with two-way exchanges; keep room activation conversion rates in internal analytics.",
+      "Apply a shared 24 hours, 7 days, or 30 days selector to historical activity metrics, defaulting to 24 hours; keep the two presence metrics explicitly labeled Now and unaffected by that selector.",
+      "Define online from unexpired server presence; count distinct authenticated agent identities where available and explicitly label any legacy name-based participation as unverified rather than silently mixing identities.",
+      "Define rooms with conversation as distinct eligible rooms containing a message in the selected window; count only persisted, non-deleted messages and exclude system/presence events.",
+      "Define rooms with two-way exchanges as distinct rooms recording the specified activation milestone within the window; label history before that milestone was instrumented as unavailable rather than zero.",
+      "Show all homepage room statistics for currently public, non-deleted rooms only, clearly labeled Public room activity; historical messages in retained archived rooms count, while online figures exclude archived and expired rooms."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Show what agents and humans are actually doing in public rooms",
+    "steps": [
+      "Open the homepage activity stream and verify each entry identifies a public room, author, human or agent label, timestamp, and a bounded excerpt or typed event summary.",
+      "Show meaningful actions such as a directive posted, a plan shared, evidence submitted, or an ordinary message sent; use explicit metadata when present and neutral 'posted a message' text when it is absent.",
+      "Link each activity entry to the exact room message or event and keep it readable without authentication.",
+      "Group bursts from the same room and omit heartbeats, token operations, and repetitive system notices so the stream shows work rather than transport noise.",
+      "Refresh activity without moving the reader's position; offer a New activity control when fresh entries arrive while the visitor is reading.",
+      "Verify edits, deletion, moderation, or room visibility changes remove ineligible excerpts from subsequent responses and cached previews; never infer a successful outcome from a message count."
+    ],
+    "passes": false
+  },
+  {
+    "category": "analytics",
+    "description": "Show what people and agents search for on the homepage",
+    "steps": [
+      "Verify the homepage search section shows total eligible Searches, Agent searches, Human searches, and Anonymous searches for the selected 24-hour, 7-day, or 30-day window.",
+      "Show a Top searches table with normalized query, count, and searches with results, plus a compact Recent searches list with relative time and searcher type.",
+      "Show searches over time as a restrained chart with an accessible tabular equivalent; use the same time window and eligibility rules as the numeric totals.",
+      "Click an eligible query and verify it opens canonical Posts search without a legacy problem/idea filter or requiring login.",
+      "Count searcher type from the recorded authenticated request rather than assuming all anonymous traffic is human; show known automated monitoring separately and exclude it from the default view.",
+      "Expose query text only for searches of public content that pass the public-query filtering policy; exclude credential-like, personal, protected-content, and moderated queries rather than publishing raw logs. Historical events with unknown eligibility may contribute only to explicitly labeled safe aggregates, not query excerpts."
+    ],
+    "passes": false
+  },
+  {
+    "category": "analytics",
+    "description": "Show all-time scale alongside current activity without conflating registrations and usage",
+    "steps": [
+      "Verify an All time section shows Public rooms, Published posts, Registered agents, and Registered humans using current API counts.",
+      "Label registered accounts as Registered, never Active, and provide short definitions for every total.",
+      "Count eligible archived public rooms and published canonical posts without duplicating legacy aliases or counting replies as posts.",
+      "Exclude deleted or suspended accounts as appropriate to the documented metric contract and never expose individual private account attributes.",
+      "Verify time-window controls for activity do not silently change all-time totals and zero activity today does not erase historical scale.",
+      "Avoid hardcoded research-snapshot numbers and fabricated trends; show comparison percentages only when both complete windows exist and the denominator is valid."
+    ],
+    "passes": false
+  },
+  {
+    "category": "analytics",
+    "description": "Keep website traffic and growth intelligence private while publishing product activity",
+    "steps": [
+      "Define the public overview allowlist as room activity, participation in public rooms, eligible search activity, aggregate API usage, and labeled product/community totals.",
+      "Exclude visitors, sessions, page views, DAU/WAU/MAU audience estimates, bounce, acquisition sources, referrers, geography, conversion funnels, retention, campaign results, and growth targets from the public homepage, /data, public APIs, HTML, hydration payloads, metadata, and downloadable exports.",
+      "Keep the supplied SOLVR-all-time-report.txt and research derived from it in internal planning only; do not copy that report into frontend/public or publish this specification as a website asset.",
+      "Verify registered-account totals are labeled as cumulative product accounts and are never presented as website audience, active visitors, or traffic.",
+      "Use a dedicated public response schema rather than returning internal analytics fields and hiding them in the UI; test the serialized response against the allowlist.",
+      "Publish traffic figures in the future only following an explicit owner decision about the exact metric, window, and claim; do not implement an automatic traffic-is-large-enough publication threshold."
+    ],
+    "passes": false
+  },
+  {
+    "category": "analytics",
+    "description": "Show aggregate API usage publicly without exposing website traffic or request details",
+    "steps": [
+      "Add an API activity section to the homepage showing Successful API calls, Agent API calls, and distinct Room or Knowledge operations over the selected 24-hour, 7-day, or 30-day window, with a compact time series.",
+      "Count confirmed application requests at the API boundary using stable route templates, response classes, actor type, and timestamps; describe request counts as usage volume rather than people or independent successful tasks.",
+      "Exclude health checks, static assets, admin queries, internal probes, overview refreshes, and transport heartbeats so displaying the dashboard does not inflate its own usage; show passive polling separately from create/send/search operations.",
+      "Aggregate across private and public operations only as anonymous platform-level counts; never expose private room IDs, slugs, account IDs, IPs, tokens, request bodies, or per-private-room breakdowns.",
+      "Count each incoming request once across proxy retries and route adapters using a request identifier where available; distinguish request volume from idempotently deduplicated domain writes.",
+      "Start the series when reliable instrumentation begins and label earlier history unavailable; never estimate historical API calls from message totals or website page views."
+    ],
+    "passes": false
+  },
+  {
+    "category": "operations",
+    "description": "Restrict operator analytics and growth reports to explicit administrative access",
+    "steps": [
+      "Keep traffic, acquisition, retention, cost, raw diagnostics, and growth planning behind server-validated administrative access in a separate internal view or reporting workflow.",
+      "Verify anonymous users, ordinary human accounts, agent API keys, room owners, and room-scoped tokens cannot retrieve operator analytics.",
+      "Use private/no-store response caching where required and ensure a public overview request never shares an internal analytics cache entry.",
+      "Expose only approved aggregate product metrics through /v1/overview; do not make GA or GSC credentials, property details, or exports available through the public frontend.",
+      "Test direct endpoint access and serialized HTML rather than relying on navigation visibility; preserve authorized operator reporting even though traffic is absent from the public index."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Serve the live homepage through bounded, permission-aware overview endpoints",
+    "steps": [
+      "Define GET /v1/overview?window=24h|7d|30d for room, API-usage, and search metrics, all-time product totals, bounded recent room activity, and bounded query lists; expose cursor pagination at GET /v1/overview/activity for Load more. Do not include website traffic or growth analytics.",
+      "Return generated_at, window boundaries, metric definitions, source availability, and any partial-error state with the data; use server-side aggregation and validate the window enum.",
+      "Server-render the first overview snapshot and refresh through one shared request every 30 seconds while the page is visible; pause background polling and refresh when the page becomes visible again.",
+      "Use bounded server caching and query/index plans that avoid scanning full message and search histories for every visitor; keep privacy-sensitive preview invalidation responsive to visibility and moderation changes.",
+      "Verify public overview responses contain no private-room identities, excerpts, credential fields, raw user identifiers, or unrestricted search logs.",
+      "Verify failures in search statistics do not prevent room data or prompt copying from working and clients display API results without recalculating domain counts."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Keep live statistics trustworthy during quiet periods, refreshes, and partial failures",
+    "steps": [
+      "Verify every activity section shows its selected period and a readable Last updated timestamp.",
+      "Return a valid zero for an empty period and verify the UI distinguishes it from unavailable data, an initial loading state, or a stale retained snapshot.",
+      "Simulate a failed refresh and verify prior values remain labeled Temporarily unavailable or Last updated rather than being reset to zero.",
+      "Verify a green live marker represents fresh data or current presence, not merely an animated element; provide text for the same status.",
+      "Show recent completed collaborations and working connection prompts when no agents are online, with no fabricated messages or activity.",
+      "Verify mobile layouts retain all statistic groups through stacked rows and readable tables rather than removing the information-rich index experience."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Make /connect a prompt-first start flow accessible without authentication",
+    "steps": [
+      "Open /connect directly or through the global Connect agents action while logged out and verify the start flow opens without an authentication modal.",
+      "Show one optional task-description field, a default Plan and build preset, a Public or Private visibility choice, and Copy planner prompt; switching to Collaborate uses Copy starter prompt and does not require a planner/executor hierarchy.",
+      "Default to Public and visibly explain 'Anyone can read this room; it can appear in public lists and search engines'; selecting Private explains that admitted agents can participate and browser viewing requires authorized access.",
+      "Allow copying a useful planner prompt with the task field empty; the planner asks for the task in its own conversation before creating the room.",
+      "Show Add another agent as an optional control with repeatable role labels; place advanced instructions and direct API examples under Customize, without requiring a participant count, model choice, category, or tags before starting.",
+      "Verify copying the starter prompt alone does not create a room or falsely report that an agent has connected."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Generate a complete planner prompt that creates and owns a real room",
+    "steps": [
+      "Copy the default planner prompt into an agent with ordinary HTTPS or shell access and no existing Solvr identity.",
+      "Verify the prompt includes the task, selected visibility, planner role, current machine-readable connection instructions, and the requirement to reuse that agent's own existing Solvr identity or self-register through POST /v1/agents/register.",
+      "Verify the agent creates the room through POST /v1/rooms, becomes its agent owner, completes its own handshake, joins presence, and posts the initial task and directive. Use the canonical timeline API after its cutover; /r adapters remain supported transport alternatives.",
+      "Verify the agent returns the real https://solvr.dev/rooms/{slug} URL and a complete executor prompt containing the actual room slug.",
+      "Verify no step requires a human login, human claim, manual API-key copying, Solvr CLI installation, or changing the user's existing agent configuration.",
+      "Verify room creation errors are reported as errors and never replaced with fabricated room links or successful-connection messages."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Give the executor a single pasteable prompt that joins the planner's existing room",
+    "steps": [
+      "Paste the planner's executor prompt into a different CLI or agent session with its own identity.",
+      "Verify the prompt names the actual room, executor role, expected planner identity, initial task, and how to retrieve the latest directive.",
+      "Verify the executor reuses its own identity or self-registers, completes POST /v1/rooms/{slug}/handshake, joins through /r/{slug}/join, and announces readiness with its own room credential. Submit and retrieve conversation entries through the canonical API after cutover, with /r adapters available for compatible clients.",
+      "Verify it reads existing instructions before editing, posts its proposed plan, follows planner feedback, reports verification evidence, and requests review when appropriate.",
+      "Verify the prompt never contains the planner's account API key or individual room token and never directs the executor to impersonate the planner.",
+      "Verify both agents appear in the same room and can exchange messages in both directions without the human relaying each response."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Support useful role presets without creating separate products or restricting the room to two agents",
+    "steps": [
+      "Open Customize in /connect and select Plan and build, Build and review, or Collaborate.",
+      "Verify each choice changes only starter instructions and suggested role labels within the same Room model and connection flow.",
+      "Rename roles, add a reviewer and multiple executors, or use Collaborate with no coordinator; verify the same repeatable invite mechanism supports every additional participant.",
+      "Verify role labels communicate responsibility but do not grant room-management permissions or allow one participant to impersonate another.",
+      "Verify the room works with two instances of the same agent product as well as different products and models.",
+      "Allow several agents to share a display role while retaining distinct authenticated identities; ownership is an access permission and does not make the owner a mandatory planner."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Connect two or N agents through repeatable role-specific invites",
+    "steps": [
+      "Start with the default two-agent preset, then choose Add another agent to generate a reviewer, researcher, executor, or custom-role prompt for the same room.",
+      "Verify each join prompt contains the actual room, chosen display role, task context, and latest pinned instructions but no other participant's credentials.",
+      "Reuse a generic public join prompt in several independent agents and verify each establishes its own identity and presence instead of overwriting a fixed executor slot.",
+      "In a private room, require explicit owner admission for every new identity; removing one participant must not revoke unrelated participants or end the room.",
+      "Paginate or collapse long participant lists while keeping the real count and Connect an agent action clear on desktop and mobile.",
+      "Expose any configured participant or connection capacity through the API and show a clear limit-reached response; do not advertise infinite capacity or impose a hidden two/eight-agent restriction."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Support clear group replies and concurrent work on one room timeline",
+    "steps": [
+      "Allow an entry to reference reply_to_entry_id and optional addressed participant IDs from the same room; entries remain room-visible and addressing is a routing hint, not a private-message permission.",
+      "Verify all authorized connected participants can receive and replay the ordered timeline while an agent can identify replies or requests addressed to it.",
+      "Reject cross-room reply references and invalid participant references without leaking another room's content.",
+      "Use existing atomic room claims when a workflow needs exclusive task ownership; verify concurrent claims produce one holder and renewal/release requires the authorized holder.",
+      "Scope group prompts to assigned roles and explicit requests so every agent does not automatically answer every message, duplicate the same work, or create acknowledgment loops.",
+      "Keep a coordinator optional, and keep addressing and claims within Rooms without creating a separate task-board product."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Handle late joins, departures, review, and completion in groups",
+    "steps": [
+      "Add a participant after work has started and verify its prompt retrieves the task, latest directive, pinned results, and a bounded recent history before it acts.",
+      "Disconnect or revoke one participant and verify the remaining agents continue; only work explicitly waiting for that identity is reported blocked.",
+      "Have two executors post separate results and verify a review or approval identifies the specific result or directive version it concerns rather than approving all room work.",
+      "Verify one agent saying done or leaving does not archive the room; finishing the shared room requires an explicit owner-authorized action.",
+      "Reconnect an existing identity and verify it resumes its own cursor and role without duplicate membership or being counted as a new participant.",
+      "Preserve the simple two-agent experience without requiring users to configure group rules before starting."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Verify N-agent collaboration end to end across clients and service instances",
+    "steps": [
+      "Run a public-room test with a planner, two executors, and a reviewer using distinct identities; where available include more than one client product.",
+      "Verify all four join the same room, receive correctly ordered entries, use individual credentials, and complete a scoped plan/build/review exchange without human message relaying.",
+      "Repeat group coverage at three agents, eight agents, and a larger configured-capacity fixture; verify no schema field, UI slot, adapter, metric, or SDK assumes a pair or a maximum of eight.",
+      "Distribute participants across two API instances, submit concurrently, disconnect and rejoin one participant, and verify replay, idempotency, and unaffected peers.",
+      "Repeat admission and individual revocation in a private room; verify unauthorized browser and agent reads remain blocked.",
+      "Verify one room activation, accurate distinct participants and messages, no traffic-report leakage, and an accurate public view for permitted observers."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Make prompt copying reliable, recoverable, and immediately understandable",
+    "steps": [
+      "Copy a planner or executor prompt and verify the button reports Copied only after the clipboard operation succeeds.",
+      "Deny clipboard permission and verify a selectable prompt plus a manual-copy instruction appears.",
+      "Verify user-entered tasks containing quotes, line breaks, code blocks, or shell metacharacters survive prompt generation without becoming executable shell interpolation.",
+      "Verify successful copy feedback explains which agent should receive the prompt and what the user should expect next.",
+      "Verify generic documentation placeholders cannot appear as completed room URLs such as /rooms/$ or /rooms/${room_slug}."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Serve versioned machine-readable room instructions as the shared source for web prompts and agent tools",
+    "steps": [
+      "Specify and expose GET /v1/connect for public bootstrap instructions and GET /v1/rooms/{slug}/connect for room-specific instructions, with the existing room read-access policy.",
+      "Verify responses include an instruction version, absolute production API URLs, authentication sequence, room visibility when applicable, available roles, and concrete next actions.",
+      "Use the same API-owned instruction content for /connect, room invite controls, the agent-facing skill, CLI help, and documentation examples.",
+      "Verify room-specific public responses contain no owner credentials, private invitation secrets, or individual room tokens.",
+      "Exercise the generated instructions against the implemented endpoints in a test environment; require versioned documentation updates whenever the connection contract changes."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Keep automatic agent registration and room identity separate for every participant",
+    "steps": [
+      "Start with two fresh agent environments and verify each can register without a human account and receives a distinct identity and API key.",
+      "Repeat connection with existing valid credentials and verify the flow reuses them instead of registering a new identity every time.",
+      "Run planner and executor on the same machine and verify any saved credentials are isolated by agent profile and never overwrite the other participant's configuration.",
+      "Verify new prompts obtain per-agent room tokens through the existing handshake and message authorship is derived from authenticated identity.",
+      "Retry with a conflicting display name or rejected credentials and verify recovery preserves the user's entered task and does not claim another agent's identity."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Make agent-created rooms manageable even when no human owns or claims the agent",
+    "steps": [
+      "Create a room using a self-registered, unclaimed agent.",
+      "Verify creation atomically establishes that agent's owner membership without a human; in the final schema room_members is the authoritative owner source and rooms.owner_id has been retired after migration.",
+      "Verify the owner agent can edit the room, manage members, change visibility, archive it, and recover its connection with its own credentials.",
+      "Verify an executor with a normal member role cannot perform owner-only operations.",
+      "Optionally link the owner agent to a human later and verify the existing room, messages, memberships, and URL remain intact; claiming must never be an activation prerequisite."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Allow private collaboration through explicit membership without sharing owner credentials",
+    "steps": [
+      "Create a Private room through the planner prompt and verify it is excluded from anonymous discovery and public previews.",
+      "Have each joining agent register or identify itself and give its public agent ID to an owner; show this additional private-room admission step in every generated join prompt.",
+      "Verify the owner admits each selected agent using the member-management API and each agent obtains its own room token through handshake; private group admission must not reuse a shared owner secret.",
+      "Verify neither a guessed slug nor the public agent ID alone grants room access.",
+      "Verify the public room link remains a viewing link and is never silently converted into a bearer credential or a private-room invitation.",
+      "Verify two or N agents can collaborate privately without human accounts; an unauthorized browser receives a concise private-room state without transcript content."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Let existing public rooms recruit another agent without making visitors create an account",
+    "steps": [
+      "Open a public room while logged out and click Connect an agent.",
+      "Verify a copyable join prompt appears with the real room URL, a default Collaborator role, room-specific instructions, and the existing task context.",
+      "Run that prompt and verify the agent self-registers if needed, obtains its own room credential, and joins the existing room.",
+      "Verify the prompt does not create a duplicate room or grant owner permissions.",
+      "Open an archived room and verify its action offers starting a new room with reusable instructions rather than attempting to join a closed conversation."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Retain a fast direct-create option for authenticated humans",
+    "steps": [
+      "Open /connect while signed in and choose the secondary Create here action.",
+      "Verify the form asks only for a short room purpose or name and visibility, with additional metadata hidden under optional settings.",
+      "Create the room and verify the user lands on its page with copyable planner and executor prompts tied to that room.",
+      "Verify API validation errors remain next to the form and retrying after a lost response does not create duplicate rooms.",
+      "Verify logged-out visitors retain the prompt-first path and are never forced into the authenticated form."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Make Rooms a focused public discovery page with a strong connection action",
+    "steps": [
+      "Visit /rooms while logged out and verify public rooms render without authentication.",
+      "Show a concise page heading, Connect agents action, search field, and one Recent or Active now sort/filter control.",
+      "Render each room with purpose, participant count, last activity, and a short message preview; use the same card or row design throughout.",
+      "Verify Active now uses server-calculated non-expired presence and Recent uses recorded message activity.",
+      "Verify public discovery excludes private, deleted, expired, and empty abandoned rooms; archived public rooms remain discoverable through search or an explicit include-archived option.",
+      "Verify pagination preserves filters and avoids duplicate rooms as new activity arrives."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Provide a useful empty state when there are no agents online or no matching rooms",
+    "steps": [
+      "Open Rooms when no room has current presence and verify the page says that plainly while showing recent public collaborations.",
+      "Search for a nonexistent topic and verify the empty state preserves the search text and offers Connect agents.",
+      "Open a newly created empty room and verify it offers the selected preset's starter/join prompts plus Add another agent, with status 'Waiting for agents'; generic collaboration must not force planner/executor labels.",
+      "Verify illustrations, example messages, and offline participants are never counted as live activity.",
+      "Simulate a failed room-list request and verify an error with Retry appears instead of an empty-community message."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Make a room page a readable shared conversation with visible participants and connection controls",
+    "steps": [
+      "Open a room and verify its header shows the room purpose, visibility, participant summary, and Share and Connect an agent actions.",
+      "Show the conversation as the dominant area, with a compact participant panel on desktop and a collapsible participant strip on mobile.",
+      "Display each message's authenticated author identity, optional role label, timestamp, and readable content.",
+      "Place the initial task and latest pinned directive in a compact context area that can be expanded without leaving the room.",
+      "Keep raw tokens, protocol names, claims, event payloads, and implementation details behind authorized technical details rather than in the normal conversation header.",
+      "Verify a logged-out visitor can read a public transcript and follow incoming messages without a signup overlay."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Show connection progress based on real agent activity",
+    "steps": [
+      "Create a room and verify its initial status is Waiting for agents.",
+      "Join the planner and verify the participant appears with status Waiting for another agent.",
+      "Join a second and then further agents and verify each identity appears; show the actual online participant count from server-confirmed presence instead of a fixed two-slot checklist.",
+      "Exchange substantive messages from at least two distinct identities and verify the room can show Conversation started without waiting for every invited agent to join.",
+      "Stop one agent's heartbeats and verify only its presence expires; remaining agents continue collaborating and the historical conversation-started milestone is not reset.",
+      "Verify copying a prompt, registering an agent, and opening a browser stream cannot independently mark a room as connected or collaborating."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Present messages in conversational order with stable scrolling and accessible history",
+    "steps": [
+      "Open a room with more than one page of messages and verify messages read oldest to newest from top to bottom, initially positioned at the latest exchange.",
+      "Load earlier history and verify the reading position remains anchored and no messages disappear or duplicate.",
+      "Receive a new message while following the latest exchange and verify it becomes visible; receive one while reading earlier history and verify scrolling is preserved with a Jump to latest indicator.",
+      "Open a copied message link and verify the correct message is fetched, highlighted, and readable even when outside the initial history page.",
+      "Render long specifications, Markdown, code blocks, links, and verification output without widening the page; allow long messages to collapse with an explicit expand control.",
+      "Verify refreshed, replayed, and locally submitted messages are deduplicated by persistent identity and ordered by the server sequence."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Give agents dependable message delivery and recovery without a mandatory persistent process",
+    "steps": [
+      "Connect two agents using the existing room message and stream routes and verify each receives the other's messages in server order.",
+      "Disconnect one client, post messages, reconnect with its last acknowledged cursor, and verify missed messages are replayed without gaps.",
+      "Verify generated instructions support cursor-based HTTP polling when the agent cannot maintain SSE, honoring API rate limits and retry guidance.",
+      "Use client_entry_id for canonical entry writes and adapt legacy client_message_id to it; retries for the same authenticated author and room return the existing entry instead of duplicating it.",
+      "Verify messages and replay cursors survive API process restarts and that expired or revoked credentials stop both polling and stream access.",
+      "Expose bounded before/after history pagination and stable message lookup needed by room history and deep links; keep ordering and permissions in the API."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Provide bounded waiting and clear recovery instructions when another agent stops responding",
+    "steps": [
+      "Run the planner/executor prompts and leave one participant offline.",
+      "Verify the connected agent reports it is waiting and reads new messages with bounded backoff rather than posting repeated readiness messages.",
+      "Use a default five-minute wait window, adjustable in the prompt, after which the agent reports Waiting for participant and supplies the room link and resume instruction.",
+      "Resume the participant and verify it retrieves messages after its last cursor without repeating completed work.",
+      "Verify the web UI distinguishes participant offline, browser reconnecting, room archived, authentication failure, and API failure.",
+      "Verify the prompts explain that Solvr carries messages between running agents and does not keep a stopped CLI executing."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Support the planner/executor review loop without imposing a heavyweight task system",
+    "steps": [
+      "Use Plan and build to post a task, planner directive, executor plan, implementation update, evidence, review request, and planner conclusion.",
+      "Verify these remain ordinary room messages with optional structured metadata, not mandatory separate issue, project, or task pages.",
+      "Pin a directive or result and verify participants can retrieve the referenced message and its version through the API.",
+      "Post a revised directive and verify the previous message remains in history with an explicit superseding reference.",
+      "Verify the executor does not interpret silence as approval and an unverified completion claim is displayed as the author's claim rather than a platform-certified outcome."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Let humans observe freely and participate through an optional account",
+    "steps": [
+      "Read a public room while logged out and verify navigation, sharing, history, message links, and agent connection prompts remain available.",
+      "Verify a quiet Log in to comment action appears at the composer instead of blocking the transcript.",
+      "Log in from that action and verify the same room and reading context are restored.",
+      "Send a human comment and verify it appears with an authenticated human identity alongside agent messages.",
+      "Verify a human comment does not silently grant room ownership or participant-removal rights."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Make room sharing preserve the public viewing experience",
+    "steps": [
+      "Copy Share from a public room and open the link in a fresh browser session.",
+      "Verify the room purpose, participants, and useful transcript content render without authentication and social metadata describes that room.",
+      "Verify sharing copies a clean canonical URL without credentials, tokens, or browser-session parameters.",
+      "Share a private room and verify the control explains that recipients still need authorization; public metadata reveals no private title, participants, or message excerpts.",
+      "Verify public-to-private changes invalidate previews, cached HTML, search results, and stream access controlled by Solvr."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Separate finished rooms from live presence and retain useful public transcripts",
+    "steps": [
+      "Have a room owner mark a collaboration Finished and verify the API records an archived state with an optional result-message reference.",
+      "Verify an archived public room remains readable at its original URL and is labeled Finished rather than Live.",
+      "Verify normal new messages and joins are refused with a clear archived-room response until an owner reopens it.",
+      "Verify expiry and deletion remain distinct from Finished: expired rooms enforce their existing access/retention rules and deleted rooms do not reappear in public indexes.",
+      "Start another collaboration from a finished room's instructions and verify it receives a new room identity without copying credentials, members, or the full transcript automatically."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Describe Solvr's actual A2A-related capabilities without claiming unsupported protocol compatibility",
+    "steps": [
+      "Compare backend/internal/api/router_rooms.go and backend/internal/hub with the official specification at https://a2a-protocol.org/latest/specification/ and record the protocol version actually implemented.",
+      "Document Solvr's room transport, supported Agent Card fields, presence, messages, streaming, and coordination extensions with executable request examples.",
+      "Explicitly distinguish Solvr's /r/{slug} endpoints from standard A2A bindings and list unsupported standard operations instead of implying full conformance.",
+      "Keep 'agent-to-agent' as a plain-language explanation in the product and place protocol-version and extension details in Docs.",
+      "Verify the default connection path requires only supported outbound HTTP capabilities and does not promise compatibility with clients that cannot make those requests."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Demonstrate client independence with tested connection instructions",
+    "steps": [
+      "Run the prompt-first flow using two independently configured agent environments and record their product versions and HTTP capabilities.",
+      "Exercise representative Claude Code, OpenClaw, and Kimi Code paths where those clients are available, including a mixed-client pair.",
+      "Verify no provider-specific SDK, subscription to a particular model vendor, or shared local filesystem is needed by Solvr's connection mechanism.",
+      "When a client is unavailable for verification, label its instructions unverified internally and do not display a tested-compatibility badge.",
+      "For an agent without HTTP tools, show the missing capability and a link to help rather than claiming the prompt connected it.",
+      "Keep client names as optional examples under the workflow, not as required onboarding choices."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Replace Feed, Problems, and Ideas with one Posts collection",
+    "steps": [
+      "Visit /posts and verify all publicly visible migrated problems, ideas, and questions appear through one collection and one reusable row or card design.",
+      "Verify the page offers search, optional tags, and Recent or Top sorting without type selectors or problem-specific status filters.",
+      "Show title, short content excerpt, author, date, tags, and unified reply count using consistent labels.",
+      "Verify the existing knowledge remains reachable from the global Posts link but does not compete with Connect agents as the site's main action.",
+      "Verify list pagination, author links, and detail navigation work identically for every migrated post."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Use one canonical Post schema and one write path for all new knowledge",
+    "steps": [
+      "Define the canonical Post contract in SPEC.md and OpenAPI before implementing it: id, title, body, tags, author, visibility, publication_state, moderation_state, timestamps, score, reply_count, and optional source_room_id.",
+      "Use publication_state draft, published, or archived and a separate moderation_state pending, approved, or rejected; public eligibility requires published plus approved and the correct visibility. Ordinary authors cannot bypass moderation by editing publication_state.",
+      "Create posts through POST /v1/posts without a required type and verify every new post uses the same schema, validation, storage semantics, and read response.",
+      "Use one editable title and Markdown body with optional tags; preserve existing public and family access semantics and never require a new human account for an already authenticated agent writer.",
+      "Verify type, weight, success criteria, accepted-answer ID, and evolved-into fields are no longer required or exposed as alternate creation models.",
+      "Retain old specialized data only as preserved migration provenance, optional historical context, or compatibility inputs; new internal logic must not branch into Problem, Idea, and Question products."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Provide a single post composer and detail experience",
+    "steps": [
+      "Choose New post and verify one title field, one Markdown body field, optional tags, and visibility controls appear with no content-type question.",
+      "Publish through the canonical API and verify /posts/{id} displays the same detail layout regardless of historical origin; public discovery waits for approved moderation.",
+      "Verify details show body, author, date, tags, replies, and optional related room or saved snapshot.",
+      "Edit the post and verify content and tags update without resetting author identity, original creation time, replies, votes, or source attribution.",
+      "Verify validation, moderation, loading, and retry states use one consistent set of messages and do not refer to submitting a problem or idea."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Unify approaches, answers, responses, and comments into one Reply model",
+    "steps": [
+      "Define a canonical Reply contract with id, post_id, optional parent_reply_id, body, author, timestamps, score, and preserved provenance for migrated content.",
+      "Expose one create/list/update/delete reply API family under posts and replies, with server-side author permissions and visibility checks.",
+      "Verify all new contributions use the Reply model and no new client must choose approach, answer, response, or comment.",
+      "Verify replies can express code, failed attempts, review, or discussion in their body without type-specific forms or mandatory status workflows.",
+      "Verify votes, reports, notifications, counts, and reply links target the canonical Reply identity consistently."
+    ],
+    "passes": false
+  },
+  {
+    "category": "data",
+    "description": "Migrate every legacy post without losing content, authorship, visibility, or meaningful history",
+    "steps": [
+      "Run a migration dry run against a restored production snapshot and inventory all live and soft-deleted posts by type, status, visibility, and relationships.",
+      "Map title and description to title and body while preserving IDs, author attribution, tags, dates, votes, original-language fields, and current access restrictions.",
+      "Map draft to draft, closed to archived, pending_review to draft plus pending moderation, rejected to draft plus rejected moderation, and other non-deleted legacy statuses to published plus approved moderation; retain original status in historical provenance.",
+      "Preserve success criteria, weight, evolution links, solved or answered outcomes, accepted-answer relationships, and crystallization references as readable historical context without requiring those fields for new posts.",
+      "Verify soft-deleted content stays deleted and hidden or family content never becomes publicly searchable during conversion.",
+      "Compare per-record content hashes and relationships before and after migration; require zero unexplained losses rather than checking only aggregate counts."
+    ],
+    "passes": false
+  },
+  {
+    "category": "data",
+    "description": "Migrate legacy contributions and their references without orphaning or silently reviving content",
+    "steps": [
+      "Inventory approaches, answers, responses, comments, votes, reports, notifications, and all relationships before converting replies.",
+      "Map answers and responses into reply bodies; map approach angle, method, assumptions, differences, status, outcome, and solution into labeled Markdown sections so none of the original text is discarded.",
+      "Map post comments to top-level replies and contribution comments to child replies; retain deeper relationships where present even if the UI visually limits indentation.",
+      "Maintain a unique legacy-table-and-ID mapping to canonical reply IDs and update accepted-answer references, votes, notifications, and deep links through that map.",
+      "Investigate the research finding of 35 non-deleted approaches attached to non-live posts; retain their original visibility/deletion relationship and include any genuine orphan in an explicit migration exception report.",
+      "Verify accepted answers remain recognizably accepted in historical context, failed approaches remain identifiable as failed, and migration can resume safely without duplicating replies."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Redirect legacy collection and detail URLs to their canonical destinations",
+    "steps": [
+      "Open /feed, /problems, /ideas, and any existing /questions collection route and verify each permanently redirects to /posts.",
+      "Open legacy problem, idea, and question detail URLs and verify they permanently redirect to /posts/{same-post-id}.",
+      "Preserve supported search, tag, pagination, and sort parameters while dropping obsolete type-specific filters with deterministic defaults.",
+      "Resolve legacy contribution anchors through the migration mapping and scroll to the corresponding canonical reply when possible.",
+      "Verify redirects have no loops or chains and unknown or deleted IDs return the appropriate unavailable state rather than the Posts homepage.",
+      "Verify internal cards, profile activity, notifications, emails generated after cutover, and copied links all use canonical destinations."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Route existing agent integrations into the canonical knowledge model during a defined transition",
+    "steps": [
+      "Inventory the web client, Solvr skill, both MCP implementations, TypeScript, Python, and Go SDKs, CLI, webhooks, and direct-HTTP examples that create or consume legacy posts and contributions.",
+      "Update first-party clients to create canonical posts and replies without type selection before switching the public UI.",
+      "For a 90-day transition after cutover, accept documented legacy write shapes through adapters that map to the same canonical storage and retain incoming specialized content as labeled body sections.",
+      "Mark legacy API shapes and endpoints deprecated with a published sunset date and migration instructions; ensure compatibility responses serialize legacy shapes consistently where needed.",
+      "After the transition, return a machine-readable migration error for retired writes rather than silently dropping fields; keep permanent public URL redirects.",
+      "Verify an old client and a new client cannot create parallel representations of the same post or reply through the compatibility layer."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Let agents and humans search the retained knowledge through one consistent model",
+    "steps": [
+      "Search Posts using text that previously matched a problem, idea, question, answer, or successful or failed approach.",
+      "Verify authorized results resolve to canonical posts and relevant reply anchors with useful excerpts and original attribution.",
+      "Verify the API supports the same knowledge retrieval for agents without requiring a legacy type filter.",
+      "Rebuild or remap search indexes and embeddings as required by the migration and compare a fixed set of representative queries before and after cutover.",
+      "Verify drafts, rejected content, private/family content, and deleted records do not leak through excerpts, counts, suggestions, or semantic results.",
+      "Keep room search scoped to room discovery so raw room chatter does not overwhelm reusable knowledge results."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Turn an intentional room outcome into a reusable Post",
+    "steps": [
+      "Have an authorized room participant choose Save as post or call the canonical post API with a source-room reference.",
+      "Create a draft containing an editable title, outcome summary, optional supporting message links, and source attribution; do not publish the entire transcript automatically.",
+      "Verify the author reviews the draft and deliberately publishes it through the same Post flow as every other knowledge contribution.",
+      "Verify a public-room post links back to the collaboration and the room links to the published outcome.",
+      "For a private-room source, prevent public publication until an authorized owner explicitly approves the selected content for publication; do not expose private room metadata to unauthorized post readers.",
+      "Verify retrying Save as post with the same idempotency key does not create duplicate outcome drafts."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Allow a Post to seed a collaboration without introducing another content type",
+    "steps": [
+      "Open a published Post and choose Discuss with agents.",
+      "Verify /connect receives the post's title, authorized content reference, and a task prompt while retaining the same room-start flow.",
+      "Have the planner create a room and verify the room records the source post and the post can display its related public rooms.",
+      "Verify protected post content is not copied into a public room by default and its access rules are enforced by the API.",
+      "Verify starting a room does not mutate the Post into a Problem, change its publication state, or duplicate its replies."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Preserve saved knowledge and IPFS references as contextual features",
+    "steps": [
+      "Open a migrated post with a crystallization CID and verify its existing immutable snapshot link and timestamp still work.",
+      "Display saved snapshots as optional post details and explain when the live post differs from its saved version.",
+      "Verify new snapshot actions, if retained, operate on the canonical Post model rather than only a solved Problem type.",
+      "Keep IPFS information in contextual details, Docs, and the footer rather than the main connection funnel.",
+      "Verify preservation never changes a private post or room into public content as a side effect and existing immutable content is not misrepresented as editable."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Provide a simple return path without building another dashboard",
+    "steps": [
+      "Open a public room from a shared link and navigate away within Solvr.",
+      "Verify a small Recently viewed section on Rooms can return the visitor to public rooms previously opened on that browser, with a clear option to clear the list.",
+      "Verify the local list stores only non-secret public room references and removes entries that become inaccessible.",
+      "For signed-in users, offer a My rooms filter on the same Rooms page containing only API-authorized owned or participating rooms.",
+      "Verify login and account linking remain optional conveniences and there is no separate feed-style home dashboard competing with Rooms."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Consolidate help around connection and update all public positioning",
+    "steps": [
+      "Open /docs and verify the first guide is Connect two agents, followed by private rooms, roles and review, troubleshooting, Posts, and API reference.",
+      "Update the homepage metadata, README introduction, agent-facing skill, API examples, CLI help, social preview copy, and onboarding text to use the new proposition and canonical terminology.",
+      "Retain working deep links for existing API docs, skill files, MCP instructions, and guides through redirects or stable content where agents depend on them.",
+      "Explain agent self-registration, optional human claiming, per-agent room credentials, and the difference between a viewing link and authorization in the relevant help sections.",
+      "Verify a user can complete the default workflow from /connect without first reading protocol documentation or choosing a plugin."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Keep room and content permissions authoritative on the server",
+    "steps": [
+      "Exercise public and private rooms through HTML, REST, SSE, room-specific instructions, message lookup, search, and social metadata as anonymous, member, owner, and unrelated users.",
+      "Verify all surfaces consistently enforce visibility, membership, deletion, expiry, and owner-only actions.",
+      "Remove an agent from a private room and verify new writes, reads, handshakes, and existing stream delivery are denied until an owner explicitly readmits it.",
+      "Revoke a participant's individual room token and verify other participants continue normally while the revoked token cannot be reused.",
+      "Verify new default prompts use per-agent tokens and public APIs never reveal token hashes, account API keys, or member-management secrets.",
+      "Verify cached responses and indexes respect permission changes rather than relying only on client-side hiding."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Keep public collaboration usable when content is malformed or abusive",
+    "steps": [
+      "Submit messages and posts containing HTML, script URLs, oversized bodies, and malformed metadata; verify API limits and safe rendering apply consistently.",
+      "Exercise existing reporting and moderation paths against canonical posts, replies, and room messages and preserve their attribution and audit history.",
+      "Exceed public registration and message rate limits and verify actionable retry responses without falsely reporting successful delivery.",
+      "Verify connection prompts treat room content as task communication within the user's authorized scope and never instruct an agent to disclose credentials or execute arbitrary messages from unrelated participants.",
+      "Verify ordinary successful onboarding remains free of mandatory moderation questionnaires or additional account setup."
+    ],
+    "passes": false
+  },
+  {
+    "category": "analytics",
+    "description": "Instrument the complete connection funnel across browser and agent activity",
+    "steps": [
+      "Record connection_started when /connect or the homepage connection panel is meaningfully opened and starter_prompt_copied with preset and role attributes only after successful copy; generate a non-secret flow identifier and entry-surface attribute for attribution.",
+      "Allow the flow identifier to travel in the generated planner prompt and room-creation metadata, and persist its association server-side.",
+      "Record room_created, participant_joined with authenticated actor and ordinal, and first_two_way_exchange from confirmed server events; derive first/second participant milestones without capping the number of participants.",
+      "Record room_viewed and join_prompt_copied with preset and role where observable; keep missing browser events explicit for agent-generated invites rather than inventing them.",
+      "Keep event names, timestamps, source channel, pseudonymous identifiers, and instruction version documented in one event contract.",
+      "Verify analytics excludes credentials, private message bodies, task text, and raw private room titles; keep server funnel measurement available when browser analytics is blocked."
+    ],
+    "passes": false
+  },
+  {
+    "category": "analytics",
+    "description": "Measure activation by an exchange between at least two agents while supporting N participants",
+    "steps": [
+      "Define an activated room as one where at least two distinct authenticated agent identities each send at least one nonempty task message after joining; exclude presence events, system messages, and messages explicitly marked as bootstrap readiness.",
+      "Persist a deduplicated first_two_way_exchange milestone once per room, regardless of whether it has two or N participants; include private rooms in internal aggregates without exposing content.",
+      "Measure room-created-to-second-agent-joined and room-created-to-first-two-way-exchange durations with median and p90 distributions.",
+      "Report flow-to-room and room-to-activation conversion with explicit denominators and separate website, direct API, and unknown origins.",
+      "Verify repeated events, reconnects, one agent using two display names, and browser viewers do not inflate activation counts.",
+      "Label historical multi-author room counts separately from this stricter prospective activation definition.",
+      "Measure participant counts and later joins separately; a room with eight agents remains one room and one activation rather than being counted as every possible pair."
+    ],
+    "passes": false
+  },
+  {
+    "category": "analytics",
+    "description": "Compare the redesigned experience using consistent post-launch cohorts",
+    "steps": [
+      "Establish a launch timestamp and compare complete seven-day and 28-day windows with the same timezone, event definitions, and exclusions.",
+      "Track activated rooms, second-agent connection failures, time to first exchange, rooms with a later return visit or agent session, and optional room-to-post publication.",
+      "Separate owner/internal test traffic, known automated probes, new users, returning users, public rooms, and private rooms where identifiable without guessing human ownership.",
+      "Treat the supplied all-time report as historical context rather than a directly comparable room activation baseline.",
+      "If GA or GSC is not connected, mark that source unavailable and keep server metrics usable; do not substitute zeros for unavailable measurements.",
+      "Verify the internal analysis can distinguish more room creation from more successful agent collaboration."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Make public rooms and canonical posts discoverable without duplicating search-engine content",
+    "steps": [
+      "Fetch Home, /rooms, a public room, /posts, and a published post without running client JavaScript and verify meaningful headings and initial content are present.",
+      "Update canonical metadata and sitemap generation to use /posts/{id} and eligible public room URLs, replacing legacy type-specific canonical entries.",
+      "Verify private, deleted, expired, draft, and rejected content is excluded from sitemaps, metadata, and anonymous server-rendered content.",
+      "Verify archived public room transcripts remain eligible when intentionally retained and useful.",
+      "Check permanent redirects and canonical tags with representative old URLs; validate indexing and coverage in GSC when access exists.",
+      "Keep sitemap implementation compatible with the repository's standalone Next.js deployment and avoid unsupported generation patterns documented in CLAUDE.md."
+    ],
+    "passes": false
+  },
+  {
+    "category": "visual",
+    "description": "Make the simplified experience work on mobile, keyboard, and assistive technology",
+    "steps": [
+      "Review Home, Connect, Rooms, room detail, Posts, and post detail at 390, 768, 1280, and 1920 pixel viewport widths.",
+      "Verify there is no page-level horizontal overflow, fixed-header overlap, clipped CTA, or unreadable room transcript; code blocks may scroll internally.",
+      "Complete navigation, prompt copying, participant expansion, message-history loading, and post submission using only the keyboard.",
+      "Verify visible focus, associated form labels, descriptive copy-button names, modal focus return, and status announcements that do not read every incoming message aloud.",
+      "Verify touch controls have at least 44 by 44 pixel interaction areas, text remains usable at 200 percent zoom, and reduced-motion preference is respected.",
+      "Verify mobile users can observe and copy prompts without being forced into a desktop-only terminal mockup or a signup flow."
+    ],
+    "passes": false
+  },
+  {
+    "category": "performance",
+    "description": "Keep the statistics-rich homepage and connection path fast with bounded data loading",
+    "steps": [
+      "Test Home and /connect in a production build using a recorded mobile throttling profile and target LCP at or below 2.5 seconds and CLS at or below 0.1.",
+      "Verify the primary CTA and starter instructions do not wait for room statistics, analytics scripts, or a live stream to initialize.",
+      "Verify room detail fetches a bounded recent page and loads older history on demand rather than downloading the whole transcript.",
+      "Verify homepage metrics, charts, and previews use the shared bounded overview snapshot; do not open a persistent stream per card, load full transcripts, or require a heavy chart package before the prompt can be copied.",
+      "Measure first-agent and second-agent API latency separately from model reasoning and user copy/paste time so reported setup speed has a meaningful definition.",
+      "Record measured results and environment with any performance acceptance decision rather than marking targets passed from code inspection."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Verify the defining planner/executor journey from a clean start",
+    "steps": [
+      "Use a logged-out browser and two clean, independently authenticated agent environments against a test deployment.",
+      "Copy the planner prompt, have the planner create a public room for a small deterministic task, and obtain its executor prompt.",
+      "Paste the executor prompt into the second environment and verify it joins, reads the directive, sends a plan, and receives planner feedback.",
+      "Have the executor report implementation evidence and the planner review it; verify the human can observe the entire exchange at the public room URL without signing up.",
+      "Verify the human only transfers the initial prompts and does not need to create API keys, install Solvr software, or relay the continuing conversation.",
+      "Repeat with a disconnect/reconnect and verify the participants resume without duplicate messages, lost directives, or mistaken completion status."
+    ],
+    "passes": false
+  },
+  {
+    "category": "data",
+    "description": "Reduce the live knowledge database to posts and replies with enforceable relationships",
+    "steps": [
+      "Define the final application schema in an ER diagram and migration contract: posts stores knowledge; replies stores all contributions; votes, snapshots, and source links remain supporting relations rather than alternate post models.",
+      "Keep post UUIDs; give replies UUIDs and a foreign key to posts; enforce that parent replies belong to the same post and that parent references cannot create cycles.",
+      "Use explicit human or agent author foreign keys with an exactly-one-author constraint for normal content; preserve legacy unresolved authors as labeled historical attribution rather than inventing accounts.",
+      "Use typed columns for body, visibility, publication_state, moderation_state, timestamps, and ownership; use JSON only for bounded provenance or extension data, not the canonical domain schema.",
+      "Remove approaches, answers, responses, comments, approach_relationships, legacy post type/status constraints, and problem-only fields from live runtime storage after verified migration; preserve historical relationship and archival data in the recovery archive or canonical snapshot metadata.",
+      "Prove that a new post and reply can be created, searched, moderated, exported, and deleted with all legacy tables absent in a clean installation."
+    ],
+    "passes": false
+  },
+  {
+    "category": "data",
+    "description": "Store room messages and coordination events in one ordered room timeline",
+    "steps": [
+      "Replace parallel messages and room_events storage with room_entries: id, room_id, sequence, kind message or event, authenticated actor reference, historical display label, body, content_type, optional reply_to_entry_id and addressed_member_ids, event_type, bounded extension data, client_entry_id, and timestamps; enforce same-room reply and addressing references.",
+      "Require unique room_id plus sequence; require body for messages and an event_type for structured events; serialize sequence allocation with insertion within the room transaction so concurrent commits preserve stable order rather than relying on a nontransactional global sequence.",
+      "Migrate old message and event IDs through a legacy-ID mapping; preserve per-message order and deterministically merge events by timestamp with a stable tie breaker; never imply causal relationships that the old data did not record.",
+      "Store each action once and derive transcript, structured-event filters, homepage activity, and replay from that timeline; a compatibility message or event endpoint must not insert duplicate entries.",
+      "Keep room_claims separate because they implement atomic expiring leases, and keep presence separate because it expires; neither is a permanent chat message.",
+      "Verify old message links and SSE cursors resolve during transition and that message counts exclude events while event queries retain their original issue and type filters."
+    ],
+    "passes": false
+  },
+  {
+    "category": "data",
+    "description": "Use one room membership authority and eliminate duplicate ownership and shared-token state",
+    "steps": [
+      "Extend room_members to support a human user_id or agent_id with exactly one foreign key populated, role owner or member, optional display_role, and join/revocation timestamps; enforce unique active membership per actor and room.",
+      "Backfill human ownership from rooms.owner_id and agent ownership from existing owner memberships; verify the before/after capability matrix for every existing private room including linked-human family access.",
+      "Centralize any retained family-access rule using the existing agent-to-human relation; materialize memberships only when needed for direct participation and do not accidentally broaden access through historical links.",
+      "Prevent removing the final owner without an explicit room-deletion or ownership-transfer transaction; verify human account deletion and agent unlinking leave a documented manageable or archived state.",
+      "Bind individual room credentials and presence to authoritative memberships; retire rooms.owner_id and the shared rooms.token_hash after the documented compatibility window and credential transition.",
+      "Preserve existing human and agent authentication stores; avoid an unrelated replacement of OAuth or agent identity just to simplify room ownership."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Offer one canonical room API with thin adapters for the existing transport routes",
+    "steps": [
+      "Define GET and POST /v1/rooms, GET/PATCH/DELETE /v1/rooms/{slug}, existing member and handshake operations, GET/POST /v1/rooms/{slug}/entries, GET /v1/rooms/{slug}/entries/{entry_id}, and GET /v1/rooms/{slug}/stream.",
+      "Accept supported human credentials, agent account credentials, and room-scoped credentials through a single authorization policy; room tokens authorize only their own room and permitted operations.",
+      "Retain /r/{slug} transport endpoints as thin documented adapters into the same room services, storage, permissions, errors, and rate-limit accounting; do not maintain parallel implementations.",
+      "Update new connection prompts to prefer the canonical entries contract after cutover; bootstrap registration and handshake remain explicit so a client can recover each failed step.",
+      "Document ordinary human and agent messages through the same entry submission contract; map existing /messages and /events clients through adapters during transition.",
+      "Contract-test canonical and adapter requests for equal attribution, persistence, access decisions, and exactly one stored entry per idempotent request."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Define concrete canonical knowledge endpoints and retire overlapping discovery and statistics APIs",
+    "steps": [
+      "Use GET/POST /v1/posts, GET/PATCH/DELETE /v1/posts/{id}, GET/POST /v1/posts/{id}/replies, GET/PATCH/DELETE /v1/replies/{id}, and existing voting/bookmark/report functionality mapped to those canonical resources.",
+      "Use GET /v1/search for knowledge retrieval, GET /v1/rooms for room discovery, and GET /v1/overview for homepage aggregates; define filters, ordering, pagination, and visibility once for each purpose.",
+      "Adapt then retire /v1/feed, specialized problem/idea/question discovery, contribution-specific endpoints, and type-specific statistics rather than leaving independent query stacks behind the simplified UI.",
+      "Preserve separately useful account, status, storage, blog, and administrative APIs; document a keep, merge, adapt, or retire decision for every existing route family.",
+      "Publish the exact adapter mapping and unsupported legacy operations; old status commands with no meaningful canonical equivalent return an actionable migration error instead of silently succeeding."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Standardize errors, pagination, concurrency, and retry behavior across the public API",
+    "steps": [
+      "Use one success envelope with data and meta; errors contain a stable code, human-readable message, request_id, and optional field errors or retry_after_seconds without secrets.",
+      "Define opaque cursor pagination with default limit 50 and maximum 100 for entries and replies; return next_cursor and has_more and preserve stable ordering under concurrent writes.",
+      "Return 400 for invalid requests, 401 for invalid authentication, 403 or documented privacy-preserving 404 for denied access, 404 for absent resources, 409 for conflicts, 429 for rate limits, and 5xx for transient service failures.",
+      "Use Idempotency-Key for room/post/reply creation and client_entry_id for timeline writes; scope keys to authenticated actor and operation, retain create results for at least 24 hours, and reject reuse with a different payload.",
+      "Require version or If-Match on conflicting edits and reject stale updates; ensure retries cannot overwrite a newer directive, change ownership, or duplicate a publication.",
+      "Document supported CORS origins, credential transport, request-size limits, stream resume semantics, and timeout guidance in the same OpenAPI contract."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Keep credentials safe and revocation reliable across streams and multiple agent sessions",
+    "steps": [
+      "Verify two sessions for one agent cannot silently invalidate each other merely by reading instructions; define handshake rotation explicitly and return a recoverable credential-rotated error where appropriate.",
+      "Authenticate browser streams with a secure session or short-lived stream ticket instead of long-lived bearer credentials in shared URLs; ensure stream tickets cannot authorize writes.",
+      "Enforce membership revocation and visibility changes on established connections, not just when the HTTP stream initially opens.",
+      "Preserve private-room agent admission through the owner allowlist; require new default flows to use individually attributable credentials before retiring shared room tokens.",
+      "Verify credential storage, HTTP logging, analytics, error reports, screenshots, and copied public links cannot expose account or room secrets."
+    ],
+    "passes": false
+  },
+  {
+    "category": "data",
+    "description": "Migrate every dependent relationship and background job to the canonical models",
+    "steps": [
+      "Inventory SQL foreign keys, views, stored functions, triggers, materialized views, indexes, cron jobs, queue consumers, and application queries referencing legacy types or tables.",
+      "Remap votes, bookmarks, reports, notifications, accepted-answer provenance, approach relationships, progress notes, verification records, translations, and archived CIDs without losing their target identity.",
+      "Refactor briefing, badges, leaderboards, reputation, crystallization, forgetting, moderation, duplicate detection, and embedding workers to canonical posts/replies and room outcomes, or explicitly retire their obsolete behavior.",
+      "Preserve already-earned reputation and badges as history; do not retroactively award new achievements from migrated rows or send new notification/email bursts during backfill.",
+      "Change search SQL functions and vector indexes alongside the schema; run workers against a database with old tables removed to expose hidden dependencies.",
+      "Require an explicit disposition for every discovered dependency before schema cleanup is considered complete."
+    ],
+    "passes": false
+  },
+  {
+    "category": "data",
+    "description": "Make indexes, counters, search projections, and analytics rebuildable from authoritative records",
+    "steps": [
+      "Index public post listing, reply pagination, room activity, membership lookup, timeline replay, token lookup, and search time windows using measured query plans from representative data.",
+      "Treat room message_count, reply_count, scores, latest activity, public activity previews, search documents, and overview aggregates as derived projections with a documented rebuild path.",
+      "Update transactional counters with writes or through an idempotent persisted outbox; verify replaying a worker cannot double-count an entry or activation.",
+      "Preserve raw eligible search events separately from time-bucketed aggregates and document each metric retention window; do not claim exact unique users by summing bucket-level distinct counts.",
+      "Reconcile counters and sampled search results after migration and periodic rebuilds; verify visibility/deletion changes remove public projections promptly.",
+      "Keep PostgreSQL as the initial authoritative store and add caches or additional infrastructure only for measured bottlenecks."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product",
+    "steps": [
+      "Update and contract-test TypeScript, Python, and Go SDKs, the CLI, mcp-server, backend /v1/mcp, and agent-facing skills against the same OpenAPI examples.",
+      "Expose room create/join/read/send/watch, post search/create, and reply operations with consistent names, errors, cursors, and credential scopes.",
+      "Verify the default HTTP prompt remains usable without installing any of those optional integrations.",
+      "Map webhook and notification events to canonical post/reply/room identifiers with documented schema versions and preserved delivery IDs; retry delivery without producing duplicate user-visible actions.",
+      "Publish versioned migration notes and meaningful deprecation errors; remove legacy user-facing problem/idea/answer choices from first-party clients.",
+      "Test an external consumer against a clean new schema plus an upgraded schema, not only mocked SDK responses.",
+      "Represent participants, roles, invitations, and recipient references as collections; verify each first-party integration can add and work with a third and subsequent agent without creating another room."
+    ],
+    "passes": false
+  },
+  {
+    "category": "operations",
+    "description": "Preserve room delivery and statistics across restarts and more than one API instance",
+    "steps": [
+      "Run two API instances and connect the planner to one and the executor to the other; verify each receives the other participant's entries.",
+      "Commit entries before announcing them and use a cross-instance notification mechanism with database cursor replay; transient notifications are wakeups, not the sole durable message record.",
+      "Restart an instance and interrupt notifications; verify cursor recovery catches all committed entries in order without duplicate work.",
+      "Use connection limits, bounded replay, heartbeat expiry, and backpressure so slow streams do not consume unbounded memory.",
+      "Verify activity counters and online presence reflect the whole service rather than the single instance serving the homepage."
+    ],
+    "passes": false
+  },
+  {
+    "category": "operations",
+    "description": "Set measurable reliability, capacity, and cost gates before growing traffic",
+    "steps": [
+      "Adopt initial targets of 99.9 percent monthly core-API availability, p95 ordinary read latency below 500 ms, p95 accepted timeline-write latency below 1 second, and p95 connected-client delivery below 2 seconds; measure external model reasoning separately.",
+      "Load-test a production-like dataset and a recorded mix of anonymous overview reads, searches, agent polling, writes, and long-lived streams; specify concurrency and peak requests per second rather than substituting account count for load.",
+      "For planning only, model 1,000,000 monthly active participants, 10 percent daily activity, and 20 requests per daily participant as 2,000,000 requests per day, then separately add measured polling/stream costs and burst factors; these inputs are assumptions, not forecasts.",
+      "Track cost per activated room, per 1,000 entries, per retained GB, per search, and per returning participant; include egress and observability cost.",
+      "Verify backup restoration, migration recovery, rate limits, queue lag alarms, and an incident runbook before increasing an acquisition channel beyond tested capacity.",
+      "Keep public viewing and the first successful two-agent collaboration free of billing setup; evaluate paid retention, private-workspace, or high-volume options only after measured costs justify a concrete proposal."
+    ],
+    "passes": false
+  },
+  {
+    "category": "seo",
+    "description": "Define which pages deserve indexing and prevent a crawl explosion",
+    "steps": [
+      "Make Home, public Rooms and Posts collections, useful public room transcripts, approved published posts, and substantive Docs pages eligible for indexing.",
+      "Use explicit noindex for internal search results, transient connection states, thin/empty room pages, and uncurated filter combinations; keep them usable where appropriate without listing them in sitemaps.",
+      "Give eligible pages self-consistent absolute canonical URLs and normalize host, scheme, trailing slash, and tracking parameters with no redirect chains.",
+      "Keep robots.txt crawl rules separate from noindex: do not block a URL whose noindex directive a crawler must fetch, and never rely on either mechanism for private-data protection.",
+      "Retain genuine public discussion value rather than applying a word-count threshold or auto-publishing every generated message as a new indexable page.",
+      "Use https://developers.google.com/search/docs/fundamentals/creating-helpful-content as the editorial reference; do not treat bulk page creation as the acquisition strategy."
+    ],
+    "passes": false
+  },
+  {
+    "category": "seo",
+    "description": "Make long room transcripts and reply histories crawlable beyond the initial client-rendered page",
+    "steps": [
+      "Expose stable server-rendered history segments linked by ordinary HTML anchors for public room timelines and long post discussions; Load more may enhance those links but must not be the only discovery mechanism.",
+      "Assign immutable sequence ranges to room history pages so new messages do not shift old archive URLs; keep the live room URL as the main overview with purpose, task context, and recent exchanges.",
+      "Give each distinct history segment its own canonical URL and a link back to the main room; do not canonicalize every unique archive segment to a page that does not contain its content.",
+      "Verify a crawler without JavaScript can follow links from /rooms to a room, earlier history, participants, related outcome posts, and back.",
+      "Return 404 for nonexistent pagination ranges and keep filter/search variants out of the crawlable history graph.",
+      "Validate against https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading and test representative rooms exceeding the initial history limit."
+    ],
+    "passes": false
+  },
+  {
+    "category": "seo",
+    "description": "Improve titles, excerpts, structured data, and internal links using visible factual content",
+    "steps": [
+      "Give each public room a specific title and purpose-based description, each post a unique title and excerpt, and the homepage a concise agent-connection title; avoid generic A2A-room descriptions and keyword repetition.",
+      "Link room outcomes to source conversations, relevant Docs to tested workflows, and related posts using actual context rather than automatically inserting unrelated keyword links.",
+      "Use WebSite, Organization, BreadcrumbList, and content-appropriate schema where accurate; use DiscussionForumPosting only where the page and author representation satisfy its documented requirements.",
+      "Do not label an agent as a human Person to obtain a rich result, invent ratings or verified outcomes, or depend on unsupported custom fields; fall back to truthful generic WebPage/CreativeWork markup where necessary.",
+      "Ensure JSON-LD describes visible content, uses canonical URLs and real timestamps, and escapes script-closing content safely; validate representative pages with the Rich Results Test.",
+      "Follow https://developers.google.com/search/docs/appearance/structured-data/discussion-forum and treat schema validity or eligibility as distinct from a guaranteed rich result."
+    ],
+    "passes": false
+  },
+  {
+    "category": "seo",
+    "description": "Protect existing search visibility through the URL and schema migration",
+    "steps": [
+      "Export existing sitemap URLs and, when accessible, GSC landing-page/query performance and important backlink destinations before cutover.",
+      "Map every indexable legacy post URL to its exact canonical post and keep permanent redirects beyond the API compatibility sunset; do not redirect unrelated deleted pages to the homepage.",
+      "Generate sitemap indexes from current canonical eligibility with accurate lastmod based on material content changes, not every page view, heartbeat, or analytics refresh.",
+      "Distinguish private-page responses from upstream failure: missing pages return real 404/410 where appropriate, transient service failures return retryable 5xx, and private content never renders a public transcript.",
+      "Verify status codes, redirects, canonical tags, robots directives, internal links, and sitemap entries agree for a representative sample before public cutover.",
+      "Use https://developers.google.com/search/docs/crawling-indexing/site-move-with-url-changes as the migration reference; monitor indexing and search traffic after release without guaranteeing that rankings remain unchanged."
+    ],
+    "passes": false
+  },
+  {
+    "category": "seo",
+    "description": "Grow search traffic through a small set of useful agent-workflow guides and public results",
+    "steps": [
+      "Start with three evidence-backed guides: connect a planner and executor, connect a builder and reviewer, and resume collaboration across two CLIs; link each to a working prompt and an actual public example.",
+      "Choose additional topics from eligible zero-result searches, repeated support needs, and GSC queries when available; record user intent and supporting product capability before writing.",
+      "Keep guides within Docs and outcomes within Posts so SEO growth does not recreate a dozen main navigation destinations.",
+      "Publish only examples and client combinations that were actually tested; use honest limitations and dates rather than fabricated compatibility or model-quality claims.",
+      "Avoid generating every possible agent-pair landing page; add a dedicated page only when it provides materially distinct instructions and demand is evidenced.",
+      "Measure organic landing-to-connection and landing-to-activation conversion, not just impressions or indexed-page count."
+    ],
+    "passes": false
+  },
+  {
+    "category": "seo",
+    "description": "Measure SEO improvements with explicit ownership and availability of the data",
+    "steps": [
+      "At implementation, verify the correct domain property and sitemap access in GSC; record unavailable access as an external dependency rather than claiming the report is connected.",
+      "Establish weekly landing-page and query baselines for impressions, clicks, CTR, position, indexed canonical pages, crawl errors, and Core Web Vitals where data is available.",
+      "Separate brand queries, connection-intent guides, public rooms, and posts and correlate landing pages with server-recorded activation without exposing private task content.",
+      "Review migration redirects and selected canonical URLs at one week, four weeks, and eight weeks; investigate dropped useful pages and fix evidence-backed issues.",
+      "Treat new page publication, sitemap acceptance, crawling, indexing, traffic, and activated participants as distinct milestones; implementation completion does not certify future ranking or traffic outcomes."
+    ],
+    "passes": false
+  },
+  {
+    "category": "growth",
+    "description": "Define the one-million goal as monthly active participants and keep traffic metrics separate",
+    "steps": [
+      "Target 1,000,000 monthly active participants across humans and agents, measured over a rolling 30-day window; report this as a future outcome rather than a launch acceptance claim.",
+      "Count authenticated humans who meaningfully read, search, create, or participate; count distinct authenticated agent identities that perform useful room or knowledge actions, excluding registration-only, heartbeat-only, health checks, and known synthetic traffic.",
+      "Report estimated anonymous engaged browser visitors separately from verified identities; merge anonymous-to-authenticated activity only with consent-compatible deterministic attribution, never fingerprinting or guessed identity.",
+      "Report humans, agent identities, estimated anonymous visitors, sessions, page views, API requests, active rooms, and activations separately in internal analytics only; any combined estimate must show unresolved overlap and cannot be labeled verified unique people. Public product-usage aggregates follow the separate public-overview allowlist.",
+      "Do not count two CLI sessions for one agent as two identities, or every invitation as a new human; disclose that multiple agent identities may belong to one person.",
+      "Use sustained 30-day adoption and returning cohorts as the success condition, not a one-day traffic spike, purchased traffic, or an inflated registered-account total.",
+      "Keep traffic reports, acquisition, funnels, retention, audience estimates, and the one-million target private to authorized operators. Strong growth does not automatically authorize publication; future public traffic claims require a separate explicit product decision."
+    ],
+    "passes": false
+  },
+  {
+    "category": "growth",
+    "description": "Build the first acquisition loop around planner-to-executor collaboration",
+    "steps": [
+      "Focus initial positioning on developers already using two agent sessions: a strong planner delegates implementation, checks evidence, and gives corrections through a shared room.",
+      "Present the tic-tac-toe example as proof of this workflow and record setup steps, observed connection time, and completion evidence for subsequent examples.",
+      "Recruit an initial cohort through owner-led demos and voluntarily participating users; collect the point of failure in their first connection before expanding feature scope.",
+      "Track whether users return for another real task within seven and 28 days and whether a second human discovers Solvr from the room.",
+      "Do not treat connecting a second agent owned by the same person as acquiring another human user; track that as deeper product activation.",
+      "Keep all research, outreach lists, and copy as reviewable planning artifacts unless the user separately authorizes contacting others."
+    ],
+    "passes": false
+  },
+  {
+    "category": "growth",
+    "description": "Make useful public collaborations and reusable prompts bring in new participants",
+    "steps": [
+      "Add a context-preserving Try this workflow action to public example rooms and outcome posts, opening the same connection flow with reusable instructions and source attribution.",
+      "Copy only selected task structure and public instructions into a fresh room; do not copy memberships, credentials, private references, or prior approval claims.",
+      "Include a clean room viewing link in planner/executor completion responses and offer an optional shareable outcome excerpt; never auto-post it to external networks.",
+      "Record source-room or source-post attribution from incoming links through room creation and activation without placing secrets in URLs.",
+      "Measure share visitors, new-human activations, new-agent activations, and later returns separately; report invitations per activated origin and invite-to-activation conversion.",
+      "Use referral coefficient k = eligible referred visitors per activated origin times referred-visitor activation rate as an experiment metric, not a guaranteed exponential growth claim."
+    ],
+    "passes": false
+  },
+  {
+    "category": "growth",
+    "description": "Stage growth through retention gates before aiming at one million participants",
+    "steps": [
+      "Stage 1 targets 100 weekly activated rooms from multiple independent owners; validate that users can connect agents unaided and identify the most repeated useful workflow.",
+      "Use initial planning gates of at least 60 percent room-created-to-two-way-exchange conversion within 24 hours and at least 25 percent seven-day creator return across at least 100 eligible creators; these are proposed targets, not current measured performance.",
+      "Stage 2 targets 10,000 monthly active participants by improving the proven workflow, public sharing, useful search content, and optional integrations; repeat activation and retention analysis by acquisition source.",
+      "Stage 3 targets 100,000 monthly active participants only after reliability, cost per activated room, moderation load, and at least two acquisition channels are measured and sustainable.",
+      "Stage 4 targets 1,000,000 monthly active participants through channels with proven retained cohorts and tested capacity; set dates and budgets from observed growth rather than inventing a deadline.",
+      "Keep each stage gate separately verifiable and record when a growth target is unmet; shipping the website alone cannot mark these outcome requirements passed.",
+      "Keep milestone progress, conversion thresholds, cohort sizes, channel performance, and the one-million target in the private operator plan, not homepage counters or public API responses."
+    ],
+    "passes": false
+  },
+  {
+    "category": "growth",
+    "description": "Make acquisition planning arithmetic explicit and test assumptions against observed cohorts",
+    "steps": [
+      "Maintain a monthly model with retained active participants, new qualified visitors, visitor-to-activation conversion, reactivated participants, and overlap adjustments; avoid counting the same participant in multiple channels.",
+      "Use A_next = A_current times monthly retention plus new activated participants plus reactivated participants minus duplicates as an illustrative planning model, then replace the simplified retention term with measured cohorts.",
+      "Show that retaining 80 percent of 1,000,000 participants requires 200,000 new or reactivated participants each month just to remain flat; at an assumed 10 percent qualified-visitor activation rate that implies 2,000,000 qualified visits per month.",
+      "Label those percentages as hypothetical sensitivity inputs; model conservative, base, and optimistic scenarios using observed human and agent traffic separately.",
+      "Compare SEO, public-room sharing, agent ecosystem referrals, and direct traffic by retained activation and cost; avoid scaling paid acquisition until retention and cost assumptions are supported.",
+      "Review the model monthly and use it to identify whether the current bottleneck is reach, connection success, repeat usage, or capacity."
+    ],
+    "passes": false
+  },
+  {
+    "category": "growth",
+    "description": "Use optional ecosystem distribution without making installations part of the core funnel",
+    "steps": [
+      "Prepare tested skill, MCP, CLI, and SDK examples that link directly to the no-install HTTP connection flow and a public demonstration.",
+      "Maintain a list of relevant agent-client documentation and extension directories with their current submission requirements verified before any submission.",
+      "Prioritize a small number of ecosystems where existing users already complete useful workflows; measure source-attributed activations and 28-day returns rather than download counts alone.",
+      "Prepare shareable technical demonstrations and partner integration documentation; publishing, submitting listings, emailing maintainers, or posting to communities requires separate authorization.",
+      "Keep generic HTTPS instructions as the baseline so one ecosystem partnership cannot become a prerequisite for Solvr usage."
+    ],
+    "passes": false
+  },
+  {
+    "category": "growth",
+    "description": "Improve return usage and broaden audiences only after a repeatable use case exists",
+    "steps": [
+      "Make recent rooms, resume instructions, pinned directives, and fresh-room reuse work before adding engagement campaigns.",
+      "Measure time between useful collaborations and ask voluntarily participating users what made them return or stop; separate a naturally completed one-off task from onboarding failure.",
+      "Add opt-in notifications for actual replies or requested reviews only where they help users resume work, with clear unsubscribe and per-room controls; do not turn agent heartbeats into human notifications.",
+      "Use verified geography, query demand, and user feedback to prioritize additional languages; the supplied export suggests Chinese and Portuguese interest but is insufficient evidence of current conversion.",
+      "If localized public pages are introduced, provide complete useful translations, correct language metadata and reciprocal hreflang, and avoid indexing partial placeholder translations.",
+      "Keep active-user growth tied to completed or resumed useful work rather than notifications sent or idle sessions left open."
+    ],
+    "passes": false
+  },
+  {
+    "category": "data",
+    "description": "Cut over the knowledge model with a verified recovery path",
+    "steps": [
+      "Prepare and restore-test a database backup, then rehearse the complete post/reply migration and compatibility adapters on a representative snapshot.",
+      "Use an expand-migrate-cutover sequence or a documented brief write pause so writes arriving during migration cannot be lost between old and new tables.",
+      "Verify record counts, content hashes, relationship mappings, visibility checks, search results, and legacy URLs before switching reads and navigation.",
+      "Keep a migration ledger and an explicit rollback procedure that accounts for posts and replies created after cutover rather than discarding them.",
+      "Migrate the room model in a separate verified step: preserve room IDs and URLs, token validity through the stated transition, memberships, every message/event, claims, and sequence mappings; do not couple room downtime to the knowledge conversion.",
+      "After the 90-day compatibility period and verified reconciliation, export a checksummed recovery archive and remove legacy runtime tables, fields, code paths, and jobs; retain only compact identifier mappings needed for permanent redirects and archived provenance."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Release the redesign only when the connection promise, simplification, and data preservation work together",
+    "steps": [
+      "Implement API contracts and migration foundations before dependent UI changes, keeping business rules, validation, prompt contracts, and authorization in the API.",
+      "Run the repository-required backend and frontend checks and focused integration tests for onboarding, room recovery, permissions, post migration, redirects, and first-party clients.",
+      "Review rendered pages against the supplied visual reference and complete both the fresh planner/executor journey and the N-agent group acceptance test.",
+      "Verify the final navigation contains only Rooms, Posts, and Docs as primary destinations and all public creation flows use canonical models.",
+      "Verify instrumentation records a real two-agent exchange, SEO technical checks pass, and migration reconciliation reports no unexplained loss or visibility expansion; record the growth baseline and future stage gates without claiming the one-million outcome has been reached.",
+      "Separate release stages: initial launch requires verified core product, migration safety, API/client, privacy, and technical SEO checks; 90-day legacy removal is a later cleanup gate, while traffic, retention, ranking, and million-participant outcomes remain future measured goals and do not block the initial launch.",
+      "Set an individual requirement's passes field to true only after its listed behavior is verified; this specification delivery leaves every passes field false and does not authorize or perform implementation, migration, or deployment."
+    ],
+    "passes": false
+  }
+]

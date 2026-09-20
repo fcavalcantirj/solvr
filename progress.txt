@@ -1,0 +1,85 @@
+SOLVR — RALPH BUILD JOURNAL
+Ledger: spec.json (95 tasks, repo root). Scaffolded 2026-09-20.
+Engines: ./ralph-claude.sh · ./ralph-codex.sh · ./ralph-kimi.sh · ./ralph-opencode.sh
+Supervisor: ./ralph-continuous.sh <engine>   (or ./ralph-<engine>-continuous.sh)
+
+THIS FILE IS APPEND-ONLY. Use >> and never >. Each iteration appends one dated
+entry describing what it did, what it verified, and anything a human must still
+confirm (prefix those lines with the pending-check marker "UAT" + colon —
+progress.sh counts them).
+
+The earlier v5 PRD journal lives at specs/progress.txt and is closed; nothing
+here should be written there.
+
+2026-09-20 --:--: Harness scaffolded (ralph.sh core + 4 engine wrappers + supervisor
+    + progress.sh meter), pointed at repo-root spec.json. Ledger at 0/95. No build
+    task has run yet. [REAL] ./progress.sh prints 0/95 (0%); VERIFY_CMD
+    "cd backend && go build ./..." exits 0 in ~6 s on this checkout.
+
+2026-09-20 19:44: Task 1/95 [product] "Make connecting independently running agents the
+    primary purpose of Solvr, with Rooms first and one unified Post model for shared
+    knowledge". Direction task: encoded the north star as EXECUTABLE invariants rather
+    than prose (golden rules forbid new doc files) and recorded today's verified baseline.
+
+    NEW: backend/internal/api/router_product_direction_test.go (252 lines) — two
+    integration tests pinning the two product rules the API can enforce today:
+      - TestProductDirection_AgentsConnectWithoutHumanAccount: planner agent
+        self-registers (public POST /v1/agents/register, no Authorization header), then
+        creates and owns a real room with its own agent key (owner_id absent = no human
+        owner) while holding an 'owner' room_members row so the ownerless room stays
+        manageable; an independently registered executor handshakes with the shared room
+        token and gets its OWN solvr_rt_ per-agent credential; both join, exchange
+        messages with server-stamped author_id, and read the one shared timeline; the
+        exchange is readable logged out. No human account, no claiming, no hand-made API
+        key, no plugin, no MCP server anywhere in the journey.
+      - TestProductDirection_NoHardCodedParticipantLimit: 9 independently registered
+        agents handshake/join/post in ONE room; asserts 9 membership rows, 9 presence
+        rows and all 9 messages on the timeline. 9 clears both the two-agent shape of the
+        planner/executor example and any eight-agent ceiling.
+
+    [REAL] cd backend && go build ./... exits 0. go vet ./internal/api/ clean. gofmt clean.
+    [REAL] cd backend && go test ./... — full suite passes, no failures, nothing broken.
+    [TEST] Both new tests currently report SKIP: "DATABASE_URL not set, skipping
+        integration test". No local Postgres was reachable this iteration (see below).
+    [REAL] Step-6 rule verified statically: NO hard-coded participant cap exists. grep
+        -rniE "max_?(agents|participants|members)|agent_?limit|participant_?limit" over
+        backend/internal + backend/cmd (*.go, excluding _test.go) and frontend
+        app/components/lib (*.ts,*.tsx, excluding .test.) returns ZERO matches.
+    [REAL] Collection-based membership, roles, credentials and delivery already exist at
+        schema level: migrations 000076_create_room_members, 000077_create_room_claims,
+        000078_create_room_events, 000079_create_room_agent_tokens.
+    [REAL] Baseline for the steps this task does NOT itself implement (they are later
+        ledger tasks; recorded here as their acceptance criteria):
+        - frontend/components/header.tsx ships 10 primary destinations today (/feed,
+          /problems, /ideas, /rooms, /agents, /data, /ipfs, /leaderboard, /skill,
+          /docs/guides) -> task 3 replaces the crowded navigation.
+        - Problems/Ideas/Questions are still separate destinations (frontend/app/problems,
+          /ideas, /questions, /feed all exist) -> tasks 46-52 unify the Post model and
+          redirect legacy URLs.
+        - /connect already exists as a route -> tasks 18-27 build the prompt-first flow.
+        - Rooms and Posts stay separate primitives; nothing in the codebase creates a room
+          per post, and nothing added here does either.
+    [UNVERIFIED] Whether the two new tests PASS against a live database. They compile,
+        vet clean and skip cleanly, but were not executed against Postgres this iteration.
+
+    Docker blocker, exact commands and exact errors:
+        $ docker compose up -d
+          Cannot connect to the Docker daemon at unix:///Users/fcavalcanti/.docker/run/docker.sock. Is the docker daemon running?
+        $ open -a Docker          # com.docker.backend starts; the VM never does
+        $ docker desktop start
+          Docker Desktop is already running
+        $ docker desktop status
+          Could not retrieve status. Is Docker Desktop running?
+        Retried ~9 minutes total; docker info never succeeded. Docker Desktop needs GUI /
+        owner intervention on this machine. DATABASE_URL was deliberately NOT pointed at
+        any other database — LOCAL ONLY, never production.
+
+UAT: Owner must start Docker Desktop from the GUI, then run:
+      cd /Users/fcavalcanti/dev/solvr && docker compose up -d
+      cd backend && DATABASE_URL="postgres://solvr:solvr_dev@localhost:5433/solvr?sslmode=disable" go test ./internal/api/ -run TestProductDirection -v
+    Expect both tests to PASS (they SKIP without DATABASE_URL). A failure there is a real
+    product-direction regression, not a test bug — do not flip it to a skip.
+UAT: 36 files already exceed the 800-line CI limit (bash scripts/check-file-size.sh),
+    including backend/internal/api/router.go at 1169 and frontend/app/privacy/page.tsx at
+    1075. Pre-existing, NOT introduced here (the new file is 252 lines), but CI enforces
+    the limit and later tasks will have to touch router.go.

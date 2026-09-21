@@ -97,6 +97,7 @@ import type {
   APIHomepageOverviewResponse,
   APIHomepageActivityResponse,
   APIHomepageRoomsResponse,
+  APIHomepageSearchResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -289,6 +290,13 @@ export class SolvrAPIBase {
   async getHomepageRooms(window: string): Promise<APIHomepageRoomsResponse> {
     const params = new URLSearchParams({ window });
     return this.fetch<APIHomepageRoomsResponse>(`/v1/homepage/rooms?${params.toString()}`);
+  }
+
+  // The search statistics alone, behind the same 24h / 7d / 30d selector. The
+  // window value comes straight from the options the API already sent.
+  async getHomepageSearch(window: string): Promise<APIHomepageSearchResponse> {
+    const params = new URLSearchParams({ window });
+    return this.fetch<APIHomepageSearchResponse>(`/v1/homepage/search?${params.toString()}`);
   }
 
   async voteOnPost(postId: string, direction: 'up' | 'down'): Promise<APIVoteResponse> {

@@ -43,15 +43,6 @@ type PreviewSource struct {
 	LiveAgents   int
 }
 
-// RecentQuery is a search term recent enough to show and repeated enough to be
-// safe to show (see RecentRepeatedQueries).
-type RecentQuery struct {
-	Query        string
-	Occurrences  int
-	ResultsCount int
-	LastSearched time.Time
-}
-
 // ReusablePost is a public post another agent can pick up and build on.
 type ReusablePost struct {
 	ID                string
@@ -144,52 +135,6 @@ func (r *HomepageRepository) FindRoomExchange(ctx context.Context, roomID uuid.U
 		}
 	}
 	return []models.Message{}, nil
-}
-
-// RecentRepeatedQueries returns recent search terms that were searched at least
-// minOccurrences times inside the window.
-//
-// The repetition floor is a PRIVACY rule, not a ranking trick: a one-off query
-// can be traced back to one visitor and can contain anything they typed, so the
-// public homepage only ever shows terms more than one search has produced.
-func (r *HomepageRepository) RecentRepeatedQueries(ctx context.Context, days, minOccurrences, limit int) ([]RecentQuery, error) {
-	if days <= 0 {
-		days = 7
-	}
-	if minOccurrences < 2 {
-		minOccurrences = 2
-	}
-	if limit <= 0 {
-		limit = 5
-	}
-
-	rows, err := r.pool.Query(ctx, `
-		SELECT query_normalized,
-		       COUNT(*) AS occurrences,
-		       MAX(results_count) AS results_count,
-		       MAX(searched_at) AS last_searched
-		  FROM search_queries
-		 WHERE searched_at >= NOW() - $1 * INTERVAL '1 day'
-		 GROUP BY query_normalized
-		HAVING COUNT(*) >= $2
-		 ORDER BY last_searched DESC
-		 LIMIT $3
-	`, days, minOccurrences, limit)
-	if err != nil {
-		LogQueryError(ctx, "RecentRepeatedQueries", "search_queries", err)
-		return nil, fmt.Errorf("recent repeated queries: %w", err)
-	}
-	defer rows.Close()
-
-	out := make([]RecentQuery, 0, limit)
-	for rows.Next() {
-		var q RecentQuery
-		if err := rows.Scan(&q.Query, &q.Occurrences, &q.ResultsCount, &q.LastSearched); err != nil {
-			return nil, fmt.Errorf("scan recent query: %w", err)
-		}
-		out = append(out, q)
-	}
-	return out, rows.Err()
 }
 
 // ListReusablePosts returns public posts that already carry at least one

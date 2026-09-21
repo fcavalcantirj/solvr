@@ -24,12 +24,13 @@ func (r *SearchAnalyticsRepository) Insert(ctx context.Context, sq models.Search
 		INSERT INTO search_queries (
 			query, query_normalized, type_filter, results_count,
 			search_method, duration_ms, searcher_type, searcher_id,
-			ip_address, user_agent, page, searched_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			ip_address, user_agent, page, searched_at, public_scope
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`,
 		sq.Query, sq.QueryNormalized, sq.TypeFilter, sq.ResultsCount,
 		sq.SearchMethod, sq.DurationMs, sq.SearcherType, sq.SearcherID,
 		nilIfEmpty(sq.IPAddress), nilIfEmpty(sq.UserAgent), sq.Page, sq.SearchedAt,
+		sq.PublicScope,
 	)
 	if err != nil {
 		return fmt.Errorf("insert search query: %w", err)

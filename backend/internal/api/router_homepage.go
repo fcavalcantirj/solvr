@@ -21,6 +21,8 @@ import (
 //	GET /v1/homepage/rooms    -- the public room statistics alone, for the
 //	                             shared 24h / 7d / 30d selector. Re-reading four
 //	                             numbers and a series beats re-reading the index.
+//	GET /v1/homepage/search   -- the search statistics alone, behind the same
+//	                             24h / 7d / 30d selector.
 //
 // Kept out of router.go (which is already over the file-size limit) and out of
 // mountRoomRoutes (which owns /v1/rooms and /r/{slug}).
@@ -41,10 +43,10 @@ func mountHomepageRoutes(r chi.Router, pool *db.Pool) {
 		db.NewRoomRepository(pool),
 		db.NewStatsRepository(pool),
 		db.NewSearchAnalyticsRepository(pool),
-		db.NewDataAnalyticsRepository(pool),
 		handlers.PreviewSlugsFromEnv(),
 	)
 	r.Get("/v1/homepage/overview", overviewHandler.GetOverview)
 	r.Get("/v1/homepage/activity", overviewHandler.GetActivity)
 	r.Get("/v1/homepage/rooms", overviewHandler.GetRooms)
+	r.Get("/v1/homepage/search", overviewHandler.GetSearch)
 }

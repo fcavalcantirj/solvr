@@ -26,12 +26,14 @@ import (
 // be previewed because someone chose it — never because it is busy.
 
 type hpoMetric struct {
-	Key        string `json:"key"`
-	Label      string `json:"label"`
-	Value      int    `json:"value"`
-	Display    string `json:"display"`
-	Window     string `json:"window"`
-	Definition string `json:"definition"`
+	Key         string `json:"key"`
+	Label       string `json:"label"`
+	Value       int    `json:"value"`
+	Display     string `json:"display"`
+	Window      string `json:"window"`
+	Definition  string `json:"definition"`
+	Qualifier   string `json:"qualifier"`
+	Unavailable bool   `json:"unavailable"`
 }
 
 type hpoTableRow struct {
@@ -165,12 +167,7 @@ type hpoOverview struct {
 		} `json:"endpoints"`
 		DocsURL string `json:"docs_url"`
 	} `json:"api_usage"`
-	Search struct {
-		Metrics    []hpoMetric `json:"metrics"`
-		Trending   hpoTable    `json:"trending"`
-		Recent     hpoTable    `json:"recent"`
-		Categories hpoTable    `json:"categories"`
-	} `json:"search"`
+	Search    hpoSearch `json:"search"`
 	Community struct {
 		Metrics []hpoMetric `json:"metrics"`
 	} `json:"community"`
@@ -267,14 +264,28 @@ func hpoSeedRoom(t *testing.T, pool *db.Pool, slug, name, purpose string, privat
 	return refreshed
 }
 
-// hpoInsertSearches records the same normalised term n times.
+// hpoInsertSearches records the same normalised term n times, exactly as
+// handlers.Search records one: an agent search over public content only.
 func hpoInsertSearches(t *testing.T, pool *db.Pool, query string, n int) {
 	t.Helper()
+	hpoInsertSearchesAs(t, pool, query, n, "agent", true, "")
+}
+
+// hpoInsertSearchesAs records n searches with a stated searcher type, a stated
+// scope, and an optional User-Agent.
+func hpoInsertSearchesAs(t *testing.T, pool *db.Pool, query string, n int, searcherType string, publicScope bool, userAgent string) {
+	t.Helper()
+	var ua any
+	if userAgent != "" {
+		ua = userAgent
+	}
 	for i := 0; i < n; i++ {
 		_, err := pool.Exec(context.Background(),
 			`INSERT INTO search_queries
-			   (query, query_normalized, results_count, search_method, duration_ms, searcher_type, searched_at)
-			 VALUES ($1, $1, 2, 'hybrid', 12, 'agent', NOW())`, query)
+			   (query, query_normalized, results_count, search_method, duration_ms,
+			    searcher_type, searched_at, public_scope, user_agent)
+			 VALUES ($1, $1, 2, 'hybrid', 12, $2, NOW(), $3, $4)`,
+			query, searcherType, publicScope, ua)
 		require.NoError(t, err)
 	}
 }
@@ -422,14 +433,14 @@ func TestHomepageOverview_ServesEverySectionToALoggedOutVisitor(t *testing.T) {
 		assert.NotEmpty(t, m.Window, "search metric %q window", m.Key)
 		assert.NotEmpty(t, m.Definition, "search metric %q definition", m.Key)
 	}
-	assert.NotEmpty(t, ov.Search.Trending.Definition)
+	assert.NotEmpty(t, ov.Search.Top.Definition)
 	assert.NotEmpty(t, ov.Search.Recent.Definition)
-	assert.NotEmpty(t, ov.Search.Categories.Definition)
-	trendingTerms := make([]string, 0, len(ov.Search.Trending.Rows))
-	for _, row := range ov.Search.Trending.Rows {
-		trendingTerms = append(trendingTerms, row.Label)
+	assert.NotEmpty(t, ov.Search.PrivacyNote)
+	topTerms := make([]string, 0, len(ov.Search.Top.Rows))
+	for _, row := range ov.Search.Top.Rows {
+		topTerms = append(topTerms, row.Query)
 	}
-	assert.Contains(t, trendingTerms, "hpo postgres race condition")
+	assert.Contains(t, topTerms, "hpo postgres race condition")
 
 	// --- all-time community totals --------------------------------------
 	require.Len(t, ov.Community.Metrics, 6)
@@ -599,9 +610,9 @@ func TestHomepageOverview_RecentQueriesOnlyShowRepeatedTerms(t *testing.T) {
 
 	recentTerms := make([]string, 0, len(ov.Search.Recent.Rows))
 	for _, row := range ov.Search.Recent.Rows {
-		recentTerms = append(recentTerms, row.Label)
+		recentTerms = append(recentTerms, row.Query)
 		assert.NotEmpty(t, row.TimeLabel)
-		assert.GreaterOrEqual(t, row.Value, 2, "every published term was searched more than once")
+		assert.NotEmpty(t, row.SearcherLabel)
 	}
 	assert.Contains(t, recentTerms, repeated)
 	assert.Contains(t, strings.ToLower(ov.Search.Recent.Definition), "more than once",

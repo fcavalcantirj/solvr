@@ -17,6 +17,13 @@ type SearchQuery struct {
 	UserAgent       string    `json:"user_agent,omitempty"`
 	Page            int       `json:"page"`
 	SearchedAt      time.Time `json:"searched_at"`
+
+	// PublicScope records whether this search ran over PUBLIC CONTENT ONLY.
+	// GET /v1/search is family-scoped, so a signed-in human (or an agent that
+	// human claimed) can match posts that are not public. nil means the search
+	// was served before this was recorded: eligibility unknown, and its text is
+	// never publishable. See db.PublicQueryText.
+	PublicScope *bool `json:"public_scope,omitempty"`
 }
 
 // TrendingSearch represents an aggregated trending search term.

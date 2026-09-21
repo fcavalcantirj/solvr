@@ -1402,3 +1402,299 @@ UAT: Agents can now label a message ({"type":"plan"|"directive"|"evidence"|
     "review"|"question"|"answer"|"progress"|"handoff"}) and it will read as
     that on the homepage. Worth putting in the agent-facing docs when the
     instruction contract lands (task 25).
+
+────────────────────────────────────────────────────────────────────────────
+2026-09-21 02:45 — TASK 9 "Show what people and agents search for on the
+  homepage" [analytics]. DONE, passes=true.
+
+FIRST, WHY NOT TASK 6 — RE-VERIFIED THIS ITERATION, NOT TAKEN ON TRUST:
+    - `ls frontend/app/connect` -> `agent/` only. There is still no /connect
+      page; next.config.mjs redirects /connect -> /connect/agent. Task 16 owns
+      it.
+    - `grep -rn "connect" backend/internal/api/router*.go` and `ls
+      backend/internal/api/handlers/ | grep -i connect` -> NOTHING. There is no
+      GET /v1/connect and no room-instruction endpoint. Task 25 owns the
+      "API-owned instruction contract" that task 6 step 4 requires.
+  Task 6 asks for a homepage panel carrying "the same task, visibility, preset
+  and copy controls used by /connect" and sharing that contract. Building it
+  means doing tasks 16+17+25 inside task 6. Per "ACCEPTANCE TASKS ARE NOT
+  CHECKLISTS", TASK 6 REMAINS OPEN and I took the first buildable task: 9.
+
+THE ONE IDEA THIS TASK TURNS ON: TWO ELIGIBILITY RULES, NEVER ONE.
+  Search is the closest a public page comes to publishing a log, so counting
+  and quoting are decided separately and the page says which is which.
+    - COUNT eligibility decides what is MEASURED: every search in the window
+      minus known automated monitoring. Searches whose eligibility is unknown
+      are counted.
+    - TEXT eligibility decides what may be QUOTED: the search must PROVABLY
+      have run over public content AND the text must pass db.PublicQueryText.
+  [REAL] A REAL LEAK THIS CLOSES, FOUND BY READING THE CODE, NOT GUESSED.
+      GET /v1/search is FAMILY-SCOPED: handlers/search.go:203 sets
+      opts.ViewerHuman = callerHumanID(r), and db/visibility.go
+      searchVisibilityClause turns a non-empty value into
+      "(visibility='public' OR owner_human_id = <that human's>)". So a
+      signed-in human — AND an agent claimed by one, via agent.HumanID — can
+      match posts that are NOT public. The old homepage published trending and
+      recent terms straight out of search_queries with no scope predicate at
+      all, so the term that found somebody's private post was publishable.
+      search_queries had no column recording this, which is why it could not
+      simply be filtered: the information was never stored.
+
+WHAT I BUILT.
+  [REAL] MIGRATION 000082 adds search_queries.public_scope BOOLEAN, NULLABLE
+      ON PURPOSE. TRUE = the search ran public-only. FALSE = family-scoped,
+      could have reached protected content. NULL = recorded before this
+      existed, eligibility genuinely UNKNOWN. Plus a partial index
+      (searched_at DESC) WHERE public_scope. Applied to the local dev database
+      by hand (there is no schema_migrations table here); solvr_test was then
+      recreated from it as TEMPLATE.
+  [REAL] handlers/search.go now records `publicScope := opts.ViewerHuman == ""`
+      on every search — the same expression the visibility clause branches on,
+      so the record cannot drift from the query that was actually run.
+  [REAL] db/search_query_policy.go — PublicQueryText(query, publicScope) is the
+      single gate, returning a NAMED reason: protected_scope, unknown_scope,
+      credential, personal, moderated, unpublishable. It is one-directional:
+      a term is published only when positively known to be safe.
+      - CREDENTIALS are matched by the SHAPE OF A VALUE, never the topic. This
+        is the difference between a knowledge base and a word filter: "how to
+        rotate an api key", "jwt token expired error" and "reset postgres
+        password" all STAY (there is a test that says so), while sk-…,
+        solvr_sk_…, AKIA…, ghp_…, xox[baprs]-…, a three-segment JWT, a PEM
+        header, NAME=<value> for password/secret/api_key/…, "Bearer <opaque>",
+        credentials inside a URL, and any unbroken 40+ char run are withheld.
+      - The NAME=<value> rule anchors the name at a word start, so
+        DATABASE_PASSWORD=hunter2 matches and "bypass=true" does not. I wrote
+        that test first and watched the naive \b version fail it.
+      - PERSONAL: emails, +-prefixed or grouped phone numbers, 11+ digit runs.
+        "error 500 on deploy", "postgres 17 upgrade" and "http 429 rate limit"
+        stay — also a test.
+      - MODERATED: a short built-in floor, EXTENDED (never replaced) by
+        SEARCH_QUERY_BLOCKLIST, matched at word starts so "pornography" is
+        caught and "xxhash" is not. No .env was touched; the variable is read
+        with a default.
+  [REAL] db/homepage_search.go — HomepageRepository.GetSearchPulse(window,
+      limit). Totals, the per-searcher-type breakdown, the separated monitoring
+      figure, the unknown-scope count, the bucketed series, the top terms and
+      the recent terms. The term reads require `public_scope` IN SQL, so a
+      family-scoped row is never even read out of the table, and PublicQueryText
+      then decides on the text. Because that policy cannot be expressed in SQL
+      the reads over-fetch and report WithheldTerms, so a short list is never
+      mistaken for a quiet week.
+  [REAL] KNOWN MONITORING IS AN ALLOW-LIST OF NAMES, NOT A BOT HEURISTIC.
+      db.KnownMonitoringAgents lists UptimeRobot, Pingdom, BetterStack,
+      StatusCake, Site24x7, Datadog, Checkly, New Relic, GoogleHC, kube-probe,
+      ELB-HealthChecker and friends. Guessing at "looks automated" would delete
+      real agent traffic: every Solvr SDK and most agents send
+      "Go-http-client/1.1", which is exactly the activity this page exists to
+      show. There is a test named for that (AGenericClientIsNotAssumedToBeAMonitor).
+      COALESCE(user_agent,'') matters: NULL ILIKE ANY is NULL, and without it
+      every credential-less caller would drop out of the count entirely.
+  [REAL] ANONYMOUS IS ITS OWN ANSWER. The breakdown is agent / human /
+      anonymous taken from the RECORDED request, and the three partition the
+      total exactly — which is precisely why anonymous cannot be folded into
+      human: the total would stop adding up. searcherTypeLabel falls back to
+      "Anonymous" for anything unrecorded or unrecognised; the one direction it
+      may never fail in is calling an unidentified caller a person.
+  [REAL] THE COUNT-ONLY AGGREGATE IS LABELLED ON THE NUMBER ITSELF, not left
+      for a reader to work out: the SEARCHES tile carries "N of these were
+      recorded before Solvr recorded whether a search could reach protected
+      content; they are counted here and their terms are never published".
+  [REAL] THE CHART SHIPS WITH ITS OWN TABLE. GET /v1/homepage/search returns
+      series.sparkline AND series.rows built from ONE series, so they cannot
+      disagree; the component renders both, the table as a real <table> with
+      scope="col"/scope="row" and a caption. A test asserts row i equals
+      point i, and that the buckets add up to the total printed above them.
+  [REAL] EVERY PUBLISHED TERM LINKS TO /posts?q=<url-escaped term>. One query
+      parameter: no type=, no legacy problem/idea filter, nothing needing an
+      account. The API builds and escapes it ("c++ & rust <interop>" ->
+      /posts?q=c%2B%2B+%26+rust+%3Cinterop%3E, tested).
+
+A DEAD LINK WITH A 200 STATUS, FOUND AND FIXED.
+  [REAL] /posts redirects to /feed (next.config.mjs), and app/feed/page.tsx ->
+      FeedPageClient started from defaultFilters and NEVER READ the URL. So
+      /posts?q=<term> resolved 200 and then ignored the term — every published
+      search link would have landed on an unfiltered feed. FeedPageClient now
+      seeds searchQuery from ?q= (trimmed), which FeedList already routes into
+      useSearch. No type filter is read: the link is a query, not a category.
+      useSearchParams needs a boundary under static rendering, so the page wraps
+      the client in <Suspense>; `npm run build` confirms /feed is still
+      prerendered static (○), 52/52 pages generated, compiled clean.
+
+REMOVED, NOT DEPRECATED (v0).
+  buildOverviewSearch's old four-argument form, the old OverviewSearch type,
+  db.RecentQuery, HomepageRepository.RecentRepeatedQueries, and the overview
+  handler's now-dead dataRepo dependency (its only caller was the old
+  type-filter table) are GONE, along with their wiring in router_homepage.go.
+
+FILES.
+  new  backend/migrations/000082_add_search_query_public_scope.{up,down}.sql
+  new  backend/internal/db/search_query_policy.go            (194 lines)
+  new  backend/internal/db/search_query_policy_test.go
+  new  backend/internal/db/homepage_search.go                (314 lines)
+  new  backend/internal/db/homepage_search_test.go
+  new  backend/internal/api/handlers/homepage_search.go      (394 lines)
+  new  backend/internal/api/handlers/homepage_search_test.go
+  new  backend/internal/api/router_homepage_search_test.go
+  new  frontend/components/homepage/search-stats-section.test.tsx
+  new  frontend/components/feed/feed-page-client.test.tsx
+  mod  backend/internal/api/handlers/homepage_overview.go    (626 -> 498)
+  mod  backend/internal/api/handlers/search.go, router_homepage.go
+  mod  backend/internal/db/{homepage_overview.go,search_analytics.go}
+  mod  backend/internal/models/search_query.go
+  mod  frontend/components/homepage/search-stats-section.tsx (30 -> 274)
+  mod  frontend/components/homepage/{live-overview.tsx,overview-fixture.ts}
+  mod  frontend/{app/feed/page.tsx,components/feed/feed-page-client.tsx}
+  mod  frontend/lib/{homepage-types.ts,api-base.ts}
+  No new file is near the 800-line limit; the overview handler SHRANK.
+
+TESTS — ALL RAN, ALL GREEN, NONE SKIPPED. Backend integration tests ran against
+  a LOCAL isolated database: solvr_test on localhost:5435, recreated with
+  DROP + CREATE DATABASE solvr_test TEMPLATE solvr. Nothing touched production.
+  [TEST] internal/db policy — 8 PASS, pure functions, no database: the scope
+      gates, twelve credential shapes, six ordinary technical terms that must
+      SURVIVE, four personal shapes, four ordinary-number terms that survive,
+      moderation word-boundaries, blank/overlong, and blocklist extension.
+  [TEST] internal/db repository — 10 PASS against the real database: totals vs
+      an independently written census (make_interval + a correlated NOT EXISTS
+      instead of the repo's ILIKE ANY in a derived table), anonymous never
+      counted as human, monitoring separated, a generic Go client NOT treated
+      as a monitor, public-scope-only publishing, with-results counting, the
+      single-search floor, the withheld count, the series covering each window
+      and excluding monitoring, and the window narrowing what is counted.
+  [TEST] internal/api/handlers — 11 PASS, pure builders, no database: the four
+      totals, the anonymous wording, monitoring stated apart, the count-only
+      qualifier, canonical Posts links, the recent list, chart-equals-table,
+      URL escaping, the empty window, the withheld note, and the label fallback.
+  [TEST] internal/api — 11 PASS end to end against the real router and the real
+      database with NO CREDENTIALS: the four totals partitioning, the window
+      selector including an unrecognised value, a family-scoped term and a
+      once-searched term absent from the RAW BODY, a pasted key and an email
+      absent from the raw body, monitoring separated, every link canonical,
+      anonymous reported as anonymous, a NULL-scope row counted but never
+      quoted, the chart adding up, Cache-Control, and — the one that proves the
+      instrumentation rather than the filter — a REAL unauthenticated
+      GET /v1/search stored with public_scope = TRUE and searcher_type
+      "anonymous", then fed through db.PublicQueryText.
+  [TEST] frontend — 15 PASS in search-stats-section.test.tsx and 7 PASS in
+      feed-page-client.test.tsx (vitest). FULL SUITE: 1351 passed / 136 files,
+      up from 1336. npx tsc --noEmit: ZERO errors. npm run build: compiled
+      clean, 52/52 static pages, /feed still ○ (static).
+      `npx next lint` on every file I touched: ZERO errors (the warnings are
+      the pre-existing unused-import baseline in lib/api-base.ts).
+  [REAL] Coverage. New backend code, deduped from the merged profile (the
+      merged file holds one block per package run, so the max per block has to
+      be taken before aggregating — the naive sum reads ~56% and is wrong):
+      db/search_query_policy.go 100.0%, handlers/homepage_search.go 94.0%,
+      db/homepage_search.go 77.6% — 87.8% of statements over the three files
+      together (188 statements). The uncovered remainder in the db file is
+      query/scan error paths that need a broken pool. Frontend:
+      search-stats-section.tsx 100% stmts / 94.44% branch / 100% funcs /
+      100% lines; feed-page-client.tsx 100% / 100% / 100% / 100% (it had no
+      test file at all before). All above the 80% floor.
+  [REAL] bash scripts/check-file-size.sh: 36 violations, the SAME 36 as the
+      2026-09-20/21 baseline, none of them mine. go vet clean. gofmt clean on
+      all 15 files I touched. (Repo-wide `gofmt -l internal/` lists ~100 files
+      — that is Go 1.26 changing struct-tag alignment against a tree written
+      on 1.22/1.23, pre-existing and untouched.)
+
+  [REAL] FULL BACKEND SUITE, HEAD vs CHANGE, each on a database recreated with
+      DROP + CREATE DATABASE solvr_test TEMPLATE solvr:
+        HEAD (backend/ stashed WITH --include-untracked): 101 failures.
+        With this change:                                 101 failures.
+      NOT ONE is a test of mine (`grep -iE
+      "SearchPulse|HomepageSearch|PublicQueryText|BuildOverviewSearch|
+      SearcherTypeLabel|Moderation|HomepageOverview"` over the failure names ->
+      no match). The two sets differ by exactly ONE name in each direction, and
+      both are siblings in the same comments suite:
+      TestCommentsCount_ProblemsShowCountAfterComment fails only with the
+      change, TestCommentsCount_FeedShowsCommentCount only at HEAD. PROVEN,
+      not assumed: run together on a database that already holds rows they
+      BOTH fail, with "expected comments_count=1, got 2" and "expected 2, got
+      3" — leftover ambient data, each one leaving the row that breaks the
+      other. Nothing to do with search.
+      NOTE the first stash attempt (`git stash push -- backend`) left the NEW
+      untracked files in place and produced a bogus 60-failure "HEAD" run that
+      did not even compile. The number above is from the --include-untracked
+      re-run.
+
+  [REAL] VERIFIED AGAINST A RUNNING STACK, not reasoned. Killed the previous
+      processes first. Go API on :8090 against postgres://localhost:5435/solvr
+      with ALLOWED_ORIGINS and a 32-char JWT_SECRET in the environment
+      (backend/.env NOT touched, NOT loaded); next dev on :3111 with
+      NEXT_PUBLIC_API_URL=http://localhost:8090.
+      THE RECORDING PATH, all three searcher types through the real endpoint:
+        anonymous curl      -> searcher_type anonymous, public_scope = t
+        registered agent    -> searcher_type agent,     public_scope = t
+        signed-in human JWT -> searcher_type human,     public_scope = f
+      That last row is the whole point and it was produced by a real login and
+      a real GET /v1/search, not by an INSERT.
+      THE PUBLISHED PAYLOAD (GET /v1/homepage/search, no credentials):
+        SEARCHES 59 = AGENT 28 + HUMAN 7 + ANONYMOUS 24, exactly.
+        AUTOMATED MONITORING 4, separate — the four UptimeRobot calls, and
+          removing them is why anonymous reads 24 and not 28.
+        the SEARCHES tile carried "47 of these were recorded before Solvr
+          recorded whether a search could reach protected content...".
+        TOP listed only the two public-scope terms; withheld_note read
+          "1 term withheld by the publishing rules" — the pasted
+          solvr_sk_ key, searched twice, correctly held back.
+        24 series rows == 24 sparkline points, summing to 59 == the metric.
+        Cache-Control: public, max-age=30.
+      ABSENT from the raw body, checked by substring: the family-scoped term,
+        the pasted solvr_sk_ value AND the bare "solvr_sk_" prefix, the
+        NULL-scope legacy term, the monitored term, the human's user uuid, and
+        "@example.test". (The literal "human:" DOES appear — in the anonymous
+        metric's own prose, "not assumed to be human: an unauthenticated
+        caller...". Checked, not a leak.)
+      WINDOW SELECTOR: 24h/7d/30d each answered with its own selected_window,
+        exactly one selected option, matching metric wording and 24/7/30
+        buckets; ?window=all-time fell back to 24h and SAID 24h.
+      HEADLESS CHROMIUM at 1280x900 AND 390x844: 4 metric tiles, 24 bars, 24
+        accessible table rows, 2 top rows, 2 recent rows, the monitoring block,
+        NO horizontal overflow at either width, ZERO page errors. Clicking
+        "7 days" re-read the section and the tile's window changed from "last
+        24 hours" to "last 7 days". FOLLOWING A PUBLISHED TERM: clicked
+        /posts?q=ralph+task9+agent+term -> landed on
+        /feed?q=ralph%20task9%20agent%20term with the search box holding
+        "ralph task9 agent term" — the click-through actually searches, with no
+        login and no type filter.
+      ALL probe data was removed afterwards (0 'ralph task9%' searches, 0 probe
+      agents, 0 probe users), both processes were killed, ports 8090/3111 are
+      clear, and solvr_test was dropped. No call left localhost.
+
+  NOTE: GET /v1/homepage/search is NOT in openapi_paths.go and SPEC.md was not
+      touched — no step asked for either, and openapi_paths.go is already 880
+      lines / over the CI limit. Same decision as tasks 5-8.
+  NOTE: the 30-second Cache-Control is inherited from the rest of the homepage
+      endpoints. The server holds no cache of its own, but a shared CDN could
+      hold a published term for up to 30s after it stops being eligible.
+      Task 14 owns the caching policy; flagged, not silently changed.
+  NOTE: task 12's "What agents call" section still reports its own fixed 7-day
+      agent/human search counts from SearchAnalyticsRepository.GetSummary. That
+      is a different section with a different window and task 12 owns it; it is
+      now the only remaining reader of GetSummary on the homepage.
+
+UAT: Owner's visual judgement on the section. Everything automatable ran green
+    (15 component tests, 11 builder tests, 11 end-to-end tests, and the
+    real-browser render above at both viewports), but whether four tiles + a
+    separated monitoring strip + two stacked lists + a chart-with-table reads
+    as calm rather than as a dashboard is a look-at-it call:
+      cd /Users/fcavalcanti/dev/solvr && docker compose up -d
+      cd backend && DATABASE_URL="postgres://solvr:solvr_dev@localhost:5435/solvr?sslmode=disable" \
+        PORT=8090 ALLOWED_ORIGINS="http://localhost:3111" \
+        JWT_SECRET="ralph-local-dev-jwt-secret-32-chars-min" go run ./cmd/api
+      cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8090 npm run dev -- -p 3111
+UAT: PRODUCTION MIGRATION. 000082 has not been applied to production. Until it
+    is, the column does not exist and GET /v1/homepage/search will error. It is
+    additive and safe (ADD COLUMN IF NOT EXISTS + a partial index), and prod has
+    no schema_migrations table, so it goes through the admin query route:
+      ALTER TABLE search_queries ADD COLUMN IF NOT EXISTS public_scope BOOLEAN;
+      CREATE INDEX IF NOT EXISTS idx_search_queries_public_scope
+        ON search_queries (searched_at DESC) WHERE public_scope;
+UAT: EXPECT THE TERM LISTS TO BE EMPTY ON PRODUCTION AT FIRST, and that is
+    correct, not a bug. Every existing row has public_scope = NULL, so no
+    historical term is publishable; the totals and the chart work immediately,
+    and terms start appearing as new searches are served after the deploy. The
+    SEARCHES tile states the count-only share in its own words meanwhile.
+UAT: SEARCH_QUERY_BLOCKLIST is unset, so moderation runs on the built-in floor
+    alone. If the owner wants terms withheld beyond it, set it (comma-separated)
+    on the API service — it EXTENDS the default and can never shrink it.

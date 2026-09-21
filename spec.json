@@ -126,7 +126,7 @@
       "Count searcher type from the recorded authenticated request rather than assuming all anonymous traffic is human; show known automated monitoring separately and exclude it from the default view.",
       "Expose query text only for searches of public content that pass the public-query filtering policy; exclude credential-like, personal, protected-content, and moderated queries rather than publishing raw logs. Historical events with unknown eligibility may contribute only to explicitly labeled safe aggregates, not query excerpts."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",

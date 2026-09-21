@@ -103,54 +103,9 @@ func TestOverviewPreviewSlugs_DefaultsToTheCodingExample(t *testing.T) {
 	assert.Len(t, parsePreviewSlugs("a,b,c,d,e"), maxOverviewPreviews, "never asks for more than it shows")
 }
 
-func TestOverviewSearchSection_StatesItsWindowsAndFormatsTheRate(t *testing.T) {
-	summary := models.SearchAnalytics{
-		TotalSearches:  200,
-		UniqueQueries:  75,
-		AvgDurationMs:  42.6,
-		ZeroResultRate: 0.4925,
-		BySearcherType: map[string]int{"agent": 150, "human": 50},
-	}
-	trending := []models.TrendingSearch{{Query: "postgres race condition", Count: 12}}
-	recent := []db.RecentQuery{{
-		Query:        "vitest mock hoisting",
-		Occurrences:  3,
-		ResultsCount: 2,
-		LastSearched: time.Now().Add(-90 * time.Second),
-	}}
-	categories := []models.DataCategory{{Category: "problem", SearchCount: 30}}
-
-	section := buildOverviewSearch(summary, trending, recent, categories)
-
-	require.NotEmpty(t, section.Metrics)
-	for _, m := range section.Metrics {
-		assert.NotEmpty(t, m.Window, "metric %q window", m.Key)
-		assert.NotEmpty(t, m.Definition, "metric %q definition", m.Key)
-		assert.NotEmpty(t, m.Display, "metric %q display", m.Key)
-	}
-	byKey := map[string]OverviewMetric{}
-	for _, m := range section.Metrics {
-		byKey[m.Key] = m
-	}
-	assert.Equal(t, "49%", byKey["zero_result_rate_7d"].Display,
-		"the API formats the percentage; the browser does no arithmetic")
-	assert.Equal(t, "43 ms", byKey["avg_search_duration_7d"].Display)
-	assert.Equal(t, 150, byKey["agent_searches_7d"].Value)
-
-	require.Len(t, section.Trending.Rows, 1)
-	assert.Equal(t, "postgres race condition", section.Trending.Rows[0].Label)
-	assert.NotEmpty(t, section.Trending.Rows[0].CountLabel)
-	assert.NotEmpty(t, section.Trending.Definition)
-
-	require.Len(t, section.Recent.Rows, 1)
-	assert.Equal(t, "vitest mock hoisting", section.Recent.Rows[0].Label)
-	assert.NotEmpty(t, section.Recent.Rows[0].TimeLabel)
-	assert.Contains(t, section.Recent.Definition, "more than once",
-		"the page states the privacy rule it applies to recent queries")
-
-	require.Len(t, section.Categories.Rows, 1)
-	assert.Equal(t, "problem", section.Categories.Rows[0].Label)
-}
+// The search section moved to homepage_search.go when it grew a window
+// selector, a chart and its own publishing policy. Its tests live beside it in
+// homepage_search_test.go.
 
 func TestOverviewAPIUsageSection_OnlyServesMeasuredNumbers(t *testing.T) {
 	summary := models.SearchAnalytics{

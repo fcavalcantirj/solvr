@@ -271,8 +271,16 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 			q = q[:500]
 		}
 
+		// Record the SCOPE this search actually ran with. opts.ViewerHuman is
+		// what searchVisibilityClause was given: empty means public-only,
+		// anything else means the results could include that human's family's
+		// non-public posts. Without this the term could never be published
+		// (db.PublicQueryText treats an unrecorded scope as unknown).
+		publicScope := opts.ViewerHuman == ""
+
 		sq := models.SearchQuery{
 			Query:           q,
+			PublicScope:     &publicScope,
 			QueryNormalized: strings.ToLower(strings.TrimSpace(q)),
 			ResultsCount:    total,
 			SearchMethod:    searchMethod,

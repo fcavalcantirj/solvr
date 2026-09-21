@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { FeedFilters, FilterState } from "@/components/feed/feed-filters";
 import { FeedList } from "@/components/feed/feed-list";
 import { FeedSidebar } from "@/components/feed/feed-sidebar";
@@ -23,9 +24,19 @@ interface FeedPageClientProps {
 }
 
 export function FeedPageClient({ initialPosts }: FeedPageClientProps) {
+  // A link into this collection may carry the term to search for: the homepage
+  // publishes canonical Posts search as /posts?q=<term>. Landing here and
+  // ignoring it would make every published search link a dead link with a 200.
+  // No type filter is read: the link is a query, not a legacy category.
+  const searchParams = useSearchParams();
+  const initialQuery = (searchParams?.get("q") ?? "").trim();
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<FilterState>(defaultFilters);
+  const [filters, setFilters] = useState<FilterState>({
+    ...defaultFilters,
+    searchQuery: initialQuery,
+  });
   const { stats } = useStats();
 
   const initialFeedPosts = useMemo(() => initialPosts.map(transformPost), [initialPosts]);

@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { OVERVIEW } from './overview-fixture';
 import { RoomPreviewsSection } from './room-previews-section';
 import { ApiUsageSection } from './api-usage-section';
-import { SearchStatsSection } from './search-stats-section';
 import { CommunityTotalsSection } from './community-totals-section';
 import { ReusablePostsSection } from './reusable-posts-section';
 import { ClosingSection } from './closing-section';
@@ -153,44 +152,8 @@ describe('ApiUsageSection', () => {
   });
 });
 
-describe('SearchStatsSection', () => {
-  it('renders the API-formatted rate rather than computing one', () => {
-    render(<SearchStatsSection data={OVERVIEW.search} />);
-    expect(screen.getByText('49%')).toBeInTheDocument();
-  });
-
-  it('renders all three compact tables with their windows and definitions', () => {
-    render(<SearchStatsSection data={OVERVIEW.search} />);
-    for (const table of [
-      OVERVIEW.search.trending,
-      OVERVIEW.search.recent,
-      OVERVIEW.search.categories,
-    ]) {
-      const node = screen.getByTestId(`overview-table-${table.heading}`);
-      expect(squish(node.textContent)).toContain(table.heading);
-      expect(squish(node.textContent)).toContain(table.window);
-      expect(within(node).getByTitle(table.definition)).toBeInTheDocument();
-      for (const row of table.rows) {
-        expect(within(node).getByText(row.label)).toBeInTheDocument();
-        expect(within(node).getByText(row.count_label)).toBeInTheDocument();
-      }
-    }
-  });
-
-  it('shows the API time label on a recent query', () => {
-    render(<SearchStatsSection data={OVERVIEW.search} />);
-    expect(screen.getByText('2 minutes ago')).toBeInTheDocument();
-  });
-
-  it('falls back to the API empty note for an empty table', () => {
-    const empty = {
-      ...OVERVIEW.search,
-      trending: { ...OVERVIEW.search.trending, rows: [] },
-    };
-    render(<SearchStatsSection data={empty} />);
-    expect(screen.getByText(OVERVIEW.search.trending.empty_note)).toBeInTheDocument();
-  });
-});
+// SearchStatsSection grew a window selector, a chart and its own publishing
+// policy; its tests live beside it in search-stats-section.test.tsx.
 
 describe('CommunityTotalsSection', () => {
   it('renders the all-time totals with the window spelled out', () => {

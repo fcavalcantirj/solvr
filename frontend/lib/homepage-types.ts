@@ -192,13 +192,86 @@ export interface APIOverviewTable {
   empty_note: string;
 }
 
+// One published search term in the top table. Every string is API-owned: the
+// browser never counts, formats or builds the link.
+export interface APIOverviewSearchRow {
+  query: string;
+  count: number;
+  count_label: string;
+  with_results: number;
+  with_results_label: string;
+  // Canonical Posts search for this term. One query parameter, no legacy type
+  // filter, nothing that requires an account.
+  search_url: string;
+  search_label: string;
+}
+
+export interface APIOverviewSearchTable {
+  heading: string;
+  window: string;
+  definition: string;
+  query_header: string;
+  count_header: string;
+  with_results_header: string;
+  rows: APIOverviewSearchRow[];
+  empty_note: string;
+  // How many terms were held back by the publishing rules, already worded.
+  // Absent when nothing was withheld.
+  withheld_note?: string;
+}
+
+export interface APIOverviewRecentSearchRow {
+  query: string;
+  // The RECORDED searcher type, worded: Agent, Human or Anonymous. An
+  // unauthenticated search is never reported as a human.
+  searcher_label: string;
+  time_label: string;
+  count_label: string;
+  results_label: string;
+  search_url: string;
+  search_label: string;
+}
+
+export interface APIOverviewRecentSearches {
+  heading: string;
+  window: string;
+  definition: string;
+  rows: APIOverviewRecentSearchRow[];
+  empty_note: string;
+}
+
+// One row of a chart's accessible tabular equivalent.
+export interface APIOverviewSeriesRow {
+  label: string;
+  value: number;
+  display: string;
+}
+
+// A restrained chart and the same data as a table, built from one series by
+// the API so the two can never disagree.
+export interface APIOverviewSeries {
+  sparkline?: APIOverviewSparkline;
+  table_heading: string;
+  table_caption: string;
+  period_header: string;
+  count_header: string;
+  rows: APIOverviewSeriesRow[];
+}
+
 export interface APIOverviewSearch {
   heading: string;
   intro: string;
+  window_label: string;
+  window_options: APIOverviewWindowOption[];
+  selected_window: string;
   metrics: APIOverviewMetric[];
-  trending: APIOverviewTable;
-  recent: APIOverviewTable;
-  categories: APIOverviewTable;
+  // Known automated monitoring, stated apart from the totals above and
+  // excluded from every one of them.
+  monitoring?: APIOverviewMetric;
+  series: APIOverviewSeries;
+  top: APIOverviewSearchTable;
+  recent: APIOverviewRecentSearches;
+  privacy_note: string;
 }
 
 export interface APIOverviewCommunity {
@@ -258,4 +331,8 @@ export interface APIHomepageActivityResponse {
 
 export interface APIHomepageRoomsResponse {
   data: APIOverviewRooms;
+}
+
+export interface APIHomepageSearchResponse {
+  data: APIOverviewSearch;
 }

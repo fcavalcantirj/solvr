@@ -59,13 +59,12 @@ describe('LiveOverview layout', () => {
 
   it('carries the public statistics itself, so the Data page is not a detour', () => {
     render(<LiveOverview />);
-    // The three tables /data exists to show: trending terms, recent terms and
-    // the type-filter breakdown, plus the agent/human search split.
-    expect(screen.getByTestId('overview-table-TRENDING QUERIES')).toBeInTheDocument();
-    expect(screen.getByTestId('overview-table-RECENT QUERIES')).toBeInTheDocument();
-    expect(
-      screen.getByTestId('overview-table-SEARCHES BY TYPE FILTER'),
-    ).toBeInTheDocument();
+    // What /data exists to show: the search totals broken down by who searched,
+    // the terms themselves, and the series behind them.
+    expect(screen.getByTestId('search-top-table')).toBeInTheDocument();
+    expect(screen.getByTestId('search-recent-list')).toBeInTheDocument();
+    expect(screen.getByTestId('search-series-table')).toBeInTheDocument();
+    expect(screen.getByTestId('search-metrics')).toBeInTheDocument();
   });
 
   it('shows a loading state instead of empty numbers while the API answers', () => {

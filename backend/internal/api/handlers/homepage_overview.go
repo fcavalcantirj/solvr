@@ -40,12 +40,10 @@ const (
 	// maxOverviewPreviews caps the editorial room previews at three.
 	maxOverviewPreviews = 3
 
-	// overviewSearchWindowDays is the window the search statistics cover.
+	// overviewSearchWindowDays is the window the API-usage search counts cover.
+	// The search SECTION has its own selectable window; this one belongs to the
+	// "what agents call" figures alone.
 	overviewSearchWindowDays = 7
-
-	// recentQueryMinOccurrences is the privacy floor on recent queries: a term
-	// only appears once more than one search has produced it.
-	recentQueryMinOccurrences = 2
 
 	// overviewReusablePostLimit is how many reusable posts the page carries.
 	overviewReusablePostLimit = 6
@@ -111,16 +109,6 @@ type OverviewAPIUsage struct {
 	Endpoints []OverviewEndpoint `json:"endpoints"`
 	DocsURL   string             `json:"docs_url"`
 	DocsLabel string             `json:"docs_label"`
-}
-
-// OverviewSearch is the search statistics section.
-type OverviewSearch struct {
-	Heading    string           `json:"heading"`
-	Intro      string           `json:"intro"`
-	Metrics    []OverviewMetric `json:"metrics"`
-	Trending   OverviewTable    `json:"trending"`
-	Recent     OverviewTable    `json:"recent"`
-	Categories OverviewTable    `json:"categories"`
 }
 
 // OverviewCommunity is the all-time community totals section.
@@ -223,110 +211,6 @@ func buildOverviewAPIUsage(summary models.SearchAnalytics, pulse db.RoomPulse, r
 		Endpoints: overviewEndpoints,
 		DocsURL:   "/api-docs",
 		DocsLabel: "Read the API reference",
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Search statistics
-// ---------------------------------------------------------------------------
-
-func buildOverviewSearch(
-	summary models.SearchAnalytics,
-	trending []models.TrendingSearch,
-	recent []db.RecentQuery,
-	categories []models.DataCategory,
-) OverviewSearch {
-	window := fmt.Sprintf("last %d days", overviewSearchWindowDays)
-
-	metrics := []OverviewMetric{
-		{
-			Key: "total_searches_7d", Label: "SEARCHES", Value: summary.TotalSearches,
-			Window:     window,
-			Definition: "Every search the API served, agents and humans together.",
-			Display:    formatOverviewNumber(summary.TotalSearches),
-		},
-		{
-			Key: "agent_searches_7d", Label: "BY AGENTS", Value: summary.BySearcherType["agent"],
-			Window:     window,
-			Definition: "Searches authenticated with an agent key.",
-			Display:    formatOverviewNumber(summary.BySearcherType["agent"]),
-		},
-		{
-			Key: "unique_queries_7d", Label: "DISTINCT QUERIES", Value: summary.UniqueQueries,
-			Window:     window,
-			Definition: "Distinct normalised search terms.",
-			Display:    formatOverviewNumber(summary.UniqueQueries),
-		},
-		{
-			Key: "zero_result_rate_7d", Label: "FOUND NOTHING", Value: int(summary.ZeroResultRate * 100),
-			Window:     window,
-			Definition: "Share of searches that returned no result — the gap in the knowledge base.",
-			Display:    fmt.Sprintf("%d%%", int(summary.ZeroResultRate*100)),
-		},
-		{
-			Key: "avg_search_duration_7d", Label: "AVERAGE LATENCY", Value: int(summary.AvgDurationMs + 0.5),
-			Window:     window,
-			Definition: "Mean server time to answer a search, in milliseconds.",
-			Display:    fmt.Sprintf("%d ms", int(summary.AvgDurationMs+0.5)),
-		},
-	}
-
-	trendingRows := make([]OverviewTableRow, 0, len(trending))
-	for _, t := range trending {
-		trendingRows = append(trendingRows, OverviewTableRow{
-			Label:      t.Query,
-			Value:      t.Count,
-			CountLabel: pluralise(t.Count, "search", "searches"),
-		})
-	}
-
-	recentRows := make([]OverviewTableRow, 0, len(recent))
-	for _, q := range recent {
-		recentRows = append(recentRows, OverviewTableRow{
-			Label:      q.Query,
-			Value:      q.Occurrences,
-			CountLabel: pluralise(q.Occurrences, "search", "searches"),
-			TimeLabel:  overviewRelativeTime(q.LastSearched),
-			Detail:     pluralise(q.ResultsCount, "result", "results"),
-		})
-	}
-
-	categoryRows := make([]OverviewTableRow, 0, len(categories))
-	for _, c := range categories {
-		categoryRows = append(categoryRows, OverviewTableRow{
-			Label:      c.Category,
-			Value:      c.SearchCount,
-			CountLabel: pluralise(c.SearchCount, "search", "searches"),
-		})
-	}
-
-	return OverviewSearch{
-		Heading: "What is being looked for",
-		Intro:   "Search is how an agent avoids redoing work. These are the terms it brings.",
-		Metrics: metrics,
-		Trending: OverviewTable{
-			Heading:    "TRENDING QUERIES",
-			Window:     window,
-			Definition: "The most searched terms in the window, by number of searches.",
-			Rows:       trendingRows,
-			EmptyNote:  "No searches in this window yet.",
-		},
-		Recent: OverviewTable{
-			Heading: "RECENT QUERIES",
-			Window:  window,
-			Definition: "The most recently searched terms that were searched more than once " +
-				"in the window. Terms searched only once are never shown — a single search " +
-				"belongs to a single visitor.",
-			Rows:      recentRows,
-			EmptyNote: "No repeated searches in this window yet.",
-		},
-		Categories: OverviewTable{
-			Heading:    "SEARCHES BY TYPE FILTER",
-			Window:     "last 24 hours",
-			Definition: "Searches grouped by the type filter the caller asked for.",
-			Rows:       categoryRows,
-			EmptyNote:  "No filtered searches in this window yet.",
-		},
 	}
 }
 
@@ -521,7 +405,6 @@ type HomepageOverviewHandler struct {
 	roomRepo   *db.RoomRepository
 	statsRepo  *db.StatsRepository
 	searchRepo *db.SearchAnalyticsRepository
-	dataRepo   *db.DataAnalyticsRepository
 	// previewSlugs is the editorial allow-list, in display order.
 	previewSlugs []string
 }
@@ -532,7 +415,6 @@ func NewHomepageOverviewHandler(
 	roomRepo *db.RoomRepository,
 	statsRepo *db.StatsRepository,
 	searchRepo *db.SearchAnalyticsRepository,
-	dataRepo *db.DataAnalyticsRepository,
 	previewSlugs []string,
 ) *HomepageOverviewHandler {
 	return &HomepageOverviewHandler{
@@ -540,7 +422,6 @@ func NewHomepageOverviewHandler(
 		roomRepo:     roomRepo,
 		statsRepo:    statsRepo,
 		searchRepo:   searchRepo,
-		dataRepo:     dataRepo,
 		previewSlugs: previewSlugs,
 	}
 }
@@ -580,22 +461,13 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 		summary.BySearcherType = map[string]int{}
 	}
 
-	trending, err := h.searchRepo.GetTrending(ctx, overviewSearchWindowDays, 5)
+	// The search section shares the room section's window, so one selector
+	// drives both. A failed read degrades to an empty measured window rather
+	// than failing the page.
+	searchPulse, err := h.homeRepo.GetSearchPulse(ctx, window, searchTermDisplayLimit)
 	if err != nil {
-		slog.Error("homepage overview: trending queries failed", "error", err)
-		trending = nil
-	}
-
-	recent, err := h.homeRepo.RecentRepeatedQueries(ctx, overviewSearchWindowDays, recentQueryMinOccurrences, 5)
-	if err != nil {
-		slog.Error("homepage overview: recent queries failed", "error", err)
-		recent = nil
-	}
-
-	categories, err := h.dataRepo.GetCategories(ctx, "24h", true)
-	if err != nil {
-		slog.Error("homepage overview: search categories failed", "error", err)
-		categories = nil
+		slog.Error("homepage overview: search pulse failed", "error", err, "window", window.Value)
+		searchPulse = db.SearchPulse{Window: window}
 	}
 
 	posts, err := h.homeRepo.ListReusablePosts(ctx, overviewReusablePostLimit)
@@ -614,7 +486,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0, 0, time.Now()),
 		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx), h.previewSlugs),
 		APIUsage:    buildOverviewAPIUsage(summary, pulse, registeredAgents),
-		Search:      buildOverviewSearch(summary, trending, recent, categories),
+		Search:      buildOverviewSearch(searchPulse),
 		Community:   buildOverviewCommunity(stats),
 		Posts:       buildOverviewPosts(posts),
 		Closing:     buildOverviewClosing(),

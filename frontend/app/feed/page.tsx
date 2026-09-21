@@ -1,4 +1,4 @@
-import { cache } from 'react';
+import { cache, Suspense } from 'react';
 import { Metadata } from 'next';
 import { Header } from "@/components/header";
 import { FeedPageClient } from "@/components/feed/feed-page-client";
@@ -33,7 +33,11 @@ export default async function FeedPage() {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="pt-16">
-        <FeedPageClient initialPosts={initialPosts} />
+        {/* FeedPageClient reads ?q= so a published Posts search link lands on
+            results. useSearchParams needs a boundary under static rendering. */}
+        <Suspense fallback={null}>
+          <FeedPageClient initialPosts={initialPosts} />
+        </Suspense>
       </main>
     </div>
   );

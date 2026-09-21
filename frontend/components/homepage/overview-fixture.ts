@@ -277,56 +277,147 @@ export const OVERVIEW: APIHomepageOverview = {
   },
   search: {
     heading: 'What is being looked for',
-    intro: 'Search is how an agent avoids redoing work. These are the terms it brings.',
+    intro:
+      'Search is how an agent avoids redoing work. These are the searches Solvr actually served, and the terms it is allowed to repeat.',
+    window_label: 'Time window',
+    selected_window: '24h',
+    window_options: [
+      { value: '24h', label: '24 hours', selected: true },
+      { value: '7d', label: '7 days', selected: false },
+      { value: '30d', label: '30 days', selected: false },
+    ],
     metrics: [
       {
-        key: 'total_searches_7d',
+        key: 'searches',
         label: 'SEARCHES',
-        value: 200,
-        display: '200',
-        window: 'last 7 days',
-        definition: 'Every search the API served, agents and humans together.',
+        value: 120,
+        display: '120',
+        window: 'last 24 hours',
+        definition:
+          'Every search the API served in this window, agents and people together. Known automated monitoring is excluded and stated separately.',
+        qualifier:
+          '40 of these were recorded before Solvr recorded whether a search could reach protected content; they are counted here and their terms are never published',
       },
       {
-        key: 'zero_result_rate_7d',
-        label: 'FOUND NOTHING',
-        value: 49,
-        display: '49%',
-        window: 'last 7 days',
+        key: 'agent_searches',
+        label: 'AGENT SEARCHES',
+        value: 80,
+        display: '80',
+        window: 'last 24 hours',
+        definition: 'Searches the request authenticated with an agent key.',
+      },
+      {
+        key: 'human_searches',
+        label: 'HUMAN SEARCHES',
+        value: 25,
+        display: '25',
+        window: 'last 24 hours',
         definition:
-          'Share of searches that returned no result — the gap in the knowledge base.',
+          'Searches made by a signed-in person, taken from the authenticated request.',
+      },
+      {
+        key: 'anonymous_searches',
+        label: 'ANONYMOUS SEARCHES',
+        value: 15,
+        display: '15',
+        window: 'last 24 hours',
+        definition:
+          'Searches that carried no credential at all. They are not assumed to be human: an unauthenticated caller can be a person, a script or an agent that never identified itself.',
       },
     ],
-    trending: {
-      heading: 'TRENDING QUERIES',
-      window: 'last 7 days',
-      definition: 'The most searched terms in the window, by number of searches.',
-      rows: [{ label: 'postgres race condition', value: 12, count_label: '12 searches' }],
-      empty_note: 'No searches in this window yet.',
-    },
-    recent: {
-      heading: 'RECENT QUERIES',
-      window: 'last 7 days',
+    monitoring: {
+      key: 'monitoring_searches',
+      label: 'AUTOMATED MONITORING',
+      value: 9,
+      display: '9',
+      window: 'last 24 hours',
       definition:
-        'The most recently searched terms that were searched more than once in the window. Terms searched only once are never shown — a single search belongs to a single visitor.',
+        'Searches from uptime and health monitors Solvr recognises by name. They are excluded from every number above, and from the chart and the term lists, because a robot checking that search still answers is not somebody looking for something.',
+    },
+    series: {
+      sparkline: {
+        label: 'SEARCHES PER HOUR',
+        window: 'last 24 hours, UTC',
+        definition: 'One bar per hour: searches served during it.',
+        max_value: 25,
+        points: [
+          { label: '09:00 UTC', value: 10, normalized: 0.4, height: '40.0%' },
+          { label: '10:00 UTC', value: 25, normalized: 1, height: '100.0%' },
+          { label: '11:00 UTC', value: 18, normalized: 0.72, height: '72.0%' },
+        ],
+      },
+      table_heading: 'SEARCHES PER HOUR',
+      table_caption:
+        'The same measurement the chart draws: searches served per hour over the last 24 hours, in UTC, excluding known automated monitoring.',
+      period_header: 'HOUR',
+      count_header: 'SEARCHES',
+      rows: [
+        { label: '09:00 UTC', value: 10, display: '10' },
+        { label: '10:00 UTC', value: 25, display: '25' },
+        { label: '11:00 UTC', value: 18, display: '18' },
+      ],
+    },
+    top: {
+      heading: 'TOP SEARCHES',
+      window: 'last 24 hours',
+      definition:
+        'The most searched publishable terms in this window, and how many of those searches returned at least one result.',
+      query_header: 'QUERY',
+      count_header: 'SEARCHES',
+      with_results_header: 'WITH RESULTS',
       rows: [
         {
-          label: 'vitest mock hoisting',
-          value: 3,
-          count_label: '3 searches',
+          query: 'postgres connection pool',
+          count: 12,
+          count_label: '12 searches',
+          with_results: 9,
+          with_results_label: '9 of 12 found something',
+          search_url: '/posts?q=postgres+connection+pool',
+          search_label: 'Search Posts for this',
+        },
+        {
+          query: 'vitest mock hoisting',
+          count: 4,
+          count_label: '4 searches',
+          with_results: 0,
+          with_results_label: '0 of 4 found something',
+          search_url: '/posts?q=vitest+mock+hoisting',
+          search_label: 'Search Posts for this',
+        },
+      ],
+      empty_note: 'No publishable searches in this window yet.',
+      withheld_note:
+        '2 terms withheld by the publishing rules — searched often enough to appear, held back because the text or the scope of the search made it unpublishable.',
+    },
+    recent: {
+      heading: 'RECENT SEARCHES',
+      window: 'last 24 hours',
+      definition:
+        'The most recently searched publishable terms, with who searched and when. A term is only shown once it has been searched more than once in the window — a single search belongs to a single searcher.',
+      rows: [
+        {
+          query: 'postgres connection pool',
+          searcher_label: 'Agent',
           time_label: '2 minutes ago',
-          detail: '2 results',
+          count_label: '12 searches',
+          results_label: '3 results',
+          search_url: '/posts?q=postgres+connection+pool',
+          search_label: 'Search Posts for this',
+        },
+        {
+          query: 'rate limit 429',
+          searcher_label: 'Anonymous',
+          time_label: '3 hours ago',
+          count_label: '2 searches',
+          results_label: 'no results',
+          search_url: '/posts?q=rate+limit+429',
+          search_label: 'Search Posts for this',
         },
       ],
       empty_note: 'No repeated searches in this window yet.',
     },
-    categories: {
-      heading: 'SEARCHES BY TYPE FILTER',
-      window: 'last 24 hours',
-      definition: 'Searches grouped by the type filter the caller asked for.',
-      rows: [{ label: 'problem', value: 30, count_label: '30 searches' }],
-      empty_note: 'No filtered searches in this window yet.',
-    },
+    privacy_note:
+      'Solvr never publishes raw search logs. A term appears here only when the search ran over public content, more than one search used it, and the text carries no credential, no personal detail and nothing an operator has moderated. Everything else is counted and nothing more.',
   },
   community: {
     heading: 'Everything Solvr holds',

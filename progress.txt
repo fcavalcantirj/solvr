@@ -495,3 +495,115 @@ UAT: Step 5 is inherently the owner's — a visual review, which the golden rule
     no Connect screen to judge until task 16.
 UAT: Owner's call on the out-of-scope contrast list above — fix the footer/feed/post-detail
     status colours now, or let tasks 46-52 absorb them with the unified Post model.
+
+2026-09-20 22:35: Task 4/95 [functional] "Give the homepage an immediately understandable
+    agent-connection proposition". Frontend-only; no backend file touched. The old
+    collective-knowledge hero is gone.
+
+    HERO (frontend/components/hero-section.tsx, 134 -> 105 lines) now says exactly what the
+    product does and offers exactly two actions:
+      - h1: "Connect your agents. Let them work together." (one element, no <br> splitting the
+        sentence, so the accessible name is the whole headline).
+      - Supporting copy: "Two agents or a whole team. Paste a prompt into each. They share a
+        Solvr room to plan, build, and review. No human signup or installation needed."
+      - PRIMARY, filled: "Connect agents now" -> /connect. SECONDARY, outline:
+        "Watch an example" -> /rooms/tictactoe-human-vs-computer-20260920.
+        Labels are written mixed-case in the DOM and uppercased with CSS, so the rendered
+        wordmark treatment is unchanged while the text is assertable as specified.
+      - Beside the control, an <ol aria-labelledby> titled HOW IT STARTS carries the three
+        steps verbatim: "1. Give your planner a prompt." / "2. Paste its invite into your
+        executor." / "3. Watch them work."
+      - Immediately below, the real product-activity strip (same /v1/stats source as before,
+        compacted to text-2xl/3xl/4xl so it clears the fold).
+    REMOVED with the old hero: the COLLECTIVE INTELLIGENCE eyebrow, the ALL SYSTEMS OPERATIONAL
+      status ping, the "Several brains ... same knowledge base" headline, min-h-screen, and the
+      registration-first CTA pair (JOIN AS HUMAN + CONNECT AI AGENT logged out, POST A PROBLEM +
+      EXPLORE FEED logged in). The hero no longer imports useAuth AT ALL — one proposition, one
+      primary action, identical for every visitor, and nothing gated behind an auth round trip
+      (the exact defect task 2 found in the header).
+    HONEST EMPTY STATE: a counter renders "--", never "0", when the API has not answered or the
+      call failed. Previously `stats?.x ?? 0` invented a zero on a failed fetch — MEASURED live:
+      with CORS blocking the API the strip showed 0/0/0/0, which reads as "nobody uses this".
+
+    [TEST] frontend/components/hero-section.test.tsx REWRITTEN (3 -> 22 tests). RED measured
+        first: 14 failed / 7 passed against the old hero (the 7 were the new speed-claim guards,
+        which are protective and green from the start). All 22 now PASS. Covers: headline and
+        supporting copy as exact strings; both CTA hrefs and the filled-vs-outline distinction
+        (the negative assertion is a word-boundary regex, because `hover:bg-foreground` contains
+        the substring `bg-foreground`); the absence of /join, /connect/agent, /new?type=problem
+        and /feed; link list equality across three auth states; a source assertion that the file
+        never mentions use-auth; workflow items as an ordered array equality; DOM ordering
+        control -> workflow -> numbers via compareDocumentPosition; numbers re-render when the
+        mocked API changes and show "--" both while loading and after a failed call.
+    [TEST] Step 6 made executable: a parameterised guard over all seven homepage files
+        (app/page.tsx + the six sections) fails on any comparative or numeric setup-time claim
+        (/fastest|quickest|best|faster than|world's|#1|in under|\d+ ?(x|seconds|secs|minutes|
+        mins)/i). Currently ZERO matches, so speed stays the design objective and never becomes
+        an unbenchmarked boast.
+    [TEST] cd frontend && npm test — FULL SUITE 126 files / 1202 tests, ALL PASS, zero failures.
+        Baseline before this task was 1183 (2026-09-20 22:35 entry); +19 is 22 new minus the 3
+        old hero tests.
+    [REAL] Coverage of hero-section.tsx: 100% statements / 100% branch / 100% functions /
+        100% lines (v8, scoped include). The failed-call branch was added after the first run
+        measured 75% branch with line 93 uncovered.
+    [REAL] npx tsc --noEmit: ZERO errors. bash scripts/check-file-size.sh: 36 violations, the
+        SAME 36 as the 2026-09-20 baseline; hero-section.tsx is 105 lines, its test 223.
+    [REAL] design-system.test.tsx still green — the hero keeps `px-4 sm:px-6 lg:px-12` and
+        `pt-24`, and adds no rounded corner.
+
+    [REAL] MEASURED IN A REAL BROWSER, not reasoned. Killed the previous next dev/next-server
+        first; ran the Go API on :8090 against postgres://localhost:5435/solvr (backend/.env NOT
+        touched and NOT loaded) and next dev on :3111 with NEXT_PUBLIC_API_URL pointed at it,
+        then drove headless Chromium (playwright, ~/Library/Caches/ms-playwright/chromium-1234)
+        at both required viewports. Geometry, from the throwaway script (deleted afterwards):
+          1280x800: h1 top 96 bottom 222 · copy 246-305 · "Connect agents now" 337-387 ·
+                    "Watch an example" 337-387 · stats strip top 435 · first number 460-500.
+          390x844:  h1 96-209 · copy 233-337 · "Connect agents now" 369-417 ·
+                    "Watch an example" 429-479 · stats strip top 728 · first number 753-785.
+        Both CTAs are FULLY above the fold at both sizes and the whole first row of numbers is
+        visible without scrolling — step 5 only requires the START of the statistics.
+        The hero section contains exactly two links: /connect = "Connect agents now" and
+        /rooms/tictactoe-human-vs-computer-20260920 = "Watch an example". The workflow renders
+        in order. Served numbers were 0/0/0/3, matching GET /v1/stats on that database exactly
+        (problems_solved 0, total_contributions 0, total_agents 0, humans_count 3) — the local
+        dev data is still the wiped set from the 2026-09-20 21:05 incident, which is why they
+        are near-zero; the wiring, not the magnitude, is what was verified.
+    [REAL] The local API needed ALLOWED_ORIGINS=http://localhost:3111 (router.go:47 defaults to
+        :3000) and a JWT_SECRET of 32+ chars, otherwise config.Load() fails, the pool is nil and
+        the router logs "WARNING: Database pool is nil. V1 API routes will not be mounted." —
+        every /v1 route then 404s. Recorded so the next iteration does not rediscover it.
+    [REAL] Link targets resolve. http://localhost:3111/connect -> 307 -> 200 (task 2's temporary
+        redirect to /connect/agent; task 16 replaces it). The example room is LIVE AND PUBLIC:
+        read-only, unauthenticated GET https://api.solvr.dev/v1/rooms/tictactoe-human-vs-
+        computer-20260920 -> 200 with the planner's opening directive in recent_messages, and
+        https://solvr.dev/rooms/tictactoe-human-vs-computer-20260920 -> 200. Nothing was written
+        to production. Locally that room 404s because the dev database was wiped — the link is
+        correct, the local fixture simply does not exist.
+    [UNVERIFIED] `npm run lint` still cannot run here: "sh: eslint: command not found"
+        (pre-existing, node_modules/.bin has no eslint; CI installs it). Not a gate: tsc and the
+        full vitest suite ran clean.
+
+    OUT OF SCOPE, MEASURED, LEFT FOR THE TASKS THAT OWN IT:
+      - The four counters (PROBLEMS SOLVED / CONTRIBUTIONS / AI AGENTS ACTIVE / HUMANS
+        PARTICIPATING) are kept as-is on purpose. Task 6 step 5 explicitly replaces "the old
+        four-counter hero strip" with room, search and community statistics whose windows are
+        visible; doing it here would be building that task.
+      - Page metadata still reads "Solvr — Collective Intelligence for Humans & AI"
+        (app/page.tsx:12 and app/layout.tsx:17, site-wide default). No step of this task names
+        the metadata, and changing the site-wide title is a separate decision.
+      - Two pre-existing unbenchmarked speed words survive the guard because they are neither
+        comparative nor numeric: features-section.tsx:9 "finds existing solutions instantly" and
+        api-section.tsx:63 "GET /search — Find solutions instantly".
+      - The GA tag fires on localhost (analytics.google.com/g/collect, ERR_ABORTED offline).
+        Pre-existing, unrelated to this task.
+
+UAT: Step 1 is inherently visual and the owner's. Open / logged out AND logged in, at 1280x800
+    and 390x844, and confirm the proposition reads in one breath and that "Connect agents now"
+    is unmistakably the one primary action:
+      cd /Users/fcavalcanti/dev/solvr/frontend && npm run dev
+    The automated equivalent already ran green (22 unit tests plus the real-browser geometry
+    above at both required viewports).
+UAT: Owner should confirm the secondary CTA should keep pointing straight at the raw room
+    (/rooms/tictactoe-human-vs-computer-20260920). Task 5 builds an on-page excerpt of that same
+    collaboration; at that point "Watch an example" may want to scroll to the excerpt instead of
+    leaving the homepage.

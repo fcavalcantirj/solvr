@@ -48,7 +48,7 @@
       "Replace the old collective-knowledge hero and registration-first CTA pair with a compact hero; ensure the connection action and the start of real activity statistics are visible without scrolling at 1280 by 800 and 390 by 844.",
       "Use speed as the design objective and plain product promise; only publish comparative claims such as 'fastest' or numeric setup-time claims when supported by a recorded benchmark."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

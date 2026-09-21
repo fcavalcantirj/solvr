@@ -1,10 +1,10 @@
 // Package main provides integration tests for the Quorum-to-Solvr migration CLI tool.
-// Tests run against a real local Docker PostgreSQL instance (port 5433).
+// Tests run against a real local Docker PostgreSQL instance (port 5435).
 // Tests are skipped automatically when DATABASE_URL is not set.
 //
 // Run with:
 //
-//	DATABASE_URL="postgres://solvr:solvr_dev@localhost:5433/solvr?sslmode=disable" go test ./cmd/migrate-quorum/... -run TestIntegration_ -v -count=1
+//	DATABASE_URL="postgres://solvr:solvr_dev@localhost:5435/solvr?sslmode=disable" go test ./cmd/migrate-quorum/... -run TestIntegration_ -v -count=1
 package main
 
 import (

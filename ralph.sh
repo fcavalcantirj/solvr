@@ -34,6 +34,7 @@ CODEX_EFFORT="${CODEX_EFFORT:-max}"
 CUSTOM_MODEL="${CUSTOM_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 CUSTOM_EFFORT="${CUSTOM_EFFORT:-}"     # empty = don't send reasoning effort
 VERIFY_CMD="${VERIFY_CMD:-}"           # host-side batch verify (empty = off); runs OUTSIDE the engine sandbox
+STALL_LIMIT="${STALL_LIMIT:-2}"        # consecutive iterations with no ledger progress before the batch stops
 
 case "$ENGINE" in
   claude|codex|opencode|kimi) ;;
@@ -98,6 +99,15 @@ fi
 format_time() {
   local secs=$1
   printf "%02d:%02d:%02d" $((secs/3600)) $((secs%3600/60)) $((secs%60))
+}
+
+# Passed-task count, used by the stall guard below.
+count_passed() {
+  if command -v jq >/dev/null 2>&1; then
+    jq '[.[] | select(.passes == true)] | length' "$PRD_FILE" 2>/dev/null || echo 0
+  else
+    grep -cE '"passes"[[:space:]]*:[[:space:]]*true' "$PRD_FILE" 2>/dev/null || echo 0
+  fi
 }
 
 # Host-side verification (runs OUTSIDE the engine sandbox, once per batch).
@@ -186,17 +196,20 @@ read -r -d '' PROMPT <<EOF || true
 - API IS SMART, CLIENT IS DUMB: 100% of business logic lives in the Go API. The frontend never validates, transforms, calculates or decides — it calls endpoints, renders what comes back, and shows loading/error states.
 - NO STUBS, NO IN-MEMORY REPOSITORIES in production paths. Use \`db.New*Repository(pool)\`; never \`NewInMemory*Repository()\`, never "temporary until the DB lands". If you cannot implement real storage, do not implement the feature.
 - NO CODE FILE OVER 800 LINES — CI enforces it via \`./scripts/check-file-size.sh\`. Split by responsibility before you get there. Markdown is exempt.
-- LOCAL ONLY. NEVER touch production: no \`/admin/query\` calls against api.solvr.dev, no email broadcasts, no deploys, no release tags, no \`git push\` unless this prompt's PUSH step says to. NEVER modify \`.env\` or any env file. The local stack is \`docker compose up -d\` (PostgreSQL on port 5433, IPFS on 5001/8081); kill any previous process before starting another.
+- LOCAL ONLY. NEVER touch production: no \`/admin/query\` calls against api.solvr.dev, no email broadcasts, no deploys, no release tags, no \`git push\` unless this prompt's PUSH step says to. NEVER modify \`.env\` or any env file. The local stack is \`docker compose up -d\` (PostgreSQL on port 5435, IPFS on 5001/8081); kill any previous process before starting another.
 - DO NOT CREATE DOCUMENTS: no summary files, no reports, no new .md files unless the current task explicitly names the file.
-- LABEL EVERY CLAIM \`[REAL]\` (verified against the running system), \`[TEST]\` (passed in tests only) or \`[UNVERIFIED]\` (reasoned but not checked). "It should work now" is not a status.
-- TASKS THAT NEED THE OWNER DEGRADE, THEY NEVER STALL: if a task's last mile is a production migration, a deploy, a broadcast or a human visual check, do every local step and every headless check you can, append a \`UAT:\` line to progress.txt naming exactly what the owner must run or confirm, and STILL set passes=true. An unpassed task makes the next iteration repeat this one forever.
+- LABEL EVERY CLAIM \`[REAL]\` (verified against the running system), \`[TEST]\` (a test that ACTUALLY RAN and passed — never a skipped one) or \`[UNVERIFIED]\` (reasoned but not checked). "It should work now" is not a status.
+- VERIFICATION IS NOT OPTIONAL — A SKIPPED TEST IS NOT A PASSED TEST. Never set passes=true on a task whose checks did not actually EXECUTE and come back green. \`SKIP\`, \`[no tests to run]\`, "it builds", "it vets clean" and "the suite is green because everything skipped" are NOT evidence of behavior. If the tests you wrote report SKIP (integration tests skip when DATABASE_URL is unset), the task is UNVERIFIED — leave passes=false.
+- ENVIRONMENT BLOCKED = STUCK, NOT DONE. If the database, Docker, a service or any dependency needed to RUN the checks is unavailable, journal the exact commands and their exact errors to progress.txt, leave passes=false, and STOP the iteration for a human. Never mark a task passed because the environment could not prove it. Point DATABASE_URL only at a local, isolated test database — never at production, never at a database holding real data.
+- OWNER-ONLY LAST MILE IS THE ONLY THING THAT DEGRADES: a task may pass with something outstanding ONLY when the remaining step is inherently the owner's — a production migration, a deploy, an email broadcast, a physical or visual confirmation — AND every automated check for that task already RAN GREEN locally. Append a \`UAT:\` line naming exactly what the owner must run or confirm, then set passes=true. This clause NEVER covers "the tests did not run".
+- ACCEPTANCE TASKS ARE NOT CHECKLISTS. If a task's checks span behavior that other tasks still have to build, writing tests for it does not complete it — leave it open and take the first task that is actually buildable now.
 - WHEN STUCK: journal the exact command and its exact error to progress.txt, leave the task open (do NOT flip passes), and stop the iteration so a human can look. Never guess an API, never invent one.
 
 === WORKFLOW ===
 1. Read $PRD_FILE (the task ledger) and progress.txt (the build journal) before anything else.
 2. In $PRD_FILE, find the FIRST task (top-to-bottom order = priority; do any task whose description starts with the URGENT marker before others) where passes is false. Work ONLY on that one task. Honor its 'DEPENDS ON:' / 'PREREQUISITE:' notes.
 3. Follow that task's 'steps' exactly. Write tests first.
-4. Validate by running that task's own 'Verify:' steps plus \`cd backend && go test ./...\` and/or \`cd frontend && npm test\` for what you touched. Do NOT mark the task done until they pass. If a Verify step is inherently visual/human-only or needs production, run every headless check you can and append a 'UAT:' line to progress.txt — then STILL set passes=true. Never skip a task (later tasks depend on it).
+4. Validate by RUNNING that task's own 'Verify:' steps plus \`cd backend && go test ./...\` and/or \`cd frontend && npm test\` for what you touched, and READ THE OUTPUT: every test you wrote for this task must report ok/PASS, not SKIP. Backend integration tests need a local isolated database — export DATABASE_URL (the local stack is \`docker compose up -d\`, Postgres on 5435) before running them, and say in the journal which database they ran against. Do NOT mark the task done until those checks pass. If the last remaining step is inherently the owner's (production migration, deploy, broadcast, visual confirmation) and everything automatable already ran green, append a 'UAT:' line to progress.txt and then set passes=true. If instead the checks could not run at all, leave passes=false and stop (see ENVIRONMENT BLOCKED above).
 5. APPEND a dated entry to progress.txt describing what you did. progress.txt is APPEND-ONLY: use >> and NEVER > — do not overwrite, truncate, rewrite or reformat it, and never delete lines you did not add. Its history is the only memory the next iteration has.
 6. In $PRD_FILE, set that task's "passes" to true.
 7. COMMIT: if .git exists, run 'git add .' to stage ALL files (including new ones), then 'git commit -m "<type>(<scope>): <task description>"' using the project's prefixes (feat, fix, refactor, test, docs, chore). If the repo is not git-initialized, note that in progress.txt and skip committing this once.
@@ -226,6 +239,8 @@ cleanup() { rm -f "$tmpfile" "$errfile"; }
 trap cleanup EXIT
 
 overall_start=$(date +%s)
+prev_passed=$(count_passed)
+stall_streak=0
 total_iteration_time=0
 completed_iterations=0
 total_cost=0
@@ -439,6 +454,30 @@ for ((i=1; i<=$1; i++)); do
     echo -e "${BLUE}  💰 Total cost: ${BOLD}\$${total_cost}${NC}"
     echo -e "${GREEN}  📊 $(./progress.sh)${NC}"
     exit 0
+  fi
+
+  # Stall guard: a task that cannot be verified is left open on purpose, which
+  # means the next iteration picks up the SAME task. Without this the loop burns
+  # tokens all night re-attempting a blocked task. Two iterations with no ledger
+  # progress = stop and let a human look.
+  now_passed=$(count_passed)
+  if [ "$now_passed" = "$prev_passed" ]; then
+    stall_streak=$((stall_streak + 1))
+  else
+    stall_streak=0
+  fi
+  prev_passed="$now_passed"
+  if [ "$stall_streak" -ge "$STALL_LIMIT" ]; then
+    echo ""
+    echo -e "${RED}${BOLD}  ⛔ RALPH BLOCKED — ${stall_streak} iterations with no ledger progress.${NC}"
+    echo -e "${RED}  The current task is not passing and is not being flipped. Read the tail of${NC}"
+    echo -e "${RED}  progress.txt for the exact command and error that stopped it.${NC}"
+    echo -e "${GREEN}📊 $(./progress.sh)${NC}"
+    {
+      echo ""
+      echo "$(date '+%Y-%m-%d %H:%M'): RALPH BLOCKED — ${stall_streak} iterations with no ledger progress (engine ${ENGINE}). Batch stopped for a human."
+    } >> progress.txt
+    exit 2
   fi
 done
 

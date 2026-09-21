@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Simple fast validation: local DB = production schema
 
-LOCAL_DB="postgresql://solvr:solvr_dev@localhost:5433/solvr?sslmode=disable"
+LOCAL_DB="postgresql://solvr:solvr_dev@localhost:5435/solvr?sslmode=disable"
 PROD_SCHEMA="./db-backups/schema_latest.sql"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -20,7 +20,7 @@ fi
 
 # 2. Dump local schema
 echo "📊 Dumping local schema..."
-PGPASSWORD=solvr_dev pg_dump -h localhost -p 5433 -U solvr -d solvr --schema-only > /tmp/local_schema.sql 2>/dev/null
+PGPASSWORD=solvr_dev pg_dump -h localhost -p 5435 -U solvr -d solvr --schema-only > /tmp/local_schema.sql 2>/dev/null
 
 # 3. Compare table counts
 PROD_TABLES=$(grep "^CREATE TABLE" "${PROD_SCHEMA}" | wc -l | tr -d ' ')

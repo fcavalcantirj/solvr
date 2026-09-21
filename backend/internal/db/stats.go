@@ -22,7 +22,7 @@ func (r *StatsRepository) GetActivePostsCount(ctx context.Context) (int, error) 
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
 		WHERE status IN ('open', 'active', 'in_progress')
-		AND deleted_at IS NULL
+		AND deleted_at IS NULL AND visibility = 'public' -- BART-151: public stats never count family posts
 	`).Scan(&count)
 	if err != nil {
 		return 0, err
@@ -50,7 +50,7 @@ func (r *StatsRepository) GetSolvedTodayCount(ctx context.Context) (int, error) 
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
 		WHERE status = 'solved'
-		AND deleted_at IS NULL
+		AND deleted_at IS NULL AND visibility = 'public' -- BART-151
 		AND updated_at >= $1
 	`, today).Scan(&count)
 	if err != nil {
@@ -65,7 +65,7 @@ func (r *StatsRepository) GetPostedTodayCount(ctx context.Context) (int, error) 
 	today := time.Now().Truncate(24 * time.Hour)
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND visibility = 'public' -- BART-151
 		AND created_at >= $1
 	`, today).Scan(&count)
 	if err != nil {
@@ -80,7 +80,7 @@ func (r *StatsRepository) GetProblemsSolvedCount(ctx context.Context) (int, erro
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
 		WHERE type = 'problem' AND status = 'solved'
-		AND deleted_at IS NULL
+		AND deleted_at IS NULL AND visibility = 'public' -- BART-151
 	`).Scan(&count)
 	if err != nil {
 		return 0, err
@@ -94,7 +94,7 @@ func (r *StatsRepository) GetQuestionsAnsweredCount(ctx context.Context) (int, e
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
 		WHERE type = 'question' AND accepted_answer_id IS NOT NULL
-		AND deleted_at IS NULL
+		AND deleted_at IS NULL AND visibility = 'public' -- BART-151
 	`).Scan(&count)
 	if err != nil {
 		return 0, err
@@ -119,7 +119,7 @@ func (r *StatsRepository) GetTotalPostsCount(ctx context.Context) (int, error) {
 	var count int
 	err := r.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM posts
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND visibility = 'public' -- BART-151
 	`).Scan(&count)
 	if err != nil {
 		return 0, err
@@ -132,9 +132,9 @@ func (r *StatsRepository) GetTotalContributionsCount(ctx context.Context) (int, 
 	var count int
 	err := r.pool.QueryRow(ctx, `
 		SELECT
-			COALESCE((SELECT COUNT(*) FROM answers WHERE deleted_at IS NULL), 0) +
-			COALESCE((SELECT COUNT(*) FROM approaches WHERE deleted_at IS NULL), 0) +
-			COALESCE((SELECT COUNT(*) FROM responses), 0)
+			COALESCE((SELECT COUNT(*) FROM answers ans WHERE ans.deleted_at IS NULL AND EXISTS (SELECT 1 FROM posts p WHERE p.id = ans.question_id AND p.visibility = 'public')), 0) +
+			COALESCE((SELECT COUNT(*) FROM approaches app WHERE app.deleted_at IS NULL AND EXISTS (SELECT 1 FROM posts p WHERE p.id = app.problem_id AND p.visibility = 'public')), 0) +
+			COALESCE((SELECT COUNT(*) FROM responses res WHERE EXISTS (SELECT 1 FROM posts p WHERE p.id = res.idea_id AND p.visibility = 'public')), 0)
 	`).Scan(&count)
 	if err != nil {
 		return 0, err
@@ -162,18 +162,18 @@ func (r *StatsRepository) GetAllStats(ctx context.Context) (*AllStatsResult, err
 	var s AllStatsResult
 	err := r.pool.QueryRow(ctx, `
 		SELECT
-			(SELECT COUNT(*) FROM posts WHERE status IN ('open', 'active', 'in_progress') AND deleted_at IS NULL),
+			(SELECT COUNT(*) FROM posts WHERE status IN ('open', 'active', 'in_progress') AND deleted_at IS NULL AND visibility = 'public'),
 			(SELECT COUNT(*) FROM agents WHERE status = 'active'),
-			(SELECT COUNT(*) FROM posts WHERE status = 'solved' AND deleted_at IS NULL AND updated_at >= $1),
-			(SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL AND created_at >= $1),
-			(SELECT COUNT(*) FROM posts WHERE type = 'problem' AND status = 'solved' AND deleted_at IS NULL),
-			(SELECT COUNT(*) FROM posts WHERE type = 'question' AND accepted_answer_id IS NOT NULL AND deleted_at IS NULL),
+			(SELECT COUNT(*) FROM posts WHERE status = 'solved' AND deleted_at IS NULL AND visibility = 'public' AND updated_at >= $1),
+			(SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL AND visibility = 'public' AND created_at >= $1),
+			(SELECT COUNT(*) FROM posts WHERE type = 'problem' AND status = 'solved' AND deleted_at IS NULL AND visibility = 'public'),
+			(SELECT COUNT(*) FROM posts WHERE type = 'question' AND accepted_answer_id IS NOT NULL AND deleted_at IS NULL AND visibility = 'public'),
 			(SELECT COUNT(*) FROM users),
-			(SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL),
-			COALESCE((SELECT COUNT(*) FROM answers WHERE deleted_at IS NULL), 0) +
-				COALESCE((SELECT COUNT(*) FROM approaches WHERE deleted_at IS NULL), 0) +
-				COALESCE((SELECT COUNT(*) FROM responses), 0),
-			(SELECT COUNT(*) FROM posts WHERE crystallization_cid IS NOT NULL AND deleted_at IS NULL)
+			(SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL AND visibility = 'public'),
+			COALESCE((SELECT COUNT(*) FROM answers ans WHERE ans.deleted_at IS NULL AND EXISTS (SELECT 1 FROM posts p WHERE p.id = ans.question_id AND p.visibility = 'public')), 0) +
+				COALESCE((SELECT COUNT(*) FROM approaches app WHERE app.deleted_at IS NULL AND EXISTS (SELECT 1 FROM posts p WHERE p.id = app.problem_id AND p.visibility = 'public')), 0) +
+				COALESCE((SELECT COUNT(*) FROM responses res WHERE EXISTS (SELECT 1 FROM posts p WHERE p.id = res.idea_id AND p.visibility = 'public')), 0),
+			(SELECT COUNT(*) FROM posts WHERE crystallization_cid IS NOT NULL AND deleted_at IS NULL AND visibility = 'public')
 	`, today).Scan(
 		&s.ActivePosts, &s.TotalAgents, &s.SolvedToday, &s.PostedToday,
 		&s.ProblemsSolved, &s.QuestionsAnswered, &s.HumansCount,
@@ -274,7 +274,7 @@ func (r *StatsRepository) GetTrendingTags(ctx context.Context, limit int) ([]any
 			SELECT tag, COUNT(*) as count
 			FROM posts, unnest(tags) as tag
 			WHERE tags IS NOT NULL AND array_length(tags, 1) > 0
-				AND deleted_at IS NULL
+				AND deleted_at IS NULL AND visibility = 'public' -- BART-151
 				AND created_at > NOW() - INTERVAL '7 days'
 			GROUP BY tag
 		),
@@ -282,7 +282,7 @@ func (r *StatsRepository) GetTrendingTags(ctx context.Context, limit int) ([]any
 			SELECT tag, COUNT(*) as count
 			FROM posts, unnest(tags) as tag
 			WHERE tags IS NOT NULL AND array_length(tags, 1) > 0
-				AND deleted_at IS NULL
+				AND deleted_at IS NULL AND visibility = 'public' -- BART-151
 				AND created_at > NOW() - INTERVAL '14 days'
 				AND created_at <= NOW() - INTERVAL '7 days'
 			GROUP BY tag
@@ -338,16 +338,16 @@ func (r *StatsRepository) GetProblemsStats(ctx context.Context) (map[string]any,
 
 	err := r.pool.QueryRow(ctx, `
 		SELECT
-			(SELECT COUNT(*) FROM posts WHERE type = 'problem' AND deleted_at IS NULL),
-			(SELECT COUNT(*) FROM posts WHERE type = 'problem' AND status = 'solved' AND deleted_at IS NULL),
+			(SELECT COUNT(*) FROM posts WHERE type = 'problem' AND deleted_at IS NULL AND visibility = 'public'),
+			(SELECT COUNT(*) FROM posts WHERE type = 'problem' AND status = 'solved' AND deleted_at IS NULL AND visibility = 'public'),
 			(SELECT COUNT(*) FROM approaches a
 				JOIN posts p ON a.problem_id = p.id
 				WHERE a.status IN ('starting', 'working')
 				AND a.deleted_at IS NULL
-				AND p.deleted_at IS NULL),
+				AND p.deleted_at IS NULL AND p.visibility = 'public'),
 			COALESCE((SELECT AVG(EXTRACT(EPOCH FROM (p.updated_at - p.created_at)) / 86400)::INT
 				FROM posts p
-				WHERE p.type = 'problem' AND p.status = 'solved' AND p.deleted_at IS NULL), 0)
+				WHERE p.type = 'problem' AND p.status = 'solved' AND p.deleted_at IS NULL AND p.visibility = 'public'), 0)
 	`).Scan(&totalProblems, &solvedCount, &activeApproaches, &avgSolveTimeDays)
 	if err != nil {
 		return nil, err
@@ -392,7 +392,7 @@ func (r *StatsRepository) GetRecentlySolvedProblems(ctx context.Context, limit i
 		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
 		WHERE p.type = 'problem'
 		AND p.status = 'solved'
-		AND p.deleted_at IS NULL
+		AND p.deleted_at IS NULL AND p.visibility = 'public' -- BART-151
 		ORDER BY p.updated_at DESC
 		LIMIT $1
 	`, limit)
@@ -462,7 +462,7 @@ func (r *StatsRepository) GetTopProblemSolvers(ctx context.Context, limit int) (
 		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
 		WHERE a.status = 'succeeded'
 		AND a.deleted_at IS NULL
-		AND p.deleted_at IS NULL
+		AND p.deleted_at IS NULL AND p.visibility = 'public' -- BART-151
 		GROUP BY a.author_id, a.author_type, ag.display_name, u.display_name
 		ORDER BY solved_count DESC
 		LIMIT $1
@@ -509,7 +509,7 @@ func (r *StatsRepository) GetIdeasCountByStatus(ctx context.Context) (map[string
 	rows, err := r.pool.Query(ctx, `
 		SELECT status, COUNT(*) as count
 		FROM posts
-		WHERE type = 'idea' AND deleted_at IS NULL
+		WHERE type = 'idea' AND deleted_at IS NULL AND visibility = 'public' -- BART-151
 		GROUP BY status
 	`)
 	if err != nil {
@@ -552,7 +552,7 @@ func (r *StatsRepository) GetFreshSparks(ctx context.Context, limit int) ([]map[
 		SELECT id, title, COALESCE(upvotes, 0) as support, created_at
 		FROM posts
 		WHERE type = 'idea'
-		AND deleted_at IS NULL
+		AND deleted_at IS NULL AND visibility = 'public' -- BART-151
 		AND created_at > NOW() - INTERVAL '24 hours'
 		ORDER BY upvotes DESC, created_at DESC
 		LIMIT $1
@@ -602,7 +602,7 @@ func (r *StatsRepository) GetReadyToDevelop(ctx context.Context, limit int) ([]m
 			END as validation_score
 		FROM posts
 		WHERE type = 'idea'
-		AND deleted_at IS NULL
+		AND deleted_at IS NULL AND visibility = 'public' -- BART-151
 		AND status IN ('active', 'open')
 		AND COALESCE(upvotes, 0) >= 10
 		ORDER BY upvotes DESC, created_at DESC
@@ -667,7 +667,7 @@ func (r *StatsRepository) GetTopSparklers(ctx context.Context, limit int) ([]map
 		FROM posts p
 		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
-		WHERE p.type = 'idea' AND p.deleted_at IS NULL
+		WHERE p.type = 'idea' AND p.deleted_at IS NULL AND p.visibility = 'public' -- BART-151
 		GROUP BY p.posted_by_id, p.posted_by_type, a.display_name, u.display_name
 		ORDER BY ideas_count DESC, realized_count DESC
 		LIMIT $1
@@ -743,7 +743,7 @@ func (r *StatsRepository) GetIdeaPipelineStats(ctx context.Context) (map[string]
 	err = r.pool.QueryRow(ctx, `
 		SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 86400)::INT, 0)
 		FROM posts
-		WHERE type = 'idea' AND status = 'evolved' AND deleted_at IS NULL
+		WHERE type = 'idea' AND status = 'evolved' AND deleted_at IS NULL AND visibility = 'public'
 	`).Scan(&avgDays)
 	if err != nil {
 		avgDays = 0
@@ -770,7 +770,7 @@ func (r *StatsRepository) GetRecentlyRealized(ctx context.Context, limit int) ([
 			evolved_into[1] as evolved_post_id
 		FROM posts
 		WHERE type = 'idea'
-		AND deleted_at IS NULL
+		AND deleted_at IS NULL AND visibility = 'public' -- BART-151
 		AND status = 'evolved'
 		AND array_length(evolved_into, 1) > 0
 		ORDER BY updated_at DESC

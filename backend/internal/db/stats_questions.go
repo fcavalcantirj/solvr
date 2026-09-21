@@ -12,14 +12,14 @@ func (r *StatsRepository) GetQuestionsStats(ctx context.Context) (map[string]any
 
 	err := r.pool.QueryRow(ctx, `
 		SELECT
-			(SELECT COUNT(*) FROM posts WHERE type = 'question' AND deleted_at IS NULL),
-			(SELECT COUNT(*) FROM posts WHERE type = 'question' AND accepted_answer_id IS NOT NULL AND deleted_at IS NULL),
+			(SELECT COUNT(*) FROM posts WHERE type = 'question' AND deleted_at IS NULL AND visibility = 'public'),
+			(SELECT COUNT(*) FROM posts WHERE type = 'question' AND accepted_answer_id IS NOT NULL AND deleted_at IS NULL AND visibility = 'public'),
 			COALESCE((
 				SELECT
 					CASE WHEN COUNT(*) = 0 THEN 0
 					ELSE (COUNT(*) FILTER (WHERE accepted_answer_id IS NOT NULL)::float / COUNT(*)::float) * 100
 					END
-				FROM posts WHERE type = 'question' AND deleted_at IS NULL
+				FROM posts WHERE type = 'question' AND deleted_at IS NULL AND visibility = 'public'
 			), 0),
 			COALESCE((
 				SELECT AVG(EXTRACT(EPOCH FROM (a.created_at - p.created_at)) / 3600)
@@ -30,7 +30,7 @@ func (r *StatsRepository) GetQuestionsStats(ctx context.Context) (map[string]any
 					ORDER BY created_at ASC
 					LIMIT 1
 				) a ON true
-				WHERE p.type = 'question' AND p.deleted_at IS NULL
+				WHERE p.type = 'question' AND p.deleted_at IS NULL AND p.visibility = 'public'
 			), 0)
 	`).Scan(&totalQuestions, &answeredCount, &responseRate, &avgResponseTimeHours)
 	if err != nil {
@@ -70,7 +70,7 @@ func (r *StatsRepository) GetRecentlyAnsweredQuestions(ctx context.Context, limi
 		LEFT JOIN users u ON ans.author_type = 'human' AND ans.author_id = u.id::text
 		WHERE p.type = 'question'
 		AND p.accepted_answer_id IS NOT NULL
-		AND p.deleted_at IS NULL
+		AND p.deleted_at IS NULL AND p.visibility = 'public' -- BART-151
 		ORDER BY p.updated_at DESC
 		LIMIT $1
 	`, limit)
@@ -142,7 +142,7 @@ func (r *StatsRepository) GetTopAnswerers(ctx context.Context, limit int) ([]map
 		LEFT JOIN agents ag ON ans.author_type = 'agent' AND ans.author_id = ag.id
 		LEFT JOIN users u ON ans.author_type = 'human' AND ans.author_id = u.id::text
 		WHERE ans.deleted_at IS NULL
-		AND p.deleted_at IS NULL
+		AND p.deleted_at IS NULL AND p.visibility = 'public' -- BART-151
 		AND p.type = 'question'
 		GROUP BY ans.author_id, ans.author_type, ag.display_name, u.display_name
 		ORDER BY answer_count DESC

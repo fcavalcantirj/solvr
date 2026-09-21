@@ -83,3 +83,160 @@ UAT: 36 files already exceed the 800-line CI limit (bash scripts/check-file-size
     including backend/internal/api/router.go at 1169 and frontend/app/privacy/page.tsx at
     1075. Pre-existing, NOT introduced here (the new file is 252 lines), but CI enforces
     the limit and later tasks will have to touch router.go.
+
+2026-09-20 20:25: Owner review of the first loop iteration — task reverted, harness rules tightened,
+    cleanup bug fixed, and the two tests finally RUN.
+    [REAL] spec.json: the product-direction task was restored to passes=false (it had been flipped
+        true while its checks — the prompt-first connect flow and the unified Post model — are still
+        unbuilt) and MOVED from index 0 to index 93, directly before the release gate at 94. It is a
+        final acceptance check, not the first buildable task. Ledger back to 0/95, schema unchanged.
+    [REAL] ralph.sh completion rules replaced. The old "tasks that need the owner degrade" clause was
+        too broad: it let an iteration pass a task when the environment could not run the checks.
+        Now: a SKIPPED test is not a passed test; environment-blocked (no database, Docker down) is
+        STUCK — journal the exact error, leave passes=false, stop; the owner-only degrade applies ONLY
+        when every automated check already ran green; acceptance tasks spanning unbuilt features stay
+        open. Workflow step 4 requires reading test output and naming the database it ran against.
+    [REAL] ralph.sh stall guard added: STALL_LIMIT (default 2) iterations with no ledger progress ends
+        the batch with "RALPH BLOCKED" (exit 2), and ralph-continuous.sh stops instead of retrying all
+        night. Verified with a stub engine: ralph.sh exit 2, supervisor exit 1.
+    [REAL] router_product_direction_test.go cleanup bug fixed. setupRoomTestServer's cleanup ends in
+        pool.Close(); deferred funcs run before t.Cleanup funcs, so both t.Cleanup delete blocks were
+        executing against a CLOSED pool and their errors were swallowed by //nolint:errcheck. The
+        helper's own sweep only deletes agents matching 'agent_roomtest_%', so agent_pd_% rows leaked.
+        Replaced with `defer pdCleanup(t, pool)` registered AFTER `defer cleanup()` (LIFO puts it
+        before the close) and cleanup failures are now logged, not swallowed.
+        MEASURED both ways on a clean database: original code left 11 agent_pd_% rows behind; fixed
+        code leaves 0.
+    [REAL] Docker Desktop was dead, not just stopped: com.docker.backend.log said
+        "backend crashed: opening tray: starting electron: unmarshaling start request: unexpected EOF"
+        then "stopping local engine linux/virtualization-framework" / "monitor exited: exit status 150".
+        The VM never started because the backend aborted launching its Electron tray. Installed 4.48.0
+        (Oct 2025 binary) on macOS 26.5. Reinstalled to 4.91.0 via `brew install --cask docker-desktop`
+        (the owner ran it — the cask needs sudo to link into /usr/local/bin). Daemon now up, server 29.8.0.
+    [REAL] TestProductDirection_AgentsConnectWithoutHumanAccount PASS (0.31s) and
+        TestProductDirection_NoHardCodedParticipantLimit PASS (0.89s), run with -count=1 against an
+        isolated pgvector/pgvector:pg17 container (solvr-test-pg, host port 5455, database solvr_test)
+        with all 81 migrations applied — 44 tables. Zero fixtures left behind afterwards.
+        The two tests are now genuinely verified; the task they belong to stays OPEN because the
+        product work it describes is still unbuilt.
+    NOTE: solvr's docker-compose postgres cannot bind 5433 — bart-v2-temporal-postgres (another
+        project, restart: unless-stopped) claimed it when the daemon came back. solvr-ipfs is up;
+        solvr-postgres is in "Created" state. Owner decision: stop the bart-v2 stack, or change
+        solvr's compose port.
+
+2026-09-20 20:35: Local Postgres moved off 5433 (owner's call — bart-v2-temporal-postgres, another
+    project with restart: unless-stopped, owns that port).
+    [REAL] docker-compose.yml now maps 5435:5432. Updated to match: PROJECT_KNOWLEDGE.md, ralph.sh's
+        prompt (both mentions), scripts/validate-local-schema.sh, scripts/validate-local-equals-prod.sh,
+        scripts/restore-local-db.sh (LOCAL_PORT and the pg_dump -p flag), and the migrate-quorum
+        integration-test header comment. The .planning/ phase documents still say 5433 on purpose —
+        they are snapshots of runs that really did use 5433.
+    [REAL] Stack up: solvr-postgres healthy on 5435, solvr-ipfs on 5001/8081. The pre-existing
+        postgres_data volume came back with its dev data (4 agents, 79 rooms, 347 posts) and a stale
+        schema_migrations row: version 76, dirty=true, so `migrate up` collided with
+        'relation "room_members" already exists'. Every object through migration 81 was verified
+        present (room_claims, room_events, room_agent_tokens, room_members, posts.visibility, zero
+        null visibility), so the ledger was corrected with `migrate force 81` — bookkeeping only, no
+        schema or data change. Now version=81 dirty=false, `migrate up` reports "no change", and the
+        dev data is untouched.
+    [REAL] Both product-direction tests re-run against localhost:5435/solvr: PASS, zero agent_pd_%
+        rows left behind. The throwaway solvr-test-pg container (5455) has been removed.
+    Local DATABASE_URL for this project is now:
+        postgres://solvr:solvr_dev@localhost:5435/solvr?sslmode=disable
+
+2026-09-20 21:05: Task 1/95 [analytics] "Use the verified usage baseline and distinguish
+    product hypotheses from measured outcomes". Two deliverables: the baseline is recorded
+    HERE (golden rules forbid new doc files), and step 6 — the one step that is executable —
+    is now enforced by tests instead of prose.
+
+    RESEARCH BASELINE (planning-internal, 2026-09-20, read-only production queries; NOT to be
+    published and NOT to be hard-coded anywhere in the product):
+      - Rooms: 52 non-deleted (23 public, 29 private). 40 rooms have >= 2 distinct agent
+        author identifiers. Those 52 rooms hold 2,152 non-deleted messages, 8 of them human.
+      - Knowledge: 2,098 non-deleted posts = 1,787 ideas + 301 problems + 10 questions.
+        Legacy contribution tables: 412 non-deleted approaches, 200 non-deleted answers,
+        21 responses, 2,715 non-deleted comments. These contribution totals are NOT all
+        attached to live posts.
+      - GA: /Users/fcavalcanti/Downloads/SOLVR-all-time-report.txt (25,767 bytes, present on
+        disk [REAL]) is the supplied report: 8,207 page views, 56.1% overall bounce, NO
+        configured activation funnel. Signup abandonment must NOT be inferred from visits to
+        /settings, /login and /join alone — that export cannot support the claim.
+      - The export reports GSC as unconfigured and mixes inconsistent activity windows. Live
+        GA/GSC and visual browser inspection were NOT available during this research.
+    HYPOTHESIS vs MEASURED: "40 rooms with >= 2 agent authors" is HISTORICAL PARTICIPATION.
+    It is not proof of concurrent presence, of successful collaboration, of unique people, or
+    of independent acquisition. The funnel gets validated after launch, not before.
+
+    STEP 6 MADE EXECUTABLE — public statistics are now live AND permission-filtered.
+    NEW: backend/internal/db/stats_visibility_test.go (306 lines), 5 integration tests:
+      - TestGetAllStats_ExcludesFamilyPrivatePosts — one public post moves total/active/
+        posted-today by exactly 1; a family post (BART-151 visibility='family') moves them by 0.
+      - TestGetAllStats_ReflectsCurrentDatabaseState — insert moves the counter up, soft delete
+        moves it back down: the number follows the database, it is never a snapshot.
+      - TestPublicPostCounters_ExcludeFamilyPrivatePosts — GetTotalPostsCount,
+        GetActivePostsCount, GetPostedTodayCount, GetProblemsSolvedCount.
+      - TestSectionStats_ExcludeFamilyPrivatePosts — /v1/stats/problems, /questions, /ideas.
+      - TestPublicStatsLists_ExcludeFamilyPrivatePosts — GetFreshSparks, GetReadyToDevelop,
+        GetRecentlySolvedProblems never return a family post's id/title (fixtures use 9999
+        upvotes so a leak would sort to the top), while the public twin still appears.
+    [TEST] RED FIRST, measured on the live schema: all 4 count/list tests failed before the
+        fix with exactly the leak they describe — "TotalPosts leaked a family-private post:
+        got 343, want 342", "GetFreshSparks exposed family-private post 99395c6c-...",
+        "total_questions counted a family-private question: got 95, want 94".
+    FIX: backend/internal/db/stats.go (+34 visibility predicates) and stats_questions.go (+6).
+        Every public stats query over posts now carries visibility = 'public', matching the
+        filters feed.go / search.go / sitemap.go / agents.go already had. Contributions
+        (answers, approaches, responses) inherit their parent post's visibility via EXISTS,
+        same pattern as approaches.go:233 and responses.go:93. GetTrendingPosts already had
+        the filter (BART-151) — it was the only one that did.
+        Edits are line-neutral: stats.go stays at 806 lines, stats_questions.go at 178. No new
+        file-size violation (stats.go was already 6 over the 800 CI limit before this task).
+    [TEST] All 5 tests PASS (-count=1, 0.70s) against an ISOLATED database:
+        postgres://solvr:solvr_dev@localhost:5435/solvr_test (created with
+        CREATE DATABASE solvr_test TEMPLATE solvr, 44 tables). Fixtures clean themselves up
+        (t.Cleanup(pool.Close) registered FIRST so LIFO closes the pool LAST — the same
+        deferred-close trap the product-direction test hit on 2026-09-20 20:25).
+    [REAL] cd backend && go test ./... (full suite) run twice against localhost:5435/solvr —
+        once with this change and once with stats.go/stats_questions.go stashed back to HEAD.
+        The internal/db failure set is IDENTICAL: 56 failures both times, same test names, only
+        timings differ (/tmp/db_before.txt vs /tmp/db_after.txt). internal/api
+        (TestTypeSpecificListEndpoints, TestIPFSHealthEndpoint) and internal/api/handlers
+        (4 GitHub OAuth tests) fail at HEAD too. Nothing here regressed anything.
+        Pre-existing causes sampled: "cannot scan NULL into *string" (agents list), "null value
+        in column referral_code of relation users violates not-null constraint" (briefing),
+        and the IPFS health test expects NO local IPFS node while solvr-ipfs is up.
+    [REAL] go vet ./internal/db/ clean; gofmt clean on the new test file. stats.go has a
+        PRE-EXISTING gofmt struct-alignment diff at IdeaPipelineStats (present at HEAD, left
+        untouched — not this task's code).
+    [REAL] Step 6 first half verified statically: grep -rnE
+        "\b(2152|2,152|2098|2,098|1787|1,787|8207|8,207|56\.1)\b" over backend/internal,
+        backend/cmd, frontend/app, frontend/components, frontend/lib returns ZERO matches.
+        No research total is hard-coded in the product. The frontend reads
+        /v1/stats, /v1/stats/trending, /v1/stats/ideas, /v1/stats/problems, /v1/stats/questions
+        through lib/api-base.ts + lib/api.ts and renders "—" until the API answers
+        (frontend/app/about/page.tsx:386-410) — dumb client, smart API, unchanged.
+    [UNVERIFIED] The production magnitude of this fix. In production, total_contributions will
+        DROP by every answer/approach/response whose parent post is family-private OR orphaned
+        (the baseline above notes contributions are not all attached to live posts), and the
+        post counters drop by the family-post count. Local dev data could not be used to size
+        it — see the incident below.
+
+    INCIDENT — local dev data wiped by the backend test suite (LOCAL ONLY, production untouched):
+        Running `go test ./...` with DATABASE_URL=...localhost:5435/solvr emptied the dev data
+        the 2026-09-20 20:35 entry described (347 posts -> 6, 4 agents -> 0, approaches 0,
+        answers 0; rooms grew 79 -> 116 from test fixtures). Cause is not this change — it is
+        unqualified cleanup helpers in the test suite itself:
+          backend/internal/db/users_test.go:1137-1141  DELETE FROM votes/responses/answers/approaches/posts/users
+          backend/internal/db/feed_test.go:489-494     cleanupFeedTestData: DELETE FROM responses/answers/approaches/posts/agents/users
+          backend/internal/db/user_api_keys_test.go:731 DELETE FROM agents
+        Any full db-package run nukes whatever database DATABASE_URL points at. The golden rule
+        ("point DATABASE_URL only at a local, ISOLATED test database") exists for exactly this.
+        From now on this loop should use solvr_test, not solvr.
+UAT: Owner decides whether to restore the local dev data (scripts/restore-local-db.sh pulls from
+    production — owner-only, this loop must not touch production). Nothing was lost that is not
+    reproducible: it was dev data on localhost:5435/solvr. solvr_test now exists on the same
+    container as the isolated target for future iterations.
+UAT: After the next deploy, owner should eyeball /v1/stats in production: total_posts,
+    active_posts and total_contributions will drop (family-private posts and contributions on
+    non-public/orphaned parents are no longer counted). That drop is the fix working, not a
+    regression. No migration is needed — this is query-level only.

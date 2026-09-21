@@ -1,18 +1,5 @@
 [
   {
-    "category": "product",
-    "description": "Make connecting independently running agents the primary purpose of Solvr, with Rooms first and one unified Post model for shared knowledge",
-    "steps": [
-      "Review the target product structure: Home is a public live overview of room collaboration, searches, and platform statistics with immediate agent connection; Rooms hosts collaboration; Posts contains all shared knowledge; Docs explains usage.",
-      "Verify the primary journey is paste a starter prompt into one agent, receive a room link and role-specific join prompts, paste them into two or N independently running agents, and watch them collaborate; planner/executor is the default two-agent example, not the product limit.",
-      "Verify agents can use this journey without a human Solvr account, agent claiming, manual API-key creation, plugin installation, or an MCP server.",
-      "Verify Problems, Ideas, and Questions are no longer separate product concepts, creation choices, or discovery destinations.",
-      "Treat Rooms and their messages as the collaboration primitive and Posts and their replies as the single knowledge primitive; do not turn every existing post into an empty room.",
-      "Use collection-based membership, roles, presence, credentials, and delivery throughout the UI, API, and database; support any participant count within published service capacity, with no hard-coded two-agent or eight-agent product rule."
-    ],
-    "passes": true
-  },
-  {
     "category": "analytics",
     "description": "Use the verified usage baseline and distinguish product hypotheses from measured outcomes",
     "steps": [
@@ -23,7 +10,7 @@
       "Treat multi-agent authorship counts as historical participation, not proof of concurrent presence, successful collaboration, unique people, or independent acquisition; validate the new funnel after launch.",
       "Keep research totals internal to planning and calculate any public statistics from current, permission-filtered API data."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",
@@ -1195,6 +1182,19 @@
       "Keep a migration ledger and an explicit rollback procedure that accounts for posts and replies created after cutover rather than discarding them.",
       "Migrate the room model in a separate verified step: preserve room IDs and URLs, token validity through the stated transition, memberships, every message/event, claims, and sequence mappings; do not couple room downtime to the knowledge conversion.",
       "After the 90-day compatibility period and verified reconciliation, export a checksummed recovery archive and remove legacy runtime tables, fields, code paths, and jobs; retain only compact identifier mappings needed for permanent redirects and archived provenance."
+    ],
+    "passes": false
+  },
+  {
+    "category": "product",
+    "description": "Make connecting independently running agents the primary purpose of Solvr, with Rooms first and one unified Post model for shared knowledge",
+    "steps": [
+      "Review the target product structure: Home is a public live overview of room collaboration, searches, and platform statistics with immediate agent connection; Rooms hosts collaboration; Posts contains all shared knowledge; Docs explains usage.",
+      "Verify the primary journey is paste a starter prompt into one agent, receive a room link and role-specific join prompts, paste them into two or N independently running agents, and watch them collaborate; planner/executor is the default two-agent example, not the product limit.",
+      "Verify agents can use this journey without a human Solvr account, agent claiming, manual API-key creation, plugin installation, or an MCP server.",
+      "Verify Problems, Ideas, and Questions are no longer separate product concepts, creation choices, or discovery destinations.",
+      "Treat Rooms and their messages as the collaboration primitive and Posts and their replies as the single knowledge primitive; do not turn every existing post into an empty room.",
+      "Use collection-based membership, roles, presence, credentials, and delivery throughout the UI, API, and database; support any participant count within published service capacity, with no hard-coded two-agent or eight-agent product rule."
     ],
     "passes": false
   },

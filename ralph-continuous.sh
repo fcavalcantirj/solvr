@@ -148,6 +148,22 @@ while true; do
     error_detail=$(grep -i "error\|failed\|refused\|limit" "$tmplog" | grep -v "is_error.*false" | tail -3 | head -c 300)
   fi
 
+  # Blocked? ralph.sh stops the batch when the ledger stops moving — looping on a
+  # blocked task just burns tokens, so the supervisor stops too.
+  if grep -q "RALPH BLOCKED" "$tmplog" 2>/dev/null; then
+    blocked_tail=$(grep -A3 "RALPH BLOCKED" "$tmplog" | sed 's/\x1b\[[0-9;]*m//g' | head -4)
+    rm -f "$tmplog"
+    echo ""
+    echo -e "${RED}${BOLD}   ⛔ RALPH BLOCKED — no ledger progress. Supervisor stopping.${NC}"
+    echo -e "${YELLOW}   Read the tail of progress.txt, unblock, then start the loop again.${NC}"
+    send_telegram "⛔ *Solvr Ralph [${ENGINE}]* - BLOCKED
+
+No ledger progress for ${STALL_LIMIT:-2} iterations — supervisor stopped.
+📊 $(./progress.sh)
+\`${blocked_tail:0:200}\`"
+    exit 1
+  fi
+
   # PRD complete?
   prd_complete=false
   if grep -q "PRD COMPLETE" "$tmplog" 2>/dev/null; then

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,6 +59,31 @@ func createAgentOwnedRoom(t *testing.T, ts *httptest.Server, agentKey string) (s
 	return roomSlug, token
 }
 
+// pdCleanup deletes this file's fixtures. It is registered with defer, NOT t.Cleanup:
+// setupRoomTestServer's cleanup ends in pool.Close(), t.Cleanup funcs run only after the
+// test function (and its defers) have returned, so a t.Cleanup delete would execute
+// against a closed pool and silently leave agent_pd_% rows behind. Deferred funcs run
+// LIFO, so registering this AFTER `defer cleanup()` makes it run BEFORE the pool closes.
+// setupRoomTestServer's own sweep covers rooms/messages/presence under 'test-%' but only
+// deletes agents matching 'agent_roomtest_%', so the agent rows are ours to clear.
+func pdCleanup(t *testing.T, pool *db.Pool) {
+	t.Helper()
+	ctx := context.Background()
+	stmts := []string{
+		"DELETE FROM messages WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-pd-%')",
+		"DELETE FROM agent_presence WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-pd-%')",
+		"DELETE FROM rooms WHERE slug LIKE 'test-pd-%'",
+		"DELETE FROM agents WHERE id LIKE 'agent_pd_%'",
+	}
+	for _, q := range stmts {
+		if _, err := pool.Exec(ctx, q); err != nil {
+			// Never fail the test on cleanup, but never swallow it either: a silent
+			// failure here is exactly how leaked fixtures go unnoticed.
+			t.Logf("pdCleanup: %q failed: %v", q, err)
+		}
+	}
+}
+
 // TestProductDirection_AgentsConnectWithoutHumanAccount walks the defining journey:
 // a planner agent self-registers, creates and owns a real room, an executor agent
 // self-registers and joins that same room, and the two exchange messages whose
@@ -65,14 +91,8 @@ func createAgentOwnedRoom(t *testing.T, ts *httptest.Server, agentKey string) (s
 func TestProductDirection_AgentsConnectWithoutHumanAccount(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
+	defer pdCleanup(t, pool) // LIFO: must run BEFORE cleanup() closes the pool
 	roomPreCleanup(t, pool)
-	t.Cleanup(func() {
-		ctx := context.Background()
-		pool.Exec(ctx, "DELETE FROM messages WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-pd-%')")       //nolint:errcheck
-		pool.Exec(ctx, "DELETE FROM agent_presence WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-pd-%')") //nolint:errcheck
-		pool.Exec(ctx, "DELETE FROM rooms WHERE slug LIKE 'test-pd-%'")                                                  //nolint:errcheck
-		pool.Exec(ctx, "DELETE FROM agents WHERE id LIKE 'agent_pd_%'")                                                  //nolint:errcheck
-	})
 
 	// 1. Planner agent self-registers. Public endpoint, no Authorization header.
 	plannerID, plannerKey := registerTestAgent(t, ts, pdAgentName("plan", 0))
@@ -147,14 +167,8 @@ func TestProductDirection_AgentsConnectWithoutHumanAccount(t *testing.T) {
 func TestProductDirection_NoHardCodedParticipantLimit(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
+	defer pdCleanup(t, pool) // LIFO: must run BEFORE cleanup() closes the pool
 	roomPreCleanup(t, pool)
-	t.Cleanup(func() {
-		ctx := context.Background()
-		pool.Exec(ctx, "DELETE FROM messages WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-pd-%')")       //nolint:errcheck
-		pool.Exec(ctx, "DELETE FROM agent_presence WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-pd-%')") //nolint:errcheck
-		pool.Exec(ctx, "DELETE FROM rooms WHERE slug LIKE 'test-pd-%'")                                                  //nolint:errcheck
-		pool.Exec(ctx, "DELETE FROM agents WHERE id LIKE 'agent_pd_%'")                                                  //nolint:errcheck
-	})
 
 	const participants = 9
 

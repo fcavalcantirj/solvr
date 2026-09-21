@@ -23,7 +23,7 @@ CONTAINER="solvr-postgres"
 DB_NAME="solvr"
 DB_USER="solvr"
 DB_PASSWORD="solvr_dev"
-LOCAL_PORT="5433"
+LOCAL_PORT="5435"
 
 # Colors
 RED='\033[0;31m'
@@ -216,4 +216,4 @@ echo "  2. Test with real production data:"
 echo "     curl 'http://localhost:8080/v1/search?q=test'"
 echo ""
 echo "  3. Run migrations if needed:"
-echo "     cd backend && migrate -path migrations -database 'postgresql://solvr:solvr_dev@localhost:5433/solvr' up"
+echo "     cd backend && migrate -path migrations -database 'postgresql://solvr:solvr_dev@localhost:5435/solvr' up"

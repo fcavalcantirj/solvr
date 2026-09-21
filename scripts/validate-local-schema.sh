@@ -8,14 +8,14 @@ set -euo pipefail
 # Reports differences in tables, columns, indexes, and constraints
 #
 # Prerequisites:
-# - Local database running on localhost:5433
+# - Local database running on localhost:5435
 # - Production schema backup exists (run backup-prod-db.sh first)
 #
 # Usage:
 #   ./scripts/validate-local-schema.sh
 
 # ---- CONFIG ----
-LOCAL_DB_URL="${DATABASE_URL:-postgresql://solvr:solvr_dev@localhost:5433/solvr?sslmode=disable}"
+LOCAL_DB_URL="${DATABASE_URL:-postgresql://solvr:solvr_dev@localhost:5435/solvr?sslmode=disable}"
 PROD_SCHEMA="./db-backups/schema_latest.sql"
 OUTPUT_FILE="./db-backups/schema_diff_$(date +'%Y-%m-%d_%H-%M-%S').txt"
 

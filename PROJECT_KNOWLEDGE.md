@@ -34,7 +34,7 @@ at api.solvr.dev, Go module github.com/fcavalcantirj/solvr, entry point
 backend/cmd/api/main.go. Frontend is a Next.js 15.5 App Router SSR/ISR application
 served at solvr.dev, built with output: 'standalone' and Dockerized on Node 20.
 Datastores are PostgreSQL 17 with the pgvector extension (Docker maps it to host
-port 5433 locally, container 5432) and IPFS Kubo v0.33.2 (ports 5001 API and 8081
+port 5435 locally, container 5432) and IPFS Kubo v0.33.2 (ports 5001 API and 8081
 gateway locally). Additional entrypoints: mcp-server/ is a TypeScript MCP server,
 cli/ is a Go CLI, and skill/ is an agent skill that is synced into the frontend by
 scripts/sync-skill.sh during the frontend prebuild step. Intended users are

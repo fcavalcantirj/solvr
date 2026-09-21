@@ -538,6 +538,11 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 		GeneratedAt: time.Now().UTC(),
 	}
 
+	// The public allowlist is enforced on the way out. A metric nobody named
+	// as publishable never reaches a visitor, whichever section grew it —
+	// see public_overview_allowlist.go.
+	enforcePublicOverviewMetrics(&overview)
+
 	w.Header().Set("Cache-Control", "public, max-age=30")
 	roomWriteJSON(w, http.StatusOK, map[string]any{"data": overview})
 }

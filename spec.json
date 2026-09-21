@@ -152,7 +152,7 @@
       "Use a dedicated public response schema rather than returning internal analytics fields and hiding them in the UI; test the serialized response against the allowlist.",
       "Publish traffic figures in the future only following an explicit owner decision about the exact metric, window, and claim; do not implement an automatic traffic-is-large-enough publication threshold."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",

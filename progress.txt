@@ -1904,3 +1904,193 @@ UAT: EXPECT PRODUCTION'S PUBLISHED POSTS AND REGISTERED HUMANS TO DROP after
     the old, larger figures back, that is a decision to publish a number that
     includes drafts and deleted accounts — worth making on purpose, not by
     accident.
+
+================================================================================
+2026-09-21 — TASK 11 (analytics): Keep website traffic and growth intelligence
+private while publishing product activity
+================================================================================
+
+TASK 6 WAS SKIPPED, ON PURPOSE, AND IT STAYS passes=false.
+    Task 6 wants "Connect agents now" on the index to open an inline panel
+    carrying "the same task, visibility, preset, and copy controls used by
+    /connect", with "the full /connect page remain[ing] directly linkable" and
+    "both surfaces us[ing] the same API-owned instruction contract".
+    [REAL] There is no /connect page: frontend/app/connect holds only
+    connect/agent/page.tsx, so the hero's href="/connect" is a 404 today.
+    [REAL] There is no instruction contract either: no route in
+    backend/internal/api/router*.go serves room instructions, and no handler
+    file matches instruct|connect|prompt.
+    Both are other tasks' work — task 16 builds /connect, 17 and 18 build the
+    planner/executor prompts, 25 serves the versioned machine-readable
+    instructions. Building task 6 means building those first, so by the
+    "acceptance tasks are not checklists" rule I left it open and took the
+    first task that is buildable now: task 11.
+
+WHAT TASK 11 IS. Solvr measures two different things and only one of them is
+    public. PRODUCT ACTIVITY (rooms, participation, eligible search, API call
+    volume, labeled product totals) is the product working in the open.
+    WEBSITE TRAFFIC AND GROWTH INTELLIGENCE (visitors, sessions, page views,
+    DAU/WAU/MAU, bounce, acquisition, referrers, geography, conversion,
+    retention, campaigns, growth targets) is operator analytics. The danger is
+    not a traffic chart on the homepage — it is an internal analytics field
+    being serialized and merely not drawn, where curl still finds it.
+
+WHAT I BUILT.
+  backend/internal/api/handlers/public_overview_allowlist.go (NEW, 282 lines)
+    - PublicOverviewSections: the 9 top-level sections the public payload may
+      carry, each with what it is for.
+    - PublicOverviewMetrics: the 21 metric keys that may be published, each
+      filed under one of five categories (room activity, participation in
+      public rooms, eligible search activity, aggregate API usage, labeled
+      product/community totals).
+    - privateAnalyticsConcepts: 16 excluded ideas as ORDERED regexes, so a
+      failure names the concept it found rather than only that something
+      leaked. PrivateAnalyticsTermIn (text) and PrivateAnalyticsTermInKey
+      (snake_case field names read as words) are the two entry points.
+    - publicOverviewAuthoredTextKeys / PublicOverviewAuthoredText: the fields
+      whose text the API itself writes. Participant content (excerpts, room
+      names, post titles, search terms) is deliberately NOT vocabulary-checked
+      — what may be quoted from it is decided by the publishing rules in
+      homepage_search.go and homepage_activity.go. A public room is allowed to
+      be about traffic analysis.
+    - enforcePublicOverviewMetrics / enforcePublicRoomsMetrics /
+      enforcePublicSearchMetrics: the allowlist is applied ON THE WAY OUT, in
+      the API, immediately before serialization. A metric nobody named is
+      withheld and logged at ERROR — it is never serialized and left for the
+      browser not to draw.
+  Wired into the three public handlers (5 lines in homepage_overview.go, and
+    GetRooms/GetSearch now build a named section and enforce before writing).
+
+  NOTHING WAS LEAKING TODAY. [REAL] grep over backend/internal for the excluded
+    vocabulary outside comments and tests: the only hit anywhere is a code
+    COMMENT in db/homepage_search.go about "agent traffic". The work is the
+    enforceable contract and the tests that hold it, not a removal.
+
+  [REAL] STEP 3 and STEP 6, verified rather than asserted:
+    - SOLVR-all-time-report.txt does not exist anywhere in the repo
+      (find -iname '*all-time-report*' over the whole tree, node_modules
+      excluded: no match), and frontend/public holds only icons, logos,
+      heartbeat.md, install.sh, skill.md/json/zip and references/.
+    - No automatic traffic-is-large-enough publication threshold exists: no
+      non-test Go file matches traffic|publish.*threshold at all.
+
+TESTS — ALL RAN, ALL GREEN, NONE SKIPPED.
+
+  [TEST] backend/internal/api/handlers — 8 new unit tests PASS:
+      TestPublicOverviewAllowlist_NamesEveryMetricThePagePublishes
+        builds the payload with the REAL builders, walks every metric slice and
+        requires the allowlist to name exactly what is published — 21 metrics,
+        21 entries, no dead entry authorising something nobody shows.
+      TestPublicOverviewAllowlist_UsesOnlyThePublishableCategories
+      TestEnforcePublicOverviewMetrics_WithholdsAnAudienceMetricFromEverySection
+        injects weekly_active_visitors into all five metric slices AND into
+        search.monitoring, then proves each one is withheld and that the
+        legitimate figures survive.
+      TestPrivateAnalyticsTermIn_NamesTheExcludedConcept (14 excluded phrases
+        and 6 product phrasings that merely look similar — "a conversation
+        between two agents" must not read as "conversion")
+      TestPrivateAnalyticsTermInKey_ReadsFieldNames (13 field names)
+      TestPublicOverviewPayload_PublishesNoAudienceOrGrowthVocabulary
+      TestPublicOverviewSections_AreExactlyTheAllowlistedSections
+      TestPublicOverviewCommunityTotals_AreLabeledProductAccountsNotAudience
+
+  [TEST] backend/internal/api — 3 new end-to-end tests PASS against a real
+      database and the real router, called with NO credentials:
+      TestPublicStatisticsEndpoints_PublishNoAudienceOrGrowthVocabulary
+        11 subtests: /v1/homepage/overview (3 windows), /rooms, /search,
+        /activity, /v1/stats, /v1/stats/search, /v1/data/breakdown, /trending,
+        /categories. Every field name in the whole payload and every sentence
+        the API wrote is checked.
+      TestPublicOverview_PublishesOnlyAllowlistedSectionsAndMetrics
+      TestPublicOverview_RegistrationTotalsReadAsProductAccountsNotAudience
+
+  [TEST] THE GUARD WAS PROVEN TO FAIL, NOT ONLY TO PASS. A passing privacy test
+      that cannot fail is worth nothing, so I mutated the code and watched it
+      break, three times:
+      1. Added UniqueVisitors30d `json:"unique_visitors_30d"` to
+         OverviewCommunity and put "Bounce rate aside," into a definition.
+         The end-to-end test failed with
+           field /v1/homepage/overview.data.community.unique_visitors_30d
+           field ...community.metrics[].definition: "Bounce rate aside, ..."
+         Reverted; git diff then showed only my intended 5 added lines.
+      2. Put a weekly_active_visitors metric in the frontend fixture and wrote
+         public/SOLVR-all-time-report.txt with "12,004 unique visitors": three
+         frontend tests failed, naming the rendered overview and the file.
+         Both reverted (git checkout of the fixture, rm of the file).
+      3. Dropped public/references/tmp-mutation.md containing "Bounce rate is
+         42%": the served-asset test failed, proving the recursive walk really
+         reads subdirectories rather than silently finding nothing.
+
+  [TEST] frontend — 6 new tests PASS
+      (components/homepage/overview-privacy.test.tsx):
+      the rendered LiveOverview HTML, the hero, the homepage metadata and the
+      all-time section carry no audience or growth idea; /public serves no
+      ledger, journal, spec or planning report; and the files it does serve
+      carry no audience FIGURE. The served-file check uses a figure-shaped
+      pattern list, not single words — heartbeat.md legitimately tells agents
+      to share what they solved "during your work session", and a word-level
+      rule called that traffic. The vocabulary is duplicated from the Go list
+      on purpose: a frontend test importing the rule from the thing it checks
+      would prove nothing.
+
+  [TEST] frontend full suite: 137 files, 1364 tests, ALL PASS.
+      `npx tsc --noEmit` clean. `npx next lint` on the new file: no warnings.
+
+  [TEST] NO REGRESSION, MEASURED BY COMPARISON ON A FRESH DATABASE.
+      A first full `go test ./...` showed 107 failures against HEAD's 105, with
+      three search tests differing. I did NOT wave that away: the two runs had
+      used the same accumulating database. I recreated solvr_test from the
+      template and ran the two packages I touched (internal/api/handlers and
+      internal/api) both ways, each on a freshly recreated database:
+        with this change : 43 failures
+        HEAD (stashed --include-untracked) : 43 failures
+        `diff` of the two sorted lists: IDENTICAL.
+      The three search failures reproduce only on a dirtied database and pass
+      on a fresh one with this change in place. Spot-checked the same way:
+      TestRoomRoutes_CreateRoom and
+      TestHomepageRooms_ASecondAgentSpeakingRecordsTheExchangeMilestone fail
+      identically at HEAD (401 from POST /v1/rooms, a fixture credential the
+      local template database does not carry). Pre-existing, unrelated.
+
+  [REAL] VERIFIED AGAINST A RUNNING STACK. Killed the previous processes first.
+      Go API on :8090 against postgres://localhost:5435/solvr with
+      ALLOWED_ORIGINS and a 32-char JWT_SECRET in the environment (backend/.env
+      NOT touched, NOT loaded); next dev on :3111 with
+      NEXT_PUBLIC_API_URL=http://localhost:8090.
+      Called with no credentials at all:
+        /v1/homepage/overview published exactly 21 metric keys — the allowlist,
+          key for key — and its top-level sections were exactly the 9
+          allowlisted ones.
+        /v1/homepage/rooms 6 metrics, /v1/homepage/search 5 metrics, all
+          allowlisted; /v1/stats/search and /v1/data/breakdown publish no
+          metrics of this shape at all.
+        Audience-ish field names found anywhere in any of those payloads: NONE.
+      Server-rendered HTML: GET / (35,713 bytes) and GET /data (27,862 bytes)
+      contain ZERO matches for any of the 16 excluded concepts.
+      Both processes were killed, ports 8090/3111 are clear, solvr_test was
+      dropped. No call left localhost.
+
+  [TEST] ./scripts/check-file-size.sh reports the same 36 pre-existing
+      violations as before this task; none is a file this task created or
+      touched (largest new file: 293 lines).
+
+NOTE: SPEC.md was not edited — no step asked for it, and no endpoint changed
+    shape. The allowlist file itself is where the rule is written down, and it
+    is the one place either the allowlist or the excluded vocabulary changes.
+NOTE: task 12 rebuilds the API-usage section around successful calls, agent
+    calls and distinct operations. Its new metric keys will have to be added to
+    PublicOverviewMetrics or the API will withhold them — which is the point,
+    and the unit test says so by name when it happens.
+NOTE: task 13 owns the other half of this — proving operator analytics stay
+    behind administrative access and that a public request never shares an
+    internal analytics cache entry. Nothing here weakens that; the public
+    overview still answers Cache-Control: public, max-age=30.
+
+UAT: NO PRODUCTION MIGRATION, NO DEPLOY STEP, NOTHING OWNER-ONLY WAS LEFT
+    OUTSTANDING for this task — every check ran locally and green.
+UAT: ONE STANDING DECISION IS THE OWNER'S, BY DESIGN. Publishing any traffic
+    figure in the future needs an explicit decision about the exact metric, the
+    exact window and the exact claim. There is deliberately no threshold in the
+    code that starts publishing traffic once it is large enough, and adding the
+    metric key to PublicOverviewMetrics is the deliberate act that would let
+    one through.

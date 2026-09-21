@@ -389,6 +389,9 @@ func (h *HomepageOverviewHandler) GetSearch(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	section := buildOverviewSearch(pulse)
+	enforcePublicSearchMetrics(&section)
+
 	w.Header().Set("Cache-Control", "public, max-age=30")
-	roomWriteJSON(w, http.StatusOK, map[string]any{"data": buildOverviewSearch(pulse)})
+	roomWriteJSON(w, http.StatusOK, map[string]any{"data": section})
 }

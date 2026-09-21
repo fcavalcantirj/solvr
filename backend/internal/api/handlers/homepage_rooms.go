@@ -307,6 +307,9 @@ func (h *HomepageOverviewHandler) GetRooms(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	section := buildOverviewRooms(pulse)
+	enforcePublicRoomsMetrics(&section)
+
 	w.Header().Set("Cache-Control", "public, max-age=30")
-	roomWriteJSON(w, http.StatusOK, map[string]any{"data": buildOverviewRooms(pulse)})
+	roomWriteJSON(w, http.StatusOK, map[string]any{"data": section})
 }

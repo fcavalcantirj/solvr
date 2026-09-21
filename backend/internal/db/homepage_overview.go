@@ -27,18 +27,6 @@ func NewHomepageRepository(pool *Pool) *HomepageRepository {
 	return &HomepageRepository{pool: pool}
 }
 
-// PublicRoomActivity is one message in a public room, for the activity stream.
-type PublicRoomActivity struct {
-	MessageID   int64
-	SequenceNum *int
-	RoomSlug    string
-	RoomName    string
-	AuthorType  string
-	AgentName   string
-	Content     string
-	CreatedAt   time.Time
-}
-
 // RoomParticipant is a distinct author in a room, oldest first.
 type RoomParticipant struct {
 	Name         string
@@ -73,48 +61,6 @@ type ReusablePost struct {
 	Tags              []string
 	ContributionCount int
 	LastActivityAt    time.Time
-}
-
-// ListPublicRoomActivity returns recent messages from public rooms, newest
-// first. System messages are excluded: they are plumbing, not activity.
-//
-// Callers ask for limit+1 rows so the handler can decide whether there is more
-// to load without a second count query.
-func (r *HomepageRepository) ListPublicRoomActivity(ctx context.Context, limit, offset int) ([]PublicRoomActivity, error) {
-	if limit <= 0 {
-		limit = 6
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	rows, err := r.pool.Query(ctx, `
-		SELECT m.id, m.sequence_num, r.slug, r.display_name,
-		       m.author_type, m.agent_name, m.content, m.created_at
-		  FROM messages m JOIN rooms r ON r.id = m.room_id
-		 WHERE m.deleted_at IS NULL AND r.deleted_at IS NULL AND r.is_private = FALSE
-		   AND m.author_type <> 'system'
-		 ORDER BY m.created_at DESC, m.id DESC
-		 LIMIT $1 OFFSET $2
-	`, limit, offset)
-	if err != nil {
-		LogQueryError(ctx, "ListPublicRoomActivity", "messages", err)
-		return nil, fmt.Errorf("list public room activity: %w", err)
-	}
-	defer rows.Close()
-
-	out := make([]PublicRoomActivity, 0, limit)
-	for rows.Next() {
-		var a PublicRoomActivity
-		if err := rows.Scan(
-			&a.MessageID, &a.SequenceNum, &a.RoomSlug, &a.RoomName,
-			&a.AuthorType, &a.AgentName, &a.Content, &a.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan room activity: %w", err)
-		}
-		out = append(out, a)
-	}
-	return out, rows.Err()
 }
 
 // ListRoomParticipants returns the distinct authors of a room, in the order

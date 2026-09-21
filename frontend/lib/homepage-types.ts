@@ -71,23 +71,44 @@ export interface APIOverviewRooms {
 }
 
 export interface APIOverviewActivityItem {
+  id: string;
+  kind: 'message' | 'event';
   room_slug: string;
   room_name: string;
   room_url: string;
   author: string;
   author_role: string;
-  excerpt: string;
+  author_label: string;
+  author_note?: string;
+  action: string;
+  action_stated: boolean;
+  excerpt?: string;
   is_excerpt: boolean;
   excerpt_note?: string;
-  message_url?: string;
+  link_url: string;
+  link_label: string;
   time_label: string;
+  timestamp: string;
+}
+
+export interface APIOverviewActivityGroup {
+  room_slug: string;
+  room_name: string;
+  room_url: string;
+  time_label: string;
+  entry_count: number;
+  count_label: string;
+  burst_note?: string;
+  items: APIOverviewActivityItem[];
 }
 
 export interface APIOverviewActivity {
   heading: string;
   intro: string;
   definition: string;
-  items: APIOverviewActivityItem[];
+  outcome_note: string;
+  groups: APIOverviewActivityGroup[];
+  entry_count: number;
   limit: number;
   offset: number;
   next_offset: number;
@@ -95,6 +116,12 @@ export interface APIOverviewActivity {
   load_more_label: string;
   load_more_url?: string;
   empty_note: string;
+  cursor: string;
+  refresh_url: string;
+  refresh_note: string;
+  has_new: boolean;
+  new_count: number;
+  new_label?: string;
 }
 
 export interface APIOverviewPreviewParticipant {

@@ -49,26 +49,61 @@ type hpoTable struct {
 }
 
 type hpoActivityItem struct {
-	RoomSlug   string `json:"room_slug"`
-	RoomName   string `json:"room_name"`
-	RoomURL    string `json:"room_url"`
-	Author     string `json:"author"`
-	AuthorRole string `json:"author_role"`
-	Excerpt    string `json:"excerpt"`
-	MessageURL string `json:"message_url"`
-	TimeLabel  string `json:"time_label"`
+	ID           string `json:"id"`
+	Kind         string `json:"kind"`
+	RoomSlug     string `json:"room_slug"`
+	RoomName     string `json:"room_name"`
+	RoomURL      string `json:"room_url"`
+	Author       string `json:"author"`
+	AuthorRole   string `json:"author_role"`
+	AuthorLabel  string `json:"author_label"`
+	AuthorNote   string `json:"author_note"`
+	Action       string `json:"action"`
+	ActionStated bool   `json:"action_stated"`
+	Excerpt      string `json:"excerpt"`
+	LinkURL      string `json:"link_url"`
+	LinkLabel    string `json:"link_label"`
+	TimeLabel    string `json:"time_label"`
+}
+
+type hpoActivityGroup struct {
+	RoomSlug   string            `json:"room_slug"`
+	RoomName   string            `json:"room_name"`
+	RoomURL    string            `json:"room_url"`
+	TimeLabel  string            `json:"time_label"`
+	EntryCount int               `json:"entry_count"`
+	CountLabel string            `json:"count_label"`
+	BurstNote  string            `json:"burst_note"`
+	Items      []hpoActivityItem `json:"items"`
 }
 
 type hpoActivity struct {
-	Heading       string            `json:"heading"`
-	Definition    string            `json:"definition"`
-	Items         []hpoActivityItem `json:"items"`
-	Limit         int               `json:"limit"`
-	Offset        int               `json:"offset"`
-	NextOffset    int               `json:"next_offset"`
-	HasMore       bool              `json:"has_more"`
-	LoadMoreLabel string            `json:"load_more_label"`
-	LoadMoreURL   string            `json:"load_more_url"`
+	Heading       string             `json:"heading"`
+	Definition    string             `json:"definition"`
+	OutcomeNote   string             `json:"outcome_note"`
+	Groups        []hpoActivityGroup `json:"groups"`
+	EntryCount    int                `json:"entry_count"`
+	Limit         int                `json:"limit"`
+	Offset        int                `json:"offset"`
+	NextOffset    int                `json:"next_offset"`
+	HasMore       bool               `json:"has_more"`
+	LoadMoreLabel string             `json:"load_more_label"`
+	LoadMoreURL   string             `json:"load_more_url"`
+	Cursor        string             `json:"cursor"`
+	RefreshURL    string             `json:"refresh_url"`
+	HasNew        bool               `json:"has_new"`
+	NewCount      int                `json:"new_count"`
+	NewLabel      string             `json:"new_label"`
+}
+
+// entries flattens the grouped stream back into one list, for the assertions
+// that are about the entries themselves rather than about how they are grouped.
+func (a hpoActivity) entries() []hpoActivityItem {
+	out := make([]hpoActivityItem, 0, a.EntryCount)
+	for _, g := range a.Groups {
+		out = append(out, g.Items...)
+	}
+	return out
 }
 
 type hpoPreview struct {
@@ -340,20 +375,22 @@ func TestHomepageOverview_ServesEverySectionToALoggedOutVisitor(t *testing.T) {
 	}
 
 	// --- activity stream ------------------------------------------------
-	require.NotEmpty(t, ov.ActivityRaw.Items, "the seeded room's messages are activity")
+	require.NotEmpty(t, ov.ActivityRaw.entries(), "the seeded room's messages are activity")
 	assert.Equal(t, 6, ov.ActivityRaw.Limit)
 	assert.Equal(t, "Load more", ov.ActivityRaw.LoadMoreLabel)
 	assert.NotEmpty(t, ov.ActivityRaw.Definition)
 	found := false
-	for _, item := range ov.ActivityRaw.Items {
+	for _, item := range ov.ActivityRaw.entries() {
 		if item.RoomSlug != previewSlug {
 			continue
 		}
 		found = true
 		assert.Equal(t, "/rooms/"+previewSlug, item.RoomURL)
-		assert.Contains(t, item.MessageURL, "#message-")
+		assert.Contains(t, item.LinkURL, "#message-")
 		assert.NotEmpty(t, item.TimeLabel, "the API words the relative time")
 		assert.Equal(t, "agent", item.AuthorRole)
+		assert.Equal(t, "Agent", item.AuthorLabel)
+		assert.NotEmpty(t, item.Action, "every entry says what it was")
 	}
 	assert.True(t, found, "the seeded public room appears in the stream")
 
@@ -520,22 +557,22 @@ func TestHomepageActivity_PaginatesBehindLoadMore(t *testing.T) {
 	hpoSeedRoom(t, pool, slug, "Paged Room", "pagination fixture", false, messages)
 
 	first, _ := getHomepageActivity(t, ts.URL, 0, 6)
-	require.Len(t, first.Items, 6)
+	require.Len(t, first.entries(), 6)
 	assert.True(t, first.HasMore)
 	assert.Equal(t, 6, first.NextOffset)
 	assert.Equal(t, "/v1/homepage/activity?offset=6&limit=6", first.LoadMoreURL)
 
 	second, _ := getHomepageActivity(t, ts.URL, first.NextOffset, 6)
 	assert.Equal(t, 6, second.Offset)
-	require.NotEmpty(t, second.Items)
+	require.NotEmpty(t, second.entries())
 
 	// Load more shows different messages, not the same page again.
 	firstExcerpts := map[string]bool{}
-	for _, item := range first.Items {
+	for _, item := range first.entries() {
 		firstExcerpts[item.Excerpt] = true
 	}
 	overlap := 0
-	for _, item := range second.Items {
+	for _, item := range second.entries() {
 		if firstExcerpts[item.Excerpt] {
 			overlap++
 		}

@@ -560,7 +560,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 		pulse = db.RoomPulse{Window: window}
 	}
 
-	activityRows, err := h.homeRepo.ListPublicRoomActivity(ctx, overviewActivityDefaultLimit+1, 0)
+	activityRows, err := h.homeRepo.ListPublicRoomFeed(ctx, overviewActivityDefaultLimit+1, 0)
 	if err != nil {
 		slog.Error("homepage overview: activity failed", "error", err)
 	}
@@ -611,7 +611,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 
 	overview := HomepageOverview{
 		Rooms:       buildOverviewRooms(pulse),
-		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0),
+		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0, 0, time.Now()),
 		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx), h.previewSlugs),
 		APIUsage:    buildOverviewAPIUsage(summary, pulse, registeredAgents),
 		Search:      buildOverviewSearch(summary, trending, recent, categories),

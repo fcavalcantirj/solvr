@@ -1192,3 +1192,213 @@ UAT: recordActivationMilestone runs one extra INSERT ... SELECT per posted
     message. On the local box it was invisible, but production message volume is
     the owner's to watch; the guard is a NOT EXISTS on
     (room_id, event_type) which idx_room_events_room_type covers.
+
+────────────────────────────────────────────────────────────────────────────
+2026-09-21 02:00 — TASK 8 "Show what agents and humans are actually doing in
+  public rooms" [functional]. DONE, passes=true.
+
+FIRST, WHY NOT TASK 6 (unchanged from the 2026-09-21 01:20 entry, re-verified
+  this iteration rather than taken on trust):
+    - `ls frontend/app/connect` -> only `agent/`. There is still no /connect
+      page; the route is task 2's temporary redirect and task 16 owns it.
+    - `grep -rn "instructions" backend/internal/api/router*.go` and a read of
+      backend/internal/api/handlers/ -> no room-instruction endpoint exists.
+      Task 25 owns the "API-owned instruction contract" task 6 step 4 requires.
+  Task 6 asks for a homepage panel with "the same task, visibility, preset and
+  copy controls used by /connect", sharing that contract. Building it means
+  doing tasks 16+17+25 inside task 6. Per "ACCEPTANCE TASKS ARE NOT
+  CHECKLISTS", TASK 6 REMAINS OPEN and I took the first buildable task: 8.
+
+WHAT THE TASK ASKED FOR, AND WHAT IT NOW DOES.
+  The stream used to be "the last message from each public room": author name,
+  excerpt, relative time. It is now a feed of WORK.
+
+  [REAL] ONE TIMELINE, TWO KINDS OF ENTRY. New repository read
+      HomepageRepository.ListPublicRoomFeed (backend/internal/db/
+      homepage_activity.go) UNIONs public-room MESSAGES with public-room TYPED
+      EVENTS (room_events), newest first. The superseded ListPublicRoomActivity
+      and db.PublicRoomActivity were deleted — v0, no back-compat.
+  [REAL] TRANSPORT IS INVISIBLE BY CONSTRUCTION. Typed events pass an
+      ALLOW-LIST (db.PublicFeedEventTypes: CLAIM, RELEASE, BUILDING, PLAN,
+      DIRECTIVE, EVIDENCE, REVIEW, BLOCKED, PR, MERGED, DONE), not a noise
+      blocklist. A heartbeat, a token operation, a presence renewal or task 7's
+      internal `room.activated` milestone can never appear, because only listed
+      work types can. A type invented tomorrow stays out until somebody decides
+      it is work worth publishing.
+  [REAL] THE ACTION LABEL IS THE POSTER'S OWN. A message labelled in its
+      metadata ({"type":"plan"}, "kind"/"action" also read) becomes "Shared a
+      plan" / "Posted a directive" / "Submitted evidence" / "Left a review" /
+      "Reported progress" / "Handed the work over"; a typed event becomes its
+      own sentence ("Claimed render the board"; "Started building" when the
+      agent named no issue). Anything unlabelled, unparseable or outside the
+      vocabulary reads "Posted a message" and carries action_stated=false. The
+      API never guesses an intent out of message text.
+  [REAL] BURSTS GROUP. Consecutive entries from one room collapse into one
+      block with a count_label and a burst_note, so a busy room cannot push
+      every other room off the page. Only CONSECUTIVE entries group: a room
+      that returns later in the stream is its own block, because merging it
+      would reorder the timeline.
+  [REAL] EVERY ENTRY LINKS TO ITSELF. link_url + link_label: the exact anchor
+      (/rooms/<slug>#message-<seq>, "Open the original message") when the entry
+      has a sequence_num, the room otherwise. MEASURED GAP, LEFT FOR THE TASK
+      THAT OWNS THE ROOM PAGE: frontend/components/rooms/ renders messages with
+      #message-<seq> anchors (message-bubble.tsx) but does NOT render typed
+      events at all, so there is no #event-<id> to land on. Rather than ship a
+      link promising a precision it does not have, an event entry addresses the
+      room and SAYS SO in its own label. Task 33+ owns the room page.
+  [REAL] REFRESH NEVER MOVES THE READER. The payload carries cursor +
+      refresh_url; GET /v1/homepage/activity?since=<cursor> answers with
+      has_new / new_count / new_label ("3 new updates", "50+ new updates" at
+      the cap, never an exact-looking capped number). The count is taken BEFORE
+      the page is read so an entry landing between the two reads is reported
+      rather than missed, and it is capped (CountPublicRoomFeedSince, cap 50)
+      so a reader returning after a week cannot turn one control into an
+      expensive count. The browser polls on an interval while the page is
+      visible and shows the API's label as a button; the list changes only when
+      the reader clicks it.
+  [REAL] NO OUTCOME IS READ OUT OF VOLUME. outcome_note ships with the section
+      ("Every label here is the poster's own... Solvr never reads a result out
+      of how much a room talks") and a test marshals the whole payload of a
+      24-message room and asserts the words solved/completed/succeeded/
+      finished/shipped appear nowhere in it.
+
+A REAL PRIVACY DEFECT FOUND AND FIXED ON THE WAY.
+  [REAL] backend/internal/api/handlers/rooms_messages.go:237 stores a human
+      room comment as agent_name = "human:<user uuid>" ("deterministic, not
+      displayed" — but frontend/components/rooms/message-bubble.tsx DOES
+      display it). The old activity query selected m.agent_name straight out,
+      so the first human comment in a public room would have published a raw
+      account id to every visitor of the index. I wrote the test first, watched
+      it fail with `+human:8bd56fd6-4993-4913-9b3b-2b657606d8eb`, then fixed
+      the feed to LEFT JOIN users and serve the PUBLIC username, with an empty
+      name (rendered "Someone") when the account cannot be resolved. The room
+      page still renders the raw value; that is its own page's bug and its own
+      task's call, and it is written down here rather than fixed silently.
+
+FILES.
+  new  backend/internal/db/homepage_activity.go             (154 lines)
+  new  backend/internal/db/homepage_activity_test.go
+  new  backend/internal/api/handlers/homepage_previews.go   (210, split out)
+  new  backend/internal/api/handlers/homepage_activity_test.go
+  new  backend/internal/api/router_homepage_activity_test.go
+  mod  backend/internal/api/handlers/homepage_activity.go   (427, rewritten)
+  mod  backend/internal/db/homepage_overview.go             (old read removed)
+  mod  backend/internal/api/handlers/homepage_overview.go   (call site)
+  mod  frontend/components/homepage/room-activity-section.tsx (217)
+  mod  frontend/lib/homepage-types.ts, frontend/lib/api-base.ts,
+       frontend/components/homepage/overview-fixture.ts
+  Previews moved OUT of handlers/homepage_activity.go into homepage_previews.go
+  so neither file grows toward the 800-line limit.
+
+TESTS — ALL RAN, ALL GREEN, NONE SKIPPED. Backend integration tests ran against
+  a LOCAL isolated database: solvr_test on localhost:5435, recreated with
+  DROP + CREATE DATABASE solvr_test TEMPLATE solvr. Nothing touched production.
+  [TEST] internal/db — 9 PASS (feed timeline, allow-list vs transport noise,
+      private/deleted/system exclusion, re-read on every request incl. a room
+      taken private, verified-vs-claimed identity, human username resolution,
+      count-since against an independently written census, the cap, argument
+      defaults).
+  [TEST] internal/api/handlers — 18 PASS (15 new activity builder tests + the
+      3 preview tests that moved with the code). Pure builders, no database.
+  [TEST] internal/api — 13 PASS end to end against the real router and the real
+      database with NO credentials at all: work vs transport, burst grouping,
+      fresh-entry reporting, deletion + visibility removal, the human-account-id
+      guard, page-size bounds and an unparseable cursor, plus the pre-existing
+      overview tests updated to the new shape.
+  [TEST] frontend — 19 tests in room-activity-section.test.tsx (vitest, fake
+      timers + act). FULL SUITE: 1336 passed / 134 files, up from 1328.
+      npx tsc --noEmit: ZERO errors. npm run lint: no new error in any file I
+      touched (28 errors / 186 warnings are the pre-existing baseline).
+  [REAL] Coverage. New backend code, merged from the coverage profile:
+      db/homepage_activity.go 79.2%, handlers/homepage_activity.go 89.7%,
+      handlers/homepage_previews.go 95.0% — 90.0% of statements over the three
+      files together (the uncovered remainder is query/scan error paths that
+      need a broken pool). Frontend room-activity-section.tsx: 97.77% stmts /
+      93.33% branch / 100% funcs / 100% lines. Both above the 80% floor.
+  [REAL] bash scripts/check-file-size.sh: 36 violations, the SAME 36 as the
+      2026-09-20 baseline. gofmt clean and go vet clean on every file touched.
+
+  [REAL] FULL BACKEND SUITE, HEAD vs CHANGE, each on a database recreated with
+      DROP + CREATE DATABASE solvr_test TEMPLATE solvr:
+        HEAD (backend/ stashed): 84 failures.
+        With this change:        67 failures.
+      NONE of the 67 is a homepage test
+      (`grep -cE "Homepage|PublicRoomFeed|OverviewActivity" -> 0`). The two
+      sets differ in BOTH directions (49 names fail only at HEAD, 32 only with
+      the change), which is the signature of order- and ambient-data-dependent
+      tests sharing one database, not of a regression. Proven, not assumed:
+      TestRoomRepository_List, TestAgentRepository_List_WithAgents and
+      TestGetTrendingNow_MixOfTypes — three of the 32 — were run ALONE on a
+      freshly recreated template database twice, once with the change and once
+      with backend/ stashed to HEAD, and failed IDENTICALLY both times. They
+      fail because the template already holds rows, exactly as the 2026-09-20
+      and 2026-09-21 01:20 entries recorded.
+
+  [REAL] VERIFIED AGAINST A RUNNING STACK, not reasoned. Killed the previous
+      API and next dev first. Go API on :8090 against
+      postgres://localhost:5435/solvr with ALLOWED_ORIGINS and a 32-char
+      JWT_SECRET in the environment (backend/.env NOT touched, NOT loaded);
+      next dev on :3111 with NEXT_PUBLIC_API_URL=http://localhost:8090.
+      Registered a probe agent, created a PUBLIC and a PRIVATE room, and posted
+      through the real endpoints (/r/{slug}/message, /r/{slug}/events):
+      - the public room's block read, in order: "Claimed task8 board render"
+        (event, stated), "Submitted evidence" (metadata kind), "Shared a plan"
+        (metadata type), "Posted a message" (unlabelled, stated=false) — with
+        burst_note "4 updates in a row from this room".
+      - ABSENT from the raw body, all checked by substring: the private room's
+        slug, its message text, its MERGED event's issue, HEARTBEAT,
+        TOKEN_ISSUED, room.activated, and the string "human:".
+      - the cursor taken BEFORE posting, replayed as ?since=, answered
+        has_new=true new_count=4 new_label="4 new updates".
+      - a human row written exactly as POST /v1/rooms/{slug}/messages writes
+        one (author_id = user uuid, agent_name = "human:<uuid>") served as
+        author "ralphtask8user", label "Human", no author_note — and the raw
+        body contained NO "human:" and NO uuid at all (regex-checked).
+      - Cache-Control: public, max-age=30 on /v1/homepage/activity.
+      - Headless Chromium at 1280x900 AND 390x844: 2 groups, 6 entries, one
+        Load more, NO horizontal overflow at either width, ZERO page errors,
+        and the outcome note rendered in full.
+      - THE NEW ACTIVITY CONTROL WAS PROVEN IN A REAL BROWSER. Loaded the page,
+        confirmed no control was shown, posted a message into another public
+        room while the page sat open, and waited: the control appeared reading
+        "1 NEW UPDATE", the six entries on screen were byte-identical to before
+        (compared as text), and the new message was NOT in the list. Clicking
+        it brought the new entry in and removed the control. Zero page errors.
+      ALL probe data was removed afterwards (0 ralph-task8-* rooms, 0 probe
+      agents, 0 probe users, 0 TASK8 messages left), both processes were
+      killed, ports 8090/3111 are clear, and solvr_test was dropped. No call
+      left localhost.
+
+  NOTE: /v1/homepage/activity is still NOT in openapi_paths.go and SPEC.md was
+      not touched — no step asked for either, and openapi_paths.go is already
+      880 lines / over the CI limit. Same decision as tasks 5-7.
+  NOTE: the endpoint keeps Cache-Control: public, max-age=30 from task 5. The
+      server holds NO cache of its own — every request re-reads the database,
+      which is what makes a deleted or newly-private entry vanish on the next
+      response — but a shared CDN cache would still hold a removed excerpt for
+      up to 30s. Task 14 owns the caching policy; flagged, not silently
+      changed.
+  NOTE: messages.metadata is '{}' for every row in the dev database today, so
+      the labelled-action vocabulary is a contract agents can start using, not
+      one anything currently exercises in production. It degrades to "Posted a
+      message", which is what every existing row now reads as.
+
+UAT: Owner's visual judgement on the grouped stream. The automated equivalents
+    ran green (19 component tests, 18 builder tests, 13 end-to-end tests and
+    the real-browser render above at both viewports), but whether a room header
+    with a count line followed by indented entries reads better than the old
+    flat list — and whether "1 NEW UPDATE" belongs above the list rather than
+    floating over it — is a look-at-it call:
+      cd /Users/fcavalcanti/dev/solvr && docker compose up -d
+      cd backend && DATABASE_URL="postgres://solvr:solvr_dev@localhost:5435/solvr?sslmode=disable" \
+        PORT=8090 ALLOWED_ORIGINS="http://localhost:3111" \
+        JWT_SECRET="ralph-local-dev-jwt-secret-32-chars-min" go run ./cmd/api
+      cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8090 npm run dev -- -p 3111
+UAT: The room page (frontend/components/rooms/message-bubble.tsx) still renders
+    a human comment's agent_name, which is "human:<user uuid>". The homepage no
+    longer does. Someone should decide whether the room page shows the username
+    too — it is a raw account identifier on a public page.
+UAT: Agents can now label a message ({"type":"plan"|"directive"|"evidence"|
+    "review"|"question"|"answer"|"progress"|"handoff"}) and it will read as
+    that on the homepage. Worth putting in the agent-facing docs when the
+    instruction contract lands (task 25).

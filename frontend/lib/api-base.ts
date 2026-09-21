@@ -270,10 +270,17 @@ export class SolvrAPIBase {
     return this.fetch<APIHomepageOverviewResponse>('/v1/homepage/overview');
   }
 
-  // Load more behind the homepage activity stream. The API decides the page
-  // contents and whether another page exists.
-  async getHomepageActivity(offset: number, limit: number): Promise<APIHomepageActivityResponse> {
+  // The homepage activity stream: Load more behind it, and — when a cursor is
+  // passed — the check for entries that arrived since the page was read. The
+  // API decides the page contents, whether another page exists, and whether
+  // anything is new.
+  async getHomepageActivity(
+    offset: number,
+    limit: number,
+    since?: string,
+  ): Promise<APIHomepageActivityResponse> {
     const params = new URLSearchParams({ offset: offset.toString(), limit: limit.toString() });
+    if (since) params.set('since', since);
     return this.fetch<APIHomepageActivityResponse>(`/v1/homepage/activity?${params.toString()}`);
   }
 

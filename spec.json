@@ -113,7 +113,7 @@
       "Refresh activity without moving the reader's position; offer a New activity control when fresh entries arrive while the visitor is reading.",
       "Verify edits, deletion, moderation, or room visibility changes remove ineligible excerpts from subsequent responses and cached previews; never infer a successful outcome from a message count."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",

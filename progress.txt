@@ -756,3 +756,215 @@ UAT: Owner's call on the hero dead-end above — either task 4/16 makes "Watch a
 UAT: The local dev database now contains a seeded copy of the tictactoe room (created through the
     API by agent ralph_seeder_*) so the local homepage shows the real example. Production was
     never written to — the only production call this iteration was the read-only GET in step 1.
+
+2026-09-21 00:35: Task 6/95 [functional] "Make the index a rich live overview of Solvr activity
+    while keeping navigation simple". Backend + frontend. The index is now SERVED, not composed
+    of marketing sections: one public endpoint answers the whole page and the homepage renders
+    whatever it says.
+
+    NEW API: GET /v1/homepage/overview — public, no auth, always 200. Eight sections in the exact
+    order step 1 names, plus GET /v1/homepage/activity?offset=&limit= as the Load more behind the
+    stream.
+      backend/internal/db/homepage_overview.go        (397 lines) HomepageRepository
+      backend/internal/api/handlers/homepage_overview.go (725) sections + handler
+      backend/internal/api/handlers/homepage_activity.go (346) stream + editorial previews
+      backend/internal/api/router_homepage.go         (+13 lines; router.go untouched — it is
+                                                       already 1172 and over the CI limit)
+    The API decides EVERYTHING the visitor sees, per the smart-API rule:
+      - which numbers are worth showing, and for each one the WINDOW it was measured over plus a
+        DEFINITION of what it counts (step 5's "windows and definitions are visible" is a field on
+        every metric, not a caption someone might forget).
+      - the sparkline: 24 hourly buckets, zero-filled, with each bar's height already expressed as
+        a CSS percentage ("50.0%"). The first draft had the browser doing `normalized * 100`; the
+        guard test caught it and the arithmetic moved into the API where it belongs.
+      - the activity stream: six items, each excerpt cut at 200 runes on a word boundary and
+        labelled "Excerpt — the original message is N characters", each relative time worded by the
+        API ("moments ago" / "3 hours ago" / "2 days ago"), each item linked to /rooms/<slug> and
+        to #message-<sequence_num>. The repo is asked for limit+1 rows so the API — not the
+        browser — decides whether there is more, and hands back the next URL.
+      - the editorial previews (step 4): an EXPLICIT ALLOW-LIST, HOMEPAGE_PREVIEW_ROOM_SLUGS,
+        defaulting to the supplied coding example (tictactoe-human-vs-computer-20260920), capped at
+        3, rendered in the configured order. There is NO ranking by message_count anywhere in the
+        path — the one thing step 4 forbids is the one thing the code cannot do. Each preview
+        carries purpose (the room's description), participants (distinct authors, oldest first),
+        a real exchange (the most recent two consecutive messages by DIFFERENT authors — a
+        monologue is not an exchange and returns empty), last activity, and selected_reason so the
+        page says WHY a room is there and nobody reads it as a leaderboard.
+      - API usage: only MEASURED call volumes (agent/human searches 7d, room messages delivered
+        24h, agents registered). There is no request-log table in this schema, so nothing here is
+        an estimate dressed up as a metric.
+      - search: total/agent/unique/zero-result-rate/avg-latency, the API formatting the percentage
+        ("31%") and the latency ("3 ms") so the browser does no arithmetic, plus three compact
+        tables — trending, recent and the type-filter breakdown.
+      - PRIVACY RULE ON RECENT QUERIES, and it is stated on the page: a term only appears once it
+        has been searched MORE THAN ONCE in the window (recentQueryMinOccurrences = 2). A one-off
+        query can be traced to one visitor and can contain anything they typed.
+      - all-time community totals, each stamped "all time"; an unread counter renders the API's own
+        "—", never an invented 0.
+      - reusable Posts: public posts carrying >= 1 contribution (answer/approach/progress note),
+        newest activity first, routed to /problems|/questions|/ideas per type, with the rule that
+        selected them printed on the page. draft/pending_review/rejected are excluded.
+      - the closing block: /connect + "Connect agents now".
+
+    PUBLIC-ONLY BY CONSTRUCTION. Every repo query carries is_private = FALSE AND deleted_at IS NULL
+    on rooms and visibility = 'public' on posts; system messages are never activity.
+
+    NEW FRONTEND: components/homepage/ — live-overview.tsx (the one fetch + the whole layout),
+      room-stats-section, room-activity-section (Load more), room-previews-section,
+      api-usage-section, search-stats-section, community-totals-section, reusable-posts-section,
+      closing-section, metric.tsx (MetricGrid / SectionHeading / CompactTable) and
+      overview-fixture.ts. hooks/use-homepage-overview.ts. lib/homepage-types.ts (202 lines — the
+      types went in their OWN module because lib/api-types.ts is already 1484 lines and over the
+      limit; api-types.ts gained one `export * from './homepage-types'` so '@/lib/api-types' is
+      still the single import point). lib/api-base.ts gained getHomepageOverview() and
+      getHomepageActivity(offset, limit).
+    app/page.tsx is now Header + HeroSection + LiveOverview + Footer variant="compact". REMOVED
+      from the homepage: HowItWorks, FeaturesSection, CollaborationShowcase, ApiSection, CtaSection
+      (the files stay; app/how-it-works/page.tsx still imports HowItWorks).
+    HERO STRIP GONE (step 5). components/hero-section.tsx 105 -> 86 lines: the four bare counters
+      (PROBLEMS SOLVED / CONTRIBUTIONS / AI AGENTS ACTIVE / HUMANS PARTICIPATING) had no window and
+      no definition. The hero no longer imports use-stats or formatCount AT ALL. Those numbers now
+      live in the community-totals section where each states its window and what it counts.
+    FOOTER COMPACT VARIANT (step 6). components/footer.tsx 148 -> 194 lines: the four-column
+      sitemap was extracted into FullColumns() and `variant="compact"` renders instead a single
+      labelled row — Rooms, Posts, Agents, Data, Skill, API Reference, About, Terms, Privacy — and
+      DROPS the footer's CONNECT AGENTS button, because the closing section above it already owns
+      that action. Conditional rendering, not a `hidden` class: the first attempt used `hidden` and
+      the tests correctly failed, because a hidden node is still in the DOM and still a second CTA.
+
+    [TEST] RED measured before GREEN, four separate times:
+      - backend unit: 19 tests failed to compile ("undefined: db.RoomPulse", "undefined:
+        buildOverviewRooms", ...) before the builders existed.
+      - backend integration: with backend/ stashed (the mount reverted) all 7 integration tests
+        FAIL; that run is recorded in /tmp/be_before.txt.
+      - PRIVACY FILTERS MEASURED RED ON PURPOSE: with `r.is_private = FALSE` removed from the
+        activity query and `p.visibility = 'public'` removed from the posts query,
+        TestHomepageOverview_NeverLeaksAPrivateRoom and
+        TestHomepageOverview_ReusablePostsExcludeFamilyPrivatePosts both FAIL. Filters restored and
+        both pass again — the tests are load-bearing, not decorative.
+      - frontend: all four new test files failed to resolve their imports before the components
+        existed ("Failed to resolve import ./live-overview" etc.).
+      - the "computes nothing of its own" guard failed on room-stats-section.tsx for
+        `${point.normalized * 100}%`, which is how the height calculation got moved into the API.
+    [TEST] 21 backend unit tests PASS, pure, no database:
+        go test ./internal/api/handlers/ -run TestOverview -count=1 -v -> all PASS (0.35s).
+        They pin: every metric carries key/label/display/window/definition; the sparkline is
+        normalised AND carries its CSS height; a flat series does not divide by zero; six items and
+        the exact Load more URL; no-more when the repo returns exactly the limit; links, roles and
+        API-worded times; excerpt truncation + note + no anchor means no link; previews honour the
+        allow-list, cap at 3, keep the configured order with the coding example first; the slug
+        parser's default and its trimming; the search percentages and labels; API usage carrying
+        only measured keys; community metrics all stamped "all time" and degrading to "—" on an
+        unread stats call; post URLs per type; the relative-time wording table; and the closing CTA.
+    [TEST] 7 backend integration tests PASS against an ISOLATED database
+        postgres://solvr:solvr_dev@localhost:5435/solvr_test (DROP + CREATE DATABASE solvr_test
+        TEMPLATE solvr first; NEVER the dev database, after the 2026-09-20 21:05 wipe incident):
+        go test ./internal/api/ -run 'TestHomepageOverview|TestHomepageActivity' -count=1 -v ->
+        ALL PASS (0.96s total). They assert on the RAW response body that a private room's slug,
+        name and content are ALL absent; that a private room yields no preview even when it is the
+        only configured one; that a 40-message public room nobody selected is NOT promoted while
+        the 2-message selected room is; that flipping the previewed room to is_private removes
+        every trace of it; that Load more returns a second page with ZERO overlap; that a
+        once-searched term never appears while a thrice-searched one does; and that a
+        family-visibility post with an approach never reaches the page while its public twin does.
+    [TEST] cd frontend && npm test — FULL SUITE 133 files / 1315 tests, ALL PASS, zero failures.
+        Baseline before this task was 1231 (2026-09-20 23:45 entry). +84.
+    [REAL] Coverage (v8, scoped): components/homepage 100% stmts / 98.07% branch / 100% funcs /
+        100% lines; hooks/use-homepage-overview.ts, components/hero-section.tsx,
+        components/footer.tsx and app/page.tsx together 100/100/100/100. The previews section was
+        68.75% branch at first (the no-purpose / no-participants / no-exchange and no-anchor paths)
+        and now has tests for exactly those degraded cases. Well over the 80% floor.
+    [REAL] npx tsc --noEmit: ZERO errors. gofmt clean on all six new/edited Go files.
+        go vet ./internal/db/ ./internal/api/ ./internal/api/handlers/ clean.
+    [REAL] bash scripts/check-file-size.sh: 36 violations, the SAME 36 as the 2026-09-20 baseline.
+        Largest new file is homepage_overview.go at 725.
+    [REAL] Backend full suite, MEASURED BOTH WAYS on databases recreated from the same template
+        before each run: HEAD (backend/ stashed) = 70 failures, with this change = 65. The sets
+        differ only by:
+          - the 7 homepage tests (fail at HEAD because the routes are not mounted — the RED proof),
+          - TestSearchAnalyticsRepository_GetTrending (fails at HEAD, passes here — ordering),
+          - TestE2E_AgentRegistrationAndPosting and TestE2E_PostAppearsInList, which both PASS in
+            isolation with this change applied,
+          - TestCommentsCount_IdeasShowCountAfterComment, which I ran in isolation AT HEAD on a
+            freshly templated database and it fails there identically:
+            "router_comments_test.go:171: expected comments_count=1 for idea, got 2".
+            Pre-existing (leftover fixtures in the template), not caused here.
+        Nothing in this change regressed anything.
+
+    [REAL] VERIFIED AGAINST A RUNNING STACK, not reasoned. Killed the previous next dev/API first;
+        Go API on :8090 against postgres://localhost:5435/solvr with ALLOWED_ORIGINS and a 32-char
+        JWT_SECRET in the environment (backend/.env NOT touched and NOT loaded), next dev on :3111.
+      - GET /v1/homepage/overview -> 200 with all eight sections. Served values: 0 agents live,
+        45 rooms active 24h, 55 messages 24h, 3 agents posting 7d, 109 public rooms; 24 sparkline
+        buckets, max 26; 6 activity items with has_more and next_offset 6; 1 preview
+        (tictactoe-human-vs-computer-20260920, "The coding example this homepage is built around",
+        2 participants, a 2-message exchange); search 44/26/8/31%/3 ms; community 6 posts, 1 agent,
+        3 humans.
+      - PAGINATION PROVEN LIVE: offset=0 and offset=6 share ZERO items.
+      - PRIVACY PROVEN LIVE against real data: the local dev database holds 6 private non-deleted
+        rooms; I pulled their slugs straight out of Postgres and checked each one against the raw
+        overview body — 0 leaked.
+      - Headless Chromium (playwright chromium_headless_shell-1234) at 1280x900 AND 390x844:
+        section order is exactly rooms, activity, previews, api, search, community, the
+        collaboration example, posts, closing. 20 metric tiles each showing value + label +
+        window. 24 sparkline bars with API-supplied heights. Load more click takes the stream from
+        6 items to 12. All three search tables present. 4 endpoint rows. Closing CTA reads
+        "Connect agents now" -> /connect. Compact footer renders exactly the nine-link row and NO
+        DISCOVER/COMPANY headings. ZERO page errors. The old copy is gone: no "COLLECTIVE
+        INTELLIGENCE", no "HUMANS PARTICIPATING", no "API-first. Agent-native.". "PROBLEMS SOLVED"
+        survives ONLY inside overview-section-community (with "all time" + its definition) and is
+        confirmed absent from the hero.
+      - Step 6 second half verified: the three tables /data exists to show — trending terms, recent
+        terms and the type-filter breakdown — are all on the homepage, alongside the agent/human
+        search split. A visitor does not need /data to see the public statistics.
+      - Link targets resolve: /rooms 200, /posts 200, /api-docs 200, /connect 200 (still task 2's
+        temporary redirect), /problems/<id> 200.
+    [REAL] MODERATION INTERACTS WITH THE POSTS SECTION, found by running it: a post created through
+        POST /v1/posts lands in status 'pending_review', and the reusable-posts query excludes
+        draft/pending_review/rejected. So a brand-new post does NOT appear on the homepage until it
+        clears review. That is the right behaviour (unreviewed text must not be promoted on the
+        index) and it is now recorded rather than rediscovered.
+
+    [UNVERIFIED] `npm run lint` still cannot run here: "sh: eslint: command not found"
+        (pre-existing, node_modules/.bin has no eslint; CI installs it). Not treated as a gate —
+        tsc and the full vitest suite both ran clean.
+    [UNVERIFIED] `npm run build` (production/standalone) was not run this iteration. The page was
+        verified in a real browser against a real API instead.
+    NOTE: the two new endpoints are NOT in openapi_paths.go and SPEC.md was not touched — no step
+        asked for either, and openapi_paths.go is already 880 lines / over the CI limit. Same
+        decision as /v1/homepage/example on 2026-09-20 23:45.
+    NOTE: the local dev database now also contains one seeded problem + approach
+        (94340754-a71e-423d-bfc8-65bd19bd8a1f, agent ralph_ov_61308, created through the product's
+        own API and then flipped from pending_review to open locally) so the reusable-posts section
+        had real content to render in the browser. Production was never touched — no call left
+        localhost this iteration.
+    NOTE: this commit also carries the owner's PRE-EXISTING working-tree changes that were already
+        there when the iteration started and were NOT touched here: a modification to
+        ralph-continuous.sh and the untracked ralph-overnight.sh. Step 7 of the loop prompt
+        mandates `git add .`; flagging them so they can be unstaged or split out if that was not
+        intended.
+
+UAT: Step 2's judgement is inherently visual and the owner's — "strong monospaced numbers, thin
+    dividers, compact tables, restrained sparklines, generous section spacing … substantial
+    information in Solvr's existing visual language". The automated equivalents already ran green
+    (67 component tests, the design-system contract including the shared section rhythm and the
+    repo-wide no-rounded-corner rule, plus the real-browser render above at both viewports).
+      cd /Users/fcavalcanti/dev/solvr && docker compose up -d
+      cd backend && DATABASE_URL="postgres://solvr:solvr_dev@localhost:5435/solvr?sslmode=disable" \
+        PORT=8090 ALLOWED_ORIGINS="http://localhost:3111" \
+        JWT_SECRET="ralph-local-dev-jwt-secret-32-chars-min" go run ./cmd/api
+      cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8090 npm run dev -- -p 3111
+    Look at / and judge: does the density read as substantial-but-calm, or as a dashboard? The
+    sparkline in particular is the one thing here that is new to Solvr's vocabulary.
+UAT: Owner's call on WHICH rooms should be previewed. Today the allow-list defaults to the coding
+    example alone; set HOMEPAGE_PREVIEW_ROOM_SLUGS to a comma-separated list of up to three public
+    slugs to add editorial picks. A slug that is private, deleted or missing is silently skipped.
+    I did NOT set it anywhere — no env file was touched.
+UAT: Owner should confirm the recent-queries privacy floor. Terms searched only once are never
+    published, and the page states that rule in the table's own definition. If that is too strict
+    (or not strict enough) the constant is recentQueryMinOccurrences in
+    backend/internal/api/handlers/homepage_overview.go.
+UAT: After the next deploy, /v1/homepage/overview and /v1/homepage/activity are new public
+    endpoints with a 30-second Cache-Control. Worth eyeballing production's numbers once: this
+    local dev database is the near-empty post-wipe set, so the magnitudes here prove the wiring,
+    not the content.

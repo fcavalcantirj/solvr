@@ -74,7 +74,7 @@
       "Replace the old four-counter hero strip with meaningful room, search, and community statistics whose windows and definitions are visible.",
       "Verify the page closes with Connect agents now and a compact footer; the homepage contains the public statistics so visiting a separate Data page is not necessary."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

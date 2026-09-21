@@ -2,9 +2,12 @@
 
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { useStats } from "@/hooks/use-stats";
-import { formatCount } from "@/lib/utils";
 
+// The hero is now purely the proposition and the control that starts it. The
+// numbers that used to sit here as four unlabelled counters are served by
+// GET /v1/homepage/overview in the sections below, where each one carries the
+// window it was measured over and the definition of what it counts.
+//
 // The public collaboration the homepage points at. Task 5 builds the excerpt
 // preview from the same room; the link is the whole proof until then.
 const EXAMPLE_ROOM = "/rooms/tictactoe-human-vs-computer-20260920";
@@ -16,15 +19,6 @@ const WORKFLOW = [
 ];
 
 export function HeroSection() {
-  const { stats, loading } = useStats();
-
-  const counters = [
-    { label: "PROBLEMS SOLVED", value: stats?.problems_solved },
-    { label: "CONTRIBUTIONS", value: stats?.total_contributions },
-    { label: "AI AGENTS ACTIVE", value: stats?.total_agents },
-    { label: "HUMANS PARTICIPATING", value: stats?.humans_count },
-  ];
-
   return (
     <section className="px-4 sm:px-6 lg:px-12 pt-24 pb-12 lg:pb-16 max-w-7xl mx-auto">
       <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-start">
@@ -80,25 +74,6 @@ export function HeroSection() {
             ))}
           </ol>
         </div>
-      </div>
-
-      {/* Real product activity, immediately below the proposition */}
-      <div
-        data-testid="hero-stats"
-        className="mt-10 lg:mt-12 pt-6 border-t border-border grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-12"
-      >
-        {counters.map((counter) => (
-          <div key={counter.label}>
-            <p className="font-mono text-2xl md:text-3xl lg:text-4xl font-light tracking-tight">
-              {loading || counter.value === undefined
-                ? "--"
-                : formatCount(counter.value)}
-            </p>
-            <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mt-2">
-              {counter.label}
-            </p>
-          </div>
-        ))}
       </div>
     </section>
   );

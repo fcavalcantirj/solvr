@@ -40,6 +40,21 @@ WAIT_TIME_SECS=$((WAIT_TIME_MINS * 60))
 BATCH_PAUSE_SECS=$((BATCH_PAUSE_MINS * 60))
 export PRD_FILE="${PRD_FILE:-spec.json}"
 
+# Overnight deadline. RALPH_STOP_AT=HH:MM (local) makes the supervisor stop BEFORE
+# starting any batch at or after that time — the task in flight always finishes, so
+# no iteration is ever killed half-done and the tree is never left dirty.
+RALPH_STOP_AT="${RALPH_STOP_AT:-}"
+stop_epoch=0
+if [ -n "$RALPH_STOP_AT" ]; then
+  stop_epoch=$(date -j -f "%Y-%m-%d %H:%M" "$(date '+%Y-%m-%d') $RALPH_STOP_AT" +%s 2>/dev/null || echo 0)
+  if [ "$stop_epoch" -eq 0 ]; then
+    echo "Invalid RALPH_STOP_AT '$RALPH_STOP_AT' — want HH:MM, e.g. 05:00"
+    exit 1
+  fi
+  # Already past today: it means the next one round the clock.
+  [ "$stop_epoch" -le "$(date +%s)" ] && stop_epoch=$((stop_epoch + 86400))
+fi
+
 case "$ENGINE" in
   claude) ENGINE_DESC="claude (${MODEL:-CLI default})" ;;
   codex)  ENGINE_DESC="codex (${CODEX_MODEL:-gpt-5.6-sol})" ;;
@@ -102,10 +117,35 @@ printf  "${MAGENTA}${BOLD}║   ⏸️  Batch pause:    %-3s minutes${NC}\n" "$B
 printf  "${MAGENTA}${BOLD}║   ⏰ Wait on error:  %-3s minutes${NC}\n" "$WAIT_TIME_MINS"
 printf  "${MAGENTA}${BOLD}║   📄 PRD:            %-30s${NC}\n" "$PRD_FILE"
 echo -e "${MAGENTA}${BOLD}║   🕐 Started at:     $(date '+%Y-%m-%d %H:%M:%S')${NC}"
+if [ "$stop_epoch" -gt 0 ]; then
+  echo -e "${MAGENTA}${BOLD}║   🛑 Stops at:       $(date -r "$stop_epoch" '+%Y-%m-%d %H:%M') (finishes the task in flight)${NC}"
+fi
 echo -e "${MAGENTA}${BOLD}╚═══════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
 while true; do
+  # Deadline: stop before starting another batch (never mid-task).
+  if [ "$stop_epoch" -gt 0 ] && [ "$(date +%s)" -ge "$stop_epoch" ]; then
+    runner_end=$(date +%s)
+    total_time=$((runner_end - runner_start))
+    echo ""
+    echo -e "${MAGENTA}${BOLD}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${MAGENTA}${BOLD}║   🛑  Deadline reached (${RALPH_STOP_AT}) — stopping cleanly.${NC}"
+    echo -e "${MAGENTA}${BOLD}║   📦 Batches: ${batch_count}   ⏱️ $(format_time $total_time)   📊 $(./progress.sh)${NC}"
+    echo -e "${MAGENTA}${BOLD}╚═══════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    {
+      echo ""
+      echo "$(date '+%Y-%m-%d %H:%M'): RALPH STOPPED — overnight deadline ${RALPH_STOP_AT} reached after ${batch_count} batches (engine ${ENGINE}). $(./progress.sh)"
+    } >> progress.txt
+    send_telegram "🛑 *Solvr Ralph [${ENGINE}]* - overnight deadline ${RALPH_STOP_AT} reached
+
+📦 Batches: ${batch_count}
+⏱️ $(format_time $total_time)
+📊 $(./progress.sh)"
+    exit 0
+  fi
+
   batch_count=$((batch_count + 1))
   batch_start=$(date +%s)
 

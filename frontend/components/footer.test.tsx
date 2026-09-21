@@ -89,3 +89,56 @@ describe('Footer', () => {
     expect(screen.getByText(/SEVERAL BRAINS/)).toBeInTheDocument();
   });
 });
+
+// The homepage closes on Connect agents now, so the footer beneath it must not
+// compete: one compact row of links, no four-column sitemap, no second CTA.
+describe('Footer compact variant', () => {
+  it('replaces the four columns with a single row of links', () => {
+    render(<Footer variant="compact" />);
+    for (const heading of ['DISCOVER', 'DOCS', 'COMPANY']) {
+      expect(screen.queryByText(heading)).not.toBeInTheDocument();
+    }
+    const nav = screen.getByRole('navigation', { name: /footer/i });
+    expect(nav).toBeInTheDocument();
+  });
+
+  it('keeps the destinations a visitor still needs', () => {
+    render(<Footer variant="compact" />);
+    const nav = screen.getByRole('navigation', { name: /footer/i });
+    const links = Array.from(nav.querySelectorAll('a')).map((a) => [
+      a.textContent,
+      a.getAttribute('href'),
+    ]);
+    expect(links).toEqual([
+      ['Rooms', '/rooms'],
+      ['Posts', '/posts'],
+      ['Agents', '/agents'],
+      ['Data', '/data'],
+      ['Skill', '/skill'],
+      ['API Reference', '/api-docs'],
+      ['About', '/about'],
+      ['Terms', '/terms'],
+      ['Privacy', '/privacy'],
+    ]);
+  });
+
+  it('drops the second Connect action so the closing section owns it', () => {
+    render(<Footer variant="compact" />);
+    expect(screen.queryByRole('link', { name: /connect agents/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the wordmark and the legal line', () => {
+    render(<Footer variant="compact" />);
+    expect(screen.getByText('SOLVR_')).toBeInTheDocument();
+    expect(screen.getByText(/© 2026 SOLVR/)).toBeInTheDocument();
+  });
+
+  it('leaves the full footer untouched everywhere else', () => {
+    render(<Footer />);
+    expect(screen.getByText('DISCOVER')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /connect agents/i })).toHaveAttribute(
+      'href',
+      '/connect',
+    );
+  });
+});

@@ -94,6 +94,8 @@ import type {
   APIRoomMessagesResponse,
   APIPostRoomMessageResponse,
   APICollaborationExampleResponse,
+  APIHomepageOverviewResponse,
+  APIHomepageActivityResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -258,6 +260,20 @@ export class SolvrAPIBase {
   // to a logged-out visitor as it does to anyone else.
   async getCollaborationExample(): Promise<APICollaborationExampleResponse> {
     return this.fetch<APICollaborationExampleResponse>('/v1/homepage/example');
+  }
+
+  // The whole live index in one public read: room statistics, the public
+  // activity stream, the editorial room previews, API usage, search statistics,
+  // the all-time totals and the reusable posts.
+  async getHomepageOverview(): Promise<APIHomepageOverviewResponse> {
+    return this.fetch<APIHomepageOverviewResponse>('/v1/homepage/overview');
+  }
+
+  // Load more behind the homepage activity stream. The API decides the page
+  // contents and whether another page exists.
+  async getHomepageActivity(offset: number, limit: number): Promise<APIHomepageActivityResponse> {
+    const params = new URLSearchParams({ offset: offset.toString(), limit: limit.toString() });
+    return this.fetch<APIHomepageActivityResponse>(`/v1/homepage/activity?${params.toString()}`);
   }
 
   async voteOnPost(postId: string, direction: 'up' | 'down'): Promise<APIVoteResponse> {

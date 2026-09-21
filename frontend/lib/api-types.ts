@@ -1477,3 +1477,8 @@ export interface APICollaborationExample {
 export interface APICollaborationExampleResponse {
   data: APICollaborationExample;
 }
+
+// The homepage overview contract lives in its own module (api-types.ts is
+// already far past the 800-line limit) and is re-exported here so
+// '@/lib/api-types' stays the single import point for API shapes.
+export * from './homepage-types';

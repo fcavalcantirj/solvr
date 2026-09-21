@@ -333,11 +333,14 @@ describe('generous spacing', () => {
   const RHYTHM = 'px-4 sm:px-6 lg:px-12 py-24 lg:py-32'
   const SECTIONS = [
     'components/collaboration-example.tsx',
-    'components/how-it-works.tsx',
-    'components/features-section.tsx',
-    'components/collaboration-showcase.tsx',
-    'components/api-section.tsx',
-    'components/cta-section.tsx',
+    'components/homepage/room-stats-section.tsx',
+    'components/homepage/room-activity-section.tsx',
+    'components/homepage/room-previews-section.tsx',
+    'components/homepage/api-usage-section.tsx',
+    'components/homepage/search-stats-section.tsx',
+    'components/homepage/community-totals-section.tsx',
+    'components/homepage/reusable-posts-section.tsx',
+    'components/homepage/closing-section.tsx',
   ]
 
   it.each(SECTIONS)('%s keeps the shared section rhythm', (file) => {

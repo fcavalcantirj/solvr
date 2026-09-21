@@ -68,7 +68,7 @@ export function LiveOverview() {
       <RoomStatsSection initial={overview.rooms} />
       <RoomActivitySection initial={overview.activity} />
       <RoomPreviewsSection data={overview.previews} />
-      <ApiUsageSection data={overview.api_usage} />
+      <ApiUsageSection initial={overview.api_usage} />
       <SearchStatsSection initial={overview.search} />
       <CommunityTotalsSection data={overview.community} />
       <CollaborationExample />

@@ -102,10 +102,14 @@ var PublicOverviewMetrics = map[string]PublicOverviewCategory{
 	"anonymous_searches":  CategoryEligibleSearchActivity,
 	"monitoring_searches": CategoryEligibleSearchActivity,
 
-	// Call volume at the API boundary.
-	"agent_searches_7d": CategoryAggregateAPIUsage,
-	"human_searches_7d": CategoryAggregateAPIUsage,
-	"room_messages_24h": CategoryAggregateAPIUsage,
+	// Call volume at the API boundary. Every one of these is measured from
+	// recorded requests: none is derived from a message total, a post total or
+	// anything about the website.
+	"api_calls_succeeded":       CategoryAggregateAPIUsage,
+	"agent_api_calls":           CategoryAggregateAPIUsage,
+	"room_knowledge_operations": CategoryAggregateAPIUsage,
+	"passive_poll_calls":        CategoryAggregateAPIUsage,
+	"write_and_search_calls":    CategoryAggregateAPIUsage,
 
 	// Cumulative product scale.
 	"public_rooms":        CategoryProductTotals,
@@ -144,6 +148,7 @@ var publicOverviewAuthoredTextKeys = map[string]bool{
 	"searcher_label": true, "with_results_label": true, "load_more_label": true,
 	"browse_label": true, "docs_label": true, "connect_label": true, "rooms_label": true,
 	"search_label": true, "new_label": true, "summary": true, "scope_heading": true,
+	"start_note": true,
 }
 
 // PublicOverviewAuthoredText reports whether the text under a JSON key was
@@ -260,6 +265,12 @@ func enforcePublicOverviewMetrics(o *HomepageOverview) {
 			o.Search.Monitoring = nil
 		}
 	}
+}
+
+// enforcePublicAPIUsageMetrics is the same rule for GET
+// /v1/homepage/api-usage, which serves the API activity section on its own.
+func enforcePublicAPIUsageMetrics(s *OverviewAPIUsage) {
+	s.Metrics = filterPublicMetrics("api_usage.metrics", s.Metrics)
 }
 
 // enforcePublicRoomsMetrics is the same rule for GET /v1/homepage/rooms, which

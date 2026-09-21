@@ -2298,3 +2298,203 @@ UAT: ONE THING IS WORTH THE OWNER'S EYES BEFORE THIS SHIPS: the wording of the
     copied prompt is the product's first contact with someone else's agent.
     Paste the planner prompt into your own agent once and read what it does
     with it — task 17 is where that round trip becomes a test.
+
+================================================================================
+2026-09-21 — TASK 12 (analytics): Show aggregate API usage publicly without
+exposing website traffic or request details
+================================================================================
+
+WHAT IT NEEDED: an API-activity section on the homepage showing successful API
+calls, agent API calls and distinct room/knowledge operations over the shared
+24h / 7d / 30d window with a compact series — MEASURED AT THE API BOUNDARY, not
+estimated from message totals. Before this the "What agents call" section was
+built from search_queries and messages: exactly the derivation step 6 forbids.
+
+WHAT WAS BUILT
+
+  BOUNDARY MEASUREMENT (new)
+    backend/migrations/000083_create_api_request_events.{up,down}.sql
+      One row per confirmed application request: request_id, route_template,
+      method, operation, operation_family, operation_kind, actor_type,
+      status_class, occurred_at. NO body, query string, slug, id, IP, user
+      agent or credential — a row can identify nobody. UNIQUE partial index on
+      request_id (WHERE NOT NULL) is what makes counting idempotent.
+    backend/internal/api/middleware/api_usage.go (+ _test.go)
+      Records after the handler returns, when chi knows the ROUTE PATTERN.
+      Excluded and therefore never usage: /health*, /v1/health*, /admin*,
+      /metrics, /v1/homepage* (the page reading its own numbers), robots/
+      sitemap/static/_next, any */stream (transport) and */heartbeat, OPTIONS
+      preflights, and any request that matched no route (a scanner hitting
+      /wp-login.php is not an application call). Kind: GET/HEAD = poll,
+      */search* = search, everything else = write. Actor from the credential
+      PRESENTED: solvr_sk_ = human, other solvr_ (agent key, solvr_rm_,
+      solvr_rt_) = agent, a three-part token = human, nothing = anonymous —
+      an unauthenticated caller is never reported as a person.
+      Canonical OPERATION names collapse route adapters: POST
+      /v1/rooms/{slug}/messages and POST /r/{slug}/message are both
+      room.message.send, so "distinct operations" counts distinct WORK.
+    backend/internal/db/api_usage.go
+      APIUsageRepository.RecordRequests (multi-row INSERT ... ON CONFLICT
+      (request_id) WHERE request_id IS NOT NULL DO NOTHING) and
+      AsyncAPIUsageRecorder: bounded queue (1024), one writer, batches of 64
+      or a 1s tick. A full queue DROPS rows and logs; measuring never slows
+      down the product it measures.
+    backend/internal/db/homepage_api_usage.go
+      GetAPIUsagePulse(window): successful calls, the actor breakdown, the
+      poll / write+search split, COUNT(DISTINCT operation) over the room and
+      knowledge families, MIN(occurred_at) as instrumented-since, and a
+      gap-free bucket series.
+
+  PUBLISHING
+    backend/internal/api/handlers/homepage_api_usage.go (+ _test.go)
+      buildOverviewAPIUsage(pulse) and GET /v1/homepage/api-usage behind the
+      same selector as rooms and search. Five metrics: api_calls_succeeded,
+      agent_api_calls, room_knowledge_operations, passive_poll_calls,
+      write_and_search_calls (the last two partition the first exactly).
+      The headline figure carries the qualifier that keeps request volume
+      apart from deduplicated domain writes: "one incoming request counts once
+      even when a proxy retried it or the domain deduplicated the write it
+      asked for". With nothing recorded every figure reads "—" and is flagged
+      unavailable, never 0; when recording started inside the window each
+      figure says "Measured since <date>; earlier history is unavailable, not
+      zero" and the section repeats it once in start_note.
+    handlers/public_overview_allowlist.go — the three DERIVED keys
+      (agent_searches_7d, human_searches_7d, room_messages_24h) are GONE from
+      the allowlist and the payload; the five measured keys replace them under
+      CategoryAggregateAPIUsage. start_note added to the authored-text keys so
+      the excluded-vocabulary walk covers it.
+    handlers/homepage_overview.go — the overview now reads GetAPIUsagePulse and
+      no longer reads the 7-day search summary for this section at all.
+    api/router.go — apimiddleware.APIUsage(db.NewAsyncAPIUsageRecorder(pool))
+      when a pool exists; api/router_homepage.go mounts the new endpoint.
+
+  FRONTEND (dumb terminal)
+    components/homepage/api-usage-section.tsx is now a client section with the
+      window selector, MetricGrid, the sparkline + its accessible table, the
+      start note and the scope note. It renders API strings only: no
+      arithmetic, no thresholds, no wording of its own, and it prints the
+      API's "—" rather than deciding a missing measurement is a zero.
+    lib/homepage-types.ts (+ APIHomepageAPIUsageResponse), lib/api-base.ts
+      (getHomepageApiUsage), live-overview.tsx, overview-fixture.ts, and the
+      ApiUsageSection tests moved out of overview-sections.test.tsx into
+      components/homepage/api-usage-section.test.tsx.
+
+VERIFICATION
+
+  [TEST] backend — new tests, all RUN and PASSED against a LOCAL isolated
+      database, postgres://localhost:5435/solvr_test (a template clone of the
+      local dev database, migrated to 83, dropped afterwards). Production was
+      never touched.
+        internal/db (7 integration tests): successful/agent/human/anonymous
+          counts, the poll vs write+search partition, distinct operations,
+          rejected calls excluded from success, ONE INCOMING REQUEST COUNTED
+          ONCE across a retry and a second route adapter, rows without an
+          identifier still counted, gap-free series for all three windows,
+          instrumented-since, and a schema assertion that the table has no
+          ip/user_agent/body/slug/id/token column.
+        internal/api/middleware (11 unit tests): template not path, the twelve
+          excluded surfaces, unmatched routes, preflight, the six credential
+          shapes, the poll/write/search split, families, adapters sharing one
+          operation name, response class, the request identifier, trailing
+          slash normalisation, nil recorder.
+        internal/api/handlers (10 tests): metrics and windows, the partition,
+          volume-not-people wording (also checked against
+          PrivateAnalyticsTermIn), the scope note, unavailable-not-zero,
+          history-before-instrumentation, chart and table from one series,
+          allowlist, no registration total, nothing invented from an empty
+          pulse.
+        internal/api (4 router tests, real HTTP): the endpoint is public and
+          states its window; three real GET /v1/rooms calls move the published
+          volume; reading the overview / rooms / search / api-usage endpoints
+          and /health moves NOTHING; the payload carries no request_id,
+          route_template, ip, user agent, room or account field.
+      Also added /v1/homepage/api-usage to the existing public-privacy suite
+      (vocabulary walk + allowlist walk) — both pass.
+
+  [TEST] NO BACKEND REGRESSION, MEASURED BY COMPARISON ON FRESH DATABASES.
+      ./internal/api/... ./internal/db/ run twice, each on a freshly recreated
+      solvr_test cloned from the local dev database:
+        HEAD (stashed --include-untracked, migrated to 82): 77 failing tests
+        with this change (migrated to 83)                 : 72 failing tests
+        diff: the 72 are a strict SUBSET of the 77. No new failure; five known
+        flakes did not recur. None of the new tests is among them.
+      The remaining failures are the documented pre-existing ones on a cloned
+      dev database (users.referral_code NOT NULL, room slug collisions,
+      service_checks fixtures, GitHub OAuth, IPFS health, comments_count,
+      type-specific list endpoints).
+      NOTE ON FLAKES: an intermediate comparison run looked alarming until the
+      cause was found — that run used a database left at migration 82 by the
+      baseline run, so api_request_events did not exist. Re-run on a properly
+      migrated fresh clone, the failure set is the subset above.
+
+  [TEST] frontend — 10 new tests in api-usage-section.test.tsx (metrics with
+      their windows and definitions, scope note, normalised bars plus the
+      table carrying the same rows, the selector re-reading
+      getHomepageApiUsage('7d'), no re-read when the current window is clicked
+      again, a failed re-read reported instead of a stale window shown as
+      current, "—" rendered for an unavailable measurement with no 0 anywhere,
+      the API's qualifier, the endpoint list and docs link, and a source scan
+      forbidding toLocaleString/Math./reduce/percent and any /v1/ path).
+      Full suite: 140 files, 1396 tests, ALL PASS (was 139/1389).
+      npx tsc --noEmit clean; next lint on the two touched components: no
+      warnings.
+
+  [TEST] ./scripts/check-file-size.sh reports the same 36 pre-existing
+      violations with and without this change (verified by stashing). The
+      largest new file is 326 lines; homepage_overview.go SHRANK 548 -> 480.
+      go vet ./... clean. golangci-lint could not run: the locally installed
+      version rejects this repo's config ("'output.formats' expected a map,
+      got 'slice'") — a pre-existing environment mismatch, unrelated.
+
+  [REAL] VERIFIED AGAINST A RUNNING STACK, THEN IN A REAL BROWSER. Previous
+      processes killed first. Go API on :8090 against
+      postgres://localhost:5435/solvr_test with a local JWT_SECRET and
+      ALLOWED_ORIGINS in the environment (backend/.env NOT touched, NOT
+      loaded); next dev on :3111 with NEXT_PUBLIC_API_URL=http://localhost:8090.
+        With the table empty: every figure "—", unavailable true, no sparkline,
+          and start_note saying nothing has been recorded yet.
+        Then 5x GET /v1/rooms, 3x GET /v1/search, 2x GET /v1/posts, one POST
+          /v1/rooms with a bogus agent key (401), three GET /v1/rooms sharing
+          one X-Request-ID, and calls to /health, /health/live,
+          /v1/homepage/{overview,rooms,api-usage}, /robots.txt and
+          /wp-login.php. The table then held exactly 12 rows:
+            room.list GET poll room anonymous 2xx           x6  (5 + 1 retry)
+            knowledge.search GET search knowledge anon 2xx   x3
+            knowledge.post.list GET poll knowledge anon 2xx  x2
+            room.create POST write room AGENT 4xx            x1
+          Nothing from health, the homepage endpoints, robots or the scanner.
+          The three retries sharing one request id became ONE row.
+        GET /v1/homepage/api-usage then published: 11 successful, 0 agent (the
+          only agent call was rejected), 3 distinct room/knowledge operations,
+          8 passive polls, 3 create/send/search — 8 + 3 = 11. ?window=7d gave
+          7 buckets and restated every window as "last 7 days". The row count
+          stayed 12 across repeated reads of the statistics.
+        GET /v1/homepage/overview carries the same five keys, and none of
+          agent_searches_7d / human_searches_7d / room_messages_24h survives
+          anywhere in the payload.
+        Browser (Chromium via playwright-core, 1280x900): the section renders
+          the five tiles with their windows and qualifiers, 24 bars and a
+          24-row table; clicking 7 DAYS issued
+          GET /v1/homepage/api-usage?window=7d (200), the tiles came back
+          reading "last 7 days", aria-pressed moved, and the chart redrew with
+          7 buckets. Screenshot at /tmp/solvr_task12_api_section.png.
+        Both processes killed, ports 8090/3111 clear, solvr_test dropped.
+
+NOTE: the LOCAL DEV database (postgres://localhost:5435/solvr) is still at
+    migration 81 and was NOT migrated — its schema is the owner's to move. All
+    testing ran on the disposable solvr_test clone.
+NOTE: SPEC.md was not edited — no step asked for it. Task 25 owns the versioned
+    machine-readable contract work.
+NOTE: task 13 owns restricting operator analytics to administrative access, and
+    task 14 owns bounding/permission-scoping the overview endpoints; this task
+    added one more public section endpoint in the shape those tasks will cover.
+
+UAT: NOTHING OWNER-ONLY WAS LEFT OUTSTANDING for the code: every automated
+    check ran locally and green, and the behaviour was confirmed against a
+    running stack and in a real browser.
+UAT: TWO THINGS NEED THE OWNER BEFORE THIS SHIPS. (1) Migration 000083 has to
+    be applied to production — the deploy lane, not this session. Until it is,
+    the section will answer "unavailable" rather than fail. (2) On the first
+    day after deploy the figures will legitimately read "Measured since
+    <today>" — worth looking at once to confirm that reads as intended rather
+    than as a bug.

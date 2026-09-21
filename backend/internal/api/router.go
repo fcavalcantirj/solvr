@@ -67,6 +67,15 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	r.Use(securityHeadersMiddleware)
 	r.Use(jsonContentTypeMiddleware)
 
+	// Aggregate API usage, measured at the boundary (see middleware.APIUsage
+	// and db.AsyncAPIUsageRecorder). It sits AFTER routing has been arranged
+	// so it can read the route TEMPLATE the request matched, and it records
+	// asynchronously so measuring never slows down what it measures. Without
+	// a database there is nowhere to record, and it becomes a pass-through.
+	if pool != nil {
+		r.Use(apimiddleware.APIUsage(db.NewAsyncAPIUsageRecorder(pool)))
+	}
+
 	// Rate limiting - load config from database with fallback to defaults
 	rateLimitConfig := loadRateLimitConfig(pool)
 	rateLimitStore := apimiddleware.NewInMemoryRateLimitStore()

@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
-	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // Solvr measures two different things, and only one of them is public.
@@ -41,15 +40,17 @@ func buildPublicOverviewFixture() HomepageOverview {
 	searchPulse := db.SearchPulse{
 		Window: window, Eligible: 140, Agent: 90, Human: 30, Anonymous: 20, Monitoring: 8,
 	}
+	instrumentedSince := time.Now().Add(-90 * 24 * time.Hour)
 
 	return HomepageOverview{
 		Rooms:    buildOverviewRooms(pulse),
 		Activity: buildOverviewActivity(nil, overviewActivityDefaultLimit, 0, 0, time.Now()),
 		Previews: buildOverviewPreviews(nil, PreviewSlugsFromEnv()),
-		APIUsage: buildOverviewAPIUsage(models.SearchAnalytics{
-			TotalSearches:  200,
-			BySearcherType: map[string]int{"agent": 150, "human": 50},
-		}, pulse),
+		APIUsage: buildOverviewAPIUsage(db.APIUsagePulse{
+			Window: window, SuccessfulCalls: 4210, AgentCalls: 3100, HumanCalls: 900,
+			AnonymousCalls: 210, PassivePolls: 2600, WriteAndSearchCalls: 1610,
+			RoomKnowledgeOperations: 11, InstrumentedSince: &instrumentedSince,
+		}),
 		Search: buildOverviewSearch(searchPulse),
 		Community: buildOverviewCommunity(
 			&db.AllTimeTotals{PublicRooms: 214, PublishedPosts: 2098, RegisteredAgents: 64, RegisteredHumans: 1003},
@@ -139,7 +140,7 @@ func TestEnforcePublicOverviewMetrics_WithholdsAnAudienceMetricFromEverySection(
 			byKey[m.Key] = true
 		}
 	}
-	for _, key := range []string{"agents_online_now", "agent_messages", "searches", "agent_searches_7d", "registered_humans"} {
+	for _, key := range []string{"agents_online_now", "agent_messages", "searches", "api_calls_succeeded", "registered_humans"} {
 		assert.True(t, byKey[key], "enforcing the allowlist must not drop %q", key)
 	}
 }

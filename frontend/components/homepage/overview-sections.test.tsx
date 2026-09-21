@@ -5,7 +5,6 @@ import { join } from 'node:path';
 
 import { OVERVIEW } from './overview-fixture';
 import { RoomPreviewsSection } from './room-previews-section';
-import { ApiUsageSection } from './api-usage-section';
 import { CommunityTotalsSection } from './community-totals-section';
 import { ReusablePostsSection } from './reusable-posts-section';
 import { ClosingSection } from './closing-section';
@@ -120,37 +119,8 @@ describe('RoomPreviewsSection', () => {
   });
 });
 
-describe('ApiUsageSection', () => {
-  it('renders the measured call volumes with their windows', () => {
-    render(<ApiUsageSection data={OVERVIEW.api_usage} />);
-    for (const metric of OVERVIEW.api_usage.metrics) {
-      expect(screen.getByText(metric.label)).toBeInTheDocument();
-      expect(screen.getByText(metric.display)).toBeInTheDocument();
-    }
-    expect(screen.getAllByTestId('overview-metric')).toHaveLength(
-      OVERVIEW.api_usage.metrics.length,
-    );
-  });
-
-  it('lists the endpoints the API named, method and path verbatim', () => {
-    render(<ApiUsageSection data={OVERVIEW.api_usage} />);
-    const rows = screen.getAllByTestId('overview-endpoint');
-    expect(rows).toHaveLength(OVERVIEW.api_usage.endpoints.length);
-    rows.forEach((row, i) => {
-      const endpoint = OVERVIEW.api_usage.endpoints[i];
-      expect(squish(row.textContent)).toContain(endpoint.method);
-      expect(squish(row.textContent)).toContain(endpoint.path);
-      expect(squish(row.textContent)).toContain(endpoint.summary);
-    });
-  });
-
-  it('links to the documentation the API pointed at', () => {
-    render(<ApiUsageSection data={OVERVIEW.api_usage} />);
-    expect(
-      screen.getByRole('link', { name: OVERVIEW.api_usage.docs_label }),
-    ).toHaveAttribute('href', '/api-docs');
-  });
-});
+// ApiUsageSection grew a window selector, a series and its own measurement at
+// the API boundary; its tests live beside it in api-usage-section.test.tsx.
 
 // SearchStatsSection grew a window selector, a chart and its own publishing
 // policy; its tests live beside it in search-stats-section.test.tsx.

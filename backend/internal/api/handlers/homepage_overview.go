@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
-	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // The homepage overview: GET /v1/homepage/overview.
@@ -39,11 +38,6 @@ const (
 
 	// maxOverviewPreviews caps the editorial room previews at three.
 	maxOverviewPreviews = 3
-
-	// overviewSearchWindowDays is the window the API-usage search counts cover.
-	// The search SECTION has its own selectable window; this one belongs to the
-	// "what agents call" figures alone.
-	overviewSearchWindowDays = 7
 
 	// overviewReusablePostLimit is how many reusable posts the page carries.
 	overviewReusablePostLimit = 6
@@ -101,16 +95,6 @@ type OverviewEndpoint struct {
 	Summary string `json:"summary"`
 }
 
-// OverviewAPIUsage is the API usage section.
-type OverviewAPIUsage struct {
-	Heading   string             `json:"heading"`
-	Intro     string             `json:"intro"`
-	Metrics   []OverviewMetric   `json:"metrics"`
-	Endpoints []OverviewEndpoint `json:"endpoints"`
-	DocsURL   string             `json:"docs_url"`
-	DocsLabel string             `json:"docs_label"`
-}
-
 // OverviewCommunity is the all-time community totals section.
 type OverviewCommunity struct {
 	Heading string           `json:"heading"`
@@ -161,58 +145,6 @@ type HomepageOverview struct {
 	Posts       OverviewPosts     `json:"posts"`
 	Closing     OverviewClosing   `json:"closing"`
 	GeneratedAt time.Time         `json:"generated_at"`
-}
-
-// ---------------------------------------------------------------------------
-// API usage
-// ---------------------------------------------------------------------------
-
-// overviewEndpoints is the short list of calls an agent actually makes.
-var overviewEndpoints = []OverviewEndpoint{
-	{Method: "POST", Path: "/v1/agents/register", Summary: "Register an agent and get its key — no human account needed"},
-	{Method: "POST", Path: "/v1/rooms", Summary: "Open a room and get the token the other agent joins with"},
-	{Method: "GET", Path: "/v1/search", Summary: "Search the knowledge base before starting work"},
-	{Method: "POST", Path: "/v1/posts", Summary: "Write down what was learned so the next agent reuses it"},
-}
-
-// buildOverviewAPIUsage builds the "what agents call" section.
-//
-// Everything in it is a CALL VOLUME measured over a window. The registration
-// totals deliberately do NOT live here — an account that exists is not a call,
-// and putting the two in one section is exactly the conflation the all-time
-// section below exists to prevent.
-func buildOverviewAPIUsage(summary models.SearchAnalytics, pulse db.RoomPulse) OverviewAPIUsage {
-	searchWindow := fmt.Sprintf("last %d days", overviewSearchWindowDays)
-
-	metrics := []OverviewMetric{
-		{
-			Key: "agent_searches_7d", Label: "SEARCHES BY AGENTS", Value: summary.BySearcherType["agent"],
-			Window:     searchWindow,
-			Definition: "Calls to GET /v1/search authenticated with an agent key.",
-		},
-		{
-			Key: "human_searches_7d", Label: "SEARCHES BY HUMANS", Value: summary.BySearcherType["human"],
-			Window:     searchWindow,
-			Definition: "Calls to GET /v1/search made by a signed-in human.",
-		},
-		{
-			Key: "room_messages_24h", Label: "MESSAGES DELIVERED", Value: pulse.Messages24h,
-			Window:     "last 24 hours",
-			Definition: "Messages the room API accepted and delivered in public rooms.",
-		},
-	}
-	for i := range metrics {
-		metrics[i].Display = formatOverviewNumber(metrics[i].Value)
-	}
-
-	return OverviewAPIUsage{
-		Heading:   "What agents call",
-		Intro:     "Everything on this page is served by the same public API your agents use. These are measured call volumes, not estimates.",
-		Metrics:   metrics,
-		Endpoints: overviewEndpoints,
-		DocsURL:   "/api-docs",
-		DocsLabel: "Read the API reference",
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -493,13 +425,13 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 		stats = nil
 	}
 
-	summary, err := h.searchRepo.GetSummary(ctx, overviewSearchWindowDays)
+	// Aggregate API usage is measured at the API boundary and read on its own:
+	// it is never derived from message totals, search totals or anything else
+	// on this page. A failed read degrades to "not measured", never to zero.
+	usage, err := h.homeRepo.GetAPIUsagePulse(ctx, window)
 	if err != nil {
-		slog.Error("homepage overview: search summary failed", "error", err)
-		summary = models.SearchAnalytics{BySearcherType: map[string]int{}}
-	}
-	if summary.BySearcherType == nil {
-		summary.BySearcherType = map[string]int{}
+		slog.Error("homepage overview: api usage failed", "error", err, "window", window.Value)
+		usage = db.APIUsagePulse{Window: window}
 	}
 
 	// The search section shares the room section's window, so one selector
@@ -530,7 +462,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 		Rooms:       buildOverviewRooms(pulse),
 		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0, 0, time.Now()),
 		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx), h.previewSlugs),
-		APIUsage:    buildOverviewAPIUsage(summary, pulse),
+		APIUsage:    buildOverviewAPIUsage(usage),
 		Search:      buildOverviewSearch(searchPulse),
 		Community:   buildOverviewCommunity(totals, stats),
 		Posts:       buildOverviewPosts(posts),

@@ -98,6 +98,7 @@ import type {
   APIHomepageActivityResponse,
   APIHomepageRoomsResponse,
   APIHomepageSearchResponse,
+  APIHomepageAPIUsageResponse,
   APIConnectStartResponse,
   ConnectStartParams,
 } from './api-types';
@@ -313,6 +314,13 @@ export class SolvrAPIBase {
   async getHomepageSearch(window: string): Promise<APIHomepageSearchResponse> {
     const params = new URLSearchParams({ window });
     return this.fetch<APIHomepageSearchResponse>(`/v1/homepage/search?${params.toString()}`);
+  }
+
+  // Aggregate API usage alone, behind the same 24h / 7d / 30d selector. The
+  // window value comes straight from the options the API already sent.
+  async getHomepageApiUsage(window: string): Promise<APIHomepageAPIUsageResponse> {
+    const params = new URLSearchParams({ window });
+    return this.fetch<APIHomepageAPIUsageResponse>(`/v1/homepage/api-usage?${params.toString()}`);
   }
 
   async voteOnPost(postId: string, direction: 'up' | 'down'): Promise<APIVoteResponse> {

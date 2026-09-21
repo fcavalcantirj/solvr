@@ -165,7 +165,7 @@
       "Count each incoming request once across proxy retries and route adapters using a request identifier where available; distinguish request volume from idempotently deduplicated domain writes.",
       "Start the series when reliable instrumentation begins and label earlier history unavailable; never estimate historical API calls from message totals or website page views."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "operations",

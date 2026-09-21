@@ -23,6 +23,11 @@ import (
 //	                             numbers and a series beats re-reading the index.
 //	GET /v1/homepage/search   -- the search statistics alone, behind the same
 //	                             24h / 7d / 30d selector.
+//	GET /v1/homepage/api-usage -- aggregate call volume at the API boundary,
+//	                             behind the same selector. None of these
+//	                             endpoints is itself counted as usage: a page
+//	                             that inflates its own numbers by being read
+//	                             is not measuring anything.
 //
 // Kept out of router.go (which is already over the file-size limit) and out of
 // mountRoomRoutes (which owns /v1/rooms and /r/{slug}).
@@ -49,4 +54,5 @@ func mountHomepageRoutes(r chi.Router, pool *db.Pool) {
 	r.Get("/v1/homepage/activity", overviewHandler.GetActivity)
 	r.Get("/v1/homepage/rooms", overviewHandler.GetRooms)
 	r.Get("/v1/homepage/search", overviewHandler.GetSearch)
+	r.Get("/v1/homepage/api-usage", overviewHandler.GetAPIUsage)
 }

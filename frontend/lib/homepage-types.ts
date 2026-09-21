@@ -167,10 +167,26 @@ export interface APIOverviewEndpoint {
   summary: string;
 }
 
+// Aggregate call volume at the API boundary, for the selected window.
+//
+// Everything in it is measured from recorded requests: it is never people,
+// never independent successful tasks, and never derived from message or post
+// totals. A period before recording started arrives as `unavailable` metrics
+// with the API's own placeholder in `display` — the browser must render that
+// placeholder rather than a zero.
 export interface APIOverviewAPIUsage {
   heading: string;
   intro: string;
+  // What is aggregated, and what is excluded from the counting.
+  scope_note: string;
+  window_label: string;
+  window_options: APIOverviewWindowOption[];
+  selected_window: string;
   metrics: APIOverviewMetric[];
+  series: APIOverviewSeries;
+  // When measurement began, if that is inside the selected window. Absent
+  // when the whole window was measured.
+  start_note?: string;
   endpoints: APIOverviewEndpoint[];
   docs_url: string;
   docs_label: string;
@@ -335,4 +351,8 @@ export interface APIHomepageRoomsResponse {
 
 export interface APIHomepageSearchResponse {
   data: APIOverviewSearch;
+}
+
+export interface APIHomepageAPIUsageResponse {
+  data: APIOverviewAPIUsage;
 }

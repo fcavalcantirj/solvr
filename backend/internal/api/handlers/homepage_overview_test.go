@@ -107,43 +107,16 @@ func TestOverviewPreviewSlugs_DefaultsToTheCodingExample(t *testing.T) {
 // selector, a chart and its own publishing policy. Its tests live beside it in
 // homepage_search_test.go.
 
-func TestOverviewAPIUsageSection_OnlyServesMeasuredNumbers(t *testing.T) {
-	summary := models.SearchAnalytics{
-		TotalSearches:  200,
-		BySearcherType: map[string]int{"agent": 150, "human": 50},
-	}
-	pulse := db.RoomPulse{Messages24h: 321}
-
-	section := buildOverviewAPIUsage(summary, pulse)
-
-	require.NotEmpty(t, section.Metrics)
-	for _, m := range section.Metrics {
-		assert.NotEmpty(t, m.Window, "metric %q window", m.Key)
-		assert.NotEmpty(t, m.Definition, "metric %q definition", m.Key)
-	}
-	byKey := map[string]OverviewMetric{}
-	for _, m := range section.Metrics {
-		byKey[m.Key] = m
-	}
-	assert.Equal(t, 150, byKey["agent_searches_7d"].Value)
-	assert.Equal(t, 321, byKey["room_messages_24h"].Value)
-	assert.NotEmpty(t, section.Endpoints)
-	for _, e := range section.Endpoints {
-		assert.NotEmpty(t, e.Method)
-		assert.True(t, strings.HasPrefix(e.Path, "/v1/"), "endpoint path %q", e.Path)
-		assert.NotEmpty(t, e.Summary)
-	}
-	assert.Equal(t, "/api-docs", section.DocsURL)
-}
+// The API-usage section grew a window selector, a series and its own
+// measurement at the API boundary. Its tests live beside it in
+// homepage_api_usage_test.go; what stays here is its place in the whole
+// payload.
 
 // The API-usage section measures CALLS. A registration total sitting among
 // them would read as usage, which is the one thing the all-time section exists
 // to keep separate.
 func TestOverviewAPIUsageSection_CarriesNoRegistrationTotal(t *testing.T) {
-	section := buildOverviewAPIUsage(
-		models.SearchAnalytics{BySearcherType: map[string]int{}},
-		db.RoomPulse{},
-	)
+	section := buildOverviewAPIUsage(db.APIUsagePulse{Window: db.DefaultRoomStatsWindow()})
 
 	for _, m := range section.Metrics {
 		assert.NotContains(t, strings.ToLower(m.Key), "registered",

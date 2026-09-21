@@ -33,6 +33,7 @@ var publicPrivacyEndpoints = []string{
 	"/v1/homepage/overview?window=30d",
 	"/v1/homepage/rooms",
 	"/v1/homepage/search",
+	"/v1/homepage/api-usage",
 	"/v1/homepage/activity?offset=0&limit=6",
 	"/v1/stats",
 	"/v1/stats/search",
@@ -86,7 +87,7 @@ func TestPublicOverview_PublishesOnlyAllowlistedSectionsAndMetrics(t *testing.T)
 	}
 
 	// The same rule on the two sections that are also served on their own.
-	for _, endpoint := range []string{"/v1/homepage/rooms", "/v1/homepage/search"} {
+	for _, endpoint := range []string{"/v1/homepage/rooms", "/v1/homepage/search", "/v1/homepage/api-usage"} {
 		sectionPayload, _ := getPublicJSON(t, ts.URL+endpoint)
 		sectionData, sectionOK := sectionPayload["data"].(map[string]any)
 		require.True(t, sectionOK, "%s must answer with a data object", endpoint)

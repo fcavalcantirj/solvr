@@ -64,14 +64,14 @@ describe('RoomCard', () => {
   it('renders live_agent_count with green pulsing dot when count > 0', () => {
     render(<RoomCard room={mockRoom} />);
     // Check that the animate-pulse element exists (green dot)
-    const pulseDot = document.querySelector('.animate-pulse.bg-green-500');
+    const pulseDot = document.querySelector('.animate-pulse.bg-green-700');
     expect(pulseDot).toBeInTheDocument();
   });
 
   it('does NOT render green pulsing dot when live_agent_count is 0', () => {
     const roomNoLive: APIRoomWithStats = { ...mockRoom, live_agent_count: 0 };
     render(<RoomCard room={roomNoLive} />);
-    const pulseDot = document.querySelector('.animate-pulse.bg-green-500');
+    const pulseDot = document.querySelector('.animate-pulse.bg-green-700');
     expect(pulseDot).not.toBeInTheDocument();
   });
 

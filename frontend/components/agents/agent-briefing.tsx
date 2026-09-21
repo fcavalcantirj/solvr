@@ -115,7 +115,7 @@ function InboxSection({ inbox }: { inbox: BriefingInbox | null }) {
           <Link
             key={`inbox-${index}`}
             href={item.link}
-            className="flex items-start gap-3 p-2 hover:bg-secondary/50 transition-colors rounded"
+            className="flex items-start gap-3 p-2 hover:bg-secondary/50 transition-colors rounded-none"
           >
             <div className="mt-0.5 text-muted-foreground">
               {getNotificationIcon(item.type)}
@@ -156,15 +156,15 @@ function OpenItemsSection({ openItems }: { openItems: BriefingOpenItems | null }
         <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">Open Items</h3>
       </div>
       <div className="grid grid-cols-3 gap-3 mb-3">
-        <div className="text-center p-2 bg-secondary/50 rounded">
+        <div className="text-center p-2 bg-secondary/50 rounded-none">
           <p className="text-lg font-mono font-bold">{openItems.problems_no_approaches}</p>
           <p className="text-xs text-muted-foreground">Problems</p>
         </div>
-        <div className="text-center p-2 bg-secondary/50 rounded">
+        <div className="text-center p-2 bg-secondary/50 rounded-none">
           <p className="text-lg font-mono font-bold">{openItems.questions_no_answers}</p>
           <p className="text-xs text-muted-foreground">Questions</p>
         </div>
-        <div className="text-center p-2 bg-secondary/50 rounded">
+        <div className="text-center p-2 bg-secondary/50 rounded-none">
           <p className="text-lg font-mono font-bold">{openItems.approaches_stale}</p>
           <p className="text-xs text-muted-foreground">Stale</p>
         </div>
@@ -172,7 +172,7 @@ function OpenItemsSection({ openItems }: { openItems: BriefingOpenItems | null }
       {openItems.items.length > 0 && (
         <div className="space-y-2">
           {openItems.items.map((item) => (
-            <div key={item.id} className="flex items-center gap-3 p-2 hover:bg-secondary/50 transition-colors rounded">
+            <div key={item.id} className="flex items-center gap-3 p-2 hover:bg-secondary/50 transition-colors rounded-none">
               <div className="text-muted-foreground">
                 {getOpenItemIcon(item.type)}
               </div>
@@ -211,7 +211,7 @@ function SuggestedActionsSection({ actions }: { actions: BriefingSuggestedAction
       </div>
       <div className="space-y-2">
         {actions.map((action, index) => (
-          <div key={`action-${index}`} className="flex items-start gap-3 p-2 hover:bg-secondary/50 transition-colors rounded">
+          <div key={`action-${index}`} className="flex items-start gap-3 p-2 hover:bg-secondary/50 transition-colors rounded-none">
             <ArrowRight className="w-4 h-4 mt-0.5 text-muted-foreground" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium line-clamp-1">{action.target_title}</p>
@@ -251,7 +251,7 @@ function OpportunitiesSection({ opportunities }: { opportunities: BriefingOpport
           <Link
             key={opp.id}
             href={`/problems/${opp.id}`}
-            className="block p-3 border border-border hover:bg-secondary/50 transition-colors rounded"
+            className="block p-3 border border-border hover:bg-secondary/50 transition-colors rounded-none"
           >
             <p className="text-sm font-medium line-clamp-1 mb-1">{opp.title}</p>
             <div className="flex flex-wrap gap-1 mb-2">
@@ -313,7 +313,7 @@ function ReputationSection({ changes }: { changes: BriefingReputationChanges | n
       </div>
       <div className="space-y-2">
         {changes.breakdown.map((event, index) => (
-          <div key={`rep-${index}`} className="flex items-center justify-between p-2 hover:bg-secondary/50 transition-colors rounded">
+          <div key={`rep-${index}`} className="flex items-center justify-between p-2 hover:bg-secondary/50 transition-colors rounded-none">
             <div className="flex-1 min-w-0">
               <p className="text-sm line-clamp-1">{event.post_title}</p>
               <p className="text-xs text-muted-foreground">{event.reason.replace(/_/g, " ")}</p>

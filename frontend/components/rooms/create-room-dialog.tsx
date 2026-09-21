@@ -243,7 +243,7 @@ export function CreateRoomDialog() {
                       <button
                         type="button"
                         onClick={() => removeTag(tag)}
-                        className="hover:text-red-500 transition-colors"
+                        className="hover:text-red-700 dark:text-red-400 transition-colors"
                         aria-label={`Remove tag ${tag}`}
                       >
                         <X className="w-3 h-3" />
@@ -278,7 +278,7 @@ export function CreateRoomDialog() {
         <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Check className="w-5 h-5 text-green-500" />
+              <Check className="w-5 h-5 text-green-700 dark:text-green-400" />
               Room Created
             </DialogTitle>
             <DialogDescription>
@@ -308,7 +308,7 @@ export function CreateRoomDialog() {
             >
               {copied ? (
                 <>
-                  <Check size={12} className="text-green-500" />
+                  <Check size={12} className="text-green-700 dark:text-green-400" />
                   COPIED
                 </>
               ) : (

@@ -84,7 +84,7 @@ function PlatformPulseSection({ pulse }: { pulse: BriefingPlatformPulse | null |
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         {stats.map((stat) => (
-          <div key={stat.label} className="text-center p-2 bg-secondary/50 rounded">
+          <div key={stat.label} className="text-center p-2 bg-secondary/50 rounded-none">
             <p className={`text-lg font-mono font-bold ${stat.color}`}>{stat.value}</p>
             <p className="text-xs text-muted-foreground">{stat.label}</p>
           </div>
@@ -119,14 +119,14 @@ function TrendingNowSection({ posts }: { posts: BriefingTrendingPost[] | null | 
           <Link
             key={post.id}
             href={`/posts/${post.id}`}
-            className="flex items-start gap-3 p-2 hover:bg-secondary/50 transition-colors rounded"
+            className="flex items-start gap-3 p-2 hover:bg-secondary/50 transition-colors rounded-none"
           >
             <span className="text-sm font-mono text-muted-foreground w-5 text-right shrink-0">
               {index + 1}.
             </span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className={`px-1.5 py-0.5 text-xs font-mono rounded ${getTypeBadgeColor(post.type)}`}>
+                <span className={`px-1.5 py-0.5 text-xs font-mono rounded-none ${getTypeBadgeColor(post.type)}`}>
                   {post.type}
                 </span>
                 <p className="text-sm font-medium line-clamp-1">{post.title}</p>
@@ -170,10 +170,10 @@ function HardcoreUnsolvedSection({ problems }: { problems: BriefingHardcoreUnsol
           <Link
             key={problem.id}
             href={`/problems/${problem.id}`}
-            className="block p-3 border border-yellow-300/50 hover:bg-yellow-50/50 dark:border-yellow-700/30 dark:hover:bg-yellow-900/10 transition-colors rounded"
+            className="block p-3 border border-yellow-300/50 hover:bg-yellow-50/50 dark:border-yellow-700/30 dark:hover:bg-yellow-900/10 transition-colors rounded-none"
           >
             <div className="flex items-center gap-2 mb-1">
-              <span className="px-1.5 py-0.5 text-xs font-mono bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 rounded">
+              <span className="px-1.5 py-0.5 text-xs font-mono bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 rounded-none">
                 W{problem.weight}
               </span>
               <p className="text-sm font-medium line-clamp-1">{problem.title}</p>
@@ -229,7 +229,7 @@ function RisingIdeasSection({ ideas }: { ideas: BriefingRisingIdea[] | null | un
           <Link
             key={idea.id}
             href={`/ideas/${idea.id}`}
-            className="block p-2 hover:bg-secondary/50 transition-colors rounded"
+            className="block p-2 hover:bg-secondary/50 transition-colors rounded-none"
           >
             <p className="text-sm font-medium line-clamp-1 mb-1">{idea.title}</p>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -284,7 +284,7 @@ function RecentVictoriesSection({ victories }: { victories: BriefingRecentVictor
           <Link
             key={victory.id}
             href={`/problems/${victory.id}`}
-            className="block p-3 border border-green-300/50 hover:bg-green-50/50 dark:border-green-700/30 dark:hover:bg-green-900/10 transition-colors rounded"
+            className="block p-3 border border-green-300/50 hover:bg-green-50/50 dark:border-green-700/30 dark:hover:bg-green-900/10 transition-colors rounded-none"
           >
             <p className="text-sm font-medium line-clamp-1 mb-1">{victory.title}</p>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -338,16 +338,16 @@ function YouMightLikeSection({ posts }: { posts: BriefingRecommendedPost[] | nul
           <Link
             key={post.id}
             href={`/posts/${post.id}`}
-            className="block p-2 hover:bg-secondary/50 transition-colors rounded"
+            className="block p-2 hover:bg-secondary/50 transition-colors rounded-none"
           >
             <div className="flex items-center gap-2 mb-1">
-              <span className={`px-1.5 py-0.5 text-xs font-mono rounded ${getTypeBadgeColor(post.type)}`}>
+              <span className={`px-1.5 py-0.5 text-xs font-mono rounded-none ${getTypeBadgeColor(post.type)}`}>
                 {post.type}
               </span>
               <p className="text-sm font-medium line-clamp-1">{post.title}</p>
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded text-xs">
+              <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded-none text-xs">
                 {getMatchReasonLabel(post.match_reason)}
               </span>
               <span>{post.vote_score} votes</span>

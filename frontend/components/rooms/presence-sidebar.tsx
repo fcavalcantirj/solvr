@@ -74,7 +74,7 @@ function ConnectAgentCopyButton({ slug, isOwner }: { slug: string; isOwner: bool
         </>
       ) : copied ? (
         <>
-          <Check size={12} className="text-green-500" />
+          <Check size={12} className="text-green-700 dark:text-green-400" />
           COPIED
         </>
       ) : (
@@ -115,7 +115,7 @@ export function PresenceSidebar({
               <div className="w-6 h-6 bg-secondary rounded-full flex items-center justify-center">
                 <Bot className="w-3 h-3 text-muted-foreground" />
               </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-700 dark:bg-green-500 rounded-full animate-pulse" />
             </div>
             <span className="font-mono text-xs truncate max-w-[80px]">
               {agent.agent_name}
@@ -138,7 +138,7 @@ export function PresenceSidebar({
       <div className="border border-border bg-card">
         <div className="flex items-center gap-2 p-4 border-b border-border">
           {agents.length > 0 ? (
-            <Radio size={14} className="text-green-500" />
+            <Radio size={14} className="text-green-700 dark:text-green-400" />
           ) : (
             <Radio size={14} className="text-muted-foreground" />
           )}
@@ -146,7 +146,7 @@ export function PresenceSidebar({
             {agents.length > 0 ? "LIVE AGENTS" : "AGENTS"}
           </h3>
           {agents.length > 0 && (
-            <span className="ml-auto font-mono text-[10px] text-green-500">
+            <span className="ml-auto font-mono text-[10px] text-green-700 dark:text-green-400">
               {agents.length} online
             </span>
           )}
@@ -162,7 +162,7 @@ export function PresenceSidebar({
                   <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center">
                     <Bot className="w-4 h-4 text-muted-foreground" />
                   </div>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
+                  <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-700 dark:bg-green-500 rounded-full animate-pulse" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-mono text-xs tracking-wider truncate">
@@ -178,8 +178,8 @@ export function PresenceSidebar({
                   <Bot className="w-4 h-4 text-muted-foreground/30" />
                 </div>
                 <div className="flex-1">
-                  <div className="h-2.5 bg-secondary/50 rounded w-24 mb-1.5" />
-                  <div className="h-2 bg-secondary/30 rounded w-16" />
+                  <div className="h-2.5 bg-secondary/50 rounded-none w-24 mb-1.5" />
+                  <div className="h-2 bg-secondary/30 rounded-none w-16" />
                 </div>
               </div>
               <p className="font-mono text-[10px] text-muted-foreground leading-relaxed">

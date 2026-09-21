@@ -184,7 +184,7 @@ export function ApiPlayground({ endpoint, isOpen, onClose }: ApiPlaygroundProps)
           </div>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-muted rounded transition-colors"
+            className="p-1 hover:bg-muted rounded-none transition-colors"
           >
             <X size={18} />
           </button>
@@ -281,7 +281,7 @@ export function ApiPlayground({ endpoint, isOpen, onClose }: ApiPlaygroundProps)
                     RESPONSE
                   </h4>
                   {responseStatus && (
-                    <span className={`font-mono text-xs px-2 py-0.5 rounded ${
+                    <span className={`font-mono text-xs px-2 py-0.5 rounded-none ${
                       responseStatus >= 200 && responseStatus < 300
                         ? "bg-emerald-500/10 text-emerald-600"
                         : "bg-red-500/10 text-red-600"

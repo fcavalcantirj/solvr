@@ -35,7 +35,7 @@
       "Use restrained green indicators for confirmed presence or connection health, accompanied by text; keep headings spacious and controls visibly interactive.",
       "Review Home, Connect, Rooms, room detail, Posts, and post detail together to verify a consistent visual system and clear emphasis on one primary action per screen."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

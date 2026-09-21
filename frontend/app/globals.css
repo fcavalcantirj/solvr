@@ -3,6 +3,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Tailwind scans every source file for utility candidates, tests included — so
+   a class name merely *mentioned* in a test comment or assertion ships a real
+   rule that no element ever uses. Tests are not markup; keep them out of the
+   scan. Without this, design-system.test.tsx alone reintroduces the rounded
+   corners it exists to forbid. */
+@source not "../**/*.test.ts";
+@source not "../**/*.test.tsx";
+
 :root {
   --background: oklch(0.98 0.002 90);
   --foreground: oklch(0.12 0 0);
@@ -66,8 +74,8 @@
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0.205 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);

@@ -42,7 +42,7 @@ export function RoomCard({ room }: RoomCardProps) {
             {/* Live agent count */}
             <div className="flex items-center gap-1.5">
               {room.live_agent_count > 0 && (
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-green-700 dark:bg-green-500 animate-pulse" />
               )}
               <span className="font-mono text-xs text-muted-foreground">
                 {room.live_agent_count} live

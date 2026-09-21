@@ -127,10 +127,10 @@ export function CommentInput({ slug, onMessageSent }: CommentInputProps) {
           className={cn(
             'font-mono text-xs mt-1 text-right',
             content.length >= 2000
-              ? 'text-red-500'
+              ? 'text-red-700 dark:text-red-400'
               : content.length >= 1900
-              ? 'text-amber-500'
-              : 'text-green-500'
+              ? 'text-amber-700 dark:text-amber-400'
+              : 'text-green-700 dark:text-green-400'
           )}
         >
           {content.length} / 2000 characters

@@ -350,3 +350,148 @@ UAT: Step 1 of this task is inherently visual and the owner's: open Home, a room
 UAT: Owner should confirm the two temporary redirects are the right call. POSTS in the nav
     currently lands the user on /feed and CONNECT AGENTS lands on /connect/agent. The
     alternative was shipping two 404s. Tasks 16 and 44 remove them.
+
+2026-09-20 22:35: Task 3/95 [visual] "Preserve Solvr's existing typography, monochrome palette,
+    sharp geometry, and generous spacing". Frontend-only; no backend file touched.
+
+    The supplied 2026-09-20 homepage screenshot is NOT in this checkout (no image anywhere in
+    the repo tree), so the references used were frontend/app/globals.css and the pages served
+    by a running dev server. A preservation task with no executable teeth is prose, so the
+    design system is now a CONTRACT that fails loudly when something drifts.
+
+    NEW: frontend/design-system.test.tsx (441 lines), 45 tests, ALL PASS. It parses
+    app/globals.css, resolves Tailwind's own palette out of node_modules/tailwindcss/theme.css
+    (no hard-coded hexes anywhere), converts OKLCH -> linear sRGB and computes real WCAG
+    ratios, then scans every non-test .ts/.tsx under app/, components/, lib/ and hooks/.
+    What it pins:
+      - Typography: --font-sans starts 'Inter', --font-mono starts 'JetBrains Mono';
+        app/layout.tsx loads both next/font families and the body defaults to font-sans; the
+        SOLVR_ wordmark keeps its exact mono treatment in BOTH header and footer.
+      - Monochrome: light background is a warm near-white (L>=0.95, chroma<=0.01, hue 60-120),
+        foreground near-black (L<=0.15), and EVERY other surface/text token in :root AND .dark
+        has chroma <= 0.01. Only --destructive* and --chart-* may carry colour.
+      - Dark parity: every :root token except the shared --radius has a .dark counterpart.
+      - Thin neutral borders: --border is neutral and sits between 1.2:1 and 2:1 against its
+        background in both themes (measured 1.355 light, 1.309 dark) — a hairline, never a rule.
+        --input must equal --border.
+      - Contrast, 9 pairs x 2 themes = 18 assertions: foreground/card-foreground/popover-
+        foreground/primary-foreground clear 7:1, secondary/accent/muted pairs clear 4.5:1.
+      - Sharp geometry: --radius is exactly 0rem, and no source file anywhere rounds a corner.
+      - Generous spacing: the five homepage sections all carry the identical rhythm
+        "px-4 sm:px-6 lg:px-12 py-24 lg:py-32"; the hero shares the gutters and clears the
+        fixed header with pt-24.
+      - Restrained status colour on the room surfaces: every text-/bg- green|emerald|amber|red
+        utility in components/rooms must clear 4.5:1 as text and 3:1 as an indicator dot
+        AGAINST THE THEME IT ACTUALLY PAINTS IN (a base utility with no dark: sibling on the
+        same element is checked against both backgrounds), plus SseStatusBadge must say
+        "LIVE" / "RECONNECTING..." in words, not only in colour. A guard test asserts the scan
+        finds >5 room files and >0 usages so a rename cannot turn the rule into a no-op.
+
+    [TEST] RED FIRST, all four rules measured failing before any fix:
+      - "never rounds a corner": 33 offenders. 22 bare `rounded` (0.25rem) in
+        agent-briefing-platform.tsx x10, agent-briefing.tsx x8, api-playground.tsx x2,
+        presence-sidebar.tsx x2; rounded-xl (= calc(--radius + 4px) = 4px) in ui/card.tsx and
+        ui/sidebar.tsx; rounded-xs (0.125rem) in ui/dialog, ui/menubar x2, ui/resizable,
+        ui/sheet; rounded-[2px] in ui/chart x2 and ui/tooltip; rounded-[4px] in ui/checkbox.
+      - "status text readable": 11 failures, e.g. "sse-status-badge.tsx:12 text-green-600 —
+        light 3.04:1", "presence-sidebar.tsx:149 text-green-500 — light 2.10:1",
+        "comment-input.tsx:130 text-red-500 — light 3.61:1".
+      - "presence dots distinguishable": 5 failures, all light-mode, e.g.
+        "room-card.tsx:45 bg-green-500 — light 2.10:1" (needs 3:1).
+      - "dark tokens neutral": --sidebar-primary carried chroma 0.243 (a blue) while the light
+        theme's is pure neutral.
+    A regex bug in the first draft is worth recording: \b never matches after the `]` of
+    `rounded-[4px]`, so the engine backtracked and mis-reported those three as bare `rounded`.
+    Replaced with a (?![\w-]) lookahead; the offender list then named the real utilities.
+
+    FIX (33 geometry + 18 colour + 2 token edits, all class-string or token level):
+      - Every positive-radius utility above -> rounded-none. 13 files. ui/card.tsx and
+        ui/sidebar.tsx were the only rounded-xl; Card is used by /rooms (room-card) and /data.
+      - Room status colour now carries an explicit dark: sibling and a shade that survives
+        light mode: text-green-700 dark:text-green-400 (4.67 / 11.15), text-amber-700
+        dark:text-amber-400 (4.77 / 11.53), text-red-700 dark:text-red-400 (6.06 / 6.84),
+        bg-green-700 dark:bg-green-500 (4.67 / 8.90), bg-amber-700 dark:bg-amber-500
+        (4.77 / 9.23). 5 files: sse-status-badge, presence-sidebar, room-card, comment-input,
+        create-room-dialog. Two existing tests asserted the old shades and were updated with
+        them (room-card.test.tsx's positive AND negative dot queries — leaving the negative one
+        on the old class would have made it pass vacuously; comment-input.test.tsx).
+      - globals.css .dark: --sidebar-primary oklch(0.488 0.243 264.376) -> oklch(0.985 0 0) and
+        --sidebar-primary-foreground 0.985 -> 0.205, mirroring how .dark already inverts
+        --primary/--primary-foreground. ui/sidebar.tsx has ZERO importers, so this is a dead
+        token brought back in line with the palette, not a live surface changing colour.
+
+    TAILWIND SCANS TEST FILES — the guardrail was re-creating what it forbids. MEASURED:
+        after the geometry fix the compiled stylesheet STILL contained border-radius 0.25rem,
+        4px and calc(var(--radius) + 4px). Source: design-system.test.tsx's own comments and
+        regex, which Tailwind v4 happily reads as utility candidates. globals.css now carries
+        @source not "../**/*.test.ts" and "../**/*.test.tsx" (the paths resolve relative to the
+        CSS file — a first attempt with "**/*.test.{ts,tsx}" matched nothing and the output was
+        byte-identical at 238977, which is how the relative-path rule was discovered). A test
+        pins both directives.
+    [REAL] Shipped stylesheet after the fix, from a real production build
+        (.next/static/css/*.css): the ONLY positive border-radius left is 3.40282e+38px —
+        rounded-full, i.e. circles. Everything else is 0, var(--radius) (0rem), or a negative
+        calc (-2px, -4px, -5px) that cannot render a corner. Dev bundle 238977 -> 238642 bytes.
+    [REAL] cd frontend && npm run build (production/standalone, prebuild included) exits 0.
+
+    [TEST] cd frontend && npm test — FULL SUITE 126 files / 1183 tests, ALL PASS, zero failures.
+        Baseline before this task was 1138 (2026-09-20 21:58 entry); +45 from the new file.
+    [REAL] npx tsc --noEmit: ZERO errors.
+    [REAL] bash scripts/check-file-size.sh from the repo root: 36 violations, the SAME 36 as
+        the 2026-09-20 baseline. design-system.test.tsx is 441 lines.
+    [REAL] Verified against a RUNNING stack, not reasoned. Killed the previous next dev, ran
+        the Go API on port 8090 (port 8080 is held by an unrelated python3 http server that was
+        left alone) against postgres://localhost:5435/solvr, and next dev on 3111 with
+        NEXT_PUBLIC_API_URL pointed at it. backend/.env was NOT touched and NOT loaded — the
+        binary reads os.Getenv only, and that file still points at 5433, which now belongs to
+        another project's container. All six screens serve 200:
+          /  /connect  /rooms  /rooms/list-room-210045-278  /posts
+          /questions/0dbeec9f-d255-4990-a7d2-1c893c57640c
+        Re-parsing every one of those responses with the same classifier the test uses:
+        ZERO rounded-corner violations on any screen. Served CSS carries --radius: 0rem,
+        --font-sans 'Inter', --font-mono 'JetBrains Mono'.
+    [REAL] Connect is NOT a screen yet. app/connect/agent/page.tsx is 27 lines: a spinner that
+        client-redirects to /login or /settings/agents. Its HTML contains no header, no footer
+        and zero SOLVR_ wordmarks, while the other five screens all render the chrome. Nothing
+        was added to it — task 16 replaces /connect with the prompt-first flow, and giving a
+        redirect hop a header would be building the wrong thing.
+    [UNVERIFIED] Whether a browser CLAMPS calc(var(--radius) - 2px) to 0 or DROPS the
+        declaration. Both readings produce no visible corner, so the conclusion holds either
+        way, but the clamp itself was not observed in a browser this iteration.
+
+    OUT OF SCOPE, MEASURED, AND LEFT OPEN ON PURPOSE — status colour outside components/rooms.
+        The same contrast rule applied to the rest of the six screens would fail on:
+          footer.tsx bg-emerald-400 (light 1.81:1) and bg-emerald-500 (2.39:1) — the
+            "operational" ping dot, needs 3:1
+          feed/feed-list.tsx + feed-page-client.tsx bg-green-500 (2.10:1), bg-amber-500 (2.03:1)
+          questions/detail/* text-emerald-600 (3.46:1), text-amber-600 (3.01:1), text-red-500
+            (3.61:1) — post-status chips, need 4.5:1
+        These are post-STATUS badges, not the presence / connection-health indicators step 4
+        names, and they live on the legacy Problems/Ideas/Questions surfaces that tasks 46-52
+        replace with the unified Post model. Fixing ~40 call sites on screens about to be
+        rewritten was judged the wrong trade; the numbers are recorded here so the Posts tasks
+        inherit them rather than rediscover them.
+    NOTE for later tasks: the geometry rule is repo-wide and has no allow-list. Any new
+        `rounded`, `rounded-xs`, `rounded-xl` or positive `rounded-[Npx]` anywhere under app/,
+        components/, lib/ or hooks/ now fails design-system.test.tsx. Use rounded-none, or
+        rounded-full when the shape really is a circle.
+    NOTE: coverage of the five touched room components is unchanged by this task (class strings
+        only, no new branches) and is pre-existing: comment-input.tsx 41.17% stmts,
+        room-card.tsx 66.66%, components/rooms overall 61.48%. The new test file itself adds
+        45 passing assertions over globals.css and the component sources.
+
+UAT: Step 5 is inherently the owner's — a visual review, which the golden rules name as the one
+    thing that may remain outstanding. Open all six together, desktop AND mobile, light AND
+    dark, and confirm they read as one system with one obvious primary action per screen:
+      cd /Users/fcavalcanti/dev/solvr/frontend && npm run dev
+      /  ·  /connect  ·  /rooms  ·  /rooms/<slug>  ·  /posts  ·  /problems/<id>
+    Two things to look at specifically, because they are the only visible changes:
+      1. Cards and dialogs are now perfectly square (Card lost its 4px corner; the dialog and
+         sheet close buttons, the checkbox and the tooltip arrow lost theirs).
+      2. Presence green is darker in LIGHT mode (green-700 instead of green-500/600) so it is
+         actually readable; dark mode is unchanged or brighter. Confirm it still reads as
+         "restrained indicator", not "alert".
+    Note while reviewing: /connect is still the redirect spinner described above, so there is
+    no Connect screen to judge until task 16.
+UAT: Owner's call on the out-of-scope contrast list above — fix the footer/feed/post-detail
+    status colours now, or let tasks 46-52 absorb them with the unified Post model.

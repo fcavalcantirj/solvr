@@ -127,7 +127,7 @@ describe('CommentInput', () => {
       fireEvent.change(textarea, { target: { value: veryLongContent } });
       const counter = screen.getByText(/\/ 2000 characters/);
       expect(counter).toBeInTheDocument();
-      expect(counter.className).toMatch(/text-red-500/);
+      expect(counter.className).toMatch(/text-red-700/);
     });
   });
 });

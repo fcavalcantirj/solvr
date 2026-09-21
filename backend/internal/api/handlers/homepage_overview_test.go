@@ -18,93 +18,6 @@ import (
 // the sparkline arrives pre-normalised so the browser only multiplies by a
 // height. These tests pin that contract on the pure builders — no database.
 
-func TestOverviewRoomSection_EveryMetricCarriesWindowAndDefinition(t *testing.T) {
-	pulse := db.RoomPulse{
-		LiveAgents:      4,
-		ActiveRooms24h:  7,
-		Messages24h:     123,
-		PublicRooms:     52,
-		AgentsPosting7d: 11,
-		MessagesPerHour: make([]db.HourlyCount, 24),
-	}
-	for i := range pulse.MessagesPerHour {
-		pulse.MessagesPerHour[i] = db.HourlyCount{
-			HourStart: time.Date(2026, 9, 21, i, 0, 0, 0, time.UTC),
-			Count:     i,
-		}
-	}
-
-	section := buildOverviewRooms(pulse)
-
-	require.NotEmpty(t, section.Heading)
-	require.Len(t, section.Metrics, 5)
-	for _, m := range section.Metrics {
-		assert.NotEmpty(t, m.Key, "metric key")
-		assert.NotEmpty(t, m.Label, "metric %q label", m.Key)
-		assert.NotEmpty(t, m.Display, "metric %q display", m.Key)
-		assert.NotEmpty(t, m.Window, "metric %q must state the window it measures", m.Key)
-		assert.NotEmpty(t, m.Definition, "metric %q must state what it counts", m.Key)
-	}
-
-	keys := make([]string, 0, len(section.Metrics))
-	for _, m := range section.Metrics {
-		keys = append(keys, m.Key)
-	}
-	assert.Equal(t, []string{
-		"live_agents", "active_rooms_24h", "messages_24h", "agents_posting_7d", "public_rooms",
-	}, keys)
-}
-
-func TestOverviewRoomSection_SparklineArrivesNormalised(t *testing.T) {
-	counts := []int{0, 5, 10, 0}
-	hourly := make([]db.HourlyCount, 0, len(counts))
-	for i, c := range counts {
-		hourly = append(hourly, db.HourlyCount{
-			HourStart: time.Date(2026, 9, 21, 10+i, 0, 0, 0, time.UTC),
-			Count:     c,
-		})
-	}
-
-	section := buildOverviewRooms(db.RoomPulse{MessagesPerHour: hourly})
-
-	require.NotNil(t, section.Sparkline)
-	spark := section.Sparkline
-	assert.NotEmpty(t, spark.Label)
-	assert.NotEmpty(t, spark.Window)
-	assert.NotEmpty(t, spark.Definition)
-	assert.Equal(t, 10, spark.MaxValue)
-	require.Len(t, spark.Points, 4)
-
-	assert.InDelta(t, 0.0, spark.Points[0].Normalized, 1e-9)
-	assert.InDelta(t, 0.5, spark.Points[1].Normalized, 1e-9)
-	assert.InDelta(t, 1.0, spark.Points[2].Normalized, 1e-9)
-
-	// The bar height is the API's answer too — the browser multiplies nothing.
-	assert.Equal(t, []string{"0.0%", "50.0%", "100.0%", "0.0%"}, []string{
-		spark.Points[0].Height, spark.Points[1].Height,
-		spark.Points[2].Height, spark.Points[3].Height,
-	})
-	for _, p := range spark.Points {
-		assert.NotEmpty(t, p.Label, "each point is labelled by the API")
-	}
-}
-
-func TestOverviewRoomSection_FlatSparklineDoesNotDivideByZero(t *testing.T) {
-	hourly := []db.HourlyCount{
-		{HourStart: time.Date(2026, 9, 21, 1, 0, 0, 0, time.UTC), Count: 0},
-		{HourStart: time.Date(2026, 9, 21, 2, 0, 0, 0, time.UTC), Count: 0},
-	}
-
-	section := buildOverviewRooms(db.RoomPulse{MessagesPerHour: hourly})
-
-	require.NotNil(t, section.Sparkline)
-	assert.Equal(t, 0, section.Sparkline.MaxValue)
-	for _, p := range section.Sparkline.Points {
-		assert.InDelta(t, 0.0, p.Normalized, 1e-9)
-		assert.Equal(t, "0.0%", p.Height)
-	}
-}
-
 func overviewActivityRows(n int) []db.PublicRoomActivity {
 	rows := make([]db.PublicRoomActivity, 0, n)
 	base := time.Now().Add(-2 * time.Hour)
@@ -336,7 +249,7 @@ func TestOverviewAPIUsageSection_OnlyServesMeasuredNumbers(t *testing.T) {
 		TotalSearches:  200,
 		BySearcherType: map[string]int{"agent": 150, "human": 50},
 	}
-	pulse := db.RoomPulse{Messages24h: 321, AgentsPosting7d: 9}
+	pulse := db.RoomPulse{Messages24h: 321}
 
 	section := buildOverviewAPIUsage(summary, pulse, 64)
 

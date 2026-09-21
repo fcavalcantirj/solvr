@@ -93,7 +93,15 @@ type hpoPreview struct {
 
 type hpoOverview struct {
 	Rooms struct {
-		Heading   string      `json:"heading"`
+		Heading         string      `json:"heading"`
+		ScopeLabel      string      `json:"scope_label"`
+		PresenceHeading string      `json:"presence_heading"`
+		PresenceMetrics []hpoMetric `json:"presence_metrics"`
+		SelectedWindow  string      `json:"selected_window"`
+		WindowOptions   []struct {
+			Value    string `json:"value"`
+			Selected bool   `json:"selected"`
+		} `json:"window_options"`
 		Metrics   []hpoMetric `json:"metrics"`
 		Sparkline *struct {
 			Label      string `json:"label"`
@@ -307,12 +315,20 @@ func TestHomepageOverview_ServesEverySectionToALoggedOutVisitor(t *testing.T) {
 
 	// --- live room statistics -------------------------------------------
 	require.NotEmpty(t, ov.Rooms.Heading, "raw: %s", raw)
-	require.Len(t, ov.Rooms.Metrics, 5)
-	for _, m := range ov.Rooms.Metrics {
+	assert.Equal(t, "Public room activity", ov.Rooms.ScopeLabel)
+	require.Len(t, ov.Rooms.PresenceMetrics, 2, "the two Now figures")
+	require.Len(t, ov.Rooms.Metrics, 4, "the four windowed figures")
+	for _, m := range append(append([]hpoMetric{}, ov.Rooms.PresenceMetrics...), ov.Rooms.Metrics...) {
 		assert.NotEmpty(t, m.Window, "room metric %q must state its window", m.Key)
 		assert.NotEmpty(t, m.Definition, "room metric %q must state its definition", m.Key)
 		assert.NotEmpty(t, m.Display, "room metric %q display", m.Key)
 	}
+	assert.Equal(t, "Now", ov.Rooms.PresenceHeading)
+	for _, m := range ov.Rooms.PresenceMetrics {
+		assert.Equal(t, "now", m.Window, "presence metric %q is never windowed", m.Key)
+	}
+	assert.Equal(t, "24h", ov.Rooms.SelectedWindow, "the index opens on 24 hours")
+	require.Len(t, ov.Rooms.WindowOptions, 3)
 	assert.Equal(t, "/rooms", ov.Rooms.RoomsURL)
 
 	require.NotNil(t, ov.Rooms.Sparkline, "the room section carries its series")

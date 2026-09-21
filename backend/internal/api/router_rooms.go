@@ -38,7 +38,7 @@ func mountRoomRoutes(
 	agentTokenRepo := db.NewRoomAgentTokenRepository(pool)
 
 	roomHandler := handlers.NewRoomHandler(roomRepo, msgRepo, presenceRepo, memberRepo, agentTokenRepo)
-	msgHandler := handlers.NewRoomMessagesHandler(msgRepo, roomRepo, presenceRepo, hubMgr)
+	msgHandler := handlers.NewRoomMessagesHandler(msgRepo, roomRepo, presenceRepo, eventRepo, hubMgr)
 	presenceHandler := handlers.NewRoomPresenceHandler(presenceRepo, roomRepo, hubMgr, registry)
 	sseHandler := handlers.NewRoomSSEHandler(hubMgr, msgRepo, roomRepo)
 	claimsHandler := handlers.NewRoomClaimsHandler(claimRepo)

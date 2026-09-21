@@ -18,6 +18,9 @@ import (
 //	                             editorial room previews, API usage, search
 //	                             statistics and the all-time community totals.
 //	GET /v1/homepage/activity -- the paginated Load more behind the stream.
+//	GET /v1/homepage/rooms    -- the public room statistics alone, for the
+//	                             shared 24h / 7d / 30d selector. Re-reading four
+//	                             numbers and a series beats re-reading the index.
 //
 // Kept out of router.go (which is already over the file-size limit) and out of
 // mountRoomRoutes (which owns /v1/rooms and /r/{slug}).
@@ -43,4 +46,5 @@ func mountHomepageRoutes(r chi.Router, pool *db.Pool) {
 	)
 	r.Get("/v1/homepage/overview", overviewHandler.GetOverview)
 	r.Get("/v1/homepage/activity", overviewHandler.GetActivity)
+	r.Get("/v1/homepage/rooms", overviewHandler.GetRooms)
 }

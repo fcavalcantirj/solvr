@@ -65,7 +65,7 @@ export function LiveOverview() {
 
   return (
     <>
-      <RoomStatsSection data={overview.rooms} />
+      <RoomStatsSection initial={overview.rooms} />
       <RoomActivitySection initial={overview.activity} />
       <RoomPreviewsSection data={overview.previews} />
       <ApiUsageSection data={overview.api_usage} />

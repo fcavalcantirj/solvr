@@ -1,10 +1,18 @@
+"use client";
+
+import { useState } from 'react';
 import Link from 'next/link';
+import { api } from '@/lib/api';
 import type { APIOverviewRooms, APIOverviewSparkline } from '@/lib/api-types';
 import { MetricGrid, SectionHeading } from './metric';
 
-// Live room statistics. Every number, window, definition and bar height is an
-// API string — the sparkline arrives with each bar's CSS height already
-// decided, so nothing here multiplies, rounds or scales anything.
+// The public room statistics.
+//
+// Two groups, and the split is the API's, not this component's: the presence
+// figures are measured NOW and the time-window selector does not touch them,
+// while the four historical figures are re-read from the API whenever a window
+// is chosen. Every number, window, definition, caveat and bar height is an API
+// string — choosing a window sends its value back and renders the new answer.
 
 function Sparkline({ sparkline }: { sparkline: APIOverviewSparkline }) {
   return (
@@ -40,7 +48,25 @@ function Sparkline({ sparkline }: { sparkline: APIOverviewSparkline }) {
   );
 }
 
-export function RoomStatsSection({ data }: { data: APIOverviewRooms }) {
+export function RoomStatsSection({ initial }: { initial: APIOverviewRooms }) {
+  const [data, setData] = useState<APIOverviewRooms>(initial);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectWindow = async (value: string) => {
+    if (value === data.selected_window) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.getHomepageRooms(value);
+      setData(response.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not read the room statistics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section
       data-testid="overview-section-rooms"
@@ -49,12 +75,69 @@ export function RoomStatsSection({ data }: { data: APIOverviewRooms }) {
       <div className="max-w-7xl mx-auto">
         <SectionHeading eyebrow="LIVE" heading={data.heading} intro={data.intro} />
 
-        <div className="mt-12 grid lg:grid-cols-12 gap-8 lg:gap-12 items-start">
-          <div className="lg:col-span-7">
-            <MetricGrid metrics={data.metrics} />
+        <div className="mt-8 max-w-3xl">
+          <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
+            {data.scope_label}
+          </p>
+          <p className="text-sm text-muted-foreground leading-relaxed mt-2">
+            {data.scope_note}
+          </p>
+        </div>
+
+        {/* The "now" half. No selector reaches these. */}
+        <div className="mt-12">
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 mb-5">
+            <h3 className="font-mono text-xs tracking-[0.3em]">{data.presence_heading}</h3>
+            <p className="font-mono text-[10px] tracking-wider text-muted-foreground">
+              {data.presence_note}
+            </p>
           </div>
-          <div className="lg:col-span-5">
-            {data.sparkline ? <Sparkline sparkline={data.sparkline} /> : null}
+          <div data-testid="overview-presence-metrics">
+            <MetricGrid metrics={data.presence_metrics} />
+          </div>
+        </div>
+
+        {/* The windowed half, and the selector that drives it. */}
+        <div className="mt-16">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+            <h3 className="font-mono text-xs tracking-[0.3em]">{data.window_heading}</h3>
+            <div
+              role="group"
+              aria-label={data.window_label}
+              className="flex border border-border divide-x divide-border"
+            >
+              {data.window_options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={option.value === data.selected_window}
+                  disabled={loading}
+                  onClick={() => selectWindow(option.value)}
+                  className={`font-mono text-[10px] uppercase tracking-[0.2em] px-4 py-3 transition-colors disabled:opacity-50 ${
+                    option.value === data.selected_window
+                      ? 'bg-foreground text-background'
+                      : 'hover:bg-secondary'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error ? (
+            <p role="alert" className="mb-5 font-mono text-xs text-muted-foreground">
+              {error}
+            </p>
+          ) : null}
+
+          <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+            <div className="lg:col-span-7">
+              <MetricGrid metrics={data.metrics} />
+            </div>
+            <div className="lg:col-span-5">
+              {data.sparkline ? <Sparkline sparkline={data.sparkline} /> : null}
+            </div>
           </div>
         </div>
 

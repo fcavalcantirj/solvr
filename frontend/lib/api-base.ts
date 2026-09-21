@@ -96,6 +96,7 @@ import type {
   APICollaborationExampleResponse,
   APIHomepageOverviewResponse,
   APIHomepageActivityResponse,
+  APIHomepageRoomsResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -274,6 +275,13 @@ export class SolvrAPIBase {
   async getHomepageActivity(offset: number, limit: number): Promise<APIHomepageActivityResponse> {
     const params = new URLSearchParams({ offset: offset.toString(), limit: limit.toString() });
     return this.fetch<APIHomepageActivityResponse>(`/v1/homepage/activity?${params.toString()}`);
+  }
+
+  // The public room statistics alone, for the shared 24h / 7d / 30d selector.
+  // The window value comes straight from the options the API already sent.
+  async getHomepageRooms(window: string): Promise<APIHomepageRoomsResponse> {
+    const params = new URLSearchParams({ window });
+    return this.fetch<APIHomepageRoomsResponse>(`/v1/homepage/rooms?${params.toString()}`);
   }
 
   async voteOnPost(postId: string, direction: 'up' | 'down'): Promise<APIVoteResponse> {

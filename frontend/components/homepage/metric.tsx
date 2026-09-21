@@ -25,6 +25,13 @@ export function MetricGrid({ metrics }: { metrics: APIOverviewMetric[] }) {
           <p className="font-mono text-[10px] tracking-wider text-muted-foreground/70 mt-1">
             {metric.window}
           </p>
+          {/* The caveat the number cannot state on its own: an unverified
+              identity share, or why a measurement is missing. The API words it. */}
+          {metric.qualifier ? (
+            <p className="font-mono text-[10px] leading-relaxed text-muted-foreground/70 mt-2">
+              {metric.qualifier}
+            </p>
+          ) : null}
         </div>
       ))}
     </dl>

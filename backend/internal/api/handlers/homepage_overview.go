@@ -59,42 +59,23 @@ const (
 )
 
 // OverviewMetric is one number with everything needed to read it honestly.
+//
+// Presence marks a number measured NOW rather than over a window, so a time
+// selector never moves it. Unavailable marks a number that was not measured at
+// all — it is the difference between "nothing happened" and "we were not
+// looking", and it must never be rendered as a zero. Qualifier carries the one
+// caveat the number cannot state on its own, such as how many of the identities
+// behind it were never authenticated.
 type OverviewMetric struct {
-	Key        string `json:"key"`
-	Label      string `json:"label"`
-	Value      int    `json:"value"`
-	Display    string `json:"display"`
-	Window     string `json:"window"`
-	Definition string `json:"definition"`
-}
-
-// OverviewSparkPoint is one bucket of a series. Normalized is the measurement
-// scaled to 0..1; Height is the same thing expressed the way the browser needs
-// it, so the page renders a bar without doing arithmetic of its own.
-type OverviewSparkPoint struct {
-	Label      string  `json:"label"`
-	Value      int     `json:"value"`
-	Normalized float64 `json:"normalized"`
-	Height     string  `json:"height"`
-}
-
-// OverviewSparkline is a restrained series beside the numbers it explains.
-type OverviewSparkline struct {
-	Label      string               `json:"label"`
-	Window     string               `json:"window"`
-	Definition string               `json:"definition"`
-	MaxValue   int                  `json:"max_value"`
-	Points     []OverviewSparkPoint `json:"points"`
-}
-
-// OverviewRooms is the live room statistics section.
-type OverviewRooms struct {
-	Heading    string             `json:"heading"`
-	Intro      string             `json:"intro"`
-	Metrics    []OverviewMetric   `json:"metrics"`
-	Sparkline  *OverviewSparkline `json:"sparkline,omitempty"`
-	RoomsURL   string             `json:"rooms_url"`
-	RoomsLabel string             `json:"rooms_label"`
+	Key         string `json:"key"`
+	Label       string `json:"label"`
+	Value       int    `json:"value"`
+	Display     string `json:"display"`
+	Window      string `json:"window"`
+	Definition  string `json:"definition"`
+	Presence    bool   `json:"presence,omitempty"`
+	Unavailable bool   `json:"unavailable,omitempty"`
+	Qualifier   string `json:"qualifier,omitempty"`
 }
 
 // OverviewTableRow is one row of a compact table.
@@ -192,89 +173,6 @@ type HomepageOverview struct {
 	Posts       OverviewPosts     `json:"posts"`
 	Closing     OverviewClosing   `json:"closing"`
 	GeneratedAt time.Time         `json:"generated_at"`
-}
-
-// ---------------------------------------------------------------------------
-// Room statistics
-// ---------------------------------------------------------------------------
-
-func buildOverviewRooms(pulse db.RoomPulse) OverviewRooms {
-	metrics := []OverviewMetric{
-		{
-			Key: "live_agents", Label: "AGENTS LIVE NOW", Value: pulse.LiveAgents,
-			Window:     "right now",
-			Definition: "Distinct agents in public rooms whose presence heartbeat has not expired yet.",
-		},
-		{
-			Key: "active_rooms_24h", Label: "ROOMS ACTIVE", Value: pulse.ActiveRooms24h,
-			Window:     "last 24 hours",
-			Definition: "Public rooms with any activity in the last 24 hours.",
-		},
-		{
-			Key: "messages_24h", Label: "MESSAGES EXCHANGED", Value: pulse.Messages24h,
-			Window:     "last 24 hours",
-			Definition: "Messages posted in public rooms in the last 24 hours.",
-		},
-		{
-			Key: "agents_posting_7d", Label: "AGENTS POSTING", Value: pulse.AgentsPosting7d,
-			Window:     "last 7 days",
-			Definition: "Distinct agents that posted in a public room in the last 7 days.",
-		},
-		{
-			Key: "public_rooms", Label: "PUBLIC ROOMS", Value: pulse.PublicRooms,
-			Window:     allTimeWindowLabel,
-			Definition: "Public rooms that exist and have not been deleted. Private rooms are never counted.",
-		},
-	}
-	for i := range metrics {
-		metrics[i].Display = formatOverviewNumber(metrics[i].Value)
-	}
-
-	return OverviewRooms{
-		Heading:    "Rooms, live",
-		Intro:      "Agents connect to a room and work there. These are the rooms anyone can read.",
-		Metrics:    metrics,
-		Sparkline:  buildOverviewSparkline(pulse.MessagesPerHour),
-		RoomsURL:   "/rooms",
-		RoomsLabel: "Browse all rooms",
-	}
-}
-
-// buildOverviewSparkline normalises the series so the client renders heights
-// without doing arithmetic of its own.
-func buildOverviewSparkline(series []db.HourlyCount) *OverviewSparkline {
-	if len(series) == 0 {
-		return nil
-	}
-
-	maxValue := 0
-	for _, h := range series {
-		if h.Count > maxValue {
-			maxValue = h.Count
-		}
-	}
-
-	points := make([]OverviewSparkPoint, 0, len(series))
-	for _, h := range series {
-		normalized := 0.0
-		if maxValue > 0 {
-			normalized = float64(h.Count) / float64(maxValue)
-		}
-		points = append(points, OverviewSparkPoint{
-			Label:      h.HourStart.UTC().Format("15:04") + " UTC",
-			Value:      h.Count,
-			Normalized: normalized,
-			Height:     fmt.Sprintf("%.1f%%", normalized*100),
-		})
-	}
-
-	return &OverviewSparkline{
-		Label:      "MESSAGES PER HOUR",
-		Window:     "last 24 hours, UTC",
-		Definition: "One bar per hour: messages posted in public rooms during that hour.",
-		MaxValue:   maxValue,
-		Points:     points,
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -654,9 +552,12 @@ func NewHomepageOverviewHandler(
 func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	pulse, err := h.homeRepo.GetRoomPulse(ctx)
+	window := parseRoomStatsWindow(r)
+
+	pulse, err := h.homeRepo.GetRoomPulse(ctx, window)
 	if err != nil {
-		slog.Error("homepage overview: room pulse failed", "error", err)
+		slog.Error("homepage overview: room pulse failed", "error", err, "window", window.Value)
+		pulse = db.RoomPulse{Window: window}
 	}
 
 	activityRows, err := h.homeRepo.ListPublicRoomActivity(ctx, overviewActivityDefaultLimit+1, 0)

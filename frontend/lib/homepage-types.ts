@@ -15,6 +15,23 @@ export interface APIOverviewMetric {
   display: string;
   window: string;
   definition: string;
+  // True when the number was measured NOW rather than over a window, so no
+  // time selector may move it.
+  presence?: boolean;
+  // True when the number was not measured at all. The API already put its own
+  // placeholder in `display`; this must never be rendered as a zero.
+  unavailable?: boolean;
+  // The one caveat the number cannot state on its own — for instance how many
+  // of the identities behind it were never authenticated.
+  qualifier?: string;
+}
+
+// One choice in the shared time-window selector. The API decides which windows
+// exist, how they read and which one is selected.
+export interface APIOverviewWindowOption {
+  value: string;
+  label: string;
+  selected: boolean;
 }
 
 export interface APIOverviewSparkPoint {
@@ -36,6 +53,17 @@ export interface APIOverviewSparkline {
 export interface APIOverviewRooms {
   heading: string;
   intro: string;
+  scope_label: string;
+  scope_note: string;
+  // The "now" half: presence, never windowed.
+  presence_heading: string;
+  presence_note: string;
+  presence_metrics: APIOverviewMetric[];
+  // The windowed half, and the selector that drives it.
+  window_heading: string;
+  window_label: string;
+  window_options: APIOverviewWindowOption[];
+  selected_window: string;
   metrics: APIOverviewMetric[];
   sparkline?: APIOverviewSparkline;
   rooms_url: string;
@@ -199,4 +227,8 @@ export interface APIHomepageOverviewResponse {
 
 export interface APIHomepageActivityResponse {
   data: APIOverviewActivity;
+}
+
+export interface APIHomepageRoomsResponse {
+  data: APIOverviewRooms;
 }

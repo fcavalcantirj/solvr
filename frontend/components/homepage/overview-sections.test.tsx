@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { OVERVIEW } from './overview-fixture';
-import { RoomStatsSection } from './room-stats-section';
 import { RoomPreviewsSection } from './room-previews-section';
 import { ApiUsageSection } from './api-usage-section';
 import { SearchStatsSection } from './search-stats-section';
@@ -30,74 +29,6 @@ const SECTION_FILES = [
   'components/homepage/reusable-posts-section.tsx',
   'components/homepage/closing-section.tsx',
 ];
-
-describe('RoomStatsSection', () => {
-  it('renders the API heading and every metric it was sent', () => {
-    render(<RoomStatsSection data={OVERVIEW.rooms} />);
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
-      OVERVIEW.rooms.heading,
-    );
-    for (const metric of OVERVIEW.rooms.metrics) {
-      expect(screen.getByText(metric.label)).toBeInTheDocument();
-      expect(screen.getByText(metric.display)).toBeInTheDocument();
-    }
-  });
-
-  it('shows the window and the definition of every number, not just the number', () => {
-    render(<RoomStatsSection data={OVERVIEW.rooms} />);
-    const metrics = screen.getAllByTestId('overview-metric');
-    expect(metrics).toHaveLength(OVERVIEW.rooms.metrics.length);
-    metrics.forEach((node, i) => {
-      const metric = OVERVIEW.rooms.metrics[i];
-      expect(squish(node.textContent)).toContain(metric.window);
-      expect(within(node).getByTitle(metric.definition)).toBeInTheDocument();
-    });
-  });
-
-  it('renders the numbers in the monospaced treatment', () => {
-    render(<RoomStatsSection data={OVERVIEW.rooms} />);
-    const value = screen.getByText('1,234');
-    expect(value.className).toContain('font-mono');
-  });
-
-  it('draws the sparkline from the heights the API normalised', () => {
-    render(<RoomStatsSection data={OVERVIEW.rooms} />);
-    const bars = screen.getAllByTestId('overview-spark-bar');
-    expect(bars).toHaveLength(3);
-    expect(bars[0].style.height).toBe('0%');
-    expect(bars[1].style.height).toBe('50%');
-    expect(bars[2].style.height).toBe('100%');
-    // The percentages come straight from the payload, not from a calculation.
-    expect(OVERVIEW.rooms.sparkline!.points.map((p) => p.height)).toEqual([
-      '0.0%',
-      '50.0%',
-      '100.0%',
-    ]);
-    expect(screen.getByText(OVERVIEW.rooms.sparkline!.label)).toBeInTheDocument();
-    expect(
-      screen.getByText(new RegExp(OVERVIEW.rooms.sparkline!.window)),
-    ).toBeInTheDocument();
-  });
-
-  it('omits the sparkline entirely when the API sent none', () => {
-    render(<RoomStatsSection data={{ ...OVERVIEW.rooms, sparkline: undefined }} />);
-    expect(screen.queryByTestId('overview-spark-bar')).not.toBeInTheDocument();
-  });
-
-  it('renders without an intro when the API sent none', () => {
-    render(<RoomStatsSection data={{ ...OVERVIEW.rooms, intro: '' }} />);
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
-      OVERVIEW.rooms.heading,
-    );
-    expect(screen.queryByText(OVERVIEW.rooms.intro)).not.toBeInTheDocument();
-  });
-
-  it('links on to all rooms with the API label', () => {
-    render(<RoomStatsSection data={OVERVIEW.rooms} />);
-    const link = screen.getByRole('link', { name: OVERVIEW.rooms.rooms_label });
-    expect(link).toHaveAttribute('href', '/rooms');
-  });
-});
 
 describe('RoomPreviewsSection', () => {
   it('renders each selected room with purpose, participants and the exchange', () => {

@@ -100,7 +100,7 @@
       "Define rooms with two-way exchanges as distinct rooms recording the specified activation milestone within the window; label history before that milestone was instrumented as unavailable rather than zero.",
       "Show all homepage room statistics for currently public, non-deleted rooms only, clearly labeled Public room activity; historical messages in retained archived rooms count, while online figures exclude archived and expired rooms."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

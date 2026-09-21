@@ -27,22 +27,6 @@ func NewHomepageRepository(pool *Pool) *HomepageRepository {
 	return &HomepageRepository{pool: pool}
 }
 
-// HourlyCount is one bucket of a time series: the hour it starts and its count.
-type HourlyCount struct {
-	HourStart time.Time
-	Count     int
-}
-
-// RoomPulse holds the live room statistics the homepage leads with.
-type RoomPulse struct {
-	LiveAgents      int
-	ActiveRooms24h  int
-	Messages24h     int
-	AgentsPosting7d int
-	PublicRooms     int
-	MessagesPerHour []HourlyCount
-}
-
 // PublicRoomActivity is one message in a public room, for the activity stream.
 type PublicRoomActivity struct {
 	MessageID   int64
@@ -89,93 +73,6 @@ type ReusablePost struct {
 	Tags              []string
 	ContributionCount int
 	LastActivityAt    time.Time
-}
-
-// hourlyBuckets is how many hours of message history the sparkline covers.
-const hourlyBuckets = 24
-
-// GetRoomPulse returns the live public-room statistics in a single round-trip,
-// plus the hourly message series behind the sparkline.
-func (r *HomepageRepository) GetRoomPulse(ctx context.Context) (RoomPulse, error) {
-	var pulse RoomPulse
-
-	err := r.pool.QueryRow(ctx, `
-		SELECT
-			(SELECT COUNT(DISTINCT ap.agent_name)
-			   FROM agent_presence ap
-			   JOIN rooms r ON r.id = ap.room_id
-			  WHERE r.deleted_at IS NULL AND r.is_private = FALSE
-			    AND ap.last_seen > NOW() - (ap.ttl_seconds || ' seconds')::interval),
-			(SELECT COUNT(*) FROM rooms
-			  WHERE deleted_at IS NULL AND is_private = FALSE
-			    AND last_active_at > NOW() - INTERVAL '24 hours'),
-			(SELECT COUNT(*)
-			   FROM messages m JOIN rooms r ON r.id = m.room_id
-			  WHERE m.deleted_at IS NULL AND r.deleted_at IS NULL AND r.is_private = FALSE
-			    AND m.created_at > NOW() - INTERVAL '24 hours'),
-			(SELECT COUNT(DISTINCT m.agent_name)
-			   FROM messages m JOIN rooms r ON r.id = m.room_id
-			  WHERE m.deleted_at IS NULL AND r.deleted_at IS NULL AND r.is_private = FALSE
-			    AND m.author_type = 'agent'
-			    AND m.created_at > NOW() - INTERVAL '7 days'),
-			(SELECT COUNT(*) FROM rooms WHERE deleted_at IS NULL AND is_private = FALSE)
-	`).Scan(
-		&pulse.LiveAgents,
-		&pulse.ActiveRooms24h,
-		&pulse.Messages24h,
-		&pulse.AgentsPosting7d,
-		&pulse.PublicRooms,
-	)
-	if err != nil {
-		LogQueryError(ctx, "GetRoomPulse", "rooms", err)
-		return pulse, fmt.Errorf("get room pulse: %w", err)
-	}
-
-	series, err := r.messagesPerHour(ctx)
-	if err != nil {
-		return pulse, err
-	}
-	pulse.MessagesPerHour = series
-
-	return pulse, nil
-}
-
-// messagesPerHour returns exactly hourlyBuckets buckets, oldest first, with
-// zeros filled in for quiet hours so the series never has gaps.
-func (r *HomepageRepository) messagesPerHour(ctx context.Context) ([]HourlyCount, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT date_trunc('hour', m.created_at) AS bucket, COUNT(*)
-		  FROM messages m JOIN rooms r ON r.id = m.room_id
-		 WHERE m.deleted_at IS NULL AND r.deleted_at IS NULL AND r.is_private = FALSE
-		   AND m.created_at >= date_trunc('hour', NOW()) - ($1::int - 1) * INTERVAL '1 hour'
-		 GROUP BY bucket
-	`, hourlyBuckets)
-	if err != nil {
-		LogQueryError(ctx, "messagesPerHour", "messages", err)
-		return nil, fmt.Errorf("messages per hour: %w", err)
-	}
-	defer rows.Close()
-
-	counts := make(map[time.Time]int, hourlyBuckets)
-	for rows.Next() {
-		var bucket time.Time
-		var count int
-		if err := rows.Scan(&bucket, &count); err != nil {
-			return nil, fmt.Errorf("scan hourly bucket: %w", err)
-		}
-		counts[bucket.UTC().Truncate(time.Hour)] = count
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	current := time.Now().UTC().Truncate(time.Hour)
-	series := make([]HourlyCount, 0, hourlyBuckets)
-	for i := hourlyBuckets - 1; i >= 0; i-- {
-		hour := current.Add(-time.Duration(i) * time.Hour)
-		series = append(series, HourlyCount{HourStart: hour, Count: counts[hour]})
-	}
-	return series, nil
 }
 
 // ListPublicRoomActivity returns recent messages from public rooms, newest

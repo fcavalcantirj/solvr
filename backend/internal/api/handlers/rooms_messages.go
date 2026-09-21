@@ -25,6 +25,7 @@ type RoomMessagesHandler struct {
 	msgRepo      *db.MessageRepository
 	roomRepo     *db.RoomRepository
 	presenceRepo *db.AgentPresenceRepository
+	eventRepo    *db.RoomEventRepository
 	hubMgr       *hub.HubManager
 
 	// testRoomLookup overrides room-by-slug lookup in unit tests (nil in production).
@@ -35,17 +36,34 @@ type RoomMessagesHandler struct {
 
 // NewRoomMessagesHandler creates a new RoomMessagesHandler with all required dependencies.
 // The presenceRepo is needed for D-28: message posting implicitly renews agent presence.
+// The eventRepo records the two-way exchange milestone the homepage reports.
 func NewRoomMessagesHandler(
 	msgRepo *db.MessageRepository,
 	roomRepo *db.RoomRepository,
 	presenceRepo *db.AgentPresenceRepository,
+	eventRepo *db.RoomEventRepository,
 	hubMgr *hub.HubManager,
 ) *RoomMessagesHandler {
 	return &RoomMessagesHandler{
 		msgRepo:      msgRepo,
 		roomRepo:     roomRepo,
 		presenceRepo: presenceRepo,
+		eventRepo:    eventRepo,
 		hubMgr:       hubMgr,
+	}
+}
+
+// recordActivationMilestone marks the room the first time it carries a two-way
+// exchange, which is what the homepage's "rooms with two-way exchanges" counts.
+//
+// It is deliberately best-effort: a room whose milestone could not be written
+// is a statistic that is briefly short, never a message that failed to post.
+func (h *RoomMessagesHandler) recordActivationMilestone(ctx context.Context, room *models.Room) {
+	if h.eventRepo == nil || room == nil {
+		return
+	}
+	if _, err := h.eventRepo.RecordActivation(ctx, room.ID); err != nil {
+		slog.Error("failed to record room activation milestone", "error", err, "room_id", room.ID)
 	}
 }
 
@@ -144,6 +162,8 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 		// Non-fatal: presence will expire naturally if heartbeat fails
 	}
 
+	h.recordActivationMilestone(r.Context(), room)
+
 	// Broadcast to hub for real-time subscribers
 	roomHub := h.hubMgr.GetOrCreate(r.Context(), hub.NewRoomID(room.ID))
 	roomHub.Broadcast(hub.RoomEvent{
@@ -236,6 +256,8 @@ func (h *RoomMessagesHandler) PostHumanMessage(w http.ResponseWriter, r *http.Re
 			slog.Error("failed to update room activity", "error", err, "room_id", room.ID)
 		}
 	}
+
+	h.recordActivationMilestone(r.Context(), room)
 
 	// Broadcast to hub for real-time SSE subscribers (non-fatal).
 	if h.hubMgr != nil {
@@ -333,4 +355,3 @@ func (h *RoomMessagesHandler) ListMessages(w http.ResponseWriter, r *http.Reques
 	}
 	roomWriteJSON(w, http.StatusOK, response)
 }
-

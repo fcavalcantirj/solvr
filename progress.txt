@@ -968,3 +968,227 @@ UAT: After the next deploy, /v1/homepage/overview and /v1/homepage/activity are 
     endpoints with a 30-second Cache-Control. Worth eyeballing production's numbers once: this
     local dev database is the near-empty post-wipe set, so the magnitudes here prove the wiring,
     not the content.
+
+================================================================================
+2026-09-21 01:20 — TASK 7 "Show substantial room statistics with precise time
+windows and honest presence labels" — DONE (passes=true)
+
+FIRST, WHY NOT TASK 6. Task 6 ("Let visitors copy the first connection prompt
+    directly from the homepage") is still the first passes=false entry and I did
+    NOT take it. Its own steps require surfaces no task has built yet:
+      step 2 — "the same task, visibility, preset, and copy controls used by
+                /connect"  -> /connect is task 16 and today is only
+                next.config.mjs's temporary redirect to /connect/agent, which
+                bounces to /login. `ls frontend/app/connect` = `agent` only.
+      step 3 — the planner prompt's wording -> task 17.
+      step 4 — "both surfaces use the same API-owned instruction contract" ->
+                task 25. `grep -riE "activat|instruction contract"` over
+                backend/internal finds nothing; there is no such endpoint.
+    Building it would mean doing tasks 16+17+25 inside task 6, against the
+    ONE TASK ONLY rule. Per "ACCEPTANCE TASKS ARE NOT CHECKLISTS", task 6 is
+    left open and I took the first task that is buildable now: task 7, which
+    extends the live overview task 5 already shipped. TASK 6 REMAINS OPEN.
+
+WHAT SHIPPED (backend first, then the page — API smart, client dumb)
+
+  NEW backend/internal/db/homepage_rooms.go (339 lines)
+    - RoomStatsWindow / RoomStatsWindows / DefaultRoomStatsWindow /
+      RoomStatsWindowByValue: the 24h / 7d / 30d vocabulary, default 24h, an
+      unknown value REJECTED (ok=false) rather than silently coerced.
+    - RoomPresenceStats (now, never windowed) vs RoomWindowStats (windowed),
+      deliberately separate types so the two can never be confused in a call.
+    - GetRoomPulse(ctx, window): one round trip for all eleven scalars plus the
+      series. Live figures use liveRoomPredicate (public + not deleted + NOT
+      EXPIRED); historical figures use publicRoomPredicate, so a retained
+      expired room keeps its transcript but leaves the "now" numbers — step 6.
+    - Verified vs unverified identity: agent_presence carries only agent_name
+      (migration 000074 has no identity column), so presence alone is a CLAIM.
+      A presence row counts as VERIFIED when room_agent_tokens holds a live
+      per-agent token for (room_id, agent_name) — i.e. the agent completed the
+      handshake with its own Solvr key (migration 000079). Unverified =
+      total - verified. Same idea for messages: author_id is stamped only when
+      a per-agent room token authenticated the post (rooms_messages.go:116-119),
+      so author_id IS NULL = posted with the shared token = unverified.
+    - messageSeries: hourly buckets for 24h, daily for 7d/30d, zero-filled,
+      oldest first, system messages excluded.
+    - RoomActivationEventType = "room.activated" and
+      RoomEventRepository.RecordActivation(ctx, roomID): records the two-way
+      exchange milestone the FIRST time a room holds messages from >= 2 distinct
+      non-system, non-deleted authors. One INSERT ... SELECT ... WHERE NOT
+      EXISTS: idempotent, never a running count.
+  backend/internal/db/homepage_overview.go: old RoomPulse/HourlyCount/
+    GetRoomPulse/messagesPerHour removed (superseded). 397 -> 294 lines.
+
+  NEW backend/internal/api/handlers/homepage_rooms.go (312 lines)
+    - OverviewRooms split into presence_metrics (window "now", presence:true)
+      and metrics (windowed), plus scope_label "Public room activity",
+      scope_note (states the public-room count and that private rooms are never
+      counted), window_options/selected_window, and the sparkline.
+    - The six metrics task 7 names: agents_online_now,
+      rooms_with_agents_online_now | rooms_with_conversation, agent_messages,
+      human_messages, rooms_with_two_way_exchanges.
+    - NO CONVERSION RATE ANYWHERE. A test marshals the section's own words and
+      asserts "conversion", "rate" and "%" never appear; activation conversion
+      stays in internal analytics, per step 1.
+    - The exchange milestone degrades honestly: never instrumented ->
+      unavailable:true + display "—" + a qualifier saying so, never 0.
+      Instrumented after the window opened -> the count plus "measured since
+      <date>; earlier history is unavailable, not zero". Step 5.
+    - parseRoomStatsWindow: absent/unknown -> 24h. Safe because the answer
+      always states the window it measured, so a fallback cannot mislabel.
+    - GetRooms serves GET /v1/homepage/rooms, Cache-Control public max-age=30.
+  backend/internal/api/handlers/homepage_overview.go: rooms/sparkline types and
+    builders moved out; OverviewMetric gained presence / unavailable /
+    qualifier; GetOverview now honours ?window=. 725 -> 626 lines.
+  backend/internal/api/router_homepage.go: GET /v1/homepage/rooms mounted.
+  backend/internal/api/handlers/rooms_messages.go + router_rooms.go: the
+    milestone is now RECORDED. RoomMessagesHandler took an eventRepo (the one
+    router_rooms.go already builds) and both PostMessage and PostHumanMessage
+    call recordActivationMilestone — best effort and logged, so a milestone
+    that cannot be written is a statistic briefly short, never a message that
+    failed to post. Emitting the milestone is what gives step 5's "within the
+    window" any meaning; task 61 still owns the activation FUNNEL measurement.
+
+  FRONTEND
+    lib/homepage-types.ts: APIOverviewMetric gained presence/unavailable/
+      qualifier; APIOverviewWindowOption added; APIOverviewRooms restructured;
+      APIHomepageRoomsResponse added.
+    lib/api-base.ts: getHomepageRooms(window).
+    components/homepage/room-stats-section.tsx: now a client component holding
+      only the API's last answer. Clicking a window calls getHomepageRooms and
+      renders the reply; it computes, ranks, converts and decides NOTHING.
+      Re-clicking the selected window makes no request.
+    components/homepage/metric.tsx: renders metric.qualifier when present.
+    live-overview.tsx passes `initial`; overview-fixture.ts rewritten.
+
+TESTS — WHAT ACTUALLY RAN, AND AGAINST WHAT
+
+  [TEST] backend/internal/db, DATABASE_URL=
+      postgres://solvr:solvr_dev@localhost:5435/solvr_test (NOT the dev
+      database; DROP + CREATE DATABASE solvr_test TEMPLATE solvr before each
+      measured run) — 14 tests in homepage_rooms_test.go, all PASS, none SKIP:
+      window vocabulary + default + rejection of 90d; presence unaffected by the
+      selector; expired heartbeats excluded; verified vs name-only split;
+      private and deleted rooms invisible; expired rooms leave the live figures
+      but keep their history; historical metrics follow the window; agent vs
+      human vs system vs deleted; a system-only room is not a conversation;
+      two-way exchanges come from the milestone; RecordActivation fires once on
+      the second author and ignores system/deleted messages; one bucket per
+      window step; Messages24h stays pinned at 24h.
+  [TEST] backend/internal/api/handlers — 20 new tests in homepage_rooms_test.go,
+      pure builders, no database, all PASS.
+  [TEST] backend/internal/api — 9 new end-to-end tests in
+      router_homepage_rooms_test.go against the real router and the real
+      database, called with no credentials at all. All PASS, including the
+      milestone one, which posts through /r/{slug}/message and watches
+      room_events go 0 -> 1 -> 1.
+  [TEST] frontend: 15 new tests in components/homepage/room-stats-section.test.tsx
+      (vitest, fireEvent — @testing-library/user-event is NOT installed here).
+      Full suite 1328 passed / 134 files, up from 1315. npx tsc --noEmit: ZERO
+      errors.
+  [REAL] Coverage (v8, scoped): components/homepage/room-stats-section.tsx
+      100% stmts / 100% branch / 100% funcs / 100% lines; the homepage folder
+      98.38 / 95.16 / 100 / 100. Above the 80% floor.
+  [REAL] bash scripts/check-file-size.sh: 36 violations, the SAME 36 as the
+      2026-09-20 baseline. Largest new file is homepage_rooms.go at 339.
+      gofmt clean and go vet ./... clean on every file touched.
+
+  [REAL] A TEST I WROTE FAILED THE FIRST FULL-SUITE RUN, AND WHY IT NOW DOES NOT.
+      TestGetRoomPulse_HistoricalMetricsFollowTheSelectedWindow passed alone and
+      failed under `go test ./...`. Cause, measured not guessed: go test runs
+      packages in parallel, internal/api posts room messages throughout, and my
+      tests asserted EXACT before/after deltas on GLOBAL aggregates. The delta
+      was never a stable measurement. Fixed by replacing the deltas with an
+      independently written CENSUS (takeRoomCensus: same definitions, written
+      with subqueries and make_interval instead of joins and string casts) taken
+      in the same breath as the repository call. Ambient rows land in BOTH
+      numbers, so a wrong predicate — counting a private room, a deleted
+      message, a system notice, an expired room's presence — still shows up as a
+      disagreement, while concurrent traffic cannot manufacture one. Where an
+      absolute claim was still needed the tests use a floor on rows they own.
+      The API-level privacy test was hardened the same way: the deterministic
+      proof is that neither the private room's content nor its slug appears
+      anywhere in the raw body, and the EXCLUSION is pinned one layer down.
+
+  [REAL] FULL BACKEND SUITE, MEASURED BOTH WAYS, each run on a database
+      recreated with DROP + CREATE DATABASE solvr_test TEMPLATE solvr:
+        HEAD (backend/ stashed): 62 failures, then 63 on a second run.
+        With this change:        64 failures.
+      The two names in the with-change set that were absent from the FIRST head
+      run were each reproduced AT HEAD:
+        - TestCommentsCount_IdeasShowCountAfterComment: run alone at HEAD on a
+          fresh template it fails identically —
+          "router_comments_test.go:171: expected comments_count=1 for idea,
+          got 2". Same failure with the change. Pre-existing (leftover fixtures
+          in the template); also recorded in the 2026-09-20 23:45 entry.
+        - TestSearchAnalyticsRepository_GetTrending: FAILED in the second HEAD
+          run. It asks its three seeded terms to survive in the top 10 of a
+          shared search_queries table, so it flips between runs regardless of
+          this change. Nothing here writes to search_queries.
+      NONE of the new tests appear in the failure set. Nothing regressed.
+
+  [REAL] VERIFIED AGAINST A RUNNING STACK, not reasoned. Killed the previous API
+      and next dev first; Go API on :8090 against postgres://localhost:5435/solvr
+      with ALLOWED_ORIGINS and a 32-char JWT_SECRET in the environment
+      (backend/.env NOT touched, NOT loaded), next dev on :3111.
+      - GET /v1/homepage/rooms with no window, ?window=24h, 7d, 30d and 90d:
+        selected_window 24h / 24h / 7d / 30d / 24h. 90d falls back and the
+        metrics then read "last 24 hours" — the fallback cannot mislabel.
+      - The window really filters: the dev database holds 144 public non-system
+        messages all time but only 54 within 30 days (oldest 2026-07-03), and
+        the endpoint served 53 agent + 1 human. The sparkline switched from 24
+        hourly bars (max 25) to 30 daily bars (max 34).
+      - THE MILESTONE WAS PROVEN END TO END ON A REAL ROOM. Registered an agent,
+        created a public room, posted through /r/{slug}/message:
+          before: 0 milestones, metric "—", unavailable=true
+          after the 1st author:  0 milestones  (a monologue is not an exchange)
+          after the 2nd author:  1 milestone
+          after a 3rd message:   1 milestone   (a milestone, not a counter)
+        The homepage metric then read 1 with the qualifier "measured since
+        21 Sep 2026; earlier history is unavailable, not zero".
+      - THE IDENTITY SPLIT WAS PROVEN LIVE. Handshook one agent into the room
+        (room_agent_tokens agent_id=agent_ralph_task7_probe2) and joined a
+        second by name only. agents_online_now served 2 with the qualifier
+        "1 identified by name only, unverified". Claimed and proven identities
+        are counted separately and the page says so.
+      - PRIVACY PROVEN LIVE against real data: the dev database holds 1 private
+        non-deleted room; its slug was pulled straight out of Postgres and
+        checked against the raw 30d body — 0 leaked.
+      - Headless Chromium (chromium_headless_shell-1234) at 1280x900 AND
+        390x844: scope line "Public room activity"; selector reads
+        24 hours:true 7 days:false 30 days:false; 6 metric tiles; the two
+        presence tiles read "now"; clicking 30 days flipped aria-pressed, moved
+        every windowed tile to "last 30 days", left BOTH presence tiles at "now",
+        and swapped the sparkline to MESSAGES PER DAY with 30 bars. The
+        qualifiers rendered ("56 posted with the shared room token, author
+        unverified"). ZERO page errors at either viewport.
+      - Cache-Control: public, max-age=30 on /v1/homepage/rooms.
+      All probe data was removed from the dev database afterwards (0 leftover
+      ralph-task7-* rooms, probe agents deleted). No call left localhost.
+
+  NOTE: /v1/homepage/rooms is NOT in openapi_paths.go and SPEC.md was not
+      touched — no step asked for either, and openapi_paths.go is already 880
+      lines / over the CI limit. Same decision as /v1/homepage/overview.
+  NOTE: agent_presence has no identity column, so "online" can only ever be a
+      name plus a cross-check against room_agent_tokens. If presence should
+      carry an authenticated agent_id, that is a migration and a separate task.
+
+UAT: Owner's visual judgement on the new selector. The automated equivalents ran
+    green (15 component tests, 20 builder tests, 9 end-to-end tests, and the
+    real-browser render above at both viewports), but whether a three-button
+    window control belongs at the top-right of the historical block, and whether
+    six tiles plus two qualifier lines still reads as calm rather than as a
+    dashboard, is a look-at-it call:
+      cd /Users/fcavalcanti/dev/solvr && docker compose up -d
+      cd backend && DATABASE_URL="postgres://solvr:solvr_dev@localhost:5435/solvr?sslmode=disable" \
+        PORT=8090 ALLOWED_ORIGINS="http://localhost:3111" \
+        JWT_SECRET="ralph-local-dev-jwt-secret-32-chars-min" go run ./cmd/api
+      cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8090 npm run dev -- -p 3111
+UAT: On production, "rooms with two-way exchanges" will read "—" until agents
+    post after the deploy, because the milestone is recorded going forward and
+    history before it is genuinely unavailable. That is the intended wording,
+    not a bug — worth knowing before someone reports a blank number.
+UAT: recordActivationMilestone runs one extra INSERT ... SELECT per posted
+    message. On the local box it was invisible, but production message volume is
+    the owner's to watch; the guard is a NOT EXISTS on
+    (room_id, event_type) which idx_room_events_room_type covers.

@@ -11,9 +11,19 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ message }: MessageBubbleProps) {
+  // Anchor so a link to /rooms/<slug>#message-<sequence_num> — the form the
+  // homepage example uses for every beat — lands on this exact message, clear
+  // of the fixed header.
+  const hasAnchor = typeof message.sequence_num === "number";
+  const anchorId = hasAnchor ? `message-${message.sequence_num}` : undefined;
+  const anchorClass = hasAnchor ? " scroll-mt-24" : "";
+
   if (message.author_type === "system") {
     return (
-      <div className="text-center text-xs text-muted-foreground font-mono py-2 px-4 border-y border-dashed border-border/50">
+      <div
+        id={anchorId}
+        className={`text-center text-xs text-muted-foreground font-mono py-2 px-4 border-y border-dashed border-border/50${anchorClass}`}
+      >
         {message.content}
       </div>
     );
@@ -21,7 +31,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   if (message.author_type === "human") {
     return (
-      <div className="flex items-start gap-3 max-w-[70%] ml-auto flex-row-reverse">
+      <div
+        id={anchorId}
+        className={`flex items-start gap-3 max-w-[70%] ml-auto flex-row-reverse${anchorClass}`}
+      >
         <div className="shrink-0 mt-1">
           <User className="w-4 h-4 text-muted-foreground" />
         </div>
@@ -57,7 +70,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   // Agent message (default)
   return (
-    <div className="flex items-start gap-3 max-w-[70%]">
+    <div
+      id={anchorId}
+      className={`flex items-start gap-3 max-w-[70%]${anchorClass}`}
+    >
       <div className="shrink-0 mt-1">
         <Bot className="w-4 h-4 text-muted-foreground" />
       </div>

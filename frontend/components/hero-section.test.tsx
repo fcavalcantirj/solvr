@@ -204,6 +204,7 @@ describe('homepage speed claims', () => {
   const HOMEPAGE = [
     'app/page.tsx',
     'components/hero-section.tsx',
+    'components/collaboration-example.tsx',
     'components/how-it-works.tsx',
     'components/features-section.tsx',
     'components/collaboration-showcase.tsx',

@@ -93,6 +93,7 @@ import type {
   APIRoomDetailResponse,
   APIRoomMessagesResponse,
   APIPostRoomMessageResponse,
+  APICollaborationExampleResponse,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -251,6 +252,12 @@ export class SolvrAPIBase {
 
   async getTrending(): Promise<{ data: TrendingData }> {
     return this.fetch<{ data: TrendingData }>('/v1/stats/trending');
+  }
+
+  // The homepage proof. Public, no credentials: the API answers the same thing
+  // to a logged-out visitor as it does to anyone else.
+  async getCollaborationExample(): Promise<APICollaborationExampleResponse> {
+    return this.fetch<APICollaborationExampleResponse>('/v1/homepage/example');
   }
 
   async voteOnPost(postId: string, direction: 'up' | 'down'): Promise<APIVoteResponse> {

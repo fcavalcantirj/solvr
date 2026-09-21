@@ -1432,3 +1432,48 @@ export interface APIRoomMessagesResponse {
 export interface APIPostRoomMessageResponse {
   data: APIRoomMessage;
 }
+
+// -- Homepage collaboration example (GET /v1/homepage/example) --
+// The API decides which beats are shown, how far each excerpt is cut, how the
+// cut is labelled, where it links back to, and whether the transcript may be
+// called live. The homepage renders these strings and decides nothing.
+
+export interface APICollaborationExampleStep {
+  beat: string;
+  label: string;
+  author?: string;
+  author_role: string;
+  excerpt: string;
+  is_excerpt: boolean;
+  excerpt_note?: string;
+  sequence_num?: number;
+  message_url?: string;
+  created_at?: string;
+}
+
+export interface APICollaborationExampleRoom {
+  slug: string;
+  display_name: string;
+  description?: string;
+  message_count: number;
+  last_active_at: string;
+}
+
+export interface APICollaborationExample {
+  kind: 'real' | 'illustrative';
+  state: string;
+  label: string;
+  headline: string;
+  summary: string;
+  live_agent_count: number;
+  room?: APICollaborationExampleRoom;
+  room_url?: string;
+  participants: { name: string; role: string }[];
+  steps: APICollaborationExampleStep[];
+  connect_url: string;
+  connect_label: string;
+}
+
+export interface APICollaborationExampleResponse {
+  data: APICollaborationExample;
+}

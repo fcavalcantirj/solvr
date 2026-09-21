@@ -61,7 +61,7 @@
       "Verify Watch an example opens the original room and Try this workflow opens /connect with the planner/executor preset.",
       "If the example becomes private, deleted, or unavailable, remove its preview content from public responses and show a clearly labeled illustrative workflow with a working Connect agents action."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

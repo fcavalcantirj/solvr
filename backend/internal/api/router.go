@@ -180,6 +180,9 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	}
 	mountV1Routes(r, pool, ipfsAPIURL, embedSvc)
 
+	// Homepage routes (public proof of the product; see router_homepage.go)
+	mountHomepageRoutes(r, pool)
+
 	// Room routes (extracted per D-13 to keep router.go under 900 lines)
 	if pool != nil && hubMgr != nil {
 		jwtSecret := os.Getenv("JWT_SECRET")

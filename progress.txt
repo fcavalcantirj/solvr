@@ -607,3 +607,152 @@ UAT: Owner should confirm the secondary CTA should keep pointing straight at the
     (/rooms/tictactoe-human-vs-computer-20260920). Task 5 builds an on-page excerpt of that same
     collaboration; at that point "Watch an example" may want to scroll to the excerpt instead of
     leaving the homepage.
+
+2026-09-20 23:45: Task 5/95 [functional] "Show a real planner/executor collaboration as the
+    primary homepage proof". Backend + frontend. The proof is now SERVED, not hard-coded: a new
+    public endpoint reads the real room and the homepage renders whatever it answers.
+
+    STEP 1 — read the real room first (read-only, no writes to production):
+      curl https://api.solvr.dev/v1/rooms/tictactoe-human-vs-computer-20260920 -> 200, is_private
+      false, message_count 9, last_active_at 2026-09-20T19:49:32Z, two agent authors
+      (raphael_tictactoe_planner, raphael_tictactoe_executor). The five beats the task names map
+      to sequence numbers 2 (PLANNER DIRECTIVE v1), 4 (IMPLEMENTATION PLAN), 5 (PLAN APPROVED),
+      6 (IMPLEMENTATION COMPLETE) and 9 (PLANNER CLOSED — final review).
+
+    NEW API: GET /v1/homepage/example — public, no auth, always 200.
+      backend/internal/api/handlers/homepage_example.go (408 lines)
+      backend/internal/api/router_homepage.go (30 lines, mountHomepageRoutes; router.go +3 lines
+        only — it is already 1169 and over the CI limit, so the wiring lives in its own file)
+      The API decides EVERYTHING the visitor sees, per the smart-API rule:
+        - which five messages are the beats. Roles come from the transcript, NOT from agent
+          names: the agent that opens the room is the planner, the next distinct agent to speak
+          is the executor. Beats are then (a) the planner's last message before the executor
+          arrives, (b) the executor's last message of its first turn, (c) the planner's next
+          message, (d) the executor's next message, (e) the planner's LAST message. Human and
+          system messages are never beats. Fewer than five resolvable turns -> fallback.
+        - the excerpt: cut at 240 runes on a word boundary, "…" appended, is_excerpt=true and
+          excerpt_note "Excerpt — the original message is N characters". A message that fits is
+          returned whole and is NOT called an excerpt (excerpt_note absent).
+        - the link back: message_url = /rooms/<slug>#message-<sequence_num> per beat.
+        - completed vs live: "completed" unless agent_presence reports live agents in that room
+          RIGHT NOW (TTL-bounded rows, the API's own independent confirmation). Only then is it
+          labelled LIVE COLLABORATION. The completed summary states the age of the last message
+          (API-formatted: "moments ago" / "N hours ago" / "N days ago") so the browser never
+          decides what "recent" means.
+        - the fallback: room private, deleted, missing, unreadable, or too short -> kind
+          "illustrative", label ILLUSTRATIVE WORKFLOW, NO room object, NO room_url, NO
+          participants, NO authors, NO message links, NO excerpts — only the five beats described
+          generically plus connect_url "/connect?preset=planner-executor".
+      Room slug is configurable via HOMEPAGE_EXAMPLE_ROOM_SLUG (default
+      tictactoe-human-vs-computer-20260920). No env file was touched.
+
+    NEW FRONTEND: components/collaboration-example.tsx (154 lines) + hooks/use-collaboration-
+      example.ts, rendered on app/page.tsx directly under the hero (the proof sits with the claim
+      it proves). lib/api-base.ts gains getCollaborationExample(); lib/api-types.ts gains the
+      response types. The component renders API strings and decides nothing — a test reads its
+      source and fails if it ever contains a slug, a transcript, a beat label, "Excerpt", the
+      completed/live wording, .slice(0,N) or substring(.
+    components/rooms/message-bubble.tsx: each message now carries id="message-<sequence_num>"
+      and scroll-mt-24. Without that anchor every "link each excerpt to its original message"
+      would open the room and land nowhere.
+
+    [TEST] RED measured before GREEN, both halves:
+      - backend: with mountHomepageRoutes commented out, the four integration tests fail with
+        "expected: 200 / actual: 404" and the server logs status 404 for /v1/homepage/example.
+      - frontend: components/collaboration-example.test.tsx failed to even transform —
+        "Failed to resolve import ./collaboration-example" — before the component existed;
+        message-bubble's four new anchor tests: 3 failed / 12 passed before the id was added.
+    [TEST] 9 backend unit tests (12 with subtests) PASS, pure, no database:
+        go test ./internal/api/handlers/ -run TestCollaborationExample -count=1 -v -> all PASS.
+        They pin the five beats and their order, the authors/roles/sequence numbers (2,4,5,6,9),
+        excerpt truncation + labelling + the note's character count, the message links, completed
+        vs live, the age wording, that human/system messages are skipped, and that NO room
+        content (slug, author names, message text) survives in the illustrative payload.
+    [TEST] 4 backend integration tests PASS against an ISOLATED database
+        postgres://solvr:solvr_dev@localhost:5435/solvr_test (NOT the dev database, after the
+        2026-09-20 21:05 wipe incident):
+        go test ./internal/api/ -run TestHomepageExample -count=1 -v -> ALL PASS (0.25s/0.05s/
+        0.05s/0.02s). They seed a real public room + 9-message transcript, call the endpoint with
+        NO credentials, then take the room away: private first, then soft-deleted — asserting on
+        the RAW response body that the slug, the planner's name and the directive text are all
+        absent, that five illustrative beats remain, and that connect_url still works.
+    [TEST] cd frontend && npm test — FULL SUITE 128 files / 1231 tests, ALL PASS, zero failures.
+        Baseline before this task was 1202 (2026-09-20 22:35 entry): +18 collaboration-example,
+        +5 use-collaboration-example, +4 message-bubble, +2 from extending the two homepage guard
+        lists (design-system.test.tsx SECTIONS and hero-section.test.tsx HOMEPAGE now include
+        components/collaboration-example.tsx, so the new section is held to the same rhythm and
+        the same no-unbenchmarked-speed-claim rule).
+    [REAL] Coverage (v8, scoped): collaboration-example.tsx + message-bubble.tsx together 100%
+        stmts / 86.84% branch / 100% funcs / 100% lines; use-collaboration-example.ts 100% across
+        the board (the two unmount-cancellation branches were uncovered at first and now have
+        their own tests). Well over the 80% floor.
+    [REAL] cd backend && go build ./... exits 0; go vet ./internal/api/... clean; gofmt clean on
+        all four new/edited Go files. npx tsc --noEmit: ZERO errors.
+    [REAL] bash scripts/check-file-size.sh: 36 violations, the SAME 36 as the 2026-09-20
+        baseline. Largest new file is homepage_example.go at 408 lines.
+    [REAL] Backend full suite, MEASURED both ways on freshly recreated databases (DROP + CREATE
+        DATABASE solvr_test TEMPLATE solvr before each run, so both runs start identical):
+        HEAD (changes stashed) = 63 failures; with this change = 65, then 63 on a second run.
+        The set differs only by tests that flip run to run (TestE2E_AgentRegistrationAndPosting,
+        TestRoomClaims_ConcurrentAcquire_ExactlyOneWins, TestCommentsCount_FeedShowsCommentCount,
+        TestOAuthUserService_ReturningUser_Integration) — every one of them PASSES in isolation
+        with this change applied, e.g. "expected comments_count=2 in feed, got 3" is leftover
+        fixtures from an earlier test, not this code. Nothing here regressed anything.
+
+    [REAL] VERIFIED AGAINST A RUNNING STACK, not reasoned. Killed the previous next dev/API
+        first; Go API on :8090 against postgres://localhost:5435/solvr (backend/.env NOT touched
+        and NOT loaded), next dev on :3111 with NEXT_PUBLIC_API_URL pointed at it.
+      - The local dev database has no such room (it was wiped on 2026-09-20 21:05), so the first
+        live call to /v1/homepage/example returned kind "illustrative" — step 6's behaviour
+        proven by accident before it was proven on purpose.
+      - Seeded the REAL transcript locally THROUGH THE PRODUCT'S OWN API (public POST
+        /v1/agents/register -> agent key -> POST /v1/rooms with the slug -> 9x POST
+        /r/<slug>/message with the room token, the exact 9 message bodies read from production).
+        The endpoint then picked sequence numbers 2, 4, 5, 6, 9 — exactly the beats identified by
+        reading the room by hand — with the right authors and character counts (1643, 755, 496,
+        1152, 335).
+      - Headless Chromium at 1280x800 (playwright, chromium-1234; the packaged browser download
+        is out of date so executablePath was pointed at the installed build): the section renders
+        COMPLETED COLLABORATION, five steps in order with author "raphael_tictactoe_planner ·
+        planner" / "raphael_tictactoe_executor · executor", each excerpt note, each message link
+        (#message-2/4/5/6/9), "Try this workflow" -> /connect?preset=planner-executor and
+        "Open the full room" -> /rooms/<slug>.
+      - Step 5 verified live: hero "Watch an example" -> /rooms/tictactoe-human-vs-computer-
+        20260920 -> 200; "Try this workflow" -> /connect?preset=planner-executor -> HTTP 307 ->
+        location /connect/agent?preset=planner-executor. Task 2's temporary redirect PRESERVES
+        the query string, so the preset survives today and lands directly once task 16 removes
+        the redirect.
+      - Anchors work: the room page serves id="message-1" ... id="message-9", and navigating to
+        /rooms/<slug>#message-6 puts the implementation-evidence message in the viewport.
+      - Step 6 verified live end to end: PATCH the room to is_private=true, then reload the
+        homepage in the browser -> label ILLUSTRATIVE WORKFLOW, 5 steps, 0 authors, 0 message
+        links, 0 room links, Connect still /connect?preset=planner-executor, and the whole page
+        HTML contains neither "raphael_tictactoe" nor "PLANNER DIRECTIVE v1". Restored the local
+        room to public afterwards.
+
+    MEASURED GAP, OUT OF SCOPE, LEFT FOR THE TASK THAT OWNS THE HERO: the hero's "Watch an
+        example" href is a STATIC slug in components/hero-section.tsx (task 4). While the room was
+        private, the example section correctly blanked itself, but that hero link still pointed at
+        the room — anonymous GET /v1/rooms/<slug> returns 403 and /rooms/<slug> renders a
+        not-found state. Step 6 is satisfied (the API's public response carries no preview
+        content), but the homepage would still offer one dead-end CTA. Fixing it means making the
+        hero consume /v1/homepage/example and rewriting task 4's pinned-href tests, which is task
+        4's or task 16's call, not this one's.
+    NOTE for later tasks: /v1/homepage/example is NOT in openapi_paths.go (no step asked for it,
+        and that file is already 880 lines / over the CI limit). SPEC.md was not touched for the
+        same reason.
+    NOTE: components/collaboration-showcase.tsx (the old problems/trending panel) is untouched and
+        still on the homepage — task 6 owns replacing the homepage's activity panels.
+
+UAT: Step 2's judgement — "compact" — is inherently visual and the owner's. The automated
+    equivalents already ran green (18 component tests plus the real-browser render above).
+      cd /Users/fcavalcanti/dev/solvr/frontend && npm run dev
+    Look at / and confirm the five-beat panel reads as proof at a glance and that 240 characters
+    per excerpt is the right amount. The excerpt limit is one constant:
+    collabExampleExcerptMaxChars in backend/internal/api/handlers/homepage_example.go.
+UAT: Owner's call on the hero dead-end above — either task 4/16 makes "Watch an example" read
+    room_url from /v1/homepage/example, or it stays static and the homepage accepts one broken
+    CTA if that room is ever taken private.
+UAT: The local dev database now contains a seeded copy of the tictactoe room (created through the
+    API by agent ralph_seeder_*) so the local homepage shows the real example. Production was
+    never written to — the only production call this iteration was the read-only GET in step 1.

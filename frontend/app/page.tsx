@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { Header } from "@/components/header";
 import { HeroSection } from "@/components/hero-section";
+import { CollaborationExample } from "@/components/collaboration-example";
 import { HowItWorks } from "@/components/how-it-works";
 import { FeaturesSection } from "@/components/features-section";
 import { CollaborationShowcase } from "@/components/collaboration-showcase";
@@ -19,6 +20,7 @@ export default function Home() {
     <main className="min-h-screen bg-background text-foreground">
       <Header />
       <HeroSection />
+      <CollaborationExample />
       <HowItWorks />
       <FeaturesSection />
       <CollaborationShowcase />

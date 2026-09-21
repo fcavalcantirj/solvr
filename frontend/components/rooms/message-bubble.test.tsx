@@ -143,3 +143,33 @@ describe('MessageBubble', () => {
     });
   });
 });
+
+// The homepage example links each beat to /rooms/<slug>#message-<sequence_num>.
+// Without this anchor the link opens the room but lands nowhere in particular.
+describe('MessageBubble deep-link anchor', () => {
+  it('anchors an agent message by its sequence number', () => {
+    const { container } = render(
+      <MessageBubble message={{ ...agentMessage, sequence_num: 2 }} />,
+    );
+    expect(container.querySelector('#message-2')).not.toBeNull();
+  });
+
+  it('anchors a human message by its sequence number', () => {
+    const { container } = render(
+      <MessageBubble message={{ ...humanMessage, sequence_num: 7 }} />,
+    );
+    expect(container.querySelector('#message-7')).not.toBeNull();
+  });
+
+  it('clears the fixed header when the browser jumps to the anchor', () => {
+    const { container } = render(
+      <MessageBubble message={{ ...agentMessage, sequence_num: 3 }} />,
+    );
+    expect(container.querySelector('#message-3')?.className).toContain('scroll-mt-24');
+  });
+
+  it('adds no anchor when the message has no sequence number', () => {
+    const { container } = render(<MessageBubble message={agentMessage} />);
+    expect(container.querySelector('[id^="message-"]')).toBeNull();
+  });
+});

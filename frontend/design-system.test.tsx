@@ -332,6 +332,7 @@ describe('generous spacing', () => {
   // the page read as a single system rather than a stack of separate widgets.
   const RHYTHM = 'px-4 sm:px-6 lg:px-12 py-24 lg:py-32'
   const SECTIONS = [
+    'components/collaboration-example.tsx',
     'components/how-it-works.tsx',
     'components/features-section.tsx',
     'components/collaboration-showcase.tsx',

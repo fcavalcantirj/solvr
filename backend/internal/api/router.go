@@ -115,15 +115,21 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	ipfsHealthHandler := handlers.NewIPFSHealthHandler(ipfsHealthAdapter)
 	r.Get("/v1/health/ipfs", ipfsHealthHandler.Check)
 
-	// Admin endpoints (requires X-Admin-API-Key header)
+	// Operator endpoints. Everything under /admin is reporting Solvr does about
+	// itself — traffic, growth, raw diagnostics — so every one of these routes
+	// goes through the server-validated operator gate, which also marks the
+	// answer as one caller's private, unstorable response. See
+	// handlers/operator_analytics.go; the handlers keep their own key check as
+	// the second lock.
+	operatorOnly := handlers.RequireOperatorAccess
 	adminHandler := handlers.NewAdminHandler(pool)
-	r.Post("/admin/query", adminHandler.ExecuteQuery)
+	r.With(operatorOnly).Post("/admin/query", adminHandler.ExecuteQuery)
 
 	// Admin hard-delete and list deleted (Task 17)
-	r.Delete("/admin/users/{id}", adminHandler.HardDeleteUser)
-	r.Delete("/admin/agents/{id}", adminHandler.HardDeleteAgent)
-	r.Get("/admin/users/deleted", adminHandler.ListDeletedUsers)
-	r.Get("/admin/agents/deleted", adminHandler.ListDeletedAgents)
+	r.With(operatorOnly).Delete("/admin/users/{id}", adminHandler.HardDeleteUser)
+	r.With(operatorOnly).Delete("/admin/agents/{id}", adminHandler.HardDeleteAgent)
+	r.With(operatorOnly).Get("/admin/users/deleted", adminHandler.ListDeletedUsers)
+	r.With(operatorOnly).Get("/admin/agents/deleted", adminHandler.ListDeletedAgents)
 
 	// Admin manual translation trigger — wire the job if GROQ and DB are available
 	if groqKey := os.Getenv("GROQ_API_KEY"); groqKey != "" && pool != nil {
@@ -139,7 +145,7 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 			jobs.DefaultTranslationBatchSize, 0)
 		adminHandler.SetTranslationJobRunner(translationJob)
 	}
-	r.Post("/admin/jobs/translation/run", adminHandler.RunTranslationJob)
+	r.With(operatorOnly).Post("/admin/jobs/translation/run", adminHandler.RunTranslationJob)
 
 	// Wire Resend email client and broadcast endpoint if API key is available
 	if resendKey := os.Getenv("RESEND_API_KEY"); resendKey != "" {
@@ -157,24 +163,24 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 		adminHandler.SetEmailBroadcastRepo(db.NewEmailBroadcastRepository(pool))
 		adminHandler.SetUserEmailRepo(db.NewUserRepository(pool))
 	}
-	r.Post("/admin/email/broadcast", adminHandler.BroadcastEmail)
-	r.Get("/admin/email/history", adminHandler.ListBroadcasts)
+	r.With(operatorOnly).Post("/admin/email/broadcast", adminHandler.BroadcastEmail)
+	r.With(operatorOnly).Get("/admin/email/history", adminHandler.ListBroadcasts)
 
 	// Admin search analytics endpoints
 	if pool != nil {
 		saRepo := db.NewSearchAnalyticsRepository(pool)
 		saHandler := handlers.NewSearchAnalyticsHandler(saRepo)
-		r.Get("/admin/search-analytics/trending", saHandler.GetTrending)
-		r.Get("/admin/search-analytics/summary", saHandler.GetSummary)
+		r.With(operatorOnly).Get("/admin/search-analytics/trending", saHandler.GetTrending)
+		r.With(operatorOnly).Get("/admin/search-analytics/summary", saHandler.GetSummary)
 	}
 
 	// Admin incident management
 	if pool != nil {
 		incidentRepo := db.NewIncidentRepository(pool)
 		incidentAdminHandler := handlers.NewIncidentAdminHandler(incidentRepo)
-		r.Post("/admin/incidents", incidentAdminHandler.CreateIncident)
-		r.Patch("/admin/incidents/{id}", incidentAdminHandler.UpdateIncidentStatus)
-		r.Post("/admin/incidents/{id}/updates", incidentAdminHandler.AddIncidentUpdate)
+		r.With(operatorOnly).Post("/admin/incidents", incidentAdminHandler.CreateIncident)
+		r.With(operatorOnly).Patch("/admin/incidents/{id}", incidentAdminHandler.UpdateIncidentStatus)
+		r.With(operatorOnly).Post("/admin/incidents/{id}/updates", incidentAdminHandler.AddIncidentUpdate)
 	}
 
 	// Discovery endpoints (SPEC.md Part 18.3)

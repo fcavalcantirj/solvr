@@ -2498,3 +2498,188 @@ UAT: TWO THINGS NEED THE OWNER BEFORE THIS SHIPS. (1) Migration 000083 has to
     day after deploy the figures will legitimately read "Measured since
     <today>" — worth looking at once to confirm that reads as intended rather
     than as a bug.
+
+================================================================================
+2026-09-21 — TASK 13 (operations): Restrict operator analytics and growth
+             reports to explicit administrative access
+================================================================================
+
+WHAT THE TASK IS ABOUT
+
+  Solvr measures two different things. PRODUCT ACTIVITY is published (tasks
+  5-12 built that, and handlers/public_overview_allowlist.go decides exactly
+  what reaches a visitor). OPERATOR ANALYTICS is the other one: traffic,
+  acquisition, retention, cost, raw diagnostics and growth planning — the
+  reporting Solvr does about ITSELF. That belongs to the people who run the
+  product, and to nobody else.
+
+  Two dangers, both server-side:
+    1. ACCESS. A credential the product issues — a human account, an agent API
+       key, a user key, a room owner, a room-scoped token — is a credential for
+       USING Solvr, not for reading Solvr's own numbers. Hiding a link is not
+       access control; the rule has to hold for somebody typing the URL.
+    2. CACHING. An operator report a shared cache may store can be handed to
+       the next visitor who asks for the same URL. A public overview request
+       must never be able to hit an entry an operator's request created.
+
+WHAT WAS THERE ALREADY, AND WHAT WAS NOT
+
+  [REAL] Every /admin handler already checked X-Admin-API-Key itself, in THREE
+      hand-rolled copies (admin.go checkAdminAuth, search_analytics.go
+      checkSearchAnalyticsAuth, incidents_admin.go checkIncidentAdminAuth),
+      each comparing the key with != (not constant time).
+  [REAL] NOT ONE of them set a cache header. A GET /admin/search-analytics/
+      trending answered 200 with no Cache-Control at all, which a CDN or proxy
+      is free to cache heuristically. That was the real gap this task closes.
+  [REAL] No GA4 or Search Console integration exists in the backend at all
+      (grep over internal/ and cmd/): there are no credentials to leak there.
+      The frontend carries the COLLECTION side only — the gtag measurement id
+      in app/layout.tsx and sendGAEvent calls in lib/analytics.ts. A
+      measurement id runs in every visitor's browser by design; it is not a
+      credential, and a test that flagged it would only teach the suite to lie.
+
+WHAT WAS BUILT
+
+  backend/internal/api/handlers/operator_analytics.go (NEW, 205 lines)
+    - OperatorAccessHeader — the one credential that opens a report.
+    - OperatorReports — the registry of surfaces that REPORT (search-analytics
+      trending + summary, email history, deleted users, deleted agents, and
+      /admin/query, which can read anything the product stores). The router and
+      the contract tests read the same list.
+    - RequireOperatorAccess — one server-validated gate. Constant-time compare
+      (crypto/subtle). An UNCONFIGURED server is CLOSED: an empty ADMIN_API_KEY
+      answers 503, it never compares equal to an empty header.
+    - ApplyOperatorReportCachePolicy — "no-store, private, max-age=0,
+      must-revalidate" + "Pragma: no-cache" + "Vary: X-Admin-API-Key,
+      Authorization, Cookie", applied to EVERY answer including refusals.
+    - OperatorCredentialTermIn / ...TermInKey — the vocabulary for GA and
+      Search Console material: reporting properties, the Data API, Search
+      Console, service accounts, client/API secrets, application default
+      credentials, a pasted PEM key, analytics exports, BigQuery. Deliberately
+      NOT the collection tag, and deliberately not bare "private key" or
+      "refresh token": Solvr issues private keys to agents and refresh tokens
+      to people, and a rule that flagged those is a rule nobody could keep.
+
+  backend/internal/api/router.go
+    - All 13 /admin routes now go through r.With(operatorOnly). The handlers
+      keep their own key check as the second lock.
+
+  frontend/lib/operator-analytics-privacy.test.ts (NEW, 160 lines)
+    - The browser collects and never reads: no reporting credential, property
+      or export in shipped source; no operator key (X-Admin-API-Key /
+      ADMIN_API_KEY) anywhere a browser could download it; no call to an
+      operator report path; lib/analytics.ts sends events and never fetches;
+      no analytics/traffic export served from public/.
+
+VERIFICATION
+
+  [TEST] backend handlers — 8 new unit tests, ALL RUN AND PASSED: the registry
+      describes every report; the gate refuses 13 credential shapes (human
+      bearer, agent key in both headers, user key, room token, owner+token,
+      empty header, wrong key, a prefix of the real key, a key differing in the
+      first byte, in the last byte, and one with trailing whitespace) and never
+      reaches the handler; the operator's own key passes; an unconfigured
+      server refuses everyone with 503; refusals are readable JSON errors;
+      every answer — served, refused, wrongly keyed — is no-store, private,
+      never public, and Vary-keyed; and the GA/GSC vocabulary names reporting
+      material while leaving the product's own private keys, refresh tokens,
+      api_key and the word "property" alone.
+
+  [TEST] backend router — 6 new integration tests over REAL HTTP against a
+      LOCAL isolated database (postgres://localhost:5435/solvr_test, a template
+      clone of the local dev database migrated to 83, dropped afterwards).
+      Production was never touched.
+        - Every registered report refused to all 8 caller kinds, using REAL
+          credentials issued by the running API: an ordinary human JWT, an
+          agent API key (both header shapes), a room owner, the room token that
+          room handed back, owner+token together, a guessed operator key, and
+          anonymous.
+        - THE WHOLE MUX WALKED: chi.Walk enumerates the registered routes, and
+          every /admin route is probed with every caller — 104 subtests
+          (13 routes x 8 callers), all refused 401/403, all carrying the
+          private policy. The test reads the router rather than a hand list, so
+          an /admin route added later is covered the day it is added.
+        - Operator reporting still WORKS for the operator (summary, trending,
+          email history all 200 with the private policy) — keeping traffic off
+          the public index did not cost the ability to read it.
+        - An unconfigured server answers 503, not the report.
+        - The public overview can never share a cache entry with a report:
+          different paths, the report is never stored, and the overview answers
+          the operator byte-identically (same field-name set, no operator
+          material) so an entry an operator's own visit created is safe.
+        - No public statistics surface carries GA or Search Console material
+          (all 12 endpoints in publicPrivacyEndpoints).
+        - CORS does not admit X-Admin-API-Key, so no page on an allowed origin
+          can send the operator credential from a browser at all.
+
+  [REAL] VERIFIED AGAINST A RUNNING SERVER. Previous process killed first; the
+      API built from this tree ran on :8090 against solvr_test with
+      ADMIN_API_KEY and JWT_SECRET in the environment (backend/.env NOT touched
+      and NOT loaded).
+        GET /admin/search-analytics/summary
+          anonymous    -> 401 MISSING_API_KEY
+          wrong key    -> 403 INVALID_API_KEY
+          operator key -> 200 with the summary
+        All three carried: Cache-Control: no-store, private, max-age=0,
+        must-revalidate / Pragma: no-cache / Vary: X-Admin-API-Key,
+        Authorization, Cookie.
+        GET /admin/search-analytics/trending?days=7 -> 200, same headers.
+        GET /v1/homepage/overview -> 200, "Cache-Control: public, max-age=30",
+        and the SAME nine data sections whether or not the operator key was
+        sent. Server killed, port 8090 clear, solvr_test dropped.
+      NOTE: the first attempt at this probe answered 404 on the search
+        analytics routes. Cause found, not guessed: cmd/api abandons the whole
+        config when JWT_SECRET is under 32 characters, so the pool was nil and
+        every pool-conditional route was skipped ("WARNING: Database pool is
+        nil" in the log). Re-run with a 32+ character secret, the routes are
+        there. Nothing to do with this change.
+
+  [TEST] NO BACKEND REGRESSION, MEASURED BY COMPARISON.
+      ./internal/api/... (same database, back to back): 9 failing tests with
+        the change, THE SAME 9 without it — comments_count x3, GitHub OAuth x4,
+        IPFS health, type-specific list endpoints. All documented pre-existing.
+      ./internal/api/... ./internal/db/ -p 1 on a FRESHLY RECREATED database
+        for each side: 68 failures with the change, 68 without. The sets differ
+        by one in each direction and the difference FLIPPED between two runs
+        (TestSearchAnalyticsRepository_GetTrending fails only in one baseline;
+        TestCrossAuth_RemoveProvider_OthersStillWork only in one after-run).
+        Both pass 3/3 in isolation on this tree, and neither touches /admin.
+        Signature of a shared-database flake, not a regression: the trending
+        test asserts three fixtures survive a top-10 cut, which depends on how
+        many search_queries rows the run before it left behind.
+      go build ./... and go vet ./internal/api/... clean.
+
+  [TEST] frontend — 6 new tests in lib/operator-analytics-privacy.test.ts, all
+      pass. Full suite: 141 files, 1402 tests, ALL PASS (was 140/1396).
+      npm run typecheck clean.
+
+  [TEST] ./scripts/check-file-size.sh reports the same 36 pre-existing
+      violations as before the change. Largest new file: 394 lines (a test).
+      router.go grew by 6 lines and was already over the limit.
+      golangci-lint still cannot run here: the installed version rejects this
+      repo's config ("'output.formats' expected a map, got 'slice'") — the
+      pre-existing environment mismatch noted in earlier entries.
+
+NOTES / BOUNDARIES
+
+  - The task text says "/v1/overview"; the route that actually serves the
+    public overview is /v1/homepage/overview, and that is what the tests read.
+    Task 14 owns the shape and bounds of those endpoints.
+  - No internal analytics VIEW was built. Operator reporting already has a
+    workflow — the /admin API with the operator key, which the solvr-admin
+    skill script drives — and choosing to build a dashboard on top of it is
+    the owner's call, not this task's.
+  - SPEC.md was not edited: no step asked for it, and no endpoint contract
+    changed. What changed is who may call the existing ones and how the answer
+    may be cached.
+  - The three hand-rolled key checks were left in place as a second lock
+    rather than deleted. Removing them is a refactor nobody asked for, and
+    defence in depth is the right default for this particular door.
+
+UAT: NOTHING OWNER-ONLY IS OUTSTANDING FOR THE CODE — every check ran locally
+    and green, and the behaviour was confirmed against a running server.
+UAT: ONE THING TO CONFIRM ON DEPLOY. ADMIN_API_KEY must be set in the
+    production environment (it already is — the admin query route depends on
+    it). If it ever becomes unset, every /admin route now answers 503 rather
+    than falling open; that is deliberate, and worth knowing before somebody
+    reads the 503 as an outage.

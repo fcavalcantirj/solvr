@@ -177,7 +177,7 @@
       "Expose only approved aggregate product metrics through /v1/overview; do not make GA or GSC credentials, property details, or exports available through the public frontend.",
       "Test direct endpoint access and serialized HTML rather than relying on navigation visibility; preserve authorized operator reporting even though traffic is absent from the public index."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

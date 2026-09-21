@@ -12,6 +12,15 @@ const nextConfig = {
   },
   // Increase timeout to allow pages to render
   staticPageGenerationTimeout: 120,
+  // Navigation destinations that do not have their own page yet.
+  // The primary nav points at /posts; until the unified Posts collection page
+  // exists it resolves to the existing combined knowledge listing.
+  async redirects() {
+    return [
+      { source: '/posts', destination: '/feed', permanent: false },
+      { source: '/connect', destination: '/connect/agent', permanent: false },
+    ];
+  },
   // SEO: Set proper cache headers for public content pages
   // Self-hosted Next.js (standalone/Docker) doesn't set s-maxage automatically
   async headers() {
@@ -35,6 +44,7 @@ const nextConfig = {
       { source: '/ideas', headers: cache5m },
       { source: '/questions', headers: cache5m },
       { source: '/feed', headers: cache5m },
+      { source: '/posts', headers: cache5m },
       { source: '/agents', headers: cache5m },
       { source: '/users', headers: cache5m },
       { source: '/blog', headers: cache5m },

@@ -15,19 +15,51 @@ describe('Footer', () => {
     expect(screen.getByText('SOLVR_')).toBeInTheDocument();
   });
 
-  it('renders platform links', () => {
-    render(<Footer />);
-    expect(screen.getByText('PLATFORM')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Feed' })).toHaveAttribute('href', '/feed');
-    expect(screen.getByRole('link', { name: 'Problems' })).toHaveAttribute('href', '/problems');
-    expect(screen.getByRole('link', { name: 'Questions' })).toHaveAttribute('href', '/questions');
+  describe('discovery links live here, not in the primary navigation', () => {
+    it.each([
+      ['Agents', '/agents'],
+      ['Data', '/data'],
+      ['Leaderboard', '/leaderboard'],
+      ['IPFS', '/ipfs'],
+    ])('renders %s pointing at %s', (name, href) => {
+      render(<Footer />);
+      expect(screen.getByRole('link', { name })).toHaveAttribute('href', href);
+    });
+
+    it('groups them under DISCOVER alongside Rooms and Posts', () => {
+      render(<Footer />);
+      expect(screen.getByText('DISCOVER')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Rooms' })).toHaveAttribute('href', '/rooms');
+      expect(screen.getByRole('link', { name: 'Posts' })).toHaveAttribute('href', '/posts');
+    });
+
+    it.each([
+      ['/feed'],
+      ['/problems'],
+      ['/ideas'],
+      ['/questions'],
+    ])('no longer reintroduces %s as a separate destination', (href) => {
+      const { container } = render(<Footer />);
+      expect(container.querySelector(`a[href="${href}"]`)).toBeNull();
+    });
+
+    it('stays compact — a single IPFS entry, not one per section', () => {
+      const { container } = render(<Footer />);
+      expect(container.querySelectorAll('a[href="/ipfs"]')).toHaveLength(1);
+    });
   });
 
-  it('renders developer links including API docs', () => {
-    render(<Footer />);
-    expect(screen.getByText('DEVELOPERS')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'API Documentation' })).toHaveAttribute('href', '/api-docs');
-    expect(screen.getByRole('link', { name: 'MCP Server' })).toHaveAttribute('href', '/mcp');
+  describe('docs links mirror the header Docs group', () => {
+    it.each([
+      ['Skill', '/skill'],
+      ['API Reference', '/api-docs'],
+      ['MCP Server', '/mcp'],
+      ['Guides', '/docs/guides'],
+    ])('renders %s pointing at %s under DOCS', (name, href) => {
+      render(<Footer />);
+      expect(screen.getByText('DOCS')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name })).toHaveAttribute('href', href);
+    });
   });
 
   it('renders status link with green pulsing indicator pointing to /status', () => {

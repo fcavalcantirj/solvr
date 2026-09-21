@@ -240,3 +240,113 @@ UAT: After the next deploy, owner should eyeball /v1/stats in production: total_
     active_posts and total_contributions will drop (family-private posts and contributions on
     non-public/orphaned parents are no longer counted). That drop is the fix working, not a
     regression. No migration is needed — this is query-level only.
+
+2026-09-20 21:58: Task 2/95 [functional] "Replace the crowded global navigation with Rooms,
+    Posts, and Docs". Frontend-only; no backend file touched.
+
+    HEADER (frontend/components/header.tsx, 236 -> 266 lines). The 10-item nav bar
+    (/feed /problems /ideas /rooms /agents /data /ipfs /leaderboard /skill /docs/guides
+    + /dashboard when signed in) is gone. What replaces it:
+      - Logo -> "/". Primary nav is a labelled landmark <nav aria-label="Primary"> holding
+        exactly THREE top-level entries, marked data-nav-level="primary" so "only these three"
+        is assertable rather than eyeballed: ROOMS (/rooms), POSTS (/posts), DOCS (group).
+      - DOCS is a disclosure button (aria-haspopup, aria-expanded, hover + click), NOT a peer
+        link. Skill (/skill), API reference (/api-docs), MCP (/mcp) and Guides (/docs/guides)
+        live beneath it and are absent from the DOM until it is opened.
+      - CONNECT AGENTS -> /connect is the one filled/prominent action. JOIN is gone (it was a
+        second filled CTA competing with it). LOG IN stays a quiet text link. Signed in: the
+        account menu (UserMenu) replaces LOG IN; Connect stays.
+      - Mobile menu mirrors the SAME hierarchy: ROOMS, POSTS, DOCS (its own collapsible group),
+        then CONNECT AGENTS, then the account section. Toggle now has aria-label="Toggle menu".
+    ACCOUNT MENU (components/ui/user-menu.tsx): DASHBOARD (/dashboard) added so the route the
+        nav dropped is not orphaned. SETTINGS + API KEYS were already there — the header no
+        longer renders /settings or /settings/api-keys on desktop at all.
+    FOOTER (components/footer.tsx, 249 -> 148 lines, 5 columns -> 4, data-driven via a
+        FooterColumn helper): new DISCOVER column carries Rooms, Posts, Agents, DATA,
+        Leaderboard, IPFS, Users. DEVELOPERS + PROTOCOL merged into DOCS (Skill, API Reference,
+        MCP Server, Guides, AMCP, Status). Feed/Problems/Questions/Ideas removed — they are no
+        longer destinations anywhere in the global chrome. IPFS appears exactly once (it used to
+        be in PROTOCOL while Agents/Leaderboard sat in PLATFORM). Footer also carries a
+        CONNECT AGENTS action.
+
+    /posts AND /connect DID NOT EXIST — both would have been 404s. MEASURED, not assumed:
+        `curl -o /dev/null -w "%{http_code}" http://localhost:3111/connect` returned 404 and
+        `app/connect/` contains only `agent/page.tsx`; there is no `app/posts/` at all.
+        A primary destination that dead-ends is a broken destination, and building the real
+        pages here would be doing tasks 16 and 44. Instead next.config.mjs now carries two
+        explicitly TEMPORARY redirects, each commented with the task that must delete it:
+          /posts   -> /feed         (permanent: false)  # task 44 replaces with the real page
+          /connect -> /connect/agent (permanent: false) # task 16 replaces with prompt-first flow
+        /posts also joined the 5-minute list-page cache-header block next to /feed.
+        NOTE for tasks 16 and 44: next.config redirects run BEFORE app routing, so adding
+        app/posts/page.tsx or app/connect/page.tsx will NOT take effect until the matching
+        redirect entry is removed.
+
+    [TEST] frontend/components/header.test.tsx REWRITTEN (150 -> 30 tests). RED measured first:
+        24 failed / 3 passed against the old header. Now 30/30 PASS. Covers the three-item
+        order as an array equality, the four docs children collapsed-then-revealed, aria-expanded
+        flipping, hover open/close, group collapsing after a choice, the filled-vs-quiet class
+        distinction for Connect vs Log in, absence of /join, and a parameterised sweep asserting
+        /feed /problems /ideas /questions /agents /data /ipfs /leaderboard /dashboard appear
+        NOWHERE in the header — desktop or mobile menu open.
+    [TEST] components/footer.test.tsx 8 -> 19 tests, all PASS. RED measured first: 11 failed.
+    [TEST] components/ui/user-menu.test.tsx 5 -> 10 tests, all PASS. RED measured first
+        (DASHBOARD missing). The added outside-click / Escape / item-close / logout / no-user
+        tests exist because I touched this file and its coverage was 66%.
+    [TEST] NEW frontend/next.config.test.ts (47 lines), 3 tests, all PASS. RED measured first:
+        "TypeError: nextConfig.redirects is not a function". Pins both temporary redirects
+        (source, destination, permanent:false) and the /posts cache header.
+    [TEST] cd frontend && npm test — FULL SUITE 125 files / 1138 tests, ALL PASS, zero failures.
+        Baseline before this task was 1097/1097 passing (a first baseline run showed 6 failures,
+        all "Test timed out in 5000ms" under parallel load; an immediate re-run was 1097/1097 —
+        flaky timeouts, not real).
+    [REAL] Coverage of the three changed components (v8, scoped include): header.tsx 100%
+        stmts/branch/funcs/lines, footer.tsx 100% across the board, user-menu.tsx 100%
+        stmts/funcs/lines and 86.66% branch. Was header 84.21%/user-menu 66.66% before the
+        extra tests. Well over the 80% floor.
+    [REAL] npx tsc --noEmit: ZERO errors. (My first next.config.test.ts draft produced 12
+        TS18048/TS2722 errors from the optional NextConfig fields; rewritten with typed helpers.)
+    [REAL] Verified against a RUNNING server, not reasoned: next dev on port 3111 (previous
+        next dev / next-server killed first).
+          curl -D - /posts   -> "HTTP/1.1 307 Temporary Redirect" + "location: /feed"
+          curl -D - /connect -> "HTTP/1.1 307 Temporary Redirect" + "location: /connect/agent"
+          curl -L -o /dev/null -w %{http_code} /connect -> 200
+          /rooms -> 200, /docs/guides -> 200
+        Parsing the server-rendered <header> block of /skill: exactly 3 data-nav-level="primary"
+        entries; href="/" x1, "/rooms" x1, "/posts" x1, "/connect" x1; and ZERO occurrences of
+        /feed /problems /ideas /questions /agents /data /ipfs /leaderboard /join /dashboard
+        /skill /mcp /api-docs (the docs children are correctly collapsed on first paint).
+        Parsing the <footer> block: /agents /data /leaderboard /ipfs /rooms /posts exactly once
+        each; /feed /problems /questions /ideas zero.
+    [REAL] Step 6's "no sidebar reintroduces Feed, Problems, Ideas, or Questions": app/layout.tsx
+        renders only <Providers>{children}</Providers> — there is no global sidebar or bottom
+        nav. The *-sidebar.tsx components (feed/problems/ideas/agents/rooms) are in-page content
+        panels that link to individual items or same-page filters (e.g. /problems?status=stuck)
+        and only render on those legacy pages; they are not global navigation. Header and Footer
+        are imported per page (55 files) — the components were changed, not the call sites.
+    [REAL] bash scripts/check-file-size.sh: 36 violations, the SAME 36 as the 2026-09-20 baseline.
+        None of them is a file this task touched — largest here is header.test.tsx at 290 lines,
+        and footer.tsx SHRANK from 249 to 148.
+    FIX FOUND BY THE REAL CHECK, not by the unit tests: the first server-rendered HTML had
+        href="/connect" appearing only ONCE on the whole page — from the footer. The header was
+        rendering just a spinner because useAuth reports isLoading=true on first paint and the
+        original code gated the entire right-hand cluster on it. The primary action of the
+        product was invisible until auth resolved. CONNECT AGENTS is now outside that gate; only
+        LOG IN and the account menu wait on auth. Added a failing test for it first
+        ("stays visible while the auth state is still loading"), then fixed it.
+
+    [UNVERIFIED] `npm run lint` cannot run on this checkout: "sh: eslint: command not found"
+        (node_modules/.bin has no eslint — the dev dependency is not installed locally).
+        PRE-EXISTING, not caused by this task; CI installs it. Not treated as a gate here
+        because tsc and the full vitest suite both ran clean.
+    [UNVERIFIED] `npm run build` (production/standalone) was not run — it static-generates pages
+        against the API and was not needed to prove the redirects, which were verified live.
+
+UAT: Step 1 of this task is inherently visual and the owner's: open Home, a room and a post on
+    desktop AND mobile, logged out AND logged in, and confirm the three-item header reads well.
+      cd /Users/fcavalcanti/dev/solvr/frontend && npm run dev
+    Automated equivalents already ran green (30 header tests incl. both auth states and both
+    breakpoints' markup, plus the server-rendered HTML parse above).
+UAT: Owner should confirm the two temporary redirects are the right call. POSTS in the nav
+    currently lands the user on /feed and CONNECT AGENTS lands on /connect/agent. The
+    alternative was shipping two 404s. Tasks 16 and 44 remove them.

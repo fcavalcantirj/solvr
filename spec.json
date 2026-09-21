@@ -23,7 +23,7 @@
       "Group Skill, API reference, MCP, and Guides beneath Docs rather than exposing each as a peer navigation item.",
       "Verify the mobile navigation mirrors this hierarchy and no sidebar reintroduces Feed, Problems, Ideas, or Questions as separate destinations."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "visual",

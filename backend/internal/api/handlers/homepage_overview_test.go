@@ -114,7 +114,7 @@ func TestOverviewAPIUsageSection_OnlyServesMeasuredNumbers(t *testing.T) {
 	}
 	pulse := db.RoomPulse{Messages24h: 321}
 
-	section := buildOverviewAPIUsage(summary, pulse, 64)
+	section := buildOverviewAPIUsage(summary, pulse)
 
 	require.NotEmpty(t, section.Metrics)
 	for _, m := range section.Metrics {
@@ -127,7 +127,6 @@ func TestOverviewAPIUsageSection_OnlyServesMeasuredNumbers(t *testing.T) {
 	}
 	assert.Equal(t, 150, byKey["agent_searches_7d"].Value)
 	assert.Equal(t, 321, byKey["room_messages_24h"].Value)
-	assert.Equal(t, 64, byKey["registered_agents"].Value)
 	assert.NotEmpty(t, section.Endpoints)
 	for _, e := range section.Endpoints {
 		assert.NotEmpty(t, e.Method)
@@ -137,32 +136,119 @@ func TestOverviewAPIUsageSection_OnlyServesMeasuredNumbers(t *testing.T) {
 	assert.Equal(t, "/api-docs", section.DocsURL)
 }
 
-func TestOverviewCommunitySection_IsAllTimeAndDefined(t *testing.T) {
+// The API-usage section measures CALLS. A registration total sitting among
+// them would read as usage, which is the one thing the all-time section exists
+// to keep separate.
+func TestOverviewAPIUsageSection_CarriesNoRegistrationTotal(t *testing.T) {
+	section := buildOverviewAPIUsage(
+		models.SearchAnalytics{BySearcherType: map[string]int{}},
+		db.RoomPulse{},
+	)
+
+	for _, m := range section.Metrics {
+		assert.NotContains(t, strings.ToLower(m.Key), "registered",
+			"a registration belongs in the all-time section, not among call volumes")
+		assert.NotEqual(t, allTimeWindowLabel, m.Window,
+			"metric %q: a usage figure is always measured over a window", m.Key)
+	}
+}
+
+// The all-time section is the scale of Solvr. Its job is to say how big the
+// product is WITHOUT letting a registration read as a measure of use.
+func TestOverviewAllTimeSection_ShowsScaleWithoutConflatingRegistrationsWithUse(t *testing.T) {
+	totals := &db.AllTimeTotals{
+		PublicRooms:      214,
+		PublishedPosts:   2098,
+		RegisteredAgents: 64,
+		RegisteredHumans: 1003,
+	}
 	stats := &db.AllStatsResult{
-		TotalPosts:         2098,
 		TotalContributions: 3327,
-		TotalAgents:        64,
-		HumansCount:        1003,
 		ProblemsSolved:     41,
 		CrystallizedPosts:  12,
 	}
 
-	section := buildOverviewCommunity(stats)
+	section := buildOverviewCommunity(totals, stats)
 
-	require.Len(t, section.Metrics, 6)
+	assert.Equal(t, "All time", section.Heading)
+
+	byKey := map[string]OverviewMetric{}
 	for _, m := range section.Metrics {
+		byKey[m.Key] = m
 		assert.Equal(t, allTimeWindowLabel, m.Window, "metric %q", m.Key)
 		assert.NotEmpty(t, m.Definition, "metric %q definition", m.Key)
+		assert.False(t, m.Presence, "metric %q is a total, never a presence reading", m.Key)
+		assert.False(t, m.Unavailable, "metric %q was read", m.Key)
 	}
+
+	for _, key := range []string{"public_rooms", "published_posts", "registered_agents", "registered_humans"} {
+		require.Contains(t, byKey, key, "the all-time section must carry %q", key)
+	}
+	assert.Equal(t, 214, byKey["public_rooms"].Value)
+	assert.Equal(t, 2098, byKey["published_posts"].Value)
+	assert.Equal(t, "2,098", byKey["published_posts"].Display)
+	assert.Equal(t, 64, byKey["registered_agents"].Value)
+	assert.Equal(t, 1003, byKey["registered_humans"].Value)
+
+	// An account total is a REGISTRATION. It may never be worded as "active",
+	// which is what would turn it into an audience figure.
+	for _, key := range []string{"registered_agents", "registered_humans"} {
+		m := byKey[key]
+		assert.Contains(t, strings.ToUpper(m.Label), "REGISTERED", "%s label", key)
+		assert.NotContains(t, strings.ToLower(m.Label), "active", "%s label", key)
+		assert.NotContains(t, strings.ToLower(m.Definition), "active", "%s definition", key)
+		assert.NotEmpty(t, m.Qualifier,
+			"%s must say out loud that registering is not using", key)
+	}
+
+	// Scale that is usage keeps its place beside the registrations.
+	assert.Equal(t, 3327, byKey["total_contributions"].Value)
+	assert.Equal(t, 41, byKey["problems_solved"].Value)
+	assert.Equal(t, 12, byKey["crystallized_posts"].Value)
 }
 
-func TestOverviewCommunitySection_SurvivesAMissingStatsRead(t *testing.T) {
-	section := buildOverviewCommunity(nil)
+// The two reads behind this section can fail independently, and a failed read
+// is not a zero: a zero would claim Solvr is empty.
+func TestOverviewAllTimeSection_ReportsEachUnreadTotalSeparately(t *testing.T) {
+	registrationKeys := []string{"public_rooms", "published_posts", "registered_agents", "registered_humans"}
+	usageKeys := []string{"total_contributions", "problems_solved", "crystallized_posts"}
 
-	require.NotEmpty(t, section.Metrics)
-	for _, m := range section.Metrics {
-		assert.Equal(t, "—", m.Display, "an unread counter says so instead of inventing a zero")
-	}
+	t.Run("totals unread", func(t *testing.T) {
+		section := buildOverviewCommunity(nil, &db.AllStatsResult{TotalContributions: 9})
+		byKey := map[string]OverviewMetric{}
+		for _, m := range section.Metrics {
+			byKey[m.Key] = m
+		}
+		for _, k := range registrationKeys {
+			assert.True(t, byKey[k].Unavailable, "%s was not measured", k)
+			assert.Equal(t, "—", byKey[k].Display, "%s must not invent a zero", k)
+		}
+		for _, k := range usageKeys {
+			assert.False(t, byKey[k].Unavailable, "%s was measured", k)
+		}
+	})
+
+	t.Run("stats unread", func(t *testing.T) {
+		section := buildOverviewCommunity(&db.AllTimeTotals{PublicRooms: 7}, nil)
+		byKey := map[string]OverviewMetric{}
+		for _, m := range section.Metrics {
+			byKey[m.Key] = m
+		}
+		for _, k := range usageKeys {
+			assert.True(t, byKey[k].Unavailable, "%s was not measured", k)
+			assert.Equal(t, "—", byKey[k].Display, "%s must not invent a zero", k)
+		}
+		assert.Equal(t, 7, byKey["public_rooms"].Value)
+	})
+
+	t.Run("neither read", func(t *testing.T) {
+		section := buildOverviewCommunity(nil, nil)
+		require.NotEmpty(t, section.Metrics)
+		for _, m := range section.Metrics {
+			assert.Equal(t, "—", m.Display, "an unread counter says so instead of inventing a zero")
+			assert.True(t, m.Unavailable, "metric %q", m.Key)
+		}
+	})
 }
 
 func TestOverviewPostsSection_LinksReusableKnowledge(t *testing.T) {

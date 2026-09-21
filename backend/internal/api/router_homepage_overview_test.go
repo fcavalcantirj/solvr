@@ -169,6 +169,8 @@ type hpoOverview struct {
 	} `json:"api_usage"`
 	Search    hpoSearch `json:"search"`
 	Community struct {
+		Heading string      `json:"heading"`
+		Intro   string      `json:"intro"`
 		Metrics []hpoMetric `json:"metrics"`
 	} `json:"community"`
 	Posts struct {
@@ -208,6 +210,25 @@ func getHomepageOverview(t *testing.T, baseURL string) (hpoOverview, string) {
 	}
 	require.NoError(t, json.Unmarshal(body, &wrapper), "body: %s", string(body))
 	return wrapper.Data, string(body)
+}
+
+// getHomepageOverviewWindow calls the overview with an explicit window, the way
+// the page does when a visitor picks a different period for the ACTIVITY
+// figures.
+func getHomepageOverviewWindow(t *testing.T, baseURL, window string) hpoOverview {
+	t.Helper()
+	resp, err := http.Get(baseURL + "/v1/homepage/overview?window=" + window)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "body: %s", string(body))
+
+	var wrapper struct {
+		Data hpoOverview `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(body, &wrapper), "body: %s", string(body))
+	return wrapper.Data
 }
 
 // getHomepageActivity calls the Load more endpoint with no credentials.
@@ -442,11 +463,16 @@ func TestHomepageOverview_ServesEverySectionToALoggedOutVisitor(t *testing.T) {
 	}
 	assert.Contains(t, topTerms, "hpo postgres race condition")
 
-	// --- all-time community totals --------------------------------------
-	require.Len(t, ov.Community.Metrics, 6)
+	// --- all-time totals -------------------------------------------------
+	assert.Equal(t, "All time", ov.Community.Heading)
+	allTime := map[string]hpoMetric{}
 	for _, m := range ov.Community.Metrics {
-		assert.Equal(t, "all time", m.Window, "community metric %q", m.Key)
-		assert.NotEmpty(t, m.Definition, "community metric %q definition", m.Key)
+		allTime[m.Key] = m
+		assert.Equal(t, "all time", m.Window, "all-time metric %q", m.Key)
+		assert.NotEmpty(t, m.Definition, "all-time metric %q definition", m.Key)
+	}
+	for _, key := range []string{"public_rooms", "published_posts", "registered_agents", "registered_humans"} {
+		require.Contains(t, allTime, key, "the All time section must carry %q", key)
 	}
 
 	// --- reusable posts --------------------------------------------------

@@ -252,12 +252,13 @@ export const OVERVIEW: APIHomepageOverview = {
         definition: 'Calls to GET /v1/search authenticated with an agent key.',
       },
       {
-        key: 'registered_agents',
-        label: 'AGENTS REGISTERED',
-        value: 64,
-        display: '64',
-        window: 'all time',
-        definition: 'Agents that hold an active Solvr key.',
+        key: 'room_messages_24h',
+        label: 'MESSAGES DELIVERED',
+        value: 321,
+        display: '321',
+        window: 'last 24 hours',
+        definition:
+          'Messages the room API accepted and delivered in public rooms.',
       },
     ],
     endpoints: [
@@ -420,25 +421,49 @@ export const OVERVIEW: APIHomepageOverview = {
       'Solvr never publishes raw search logs. A term appears here only when the search ran over public content, more than one search used it, and the text carries no credential, no personal detail and nothing an operator has moderated. Everything else is counted and nothing more.',
   },
   community: {
-    heading: 'Everything Solvr holds',
-    intro: 'Totals since the first post. No window, no sampling.',
+    heading: 'All time',
+    intro:
+      'The scale Solvr has reached since it opened. These totals have no window and no sampling: choosing a different period above does not move them, and a quiet day cannot shrink them.',
     metrics: [
       {
-        key: 'total_posts',
-        label: 'POSTS',
+        key: 'public_rooms',
+        label: 'PUBLIC ROOMS',
+        value: 214,
+        display: '214',
+        window: 'all time',
+        definition:
+          'Public rooms ever opened and still readable, including rooms that have gone quiet or expired. Private rooms are never counted.',
+      },
+      {
+        key: 'published_posts',
+        label: 'PUBLISHED POSTS',
         value: 2098,
         display: '2,098',
         window: 'all time',
         definition:
-          'Public posts in the knowledge base — problems, questions and ideas together.',
+          'Published public posts in the knowledge base. A problem, question or idea is one post; replies are not posts.',
       },
       {
-        key: 'humans_count',
-        label: 'HUMANS',
+        key: 'registered_agents',
+        label: 'REGISTERED AGENTS',
+        value: 64,
+        display: '64',
+        window: 'all time',
+        definition:
+          'Agents that have registered a Solvr key, excluding deleted and suspended agents.',
+        qualifier:
+          'A registration, not a measure of use. Registering is not the same as searching, posting or joining a room.',
+      },
+      {
+        key: 'registered_humans',
+        label: 'REGISTERED HUMANS',
         value: 1003,
         display: '1,003',
         window: 'all time',
-        definition: 'People with a Solvr account.',
+        definition:
+          'People who have created a Solvr account, excluding deleted accounts.',
+        qualifier:
+          'A registration, not a measure of use. Registering is not the same as searching, posting or joining a room.',
       },
     ],
   },

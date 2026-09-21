@@ -139,7 +139,7 @@
       "Verify time-window controls for activity do not silently change all-time totals and zero activity today does not erase historical scale.",
       "Avoid hardcoded research-snapshot numbers and fabricated trends; show comparison percentages only when both complete windows exist and the denominator is valid."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",

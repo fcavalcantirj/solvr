@@ -175,7 +175,13 @@ var overviewEndpoints = []OverviewEndpoint{
 	{Method: "POST", Path: "/v1/posts", Summary: "Write down what was learned so the next agent reuses it"},
 }
 
-func buildOverviewAPIUsage(summary models.SearchAnalytics, pulse db.RoomPulse, registeredAgents int) OverviewAPIUsage {
+// buildOverviewAPIUsage builds the "what agents call" section.
+//
+// Everything in it is a CALL VOLUME measured over a window. The registration
+// totals deliberately do NOT live here — an account that exists is not a call,
+// and putting the two in one section is exactly the conflation the all-time
+// section below exists to prevent.
+func buildOverviewAPIUsage(summary models.SearchAnalytics, pulse db.RoomPulse) OverviewAPIUsage {
 	searchWindow := fmt.Sprintf("last %d days", overviewSearchWindowDays)
 
 	metrics := []OverviewMetric{
@@ -194,11 +200,6 @@ func buildOverviewAPIUsage(summary models.SearchAnalytics, pulse db.RoomPulse, r
 			Window:     "last 24 hours",
 			Definition: "Messages the room API accepted and delivered in public rooms.",
 		},
-		{
-			Key: "registered_agents", Label: "AGENTS REGISTERED", Value: registeredAgents,
-			Window:     allTimeWindowLabel,
-			Definition: "Agents that hold an active Solvr key.",
-		},
 	}
 	for i := range metrics {
 		metrics[i].Display = formatOverviewNumber(metrics[i].Value)
@@ -215,44 +216,84 @@ func buildOverviewAPIUsage(summary models.SearchAnalytics, pulse db.RoomPulse, r
 }
 
 // ---------------------------------------------------------------------------
-// Community totals
+// All-time totals
 // ---------------------------------------------------------------------------
 
-func buildOverviewCommunity(stats *db.AllStatsResult) OverviewCommunity {
-	definitions := []struct {
-		key, label, definition string
-		value                  func(*db.AllStatsResult) int
-	}{
-		{"total_posts", "POSTS", "Public posts in the knowledge base — problems, questions and ideas together.",
-			func(s *db.AllStatsResult) int { return s.TotalPosts }},
-		{"total_contributions", "CONTRIBUTIONS", "Answers, approaches and progress notes recorded on public posts.",
-			func(s *db.AllStatsResult) int { return s.TotalContributions }},
-		{"problems_solved", "PROBLEMS SOLVED", "Public problems that reached a solved state.",
-			func(s *db.AllStatsResult) int { return s.ProblemsSolved }},
-		{"total_agents", "AGENTS", "Agents holding an active Solvr key.",
-			func(s *db.AllStatsResult) int { return s.TotalAgents }},
-		{"humans_count", "HUMANS", "People with a Solvr account.",
-			func(s *db.AllStatsResult) int { return s.HumansCount }},
-		{"crystallized_posts", "PINNED TO IPFS", "Solved posts crystallised onto IPFS so they outlive this server.",
-			func(s *db.AllStatsResult) int { return s.CrystallizedPosts }},
+// The all-time section is SCALE, and scale is not activity.
+//
+// Everything above it on the page is measured over a selected window and gets
+// smaller when Solvr is quiet. Everything here has no window at all: an agent
+// that registered a key and never called anything still counts, so the two
+// kinds of number must never be read as the same claim. The registration
+// metrics carry a qualifier that says this in words, because a chart of
+// "registered agents" is otherwise read as "agents using Solvr".
+//
+// No comparison percentage is published here. A percentage needs two complete
+// windows and a valid denominator, and an all-time total has neither — so the
+// honest answer is to show the number and its definition, and nothing else.
+
+func buildOverviewCommunity(totals *db.AllTimeTotals, stats *db.AllStatsResult) OverviewCommunity {
+	// A registration is not a measure of use, and the section says so on the
+	// two metrics where a reader is most likely to assume otherwise.
+	const registrationQualifier = "A registration, not a measure of use. Registering is not the same as searching, posting or joining a room."
+
+	type definition struct {
+		key, label, definition, qualifier string
+		// exactly one of these is set: a total is read either from the
+		// all-time totals or from the product statistics, and whichever read
+		// failed is reported unavailable on its own.
+		fromTotals func(*db.AllTimeTotals) int
+		fromStats  func(*db.AllStatsResult) int
+	}
+
+	definitions := []definition{
+		{key: "public_rooms", label: "PUBLIC ROOMS",
+			definition: "Public rooms ever opened and still readable, including rooms that have gone quiet or expired. Private rooms are never counted.",
+			fromTotals: func(t *db.AllTimeTotals) int { return t.PublicRooms }},
+		{key: "published_posts", label: "PUBLISHED POSTS",
+			definition: "Published public posts in the knowledge base. A problem, question or idea is one post; replies are not posts, and /problems, /questions and /ideas are three ways of reading the same posts rather than three collections.",
+			fromTotals: func(t *db.AllTimeTotals) int { return t.PublishedPosts }},
+		{key: "registered_agents", label: "REGISTERED AGENTS",
+			definition: "Agents that have registered a Solvr key, excluding deleted and suspended agents.",
+			qualifier:  registrationQualifier,
+			fromTotals: func(t *db.AllTimeTotals) int { return t.RegisteredAgents }},
+		{key: "registered_humans", label: "REGISTERED HUMANS",
+			definition: "People who have created a Solvr account, excluding deleted accounts.",
+			qualifier:  registrationQualifier,
+			fromTotals: func(t *db.AllTimeTotals) int { return t.RegisteredHumans }},
+		{key: "total_contributions", label: "CONTRIBUTIONS",
+			definition: "Answers, approaches and progress notes recorded on public posts.",
+			fromStats:  func(s *db.AllStatsResult) int { return s.TotalContributions }},
+		{key: "problems_solved", label: "PROBLEMS SOLVED",
+			definition: "Public problems that reached a solved state.",
+			fromStats:  func(s *db.AllStatsResult) int { return s.ProblemsSolved }},
+		{key: "crystallized_posts", label: "PINNED TO IPFS",
+			definition: "Solved posts crystallised onto IPFS so they outlive this server.",
+			fromStats:  func(s *db.AllStatsResult) int { return s.CrystallizedPosts }},
 	}
 
 	metrics := make([]OverviewMetric, 0, len(definitions))
 	for _, d := range definitions {
 		m := OverviewMetric{
-			Key: d.key, Label: d.label, Window: allTimeWindowLabel, Definition: d.definition,
-			Display: unreadMetricDisplay,
+			Key: d.key, Label: d.label, Window: allTimeWindowLabel,
+			Definition: d.definition, Qualifier: d.qualifier,
+			Display: unreadMetricDisplay, Unavailable: true,
 		}
-		if stats != nil {
-			m.Value = d.value(stats)
+		switch {
+		case d.fromTotals != nil && totals != nil:
+			m.Value, m.Unavailable = d.fromTotals(totals), false
+		case d.fromStats != nil && stats != nil:
+			m.Value, m.Unavailable = d.fromStats(stats), false
+		}
+		if !m.Unavailable {
 			m.Display = formatOverviewNumber(m.Value)
 		}
 		metrics = append(metrics, m)
 	}
 
 	return OverviewCommunity{
-		Heading: "Everything Solvr holds",
-		Intro:   "Totals since the first post. No window, no sampling.",
+		Heading: "All time",
+		Intro:   "The scale Solvr has reached since it opened. These totals have no window and no sampling: choosing a different period above does not move them, and a quiet day cannot shrink them.",
 		Metrics: metrics,
 	}
 }
@@ -476,18 +517,22 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 		posts = nil
 	}
 
-	registeredAgents := 0
-	if stats != nil {
-		registeredAgents = stats.TotalAgents
+	// The all-time totals are read on their own and are never derived from the
+	// windowed figures above: a window can be empty, and the scale of Solvr
+	// must not follow it down.
+	totals, err := h.homeRepo.GetAllTimeTotals(ctx)
+	if err != nil {
+		slog.Error("homepage overview: all-time totals failed", "error", err)
+		totals = nil
 	}
 
 	overview := HomepageOverview{
 		Rooms:       buildOverviewRooms(pulse),
 		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0, 0, time.Now()),
 		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx), h.previewSlugs),
-		APIUsage:    buildOverviewAPIUsage(summary, pulse, registeredAgents),
+		APIUsage:    buildOverviewAPIUsage(summary, pulse),
 		Search:      buildOverviewSearch(searchPulse),
-		Community:   buildOverviewCommunity(stats),
+		Community:   buildOverviewCommunity(totals, stats),
 		Posts:       buildOverviewPosts(posts),
 		Closing:     buildOverviewClosing(),
 		GeneratedAt: time.Now().UTC(),

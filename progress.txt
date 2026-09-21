@@ -1698,3 +1698,209 @@ UAT: EXPECT THE TERM LISTS TO BE EMPTY ON PRODUCTION AT FIRST, and that is
 UAT: SEARCH_QUERY_BLOCKLIST is unset, so moderation runs on the built-in floor
     alone. If the owner wants terms withheld beyond it, set it (comma-separated)
     on the API service — it EXTENDS the default and can never shrink it.
+
+================================================================================
+2026-09-21 03:10 — TASK 10 "Show all-time scale alongside current activity
+without conflating registrations and usage" — DONE (passes=true)
+
+FIRST, WHY NOT TASK 6 (unchanged from the 01:20 entry, re-checked, not assumed).
+    Task 6 is still the first passes=false entry and I did NOT take it.
+    `ls frontend/app/connect` is still `agent` only — a 27-line spinner that
+    bounces to /login — so step 2's "the same task, visibility, preset and copy
+    controls used by /connect" has no /connect to be the same as, step 3's
+    planner wording is task 17, and step 4's "API-owned instruction contract"
+    does not exist: `grep -ril instruction backend/internal/api` finds only
+    agents_claim.go and two moderation tests. Building task 6 means building
+    tasks 16+17+25 inside it. Left open per "ACCEPTANCE TASKS ARE NOT
+    CHECKLISTS"; took task 10, which is buildable today. TASK 6 REMAINS OPEN.
+
+THE ACTUAL DEFECT THIS TASK FIXED (measured on the local database, not reasoned)
+    The old "Everything Solvr holds" section read its numbers from
+    StatsRepository.GetAllStats, and two of them were WRONG in the direction
+    that flatters:
+      HUMANS  = `SELECT COUNT(*) FROM users`             -- counts DELETED users
+      AGENTS  = `... FROM agents WHERE status='active'`  -- no deleted_at filter
+      POSTS   = every non-deleted public post            -- counts DRAFTS
+    On the local database that is 12 humans instead of 10, and 22 posts instead
+    of 13. There was no public-rooms total at all, and the "What agents call"
+    section carried a metric "AGENTS REGISTERED ... Agents that hold an active
+    Solvr key" — a REGISTRATION sitting among CALL VOLUMES, which is precisely
+    the conflation this task is named after.
+
+WHAT SHIPPED (backend first, then the page — API smart, client dumb)
+
+  NEW backend/internal/db/homepage_totals.go (82 lines)
+    - AllTimeTotals{PublicRooms, PublishedPosts, RegisteredAgents,
+      RegisteredHumans} and HomepageRepository.GetAllTimeTotals: one round trip,
+      four subqueries, an error on failure rather than a zeroed struct.
+    - publishedPostStatuses is a DENYLIST (draft, pending_review, rejected) on
+      purpose: posts.status carries twelve lifecycle values and every other one
+      describes a readable post, so a future status counts without anyone
+      remembering to edit this file.
+    - PublicRooms deliberately INCLUDES expired rooms. Expiry archives a room,
+      it does not erase it — dropping them would shrink Solvr every time a room
+      went quiet. The windowed figures in homepage_rooms.go still exclude them
+      from the LIVE numbers; the two rules now sit beside each other, commented.
+
+  CHANGED backend/internal/api/handlers/homepage_overview.go (498 -> 543)
+    - buildOverviewCommunity(totals, stats): heading "All time", seven metrics.
+      public_rooms / published_posts / registered_agents / registered_humans
+      come from the new read; total_contributions / problems_solved /
+      crystallized_posts still come from GetAllStats. The two reads FAIL
+      INDEPENDENTLY: whichever one failed marks only its own metrics
+      Unavailable + "—". The old code set the display to "—" but left
+      Unavailable false, so a failed read was indistinguishable from a
+      measurement; it now says so.
+    - Both registration metrics carry a Qualifier the page renders verbatim:
+      "A registration, not a measure of use. Registering is not the same as
+      searching, posting or joining a room."
+    - buildOverviewAPIUsage lost its `registeredAgents int` parameter and the
+      AGENTS REGISTERED metric. That section is now three call volumes, every
+      one of them windowed. Task 12 owns rebuilding it; this only removed the
+      number that did not belong in it.
+    - NO comparison percentage is published. A percentage needs two complete
+      windows and a valid denominator and an all-time total has neither, so the
+      honest output is the number and its definition. Commented in the file so
+      the next iteration does not "helpfully" add a trend.
+
+  CHANGED frontend/components/homepage/metric.tsx
+    - MetricGrid drew its rules as `gap-px bg-border`, which paints the UNUSED
+      cells of a partly filled last row in the border colour. Seven metrics on
+      a 3-column grid leaves two such cells. Switched to cell borders
+      (`border-t border-l` on the grid, `border-r border-b` on each cell):
+      identical 1px rules for a full row, background for an empty one.
+      Verified in the browser, see below.
+
+  CHANGED frontend/components/homepage/overview-fixture.ts + the two suites.
+    No component logic changed — the section already renders whatever metrics
+    the API sends, which is why the frontend diff is a fixture and tests.
+
+TESTS — WHAT ACTUALLY RAN, AND AGAINST WHAT
+
+  Database for every backend integration test below:
+    postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable
+    (LOCAL docker compose Postgres on 5435, DROP + CREATE DATABASE solvr_test
+    TEMPLATE solvr before each measured run, dropped again at the end).
+    Nothing in this task touched production or api.solvr.dev.
+
+  [TEST] internal/db — 2 new integration tests, both PASS (not SKIP):
+      TestGetAllTimeTotals_CountsScaleAndExcludesWhatIsNotPublic
+      TestGetAllTimeTotals_RepliesAreNotPosts
+    Every assertion is a DELTA against a baseline read taken before the fixture
+    is written, so they are correct on a database that already holds rows. The
+    fixture writes 5 rooms (2 live public, 1 EXPIRED public, 1 private, 1
+    deleted), 7 posts (open, solved, draft, pending_review, rejected, family,
+    deleted), 3 agents (active, suspended, deleted) and 2 users (live,
+    deleted), and asserts the deltas are exactly 3 / 2 / 1 / 1.
+
+  [TEST] internal/api/handlers — 4 tests PASS:
+      TestOverviewAllTimeSection_ShowsScaleWithoutConflatingRegistrationsWithUse
+      TestOverviewAllTimeSection_ReportsEachUnreadTotalSeparately (3 subtests:
+        totals unread / stats unread / neither read)
+      TestOverviewAPIUsageSection_CarriesNoRegistrationTotal
+      TestOverviewAPIUsageSection_OnlyServesMeasuredNumbers (updated)
+
+  [TEST] internal/api — 2 new end-to-end tests PASS against the real database:
+      TestHomepageOverview_AllTimeTotalsDoNotMoveWithTheActivityWindow
+        seeds a public room whose messages are backdated 120 days (outside
+        every selectable window), plus one published post, one draft and one
+        family post; then requires day/week/month Community.Metrics to be
+        EQUAL, public_rooms to have risen by exactly 1 and published_posts by
+        exactly 1, and finally re-computes all four totals in SQL and asserts
+        the endpoint returned the database's answer rather than a constant.
+      TestHomepageOverview_AllTimeTotalsPublishNoAccountAttributes
+        serialises the section and asserts no "@", no UUID, and neither the
+        username nor the email of a real row in the users table.
+
+  [TEST] frontend — full suite: 136 files, 1358 tests, ALL PASS.
+      `npx tsc --noEmit` clean. `npm run lint` reports no new finding for any
+      file I touched (the one warning on overview-sections.test.tsx, an unused
+      `within` import, is present at HEAD — `git show HEAD:...` confirms).
+
+  [TEST] NO REGRESSION, PROVEN BY COMPARISON, NOT ASSUMED.
+      Full `go test ./...` twice on a freshly recreated solvr_test:
+        with this change : 69 failures
+        HEAD (backend/ AND frontend/ stashed --include-untracked): 69 failures
+        `diff` of the two sorted failure-name lists: IDENTICAL, byte for byte.
+      A later 3-package run also failed TestSearchAnalyticsRepository_GetTrending
+      ("expected 3 test trending results, got 2"). I did not assume it was
+      ambient: I ran it ALONE on a fresh template database at HEAD with my work
+      stashed and it failed with the same message. Pre-existing, ordering
+      dependent, unrelated.
+
+  [TEST] A TEST DEFECT I WROTE AND THEN CAUGHT. The fixture first registered
+      its cleanup with t.Cleanup. newRoomStatsPool closes the pool with
+      `defer done()`, deferred funcs run BEFORE t.Cleanup funcs, and a closed
+      pool swallows every DELETE without erroring — so the fixture rows stayed
+      in the dev database and I found 12 rooms / 24 posts / 12 agents / 5 users
+      of my own litter. Changed to `defer f.cleanup()` (registered after
+      `defer done()`, so LIFO runs it first) and PROVED the fix by counting
+      `WHERE slug LIKE 'at0%'` before and after a run: 12/24/12/5 both times,
+      i.e. the run wrote and removed its own rows. The earlier litter was then
+      purged; the local database is back to 191 public rooms / 4 published
+      posts / 8 registered agents / 7 registered humans. The comment on
+      cleanup() now says why it may never be a t.Cleanup.
+
+  [REAL] VERIFIED AGAINST A RUNNING STACK. Killed the previous processes first.
+      Go API on :8090 against postgres://localhost:5435/solvr with
+      ALLOWED_ORIGINS and a 32-char JWT_SECRET in the environment (backend/.env
+      NOT touched, NOT loaded); next dev on :3111 with
+      NEXT_PUBLIC_API_URL=http://localhost:8090.
+      GET /v1/homepage/overview returned, and direct SQL at the same moment
+      returned the SAME four numbers:
+        public_rooms 200, published_posts 13, registered_agents 14,
+        registered_humans 10
+      — against 22 public posts and 12 user rows actually present. The 9
+      unpublished posts and the 2 deleted accounts are excluded, which is the
+      whole point and is now visible rather than argued.
+      WINDOW INVARIANCE, measured: the sha of the serialised community.metrics
+      array is 8b29806bffc2 for ?window=24h, 7d AND 30d — byte identical —
+      while rooms.selected_window follows the request and the first windowed
+      room metric moves 64 -> 64 -> 66. Activity moves; scale does not.
+      HEADLESS CHROMIUM at 1280x900 AND 390x844: heading "All time", 7 metric
+      cells, every one carrying "all time", both registration cells rendering
+      the qualifier in full, NO horizontal overflow at either width, ZERO page
+      errors, and the section contains none of "active agents", "active
+      humans", "active users". Clicking "30 days" in the room section left the
+      All time section's text EXACTLY unchanged (compared as a string).
+      A screenshot of the section confirmed the grid fix: the ragged last row
+      shows background, not a block of border colour.
+      Both processes were killed, ports 8090/3111 are clear, solvr_test was
+      dropped. No call left localhost.
+
+NOTE: GET /v1/homepage/overview is not in openapi_paths.go and SPEC.md was not
+    touched — no step asked for either, and openapi_paths.go is already 880
+    lines / over the CI limit. Same decision as tasks 5-9.
+NOTE: router_homepage_overview_test.go was at 796 lines with the new tests in
+    it, four lines under the CI limit. Split: the all-time end-to-end tests now
+    live in backend/internal/api/router_homepage_totals_test.go (145 lines) and
+    the original is back to 669. ./scripts/check-file-size.sh reports the same
+    36 pre-existing violations as before this task and none of them is a file
+    this task created or touched.
+NOTE: users has NO status column — suspension is not persisted for humans, only
+    deleted_at is. RegisteredHumans therefore excludes deleted accounts and
+    nothing else, and the metric definition says exactly that rather than
+    implying a suspension filter that does not exist.
+NOTE: task 12 owns the API-usage section and will rebuild it around successful
+    calls / agent calls / distinct operations. It is now three windowed call
+    volumes with the registration total removed; nothing else was changed there.
+
+UAT: Owner's visual judgement on the section. Everything automatable ran green
+    (the tests above plus the real-browser render at both viewports), but
+    whether seven tiles with a ragged last row reads well at the bottom of the
+    index is a look-at-it call, as is whether PINNED TO IPFS still earns a tile:
+      cd /Users/fcavalcanti/dev/solvr && docker compose up -d
+      cd backend && DATABASE_URL="postgres://solvr:solvr_dev@localhost:5435/solvr?sslmode=disable" \
+        PORT=8090 ALLOWED_ORIGINS="http://localhost:3111" \
+        JWT_SECRET="ralph-local-dev-jwt-secret-32-chars-min" go run ./cmd/api
+      cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8090 npm run dev -- -p 3111
+UAT: NO PRODUCTION MIGRATION IS NEEDED. GetAllTimeTotals reads only columns
+    that already exist on production (rooms.is_private, rooms.deleted_at,
+    posts.status/visibility/deleted_at, agents.status/deleted_at,
+    users.deleted_at). Nothing to apply through the admin query route.
+UAT: EXPECT PRODUCTION'S PUBLISHED POSTS AND REGISTERED HUMANS TO DROP after
+    the deploy, and that is the fix landing, not a regression. Drafts and
+    deleted accounts were being counted; they no longer are. If the owner wants
+    the old, larger figures back, that is a decision to publish a number that
+    includes drafts and deleted accounts — worth making on purpose, not by
+    accident.

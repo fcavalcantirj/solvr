@@ -4,14 +4,17 @@ import type { APIOverviewMetric, APIOverviewTable } from '@/lib/api-types';
 // window it was measured over, and the definition of what it counts — all of
 // them API strings. Thin dividers, square corners, no colour.
 
+// The grid draws its rules as cell borders rather than as gaps over a coloured
+// background. A section may carry any number of metrics, and with a partly
+// filled last row the gap version paints the unused cells in the border colour.
 export function MetricGrid({ metrics }: { metrics: APIOverviewMetric[] }) {
   return (
-    <dl className="grid grid-cols-2 lg:grid-cols-3 gap-px bg-border border border-border">
+    <dl className="grid grid-cols-2 lg:grid-cols-3 border-t border-l border-border">
       {metrics.map((metric) => (
         <div
           key={metric.key}
           data-testid="overview-metric"
-          className="bg-background p-5 sm:p-6"
+          className="bg-background border-r border-b border-border p-5 sm:p-6"
         >
           <dd
             className="font-mono text-3xl sm:text-4xl font-light tracking-tight"

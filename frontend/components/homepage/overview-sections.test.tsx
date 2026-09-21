@@ -164,6 +164,47 @@ describe('CommunityTotalsSection', () => {
     metrics.forEach((node) => expect(squish(node.textContent)).toContain('all time'));
   });
 
+  // The four totals the section exists to publish: the scale of Solvr, with
+  // the two account totals named as REGISTRATIONS rather than as an audience.
+  it('names the public rooms, published posts and registered accounts', () => {
+    render(<CommunityTotalsSection data={OVERVIEW.community} />);
+    expect(screen.getByText(OVERVIEW.community.heading)).toBeInTheDocument();
+
+    for (const metric of OVERVIEW.community.metrics) {
+      expect(screen.getByText(metric.label)).toBeInTheDocument();
+      expect(screen.getByText(metric.display)).toBeInTheDocument();
+    }
+
+    const labels = OVERVIEW.community.metrics.map((m) => m.label);
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        'PUBLIC ROOMS',
+        'PUBLISHED POSTS',
+        'REGISTERED AGENTS',
+        'REGISTERED HUMANS',
+      ]),
+    );
+  });
+
+  it('carries the API caveat that a registration is not a measure of use', () => {
+    render(<CommunityTotalsSection data={OVERVIEW.community} />);
+    const registration = OVERVIEW.community.metrics.find(
+      (m) => m.key === 'registered_agents',
+    )!;
+    expect(registration.qualifier).toBeTruthy();
+    expect(screen.getAllByText(registration.qualifier!).length).toBeGreaterThan(0);
+  });
+
+  it('never calls a registered account an active one', () => {
+    render(<CommunityTotalsSection data={OVERVIEW.community} />);
+    const rendered = squish(
+      screen.getByTestId('overview-section-community').textContent,
+    ).toLowerCase();
+    expect(rendered).not.toContain('active agents');
+    expect(rendered).not.toContain('active humans');
+    expect(rendered).not.toContain('active users');
+  });
+
   it('renders an unread counter exactly as the API sent it, never as a zero', () => {
     const unread = {
       ...OVERVIEW.community,

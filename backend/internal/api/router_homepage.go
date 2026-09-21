@@ -50,9 +50,17 @@ func mountHomepageRoutes(r chi.Router, pool *db.Pool) {
 		db.NewSearchAnalyticsRepository(pool),
 		handlers.PreviewSlugsFromEnv(),
 	)
+	overviewHandler.SetOverviewCache(handlers.NewOverviewCache())
+	handlers.SetOverviewCacheInvalidator(overviewHandler.InvalidateCache)
 	r.Get("/v1/homepage/overview", overviewHandler.GetOverview)
 	r.Get("/v1/homepage/activity", overviewHandler.GetActivity)
 	r.Get("/v1/homepage/rooms", overviewHandler.GetRooms)
 	r.Get("/v1/homepage/search", overviewHandler.GetSearch)
 	r.Get("/v1/homepage/api-usage", overviewHandler.GetAPIUsage)
+
+	// Task 14: consolidated /v1/overview endpoint with the richer meta envelope
+	// and a bounded 30-second server-side cache. /v1/overview/activity is the
+	// cursor-paginated Load more behind the stream.
+	r.Get("/v1/overview", overviewHandler.GetOverviewConsolidated)
+	r.Get("/v1/overview/activity", overviewHandler.GetActivity)
 }

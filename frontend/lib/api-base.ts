@@ -99,6 +99,7 @@ import type {
   APIHomepageRoomsResponse,
   APIHomepageSearchResponse,
   APIHomepageAPIUsageResponse,
+  APIOverviewResponse,
   APIConnectStartResponse,
   ConnectStartParams,
 } from './api-types';
@@ -272,6 +273,19 @@ export class SolvrAPIBase {
   // the all-time totals and the reusable posts.
   async getHomepageOverview(): Promise<APIHomepageOverviewResponse> {
     return this.fetch<APIHomepageOverviewResponse>('/v1/homepage/overview');
+  }
+
+  // The consolidated overview endpoint (Task 14). Same data as
+  // getHomepageOverview, but wrapped in a meta envelope carrying generated_at,
+  // window boundaries, source availability, and any partial-error state.
+  // The browser renders the data and meta it receives; it computes nothing.
+  async getOverview(window?: string): Promise<APIOverviewResponse> {
+    const params = new URLSearchParams();
+    if (window) params.set('window', window);
+    const query = params.toString();
+    return this.fetch<APIOverviewResponse>(
+      `/v1/overview${query ? `?${query}` : ''}`,
+    );
   }
 
   // The homepage activity stream: Load more behind it, and — when a cursor is

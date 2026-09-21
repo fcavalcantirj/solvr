@@ -341,6 +341,46 @@ export interface APIHomepageOverviewResponse {
   data: APIHomepageOverview;
 }
 
+// --- Task 14: consolidated /v1/overview envelope ---
+
+// The meta block that GET /v1/overview wraps around its data, so the browser
+// can state when the snapshot was read, what window it covers, which subsystems
+// answered, and what (if anything) degraded.
+export interface APIOverviewWindowOption {
+  value: string;
+  label: string;
+  selected: boolean;
+}
+
+export interface APIOverviewMetaWindow {
+  value: string;
+  label: string;
+  start: string;
+  end: string;
+}
+
+export interface APIOverviewMetaBoundaries {
+  start_time: string;
+  end_time: string;
+}
+
+export interface APIOverviewMeta {
+  generated_at: string;
+  window: APIOverviewMetaWindow;
+  window_boundaries: APIOverviewMetaBoundaries;
+  window_definition: string;
+  source_availability: Record<string, boolean>;
+  partial_errors: string[];
+}
+
+// GET /v1/overview returns the HomepageOverview payload inside a richer envelope
+// with a meta block. The data shape is unchanged from /v1/homepage/overview;
+// only the wrapper gained a meta field.
+export interface APIOverviewResponse {
+  data: APIHomepageOverview;
+  meta: APIOverviewMeta;
+}
+
 export interface APIHomepageActivityResponse {
   data: APIOverviewActivity;
 }

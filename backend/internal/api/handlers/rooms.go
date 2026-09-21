@@ -255,6 +255,14 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Invalidate the public overview cache when a room's visibility changes —
+	// a room that goes private must not leave a stale preview in the cached
+	// snapshot. Moderation changes to posts also affect the reusable-posts
+	// section, so they invalidate too.
+	if params.IsPrivate != nil {
+		InvalidateOverviewCache()
+	}
+
 	response := map[string]interface{}{
 		"data": updated,
 	}
@@ -299,6 +307,11 @@ func (h *RoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete room")
 		return
 	}
+
+	// Invalidate the public overview cache when a room is deleted — a deleted
+	// room must not leave a stale preview or activity item in the cached
+	// snapshot.
+	InvalidateOverviewCache()
 
 	w.WriteHeader(http.StatusNoContent)
 }

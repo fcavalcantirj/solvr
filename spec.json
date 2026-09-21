@@ -190,7 +190,7 @@
       "Verify public overview responses contain no private-room identities, excerpts, credential fields, raw user identifiers, or unrestricted search logs.",
       "Verify failures in search statistics do not prevent room data or prompt copying from working and clients display API results without recalculating domain counts."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

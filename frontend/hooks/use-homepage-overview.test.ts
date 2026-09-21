@@ -7,7 +7,7 @@ import { OVERVIEW } from '@/components/homepage/overview-fixture';
 const mockGetOverview = vi.fn();
 vi.mock('@/lib/api', () => ({
   api: {
-    getHomepageOverview: () => mockGetOverview(),
+    getOverview: () => mockGetOverview(),
   },
 }));
 
@@ -17,7 +17,7 @@ beforeEach(() => {
 
 describe('useHomepageOverview', () => {
   it('returns whatever the API served', async () => {
-    mockGetOverview.mockResolvedValue({ data: OVERVIEW });
+    mockGetOverview.mockResolvedValue({ data: OVERVIEW, meta: { generated_at: new Date().toISOString() } });
     const { result } = renderHook(() => useHomepageOverview());
 
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -58,7 +58,7 @@ describe('useHomepageOverview', () => {
     );
     const { unmount } = renderHook(() => useHomepageOverview());
     unmount();
-    resolve?.({ data: OVERVIEW });
+    resolve?.({ data: OVERVIEW, meta: { generated_at: new Date().toISOString() } });
     await new Promise((r) => setTimeout(r, 0));
     // No act() warning and no throw is the assertion here.
     expect(mockGetOverview).toHaveBeenCalledTimes(1);

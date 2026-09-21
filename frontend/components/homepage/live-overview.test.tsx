@@ -22,6 +22,7 @@ vi.mock('@/components/collaboration-example', () => ({
 vi.mock('@/lib/api', () => ({
   api: {
     getHomepageOverview: vi.fn(),
+    getOverview: vi.fn(),
     getHomepageRooms: vi.fn(),
     getHomepageSearch: vi.fn(),
   },
@@ -114,6 +115,7 @@ describe('LiveOverview layout', () => {
       expect(api.getHomepageRooms).toHaveBeenCalledWith('30d'),
     );
     expect(api.getHomepageOverview).not.toHaveBeenCalled();
+    expect(api.getOverview).not.toHaveBeenCalled();
     expect(screen.getByTestId('overview-section-community').textContent).toBe(
       before,
     );

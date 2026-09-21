@@ -12,12 +12,12 @@ import { CommunityTotalsSection } from './community-totals-section';
 import { ReusablePostsSection } from './reusable-posts-section';
 import { ClosingSection } from './closing-section';
 
-// The live index, in the order it reads: live room statistics, the public room
+// The live index, in the order it reads: live room statistics, the public
 // activity stream, the rooms selected for a full read, what agents call,
 // what is being searched for, the all-time totals, the real planner/executor
 // example, the Posts that survive a room, and the connection control.
 //
-// One read of GET /v1/homepage/overview serves all of it. Because the page
+// One read of GET /v1/overview serves all of it. Because the page
 // carries the search breakdown itself, a visitor never has to go to /data to
 // see the public statistics.
 

@@ -2683,3 +2683,74 @@ UAT: ONE THING TO CONFIRM ON DEPLOY. ADMIN_API_KEY must be set in the
     it). If it ever becomes unset, every /admin route now answers 503 rather
     than falling open; that is deliberate, and worth knowing before somebody
     reads the 503 as an outage.
+
+2026-09-21 05:27: RALPH STOPPED — overnight deadline 05:00 reached after 9 batches (engine claude). 14/95 (14%) · 38 UAT pending
+
+2026-09-21 12:05 — TASK 14 "Serve the live homepage through bounded, permission-aware
+overview endpoints" — COMPLETED (passes=true)
+
+WHAT SHIPPED
+
+  BACKEND
+  - backend/internal/api/handlers/overview_cache.go (NEW, 132 lines):
+    OverviewCache struct with 30s TTL, 6-entry max, window-keyed Get/Set/
+    Invalidate methods. Package-level invalidator hook
+    (SetOverviewCacheInvalidator/InvalidateOverviewCache) so the room write
+    path can invalidate without threading the cache through handlers.
+  - backend/internal/api/handlers/homepage_overview.go (713 lines):
+    Added OverviewMeta, OverviewWindowMeta, OverviewWindowBoundaries,
+    OverviewResponse structs. Added buildOverviewMeta, sourceAvailability,
+    and buildOverview() shared method that tracks partial errors per subsystem.
+    Added GetOverviewConsolidated handler serving from cache + wrapping in the
+    meta envelope. Added SetOverviewCache() and InvalidateCache() methods.
+    The original GetOverview still serves /v1/homepage/overview unchanged.
+  - backend/internal/api/router_homepage.go: mounted GET /v1/overview and
+    GET /v1/overview/activity. Wired cache and invalidator.
+  - backend/internal/api/handlers/rooms.go: added InvalidateOverviewCache()
+    call in UpdateRoom (when IsPrivate changes) and in DeleteRoom (after
+    SoftDelete).
+
+  FRONTEND
+  - frontend/lib/homepage-types.ts: added APIOverviewMeta, APIOverviewResponse,
+    APIOverviewWindowOption, APIOverviewMetaWindow, APIOverviewMetaBoundaries
+    types for the consolidated envelope.
+  - frontend/lib/api-base.ts: added getOverview(window?) method calling /v1/overview.
+  - frontend/hooks/use-homepage-overview.ts: updated to call getOverview()
+    instead of getHomepageOverview(); still exposes `overview` as
+    APIHomepageOverview (backward compat for live-overview.tsx) and now also
+    exposes `meta` (APIOverviewMeta).
+  - frontend/components/homepage/live-overview.tsx: comment updated to reference
+    /v1/overview.
+
+  TESTS
+  - backend/internal/api/router_homepage_consolidated_test.go (268 lines, 7 tests):
+    EnvelopeShape, WindowValidation, CacheControl, NeverLeaksAPrivateRoom,
+    ActivityAliasRouted, PartialErrorDegradation, CacheInvalidatedOnVisibilityChange.
+    All PASS against isolated database
+    postgres://solvr:solvr_dev@localhost:5435/solvr_test.
+
+  VERIFICATION
+  [TEST] TestOverviewConsolidated_* — all 7 PASS, run with
+    DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test against
+    an isolated database (DROP + CREATE DATABASE solvr_test TEMPLATE solvr).
+  [REAL] go build ./... exits 0. go vet ./internal/api/handlers/ clean.
+  [REAL] go vet ./internal/api/ clean.
+  [REAL] bash scripts/check-file-size.sh: no NEW violations. All new/edited
+    files under 800 lines (homepage_overview.go 713, overview_cache.go 132,
+    rooms.go 451, api-base.ts 791, homepage-types.ts 398, live-overview.tsx 79,
+    use-homepage-overview.ts 44).
+  [REAL] 2 api_request_events table does not exist on the local dev/test schema —
+    GetAPIUsagePulse returns an error that is caught and reported as a
+    partial_error in the meta envelope, while the rest of the overview still
+    serves (degradation path proven by TestOverviewConsolidated_PartialErrorDegradation).
+  [REAL] npx tsc --noEmit: ZERO errors.
+  [TEST] frontend: hooks/use-homepage-overview.test.ts (6 tests) PASS,
+    components/homepage/live-overview.test.tsx (7 tests) PASS.
+  [REAL] Full frontend suite: 141 files / 1402 tests, ALL PASS.
+
+  KNOWN GAP
+  The api_request_events table is absent from the local schema (it is a
+  production-only table). On /v1/overview, the api_usage section degrades to
+  "unavailable" via partial_errors while every other section serves normally —
+  this is the graceful-degradation path the task requires. Production has the
+  table and will show real API usage numbers.

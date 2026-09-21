@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -380,6 +382,9 @@ type HomepageOverviewHandler struct {
 	searchRepo *db.SearchAnalyticsRepository
 	// previewSlugs is the editorial allow-list, in display order.
 	previewSlugs []string
+	// cache is the bounded 30-second server-side cache for the consolidated
+	// endpoint. May be nil (no caching).
+	cache *OverviewCache
 }
 
 // NewHomepageOverviewHandler wires the overview to the repositories it reads.
@@ -396,6 +401,181 @@ func NewHomepageOverviewHandler(
 		statsRepo:    statsRepo,
 		searchRepo:   searchRepo,
 		previewSlugs: previewSlugs,
+	}
+}
+
+// SetOverviewCache attaches a bounded server-side cache so the consolidated
+// endpoint can serve a 30-second snapshot instead of re-reading the database on
+// every request. Called by the router when a pool is available.
+func (h *HomepageOverviewHandler) SetOverviewCache(c *OverviewCache) {
+	h.cache = c
+}
+
+// InvalidateCache drops the server-side cache. Called by the package-level
+// invalidator hook when rooms change visibility or are moderated.
+func (h *HomepageOverviewHandler) InvalidateCache() {
+	if h.cache != nil {
+		h.cache.Invalidate()
+	}
+}
+
+// OverviewMeta is the envelope around the overview data that Task 14 introduces:
+// metadata about when the snapshot was read, what window it covers, which
+// subsystems responded, and any partial errors that occurred.
+type OverviewMeta struct {
+	// GeneratedAt is when this snapshot was read from the database.
+	GeneratedAt time.Time `json:"generated_at"`
+
+	// Window is the selected measurement window and its boundaries.
+	Window OverviewWindowMeta `json:"window"`
+
+	// WindowBoundaries are the exact start and end instants of the selected window.
+	WindowBoundaries OverviewWindowBoundaries `json:"window_boundaries"`
+
+	// WindowDefinition is a human-readable sentence describing the window.
+	WindowDefinition string `json:"window_definition"`
+
+	// SourceAvailability reports which subsystems answered successfully. A
+	// subsystem that failed to read is false here and listed in PartialErrors.
+	SourceAvailability map[string]bool `json:"source_availability"`
+
+	// PartialErrors lists the subsystems that failed, with a short description.
+	// The data section is still served with whatever was available.
+	PartialErrors []string `json:"partial_errors"`
+}
+
+// OverviewWindowMeta describes the selected time window.
+type OverviewWindowMeta struct {
+	Value string    `json:"value"`
+	Label string    `json:"label"`
+	Start time.Time `json:"start"`
+	End   time.Time `json:"end"`
+}
+
+// OverviewWindowBoundaries are the exact start and end instants of the window.
+type OverviewWindowBoundaries struct {
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
+}
+
+// OverviewResponse is the Task 14 consolidated envelope: the existing
+// HomepageOverview data plus the meta block.
+type OverviewResponse struct {
+	Data HomepageOverview `json:"data"`
+	Meta OverviewMeta     `json:"meta"`
+}
+
+// buildOverview assembles the full HomepageOverview from all subsystems,
+// recording which sources succeeded and which partially failed. The returned
+// partialErrors slice names every subsystem that could not be read.
+func (h *HomepageOverviewHandler) buildOverview(ctx Context, window db.RoomStatsWindow) (HomepageOverview, []string) {
+	var partialErrors []string
+
+	pulse, err := h.homeRepo.GetRoomPulse(ctx, window)
+	if err != nil {
+		slog.Error("homepage overview: room pulse failed", "error", err, "window", window.Value)
+		pulse = db.RoomPulse{Window: window}
+		partialErrors = append(partialErrors, "room statistics unavailable: "+err.Error())
+	}
+
+	activityRows, err := h.homeRepo.ListPublicRoomFeed(ctx, overviewActivityDefaultLimit+1, 0)
+	if err != nil {
+		slog.Error("homepage overview: activity failed", "error", err)
+		partialErrors = append(partialErrors, "activity stream unavailable: "+err.Error())
+	}
+
+	stats, err := h.statsRepo.GetAllStats(ctx)
+	if err != nil {
+		slog.Error("homepage overview: stats failed", "error", err)
+		stats = nil
+		partialErrors = append(partialErrors, "community statistics unavailable: "+err.Error())
+	}
+
+	usage, err := h.homeRepo.GetAPIUsagePulse(ctx, window)
+	if err != nil {
+		slog.Error("homepage overview: api usage failed", "error", err, "window", window.Value)
+		usage = db.APIUsagePulse{Window: window}
+		partialErrors = append(partialErrors, "API usage unavailable: "+err.Error())
+	}
+
+	searchPulse, err := h.homeRepo.GetSearchPulse(ctx, window, searchTermDisplayLimit)
+	if err != nil {
+		slog.Error("homepage overview: search pulse failed", "error", err, "window", window.Value)
+		searchPulse = db.SearchPulse{Window: window}
+		partialErrors = append(partialErrors, "search statistics unavailable: "+err.Error())
+	}
+
+	posts, err := h.homeRepo.ListReusablePosts(ctx, overviewReusablePostLimit)
+	if err != nil {
+		slog.Error("homepage overview: reusable posts failed", "error", err)
+		posts = nil
+		partialErrors = append(partialErrors, "reusable posts unavailable: "+err.Error())
+	}
+
+	totals, err := h.homeRepo.GetAllTimeTotals(ctx)
+	if err != nil {
+		slog.Error("homepage overview: all-time totals failed", "error", err)
+		totals = nil
+		partialErrors = append(partialErrors, "all-time totals unavailable: "+err.Error())
+	}
+
+	overview := HomepageOverview{
+		Rooms:       buildOverviewRooms(pulse),
+		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0, 0, time.Now()),
+		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx), h.previewSlugs),
+		APIUsage:    buildOverviewAPIUsage(usage),
+		Search:      buildOverviewSearch(searchPulse),
+		Community:   buildOverviewCommunity(totals, stats),
+		Posts:       buildOverviewPosts(posts),
+		Closing:     buildOverviewClosing(),
+		GeneratedAt: time.Now().UTC(),
+	}
+
+	enforcePublicOverviewMetrics(&overview)
+	return overview, partialErrors
+}
+
+// sourceAvailability maps each subsystem name to whether it succeeded. It
+// inspects the partial error strings, which are named by subsystem.
+func sourceAvailability(partialErrors []string) map[string]bool {
+	all := []string{"rooms", "activity", "api_usage", "search", "community", "previews", "posts"}
+	avail := make(map[string]bool, len(all))
+	for _, s := range all {
+		avail[s] = true
+	}
+	for _, e := range partialErrors {
+		// Each error string starts with the subsystem name followed by a space
+		// and a description. Match the prefix.
+		for _, s := range all {
+			if strings.HasPrefix(e, s+" ") || strings.HasPrefix(e, s+" statistics") || strings.HasPrefix(e, s+" stream") || strings.HasPrefix(e, s+" posts") {
+				avail[s] = false
+				break
+			}
+		}
+	}
+	return avail
+}
+
+// buildOverviewMeta constructs the meta envelope for the consolidated response.
+func buildOverviewMeta(window db.RoomStatsWindow, partialErrors []string) OverviewMeta {
+	now := time.Now().UTC()
+	start := now.Add(-window.Duration)
+
+	return OverviewMeta{
+		GeneratedAt: now,
+		Window: OverviewWindowMeta{
+			Value: window.Value,
+			Label: window.Label,
+			Start: start,
+			End:   now,
+		},
+		WindowBoundaries: OverviewWindowBoundaries{
+			StartTime: start,
+			EndTime:   now,
+		},
+		WindowDefinition: fmt.Sprintf("Metrics measured over the %s (%s).", window.Label, window.WindowText),
+		SourceAvailability: sourceAvailability(partialErrors),
+		PartialErrors:      partialErrors,
 	}
 }
 
@@ -478,3 +658,56 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Cache-Control", "public, max-age=30")
 	roomWriteJSON(w, http.StatusOK, map[string]any{"data": overview})
 }
+
+// GetOverviewConsolidated handles GET /v1/overview. Public, no auth.
+//
+// This is the Task 14 consolidated endpoint: it wraps the existing homepage
+// overview in a richer envelope with a meta block carrying generated_at, window
+// boundaries, source availability, and partial-error state. It is served from a
+// bounded 30-second server-side cache that is invalidated when rooms change
+// visibility or are moderated.
+func (h *HomepageOverviewHandler) GetOverviewConsolidated(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	window := parseRoomStatsWindow(r)
+
+	cacheKey := window.Value
+
+	// Try the cache first.
+	if h.cache != nil {
+		if cached, ok := h.cache.Get(cacheKey); ok {
+			w.Header().Set("Cache-Control", "public, max-age=30")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write(cached)
+			return
+		}
+	}
+
+	overview, partialErrors := h.buildOverview(ctx, window)
+	meta := buildOverviewMeta(window, partialErrors)
+
+	resp := OverviewResponse{
+		Data: overview,
+		Meta: meta,
+	}
+
+	var buf []byte
+	buf, err := json.Marshal(resp)
+	if err != nil {
+		slog.Error("homepage overview: failed to marshal consolidated response", "error", err)
+		roomWriteError(w, http.StatusInternalServerError, "SERIALIZATION_ERROR", "failed to serialize overview")
+		return
+	}
+
+	// Store in cache.
+	if h.cache != nil {
+		h.cache.Set(cacheKey, buf)
+	}
+
+	w.Header().Set("Cache-Control", "public, max-age=30")
+	roomWriteJSON(w, http.StatusOK, resp)
+}
+
+// Context is a type alias so buildOverview can be called with an http context
+// without importing http into the signature. (Kept minimal for readability.)
+type Context = context.Context

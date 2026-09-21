@@ -2094,3 +2094,207 @@ UAT: ONE STANDING DECISION IS THE OWNER'S, BY DESIGN. Publishing any traffic
     code that starts publishing traffic once it is large enough, and adding the
     metric key to PublicOverviewMetrics is the deliberate act that would let
     one through.
+
+================================================================================
+2026-09-21 — TASK 6: LET VISITORS COPY THE FIRST CONNECTION PROMPT DIRECTLY
+              FROM THE HOMEPAGE
+================================================================================
+
+WHAT THE TASK NEEDED THAT DID NOT EXIST YET. Nothing on the index could copy a
+prompt, /connect had no page at all (next.config redirected it to
+/connect/agent, which pushes a logged-out visitor to /login), and there was no
+API-owned instruction contract for two surfaces to share. So this task built
+the contract first and gave both surfaces the same component.
+
+BACKEND — GET /v1/connect, THE START-FLOW CONTRACT (public, no auth).
+  backend/internal/api/handlers/connect.go          (329 lines)
+  backend/internal/api/handlers/connect_prompts.go  (182 lines)
+  backend/internal/api/router_connect.go            (29 lines, mounted from
+      router.go beside mountHomepageRoutes; router.go is already over the
+      file-size limit so the route lives in its own file)
+
+  The API decides EVERYTHING the panel shows: heading, intro, the task field's
+  label/placeholder/note/bound, the two option groups and their question, which
+  preset and which visibility is selected, what each choice MEANS in words, the
+  copy control's label and its Copied label, the sentence that names the agent
+  the prompt must be pasted into, the two initial copy/paste steps, the example
+  link, the note that copying alone connects nothing — and the prompt text
+  itself, character for character.
+    ?task=       optional free text, bounded at 2000 runes (400 above it)
+    ?preset=     plan-and-build (default) | collaborate  -> 400 on anything else
+    ?visibility= public (default) | private              -> 400 on anything else
+  An unknown value is refused rather than guessed: the API never picks a room
+  shape somebody did not ask for.
+
+  The prompt is written in Go, not in the browser, because the endpoints it
+  names, the identity it demands and the visibility it creates are product
+  decisions. It uses absolute production URLs (the agent reading it is not in
+  the browser that copied it), tells the agent to REUSE its own Solvr identity
+  or self-register, create the room it will own, take its own per-agent room
+  token through handshake, join, post the task, and hand back the real room URL
+  plus a complete prompt for the second agent — and to report a failed call as
+  the exact error, never as a fabricated room link. It contains no "$" and no
+  "${" anywhere, so nothing in it can read as a shell or template expansion,
+  and the slug placeholder is the unmistakable ROOM_SLUG.
+
+  The example link only points at the showcase room while that room really is
+  public and readable; missing, deleted, private or unreadable degrades to the
+  public rooms list rather than to a dead link. The slug is the same
+  HOMEPAGE_EXAMPLE_ROOM_SLUG the homepage example uses, so the two surfaces
+  can never point at different collaborations.
+
+FRONTEND — ONE PANEL, TWO SURFACES.
+  frontend/components/connect/connect-panel.tsx  (255 lines) — the shared panel
+  frontend/hooks/use-connect-start.ts            (56)  — holds only what the
+      visitor typed or chose; a choice not yet made is NOT sent, so the API's
+      defaults are the only defaults anywhere
+  frontend/lib/connect-types.ts                  (93)  + re-export from
+      lib/api-types.ts, and api.getConnectStart() in lib/api-base.ts
+  frontend/app/connect/page.tsx                  (29)  — the full page
+  frontend/components/hero-section.tsx           — Connect agents now is now a
+      control that opens the panel INLINE under the proposition (aria-expanded
+      / aria-controls), not a link that leaves the index
+  frontend/components/header.tsx                 — a compact CONNECT action in
+      the mobile bar, outside the menu
+  frontend/next.config.mjs                       — the /connect -> /connect/agent
+      redirect is GONE (that placeholder was the reason /connect demanded a login)
+
+  The panel renders API strings only. It writes no prompt, no endpoint, no
+  visibility rule; it types into a field, sends the choice back, and copies the
+  characters it was given.
+
+TESTS — ALL RAN, ALL GREEN, NONE SKIPPED.
+
+  [TEST] backend/internal/api/handlers — 15 unit tests PASS (connect_test.go):
+      defaults are plan-and-build + public with EXACTLY ONE selection in each
+      group; public and private each carry their own explanation; an empty task
+      still copies a complete prompt that tells the agent to ask for the task;
+      a typed task (with quotes, a semicolon and a tilde) reaches the prompt
+      verbatim and the prompt still contains no "$" and no backtick; private
+      flips the room the agent is told to create to "is_private": true;
+      collaborate switches the control to Copy starter prompt and its prompt
+      names no executor at all; every prompt names production endpoints and
+      never a fabricated room (no "/rooms/$", no "${"), and says "never invent";
+      the planner prompt reuses the agent's own identity, registers, handshakes,
+      and requires no human login and no CLI install; the two copy/paste steps
+      are numbered and explained; the example falls back to /rooms when the
+      showcase room is missing, private, or absent; the handler works with no
+      room repository at all; unknown preset/visibility and an over-long task
+      are 400s; the note says copying alone connects nothing.
+
+  [TEST] backend/internal/api — 5 end-to-end tests PASS against a real database
+      and the real router, called with NO credentials (router_connect_test.go):
+      the whole contract is served to a logged-out visitor and leaks no
+      credential or owner field; the typed task and the private choice reach
+      the prompt; unknown preset/visibility are 400; the example resolves to a
+      REAL public room seeded by the test; and — the important one —
+      TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes walks every
+      chi route the router really mounts and requires every "METHOD https://
+      api.solvr.dev/..." line in every prompt variant to be one of them. A
+      prompt cannot name an endpoint this API does not serve.
+
+  [TEST] THE GUARDS WERE PROVEN TO FAIL, NOT ONLY TO PASS:
+      1. Added "POST .../v1/rooms/ROOM_SLUG/invite" to the planner prompt. The
+         walk test failed with: prompt (query "") tells the agent to call
+         POST /v1/rooms/{slug}/invite, which this API does not serve. Reverted.
+      2. Put a hardcoded "POST https://api.solvr.dev/v1/agents/register" in
+         connect-panel.tsx. The dumb-terminal test failed by name. Reverted.
+      (That walk test also caught a real mistake while being written: it first
+      walked a router built WITHOUT the hub, where the room routes are not
+      mounted at all, and correctly reported POST /v1/rooms as unserved.)
+
+  [TEST] frontend — 16 new panel tests + 5 new /connect page tests PASS, plus
+      the hero and next.config tests updated to the new behaviour:
+      the panel publishes the API's heading/intro/note, the task field with its
+      label, placeholder, note and maxlength; every preset and visibility with
+      its explanation and the API's selection; the two numbered steps; the real
+      example link; the exact paste instruction and the next step; clicking
+      Copy writes EXACTLY prompt.text to the clipboard and then shows the API's
+      Copied label; the prompt is always visible and selectable; the first call
+      sends NO parameters (the API owns the defaults); typing a task, changing
+      the preset and changing the visibility each re-read the contract and the
+      panel renders what comes back rather than relabelling what it had; a
+      loading state, and a failure that reports the error instead of inventing
+      a prompt; the compact panel links the full page, the page does not link
+      itself, and the headings are h2/h1 respectively; and the panel source
+      contains no endpoint, no prompt sentence and no preset value of its own.
+      The hero tests now require a BUTTON that opens the panel in place, with
+      aria-expanded, no role="dialog" and no fixed positioning — an overlay
+      would take the index away from someone reading it.
+
+  [TEST] frontend full suite: 139 files, 1389 tests, ALL PASS (was 137/1364).
+      npx tsc --noEmit clean. npx next lint on the five touched files: no
+      warnings. npm run build succeeds and /connect is in the output (196 B,
+      static) — it builds under output: 'standalone'.
+
+  [TEST] NO BACKEND REGRESSION, MEASURED BY COMPARISON ON A FRESH DATABASE.
+      DATABASE_URL pointed at postgres://localhost:5435/solvr_test, a LOCAL
+      database created as a template clone of the local solvr dev database;
+      production was never touched. ./internal/api/... run twice, each on a
+      freshly recreated solvr_test:
+        with this change              : 12 failing tests
+        HEAD (stashed --include-untracked) : 12 failing tests
+        diff of the two sorted lists  : IDENTICAL
+      They are the known pre-existing ones (GitHub OAuth integration, IPFS
+      health, comments_count, type-specific list endpoints). A full go test
+      ./... also shows the pre-existing internal/db failures (users.referral_code
+      NOT NULL, room slug collisions, service_checks fixtures) — data-dependent
+      on the cloned database and unrelated to this task.
+
+  [TEST] ./scripts/check-file-size.sh reports the same 36 pre-existing
+      violations as before; none is a file this task created or touched. The
+      largest new file is 329 lines.
+
+  [REAL] VERIFIED IN A REAL BROWSER AGAINST A RUNNING STACK. Previous processes
+      killed first. Go API on :8090 against postgres://localhost:5435/solvr_test
+      with a local JWT_SECRET and ALLOWED_ORIGINS in the environment
+      (backend/.env NOT touched, NOT loaded); next dev on :3111 with
+      NEXT_PUBLIC_API_URL=http://localhost:8090; Chromium through playwright-core.
+        curl with NO credentials: /v1/connect returns the 14-key contract,
+          defaults plan-and-build + public, example kind "real" ->
+          /rooms/tictactoe-human-vs-computer-20260920, prompt contains no "$";
+          ?task=Fix the "flaky" login test; it fails ~1 in 5 runs is echoed and
+          reaches the prompt verbatim; ?visibility=private flips the room to
+          "is_private": true; ?preset=collaborate returns Copy starter prompt
+          and a prompt with no "executor" in it; ?preset=solo and
+          ?visibility=unlisted return 400 INVALID_PRESET / INVALID_VISIBILITY.
+        Index at / : the panel is absent (0) before the click and present (1)
+          after clicking Connect agents now — no navigation; heading "Connect
+          your agents"; control reads COPY PLANNER PROMPT; the sentence "Paste
+          this into your planner. It will give you the prompt for your executor."
+          is visible; with the field empty the prompt says "Ask me what we are
+          working on". Typing a task put it in the prompt; choosing Private put
+          "is_private": true in it. Clicking Copy put 2227 characters on the
+          clipboard, EQUAL to the prompt the API sent. The panel links /connect
+          and /rooms/tictactoe-human-vs-computer-20260920.
+        /connect directly: 200 (it was a 307 to /connect/agent before this
+          task), data-variant="page", h1 "Connect your agents", no redirect to
+          /login, same COPY PLANNER PROMPT control, canonical
+          https://solvr.dev/connect.
+        iPhone 13 viewport (664px tall): after scrolling 4000px down the index,
+          the CONNECT action is visible at y=16 inside the fixed header — in the
+          bar, not an overlay over the content or the table controls below.
+      Both processes were killed, ports 8090/3111 are clear, solvr_test dropped.
+      No call left localhost.
+
+NOTE: SPEC.md was not edited — no step asked for it. Task 25 owns specifying
+    GET /v1/connect (versioning, GET /v1/rooms/{slug}/connect, and using the
+    same content for the skill, the CLI and the docs); this task built the
+    contract those will extend.
+NOTE: task 16 owns the rest of /connect — Add another agent, Customize,
+    advanced instructions, direct API examples, and the proof that copying a
+    starter prompt creates no room. The page it will deepen now exists and is
+    reachable without authentication.
+NOTE: task 24 owns copy robustness. What exists today: the prompt is always
+    visible and selectable, Copied appears only after the clipboard call
+    resolves, and a rejected clipboard shows a manual-copy instruction.
+NOTE: frontend/app/connect/agent/page.tsx is untouched and still redirects to
+    the agent-claim flow. Only /connect itself stopped redirecting.
+
+UAT: NOTHING OWNER-ONLY WAS LEFT OUTSTANDING — no production migration, no
+    deploy step, no broadcast. Every automated check ran locally and green, and
+    the behaviour was confirmed in a real browser.
+UAT: ONE THING IS WORTH THE OWNER'S EYES BEFORE THIS SHIPS: the wording of the
+    copied prompt is the product's first contact with someone else's agent.
+    Paste the planner prompt into your own agent once and read what it does
+    with it — task 17 is where that round trip becomes a test.

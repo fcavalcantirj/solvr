@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,6 +22,15 @@ const EXAMPLE_ROOM = '/rooms/tictactoe-human-vs-computer-20260920';
 const mockUseAuth = vi.fn();
 vi.mock('@/hooks/use-auth', () => ({
   useAuth: () => mockUseAuth(),
+}));
+
+// The hero opens the SHARED connection panel — the same component /connect
+// renders full-page. Its contents are proven in its own test; here only the
+// opening matters.
+vi.mock('@/components/connect/connect-panel', () => ({
+  ConnectPanel: ({ variant }: { variant?: string }) => (
+    <div data-testid="connect-panel" data-variant={variant} />
+  ),
 }));
 
 const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
@@ -57,10 +66,37 @@ describe('HeroSection proposition', () => {
 describe('HeroSection calls to action', () => {
   it('makes Connect agents now the primary, filled action', () => {
     render(<HeroSection />);
-    const cta = screen.getByRole('link', { name: 'Connect agents now' });
-    expect(cta).toHaveAttribute('href', '/connect');
+    const cta = screen.getByRole('button', { name: /Connect agents now/i });
     expect(cta.className).toContain('bg-foreground');
     expect(cta.className).toContain('text-background');
+  });
+
+  it('opens the connection panel on the index itself, without leaving the page', () => {
+    render(<HeroSection />);
+    expect(screen.queryByTestId('connect-panel')).not.toBeInTheDocument();
+
+    const cta = screen.getByRole('button', { name: /Connect agents now/i });
+    expect(cta).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(cta);
+
+    const panel = screen.getByTestId('connect-panel');
+    expect(panel).toHaveAttribute('data-variant', 'panel');
+    expect(screen.getByRole('button', { name: /Connect agents now/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
+  it('keeps the panel inline under the proposition rather than covering the page', () => {
+    render(<HeroSection />);
+    fireEvent.click(screen.getByRole('button', { name: /Connect agents now/i }));
+    const panel = screen.getByTestId('connect-panel');
+    // An overlay would take the page away from a visitor reading the index.
+    expect(panel.closest('[role="dialog"]')).toBeNull();
+    expect(panel.closest('.fixed')).toBeNull();
+    const heading = screen.getByRole('heading', { level: 1 });
+    // DOCUMENT_POSITION_FOLLOWING = 4
+    expect(heading.compareDocumentPosition(panel) & 4).toBeTruthy();
   });
 
   it('makes Watch an example the secondary action on the public example room', () => {
@@ -94,8 +130,9 @@ describe('HeroSection calls to action', () => {
     ]) {
       mockUseAuth.mockReturnValue(auth);
       const { container, unmount } = render(<HeroSection />);
-      const names = Array.from(container.querySelectorAll('a')).map((a) => squish(a.textContent));
-      expect(names).toEqual(['Connect agents now', 'Watch an example']);
+      const links = Array.from(container.querySelectorAll('a')).map((a) => squish(a.textContent));
+      expect(links).toEqual(['Watch an example']);
+      expect(screen.getByRole('button', { name: /Connect agents now/i })).toBeInTheDocument();
       unmount();
     }
   });
@@ -117,7 +154,7 @@ describe('HeroSection workflow', () => {
 
   it('puts the workflow after the connection control', () => {
     render(<HeroSection />);
-    const cta = screen.getByRole('link', { name: 'Connect agents now' });
+    const cta = screen.getByRole('button', { name: /Connect agents now/i });
     const list = screen.getByRole('list', { name: /how it starts/i });
     // DOCUMENT_POSITION_FOLLOWING = 4
     expect(cta.compareDocumentPosition(list) & 4).toBeTruthy();

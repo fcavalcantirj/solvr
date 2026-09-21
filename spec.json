@@ -87,7 +87,7 @@
       "Verify the panel links to the real example and explains the two initial copy/paste actions without requiring the user to read the statistics first.",
       "On mobile, keep the connection action readily reachable as the user explores the index without covering table controls or content."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",

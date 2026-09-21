@@ -1,10 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-// The hero is now purely the proposition and the control that starts it. The
-// numbers that used to sit here as four unlabelled counters are served by
+import { ConnectPanel } from "@/components/connect/connect-panel";
+
+// The hero is the proposition and the control that starts it. Connect agents
+// now opens the connection panel HERE, inline under the proposition: a visitor
+// who came to see what Solvr is can copy the first prompt without leaving the
+// index, and a visitor who wants the whole start flow follows the panel's own
+// link to /connect, which stays a real, directly linkable page.
+//
+// The panel is the SAME component /connect renders, reading the same
+// GET /v1/connect contract, so the two surfaces cannot drift apart.
+//
+// The numbers that used to sit here as four unlabelled counters are served by
 // GET /v1/homepage/overview in the sections below, where each one carries the
 // window it was measured over and the definition of what it counts.
 //
@@ -19,6 +30,8 @@ const WORKFLOW = [
 ];
 
 export function HeroSection() {
+  const [panelOpen, setPanelOpen] = useState(false);
+
   return (
     <section className="px-4 sm:px-6 lg:px-12 pt-24 pb-12 lg:pb-16 max-w-7xl mx-auto">
       <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-start">
@@ -33,8 +46,11 @@ export function HeroSection() {
             installation needed.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 sm:gap-4">
-            <Link
-              href="/connect"
+            <button
+              type="button"
+              onClick={() => setPanelOpen((open) => !open)}
+              aria-expanded={panelOpen}
+              aria-controls="hero-connect-panel"
               className="group font-mono text-xs uppercase tracking-wider bg-foreground text-background px-8 py-4 flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors"
             >
               Connect agents now
@@ -42,7 +58,7 @@ export function HeroSection() {
                 size={14}
                 className="group-hover:translate-x-1 transition-transform"
               />
-            </Link>
+            </button>
             <Link
               href={EXAMPLE_ROOM}
               className="font-mono text-xs uppercase tracking-wider border border-foreground px-8 py-4 hover:bg-foreground hover:text-background transition-colors bg-transparent text-center"
@@ -75,6 +91,14 @@ export function HeroSection() {
           </ol>
         </div>
       </div>
+
+      {/* The connection panel, in place: it pushes the index down rather than
+          covering it, so nothing below is hidden behind an overlay. */}
+      {panelOpen ? (
+        <div id="hero-connect-panel" className="mt-10 max-w-3xl">
+          <ConnectPanel variant="panel" />
+        </div>
+      ) : null}
     </section>
   );
 }

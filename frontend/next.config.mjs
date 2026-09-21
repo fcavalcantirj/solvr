@@ -15,10 +15,11 @@ const nextConfig = {
   // Navigation destinations that do not have their own page yet.
   // The primary nav points at /posts; until the unified Posts collection page
   // exists it resolves to the existing combined knowledge listing.
+  // /connect is NOT here: it is a real page now — the prompt-first start flow —
+  // and redirecting it would send the primary action to a login.
   async redirects() {
     return [
       { source: '/posts', destination: '/feed', permanent: false },
-      { source: '/connect', destination: '/connect/agent', permanent: false },
     ];
   },
   // SEO: Set proper cache headers for public content pages

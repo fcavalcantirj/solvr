@@ -15,9 +15,9 @@ async function headerRuleFor(source: string): Promise<HeaderRule | undefined> {
 }
 
 /**
- * The header's primary navigation points at /posts and its prominent action
- * points at /connect. Neither has its own page yet, so both must still resolve
- * rather than 404 — a navigation destination that dead-ends is a broken one.
+ * The header's primary navigation points at /posts, which has no page of its
+ * own yet and must still resolve rather than 404 — a navigation destination
+ * that dead-ends is a broken one. /connect, by contrast, IS a page now.
  */
 describe('next.config redirects', () => {
   it('resolves the /posts navigation destination', async () => {
@@ -29,13 +29,11 @@ describe('next.config redirects', () => {
     expect(posts?.permanent).toBe(false);
   });
 
-  it('resolves the /connect primary action', async () => {
-    const connect = await redirectFor('/connect');
-
-    expect(connect).toBeDefined();
-    expect(connect?.destination).toBe('/connect/agent');
-    // Temporary: task 16 replaces this with the prompt-first start flow.
-    expect(connect?.permanent).toBe(false);
+  it('lets /connect serve its own page instead of redirecting it away', async () => {
+    // /connect is now a real page: the prompt-first start flow, rendering the
+    // same panel the index opens inline. A redirect here would send the
+    // primary action to the old agent-claim flow, which demands a login.
+    expect(await redirectFor('/connect')).toBeUndefined();
   });
 });
 

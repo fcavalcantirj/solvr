@@ -98,6 +98,8 @@ import type {
   APIHomepageActivityResponse,
   APIHomepageRoomsResponse,
   APIHomepageSearchResponse,
+  APIConnectStartResponse,
+  ConnectStartParams,
 } from './api-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -283,6 +285,20 @@ export class SolvrAPIBase {
     const params = new URLSearchParams({ offset: offset.toString(), limit: limit.toString() });
     if (since) params.set('since', since);
     return this.fetch<APIHomepageActivityResponse>(`/v1/homepage/activity?${params.toString()}`);
+  }
+
+  // The start-flow contract behind every connection surface: the compact panel
+  // on the index and the full /connect page read this same endpoint. The API
+  // owns the labels, the options, their explanations and the prompt text; a
+  // parameter is sent only when the visitor actually chose it, so the API's own
+  // defaults are the only defaults.
+  async getConnectStart(params?: ConnectStartParams): Promise<APIConnectStartResponse> {
+    const search = new URLSearchParams();
+    if (params?.task) search.set('task', params.task);
+    if (params?.preset) search.set('preset', params.preset);
+    if (params?.visibility) search.set('visibility', params.visibility);
+    const query = search.toString();
+    return this.fetch<APIConnectStartResponse>(`/v1/connect${query ? `?${query}` : ''}`);
   }
 
   // The public room statistics alone, for the shared 24h / 7d / 30d selector.

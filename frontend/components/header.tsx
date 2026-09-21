@@ -118,16 +118,28 @@ export function Header() {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
-          <button
-            type="button"
-            aria-label="Toggle menu"
-            aria-expanded={isMenuOpen}
-            className="md:hidden p-2"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-          >
-            {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
+          {/* Mobile: the connection action sits in the bar itself, not behind
+              the menu. The index is long and statistics-rich, and a visitor
+              scrolling it must be able to start a connection at any point —
+              from the fixed header, without an overlay covering the content or
+              the table controls below it. */}
+          <div className="md:hidden flex items-center gap-2">
+            <Link
+              href="/connect"
+              className="md:hidden font-mono text-xs tracking-wider bg-foreground text-background px-4 py-2"
+            >
+              CONNECT
+            </Link>
+            <button
+              type="button"
+              aria-label="Toggle menu"
+              aria-expanded={isMenuOpen}
+              className="p-2"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            >
+              {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          </div>
         </div>
       </div>
 

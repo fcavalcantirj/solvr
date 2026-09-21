@@ -1482,3 +1482,4 @@ export interface APICollaborationExampleResponse {
 // already far past the 800-line limit) and is re-exported here so
 // '@/lib/api-types' stays the single import point for API shapes.
 export * from './homepage-types';
+export * from './connect-types';

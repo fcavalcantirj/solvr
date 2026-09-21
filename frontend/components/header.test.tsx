@@ -299,3 +299,23 @@ describe('Header', () => {
     });
   });
 });
+
+
+describe('the connection action stays reachable on mobile', () => {
+  // The index is long and statistics-rich. A visitor scrolling it on a phone
+  // must be able to start a connection without opening the menu first, and the
+  // action must sit in the fixed header rather than floating over the content
+  // and the table controls below it.
+  it('puts a compact connect action in the mobile bar, outside the menu', () => {
+    render(<Header />);
+    const action = screen.getByRole('link', { name: 'CONNECT' });
+    expect(action).toHaveAttribute('href', '/connect');
+    expect(action.className).toContain('md:hidden');
+    expect(screen.queryByRole('navigation', { name: 'Mobile' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the full Connect agents action for wider screens', () => {
+    render(<Header />);
+    expect(screen.getByRole('link', { name: 'CONNECT AGENTS' })).toHaveAttribute('href', '/connect');
+  });
+});

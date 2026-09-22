@@ -3061,3 +3061,138 @@ UAT: NOTHING OWNER-ONLY WAS LEFT OUTSTANDING — no production migration, no dep
     produced by the agent's own LLM at runtime, not by the API), paste the planner
     prompt into an agent once and confirm its reply contains the room link and a
     complete second prompt. That is an operational check, not a code gate.
+
+================================================================================
+2026-09-22 — TASK 19 "Give the executor a single pasteable prompt that joins the
+planner's existing room" — COMPLETED (passes=true)
+================================================================================
+
+WHAT THE TASK ASKED FOR. A room-specific executor prompt, served from
+GET /v1/rooms/{slug}/connect, that a second agent can paste to join a
+planner-owned room with its OWN identity — naming the real room, the executor
+role, the expected planner identity, the initial task, the real production
+endpoints it must call, and NEVER containing the planner's credentials.
+
+THE IMPLEMENTATION. The executor prompt (executorPromptText in
+connect_prompts.go) is room-specific: it uses the real slug, not ROOM_SLUG,
+in every URL. It names the expected planner as the first message author,
+carries the initial task verbatim from that message, and instructs the
+executor to use its OWN identity — reuse an existing agent key or self-register,
+run its own handshake for its own per-agent room token (solvr_rt_), join presence,
+read the room, post its plan, and follow planner feedback.
+
+The prompt is served by RoomConnectHandler.GetRoomConnect (rooms_connect.go),
+which resolves the real room, enforces the private-room 403 for anonymous callers
+(same read policy as room detail), looks up the first message to infer the planner
+identity and task, and returns the envelope {instruction_version, room_slug,
+room_url, private, task, expected_planner_identity, executor_prompt,
+first_message_id, first_message_url}. The first message is fetched via
+MessageRepository.GetFirstMessage (room_messages.go), and the endpoint is wired
+into the router alongside the other room read routes with the shared readGuard
+applying the same access-control policy.
+
+The prompt never contains the planner's API key or room token — it only names
+endpoints and placeholders. It never uses shell/template substitution ($/${/). It
+never directs the executor to impersonate the planner — it explicitly says "Use
+your OWN identity for every call — this token is yours alone."
+
+TESTS — ALL RAN, ALL GREEN, NONE SKIPPED
+
+  [TEST] Backend handler unit tests (no DB), pure builders:
+    go test ./internal/api/handlers/ -run TestRoomsConnect -count=1 -v
+    Result: 7 tests PASS:
+      - TestRoomsConnect_ExecutorPromptNamesActualRoom: names real room URL,
+        executor role, expected planner identity, initial task, real endpoints
+        (handshake/join/message/messages with real slug), "use your OWN
+        identity", never invents, no "$", no `${`, no backticks, no localhost,
+        no credential patterns (solvr_sk_/solvr_rt_/api_key/room_token).
+      - TestRoomsConnect_ExecutorPromptNeverLeaksCredentials: explicit assertion
+        that no solvr_sk_, solvr_rt_, solvr_rm_, api_key, or room_token appears.
+      - TestRoomsConnect_PrivateRoomExecutorPromptMentionsPrivateContext:
+        private room prompt carries the slug, says "private", still has no
+        ROOM_SLUG placeholder, no $, no ${.
+      - TestRoomsConnect_ExecutorPromptForNoFirstMessage: degrades gracefully
+        when room has no messages — still names real room + executor role.
+      - TestRoomsConnect_HandlerServesRoomConnectEnvelope: returns JSON envelope
+        with all fields; no credentials in raw body.
+      - TestRoomsConnect_Handler404ForNonexistentRoom: 404 for missing room.
+      - TestRoomsConnect_Handler403ForPrivateRoomWhenUnauthenticated: 403 for
+        private room to anonymous caller.
+
+  [TEST] Backend integration tests (real router + real database, no credentials):
+    DATABASE_URL="postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable"
+    go test ./internal/api/ -run "TestConnectEndpoint_RoomInstructions|TestConnectEndpoint_ExecutorPrompt" -count=1 -v
+    Result: 5 tests PASS:
+      - TestConnectEndpoint_RoomInstructionsEndpoint: seeds a real public room
+        with a registered planner, posts task + directive, then an anonymous
+        visitor fetches /v1/rooms/{slug}/connect. Verifies: real slug (not
+        ROOM_SLUG), real planner identity (first message author), real task,
+        real room URL, NO credentials anywhere in the raw body.
+      - TestConnectEndpoint_RoomInstructionsEndpoint_PrivateRoomIs403: private
+        room returns 403 to anonymous visitor.
+      - TestConnectEndpoint_RoomInstructionsEndpoint_NonexistentRoomIs404:
+        missing room returns 404.
+      - TestConnectEndpoint_ExecutorPromptEndToEnd: FULL end-to-end journey —
+        planner self-registers, creates room, handshakes, joins, posts task +
+        directive; executor self-registers with DIFFERENT identity, handshakes
+        into the SAME room, joins, posts a plan. Verifies: both agents appear
+        in transcript, executor token differs from planner token, executor
+        reads planner directive AND planner reads executor plan.
+      - TestConnectEndpoint_ExecutorPromptNamesOnlyRealRoutes: walks the chi
+        router and requires every production URL in the executor prompt to be
+        a route this API actually serves.
+
+  [TEST] Planner prompt route-walk still passes (no regression):
+    TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes — all 3
+    variants (default, collaborate, private) PASS.
+
+  [REAL] Backend full suite regression check, measured by comparison on a
+  freshly recreated solvr_test database:
+    HEAD (stashed --include-untracked):  9 failures in internal/api
+    With this change:                    9 failures in internal/api
+    diff of sorted failure-name lists:   IDENTICAL
+    The 9 are all pre-existing (3 comments_count, 4 GitHub OAuth integration
+    needing real credentials, 1 IPFS health expecting no local node, 1 type-
+    specific list endpoint data issue). None of the new tests appear in the
+    failure set. No regression.
+
+  [REAL] cd backend && go build ./... exits 0.
+  [REAL] go vet ./internal/api/... clean. gofmt clean on all new/edited files
+        (rooms_connect_test.go was reformatted by gofmt -w before commit).
+  [REAL] bash scripts/check-file-size.sh: 36 violations, the SAME 36 as the
+        2026-09-20 baseline. Largest new file: rooms_connect_test.go at 251 lines.
+        connect_prompts.go at 267 lines (was 182, grew by the executorPromptText
+        function). No new violations.
+
+E2E VERIFIED AGAINST A RUNNING STACK (not just tests):
+  - Started the API on :8092 against solvr_test (isolated clone of local dev db).
+  - Reproduced the full Task 19 journey manually via curl + a Python script:
+    planner self-registers -> creates room -> handshakes -> joins -> posts task;
+    anonymous GET /v1/rooms/{slug}/connect returns the executor prompt with real
+    slug, expected planner, task, first_message_url; executor self-registers ->
+    handshakes with its OWN key -> joins -> posts plan; both agents appear in
+    the transcript with correct author attribution; executor reads planner's
+    directive and planner reads executor's plan; prompt contains no credentials,
+    no planner tokens, no shell/template syntax; prompt uses real slug and real
+    endpoint URLs only.
+  - All probe data removed afterwards (0 task19_e2e_* rooms/agents/messages left).
+  - Server killed, ports clear, solvr_test dropped. No call left localhost.
+
+FILES CHANGED (for this task):
+  new  backend/internal/api/handlers/rooms_connect.go (142 lines)
+  new  backend/internal/api/handlers/rooms_connect_test.go (251 lines after gofmt)
+  mod  backend/internal/api/handlers/connect_prompts.go (+86 lines: executorPromptText)
+  mod  backend/internal/db/room_messages.go (+37 lines: GetFirstMessage)
+  mod  backend/internal/api/router_rooms.go (+2 lines: route registration)
+  mod  backend/internal/api/middleware/api_usage.go (+1 line: operation name)
+  mod  backend/internal/api/router_connect_test.go (+315 lines: 5 e2e tests)
+
+NOTE: The homepage_overview_test.go changes in the working tree were from Task 16
+  and were never committed in that iteration. They are included here because the
+  commit must capture ALL staged files (git add . per the loop rules), and they
+  pass cleanly (verified above: all TestOverview* tests PASS).
+
+UAT: NOTHING OWNER-ONLY WAS LEFT OUTSTANDING — no production migration, no deploy
+    step, no broadcast. Every automated check ran locally and green, and the full
+    two-agent executor journey was exercised against a running API on an isolated
+    test database.

@@ -297,6 +297,319 @@ func TestConnectEndpoint_PlannerPromptRunsEndToEndWithoutAHumanAccount(t *testin
 		"per-agent room token must differ from the shared creator token")
 }
 
+// roomConnectContract is the response envelope from GET /v1/rooms/{slug}/connect.
+type roomConnectContract struct {
+	InstructionVersion string `json:"instruction_version"`
+	RoomSlug           string `json:"room_slug"`
+	RoomURL            string `json:"room_url"`
+	Private            bool   `json:"private"`
+	Task               string `json:"task"`
+	ExpectedPlanner    string `json:"expected_planner_identity"`
+	ExecutorPrompt     string `json:"executor_prompt"`
+	FirstMessageID     int64  `json:"first_message_id"`
+	FirstMessageURL    string `json:"first_message_url"`
+}
+
+// getRoomConnectContract calls the room-specific connect endpoint with no credentials.
+func getRoomConnectContract(t *testing.T, baseURL, slug string) (roomConnectContract, string) {
+	t.Helper()
+	resp, err := http.Get(baseURL + "/v1/rooms/" + slug + "/connect")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "body: %s", string(body))
+
+	var wrapper struct {
+		Data roomConnectContract `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(body, &wrapper), "body: %s", string(body))
+	return wrapper.Data, string(body)
+}
+
+// extractRoomToken reads the "token" field from a room creation JSON response.
+func extractRoomToken(t *testing.T, raw string) string {
+	t.Helper()
+	token, _ := extractRoomTokenAndSlug(t, raw)
+	return token
+}
+
+// extractRoomTokenAndSlug reads both the "token" and the nested "data.slug" from a
+// room creation JSON response (which returns {"data": {...}, "token": ...}).
+func extractRoomTokenAndSlug(t *testing.T, raw string) (string, string) {
+	t.Helper()
+	var result map[string]any
+	require.NoError(t, json.Unmarshal([]byte(raw), &result))
+	token, _ := result["token"].(string)
+	require.NotEmpty(t, token)
+	data, _ := result["data"].(map[string]any)
+	slug, _ := data["slug"].(string)
+	require.NotEmpty(t, slug)
+	return token, slug
+}
+
+// messageContains scans a list of message maps (as returned by the room endpoint)
+// and reports whether any message's content contains the given substring.
+func messageContains(messages []any, needle string) bool {
+	for _, m := range messages {
+		msg, ok := m.(map[string]any)
+		if !ok {
+			continue
+		}
+		if content, _ := msg["content"].(string); strings.Contains(content, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestConnectEndpoint_RoomInstructionsEndpoint verifies the GET
+// /v1/rooms/{slug}/connect endpoint serves room-specific executor instructions to a
+// logged-out visitor for a public room: real slug (not ROOM_SLUG placeholder), real
+// planner identity and task from the first message, real room URL, and NO credentials.
+func TestConnectEndpoint_RoomInstructionsEndpoint(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	roomPreCleanup(t, pool)
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM agents WHERE id LIKE 'agent_task19%'") //nolint:errcheck
+	})
+
+	// Create a public room with a registered planner agent.
+	agentName := fmt.Sprintf("task19planner%d", time.Now().UnixNano()%1000000000)
+	_, agentKey := registerTestAgent(t, ts, agentName)
+
+	// Slug is auto-generated from display_name via slugify (no underscore allowed).
+	createBody := fmt.Sprintf(`{"display_name":"Task 19 room %d"}`, time.Now().UnixNano()%1000000000)
+	createReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/rooms", strings.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer "+agentKey)
+	createResp, err := http.DefaultClient.Do(createReq)
+	require.NoError(t, err)
+	defer createResp.Body.Close()
+	createRaw, _ := io.ReadAll(createResp.Body)
+	require.Equal(t, http.StatusCreated, createResp.StatusCode, "create room: %s", string(createRaw))
+
+	// Handshake to get the per-agent token, then post the initial task + directive.
+	sharedToken, roomSlug := extractRoomTokenAndSlug(t, string(createRaw))
+	_, plannerRoomToken := handshake(t, ts.URL, roomSlug, agentKey, sharedToken)
+	require.True(t, strings.HasPrefix(plannerRoomToken, "solvr_rt_"))
+
+	doJSON(t, http.MethodPost, ts.URL+"/r/"+roomSlug+"/join", plannerRoomToken,
+		fmt.Sprintf(`{"agent_name":"%s"}`, agentName))
+	taskContent := "Task: Build a distributed key-value store. Directive: design the sharding strategy."
+	st, _ := doJSON(t, http.MethodPost, ts.URL+"/r/"+roomSlug+"/message", plannerRoomToken,
+		fmt.Sprintf(`{"agent_name":"%s","content":"%s"}`, agentName, taskContent))
+	require.Equal(t, http.StatusCreated, st)
+
+	// Now an anonymous visitor fetches the executor prompt.
+	contract, body := getRoomConnectContract(t, ts.URL, roomSlug)
+
+	require.Equal(t, "1.0", contract.InstructionVersion, "body: %s", body)
+	require.Equal(t, roomSlug, contract.RoomSlug)
+	require.Equal(t, "https://solvr.dev/rooms/"+roomSlug, contract.RoomURL)
+	require.False(t, contract.Private)
+	require.NotEmpty(t, contract.ExecutorPrompt)
+	require.Contains(t, contract.ExecutorPrompt, roomSlug, "prompt must contain the real slug")
+	require.NotContains(t, contract.ExecutorPrompt, "ROOM_SLUG", "prompt must not contain the placeholder")
+	require.Equal(t, agentName, contract.ExpectedPlanner, "expected planner = first message author")
+	require.Contains(t, contract.Task, "distributed key-value store")
+	require.Contains(t, contract.Task, "sharding strategy")
+	require.Greater(t, contract.FirstMessageID, int64(0))
+	require.Contains(t, contract.FirstMessageURL, roomSlug)
+
+	// No credentials in the raw response body.
+	lower := strings.ToLower(body)
+	for _, secret := range []string{"solvr_sk_", "solvr_rt_", "solvr_rm_", "api_key", "room_token", "token_hash"} {
+		require.NotContains(t, lower, secret, "leaked %q in room connect response", secret)
+	}
+}
+
+// TestConnectEndpoint_RoomInstructionsEndpoint_PrivateRoomIs403 verifies that a private
+// room returns 403 to an anonymous visitor (same read policy as room detail).
+func TestConnectEndpoint_RoomInstructionsEndpoint_PrivateRoomIs403(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	roomPreCleanup(t, pool)
+
+	_, jwt := createRoomTestUser(t, pool)
+	slug, _ := createClosedRoom(t, ts, jwt) // private room
+
+	resp, err := http.Get(ts.URL + "/v1/rooms/" + slug + "/connect")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+}
+
+// TestConnectEndpoint_RoomInstructionsEndpoint_NonexistentRoomIs404 verifies a missing
+// room returns 404.
+func TestConnectEndpoint_RoomInstructionsEndpoint_NonexistentRoomIs404(t *testing.T) {
+	ts, _, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+
+	resp, err := http.Get(ts.URL + "/v1/rooms/does-not-exist-12345/connect")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+// TestConnectEndpoint_ExecutorPromptEndToEnd verifies the full executor journey:
+// the planner creates a public room and posts the task, the executor fetches the
+// room-specific prompt from /v1/rooms/{slug}/connect, then follows it to
+// handshake, join, and post a plan — all without a human relaying messages.
+func TestConnectEndpoint_ExecutorPromptEndToEnd(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	roomPreCleanup(t, pool)
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM agents WHERE id LIKE 'agent_task19%'")
+	})
+
+	// --- PLANNER side: register, create room, handshake, join, post task + directive ---
+	plannerName := fmt.Sprintf("task19ple2e%d", time.Now().UnixNano()%1000000000)
+	_, plannerKey := registerTestAgent(t, ts, plannerName)
+
+	createBody := fmt.Sprintf(`{"display_name":"E2E room %d"}`, time.Now().UnixNano()%1000000000)
+	createReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/rooms", strings.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer "+plannerKey)
+	createResp, err := http.DefaultClient.Do(createReq)
+	require.NoError(t, err)
+	defer createResp.Body.Close()
+	createRaw, _ := io.ReadAll(createResp.Body)
+	require.Equal(t, http.StatusCreated, createResp.StatusCode, string(createRaw))
+
+	sharedToken, roomSlug := extractRoomTokenAndSlug(t, string(createRaw))
+	_, plannerRoomToken := handshake(t, ts.URL, roomSlug, plannerKey, sharedToken)
+	require.True(t, strings.HasPrefix(plannerRoomToken, "solvr_rt_"))
+
+	doJSON(t, http.MethodPost, ts.URL+"/r/"+roomSlug+"/join", plannerRoomToken,
+		fmt.Sprintf(`{"agent_name":"%s"}`, plannerName))
+	taskContent := "Task: Build a todo list CLI. Directive: design the command structure."
+	doJSON(t, http.MethodPost, ts.URL+"/r/"+roomSlug+"/message", plannerRoomToken,
+		fmt.Sprintf(`{"agent_name":"%s","content":"%s"}`, plannerName, taskContent))
+
+	// --- EXECUTOR side: GET the room-specific prompt ---
+	contract, conBody := getRoomConnectContract(t, ts.URL, roomSlug)
+	require.NotEmpty(t, conBody)
+	require.Equal(t, roomSlug, contract.RoomSlug)
+	require.Equal(t, plannerName, contract.ExpectedPlanner)
+	require.Contains(t, contract.ExecutorPrompt, roomSlug)
+	require.NotContains(t, contract.ExecutorPrompt, "ROOM_SLUG")
+
+	// --- EXECUTOR side: follow the prompt — self-register, handshake, join, post plan ---
+	execName := fmt.Sprintf("task19exe%d", time.Now().UnixNano()%1000000000)
+	_, execKey := registerTestAgent(t, ts, execName)
+
+	_, execRoomToken := handshake(t, ts.URL, roomSlug, execKey, "")
+	require.True(t, strings.HasPrefix(execRoomToken, "solvr_rt_"), "executor must get its own per-agent token")
+	require.NotEqual(t, plannerRoomToken, execRoomToken, "executor token must differ from planner token")
+
+	doJSON(t, http.MethodPost, ts.URL+"/r/"+roomSlug+"/join", execRoomToken,
+		fmt.Sprintf(`{"agent_name":"%s"}`, execName))
+
+	execMsg := fmt.Sprintf(`{"agent_name":"%s","content":"PLAN: I will build the todo list CLI in three steps: 1) parse commands, 2) manage items, 3) persist state."}`, execName)
+	st, out := doJSON(t, http.MethodPost, ts.URL+"/r/"+roomSlug+"/message", execRoomToken, execMsg)
+	require.Equal(t, http.StatusCreated, st, "executor posts plan: %v", out)
+
+	// --- VERIFY: both agents appear in the room, messages exchange both ways ---
+	st, roomData := doJSON(t, http.MethodGet, ts.URL+"/v1/rooms/"+roomSlug, "", "")
+	require.Equal(t, http.StatusOK, st, "public room must be readable logged out")
+	roomMap, _ := roomData["data"].(map[string]any)
+	messages, _ := roomMap["recent_messages"].([]any)
+	require.GreaterOrEqual(t, len(messages), 2, "both planner and executor messages must be in the transcript")
+
+	foundPlanner := false
+	foundExecutor := false
+	for _, m := range messages {
+		msg, ok := m.(map[string]any)
+		if !ok {
+			continue
+		}
+		author, _ := msg["agent_name"].(string)
+		if author == plannerName {
+			foundPlanner = true
+		}
+		if author == execName {
+			foundExecutor = true
+		}
+	}
+	require.True(t, foundPlanner, "planner message must be visible in the room")
+	require.True(t, foundExecutor, "executor message must be visible in the room")
+
+	// --- Verify the planner can read the executor's plan ---
+	st, plannerView := doJSON(t, http.MethodGet, ts.URL+"/v1/rooms/"+roomSlug, plannerKey, "")
+	require.Equal(t, http.StatusOK, st)
+	plannerMsgs, _ := plannerView["data"].(map[string]any)["recent_messages"].([]any)
+	require.True(t, messageContains(plannerMsgs, "PLAN:"),
+		"planner can read the executor's plan")
+
+	// --- Verify the executor can read the planner's directive (two-way exchange) ---
+	st, execView := doJSON(t, http.MethodGet, ts.URL+"/v1/rooms/"+roomSlug, execKey, "")
+	require.Equal(t, http.StatusOK, st)
+	execMsgs, _ := execView["data"].(map[string]any)["recent_messages"].([]any)
+	require.True(t, messageContains(execMsgs, "design the command structure"),
+		"executor can read the planner's directive")
+}
+
+// TestConnectEndpoint_ExecutorPromptNamesOnlyRealRoutes verifies that every production
+// URL named in the executor prompt is a route the API actually serves (walks the chi
+// router to build the served set, same pattern as
+// TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes).
+func TestConnectEndpoint_ExecutorPromptNamesOnlyRealRoutes(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	roomPreCleanup(t, pool)
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM agents WHERE id LIKE 'agent_task19%'")
+	})
+
+	agentName := fmt.Sprintf("task19routecheck%d", time.Now().UnixNano()%1000000000)
+	_, agentKey := registerTestAgent(t, ts, agentName)
+
+	createBody := fmt.Sprintf(`{"display_name":"Route check room %d"}`, time.Now().UnixNano()%1000000000)
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/rooms", strings.NewReader(createBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+agentKey)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	respBody, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode, string(respBody))
+
+	sharedToken, slug := extractRoomTokenAndSlug(t, string(respBody))
+	_, roomToken := handshake(t, ts.URL, slug, agentKey, sharedToken)
+	doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/join", roomToken, fmt.Sprintf(`{"agent_name":"%s"}`, agentName))
+	st, _ := doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/message", roomToken,
+		fmt.Sprintf(`{"agent_name":"%s","content":"Task: route check directive."}`, agentName))
+	require.Equal(t, http.StatusCreated, st)
+
+	// Fetch the room connect endpoint and extract the executor prompt.
+	contract, _ := getRoomConnectContract(t, ts.URL, slug)
+	require.Contains(t, contract.ExecutorPrompt, slug)
+
+	// Walk the real router to get all served routes.
+	registry := hub.NewPresenceRegistry()
+	hubMgr := hub.NewHubManager(context.Background(), registry, slog.Default(), 0)
+	router := NewRouter(pool, hubMgr, registry)
+	served := map[string]bool{}
+	require.NoError(t, chi.Walk(router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		served[method+" "+strings.TrimSuffix(route, "/")] = true
+		return nil
+	}))
+
+	matches := promptEndpointRE.FindAllStringSubmatch(contract.ExecutorPrompt, -1)
+	require.NotEmpty(t, matches, "executor prompt names no endpoint at all")
+	for _, m := range matches {
+		method, path := m[1], m[2]
+		// The executor prompt names the REAL slug; chi reports the route template
+		// with {slug}, so substitute before matching.
+		path = strings.ReplaceAll(path, slug, "{slug}")
+		require.True(t, served[method+" "+strings.TrimSuffix(path, "/")],
+			"executor prompt tells the agent to call %s %s, which this API does not serve", method, path)
+	}
+}
+
 var promptEndpointRE = regexp.MustCompile(`(GET|POST) https://api\.solvr\.dev(/[A-Za-z0-9_/{}.-]+)`)
 
 func TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes(t *testing.T) {
@@ -324,7 +637,7 @@ func TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes(t *testing.T
 
 		for _, m := range matches {
 			method, path := m[1], m[2]
-			// The prompt's slug placeholder is the router's slug parameter.
+			// The prompt's ROOM_SLUG placeholder maps to the router's {slug} parameter.
 			path = strings.ReplaceAll(path, "ROOM_SLUG", "{slug}")
 			key := method + " " + strings.TrimSuffix(path, "/")
 			require.True(t, served[key],

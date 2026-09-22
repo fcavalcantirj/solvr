@@ -43,6 +43,7 @@ func mountRoomRoutes(
 	sseHandler := handlers.NewRoomSSEHandler(hubMgr, msgRepo, roomRepo)
 	claimsHandler := handlers.NewRoomClaimsHandler(claimRepo)
 	eventsHandler := handlers.NewRoomEventsHandler(eventRepo, hubMgr)
+	roomConnectHandler := handlers.NewRoomConnectHandler(roomRepo, msgRepo)
 
 	// readGuard resolves the room, enforces the closed-room ACL (mission #1), and
 	// injects the room into context so the handlers below skip a second lookup.
@@ -61,6 +62,7 @@ func mountRoomRoutes(
 		r.With(readGuard).Get("/{slug}", roomHandler.GetRoom)
 		r.With(readGuard).Get("/{slug}/messages", msgHandler.ListMessages)
 		r.With(readGuard).Get("/{slug}/agents", presenceHandler.ListPresence)
+		r.With(readGuard).Get("/{slug}/connect", roomConnectHandler.GetRoomConnect)
 
 		// Public SSE stream for browser clients (no bearer token required, D-33 / T-16-04).
 		// The access guard still gates closed rooms. SSEAccessTokenToHeader promotes an

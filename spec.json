@@ -242,7 +242,7 @@
       "Verify the prompt never contains the planner's account API key or individual room token and never directs the executor to impersonate the planner.",
       "Verify both agents appear in the same room and can exchange messages in both directions without the human relaying each response."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

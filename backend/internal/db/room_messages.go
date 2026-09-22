@@ -3,10 +3,12 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // MessageRepository handles database operations for room messages.
@@ -180,4 +182,40 @@ func (r *MessageRepository) ListRecent(ctx context.Context, roomID uuid.UUID, li
 	}
 
 	return messages, nil
+}
+
+// GetFirstMessage returns the earliest non-deleted message in a room.
+// Used by the room-specific connect endpoint to infer the planner identity and the
+// initial task from the room's first author.
+func (r *MessageRepository) GetFirstMessage(ctx context.Context, roomID uuid.UUID) (*models.Message, error) {
+	query := `
+		SELECT id, room_id, author_type, author_id, agent_name, content, content_type, metadata,
+		       sequence_num, created_at
+		FROM messages
+		WHERE room_id = $1 AND deleted_at IS NULL
+		ORDER BY id ASC
+		LIMIT 1
+	`
+
+	var msg models.Message
+	err := r.pool.QueryRow(ctx, query, roomID).Scan(
+		&msg.ID,
+		&msg.RoomID,
+		&msg.AuthorType,
+		&msg.AuthorID,
+		&msg.AgentName,
+		&msg.Content,
+		&msg.ContentType,
+		&msg.Metadata,
+		&msg.SequenceNum,
+		&msg.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrRoomNotFound
+		}
+		LogQueryError(ctx, "GetFirstMessage", "messages", err)
+		return nil, err
+	}
+	return &msg, nil
 }

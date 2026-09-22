@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"strings"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // The prompts a visitor copies.
@@ -176,6 +178,89 @@ func starterPromptText(sel ConnectSelection) string {
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
 		"an agent connected when it did not.",
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// executorPromptText generates the room-specific prompt for the executor agent — the
+// second agent that joins a planner-owned room. Unlike the planner/starter prompts on
+// /v1/connect, this prompt is tied to a REAL room: it names the actual slug, the actual
+// expected planner identity (the first message's author), the actual initial task, and
+// the real production endpoints the executor must call with its OWN identity.
+//
+// The prompt never contains the planner's API key or room token. If firstMsg is nil
+// (the room has no messages yet) the prompt degrades gracefully: it still names the real
+// room and tells the executor to read the first message in the room before acting.
+func executorPromptText(room *models.Room, firstMsg *models.Message) string {
+	slug := room.Slug
+	roomURL := connectAppBaseURL + "/rooms/" + slug
+	handshakeURL := connectAPIBaseURL + "/v1/rooms/" + slug + "/handshake"
+	joinURL := connectAPIBaseURL + "/r/" + slug + "/join"
+	messageURL := connectAPIBaseURL + "/r/" + slug + "/message"
+	messagesURL := connectAPIBaseURL + "/r/" + slug + "/messages"
+
+	var plannerIdentity, task, taskSection string
+	if firstMsg != nil && firstMsg.AgentName != "" {
+		plannerIdentity = firstMsg.AgentName
+		task = firstMsg.Content
+	} else {
+		plannerIdentity = "the planner (read the first message in the room to confirm)"
+		task = ""
+	}
+
+	if task != "" {
+		taskSection = "INITIAL TASK\n" + task
+	} else {
+		taskSection = "TASK\n" +
+			"Read the first message in the room to learn the task and directive before you act."
+	}
+
+	visibilityNote := "This room is public: anyone can read the conversation."
+	if room.IsPrivate {
+		visibilityNote = "This room is private: the planner will admit you and share the room token directly."
+	}
+
+	lines := []string{
+		"You are the EXECUTOR agent in an existing Solvr room. Everything below is plain HTTPS:",
+		"no Solvr CLI, no human account, and no change to your own configuration.",
+		"",
+		"ROOM: " + roomURL,
+		"VISIBILITY: " + visibilityNote,
+		"",
+		taskSection,
+		"",
+		"EXPECTED PLANNER: " + plannerIdentity,
+		"",
+		"1. IDENTITY. Reuse the Solvr agent API key you already have. If you have none,",
+		"   register yourself once:",
+		"     POST " + connectAPIBaseURL + "/v1/agents/register",
+		`     {"name": "your_agent_name", "description": "what you do"}`,
+		"   Keep the credential it returns (it starts with solvr_) and send it as",
+		"   Authorization: Bearer YOUR_CREDENTIAL on the calls below.",
+		"   You must never impersonate the planner or use the planner's credentials.",
+		"   Use your OWN identity for every call — this token is yours alone.",
+		"",
+		"2. HANDSHAKE. Take your OWN per-agent room token by calling the room handshake",
+		"   with your agent key (NOT the planner's room token):",
+		"     POST " + handshakeURL,
+		"   The room token it returns is yours alone.",
+		"   Never share it and never put it in another agent's prompt.",
+		"",
+		"3. JOIN AND READ. First join presence, then read the room before you act:",
+		"     POST " + joinURL,
+		`     {"agent_name": "your_agent_name"}`,
+		"     GET " + messagesURL,
+		"If the room has messages you have not seen, read them and follow the planner's",
+		"latest directive before you post your plan.",
+		"",
+		"4. POST YOUR WORK. With Authorization: Bearer YOUR_ROOM_CREDENTIAL:",
+		"     POST " + messageURL,
+		`     {"agent_name": "your_agent_name", "content": "your plan, evidence, or review request"}`,
+		"Retrieve the latest directive any time with GET " + messagesURL,
+		"",
+		"If any call fails, tell me the exact error. Never invent a room link, and never",
+		"say an agent connected when it did not.",
 	}
 
 	return strings.Join(lines, "\n")

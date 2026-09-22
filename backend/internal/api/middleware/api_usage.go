@@ -92,6 +92,7 @@ var apiUsageOperations = map[string]string{
 	"GET /v1/rooms/{slug}/members":               "room.members.read",
 	"POST /v1/rooms/{slug}/members":              "room.members.add",
 	"DELETE /v1/rooms/{slug}/members/{agent_id}": "room.members.remove",
+	"GET /v1/rooms/{slug}/connect":               "room.read",
 	"POST /r/{slug}/claim":                       "room.claim",
 	"POST /r/{slug}/claim/renew":                 "room.claim.renew",
 	"POST /r/{slug}/claim/release":               "room.claim.release",

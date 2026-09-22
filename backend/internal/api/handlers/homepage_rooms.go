@@ -81,16 +81,52 @@ type OverviewRooms struct {
 	Sparkline  *OverviewSparkline `json:"sparkline,omitempty"`
 	RoomsURL   string             `json:"rooms_url"`
 	RoomsLabel string             `json:"rooms_label"`
+
+	// RecentCompletedRooms is the offline fallback: rooms that had activity in
+	// the window but currently have no agents online. The API only returns this
+	// when agents_online_now == 0, so the browser renders it or doesn't — it
+	// never decides when to show it. Absent when agents are online.
+	RecentCompletedRooms []RecentCompletedRoom `json:"recent_completed_rooms,omitempty"`
+	// LiveMarker carries the green live point + text label. The API decides the
+	// wording; the browser renders the point and the text. Absent when there is
+	// no room data at all (e.g. the room repo failed entirely).
+	LiveMarker *OverviewLiveMarker `json:"live_marker,omitempty"`
+}
+
+// RecentCompletedRoom is a public room that had recent activity but currently
+// has no agents online. The API returns these as a meaningful offline fallback
+// instead of an empty "no agents" state.
+type RecentCompletedRoom struct {
+	RoomID          string `json:"room_id"`
+	Slug            string `json:"slug"`
+	DisplayName     string `json:"display_name"`
+	Purpose         string `json:"purpose"`
+	MessageCount    int    `json:"message_count"`
+	LastActiveLabel string `json:"last_activity_label"`
+}
+
+// OverviewLiveMarker is the green live marker: online bool + a text label.
+// The API decides the wording; the browser renders the point and the text.
+type OverviewLiveMarker struct {
+	Online bool   `json:"online"`
+	Label  string `json:"label"`
 }
 
 // presenceWindowLabel is what a presence metric states instead of a window.
 const presenceWindowLabel = "now"
 
 // buildOverviewRooms turns one reading into the whole section.
-func buildOverviewRooms(pulse db.RoomPulse) OverviewRooms {
+// When no agents are online now (pulse.Presence.AgentsOnline == 0), the API
+// also fetches recently-completed rooms as a meaningful offline fallback.
+func buildOverviewRooms(pulse db.RoomPulse, recent []db.RecentCompletedRoom) OverviewRooms {
 	window := pulse.Window
 	if window.Value == "" {
 		window = db.DefaultRoomStatsWindow()
+	}
+
+	var recentRooms []RecentCompletedRoom
+	if pulse.Presence.AgentsOnline == 0 {
+		recentRooms = toRecentCompletedRooms(recent, window)
 	}
 
 	return OverviewRooms{
@@ -113,9 +149,78 @@ func buildOverviewRooms(pulse db.RoomPulse) OverviewRooms {
 		SelectedWindow: window.Value,
 		Metrics:        buildRoomWindowMetrics(pulse.Stats, window),
 
-		Sparkline:  buildOverviewSparkline(pulse.Stats.Series, window),
-		RoomsURL:   "/rooms",
-		RoomsLabel: "Browse all rooms",
+		Sparkline:            buildOverviewSparkline(pulse.Stats.Series, window),
+		RoomsURL:             "/rooms",
+		RoomsLabel:           "Browse all rooms",
+		RecentCompletedRooms: recentRooms,
+		LiveMarker:           buildLiveMarker(pulse.Presence.AgentsOnline, len(recentRooms) > 0),
+	}
+}
+
+// buildLiveMarker decides the green live point and its text label. The API owns
+// the wording so the browser renders it without deciding anything.
+func buildLiveMarker(agentsOnline int, hasRecent bool) *OverviewLiveMarker {
+	if agentsOnline > 0 {
+		return &OverviewLiveMarker{
+			Online: true,
+			Label:  fmt.Sprintf("%d agents online now", agentsOnline),
+		}
+	}
+	if hasRecent {
+		return &OverviewLiveMarker{
+			Online: false,
+			Label:  "No agents online now. Recent rooms below.",
+		}
+	}
+	return &OverviewLiveMarker{
+		Online: false,
+		Label:  "No agents online now.",
+	}
+}
+
+// toRecentCompletedRooms converts DB-side recent rooms into the handler-level
+// type, letting the API word the last-active label and omit the room_id/uuid.
+func toRecentCompletedRooms(src []db.RecentCompletedRoom, window db.RoomStatsWindow) []RecentCompletedRoom {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([]RecentCompletedRoom, 0, len(src))
+	for _, r := range src {
+		purpose := ""
+		if r.Description != nil {
+			purpose = *r.Description
+		}
+		out = append(out, RecentCompletedRoom{
+			RoomID:          r.RoomID.String(),
+			Slug:            r.Slug,
+			DisplayName:     r.DisplayName,
+			Purpose:         purpose,
+			MessageCount:    r.MessageCount,
+			LastActiveLabel: formatLastActiveLabel(r.LastActiveAt),
+		})
+	}
+	return out
+}
+
+// formatLastActiveLabel turns a timestamp into a readable relative-ish label
+// ("1 hour ago", "yesterday", "2 days ago"). The API owns the wording so the
+// browser shows a consistent face without doing arithmetic.
+func formatLastActiveLabel(t time.Time) string {
+	age := time.Since(t)
+	switch {
+	case age < time.Hour:
+		return "<1 hour ago"
+	case age < 24*time.Hour:
+		h := int(age.Hours())
+		if h == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", h)
+	case age < 48*time.Hour:
+		return "yesterday"
+	default:
+		d := int(age.Hours() / 24)
+		return fmt.Sprintf("%d days ago", d)
 	}
 }
 
@@ -307,7 +412,12 @@ func (h *HomepageOverviewHandler) GetRooms(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	section := buildOverviewRooms(pulse)
+	var recentRooms []db.RecentCompletedRoom
+	if pulse.Presence.AgentsOnline == 0 {
+		recentRooms, _ = h.homeRepo.GetRecentCompletedRooms(r.Context(), window)
+	}
+
+	section := buildOverviewRooms(pulse, recentRooms)
 	enforcePublicRoomsMetrics(&section)
 
 	w.Header().Set("Cache-Control", "public, max-age=30")

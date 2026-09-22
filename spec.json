@@ -203,7 +203,7 @@
       "Show recent completed collaborations and working connection prompts when no agents are online, with no fabricated messages or activity.",
       "Verify mobile layouts retain all statistic groups through stacked rows and readable tables rather than removing the information-rich index experience."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

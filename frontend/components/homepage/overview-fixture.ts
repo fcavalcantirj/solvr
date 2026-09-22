@@ -1,4 +1,4 @@
-import type { APIHomepageOverview } from '@/lib/api-types';
+import type { APIHomepageOverview, APIOverviewMeta } from '@/lib/api-types';
 
 // One overview payload, shaped exactly like GET /v1/homepage/overview answers.
 // Shared by the section tests so a contract change breaks one file, not six.
@@ -95,6 +95,10 @@ export const OVERVIEW: APIHomepageOverview = {
     },
     rooms_url: '/rooms',
     rooms_label: 'Browse all rooms',
+    live_marker: {
+      online: true,
+      label: '5 agents online now',
+    },
   },
   activity: {
     heading: 'Happening in public rooms',
@@ -558,4 +562,74 @@ export const OVERVIEW: APIHomepageOverview = {
     connect_label: 'Connect agents now',
   },
   generated_at: '2026-09-21T09:00:00Z',
+};
+
+// An offline variant: no agents online, with recent completed collaborations
+// as the meaningful fallback. Used by room-stats-section tests.
+export const OFFLINE_OVERVIEW: APIHomepageOverview = {
+  ...OVERVIEW,
+  rooms: {
+    ...OVERVIEW.rooms,
+    presence_metrics: OVERVIEW.rooms.presence_metrics.map((m) => ({
+      ...m,
+      value: 0,
+      display: '0',
+    })),
+    live_marker: {
+      online: false,
+      label: 'No agents online now. Recent rooms below.',
+    },
+    recent_collaborations: [
+      {
+        slug: 'recent-room-1',
+        display_name: 'Completed Collaboration A',
+        room_url: '/rooms/recent-room-1',
+        purpose: 'A finished collaboration no one is in right now',
+        message_count: 12,
+        message_count_label: '12 messages',
+        last_activity_label: '2 hours ago',
+      },
+      {
+        slug: 'recent-room-2',
+        display_name: 'Completed Collaboration B',
+        room_url: '/rooms/recent-room-2',
+        purpose: 'Another recent room',
+        message_count: 8,
+        message_count_label: '8 messages',
+        last_activity_label: 'yesterday',
+      },
+    ],
+  },
+};
+
+// A stale variant: meta carries partial errors and stale=true, so the page
+// renders a "Temporarily unavailable" notice.
+export const STALE_META: APIOverviewMeta = {
+  generated_at: '2026-09-21T09:00:00Z',
+  window: {
+    value: '24h',
+    label: '24 hours',
+    start: '2026-09-20T09:00:00Z',
+    end: '2026-09-21T09:00:00Z',
+  },
+  window_boundaries: {
+    start_time: '2026-09-20T09:00:00Z',
+    end_time: '2026-09-21T09:00:00Z',
+  },
+  window_definition: 'Metrics measured over the 24 hours (last 24 hours).',
+  source_availability: {
+    rooms: true,
+    activity: true,
+    api_usage: false,
+    search: false,
+    community: true,
+  },
+  partial_errors: [
+    'API usage unavailable: connection refused',
+    'search statistics unavailable: timeout',
+  ],
+  stale: true,
+  last_updated_label: 'Updated 9:00 AM',
+  stale_label:
+    '2 statistics sections were retained from a partial refresh',
 };

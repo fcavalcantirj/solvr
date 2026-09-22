@@ -25,12 +25,15 @@ import (
 
 // overviewMeta is the meta envelope that GET /v1/overview wraps around its data.
 type overviewMeta struct {
-	GeneratedAt         time.Time          `json:"generated_at"`
-	Window              overviewWindowMeta `json:"window"`
-	WindowBoundaries    windowBoundaries   `json:"window_boundaries"`
-	WindowDefinition    string             `json:"window_definition"`
-	SourceAvailability  map[string]bool    `json:"source_availability"`
-	PartialErrors       []string           `json:"partial_errors"`
+	GeneratedAt        time.Time          `json:"generated_at"`
+	Window             overviewWindowMeta `json:"window"`
+	WindowBoundaries   windowBoundaries   `json:"window_boundaries"`
+	WindowDefinition   string             `json:"window_definition"`
+	SourceAvailability map[string]bool    `json:"source_availability"`
+	PartialErrors      []string           `json:"partial_errors"`
+	Stale              bool               `json:"stale"`
+	LastUpdatedLabel   string             `json:"last_updated_label"`
+	StaleLabel         string             `json:"stale_label"`
 }
 
 type overviewWindowMeta struct {
@@ -47,7 +50,7 @@ type windowBoundaries struct {
 
 type consolidatedOverviewResponse struct {
 	Data handlers.HomepageOverview `json:"data"`
-	Meta overviewMeta               `json:"meta"`
+	Meta overviewMeta              `json:"meta"`
 }
 
 // getConsolidatedOverview calls GET /v1/overview with no credentials, the way a
@@ -129,6 +132,14 @@ func TestOverviewConsolidated_EnvelopeShape(t *testing.T) {
 	assert.Contains(t, resp.Meta.SourceAvailability, "api_usage")
 	assert.Contains(t, resp.Meta.SourceAvailability, "search")
 	assert.Contains(t, resp.Meta.SourceAvailability, "community")
+
+	// Task 16: the meta envelope carries a readable Last updated timestamp,
+	// and a stale flag that is false on a clean read.
+	assert.NotEmpty(t, resp.Meta.LastUpdatedLabel, "last_updated_label must be a readable string")
+	assert.Contains(t, resp.Meta.LastUpdatedLabel, "Updated", "last_updated_label must be human-readable text")
+	assert.False(t, resp.Meta.Stale, "a clean read is not stale")
+	assert.Empty(t, resp.Meta.StaleLabel, "a fresh snapshot has no stale label")
+	assert.Empty(t, resp.Meta.PartialErrors, "no partial errors on a clean read")
 
 	// data must still be the existing HomepageOverview shape.
 	assert.False(t, resp.Data.GeneratedAt.IsZero())

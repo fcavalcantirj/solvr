@@ -337,3 +337,79 @@ func (r *RoomEventRepository) RecordActivation(ctx context.Context, roomID uuid.
 	}
 	return tag.RowsAffected() > 0, nil
 }
+
+// RecentCompletedRoom is a public room that had activity in the window but
+// currently has no agents online. It lets the homepage show recent completed
+// collaborations as a meaningful offline fallback instead of an empty presence.
+type RecentCompletedRoom struct {
+	RoomID       uuid.UUID `json:"room_id"`
+	Slug         string    `json:"slug"`
+	DisplayName  string    `json:"display_name"`
+	Description  *string   `json:"description"`
+	MessageCount int       `json:"message_count"`
+	LastActiveAt time.Time `json:"last_active_at"`
+}
+
+// GetRecentCompletedRooms returns public, non-deleted rooms that had at least
+// one non-system message within the window but currently have NO unexpired
+// agent presence. These are "completed collaborations" — rooms where work
+// happened recently, just not right now.
+//
+// The query excludes:
+//   - private rooms (is_private = TRUE)
+//   - deleted rooms (deleted_at IS NOT NULL)
+//   - expired rooms (expires_at < NOW()) — they are archived, not active
+//   - rooms with any current unexpired presence
+//   - rooms with no non-system messages in the window
+//
+// Results are ordered by recency of last activity, newest first.
+func (r *HomepageRepository) GetRecentCompletedRooms(ctx context.Context, window RoomStatsWindow) ([]RecentCompletedRoom, error) {
+	query := `
+		SELECT r.id, r.slug, r.display_name, r.description, r.message_count, r.last_active_at
+		  FROM rooms r
+		 WHERE ` + publicRoomPredicate + `
+		   AND (r.expires_at IS NULL OR r.expires_at > NOW())
+		   AND r.last_active_at > NOW() - $1::interval
+		   AND EXISTS (
+		         SELECT 1 FROM messages m
+		          WHERE m.room_id = r.id
+		            AND m.deleted_at IS NULL
+		            AND m.author_type <> 'system'
+		            AND m.created_at > NOW() - $1::interval
+		       )
+		   AND NOT EXISTS (
+		         SELECT 1 FROM agent_presence ap
+		          WHERE ap.room_id = r.id
+		            AND ` + unexpiredPresence + `
+		       )
+		 ORDER BY r.last_active_at DESC
+		 LIMIT 10
+	`
+
+	rows, err := r.pool.Query(ctx, query, window.interval())
+	if err != nil {
+		LogQueryError(ctx, "GetRecentCompletedRooms", "rooms", err)
+		return nil, fmt.Errorf("get recent completed rooms: %w", err)
+	}
+	defer rows.Close()
+
+	var results []RecentCompletedRoom
+	for rows.Next() {
+		var room RecentCompletedRoom
+		if err := rows.Scan(
+			&room.RoomID,
+			&room.Slug,
+			&room.DisplayName,
+			&room.Description,
+			&room.MessageCount,
+			&room.LastActiveAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan recent completed room: %w", err)
+		}
+		results = append(results, room)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate recent completed rooms: %w", err)
+	}
+	return results, nil
+}

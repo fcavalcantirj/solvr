@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -64,7 +65,7 @@ func metricByKey(t *testing.T, metrics []OverviewMetric, key string) OverviewMet
 }
 
 func TestOverviewRooms_ShowsTheSixStatisticsTheHomepagePromises(t *testing.T) {
-	section := buildOverviewRooms(samplePulse(db.DefaultRoomStatsWindow()))
+	section := buildOverviewRooms(samplePulse(db.DefaultRoomStatsWindow()), nil)
 
 	presenceKeys := make([]string, 0, len(section.PresenceMetrics))
 	for _, m := range section.PresenceMetrics {
@@ -89,7 +90,7 @@ func TestOverviewRooms_ShowsTheSixStatisticsTheHomepagePromises(t *testing.T) {
 }
 
 func TestOverviewRooms_KeepsConversionRatesOutOfThePublicPage(t *testing.T) {
-	section := buildOverviewRooms(samplePulse(db.DefaultRoomStatsWindow()))
+	section := buildOverviewRooms(samplePulse(db.DefaultRoomStatsWindow()), nil)
 
 	// The sparkline legitimately carries CSS percentages, so the check is on
 	// the words the page shows, not on every byte of the payload.
@@ -117,7 +118,7 @@ func TestOverviewRooms_KeepsConversionRatesOutOfThePublicPage(t *testing.T) {
 
 func TestOverviewRooms_PresenceIsLabelledNowAndNeverFollowsTheSelector(t *testing.T) {
 	for _, w := range db.RoomStatsWindows {
-		section := buildOverviewRooms(samplePulse(w))
+		section := buildOverviewRooms(samplePulse(w), nil)
 
 		require.NotEmpty(t, section.PresenceMetrics)
 		for _, m := range section.PresenceMetrics {
@@ -128,8 +129,8 @@ func TestOverviewRooms_PresenceIsLabelledNowAndNeverFollowsTheSelector(t *testin
 		assert.Equal(t, "Now", section.PresenceHeading)
 	}
 
-	day := buildOverviewRooms(samplePulse(db.RoomStatsWindows[0]))
-	month := buildOverviewRooms(samplePulse(db.RoomStatsWindows[2]))
+	day := buildOverviewRooms(samplePulse(db.RoomStatsWindows[0]), nil)
+	month := buildOverviewRooms(samplePulse(db.RoomStatsWindows[2]), nil)
 	assert.Equal(t,
 		metricByKey(t, day.PresenceMetrics, "agents_online_now").Value,
 		metricByKey(t, month.PresenceMetrics, "agents_online_now").Value,
@@ -138,7 +139,7 @@ func TestOverviewRooms_PresenceIsLabelledNowAndNeverFollowsTheSelector(t *testin
 
 func TestOverviewRooms_HistoricalMetricsStateTheSelectedWindow(t *testing.T) {
 	for _, w := range db.RoomStatsWindows {
-		section := buildOverviewRooms(samplePulse(w))
+		section := buildOverviewRooms(samplePulse(w), nil)
 
 		assert.Equal(t, w.Value, section.SelectedWindow)
 		for _, m := range section.Metrics {
@@ -150,7 +151,7 @@ func TestOverviewRooms_HistoricalMetricsStateTheSelectedWindow(t *testing.T) {
 }
 
 func TestOverviewRooms_OffersTheSharedSelectorDefaultingToTwentyFourHours(t *testing.T) {
-	section := buildOverviewRooms(samplePulse(db.DefaultRoomStatsWindow()))
+	section := buildOverviewRooms(samplePulse(db.DefaultRoomStatsWindow()), nil)
 
 	require.Len(t, section.WindowOptions, 3)
 	labels := make([]string, 0, 3)
@@ -169,7 +170,7 @@ func TestOverviewRooms_OffersTheSharedSelectorDefaultingToTwentyFourHours(t *tes
 }
 
 func TestOverviewRooms_SelectorMovesWithTheRequestedWindow(t *testing.T) {
-	section := buildOverviewRooms(samplePulse(db.RoomStatsWindows[1]))
+	section := buildOverviewRooms(samplePulse(db.RoomStatsWindows[1]), nil)
 
 	assert.Equal(t, "7d", section.SelectedWindow)
 	for _, o := range section.WindowOptions {
@@ -178,7 +179,7 @@ func TestOverviewRooms_SelectorMovesWithTheRequestedWindow(t *testing.T) {
 }
 
 func TestOverviewRooms_NamesUnverifiedIdentitiesInsteadOfMixingThem(t *testing.T) {
-	section := buildOverviewRooms(samplePulse(db.DefaultRoomStatsWindow()))
+	section := buildOverviewRooms(samplePulse(db.DefaultRoomStatsWindow()), nil)
 
 	online := metricByKey(t, section.PresenceMetrics, "agents_online_now")
 	assert.Equal(t, 5, online.Value)
@@ -197,7 +198,7 @@ func TestOverviewRooms_SaysNothingAboutIdentityWhenThereIsNothingToSay(t *testin
 	pulse.Stats.AgentMessages = 0
 	pulse.Stats.UnverifiedAgentMessages = 0
 
-	section := buildOverviewRooms(pulse)
+	section := buildOverviewRooms(pulse, nil)
 
 	assert.Empty(t, metricByKey(t, section.PresenceMetrics, "agents_online_now").Qualifier)
 	assert.Empty(t, metricByKey(t, section.Metrics, "agent_messages").Qualifier)
@@ -208,7 +209,7 @@ func TestOverviewRooms_AllOnlineAgentsVerifiedSaysSo(t *testing.T) {
 	pulse.Presence.VerifiedAgentsOnline = pulse.Presence.AgentsOnline
 	pulse.Presence.UnverifiedAgentsOnline = 0
 
-	online := metricByKey(t, buildOverviewRooms(pulse).PresenceMetrics, "agents_online_now")
+	online := metricByKey(t, buildOverviewRooms(pulse, nil).PresenceMetrics, "agents_online_now")
 	assert.NotContains(t, online.Qualifier, "unverified")
 }
 
@@ -217,7 +218,7 @@ func TestOverviewRooms_UninstrumentedActivationIsUnavailableNotZero(t *testing.T
 	pulse.Stats.ActivationInstrumentedSince = nil
 	pulse.Stats.TwoWayExchangeRooms = 0
 
-	exchanges := metricByKey(t, buildOverviewRooms(pulse).Metrics, "rooms_with_two_way_exchanges")
+	exchanges := metricByKey(t, buildOverviewRooms(pulse, nil).Metrics, "rooms_with_two_way_exchanges")
 
 	assert.True(t, exchanges.Unavailable, "a milestone that was never recorded is unavailable")
 	assert.Equal(t, unreadMetricDisplay, exchanges.Display, "it must never read as 0")
@@ -230,7 +231,7 @@ func TestOverviewRooms_ActivationOlderThanTheWindowReadsNormally(t *testing.T) {
 	long := time.Now().Add(-90 * 24 * time.Hour)
 	pulse.Stats.ActivationInstrumentedSince = &long
 
-	exchanges := metricByKey(t, buildOverviewRooms(pulse).Metrics, "rooms_with_two_way_exchanges")
+	exchanges := metricByKey(t, buildOverviewRooms(pulse, nil).Metrics, "rooms_with_two_way_exchanges")
 
 	assert.False(t, exchanges.Unavailable)
 	assert.Equal(t, "4", exchanges.Display)
@@ -243,7 +244,7 @@ func TestOverviewRooms_ActivationInsideTheWindowDeclaresThePartialHistory(t *tes
 	recent := time.Now().Add(-2 * time.Hour)
 	pulse.Stats.ActivationInstrumentedSince = &recent
 
-	exchanges := metricByKey(t, buildOverviewRooms(pulse).Metrics, "rooms_with_two_way_exchanges")
+	exchanges := metricByKey(t, buildOverviewRooms(pulse, nil).Metrics, "rooms_with_two_way_exchanges")
 
 	assert.False(t, exchanges.Unavailable, "what was measured is still worth showing")
 	assert.Contains(t, exchanges.Qualifier, "unavailable",
@@ -251,7 +252,7 @@ func TestOverviewRooms_ActivationInsideTheWindowDeclaresThePartialHistory(t *tes
 }
 
 func TestOverviewRooms_ScopesEveryNumberToPublicRooms(t *testing.T) {
-	section := buildOverviewRooms(samplePulse(db.DefaultRoomStatsWindow()))
+	section := buildOverviewRooms(samplePulse(db.DefaultRoomStatsWindow()), nil)
 
 	assert.Equal(t, "Public room activity", section.ScopeLabel)
 	assert.Contains(t, section.ScopeNote, "52", "the public room count is stated as context")
@@ -260,7 +261,7 @@ func TestOverviewRooms_ScopesEveryNumberToPublicRooms(t *testing.T) {
 
 func TestOverviewRooms_SparklineFollowsTheSelectedWindow(t *testing.T) {
 	for _, w := range db.RoomStatsWindows {
-		section := buildOverviewRooms(samplePulse(w))
+		section := buildOverviewRooms(samplePulse(w), nil)
 
 		require.NotNil(t, section.Sparkline, "window %q", w.Value)
 		assert.Len(t, section.Sparkline.Points, w.Buckets, "window %q buckets", w.Value)
@@ -276,7 +277,7 @@ func TestOverviewRooms_SparklineArrivesNormalised(t *testing.T) {
 		{BucketStart: time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC), Count: 10},
 	}
 
-	spark := buildOverviewRooms(pulse).Sparkline
+	spark := buildOverviewRooms(pulse, nil).Sparkline
 
 	require.NotNil(t, spark)
 	assert.Equal(t, 10, spark.MaxValue)
@@ -288,7 +289,7 @@ func TestOverviewRooms_SparklineIsOmittedWhenThereIsNoSeries(t *testing.T) {
 	pulse := samplePulse(db.DefaultRoomStatsWindow())
 	pulse.Stats.Series = nil
 
-	assert.Nil(t, buildOverviewRooms(pulse).Sparkline)
+	assert.Nil(t, buildOverviewRooms(pulse, nil).Sparkline)
 }
 
 func TestParseRoomStatsWindow_DefaultsToTwentyFourHours(t *testing.T) {
@@ -309,7 +310,7 @@ func TestParseRoomStatsWindow_FallsBackWithoutMislabellingTheAnswer(t *testing.T
 
 	assert.Equal(t, "24h", window.Value)
 	// The answer is never mislabelled: the section it builds states 24 hours.
-	assert.Equal(t, "last 24 hours", buildOverviewRooms(samplePulse(window)).Metrics[0].Window)
+	assert.Equal(t, "last 24 hours", buildOverviewRooms(samplePulse(window), nil).Metrics[0].Window)
 }
 
 func TestOverviewRooms_FlatSparklineDoesNotDivideByZero(t *testing.T) {
@@ -319,7 +320,7 @@ func TestOverviewRooms_FlatSparklineDoesNotDivideByZero(t *testing.T) {
 		{BucketStart: time.Date(2026, 9, 21, 2, 0, 0, 0, time.UTC), Count: 0},
 	}
 
-	spark := buildOverviewRooms(pulse).Sparkline
+	spark := buildOverviewRooms(pulse, nil).Sparkline
 
 	require.NotNil(t, spark)
 	assert.Equal(t, 0, spark.MaxValue)
@@ -329,3 +330,75 @@ func TestOverviewRooms_FlatSparklineDoesNotDivideByZero(t *testing.T) {
 		assert.NotEmpty(t, p.Label, "each point is labelled by the API")
 	}
 }
+
+// --- Task 16: live marker + recent completed rooms ---
+
+func TestBuildOverviewRooms_LiveMarkerWhenAgentsOnline(t *testing.T) {
+	pulse := samplePulse(db.DefaultRoomStatsWindow())
+	pulse.Presence.AgentsOnline = 3
+	pulse.Presence.VerifiedAgentsOnline = 2
+	pulse.Presence.UnverifiedAgentsOnline = 1
+
+	section := buildOverviewRooms(pulse, nil)
+
+	require.NotNil(t, section.LiveMarker)
+	assert.True(t, section.LiveMarker.Online, "agents online means live marker is green")
+	assert.Contains(t, section.LiveMarker.Label, "3 agents online now")
+	assert.Nil(t, section.RecentCompletedRooms, "no recent rooms when agents are online")
+}
+
+func TestBuildOverviewRooms_OfflineMarkerWithRecentCollaborations(t *testing.T) {
+	pulse := samplePulse(db.DefaultRoomStatsWindow())
+	pulse.Presence.AgentsOnline = 0
+
+	recent := []db.RecentCompletedRoom{
+		{RoomID: uuid.New(), Slug: "recent-room", DisplayName: "Recent Room", Description: nil, MessageCount: 5, LastActiveAt: time.Now().Add(-2 * time.Hour)},
+	}
+
+	section := buildOverviewRooms(pulse, recent)
+
+	require.NotNil(t, section.LiveMarker)
+	assert.False(t, section.LiveMarker.Online, "no agents online means not live")
+	assert.Contains(t, section.LiveMarker.Label, "No agents online now")
+	assert.Len(t, section.RecentCompletedRooms, 1)
+	assert.Equal(t, "recent-room", section.RecentCompletedRooms[0].Slug)
+	assert.Equal(t, "Recent Room", section.RecentCompletedRooms[0].DisplayName)
+	assert.Equal(t, 5, section.RecentCompletedRooms[0].MessageCount)
+}
+
+func TestBuildOverviewRooms_OfflineMarkerWithoutRecentCollaborations(t *testing.T) {
+	pulse := samplePulse(db.DefaultRoomStatsWindow())
+	pulse.Presence.AgentsOnline = 0
+
+	section := buildOverviewRooms(pulse, nil)
+
+	require.NotNil(t, section.LiveMarker)
+	assert.False(t, section.LiveMarker.Online)
+	assert.Nil(t, section.RecentCompletedRooms, "no recent rooms when none are fetched")
+}
+
+func TestToRecentCompletedRooms_ConvertsPurposeFromNil(t *testing.T) {
+	src := []db.RecentCompletedRoom{
+		{RoomID: uuid.New(), Slug: "no-desc", DisplayName: "No Desc Room", Description: nil, MessageCount: 1, LastActiveAt: time.Now()},
+		{RoomID: uuid.New(), Slug: "with-desc", DisplayName: "With Desc Room", Description: strPtrLocal("A real purpose"), MessageCount: 3, LastActiveAt: time.Now()},
+	}
+
+	out := toRecentCompletedRooms(src, db.DefaultRoomStatsWindow())
+
+	require.Len(t, out, 2)
+	assert.Equal(t, "no-desc", out[0].Slug)
+	assert.Equal(t, "", out[0].Purpose, "nil description becomes empty string")
+	assert.Equal(t, "A real purpose", out[1].Purpose)
+}
+
+func TestFormatLastActiveLabel(t *testing.T) {
+	now := time.Now()
+
+	assert.Contains(t, formatLastActiveLabel(now.Add(-30*time.Minute)), "ago")
+	assert.Contains(t, formatLastActiveLabel(now.Add(-3*time.Hour)), "3 hours ago")
+	assert.Equal(t, "yesterday", formatLastActiveLabel(now.Add(-25*time.Hour)))
+	assert.Contains(t, formatLastActiveLabel(now.Add(-5*24*time.Hour)), "5 days ago")
+}
+
+// strPtrLocal is a small helper for the nil-description test above.
+func strPtrLocal(s string) *string { return &s }

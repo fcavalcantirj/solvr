@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import type { APIOverviewRooms, APIOverviewSparkline } from '@/lib/api-types';
+import type { APIOverviewRooms, APIOverviewLiveMarker, APIOverviewRecentCollaboration, APIOverviewSparkline } from '@/lib/api-types';
 import { MetricGrid, SectionHeading } from './metric';
 
 // The public room statistics.
@@ -48,6 +48,68 @@ function Sparkline({ sparkline }: { sparkline: APIOverviewSparkline }) {
   );
 }
 
+// LiveMarker renders the green presence dot and its text label. The API owns
+// the wording; the component just renders the point and the text it was given.
+function LiveMarker({ marker }: { marker: APIOverviewLiveMarker }) {
+  return (
+    <div
+      data-testid="overview-live-marker"
+      className="mt-8 flex items-center gap-3 font-mono text-xs tracking-wider"
+    >
+      <span
+        data-testid="overview-live-dot"
+        className={`w-2 h-2 rounded-full ${
+          marker.online ? 'bg-green-700 dark:bg-green-400 animate-pulse' : 'bg-muted'
+        }`}
+        aria-hidden="true"
+      ></span>
+      <span data-testid="overview-live-label">{marker.label}</span>
+    </div>
+  );
+}
+
+// RecentCollaborationsSection renders rooms that had activity in the window but
+// currently have no agents online. The API only sends this when agents_online_now
+// is zero, so the browser never decides when to show it.
+function RecentCollaborationsSection({
+  rooms,
+}: {
+  rooms: APIOverviewRecentCollaboration[];
+}) {
+  return (
+    <div data-testid="overview-recent-collaborations" className="mt-12">
+      <p className="font-mono text-xs tracking-[0.2em] text-muted-foreground mb-4">
+        RECENTLY COMPLETED
+      </p>
+      <ul className="space-y-4">
+        {rooms.map((room) => (
+          <li key={room.slug} className="border border-border p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-baseline gap-2">
+              <h4 className="text-lg font-medium">
+                <Link
+                  href={room.room_url}
+                  className="hover:text-foreground transition-colors"
+                >
+                  {room.display_name}
+                </Link>
+              </h4>
+              <span className="font-mono text-xs tracking-wider text-muted-foreground">
+                {room.message_count_label}
+              </span>
+            </div>
+            {room.purpose ? (
+              <p className="text-sm text-muted-foreground mt-2">{room.purpose}</p>
+            ) : null}
+            <p className="font-mono text-xs tracking-wider text-muted-foreground mt-2">
+              {room.last_activity_label}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function RoomStatsSection({ initial }: { initial: APIOverviewRooms }) {
   const [data, setData] = useState<APIOverviewRooms>(initial);
   const [loading, setLoading] = useState(false);
@@ -75,6 +137,10 @@ export function RoomStatsSection({ initial }: { initial: APIOverviewRooms }) {
       <div className="max-w-7xl mx-auto">
         <SectionHeading eyebrow="LIVE" heading={data.heading} intro={data.intro} />
 
+        {data.live_marker ? (
+          <LiveMarker marker={data.live_marker} />
+        ) : null}
+
         <div className="mt-8 max-w-3xl">
           <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground">
             {data.scope_label}
@@ -95,6 +161,10 @@ export function RoomStatsSection({ initial }: { initial: APIOverviewRooms }) {
           <div data-testid="overview-presence-metrics">
             <MetricGrid metrics={data.presence_metrics} />
           </div>
+
+          {data.recent_collaborations && data.recent_collaborations.length > 0 ? (
+            <RecentCollaborationsSection rooms={data.recent_collaborations} />
+          ) : null}
         </div>
 
         {/* The windowed half, and the selector that drives it. */}

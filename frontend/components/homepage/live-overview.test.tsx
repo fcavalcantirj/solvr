@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { OVERVIEW } from './overview-fixture';
+import { OVERVIEW, STALE_META } from './overview-fixture';
 import { LiveOverview } from './live-overview';
 import { api } from '@/lib/api';
 
@@ -32,7 +32,7 @@ const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockUseOverview.mockReturnValue({ overview: OVERVIEW, loading: false, error: null });
+  mockUseOverview.mockReturnValue({ overview: OVERVIEW, meta: null, loading: false, error: null });
   vi.mocked(api.getHomepageRooms).mockResolvedValue({
     data: { ...OVERVIEW.rooms, selected_window: '30d' },
   });
@@ -125,5 +125,45 @@ describe('LiveOverview layout', () => {
     const source = read('components/homepage/live-overview.tsx');
     expect(source).not.toMatch(/(?<![\w-])\d{3,}(?![\w%-])/);
     expect(source).not.toMatch(/\.(toFixed|sort)\(/);
+  });
+});
+
+describe('LiveOverview meta banner', () => {
+  it('renders the Last updated timestamp when meta is present', () => {
+    mockUseOverview.mockReturnValue({ overview: OVERVIEW, meta: STALE_META, loading: false, error: null });
+    render(<LiveOverview />);
+
+    expect(screen.getByTestId('overview-last-updated')).toHaveTextContent(
+      STALE_META.last_updated_label,
+    );
+  });
+
+  it('shows the stale label and partial errors when a refresh degraded', () => {
+    mockUseOverview.mockReturnValue({ overview: OVERVIEW, meta: STALE_META, loading: false, error: null });
+    render(<LiveOverview />);
+
+    expect(screen.getByTestId('overview-stale-label')).toHaveTextContent(
+      STALE_META.stale_label,
+    );
+    expect(screen.getByTestId('overview-stale-icon')).toBeInTheDocument();
+    expect(screen.getByTestId('overview-stale-label')).toHaveAttribute('role', 'status');
+
+    const errorNodes = screen.getAllByTestId('overview-partial-errors')[0];
+    expect(errorNodes).toBeInTheDocument();
+    for (const err of STALE_META.partial_errors) {
+      expect(errorNodes).toHaveTextContent('Temporarily unavailable: ' + err);
+    }
+  });
+
+  it('does not render a stale label when the snapshot is fresh', () => {
+    const freshMeta = { ...STALE_META, stale: false, stale_label: '', partial_errors: [] };
+    mockUseOverview.mockReturnValue({ overview: OVERVIEW, meta: freshMeta, loading: false, error: null });
+    render(<LiveOverview />);
+
+    expect(screen.queryByTestId('overview-stale-label')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('overview-partial-errors')).not.toBeInTheDocument();
+    expect(screen.getByTestId('overview-last-updated')).toHaveTextContent(
+      freshMeta.last_updated_label,
+    );
   });
 });

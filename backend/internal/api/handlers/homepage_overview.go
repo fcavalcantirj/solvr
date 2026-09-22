@@ -442,6 +442,21 @@ type OverviewMeta struct {
 	// PartialErrors lists the subsystems that failed, with a short description.
 	// The data section is still served with whatever was available.
 	PartialErrors []string `json:"partial_errors"`
+
+	// Stale is true when any subsystem degraded: the snapshot retained prior values
+	// rather than serving a fresh read. A stale snapshot is NOT a zero — the data
+	// is still served, but the page must label it so a quiet period or a failed
+	// refresh is never mistaken for "nothing happened".
+	Stale bool `json:"stale"`
+
+	// LastUpdatedLabel is a readable, API-formatted timestamp like "Updated 10:32
+	// AM" so the page renders it without doing any time arithmetic of its own.
+	LastUpdatedLabel string `json:"last_updated_label"`
+
+	// StaleLabel is a non-blocking notice the page can surface when the snapshot
+	// is stale — for instance "Data retained from a partial refresh". Empty when
+	// the snapshot is fresh.
+	StaleLabel string `json:"stale_label,omitempty"`
 }
 
 // OverviewWindowMeta describes the selected time window.
@@ -519,8 +534,20 @@ func (h *HomepageOverviewHandler) buildOverview(ctx Context, window db.RoomStats
 		partialErrors = append(partialErrors, "all-time totals unavailable: "+err.Error())
 	}
 
+	// Recent completed rooms: the offline fallback shown when no agents are
+	// currently online. Only fetched when presence reports zero; otherwise nil
+	// and never serialized.
+	var recentRooms []db.RecentCompletedRoom
+	if pulse.Presence.AgentsOnline == 0 {
+		recentRooms, err = h.homeRepo.GetRecentCompletedRooms(ctx, window)
+		if err != nil {
+			slog.Error("homepage overview: recent completed rooms failed", "error", err, "window", window.Value)
+			recentRooms = nil
+		}
+	}
+
 	overview := HomepageOverview{
-		Rooms:       buildOverviewRooms(pulse),
+		Rooms:       buildOverviewRooms(pulse, recentRooms),
 		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0, 0, time.Now()),
 		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx), h.previewSlugs),
 		APIUsage:    buildOverviewAPIUsage(usage),
@@ -573,10 +600,27 @@ func buildOverviewMeta(window db.RoomStatsWindow, partialErrors []string) Overvi
 			StartTime: start,
 			EndTime:   now,
 		},
-		WindowDefinition: fmt.Sprintf("Metrics measured over the %s (%s).", window.Label, window.WindowText),
+		WindowDefinition:   fmt.Sprintf("Metrics measured over the %s (%s).", window.Label, window.WindowText),
 		SourceAvailability: sourceAvailability(partialErrors),
 		PartialErrors:      partialErrors,
+		Stale:              len(partialErrors) > 0,
+		LastUpdatedLabel:   "Updated " + now.Format("3:04 PM"),
+		StaleLabel:         buildStaleLabel(partialErrors),
 	}
+}
+
+// buildStaleLabel produces a human-readable notice for a degraded snapshot.
+// It is empty when the snapshot is fully fresh. The wording is deliberately
+// non-blocking: it tells the visitor values were retained, not that the page
+// is broken.
+func buildStaleLabel(partialErrors []string) string {
+	if len(partialErrors) == 0 {
+		return ""
+	}
+	if len(partialErrors) == 1 {
+		return "Some statistics were retained from a partial refresh; the unavailable section is labeled below."
+	}
+	return fmt.Sprintf("%d statistics sections were retained from a partial refresh", len(partialErrors))
 }
 
 // GetOverview handles GET /v1/homepage/overview. Public, no auth.
@@ -638,8 +682,17 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 		totals = nil
 	}
 
+	var recentRooms []db.RecentCompletedRoom
+	if pulse.Presence.AgentsOnline == 0 {
+		recentRooms, err = h.homeRepo.GetRecentCompletedRooms(ctx, window)
+		if err != nil {
+			slog.Error("homepage overview: recent completed rooms failed", "error", err, "window", window.Value)
+			recentRooms = nil
+		}
+	}
+
 	overview := HomepageOverview{
-		Rooms:       buildOverviewRooms(pulse),
+		Rooms:       buildOverviewRooms(pulse, recentRooms),
 		Activity:    buildOverviewActivity(activityRows, overviewActivityDefaultLimit, 0, 0, time.Now()),
 		Previews:    buildOverviewPreviews(h.loadPreviewSources(ctx), h.previewSlugs),
 		APIUsage:    buildOverviewAPIUsage(usage),

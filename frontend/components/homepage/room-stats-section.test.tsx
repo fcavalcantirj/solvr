@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { OVERVIEW } from './overview-fixture';
+import { OVERVIEW, OFFLINE_OVERVIEW } from './overview-fixture';
 import { RoomStatsSection } from './room-stats-section';
 import type { APIOverviewRooms } from '@/lib/api-types';
 
@@ -220,5 +220,67 @@ describe('RoomStatsSection', () => {
     render(<RoomStatsSection initial={ROOMS} />);
     const link = screen.getByRole('link', { name: ROOMS.rooms_label });
     expect(link).toHaveAttribute('href', '/rooms');
+  });
+
+  // --- Task 16: green live marker and offline fallback ---
+
+  it('renders a green live marker with text when agents are online', () => {
+    render(<RoomStatsSection initial={ROOMS} />);
+
+    const marker = screen.getByTestId('overview-live-marker');
+    expect(marker).toBeInTheDocument();
+
+    const dot = screen.getByTestId('overview-live-dot');
+    expect(dot).toHaveClass('bg-green-700', 'dark:bg-green-400', 'animate-pulse');
+
+    const label = screen.getByTestId('overview-live-label');
+    expect(label).toHaveTextContent(ROOMS.live_marker!.label);
+  });
+
+  it('renders a grey dot and offline text when no agents are online', () => {
+    render(<RoomStatsSection initial={OFFLINE_OVERVIEW.rooms} />);
+
+    const marker = screen.getByTestId('overview-live-marker');
+    expect(marker).toBeInTheDocument();
+
+    const dot = screen.getByTestId('overview-live-dot');
+    expect(dot).toHaveClass('bg-muted');
+    expect(dot).not.toHaveClass('animate-pulse');
+
+    const label = screen.getByTestId('overview-live-label');
+    expect(label).toHaveTextContent(OFFLINE_OVERVIEW.rooms.live_marker!.label);
+  });
+
+  it('shows recent completed collaborations when no agents are online', () => {
+    render(<RoomStatsSection initial={OFFLINE_OVERVIEW.rooms} />);
+
+    const section = screen.getByTestId('overview-recent-collaborations');
+    expect(section).toBeInTheDocument();
+
+    for (const room of OFFLINE_OVERVIEW.rooms.recent_collaborations!) {
+      const link = screen.getByRole('link', { name: room.display_name });
+      expect(link).toHaveAttribute('href', room.room_url);
+      expect(screen.getByText(room.message_count_label)).toBeInTheDocument();
+      if (room.purpose) {
+        expect(screen.getByText(room.purpose)).toBeInTheDocument();
+      }
+      expect(screen.getByText(room.last_activity_label)).toBeInTheDocument();
+    }
+  });
+
+  it('omits the live marker when the API did not send one', () => {
+    const withoutMarker: APIOverviewRooms = {
+      ...ROOMS,
+      live_marker: undefined,
+    };
+    render(<RoomStatsSection initial={withoutMarker} />);
+
+    expect(screen.queryByTestId('overview-live-marker')).not.toBeInTheDocument();
+  });
+
+  it('omits recent collaborations when agents are online', () => {
+    render(<RoomStatsSection initial={ROOMS} />);
+
+    expect(screen.queryByTestId('overview-recent-collaborations')).not.toBeInTheDocument();
   });
 });

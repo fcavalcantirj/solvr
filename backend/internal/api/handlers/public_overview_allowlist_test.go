@@ -43,7 +43,7 @@ func buildPublicOverviewFixture() HomepageOverview {
 	instrumentedSince := time.Now().Add(-90 * 24 * time.Hour)
 
 	return HomepageOverview{
-		Rooms:    buildOverviewRooms(pulse),
+		Rooms:    buildOverviewRooms(pulse, nil),
 		Activity: buildOverviewActivity(nil, overviewActivityDefaultLimit, 0, 0, time.Now()),
 		Previews: buildOverviewPreviews(nil, PreviewSlugsFromEnv()),
 		APIUsage: buildOverviewAPIUsage(db.APIUsagePulse{

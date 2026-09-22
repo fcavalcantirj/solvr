@@ -50,6 +50,24 @@ export interface APIOverviewSparkline {
   points: APIOverviewSparkPoint[];
 }
 
+// The green live marker: a point + text stating whether data is fresh or who
+// is online right now. The API decides the label, the browser renders it.
+export interface APIOverviewLiveMarker {
+  online: boolean;
+  label: string;
+}
+
+// A recent completed collaboration shown when no agents are online.
+export interface APIOverviewRecentCollaboration {
+  slug: string;
+  display_name: string;
+  room_url: string;
+  purpose: string;
+  message_count: number;
+  message_count_label: string;
+  last_activity_label: string;
+}
+
 export interface APIOverviewRooms {
   heading: string;
   intro: string;
@@ -68,6 +86,10 @@ export interface APIOverviewRooms {
   sparkline?: APIOverviewSparkline;
   rooms_url: string;
   rooms_label: string;
+  // Only present when agents_online_now == 0: recent completed collaborations
+  // as a meaningful offline fallback. Absent when agents are online.
+  live_marker?: APIOverviewLiveMarker;
+  recent_collaborations?: APIOverviewRecentCollaboration[];
 }
 
 export interface APIOverviewActivityItem {
@@ -371,6 +393,15 @@ export interface APIOverviewMeta {
   window_definition: string;
   source_availability: Record<string, boolean>;
   partial_errors: string[];
+  // True when any subsystem degraded: the snapshot retained prior values rather
+  // than serving a fresh read. The page must label this so a quiet period or
+  // failed refresh is never mistaken for "nothing happened".
+  stale: boolean;
+  // A readable, API-formatted timestamp like "Updated 10:32 AM".
+  last_updated_label: string;
+  // A non-blocking notice for a degraded snapshot, e.g. "Some statistics were
+  // retained from a partial refresh". Empty when fresh.
+  stale_label: string;
 }
 
 // GET /v1/overview returns the HomepageOverview payload inside a richer envelope

@@ -2,7 +2,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useHomepageOverview } from './use-homepage-overview';
-import { OVERVIEW } from '@/components/homepage/overview-fixture';
+import { OVERVIEW, STALE_META } from '@/components/homepage/overview-fixture';
 
 const mockGetOverview = vi.fn();
 vi.mock('@/lib/api', () => ({
@@ -17,11 +17,12 @@ beforeEach(() => {
 
 describe('useHomepageOverview', () => {
   it('returns whatever the API served', async () => {
-    mockGetOverview.mockResolvedValue({ data: OVERVIEW, meta: { generated_at: new Date().toISOString() } });
+    mockGetOverview.mockResolvedValue({ data: OVERVIEW, meta: STALE_META });
     const { result } = renderHook(() => useHomepageOverview());
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.overview).toEqual(OVERVIEW);
+    expect(result.current.meta).toEqual(STALE_META);
     expect(result.current.error).toBeNull();
   });
 

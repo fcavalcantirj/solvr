@@ -311,3 +311,64 @@ func TestConnect_NamesTheGroupsTheOptionsBelongTo(t *testing.T) {
 	require.NotEmpty(t, start.VisibilityLabel)
 	require.NotEqual(t, start.PresetsLabel, start.VisibilityLabel)
 }
+
+func TestConnect_ProvidesAnAddAnotherAgentControlWithRoleLabels(t *testing.T) {
+	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
+
+	start, body := getConnect(t, h, "")
+
+	require.NotEmpty(t, start.AddAgent.Label, "body: %s", body)
+	require.NotEmpty(t, start.AddAgent.Detail)
+	require.NotEmpty(t, start.AddAgent.SlugPlaceholder)
+	require.NotEmpty(t, start.AddAgent.RolePrompt, "the role prompt the visitor copies for an extra agent")
+	// No "$" or "${" — placeholders must be unmistakable, not shell-expandable.
+	require.NotContains(t, start.AddAgent.SlugPlaceholder, "$")
+	require.NotContains(t, start.AddAgent.RolePrompt, "$")
+	require.NotContains(t, start.AddAgent.RolePrompt, "${")
+}
+
+func TestConnect_CollaboratePresetProvidesASuitableAddAgentRole(t *testing.T) {
+	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
+
+	start, _ := getConnect(t, h, "preset=collaborate")
+
+	require.NotEmpty(t, start.AddAgent.Label)
+	require.NotEmpty(t, start.AddAgent.RolePrompt)
+	// A peer collaboration has no planner directing an executor, so the add-another-agent
+	// role must not name the executor either.
+	require.NotContains(t, strings.ToLower(start.AddAgent.RolePrompt), "executor")
+}
+
+func TestConnect_CustomizeSectionCarriesAdvancedInstructionsAndApiExamples(t *testing.T) {
+	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
+
+	start, body := getConnect(t, h, "")
+
+	require.Equal(t, "customize", start.Customize.Key, "body: %s", body)
+	require.NotEmpty(t, start.Customize.Label)
+	require.NotEmpty(t, start.Customize.Detail)
+	require.NotEmpty(t, start.Customize.ApiExamples, "body: %s", body)
+	require.NotEmpty(t, start.Customize.AdvancedInstructions)
+
+	// The API examples must reference real production endpoints, not localhost.
+	for _, example := range start.Customize.ApiExamples {
+		require.Contains(t, example, "https://api.solvr.dev")
+	}
+	for _, example := range start.Customize.AdvancedInstructions {
+		require.NotEqual(t, "", strings.TrimSpace(example))
+	}
+}
+
+func TestConnect_CopyingTheStarterPromptAloneDoesNotCreateARoom(t *testing.T) {
+	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
+
+	start, _ := getConnect(t, h, "")
+
+	// The note that says copying alone connects nothing is a product guarantee.
+	require.Contains(t, strings.ToLower(start.Note), "copying")
+	require.Contains(t, strings.ToLower(start.Note), "does not create")
+
+	// The add-agent role prompt must also carry the same guarantee: it is a
+	// prompt to paste, not an action that creates anything on its own.
+	require.Contains(t, strings.ToLower(start.AddAgent.Detail), "paste")
+}

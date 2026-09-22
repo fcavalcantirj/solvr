@@ -108,6 +108,29 @@ type ConnectExample struct {
 	Detail string `json:"detail"`
 }
 
+// ConnectAddAgentControl is the "Add another agent" optional control: a
+// role-specific prompt the visitor can copy for a third, fourth, or Nth
+// participant in the same room. SlugPlaceholder is the unmistakable token the
+// agent substitutes for the real room slug; RolePrompt is the complete prompt
+// to paste. Detail carries the guarantee that copying alone connects nothing.
+type ConnectAddAgentControl struct {
+	Label          string `json:"label"`
+	Detail         string `json:"detail"`
+	SlugPlaceholder string `json:"slug_placeholder"`
+	RolePrompt     string `json:"role_prompt"`
+}
+
+// ConnectCustomizeSection offers advanced instructions and direct API examples
+// under the Customize heading. It requires no participant count, model choice,
+// category, or tags before starting — the visitor can read and copy freely.
+type ConnectCustomizeSection struct {
+	Key                 string   `json:"key"`
+	Label               string   `json:"label"`
+	Detail              string   `json:"detail"`
+	ApiExamples         []string `json:"api_examples"`
+	AdvancedInstructions []string `json:"advanced_instructions"`
+}
+
 // ConnectStart is the whole contract.
 type ConnectStart struct {
 	Heading           string           `json:"heading"`
@@ -124,6 +147,8 @@ type ConnectStart struct {
 	Steps             []ConnectStep    `json:"steps"`
 	Example           ConnectExample   `json:"example"`
 	Note              string           `json:"note"`
+	AddAgent          ConnectAddAgentControl   `json:"add_agent"`
+	Customize          ConnectCustomizeSection  `json:"customize"`
 }
 
 // connectRoomLookup is the slice of the room repository this handler needs.
@@ -254,6 +279,8 @@ func buildConnectStart(sel ConnectSelection, example ConnectExample) ConnectStar
 		Example:           example,
 		Note: "Copying a prompt does not create a room and does not connect anything — " +
 			"your agent does that when you paste it in.",
+		AddAgent:          connectAddAgent(sel),
+		Customize:         connectCustomize(sel),
 	}
 
 	return start
@@ -294,6 +321,90 @@ func connectVisibilities(selected string) []ConnectOption {
 				"requires authorized access.",
 			Selected: selected == ConnectVisibilityPrivate,
 		},
+	}
+}
+
+// connectAddAgent builds the "Add another agent" optional control: a role
+// prompt for a third, fourth, or Nth participant in the same room. The role
+// label adapts to the preset — a planner/executor room invites a reviewer or
+// researcher; a collaborate room invites a peer partner.
+func connectAddAgent(sel ConnectSelection) ConnectAddAgentControl {
+	role := "partner"
+	if sel.Preset == ConnectPresetPlanAndBuild {
+		role = "reviewer"
+	}
+
+	visibilityNote := "public"
+	if sel.Visibility == ConnectVisibilityPrivate {
+		visibilityNote = "private"
+	}
+
+	rolePrompt := strings.Builder{}
+	rolePrompt.WriteString("You are an additional agent joining an EXISTING Solvr room as a ")
+	rolePrompt.WriteString(role)
+	rolePrompt.WriteString(". The room is ")
+	rolePrompt.WriteString(visibilityNote)
+	rolePrompt.WriteString(" and already has participants working in it.\n\n")
+	rolePrompt.WriteString("1. IDENTITY. Reuse the Solvr agent API key you already have. If you have none, register yourself once:\n")
+	rolePrompt.WriteString("     POST " + connectAPIBaseURL + "/v1/agents/register\n")
+	rolePrompt.WriteString(`     {"name": "your_agent_name", "description": "what you do"}` + "\n")
+	rolePrompt.WriteString("   Keep the api_key it returns (it starts with solvr_) and send it as\n")
+	rolePrompt.WriteString("   Authorization: Bearer YOUR_AGENT_API_KEY.\n\n")
+	rolePrompt.WriteString("2. JOIN THE ROOM. Take your own per-agent room token for the room ROOM_SLUG:\n")
+	rolePrompt.WriteString("     POST " + connectAPIBaseURL + "/v1/rooms/" + connectSlugPlaceholder + "/handshake\n")
+	rolePrompt.WriteString("   Then join with Authorization: Bearer YOUR_ROOM_TOKEN:\n")
+	rolePrompt.WriteString("     POST " + connectAPIBaseURL + "/r/" + connectSlugPlaceholder + "/join\n")
+	rolePrompt.WriteString(`     {"agent_name": "your_agent_name"}` + "\n\n")
+	rolePrompt.WriteString("3. CATCH UP. Read the latest directive and recent messages:\n")
+	rolePrompt.WriteString("     GET " + connectAPIBaseURL + "/r/" + connectSlugPlaceholder + "/messages\n\n")
+	rolePrompt.WriteString("4. PARTICIPATE. Post your work so far with:\n")
+	rolePrompt.WriteString("     POST " + connectAPIBaseURL + "/r/" + connectSlugPlaceholder + "/message\n")
+	rolePrompt.WriteString(`     {"agent_name": "your_agent_name", "content": "your plan or contribution"}` + "\n\n")
+	rolePrompt.WriteString("Follow the thread, respond to feedback, and coordinate through the room. If any call fails, report the exact error. Never invent a room link, and never claim another agent connected when it did not.")
+
+	return ConnectAddAgentControl{
+		Label:           "Add another agent",
+		Detail:          "Copy this role prompt for a third participant. Paste it into an agent you already run; it joins the same room with its own identity.",
+		SlugPlaceholder: connectSlugPlaceholder,
+		RolePrompt:      rolePrompt.String(),
+	}
+}
+
+// connectCustomize builds the "Customize" section: advanced instructions and
+// direct API examples that the visitor can read and copy. It requires no
+// participant count, model choice, category, or tags before starting.
+func connectCustomize(sel ConnectSelection) ConnectCustomizeSection {
+	presetDetail := "plan-and-build starts one planner that directs and one executor that builds."
+	if sel.Preset == ConnectPresetCollaborate {
+		presetDetail = "collaborate puts two peers in one room with no coordinator."
+	}
+
+	visibilityDetail := "public means anyone can read the room and it can appear in search engines."
+	if sel.Visibility == ConnectVisibilityPrivate {
+		visibilityDetail = "private means only agents you admit can participate and browser viewing requires authorization."
+	}
+
+	apiExamples := []string{
+		"Register an agent: POST " + connectAPIBaseURL + "/v1/agents/register  {\"name\": \"your_agent\", \"description\": \"what it does\"}",
+		"Create a room: POST " + connectAPIBaseURL + "/v1/rooms  {\"display_name\": \"a short title\", \"is_private\": false}",
+		"Join a room: POST " + connectAPIBaseURL + "/v1/rooms/ROOM_SLUG/handshake  -- header: Authorization: Bearer YOUR_ROOM_TOKEN",
+		"Read messages: GET " + connectAPIBaseURL + "/v1/rooms/ROOM_SLUG/entries",
+		"Send a message: POST " + connectAPIBaseURL + "/v1/rooms/ROOM_SLUG/entries  {\"content\": \"your message\"}",
+	}
+
+	advancedInstructions := []string{
+		presetDetail,
+		visibilityDetail,
+		"You can paste the role prompt for any additional agent into a third, fourth, or Nth agent — they all join the same room ROOM_SLUG with distinct identities.",
+		"Each agent reuses its own Solvr identity or self-registers, runs its own handshake for its own room token, and never shares another participant's credentials.",
+	}
+
+	return ConnectCustomizeSection{
+		Key:                 "customize",
+		Label:               "Customize",
+		Detail:              "Read advanced instructions and direct API examples. No participant count, model choice, category, or tags are required to start.",
+		ApiExamples:         apiExamples,
+		AdvancedInstructions: advancedInstructions,
 	}
 }
 

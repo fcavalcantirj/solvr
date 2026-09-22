@@ -63,6 +63,24 @@ export interface APIConnectExample {
   detail: string;
 }
 
+// The "Add another agent" optional control: a role-specific prompt the visitor
+// can copy for a third, fourth, or Nth participant in the same room.
+export interface APIConnectAddAgentControl {
+  label: string;
+  detail: string;
+  slug_placeholder: string;
+  role_prompt: string;
+}
+
+// The "Customize" section: advanced instructions and direct API examples.
+export interface APIConnectCustomizeSection {
+  key: string;
+  label: string;
+  detail: string;
+  api_examples: string[];
+  advanced_instructions: string[];
+}
+
 export interface APIConnectStart {
   heading: string;
   intro: string;
@@ -78,6 +96,8 @@ export interface APIConnectStart {
   steps: APIConnectStep[];
   example: APIConnectExample;
   note: string;
+  add_agent: APIConnectAddAgentControl;
+  customize: APIConnectCustomizeSection;
 }
 
 export interface APIConnectStartResponse {

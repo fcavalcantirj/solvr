@@ -2894,3 +2894,87 @@ UAT: Step 6 (mobile layout) is inherently visual — owner should open / on both
   viewports and confirm all statistic groups remain readable through stacked rows.
   The automated equivalents (125 component tests + design-system rhythm test)
   already ran green.
+
+================================================================================
+2026-09-22 — TASK 17: Make /connect a prompt-first start flow accessible without authentication
+================================================================================
+
+CONTINUATION from Task 6 (2026-09-21 02:00): Step 5 of Task 17 was the remaining
+unbuilt piece — "Show Add another agent as an optional control with repeatable
+role labels; place advanced instructions and direct API examples under Customize."
+The start flow itself was already built; this iteration adds the add-agent control
+and the Customize section to the existing /v1/connect contract and renders them
+on both the index panel and the /connect page.
+
+WHAT WAS BUILT (backend first, then the frontend — API smart, client dumb)
+
+  BACKEND
+  - backend/internal/api/handlers/connect.go (329 -> 440 lines):
+    - NEW ConnectAddAgentControl struct: label, detail, slug_placeholder, role_prompt.
+    - NEW ConnectCustomizeSection struct: key, label, detail, api_examples, advanced_instructions.
+    - ConnectStart struct gained AddAgent and Customize fields.
+    - buildConnectStart now populates both fields via connectAddAgent(sel) and connectCustomize(sel).
+  - backend/internal/api/handlers/connect_prompts.go (+140 lines):
+    - connectAddAgent(sel): builds a role-specific prompt for a third+ participant. The role
+      adapts to the preset — "reviewer" for plan-and-build, "partner" for collaborate. The prompt
+      names real production endpoints, uses the unmistakable ROOM_SLUG and YOUR_ROOM_TOKEN
+      placeholders (no $ or ${), and reuses the agent's own identity.
+    - connectCustomize(sel): builds advanced instructions (preset visibility meaning, how to add
+      more agents) and direct API examples (register, create room, join, read messages, send
+      messages). All endpoints are production URLs with ROOM_SLUG placeholders.
+
+  FRONTEND
+  - frontend/lib/connect-types.ts: added APIConnectAddAgentControl and APIConnectCustomizeSection
+    interfaces, wired into APIConnectStart.
+  - frontend/components/connect/connect-fixture.ts: added add_agent and customize to CONNECT_START
+    and CONNECT_START_PRIVATE_COLLABORATE (with collaborate/peer variants).
+  - frontend/components/connect/connect-panel.tsx (255 -> 288 lines): renders the Add another agent
+    section with its role prompt in a <pre> block, and the Customize section with advanced
+    instructions and API examples. The panel source is still scanned by the dumb-terminal test.
+
+TESTS — ALL RAN, ALL GREEN, NONE SKIPPED
+
+  [TEST] Backend handler tests (pure, no DB), run with:
+    DATABASE_URL="postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable"
+    go test ./internal/api/handlers/ -run TestConnect -count=1 -v
+    Result: 20 tests PASS (including the 4 new RED-first tests that were written earlier:
+    TestConnect_ProvidesAnAddAnotherAgentControlWithRoleLabels,
+    TestConnect_CollaboratePresetProvidesASuitableAddAgentRole,
+    TestConnect_CustomizeSectionCarriesAdvancedInstructionsAndApiExamples,
+    TestConnect_CopyingTheStarterPromptAloneDoesNotCreateARoom).
+
+  [TEST] Backend integration tests (real router + real database), run with:
+    DATABASE_URL="postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable"
+    go test ./internal/api/ -run TestConnectEndpoint -count=1 -v
+    Result: 5 tests PASS, including TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes
+    which walks every chi route and requires every production URL in every prompt variant to be
+    a route the API actually serves. The new add-agent prompt's endpoints are all real routes.
+
+  [TEST] Frontend tests, run with:
+    npx vitest run components/connect/connect-panel.test.tsx
+    Result: 18 tests PASS (2 new tests added:
+    "renders the Add another agent control with its role prompt from the API"
+    "renders the Customize section with advanced instructions and API examples").
+
+  [REAL] npx tsc --noEmit: ZERO errors.
+  [REAL] go build ./... exits 0.
+  [REAL] go vet ./internal/api/handlers/ clean.
+  [REAL] bash scripts/check-file-size.sh: same 36 pre-existing violations, none from this task.
+    Largest touched file: connect.go at 440 lines. connect-panel.tsx at 288 lines.
+
+  [TEST] NO REGRESSION: the dumb-terminal test in connect-panel.test.tsx still passes —
+    the component source contains no "api.solvr.dev", no "agents/register", no "is_private",
+    no "Copy planner prompt", no "Paste this into your planner", no "plan-and-build".
+    The new sections render API strings only (start.add_agent.*, start.customize.*).
+
+NOTES
+  - The add-agent role prompt follows the same pattern as the planner/starter prompts: absolute
+    production URLs, ROOM_SLUG placeholder, no $ or ${, reuse-your-own-identity guidance.
+  - The customize section requires no participant count, model choice, category, or tags — the
+    visitor can read and copy freely.
+  - No new docs files were created (golden rules forbid it).
+  - This was a LOCAL ONLY task: no production calls, no deploys, no env file changes.
+  - Database used: postgres://solvr:solvr_dev@localhost:5435/solvr_test (isolated template clone).
+
+UAT: NOTHING OWNER-ONLY WAS LEFT OUTSTANDING — no production migration, no deploy step,
+    no broadcast. Every automated check ran locally and green.

@@ -63,6 +63,19 @@ type connectContract struct {
 		NextStep    string `json:"next_step"`
 		Text        string `json:"text"`
 	} `json:"prompt"`
+	AddAgent struct {
+		Label          string   `json:"label"`
+		Detail         string   `json:"detail"`
+		SlugPlaceholder string   `json:"slug_placeholder"`
+		RolePrompt     string   `json:"role_prompt"`
+	} `json:"add_agent"`
+	Customize struct {
+		Key                 string   `json:"key"`
+		Label               string   `json:"label"`
+		Detail              string   `json:"detail"`
+		ApiExamples         []string `json:"api_examples"`
+		AdvancedInstructions []string `json:"advanced_instructions"`
+	} `json:"customize"`
 	Steps []struct {
 		Number int    `json:"number"`
 		Label  string `json:"label"`

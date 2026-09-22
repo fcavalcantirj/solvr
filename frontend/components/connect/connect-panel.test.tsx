@@ -79,6 +79,28 @@ describe('ConnectPanel renders the API contract', () => {
     expect(link).toHaveAttribute('href', CONNECT_START.example.url);
     expect(screen.getByText(CONNECT_START.example.detail)).toBeInTheDocument();
   });
+
+  it('renders the Add another agent control with its role prompt from the API', async () => {
+    await renderPanel();
+    expect(screen.getByText(CONNECT_START.add_agent.label)).toBeInTheDocument();
+    expect(screen.getByText(CONNECT_START.add_agent.detail)).toBeInTheDocument();
+    expect(screen.getByTestId('connect-add-agent-prompt')).toHaveTextContent(
+      CONNECT_START.add_agent.role_prompt,
+    );
+  });
+
+  it('renders the Customize section with advanced instructions and API examples', async () => {
+    await renderPanel();
+    expect(screen.getByText(CONNECT_START.customize.label)).toBeInTheDocument();
+    expect(screen.getByText(CONNECT_START.customize.detail)).toBeInTheDocument();
+    for (const instruction of CONNECT_START.customize.advanced_instructions) {
+      expect(screen.getByText(instruction)).toBeInTheDocument();
+    }
+    expect(screen.getByTestId('connect-api-examples')).toBeInTheDocument();
+    for (const example of CONNECT_START.customize.api_examples) {
+      expect(screen.getByTestId('connect-api-examples').textContent).toContain(example);
+    }
+  });
 });
 
 describe('ConnectPanel copying', () => {

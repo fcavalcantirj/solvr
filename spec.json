@@ -216,7 +216,7 @@
       "Show Add another agent as an optional control with repeatable role labels; place advanced instructions and direct API examples under Customize, without requiring a participant count, model choice, category, or tags before starting.",
       "Verify copying the starter prompt alone does not create a room or falsely report that an agent has connected."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

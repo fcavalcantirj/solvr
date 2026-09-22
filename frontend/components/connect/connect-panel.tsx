@@ -187,6 +187,39 @@ function ConnectPanelContent({
         ) : null}
       </div>
 
+      {/* Add another agent — an optional, repeatable role prompt */}
+      {start.add_agent.label ? (
+        <div className="mt-6 border-t border-border pt-6">
+          <h3 className="font-mono text-xs tracking-wider">{start.add_agent.label}</h3>
+          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{start.add_agent.detail}</p>
+          <pre
+            data-testid="connect-add-agent-prompt"
+            className="mt-3 max-h-56 overflow-auto bg-background border border-border p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words select-all"
+          >
+            {start.add_agent.role_prompt}
+          </pre>
+        </div>
+      ) : null}
+
+      {/* Customize — advanced instructions and direct API examples */}
+      {start.customize.key ? (
+        <div className="mt-6 border-t border-border pt-6">
+          <h3 className="font-mono text-xs tracking-wider">{start.customize.label}</h3>
+          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{start.customize.detail}</p>
+          <ul className="mt-3 space-y-2">
+            {start.customize.advanced_instructions.map((instruction, i) => (
+              <li key={`adv-${i}`} className="text-sm text-muted-foreground leading-relaxed">{instruction}</li>
+            ))}
+          </ul>
+          <pre
+            data-testid="connect-api-examples"
+            className="mt-3 max-h-64 overflow-auto bg-background border border-border p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words select-all"
+          >
+            {start.customize.api_examples.join('\n')}
+          </pre>
+        </div>
+      ) : null}
+
       {/* The real collaboration, and the full page when this is the panel */}
       <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
         <Link

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { CONNECT_START, CONNECT_START_PRIVATE_COLLABORATE } from './connect-fixture';
+import { CONNECT_START, CONNECT_START_PRIVATE_COLLABORATE, CONNECT_START_BUILD_AND_REVIEW } from './connect-fixture';
 import { ConnectPanel } from './connect-panel';
 
 // The connection panel is the ONE surface that starts a connection. The index
@@ -180,6 +180,39 @@ describe('ConnectPanel sends every choice back to the API', () => {
     await screen.findByRole('button', { name: CONNECT_START_PRIVATE_COLLABORATE.prompt.label });
     expect(screen.getByText(CONNECT_START_PRIVATE_COLLABORATE.prompt.instruction)).toBeInTheDocument();
     expect(screen.getByTestId('connect-prompt-text')).toHaveTextContent('You are the FIRST agent');
+  });
+
+  it('re-reads the prompt when the build-and-review preset is chosen', async () => {
+    await renderPanel();
+
+    // The API answers with the build-and-review variant while the room is still
+    // public, because the visitor has not chosen otherwise yet.
+    const buildAndReviewPublic = {
+      ...CONNECT_START_BUILD_AND_REVIEW,
+      visibility_options: CONNECT_START.visibility_options,
+      selected: { ...CONNECT_START_BUILD_AND_REVIEW.selected, visibility: 'public' },
+    };
+    vi.mocked(api.getConnectStart).mockResolvedValue({ data: buildAndReviewPublic });
+
+    fireEvent.click(screen.getByRole('radio', { name: /Build and review/i }));
+    await waitFor(() => {
+      expect(vi.mocked(api.getConnectStart)).toHaveBeenCalledWith(
+        expect.objectContaining({ preset: 'build-and-review' }),
+      );
+    });
+
+    // The builder prompt replaces the planner prompt.
+    await screen.findByRole('button', { name: CONNECT_START_BUILD_AND_REVIEW.prompt.label });
+    expect(screen.getByText(CONNECT_START_BUILD_AND_REVIEW.prompt.instruction)).toBeInTheDocument();
+    expect(screen.getByTestId('connect-prompt-text')).toHaveTextContent('You are the BUILDER agent');
+  });
+
+  it('renders the build-and-review add-agent role as a reviewer', async () => {
+    vi.mocked(api.getConnectStart).mockResolvedValue({ data: CONNECT_START_BUILD_AND_REVIEW });
+    await renderPanel();
+
+    expect(screen.getByText(CONNECT_START_BUILD_AND_REVIEW.add_agent.label)).toBeInTheDocument();
+    expect(screen.getByTestId('connect-add-agent-prompt')).toHaveTextContent('reviewer');
   });
 });
 

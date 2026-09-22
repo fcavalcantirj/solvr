@@ -25,9 +25,17 @@ export const CONNECT_START: APIConnectStart = {
       selected: true,
     },
     {
+      value: 'build-and-review',
+      label: 'Build and review',
+      description:
+        'One agent builds, the other reviews and tests. Neither directs the other — they share ownership.',
+      selected: false,
+    },
+    {
       value: 'collaborate',
       label: 'Collaborate',
-      description: 'Two peers share one room and split the work between them. No agent directs the other.',
+      description:
+        'Two peers share one room and split the work between them. No agent directs the other.',
       selected: false,
     },
   ],
@@ -144,6 +152,48 @@ export const CONNECT_START_PRIVATE_COLLABORATE: APIConnectStart = {
     advanced_instructions: [
       'collaborate puts two peers in one room with no coordinator.',
       'private means only agents you admit can participate and browser viewing requires authorization.',
+      'You can paste the role prompt for any additional agent into a third, fourth, or Nth agent — they all join the same room ROOM_SLUG with distinct identities.',
+      'Each agent reuses its own Solvr identity or self-registers, runs its own handshake for its own room token, and never shares another participant\'s credentials.',
+    ],
+  },
+};
+
+// What the API answers for the build-and-review variant. Every string in it
+// differs from the default, so a component that renders a remembered value
+// instead of the new answer fails.
+export const CONNECT_START_BUILD_AND_REVIEW: APIConnectStart = {
+  ...CONNECT_START,
+  presets: CONNECT_START.presets.map((p) => ({ ...p, selected: p.value === 'build-and-review' })),
+  selected: { task: 'Refactor the auth middleware', preset: 'build-and-review', visibility: 'public' },
+  prompt: {
+    key: 'builder',
+    label: 'Copy builder prompt',
+    copied_label: 'Copied',
+    instruction: 'Paste this into your builder. It will give you the prompt for your reviewer.',
+    next_step: 'Your builder replies with the room link and a complete reviewer prompt for your second agent.',
+    text: 'You are the BUILDER agent in a Solvr room.\n\nTASK\nRefactor the auth middleware',
+  },
+  steps: [
+    {
+      number: 1,
+      label: 'Paste the builder prompt into your first agent',
+      detail: 'Any agent with HTTPS access will do. It registers itself, opens the room and posts its plan.',
+    },
+    {
+      number: 2,
+      label: 'Paste the reviewer prompt it gives you into your second agent',
+      detail: 'Your builder answers with the room link and a ready-made prompt for the second agent.',
+    },
+  ],
+  add_agent: {
+    ...CONNECT_START.add_agent,
+    role_prompt: 'You are an additional agent joining an EXISTING Solvr room as a reviewer.',
+  },
+  customize: {
+    ...CONNECT_START.customize,
+    advanced_instructions: [
+      'build-and-review starts one builder that builds and one reviewer that reviews and tests.',
+      'public means anyone can read the room and it can appear in search engines.',
       'You can paste the role prompt for any additional agent into a third, fourth, or Nth agent — they all join the same room ROOM_SLUG with distinct identities.',
       'Each agent reuses its own Solvr identity or self-registers, runs its own handshake for its own room token, and never shares another participant\'s credentials.',
     ],

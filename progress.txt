@@ -3196,3 +3196,119 @@ UAT: NOTHING OWNER-ONLY WAS LEFT OUTSTANDING — no production migration, no dep
     step, no broadcast. Every automated check ran locally and green, and the full
     two-agent executor journey was exercised against a running API on an isolated
     test database.
+
+================================================================================
+2026-09-22 — TASK 20 "Support useful role presets without creating separate products
+or restricting the room to two agents" [functional]. DONE, passes=true.
+================================================================================
+
+WHAT THE TASK ASKED FOR AND WHAT IT NOW DOES.
+
+The /connect start flow offered two presets — plan-and-build and collaborate.
+Task 20 adds a third: build-and-review. Each preset changes only starter
+instructions and suggested role labels within the same Room model and
+connection flow; no new product, no two-agent restriction, no room model change.
+
+WHAT SHIPPED (backend first, then frontend — API smart, client dumb).
+
+  BACKEND
+  - backend/internal/api/handlers/connect.go (+54 lines):
+    - NEW constant ConnectPresetBuildAndReview = "build-and-review".
+    - connectPresets() now returns THREE options (plan-and-build, build-and-review,
+      collaborate), each with its own label and description.
+    - GetConnect validation accepts the new preset; an unknown preset is still 400.
+    - connectAddAgent() now selects "reviewer" as the role for BOTH plan-and-build
+      AND build-and-review (a third participant reviews the work); collaborate
+      keeps "partner". Role labels communicate responsibility but grant NO
+      room-management permissions.
+    - connectSteps() now takes the preset string (was bool planner) and adds
+      build-and-review steps: "Paste the builder prompt into your first agent" /
+      "Paste the reviewer prompt it gives you into your second agent."
+    - connectCustomize() presetDetail now describes build-and-review.
+  - backend/internal/api/handlers/connect_prompts.go (+66 lines):
+    - NEW const connectBuilderInstruction: "Paste this into your builder. It
+      will give you the prompt for your reviewer."
+    - buildConnectPrompt() dispatches build-and-review to the builder prompt.
+    - NEW builderPromptText(sel): the build-and-review prompt. One builder opens
+      the room and builds, one reviewer reviews and tests. Neither directs the
+      other. The builder prompt instructs the agent to return a complete reviewer
+      prompt containing the real room slug, the reviewer role, the builder identity,
+      and the task — telling the reviewer to use ITS OWN identity, reuse its key
+      or register, run its own handshake for its own room token, join, and review.
+      No "$", no "${", no shell/template expansion, never fabricates a room link.
+
+  FRONTEND (dumb terminal — renders API strings only)
+  - frontend/components/connect/connect-fixture.ts (+52 lines): added
+    CONNECT_START_BUILD_AND_REVIEW fixture variant and included the third preset
+    in CONNECT_START.presets.
+  - frontend/components/connect/connect-panel.test.tsx (+35 lines): two new tests:
+    switch to build-and-review preset renders the builder prompt; add-agent role
+    renders as reviewer.
+
+TESTS — ALL RAN, ALL GREEN, NONE SKIPPED.
+
+  [TEST] backend/internal/api/handlers — 25 NEW subtests across 6 new tests,
+    all PASS:
+    TestConnect_BuildAndReviewPresetIsAvailableAndChangesStarterInstructions
+    TestConnect_BuildAndReviewPresetCarriesTaskVerbatim
+    TestConnect_BuildAndReviewPresetPrivateChangesTheRoom
+    TestConnect_BuildAndReviewAddAgentRoleIsReviewer
+    TestConnect_BuildAndReviewRejectsUnknownPresetAndAcceptsTheThreeKnown
+
+  [TEST] backend/internal/api — 2 NEW integration tests, all PASS against
+    an isolated database postgres://solvr:solvr_dev@localhost:5435/solvr_test
+    (DROP + CREATE DATABASE solvr_test TEMPLATE solvr before each run):
+    TestConnectEndpoint_BuildAndReviewPresetServesBuilderReviewerContract
+      (verifies 3 presets, builder/reviewer roles, no planner/executor in text,
+       no credentials, no $/${, and walks the chi router to prove every endpoint
+       named in the prompt is a route the API actually serves)
+    TestConnectEndpoint_BuildAndReviewRejectsUnknownPreset (400 on preset=builder)
+
+  [TEST] frontend — 2 NEW tests in connect-panel.test.tsx, all PASS.
+    Full suite: 141 files / 1414 tests, ALL PASS (was 141/1412).
+
+  [REAL] NO REGRESSION, measured by comparison on a freshly recreated solvr_test.
+    HEAD (stashed --include-untracked) vs with this change, same 9 pre-existing
+    failures in internal/api/ (3 comments_count, 4 GitHub OAuth integration
+    needing real credentials, 1 IPFS health, 1 type-specific list endpoints).
+    No new failures; no TestConnect or TestConnectEndpoint failures.
+
+  [REAL] go build ./... exits 0. go vet ./internal/api/... clean.
+  [REAL] gofmt clean on all changed Go files.
+  [REAL] bash scripts/check-file-size.sh: no NEW violations. All changed files
+    well under 800 lines (connect.go 470, connect_prompts.go 333, connect_test.go
+    550, router_connect_test.go 700, connect-panel.tsx 288, connect-fixture.ts 201).
+  [REAL] npx tsc --noEmit: ZERO errors.
+
+  [REAL] VERIFIED AGAINST A RUNNING STACK. API on :8093 against
+    postgres://solvr:solvr_dev@localhost:5435/solvr_test (backend/.env NOT touched).
+    curl GET /v1/connect?preset=build-and-review returned:
+      selected preset: build-and-review, prompt key: builder, label: Copy builder prompt
+      3 presets: plan-and-build, build-and-review, collaborate
+      prompt contains "builder" and "reviewer" but NOT "planner" or "executor"
+      add_agent role: reviewer
+      steps: builder prompt / reviewer prompt
+      no "$", no "${", no "http://localhost"
+    curl GET /v1/connect (default) still returns plan-and-build/planner/executor.
+    curl GET /v1/connect?preset=builder returns 400 INVALID_PRESET.
+    curl GET /v1/connect?preset=build-and-review&visibility=private returns prompt
+      with "is_private": true and builder/reviewer roles.
+    Server killed, port 8093 clear, solvr_test dropped. No call left localhost.
+
+NOTES
+  - The frontend types (connect-types.ts) needed NO changes: presets is an
+    APIConnectOption[], the third preset is carried through automatically.
+  - No SPEC.md or openapi_paths.go change — no step asked for it, and
+    openapi_paths.go is already over the 800-line CI limit.
+  - The route-walk test (TestConnectEndpoint_BuildAndReviewPresetServesBuilderReviewContract)
+    proves every production URL in the builder prompt is a real chi route, same
+    pattern as the existing TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes.
+  - Role labels ("builder", "reviewer", "partner") are SUGGESTED labels only; they
+    do not map to any room_members.role value and grant no room-management
+    permissions. All participants use the same room_members table with role
+    'owner' or 'member'.
+
+UAT: NOTHING OWNER-ONLY IS OUTSTANDING — no production migration, no deploy step,
+    no broadcast. Every automated check ran locally and green, and the new preset
+    was confirmed against a running API. The room model and connection flow are
+    unchanged; the feature is the third preset and its role-aligned starter prompt.

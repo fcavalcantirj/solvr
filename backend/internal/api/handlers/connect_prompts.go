@@ -33,6 +33,7 @@ const (
 	// that must receive the copied prompt.
 	connectPlannerInstruction = "Paste this into your planner. It will give you the prompt for your executor."
 	connectStarterInstruction = "Paste this into your first agent. It will give you the prompt for its partner."
+	connectBuilderInstruction = "Paste this into your builder. It will give you the prompt for your reviewer."
 )
 
 // buildConnectPrompt writes the prompt for one selection.
@@ -45,6 +46,17 @@ func buildConnectPrompt(sel ConnectSelection) ConnectPrompt {
 			Instruction: connectStarterInstruction,
 			NextStep:    "Your first agent replies with the room link and a complete partner prompt for your second agent.",
 			Text:        starterPromptText(sel),
+		}
+	}
+
+	if sel.Preset == ConnectPresetBuildAndReview {
+		return ConnectPrompt{
+			Key:         "builder",
+			Label:       "Copy builder prompt",
+			CopiedLabel: "Copied",
+			Instruction: connectBuilderInstruction,
+			NextStep:    "Your builder replies with the room link and a complete reviewer prompt for your second agent.",
+			Text:        builderPromptText(sel),
 		}
 	}
 
@@ -175,6 +187,60 @@ func starterPromptText(sel ConnectSelection) string {
 		"",
 		"5. THEN WORK. Agree the split in the room, do your half, and keep the decisions in",
 		"   the room rather than in this chat.",
+		"",
+		"If any call fails, tell me the exact error. Never invent a room link, and never say",
+		"an agent connected when it did not.",
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// builderPromptText is the build-and-review shape: one builder that builds and
+// one reviewer that reviews and tests. Neither directs the other.
+func builderPromptText(sel ConnectSelection) string {
+	isPrivate, visibilityNote := promptVisibilitySection(sel.Visibility)
+	slug := connectSlugPlaceholder
+
+	lines := []string{
+		"You are the BUILDER agent in a Solvr room. A second agent, the reviewer, will",
+		"join to review and test your work. Everything below is plain HTTPS:",
+		"no Solvr CLI, no human account, and no change to your own configuration.",
+		"",
+		promptTaskSection(sel.Task),
+		"",
+		"1. IDENTITY. Reuse the Solvr agent API key you already have. If you have none,",
+		"   register yourself once:",
+		"     POST " + connectAPIBaseURL + "/v1/agents/register",
+		`     {"name": "your_agent_name", "description": "what you do"}`,
+		"   Keep the api_key it returns (it starts with solvr_) and send it as",
+		"   Authorization: Bearer YOUR_AGENT_API_KEY on the /v1 calls below.",
+		"",
+		"2. ROOM. Create the room you will share with the reviewer:",
+		"     POST " + connectAPIBaseURL + "/v1/rooms",
+		`     {"display_name": "a short title for the task", "is_private": ` + isPrivate + "}",
+		"   " + visibilityNote,
+		"   The response carries the room slug. Then take your own per-agent room token:",
+		"     POST " + connectAPIBaseURL + "/v1/rooms/" + slug + "/handshake",
+		"   The room_token it returns (it starts with solvr_rt_) is yours alone.",
+		"   Never share it and never put it in another agent's prompt.",
+		"",
+		"3. OPEN THE WORK. With Authorization: Bearer YOUR_ROOM_TOKEN:",
+		"     POST " + connectAPIBaseURL + "/r/" + slug + "/join",
+		`     {"agent_name": "your_agent_name"}`,
+		"     POST " + connectAPIBaseURL + "/r/" + slug + "/message",
+		`     {"agent_name": "your_agent_name", "content": "the task and your implementation plan"}`,
+		"   Read the replies with GET " + connectAPIBaseURL + "/r/" + slug + "/messages",
+		"",
+		"4. HAND ME THE SECOND PROMPT. Reply to me with:",
+		"   - the room link " + connectAppBaseURL + "/rooms/" + slug + " using the REAL slug,",
+		"   - and a complete REVIEWER PROMPT I can paste into my other agent. It must name",
+		"     the room, the reviewer role, you as the builder and the task, and it must tell",
+		"     that agent to use ITS OWN identity: reuse its key or register, run its own",
+		"     handshake for its own room token, join, and review your work. Never put your API",
+		"     key or your room token in that prompt.",
+		"",
+		"5. THEN WORK. Build in the room and keep the decisions in the room rather than in",
+		"   this chat. The reviewer reads your plan and reports issues.",
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
 		"an agent connected when it did not.",

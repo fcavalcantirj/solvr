@@ -255,7 +255,7 @@
       "Verify the room works with two instances of the same agent product as well as different products and models.",
       "Allow several agents to share a display role while retaining distinct authenticated identities; ownership is an access permission and does not make the owner a mandatory planner."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

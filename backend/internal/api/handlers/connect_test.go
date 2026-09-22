@@ -268,6 +268,106 @@ func TestConnect_WorksWithNoRoomRepositoryAtAll(t *testing.T) {
 	require.NotEmpty(t, start.Prompt.Text, "the prompt never depends on the example room")
 }
 
+func TestConnect_BuildAndReviewPresetIsAvailableAndChangesStarterInstructions(t *testing.T) {
+	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
+
+	start, body := getConnect(t, h, "preset=build-and-review")
+
+	require.Equal(t, ConnectPresetBuildAndReview, start.Selected.Preset, "body: %s", body)
+
+	// The new preset must appear in the option list.
+	var presetSelected int
+	var hasBuildAndReview bool
+	for _, p := range start.Presets {
+		require.NotEmpty(t, p.Label)
+		require.NotEmpty(t, p.Description)
+		if p.Value == ConnectPresetBuildAndReview {
+			hasBuildAndReview = true
+			require.True(t, p.Selected, "build-and-review must be selected when preset=build-and-review")
+		}
+		if p.Selected {
+			presetSelected++
+		}
+	}
+	require.True(t, hasBuildAndReview, "build-and-review must be an available preset")
+	require.Equal(t, 1, presetSelected, "exactly one preset is selected")
+
+	// There must now be THREE presets, all within the same Room model and flow.
+	require.Len(t, start.Presets, 3, "presets: %v", start.Presets)
+
+	// The prompt key/label change: build-and-review uses a builder, not a planner.
+	require.NotEqual(t, "planner", start.Prompt.Key)
+	require.NotEqual(t, "starter", start.Prompt.Key)
+	require.Contains(t, strings.ToLower(start.Prompt.Label), "builder")
+
+	// The builder prompt names builder + reviewer roles, not planner + executor.
+	lower := strings.ToLower(start.Prompt.Text)
+	require.Contains(t, lower, "builder")
+	require.Contains(t, lower, "reviewer")
+	require.NotContains(t, lower, "planner")
+	require.NotContains(t, lower, "executor")
+
+	// No shell/template placeholders.
+	require.NotContains(t, start.Prompt.Text, "$")
+	require.NotContains(t, start.Prompt.Text, "${")
+}
+
+func TestConnect_BuildAndReviewPresetCarriesTaskVerbatim(t *testing.T) {
+	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
+
+	task := `Audit logging for the checkout flow`
+	start, body := getConnect(t, h, "preset=build-and-review&task="+url.QueryEscape(task))
+
+	require.Equal(t, task, start.Selected.Task, "body: %s", body)
+	require.Contains(t, start.Prompt.Text, task)
+	require.NotContains(t, start.Prompt.Text, "$")
+}
+
+func TestConnect_BuildAndReviewPresetPrivateChangesTheRoom(t *testing.T) {
+	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
+
+	start, _ := getConnect(t, h, "preset=build-and-review&visibility=private")
+
+	require.Equal(t, ConnectVisibilityPrivate, start.Selected.Visibility)
+	require.Contains(t, start.Prompt.Text, `"is_private": true`)
+	// Role labels still present in the private variant.
+	require.Contains(t, strings.ToLower(start.Prompt.Text), "builder")
+}
+
+func TestConnect_BuildAndReviewAddAgentRoleIsReviewer(t *testing.T) {
+	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
+
+	start, body := getConnect(t, h, "preset=build-and-review")
+
+	require.NotEmpty(t, start.AddAgent.Label, "body: %s", body)
+	require.NotEmpty(t, start.AddAgent.RolePrompt)
+	// For build-and-review, the add-another-agent role is a reviewer, not an executor.
+	require.Contains(t, strings.ToLower(start.AddAgent.RolePrompt), "reviewer")
+	// The add-agent prompt must never mention planner/executor.
+	require.NotContains(t, strings.ToLower(start.AddAgent.RolePrompt), "executor")
+	// No shell/template placeholders.
+	require.NotContains(t, start.AddAgent.SlugPlaceholder, "$")
+	require.NotContains(t, start.AddAgent.RolePrompt, "$")
+}
+
+func TestConnect_BuildAndReviewRejectsUnknownPresetAndAcceptsTheThreeKnown(t *testing.T) {
+	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
+
+	for _, preset := range []string{ConnectPresetPlanAndBuild, ConnectPresetBuildAndReview, ConnectPresetCollaborate} {
+		start, _ := getConnect(t, h, "preset="+preset)
+		require.Equal(t, preset, start.Selected.Preset)
+	}
+
+	// An unknown preset is refused.
+	for _, query := range []string{"preset=solo", "preset=builder"} {
+		req := httptest.NewRequest(http.MethodGet, "/v1/connect?"+query, nil)
+		w := httptest.NewRecorder()
+		h.GetConnect(w, req)
+		require.Equal(t, http.StatusBadRequest, w.Code, "query %s body %s", query, w.Body.String())
+		require.Contains(t, w.Body.String(), "error")
+	}
+}
+
 func TestConnect_RejectsAnUnknownPresetOrVisibilityInsteadOfGuessing(t *testing.T) {
 	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
 

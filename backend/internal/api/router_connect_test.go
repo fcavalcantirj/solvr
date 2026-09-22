@@ -124,7 +124,7 @@ func TestConnectEndpoint_ServesTheWholeStartContractToALoggedOutVisitor(t *testi
 	require.NotEmpty(t, contract.TaskField.Label)
 	require.True(t, contract.TaskField.Optional)
 	require.Greater(t, contract.TaskField.MaxChars, 0)
-	require.Len(t, contract.Presets, 2)
+	require.Len(t, contract.Presets, 3)
 	require.Len(t, contract.VisibilityOptions, 2)
 	require.Len(t, contract.Steps, 2)
 	require.Equal(t, "plan-and-build", contract.Selected.Preset)
@@ -167,6 +167,59 @@ func TestConnectEndpoint_RefusesAnUnknownPresetOrVisibility(t *testing.T) {
 		resp.Body.Close()
 		require.Equal(t, http.StatusBadRequest, resp.StatusCode, "query %s body %s", query, string(body))
 	}
+}
+
+func TestConnectEndpoint_BuildAndReviewPresetServesBuilderReviewerContract(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+
+	contract, body := getConnectContract(t, ts.URL, "preset=build-and-review&visibility=public")
+
+	require.Equal(t, "build-and-review", contract.Selected.Preset, "body: %s", body)
+	require.Len(t, contract.Presets, 3, "three presets must be advertised")
+
+	// The prompt key and label reflect builder/reviewer, not planner/executor.
+	require.Contains(t, strings.ToLower(contract.Prompt.Label), "builder")
+	promptLower := strings.ToLower(contract.Prompt.Text)
+	require.Contains(t, promptLower, "builder")
+	require.Contains(t, promptLower, "reviewer")
+	require.NotContains(t, promptLower, "planner")
+	require.NotContains(t, promptLower, "executor")
+
+	// The add-agent role for build-and-review is a reviewer.
+	require.Contains(t, strings.ToLower(contract.AddAgent.RolePrompt), "reviewer")
+
+	// No shell/template placeholders and no localhost.
+	require.NotContains(t, contract.Prompt.Text, "$")
+	require.NotContains(t, contract.Prompt.Text, "${")
+	require.NotContains(t, contract.Prompt.Text, "http://localhost")
+
+	// Every production URL in the prompt must be a route the API actually serves.
+	registry := hub.NewPresenceRegistry()
+	hubMgr := hub.NewHubManager(context.Background(), registry, slog.Default(), 0)
+	router := NewRouter(pool, hubMgr, registry)
+	served := map[string]bool{}
+	require.NoError(t, chi.Walk(router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		served[method+" "+strings.TrimSuffix(route, "/")] = true
+		return nil
+	}))
+	for _, m := range promptEndpointRE.FindAllStringSubmatch(contract.Prompt.Text, -1) {
+		method, path := m[1], m[2]
+		path = strings.ReplaceAll(path, "ROOM_SLUG", "{slug}")
+		require.True(t, served[method+" "+strings.TrimSuffix(path, "/")],
+			"build-and-review prompt tells the agent to call %s, which this API does not serve", method+" "+path)
+	}
+}
+
+func TestConnectEndpoint_BuildAndReviewRejectsUnknownPreset(t *testing.T) {
+	ts, _, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+
+	resp, err := http.Get(ts.URL + "/v1/connect?preset=builder")
+	require.NoError(t, err)
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "body %s", string(body))
 }
 
 func TestConnectEndpoint_LinksTheRealPublicExampleRoomItIsPointedAt(t *testing.T) {

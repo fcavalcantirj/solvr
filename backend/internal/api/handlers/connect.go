@@ -29,6 +29,10 @@ const (
 	// directs, one executor agent builds.
 	ConnectPresetPlanAndBuild = "plan-and-build"
 
+	// ConnectPresetBuildAndReview is one builder that builds and one reviewer
+	// that reviews and tests. No single agent directs the other.
+	ConnectPresetBuildAndReview = "build-and-review"
+
 	// ConnectPresetCollaborate is two peers in one room, no hierarchy.
 	ConnectPresetCollaborate = "collaborate"
 
@@ -176,7 +180,7 @@ func NewConnectHandler(rooms connectRoomLookup) *ConnectHandler {
 // GetConnect handles GET /v1/connect (public, no auth).
 //
 //	?task=       optional, free text, bounded by ConnectTaskMaxChars
-//	?preset=     plan-and-build (default) | collaborate
+//	?preset=     plan-and-build (default) | build-and-review | collaborate
 //	?visibility= public (default) | private
 //
 // An unknown preset or visibility is a 400: the API never guesses which room
@@ -195,9 +199,9 @@ func (h *ConnectHandler) GetConnect(w http.ResponseWriter, r *http.Request) {
 	if preset == "" {
 		preset = ConnectPresetPlanAndBuild
 	}
-	if preset != ConnectPresetPlanAndBuild && preset != ConnectPresetCollaborate {
+	if preset != ConnectPresetPlanAndBuild && preset != ConnectPresetBuildAndReview && preset != ConnectPresetCollaborate {
 		roomWriteError(w, http.StatusBadRequest, "INVALID_PRESET",
-			"preset must be "+ConnectPresetPlanAndBuild+" or "+ConnectPresetCollaborate)
+			"preset must be "+ConnectPresetPlanAndBuild+", "+ConnectPresetBuildAndReview+" or "+ConnectPresetCollaborate)
 		return
 	}
 
@@ -253,8 +257,6 @@ func (h *ConnectHandler) resolveExample(ctx context.Context) ConnectExample {
 // buildConnectStart is pure: the same selection and example always produce the
 // same contract, prompt text included.
 func buildConnectStart(sel ConnectSelection, example ConnectExample) ConnectStart {
-	planner := sel.Preset == ConnectPresetPlanAndBuild
-
 	start := ConnectStart{
 		Heading: "Connect your agents",
 		Intro: "Copy one prompt into an agent you already run. It creates the room, " +
@@ -275,7 +277,7 @@ func buildConnectStart(sel ConnectSelection, example ConnectExample) ConnectStar
 		VisibilityOptions: connectVisibilities(sel.Visibility),
 		Selected:          sel,
 		Prompt:            buildConnectPrompt(sel),
-		Steps:             connectSteps(planner),
+		Steps:             connectSteps(sel.Preset),
 		Example:           example,
 		Note: "Copying a prompt does not create a room and does not connect anything — " +
 			"your agent does that when you paste it in.",
@@ -287,6 +289,8 @@ func buildConnectStart(sel ConnectSelection, example ConnectExample) ConnectStar
 }
 
 // connectPresets is the shape of the collaboration, with the one selected.
+// Each preset changes only starter instructions and suggested role labels within
+// the same Room model and connection flow.
 func connectPresets(selected string) []ConnectOption {
 	return []ConnectOption{
 		{
@@ -294,6 +298,12 @@ func connectPresets(selected string) []ConnectOption {
 			Label:       "Plan and build",
 			Description: "One agent plans and reviews, the other builds. The planner opens the room and invites the executor.",
 			Selected:    selected == ConnectPresetPlanAndBuild,
+		},
+		{
+			Value:       ConnectPresetBuildAndReview,
+			Label:       "Build and review",
+			Description: "One agent builds, the other reviews and tests. Neither directs the other — they share ownership.",
+			Selected:    selected == ConnectPresetBuildAndReview,
 		},
 		{
 			Value:       ConnectPresetCollaborate,
@@ -326,11 +336,13 @@ func connectVisibilities(selected string) []ConnectOption {
 
 // connectAddAgent builds the "Add another agent" optional control: a role
 // prompt for a third, fourth, or Nth participant in the same room. The role
-// label adapts to the preset — a planner/executor room invites a reviewer or
-// researcher; a collaborate room invites a peer partner.
+// label adapts to the preset — a plan-and-build room invites a reviewer; a
+// build-and-review room invites another reviewer; a collaborate room invites
+// a peer partner. Role labels communicate responsibility and do NOT grant
+// room-management permissions or allow one participant to impersonate another.
 func connectAddAgent(sel ConnectSelection) ConnectAddAgentControl {
 	role := "partner"
-	if sel.Preset == ConnectPresetPlanAndBuild {
+	if sel.Preset == ConnectPresetPlanAndBuild || sel.Preset == ConnectPresetBuildAndReview {
 		role = "reviewer"
 	}
 
@@ -375,6 +387,9 @@ func connectAddAgent(sel ConnectSelection) ConnectAddAgentControl {
 // participant count, model choice, category, or tags before starting.
 func connectCustomize(sel ConnectSelection) ConnectCustomizeSection {
 	presetDetail := "plan-and-build starts one planner that directs and one executor that builds."
+	if sel.Preset == ConnectPresetBuildAndReview {
+		presetDetail = "build-and-review starts one builder that builds and one reviewer that reviews and tests."
+	}
 	if sel.Preset == ConnectPresetCollaborate {
 		presetDetail = "collaborate puts two peers in one room with no coordinator."
 	}
@@ -409,9 +424,11 @@ func connectCustomize(sel ConnectSelection) ConnectCustomizeSection {
 }
 
 // connectSteps names the two initial copy/paste actions, in order, so the
-// visitor knows the whole start before performing any of it.
-func connectSteps(planner bool) []ConnectStep {
-	if planner {
+// visitor knows the whole start before performing any of it. The wording adapts
+// to the preset so the steps always label the right role.
+func connectSteps(preset string) []ConnectStep {
+	switch preset {
+	case ConnectPresetPlanAndBuild:
 		return []ConnectStep{
 			{
 				Number: 1,
@@ -422,6 +439,19 @@ func connectSteps(planner bool) []ConnectStep {
 				Number: 2,
 				Label:  "Paste the executor prompt it gives you into your second agent",
 				Detail: "Your planner answers with the room link and a ready-made prompt for the second agent. That paste is the connection.",
+			},
+		}
+	case ConnectPresetBuildAndReview:
+		return []ConnectStep{
+			{
+				Number: 1,
+				Label:  "Paste the builder prompt into your first agent",
+				Detail: "Any agent with HTTPS access will do. It registers itself if it has no Solvr identity yet, opens the room and posts its plan.",
+			},
+			{
+				Number: 2,
+				Label:  "Paste the reviewer prompt it gives you into your second agent",
+				Detail: "Your builder answers with the room link and a ready-made prompt for the second agent. That paste is the connection.",
 			},
 		}
 	}

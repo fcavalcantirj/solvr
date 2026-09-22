@@ -114,41 +114,41 @@ type ConnectExample struct {
 // agent substitutes for the real room slug; RolePrompt is the complete prompt
 // to paste. Detail carries the guarantee that copying alone connects nothing.
 type ConnectAddAgentControl struct {
-	Label          string `json:"label"`
-	Detail         string `json:"detail"`
+	Label           string `json:"label"`
+	Detail          string `json:"detail"`
 	SlugPlaceholder string `json:"slug_placeholder"`
-	RolePrompt     string `json:"role_prompt"`
+	RolePrompt      string `json:"role_prompt"`
 }
 
 // ConnectCustomizeSection offers advanced instructions and direct API examples
 // under the Customize heading. It requires no participant count, model choice,
 // category, or tags before starting — the visitor can read and copy freely.
 type ConnectCustomizeSection struct {
-	Key                 string   `json:"key"`
-	Label               string   `json:"label"`
-	Detail              string   `json:"detail"`
-	ApiExamples         []string `json:"api_examples"`
+	Key                  string   `json:"key"`
+	Label                string   `json:"label"`
+	Detail               string   `json:"detail"`
+	ApiExamples          []string `json:"api_examples"`
 	AdvancedInstructions []string `json:"advanced_instructions"`
 }
 
 // ConnectStart is the whole contract.
 type ConnectStart struct {
-	Heading           string           `json:"heading"`
-	Intro             string           `json:"intro"`
-	PageURL           string           `json:"page_url"`
-	PageLabel         string           `json:"page_label"`
-	TaskField         ConnectTaskField `json:"task_field"`
-	PresetsLabel      string           `json:"presets_label"`
-	Presets           []ConnectOption  `json:"presets"`
-	VisibilityLabel   string           `json:"visibility_label"`
-	VisibilityOptions []ConnectOption  `json:"visibility_options"`
-	Selected          ConnectSelection `json:"selected"`
-	Prompt            ConnectPrompt    `json:"prompt"`
-	Steps             []ConnectStep    `json:"steps"`
-	Example           ConnectExample   `json:"example"`
-	Note              string           `json:"note"`
-	AddAgent          ConnectAddAgentControl   `json:"add_agent"`
-	Customize          ConnectCustomizeSection  `json:"customize"`
+	Heading           string                  `json:"heading"`
+	Intro             string                  `json:"intro"`
+	PageURL           string                  `json:"page_url"`
+	PageLabel         string                  `json:"page_label"`
+	TaskField         ConnectTaskField        `json:"task_field"`
+	PresetsLabel      string                  `json:"presets_label"`
+	Presets           []ConnectOption         `json:"presets"`
+	VisibilityLabel   string                  `json:"visibility_label"`
+	VisibilityOptions []ConnectOption         `json:"visibility_options"`
+	Selected          ConnectSelection        `json:"selected"`
+	Prompt            ConnectPrompt           `json:"prompt"`
+	Steps             []ConnectStep           `json:"steps"`
+	Example           ConnectExample          `json:"example"`
+	Note              string                  `json:"note"`
+	AddAgent          ConnectAddAgentControl  `json:"add_agent"`
+	Customize         ConnectCustomizeSection `json:"customize"`
 }
 
 // connectRoomLookup is the slice of the room repository this handler needs.
@@ -279,8 +279,8 @@ func buildConnectStart(sel ConnectSelection, example ConnectExample) ConnectStar
 		Example:           example,
 		Note: "Copying a prompt does not create a room and does not connect anything — " +
 			"your agent does that when you paste it in.",
-		AddAgent:          connectAddAgent(sel),
-		Customize:         connectCustomize(sel),
+		AddAgent:  connectAddAgent(sel),
+		Customize: connectCustomize(sel),
 	}
 
 	return start
@@ -400,10 +400,10 @@ func connectCustomize(sel ConnectSelection) ConnectCustomizeSection {
 	}
 
 	return ConnectCustomizeSection{
-		Key:                 "customize",
-		Label:               "Customize",
-		Detail:              "Read advanced instructions and direct API examples. No participant count, model choice, category, or tags are required to start.",
-		ApiExamples:         apiExamples,
+		Key:                  "customize",
+		Label:                "Customize",
+		Detail:               "Read advanced instructions and direct API examples. No participant count, model choice, category, or tags are required to start.",
+		ApiExamples:          apiExamples,
 		AdvancedInstructions: advancedInstructions,
 	}
 }

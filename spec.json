@@ -229,7 +229,7 @@
       "Verify no step requires a human login, human claim, manual API-key copying, Solvr CLI installation, or changing the user's existing agent configuration.",
       "Verify room creation errors are reported as errors and never replaced with fabricated room links or successful-connection messages."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

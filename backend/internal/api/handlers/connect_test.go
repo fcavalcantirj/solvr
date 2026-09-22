@@ -372,3 +372,79 @@ func TestConnect_CopyingTheStarterPromptAloneDoesNotCreateARoom(t *testing.T) {
 	// prompt to paste, not an action that creates anything on its own.
 	require.Contains(t, strings.ToLower(start.AddAgent.Detail), "paste")
 }
+
+// TestConnect_PlannerPromptIsCompleteForTask18 verifies every step Task 18
+// requires of the planner prompt: it carries the task, visibility, planner role,
+// machine-readable connection instructions, identity reuse/self-registration, the
+// full room-create -> handshake -> join -> post sequence, the room-URL + executor-
+// prompt return instruction, the no-human-login guarantee, and the never-invent-
+// a-link error rule.
+func TestConnect_PlannerPromptIsCompleteForTask18(t *testing.T) {
+	h := newTestConnectHandler(t, &fakeConnectRooms{room: publicExampleRoom("example-room")}, "example-room")
+
+	for _, tc := range []struct {
+		name  string
+		query string
+	}{
+		{"default", ""},
+		{"with task", "task=Build+a+tic-tac-toe+AI+that+plays+optimally"},
+		{"private", "visibility=private"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			start, body := getConnect(t, h, tc.query)
+			require.Equal(t, "planner", start.Prompt.Key, "body: %s", body)
+			text := start.Prompt.Text
+			lower := strings.ToLower(text)
+
+			// Step 2: the prompt carries the task, visibility, planner role, and
+			// identity reuse/self-registration requirement.
+			require.Contains(t, lower, "planner")
+			require.Contains(t, lower, "reuse")
+			require.Contains(t, lower, "register")
+			require.Contains(t, lower, connectAPIBaseURL+"/v1/agents/register")
+			require.Contains(t, lower, "authorization: bearer")
+			if tc.query == "with task" || tc.query == "default" {
+				// Visibility is stated as plain HTTPS instructions.
+				require.Contains(t, lower, "is_private")
+			}
+
+			// Step 3: the prompt names the canonical create -> handshake -> join -> message
+			// sequence so the agent can create the room, own it, take its per-agent token,
+			// join presence, and post the initial task and directive.
+			require.Contains(t, lower, strings.ToLower(connectAPIBaseURL+"/v1/rooms"))
+			require.Contains(t, lower, strings.ToLower(connectAPIBaseURL+"/v1/rooms/"+connectSlugPlaceholder+"/handshake"))
+			require.Contains(t, lower, strings.ToLower(connectAPIBaseURL+"/r/"+connectSlugPlaceholder+"/join"))
+			require.Contains(t, lower, strings.ToLower(connectAPIBaseURL+"/r/"+connectSlugPlaceholder+"/message"))
+			require.Contains(t, lower, strings.ToLower(connectAPIBaseURL+"/r/"+connectSlugPlaceholder+"/messages"))
+			// The message content must be the task and first directive.
+			require.Contains(t, lower, "directive")
+
+			// Step 4: the prompt tells the agent to return the real room URL (using the
+			// REAL slug) and a complete executor prompt containing the actual room slug.
+			require.Contains(t, lower, strings.ToLower(connectAppBaseURL+"/rooms/"+connectSlugPlaceholder))
+			require.Contains(t, lower, "real slug")
+			require.Contains(t, lower, "executor prompt")
+			// The executor prompt instructions must tell the second agent to use its OWN identity.
+			require.Contains(t, lower, "its own")
+			require.Contains(t, lower, "handshake")
+			// The prompt instructs the agent not to leak credentials into the executor prompt.
+			require.Contains(t, lower, "never put your api key or your room token in that prompt")
+
+			// Step 5: no human login, claim, manual API-key, CLI, or config change.
+			require.NotContains(t, lower, "log in to solvr")
+			require.NotContains(t, lower, "install the solvr cli")
+			require.NotContains(t, lower, "manual api-key")
+			require.NotContains(t, lower, "claim your")
+
+			// Step 6: report errors, never invent room links.
+			require.Contains(t, lower, "never invent")
+			require.Contains(t, lower, "exact error")
+
+			// The prompt must name production endpoints only — no localhost.
+			require.NotContains(t, text, "http://localhost")
+			// No shell/template expansion placeholders.
+			require.NotContains(t, text, "$")
+			require.NotContains(t, text, "${")
+		})
+	}
+}

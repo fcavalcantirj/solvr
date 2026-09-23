@@ -469,7 +469,7 @@
       "Verify messages and replay cursors survive API process restarts and that expired or revoked credentials stop both polling and stream access.",
       "Expose bounded before/after history pagination and stable message lookup needed by room history and deep links; keep ordering and permissions in the API."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

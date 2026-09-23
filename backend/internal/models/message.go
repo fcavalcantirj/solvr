@@ -36,4 +36,8 @@ type CreateMessageParams struct {
 	Metadata           json.RawMessage `json:"metadata,omitempty"`
 	ReplyToEntryID     *int64          `json:"reply_to_entry_id,omitempty"`
 	AddressedMemberIDs json.RawMessage `json:"addressed_member_ids,omitempty"`
+	// ClientEntryID is an optional caller-supplied key for idempotent writes. When
+	// set for an authenticated author (AuthorID != nil), a retry with the same key
+	// in the same room returns the existing entry instead of creating a duplicate.
+	ClientEntryID *string `json:"client_entry_id,omitempty"`
 }

@@ -75,6 +75,10 @@ type postMessageRequest struct {
 	Metadata           json.RawMessage `json:"metadata,omitempty"`
 	ReplyToEntryID     *int64          `json:"reply_to_entry_id,omitempty"`
 	AddressedMemberIDs json.RawMessage `json:"addressed_member_ids,omitempty"`
+	// ClientEntryID is the canonical idempotency key for a write. ClientMessageID is
+	// the legacy field name, adapted to ClientEntryID when the canonical one is absent.
+	ClientEntryID   *string `json:"client_entry_id,omitempty"`
+	ClientMessageID *string `json:"client_message_id,omitempty"`
 }
 
 // postHumanMessageRequest is the JSON body for POST /v1/rooms/{slug}/messages (human comment).
@@ -136,6 +140,15 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 		AddressedMemberIDs: req.AddressedMemberIDs,
 	}
 
+	// Idempotency: prefer the canonical client_entry_id, adapt the legacy
+	// client_message_id when only that is present. A retry with the same key from
+	// the same authenticated author returns the existing entry instead of a duplicate.
+	if req.ClientEntryID != nil && *req.ClientEntryID != "" {
+		params.ClientEntryID = req.ClientEntryID
+	} else if req.ClientMessageID != nil && *req.ClientMessageID != "" {
+		params.ClientEntryID = req.ClientMessageID
+	}
+
 	// Mission #3: if a per-agent room token authenticated this request, stamp the
 	// authoritative agent id as author_id so authorship is trustworthy (not just the
 	// spoofable agent_name). Shared-token posts leave author_id nil, as before.
@@ -143,10 +156,21 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 		params.AuthorID = &authAgentID
 	}
 
-	msg, err := h.msgRepo.Create(r.Context(), params)
+	msg, created, err := h.msgRepo.CreateWithClientEntry(r.Context(), params)
 	if err != nil {
 		slog.Error("failed to create message", "error", err, "room_id", room.ID)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create message")
+		return
+	}
+
+	// Idempotent replay of a retried write: the original write already incremented
+	// counts, renewed presence, recorded the activation milestone, and broadcast the
+	// entry. Return the existing entry without repeating any of those side effects.
+	if !created {
+		roomWriteJSON(w, http.StatusOK, map[string]interface{}{
+			"data":              msg,
+			"idempotent_replay": true,
+		})
 		return
 	}
 
@@ -322,12 +346,18 @@ func (h *RoomMessagesHandler) ListMessages(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// Parse pagination params
-	var afterID int64
+	// Parse pagination params. `after` pages forward for cursor polling/replay;
+	// `before` pages backward to load earlier history anchored on a known id.
+	var afterID, beforeID int64
 	limit := 100
 	if a := r.URL.Query().Get("after"); a != "" {
 		if parsed, err := strconv.ParseInt(a, 10, 64); err == nil && parsed > 0 {
 			afterID = parsed
+		}
+	}
+	if b := r.URL.Query().Get("before"); b != "" {
+		if parsed, err := strconv.ParseInt(b, 10, 64); err == nil && parsed > 0 {
+			beforeID = parsed
 		}
 	}
 	if l := r.URL.Query().Get("limit"); l != "" {
@@ -338,9 +368,12 @@ func (h *RoomMessagesHandler) ListMessages(w http.ResponseWriter, r *http.Reques
 
 	var messages []models.Message
 	var err error
-	if afterID > 0 {
+	switch {
+	case afterID > 0:
 		messages, err = h.msgRepo.ListAfter(r.Context(), room.ID, afterID, limit)
-	} else {
+	case beforeID > 0:
+		messages, err = h.msgRepo.ListBefore(r.Context(), room.ID, beforeID, limit)
+	default:
 		messages, err = h.msgRepo.ListRecent(r.Context(), room.ID, limit)
 	}
 	if err != nil {
@@ -362,4 +395,47 @@ func (h *RoomMessagesHandler) ListMessages(w http.ResponseWriter, r *http.Reques
 		"data": messages,
 	}
 	roomWriteJSON(w, http.StatusOK, response)
+}
+
+// GetMessage handles GET /v1/rooms/{slug}/messages/{id} and GET /r/{slug}/messages/{id}.
+// It is the stable single-message lookup deep links rely on: it returns the correct
+// message even when it falls outside the initial recent-history page. Room access is
+// enforced upstream (access guard / bearer guard) and GetByID is room-scoped, so a
+// deep link can never fetch another room's message.
+func (h *RoomMessagesHandler) GetMessage(w http.ResponseWriter, r *http.Request) {
+	// Room can come from BearerGuard (A2A route) or the read access guard; fall back
+	// to a slug lookup on the public REST route.
+	room := apimiddleware.RoomFromContext(r.Context())
+	if room == nil {
+		slug := chi.URLParam(r, "slug")
+		if slug == "" {
+			roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "slug is required")
+			return
+		}
+		var err error
+		room, err = h.roomRepo.GetBySlug(r.Context(), slug)
+		if err != nil {
+			roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "room not found")
+			return
+		}
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid message id")
+		return
+	}
+
+	msg, err := h.msgRepo.GetByID(r.Context(), room.ID, id)
+	if err != nil {
+		if errors.Is(err, db.ErrMessageNotFound) {
+			roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "message not found")
+			return
+		}
+		slog.Error("failed to get message", "error", err, "room_id", room.ID, "message_id", id)
+		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get message")
+		return
+	}
+
+	roomWriteJSON(w, http.StatusOK, map[string]interface{}{"data": msg})
 }

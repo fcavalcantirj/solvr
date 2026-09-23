@@ -4285,3 +4285,117 @@ DIFF (git status --porcelain / git diff --stat)
 UAT: none outstanding — every automated check ran locally and green. The status is
   server-computed and rendered live on the room page from real presence + the
   persisted activation milestone.
+
+================================================================================
+2026-09-23  TASK: "Give agents dependable message delivery and recovery without a
+            mandatory persistent process" (category api). passes false -> true.
+================================================================================
+
+TASK SELECTION (walked first-false top-to-bottom; verified each blocker IN CODE
+this session, not from the journal)
+  - "Verify N-agent collaboration end to end" (acceptance): step 4 needs TWO API
+    instances + cross-instance delivery; internal/hub still in-process only. SKIP.
+  - "Make agent-created rooms manageable": step 2 owner_id RETIRED (rooms.go still
+    INSERTs/SELECTs owner_id, grep confirmed) + step 3 owner can ARCHIVE. Archive is
+    owned by the later "Separate finished rooms from live presence" task (spec ~525);
+    grep of rooms code/migrations shows NO archive/finished. Forward-dep. SKIP.
+  - "Let existing public rooms recruit another agent": step 5 opens an ARCHIVED room
+    -> archive unbuilt (same later task). SKIP.
+  - "Retain a fast direct-create option": owns net-new idempotency (spec line 392 is
+    the ONLY rooms-idempotency mention) BUT step 3 "land on its page with copyable
+    PLANNER and EXECUTOR prompts" forward-deps on room-page connect-prompt UI. Verified
+    room-detail-client.tsx has only a generic CONNECT AGENT (owner rotate+copy) control,
+    no planner/executor prompts (that UI is the room-page task's domain, spec ~433). SKIP.
+  - "Make Rooms a focused public discovery page": step 5 archived-discoverable + a rooms
+    search field; grep rooms_discovery.go has neither. Forward-dep on archive. SKIP.
+  - "Provide a useful empty state": depends on the Rooms-discovery redesign above. SKIP.
+  - "Make a room page a readable shared conversation": step 4 "latest pinned directive"
+    -> message pin is owned by "Support the planner/executor review loop" (spec ~492);
+    grep pin in rooms message code = only IPFS pinning, no message pin. SKIP.
+  - "Present messages in conversational order": step 4 deep-link fetch of a message
+    OUTSIDE the initial page needs single-message lookup + before-pagination, which THIS
+    task (below) builds. Forward-dep on this task. SKIP.
+  - "Give agents dependable message delivery and recovery" (api): builds its OWN
+    primitives (client_entry_id idempotent writes, before/after pagination, single-message
+    lookup) with no archive/pin/room-UI/cross-instance dependency. Verified absent this
+    session: only MessageRepository.{Create,ListAfter(after cursor),ListRecent,
+    GetFirstMessage}; no client_message_id/client_entry_id, no before, no GetByID.
+    Fully local-DB testable. TOOK THIS ONE.
+
+WHAT I BUILT (TDD: RED first -> GREEN). API is smart; NO frontend change (client is dumb;
+this is an API-only task).
+  Migration 000085_add_client_entry_id_to_messages (.up/.down):
+    ALTER messages ADD client_entry_id VARCHAR(255);
+    partial UNIQUE INDEX (room_id, author_id, client_entry_id)
+      WHERE client_entry_id IS NOT NULL AND author_id IS NOT NULL AND deleted_at IS NULL.
+    Idempotency is scoped to the AUTHENTICATED author (author_id from the room token),
+    never the spoofable agent_name; shared-token posts (author_id NULL) are never deduped.
+  models/message.go: +ClientEntryID *string on CreateMessageParams (write/lookup key only;
+    deliberately NOT added to Message so it is never surfaced in read responses).
+  db/room_messages.go:
+    +ErrMessageNotFound; +messageColumns const (shared 12-col SELECT list).
+    Create() now delegates to new CreateWithClientEntry(ctx,params) (*Message, created bool,
+      error): pre-checks getByClientEntryID; inserts with client_entry_id; on a concurrent
+      23505 unique violation re-selects and returns the winner. created=false on replay.
+    +getByClientEntryID (private), +GetByID(room-scoped, ErrMessageNotFound), +ListBefore
+      (id < before, DESC LIMIT then reversed to ASC -> earlier history, no gaps).
+  api/handlers/rooms_messages.go:
+    postMessageRequest: +client_entry_id, +client_message_id (legacy alias).
+    PostMessage: prefer client_entry_id else adapt client_message_id -> params.ClientEntryID;
+      call CreateWithClientEntry; on created==false return 200 {data,idempotent_replay:true}
+      WITHOUT re-incrementing count / renewing presence / re-recording activation / re-broadcasting.
+    ListMessages: +?before=<id> branch (ListBefore) alongside existing ?after cursor.
+    +GetMessage handler for GET /{slug}/messages/{id} (stable deep-link lookup; 404 on
+      cross-room or missing; permissions enforced upstream by the guard, GetByID room-scoped).
+  api/router_rooms.go: registered GET /v1/rooms/{slug}/messages/{id} (readGuard) and
+    GET /r/{slug}/messages/{id} (BearerGuard).
+
+STEP-BY-STEP EVIDENCE
+  1 (ordering)            [TEST] internal/api Connect|Room|Message end-to-end suite green.
+  2 (cursor replay)      [TEST] TestMessageDelivery_ListAfterReplayNoGaps PASS.
+  3 (HTTP polling)       [REAL] connect instructions already emit "Read messages: GET .../r/{slug}/messages"
+                          (connect.go:384-385, connect_prompts.go:375); [TEST] API honors ?after/?before/?limit.
+  4 (client_entry_id)    [TEST] TestMessageDelivery_ClientEntryIdempotentRetry: 2nd write same
+                          (author,key) -> created=false, same id, content preserved, exactly 1 row;
+                          different author same key -> new entry. [TEST] TestPostMessageHandler_AcceptsClientEntryFields:
+                          POST accepts client_entry_id AND legacy client_message_id (201).
+  5 (survive restart /   [TEST] TestMessageDelivery_MessagesSurviveFreshRepo (fresh repo instance reads
+     revoked creds)       persisted rows). [REAL] revoked/expired creds already blocked by BearerGuard /
+                          RoomAccessGuard (pre-existing; TestRoomHandshake_ClosedRoom etc. still green).
+  6 (before/after + lookup) [TEST] TestMessageDelivery_ListBeforeAnchoredNoGaps (ascending, contiguous),
+                          TestMessageDelivery_GetByIDRoomScoped (cross-room -> ErrMessageNotFound),
+                          TestGetMessageHandler_FetchesAndScopes (404 cross-room), TestListMessagesHandler_BeforePagination.
+
+VERIFICATION (local isolated DB solvr_test on localhost:5435; backend/.env NOT touched;
+  NO production calls)
+  [REAL] migrate up applied 000085 -> schema_migrations 85 (clean); down 1 removed the
+    column (0), up restored it (1) -> migration reversible.
+  [TEST] DATABASE_URL=...solvr_test go test ./internal/api/handlers/ -run
+    'TestMessageDelivery|TestGetMessageHandler|TestListMessagesHandler|TestPostMessageHandler_AcceptsClientEntry'
+    -count=1 -v -> 8/8 PASS, 0 SKIP.
+  [TEST] existing PostHumanMessage|ListMessages|PostMessage handler tests -> ok (no regression).
+  [TEST] internal/api Connect|Room|Message|Handshake|SSE|Stream -count=1 -> ok (10.7s) — full
+    A2A posting path now routes through CreateWithClientEntry, unaffected.
+  [REAL] go build ./... exit 0; gofmt -l (touched) clean; go vet (handlers/db/api) clean.
+  [REAL] file sizes: room_messages.go 399, rooms_messages.go 441 lines (both < 800).
+
+NO EXISTING TEST DELETED / SKIPPED / WEAKENED. Change is additive: Create keeps its exact
+  signature (delegates to CreateWithClientEntry), all existing callers unchanged; new column
+  is nullable and omitted from read SELECTs/Message struct, so existing readers are untouched.
+
+DIFF (git status --porcelain / git diff --stat)
+  M backend/internal/api/handlers/rooms_messages.go   (+86/-8 region: request fields, idempotent
+                                                        PostMessage branch, before param, GetMessage)
+  M backend/internal/api/router_rooms.go              (+2: two messages/{id} routes)
+  M backend/internal/db/room_messages.go              (+172: CreateWithClientEntry, getByClientEntryID,
+                                                        GetByID, ListBefore, ErrMessageNotFound, messageColumns)
+  M backend/internal/models/message.go                (+4: ClientEntryID on CreateMessageParams)
+  M spec.json                                         (this task passes false -> true)
+  ?? backend/internal/api/handlers/rooms_messages_delivery_test.go  (NEW, test-only, 8 tests)
+  ?? backend/migrations/000085_add_client_entry_id_to_messages.up.sql   (NEW)
+  ?? backend/migrations/000085_add_client_entry_id_to_messages.down.sql (NEW)
+
+UAT: none outstanding for local verification — every automated check ran locally and green.
+  Owner-only last mile when this reaches prod: apply migration 000085 to the production DB
+  (manual admin-query route per this project's manual-migration process) before the new
+  columns/routes are relied on; local proof is complete.

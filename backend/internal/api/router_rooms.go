@@ -61,6 +61,7 @@ func mountRoomRoutes(
 		// members-only (403 otherwise) for closed rooms.
 		r.With(readGuard).Get("/{slug}", roomHandler.GetRoom)
 		r.With(readGuard).Get("/{slug}/messages", msgHandler.ListMessages)
+		r.With(readGuard).Get("/{slug}/messages/{id}", msgHandler.GetMessage)
 		r.With(readGuard).Get("/{slug}/agents", presenceHandler.ListPresence)
 		r.With(readGuard).Get("/{slug}/connect", roomConnectHandler.GetRoomConnect)
 
@@ -101,6 +102,7 @@ func mountRoomRoutes(
 		r.With(httprate.LimitByIP(60, time.Minute)).Post("/message", msgHandler.PostMessage)
 
 		r.Get("/messages", msgHandler.ListMessages)
+		r.Get("/messages/{id}", msgHandler.GetMessage)
 
 		r.Post("/join", presenceHandler.JoinRoom)
 		r.Post("/heartbeat", presenceHandler.Heartbeat)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import type { APIRoom, APIRoomMessage, APIAgentPresenceRecord, RoomConnectionStatus } from '@/lib/api-types';
 import { MessageList } from './message-list';
 import { PresenceSidebar } from './presence-sidebar';
@@ -10,6 +10,8 @@ import { SseStatusBadge } from './sse-status-badge';
 import { NewMessagesBadge } from './new-messages-badge';
 import { RoomHeader } from './room-header';
 import { useRoomSse } from '@/hooks/use-room-sse';
+import { api } from '@/lib/api';
+import { mergeMessages, isNearBottom } from '@/lib/rooms/message-view';
 
 interface RoomDetailClientProps {
   room: APIRoom;
@@ -19,20 +21,48 @@ interface RoomDetailClientProps {
   // Server-derived connection progress (waiting/started). The client renders it
   // as-is and never recomputes it from the presence list.
   connectionStatus?: RoomConnectionStatus;
+  // Persistent id of a message to deep-link to (highlight + scroll into view).
+  // In production this is read from the ?message= query param when not supplied.
+  highlightMessageId?: number;
 }
 
-// Messages render newest-first (index 0 at the top), so "caught up" means
-// the user is near scrollTop=0. Leave a small threshold for sub-pixel rounding.
-const NEAR_TOP_THRESHOLD_PX = 24;
+const OLDER_PAGE_SIZE = 50;
 
-export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName, connectionStatus }: RoomDetailClientProps) {
-  const [messages, setMessages] = useState<APIRoomMessage[]>(initialMessages);
+// Reads a deep-link target from the URL (?message=<id>) without pulling in the
+// Next router, so the component stays trivially testable via the prop.
+function readMessageParam(): number | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const raw = new URLSearchParams(window.location.search).get('message');
+  if (!raw) return undefined;
+  const id = Number(raw);
+  return Number.isFinite(id) && id > 0 ? id : undefined;
+}
+
+export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName, connectionStatus, highlightMessageId }: RoomDetailClientProps) {
+  // The transcript reads oldest -> newest (top -> bottom). All batches (initial
+  // window, older-history pages, SSE pushes, deep-link fetches, local echoes) go
+  // through mergeMessages, so the list is always ordered by server id and free
+  // of duplicates.
+  const [messages, setMessages] = useState<APIRoomMessage[]>(() => mergeMessages(initialMessages));
   const [agents, setAgents] = useState<APIAgentPresenceRecord[]>(initialAgents);
   const [unreadCount, setUnreadCount] = useState(0);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [highlightId, setHighlightId] = useState<number | undefined>(undefined);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlder, setHasOlder] = useState(
+    () => initialMessages.length > 0 && room.message_count > initialMessages.length,
+  );
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  // Default true: user just loaded the page and is looking at the top.
-  const isNearTopRef = useRef(true);
+  // The reader is "following the latest exchange" while near the bottom, where
+  // the newest message lives. Default true: the page opens pinned to the latest.
+  const isNearBottomRef = useRef(true);
+  // When set, the next layout pass pins the viewport to the bottom (newest).
+  const pinBottomRef = useRef(true);
+  // When set (during LOAD OLDER), the next layout pass keeps the reading position
+  // anchored after older messages are prepended, so nothing appears to jump.
+  const olderAnchorRef = useRef<number | null>(null);
+  const deepLinkDoneRef = useRef(false);
+  const highlightScrolledRef = useRef(false);
 
   // Get the highest message ID from SSR data for Last-Event-ID replay (D-35)
   const lastKnownId = initialMessages.length > 0
@@ -44,44 +74,122 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
     lastKnownId
   );
 
-  // Append new messages from SSE — NO auto-scroll (D-34).
-  // Unread counter only increments when the user is scrolled AWAY from the top
-  // (newest messages), otherwise new messages are already visible and marking
-  // them "unread" is noise (phase G — scroll-aware unread counter).
-  useEffect(() => {
-    if (newMessages.length > 0) {
-      let addedCount = 0;
-      setMessages(prev => {
-        const existingIds = new Set(prev.map(m => m.id));
-        const unique = newMessages.filter(m => !existingIds.has(m.id));
-        if (unique.length === 0) return prev;
-        addedCount = unique.length;
-        return [...unique, ...prev];
-      });
-      if (addedCount > 0 && !isNearTopRef.current) {
-        setUnreadCount(c => c + addedCount);
-      }
-      clearNewMessages();
+  const scrollToBottom = useCallback((smooth = false) => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    if (typeof el.scrollTo === 'function') {
+      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
     }
-  }, [newMessages, clearNewMessages]);
+    el.scrollTop = el.scrollHeight;
+  }, []);
 
-  // Scroll tracking: flip isNearTopRef when the user enters/leaves the top
-  // region, and clear any pending unread count the moment they scroll back up.
+  // Position the viewport after every message change:
+  //   - LOAD OLDER prepends history -> keep the reading position anchored.
+  //   - otherwise, if we should follow the latest -> pin to the bottom.
+  useLayoutEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    if (olderAnchorRef.current != null) {
+      el.scrollTop += el.scrollHeight - olderAnchorRef.current;
+      olderAnchorRef.current = null;
+      return;
+    }
+    if (pinBottomRef.current) {
+      pinBottomRef.current = false;
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages]);
+
+  // Append new SSE messages. When the reader is following the latest exchange the
+  // new message is scrolled into view; when they are reading earlier history the
+  // unread counter grows and a "Jump to latest" indicator appears (D-34: never
+  // yank the reader's position).
+  useEffect(() => {
+    if (newMessages.length === 0) return;
+    const existingIds = new Set(messages.map(m => m.id));
+    const added = newMessages.filter(m => !existingIds.has(m.id)).length;
+    if (added > 0) {
+      setMessages(prev => mergeMessages(prev, newMessages));
+      if (isNearBottomRef.current) {
+        pinBottomRef.current = true;
+      } else {
+        setUnreadCount(c => c + added);
+      }
+    }
+    clearNewMessages();
+  }, [newMessages, clearNewMessages, messages]);
+
+  // Track scroll position so we know whether the reader is following the latest
+  // exchange; clear the unread count the moment they return to the bottom.
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     const onScroll = () => {
-      const nearTop = el.scrollTop <= NEAR_TOP_THRESHOLD_PX;
-      if (nearTop && !isNearTopRef.current) {
-        isNearTopRef.current = true;
-        setUnreadCount(0);
-      } else if (!nearTop && isNearTopRef.current) {
-        isNearTopRef.current = false;
-      }
+      const near = isNearBottom(el);
+      isNearBottomRef.current = near;
+      if (near) setUnreadCount(0);
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
+
+  // Resolve a deep-linked message once. If it is outside the loaded window we
+  // fetch it by id (stable lookup) and merge it in; ordering keeps it in place.
+  useEffect(() => {
+    if (deepLinkDoneRef.current) return;
+    deepLinkDoneRef.current = true;
+    const target = highlightMessageId ?? readMessageParam();
+    if (target == null) return;
+    if (messages.some(m => m.id === target)) {
+      setHighlightId(target);
+      return;
+    }
+    api.fetchRoomMessage(room.slug, target)
+      .then(res => {
+        setMessages(prev => mergeMessages(prev, [res.data]));
+        setHighlightId(target);
+      })
+      .catch(() => {
+        // Message deleted, moved, or not readable — leave the transcript as-is.
+      });
+  // Intentionally mount-once: the deep link is resolved from the initial URL.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Scroll the highlighted message into view once it is in the DOM.
+  useEffect(() => {
+    if (highlightId == null || highlightScrolledRef.current) return;
+    const el = scrollContainerRef.current?.querySelector(`[data-message-id="${highlightId}"]`);
+    if (el) {
+      highlightScrolledRef.current = true;
+      // The deep-link fetch must never be pinned to the bottom instead.
+      pinBottomRef.current = false;
+      (el as HTMLElement).scrollIntoView({ block: 'center' });
+    }
+  }, [highlightId, messages]);
+
+  const loadOlder = useCallback(async () => {
+    if (loadingOlder || messages.length === 0) return;
+    setLoadingOlder(true);
+    const oldestId = Math.min(...messages.map(m => m.id));
+    const el = scrollContainerRef.current;
+    if (el) olderAnchorRef.current = el.scrollHeight;
+    try {
+      const res = await api.fetchRoomMessages(room.slug, { before: oldestId, limit: OLDER_PAGE_SIZE });
+      const batch = res.data;
+      if (batch.length < OLDER_PAGE_SIZE) setHasOlder(false);
+      if (batch.length > 0) {
+        setMessages(prev => mergeMessages(prev, batch));
+      } else {
+        olderAnchorRef.current = null;
+      }
+    } catch {
+      // Transient failure — keep current history; the button stays available.
+      olderAnchorRef.current = null;
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [loadingOlder, messages, room.slug]);
 
   // Handle presence joins + leaves as a single batch so we can clear both
   // arrays after consumption. Historical leaves MUST NOT re-apply when a later
@@ -104,24 +212,22 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
     clearPresenceEvents();
   }, [presenceJoins, presenceLeaves, clearPresenceEvents]);
 
-  // Comment sent callback — append confirmed message (D-28: no optimistic UI)
+  // Comment sent callback — append confirmed message (D-28: no optimistic UI).
+  // The author's own message is newest, so follow it to the bottom.
   const handleMessageSent = useCallback((msg: APIRoomMessage) => {
-    setMessages(prev => {
-      if (prev.some(m => m.id === msg.id)) return prev; // Deduplicate
-      return [msg, ...prev];
-    });
+    setMessages(prev => mergeMessages(prev, [msg]));
+    isNearBottomRef.current = true;
+    pinBottomRef.current = true;
+    setUnreadCount(0);
   }, []);
 
-  // Click on new-messages badge: dismiss and scroll the user back to the top
-  // (= newest message, since we render newest-first).
+  // Click on the Jump to latest indicator: dismiss and scroll to the newest
+  // message (bottom, since the transcript reads oldest -> newest).
   const handleDismissUnread = useCallback(() => {
     setUnreadCount(0);
-    const el = scrollContainerRef.current;
-    if (el) {
-      el.scrollTo({ top: 0, behavior: 'smooth' });
-      isNearTopRef.current = true;
-    }
-  }, []);
+    isNearBottomRef.current = true;
+    scrollToBottom(true);
+  }, [scrollToBottom]);
 
   // SSR `room.message_count` is frozen at ISR snapshot time (revalidate: 300).
   // Once SSE delivers new messages, the live count can exceed the snapshot —
@@ -159,9 +265,15 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
             stay scrollable instead of crushing to zero. */}
         <div className="flex-1 min-w-0 border border-border bg-card flex flex-col h-[60vh] lg:h-auto lg:min-h-0">
           {/* Messages — scrollable */}
-          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0">
-            <MessageList messages={messages} slug={room.slug} />
-            <div ref={bottomRef} />
+          <div ref={scrollContainerRef} data-testid="room-scroll" className="flex-1 overflow-y-auto min-h-0">
+            <MessageList
+              messages={messages}
+              slug={room.slug}
+              highlightId={highlightId}
+              hasOlder={hasOlder}
+              loadingOlder={loadingOlder}
+              onLoadOlder={loadOlder}
+            />
           </div>
 
           {/* Comment input — pinned at bottom, always visible */}
@@ -177,7 +289,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
         </aside>
       </div>
 
-      {/* Floating new messages badge (D-34: user-initiated only) */}
+      {/* Floating Jump to latest indicator (D-34: user-initiated only) */}
       <NewMessagesBadge count={unreadCount} onClick={handleDismissUnread} />
     </div>
   );

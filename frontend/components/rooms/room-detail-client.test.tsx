@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import { RoomDetailClient } from "./room-detail-client";
 import type {
   APIRoom,
@@ -16,6 +16,7 @@ vi.mock("next/link", () => ({
 vi.mock("@/lib/api", () => ({
   api: {
     fetchRoomMessages: vi.fn(),
+    fetchRoomMessage: vi.fn(),
     postRoomMessage: vi.fn(),
   },
 }));
@@ -232,5 +233,97 @@ describe("RoomDetailClient — presence event handling", () => {
     // Alice must still be present — this is the regression we are guarding.
     expect(hasName("alice")).toBe(true);
     expect(hasName("bob")).toBe(false);
+  });
+});
+
+describe("RoomDetailClient — deep-linked message", () => {
+  beforeAll(() => {
+    // JSDOM implements neither of these; the deep-link scroll must not throw.
+    Element.prototype.scrollIntoView = vi.fn();
+    Element.prototype.scrollTo = vi.fn() as unknown as typeof Element.prototype.scrollTo;
+  });
+  beforeEach(async () => {
+    resetSseMock();
+    const { api } = await import("@/lib/api");
+    vi.mocked(api.fetchRoomMessage).mockReset();
+  });
+
+  it("fetches and highlights a message that is outside the initial history page", async () => {
+    const { api } = await import("@/lib/api");
+    vi.mocked(api.fetchRoomMessage).mockResolvedValue({
+      data: makeMsg(999, "message from deep in history"),
+    });
+
+    render(
+      <RoomDetailClient
+        room={makeRoom({ message_count: 500 })}
+        initialMessages={[makeMsg(498, "recent one"), makeMsg(499, "recent two")]}
+        initialAgents={[]}
+        highlightMessageId={999}
+      />,
+    );
+
+    expect(await screen.findByText("message from deep in history")).toBeInTheDocument();
+    await waitFor(() => {
+      const el = document.querySelector('[data-message-id="999"]');
+      expect(el?.getAttribute("data-highlighted")).toBe("true");
+    });
+    expect(vi.mocked(api.fetchRoomMessage)).toHaveBeenCalledWith("help-with-hermes-agent", 999);
+  });
+
+  it("highlights an already-loaded deep-link target without fetching it", async () => {
+    const { api } = await import("@/lib/api");
+    render(
+      <RoomDetailClient
+        room={makeRoom({ message_count: 2 })}
+        initialMessages={[makeMsg(1, "one"), makeMsg(2, "two")]}
+        initialAgents={[]}
+        highlightMessageId={2}
+      />,
+    );
+
+    await waitFor(() => {
+      const el = document.querySelector('[data-message-id="2"]');
+      expect(el?.getAttribute("data-highlighted")).toBe("true");
+    });
+    expect(vi.mocked(api.fetchRoomMessage)).not.toHaveBeenCalled();
+  });
+});
+
+describe("RoomDetailClient — jump to latest", () => {
+  beforeAll(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+    Element.prototype.scrollTo = vi.fn() as unknown as typeof Element.prototype.scrollTo;
+  });
+  beforeEach(() => resetSseMock());
+
+  it("shows a Jump to latest indicator when a new message arrives while reading earlier history", () => {
+    const room = makeRoom({ message_count: 2 });
+    const { rerender } = render(
+      <RoomDetailClient
+        room={room}
+        initialMessages={[makeMsg(1, "one"), makeMsg(2, "two")]}
+        initialAgents={[]}
+      />,
+    );
+
+    // Reader has scrolled up into earlier history (far from the bottom).
+    const container = screen.getByTestId("room-scroll");
+    Object.defineProperty(container, "scrollHeight", { value: 2000, configurable: true });
+    Object.defineProperty(container, "clientHeight", { value: 300, configurable: true });
+    container.scrollTop = 0;
+    fireEvent.scroll(container);
+
+    // A new message arrives via SSE.
+    sseState.newMessages = [makeMsg(3, "brand new arrival")];
+    rerender(
+      <RoomDetailClient
+        room={room}
+        initialMessages={[makeMsg(1, "one"), makeMsg(2, "two")]}
+        initialAgents={[]}
+      />,
+    );
+
+    expect(screen.getByText(/jump to latest/i)).toBeInTheDocument();
   });
 });

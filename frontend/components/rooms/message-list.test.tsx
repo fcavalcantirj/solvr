@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { MessageList } from "./message-list";
 import type { APIRoomMessage } from "@/lib/api-types";
@@ -59,5 +59,47 @@ describe("MessageList", () => {
 
     rerender(<MessageList messages={[makeMsg(42, "first real message")]} slug="room-1" />);
     expect(screen.getByText("first real message")).toBeInTheDocument();
+  });
+
+  it("reads oldest to newest from top to bottom regardless of prop order", () => {
+    const messages = [makeMsg(3, "c"), makeMsg(1, "a"), makeMsg(2, "b")];
+    const { container } = render(<MessageList messages={messages} slug="room-1" />);
+    const ids = Array.from(container.querySelectorAll("[data-message-id]")).map((el) =>
+      el.getAttribute("data-message-id"),
+    );
+    expect(ids).toEqual(["1", "2", "3"]);
+  });
+
+  it("de-duplicates messages by persistent id (refresh/replay/local echo)", () => {
+    const messages = [makeMsg(1, "a"), makeMsg(1, "a-again"), makeMsg(2, "b")];
+    const { container } = render(<MessageList messages={messages} slug="room-1" />);
+    expect(container.querySelectorAll("[data-message-id]")).toHaveLength(2);
+  });
+
+  it("shows a Load older control only when there is earlier history and calls back on click", () => {
+    const onLoadOlder = vi.fn();
+    const { rerender } = render(
+      <MessageList messages={[makeMsg(5, "x")]} slug="room-1" />,
+    );
+    expect(screen.queryByText(/load older/i)).not.toBeInTheDocument();
+
+    rerender(
+      <MessageList
+        messages={[makeMsg(5, "x")]}
+        slug="room-1"
+        hasOlder
+        onLoadOlder={onLoadOlder}
+      />,
+    );
+    fireEvent.click(screen.getByText(/load older/i));
+    expect(onLoadOlder).toHaveBeenCalledOnce();
+  });
+
+  it("marks the deep-linked message as highlighted", () => {
+    const { container } = render(
+      <MessageList messages={[makeMsg(1, "a"), makeMsg(2, "b")]} slug="room-1" highlightId={2} />,
+    );
+    const highlighted = container.querySelector('[data-highlighted="true"]');
+    expect(highlighted?.getAttribute("data-message-id")).toBe("2");
   });
 });

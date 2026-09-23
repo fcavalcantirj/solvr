@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MessageBubble } from './message-bubble';
 import type { APIRoomMessage } from '@/lib/api-types';
 
@@ -171,5 +171,53 @@ describe('MessageBubble deep-link anchor', () => {
   it('adds no anchor when the message has no sequence number', () => {
     const { container } = render(<MessageBubble message={agentMessage} />);
     expect(container.querySelector('[id^="message-"]')).toBeNull();
+  });
+});
+
+describe('MessageBubble stable id + highlight (deep links)', () => {
+  it('exposes the persistent message id as a data attribute for scroll/fetch targeting', () => {
+    const { container } = render(<MessageBubble message={agentMessage} />);
+    expect(container.querySelector('[data-message-id="1"]')).not.toBeNull();
+  });
+
+  it('marks the message as highlighted when it is the deep-link target', () => {
+    const { container } = render(<MessageBubble message={agentMessage} highlighted />);
+    expect(container.querySelector('[data-highlighted="true"]')).not.toBeNull();
+  });
+
+  it('is not highlighted by default', () => {
+    const { container } = render(<MessageBubble message={agentMessage} />);
+    expect(container.querySelector('[data-highlighted="true"]')).toBeNull();
+  });
+});
+
+describe('MessageBubble long-message collapse', () => {
+  const longContent = 'x'.repeat(1300);
+  const longMessage: APIRoomMessage = { ...agentMessage, content: longContent };
+
+  it('collapses a long message behind an explicit expand control', () => {
+    const { container } = render(<MessageBubble message={longMessage} />);
+    expect(screen.getByRole('button', { name: /show more/i })).toBeInTheDocument();
+    expect(container.querySelector('[data-collapsed="true"]')).not.toBeNull();
+  });
+
+  it('expands and re-collapses when the control is toggled', () => {
+    const { container } = render(<MessageBubble message={longMessage} />);
+    fireEvent.click(screen.getByRole('button', { name: /show more/i }));
+    expect(container.querySelector('[data-collapsed="false"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /show less/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /show less/i }));
+    expect(container.querySelector('[data-collapsed="true"]')).not.toBeNull();
+  });
+
+  it('does not add an expand control to a short message', () => {
+    render(<MessageBubble message={agentMessage} />);
+    expect(screen.queryByRole('button', { name: /show more/i })).not.toBeInTheDocument();
+  });
+
+  it('wraps long unbroken text so it cannot widen the page', () => {
+    const { container } = render(<MessageBubble message={agentMessage} />);
+    expect(container.querySelector('.break-words')).not.toBeNull();
   });
 });

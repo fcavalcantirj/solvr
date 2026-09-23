@@ -1,16 +1,62 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Bot, User } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { MarkdownContent } from "@/components/shared/markdown-content";
+import { isLongMessage } from "@/lib/rooms/message-view";
 import type { APIRoomMessage } from "@/lib/api-types";
 
 interface MessageBubbleProps {
   message: APIRoomMessage;
+  // Set when this message is the target of a deep link, so the reader can spot
+  // it after the page scrolls it into view.
+  highlighted?: boolean;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+// Renders a message body as text or Markdown and collapses long bodies behind an
+// explicit expand control. Long unbroken tokens wrap instead of widening the
+// page; code blocks keep their own internal horizontal scroll (MarkdownContent).
+function MessageBody({
+  content,
+  contentType,
+}: {
+  content: string;
+  contentType: APIRoomMessage["content_type"];
+}) {
+  const long = isLongMessage(content);
+  const [expanded, setExpanded] = useState(false);
+  const collapsed = long && !expanded;
+
+  return (
+    <>
+      <div
+        data-collapsed={long ? (collapsed ? "true" : "false") : undefined}
+        className={collapsed ? "max-h-72 overflow-hidden" : undefined}
+      >
+        {contentType === "markdown" ? (
+          <MarkdownContent content={content} variant="compact" />
+        ) : (
+          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+            {content}
+          </p>
+        )}
+      </div>
+      {long && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="mt-2 font-mono text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </>
+  );
+}
+
+export function MessageBubble({ message, highlighted }: MessageBubbleProps) {
   // Anchor so a link to /rooms/<slug>#message-<sequence_num> — the form the
   // homepage example uses for every beat — lands on this exact message, clear
   // of the fixed header.
@@ -18,11 +64,22 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const anchorId = hasAnchor ? `message-${message.sequence_num}` : undefined;
   const anchorClass = hasAnchor ? " scroll-mt-24" : "";
 
+  // A deep link resolved by persistent id (not sequence) targets this element
+  // and rings it briefly; the data attribute is a stable scroll/fetch target.
+  const highlightAttr = highlighted ? "true" : undefined;
+  const highlightClass = highlighted
+    ? " ring-2 ring-green-500 ring-offset-2 ring-offset-background rounded-lg"
+    : "";
+  // Deep links land the reader here regardless of which anchor form was used.
+  const deepLinkScrollClass = highlighted && !hasAnchor ? " scroll-mt-24" : "";
+
   if (message.author_type === "system") {
     return (
       <div
         id={anchorId}
-        className={`text-center text-xs text-muted-foreground font-mono py-2 px-4 border-y border-dashed border-border/50${anchorClass}`}
+        data-message-id={message.id}
+        data-highlighted={highlightAttr}
+        className={`text-center text-xs text-muted-foreground font-mono py-2 px-4 border-y border-dashed border-border/50${anchorClass}${highlightClass}${deepLinkScrollClass}`}
       >
         {message.content}
       </div>
@@ -33,7 +90,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     return (
       <div
         id={anchorId}
-        className={`flex items-start gap-3 max-w-[70%] ml-auto flex-row-reverse${anchorClass}`}
+        data-message-id={message.id}
+        data-highlighted={highlightAttr}
+        className={`flex items-start gap-3 max-w-[70%] ml-auto flex-row-reverse${anchorClass}${deepLinkScrollClass}`}
       >
         <div className="shrink-0 mt-1">
           <User className="w-4 h-4 text-muted-foreground" />
@@ -58,10 +117,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               })}
             </span>
           </div>
-          <div className="bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900 rounded-lg p-3 text-left">
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">
-              {message.content}
-            </p>
+          <div
+            className={`bg-green-50 dark:bg-green-950/30 border border-green-100 dark:border-green-900 rounded-lg p-3 text-left${highlightClass}`}
+          >
+            <MessageBody content={message.content} contentType={message.content_type} />
           </div>
         </div>
       </div>
@@ -72,12 +131,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div
       id={anchorId}
-      className={`flex items-start gap-3 max-w-[70%]${anchorClass}`}
+      data-message-id={message.id}
+      data-highlighted={highlightAttr}
+      className={`flex items-start gap-3 max-w-[70%]${anchorClass}${deepLinkScrollClass}`}
     >
       <div className="shrink-0 mt-1">
         <Bot className="w-4 h-4 text-muted-foreground" />
       </div>
-      <div>
+      <div className="min-w-0">
         <div className="flex items-center gap-2 mb-1">
           {message.author_id ? (
             <Link
@@ -97,14 +158,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             })}
           </span>
         </div>
-        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg p-3">
-          {message.content_type === "markdown" ? (
-            <MarkdownContent content={message.content} variant="compact" />
-          ) : (
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">
-              {message.content}
-            </p>
-          )}
+        <div
+          className={`bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg p-3${highlightClass}`}
+        >
+          <MessageBody content={message.content} contentType={message.content_type} />
         </div>
       </div>
     </div>

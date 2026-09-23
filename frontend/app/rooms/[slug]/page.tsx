@@ -82,7 +82,8 @@ export default async function RoomDetailPage({
 
   const { room, agents, recent_messages, owner_display_name, connection_status } = payload.data;
 
-  // API returns newest first — keep that order (newest at top)
+  // API returns the recent window newest-first; RoomDetailClient re-orders it
+  // oldest -> newest for conventional top-to-bottom reading and de-duplicates.
   const messages = recent_messages || [];
 
   return (

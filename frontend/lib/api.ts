@@ -386,12 +386,33 @@ class SolvrAPI extends SolvrAPIBase {
     return this.fetch<APIRoomDetailResponse>(`/v1/rooms/${encodeURIComponent(slug)}`);
   }
 
-  /** Fetch messages for a room with optional cursor-based pagination. */
-  async fetchRoomMessages(slug: string, afterId?: number, limit = 50): Promise<APIRoomMessagesResponse> {
+  /**
+   * Fetch messages for a room with cursor-based pagination.
+   * - `after` pages forward (newer than the cursor) for polling/replay.
+   * - `before` pages backward (older than the cursor) to load earlier history.
+   * Ordering, permissions, and the cursor contract are owned by the API.
+   */
+  async fetchRoomMessages(
+    slug: string,
+    opts: { after?: number; before?: number; limit?: number } = {},
+  ): Promise<APIRoomMessagesResponse> {
+    const { after, before, limit = 50 } = opts;
     const params = new URLSearchParams();
-    if (afterId !== undefined) params.set('after', String(afterId));
+    if (after !== undefined) params.set('after', String(after));
+    if (before !== undefined) params.set('before', String(before));
     params.set('limit', String(limit));
     return this.fetch<APIRoomMessagesResponse>(`/v1/rooms/${encodeURIComponent(slug)}/messages?${params}`);
+  }
+
+  /**
+   * Fetch a single room message by its persistent id — used to resolve a
+   * deep-linked message that falls outside the loaded history window. Returns
+   * 404 for a message in another room or one that does not exist.
+   */
+  async fetchRoomMessage(slug: string, id: number): Promise<APIPostRoomMessageResponse> {
+    return this.fetch<APIPostRoomMessageResponse>(
+      `/v1/rooms/${encodeURIComponent(slug)}/messages/${id}`,
+    );
   }
 
   /** Create a new room. Requires JWT authentication. */

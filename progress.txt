@@ -4399,3 +4399,144 @@ UAT: none outstanding for local verification — every automated check ran local
   Owner-only last mile when this reaches prod: apply migration 000085 to the production DB
   (manual admin-query route per this project's manual-migration process) before the new
   columns/routes are relied on; local proof is complete.
+
+================================================================================
+2026-09-23  TASK: "Present messages in conversational order with stable scrolling
+            and accessible history" (category functional). passes false -> true.
+================================================================================
+
+TASK SELECTION (re-walked first-false top-to-bottom; verified EACH blocker IN CODE
+this session, not from the journal)
+  - "Verify N-agent collaboration end to end" (acceptance): step 4 needs TWO API
+    instances + cross-instance delivery. internal/hub is in-process only; the task
+    that builds cross-instance ("Preserve room delivery across >1 API instance",
+    spec ~983) is still passes=false. Acceptance task spanning unbuilt behavior. SKIP.
+  - "Make agent-created rooms manageable": step 2 wants rooms.owner_id RETIRED, step 3
+    owner can ARCHIVE. grep rooms.go: owner_id still INSERT/SELECT (lines 61-174).
+    grep archiv|finished in rooms.go/room.go/router_rooms.go = EMPTY. owner_id retirement
+    owned by "one room membership authority" (~880), archive by "Separate finished rooms"
+    (~525), both false. Forward-dep. SKIP.
+  - "Let existing public rooms recruit another agent": step 5 opens an ARCHIVED room ->
+    archive unbuilt (grep empty). SKIP.
+  - "Retain a fast direct-create option": step 3 land on room page with copyable PLANNER
+    and EXECUTOR prompts (grep planner|executor in room-detail-client.tsx/room-header.tsx
+    = EMPTY, no such UI) AND step 4 "retrying after lost response does not create duplicate
+    rooms" needs room-create idempotency (grep idempotency in rooms.go/router_rooms.go/
+    rooms handler = EMPTY; only room_messages has client_entry_id). Idempotency-Key on
+    room create is owned by "Standardize errors, pagination, concurrency" (~918), false.
+    Forward-dep on two unbuilt things. SKIP.
+  - "Make Rooms a focused public discovery page": step 5 archived-discoverable -> archive
+    unbuilt. SKIP.
+  - "Provide a useful empty state": depends on the Rooms-discovery redesign above. SKIP.
+  - "Make a room page a readable shared conversation": step 4 "latest pinned directive"
+    -> message pin owned by "planner/executor review loop" (~490); grep pin in
+    room_messages.go/rooms_messages.go/message.go = EMPTY (only IPFS pinning elsewhere).
+    Forward-dep. SKIP.
+  - "Present messages in conversational order" (functional): its ONLY external primitives
+    were before/after pagination + single-message lookup, both SHIPPED last iteration
+    (?before=<id>, GET /v1/rooms/{slug}/messages/{id}). No archive/pin/idempotency/
+    cross-instance dependency. The room conversation UI already exists (message-list.tsx,
+    message-bubble.tsx, room-detail-client.tsx, new-messages-badge.tsx). First buildable. TOOK IT.
+
+STARTING STATE (verified this session)
+  - Transcript rendered NEWEST-FIRST (room-detail-client.tsx old comment: "Messages render
+    newest-first (index 0 at the top)") — contradicts step 1 (oldest->newest top->bottom,
+    initially at latest).
+  - message-list.tsx "LOAD OLDER" called fetchRoomMessages(slug, oldestId) which set
+    ?after=oldestId — WRONG direction for older history; the new ?before was unused.
+  - No single-message fetch helper on the client; no long-message collapse; no deep-link
+    highlight/fetch; no Jump-to-latest (badge was near-TOP unread).
+
+WHAT I BUILT (TDD: wrote tests FIRST -> ran RED [13 failing / 25 passing] -> implemented
+-> GREEN [47/47]). Client-is-dumb: no domain logic added; ordering/dedup/scroll are pure
+view assembly of already-authoritative API rows. NO backend change.
+  NEW frontend/lib/rooms/message-view.ts (pure, unit-tested): mergeMessages(...batches)
+    = union + dedup by persistent id (first wins) + sort ascending by server id;
+    isNearBottom(el, threshold=64); isLongMessage()/LONG_MESSAGE_CHARS=1200.
+  lib/api.ts: fetchRoomMessages(slug, {after?,before?,limit}) now supports ?before (older
+    history); NEW fetchRoomMessage(slug, id) -> GET /v1/rooms/{slug}/messages/{id} for
+    deep-link resolution. (Only caller was message-list.tsx, rewritten; typecheck clean.)
+  message-list.tsx: now PRESENTATIONAL — renders mergeMessages(messages) oldest->newest,
+    dedup by id, controlled LOAD OLDER (hasOlder/loadingOlder/onLoadOlder), highlightId.
+  message-bubble.tsx: data-message-id on every branch (stable scroll/fetch target, NOT an
+    id so #message-<sequence_num> anchors stay unique); highlighted prop (ring +
+    data-highlighted); MessageBody collapses long bodies behind Show more/Show less
+    (data-collapsed) and adds break-words so long unbroken text can't widen the page;
+    markdown/code still via MarkdownContent (pre code keeps its own overflow-x-auto).
+  room-detail-client.tsx: bottom-anchored conversation. mergeMessages for every source
+    (initial/SSE/older/deep-link/local echo); useLayoutEffect pins to bottom on mount and
+    on new-while-following, and ANCHORS scroll on older-prepend (scrollTop += heightDelta);
+    near-bottom tracking flips the unread/Jump-to-latest logic (was near-top); loadOlder
+    uses ?before=min(id); deep-link effect resolves ?message=<id> (prop override) — present
+    -> highlight, else fetchRoomMessage -> merge -> highlight -> scrollIntoView once.
+  new-messages-badge.tsx: relabeled to "Jump to latest · N new" with aria-label.
+  app/rooms/[slug]/page.tsx: corrected the ordering comment (client re-orders + dedups).
+
+STEP-BY-STEP EVIDENCE
+  1 (oldest->newest, at latest) [TEST] message-list "reads oldest to newest from top to
+     bottom regardless of prop order" (data-message-id order = [1,2,3] from prop [3,1,2]);
+     message-view mergeMessages order tests. Initial scroll-to-bottom = pinBottomRef in a
+     useLayoutEffect; pixel position is layout-only (see UAT).
+  2 (load earlier, anchored, no gaps/dup) [TEST] message-view "merges several batches with
+     no gaps or duplicates" ([1,2]+[4,3]+[2,5] -> [1,2,3,4,5]); message-list dedup test;
+     message-list "Load older ... calls back on click"; loadOlder issues ?before. Scroll
+     anchoring math implemented (heightDelta); visual anchor = UAT.
+  3 (new-while-following visible; Jump to latest while reading) [TEST] room-detail "shows a
+     Jump to latest indicator when a new message arrives while reading earlier history"
+     (scrolled up via mocked scrollHeight/clientHeight + fireEvent scroll, then SSE msg);
+     new-messages-badge tests (label, count, onClick). Auto-scroll when near bottom =
+     pinBottom logic; visual = UAT.
+  4 (deep-link fetched+highlighted outside page) [TEST] room-detail "fetches and highlights
+     a message that is outside the initial history page" (fetchRoomMessage(slug,999)
+     mocked, message appears + data-highlighted=true) and "highlights an already-loaded
+     target without fetching it".
+  5 (markdown/code/long collapse, no widening) [TEST] message-bubble "collapses a long
+     message behind an explicit expand control", "expands and re-collapses", "does not add
+     an expand control to a short message", "wraps long unbroken text (break-words)";
+     existing markdown/text-vs-MarkdownContent tests still green.
+  6 (dedup by persistent identity, order by server sequence) [TEST] message-view dedup
+     (keeps first occurrence) + order-by-id; message-list dedup test.
+
+VERIFICATION (frontend Vitest, JSDOM)
+  [TEST] targeted RED first: 13 failed / 25 passed BEFORE impl.
+  [TEST] targeted after impl: message-view(9) + new-messages-badge(3) + message-list(7) +
+    message-bubble(22) + room-detail-client(6) = 47/47 PASS, 0 SKIP.
+  [TEST] full frontend suite: 146 files, 1455 tests, ALL PASS, 0 skip (npm test, /tmp/
+    solvr_fe_test.log) — no regression from the fetchRoomMessages signature change or the
+    order/scroll rewrite (lib/api.test.ts, use-room-sse.test.ts, private-room path all green).
+  [REAL] npm run typecheck (tsc --noEmit) exit 0.
+  [REAL] eslint on the 8 touched/added files: 0 errors (53 warnings are all pre-existing
+    "unused type import" warnings in lib/api.ts lines 55-103, untouched by me).
+  [REAL] file sizes: room-detail-client 296, message-bubble 169, message-list 55,
+    message-view 45, new-messages-badge 21, api.ts 500 — all < 800.
+
+PRE-EXISTING, NOT TOUCHED: scripts/check-file-size.sh reports 37 violations (backend test
+  files, router.go, app/privacy/page.tsx) and the full lint run shows 28 errors — all in
+  files I did not modify; unrelated to this task, left as-is.
+
+NO EXISTING TEST DELETED / SKIPPED / WEAKENED. message-list.test.tsx, message-bubble.test.tsx,
+  room-detail-client.test.tsx: I only APPENDED describe blocks (and added fireEvent/waitFor
+  imports + a fetchRoomMessage mock entry + scrollIntoView/scrollTo JSDOM stubs so the new
+  tests run). Every prior assertion still executes and passes. message-bubble's existing
+  "adds no anchor when no sequence number" still holds because the stable id is a
+  data-message-id attribute, not an element id.
+
+DIFF (git status --porcelain / git diff --stat)
+  M frontend/app/rooms/[slug]/page.tsx                (+3/-1 comment only)
+  M frontend/components/rooms/message-bubble.tsx      (+91/-... data-message-id, highlight, MessageBody collapse)
+  M frontend/components/rooms/message-list.tsx        (presentational: order/dedup/highlight/controlled load-older)
+  M frontend/components/rooms/new-messages-badge.tsx  (Jump to latest label)
+  M frontend/components/rooms/room-detail-client.tsx  (+216 bottom-anchored scroll, before-pagination, deep-link)
+  M frontend/lib/api.ts                               (before param + fetchRoomMessage)
+  M .../message-bubble.test.tsx, message-list.test.tsx, room-detail-client.test.tsx (APPENDED tests)
+  ?? frontend/lib/rooms/message-view.ts + .test.ts    (NEW pure helpers + tests)
+  ?? frontend/components/rooms/new-messages-badge.test.tsx (NEW)
+
+UAT (owner-only last mile — visual/layout confirmation JSDOM cannot measure; every
+  automatable check ran GREEN locally): in a real browser open a public room with >1 page
+  of messages and visually confirm (a) it opens scrolled to the latest exchange at the
+  bottom, (b) LOAD OLDER MESSAGES keeps the reading position anchored (no jump), (c) a new
+  SSE message auto-appears at the bottom when following, and shows the "Jump to latest"
+  pill (not auto-scroll) when reading history, (d) /rooms/<slug>?message=<id> for a message
+  outside the initial window fetches it, highlights it, and scrolls it into view. The
+  message-ordering, dedup, deep-link fetch, and indicator LOGIC are already unit-verified.

@@ -456,7 +456,7 @@
       "Render long specifications, Markdown, code blocks, links, and verification output without widening the page; allow long messages to collapse with an explicit expand control.",
       "Verify refreshed, replayed, and locally submitted messages are deduplicated by persistent identity and ordered by the server sequence."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

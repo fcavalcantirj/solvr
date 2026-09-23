@@ -194,14 +194,16 @@ func newTestHumanMsgHandler(room *models.Room, createErr error, _ error) *RoomMe
 				userID = *params.AuthorID
 			}
 			return &models.Message{
-				ID:          1,
-				RoomID:      params.RoomID,
-				AuthorType:  params.AuthorType,
-				AuthorID:    &userID,
-				AgentName:   params.AgentName,
-				Content:     params.Content,
-				ContentType: params.ContentType,
-				CreatedAt:   time.Now(),
+				ID:                 1,
+				RoomID:             params.RoomID,
+				AuthorType:         params.AuthorType,
+				AuthorID:           &userID,
+				AgentName:          params.AgentName,
+				Content:            params.Content,
+				ContentType:        params.ContentType,
+				ReplyToEntryID:     params.ReplyToEntryID,
+				AddressedMemberIDs: params.AddressedMemberIDs,
+				CreatedAt:          time.Now(),
 			}, nil
 		},
 	}
@@ -212,5 +214,78 @@ func newTestHumanMsgHandlerNoRoom() *RoomMessagesHandler {
 		testRoomLookup: func(_ context.Context, _ string) (*models.Room, error) {
 			return nil, db.ErrRoomNotFound
 		},
+	}
+}
+
+// TestPostHumanMessage_WithReplyToEntryID tests that a message can reference another message.
+func TestPostHumanMessage_WithReplyToEntryID(t *testing.T) {
+	room := testRoomMsgRoom()
+	handler := newTestHumanMsgHandler(room, nil, nil)
+
+	body := `{"content": "This is a reply", "reply_to_entry_id": 42}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/rooms/"+room.Slug+"/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = addRoomMsgJWTCtx(req, "user-123")
+	req = withSlug(req, room.Slug)
+	w := httptest.NewRecorder()
+
+	handler.PostHumanMessage(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid JSON response: %v", err)
+	}
+
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected data object in response")
+	}
+
+	// Verify reply_to_entry_id is preserved in response
+	if replyTo, ok := data["reply_to_entry_id"]; !ok || replyTo != float64(42) {
+		t.Errorf("expected reply_to_entry_id=42 in response, got %v", replyTo)
+	}
+}
+
+// TestPostHumanMessage_WithAddressedMemberIDs tests that a message can specify which members it's addressed to.
+func TestPostHumanMessage_WithAddressedMemberIDs(t *testing.T) {
+	room := testRoomMsgRoom()
+	handler := newTestHumanMsgHandler(room, nil, nil)
+
+	body := `{"content": "Addressed message", "addressed_member_ids": ["agent-1", "agent-2"]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/rooms/"+room.Slug+"/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = addRoomMsgJWTCtx(req, "user-123")
+	req = withSlug(req, room.Slug)
+	w := httptest.NewRecorder()
+
+	handler.PostHumanMessage(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid JSON response: %v", err)
+	}
+
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected data object in response")
+	}
+
+	// Verify addressed_member_ids is preserved in response
+	if addressed, ok := data["addressed_member_ids"]; !ok {
+		t.Errorf("expected addressed_member_ids in response")
+	} else {
+		arr, isArr := addressed.([]interface{})
+		if !isArr || len(arr) != 2 {
+			t.Errorf("expected 2 addressed members, got %v", addressed)
+		}
 	}
 }

@@ -69,15 +69,19 @@ func (h *RoomMessagesHandler) recordActivationMilestone(ctx context.Context, roo
 
 // postMessageRequest is the JSON body for POST /r/{slug}/message.
 type postMessageRequest struct {
-	AgentName   string          `json:"agent_name"`
-	Content     string          `json:"content"`
-	ContentType string          `json:"content_type,omitempty"`
-	Metadata    json.RawMessage `json:"metadata,omitempty"`
+	AgentName          string          `json:"agent_name"`
+	Content            string          `json:"content"`
+	ContentType        string          `json:"content_type,omitempty"`
+	Metadata           json.RawMessage `json:"metadata,omitempty"`
+	ReplyToEntryID     *int64          `json:"reply_to_entry_id,omitempty"`
+	AddressedMemberIDs json.RawMessage `json:"addressed_member_ids,omitempty"`
 }
 
 // postHumanMessageRequest is the JSON body for POST /v1/rooms/{slug}/messages (human comment).
 type postHumanMessageRequest struct {
-	Content string `json:"content"`
+	Content            string          `json:"content"`
+	ReplyToEntryID     *int64          `json:"reply_to_entry_id,omitempty"`
+	AddressedMemberIDs json.RawMessage `json:"addressed_member_ids,omitempty"`
 }
 
 // PostMessage handles POST /r/{slug}/message.
@@ -122,12 +126,14 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 	}
 
 	params := models.CreateMessageParams{
-		RoomID:      room.ID,
-		AuthorType:  "agent",
-		AgentName:   req.AgentName,
-		Content:     req.Content,
-		ContentType: contentType,
-		Metadata:    req.Metadata,
+		RoomID:             room.ID,
+		AuthorType:         "agent",
+		AgentName:          req.AgentName,
+		Content:            req.Content,
+		ContentType:        contentType,
+		Metadata:           req.Metadata,
+		ReplyToEntryID:     req.ReplyToEntryID,
+		AddressedMemberIDs: req.AddressedMemberIDs,
 	}
 
 	// Mission #3: if a per-agent room token authenticated this request, stamp the
@@ -231,12 +237,14 @@ func (h *RoomMessagesHandler) PostHumanMessage(w http.ResponseWriter, r *http.Re
 	// T-16-03: AuthorID comes from the JWT, never from request body.
 	authorID := claims.UserID
 	params := models.CreateMessageParams{
-		RoomID:      room.ID,
-		AuthorType:  "human",
-		AuthorID:    &authorID,
-		AgentName:   "human:" + claims.UserID, // deterministic, not displayed
-		Content:     req.Content,
-		ContentType: "text", // D-26: human comments are always plain text
+		RoomID:             room.ID,
+		AuthorType:         "human",
+		AuthorID:           &authorID,
+		AgentName:          "human:" + claims.UserID, // deterministic, not displayed
+		Content:            req.Content,
+		ContentType:        "text", // D-26: human comments are always plain text
+		ReplyToEntryID:     req.ReplyToEntryID,
+		AddressedMemberIDs: req.AddressedMemberIDs,
 	}
 
 	msg, err := h.createMessage(r.Context(), params)

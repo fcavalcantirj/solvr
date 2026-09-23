@@ -26,11 +26,11 @@ func NewMessageRepository(pool *Pool) *MessageRepository {
 // within the same INSERT, which is serialized by PostgreSQL under concurrent writes.
 func (r *MessageRepository) Create(ctx context.Context, params models.CreateMessageParams) (*models.Message, error) {
 	query := `
-		INSERT INTO messages (room_id, author_type, author_id, agent_name, content, content_type, metadata, sequence_num)
-		VALUES ($1, $2, $3, $4, $5, $6, $7,
+		INSERT INTO messages (room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, sequence_num)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
 			(SELECT COALESCE(MAX(sequence_num), 0) + 1 FROM messages WHERE room_id = $1 AND deleted_at IS NULL)
 		)
-		RETURNING id, room_id, author_type, author_id, agent_name, content, content_type, metadata, sequence_num, created_at, deleted_at
+		RETURNING id, room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, sequence_num, created_at, deleted_at
 	`
 
 	// Default metadata to empty JSON object if nil (DB column is NOT NULL DEFAULT '{}')
@@ -48,6 +48,8 @@ func (r *MessageRepository) Create(ctx context.Context, params models.CreateMess
 		params.Content,
 		params.ContentType,
 		metadata,
+		params.ReplyToEntryID,
+		params.AddressedMemberIDs,
 	).Scan(
 		&msg.ID,
 		&msg.RoomID,
@@ -57,6 +59,8 @@ func (r *MessageRepository) Create(ctx context.Context, params models.CreateMess
 		&msg.Content,
 		&msg.ContentType,
 		&msg.Metadata,
+		&msg.ReplyToEntryID,
+		&msg.AddressedMemberIDs,
 		&msg.SequenceNum,
 		&msg.CreatedAt,
 		&msg.DeletedAt,
@@ -77,7 +81,7 @@ func (r *MessageRepository) ListAfter(ctx context.Context, roomID uuid.UUID, aft
 	}
 
 	query := `
-		SELECT id, room_id, author_type, author_id, agent_name, content, content_type, metadata, sequence_num, created_at
+		SELECT id, room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, sequence_num, created_at
 		FROM messages
 		WHERE room_id = $1 AND id > $2 AND deleted_at IS NULL
 		ORDER BY id ASC
@@ -103,6 +107,8 @@ func (r *MessageRepository) ListAfter(ctx context.Context, roomID uuid.UUID, aft
 			&msg.Content,
 			&msg.ContentType,
 			&msg.Metadata,
+			&msg.ReplyToEntryID,
+			&msg.AddressedMemberIDs,
 			&msg.SequenceNum,
 			&msg.CreatedAt,
 		)
@@ -132,7 +138,7 @@ func (r *MessageRepository) ListRecent(ctx context.Context, roomID uuid.UUID, li
 	}
 
 	query := `
-		SELECT id, room_id, author_type, author_id, agent_name, content, content_type, metadata, sequence_num, created_at
+		SELECT id, room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, sequence_num, created_at
 		FROM messages
 		WHERE room_id = $1 AND deleted_at IS NULL
 		ORDER BY id DESC
@@ -158,6 +164,8 @@ func (r *MessageRepository) ListRecent(ctx context.Context, roomID uuid.UUID, li
 			&msg.Content,
 			&msg.ContentType,
 			&msg.Metadata,
+			&msg.ReplyToEntryID,
+			&msg.AddressedMemberIDs,
 			&msg.SequenceNum,
 			&msg.CreatedAt,
 		)
@@ -190,7 +198,7 @@ func (r *MessageRepository) ListRecent(ctx context.Context, roomID uuid.UUID, li
 func (r *MessageRepository) GetFirstMessage(ctx context.Context, roomID uuid.UUID) (*models.Message, error) {
 	query := `
 		SELECT id, room_id, author_type, author_id, agent_name, content, content_type, metadata,
-		       sequence_num, created_at
+		       reply_to_entry_id, addressed_member_ids, sequence_num, created_at
 		FROM messages
 		WHERE room_id = $1 AND deleted_at IS NULL
 		ORDER BY id ASC
@@ -207,6 +215,8 @@ func (r *MessageRepository) GetFirstMessage(ctx context.Context, roomID uuid.UUI
 		&msg.Content,
 		&msg.ContentType,
 		&msg.Metadata,
+		&msg.ReplyToEntryID,
+		&msg.AddressedMemberIDs,
 		&msg.SequenceNum,
 		&msg.CreatedAt,
 	)

@@ -79,6 +79,9 @@ type postMessageRequest struct {
 	Metadata           json.RawMessage `json:"metadata,omitempty"`
 	ReplyToEntryID     *int64          `json:"reply_to_entry_id,omitempty"`
 	AddressedMemberIDs json.RawMessage `json:"addressed_member_ids,omitempty"`
+	// SupersedesEntryID marks this message as a revised directive/result that
+	// explicitly supersedes an earlier message in the same room.
+	SupersedesEntryID *int64 `json:"supersedes_entry_id,omitempty"`
 	// ClientEntryID is the canonical idempotency key for a write. ClientMessageID is
 	// the legacy field name, adapted to ClientEntryID when the canonical one is absent.
 	ClientEntryID   *string `json:"client_entry_id,omitempty"`
@@ -137,6 +140,21 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// A revised directive/result may explicitly supersede an earlier message. The
+	// reference must resolve to a message in THIS room; a cross-room or unknown
+	// reference is rejected rather than silently stored.
+	if req.SupersedesEntryID != nil {
+		if _, err := h.msgRepo.GetByID(r.Context(), room.ID, *req.SupersedesEntryID); err != nil {
+			if errors.Is(err, db.ErrMessageNotFound) {
+				roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "supersedes_entry_id does not reference a message in this room")
+				return
+			}
+			slog.Error("failed to validate supersedes_entry_id", "error", err, "room_id", room.ID)
+			roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to validate supersedes reference")
+			return
+		}
+	}
+
 	params := models.CreateMessageParams{
 		RoomID:             room.ID,
 		AuthorType:         "agent",
@@ -146,6 +164,7 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 		Metadata:           req.Metadata,
 		ReplyToEntryID:     req.ReplyToEntryID,
 		AddressedMemberIDs: req.AddressedMemberIDs,
+		SupersedesEntryID:  req.SupersedesEntryID,
 	}
 
 	// Idempotency: prefer the canonical client_entry_id, adapt the legacy
@@ -450,4 +469,78 @@ func (h *RoomMessagesHandler) GetMessage(w http.ResponseWriter, r *http.Request)
 	}
 
 	roomWriteJSON(w, http.StatusOK, map[string]interface{}{"data": msg})
+}
+
+// PinMessage handles POST /r/{slug}/messages/{id}/pin. An authenticated room
+// participant pins a directive or result so participants can retrieve it without
+// scanning the transcript. Idempotent; room access is enforced upstream by
+// BearerGuard, so a caller here already holds a valid room token.
+func (h *RoomMessagesHandler) PinMessage(w http.ResponseWriter, r *http.Request) {
+	h.setMessagePinned(w, r, true)
+}
+
+// UnpinMessage handles DELETE /r/{slug}/messages/{id}/pin.
+func (h *RoomMessagesHandler) UnpinMessage(w http.ResponseWriter, r *http.Request) {
+	h.setMessagePinned(w, r, false)
+}
+
+// setMessagePinned pins or unpins a message scoped to the bearer-authenticated room.
+func (h *RoomMessagesHandler) setMessagePinned(w http.ResponseWriter, r *http.Request, pin bool) {
+	room := apimiddleware.RoomFromContext(r.Context())
+	if room == nil {
+		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "room context missing")
+		return
+	}
+
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid message id")
+		return
+	}
+
+	var msg *models.Message
+	if pin {
+		msg, err = h.msgRepo.Pin(r.Context(), room.ID, id)
+	} else {
+		msg, err = h.msgRepo.Unpin(r.Context(), room.ID, id)
+	}
+	if err != nil {
+		if errors.Is(err, db.ErrMessageNotFound) {
+			roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "message not found")
+			return
+		}
+		slog.Error("failed to set message pin", "error", err, "room_id", room.ID, "message_id", id)
+		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update pin")
+		return
+	}
+
+	roomWriteJSON(w, http.StatusOK, map[string]interface{}{"data": msg})
+}
+
+// ListPinnedMessages handles GET /r/{slug}/pins. Returns the room's pinned
+// directives/results newest-first. Room access is enforced upstream.
+func (h *RoomMessagesHandler) ListPinnedMessages(w http.ResponseWriter, r *http.Request) {
+	room := apimiddleware.RoomFromContext(r.Context())
+	if room == nil {
+		slug := chi.URLParam(r, "slug")
+		if slug == "" {
+			roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "slug is required")
+			return
+		}
+		var err error
+		room, err = h.roomRepo.GetBySlug(r.Context(), slug)
+		if err != nil {
+			roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "room not found")
+			return
+		}
+	}
+
+	pinned, err := h.msgRepo.ListPinned(r.Context(), room.ID)
+	if err != nil {
+		slog.Error("failed to list pinned messages", "error", err, "room_id", room.ID)
+		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list pinned messages")
+		return
+	}
+
+	roomWriteJSON(w, http.StatusOK, map[string]interface{}{"data": pinned})
 }

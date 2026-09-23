@@ -5397,3 +5397,169 @@ already ran GREEN locally):
   without redoing posted work. In the browser, drop the network to confirm the
   room shows RECONNECTING then "LIVE UPDATES OFFLINE"; stop an agent's heartbeat
   to confirm the "<name> went offline" note appears and clears on rejoin.
+
+================================================================================
+2026-09-23 — DONE (task flipped: "Support the planner/executor review loop
+without imposing a heavyweight task system")
+--------------------------------------------------------------------------------
+POINTER / SKIP RATIONALE (why not the three earlier passes:false tasks — each
+re-verified against the ACTUAL code this session, not the prior journal):
+  - "Verify N-agent collaboration end to end across clients and service
+    instances" (first passes:false): ACCEPTANCE task. Its checks require a live
+    planner + two executors + reviewer across MORE THAN ONE client product and
+    TWO API instances with human-free relaying — inherently owner/multi-product
+    and spanning behavior later tasks still build (canonical room API, membership
+    authority). Left passes=false per the acceptance-task rule.
+  - "Make agent-created rooms manageable even when no human owns or claims the
+    agent": BLOCKED. Step 2 requires "rooms.owner_id has been retired after
+    migration". [REAL] newest migration is 000086_add_room_archive; there is NO
+    migration dropping rooms.owner_id (grep of backend/migrations for
+    DROP.*owner_id = none). owner_id retirement is the deliverable of the later
+    data task "Use one room membership authority ...". Forward dependency; left
+    passes=false.
+  - "Make a room page a readable shared conversation ..." (passes:false, before
+    this task): step 4 needs "the latest PINNED DIRECTIVE in a compact context
+    area". BEFORE this task there was NO message-pin feature (the only "pin" in
+    backend was IPFS content pinning: models/pin.go + the pins table). Pinning is
+    built by THIS task; the room-page task can consume it in a later iteration.
+    Treated like an acceptance task spanning not-yet-built behavior: left
+    passes=false, took the first task that was actually buildable now.
+
+TASK BUILT: "Support the planner/executor review loop without imposing a
+heavyweight task system" (functional). It adds message PINNING and message
+SUPERSEDING to the existing room timeline, plus review-loop guidance in the
+copied join prompts. No separate issue/project/task product — directives and
+results stay ORDINARY room messages (the messages table), which is exactly what
+step 2 asks for.
+
+STATE OF EACH STEP (read the actual code first):
+  step 1 (Plan-and-build posts task/directive/plan/update/evidence/review
+    request/conclusion): these are ordinary messages posted via the existing
+    room message API; the Plan-and-build planner/executor prompts drive the
+    sequence. Live two-agent run = owner UAT; the message mechanism is tested.
+  step 2 (ordinary room messages with OPTIONAL structured metadata, NOT mandatory
+    separate issue/project/task pages): [REAL] messages already carry a metadata
+    JSONB column; pin/supersede are message COLUMNS, not new entities, so a
+    directive/result is just a message. No separate task-page endpoint exists.
+  step 3 (pin a directive/result; participants retrieve the referenced message
+    and its version through the API): GAP -> BUILT. New pinned_at column + Pin/
+    Unpin/ListPinned repo methods + POST/DELETE /r/{slug}/messages/{id}/pin and
+    GET /r/{slug}/pins. Because messages are immutable, a pin references that
+    exact version.
+  step 4 (post a revised directive; the previous message remains in history with
+    an explicit superseding reference): GAP -> BUILT. New supersedes_entry_id
+    column (FK messages(id) ON DELETE SET NULL) + POST /r/{slug}/message accepts
+    supersedes_entry_id and validates it resolves to a message in THIS room (a
+    cross-room/unknown ref is rejected 400, never silently stored). The original
+    stays readable; only the new message carries the reference.
+  step 5 (executor does not interpret silence as approval; an unverified
+    completion claim is displayed as the author's claim, not platform-certified):
+    - prompt half: GAP -> BUILT. New reviewLoopNote() appended to the executor
+      and role-specific join prompts: "Do NOT interpret silence as approval",
+      request explicit review, "present it as your own claim — Solvr ... does not
+      certify outcomes".
+    - display half: [REAL] already satisfied by design — MessageBubble renders
+      every message as the author's own content with the author identity and NO
+      platform certification badge. Pinned a guard test asserting a completion
+      claim shows as the author's message and NO certified/verified/approved
+      badge is added by the platform.
+
+CHANGES (GREEN, minimum code):
+  MIGRATION
+    000087_add_message_pin_supersede.up/down.sql: ADD COLUMN pinned_at TIMESTAMPTZ,
+      ADD COLUMN supersedes_entry_id BIGINT REFERENCES messages(id) ON DELETE SET
+      NULL; partial indexes idx_messages_room_pinned and idx_messages_supersedes.
+      Applied to the LOCAL isolated test DB (schema_migrations bumped 86 -> 87).
+  BACKEND (smart API owns all logic)
+    models/message.go: Message gains PinnedAt *time.Time and SupersedesEntryID
+      *int64 (both omitempty); CreateMessageParams gains SupersedesEntryID.
+    db/room_messages.go: messageColumns extended with pinned_at, supersedes_entry_id;
+      introduced a single scanMessage(rowScanner) helper and routed every read
+      (Create RETURNING, getByClientEntryID, GetByID, ListBefore, ListAfter,
+      ListRecent, GetFirstMessage) through it so the column list and scan targets
+      cannot drift; INSERT now writes supersedes_entry_id; new Pin/Unpin/setPinned/
+      ListPinned methods (room-scoped, non-deleted, idempotent via
+      COALESCE(pinned_at, NOW())). File 395 lines (< 800).
+    api/handlers/rooms_messages.go: postMessageRequest gains supersedes_entry_id;
+      PostMessage validates the reference is in-room (400 else); new PinMessage/
+      UnpinMessage/ListPinnedMessages handlers (bearer-guarded room context).
+      File 546 lines.
+    api/router_rooms.go: wired GET /r/{slug}/pins, POST + DELETE
+      /r/{slug}/messages/{id}/pin under the existing BearerGuard group.
+    api/handlers/connect_prompts.go: reviewLoopNote() helper appended to the
+      executor and role-specific prompts. File 517 lines.
+  FRONTEND (dumb terminal)
+    lib/api-types.ts: APIRoomMessage gains optional pinned_at, supersedes_entry_id
+      (carries the API fields; no client logic).
+    components/rooms/message-bubble.test.tsx: +2 guard tests (completion claim
+      renders as the author's message; no platform certification badge). No
+      component code change was needed — the plain rendering already satisfies
+      step 5's display half.
+
+TDD:
+  RED db: room_messages_pin_supersede_test.go referenced Pin/Unpin/ListPinned/
+    PinnedAt/SupersedesEntryID -> build failed (undefined). GREEN after model+repo.
+  RED handler: rooms_messages_pin_test.go (pin/list/unpin, supersede, cross-room
+    reject, unknown-id 404) -> compiled after handlers added -> all PASS.
+  RED prompt: connect_prompts_review_loop_test.go asserted the silence/approval/
+    own-claim/does-not-certify phrases -> FAIL -> GREEN after reviewLoopNote().
+  RED frontend: 2 new message-bubble assertions -> GREEN (existing rendering).
+
+VERIFICATION (all RAN this session against the LOCAL isolated test DB
+postgres://solvr:solvr_dev@localhost:5435/solvr_test [docker solvr-postgres]):
+  [TEST] go test ./internal/db -run 'TestMessageRepository_PinUnpinList|
+    TestMessageRepository_Supersede' = PASS (0 SKIP).
+  [TEST] go test ./internal/api/handlers -run 'TestPinMessageHandler_PinListUnpin|
+    TestPinMessageHandler_UnknownID|TestPostMessageHandler_Supersede|
+    TestPostMessageHandler_SupersedeCrossRoomRejected' = PASS.
+  [TEST] go test ./internal/api/handlers -run 'TestConnectPrompts_IncludeReviewLoopGuidance|
+    TestConnectPrompts_IncludeBoundedWaitingRecovery' = PASS (no prompt regression).
+  [TEST] go test ./internal/db -run 'Message' = ok; handlers subset
+    'Message|Room|Connect|Pin|Delivery|Sse|Handshake|Presence|Claim' = ok.
+  [TEST] frontend npx vitest run components/rooms/message-bubble.test.tsx = 24 PASS
+    (incl 2 new); components/rooms/ = 16 files, 114 PASS.
+  [REAL] go build ./... OK; go vet ./internal/{db,api,api/handlers,models} clean;
+    frontend npx tsc --noEmit exit 0.
+  [REAL] file sizes: room_messages.go 395, rooms_messages.go 546, connect_prompts.go
+    517, message.go 53 — all < 800.
+
+PRE-EXISTING FAILURES (NOT this task, NOT a regression — PROVEN):
+  Running the FULL db package surfaces many failures in UNRELATED tables:
+  TestAgentRepository_List_*, TestGetPlatformPulse, TestGetRecentVictories,
+  TestGetTrendingNow, TestGetYouMightLike, TestGetRisingIdeas, TestBriefing_*.
+  Root: the shared solvr_test DB holds dirty rows — agents List scan fails with
+  "can't scan into dest[2]: cannot scan NULL into *string" (the agents table,
+  which this task never touches). PROOF it is pre-existing: git stash -u (clean
+  HEAD, my changes removed) reproduces the IDENTICAL failures for
+  TestAgentRepository_List_Empty and TestGetPlatformPulse_ReturnsCorrectCounts.
+  My diff touches only message/prompt/room-connect files (git diff --stat below),
+  none of which are imported by agents/feed/briefing scan paths. Left untouched;
+  they are a dirty-fixture/DB-seed issue for a human to clean, orthogonal to this
+  task.
+
+DIFF (git status --porcelain / git diff --stat) — matches the work above:
+  M backend/internal/api/handlers/connect_prompts.go   (reviewLoopNote + 2 wirings)
+  M backend/internal/api/handlers/rooms_messages.go    (supersede validation + pin handlers)
+  M backend/internal/api/router_rooms.go               (3 pin routes)
+  M backend/internal/db/room_messages.go               (scanMessage + pin/supersede + Pin/Unpin/ListPinned)
+  M backend/internal/models/message.go                 (PinnedAt, SupersedesEntryID)
+  M frontend/components/rooms/message-bubble.test.tsx  (+2 guard tests)
+  M frontend/lib/api-types.ts                          (optional pinned_at, supersedes_entry_id)
+  ?? backend/internal/api/handlers/connect_prompts_review_loop_test.go
+  ?? backend/internal/api/handlers/rooms_messages_pin_test.go
+  ?? backend/internal/db/room_messages_pin_supersede_test.go
+  ?? backend/migrations/000087_add_message_pin_supersede.up.sql / .down.sql
+  (spec.json: this task passes -> true)
+
+No existing test deleted/skipped/weakened. The scanMessage refactor preserves the
+column set for every existing read (the full Message* db suite and the room/
+message/connect/delivery/sse handler suite still pass unchanged).
+
+UAT (owner last mile — every automatable check already ran GREEN locally):
+  Run the Plan-and-build planner + executor prompts in two real agents. Confirm
+  the planner pins its directive and the executor retrieves it via GET
+  /r/<slug>/pins; post a revised directive with supersedes_entry_id and confirm
+  the original stays in history with the explicit reference; confirm the executor
+  waits for explicit review (does not treat silence as approval) and reports
+  completion as its own claim. Then apply migration 000087 to production before
+  the room-page task consumes pinned directives.

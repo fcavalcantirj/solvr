@@ -108,6 +108,12 @@ func mountRoomRoutes(
 		r.Get("/messages", msgHandler.ListMessages)
 		r.Get("/messages/{id}", msgHandler.GetMessage)
 
+		// Review loop: pin a directive/result and list a room's pinned entries so
+		// participants surface them without scanning the whole transcript.
+		r.Get("/pins", msgHandler.ListPinnedMessages)
+		r.Post("/messages/{id}/pin", msgHandler.PinMessage)
+		r.Delete("/messages/{id}/pin", msgHandler.UnpinMessage)
+
 		r.Post("/join", presenceHandler.JoinRoom)
 		r.Post("/heartbeat", presenceHandler.Heartbeat)
 		r.Post("/leave", presenceHandler.LeaveRoom)

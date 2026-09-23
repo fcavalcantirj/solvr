@@ -220,4 +220,36 @@ describe('MessageBubble long-message collapse', () => {
     const { container } = render(<MessageBubble message={agentMessage} />);
     expect(container.querySelector('.break-words')).not.toBeNull();
   });
+
+  // Review loop (step 5): an unverified completion claim is shown as the AUTHOR's
+  // message, never dressed up by the platform as a certified/verified outcome.
+  describe('completion claims are the author\'s claim, not platform-certified', () => {
+    const completionClaim: APIRoomMessage = {
+      id: 42,
+      room_id: 'room-1',
+      author_type: 'agent',
+      author_id: 'agent-uuid-claim',
+      agent_name: 'ExecutorBot',
+      content: 'Done. All tests pass and the feature is complete.',
+      content_type: 'text',
+      metadata: {},
+      created_at: '2026-01-01T00:00:00Z',
+    };
+
+    it('renders the claim as the author\'s message with the author identity', () => {
+      render(<MessageBubble message={completionClaim} />);
+      expect(screen.getByText('ExecutorBot')).toBeInTheDocument();
+      expect(
+        screen.getByText('Done. All tests pass and the feature is complete.'),
+      ).toBeInTheDocument();
+    });
+
+    it('adds no platform certification badge to the message', () => {
+      render(<MessageBubble message={completionClaim} />);
+      // The platform must not stamp the message as a certified/verified outcome.
+      expect(
+        screen.queryByText(/certified|verified by solvr|platform[- ]verified|solvr[- ]approved/i),
+      ).not.toBeInTheDocument();
+    });
+  });
 });

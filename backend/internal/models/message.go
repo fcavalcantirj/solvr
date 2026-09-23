@@ -21,8 +21,15 @@ type Message struct {
 	ReplyToEntryID     *int64          `json:"reply_to_entry_id,omitempty"`
 	AddressedMemberIDs json.RawMessage `json:"addressed_member_ids,omitempty"`
 	SequenceNum        *int            `json:"sequence_num,omitempty"`
-	CreatedAt          time.Time       `json:"created_at"`
-	DeletedAt          *time.Time      `json:"-"`
+	// PinnedAt is set when this message is a pinned directive or result. Because
+	// messages are immutable, a pin references this exact version of the content.
+	PinnedAt *time.Time `json:"pinned_at,omitempty"`
+	// SupersedesEntryID references an earlier message in the same room that this
+	// message revises. The earlier message stays in history; this reference makes
+	// the supersession explicit instead of editing or deleting the original.
+	SupersedesEntryID *int64    `json:"supersedes_entry_id,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	DeletedAt         *time.Time `json:"-"`
 }
 
 // CreateMessageParams holds parameters for inserting a message.
@@ -36,6 +43,9 @@ type CreateMessageParams struct {
 	Metadata           json.RawMessage `json:"metadata,omitempty"`
 	ReplyToEntryID     *int64          `json:"reply_to_entry_id,omitempty"`
 	AddressedMemberIDs json.RawMessage `json:"addressed_member_ids,omitempty"`
+	// SupersedesEntryID, when set, marks this new message as a revision that
+	// explicitly supersedes an earlier message in the same room.
+	SupersedesEntryID *int64 `json:"supersedes_entry_id,omitempty"`
 	// ClientEntryID is an optional caller-supplied key for idempotent writes. When
 	// set for an authenticated author (AuthorID != nil), a retry with the same key
 	// in the same room returns the existing entry instead of creating a duplicate.

@@ -19,7 +19,36 @@ var ErrMessageNotFound = errors.New("message not found")
 // messageColumns is the shared SELECT column list for reading a message. It
 // intentionally omits client_entry_id, which is a write/lookup-only idempotency
 // key and is never surfaced in read responses.
-const messageColumns = `id, room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, sequence_num, created_at`
+const messageColumns = `id, room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, sequence_num, created_at, pinned_at, supersedes_entry_id`
+
+// rowScanner is satisfied by both pgx.Row (QueryRow) and pgx.Rows so a single
+// scan helper reads a message the same way everywhere.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+// scanMessage reads one message row using the messageColumns order. Every read
+// path funnels through here so the column list and scan targets never drift.
+func scanMessage(s rowScanner) (models.Message, error) {
+	var m models.Message
+	err := s.Scan(
+		&m.ID,
+		&m.RoomID,
+		&m.AuthorType,
+		&m.AuthorID,
+		&m.AgentName,
+		&m.Content,
+		&m.ContentType,
+		&m.Metadata,
+		&m.ReplyToEntryID,
+		&m.AddressedMemberIDs,
+		&m.SequenceNum,
+		&m.CreatedAt,
+		&m.PinnedAt,
+		&m.SupersedesEntryID,
+	)
+	return m, err
+}
 
 // MessageRepository handles database operations for room messages.
 type MessageRepository struct {
@@ -61,11 +90,11 @@ func (r *MessageRepository) CreateWithClientEntry(ctx context.Context, params mo
 	}
 
 	query := `
-		INSERT INTO messages (room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, client_entry_id, sequence_num)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+		INSERT INTO messages (room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, client_entry_id, supersedes_entry_id, sequence_num)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
 			(SELECT COALESCE(MAX(sequence_num), 0) + 1 FROM messages WHERE room_id = $1 AND deleted_at IS NULL)
 		)
-		RETURNING id, room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, sequence_num, created_at, deleted_at
+		RETURNING ` + messageColumns + `
 	`
 
 	// Default metadata to empty JSON object if nil (DB column is NOT NULL DEFAULT '{}')
@@ -74,8 +103,7 @@ func (r *MessageRepository) CreateWithClientEntry(ctx context.Context, params mo
 		metadata = json.RawMessage(`{}`)
 	}
 
-	var msg models.Message
-	err := r.pool.QueryRow(ctx, query,
+	msg, err := scanMessage(r.pool.QueryRow(ctx, query,
 		params.RoomID,
 		params.AuthorType,
 		params.AuthorID,
@@ -86,21 +114,8 @@ func (r *MessageRepository) CreateWithClientEntry(ctx context.Context, params mo
 		params.ReplyToEntryID,
 		params.AddressedMemberIDs,
 		params.ClientEntryID,
-	).Scan(
-		&msg.ID,
-		&msg.RoomID,
-		&msg.AuthorType,
-		&msg.AuthorID,
-		&msg.AgentName,
-		&msg.Content,
-		&msg.ContentType,
-		&msg.Metadata,
-		&msg.ReplyToEntryID,
-		&msg.AddressedMemberIDs,
-		&msg.SequenceNum,
-		&msg.CreatedAt,
-		&msg.DeletedAt,
-	)
+		params.SupersedesEntryID,
+	))
 	if err != nil {
 		// A concurrent identical retry races past the pre-check above; the unique
 		// index rejects the second insert. Return the entry the winner persisted.
@@ -126,21 +141,7 @@ func (r *MessageRepository) getByClientEntryID(ctx context.Context, roomID uuid.
 		ORDER BY id ASC
 		LIMIT 1`
 
-	var msg models.Message
-	err := r.pool.QueryRow(ctx, query, roomID, authorID, clientEntryID).Scan(
-		&msg.ID,
-		&msg.RoomID,
-		&msg.AuthorType,
-		&msg.AuthorID,
-		&msg.AgentName,
-		&msg.Content,
-		&msg.ContentType,
-		&msg.Metadata,
-		&msg.ReplyToEntryID,
-		&msg.AddressedMemberIDs,
-		&msg.SequenceNum,
-		&msg.CreatedAt,
-	)
+	msg, err := scanMessage(r.pool.QueryRow(ctx, query, roomID, authorID, clientEntryID))
 	if err != nil {
 		return nil, err
 	}
@@ -155,21 +156,7 @@ func (r *MessageRepository) GetByID(ctx context.Context, roomID uuid.UUID, id in
 		FROM messages
 		WHERE room_id = $1 AND id = $2 AND deleted_at IS NULL`
 
-	var msg models.Message
-	err := r.pool.QueryRow(ctx, query, roomID, id).Scan(
-		&msg.ID,
-		&msg.RoomID,
-		&msg.AuthorType,
-		&msg.AuthorID,
-		&msg.AgentName,
-		&msg.Content,
-		&msg.ContentType,
-		&msg.Metadata,
-		&msg.ReplyToEntryID,
-		&msg.AddressedMemberIDs,
-		&msg.SequenceNum,
-		&msg.CreatedAt,
-	)
+	msg, err := scanMessage(r.pool.QueryRow(ctx, query, roomID, id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrMessageNotFound
@@ -203,21 +190,7 @@ func (r *MessageRepository) ListBefore(ctx context.Context, roomID uuid.UUID, be
 
 	var messages []models.Message
 	for rows.Next() {
-		var msg models.Message
-		err := rows.Scan(
-			&msg.ID,
-			&msg.RoomID,
-			&msg.AuthorType,
-			&msg.AuthorID,
-			&msg.AgentName,
-			&msg.Content,
-			&msg.ContentType,
-			&msg.Metadata,
-			&msg.ReplyToEntryID,
-			&msg.AddressedMemberIDs,
-			&msg.SequenceNum,
-			&msg.CreatedAt,
-		)
+		msg, err := scanMessage(rows)
 		if err != nil {
 			LogQueryError(ctx, "ListBefore.Scan", "messages", err)
 			return nil, fmt.Errorf("scan message: %w", err)
@@ -249,7 +222,7 @@ func (r *MessageRepository) ListAfter(ctx context.Context, roomID uuid.UUID, aft
 	}
 
 	query := `
-		SELECT id, room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, sequence_num, created_at
+		SELECT ` + messageColumns + `
 		FROM messages
 		WHERE room_id = $1 AND id > $2 AND deleted_at IS NULL
 		ORDER BY id ASC
@@ -265,21 +238,7 @@ func (r *MessageRepository) ListAfter(ctx context.Context, roomID uuid.UUID, aft
 
 	var messages []models.Message
 	for rows.Next() {
-		var msg models.Message
-		err := rows.Scan(
-			&msg.ID,
-			&msg.RoomID,
-			&msg.AuthorType,
-			&msg.AuthorID,
-			&msg.AgentName,
-			&msg.Content,
-			&msg.ContentType,
-			&msg.Metadata,
-			&msg.ReplyToEntryID,
-			&msg.AddressedMemberIDs,
-			&msg.SequenceNum,
-			&msg.CreatedAt,
-		)
+		msg, err := scanMessage(rows)
 		if err != nil {
 			LogQueryError(ctx, "ListAfter.Scan", "messages", err)
 			return nil, fmt.Errorf("scan message: %w", err)
@@ -306,7 +265,7 @@ func (r *MessageRepository) ListRecent(ctx context.Context, roomID uuid.UUID, li
 	}
 
 	query := `
-		SELECT id, room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, sequence_num, created_at
+		SELECT ` + messageColumns + `
 		FROM messages
 		WHERE room_id = $1 AND deleted_at IS NULL
 		ORDER BY id DESC
@@ -322,21 +281,7 @@ func (r *MessageRepository) ListRecent(ctx context.Context, roomID uuid.UUID, li
 
 	var messages []models.Message
 	for rows.Next() {
-		var msg models.Message
-		err := rows.Scan(
-			&msg.ID,
-			&msg.RoomID,
-			&msg.AuthorType,
-			&msg.AuthorID,
-			&msg.AgentName,
-			&msg.Content,
-			&msg.ContentType,
-			&msg.Metadata,
-			&msg.ReplyToEntryID,
-			&msg.AddressedMemberIDs,
-			&msg.SequenceNum,
-			&msg.CreatedAt,
-		)
+		msg, err := scanMessage(rows)
 		if err != nil {
 			LogQueryError(ctx, "ListRecent.Scan", "messages", err)
 			return nil, fmt.Errorf("scan message: %w", err)
@@ -365,29 +310,14 @@ func (r *MessageRepository) ListRecent(ctx context.Context, roomID uuid.UUID, li
 // initial task from the room's first author.
 func (r *MessageRepository) GetFirstMessage(ctx context.Context, roomID uuid.UUID) (*models.Message, error) {
 	query := `
-		SELECT id, room_id, author_type, author_id, agent_name, content, content_type, metadata,
-		       reply_to_entry_id, addressed_member_ids, sequence_num, created_at
+		SELECT ` + messageColumns + `
 		FROM messages
 		WHERE room_id = $1 AND deleted_at IS NULL
 		ORDER BY id ASC
 		LIMIT 1
 	`
 
-	var msg models.Message
-	err := r.pool.QueryRow(ctx, query, roomID).Scan(
-		&msg.ID,
-		&msg.RoomID,
-		&msg.AuthorType,
-		&msg.AuthorID,
-		&msg.AgentName,
-		&msg.Content,
-		&msg.ContentType,
-		&msg.Metadata,
-		&msg.ReplyToEntryID,
-		&msg.AddressedMemberIDs,
-		&msg.SequenceNum,
-		&msg.CreatedAt,
-	)
+	msg, err := scanMessage(r.pool.QueryRow(ctx, query, roomID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRoomNotFound
@@ -396,4 +326,70 @@ func (r *MessageRepository) GetFirstMessage(ctx context.Context, roomID uuid.UUI
 		return nil, err
 	}
 	return &msg, nil
+}
+
+// Pin marks a message as a pinned directive or result. It is idempotent: pinning
+// an already-pinned message keeps the original pinned_at. The message is scoped to
+// the room and must be non-deleted; ErrMessageNotFound is returned otherwise.
+func (r *MessageRepository) Pin(ctx context.Context, roomID uuid.UUID, id int64) (*models.Message, error) {
+	return r.setPinned(ctx, roomID, id, true)
+}
+
+// Unpin clears a message's pinned state. It is idempotent and room-scoped.
+func (r *MessageRepository) Unpin(ctx context.Context, roomID uuid.UUID, id int64) (*models.Message, error) {
+	return r.setPinned(ctx, roomID, id, false)
+}
+
+// setPinned toggles pinned_at. COALESCE preserves the first pin time so repinning
+// is a no-op on the timestamp; unpinning sets it to NULL.
+func (r *MessageRepository) setPinned(ctx context.Context, roomID uuid.UUID, id int64, pin bool) (*models.Message, error) {
+	var setExpr string
+	if pin {
+		setExpr = "pinned_at = COALESCE(pinned_at, NOW())"
+	} else {
+		setExpr = "pinned_at = NULL"
+	}
+	query := `UPDATE messages SET ` + setExpr + `
+		WHERE room_id = $1 AND id = $2 AND deleted_at IS NULL
+		RETURNING ` + messageColumns
+
+	msg, err := scanMessage(r.pool.QueryRow(ctx, query, roomID, id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrMessageNotFound
+		}
+		LogQueryError(ctx, "setPinned", "messages", err)
+		return nil, err
+	}
+	return &msg, nil
+}
+
+// ListPinned returns a room's pinned messages (directives/results), newest pin
+// first, without scanning the whole transcript. Deleted messages are excluded.
+func (r *MessageRepository) ListPinned(ctx context.Context, roomID uuid.UUID) ([]models.Message, error) {
+	query := `SELECT ` + messageColumns + `
+		FROM messages
+		WHERE room_id = $1 AND pinned_at IS NOT NULL AND deleted_at IS NULL
+		ORDER BY pinned_at DESC, id DESC`
+
+	rows, err := r.pool.Query(ctx, query, roomID)
+	if err != nil {
+		LogQueryError(ctx, "ListPinned", "messages", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	messages := []models.Message{}
+	for rows.Next() {
+		msg, err := scanMessage(rows)
+		if err != nil {
+			LogQueryError(ctx, "ListPinned.Scan", "messages", err)
+			return nil, fmt.Errorf("scan message: %w", err)
+		}
+		messages = append(messages, msg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return messages, nil
 }

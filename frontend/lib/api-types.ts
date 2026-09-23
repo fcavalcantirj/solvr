@@ -1442,6 +1442,12 @@ export interface APIRoomMessage {
   content_type: 'text' | 'markdown' | 'json';
   metadata: Record<string, unknown>;
   sequence_num?: number;
+  // Set when this message is a pinned directive or result (review loop). Because
+  // messages are immutable, the pin references this exact version of the content.
+  pinned_at?: string;
+  // References an earlier message in the same room that this one revises. The
+  // earlier message stays in history; this makes the supersession explicit.
+  supersedes_entry_id?: number;
   created_at: string;
 }
 

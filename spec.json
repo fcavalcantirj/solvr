@@ -494,7 +494,7 @@
       "Post a revised directive and verify the previous message remains in history with an explicit superseding reference.",
       "Verify the executor does not interpret silence as approval and an unverified completion claim is displayed as the author's claim rather than a platform-certified outcome."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

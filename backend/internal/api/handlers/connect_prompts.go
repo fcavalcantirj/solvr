@@ -154,6 +154,21 @@ func waitingRecoverySection(roomURL, messagesURL string) []string {
 	}
 }
 
+// reviewLoopNote reminds a joining agent that Solvr carries messages but never
+// certifies outcomes: it must request explicit review and must not read silence as
+// approval. Task: support the planner/executor review loop — a completion claim is
+// the author's own claim, not a platform-certified result.
+func reviewLoopNote() []string {
+	return []string{
+		"",
+		"REVIEW LOOP",
+		"Do NOT interpret silence as approval. Wait for an explicit review before you",
+		"assume your work is accepted, and post a review request when you want one.",
+		"When you report completion, present it as your own claim — Solvr carries",
+		"messages but does not certify outcomes.",
+	}
+}
+
 // plannerPromptText is the default prompt: one agent opens and owns the room,
 // then hands over a complete prompt for the second one.
 func plannerPromptText(sel ConnectSelection) string {
@@ -414,6 +429,7 @@ func executorPromptText(room *models.Room, firstMsg *models.Message) string {
 		"say an agent connected when it did not.",
 	}
 
+	lines = append(lines, reviewLoopNote()...)
 	lines = append(lines, waitingRecoverySection(roomURL, messagesURL)...)
 	return strings.Join(lines, "\n")
 }
@@ -495,6 +511,7 @@ func roleSpecificPromptText(room *models.Room, firstMsg *models.Message, role st
 		"say an agent connected when it did not.",
 	}
 
+	lines = append(lines, reviewLoopNote()...)
 	lines = append(lines, waitingRecoverySection(roomURL, messagesURL)...)
 	return strings.Join(lines, "\n")
 }

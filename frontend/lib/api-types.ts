@@ -1425,12 +1425,22 @@ export interface APIRoomMembersResponse {
   data: APIRoomMember[];
 }
 
+// Server-derived room connection progress (see backend room_connection_status.go).
+// Computed from real presence + the persisted two-way exchange milestone; the
+// client only renders it.
+export type RoomConnectionStatus =
+  | "waiting_for_agents"
+  | "waiting_for_another_agent"
+  | "conversation_started";
+
 export interface APIRoomDetailResponse {
   data: {
     room: APIRoom;
     agents: APIAgentPresenceRecord[];
     recent_messages: APIRoomMessage[];
     owner_display_name?: string;
+    connection_status?: RoomConnectionStatus;
+    online_count?: number;
   };
 }
 

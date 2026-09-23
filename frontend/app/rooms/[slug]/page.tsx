@@ -80,7 +80,7 @@ export default async function RoomDetailPage({
     );
   }
 
-  const { room, agents, recent_messages, owner_display_name } = payload.data;
+  const { room, agents, recent_messages, owner_display_name, connection_status } = payload.data;
 
   // API returns newest first — keep that order (newest at top)
   const messages = recent_messages || [];
@@ -98,6 +98,7 @@ export default async function RoomDetailPage({
             initialMessages={messages}
             initialAgents={agents || []}
             ownerDisplayName={owner_display_name}
+            connectionStatus={connection_status}
           />
         </div>
       </main>

@@ -443,7 +443,7 @@
       "Stop one agent's heartbeats and verify only its presence expires; remaining agents continue collaborating and the historical conversation-started milestone is not reset.",
       "Verify copying a prompt, registering an agent, and opening a browser stream cannot independently mark a room as connected or collaborating."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

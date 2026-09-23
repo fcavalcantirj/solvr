@@ -80,6 +80,23 @@ func (r *RoomEventRepository) Query(ctx context.Context, p models.QueryRoomEvent
 	return events, rows.Err()
 }
 
+// IsActivated reports whether a room has recorded the two-way activation
+// milestone (RoomActivationEventType). RecordActivation writes that event once
+// and it is never removed, so this is a stable, sticky signal that a room has
+// carried a real exchange between at least two distinct agent identities.
+func (r *RoomEventRepository) IsActivated(ctx context.Context, roomID uuid.UUID) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM room_events WHERE room_id = $1 AND event_type = $2
+		)`, roomID, RoomActivationEventType).Scan(&exists)
+	if err != nil {
+		LogQueryError(ctx, "IsActivated", "room_events", err)
+		return false, fmt.Errorf("check room activation: %w", err)
+	}
+	return exists, nil
+}
+
 // LatestByIssue returns the most recent event for a given issue in a room, or nil if
 // none. Useful for "who currently holds APP-185" style lookups.
 func (r *RoomEventRepository) LatestByIssue(ctx context.Context, roomID uuid.UUID, issue string) (*models.RoomEvent, error) {

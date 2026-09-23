@@ -23,6 +23,7 @@ type RoomHandler struct {
 	presenceRepo   *db.AgentPresenceRepository
 	memberRepo     *db.RoomMemberRepository
 	agentTokenRepo *db.RoomAgentTokenRepository
+	eventRepo      *db.RoomEventRepository
 }
 
 // NewRoomHandler creates a new RoomHandler with the required repositories.
@@ -32,6 +33,7 @@ func NewRoomHandler(
 	presenceRepo *db.AgentPresenceRepository,
 	memberRepo *db.RoomMemberRepository,
 	agentTokenRepo *db.RoomAgentTokenRepository,
+	eventRepo *db.RoomEventRepository,
 ) *RoomHandler {
 	return &RoomHandler{
 		roomRepo:       roomRepo,
@@ -39,6 +41,7 @@ func NewRoomHandler(
 		presenceRepo:   presenceRepo,
 		memberRepo:     memberRepo,
 		agentTokenRepo: agentTokenRepo,
+		eventRepo:      eventRepo,
 	}
 }
 
@@ -167,11 +170,27 @@ func (h *RoomHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
 		messages = []models.Message{} // graceful degradation
 	}
 
+	// Derive the room's connection progress from real activity only: the count of
+	// server-confirmed, unexpired agent presence (len(agents)) plus the sticky
+	// two-way activation milestone. The client renders this — it never recomputes
+	// it from message counts or presence events.
+	activated := false
+	if h.eventRepo != nil {
+		if a, err := h.eventRepo.IsActivated(r.Context(), room.ID); err != nil {
+			slog.Error("failed to check room activation", "error", err, "room_id", room.ID)
+		} else {
+			activated = a
+		}
+	}
+	onlineCount := len(agents)
+
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"room":            room,
-			"agents":          agents,
-			"recent_messages": messages,
+			"room":              room,
+			"agents":            agents,
+			"recent_messages":   messages,
+			"connection_status": ComputeConnectionStatus(activated, onlineCount),
+			"online_count":      onlineCount,
 		},
 	}
 	roomWriteJSON(w, http.StatusOK, response)

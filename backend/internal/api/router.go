@@ -277,7 +277,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 	// Family-scoped room discovery handler for GET /v1/me/rooms. ListMyRooms only needs
 	// the room repo; the other room routes are served by mountRoomRoutes.
-	roomDiscoveryHandler := handlers.NewRoomHandler(roomRepo, nil, nil, nil, nil)
+	roomDiscoveryHandler := handlers.NewRoomHandler(roomRepo, nil, nil, nil, nil, nil)
 
 	// Create posts handler
 	postsHandler := handlers.NewPostsHandler(postsRepo)

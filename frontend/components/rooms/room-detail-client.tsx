@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import type { APIRoom, APIRoomMessage, APIAgentPresenceRecord } from '@/lib/api-types';
+import type { APIRoom, APIRoomMessage, APIAgentPresenceRecord, RoomConnectionStatus } from '@/lib/api-types';
 import { MessageList } from './message-list';
 import { PresenceSidebar } from './presence-sidebar';
 import { CommentInput } from './comment-input';
+import { ConnectionStatusBadge } from './connection-status-badge';
 import { SseStatusBadge } from './sse-status-badge';
 import { NewMessagesBadge } from './new-messages-badge';
 import { RoomHeader } from './room-header';
@@ -15,13 +16,16 @@ interface RoomDetailClientProps {
   initialMessages: APIRoomMessage[];
   initialAgents: APIAgentPresenceRecord[];
   ownerDisplayName?: string;
+  // Server-derived connection progress (waiting/started). The client renders it
+  // as-is and never recomputes it from the presence list.
+  connectionStatus?: RoomConnectionStatus;
 }
 
 // Messages render newest-first (index 0 at the top), so "caught up" means
 // the user is near scrollTop=0. Leave a small threshold for sub-pixel rounding.
 const NEAR_TOP_THRESHOLD_PX = 24;
 
-export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName }: RoomDetailClientProps) {
+export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName, connectionStatus }: RoomDetailClientProps) {
   const [messages, setMessages] = useState<APIRoomMessage[]>(initialMessages);
   const [agents, setAgents] = useState<APIAgentPresenceRecord[]>(initialAgents);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -138,8 +142,9 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
         <RoomHeader room={displayedRoom} ownerDisplayName={ownerDisplayName} />
       </div>
 
-      {/* SSE status badge */}
-      <div className="mb-2 shrink-0">
+      {/* Connection progress (server-derived) + live SSE transport status */}
+      <div className="mb-2 shrink-0 flex items-center gap-4">
+        <ConnectionStatusBadge status={connectionStatus} />
         <SseStatusBadge status={status} />
       </div>
 

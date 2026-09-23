@@ -3596,3 +3596,78 @@ NOTES
 
 All 95 tasks in spec.json now have passes=true except task 21.
 
+
+================================================================================
+2026-09-23 — TASK 22 (spec.json index 22): "Handle late joins, departures,
+review, and completion in groups" [category: functional]
+================================================================================
+
+APPROACH
+  This is a mid-level integration checkpoint whose dependencies were all built by
+  earlier tasks (member add/revoke + per-agent token isolation, group reply
+  addressing via reply_to_entry_id, idempotent handshake, cursor pagination,
+  owner-only room lifecycle). No production code was missing, so the work is a
+  real end-to-end verification of the COMPOSED group lifecycle against the live
+  local database — not just unit stubs. Read the actual handlers first
+  (rooms_members.go, rooms_messages.go, rooms_handshake.go, rooms_connect.go,
+  connect_prompts.go, rooms.go DeleteRoom/canManage) to confirm each behavior
+  exists before asserting it.
+
+DIFF (git status --porcelain / git diff --stat)
+  ?? backend/internal/api/router_rooms_groups_test.go   (NEW, 267 lines, test-only)
+  No production .go files changed — the diff is exactly one new integration-test
+  file plus this journal entry and the spec.json passes flip. All six behaviors
+  were already implemented; this task PROVES they work together.
+
+NEW TESTS (all ran against real router + real DB, all PASS, none SKIP)
+  DATABASE_URL="postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable"
+  go test ./internal/api/ -run TestGroupLifecycle -count=1 -v
+
+  [TEST] TestGroupLifecycle_LateJoinPromptRetrievesContextBeforeActing — step 1.
+     Planner posts the task then a later directive; a reviewer joining AFTER work
+     started fetches GET /v1/rooms/{slug}/connect?role=reviewer and the envelope
+     carries the initial task, and the prompt tells it to GET /r/{slug}/messages
+     and read "before you post". PASS (0.21s).
+  [TEST] TestGroupLifecycle_RevokeOneParticipantOthersContinue — step 2 (public
+     room variant; the existing TestRoomMembers_AddRevoke_IsolatesAgents covers a
+     closed room). Owner revokes agent A only: A's per-agent token → 401, agent B
+     keeps posting → 201. PASS (0.25s).
+  [TEST] TestGroupLifecycle_ReviewAddressesSpecificResult — step 3. Two executors
+     post separate results (ids id1,id2); the reviewer approves with
+     reply_to_entry_id=id2. The stored review references exactly id2 and NOT id1,
+     so approval is scoped to one result, not all room work. PASS (0.73s).
+  [TEST] TestGroupLifecycle_AgentDoneDoesNotEndRoomAndFinishIsOwnerOnly — step 4.
+     Agent A posts content "done" (an ordinary message): room still resolves 200
+     and agent B still posts. A participant agent's DELETE /v1/rooms/{slug} → 403;
+     only the owner's DELETE → 204, after which GET → 404. So a "done" message
+     never ends the room and finishing requires the explicit owner-authorized
+     action. NOTE: "finish" today maps to the owner-only soft delete; the distinct
+     labeled Finished/archived state (readable-at-URL, reopen, expiry vs delete)
+     is task 41's scope — this task only pins the negative guarantee + owner gate.
+     PASS (0.45s).
+  [TEST] TestGroupLifecycle_ReconnectResumesCursorWithoutDuplicateMembership —
+     step 5. Agent A joins, posts msg id1; B posts id2 while A is away; A
+     re-handshakes with the SAME identity → still exactly one membership row, role
+     "member" preserved. Resuming GET /r/{slug}/messages?after=id1 returns only
+     id2 (no repeated work). PASS (0.41s).
+  Step 6 ("simple two-agent, no group config required"): every test above starts a
+     room and connects agents with ZERO group configuration; the default
+     planner/executor flow is already exercised by the existing TestConnectEndpoint
+     integration tests. No group-rules setup is required before starting.
+
+FULL PACKAGE RUN (regression check)
+  [TEST] go test ./internal/api/ -count=1 -v against solvr_test on localhost:5435:
+     all 5 TestGroupLifecycle_* PASS. The 5 remaining failures are the KNOWN
+     pre-existing ones, unrelated to this change and present before it:
+       TestCommentsCount_ProblemsShowCountAfterComment
+       TestCommentsCount_IdeasShowCountAfterComment
+       TestCommentsCount_FeedShowsCommentCount
+       TestTypeSpecificListEndpoints
+       TestIPFSHealthEndpoint
+     (documented in memory/progress as comments_count / type-specific list /
+     IPFS-health pre-existing failures.) The new file added zero regressions.
+
+  File size: router_rooms_groups_test.go = 267 lines (< 800 limit). OK.
+
+RESULT: passes → true (index 22). All six steps verified by integration tests that
+actually executed and returned green; no environment blockers.

@@ -294,7 +294,7 @@
       "Reconnect an existing identity and verify it resumes its own cursor and role without duplicate membership or being counted as a new participant.",
       "Preserve the simple two-agent experience without requiring users to configure group rules before starting."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

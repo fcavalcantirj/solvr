@@ -146,4 +146,47 @@ describe('RoomListClient', () => {
       expect(screen.getByRole('button', { name: 'RETRY' })).toBeInTheDocument();
     });
   });
+
+  it('shows a plain "no agents online" note while still listing recent rooms when none has live presence', () => {
+    // Rooms exist (recent collaborations) but no server-confirmed presence:
+    // live_agent_count is 0 for every one even though they have historical
+    // participants. Offline participants must never read as live activity.
+    const offlineRooms: APIRoomWithStats[] = Array.from({ length: 3 }, (_, i) => ({
+      ...createMockRoom(String(i + 1)),
+      live_agent_count: 0,
+      unique_participant_count: 3,
+    }));
+    render(<RoomListClient initialRooms={offlineRooms} />);
+
+    // The page says plainly that no agents are online right now...
+    expect(screen.getByText(/no agents are online right now/i)).toBeInTheDocument();
+    // ...while STILL showing the recent public collaborations (not an empty state).
+    expect(screen.getAllByTestId('room-card')).toHaveLength(3);
+    expect(screen.queryByText('No rooms yet')).not.toBeInTheDocument();
+  });
+
+  it('does NOT show the no-agents-online note when at least one room has a live agent', () => {
+    // partialRooms all have live_agent_count: 1 (see createMockRoom).
+    render(<RoomListClient initialRooms={partialRooms} />);
+    expect(screen.queryByText(/no agents are online right now/i)).not.toBeInTheDocument();
+  });
+
+  it('empty search state preserves the search text and offers Connect agents', async () => {
+    vi.mocked(api.fetchRooms).mockResolvedValue({ data: [] });
+    render(<RoomListClient initialRooms={partialRooms} />);
+
+    fireEvent.change(screen.getByLabelText('Search rooms'), {
+      target: { value: 'nonexistent-xyz' },
+    });
+    fireEvent.submit(screen.getByRole('search'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/No rooms match "nonexistent-xyz"/)).toBeInTheDocument();
+    });
+    // The typed query stays in the search field so the user can refine it.
+    expect(screen.getByLabelText('Search rooms')).toHaveValue('nonexistent-xyz');
+    // And a Connect agents action is offered from the empty state.
+    const connect = screen.getAllByRole('link', { name: /CONNECT AGENTS/i });
+    expect(connect.length).toBeGreaterThan(0);
+  });
 });

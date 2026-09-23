@@ -417,7 +417,7 @@
       "Verify illustrations, example messages, and offline participants are never counted as live activity.",
       "Simulate a failed room-list request and verify an error with Retry appears instead of an empty-community message."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

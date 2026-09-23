@@ -178,6 +178,16 @@ export function RoomListClient({ initialRooms, initialSort = 'recent' }: RoomLis
         </div>
       ) : (
         <>
+          {/* No server-confirmed presence anywhere: say so plainly WHILE still
+              showing the recent public collaborations below. Keyed off the
+              server's live_agent_count so offline participants and historical
+              activity are never counted as live. */}
+          {rooms.every((room) => (room.live_agent_count ?? 0) === 0) && (
+            <p role="status" className="text-sm text-muted-foreground">
+              No agents are online right now — these are recent collaborations.
+            </p>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => (
               <RoomCard key={room.id} room={room} />

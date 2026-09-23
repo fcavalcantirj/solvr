@@ -5175,3 +5175,90 @@ ENVIRONMENT (verified working — this is NOT an env block):
 ACTION: passes LEFT AT false. No spec.json task field changed. No production code
   changed (git status --porcelain shows only this progress.txt append). Stopping
   the iteration for a human to make the owner_id-retirement design decision above.
+
+================================================================================
+2026-09-23 — DONE (task flipped: "Provide a useful empty state when there are no
+agents online or no matching rooms")
+--------------------------------------------------------------------------------
+POINTER / SKIP RATIONALE (why not the earlier passes:false tasks):
+  - "Verify N-agent collaboration end to end..." (first passes:false): ACCEPTANCE
+    task spanning behavior later tasks still build (N-agent, member admission,
+    multi-instance replay). Left open per the acceptance-task rule.
+  - "Make agent-created rooms manageable even when no human owns or claims the
+    agent": still BLOCKED, left passes=false. I re-verified the block myself:
+      [REAL] db/rooms.go Create() lines 120-130 still inserts the agent 'owner'
+        row atomically inside the room tx (only when CreatorAgentID != "").
+      [REAL] `ls backend/migrations | tail` shows the newest is 000086_add_room_
+        archive — there is NO migration >=000087 retiring rooms.owner_id; the
+        column is still scanned (db/rooms.go:104) and load-bearing.
+    CORRECTION to the previous entry's framing: the missing piece is NOT a missing
+    human design decision. The design already exists IN THE LEDGER as the later
+    data task "Use one room membership authority and eliminate duplicate ownership
+    and shared-token state" (extend room_members to hold a human user_id, backfill
+    from rooms.owner_id, then "retire rooms.owner_id and the shared rooms.token_hash
+    AFTER the documented compatibility window"). So owner_id retirement is an
+    INTENTIONALLY-LATE, post-compatibility-window step owned by that task (and the
+    final cutover task "Cut over the knowledge model with a verified recovery
+    path"). This task's step 2 ("owner_id has been retired after migration") is a
+    forward dependency on that unbuilt foundation — i.e. its checks span behavior
+    other tasks must build. Treated like an acceptance task: LEFT passes=false,
+    took the first task that is actually buildable now. (A human may wish to defer
+    this task in the ledger until after the membership-authority + cutover
+    foundation lands; I did not reorder it — the ledger is append-only.)
+
+TASK BUILT: "Provide a useful empty state when there are no agents online or no
+matching rooms" (functional). Frontend-only, no schema/API change needed.
+
+STATE OF EACH VERIFY STEP BEFORE MY CHANGE (read the actual code, not the plan):
+  step 1 (no room has current presence -> say so plainly while showing recent
+    collaborations): GAP. RoomListClient only rendered an empty state when
+    rooms.length===0; when rooms existed but none had live presence it showed the
+    cards with no note. THIS is the one gap I closed.
+  step 2 (nonexistent search -> empty state preserves search text + offers Connect):
+    [TEST] already satisfied — added a test proving it: the empty state renders
+    'No rooms match "nonexistent-xyz"', the search input still holds the typed
+    text, and a CONNECT AGENTS link is offered.
+  step 3 (newly created empty room detail: preset starter/join prompts + Add
+    another agent + status 'Waiting for agents'; generic collab must NOT force
+    planner/executor): [REAL] served by existing room-detail components —
+    ConnectAgentPanel uses a NEUTRAL role=collaborator (connect-agent-panel.tsx:40)
+    so generic rooms are not forced into planner/executor; ConnectionStatusBadge
+    renders "Waiting for agents" for status waiting_for_agents
+    (connection-status-badge.tsx:9); RoomStarterPrompts shows the plan-and-build
+    planner/executor prompts for the direct-create landing. Covered by
+    connect-agent-panel.test.tsx, connection-status-badge.test.tsx,
+    room-starter-prompts.test.tsx, room-detail-client.test.tsx (all green).
+  step 4 (illustrations/example messages/offline participants never counted as
+    live): [TEST] my new no-presence note keys off the server's live_agent_count
+    (offline participants live in unique_participant_count, which does NOT trigger
+    it); RoomCard only renders the green live pulse when live_agent_count>0
+    (room-card.tsx:55). Test uses a room with unique_participant_count:3 and
+    live_agent_count:0 and asserts the "no agents online" note DOES appear and the
+    cards still render.
+  step 5 (failed room-list request -> error + Retry, not empty-community message):
+    [TEST] already satisfied by the pre-existing 'shows an error state with Retry'
+    test; unchanged and still green.
+
+CHANGE (GREEN, minimum code):
+  frontend/components/rooms/room-list.tsx — inside the rooms-rendered branch, add
+    a plain role="status" note "No agents are online right now — these are recent
+    collaborations." shown only when rooms.every(r => (r.live_agent_count ?? 0)===0).
+    It is additive (sits above the grid) so the all-empty "No rooms yet" path and
+    the error path are untouched. File is 212 lines (< 800 limit).
+
+TDD:
+  RED: added 3 tests to room-list.test.tsx; ran
+    `npx vitest run components/rooms/room-list.test.tsx` -> 11 passed, 1 FAILED
+    (getByText(/no agents are online right now/i) not found) — the genuine gap.
+  GREEN: implemented the note; re-ran the same file -> 12 passed.
+  REGRESSION: `npx vitest run components/rooms/` -> 15 files, 107 tests, all PASS.
+  (The RoomCard console line in that run is an EXISTING room-card test feeding
+   invalid data on purpose; its 14 tests pass. No test deleted/skipped/weakened.)
+
+DIFF (git status --porcelain / git diff --stat) — matches the work above:
+  M frontend/components/rooms/room-list.tsx       (+10: the no-presence note)
+  M frontend/components/rooms/room-list.test.tsx  (+43: 3 new tests)
+  M spec.json                                     (this task passes -> true)
+
+No backend change, no migration, no env touched. DATABASE_URL not needed (this
+task is client rendering of API-provided fields; business logic stays server-side).

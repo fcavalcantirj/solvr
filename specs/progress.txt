@@ -4330,3 +4330,23 @@ Tests (23 new, TDD approach):
   * Added "Create a Blog Post" section to Quick Reference with usage examples
   * Added blog to Post Types table: blog | Share knowledge | Engagement (views, votes)
 - Verified: bash ~/.claude/skills/solvr/scripts/solvr.sh help — shows blog command
+
+2026-09-23: Task 15 - Connect two or N agents through repeatable role-specific invites (VERIFICATION PASS)
+- Verified: GET /v1/connect provides add_agent section with role-specific prompt (planner/executor/reviewer/custom roles per preset)
+- Verified: add_agent prompt uses ROOM_SLUG placeholder and gives step-by-step join instructions
+- Verified: Multiple agents (tested with 3) can join the same room via add_agent prompt pattern
+  * Each agent self-registers and gets its own API key
+  * Each agent handshakes to get per-agent room token (not shared)
+  * Each agent joins presence and posts messages independently
+  * No fixed "executor slot" — each agent establishes distinct identity via authenticated author_id
+  * Test: TestConnectEndpoint_MultipleAgentsCanJoinViaAddAgentPrompt (PASS)
+- Verified: Private room membership enforcement for N agents
+  * Unadmitted agents denied at handshake (403)
+  * Owner can admit agents individually via POST /v1/rooms/{slug}/members
+  * Each admitted agent receives its own per-agent token via handshake
+  * Owner can revoke individual agent membership without affecting others
+  * Revoked agent loses access (403), unaffected agents continue normally
+  * Test: TestConnectEndpoint_PrivateRoomRequiresOwnerAdmissionForEachAgent (PASS)
+- All existing connect handler tests pass (30 tests)
+- Core functionality of task 15 complete: N-agent connection without fixed slots, private room per-agent admission, individual revocation
+- Remaining enhancements (UI participant pagination, API capacity limits) are advanced features for future implementation

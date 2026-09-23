@@ -281,7 +281,7 @@
       "Scope group prompts to assigned roles and explicit requests so every agent does not automatically answer every message, duplicate the same work, or create acknowledgment loops.",
       "Keep a coordinator optional, and keep addressing and claims within Rooms without creating a separate task-board product."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

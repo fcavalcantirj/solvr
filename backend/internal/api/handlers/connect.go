@@ -85,14 +85,18 @@ type ConnectSelection struct {
 //
 // Instruction is the sentence shown beside the control — it names the agent
 // that must receive the prompt. NextStep is what happens after the paste, so a
-// visitor knows a second copy/paste is coming before they start.
+// visitor knows a second copy/paste is coming before they start. CopiedDetail is
+// the confirmation shown ONLY after a successful copy: it names the agent the
+// prompt is for and what comes back, so the feedback explains the next move
+// rather than merely relabelling the button.
 type ConnectPrompt struct {
-	Key         string `json:"key"`
-	Label       string `json:"label"`
-	CopiedLabel string `json:"copied_label"`
-	Instruction string `json:"instruction"`
-	NextStep    string `json:"next_step"`
-	Text        string `json:"text"`
+	Key          string `json:"key"`
+	Label        string `json:"label"`
+	CopiedLabel  string `json:"copied_label"`
+	CopiedDetail string `json:"copied_detail"`
+	Instruction  string `json:"instruction"`
+	NextStep     string `json:"next_step"`
+	Text         string `json:"text"`
 }
 
 // ConnectStep is one of the two initial copy/paste actions.

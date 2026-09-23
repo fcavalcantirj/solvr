@@ -34,39 +34,49 @@ const (
 	connectPlannerInstruction = "Paste this into your planner. It will give you the prompt for your executor."
 	connectStarterInstruction = "Paste this into your first agent. It will give you the prompt for its partner."
 	connectBuilderInstruction = "Paste this into your builder. It will give you the prompt for your reviewer."
+
+	// connectPlannerCopied and friends are the confirmation shown after a
+	// successful copy. Each names the agent to paste into and what it hands back,
+	// so the feedback explains the next move.
+	connectPlannerCopiedDetail = "Copied. Paste it into your planner now — it replies with the room link and a complete executor prompt for your second agent."
+	connectStarterCopiedDetail = "Copied. Paste it into your first agent now — it replies with the room link and a partner prompt for your second agent."
+	connectBuilderCopiedDetail = "Copied. Paste it into your builder now — it replies with the room link and a reviewer prompt for your second agent."
 )
 
 // buildConnectPrompt writes the prompt for one selection.
 func buildConnectPrompt(sel ConnectSelection) ConnectPrompt {
 	if sel.Preset == ConnectPresetCollaborate {
 		return ConnectPrompt{
-			Key:         "starter",
-			Label:       "Copy starter prompt",
-			CopiedLabel: "Copied",
-			Instruction: connectStarterInstruction,
-			NextStep:    "Your first agent replies with the room link and a complete partner prompt for your second agent.",
-			Text:        starterPromptText(sel),
+			Key:          "starter",
+			Label:        "Copy starter prompt",
+			CopiedLabel:  "Copied",
+			CopiedDetail: connectStarterCopiedDetail,
+			Instruction:  connectStarterInstruction,
+			NextStep:     "Your first agent replies with the room link and a complete partner prompt for your second agent.",
+			Text:         starterPromptText(sel),
 		}
 	}
 
 	if sel.Preset == ConnectPresetBuildAndReview {
 		return ConnectPrompt{
-			Key:         "builder",
-			Label:       "Copy builder prompt",
-			CopiedLabel: "Copied",
-			Instruction: connectBuilderInstruction,
-			NextStep:    "Your builder replies with the room link and a complete reviewer prompt for your second agent.",
-			Text:        builderPromptText(sel),
+			Key:          "builder",
+			Label:        "Copy builder prompt",
+			CopiedLabel:  "Copied",
+			CopiedDetail: connectBuilderCopiedDetail,
+			Instruction:  connectBuilderInstruction,
+			NextStep:     "Your builder replies with the room link and a complete reviewer prompt for your second agent.",
+			Text:         builderPromptText(sel),
 		}
 	}
 
 	return ConnectPrompt{
-		Key:         "planner",
-		Label:       "Copy planner prompt",
-		CopiedLabel: "Copied",
-		Instruction: connectPlannerInstruction,
-		NextStep:    "Your planner replies with the room link and a complete executor prompt for your second agent.",
-		Text:        plannerPromptText(sel),
+		Key:          "planner",
+		Label:        "Copy planner prompt",
+		CopiedLabel:  "Copied",
+		CopiedDetail: connectPlannerCopiedDetail,
+		Instruction:  connectPlannerInstruction,
+		NextStep:     "Your planner replies with the room link and a complete executor prompt for your second agent.",
+		Text:         plannerPromptText(sel),
 	}
 }
 

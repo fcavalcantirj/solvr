@@ -319,7 +319,7 @@
       "Verify successful copy feedback explains which agent should receive the prompt and what the user should expect next.",
       "Verify generic documentation placeholders cannot appear as completed room URLs such as /rooms/$ or /rooms/${room_slug}."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

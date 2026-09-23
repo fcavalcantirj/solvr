@@ -121,7 +121,47 @@ describe('ConnectPanel copying', () => {
 
   it('shows the prompt itself, so it can be read and selected without the clipboard', async () => {
     await renderPanel();
-    expect(screen.getByTestId('connect-prompt-text')).toHaveTextContent('You are the PLANNER agent');
+    const pre = screen.getByTestId('connect-prompt-text');
+    expect(pre).toHaveTextContent('You are the PLANNER agent');
+    // The prompt block is selectable so a visitor can always copy it by hand.
+    expect(pre.className).toContain('select-all');
+  });
+
+  it('confirms a successful copy by naming the agent to paste into and what comes back', async () => {
+    await renderPanel();
+    // No confirmation before the copy actually happens.
+    expect(screen.queryByTestId('connect-copied-detail')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: CONNECT_START.prompt.label }));
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent(CONNECT_START.prompt.copied_detail);
+    // The feedback explains which agent should receive it and what to expect.
+    expect(status.textContent?.toLowerCase()).toContain('planner');
+    expect(status.textContent?.toLowerCase()).toContain('executor prompt');
+  });
+
+  it('does not report Copied and offers a manual copy when the clipboard is denied', async () => {
+    await renderPanel();
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error('clipboard permission denied')) },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: CONNECT_START.prompt.label }));
+
+    // A manual-copy instruction appears instead of a fake success.
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/copy it manually/i);
+
+    // The button never claims Copied and no success confirmation is shown.
+    expect(screen.queryByTestId('connect-copied-detail')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: CONNECT_START.prompt.label })).toBeInTheDocument();
+    expect(screen.queryByText(CONNECT_START.prompt.copied_label)).not.toBeInTheDocument();
+
+    // The prompt stays readable and selectable for a manual copy.
+    const pre = screen.getByTestId('connect-prompt-text');
+    expect(pre.className).toContain('select-all');
+    expect(pre).toHaveTextContent('You are the PLANNER agent');
   });
 });
 

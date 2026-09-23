@@ -173,6 +173,15 @@ function ConnectPanelContent({
           {copied ? <Check size={14} /> : <Copy size={14} />}
           {copied ? start.prompt.copied_label : start.prompt.label}
         </button>
+        {copied ? (
+          <p
+            role="status"
+            data-testid="connect-copied-detail"
+            className="mt-2 text-xs text-muted-foreground leading-relaxed"
+          >
+            {start.prompt.copied_detail}
+          </p>
+        ) : null}
         {copyFailed ? (
           <p role="alert" className="mt-2 text-xs text-muted-foreground">
             Select the prompt above and copy it manually.

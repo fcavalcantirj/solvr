@@ -3671,3 +3671,137 @@ FULL PACKAGE RUN (regression check)
 
 RESULT: passes → true (index 22). All six steps verified by integration tests that
 actually executed and returned green; no environment blockers.
+
+================================================================================
+2026-09-23 — TASK 24 (spec.json index 24): "Make prompt copying reliable,
+recoverable, and immediately understandable" [category: functional] — passes=true
+================================================================================
+
+WHY INDEX 23 WAS SKIPPED (acceptance task spanning unbuilt behavior).
+  The first passes=false task is index 23, "Verify N-agent collaboration end to
+  end across clients and SERVICE INSTANCES." Its step 4 requires "Distribute
+  participants across two API instances ... verify replay, idempotency, and
+  unaffected peers," and step 3 requires "no ... SDK assumes a pair or a maximum
+  of eight." Both span behavior LATER tasks still build:
+    - Cross-instance live delivery is NOT implemented. [REAL] verified in code:
+      internal/hub/hub.go:100 keeps subscribers in an in-process map
+      (`subscribers := make(map[string]chan<- RoomEvent)`); grep for
+      NOTIFY/LISTEN/pg_notify across internal/ returns ZERO. SSE broadcast never
+      leaves the instance that received the write. The dedicated later task
+      "Preserve room delivery and statistics across restarts and more than one
+      API instance" (still passes=false) is the one that builds the cross-instance
+      notification + cursor replay.
+    - SDK collection support is a later task ("Keep SDKs, CLI, MCP, skills, and
+      webhooks consistent ... Represent participants ... as collections").
+  Per the ledger rule "ACCEPTANCE TASKS ARE NOT CHECKLISTS ... leave it open and
+  take the first task that is actually buildable now" (and the owner's 2026-09-20
+  precedent that end-to-end acceptance checks are FINAL gates, not early work),
+  index 23 stays passes=false and this iteration took index 24, which is fully
+  buildable now: the connect panel and prompt generation already exist (tasks
+  16-20), and task 24 hardens their copy behavior.
+
+DIFF (git status --porcelain / git diff --stat)
+  M backend/internal/api/handlers/connect.go            (+CopiedDetail field on ConnectPrompt)
+  M backend/internal/api/handlers/connect_prompts.go    (+3 copied-detail consts, set in all 3 prompt branches)
+  M frontend/lib/connect-types.ts                       (+copied_detail on APIConnectPrompt)
+  M frontend/components/connect/connect-fixture.ts       (+copied_detail in 3 prompt fixtures)
+  M frontend/components/connect/connect-panel.tsx        (+role="status" copy-success feedback)
+  M frontend/components/connect/connect-panel.test.tsx   (+2 tests, 1 assertion strengthened)
+  ?? backend/internal/api/handlers/connect_prompt_safety_test.go (NEW, 146 lines)
+
+WHAT SHIPPED (backend first, then frontend — API smart, client dumb).
+  Steps 1 and 2 (Copied only after clipboard success; deny clipboard -> selectable
+  prompt + manual instruction) were ALREADY implemented in connect-panel.tsx
+  (copy() only setCopied(true) after `await navigator.clipboard.writeText`
+  resolves; the <pre> carries select-all; a role="alert" manual instruction shows
+  on failure). This task PINS them with tests.
+  Step 4 was the one genuine production gap: a successful copy only flipped the
+  button label to "Copied" and never named the recipient agent. Added an
+  API-owned field so the client stays dumb:
+    - ConnectPrompt gained CopiedDetail string `json:"copied_detail"`.
+    - buildConnectPrompt sets it per preset: planner names "planner"+"executor
+      prompt", collaborate names "first agent"+"partner prompt", build-and-review
+      names "builder"+"reviewer prompt". Each begins "Copied. Paste it into your
+      <agent> now — it replies with the room link and a ... prompt for your second
+      agent." No "$", no backtick (it is pasted-into-a-conversation text too).
+    - connect-panel.tsx renders it in a role="status" region (data-testid
+      connect-copied-detail) ONLY when copied === true. The always-visible
+      instruction/next_step are untouched, so no existing getByText collides.
+  Steps 3 and 5 are prompt-generation safety, verified by a new backend test file.
+
+NEW TESTS — ALL RAN, ALL GREEN, NONE SKIPPED.
+  BACKEND (pure, no DB) — connect_prompt_safety_test.go:
+  DATABASE_URL unset; go test ./internal/api/handlers/ -run 'TestConnect_CopiedDetail|TestConnect_UserTaskWithShell|TestConnect_PromptsNeverEmit' -count=1 -v
+    [TEST] TestConnect_CopiedDetailNamesRecipientAgentAndNextStep (3 subtests) PASS
+      — each preset's copied_detail names its recipient agent + the second prompt,
+      contains "paste", and carries no $ or backtick.
+    [TEST] TestConnect_UserTaskWithShellMetacharactersStaysInTaskSection (3 subtests)
+      PASS — a hostile task (`"; rm -rf / #`, backticks, $(...), ${room_slug},
+      a ```bash fence, newlines) survives verbatim AND is proven confined to the
+      TASK section: the prompt built with the hostile task equals the prompt built
+      with a marker task, marker->hostile substituted once. It never lands in a
+      JSON "content" body (those use fixed placeholder text).
+    [TEST] TestConnect_PromptsNeverEmitPlaceholderRoomURLs (7 subtests) PASS —
+      /v1/connect prompts (planner/starter/builder) carry the unmistakable
+      /rooms/ROOM_SLUG token and NONE of /rooms/$, /rooms/${, ${room_slug},
+      /rooms/{room_slug}, /rooms/{slug}; the room-specific prompts (executor,
+      role reviewer/executor, executor-with-no-first-message) carry the REAL slug
+      and never fall back to ROOM_SLUG or any of those placeholders.
+  FRONTEND — connect-panel.test.tsx (npx vitest run components/connect/connect-panel.test.tsx -> 22/22 PASS):
+    [TEST] "confirms a successful copy by naming the agent to paste into and what
+      comes back" — no confirmation before click; after click a role="status"
+      shows copied_detail and its text (lowercased) contains "planner" and
+      "executor prompt".
+    [TEST] "does not report Copied and offers a manual copy when the clipboard is
+      denied" — with writeText mocked to reject: a role="alert" says "copy it
+      manually", the connect-copied-detail status is absent, the button still
+      shows the label (never "Copied"), and the prompt <pre> keeps select-all and
+      its text. (Step 1 "Copied only after success" is pinned by this negative
+      plus the existing success test.)
+    Strengthened the existing "shows the prompt itself" test to assert select-all.
+
+REGRESSION + REAL VERIFICATION
+  [REAL] cd backend && go build ./... exits 0. go vet ./internal/api/handlers/ clean.
+    gofmt -l on connect.go, connect_prompts.go, connect_prompt_safety_test.go: clean.
+  [TEST] go test ./internal/api/handlers/ -run TestConnect (no DB): ok, 38 Connect
+    tests pass.
+  [TEST] Full handlers package against isolated DB
+    postgres://solvr:solvr_dev@localhost:5435/solvr_test (/tmp/t24_handlers.log):
+    the ONLY --- FAIL lines are the 4 pre-existing GitHub OAuth integration tests
+    (TestGitHubOAuthRedirect_Integration, TestGitHubCallback_MissingCode/GitHubError/
+    InvalidCode_Integration — they reach github.com with no test credentials,
+    documented pre-existing in the task 18/19/20 entries). ZERO Connect failures;
+    38 Connect subtests PASS. The service_checks/IPFS log noise is from
+    error-path tests that still pass.
+  [TEST] Connect integration + product direction, isolated DB:
+    go test ./internal/api/ -run 'TestConnectEndpoint|TestRoomsConnect|TestProductDirection'
+    -count=1 -> ok (the added JSON field is additive; nothing regressed).
+  [REAL] Live wire check. Built ./cmd/api, ran it on :8094 against solvr_test
+    (ALLOWED_ORIGINS + 32-char JWT_SECRET set; backend/.env NOT touched), then:
+      GET /v1/connect                    -> prompt.key=planner,
+        copied_detail="Copied. Paste it into your planner now — it replies with
+        the room link and a complete executor prompt for your second agent."
+      GET /v1/connect?preset=collaborate      -> starter, "...first agent...partner prompt..."
+      GET /v1/connect?preset=build-and-review -> builder, "...builder...reviewer prompt..."
+    Server killed, port 8094 clear, temp binary removed. /v1/connect is read-only;
+    no rows written to solvr_test.
+  [TEST] cd frontend && npm test (npx vitest run) — FULL SUITE 143 files / 1426
+    tests, ALL PASS (baseline 1424 per the 2026-09-23 task 21 entry; +2 new).
+  [REAL] npx tsc --noEmit: ZERO errors.
+  [REAL] bash scripts/check-file-size.sh: 37 violations, NONE from this task — my
+    largest touched file is connect.go at 474 lines; the new test file is 146. The
+    37th (over the 36 baseline) is backend/internal/api/router_connect_test.go at
+    957 lines, committed by an earlier task (unmodified here, not in git status).
+
+NOTES
+  - No SPEC.md / openapi change: no endpoint SHAPE changed, only one additive
+    response field on the existing /v1/connect prompt object.
+  - The frontend stays a dumb terminal: the copy-success sentence is API text
+    (start.prompt.copied_detail); the panel only chooses when to show it. The
+    dumb-terminal source-scan test still passes.
+  - LOCAL ONLY: no production calls, no deploy, no env-file change. Isolated DB
+    solvr_test on localhost:5435.
+
+UAT: NOTHING OWNER-ONLY IS OUTSTANDING — no production migration, no deploy, no
+    broadcast. Every automated check ran locally and green, and the copied_detail
+    field was confirmed on the live /v1/connect wire for all three presets.

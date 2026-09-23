@@ -36,11 +36,14 @@ export interface APIConnectSelection {
 
 // The one thing the visitor copies. `instruction` names the agent that must
 // receive it; `next_step` says what comes back, so a visitor knows a second
-// copy/paste is coming before they start.
+// copy/paste is coming before they start. `copied_detail` is the confirmation
+// shown only after a successful copy: it names the agent to paste into and what
+// comes back next.
 export interface APIConnectPrompt {
   key: string;
   label: string;
   copied_label: string;
+  copied_detail: string;
   instruction: string;
   next_step: string;
   text: string;

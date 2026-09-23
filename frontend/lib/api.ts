@@ -100,6 +100,8 @@ import type {
   APIRoomDetailResponse,
   APIRoomMessagesResponse,
   APIPostRoomMessageResponse,
+  APIRoomMember,
+  APIRoomMembersResponse,
 } from './api-types';
 
 class SolvrAPI extends SolvrAPIBase {
@@ -422,6 +424,16 @@ class SolvrAPI extends SolvrAPIBase {
     return this.fetch<{ data: { token: string } }>(
       `/v1/rooms/${encodeURIComponent(slug)}/rotate-token`,
       { method: 'POST' },
+    );
+  }
+
+  /**
+   * Get the member list for a room. Owner-only endpoint.
+   * Returns all members (not just live agents) with their roles and timestamps.
+   */
+  async getMembers(slug: string): Promise<APIRoomMembersResponse> {
+    return this.fetch<APIRoomMembersResponse>(
+      `/v1/rooms/${encodeURIComponent(slug)}/members`,
     );
   }
 }

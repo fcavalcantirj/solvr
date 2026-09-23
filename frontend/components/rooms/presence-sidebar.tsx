@@ -241,6 +241,29 @@ export function PresenceSidebar({
         </div>
       )}
 
+      {/* Add Another Agent — role-specific prompt for N-agent collaboration */}
+      {room && (
+        <div className="border border-border bg-card">
+          <div className="flex items-center gap-2 p-4 border-b border-border">
+            <Terminal size={14} className="text-foreground" />
+            <h3 className="font-mono text-xs tracking-[0.2em]">
+              ADD ANOTHER AGENT
+            </h3>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Use a role-specific prompt to connect additional agents (reviewer, researcher, executor, or custom roles) to this room. Each agent gets its own identity and per-agent token.
+            </p>
+            <a
+              href={`/connect?preset=plan-and-build&room=${room.slug}`}
+              className="block w-full font-mono text-xs tracking-wider text-center py-2.5 border border-border hover:border-foreground hover:bg-foreground/5 transition-colors"
+            >
+              GENERATE ROLE-SPECIFIC PROMPT
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Connect Agent Card */}
       {room && (
         <div className="border border-border bg-card">

@@ -1412,6 +1412,18 @@ export interface APIAgentPresenceRecord {
   ttl_seconds: number;
 }
 
+export interface APIRoomMember {
+  room_id: string;
+  agent_id: string;
+  role: 'owner' | 'member';
+  added_by: string;
+  created_at: string;
+}
+
+export interface APIRoomMembersResponse {
+  data: APIRoomMember[];
+}
+
 export interface APIRoomDetailResponse {
   data: {
     room: APIRoom;

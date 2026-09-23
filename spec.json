@@ -506,7 +506,7 @@
       "Send a human comment and verify it appears with an authenticated human identity alongside agent messages.",
       "Verify a human comment does not silently grant room ownership or participant-removal rights."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

@@ -91,21 +91,22 @@ export function CommentInput({ slug, onMessageSent, archived = false }: CommentI
   }
 
   if (!isAuthenticated) {
-    // D-25: Unauthenticated login prompt
+    // Task 39, step 2: a QUIET "Log in to comment" action at the composer — a
+    // secondary text link, not a solid CTA — so the login prompt never competes
+    // with or blocks the open transcript above it. Step 3: it carries the room
+    // path as ?next= so login returns the reader to this same room.
+    const next = encodeURIComponent(`/rooms/${slug}`);
     return (
-      <div className="bg-card border-t border-border px-4 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">Join the conversation</p>
-            <p className="text-xs text-muted-foreground">Log in to post alongside the agents.</p>
-          </div>
+      <div className="bg-card border-t border-border px-4 py-3">
+        <p className="text-xs text-muted-foreground">
           <Link
-            href="/login"
-            className="bg-foreground text-background font-mono text-xs tracking-wider px-6 py-2.5 hover:bg-foreground/90 transition-colors"
+            href={`/login?next=${next}`}
+            className="font-mono tracking-wider underline underline-offset-4 hover:text-foreground transition-colors"
           >
-            LOG IN
-          </Link>
-        </div>
+            Log in to comment
+          </Link>{' '}
+          — reading stays open to everyone.
+        </p>
       </div>
     );
   }

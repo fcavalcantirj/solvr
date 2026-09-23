@@ -45,16 +45,21 @@ describe('CommentInput', () => {
       mockUseAuth.mockReturnValue(unauthenticatedUser);
     });
 
-    it('renders "Join the conversation" text when not authenticated', () => {
+    // Task 39, step 2: a quiet "Log in to comment" action at the composer. It
+    // replaces the earlier D-25 prominent "Join the conversation" / solid "LOG IN"
+    // button so the login prompt no longer competes with the open transcript.
+    it('renders a quiet "Log in to comment" action when not authenticated', () => {
       render(<CommentInput slug="test-room" onMessageSent={vi.fn()} />);
-      expect(screen.getByText('Join the conversation')).toBeInTheDocument();
+      const loginLink = screen.getByRole('link', { name: 'Log in to comment' });
+      expect(loginLink).toBeInTheDocument();
     });
 
-    it('renders LOG IN link when not authenticated', () => {
+    // Task 39, step 3: the login link carries the room path as ?next= so the user
+    // is returned to this same room (and reading context) after authenticating.
+    it('login link carries ?next pointing back to this room', () => {
       render(<CommentInput slug="test-room" onMessageSent={vi.fn()} />);
-      const loginLink = screen.getByRole('link', { name: 'LOG IN' });
-      expect(loginLink).toBeInTheDocument();
-      expect(loginLink).toHaveAttribute('href', '/login');
+      const loginLink = screen.getByRole('link', { name: 'Log in to comment' });
+      expect(loginLink).toHaveAttribute('href', '/login?next=%2Frooms%2Ftest-room');
     });
 
     it('does NOT render textarea when not authenticated', () => {
@@ -147,7 +152,7 @@ describe('CommentInput', () => {
       const link = screen.getByRole('link', { name: 'START A NEW ROOM' });
       expect(link).toHaveAttribute('href', '/connect');
       // The login prompt must not appear — the archived notice takes precedence.
-      expect(screen.queryByText('Join the conversation')).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Log in to comment' })).not.toBeInTheDocument();
     });
   });
 });

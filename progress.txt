@@ -5716,3 +5716,134 @@ scope, not automatable here):
   clean /rooms/<slug> URL; Connect scrolls to the connection panel. Confirm the
   context area shows the initial task and, once a directive is pinned, the latest
   pinned directive, each expandable in place and linking into the transcript.
+
+================================================================================
+2026-09-23 — DONE (task flipped: "Let humans observe freely and participate
+through an optional account")
+--------------------------------------------------------------------------------
+POINTER / SKIP RATIONALE (the two earlier passes:false tasks, re-verified against
+the ACTUAL code THIS session — grep, not the prior journal):
+  - "Verify N-agent collaboration end to end across clients and service
+    instances" (first passes:false): ACCEPTANCE task. Its checks span a canonical
+    room timeline API + "distribute participants across TWO API instances" + an
+    8-agent/large-capacity fixture. [REAL] grep 'entries' backend/internal/api/
+    router_rooms.go => NO /entries route (only a comment); the canonical room API
+    is the later passes:false task "Offer one canonical room API with thin
+    adapters", and multi-instance delivery is the later "Preserve room delivery
+    ... more than one instance" task. Spans unbuilt behavior -> left passes=false
+    per the ACCEPTANCE-TASKS-ARE-NOT-CHECKLISTS rule.
+  - "Make agent-created rooms manageable even when no human owns or claims the
+    agent": BLOCKED. Step 2 requires "rooms.owner_id has been retired after
+    migration". [REAL] grep -rilE 'drop.*owner_id|owner_id.*drop'
+    backend/migrations => NONE; newest migration is 000087_add_message_pin_
+    supersede. owner_id retirement is the deliverable of the later data task
+    "Use one room membership authority ...". Forward dependency; left passes=false.
+  Took the next buildable task: "Let humans observe freely and participate through
+  an optional account" (category functional, all steps buildable now).
+
+STATE OF EACH STEP (read the ACTUAL code first, then acted):
+  step 1 (logged-out visitor reads a public room; navigation, sharing, history,
+    message links, connection prompts remain available): [REAL] already satisfied
+    — app/rooms/[slug]/page.tsx SSRs the public room with no auth gate; RoomHeader
+    Share + ConnectAgentPanel + MessageList deep links all render logged out.
+    Unchanged.
+  step 2 (a QUIET "Log in to comment" action at the composer, not blocking the
+    transcript): GAP -> BUILT. The composer's unauthenticated state was the D-25
+    prompt: a prominent bar reading "Join the conversation" / "Log in to post
+    alongside the agents." with a SOLID foreground "LOG IN" button (a primary-CTA
+    style). Replaced with a QUIET secondary text link "Log in to comment" (muted,
+    underlined) + " — reading stays open to everyone." It still sits at the
+    composer below the open transcript; the transcript was never blocked.
+  step 3 (log in from that action -> the same room and reading context restored):
+    GAP -> BUILT. Two parts:
+    - The composer login link now carries ?next=<encoded room path>
+      (/login?next=%2Frooms%2F<slug>). The OAuth buttons (loginWithGitHub/Google
+      in hooks/use-auth.tsx) ALREADY read ?next= and store auth_return_url, and
+      app/auth/callback/page.tsx ALREADY returns there — so OAuth login now lands
+      back on the room. [REAL] verified those two consumers by grep.
+    - The /login EMAIL form ignored ?next= (handleSubmit only read
+      auth_return_url, which the composer link never sets). Fixed: handleSubmit now
+      falls back to safeReturnPath(?next) so email login also returns to the room.
+  step 4 (human comment appears with an authenticated human identity alongside
+    agent messages): [REAL] already satisfied on the smart API —
+    handlers/rooms_messages.go PostHumanMessage sets AuthorType="human" and
+    AuthorID=claims.UserID from the JWT (never the body). [TEST]
+    TestPostHumanMessage_Success asserts author_type=="human" (ran GREEN this
+    session). No change.
+  step 5 (a human comment does NOT silently grant room ownership or
+    participant-removal rights): [REAL] already satisfied — PostHumanMessage
+    creates ONLY a message; it holds no members/owner repo and performs no
+    membership or ownership write (read the handler start-to-finish, lines
+    246-342). Structural guarantee; no change.
+
+CHANGES (FRONTEND ONLY — the smart API already owned steps 4/5):
+  frontend/lib/auth/return-url.ts: NEW. safeReturnPath(next) returns next only
+    when it is a safe same-origin relative path (single leading '/', rejects
+    '//host', '/\\host', absolute URLs, null) — an open-redirect guard for the
+    ?next= return target.
+  frontend/components/rooms/comment-input.tsx: unauthenticated composer now renders
+    the quiet "Log in to comment" link to /login?next=<encoded room path>
+    (was the D-25 "Join the conversation" bar + solid LOG IN button). 168 lines.
+  frontend/app/login/page.tsx: handleSubmit (email path) resolves returnUrl as
+    auth_return_url || safeReturnPath(?next) || '/'. 276 lines.
+
+TDD:
+  RED (helper): lib/auth/return-url.test.ts (7 cases: relative path kept incl.
+    query string; null/undefined/empty, absolute, //host, /\\host, no-leading-slash
+    rejected) -> module missing -> FAIL.
+  RED (composer): comment-input.test.tsx unauthenticated block now asserts a link
+    named "Log in to comment" and href "/login?next=%2Frooms%2Ftest-room" -> FAIL
+    (old markup rendered "Join the conversation" + LOG IN -> /login).
+  GREEN after the helper + composer + login-page edits.
+
+EXISTING TESTS REPLACED (per the no-weakening protocol — this task changes the
+  composer's unauthenticated copy, so its two D-25 assertions no longer describe
+  live behavior; each is replaced by a test pinning the SAME "unauthenticated ->
+  offer login at the composer" behavior with the new copy/contract):
+  (a) comment-input.test.tsx 'renders "Join the conversation" text when not
+      authenticated' asserted getByText('Join the conversation').
+      REPLACED BY 'renders a quiet "Log in to comment" action when not
+      authenticated' (getByRole link name 'Log in to comment') — PASSING.
+  (b) comment-input.test.tsx 'renders LOG IN link when not authenticated' asserted
+      getByRole('link',{name:'LOG IN'}) with href '/login'.
+      REPLACED BY 'login link carries ?next pointing back to this room'
+      (href '/login?next=%2Frooms%2Ftest-room') — PASSING.
+  Also updated the archived-room test's negative assertion from
+  queryByText('Join the conversation') to queryByRole link 'Log in to comment'
+  (same intent: the login prompt must not appear on a finished room). No test was
+  deleted, skipped, or had its assertions loosened; the four unauthenticated
+  negative assertions (no textarea, no button) are unchanged and still pass.
+
+VERIFICATION (all RAN this session; frontend tests need no DB):
+  [TEST] frontend npx vitest run lib/auth/return-url.test.ts
+    components/rooms/comment-input.test.tsx = 21 PASS (7 + 14), 0 SKIP.
+  [TEST] frontend FULL suite npx vitest run = 154 files, 1506 tests PASS, 0 fail
+    (was 153/1499 last session; +1 file / +7 = the new return-url tests).
+  [TEST] backend go test ./internal/api/handlers -run TestPostHumanMessage -v =
+    8 PASS, 0 SKIP (mock handler, no DB) — pins step 4 (author_type=human) and,
+    with the read-through above, step 5.
+  [REAL] frontend npx tsc --noEmit exit 0.
+  [REAL] file sizes: comment-input.tsx 168, return-url.ts 16, login/page.tsx 276
+    — all < 800.
+
+PRE-EXISTING FAILURES (NOT this task): unchanged from prior journal — the shared
+  solvr_test DB carries dirty fixtures and the GitHub-OAuth handler lacks local
+  creds; those internal/db + oauth tests fail identically with my changes stashed.
+  My diff is FRONTEND-ONLY plus a read-only backend test run; it imports none of
+  those paths. Left untouched for a human to clean the shared DB.
+
+DIFF (git status --porcelain / git diff --stat) — matches the work above:
+  M frontend/app/login/page.tsx                      (email handleSubmit honors ?next)
+  M frontend/components/rooms/comment-input.tsx      (quiet "Log in to comment" + ?next)
+  M frontend/components/rooms/comment-input.test.tsx (2 replaced + 1 negative updated)
+  ?? frontend/lib/auth/return-url.ts / return-url.test.ts
+  (spec.json: this task passes -> true)
+
+UAT (owner last mile — every automatable check already ran GREEN locally; the only
+remaining confirmation is a real-browser flow, which is not unit-testable here):
+  Open a public room logged out (e.g. the tictactoe room). Confirm the transcript
+  reads freely and the composer shows the quiet "Log in to comment" link (not a
+  loud CTA). Click it; on /login sign in with GitHub, Google, AND the email form;
+  confirm each returns you to that same room. Post a comment; confirm it appears
+  with your human identity beside the agent messages and that you did NOT gain
+  owner/remove-member controls on the room.

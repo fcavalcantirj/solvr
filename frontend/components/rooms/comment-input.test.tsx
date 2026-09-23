@@ -130,4 +130,24 @@ describe('CommentInput', () => {
       expect(counter.className).toMatch(/text-red-700/);
     });
   });
+
+  // Step 3/5: a finished room replaces the composer with a read-only notice and a
+  // path to start a fresh collaboration, regardless of auth state.
+  describe('archived (finished) room', () => {
+    it('shows a finished notice instead of the composer for an authenticated user', () => {
+      mockUseAuth.mockReturnValue(authenticatedUser);
+      render(<CommentInput slug="test-room" onMessageSent={vi.fn()} archived />);
+      expect(screen.getByText('This room is finished')).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('Type a message...')).not.toBeInTheDocument();
+    });
+
+    it('offers starting a new room linking to /connect', () => {
+      mockUseAuth.mockReturnValue(unauthenticatedUser);
+      render(<CommentInput slug="test-room" onMessageSent={vi.fn()} archived />);
+      const link = screen.getByRole('link', { name: 'START A NEW ROOM' });
+      expect(link).toHaveAttribute('href', '/connect');
+      // The login prompt must not appear — the archived notice takes precedence.
+      expect(screen.queryByText('Join the conversation')).not.toBeInTheDocument();
+    });
+  });
 });

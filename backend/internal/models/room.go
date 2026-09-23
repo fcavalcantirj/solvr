@@ -25,7 +25,16 @@ type Room struct {
 	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 	DeletedAt    *time.Time `json:"-"`
 	CapacityMax  *int       `json:"capacity_max,omitempty"` // Step 6: optional capacity limit
+	// ArchivedAt marks a room Finished: the transcript stays readable but new
+	// messages and joins are refused until an owner reopens it (archived_at cleared).
+	// Distinct from ExpiresAt (retention) and DeletedAt (removed from indexes).
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+	// ResultMessageID optionally points at the room message that captured the outcome.
+	ResultMessageID *int64 `json:"result_message_id,omitempty"`
 }
+
+// IsArchived reports whether the room has been marked Finished.
+func (r *Room) IsArchived() bool { return r.ArchivedAt != nil }
 
 // RoomWithStats extends Room with computed fields for list responses.
 type RoomWithStats struct {

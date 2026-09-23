@@ -278,7 +278,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
 
           {/* Comment input — pinned at bottom, always visible */}
           <div className="border-t border-border shrink-0">
-            <CommentInput slug={room.slug} onMessageSent={handleMessageSent} />
+            <CommentInput slug={room.slug} onMessageSent={handleMessageSent} archived={displayedRoom.archived_at != null} />
           </div>
         </div>
 

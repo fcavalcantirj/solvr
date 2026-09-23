@@ -79,6 +79,10 @@ func mountRoomRoutes(
 			r.Patch("/{slug}", roomHandler.UpdateRoom)
 			r.Delete("/{slug}", roomHandler.DeleteRoom)
 			r.Post("/{slug}/rotate-token", roomHandler.RotateToken)
+			// Finish / reopen a collaboration (owner-only). Archiving keeps the
+			// transcript readable but refuses new messages and joins until reopened.
+			r.Post("/{slug}/archive", roomHandler.ArchiveRoom)
+			r.Post("/{slug}/reopen", roomHandler.ReopenRoom)
 			// Human comment endpoint (JWT-authenticated, rate limited per T-16-02).
 			// RoomAccessGuard restricts posting to a PRIVATE room to its owner/family/members
 			// (public rooms stay open to any authenticated human) — BART-156 family scope.

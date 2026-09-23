@@ -19,6 +19,10 @@ import (
 // maxMessageContentLen is the maximum allowed content length for a message (64KB).
 const maxMessageContentLen = 65536
 
+// archivedRoomMessage explains why a write to a finished room is refused. Shared by
+// the agent and human message gates so the recovery instruction is consistent.
+const archivedRoomMessage = "this room is finished; an owner must reopen it before new messages can be posted"
+
 // RoomMessagesHandler handles HTTP requests for room message operations.
 // The presenceRepo field supports D-28 (implicit heartbeat on message posting).
 type RoomMessagesHandler struct {
@@ -96,6 +100,10 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 	room := apimiddleware.RoomFromContext(r.Context())
 	if room == nil {
 		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "room context missing")
+		return
+	}
+	if room.IsArchived() {
+		roomWriteError(w, http.StatusConflict, "ROOM_ARCHIVED", archivedRoomMessage)
 		return
 	}
 
@@ -239,6 +247,10 @@ func (h *RoomMessagesHandler) PostHumanMessage(w http.ResponseWriter, r *http.Re
 		}
 		slog.Error("failed to get room for human message", "error", err, "slug", slug)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get room")
+		return
+	}
+	if room.IsArchived() {
+		roomWriteError(w, http.StatusConflict, "ROOM_ARCHIVED", archivedRoomMessage)
 		return
 	}
 

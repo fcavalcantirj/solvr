@@ -4540,3 +4540,150 @@ UAT (owner-only last mile — visual/layout confirmation JSDOM cannot measure; e
   pill (not auto-scroll) when reading history, (d) /rooms/<slug>?message=<id> for a message
   outside the initial window fetches it, highlights it, and scrolls it into view. The
   message-ordering, dedup, deep-link fetch, and indicator LOGIC are already unit-verified.
+
+================================================================================
+2026-09-23  TASK: "Separate finished rooms from live presence and retain useful
+            public transcripts" (category functional). passes false -> true.
+================================================================================
+
+TASK SELECTION (re-walked first-false top-to-bottom; verified EACH blocker IN CODE
+this session, not from the journal)
+  - "Verify N-agent collaboration end to end" (acceptance): step 4 needs TWO API
+    instances + cross-instance delivery. [REAL] internal/hub/manager.go holds
+    `hubs map[RoomID]*RoomHub` under a sync.RWMutex — process-local SSE fan-out;
+    grep redis|nats|pubsub|LISTEN/NOTIFY in internal/hub = EMPTY. The cross-instance
+    task ("Preserve room delivery ... more than one API instance", spec idx 77) is
+    passes=false. Acceptance spanning unbuilt behavior. SKIP.
+  - "Make agent-created rooms manageable": step 2 wants rooms.owner_id RETIRED
+    (owned by "one room membership authority", idx 69, false) + step 3 ARCHIVE.
+    [REAL] db/rooms.go still INSERT/SELECTs owner_id (lines 73/149/...). Forward-dep. SKIP.
+  - "Let existing public rooms recruit another agent": step 5 opens an ARCHIVED room.
+    Archive unbuilt. SKIP.
+  - "Retain a fast direct-create option": step 4 room-create idempotency. [REAL] only
+    messages has client_entry_id; grep idempotency in db/rooms.go create = EMPTY
+    (owned by "Standardize errors, pagination, concurrency", idx 72, false). SKIP.
+  - "Make Rooms a focused public discovery page": step 5 archived-discoverable. SKIP.
+  - "Provide a useful empty state": depends on the idx-31 Rooms redesign. SKIP.
+  - "Make a room page a readable shared conversation": step 4 "latest pinned directive"
+    -> message pin (owned by idx 38 review-loop). [REAL] grep pin in db/room_messages.go
+    /models/message.go = EMPTY. SKIP.
+  - "Provide bounded waiting...": step 5 web UI must distinguish "room archived" state
+    -> archive unbuilt. SKIP.
+  - "Support the planner/executor review loop": step 3 BUILDS pin, step 5 frontend
+    "author's claim not platform-certified" is mutually entangled with the room-page
+    conversation redesign (idx 33, false); pin has no independent home until that page
+    exists. Not cleanly first. SKIP.
+  - "Let humans observe freely": step 1 requires "sharing ... remain available".
+    [REAL] grep share/Share in room-header.tsx/room-detail-client.tsx = no Share
+    control (owned by idx 40). Forward-dep. SKIP.
+  - "Make room sharing preserve the public viewing experience": step 5 "public-to-
+    private changes invalidate ... stream access" -> stream revocation (owned by idx 73,
+    false) + cache invalidation. SKIP.
+  - "Separate finished rooms ..." (THIS TASK): self-contained. Owner marks Finished on
+    the CURRENT owner model (owner_id still present, canManage unchanged); no dependency
+    on pin/idempotency/cross-instance/owner_id-retirement. It is the archive-introducing
+    task that idx 27/29/31/33/37 depend on. First buildable. TOOK IT.
+
+ENVIRONMENT NOTE (local test DB drift, fixed for the run — no prod touched)
+  [REAL] docker solvr-postgres up on :5435 (healthy). schema_migrations was at
+  version 84: migration 000085 (client_entry_id) was NOT applied and MessageRepository
+  .Create references that column. Applied 000085 up + my new 000086 to the LOCAL DB and
+  set schema_migrations.version=86. Also: several pre-existing db/handler tests fail on
+  this local DB from UNRELATED drift — agents scan "cannot scan NULL into *string",
+  users.referral_code NOT-NULL, missing service_checks table, IPFS node unreachable.
+  None touch rooms; my scanner change cannot affect AgentRepository/briefing/pulse.
+  Separately, TestRoomRepository_Update/SoftDelete/RotateToken leak rows every run
+  (their cleanup prefix "testroomup/sd/rt" never matches their auto-slug
+  "update-test-room"/... ); cleared the stale fixture slugs from the LOCAL DB so the
+  room suite runs clean. Did NOT modify any test.
+
+WHAT I BUILT (TDD: RED first each layer, then GREEN)
+  MIGRATION backend/migrations/000086_add_room_archive.{up,down}.sql
+    ALTER rooms ADD archived_at TIMESTAMPTZ, result_message_id BIGINT REFERENCES
+    messages(id) ON DELETE SET NULL; partial index idx_rooms_archived. [REAL] applied +
+    verified on local DB (columns/index/FK present).
+  MODEL models/room.go: Room.ArchivedAt *time.Time (json archived_at), ResultMessageID
+    *int64; IsArchived() helper.
+  REPO db/rooms.go: expanded the shared 15-col list -> 17 cols in Create RETURNING,
+    GetBySlug, GetByID, GetByTokenHash, ListByOwner, Update RETURNING and the three scan
+    paths (Create inline, scanRoom, scanRoomRow). New Archive(roomID, resultMsgID*)
+    (archived_at = COALESCE(archived_at, NOW()) so re-archive keeps the original ts) and
+    Reopen(roomID) (archived_at = NULL, result retained). ErrRoomNotFound on unknown/
+    deleted room via scanRoom's pgx.ErrNoRows path.
+  GATES: agent PostMessage (rooms_messages.go) + human PostHumanMessage +
+    presence JoinRoom (rooms_presence.go) now return 409 ROOM_ARCHIVED (shared
+    archivedRoomMessage const) when room.IsArchived(), placed before any repo call.
+  HANDLERS rooms_archive.go (NEW, 141 lines): ArchiveRoom / ReopenRoom on *RoomHandler,
+    mirroring UpdateRoom's auth (canManage = owner human/claimed-agent/agent-owner-member
+    or admin). Optional {result_message_id} validated via msgRepo.GetByID(room.ID, id)
+    -> 400 if it is not a message in THIS room. InvalidateOverviewCache() so a finished
+    room drops out of the live overview. Routes POST /v1/rooms/{slug}/archive and
+    /reopen wired into the authenticated owner group in router_rooms.go.
+  FRONTEND (client is dumb — pure render of the API flag): api-types APIRoom gains
+    archived_at?/result_message_id?; room-header shows "· FINISHED" vs "· LIVE"
+    (data-testid=room-status); comment-input gains archived? prop -> replaces the
+    composer/login with a "This room is finished" notice + START A NEW ROOM link to
+    /connect; room-detail-client passes archived={displayedRoom.archived_at != null}.
+
+STEP-BY-STEP EVIDENCE
+  1 (owner marks Finished; API records archived state + optional result ref)
+    [TEST] db TestRoomRepository_Archive_SetsArchivedState / _WithoutResultMessage;
+    handler TestArchiveRoom_ArchivesAndReopens (200, archived_at set, result_message_id
+    echoed) and _NonOwnerForbidden (403) and _ResultMessageMustBelongToRoom (400).
+  2 (archived public room readable at original URL, labeled Finished not Live)
+    [TEST] db Archive_SetsArchivedState asserts GetBySlug still returns the room with
+    archived_at; frontend RoomHeader "labels an archived room FINISHED" / "labels a live
+    room LIVE".
+  3 (new messages + joins refused with clear archived response until reopened)
+    [TEST] handler TestPostMessage_ArchivedRoomRefused, TestPostHumanMessage_
+    ArchivedRoomRefused, TestJoinRoom_ArchivedRoomRefused all assert 409 + code
+    ROOM_ARCHIVED; TestArchiveRoom_ArchivesAndReopens asserts reopen clears archived_at;
+    db Reopen_ClearsArchivedState. Frontend comment-input "shows a finished notice
+    instead of the composer".
+  4 (expiry + deletion remain distinct from Finished)
+    [TEST] db TestRoomRepository_Archive_DistinctFromDeleteAndExpiry: Archive sets
+    neither deleted_at nor expires_at; archived room stays readable; a soft-deleted
+    archived room 404s.
+  5 (start another collaboration from a finished room -> new identity, no copied creds/
+    members/transcript) [TEST] db TestRoomRepository_StartNewFromFinished_Independent:
+    a room created after archiving has a distinct id/slug, a distinct token, and
+    message_count 0; frontend offers START A NEW ROOM -> /connect (reusable instructions).
+
+VERIFICATION (all RAN against local Postgres :5435 database "solvr")
+  [TEST] backend archive/gate suite: 7 db + 3 gate + 4 handler = 14/14 PASS, 0 SKIP.
+  [TEST] backend Room|Message|Presence db + handler subsets: ok (no regression from the
+    +2-column scanner change or the gates).
+  [TEST] internal/api (router) Room|Archive: ok.
+  [TEST] frontend full suite (npx vitest run): 147 files, 1459 tests PASS, 0 skip
+    (+4 new: comment-input archived x2, room-header status x2).
+  [REAL] npm run typecheck (tsc --noEmit) exit 0.
+  [REAL] go build ./... OK; go vet ./internal/db ./internal/api/handlers ./internal/api
+    ./internal/models clean.
+  [REAL] file sizes: db/rooms.go 533, rooms_archive.go 141, rooms_messages.go 453,
+    rooms_presence.go 285, models/room.go 70, router_rooms.go 129 — all < 800;
+    scripts/check-file-size.sh flags none of my files.
+
+PRE-EXISTING, NOT MINE, LEFT AS-IS: the unrelated db/handler failures above (agents
+  NULL scan, users.referral_code, service_checks, IPFS) fail from local DB drift, not
+  from this change; the memory already records rate-limiter + GitHub-OAuth pre-existing
+  failures. NO existing test deleted/skipped/weakened — I only added files and appended
+  a describe block to comment-input.test.tsx.
+
+DIFF (git status --porcelain / git diff --stat) — matches the work above
+  M backend/internal/api/handlers/rooms_messages.go (+12 archived const + gate)
+  M backend/internal/api/handlers/rooms_presence.go  (+4 join gate)
+  M backend/internal/api/router_rooms.go             (+4 archive/reopen routes)
+  M backend/internal/db/rooms.go                      (+58/-11 cols+scanners+Archive/Reopen)
+  M backend/internal/models/room.go                   (+9 fields + IsArchived)
+  M frontend/lib/api-types.ts                          (+5 archived_at/result_message_id)
+  M frontend/components/rooms/comment-input.{tsx,test.tsx}, room-detail-client.tsx, room-header.tsx
+  ?? rooms_archive.go, rooms_archive_gate_test.go, rooms_archive_handler_test.go,
+     rooms_archive_test.go, 000086_add_room_archive.{up,down}.sql, room-header.test.tsx
+
+UAT (owner-only last mile; every automatable check already ran GREEN locally):
+  1) Apply migration 000086 (archived_at + result_message_id + idx_rooms_archived) to
+     the PRODUCTION database — local application + all tests are green; prod is manual
+     per the deploy process. 2) Optional visual pass in a real browser: open a room,
+     POST /v1/rooms/{slug}/archive as owner, confirm the header reads "· FINISHED", the
+     composer shows the finished notice with START A NEW ROOM, and the transcript still
+     renders; then POST /reopen and confirm it returns to "· LIVE" and accepts messages.

@@ -58,6 +58,10 @@ func (h *RoomPresenceHandler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "room context missing")
 		return
 	}
+	if room.IsArchived() {
+		roomWriteError(w, http.StatusConflict, "ROOM_ARCHIVED", "this room is finished; an owner must reopen it before new agents can join")
+		return
+	}
 
 	var req joinRoomRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

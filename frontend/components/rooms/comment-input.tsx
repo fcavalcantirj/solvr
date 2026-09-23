@@ -12,9 +12,12 @@ import type { APIRoomMessage } from '@/lib/api-types';
 interface CommentInputProps {
   slug: string;
   onMessageSent: (msg: APIRoomMessage) => void;
+  /** When true the room is Finished: the composer is replaced by a read-only
+   * notice offering to start a fresh collaboration (the API refuses new posts). */
+  archived?: boolean;
 }
 
-export function CommentInput({ slug, onMessageSent }: CommentInputProps) {
+export function CommentInput({ slug, onMessageSent, archived = false }: CommentInputProps) {
   const { user, isAuthenticated } = useAuth();
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -63,6 +66,29 @@ export function CommentInput({ slug, onMessageSent }: CommentInputProps) {
       void handleSubmit();
     }
   }, [handleSubmit]);
+
+  if (archived) {
+    // The room is Finished: no new messages are accepted. Offer a clean restart
+    // that reuses the collaboration's instructions in a brand-new room.
+    return (
+      <div className="bg-card border-t border-border px-4 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">This room is finished</p>
+            <p className="text-xs text-muted-foreground">
+              New messages are closed. Start a new room to continue the work.
+            </p>
+          </div>
+          <Link
+            href="/connect"
+            className="bg-foreground text-background font-mono text-xs tracking-wider px-6 py-2.5 hover:bg-foreground/90 transition-colors whitespace-nowrap"
+          >
+            START A NEW ROOM
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     // D-25: Unauthenticated login prompt

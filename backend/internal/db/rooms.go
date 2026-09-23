@@ -73,7 +73,8 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 		INSERT INTO rooms (slug, display_name, description, category, tags, is_private, owner_id, token_hash, message_count, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9)
 		RETURNING id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at
+			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
+			archived_at, result_message_id
 	`
 
 	// A room and its owner-membership row are created atomically: if the membership
@@ -107,6 +108,8 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 			&room.LastActiveAt,
 			&room.ExpiresAt,
 			&room.DeletedAt,
+			&room.ArchivedAt,
+			&room.ResultMessageID,
 		)
 		if scanErr != nil {
 			return scanErr
@@ -147,7 +150,8 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 func (r *RoomRepository) GetBySlug(ctx context.Context, slug string) (*models.Room, error) {
 	query := `
 		SELECT id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at
+			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
+			archived_at, result_message_id
 		FROM rooms
 		WHERE slug = $1 AND deleted_at IS NULL
 	`
@@ -159,7 +163,8 @@ func (r *RoomRepository) GetBySlug(ctx context.Context, slug string) (*models.Ro
 func (r *RoomRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Room, error) {
 	query := `
 		SELECT id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at
+			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
+			archived_at, result_message_id
 		FROM rooms
 		WHERE id = $1 AND deleted_at IS NULL
 	`
@@ -172,7 +177,8 @@ func (r *RoomRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Roo
 func (r *RoomRepository) GetByTokenHash(ctx context.Context, hash string) (*models.Room, error) {
 	query := `
 		SELECT id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at
+			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
+			archived_at, result_message_id
 		FROM rooms
 		WHERE token_hash = $1 AND deleted_at IS NULL
 	`
@@ -252,7 +258,8 @@ func (r *RoomRepository) List(ctx context.Context, limit, offset int) ([]models.
 func (r *RoomRepository) ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]models.Room, error) {
 	query := `
 		SELECT id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at
+			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
+			archived_at, result_message_id
 		FROM rooms
 		WHERE owner_id = $1 AND deleted_at IS NULL
 		ORDER BY created_at DESC
@@ -325,7 +332,8 @@ func (r *RoomRepository) Update(ctx context.Context, roomID uuid.UUID, params mo
 		UPDATE rooms SET %s
 		WHERE id = $%d AND deleted_at IS NULL
 		RETURNING id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at
+			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
+			archived_at, result_message_id
 	`, strings.Join(setClauses, ", "), argIdx)
 	args = append(args, roomID)
 
@@ -362,6 +370,40 @@ func (r *RoomRepository) SoftDelete(ctx context.Context, roomID uuid.UUID) error
 		return ErrRoomNotFound
 	}
 	return nil
+}
+
+// Archive marks a room Finished: it records archived_at (preserving the original
+// timestamp on a re-archive via COALESCE) and, optionally, the message that
+// captured the result. The transcript stays readable; the message/join gates
+// enforced in the handlers refuse new activity until Reopen clears the state.
+// Archiving never touches deleted_at or expires_at — it is distinct from both.
+func (r *RoomRepository) Archive(ctx context.Context, roomID uuid.UUID, resultMessageID *int64) (*models.Room, error) {
+	query := `
+		UPDATE rooms
+		SET archived_at = COALESCE(archived_at, NOW()),
+			result_message_id = $2,
+			updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
+			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
+			archived_at, result_message_id
+	`
+	return r.scanRoomFromRow(ctx, "Archive", query, roomID, resultMessageID)
+}
+
+// Reopen clears the archived state so the room becomes Live again. The recorded
+// result_message_id is retained as history.
+func (r *RoomRepository) Reopen(ctx context.Context, roomID uuid.UUID) (*models.Room, error) {
+	query := `
+		UPDATE rooms
+		SET archived_at = NULL,
+			updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
+			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
+			archived_at, result_message_id
+	`
+	return r.scanRoomFromRow(ctx, "Reopen", query, roomID)
 }
 
 // RotateToken generates a new bearer token for a room, replacing the old one.
@@ -449,6 +491,8 @@ func (r *RoomRepository) scanRoom(ctx context.Context, op, query string, args ..
 		&room.LastActiveAt,
 		&room.ExpiresAt,
 		&room.DeletedAt,
+		&room.ArchivedAt,
+		&room.ResultMessageID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -483,5 +527,7 @@ func (r *RoomRepository) scanRoomRow(rows pgx.Rows, room *models.Room) error {
 		&room.LastActiveAt,
 		&room.ExpiresAt,
 		&room.DeletedAt,
+		&room.ArchivedAt,
+		&room.ResultMessageID,
 	)
 }

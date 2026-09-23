@@ -530,7 +530,7 @@
       "Verify expiry and deletion remain distinct from Finished: expired rooms enforce their existing access/retention rules and deleted rooms do not reappear in public indexes.",
       "Start another collaboration from a finished room's instructions and verify it receives a new room identity without copying credentials, members, or the full transcript automatically."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

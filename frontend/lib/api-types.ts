@@ -1380,6 +1380,11 @@ export interface APIRoom {
   last_active_at: string;
   expires_at?: string;
   capacity_max?: number; // Step 6: optional capacity limit
+  /** Set when the room has been marked Finished; the transcript stays readable but
+   * new messages and joins are refused until an owner reopens it. */
+  archived_at?: string;
+  /** Optional pointer to the room message that captured the finished result. */
+  result_message_id?: number;
 }
 
 export interface APIRoomWithStats extends APIRoom {

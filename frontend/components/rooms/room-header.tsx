@@ -11,9 +11,15 @@ interface RoomHeaderProps {
 export function RoomHeader({ room, ownerDisplayName }: RoomHeaderProps) {
   return (
     <div className="mb-4 lg:mb-8">
-      {/* Eyebrow */}
-      <p className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-2 lg:mb-4">
-        ROOM
+      {/* Eyebrow + live/finished status. An archived room is labeled Finished
+          rather than Live; the transcript stays readable at this URL. */}
+      <p className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-2 lg:mb-4 flex items-center gap-2">
+        <span>ROOM</span>
+        {room.archived_at ? (
+          <span data-testid="room-status" className="text-muted-foreground">· FINISHED</span>
+        ) : (
+          <span data-testid="room-status" className="text-green-700 dark:text-green-400">· LIVE</span>
+        )}
       </p>
       {/* Room name */}
       <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-normal tracking-tight mb-2 lg:mb-4 break-words">

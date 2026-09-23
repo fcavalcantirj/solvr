@@ -5262,3 +5262,138 @@ DIFF (git status --porcelain / git diff --stat) — matches the work above:
 
 No backend change, no migration, no env touched. DATABASE_URL not needed (this
 task is client rendering of API-provided fields; business logic stays server-side).
+
+================================================================================
+2026-09-23 — DONE (task flipped: "Provide bounded waiting and clear recovery
+instructions when another agent stops responding")
+--------------------------------------------------------------------------------
+POINTER / SKIP RATIONALE (why not the earlier passes:false tasks):
+  - "Verify N-agent collaboration end to end across clients and service
+    instances" (first passes:false): ACCEPTANCE task spanning behavior later
+    tasks still build (N-agent, member admission/revocation, multi-instance
+    replay). Left open per the acceptance-task rule.
+  - "Make agent-created rooms manageable even when no human owns or claims the
+    agent": still BLOCKED (step 2 "rooms.owner_id has been retired after
+    migration" is a forward dependency on the later data task "Use one room
+    membership authority ..." + the final cutover task; there is no migration
+    >=000087 retiring owner_id — [REAL] newest migration is 000086_add_room_
+    archive). Left passes=false. Not re-litigated; the ledger is append-only.
+  - "Make a room page a readable shared conversation with visible participants
+    and connection controls" (passes:false, comes before this task): its step 4
+    requires "the initial task and latest PINNED DIRECTIVE in a compact context
+    area". [REAL] There is NO pinning feature in the backend — grep of
+    backend/internal for pin/directive shows "directive" only as message CONTENT
+    and as a homepage-activity event label (homepage_activity.go:38), and there
+    is no pin API/column. Pinning is the deliverable of the LATER task "Support
+    the planner/executor review loop ..." ("Pin a directive or result ... retrieve
+    ... through the API"). So the room-page task's checks span behavior another
+    (later) task must build. Treated like an acceptance task: LEFT passes=false,
+    took the first task that is actually buildable now.
+
+TASK BUILT: "Provide bounded waiting and clear recovery instructions when another
+agent stops responding" (functional). Two deliverables: (a) the copied agent
+prompts now teach bounded waiting + recovery; (b) the room web UI distinguishes
+the connection/participant states step 5 lists.
+
+STATE OF EACH STEP BEFORE MY CHANGE (read the actual code, not the plan):
+  step 1 (run prompts, leave one offline): owner UAT — needs two real agents.
+  step 2 (connected agent waits with bounded backoff, no repeated readiness):
+    GAP — backend/internal/api/handlers/connect_prompts.go generated NO waiting
+    guidance in any of the 5 prompt builders (planner/starter/builder/executor/
+    role-specific).
+  step 3 (default 5-min wait window, adjustable, then "Waiting for participant"
+    + room link + resume): GAP — absent from all prompts.
+  step 4 (resume after last cursor without repeating work): partially served by
+    the existing /r/<slug>/messages cursor read (task "dependable message
+    delivery" is passing); the PROMPT did not tell the agent to resume from the
+    last message it saw — now it does. Live agent run = owner UAT.
+  step 5 (web UI distinguishes participant offline, browser reconnecting, room
+    archived, authentication failure, API failure):
+      - browser reconnecting: [TEST] already distinct (SseStatusBadge
+        "RECONNECTING...").
+      - room archived: [REAL] already distinct (RoomHeader "FINISHED",
+        CommentInput disabled) — room-header.test.tsx unchanged/green.
+      - authentication failure: [REAL] already distinct (PrivateRoomView
+        needs-login/forbidden) — private-room-view.test.tsx unchanged/green.
+      - API failure: GAP — SseStatusBadge returned null for 'disconnected'
+        (retries exhausted), invisible + indistinguishable from healthy. FIXED.
+      - participant offline: GAP — a present agent that stopped heartbeating was
+        just silently removed from the presence list. FIXED.
+
+CHANGES (GREEN, minimum code):
+  BACKEND (the smart API owns the prompt contract)
+    handlers/connect_prompts.go: new waitingRecoverySection(roomURL, messagesURL)
+      helper appended into ALL five prompt builders (planner, starter, builder,
+      executor, role-specific). It says: do NOT post repeated readiness messages;
+      poll with bounded backoff; wait about 5 minutes (adjustable); then report
+      "Waiting for participant" with the room link + resume step; resume by
+      reading the room from the last message seen (never redo posted work); and
+      that Solvr carries messages between running agents and does NOT keep a
+      stopped agent running. No shell/template-substitution characters (prompt
+      rule). File 500 lines (< 800).
+  FRONTEND (dumb terminal — renders the states, computes none of the domain logic)
+    components/rooms/sse-status-badge.tsx: 'disconnected' now renders a distinct
+      red "LIVE UPDATES OFFLINE — RELOAD TO RECONNECT" (API failure), separate
+      from the amber transient "RECONNECTING..."; 'connecting' still renders
+      nothing. File 43 lines.
+    components/rooms/room-detail-client.tsx: track offlineNames from SSE presence
+      leaves (a rejoin clears the name) and render a role="status"
+      data-testid=participant-offline note "<names> went offline — Solvr is
+      holding the room; they can resume anytime.", placed by the connection
+      badges and kept distinct from the transport badge. File 345 lines.
+
+TDD:
+  RED backend: connect_prompts_waiting_test.go asserts all 5 prompt builders
+    contain the bounded-waiting phrases + a room link. Ran
+    `go test ./internal/api/handlers -run TestConnectPrompts_IncludeBoundedWaitingRecovery`
+    -> FAIL (phrases missing). GREEN after the helper -> ok.
+  RED frontend (SSE): sse-status-badge.test.tsx `distinguishes a permanent API
+    failure from reconnecting` FAILED (component returned null). GREEN after the
+    disconnected branch -> 4/4 pass.
+  RED frontend (offline): room-detail-client.test.tsx `shows a participant went
+    offline, then clears it when they resume` FAILED (no testid). GREEN after the
+    offlineNames wiring -> 7/7 pass.
+
+VERIFICATION (all RAN this session; frontend needs no DB, backend ran against the
+LOCAL isolated test DB postgres://solvr:solvr_dev@localhost:5435/solvr_test
+[docker solvr-postgres, schema_migrations version 86]):
+  [TEST] backend go test ./internal/api/handlers -run
+    TestConnectPrompts_IncludeBoundedWaitingRecovery = ok (0 SKIP).
+  [TEST] backend go test ./internal/api/handlers -run 'Connect|Prompt|connect' = ok.
+  [REAL] backend go build ./... OK; go vet ./internal/api/handlers clean.
+  [TEST] backend go test ./internal/api/handlers (full package, DATABASE_URL set)
+    = 4 failures, ALL pre-existing GitHub OAuth integration tests
+    (TestGitHubOAuthRedirect_Integration, TestGitHubCallback_MissingCode/
+    GitHubError/InvalidCode_Integration — they expect a 302 OAuth redirect and
+    need GitHub creds not configured locally; noted in MEMORY as pre-existing).
+    grep "^--- FAIL" | grep -v oauth/github => NONE. My change touches only
+    connect_prompts.go, which those tests never import.
+  [TEST] frontend npx vitest run components/rooms/ = 16 files, 112 tests PASS.
+  [TEST] frontend FULL suite npx vitest run = 151 files, 1485 tests PASS, 0 fail.
+  [REAL] frontend npm run typecheck (tsc --noEmit) exit 0.
+  [REAL] file sizes: connect_prompts.go 500, sse-status-badge.tsx 43,
+    room-detail-client.tsx 345 — all < 800.
+
+NO existing test deleted/skipped/weakened. The prior SseStatusBadge behavior
+  (LIVE / RECONNECTING / null-on-connecting) is preserved and now additionally
+  asserted by the new sse-status-badge.test.tsx; the 6 pre-existing
+  room-detail-client tests still pass unchanged.
+
+DIFF (git status --porcelain / git diff --stat) — matches the work above:
+  M backend/internal/api/handlers/connect_prompts.go   (waitingRecoverySection + 5 wirings)
+  M frontend/components/rooms/room-detail-client.tsx    (offlineNames + notice)
+  M frontend/components/rooms/room-detail-client.test.tsx (+participant-offline test)
+  M frontend/components/rooms/sse-status-badge.tsx       (disconnected/API-failure state)
+  ?? backend/internal/api/handlers/connect_prompts_waiting_test.go
+  ?? frontend/components/rooms/sse-status-badge.test.tsx
+  (spec.json: this task passes -> true)
+
+UAT (owner last mile — inherently needs two real agents; every automatable check
+already ran GREEN locally):
+  Run the planner + executor prompts in two agent environments and leave the
+  executor offline. Confirm the planner waits with bounded backoff (no repeated
+  "ready?" spam), and after ~5 min reports "Waiting for participant" with the
+  room link. Start the executor and confirm it resumes from its last cursor
+  without redoing posted work. In the browser, drop the network to confirm the
+  room shows RECONNECTING then "LIVE UPDATES OFFLINE"; stop an agent's heartbeat
+  to confirm the "<name> went offline" note appears and clears on rejoin.

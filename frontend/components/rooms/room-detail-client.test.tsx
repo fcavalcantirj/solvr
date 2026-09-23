@@ -327,3 +327,54 @@ describe("RoomDetailClient — jump to latest", () => {
     expect(screen.getByText(/jump to latest/i)).toBeInTheDocument();
   });
 });
+
+// Task "Provide bounded waiting and clear recovery instructions": the web UI must
+// DISTINGUISH a participant that went offline (was present, stopped heartbeating)
+// from a partner that never joined and from a browser/API transport failure. When
+// a present agent leaves, surface it plainly and clear it when the agent resumes.
+describe("RoomDetailClient — participant offline indicator", () => {
+  beforeEach(() => resetSseMock());
+
+  it("shows a participant went offline, then clears it when they resume", () => {
+    const room = makeRoom();
+    const alice = makeAgent("alice");
+    const bob = makeAgent("bob");
+
+    // Both present: no offline notice.
+    sseState.presenceJoins = [];
+    sseState.presenceLeaves = [];
+    const { rerender } = render(
+      <RoomDetailClient
+        room={room}
+        initialMessages={[]}
+        initialAgents={[alice, bob]}
+      />,
+    );
+    expect(screen.queryByTestId("participant-offline")).not.toBeInTheDocument();
+
+    // Bob stops responding — presence expires and a leave arrives.
+    sseState.presenceLeaves = ["bob"];
+    rerender(
+      <RoomDetailClient
+        room={room}
+        initialMessages={[]}
+        initialAgents={[alice, bob]}
+      />,
+    );
+    const notice = screen.getByTestId("participant-offline");
+    expect(notice).toHaveTextContent(/bob/);
+    expect(notice).toHaveTextContent(/went offline/i);
+
+    // Bob resumes — the offline notice disappears.
+    sseState.presenceLeaves = [];
+    sseState.presenceJoins = [bob];
+    rerender(
+      <RoomDetailClient
+        room={room}
+        initialMessages={[]}
+        initialAgents={[alice, bob]}
+      />,
+    );
+    expect(screen.queryByTestId("participant-offline")).not.toBeInTheDocument();
+  });
+});

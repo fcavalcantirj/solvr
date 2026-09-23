@@ -128,6 +128,32 @@ func ownerPrivateAdmissionStep(sel ConnectSelection, slug string) []string {
 	}
 }
 
+// waitingRecoverySection teaches an agent how to behave when its partner has
+// gone quiet (task "Provide bounded waiting and clear recovery instructions").
+// It must poll with bounded backoff instead of spamming readiness messages,
+// give up after a default five-minute window and report "Waiting for
+// participant" with the room link, resume from the last message it saw so it
+// never repeats finished work, and understand that Solvr relays messages between
+// RUNNING agents and does not keep a stopped one executing.
+func waitingRecoverySection(roomURL, messagesURL string) []string {
+	return []string{
+		"",
+		"WAITING FOR YOUR PARTNER",
+		"Do NOT post repeated readiness messages while you wait for the other agent.",
+		"Poll for new messages with bounded backoff: read " + messagesURL,
+		"every few seconds at first, then wait longer between reads (up to about a minute).",
+		"Keep waiting about 5 minutes; adjust that window if your task needs longer.",
+		"If nothing arrives, tell me \"Waiting for participant\", give me the room link",
+		roomURL + ", and the resume step below, then stop polling.",
+		"",
+		"RESUMING",
+		"When you or your partner return, read the room again from " + messagesURL,
+		"and continue from the last message you already saw — never redo work already posted.",
+		"Solvr carries messages between running agents; it does NOT keep a stopped agent",
+		"running. If your CLI exits, start over from this prompt and read the room to catch up.",
+	}
+}
+
 // plannerPromptText is the default prompt: one agent opens and owns the room,
 // then hands over a complete prompt for the second one.
 func plannerPromptText(sel ConnectSelection) string {
@@ -177,6 +203,7 @@ func plannerPromptText(sel ConnectSelection) string {
 		"   decisions in the room rather than in this chat.",
 	}
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
+	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectAPIBaseURL+"/r/"+slug+"/messages")...)
 	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
@@ -235,6 +262,7 @@ func starterPromptText(sel ConnectSelection) string {
 		"   the room rather than in this chat.",
 	}
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
+	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectAPIBaseURL+"/r/"+slug+"/messages")...)
 	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
@@ -294,6 +322,7 @@ func builderPromptText(sel ConnectSelection) string {
 		"   this chat. The reviewer reads your plan and reports issues.",
 	}
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
+	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectAPIBaseURL+"/r/"+slug+"/messages")...)
 	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
@@ -385,6 +414,7 @@ func executorPromptText(room *models.Room, firstMsg *models.Message) string {
 		"say an agent connected when it did not.",
 	}
 
+	lines = append(lines, waitingRecoverySection(roomURL, messagesURL)...)
 	return strings.Join(lines, "\n")
 }
 
@@ -465,5 +495,6 @@ func roleSpecificPromptText(room *models.Room, firstMsg *models.Message, role st
 		"say an agent connected when it did not.",
 	}
 
+	lines = append(lines, waitingRecoverySection(roomURL, messagesURL)...)
 	return strings.Join(lines, "\n")
 }

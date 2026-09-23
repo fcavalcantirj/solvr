@@ -47,6 +47,10 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
   // of duplicates.
   const [messages, setMessages] = useState<APIRoomMessage[]>(() => mergeMessages(initialMessages));
   const [agents, setAgents] = useState<APIAgentPresenceRecord[]>(initialAgents);
+  // Names of participants that were present and stopped heartbeating (presence
+  // expired). Kept distinct from "never joined" and from a browser/API transport
+  // failure so the reader can tell a stopped partner from a lost connection.
+  const [offlineNames, setOfflineNames] = useState<string[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [highlightId, setHighlightId] = useState<number | undefined>(undefined);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -211,6 +215,20 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
       }
       return next;
     });
+    // Track who went offline: a leave adds the name, a (re)join clears it. This
+    // is the "participant offline" signal, separate from the transport badge.
+    setOfflineNames(prev => {
+      let next = prev;
+      if (presenceLeaves.length > 0) {
+        const additions = presenceLeaves.filter(n => !next.includes(n));
+        if (additions.length > 0) next = [...next, ...additions];
+      }
+      if (presenceJoins.length > 0) {
+        const rejoined = new Set(presenceJoins.map(a => a.agent_name));
+        next = next.filter(n => !rejoined.has(n));
+      }
+      return next;
+    });
     clearPresenceEvents();
   }, [presenceJoins, presenceLeaves, clearPresenceEvents]);
 
@@ -262,6 +280,19 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
         <ConnectionStatusBadge status={connectionStatus} />
         <SseStatusBadge status={status} />
       </div>
+
+      {/* Participant offline — a partner that was present has stopped responding.
+          Kept distinct from the transport badge above (which reports the reader's
+          own browser/API connection) and from "waiting for another agent". */}
+      {offlineNames.length > 0 && (
+        <div
+          data-testid="participant-offline"
+          role="status"
+          className="mb-2 shrink-0 font-mono text-[10px] tracking-wider text-amber-700 dark:text-amber-400"
+        >
+          {offlineNames.join(", ")} went offline — Solvr is holding the room; they can resume anytime.
+        </div>
+      )}
 
       {/* Mobile-only presence strip (hidden on lg+) */}
       <div className="lg:hidden shrink-0">

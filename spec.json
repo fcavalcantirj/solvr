@@ -482,7 +482,7 @@
       "Verify the web UI distinguishes participant offline, browser reconnecting, room archived, authentication failure, and API failure.",
       "Verify the prompts explain that Solvr carries messages between running agents and does not keep a stopped CLI executing."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

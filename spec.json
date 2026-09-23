@@ -368,7 +368,7 @@
       "Verify the public room link remains a viewing link and is never silently converted into a bearer credential or a private-room invitation.",
       "Verify two or N agents can collaborate privately without human accounts; an unauthorized browser receives a concise private-room state without transcript content."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

@@ -99,6 +99,35 @@ func promptVisibilitySection(visibility string) (isPrivate string, note string) 
 	return "false", "This room is public: anyone can read it, and it can appear in public lists and search engines."
 }
 
+// joinerPrivateAdmissionNote is the visibility line for an agent JOINING a private room.
+// It replaces the old shared-token wording (task 371): the joiner gives the owner its
+// PUBLIC agent id, the owner admits it through the members API, and it still takes its
+// OWN per-agent room token by handshake — the owner never shares its token.
+func joinerPrivateAdmissionNote(slug string) string {
+	return "This room is private: send the room owner your PUBLIC agent id so it can admit you " +
+		"(POST " + connectAPIBaseURL + "/v1/rooms/" + slug + "/members). " +
+		"You still take your OWN room token by handshake below; the owner never shares its token with you."
+}
+
+// ownerPrivateAdmissionStep is the extra instruction a room OWNER needs to admit joining
+// agents into a private room (task 371). Public rooms need no admission — any registered
+// agent may handshake — so it returns nil. Admission uses the joiner's PUBLIC agent id
+// via the members API, never the owner's own key or a shared room token.
+func ownerPrivateAdmissionStep(sel ConnectSelection, slug string) []string {
+	if sel.Visibility != ConnectVisibilityPrivate {
+		return nil
+	}
+	return []string{
+		"",
+		"   ADMIT PRIVATE-ROOM AGENTS. Because this room is private, each joining agent will",
+		"   send you its PUBLIC agent id. Admit each one so it can take part:",
+		"     POST " + connectAPIBaseURL + "/v1/rooms/" + slug + "/members",
+		`     {"agent_id": "THEIR_PUBLIC_AGENT_ID"}`,
+		"   Admission uses their id, not your key or a shared token; each admitted agent then",
+		"   takes its own room token by handshake.",
+	}
+}
+
 // plannerPromptText is the default prompt: one agent opens and owns the room,
 // then hands over a complete prompt for the second one.
 func plannerPromptText(sel ConnectSelection) string {
@@ -146,10 +175,13 @@ func plannerPromptText(sel ConnectSelection) string {
 		"",
 		"5. THEN WORK. Direct the executor in the room, review what it reports, and keep the",
 		"   decisions in the room rather than in this chat.",
+	}
+	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
+	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
 		"an agent connected when it did not.",
-	}
+	)
 
 	return strings.Join(lines, "\n")
 }
@@ -201,10 +233,13 @@ func starterPromptText(sel ConnectSelection) string {
 		"",
 		"5. THEN WORK. Agree the split in the room, do your half, and keep the decisions in",
 		"   the room rather than in this chat.",
+	}
+	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
+	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
 		"an agent connected when it did not.",
-	}
+	)
 
 	return strings.Join(lines, "\n")
 }
@@ -257,10 +292,13 @@ func builderPromptText(sel ConnectSelection) string {
 		"",
 		"5. THEN WORK. Build in the room and keep the decisions in the room rather than in",
 		"   this chat. The reviewer reads your plan and reports issues.",
+	}
+	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
+	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
 		"an agent connected when it did not.",
-	}
+	)
 
 	return strings.Join(lines, "\n")
 }
@@ -300,7 +338,7 @@ func executorPromptText(room *models.Room, firstMsg *models.Message) string {
 
 	visibilityNote := "This room is public: anyone can read the conversation."
 	if room.IsPrivate {
-		visibilityNote = "This room is private: the planner will admit you and share the room token directly."
+		visibilityNote = joinerPrivateAdmissionNote(slug)
 	}
 
 	lines := []string{
@@ -380,7 +418,7 @@ func roleSpecificPromptText(room *models.Room, firstMsg *models.Message, role st
 
 	visibilityNote := "This room is public: anyone can read the conversation."
 	if room.IsPrivate {
-		visibilityNote = "This room is private: you will receive the room token directly from the room owner."
+		visibilityNote = joinerPrivateAdmissionNote(slug)
 	}
 
 	roleCapitalized := strings.ToUpper(role[:1]) + role[1:]

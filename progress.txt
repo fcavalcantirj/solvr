@@ -4046,3 +4046,124 @@ PRE-EXISTING FAILURES (NOT this change — proven by baseline)
 UAT: nothing owner-only is outstanding. Every automated check ran locally and
   green; the isolation guidance is plain prompt text served by /v1/connect and
   needs no migration, deploy, or broadcast.
+
+================================================================================
+2026-09-23  TASK: "Allow private collaboration through explicit membership
+            without sharing owner credentials" (category functional). passes false -> true.
+================================================================================
+
+TASK SELECTION
+  First passes=false is the acceptance task "Verify N-agent collaboration end to
+  end across clients and service instances" — its step 4 needs TWO API instances
+  with cross-instance delivery, built by the still-false ops task "Preserve room
+  delivery and statistics across restarts and more than one API instance". Spans
+  unbuilt behavior -> LEFT OPEN (same reason the prior iteration deferred it).
+  Next false: "Make agent-created rooms manageable even when no human owns or
+  claims the agent". Its step 3 requires the owner agent to ARCHIVE the room and
+  step 2 requires "rooms.owner_id has been retired after migration" — archive is
+  unbuilt (grep 'archiv' over internal/db/rooms*.go + handlers/rooms*.go is empty;
+  archive is the later task "Separate finished rooms from live presence") and
+  owner_id retirement is the later data task "Use one room membership authority".
+  Spans unbuilt behavior -> LEFT OPEN. Took the first fully-buildable task after
+  it: private collaboration through explicit membership.
+
+WHAT ALREADY EXISTED (verified by reading code + running tests, not rebuilt)
+  - Step 1 (private excluded from public discovery/previews): [REAL] db/rooms.go
+    List() WHERE clause is "r.deleted_at IS NULL AND r.is_private = FALSE";
+    homepage_rooms.go:139 "Private rooms are never counted, and their contents
+    never reach this page." Room.TokenHash is json:"-" (never serialized).
+  - Step 3 backend (owner admits via member-management API; each agent gets its
+    OWN per-agent token via handshake; no shared secret): POST/GET/DELETE
+    /v1/rooms/{slug}/members (router_rooms.go:88-90) + Handshake issues a per-agent
+    solvr_rt_ token (rooms_handshake.go). Allowlist path in handshakeAuthorized:
+    an owner-admitted agent handshakes with its OWN api key (no room_token) and
+    gets its OWN token.
+  - Step 4 (guessed slug / public agent id alone does not grant access): handshake
+    returns 403 for a non-member without the shared token; TestRoomACL_ClosedRoom_
+    ReadsAreMembersOnly, TestRoomHandshake_ClosedRoom_RequiresMembershipOrToken.
+  - Step 6 (unauthorized browser gets a concise private-room state without
+    transcript): TestRoomHumanPost_PrivateRoom_MembersOnly + TestRoomSSE_
+    AccessTokenQueryParam_AuthorizesPrivateStream.
+
+THE ONE REAL GAP (steps 2 & 3, in the GENERATED PROMPTS), FIXED WITH TDD
+  The generated join prompts described a SHARED-TOKEN admission model, which step 3
+  explicitly forbids ("private group admission must not reuse a shared owner
+  secret"):
+    - executorPromptText private note said "the planner will admit you and share
+      the room token directly."
+    - roleSpecificPromptText private note said "you will receive the room token
+      directly from the room owner."
+  This also contradicted the SAME prompt's HANDSHAKE step ("take your OWN per-agent
+  room token ... NOT the planner's room token"). And step 2 requires every generated
+  JOIN prompt to show the "give your PUBLIC agent id to the owner" admission step,
+  which was absent. The OWNER prompts (planner/starter/builder) never told the owner
+  HOW to admit a private-room agent (POST /v1/rooms/{slug}/members by the joiner's
+  public id) — step 3's owner side.
+
+TDD
+  RED: new PURE unit file handlers/connect_private_admission_test.go (no DB, no HTTP
+    -> always executes, never SKIP). Ran first:
+      go test ./internal/api/handlers/ -run TestConnectPrivateAdmission -v  (DATABASE_URL unset)
+      --- FAIL: TestConnectPrivateAdmission_JoinerPromptsGivePublicAgentIdNotSharedToken
+        (executor + role prompts still carried shared-token wording, no "public
+         agent id", no "/members")
+      --- FAIL: TestConnectPrivateAdmission_OwnerPromptsAdmitJoinersById
+        (planner/starter/builder had no /members admission step, no THEIR_PUBLIC_AGENT_ID)
+      the two PUBLIC negative-control tests PASSED at RED (public prompts already
+      had no /members step).
+  GREEN: edited handlers/connect_prompts.go (+43/-5). Added two helpers next to
+    promptVisibilitySection:
+      - joinerPrivateAdmissionNote(slug): "send the room owner your PUBLIC agent id
+        so it can admit you (POST .../v1/rooms/{slug}/members). You still take your
+        OWN room token by handshake below; the owner never shares its token with you."
+        Wired into executorPromptText and roleSpecificPromptText (replaced both
+        shared-token notes).
+      - ownerPrivateAdmissionStep(sel, slug): returns nil for public; for private
+        emits an "ADMIT PRIVATE-ROOM AGENTS" block that POSTs the joiner's
+        THEIR_PUBLIC_AGENT_ID to /v1/rooms/{slug}/members and states admission uses
+        their id "not your key or a shared token". Appended into planner/starter/
+        builder before their trailing "If any call fails" block.
+    Re-ran: all 5 TestConnectPrivateAdmission_* PASS.
+
+DIFF (git status --porcelain / git diff --stat)
+  M backend/internal/api/handlers/connect_prompts.go   (+43 / -5)
+  ?? backend/internal/api/handlers/connect_private_admission_test.go  (NEW, 109 lines, test-only)
+  No other production file changed. Frontend UNTOUCHED: the /connect page and the
+  index panel are dumb terminals that render /v1/connect verbatim (API is smart,
+  client is dumb), so the additive prompt text needs no frontend change.
+
+VERIFICATION (isolated local DB solvr_test on localhost:5435; backend/.env NOT
+  touched; no production calls)
+  [TEST] go test ./internal/api/handlers/ -run TestConnectPrivateAdmission -count=1
+    -> ok, 5/5 PASS, 0 SKIP.
+  [TEST] DATABASE_URL=...solvr_test go test ./internal/api/ -run
+    'TestConnectEndpoint|TestRoomsConnect|TestRoomConnect|TestRoomACL|TestRoomHandshake|
+     TestRoomMembers|TestRoomSSE_AccessToken|TestRoomHumanPost_PrivateRoom|
+     TestRoomRoutes_(Update|Delete|RotateToken|CreateRoom)' -count=1 -v
+    -> ok (6.303s), 40 PASS, 0 FAIL, 0 SKIP. Notable ones that RAN green:
+      --- PASS: TestConnectEndpoint_PrivateRoomRequiresOwnerAdmissionForEachAgent
+      --- PASS: TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes
+        (proves my new /v1/rooms/{slug}/members URL is a real served route)
+      --- PASS: TestRoomHandshake_ClosedRoom_RequiresMembershipOrToken
+      --- PASS: TestRoomMembers_AddRevoke_IsolatesAgents
+      --- PASS: TestRoomHumanPost_PrivateRoom_MembersOnly
+  [REAL] cd backend && go build ./... -> exit 0. go vet ./internal/api/handlers/ clean.
+    gofmt -l both files: clean.
+  [REAL] bash scripts/check-file-size.sh: neither touched file in the violations
+    (connect_prompts.go 469, connect_private_admission_test.go 109; limit 800).
+  [REAL] Live wire. Built ./cmd/api -> /tmp/solvr-api-t371 on :8097 against solvr_test
+    (ALLOWED_ORIGINS + 32-char JWT_SECRET set; backend/.env NOT touched), curled:
+      GET /v1/connect?visibility=private -> data.prompt.text HAS
+        "/v1/rooms/ROOM_SLUG/members" AND "THEIR_PUBLIC_AGENT_ID"; shared-token
+        wording ("share the room token directly") ABSENT.
+      GET /v1/connect?visibility=public  -> "/members" ABSENT (no admission step).
+    Server killed, port 8097 clear, temp binary removed. /v1/connect is read-only;
+    no rows written to solvr_test.
+
+NO EXISTING TEST DELETED / SKIPPED / WEAKENED. Change is additive prompt text +
+  new test file. The two PUBLIC negative-control tests guard against the admission
+  step leaking into public prompts.
+
+UAT: nothing owner-only is outstanding. Every automated check ran locally and green;
+  the corrected private-admission guidance is plain prompt text served by /v1/connect
+  and the room connect endpoint, needing no migration, deploy, or broadcast.

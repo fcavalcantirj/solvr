@@ -3805,3 +3805,149 @@ NOTES
 UAT: NOTHING OWNER-ONLY IS OUTSTANDING — no production migration, no deploy, no
     broadcast. Every automated check ran locally and green, and the copied_detail
     field was confirmed on the live /v1/connect wire for all three presets.
+
+================================================================================
+2026-09-23 — TASK 25 (spec.json index 25): "Serve versioned machine-readable room
+instructions as the shared source for web prompts and agent tools" [category: api]
+— passes=true
+================================================================================
+
+WHY INDEX 23 WAS SKIPPED AGAIN (unchanged, re-confirmed this iteration).
+  The first passes=false task is still index 23, "Verify N-agent collaboration end
+  to end across clients and SERVICE INSTANCES" — an acceptance task whose step 4
+  ("distribute participants across two API instances ... verify replay,
+  idempotency, and unaffected peers") spans behavior a LATER task still builds.
+  [REAL] re-verified in code THIS iteration: internal/hub/hub.go:100 still keeps
+  subscribers in an in-process map (subscribers := make(map[string]chan<- RoomEvent))
+  and grep for NOTIFY/LISTEN/pg_notify across internal/ returns ZERO — SSE
+  broadcast never leaves the instance that received the write. The dedicated later
+  task "Preserve room delivery and statistics across restarts and more than one API
+  instance" (still passes=false) is the one that builds cross-instance delivery.
+  Per the ledger's "ACCEPTANCE TASKS ARE NOT CHECKLISTS ... take the first task
+  that is actually buildable now", index 23 stays open and this iteration took the
+  first buildable task, index 25.
+
+WHAT WAS ALREADY BUILT (read the actual code first, per the golden rules).
+  Both endpoints already exist from tasks 16-20:
+    - GET /v1/connect            -> router_connect.go:28 (public, no auth), served
+      by ConnectHandler.GetConnect -> buildConnectStart (connect.go).
+    - GET /v1/rooms/{slug}/connect -> router_rooms.go:65, wrapped in readGuard
+      (the EXISTING room read-access policy; private rooms 403 anonymous), served
+      by RoomConnectHandler.GetRoomConnect -> buildRoomConnectEnvelope
+      (rooms_connect.go). Its envelope ALREADY carried instruction_version.
+  The prompt content is already API-owned and centralized in connect_prompts.go
+  (shared consts connectAPIBaseURL="https://api.solvr.dev",
+  connectAppBaseURL="https://solvr.dev", connectSlugPlaceholder="ROOM_SLUG", and
+  the plannerPromptText/starterPromptText/builderPromptText/executorPromptText/
+  roleSpecificPromptText builders). The web /connect page and the index panel are
+  dumb terminals that render /v1/connect.
+
+THE ONE REAL GAP (step 2), FIXED WITH TDD.
+  GET /v1/connect (the ConnectStart contract) had NO instruction version field,
+  while GET /v1/rooms/{slug}/connect hardcoded the literal "1.0" inline. Step 2
+  requires the instruction version on the responses, and step 5 requires a versioned
+  contract ("versioned documentation updates whenever the connection contract
+  changes") — which needs ONE source of truth so the two surfaces cannot drift.
+
+DIFF (git status --porcelain / git diff --stat)
+  M backend/internal/api/handlers/connect.go        (+ConnectInstructionVersion const,
+      +InstructionVersion field on ConnectStart, set in buildConnectStart; gofmt
+      re-aligned the ConnectStart struct block — hence 28 ins / 18 del)
+  M backend/internal/api/handlers/rooms_connect.go  (literal "1.0" -> ConnectInstructionVersion)
+  ?? backend/internal/api/handlers/connect_version_test.go (NEW, 130 lines, test-only)
+  No other production file changed. No frontend file touched (the added JSON field
+  is additive; the dumb client ignores unknown fields, so no frontend test is
+  affected and none was run).
+
+WHAT SHIPPED
+  - connect.go: new exported const ConnectInstructionVersion = "1.0" with a comment
+    stating the single-source-of-truth bump rule. New field
+    InstructionVersion string `json:"instruction_version"` on ConnectStart, set to
+    the const in buildConnectStart.
+  - rooms_connect.go: InstructionVersion now reads ConnectInstructionVersion instead
+    of the bare literal, so both endpoints report exactly one version.
+  - Value stays "1.0", so the pre-existing integration assertion
+    router_connect_test.go:461 (require.Equal "1.0") still passes unchanged. No
+    existing test was deleted, skipped, renamed, or weakened.
+
+NEW TESTS — PURE (no DB, no HTTP), so they ALWAYS EXECUTE and never SKIP.
+  connect_version_test.go, package handlers:
+  go test ./internal/api/handlers/ -run 'TestConnect_(InstructionVersion|StartCarries|BothEndpoints|StartExposes|RoomEnvelope)' -count=1 -v  (DATABASE_URL unset)
+    [TEST] TestConnect_InstructionVersionConstantIsNonEmpty PASS
+    [TEST] TestConnect_StartCarriesInstructionVersion PASS — buildConnectStart carries
+      instruction_version == ConnectInstructionVersion (this is what GetConnect returns).
+    [TEST] TestConnect_BothEndpointsShareOneInstructionVersion PASS — buildConnectStart
+      and buildRoomConnectEnvelope report the SAME non-empty version (single source).
+    [TEST] TestConnect_StartExposesAbsoluteURLsAuthSequenceRolesAndNextActions PASS —
+      the public prompt carries https://api.solvr.dev, the auth sequence
+      (/v1/agents/register -> "Authorization: Bearer" -> /handshake), 3 presets +
+      an add-agent role prompt (available roles), and 2 ordered steps (next actions).
+    [TEST] TestConnect_RoomEnvelopeCarriesVersionVisibilityRoleAndNoSecrets PASS —
+      room envelope carries the shared version, absolute room URL, requested role,
+      public visibility, and NO solvr_sk_/solvr_rt_/solvr_rm_/room_token/api_key/
+      token_hash/owner_id in the generated prompt (step 4).
+    [TEST] TestConnect_RoomEnvelopePrivateRoomReportsPrivateVisibility PASS.
+  RED first: with the const/field absent the package failed to compile (undefined:
+  ConnectInstructionVersion; ConnectStart has no field InstructionVersion) — the
+  measured RED. GREEN after the edits: 6/6 PASS, all RUN, none SKIP.
+
+REGRESSION + REAL VERIFICATION
+  [REAL] cd backend && go build ./... exits 0. go vet ./internal/api/handlers/ clean.
+    gofmt -l on all three files: clean.
+  [TEST] go test ./internal/api/handlers/ -run TestConnect -count=1 -> ok (no DB).
+  [TEST] Against isolated DB postgres://solvr:solvr_dev@localhost:5435/solvr_test:
+    go test ./internal/api/ -run 'TestConnectEndpoint|TestRoomsConnect|TestGroupLifecycle'
+    -count=1 -> ok (3.461s). Targeted -v confirmed the two that pin the contract on
+    the WIRE actually RAN (not skipped):
+      --- PASS: TestConnectEndpoint_ServesTheWholeStartContractToALoggedOutVisitor
+      --- PASS: TestConnectEndpoint_RoomInstructionsEndpoint   (asserts instruction_version=="1.0")
+  [TEST] Full handlers package against solvr_test (/tmp/t25_handlers_full.log): the
+    ONLY --- FAIL lines are the 4 pre-existing GitHub OAuth integration tests
+    (TestGitHubOAuthRedirect_Integration, TestGitHubCallback_MissingCode/GitHubError/
+    InvalidCode_Integration — they reach github.com with no credentials, documented
+    pre-existing in the task 18/19/20 and task 24 entries). ZERO Connect failures.
+  [REAL] Live wire check. Built ./cmd/api -> /tmp/solvr-api-t25, ran on :8096 against
+    solvr_test (ALLOWED_ORIGINS + 32-char JWT_SECRET set; backend/.env NOT touched),
+    then curled the real route:
+      GET /v1/connect                     -> instruction_version = "1.0", prompt.text present, presets=3, steps=2
+      GET /v1/connect?preset=collaborate  -> instruction_version = "1.0"
+    Server killed, port 8096 clear, temp binary removed. /v1/connect is read-only;
+    no rows written to solvr_test.
+  [REAL] bash scripts/check-file-size.sh: 37 violations, the SAME 37 as the task 24
+    baseline. My touched files: connect.go 484, rooms_connect.go 161,
+    connect_version_test.go 130 — all well under the 800 limit; NONE is in the list.
+
+STEP-BY-STEP DISPOSITION
+  1 [REAL] both endpoints exposed with the existing room read-access policy (readGuard;
+    private -> 403 via TestConnectEndpoint_RoomInstructionsEndpoint_PrivateRoomIs403).
+  2 [TEST] instruction version (now on BOTH), absolute production URLs, auth sequence,
+    room visibility, available roles, concrete next actions — all asserted.
+  3 The versioned API contract is the single source of truth and the web surfaces
+    (/connect page + index panel) already read /v1/connect; the room invite control
+    (add_agent + /v1/rooms/{slug}/connect) builds from the same connect_prompts.go
+    content. [DEFERRED, not this task's code] Aligning the agent-facing skill, CLI
+    help, and documentation examples to consume this same contract is the explicit
+    scope of the later tasks "Consolidate help around connection and update all
+    public positioning" and "Keep SDKs, CLI, MCP, skills, and webhooks consistent" —
+    both still passes=false. No external skill/CLI file was modified here.
+  4 [TEST] room-specific public responses carry no owner credentials, private
+    invitation secrets, or individual room tokens (existing + new tests).
+  5 [TEST] the generated instructions are exercised end to end against the real
+    endpoints by TestConnectEndpoint_ExecutorPromptEndToEnd (router_connect_test.go:509)
+    and the planner journey (:250); versioning is now enforced by the single
+    ConnectInstructionVersion source.
+
+NOTES / DECISIONS
+  - SPEC.md was NOT edited: it has zero prior mention of /v1/connect (the endpoints
+    were built by tasks 16-20 without a SPEC.md section and those tasks passed), and
+    the golden rules forbid creating docs unless a task names the file. The contract
+    is self-describing via the instruction_version field, and the bump rule is
+    documented in code on ConnectInstructionVersion. OpenAPI (openapi_paths.go 880 /
+    openapi_schemas.go 867) already EXCEED the 800-line limit and do not list connect;
+    adding to them would worsen an existing CI violation, so they were left untouched.
+  - LOCAL ONLY: no production calls, no deploy, no env-file change. Isolated DB
+    solvr_test on localhost:5435.
+
+UAT: NOTHING OWNER-ONLY IS OUTSTANDING for this task — no production migration, no
+    deploy, no broadcast. Every automated check ran locally and green, and the new
+    instruction_version field was confirmed on the live /v1/connect wire.

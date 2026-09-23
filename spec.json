@@ -331,7 +331,7 @@
       "Verify room-specific public responses contain no owner credentials, private invitation secrets, or individual room tokens.",
       "Exercise the generated instructions against the implemented endpoints in a test environment; require versioned documentation updates whenever the connection contract changes."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

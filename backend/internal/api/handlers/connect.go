@@ -25,6 +25,14 @@ import (
 // visitor gets the whole contract.
 
 const (
+	// ConnectInstructionVersion is the version of the machine-readable connection
+	// contract served by BOTH GET /v1/connect and GET /v1/rooms/{slug}/connect. It
+	// is the single source of truth: bump it whenever the connection contract
+	// changes — the endpoints an agent calls, the authentication sequence, or the
+	// prompt shape — so a client can tell which contract it is following and a
+	// contract change forces exactly one version bump across both surfaces.
+	ConnectInstructionVersion = "1.0"
+
 	// ConnectPresetPlanAndBuild is the default shape: one planner agent
 	// directs, one executor agent builds.
 	ConnectPresetPlanAndBuild = "plan-and-build"
@@ -141,22 +149,23 @@ type ConnectCustomizeSection struct {
 
 // ConnectStart is the whole contract.
 type ConnectStart struct {
-	Heading           string                  `json:"heading"`
-	Intro             string                  `json:"intro"`
-	PageURL           string                  `json:"page_url"`
-	PageLabel         string                  `json:"page_label"`
-	TaskField         ConnectTaskField        `json:"task_field"`
-	PresetsLabel      string                  `json:"presets_label"`
-	Presets           []ConnectOption         `json:"presets"`
-	VisibilityLabel   string                  `json:"visibility_label"`
-	VisibilityOptions []ConnectOption         `json:"visibility_options"`
-	Selected          ConnectSelection        `json:"selected"`
-	Prompt            ConnectPrompt           `json:"prompt"`
-	Steps             []ConnectStep           `json:"steps"`
-	Example           ConnectExample          `json:"example"`
-	Note              string                  `json:"note"`
-	AddAgent          ConnectAddAgentControl  `json:"add_agent"`
-	Customize         ConnectCustomizeSection `json:"customize"`
+	InstructionVersion string                  `json:"instruction_version"`
+	Heading            string                  `json:"heading"`
+	Intro              string                  `json:"intro"`
+	PageURL            string                  `json:"page_url"`
+	PageLabel          string                  `json:"page_label"`
+	TaskField          ConnectTaskField        `json:"task_field"`
+	PresetsLabel       string                  `json:"presets_label"`
+	Presets            []ConnectOption         `json:"presets"`
+	VisibilityLabel    string                  `json:"visibility_label"`
+	VisibilityOptions  []ConnectOption         `json:"visibility_options"`
+	Selected           ConnectSelection        `json:"selected"`
+	Prompt             ConnectPrompt           `json:"prompt"`
+	Steps              []ConnectStep           `json:"steps"`
+	Example            ConnectExample          `json:"example"`
+	Note               string                  `json:"note"`
+	AddAgent           ConnectAddAgentControl  `json:"add_agent"`
+	Customize          ConnectCustomizeSection `json:"customize"`
 }
 
 // connectRoomLookup is the slice of the room repository this handler needs.
@@ -262,7 +271,8 @@ func (h *ConnectHandler) resolveExample(ctx context.Context) ConnectExample {
 // same contract, prompt text included.
 func buildConnectStart(sel ConnectSelection, example ConnectExample) ConnectStart {
 	start := ConnectStart{
-		Heading: "Connect your agents",
+		InstructionVersion: ConnectInstructionVersion,
+		Heading:            "Connect your agents",
 		Intro: "Copy one prompt into an agent you already run. It creates the room, " +
 			"then hands you the prompt for the second agent. No account, no install.",
 		PageURL:   connectPageURL,

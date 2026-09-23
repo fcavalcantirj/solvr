@@ -131,7 +131,7 @@ func roomConnectSlugFromRequest(r *http.Request) string {
 // The role parameter determines which role-specific prompt is generated.
 func buildRoomConnectEnvelope(room *models.Room, firstMsg *models.Message, role string) roomConnectEnvelope {
 	env := roomConnectEnvelope{
-		InstructionVersion: "1.0",
+		InstructionVersion: ConnectInstructionVersion,
 		RoomSlug:           room.Slug,
 		RoomURL:            connectAppBaseURL + "/rooms/" + room.Slug,
 		Private:            room.IsPrivate,

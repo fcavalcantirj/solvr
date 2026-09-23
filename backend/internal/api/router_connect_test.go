@@ -698,3 +698,260 @@ func TestConnectEndpoint_PromptsOnlyNameRoutesThisAPIActuallyServes(t *testing.T
 		}
 	}
 }
+
+// TestConnectEndpoint_MultipleAgentsCanJoinViaAddAgentPrompt verifies that N agents
+// can join the same room via the add_agent prompt pattern. Each agent establishes its
+// own identity and presence without overwriting a fixed executor slot. This is the
+// behavioral requirement of task 15, step 3: agents must be able to reuse the generic
+// join prompt without fixed slots.
+func TestConnectEndpoint_MultipleAgentsCanJoinViaAddAgentPrompt(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	roomPreCleanup(t, pool)
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM agents WHERE id LIKE 'agent_n_agent_%'") //nolint:errcheck
+	})
+
+	// SETUP: Planner creates a room.
+	plannerName := fmt.Sprintf("planner_nagent_%d", time.Now().UnixNano()%1000000000)
+	regReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/agents/register",
+		strings.NewReader(fmt.Sprintf(`{"name":"%s","description":"planner for n-agent test"}`, plannerName)))
+	regReq.Header.Set("Content-Type", "application/json")
+	regResp, _ := http.DefaultClient.Do(regReq)
+	regRaw, _ := io.ReadAll(regResp.Body)
+	regResp.Body.Close()
+	var regResult map[string]any
+	json.Unmarshal(regRaw, &regResult)
+	plannerKey, _ := regResult["api_key"].(string)
+	agentData, _ := regResult["agent"].(map[string]any)
+	plannerID, _ := agentData["id"].(string)
+
+	// Create room.
+	slug := fmt.Sprintf("test-n-agent-%d", time.Now().UnixNano()%1000000000)
+	createBody := fmt.Sprintf(`{"display_name":"N-Agent Test Room","slug":"%s"}`, slug)
+	createReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/rooms", strings.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer "+plannerKey)
+	createResp, _ := http.DefaultClient.Do(createReq)
+	createRaw, _ := io.ReadAll(createResp.Body)
+	createResp.Body.Close()
+	var createResult map[string]any
+	json.Unmarshal(createRaw, &createResult)
+	roomToken, _ := createResult["token"].(string)
+
+	// Planner joins.
+	_, plannerRoomToken := handshake(t, ts.URL, slug, plannerKey, roomToken)
+	status, _ := doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/join", plannerRoomToken,
+		fmt.Sprintf(`{"agent_name":"%s"}`, plannerName))
+	require.Equal(t, http.StatusOK, status)
+
+	// Now register and join N executors via the add_agent prompt pattern.
+	// The add_agent prompt tells each agent to:
+	// 1. Register (if needed)
+	// 2. POST /v1/rooms/{slug}/handshake to get its own per-agent token
+	// 3. POST /r/{slug}/join to establish presence
+	// 4. POST messages to the room
+	const numExecutors = 3
+	executors := make(map[string]string) // agentID -> agentKey
+	executorTokens := make(map[string]string) // agentID -> perAgentToken
+
+	for i := 1; i <= numExecutors; i++ {
+		// Step 1: Each executor self-registers.
+		execName := fmt.Sprintf("executor_%d_nagent_%d", i, time.Now().UnixNano()%1000000000)
+		regReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/agents/register",
+			strings.NewReader(fmt.Sprintf(`{"name":"%s","description":"executor %d for n-agent test"}`, execName, i)))
+		regReq.Header.Set("Content-Type", "application/json")
+		regResp, _ := http.DefaultClient.Do(regReq)
+		regRaw, _ := io.ReadAll(regResp.Body)
+		regResp.Body.Close()
+		var execRegResult map[string]any
+		json.Unmarshal(regRaw, &execRegResult)
+		execKey, _ := execRegResult["api_key"].(string)
+		execData, _ := execRegResult["agent"].(map[string]any)
+		execID, _ := execData["id"].(string)
+		executors[execID] = execKey
+		executorTokens[execID] = ""
+
+		// Step 2: Each executor handshakes with the room (no shared token needed for public room).
+		status, execPerAgentToken := handshake(t, ts.URL, slug, execKey, "")
+		require.Equal(t, http.StatusCreated, status, "executor %d handshake failed", i)
+		require.NotEmpty(t, execPerAgentToken, "executor %d must receive per-agent token", i)
+		executorTokens[execID] = execPerAgentToken
+
+		// Step 3: Each executor joins presence.
+		status, joinOut := doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/join", execPerAgentToken,
+			fmt.Sprintf(`{"agent_name":"%s"}`, execName))
+		require.Equal(t, http.StatusOK, status, "executor %d join failed: %v", i, joinOut)
+
+		// Step 4: Each executor posts a message.
+		status, msgOut := doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/message", execPerAgentToken,
+			fmt.Sprintf(`{"agent_name":"%s","content":"Executor %d is ready"}`, execName, i))
+		require.Equal(t, http.StatusCreated, status, "executor %d post failed: %v", i, msgOut)
+		msgData, _ := msgOut["data"].(map[string]any)
+		// The server stamps the authoritative author_id based on the authenticated token.
+		require.Equal(t, execID, msgData["author_id"], "executor %d authorship must be stamped by server", i)
+	}
+
+	// VERIFICATION 1: All executors are members of the room.
+	status, membersOut := doJSON(t, http.MethodGet, ts.URL+"/v1/rooms/"+slug+"/members", plannerKey, "")
+	require.Equal(t, http.StatusOK, status)
+	members, _ := membersOut["data"].([]any)
+	memberIDs := make(map[string]bool)
+	for _, m := range members {
+		entry, ok := m.(map[string]any)
+		if ok {
+			agentID, _ := entry["agent_id"].(string)
+			memberIDs[agentID] = true
+		}
+	}
+	require.True(t, memberIDs[plannerID], "planner must be a member")
+	for execID := range executors {
+		require.True(t, memberIDs[execID], "executor %s must be a member", execID)
+	}
+	require.Equal(t, 1+numExecutors, len(memberIDs), "room must have exactly planner + %d executors", numExecutors)
+
+	// VERIFICATION 2: All agents' messages appear in the room with correct authorship.
+	status, roomOut := doJSON(t, http.MethodGet, ts.URL+"/v1/rooms/"+slug, "", "")
+	require.Equal(t, http.StatusOK, status)
+	roomData, _ := roomOut["data"].(map[string]any)
+	recentMsgs, _ := roomData["recent_messages"].([]any)
+	authorIDs := make(map[string]int) // count messages per author_id
+	for _, msg := range recentMsgs {
+		msgEntry, ok := msg.(map[string]any)
+		if ok {
+			authorID, _ := msgEntry["author_id"].(string)
+			authorIDs[authorID]++
+		}
+	}
+	// Each executor should have exactly 1 message (the one they posted).
+	for execID := range executors {
+		require.Equal(t, 1, authorIDs[execID], "executor %s must have exactly 1 message in room", execID)
+	}
+
+	// VERIFICATION 3: No overwriting of slots — each agent maintains distinct identity.
+	// If there were a fixed "executor slot" that was being overwritten, we would see
+	// fewer than numExecutors distinct author_ids.
+	distinctAuthors := 0
+	for _, count := range authorIDs {
+		if count > 0 {
+			distinctAuthors++
+		}
+	}
+	require.GreaterOrEqual(t, distinctAuthors, numExecutors, "must have at least %d distinct authors (no fixed slot overwriting)", numExecutors)
+}
+
+// TestConnectEndpoint_PrivateRoomRequiresOwnerAdmissionForEachAgent verifies that in
+// a private room, each new agent identity must be explicitly admitted by the owner.
+// Removing one agent does not affect others. This is task 15, step 4.
+func TestConnectEndpoint_PrivateRoomRequiresOwnerAdmissionForEachAgent(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	roomPreCleanup(t, pool)
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM agents WHERE id LIKE 'agent_priv_%'") //nolint:errcheck
+	})
+
+	// SETUP: Create a private room.
+	plannerName := fmt.Sprintf("owner_priv_%d", time.Now().UnixNano()%1000000000)
+	regReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/agents/register",
+		strings.NewReader(fmt.Sprintf(`{"name":"%s","description":"private room owner"}`, plannerName)))
+	regReq.Header.Set("Content-Type", "application/json")
+	regResp, _ := http.DefaultClient.Do(regReq)
+	regRaw, _ := io.ReadAll(regResp.Body)
+	regResp.Body.Close()
+	var regResult map[string]any
+	json.Unmarshal(regRaw, &regResult)
+	ownerKey, _ := regResult["api_key"].(string)
+
+	// Create private room.
+	slug := fmt.Sprintf("test-priv-room-%d", time.Now().UnixNano()%1000000000)
+	createBody := fmt.Sprintf(`{"display_name":"Private Room","slug":"%s","is_private":true}`, slug)
+	createReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/v1/rooms", strings.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Authorization", "Bearer "+ownerKey)
+	createResp, _ := http.DefaultClient.Do(createReq)
+	createRaw, _ := io.ReadAll(createResp.Body)
+	createResp.Body.Close()
+	var createResult map[string]any
+	json.Unmarshal(createRaw, &createResult)
+	roomToken, _ := createResult["token"].(string)
+
+	// Owner joins.
+	_, ownerRoomToken := handshake(t, ts.URL, slug, ownerKey, roomToken)
+	doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/join", ownerRoomToken, `{"agent_name":"owner"}`)
+
+	// TEST: Register two agents.
+	agent1Name := fmt.Sprintf("agent1_priv_%d", time.Now().UnixNano()%1000000000)
+	regReq, _ = http.NewRequest(http.MethodPost, ts.URL+"/v1/agents/register",
+		strings.NewReader(fmt.Sprintf(`{"name":"%s","description":"agent 1"}`, agent1Name)))
+	regReq.Header.Set("Content-Type", "application/json")
+	regResp, _ = http.DefaultClient.Do(regReq)
+	regRaw, _ = io.ReadAll(regResp.Body)
+	regResp.Body.Close()
+	var agent1RegResult map[string]any
+	json.Unmarshal(regRaw, &agent1RegResult)
+	agent1Key, _ := agent1RegResult["api_key"].(string)
+	agent1Data, _ := agent1RegResult["agent"].(map[string]any)
+	agent1ID, _ := agent1Data["id"].(string)
+
+	agent2Name := fmt.Sprintf("agent2_priv_%d", time.Now().UnixNano()%1000000000)
+	regReq, _ = http.NewRequest(http.MethodPost, ts.URL+"/v1/agents/register",
+		strings.NewReader(fmt.Sprintf(`{"name":"%s","description":"agent 2"}`, agent2Name)))
+	regReq.Header.Set("Content-Type", "application/json")
+	regResp, _ = http.DefaultClient.Do(regReq)
+	regRaw, _ = io.ReadAll(regResp.Body)
+	regResp.Body.Close()
+	var agent2RegResult map[string]any
+	json.Unmarshal(regRaw, &agent2RegResult)
+	agent2Key, _ := agent2RegResult["api_key"].(string)
+	agent2Data, _ := agent2RegResult["agent"].(map[string]any)
+	agent2ID, _ := agent2Data["id"].(string)
+
+	// VERIFICATION 1: Unadmitted agents cannot handshake or join.
+	status, _ := handshake(t, ts.URL, slug, agent1Key, "")
+	require.Equal(t, http.StatusForbidden, status, "unadmitted agent must be denied")
+
+	// VERIFICATION 2: Owner admits agent1 only (not agent2).
+	status, _ = doJSON(t, http.MethodPost, ts.URL+"/v1/rooms/"+slug+"/members", ownerKey,
+		fmt.Sprintf(`{"agent_id":"%s"}`, agent1ID))
+	require.Equal(t, http.StatusCreated, status)
+
+	// Agent1 can now handshake and join.
+	status, agent1Token := handshake(t, ts.URL, slug, agent1Key, "")
+	require.Equal(t, http.StatusCreated, status, "admitted agent must handshake successfully")
+	status, _ = doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/join", agent1Token, `{"agent_name":"agent1"}`)
+	require.Equal(t, http.StatusOK, status, "admitted agent must join successfully")
+
+	// Agent2 still cannot handshake (not yet admitted).
+	status, _ = handshake(t, ts.URL, slug, agent2Key, "")
+	require.Equal(t, http.StatusForbidden, status, "unadmitted agent2 must still be denied")
+
+	// VERIFICATION 3: Owner admits agent2.
+	status, _ = doJSON(t, http.MethodPost, ts.URL+"/v1/rooms/"+slug+"/members", ownerKey,
+		fmt.Sprintf(`{"agent_id":"%s"}`, agent2ID))
+	require.Equal(t, http.StatusCreated, status)
+
+	// Agent2 can now handshake and join.
+	status, agent2Token := handshake(t, ts.URL, slug, agent2Key, "")
+	require.Equal(t, http.StatusCreated, status)
+	status, _ = doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/join", agent2Token, `{"agent_name":"agent2"}`)
+	require.Equal(t, http.StatusOK, status)
+
+	// VERIFICATION 4: Owner revokes agent1. Agent1 loses access, agent2 unaffected.
+	status, _ = doJSON(t, http.MethodDelete, ts.URL+"/v1/rooms/"+slug+"/members/"+agent1ID, ownerKey, "")
+	require.Equal(t, http.StatusNoContent, status)
+
+	// Agent1 can no longer access the room.
+	status, _ = doJSON(t, http.MethodGet, ts.URL+"/v1/rooms/"+slug, agent1Key, "")
+	require.Equal(t, http.StatusForbidden, status, "revoked agent loses access")
+
+	// Agent2 still has full access.
+	status, _ = doJSON(t, http.MethodGet, ts.URL+"/v1/rooms/"+slug, agent2Key, "")
+	require.Equal(t, http.StatusOK, status, "other agents remain unaffected")
+	
+	// Agent2 can still post via its per-agent token.
+	status, msgOut := doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/message", agent2Token, `{"agent_name":"agent2","content":"still here"}`)
+	require.Equal(t, http.StatusCreated, status, "unaffected agent can still post")
+	msgData, _ := msgOut["data"].(map[string]any)
+	require.Equal(t, agent2ID, msgData["author_id"])
+}

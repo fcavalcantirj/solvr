@@ -182,6 +182,7 @@ while true; do
     elif grep -qi "at capacity" "$tmplog"; then error_msg="API at capacity"
     elif grep -qi "No messages returned" "$tmplog"; then error_msg="No messages returned"
     elif grep -qi "ECONNREFUSED\|connection refused" "$tmplog"; then error_msg="Connection refused"
+    elif grep -qi "RALPH ITERATION TIMEOUT" "$tmplog"; then error_msg="Engine hung — iteration killed by the per-iteration timeout"
     elif grep -qi "host verify FAILED" "$tmplog"; then error_msg="Host verification failed — URGENT task injected"
     else error_msg="Unknown error (exit code: $exit_code)"
     fi

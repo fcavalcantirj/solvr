@@ -35,6 +35,28 @@ CUSTOM_MODEL="${CUSTOM_MODEL:-opencode/muse-spark-1.3-contributor-free}"
 CUSTOM_EFFORT="${CUSTOM_EFFORT:-}"     # empty = don't send reasoning effort
 VERIFY_CMD="${VERIFY_CMD:-}"           # host-side batch verify (empty = off); runs OUTSIDE the engine sandbox
 STALL_LIMIT="${STALL_LIMIT:-2}"        # consecutive iterations with no ledger progress before the batch stops
+RALPH_ITER_TIMEOUT="${RALPH_ITER_TIMEOUT:-45m}"   # wall clock per engine call; empty = off
+
+# Per-iteration timeout. The stall guard only counts iterations that END, so an
+# engine that hangs is never counted and eats the whole run: kimi wedged for
+# 13.5 h on 2026-09-22 with zero output, zero files touched, and the supervisor
+# never noticed. This kills the engine call itself.
+TIMEOUT_BIN=""
+if [ -n "$RALPH_ITER_TIMEOUT" ]; then
+  if command -v timeout >/dev/null 2>&1; then TIMEOUT_BIN="timeout"
+  elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN="gtimeout"
+  else echo "Note: no timeout/gtimeout on PATH — per-iteration timeout disabled (brew install coreutils)"; fi
+fi
+
+# run_engine <cmd...> — runs the engine under the timeout when one is available.
+# -k 30s sends KILL 30 s after TERM for an engine that ignores TERM.
+run_engine() {
+  if [ -n "$TIMEOUT_BIN" ]; then
+    "$TIMEOUT_BIN" -k 30s "$RALPH_ITER_TIMEOUT" "$@"
+  else
+    "$@"
+  fi
+}
 
 case "$ENGINE" in
   claude|codex|opencode|kimi) ;;
@@ -268,7 +290,7 @@ for ((i=1; i<=$1; i++)); do
 
   if [ "$ENGINE" = "claude" ]; then
     # Headless Claude Code on ONE task; JSON output carries result + usage/cost.
-    claude $MODEL_FLAG --dangerously-skip-permissions --no-session-persistence \
+    run_engine claude $MODEL_FLAG --dangerously-skip-permissions --no-session-persistence \
       -p --output-format json "$CLAUDE_INPUT" > "$tmpfile" 2>&1 || engine_exit=$?
   elif [ "$ENGINE" = "opencode" ]; then
     # opencode run: headless one-shot. --auto auto-approves permissions (the loop
@@ -278,7 +300,7 @@ for ((i=1; i<=$1; i++)); do
     # follows it, so `-f progress.txt "$PROMPT"` parsed the ENTIRE prompt as a
     # second filename and exited 1. The prompt tells it to read the files itself,
     # exactly like the codex lane. Keep the message the ONLY positional.
-    opencode run --auto -m "$OPENCODE_MODEL" ${OPENCODE_VARIANT:+--variant "$OPENCODE_VARIANT"} $OPENCODE_EXTRA_FLAGS \
+    run_engine opencode run --auto -m "$OPENCODE_MODEL" ${OPENCODE_VARIANT:+--variant "$OPENCODE_VARIANT"} $OPENCODE_EXTRA_FLAGS \
       "$OPENCODE_INPUT" < /dev/null > "$tmpfile" 2> "$errfile" || engine_exit=$?
   elif [ "$ENGINE" = "kimi" ]; then
     # kimi -p: one prompt, non-interactive, response on stdout (text mode adds a
@@ -289,7 +311,7 @@ for ((i=1; i<=$1; i++)); do
     # Free-tier providers answer 429 mid-task. A dead prompt run keeps its
     # session, and `-p ... -c` resumes the last session of this directory with
     # its memory intact, so a retry continues the task instead of restarting it.
-    kimi -p "$OPENCODE_INPUT" -m "$KIMI_MODEL" --output-format text $KIMI_EXTRA_FLAGS \
+    run_engine kimi -p "$OPENCODE_INPUT" -m "$KIMI_MODEL" --output-format text $KIMI_EXTRA_FLAGS \
       < /dev/null > "$tmpfile" 2> "$errfile" || engine_exit=$?
     kimi_attempt=1
     kimi_backoff="$KIMI_BACKOFF_S"
@@ -311,7 +333,7 @@ for ((i=1; i<=$1; i++)); do
       sleep "$kimi_backoff"
       engine_exit=0
       kimi_retry_start=$(date +%s)
-      kimi -p "$KIMI_RESUME_INPUT" -c -m "$KIMI_MODEL" --output-format text $KIMI_EXTRA_FLAGS \
+      run_engine kimi -p "$KIMI_RESUME_INPUT" -c -m "$KIMI_MODEL" --output-format text $KIMI_EXTRA_FLAGS \
         < /dev/null >> "$tmpfile" 2> "$errfile" || engine_exit=$?
       kimi_retry_ran=$(( $(date +%s) - kimi_retry_start ))
       if [ "$engine_exit" -ne 0 ] && [ "$kimi_retry_ran" -lt "$KIMI_FAST_FAIL_S" ]; then
@@ -340,7 +362,7 @@ for ((i=1; i<=$1; i++)); do
     # output redirected it died with exit 141 (SIGPIPE), and with an inherited pipe
     # it simply HUNG until killed. Measured 2026-09-10: same invocation, stdin
     # inherited = exit 124 after a 90 s timeout; stdin </dev/null = exit 0.
-    codex "${codex_args[@]}" "$CODEX_INPUT" < /dev/null > "$tmpfile" 2> "$errfile" || engine_exit=$?
+    run_engine codex "${codex_args[@]}" "$CODEX_INPUT" < /dev/null > "$tmpfile" 2> "$errfile" || engine_exit=$?
   fi
 
   # Restore the journal if the engine overwrote rather than appended: the last
@@ -354,6 +376,21 @@ for ((i=1; i<=$1; i++)); do
     fi
   fi
   [ -n "$progbak" ] && rm -f "$progbak"
+
+  # Timed out? 124 = timeout sent TERM, 137 = it had to KILL. Either way the
+  # engine produced nothing usable: journal it and end the batch so a human (or
+  # the supervisor's backoff) decides what runs next.
+  if [ "$engine_exit" -eq 124 ] || [ "$engine_exit" -eq 137 ]; then
+    echo ""
+    echo -e "${RED}${BOLD}  ⏱️  RALPH ITERATION TIMEOUT — ${ENGINE} produced nothing within ${RALPH_ITER_TIMEOUT}.${NC}"
+    echo -e "${RED}  Killed it. The ledger was not touched; the working tree is whatever the engine left.${NC}"
+    {
+      echo ""
+      echo "$(date '+%Y-%m-%d %H:%M'): RALPH ITERATION TIMEOUT — ${ENGINE} was killed after ${RALPH_ITER_TIMEOUT} with no result (iteration $i). Ledger untouched."
+    } >> progress.txt
+    echo -e "${GREEN}📊 $(./progress.sh)${NC}"
+    exit 1
+  fi
 
   iter_end=$(date +%s)
   iter_time=$((iter_end - iter_start))

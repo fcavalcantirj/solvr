@@ -3951,3 +3951,98 @@ NOTES / DECISIONS
 UAT: NOTHING OWNER-ONLY IS OUTSTANDING for this task — no production migration, no
     deploy, no broadcast. Every automated check ran locally and green, and the new
     instruction_version field was confirmed on the live /v1/connect wire.
+
+================================================================================
+2026-09-23  TASK: "Keep automatic agent registration and room identity separate
+            for every participant" (category api). passes false -> true.
+================================================================================
+
+TASK SELECTION
+  First passes=false in the ledger is the acceptance task "Verify N-agent
+  collaboration end to end across clients and service instances". It spans
+  behavior still unbuilt (private-room admission/revocation, agent-created-room
+  management, cross-instance delivery — all later tasks still passes=false), so
+  per the ACCEPTANCE-TASKS-ARE-NOT-CHECKLISTS rule it was LEFT OPEN and I took the
+  first buildable task after it: the registration/identity-separation task.
+
+WHAT ALREADY EXISTED (verified, not rebuilt)
+  - Step 1 (register with no human account -> distinct identity + API key):
+    handlers/agents.go RegisterAgent sets HumanID=nil, generates a unique agentID
+    from the name and a fresh api_key. Covered by mock-based unit tests
+    (agents_register_test.go) that always run.
+  - Step 4 API side (authorship from authenticated identity): rooms_messages.go
+    PostMessage stamps params.AuthorID from apimiddleware.RoomAgentIDFromContext
+    ("not just the spoofable agent_name"). Per-agent room token issued by the
+    handshake. Proven by TestRoomHandshake_PublicRoom_IssuesTokenAndAuthoritative
+    Authorship.
+  - Step 5 (name conflict -> no identity theft): RegisterAgent returns 409 with
+    name suggestions via writeDuplicateNameError; covered by
+    agents_name_uniqueness_test.go.
+
+THE ONE REAL GAP (step 3), FIXED WITH TDD
+  Step 3 requires that when a planner and an executor run on the SAME machine,
+  each agent's saved credential is isolated by agent profile and never overwrites
+  the other participant's configuration. None of the five copyable prompts said
+  this: planner/builder/executor/role had "no change to your own configuration"
+  and the executor/role prompts said "use your OWN identity", but nothing told the
+  second agent NOT to clobber the first's saved key on a shared machine, and the
+  starter (collaborate) prompt carried no configuration guidance at all.
+
+TDD
+  RED: new PURE unit file handlers/connect_identity_test.go (no DB, no HTTP — it
+    always executes, never SKIP). Ran first:
+      go test ./internal/api/handlers/ -run TestConnectIdentity -v  (DATABASE_URL unset)
+      --- FAIL: TestConnectIdentity_EveryPromptIsolatesCredentialsByProfile
+        (all 5 prompts: no "machine", no "profile", no "overwrite")
+      the other 4 TestConnectIdentity_* PASSED (they characterize existing prompt
+      guarantees: reuse-before-register, no-human-account + register endpoint,
+      own room token via handshake + never leak it, no impersonation).
+  GREEN: added a two-line isolation instruction to the IDENTITY section of all
+    five builders in handlers/connect_prompts.go (plannerPromptText,
+    starterPromptText, builderPromptText, executorPromptText, roleSpecificPromptText):
+      "If another Solvr agent already runs on this machine, keep this key/credential
+       under this agent's own profile and never overwrite the other agent's saved
+       credential."
+    Re-ran: all 5 TestConnectIdentity_* PASS.
+
+DIFF (git status --porcelain)
+  M backend/internal/api/handlers/connect_prompts.go   (+10 lines: 2 per builder x5)
+  ?? backend/internal/api/handlers/connect_identity_test.go  (NEW, 118 lines, test-only)
+  No other production file changed. Frontend untouched: the /connect page and the
+  index panel are dumb terminals that render /v1/connect verbatim, so the additive
+  prompt text needs no frontend change and no frontend test was affected.
+
+VERIFICATION (all ran against isolated local DB solvr_test on localhost:5435;
+  backend/.env NOT touched; no production calls)
+  [TEST] go test ./internal/api/handlers/ -run TestConnectIdentity -count=1 -> ok, 5/5 PASS, 0 SKIP.
+  [TEST] go test ./internal/api/handlers/ -run 'TestConnect|TestRegister|NameUniqueness|DuplicateName'
+    -count=1 -> ok (no regression in the connect/register suites the change lives in).
+  [TEST] DATABASE_URL=solvr_test go test ./internal/api/ -run
+    'TestRoomHandshake|TestRoomMembers_AddRevoke_IsolatesAgents|TestConnectEndpoint'
+    -v -> all PASS, 0 SKIP. Notable:
+      --- PASS: TestRoomHandshake_PublicRoom_IssuesTokenAndAuthoritativeAuthorship  (step 4)
+      --- PASS: TestRoomMembers_AddRevoke_IsolatesAgents                            (identity isolation)
+      --- PASS: TestConnectEndpoint_PlannerPromptRunsEndToEndWithoutAHumanAccount   (step 1)
+      --- PASS: TestConnectEndpoint_ExecutorPromptEndToEnd                          (second agent uses own identity)
+  [REAL] cd backend && go build ./... -> exit 0. go vet ./internal/api/handlers/ clean.
+    gofmt -l on both files: clean.
+  [REAL] bash scripts/check-file-size.sh: neither touched file appears in the
+    violations list (connect_prompts.go 431, connect_identity_test.go 118; limit 800).
+
+PRE-EXISTING FAILURES (NOT this change — proven by baseline)
+  A full run of ./internal/api/handlers/ + ./internal/api/ also failed:
+    - 4 GitHub OAuth integration tests (reach github.com with no creds; documented
+      pre-existing in the task 24/25 entries).
+    - TestIPFSHealthEndpoint: the test expects 503 "without a running IPFS node",
+      but the local solvr-ipfs container IS up, so /v1/health/ipfs returns 200.
+    - TestCommentsCount_* (3) and TestTypeSpecificListEndpoints: off-by-one comment
+      counts / list contents from accumulated rows in the shared solvr_test DB.
+  BASELINE: git stash push -u of both my files -> clean tree -> re-ran exactly
+    'TestCommentsCount|TestTypeSpecificListEndpoints|TestIPFSHealthEndpoint':
+    ALL FIVE FAIL IDENTICALLY WITHOUT MY CHANGE. Then git stash pop restored both
+    files (confirmed by git status). A prompt-string edit cannot affect IPFS
+    health, comment counts, or OAuth; these are environment/DB-state issues.
+
+UAT: nothing owner-only is outstanding. Every automated check ran locally and
+  green; the isolation guidance is plain prompt text served by /v1/connect and
+  needs no migration, deploy, or broadcast.

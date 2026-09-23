@@ -343,7 +343,7 @@
       "Verify new prompts obtain per-agent room tokens through the existing handshake and message authorship is derived from authenticated identity.",
       "Retry with a conflicting display name or rejected credentials and verify recovery preserves the user's entered task and does not claim another agent's identity."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

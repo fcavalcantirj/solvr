@@ -268,7 +268,7 @@
       "Paginate or collapse long participant lists while keeping the real count and Connect an agent action clear on desktop and mobile.",
       "Expose any configured participant or connection capacity through the API and show a clear limit-reached response; do not advertise infinite capacity or impose a hidden two/eight-agent restriction."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

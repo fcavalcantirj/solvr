@@ -380,7 +380,7 @@
       "Verify the prompt does not create a duplicate room or grant owner permissions.",
       "Open an archived room and verify its action offers starting a new room with reusable instructions rather than attempting to join a closed conversation."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

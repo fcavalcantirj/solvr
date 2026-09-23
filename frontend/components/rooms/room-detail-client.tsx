@@ -5,6 +5,7 @@ import type { APIRoom, APIRoomMessage, APIAgentPresenceRecord, RoomConnectionSta
 import { MessageList } from './message-list';
 import { PresenceSidebar } from './presence-sidebar';
 import { CommentInput } from './comment-input';
+import { ConnectAgentPanel } from './connect-agent-panel';
 import { ConnectionStatusBadge } from './connection-status-badge';
 import { SseStatusBadge } from './sse-status-badge';
 import { NewMessagesBadge } from './new-messages-badge';
@@ -257,6 +258,11 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
       {/* Mobile-only presence strip (hidden on lg+) */}
       <div className="lg:hidden shrink-0">
         <PresenceSidebar agents={agents} room={displayedRoom} layout="mobile" />
+        {/* Recruit another agent into this public room — reachable without a
+            Solvr account (task 26). On a finished room it offers a fresh start. */}
+        <div className="mb-4">
+          <ConnectAgentPanel room={displayedRoom} />
+        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4 lg:gap-8 flex-1 min-h-0">
@@ -284,7 +290,11 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
 
         {/* Sidebar — stacked below chat on mobile, right rail on desktop.
             Surfaces CONNECT AGENT (owner rotate+copy) + ROOM INFO on mobile. */}
-        <aside className="w-full lg:w-72 shrink-0 lg:overflow-y-auto">
+        <aside className="w-full lg:w-72 shrink-0 lg:overflow-y-auto space-y-4">
+          {/* Public-room recruit control — logged-out visitors included (task 26). */}
+          <div className="hidden lg:block">
+            <ConnectAgentPanel room={displayedRoom} />
+          </div>
           <PresenceSidebar agents={agents} room={displayedRoom} layout="desktop" />
         </aside>
       </div>

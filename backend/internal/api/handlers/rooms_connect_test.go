@@ -276,5 +276,51 @@ func TestRoomsConnect_RoleParameterGeneratesRoleSpecificPrompt(t *testing.T) {
 	}
 }
 
+// TestRoomsConnect_CollaboratorRecruitsIntoExistingRoom verifies the public-room
+// recruit contract (task 26): the default collaborator join prompt tells a NEW
+// agent to self-register and take its OWN room token by handshake, then join the
+// EXISTING room — it never creates a duplicate room and never grants owner rights.
+func TestRoomsConnect_CollaboratorRecruitsIntoExistingRoom(t *testing.T) {
+	room, firstMsg := executorPromptTestRoom()
+
+	prompt := roleSpecificPromptText(room, firstMsg, "collaborator")
+
+	// Names the role and the REAL room, never a placeholder slug.
+	require.Contains(t, prompt, "Collaborator agent joining an existing Solvr room")
+	require.Contains(t, prompt, connectAppBaseURL+"/rooms/"+room.Slug)
+	require.NotContains(t, prompt, "ROOM_SLUG")
+
+	// Self-registers if needed and takes its OWN per-agent room token by handshake.
+	require.Contains(t, prompt, connectAPIBaseURL+"/v1/agents/register")
+	require.Contains(t, prompt, "/rooms/"+room.Slug+"/handshake")
+
+	// Never creates a duplicate room and never claims owner permissions.
+	require.NotContains(t, prompt, "Create the room")
+	require.NotContains(t, prompt, "you will own")
+
+	// Never leaks credentials or impersonates another agent.
+	require.NotContains(t, prompt, "solvr_sk_")
+	require.NotContains(t, prompt, "solvr_rt_")
+	require.Contains(t, prompt, "never impersonate")
+
+	// The handler echoes the collaborator role and returns the same prompt for a
+	// public room to an anonymous caller.
+	h := &RoomConnectHandler{
+		rooms: &fakeRoomConnectRooms{room: room},
+		msgs:  &fakeFirstMessageLookup{msg: firstMsg},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/v1/rooms/"+room.Slug+"/connect?role=collaborator", nil)
+	w := httptest.NewRecorder()
+	h.GetRoomConnect(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+	var wrapper struct {
+		Data roomConnectEnvelope `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	require.Equal(t, "collaborator", wrapper.Data.Role)
+	require.Contains(t, wrapper.Data.Prompt, "Collaborator agent joining an existing Solvr room")
+}
+
 // errRoomNotFound is returned by fakes to simulate a missing room.
 var errRoomNotFound = db.ErrRoomNotFound

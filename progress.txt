@@ -4687,3 +4687,123 @@ UAT (owner-only last mile; every automatable check already ran GREEN locally):
      POST /v1/rooms/{slug}/archive as owner, confirm the header reads "· FINISHED", the
      composer shows the finished notice with START A NEW ROOM, and the transcript still
      renders; then POST /reopen and confirm it returns to "· LIVE" and accepts messages.
+
+================================================================================
+2026-09-23  TASK: "Let existing public rooms recruit another agent without
+            making visitors create an account" (category functional).
+            passes false -> true.
+================================================================================
+
+TASK SELECTION (re-walked first-false top-to-bottom; verified EACH blocker IN
+CODE this session, not from the journal)
+  - "Verify N-agent collaboration end to end" (acceptance): step 4 still needs
+    TWO API instances + cross-instance delivery. [REAL] grep -riE
+    redis|nats|pubsub|LISTEN|NOTIFY in internal/hub = EMPTY; hub is process-local
+    (manager.go hubs map under RWMutex). Cross-instance is idx 77 (false).
+    Acceptance spanning unbuilt behavior. SKIP.
+  - "Make agent-created rooms manageable": step 2 wants rooms.owner_id RETIRED
+    after migration (owned by "one room membership authority", idx 69, false).
+    [REAL] db/rooms.go still INSERT/SELECTs owner_id. Forward-dep. SKIP.
+  - "Let existing public rooms recruit another agent" (THIS TASK): previously
+    skipped ONLY because step 5 opens an ARCHIVED room and archive was unbuilt.
+    Archive shipped last iteration (000086 archived_at on rooms; APIRoom.archived_at;
+    room-header FINISHED/LIVE; join/message/presence 409 ROOM_ARCHIVED). Now
+    buildable. [REAL] verified the API half already exists: GET /v1/rooms/{slug}/connect
+    (router_rooms.go:66, readGuard = public read) + roleSpecificPromptText(room,
+    firstMsg, role) already emits a SELF-SERVICE join prompt for ANY role incl.
+    "collaborator": the agent self-registers (/v1/agents/register), takes its OWN
+    room token by handshake, joins the EXISTING room — no POST /v1/rooms, no owner
+    grant, no owner token. Public rooms need no admission (ownerPrivateAdmissionStep
+    returns nil for public). The GAP was purely FRONTEND: the room page had no
+    self-service "Connect an agent" control (the existing presence-sidebar "COPY
+    A2A PROMPT" card is a DIFFERENT owner-token feature — owner rotates+copies a
+    bearer token; that is NOT the public recruit flow). TOOK IT.
+
+WHAT I BUILT (TDD: RED component test first, then GREEN)
+  FRONTEND (client is dumb — renders API-owned prompt; no domain logic client-side)
+    NEW frontend/components/rooms/connect-agent-panel.tsx (190 lines): a room-page
+      "CONNECT AN AGENT" card. LIVE public room -> "GET JOIN PROMPT" button lazily
+      fetches api.getRoomConnect(slug,"collaborator") and renders the returned
+      prompt in a selectable <pre data-testid=join-prompt> + COPY JOIN PROMPT
+      (navigator.clipboard, "COPIED" only after success; manual-copy hint since the
+      prompt is already selectable), the Collaborator role (data-testid=connect-role),
+      the real room_url (data-testid=connect-room-url), and the existing task.
+      FINISHED (room.archived_at != null) -> no fetch, shows a "room is finished"
+      notice + START A NEW ROOM link to /connect (reusable instructions, not a join
+      into a closed conversation). Error -> message + RETRY.
+    NEW frontend/components/rooms/connect-agent-panel.test.tsx (4 tests).
+    api.ts: added getRoomConnect(slug, role="collaborator") -> GET
+      /v1/rooms/{slug}/connect?role=..., imported APIRoomConnectResponse.
+    api-types.ts: added APIRoomConnectResponse (the /connect envelope).
+    room-detail-client.tsx: mount <ConnectAgentPanel room={displayedRoom}/> in the
+      desktop right rail (above PresenceSidebar) and in the mobile block. Lazy fetch
+      means mounting does NOT call getRoomConnect at render, so the existing
+      room-detail-client.test.tsx api mock (3 methods) is untouched and stays green.
+  BACKEND (contract evidence only — the endpoint/prompt already existed; no prod
+    code changed): rooms_connect_test.go += TestRoomsConnect_CollaboratorRecruitsIntoExistingRoom
+    asserting the collaborator prompt names the real room + "joining an existing
+    Solvr room", uses /v1/agents/register + /handshake, does NOT contain "Create the
+    room" / "you will own", says "never impersonate", leaks no solvr_sk_/solvr_rt_,
+    and the handler echoes role="collaborator" for a public room.
+
+STEP-BY-STEP EVIDENCE
+  1 (logged-out visitor, public room, click Connect an agent)
+    [TEST] connect-agent-panel "reveals the collaborator join prompt ... when clicked"
+    — no fetch until click; click GET JOIN PROMPT -> getRoomConnect(slug,"collaborator").
+  2 (copyable join prompt: real room URL, default Collaborator role, room-specific
+    instructions, existing task) [TEST] same test asserts join-prompt contains the
+    real /rooms/<slug> URL + "joining an existing Solvr room", connect-role =
+    collaborator, connect-room-url href = real URL, task text shown; [TEST] backend
+    handler returns role="collaborator" + that prompt.
+  3 (self-registers, own credential, joins EXISTING room) [TEST] backend asserts
+    prompt has /v1/agents/register + /rooms/<slug>/handshake + "joining an existing".
+  4 (no duplicate room, no owner permissions) [TEST] backend asserts prompt NOT
+    "Create the room", NOT "you will own", contains "never impersonate".
+  5 (archived room offers a NEW room, not a join) [TEST] connect-agent-panel
+    "offers starting a new room for a finished (archived) room" — START A NEW ROOM
+    link -> /connect, no join-prompt rendered, getRoomConnect NOT called.
+  + copy path [TEST] "copies the join prompt to the clipboard" (writeText called
+    with the exact prompt, COPIED shown); error path [TEST] "shows an error with
+    retry" (reject -> RETRY -> resolve -> prompt appears).
+
+VERIFICATION (all RAN this session; no DB required — frontend tests + fake-based
+  handler test)
+  [TEST] backend go test ./internal/api/handlers -run RoomsConnect -count=1 = ok
+    (incl. the new collaborator test), 0 SKIP.
+  [TEST] frontend targeted: connect-agent-panel (4) + room-detail-client (6,
+    unchanged, no regression from mounting) + presence-sidebar (3, unchanged) =
+    13/13 PASS.
+  [TEST] frontend FULL suite: npx vitest run = 148 files, 1463 tests PASS, 0 skip
+    (was 1459; +4 new).
+  [REAL] npm run typecheck (tsc --noEmit) exit 0.
+  [REAL] go build ./... OK; go vet ./internal/api/handlers clean.
+
+FILE SIZES / PRE-EXISTING DEBT (honest note): my NEW/changed files are all under
+  the 800 limit — connect-agent-panel.tsx 190, room-detail-client.tsx 306, api.ts
+  513. api-types.ts is 1536 (I added a 23-line interface following the established
+  "all API types live here" convention). api-types.ts was ALREADY ~1514 lines
+  (>800) before this change; it is one of 37 files scripts/check-file-size.sh
+  already flags on main (the raw script exits 1 on HEAD today, independent of my
+  work). I did NOT introduce a new over-limit file and did not meaningfully worsen
+  the pre-existing situation. Splitting api-types.ts is unrelated refactor debt, not
+  this task's job, and would risk broad breakage — left as-is.
+
+NO existing test deleted/skipped/weakened. Only ADDED: 2 new frontend files, 1 new
+  backend test func, a getRoomConnect method + its type + import, and the mount +
+  2 imports in room-detail-client. The presence-sidebar "COPY A2A PROMPT"
+  owner-token card and its 3 tests are UNTOUCHED (that is a distinct owner feature,
+  not replaced by this task).
+
+DIFF (git status --porcelain / git diff --stat) — matches the work above
+  M backend/internal/api/handlers/rooms_connect_test.go (+46 new collaborator test)
+  M frontend/components/rooms/room-detail-client.tsx     (+12 import + 2 mounts)
+  M frontend/lib/api-types.ts                            (+23 APIRoomConnectResponse)
+  M frontend/lib/api.ts                                  (+13 getRoomConnect + import)
+  M spec.json                                            (this task passes -> true)
+  ?? connect-agent-panel.tsx, connect-agent-panel.test.tsx
+
+UAT (owner visual last mile; every automatable check already ran GREEN locally):
+  Open a LIVE public room logged out, click CONNECT AN AGENT -> GET JOIN PROMPT,
+  confirm the Collaborator prompt + real room URL + task appear and COPY works;
+  then open a FINISHED room and confirm it shows START A NEW ROOM (-> /connect)
+  instead of a join prompt.

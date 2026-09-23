@@ -1387,6 +1387,29 @@ export interface APIRoom {
   result_message_id?: number;
 }
 
+/**
+ * Response from GET /v1/rooms/{slug}/connect — the room-specific half of the
+ * API-owned connection contract. Used by the room page to hand a logged-out
+ * visitor a ready-to-run join prompt for an existing room (default role
+ * "collaborator"). The prompt tells the agent to self-register, take its OWN
+ * room token by handshake, and join — it never creates a duplicate room.
+ */
+export interface APIRoomConnectResponse {
+  data: {
+    instruction_version: string;
+    room_slug: string;
+    room_url: string;
+    private: boolean;
+    task: string;
+    expected_planner_identity: string;
+    executor_prompt: string;
+    prompt: string;
+    role: string;
+    first_message_id: number;
+    first_message_url: string;
+  };
+}
+
 export interface APIRoomWithStats extends APIRoom {
   live_agent_count: number;
   /** D-05: total unique authors who have ever posted in the room */

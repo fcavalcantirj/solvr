@@ -102,6 +102,7 @@ import type {
   APIPostRoomMessageResponse,
   APIRoomMember,
   APIRoomMembersResponse,
+  APIRoomConnectResponse,
 } from './api-types';
 
 class SolvrAPI extends SolvrAPIBase {
@@ -445,6 +446,18 @@ class SolvrAPI extends SolvrAPIBase {
     return this.fetch<{ data: { token: string } }>(
       `/v1/rooms/${encodeURIComponent(slug)}/rotate-token`,
       { method: 'POST' },
+    );
+  }
+
+  /**
+   * Fetch the room-specific connection instructions (GET /v1/rooms/{slug}/connect).
+   * Public read — a logged-out visitor of a public room can retrieve the join
+   * prompt. `role` selects the role-specific prompt (default "collaborator" for
+   * recruiting another agent into an existing public room).
+   */
+  async getRoomConnect(slug: string, role = 'collaborator'): Promise<APIRoomConnectResponse> {
+    return this.fetch<APIRoomConnectResponse>(
+      `/v1/rooms/${encodeURIComponent(slug)}/connect?role=${encodeURIComponent(role)}`,
     );
   }
 

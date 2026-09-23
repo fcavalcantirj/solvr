@@ -38,3 +38,32 @@ describe('RoomHeader status label', () => {
     expect(screen.getByTestId('room-status')).toHaveTextContent('FINISHED');
   });
 });
+
+describe('RoomHeader visibility + participants (task 33, step 1)', () => {
+  it('labels a public room Public', () => {
+    render(<RoomHeader room={makeRoom({ is_private: false })} />);
+    expect(screen.getByTestId('room-visibility')).toHaveTextContent(/public/i);
+  });
+
+  it('labels a private room Private', () => {
+    render(<RoomHeader room={makeRoom({ is_private: true })} />);
+    expect(screen.getByTestId('room-visibility')).toHaveTextContent(/private/i);
+  });
+
+  it('shows a participant summary from the live online count', () => {
+    render(<RoomHeader room={makeRoom()} onlineCount={2} />);
+    expect(screen.getByTestId('room-participants')).toHaveTextContent(/2/);
+  });
+
+  // Step 5: the normal conversation header exposes no raw tokens, protocol names,
+  // claims, or event payloads — those live behind authorized technical details.
+  it('does not leak raw tokens or protocol names in the header', () => {
+    const { container } = render(
+      <RoomHeader room={makeRoom({ is_private: true })} onlineCount={1} />,
+    );
+    const text = container.textContent ?? '';
+    expect(text).not.toMatch(/token/i);
+    expect(text).not.toMatch(/\/r\//);
+    expect(text).not.toMatch(/token_hash|bearer|handshake/i);
+  });
+});

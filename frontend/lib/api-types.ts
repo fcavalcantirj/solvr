@@ -1489,6 +1489,11 @@ export interface APIRoomDetailResponse {
     owner_display_name?: string;
     connection_status?: RoomConnectionStatus;
     online_count?: number;
+    // Compact context area (task 33, step 4): the room's first message (the initial
+    // task) and the most recently pinned directive. The API decides which message is
+    // first and which pin is latest; the client only renders them.
+    initial_task?: APIRoomMessage | null;
+    latest_pinned?: APIRoomMessage | null;
   };
 }
 

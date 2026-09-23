@@ -185,11 +185,35 @@ func (h *RoomHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	onlineCount := len(agents)
 
+	// Compact context area (task 33, step 4): the room's INITIAL TASK (its first
+	// message, even when it has scrolled out of the recent window) and the LATEST
+	// PINNED DIRECTIVE. The server decides "first" and "latest" — ListPinned returns
+	// newest-pin first — so the client renders these without scanning the transcript.
+	var initialTask *models.Message
+	if first, err := h.msgRepo.GetFirstMessage(r.Context(), room.ID); err != nil {
+		// An empty room has no first message (ErrRoomNotFound); that is a valid
+		// null context, not a failure. Only genuine errors are logged.
+		if !errors.Is(err, db.ErrRoomNotFound) {
+			slog.Error("failed to get first message", "error", err, "room_id", room.ID)
+		}
+	} else {
+		initialTask = first
+	}
+
+	var latestPinned *models.Message
+	if pins, err := h.msgRepo.ListPinned(r.Context(), room.ID); err != nil {
+		slog.Error("failed to list pinned messages", "error", err, "room_id", room.ID)
+	} else if len(pins) > 0 {
+		latestPinned = &pins[0]
+	}
+
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
 			"room":              room,
 			"agents":            agents,
 			"recent_messages":   messages,
+			"initial_task":      initialTask,
+			"latest_pinned":     latestPinned,
 			"connection_status": ComputeConnectionStatus(activated, onlineCount),
 			"online_count":      onlineCount,
 		},

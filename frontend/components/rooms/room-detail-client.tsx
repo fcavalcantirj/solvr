@@ -7,6 +7,7 @@ import { PresenceSidebar } from './presence-sidebar';
 import { CommentInput } from './comment-input';
 import { ConnectAgentPanel } from './connect-agent-panel';
 import { RoomStarterPrompts } from './room-starter-prompts';
+import { RoomContextPanel } from './room-context-panel';
 import { ConnectionStatusBadge } from './connection-status-badge';
 import { SseStatusBadge } from './sse-status-badge';
 import { NewMessagesBadge } from './new-messages-badge';
@@ -23,6 +24,10 @@ interface RoomDetailClientProps {
   // Server-derived connection progress (waiting/started). The client renders it
   // as-is and never recomputes it from the presence list.
   connectionStatus?: RoomConnectionStatus;
+  // Compact context area (task 33, step 4): the initial task (first message) and
+  // the latest pinned directive, both chosen by the API. Rendered as-is.
+  initialTask?: APIRoomMessage | null;
+  latestPinned?: APIRoomMessage | null;
   // Persistent id of a message to deep-link to (highlight + scroll into view).
   // In production this is read from the ?message= query param when not supplied.
   highlightMessageId?: number;
@@ -40,7 +45,7 @@ function readMessageParam(): number | undefined {
   return Number.isFinite(id) && id > 0 ? id : undefined;
 }
 
-export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName, connectionStatus, highlightMessageId }: RoomDetailClientProps) {
+export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDisplayName, connectionStatus, initialTask, latestPinned, highlightMessageId }: RoomDetailClientProps) {
   // The transcript reads oldest -> newest (top -> bottom). All batches (initial
   // window, older-history pages, SSE pushes, deep-link fetches, local echoes) go
   // through mergeMessages, so the list is always ordered by server id and free
@@ -265,7 +270,13 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
       {/* Room header — lives inside the client component so message_count
           reflects SSE arrivals immediately instead of the stale ISR snapshot. */}
       <div className="shrink-0">
-        <RoomHeader room={displayedRoom} ownerDisplayName={ownerDisplayName} />
+        <RoomHeader room={displayedRoom} ownerDisplayName={ownerDisplayName} onlineCount={agents.length} />
+      </div>
+
+      {/* Compact context area: the initial task + latest pinned directive, so a
+          reader does not have to scroll a long transcript to find them. */}
+      <div className="shrink-0">
+        <RoomContextPanel initialTask={initialTask} latestPinned={latestPinned} />
       </div>
 
       {/* Fast direct-create landing (task: humans who created the room here). It
@@ -329,8 +340,9 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
 
         {/* Sidebar — stacked below chat on mobile, right rail on desktop.
             Surfaces CONNECT AGENT (owner rotate+copy) + ROOM INFO on mobile. */}
-        <aside className="w-full lg:w-72 shrink-0 lg:overflow-y-auto space-y-4">
-          {/* Public-room recruit control — logged-out visitors included (task 26). */}
+        <aside id="connect-agent" className="w-full lg:w-72 shrink-0 lg:overflow-y-auto space-y-4 scroll-mt-24">
+          {/* Public-room recruit control — logged-out visitors included (task 26).
+              The header's Connect an agent action anchors to this panel (#connect-agent). */}
           <div className="hidden lg:block">
             <ConnectAgentPanel room={displayedRoom} />
           </div>

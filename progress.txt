@@ -5563,3 +5563,156 @@ UAT (owner last mile — every automatable check already ran GREEN locally):
   waits for explicit review (does not treat silence as approval) and reports
   completion as its own claim. Then apply migration 000087 to production before
   the room-page task consumes pinned directives.
+
+================================================================================
+2026-09-23 — DONE (task flipped: "Make a room page a readable shared conversation
+with visible participants and connection controls")
+--------------------------------------------------------------------------------
+POINTER / SKIP RATIONALE (the two earlier passes:false tasks, re-verified against
+the ACTUAL code THIS session, not the prior journal):
+  - "Verify N-agent collaboration end to end across clients and service
+    instances" (first passes:false): ACCEPTANCE task. Needs a live planner + two
+    executors + reviewer across >1 client product and TWO API instances, plus the
+    canonical /v1/rooms/{slug}/entries contract. [REAL] grep of router_rooms.go:
+    NO /entries route exists (that is the later "Offer one canonical room API"
+    task). Spans behavior later tasks still build. Left passes=false per the
+    acceptance-task rule.
+  - "Make agent-created rooms manageable even when no human owns or claims the
+    agent": BLOCKED. Step 2 requires "rooms.owner_id has been retired after
+    migration". [REAL] grep -riE 'drop.*owner_id' backend/migrations => NONE;
+    newest migration is 000087_add_message_pin_supersede. owner_id retirement is
+    the deliverable of the later data task "Use one room membership authority ...".
+    Forward dependency; left passes=false.
+  NOTE: this room-page task was itself skipped LAST session because step 4 needs a
+  "latest PINNED DIRECTIVE" and pinning did not exist. The prior iteration BUILT
+  message pinning (migration 000087, GET /r/{slug}/pins, MessageRepository.
+  ListPinned). [REAL] verified pins route + ListPinned present this session, so
+  the room-page task is now buildable — took it.
+
+TASK BUILT: the room page's header now shows visibility + a live participant
+summary + Share and Connect-an-agent actions (step 1), and a compact expandable
+CONTEXT AREA surfaces the room's INITIAL TASK and LATEST PINNED DIRECTIVE (step 4).
+Steps 2/3/6 were already satisfied by existing components (verified by reading the
+actual code, not assumed) and are left untouched.
+
+STATE OF EACH STEP (read the actual code first):
+  step 1 (header: purpose, visibility, participant summary, Share + Connect):
+    - purpose: [REAL] RoomHeader already renders room.description.
+    - visibility: GAP -> BUILT. RoomHeader eyebrow now renders "· PUBLIC" / "·
+      PRIVATE" from room.is_private (data-testid room-visibility).
+    - participant summary: GAP -> BUILT. RoomHeader takes onlineCount (=
+      agents.length from server-confirmed presence, never recomputed) and renders
+      "<n> online" with a restrained green/grey dot (data-testid room-participants).
+    - Share + Connect: GAP -> BUILT. New RoomHeaderActions (reuses the existing
+      useShare hook): Share copies the CANONICAL origin+/rooms/{slug} URL (no
+      token/session params); Connect an agent is an in-page anchor to
+      #connect-agent (the aside now carries id="connect-agent" scroll-mt-24).
+  step 2 (conversation dominant; compact participant panel desktop; collapsible
+    strip mobile): [REAL] already done — MessageList is the flex-1 main area,
+    PresenceSidebar renders layout="desktop" (right rail) and layout="mobile"
+    (strip). Unchanged; its 3 tests still pass.
+  step 3 (author identity, optional role label, timestamp, readable content):
+    [REAL] MessageBubble already renders the authenticated author (Link to
+    /agents|/users), a relative timestamp, and text/Markdown body. Role label is
+    OPTIONAL per the step; absent is acceptable. Unchanged.
+  step 4 (initial task + latest pinned directive in a compact context area
+    expandable without leaving the room): GAP -> BUILT.
+    - backend: GET /v1/rooms/{slug} (RoomHandler.GetRoom) now returns
+      initial_task (msgRepo.GetFirstMessage; null for an empty room, ErrRoomNotFound
+      treated as valid-null not error) and latest_pinned (msgRepo.ListPinned()[0];
+      ListPinned is newest-pin-first so [0] is the latest directive). Server picks
+      "first" and "latest"; the client never scans the transcript.
+    - frontend: new RoomContextPanel renders the two items; each is compact by
+      default and EXPANDS IN PLACE via a button (never a navigation) and links to
+      its exact message via #message-<sequence_num>. Renders nothing when both are
+      absent.
+  step 5 (raw tokens, protocol names, claims, event payloads behind authorized
+    technical details, not in the normal header): [REAL] the header exposes none
+    of these — a guard test asserts RoomHeader's rendered text contains no
+    token/handshake/bearer/token_hash/"/r/" strings. The technical/owner controls
+    (token rotation) remain inside the owner-gated ConnectAgentPanel, not the
+    header. No code change needed for the negative; the guard test pins it.
+  step 6 (logged-out visitor reads a public transcript and follows incoming
+    messages without a signup overlay): [REAL] already done — page.tsx SSRs the
+    public room and RoomDetailClient's useRoomSse streams live updates with no
+    auth gate over the transcript. Unchanged.
+
+CHANGES (GREEN, minimum code):
+  BACKEND (smart API owns all logic)
+    api/handlers/rooms.go: GetRoom adds initial_task + latest_pinned to the
+      response data (GetFirstMessage + ListPinned, both already in the repo). File
+      508 lines (< 800).
+  FRONTEND (dumb terminal — renders what the API returns)
+    lib/api-types.ts: APIRoomDetailResponse.data gains initial_task?, latest_pinned?
+      (both APIRoomMessage | null).
+    components/rooms/room-context-panel.tsx: NEW. The compact context area.
+    components/rooms/room-header-actions.tsx: NEW. Share (useShare, canonical URL)
+      + Connect-an-agent (#connect-agent anchor).
+    components/rooms/room-header.tsx: + visibility badge, + participant summary
+      (onlineCount prop), + <RoomHeaderActions>. 98 lines.
+    components/rooms/room-detail-client.tsx: passes onlineCount + initialTask +
+      latestPinned; renders <RoomContextPanel>; aside gets id="connect-agent". 357.
+    app/rooms/[slug]/page.tsx: destructures initial_task/latest_pinned and passes
+      them to RoomDetailClient.
+
+TDD:
+  RED backend: rooms_context_test.go asserted data.initial_task == first message
+    and data.latest_pinned == the most-recently-pinned message ->
+    FAIL (initial_task nil) -> GREEN after the GetRoom addition.
+  RED frontend: room-context-panel.test.tsx (renders nothing when empty; shows
+    Task + Pinned directive labels; expands in place via a BUTTON; links via
+    #message-<seq>); room-header-actions.test.tsx (Share button + Connect link to
+    #connect-agent; Share copies canonical /rooms/{slug}); room-header.test.tsx
+    (+ Public/Private visibility, participant summary, no token/protocol leak) ->
+    all FAILED (missing components) -> GREEN after the components.
+
+VERIFICATION (all RAN this session; frontend needs no DB; backend ran against the
+LOCAL isolated test DB postgres://solvr:solvr_dev@localhost:5435/solvr_test
+[docker solvr-postgres, schema_migrations version 87]):
+  [TEST] backend go test ./internal/api/handlers -run
+    'TestGetRoom_ContextCarriesInitialTaskAndLatestPinned|
+     TestGetRoom_ConnectionStatusReflectsRealActivity|TestPinMessageHandler_PinListUnpin'
+    -v = 3 PASS, 0 SKIP.
+  [TEST] frontend npx vitest run components/rooms/ = 18 files, 126 tests PASS
+    (incl the 12 new: context-panel 5, header-actions 3, header +4).
+  [TEST] frontend FULL suite npx vitest run = 153 files, 1499 tests PASS, 0 fail.
+  [REAL] backend go build ./... OK; go vet ./internal/api/handlers clean.
+  [REAL] frontend npx tsc --noEmit exit 0.
+  [REAL] file sizes: rooms.go 508, room-header.tsx 98, room-detail-client.tsx 357,
+    room-context-panel.tsx 87, room-header-actions.tsx 48 — all < 800.
+
+PRE-EXISTING FAILURES (NOT this task, NOT a regression — PROVEN this session):
+  The full internal/db package and the GitHub OAuth handler tests fail on the
+  shared solvr_test DB. Root causes are dirty fixtures / missing local OAuth creds,
+  documented in MEMORY and the prior journal. PROOF for the room-repo ones: with my
+  changes stashed (git stash -u, clean HEAD) TestRoomRepository_GetBySlug fails
+  IDENTICALLY — "rooms_test.go:99: Create() error = room slug already exists" (the
+  db tests use hardcoded slugs that collide with rows left by earlier runs). My
+  diff touches only the room-detail HANDLER + frontend; it imports none of the
+  agents/feed/briefing/crystallization/room-repo scan paths. Left untouched for a
+  human to clean the shared DB — orthogonal to this task.
+
+NO existing test deleted/skipped/weakened. RoomHeader's 2 status tests, the 7
+  room-detail-client tests, and the presence/message/connect suites all still pass
+  unchanged; the header additions are new assertions alongside the old ones.
+
+DIFF (git status --porcelain / git diff --stat) — matches the work above:
+  M backend/internal/api/handlers/rooms.go            (initial_task + latest_pinned)
+  M frontend/app/rooms/[slug]/page.tsx                (pass the two fields through)
+  M frontend/components/rooms/room-detail-client.tsx  (onlineCount + context panel + #connect-agent)
+  M frontend/components/rooms/room-header.tsx          (visibility + participants + actions)
+  M frontend/components/rooms/room-header.test.tsx     (+4 header assertions)
+  M frontend/lib/api-types.ts                          (initial_task?, latest_pinned?)
+  ?? backend/internal/api/handlers/rooms_context_test.go
+  ?? frontend/components/rooms/room-context-panel.tsx / .test.tsx
+  ?? frontend/components/rooms/room-header-actions.tsx / .test.tsx
+  (spec.json: this task passes -> true)
+
+UAT (owner last mile — every automatable check already ran GREEN locally; the only
+remaining confirmation is a visual render in a real browser, which is task 64's
+scope, not automatable here):
+  Open a public room (e.g. the tictactoe room) logged out. Confirm the header
+  reads PUBLIC, shows "<n> online" and Share + Connect an agent; Share copies a
+  clean /rooms/<slug> URL; Connect scrolls to the connection panel. Confirm the
+  context area shows the initial task and, once a directive is pinned, the latest
+  pinned directive, each expandable in place and linking into the transcript.

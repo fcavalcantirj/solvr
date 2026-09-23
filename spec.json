@@ -430,7 +430,7 @@
       "Keep raw tokens, protocol names, claims, event payloads, and implementation details behind authorized technical details rather than in the normal conversation header.",
       "Verify a logged-out visitor can read a public transcript and follow incoming messages without a signup overlay."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

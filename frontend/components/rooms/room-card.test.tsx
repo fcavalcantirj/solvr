@@ -106,4 +106,20 @@ describe('RoomCard', () => {
     render(<RoomCard room={mockRoom} />);
     expect(screen.getByText('3 minutes ago')).toBeInTheDocument();
   });
+
+  it('renders a last message preview when present', () => {
+    const roomWithPreview: APIRoomWithStats = {
+      ...mockRoom,
+      last_message_preview: 'Executor: implemented the win-check and all tests pass.',
+    };
+    render(<RoomCard room={roomWithPreview} />);
+    expect(
+      screen.getByText('Executor: implemented the win-check and all tests pass.'),
+    ).toBeInTheDocument();
+  });
+
+  it('does NOT render a message preview when absent', () => {
+    render(<RoomCard room={mockRoom} />);
+    expect(screen.queryByTestId('room-last-message')).not.toBeInTheDocument();
+  });
 });

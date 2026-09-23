@@ -4937,3 +4937,148 @@ UAT (owner visual last mile; every automatable check already ran GREEN locally):
   confirm you land on /rooms/<slug>?created=1 showing copyable PLANNER and EXECUTOR
   prompts; retry the same name and confirm the "already exists" error shows in-form
   with no duplicate room; open /connect logged out and confirm no create form.
+
+================================================================================
+2026-09-23  Task: "Make Rooms a focused public discovery page with a strong
+            connection action" (functional; spec.json line ~396-408)
+================================================================================
+
+TASK SELECTION (first-false, top-to-bottom, with the acceptance/forward-dep carve-outs)
+  - Line 310 "Verify N-agent collaboration end to end across clients and service
+    instances" = FIRST false. SKIPPED as an acceptance task spanning unbuilt
+    behavior. Step 4 requires "Distribute participants across two API instances ...
+    verify replay". [REAL] grep of backend/internal/hub + backend/internal/api for
+    redis|nats|pubsub|LISTEN|NOTIFY|pg_notify => NONE; the hub is process-local.
+    Cross-instance delivery is the still-false task "Preserve room delivery and
+    statistics across restarts and more than one API instance" (line ~981). Left
+    passes=false.
+  - Line 358 "Make agent-created rooms manageable even when no human owns or claims
+    the agent" = SKIPPED (forward-dep). Step 2 requires "rooms.owner_id has been
+    retired after migration". [REAL] backend/internal/db/rooms.go STILL
+    INSERT/SELECT/WHERE owner_id (lines 73,75,152,205,264,334...); latest migration
+    is 000086 (room archive), none retires owner_id. Retirement is owned by the
+    still-false "Use one room membership authority" task (line ~880). Left
+    passes=false.
+  - Line ~396 "Make Rooms a focused public discovery page" = buildable now, no
+    forward-dep on unbuilt schema. TOOK IT.
+
+WHAT WAS MISSING (before this iteration)
+  [REAL] GET /v1/rooms (handlers/rooms.go ListRooms) accepted only limit/offset and
+    called RoomRepository.List, which had a fixed query: excludes deleted+private,
+    ORDER BY last_active_at DESC only. No sort=active, no search, no expired/empty/
+    archived handling, no message preview. Frontend /rooms page carried the OLD
+    "AGENT COMMUNICATION PROTOCOL / Real-time A2A" heading, no search field, no
+    sort control, and RoomCard showed no last-message preview.
+
+WHAT I BUILT (TDD: RED first)
+  BACKEND (business logic lives here — client only forwards sort/query and renders)
+    models/room.go: RoomWithStats += LastMessagePreview *string
+      (json:"last_message_preview,omitempty").
+    db/rooms.go: NEW RoomListParams{Limit,Offset,Sort,Query,IncludeArchived} and
+      NEW ListFiltered(ctx, params). List(ctx,limit,offset) now DELEGATES to
+      ListFiltered with defaults (single query path; the old List test still holds).
+      ListFiltered always excludes private, soft-deleted, expired
+      (expires_at IS NULL OR > NOW()), and empty-abandoned rooms
+      (message_count=0 AND last_active_at < NOW()-INTERVAL '1 hour' AND no live
+      presence). Archived (archived_at) hidden by default, surfaced when a search
+      query is present OR IncludeArchived=true. sort=active => ORDER BY
+      live_agent_count DESC, last_active_at DESC, id DESC; sort=recent (default) =>
+      last_active_at DESC, id DESC (stable id tie-breaker). last_message_preview =
+      LEFT(content,200) of the latest non-deleted message.
+    handlers/rooms.go ListRooms: parses sort (recent|active, unknown->recent), q,
+      include_archived=true; calls ListFiltered.
+  FRONTEND (dumb terminal — forwards params, renders results)
+    lib/api-types.ts: APIRoomWithStats += last_message_preview?; NEW RoomListParams.
+    lib/api.ts: fetchRooms now takes a RoomListParams object and builds
+      limit/offset/sort/q/include_archived query params (was fetchRooms(limit,offset)).
+    components/rooms/room-card.tsx: renders last_message_preview when present
+      (data-testid=room-last-message), hidden otherwise.
+    components/rooms/room-list.tsx: rewritten with a controls bar — search form
+      (aria-label "Search rooms"), a Recent | Active now sort toggle (aria-pressed),
+      and a prominent CONNECT AGENTS link to /connect. Sort/search re-query the API
+      from offset 0 and REPLACE the list; Load more appends with mergeUnique()
+      dedup by room id (new activity can repeat a room across offset pages).
+      Adds an error state with RETRY and a query-aware empty state. Does NOT fetch
+      on mount (uses server-rendered initialRooms).
+    app/rooms/page.tsx: concise heading (dropped "AGENT COMMUNICATION PROTOCOL" and
+      the A2A-protocol prose); server-fetch now requests sort=recent and passes
+      initialSort to RoomListClient. Metadata description rewritten to plain product
+      language.
+
+STEP-BY-STEP EVIDENCE
+  1 (public rooms render logged out) [TEST] backend TestRoomRoutes_ListRooms GETs
+    /v1/rooms unauthenticated -> 200 with live_agent_count; page.tsx server-fetches
+    the public endpoint. (visual render = UAT)
+  2 (concise heading + Connect agents + search + one Recent/Active now control)
+    [TEST] room-list "renders a search field, Recent/Active now sort controls, and a
+    Connect agents action" (CONNECT AGENTS -> /connect).
+  3 (card: purpose, participants, last activity, short message preview) [TEST]
+    room-card "renders a last message preview when present" + "does NOT render ...
+    when absent" + existing participant/last-active card tests (all still green).
+  4 (Active now = non-expired presence; Recent = message activity) [TEST] backend
+    TestRoomRepository_ListFiltered/sort=active (room with a live agent ordered
+    first, LiveAgentCount==1) and /sort=recent (newer last_active first). [TEST]
+    room-list "re-queries the API with sort=active when Active now is selected".
+  5 (excludes private/deleted/expired/empty-abandoned; archived via search or
+    include-archived) [TEST] ListFiltered subtests: excludes_expired_rooms;
+    excludes_empty_abandoned_rooms_but_keeps_content_or_fresh_rooms; archived
+    excluded_by_default,_included_via_flag_and_via_search. Private+deleted exclusion
+    covered by the existing List query/test (is_private=FALSE, deleted_at IS NULL).
+  6 (pagination preserves filters, no duplicates on new activity) [TEST] room-list
+    "deduplicates rooms already shown when loading more" (overlapping page -> Room 20
+    appears once) + Load more forwards sort+q; backend adds a stable id tie-breaker.
+
+VERIFICATION (all RAN this session against the LOCAL isolated test DB
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test — docker solvr-postgres;
+  migrated fresh to version 86 with `migrate up`)
+  [TEST] backend go test ./internal/db -run
+    'TestRoomRepository_ListFiltered|TestRoomRepository_List$' = ok, 0 SKIP
+    (8 ListFiltered subtests + List, all PASS on a freshly recreated+migrated DB).
+  [TEST] backend go test ./internal/api/... -run 'ListRooms|RoomRoutes' = ok
+    (TestRoomRoutes_ListRooms and all room routes PASS).
+  [REAL] go build ./... OK; go vet ./internal/db ./internal/api/handlers
+    ./internal/models clean.
+  [TEST] frontend room-list.test.tsx (9) + room-card.test.tsx (14) PASS.
+  [TEST] frontend FULL suite `npx vitest run` = 150 files, 1477 tests PASS, 0 fail
+    (was 1470; +7: 5 room-list + 2 room-card).
+  [REAL] frontend npm run typecheck (tsc --noEmit) exit 0.
+  [REAL] scripts/check-file-size.sh: my touched files are all under 800 (rooms.go
+    620, handlers/rooms.go 484, room.go 73, room-list.tsx 202, room-card.tsx 102,
+    page.tsx 61). The 37 reported violations are ALL pre-existing files I did not
+    touch (router.go 1188, privacy/page.tsx 1075, etc.).
+
+PRE-EXISTING FAILURES (NOT caused by this task; do not block it)
+  A full `go test ./...` on the fresh test DB shows 49 failures in the db package,
+  ALL from unrelated legacy test helpers inserting users without referral_code
+  (migration 000070 sets users.referral_code NOT NULL): TestCrystallization_*,
+  TestBriefing_*, TestGetTrendingNow_*, TestGetRecentVictories_*, users_test, etc.
+  [REAL] `git status --porcelain` shows my diff touches ONLY rooms files
+  (handlers/rooms.go, db/rooms.go, models/room.go + new rooms_listfiltered_test.go);
+  none of the failing tests are in the rooms path and they fail identically without
+  my change (the schema predates this task at version >=70). NO room test failed on
+  the fresh DB.
+
+NO existing test deleted/skipped/weakened. The pre-existing db/rooms_test.go
+  TestRoomRepository_List (returns >=2 public rooms with live_agent_count; excludes
+  soft-deleted) still runs and passes because List now delegates to ListFiltered and
+  fresh empty rooms are not "abandoned" (age gate). room-card's 12 prior tests and
+  room-list's 4 prior tests are unchanged and green.
+
+DIFF (git status --porcelain / git diff --stat) — matches the work above
+  M backend/internal/api/handlers/rooms.go   (sort/q/include_archived parsing)
+  M backend/internal/db/rooms.go             (RoomListParams + ListFiltered; List delegates)
+  M backend/internal/models/room.go          (+LastMessagePreview)
+  M frontend/app/rooms/page.tsx              (concise heading, sort=recent)
+  M frontend/components/rooms/room-card.tsx  (+message preview)
+  M frontend/components/rooms/room-list.tsx  (controls bar + refetch + dedup)
+  M frontend/lib/api.ts                      (fetchRooms(params))
+  M frontend/lib/api-types.ts                (+last_message_preview, RoomListParams)
+  M spec.json                                (this task passes -> true)
+  ?? backend/internal/db/rooms_listfiltered_test.go (8-subtest integration test)
+
+UAT (owner visual last mile; every automatable check already ran GREEN locally):
+  Open /rooms logged out. Confirm the concise heading (no "AGENT COMMUNICATION
+  PROTOCOL"), a search box, a Recent | Active now toggle, and a CONNECT AGENTS
+  button. Type a query + Search and confirm results narrow; toggle Active now and
+  confirm rooms with live agents lead; confirm each card shows a short last-message
+  preview; scroll and Load more without seeing a room repeat.

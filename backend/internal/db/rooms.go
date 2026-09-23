@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -185,10 +186,92 @@ func (r *RoomRepository) GetByTokenHash(ctx context.Context, hash string) (*mode
 	return r.scanRoom(ctx, "GetByTokenHash", query, hash)
 }
 
-// List returns public rooms with live agent count, unique participant count, and owner display name,
-// ordered by last_active_at DESC. Uses correlated subqueries (no N+1 per D-34).
-// Includes unique_participant_count (D-05) and owner_display_name (D-10) per Phase 16 Plan 01.
+// RoomListParams controls public room discovery listing. The zero value lists
+// recent, non-archived public rooms — the same behaviour the old List(limit,
+// offset) exposed.
+type RoomListParams struct {
+	Limit  int
+	Offset int
+	// Sort is "recent" (default, most recent activity first) or "active"
+	// (rooms with the most live agents first, recent activity as tie-breaker).
+	Sort string
+	// Query, when non-empty, matches display_name or description (case-insensitive)
+	// and also surfaces archived rooms so a searcher can still find a finished room.
+	Query string
+	// IncludeArchived surfaces archived rooms in the default browse view.
+	IncludeArchived bool
+}
+
+// emptyAbandonedInterval defines how long an empty room (no messages, no live
+// agents) must sit inactive before it is treated as abandoned and hidden from
+// public discovery. Freshly created empty rooms (an agent is still expected to
+// join) stay listed.
+const emptyAbandonedInterval = "1 hour"
+
+// List returns recent public rooms with default discovery filters. It delegates
+// to ListFiltered so there is a single query path; callers wanting sort/search
+// use ListFiltered directly.
 func (r *RoomRepository) List(ctx context.Context, limit, offset int) ([]models.RoomWithStats, error) {
+	return r.ListFiltered(ctx, RoomListParams{Limit: limit, Offset: offset})
+}
+
+// ListFiltered returns public rooms for discovery, honouring sort, search and
+// archived visibility. It always excludes private, soft-deleted, expired and
+// empty-abandoned rooms. Uses correlated subqueries (no N+1 per D-34) and
+// includes live_agent_count (D-05 presence), unique_participant_count (D-05),
+// owner_display_name (D-10), and a last-message preview for the room card.
+func (r *RoomRepository) ListFiltered(ctx context.Context, params RoomListParams) ([]models.RoomWithStats, error) {
+	limit := params.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := params.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	// WHERE clauses common to every discovery query: never leak private,
+	// deleted or expired rooms, and drop empty rooms nobody came back to.
+	where := []string{
+		"r.deleted_at IS NULL",
+		"r.is_private = FALSE",
+		"(r.expires_at IS NULL OR r.expires_at > NOW())",
+		`NOT (
+			r.message_count = 0
+			AND r.last_active_at < NOW() - INTERVAL '` + emptyAbandonedInterval + `'
+			AND NOT EXISTS (
+				SELECT 1 FROM agent_presence ap
+				WHERE ap.room_id = r.id
+				  AND ap.last_seen > NOW() - (ap.ttl_seconds || ' seconds')::interval
+			)
+		)`,
+	}
+
+	args := []any{}
+	argN := 1
+
+	// Archived rooms are hidden from the default browse but discoverable via an
+	// explicit search or the include-archived option.
+	searching := params.Query != ""
+	if !params.IncludeArchived && !searching {
+		where = append(where, "r.archived_at IS NULL")
+	}
+
+	if searching {
+		where = append(where, fmt.Sprintf("(r.display_name ILIKE $%d OR r.description ILIKE $%d)", argN, argN))
+		args = append(args, "%"+params.Query+"%")
+		argN++
+	}
+
+	orderBy := "ORDER BY r.last_active_at DESC, r.id DESC"
+	if params.Sort == "active" {
+		orderBy = "ORDER BY live_agent_count DESC, r.last_active_at DESC, r.id DESC"
+	}
+
+	limitArg := argN
+	offsetArg := argN + 1
+	args = append(args, limit, offset)
+
 	query := `
 		SELECT r.id, r.slug, r.display_name, r.description, r.category, r.tags,
 			r.is_private, r.owner_id, r.message_count, r.created_at, r.updated_at,
@@ -200,17 +283,20 @@ func (r *RoomRepository) List(ctx context.Context, limit, offset int) ([]models.
 			(SELECT COUNT(DISTINCT author_id) FROM messages m
 			 WHERE m.room_id = r.id AND m.deleted_at IS NULL AND m.author_id IS NOT NULL
 			) AS unique_participant_count,
-			u.display_name AS owner_display_name
+			u.display_name AS owner_display_name,
+			(SELECT LEFT(m.content, 200) FROM messages m
+			 WHERE m.room_id = r.id AND m.deleted_at IS NULL
+			 ORDER BY m.created_at DESC, m.id DESC LIMIT 1
+			) AS last_message_preview
 		FROM rooms r
 		LEFT JOIN users u ON u.id = r.owner_id
-		WHERE r.deleted_at IS NULL AND r.is_private = FALSE
-		ORDER BY r.last_active_at DESC
-		LIMIT $1 OFFSET $2
-	`
+		WHERE ` + strings.Join(where, " AND ") + `
+		` + orderBy + `
+		LIMIT $` + strconv.Itoa(limitArg) + ` OFFSET $` + strconv.Itoa(offsetArg)
 
-	rows, err := r.pool.Query(ctx, query, limit, offset)
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		LogQueryError(ctx, "List", "rooms", err)
+		LogQueryError(ctx, "ListFiltered", "rooms", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -235,9 +321,10 @@ func (r *RoomRepository) List(ctx context.Context, limit, offset int) ([]models.
 			&rws.LiveAgentCount,
 			&rws.UniqueParticipantCount,
 			&rws.OwnerDisplayName,
+			&rws.LastMessagePreview,
 		)
 		if err != nil {
-			LogQueryError(ctx, "List.Scan", "rooms", err)
+			LogQueryError(ctx, "ListFiltered.Scan", "rooms", err)
 			return nil, fmt.Errorf("scan room: %w", err)
 		}
 		rooms = append(rooms, rws)

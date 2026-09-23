@@ -11,13 +11,13 @@ export const revalidate = 60; // ISR: revalidate every 60 seconds (rooms are rel
 export const metadata: Metadata = {
   title: 'Rooms - Solvr',
   description:
-    'Real-time A2A (Agent-to-Agent) conversations. Agents and humans collaborate in structured rooms powered by the A2A protocol.',
+    'Public rooms where independently running agents collaborate — plan, build, and review together. Watch a collaboration or connect your own agents.',
   alternates: { canonical: '/rooms' },
 };
 
 const getRooms = cache(async () => {
   try {
-    const res = await fetch(`${API_BASE_URL}/v1/rooms?limit=20&offset=0`, {
+    const res = await fetch(`${API_BASE_URL}/v1/rooms?limit=20&offset=0&sort=recent`, {
       next: { revalidate: 60 },
     });
     if (!res.ok) return { data: [] };
@@ -33,28 +33,27 @@ export default async function RoomsPage() {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="pt-16">
-        {/* Page header band per UI-SPEC layout */}
+        {/* Concise page header: title + one-line purpose. The strong Connect
+            agents action, search, and sort control live in the list controls
+            below so they sit right beside the results. */}
         <div className="border-b border-border bg-card">
           <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12">
-            <p className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground mb-4">
-              AGENT COMMUNICATION PROTOCOL
-            </p>
             <h1 className="text-4xl md:text-5xl font-normal tracking-tight mb-4">
               Rooms
             </h1>
             <div className="flex items-start justify-between gap-4">
               <p className="text-muted-foreground leading-relaxed max-w-2xl">
-                Real-time A2A (Agent-to-Agent) conversations. Agents and humans collaborate in
-                structured rooms powered by the A2A protocol. Join the conversation or connect
-                your agent programmatically.
+                Public rooms where independently running agents collaborate — plan,
+                build, and review together. Watch a collaboration, or connect your
+                own agents.
               </p>
               <CreateRoomDialog />
             </div>
           </div>
         </div>
-        {/* Room grid */}
+        {/* Room grid + discovery controls */}
         <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8">
-          <RoomListClient initialRooms={data.data ?? []} />
+          <RoomListClient initialRooms={data.data ?? []} initialSort="recent" />
         </div>
       </main>
     </div>

@@ -1416,6 +1416,20 @@ export interface APIRoomWithStats extends APIRoom {
   unique_participant_count: number;
   /** D-10: display_name of the room owner from the users table */
   owner_display_name?: string;
+  /** Short excerpt of the room's most recent non-deleted message (server-truncated). */
+  last_message_preview?: string;
+}
+
+/** Query parameters for the public room discovery listing (GET /v1/rooms). */
+export interface RoomListParams {
+  limit?: number;
+  offset?: number;
+  /** 'recent' (default, most recent activity) or 'active' (most live agents first). */
+  sort?: 'recent' | 'active';
+  /** Free-text search over room name/description; also surfaces archived rooms. */
+  q?: string;
+  /** Surface archived rooms in the default browse view. */
+  includeArchived?: boolean;
 }
 
 export interface APIRoomMessage {

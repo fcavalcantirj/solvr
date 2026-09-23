@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/auth"
@@ -214,7 +215,20 @@ func (h *RoomHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rooms, err := h.roomRepo.List(r.Context(), limit, offset)
+	// Sort control: Recent (default) or Active now. Unknown values fall back to
+	// recent rather than erroring, matching the lenient limit/offset parsing.
+	sort := "recent"
+	if s := r.URL.Query().Get("sort"); s == "active" {
+		sort = "active"
+	}
+
+	rooms, err := h.roomRepo.ListFiltered(r.Context(), db.RoomListParams{
+		Limit:           limit,
+		Offset:          offset,
+		Sort:            sort,
+		Query:           strings.TrimSpace(r.URL.Query().Get("q")),
+		IncludeArchived: r.URL.Query().Get("include_archived") == "true",
+	})
 	if err != nil {
 		slog.Error("failed to list rooms", "error", err)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list rooms")

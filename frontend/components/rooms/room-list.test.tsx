@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { RoomListClient } from './room-list';
+import { api } from '@/lib/api';
 import type { APIRoomWithStats } from '@/lib/api-types';
 
 vi.mock('next/link', () => ({
@@ -52,6 +53,10 @@ const partialRooms: APIRoomWithStats[] = Array.from({ length: 5 }, (_, i) =>
 );
 
 describe('RoomListClient', () => {
+  beforeEach(() => {
+    vi.mocked(api.fetchRooms).mockReset();
+  });
+
   it('renders room cards for each room in initialRooms', () => {
     render(<RoomListClient initialRooms={partialRooms} />);
     const cards = screen.getAllByTestId('room-card');
@@ -71,5 +76,74 @@ describe('RoomListClient', () => {
   it('does NOT render load more button when fewer than 20 rooms', () => {
     render(<RoomListClient initialRooms={partialRooms} />);
     expect(screen.queryByRole('button', { name: /LOAD MORE ROOMS/i })).not.toBeInTheDocument();
+  });
+
+  it('renders a search field, Recent/Active now sort controls, and a Connect agents action', () => {
+    render(<RoomListClient initialRooms={partialRooms} />);
+    expect(screen.getByLabelText('Search rooms')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Recent' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Active now' })).toBeInTheDocument();
+    const connect = screen.getByRole('link', { name: /CONNECT AGENTS/i });
+    expect(connect).toHaveAttribute('href', '/connect');
+  });
+
+  it('re-queries the API with sort=active when Active now is selected', async () => {
+    vi.mocked(api.fetchRooms).mockResolvedValue({ data: [createMockRoom('99')] });
+    render(<RoomListClient initialRooms={partialRooms} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Active now' }));
+
+    await waitFor(() => {
+      expect(api.fetchRooms).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: 'active', offset: 0 }),
+      );
+    });
+    // The list is replaced with the server response.
+    await waitFor(() => {
+      expect(screen.getByText('Room 99')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Room 1')).not.toBeInTheDocument();
+  });
+
+  it('re-queries the API with the search text on submit', async () => {
+    vi.mocked(api.fetchRooms).mockResolvedValue({ data: [createMockRoom('42')] });
+    render(<RoomListClient initialRooms={partialRooms} />);
+
+    fireEvent.change(screen.getByLabelText('Search rooms'), { target: { value: 'parser' } });
+    fireEvent.submit(screen.getByRole('search'));
+
+    await waitFor(() => {
+      expect(api.fetchRooms).toHaveBeenCalledWith(
+        expect.objectContaining({ q: 'parser', offset: 0 }),
+      );
+    });
+  });
+
+  it('deduplicates rooms already shown when loading more', async () => {
+    // Server returns a page that overlaps with rooms already on screen (room 20
+    // moved due to new activity) plus a genuinely new room.
+    vi.mocked(api.fetchRooms).mockResolvedValue({
+      data: [createMockRoom('20'), createMockRoom('21')],
+    });
+    render(<RoomListClient initialRooms={fullPageRooms} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /LOAD MORE ROOMS/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Room 21')).toBeInTheDocument();
+    });
+    // Room 20 already existed; it must appear exactly once, not duplicated.
+    expect(screen.getAllByText('Room 20')).toHaveLength(1);
+  });
+
+  it('shows an error state with Retry when a re-query fails', async () => {
+    vi.mocked(api.fetchRooms).mockRejectedValue(new Error('network'));
+    render(<RoomListClient initialRooms={partialRooms} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Active now' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'RETRY' })).toBeInTheDocument();
+    });
   });
 });

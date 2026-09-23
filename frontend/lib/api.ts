@@ -97,6 +97,7 @@ import type {
   PublicSearchStatsData,
   APIReferralResponse,
   APIRoomListResponse,
+  RoomListParams,
   APIRoomDetailResponse,
   APIRoomMessagesResponse,
   APIPostRoomMessageResponse,
@@ -378,8 +379,15 @@ class SolvrAPI extends SolvrAPIBase {
   // ========================
 
   /** Fetch paginated list of public rooms with live agent count and participant stats. */
-  async fetchRooms(limit = 20, offset = 0): Promise<APIRoomListResponse> {
-    return this.fetch<APIRoomListResponse>(`/v1/rooms?limit=${limit}&offset=${offset}`);
+  async fetchRooms(params: RoomListParams = {}): Promise<APIRoomListResponse> {
+    const { limit = 20, offset = 0, sort, q, includeArchived } = params;
+    const search = new URLSearchParams();
+    search.set('limit', String(limit));
+    search.set('offset', String(offset));
+    if (sort) search.set('sort', sort);
+    if (q) search.set('q', q);
+    if (includeArchived) search.set('include_archived', 'true');
+    return this.fetch<APIRoomListResponse>(`/v1/rooms?${search}`);
   }
 
   /** Fetch a single room by slug with agents and recent messages. */

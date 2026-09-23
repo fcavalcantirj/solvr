@@ -37,6 +37,17 @@ export function RoomCard({ room }: RoomCardProps) {
             </p>
           )}
 
+          {/* Short preview of the most recent message so the card shows what the
+              room is actually about, not just its metadata. */}
+          {room.last_message_preview && (
+            <p
+              data-testid="room-last-message"
+              className="text-xs text-muted-foreground/80 italic leading-relaxed line-clamp-2 border-l-2 border-border pl-3"
+            >
+              {room.last_message_preview}
+            </p>
+          )}
+
           {/* Stats row */}
           <div className="flex flex-wrap items-center gap-3">
             {/* Live agent count */}

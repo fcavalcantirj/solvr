@@ -405,7 +405,7 @@
       "Verify public discovery excludes private, deleted, expired, and empty abandoned rooms; archived public rooms remain discoverable through search or an explicit include-archived option.",
       "Verify pagination preserves filters and avoids duplicate rooms as new activity arrives."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

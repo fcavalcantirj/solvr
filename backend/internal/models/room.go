@@ -42,6 +42,9 @@ type RoomWithStats struct {
 	LiveAgentCount         int     `json:"live_agent_count"`
 	UniqueParticipantCount int     `json:"unique_participant_count"`
 	OwnerDisplayName       *string `json:"owner_display_name,omitempty"`
+	// LastMessagePreview is a short excerpt of the room's most recent non-deleted
+	// message, used for the public discovery card. Nil when the room has no messages.
+	LastMessagePreview *string `json:"last_message_preview,omitempty"`
 }
 
 // CreateRoomParams holds parameters for creating a room.

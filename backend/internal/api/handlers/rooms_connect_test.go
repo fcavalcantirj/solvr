@@ -247,5 +247,34 @@ func TestRoomsConnect_Handler403ForPrivateRoomWhenUnauthenticated(t *testing.T) 
 	require.Equal(t, http.StatusForbidden, w.Code)
 }
 
+// TestRoomsConnect_RoleParameterGeneratesRoleSpecificPrompt verifies that different
+// roles (reviewer, researcher, executor) generate appropriate role-specific join prompts.
+func TestRoomsConnect_RoleParameterGeneratesRoleSpecificPrompt(t *testing.T) {
+	room, firstMsg := executorPromptTestRoom()
+
+	for _, tc := range []struct {
+		name string
+		role string
+		want string
+	}{
+		{"executor", "executor", "executor"},
+		{"reviewer", "reviewer", "reviewer"},
+		{"researcher", "researcher", "researcher"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prompt := roleSpecificPromptText(room, firstMsg, tc.role)
+			require.Contains(t, strings.ToLower(prompt), tc.want,
+				"prompt for role %q must mention the role", tc.role)
+			require.Contains(t, prompt, connectAppBaseURL+"/rooms/"+room.Slug)
+			require.NotContains(t, prompt, "ROOM_SLUG")
+			require.NotContains(t, prompt, "$")
+			require.NotContains(t, prompt, "${")
+			// Credentials must never appear.
+			require.NotContains(t, prompt, "solvr_sk_")
+			require.NotContains(t, prompt, "solvr_rt_")
+		})
+	}
+}
+
 // errRoomNotFound is returned by fakes to simulate a missing room.
 var errRoomNotFound = db.ErrRoomNotFound

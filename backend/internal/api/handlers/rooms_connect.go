@@ -14,9 +14,10 @@ import (
 )
 
 // roomConnectEnvelope is the JSON response from GET /v1/rooms/{slug}/connect.
-// It is the room-specific half of the connection contract: the executor prompt is
-// already bound to the REAL room, with the real slug, the expected planner identity
+// It is the room-specific half of the connection contract: the prompt is
+// already bound to the REAL room, with the real slug, the expected first participant identity
 // inferred from the first message, and the initial task.
+// The role parameter determines which prompt is returned (executor, reviewer, researcher, or custom).
 type roomConnectEnvelope struct {
 	InstructionVersion string `json:"instruction_version"`
 	RoomSlug           string `json:"room_slug"`
@@ -24,7 +25,9 @@ type roomConnectEnvelope struct {
 	Private            bool   `json:"private"`
 	Task               string `json:"task"`
 	ExpectedPlanner    string `json:"expected_planner_identity"`
-	ExecutorPrompt     string `json:"executor_prompt"`
+	ExecutorPrompt     string `json:"executor_prompt"` // Backward compatible
+	Prompt             string `json:"prompt"`          // New generic prompt field
+	Role               string `json:"role"`
 	FirstMessageID     int64  `json:"first_message_id"`
 	FirstMessageURL    string `json:"first_message_url"`
 }
@@ -56,13 +59,20 @@ func NewRoomConnectHandler(rooms connectRoomLookup, msgs firstMessageLookup) *Ro
 
 // GetRoomConnect handles GET /v1/rooms/{slug}/connect (public read, same policy as
 // room detail). It resolves the room, enforces the private-room 403, looks up the
-// first message to infer the planner identity and initial task, and returns the
-// room-specific executor prompt envelope.
+// first message to infer the first participant identity and initial task, and returns the
+// room-specific join prompt envelope. The ?role= query parameter selects which role-specific
+// prompt is returned (executor, reviewer, researcher, or custom role label). Defaults to executor.
 func (h *RoomConnectHandler) GetRoomConnect(w http.ResponseWriter, r *http.Request) {
 	slug := roomConnectSlugFromRequest(r)
 	if slug == "" {
 		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "slug is required")
 		return
+	}
+
+	// Extract role from query parameter (default: executor)
+	role := r.URL.Query().Get("role")
+	if role == "" {
+		role = "executor"
 	}
 
 	room, err := h.rooms.GetBySlug(r.Context(), slug)
@@ -93,7 +103,7 @@ func (h *RoomConnectHandler) GetRoomConnect(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	envelope := buildRoomConnectEnvelope(room, firstMsg)
+	envelope := buildRoomConnectEnvelope(room, firstMsg, role)
 	roomWriteJSON(w, http.StatusOK, map[string]any{"data": envelope})
 }
 
@@ -117,13 +127,15 @@ func roomConnectSlugFromRequest(r *http.Request) string {
 // buildRoomConnectEnvelope assembles the response envelope from a room and its first
 // message. When firstMsg is nil (the room has no messages yet), the prompt and fields
 // degrade gracefully: the planner identity and task are absent, and the prompt still
-// names the real room and tells the executor to read the first message before acting.
-func buildRoomConnectEnvelope(room *models.Room, firstMsg *models.Message) roomConnectEnvelope {
+// names the real room and tells the agent to read the first message before acting.
+// The role parameter determines which role-specific prompt is generated.
+func buildRoomConnectEnvelope(room *models.Room, firstMsg *models.Message, role string) roomConnectEnvelope {
 	env := roomConnectEnvelope{
 		InstructionVersion: "1.0",
 		RoomSlug:           room.Slug,
 		RoomURL:            connectAppBaseURL + "/rooms/" + room.Slug,
 		Private:            room.IsPrivate,
+		Role:               role,
 	}
 
 	if firstMsg != nil {
@@ -137,6 +149,13 @@ func buildRoomConnectEnvelope(room *models.Room, firstMsg *models.Message) roomC
 		}
 	}
 
-	env.ExecutorPrompt = executorPromptText(room, firstMsg)
+	// Generate role-specific prompt
+	if role == "executor" {
+		prompt := executorPromptText(room, firstMsg)
+		env.Prompt = prompt
+		env.ExecutorPrompt = prompt
+	} else {
+		env.Prompt = roleSpecificPromptText(room, firstMsg, role)
+	}
 	return env
 }

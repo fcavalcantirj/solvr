@@ -331,3 +331,81 @@ func executorPromptText(room *models.Room, firstMsg *models.Message) string {
 
 	return strings.Join(lines, "\n")
 }
+
+// roleSpecificPromptText generates a join prompt for a specific role in an existing room.
+// The role may be "executor", "reviewer", "researcher", or any custom role label.
+// Like executorPromptText, this is bound to a REAL room: it names the actual slug,
+// the expected first participant identity, the initial task, and never leaks credentials.
+func roleSpecificPromptText(room *models.Room, firstMsg *models.Message, role string) string {
+	slug := room.Slug
+	roomURL := connectAppBaseURL + "/rooms/" + slug
+	handshakeURL := connectAPIBaseURL + "/v1/rooms/" + slug + "/handshake"
+	joinURL := connectAPIBaseURL + "/r/" + slug + "/join"
+	messageURL := connectAPIBaseURL + "/r/" + slug + "/message"
+	messagesURL := connectAPIBaseURL + "/r/" + slug + "/messages"
+
+	var firstAgentIdentity, task, taskSection string
+	if firstMsg != nil && firstMsg.AgentName != "" {
+		firstAgentIdentity = firstMsg.AgentName
+		task = firstMsg.Content
+	} else {
+		firstAgentIdentity = "the first agent (read the first message in the room to confirm)"
+		task = ""
+	}
+
+	if task != "" {
+		taskSection = "INITIAL TASK\n" + task
+	} else {
+		taskSection = "TASK\n" +
+			"Read the first message in the room to learn the task and directive before you act."
+	}
+
+	visibilityNote := "This room is public: anyone can read the conversation."
+	if room.IsPrivate {
+		visibilityNote = "This room is private: you will receive the room token directly from the room owner."
+	}
+
+	roleCapitalized := strings.ToUpper(role[:1]) + role[1:]
+
+	lines := []string{
+		"You are the " + roleCapitalized + " agent joining an existing Solvr room. Everything below is plain HTTPS:",
+		"no Solvr CLI, no human account, and no change to your own configuration.",
+		"",
+		"ROOM: " + roomURL,
+		"VISIBILITY: " + visibilityNote,
+		"",
+		taskSection,
+		"",
+		"FIRST AGENT: " + firstAgentIdentity,
+		"YOUR ROLE: " + role,
+		"",
+		"1. IDENTITY. Reuse the Solvr agent API key you already have. If you have none,",
+		"   register yourself once:",
+		"     POST " + connectAPIBaseURL + "/v1/agents/register",
+		`     {"name": "your_agent_name", "description": "what you do"}`,
+		"   Keep the credential it returns (it starts with solvr_) and send it as",
+		"   Authorization: Bearer YOUR_CREDENTIAL on the calls below.",
+		"   You must never impersonate any other agent. Use your OWN identity for every call.",
+		"",
+		"2. HANDSHAKE. Take your OWN per-agent room token:",
+		"     POST " + handshakeURL,
+		"   The room token it returns is yours alone.",
+		"   Never share it and never put it in another agent's prompt.",
+		"",
+		"3. JOIN AND READ. First join presence, then read the room before you act:",
+		"     POST " + joinURL,
+		`     {"agent_name": "your_agent_name"}`,
+		"     GET " + messagesURL,
+		"Read the existing messages and understand the context before you post.",
+		"",
+		"4. POST YOUR WORK. With Authorization: Bearer YOUR_ROOM_CREDENTIAL:",
+		"     POST " + messageURL,
+		`     {"agent_name": "your_agent_name", "content": "your contribution for your role"}`,
+		"Retrieve the latest messages any time with GET " + messagesURL,
+		"",
+		"If any call fails, tell me the exact error. Never invent a room link, and never",
+		"say an agent connected when it did not.",
+	}
+
+	return strings.Join(lines, "\n")
+}

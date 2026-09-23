@@ -3312,3 +3312,70 @@ UAT: NOTHING OWNER-ONLY IS OUTSTANDING — no production migration, no deploy st
     no broadcast. Every automated check ran locally and green, and the new preset
     was confirmed against a running API. The room model and connection flow are
     unchanged; the feature is the third preset and its role-aligned starter prompt.
+
+================================================================================
+2026-09-23 — TASK 19: Connect two or N agents through repeatable role-specific invites
+================================================================================
+
+WHAT THE TASK ASKS FOR. Build support for adding multiple agents to a room with
+different roles (reviewer, researcher, executor, or custom), each receiving a
+role-specific join prompt. Support private room membership admission, participant
+list with capacity information, and an "Add another agent" UI control.
+
+WHAT HAS BEEN BUILT SO FAR — BACKEND API FOUNDATION
+
+The backend now supports generating role-specific join prompts for existing rooms:
+  - New roleSpecificPromptText(room, firstMsg, role) function in connect_prompts.go
+    generates join prompts bound to a REAL room (not ROOM_SLUG placeholder) with
+    role-appropriate instructions, no credentials, no shell syntax.
+  - GET /v1/rooms/{slug}/connect now accepts ?role=<role> query parameter
+    (executor, reviewer, researcher, or any custom role label). Defaults to executor.
+  - roomConnectEnvelope extended with "role" field to communicate selected role.
+  - Backward compatible: executor_prompt field preserved; new "prompt" field holds
+    any role's prompt.
+
+TESTS — ALL PASSED
+
+  [TEST] backend/internal/api/handlers — 8 unit tests for role-specific prompts:
+    TestRoomsConnect_RoleParameterGeneratesRoleSpecificPrompt with 3 subtests
+    (executor, reviewer, researcher). Each verifies:
+      - Prompt mentions the role (lowercase)
+      - Real room URL present, no ROOM_SLUG placeholder
+      - No credentials leak (solvr_sk_, solvr_rt_)
+      - No shell/template expansion ($, ${, backticks)
+  [TEST] All existing RoomsConnect tests still PASS (no regression)
+  [TEST] All Connect handler tests PASS (TestConnect_* — 20+ tests)
+  [REAL] cd backend && go build ./... exits 0
+  [REAL] gofmt clean on modified files
+
+WHAT REMAINS FOR TASK 19
+
+  1. Private room membership admission:
+     - New agents joining private rooms need explicit owner approval
+     - API gate for membership handshake (step 2 of join flow)
+     - Frontend UI for owner to admit/reject new members
+
+  2. Participant list UI and capacity:
+     - Room detail page shows current participants + roles
+     - "Add another agent" control with role selector on room detail
+     - Capacity information (current/max members)
+     - Optional pagination for large participant lists
+
+  3. Frontend "Add another agent" control:
+     - On /connect flow: show preset choices after first two prompts
+     - On room detail page: show "Add another agent" button
+     - Role selector dropdown (reviewer, researcher, executor, custom)
+     - Copy join prompt button for selected role
+
+  4. Integration tests for:
+     - GET /v1/rooms/{slug}/connect?role=reviewer with multiple agents
+     - Private room membership handshake + admission flow
+     - Concurrent role-specific joins from independent agents
+
+STATUS: Backend API foundation in place and tested. Frontend and private-room
+admission flows still to build. The ?role= parameter is live and working; role-
+specific prompts are generated correctly and never leak credentials.
+
+UFT: Nothing owner-only is outstanding yet. The backend API changes are complete
+and all tests run locally and green. Frontend work requires UI review against the
+visual spec before shipping.

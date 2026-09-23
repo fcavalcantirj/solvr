@@ -322,5 +322,54 @@ func TestRoomsConnect_CollaboratorRecruitsIntoExistingRoom(t *testing.T) {
 	require.Contains(t, wrapper.Data.Prompt, "Collaborator agent joining an existing Solvr room")
 }
 
+// TestRoomsConnect_PlannerJoinsFreshlyCreatedRoom verifies the fast direct-create
+// contract (task: "Retain a fast direct-create option for authenticated humans"):
+// a human who makes the room here lands on it and copies planner + executor
+// prompts tied to that room. The room already exists, so the planner prompt is a
+// JOIN prompt for the real room (never a "create the room" prompt), works even
+// while the room is still empty (no first message yet), and leaks no credentials.
+func TestRoomsConnect_PlannerJoinsFreshlyCreatedRoom(t *testing.T) {
+	room, _ := executorPromptTestRoom()
+
+	// A freshly created room is empty: no first message yet.
+	prompt := roleSpecificPromptText(room, nil, "planner")
+
+	// Names the planner role and the REAL room, never a placeholder slug.
+	require.Contains(t, prompt, "Planner agent joining an existing Solvr room")
+	require.Contains(t, prompt, connectAppBaseURL+"/rooms/"+room.Slug)
+	require.NotContains(t, prompt, "ROOM_SLUG")
+
+	// Self-registers if needed and takes its OWN per-agent room token by handshake.
+	require.Contains(t, prompt, connectAPIBaseURL+"/v1/agents/register")
+	require.Contains(t, prompt, "/rooms/"+room.Slug+"/handshake")
+
+	// The room already exists — this is a join, never a second create.
+	require.NotContains(t, prompt, "Create the room")
+	require.NotContains(t, prompt, "you will own")
+
+	// Never leaks credentials or impersonates another agent.
+	require.NotContains(t, prompt, "solvr_sk_")
+	require.NotContains(t, prompt, "solvr_rt_")
+	require.Contains(t, prompt, "never impersonate")
+
+	// The handler echoes the planner role and serves the planner prompt in the
+	// .prompt field (executor goes through .executor_prompt).
+	h := &RoomConnectHandler{
+		rooms: &fakeRoomConnectRooms{room: room},
+		msgs:  &fakeFirstMessageLookup{msg: nil},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/v1/rooms/"+room.Slug+"/connect?role=planner", nil)
+	w := httptest.NewRecorder()
+	h.GetRoomConnect(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+	var wrapper struct {
+		Data roomConnectEnvelope `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	require.Equal(t, "planner", wrapper.Data.Role)
+	require.Contains(t, wrapper.Data.Prompt, "Planner agent joining an existing Solvr room")
+}
+
 // errRoomNotFound is returned by fakes to simulate a missing room.
 var errRoomNotFound = db.ErrRoomNotFound

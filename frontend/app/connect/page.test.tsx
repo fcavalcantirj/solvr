@@ -19,6 +19,12 @@ vi.mock('@/components/connect/connect-panel', () => ({
   ),
 }));
 
+// The signed-in-only direct-create panel reads auth, so mock it here the same
+// way the header is mocked — the page test never mounts an AuthProvider.
+vi.mock('@/components/connect/direct-create-panel', () => ({
+  DirectCreatePanel: () => <div data-testid="page-direct-create-panel" />,
+}));
+
 const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
 
 describe('the /connect page', () => {
@@ -36,6 +42,14 @@ describe('the /connect page', () => {
     // DOCUMENT_POSITION_FOLLOWING = 4
     expect(header.compareDocumentPosition(panel) & 4).toBeTruthy();
     expect(panel.compareDocumentPosition(footer) & 4).toBeTruthy();
+  });
+
+  it('offers the signed-in direct-create path below the prompt-first panel', () => {
+    render(<ConnectPage />);
+    const panel = screen.getByTestId('page-connect-panel');
+    const directCreate = screen.getByTestId('page-direct-create-panel');
+    // DOCUMENT_POSITION_FOLLOWING = 4 — the prompt-first panel comes first.
+    expect(panel.compareDocumentPosition(directCreate) & 4).toBeTruthy();
   });
 
   it('is its own canonical URL, so it can be linked and shared directly', () => {

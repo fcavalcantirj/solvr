@@ -422,6 +422,7 @@ class SolvrAPI extends SolvrAPIBase {
     description?: string;
     category?: string;
     tags?: string[];
+    is_private?: boolean;
   }): Promise<{ data: { slug: string; id: string; display_name: string }; token: string }> {
     return this.fetch(`/v1/rooms`, {
       method: 'POST',

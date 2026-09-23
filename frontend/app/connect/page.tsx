@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { Header } from '@/components/header';
 import { ConnectPanel } from '@/components/connect/connect-panel';
+import { DirectCreatePanel } from '@/components/connect/direct-create-panel';
 import { Footer } from '@/components/footer';
 
 // /connect — the full start flow, directly linkable and shareable.
@@ -22,6 +23,9 @@ export default function ConnectPage() {
       <Header />
       <section className="px-4 sm:px-6 lg:px-12 pt-24 pb-16 max-w-3xl mx-auto">
         <ConnectPanel variant="page" />
+        {/* Secondary, signed-in-only fast path. Renders nothing for logged-out
+            visitors, so the prompt-first flow above stays the whole experience. */}
+        <DirectCreatePanel />
       </section>
       <Footer variant="compact" />
     </main>

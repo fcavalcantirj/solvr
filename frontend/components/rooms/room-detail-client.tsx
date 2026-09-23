@@ -6,6 +6,7 @@ import { MessageList } from './message-list';
 import { PresenceSidebar } from './presence-sidebar';
 import { CommentInput } from './comment-input';
 import { ConnectAgentPanel } from './connect-agent-panel';
+import { RoomStarterPrompts } from './room-starter-prompts';
 import { ConnectionStatusBadge } from './connection-status-badge';
 import { SseStatusBadge } from './sse-status-badge';
 import { NewMessagesBadge } from './new-messages-badge';
@@ -247,6 +248,13 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
           reflects SSE arrivals immediately instead of the stale ISR snapshot. */}
       <div className="shrink-0">
         <RoomHeader room={displayedRoom} ownerDisplayName={ownerDisplayName} />
+      </div>
+
+      {/* Fast direct-create landing (task: humans who created the room here). It
+          reads ?created=1 and self-hides on every other room view, so it never
+          fetches or renders for ordinary visitors. */}
+      <div className="shrink-0">
+        <RoomStarterPrompts room={displayedRoom} />
       </div>
 
       {/* Connection progress (server-derived) + live SSE transport status */}

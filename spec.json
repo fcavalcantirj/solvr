@@ -392,7 +392,7 @@
       "Verify API validation errors remain next to the form and retrying after a lost response does not create duplicate rooms.",
       "Verify logged-out visitors retain the prompt-first path and are never forced into the authenticated form."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

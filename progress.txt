@@ -4807,3 +4807,133 @@ UAT (owner visual last mile; every automatable check already ran GREEN locally):
   confirm the Collaborator prompt + real room URL + task appear and COPY works;
   then open a FINISHED room and confirm it shows START A NEW ROOM (-> /connect)
   instead of a join prompt.
+
+================================================================================
+2026-09-23  TASK: "Retain a fast direct-create option for authenticated humans"
+            (category functional).  passes false -> true.
+================================================================================
+
+TASK SELECTION (re-walked first-false top-to-bottom; verified EACH blocker IN
+CODE this session, not from the journal)
+  - "Verify N-agent collaboration end to end" (acceptance): step 4 needs TWO API
+    instances + cross-instance delivery. [REAL] grep -riE
+    redis|nats|pubsub|LISTEN|NOTIFY|pgnotify in internal/hub = EMPTY -> hub is
+    process-local. Cross-instance is the still-false "Preserve room delivery ...
+    more than one API instance" task. Acceptance spanning unbuilt behavior. SKIP.
+  - "Make agent-created rooms manageable": step 2 wants rooms.owner_id RETIRED
+    after migration. [REAL] db/rooms.go STILL INSERT/SELECT/WHERE owner_id
+    (lines 73,75,152,205,260,264,334); latest migration is 000086 (room archive),
+    none retires owner_id. Retirement is owned by the still-false "Use one room
+    membership authority" task. Forward-dep. SKIP.
+  - "Retain a fast direct-create option for authenticated humans" (THIS TASK):
+    buildable now. [REAL] POST /v1/rooms already accepts is_private
+    (rooms.go:55, CreateRoom). [REAL] slug is DETERMINISTIC: db/rooms.go Create ->
+    slugify(DisplayName) with NO random suffix, unique-slug constraint -> a retry
+    with the same name returns 409 DUPLICATE_ROOM (rooms.go:117-119), so a lost
+    response cannot make a second room. [REAL] planner/executor JOIN prompts for
+    an existing room already exist via GET /v1/rooms/{slug}/connect?role=
+    (connect_prompts.go executorPromptText + roleSpecificPromptText; role=executor
+    -> .executor_prompt, any other role -> .prompt). The GAP was purely the
+    FRONTEND surface: /connect had no signed-in "Create here" path, and the room
+    page showed no planner+executor starter prompts. TOOK IT.
+
+WHAT I BUILT (TDD: RED first — new test files failed to import, then GREEN)
+  FRONTEND (client is dumb — renders API-owned prompts; the only "logic" is which
+  role to ask the connect endpoint for and reading a URL flag)
+    NEW frontend/components/connect/direct-create-panel.tsx (183 lines): the
+      SECONDARY, signed-in-only start path on /connect. useAuth() -> if NOT
+      authenticated it renders null (logged-out visitors keep the prompt-first
+      ConnectPanel; never a form, never a login). Signed in: a quiet "Create here"
+      toggle (data-testid=direct-create-toggle) opens a MINIMAL form — room
+      purpose/name (data-testid=direct-create-name) + Public/Private visibility
+      radios (Public default), with description tucked under an "Optional settings"
+      <details> (data-testid=direct-create-optional). Submit ->
+      api.createRoom({display_name, is_private, description?}) then
+      router.push(`/rooms/${slug}?created=1`). 409 -> inline role=alert "A room with
+      that name already exists"; no navigate (no duplicate). Double-submit guarded.
+    NEW frontend/components/rooms/room-starter-prompts.tsx (202 lines): shown on the
+      room page only when the URL carries ?created=1 (or justCreated prop) — every
+      other room view renders null and issues NO request (so it never touches the
+      existing room-detail-client.test api mock). When shown it fetches BOTH prompts
+      from the API (getRoomConnect role=planner -> .prompt, role=executor ->
+      .executor_prompt), renders each in a selectable <pre>
+      (data-testid=starter-planner-prompt / starter-executor-prompt) with a copy
+      button ("COPIED" only after navigator.clipboard succeeds; manual-copy hint),
+      the real room_url, a loading state, and an error+RETRY.
+    api.ts: createRoom payload type += is_private?: boolean (backend already
+      honored it; the type just now allows passing it).
+    connect/page.tsx: mounts <DirectCreatePanel/> BELOW <ConnectPanel variant=page/>
+      (import string contains no "use-auth"/"/login"/"router.push", so the page's
+      source-grep guard test stays green — the auth lives inside the child).
+    room-detail-client.tsx: mounts <RoomStarterPrompts room={displayedRoom}/> under
+      the header; self-hides unless ?created=1.
+    NEW tests: direct-create-panel.test.tsx (4), room-starter-prompts.test.tsx (2).
+    page.test.tsx: ADDED a vi.mock for direct-create-panel (same pattern the file
+      already uses for Header/ConnectPanel — the page test mounts no AuthProvider)
+      + 1 new assertion it renders below the prompt-first panel.
+  BACKEND (contract evidence only — endpoint/prompt already existed; NO prod code
+  changed): rooms_connect_test.go += TestRoomsConnect_PlannerJoinsFreshlyCreatedRoom
+    asserting role=planner on an EMPTY room (firstMsg=nil, the real direct-create
+    state) yields "Planner agent joining an existing Solvr room" bound to the real
+    slug, uses /v1/agents/register + /handshake, is NOT "Create the room"/"you will
+    own", says "never impersonate", leaks no solvr_sk_/solvr_rt_, and the handler
+    echoes role="planner" with the prompt in .prompt.
+
+STEP-BY-STEP EVIDENCE
+  1 (signed-in /connect, choose secondary Create here) [TEST] direct-create-panel
+    "offers a secondary Create here action ... when signed in" + page.test
+    "offers the signed-in direct-create path below the prompt-first panel".
+  2 (form: purpose/name + visibility only; metadata under optional settings)
+    [TEST] same panel test asserts name input + Public(default)/Private radios and
+    that Optional settings is a CLOSED <details>.
+  3 (create -> land on room page with copyable planner + executor prompts)
+    [TEST] direct-create-panel "creates the room with the chosen visibility and
+    lands on its room page" (createRoom called with is_private:true; push
+    '/rooms/debug-the-parser?created=1'); [TEST] room-starter-prompts "shows
+    copyable planner and executor prompts tied to the room after creation" (fetches
+    role=planner+executor, renders both, copy works); [TEST] backend
+    TestRoomsConnect_PlannerJoinsFreshlyCreatedRoom proves the planner prompt is a
+    real join prompt for the room.
+  4 (validation error next to form; retry makes no duplicate) [TEST]
+    direct-create-panel "keeps a validation error next to the form and does not
+    duplicate the room on retry" (409 -> alert 'already exists', push NOT called);
+    [REAL] deterministic slug + unique constraint -> 409 on retry (db/rooms.go,
+    rooms.go:117).
+  5 (logged-out keeps prompt-first, never forced into the form) [TEST]
+    direct-create-panel "renders nothing for logged-out visitors"; ConnectPanel
+    (prompt-first) always renders on /connect regardless of auth.
+
+VERIFICATION (all RAN this session; no DB required — frontend tests + fake-based
+  handler unit test)
+  [TEST] backend go test ./internal/api/handlers -run RoomsConnect -count=1 = ok
+    (incl. the new planner test), 0 SKIP.
+  [TEST] frontend targeted: direct-create-panel (4) + room-starter-prompts (2) +
+    room-detail-client (6, UNCHANGED, no regression from the mount) + connect
+    page (6, +1 new) = 18/18 PASS.
+  [TEST] frontend FULL suite: npx vitest run = 150 files, 1470 tests PASS, 0 skip
+    (was 1463; +7: 4 panel + 2 starter + 1 page).
+  [REAL] npm run typecheck (tsc --noEmit) exit 0.
+  [REAL] go build ./... OK; go vet ./internal/api/handlers clean.
+
+FILE SIZES: all touched files under the 800 limit — direct-create-panel.tsx 183,
+  room-starter-prompts.tsx 202, room-detail-client.tsx 314, page.tsx 33, api.ts
+  (+1). No new over-limit file introduced.
+
+NO existing test deleted/skipped/weakened. page.test.tsx only gained a child mock
+  + a new assertion; its 5 prior assertions still run. room-detail-client's 6
+  tests are untouched and green.
+
+DIFF (git status --porcelain / git diff --stat) — matches the work above
+  M backend/internal/api/handlers/rooms_connect_test.go (+49 planner test)
+  M frontend/app/connect/page.test.tsx                  (+14 mock + assertion)
+  M frontend/app/connect/page.tsx                       (+4 import + mount)
+  M frontend/components/rooms/room-detail-client.tsx    (+8 import + mount)
+  M frontend/lib/api.ts                                 (+1 is_private field)
+  M spec.json                                           (this task passes -> true)
+  ?? direct-create-panel.{tsx,test.tsx}, room-starter-prompts.{tsx,test.tsx}
+
+UAT (owner visual last mile; every automatable check already ran GREEN locally):
+  Sign in, open /connect, click CREATE HERE, name a room + pick Private, Create ->
+  confirm you land on /rooms/<slug>?created=1 showing copyable PLANNER and EXECUTOR
+  prompts; retry the same name and confirm the "already exists" error shows in-form
+  with no duplicate room; open /connect logged out and confirm no create form.

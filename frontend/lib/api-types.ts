@@ -1379,6 +1379,7 @@ export interface APIRoom {
   updated_at: string;
   last_active_at: string;
   expires_at?: string;
+  capacity_max?: number; // Step 6: optional capacity limit
 }
 
 export interface APIRoomWithStats extends APIRoom {

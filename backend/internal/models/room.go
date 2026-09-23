@@ -24,6 +24,7 @@ type Room struct {
 	LastActiveAt time.Time  `json:"last_active_at"`
 	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 	DeletedAt    *time.Time `json:"-"`
+	CapacityMax  *int       `json:"capacity_max,omitempty"` // Step 6: optional capacity limit
 }
 
 // RoomWithStats extends Room with computed fields for list responses.

@@ -5,6 +5,8 @@ import { Bot, Radio, MessageSquare, Clock, Copy, Check, Terminal, Loader2 } from
 import { formatDistanceToNow } from "date-fns";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
+import { useRoomMembers } from "@/hooks/use-room-members";
+import { ParticipantsPanel } from "./participants-panel";
 import type { APIAgentPresenceRecord } from "@/lib/api-types";
 import type { APIRoom } from "@/lib/api-types";
 
@@ -102,6 +104,7 @@ export function PresenceSidebar({
   const isOwner = Boolean(
     user && room?.owner_id && user.id === room.owner_id,
   );
+  const { members } = useRoomMembers(room?.slug || "");
 
   if (layout === "mobile") {
     return (
@@ -239,6 +242,11 @@ export function PresenceSidebar({
             )}
           </div>
         </div>
+      )}
+
+      {/* Participants Panel — Step 5: display member list with capacity — Step 6 */}
+      {room && members.length > 0 && (
+        <ParticipantsPanel room={room} members={members} />
       )}
 
       {/* Add Another Agent — role-specific prompt for N-agent collaboration */}

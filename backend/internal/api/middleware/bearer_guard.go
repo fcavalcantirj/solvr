@@ -9,6 +9,7 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/fcavalcantirj/solvr/internal/token"
+	"github.com/go-chi/chi/v5"
 )
 
 type roomContextKey string
@@ -68,6 +69,12 @@ func BearerGuard(roomRepo *db.RoomRepository, agentTokenRepo *db.RoomAgentTokenR
 			room, err := roomRepo.GetByID(r.Context(), identity.RoomID)
 			if err != nil {
 				bearerGuardUnauthorized(w, "invalid room token")
+				return
+			}
+			// A room token authorizes only its own room: /r/{other-slug} is refused
+			// instead of silently acting on the token's room (slugs are immutable).
+			if slug := chi.URLParam(r, "slug"); slug != "" && slug != room.Slug {
+				roomGuardError(w, http.StatusForbidden, "FORBIDDEN", errRoomTokenScope.Error())
 				return
 			}
 			ctx := context.WithValue(r.Context(), RoomContextKey, room)

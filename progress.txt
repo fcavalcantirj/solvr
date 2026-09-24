@@ -9631,3 +9631,78 @@ VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_te
     FAIL = identical set to /tmp/s8_full.log (comm: 0 new, 0 gone). New test PASS in it.
   [REAL] gofmt clean, go vet ./internal/api ok. check-file-size.sh reports the same
     pre-existing oversized files; the new file is ~180 lines.
+
+================================================================================
+2026-09-24 — Task idx 70 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Offer one canonical room API with thin adapters for the existing transport routes"
+SLICE 1 of N: canonical timeline entries routes + one room authorization policy + the
+/r/{slug}/message and /v1/rooms/{slug}/messages adapters share ONE submission path.
+================================================================================
+
+TASK SELECTION (top-down): idx 23 (ACCEPTANCE, needs idx 77), 51/52 (knowledge cutover
+  idx 92 + idx 67), 58 (needs idx 73 stream revocation), 66 (ACCEPTANCE, test deployment),
+  67 (needs idx 74) — all still blocked for the reasons in the idx 69 slice-1 entry. SKIP.
+  idx 70: buildable now that the room timeline cutover (000094, room_entries) and the
+  per-agent credential transition (idx 69) are done. TOOK IT.
+
+FILES ([REAL] git status --porcelain / git diff --stat before journaling):
+  NEW backend/internal/api/middleware/room_policy.go (187 lines): RoomActor (type, id,
+    label, credential, admin) + RoomActorFromContext; resolveRoomActor (a solvr_rt_ token
+    first — invalid/expired -> 401, another room's token -> 403 "room token is not valid
+    for this room"; else agent API key; else human JWT/user API key); roomActorAllowed =
+    THE single decision (room token of this room -> yes; public read -> anyone; agent ->
+    active member or family owner; human -> admin, public-room write, or active member);
+    RoomPolicyGuard(access RoomRead|RoomWrite) resolves room+actor, anonymous write 401,
+    non-participant 403 (agent write hint: handshake first).
+  M   middleware/room_access_guard.go: roomMemberAccessAllowed now = resolveRoomActor
+    (a token that cannot act on this room is ignored, falling back to the account identity,
+    exactly as before) + roomActorAllowed(RoomRead). Same rules, one implementation.
+  M   middleware/bearer_guard.go: +slug scope check — a room token on /r/{other-slug}/* is
+    403 instead of silently acting on the token's own room (slugs are immutable).
+  NEW handlers/rooms_entry_submit.go (157 lines): messageSubmission + submitMessage = THE
+    message write (archived 409, body/length/content_type validation, human text-only,
+    same-room supersedes check, CreateWithClientEntry idempotency, side effects once:
+    count, activity, agent heartbeat, activation milestone, hub broadcast).
+    Validation text now says "body is required (content on the legacy message routes)".
+  M   handlers/rooms_messages.go (577 -> 429): PostMessage and PostHumanMessage are thin
+    adapters that decode their legacy bodies and call submitMessage; createMessage removed
+    (replaced by storeMessage, which keeps the testMsgCreate unit-test hook).
+  NEW handlers/rooms_entries.go (210 lines): GET /v1/rooms/{slug}/entries (messages AND
+    events, ascending sequence, opaque base64url cursor "seq:<n>", limit default 50 max 100,
+    ?kind=message|event, meta {limit, has_more, next_cursor}); POST .../entries (kind
+    message only for now; 201 {data: entry, meta: {idempotent_replay:false}} or 200 replay);
+    GET .../entries/{entry_id} (room-scoped, 404 foreign id, 400 non-numeric).
+  M   db/room_entries.go: +ListPage(roomID, afterSequence, kind, limit).
+  M   router_rooms.go: mounts the 3 routes behind optionalAuth + RoomPolicyGuard; the agent
+    60/min and human 10/min limiters are built ONCE and shared by canonical and adapter
+    writes (entryWriteLimit picks the bucket by actor type).
+  NEW backend/internal/api/router_rooms_entries_test.go (4 tests).
+  No test deleted, skipped or loosened. No frontend change. No SPEC.md change yet.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test, v100):
+  [TEST] RED (/tmp/i70_red.log): all 4 TestRoomEntries_* FAIL (routes absent).
+  [TEST] GREEN (/tmp/i70_green1.log): 4 PASS, 0 SKIP —
+    _CanonicalAndAdapterWritesShareOneSubmissionPath (room token / agent key / human JWT
+      canonical writes; equal author_type+author_id vs /r/message and /messages adapters;
+      client_entry_id replay across paths returns the other path's entry; exactly one row
+      per key; message_count counts stored entries only; shared validation 400),
+    _OneAuthorizationPolicyAcrossCredentials (16 credential cases incl. other-room token
+      403 on canonical AND /r adapter, invalid token 401, outsider human 403 on both paths;
+      archived room 409 ROOM_ARCHIVED on both paths),
+    _ListsTheWholeTimelineWithCursorPagination (4 messages + 1 event paged by 2 in order,
+      kind filter, bad kind/cursor 400, clamp 100, default 50, foreign id 404),
+    _HumanWriteRateLimitIsSharedWithTheAdapter (10 adapter writes then canonical -> 429).
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i70_full.log): 3812 PASS (idx 27:
+    3807), 11 SKIP, 72 unique FAIL = identical set to /tmp/i27_full.log (comm: 0 new, 0 gone).
+  [REAL] gofmt clean on every touched file; go vet ./internal/api/... ok; all touched files
+    under 800 lines.
+
+REMAINING FOR idx 70 (next slices):
+  - kind=event through POST /entries (room_events view has no author_id; attribute events
+    to the actor) and /r/{slug}/events + GET /r/{slug}/events as adapters over the same path.
+  - GET /v1/rooms/{slug}/stream under RoomPolicyGuard (room tokens + account keys), /r/stream
+    as adapter; GET /v1/rooms/{slug}/messages list as adapter over entries.
+  - Step 4: connection prompts (connect_prompts.go, skill script) prefer /entries, keeping
+    register + handshake explicit and recoverable.
+  - Step 5: SPEC.md — canonical entry contract + adapter mapping for /messages and /events.
+  - Step 6: extend contract tests to events and the stream.

@@ -8,10 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
-	"github.com/fcavalcantirj/solvr/internal/token"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -72,42 +70,16 @@ func RoomAccessGuard(roomRepo *db.RoomRepository, memberRepo *db.RoomMemberRepos
 	}
 }
 
-// roomMemberAccessAllowed reports whether the caller may access a closed room.
+// roomMemberAccessAllowed reports whether the caller may access a closed room. It uses
+// the same actor resolution and decision as RoomPolicyGuard (roomActorAllowed), except
+// that a room token which cannot act on this room is ignored rather than refused, so the
+// caller's account identity (if any) still decides.
 func roomMemberAccessAllowed(r *http.Request, room *models.Room, memberRepo *db.RoomMemberRepository, agentTokenRepo *db.RoomAgentTokenRepository) (bool, error) {
-	tok := roomBearerToken(r)
-
-	// 1. Per-agent room token (mission #3): a live token scoped to THIS room grants
-	//    access. Revoking the agent deletes the token, so this path denies at once.
-	if tok != "" && agentTokenRepo != nil && token.IsAgentRoomToken(tok) {
-		identity, err := agentTokenRepo.ResolveByHash(r.Context(), token.HashToken(tok))
-		if err == nil && identity.RoomID == room.ID {
-			return true, nil
-		}
+	actor, err := resolveRoomActor(r, room, agentTokenRepo)
+	if err != nil {
+		actor = accountRoomActor(r)
 	}
-
-	// 2. Authenticated agent (its own agent API key): an agent with an active membership,
-	//    OR a "family" sibling whose CURRENT linked human is a live, active owner of the
-	//    room (room_members, migration 000096). Family scope grants ACCESS only — the
-	//    agent still acts under its own id/token. Foreign and unclaimed agents never match.
-	if agent := auth.AgentFromContext(r.Context()); agent != nil && memberRepo != nil {
-		isMember, err := memberRepo.IsMember(r.Context(), room.ID, agent.ID)
-		if err != nil || isMember {
-			return isMember, err
-		}
-		return memberRepo.IsFamilyOwner(r.Context(), room.ID, agent.ID)
-	}
-
-	// 3. Admin, or a human holding an active membership in the room.
-	if claims := auth.ClaimsFromContext(r.Context()); claims != nil {
-		if claims.Role == "admin" {
-			return true, nil
-		}
-		if memberRepo != nil {
-			return memberRepo.IsUserMember(r.Context(), room.ID, claims.UserID)
-		}
-	}
-
-	return false, nil
+	return roomActorAllowed(r.Context(), room, actor, RoomRead, memberRepo)
 }
 
 // roomBearerToken extracts a candidate room token from the Authorization header or the

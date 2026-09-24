@@ -118,10 +118,11 @@ type postHumanMessageRequest struct {
 	AddressedMemberIDs json.RawMessage `json:"addressed_member_ids,omitempty"`
 }
 
-// PostMessage handles POST /r/{slug}/message.
-// Requires bearer token authentication via BearerGuard middleware (D-17).
-// Creates a message, increments room message count (D-30), updates room activity,
-// renews agent presence (D-28 implicit heartbeat), and broadcasts to the hub.
+// PostMessage handles POST /r/{slug}/message: the legacy agent transport adapter into
+// submitMessage, the same submission path as POST /v1/rooms/{slug}/entries.
+// Requires a per-agent room token via BearerGuard (D-17). The body's agent_name is kept
+// as the display label; author_id always comes from the token. client_message_id is
+// adapted to the canonical client_entry_id when only the legacy field is present.
 func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request) {
 	room := apimiddleware.RoomFromContext(r.Context())
 	if room == nil {
@@ -138,88 +139,35 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
 		return
 	}
-
-	// Validate required fields
 	if req.AgentName == "" {
 		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "agent_name is required")
 		return
 	}
-	if req.Content == "" {
-		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "content is required")
-		return
-	}
-	if len(req.Content) > maxMessageContentLen {
-		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "content exceeds maximum length of 65536 characters")
-		return
-	}
 
-	// Default content_type to "text"
-	contentType := req.ContentType
-	if contentType == "" {
-		contentType = "text"
-	}
-	if contentType != "text" && contentType != "markdown" && contentType != "json" {
-		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "content_type must be text, markdown, or json")
-		return
-	}
-
-	// A revised directive/result may explicitly supersede an earlier message. The
-	// reference must resolve to a message in THIS room; a cross-room or unknown
-	// reference is rejected rather than silently stored.
-	if req.SupersedesEntryID != nil {
-		if _, err := h.msgRepo.GetByID(r.Context(), room.ID, *req.SupersedesEntryID); err != nil {
-			if errors.Is(err, db.ErrMessageNotFound) {
-				roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "supersedes_entry_id does not reference a message in this room")
-				return
-			}
-			slog.Error("failed to validate supersedes_entry_id", "error", err, "room_id", room.ID)
-			roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to validate supersedes reference")
-			return
-		}
-	}
-
-	params := models.CreateMessageParams{
-		RoomID:             room.ID,
+	sub := messageSubmission{
 		AuthorType:         "agent",
-		AgentName:          req.AgentName,
+		Label:              req.AgentName,
 		Content:            req.Content,
-		ContentType:        contentType,
+		ContentType:        req.ContentType,
 		Metadata:           req.Metadata,
 		ReplyToEntryID:     req.ReplyToEntryID,
 		AddressedMemberIDs: req.AddressedMemberIDs,
 		SupersedesEntryID:  req.SupersedesEntryID,
+		ClientEntryID:      req.ClientEntryID,
 	}
-
-	// Idempotency: prefer the canonical client_entry_id, adapt the legacy
-	// client_message_id when only that is present. A retry with the same key from
-	// the same authenticated author returns the existing entry instead of a duplicate.
-	if req.ClientEntryID != nil && *req.ClientEntryID != "" {
-		params.ClientEntryID = req.ClientEntryID
-	} else if req.ClientMessageID != nil && *req.ClientMessageID != "" {
-		params.ClientEntryID = req.ClientMessageID
+	if sub.ClientEntryID == nil || *sub.ClientEntryID == "" {
+		sub.ClientEntryID = req.ClientMessageID
 	}
-
-	// Mission #3: if a per-agent room token authenticated this request, stamp the
-	// authoritative agent id as author_id so authorship is trustworthy (not just the
-	// spoofable agent_name). Shared-token posts leave author_id nil, as before.
+	// Mission #3: the per-agent room token's agent id is the authoritative author.
 	if authAgentID := apimiddleware.RoomAgentIDFromContext(r.Context()); authAgentID != "" {
-		params.AuthorID = &authAgentID
+		sub.AuthorID = &authAgentID
 	}
 
-	msg, created, err := h.msgRepo.CreateWithClientEntry(r.Context(), params)
-	if err != nil {
-		if errors.Is(err, db.ErrInvalidEntryReference) {
-			roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", invalidEntryReferenceMsg)
-			return
-		}
-		slog.Error("failed to create message", "error", err, "room_id", room.ID)
-		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create message")
+	msg, created, serr := h.submitMessage(r.Context(), room, sub)
+	if serr != nil {
+		serr.write(w)
 		return
 	}
-
-	// Idempotent replay of a retried write: the original write already incremented
-	// counts, renewed presence, recorded the activation milestone, and broadcast the
-	// entry. Return the existing entry without repeating any of those side effects.
 	if !created {
 		roomWriteJSON(w, http.StatusOK, map[string]interface{}{
 			"data":              msg,
@@ -227,51 +175,13 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 		})
 		return
 	}
-
-	// D-30: Increment message count on room
-	if err := h.roomRepo.IncrementMessageCount(r.Context(), room.ID); err != nil {
-		slog.Error("failed to increment message count", "error", err, "room_id", room.ID)
-		// Non-fatal: continue even if count update fails
-	}
-
-	// Update room activity timestamp
-	if err := h.roomRepo.UpdateActivity(r.Context(), room.ID); err != nil {
-		slog.Error("failed to update room activity", "error", err, "room_id", room.ID)
-		// Non-fatal
-	}
-
-	// D-28: Implicit heartbeat -- message posting renews the author's own presence
-	if _, err := h.presenceRepo.UpdateHeartbeat(r.Context(), room.ID, apimiddleware.RoomAgentIDFromContext(r.Context())); err != nil {
-		slog.Error("failed to update heartbeat on message", "error", err, "room_id", room.ID, "agent", req.AgentName)
-		// Non-fatal: presence will expire naturally if heartbeat fails
-	}
-
-	h.recordActivationMilestone(r.Context(), room)
-
-	// Broadcast to hub for real-time subscribers
-	roomHub := h.hubMgr.GetOrCreate(r.Context(), hub.NewRoomID(room.ID))
-	roomHub.Broadcast(hub.RoomEvent{
-		ID:        msg.ID,
-		Type:      hub.EventMessage,
-		RoomID:    hub.NewRoomID(room.ID),
-		AgentName: msg.AgentName,
-		Payload:   msg,
-		Timestamp: msg.CreatedAt,
-	})
-
-	response := map[string]interface{}{
-		"data": msg,
-	}
-	roomWriteJSON(w, http.StatusCreated, response)
+	roomWriteJSON(w, http.StatusCreated, map[string]interface{}{"data": msg})
 }
 
-// PostHumanMessage handles POST /v1/rooms/{slug}/messages.
-// Requires Solvr JWT authentication (not a room bearer token).
-// Allows authenticated human users to post comments in a room.
-// Author identity is extracted from the JWT claims server-side (T-16-03: never trust client).
-// Content type is always "text" (D-26, T-16-01).
+// PostHumanMessage handles POST /v1/rooms/{slug}/messages: the human comment adapter
+// into submitMessage. Requires Solvr JWT authentication; the author is taken from the
+// JWT claims server-side (T-16-03) and content is always plain text (D-26).
 func (h *RoomMessagesHandler) PostHumanMessage(w http.ResponseWriter, r *http.Request) {
-	// T-16-03: Extract user identity from JWT claims (server-side only).
 	claims := auth.ClaimsFromContext(r.Context())
 	if claims == nil {
 		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
@@ -284,7 +194,6 @@ func (h *RoomMessagesHandler) PostHumanMessage(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Resolve room by slug (public REST route, not bearer guard).
 	room, err := h.resolveRoomBySlug(r.Context(), slug)
 	if err != nil {
 		if errors.Is(err, db.ErrRoomNotFound) {
@@ -306,70 +215,21 @@ func (h *RoomMessagesHandler) PostHumanMessage(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// T-16-01: Validate content length and enforce text-only content type.
-	if req.Content == "" {
-		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "content is required")
-		return
-	}
-	if len(req.Content) > maxMessageContentLen {
-		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "content exceeds maximum length of 65536 characters")
-		return
-	}
-
-	// T-16-03: AuthorID comes from the JWT, never from request body.
 	authorID := claims.UserID
-	params := models.CreateMessageParams{
-		RoomID:             room.ID,
+	msg, _, serr := h.submitMessage(r.Context(), room, messageSubmission{
 		AuthorType:         "human",
 		AuthorID:           &authorID,
-		AgentName:          "human:" + claims.UserID, // deterministic, not displayed
+		Label:              "human:" + claims.UserID, // deterministic, not displayed
 		Content:            req.Content,
-		ContentType:        "text", // D-26: human comments are always plain text
+		ContentType:        "text",
 		ReplyToEntryID:     req.ReplyToEntryID,
 		AddressedMemberIDs: req.AddressedMemberIDs,
-	}
-
-	msg, err := h.createMessage(r.Context(), params)
-	if err != nil {
-		if errors.Is(err, db.ErrInvalidEntryReference) {
-			roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", invalidEntryReferenceMsg)
-			return
-		}
-		slog.Error("failed to create human message", "error", err, "room_id", room.ID)
-		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create message")
+	})
+	if serr != nil {
+		serr.write(w)
 		return
 	}
-
-	// Increment message count on room (non-fatal if fails).
-	if h.roomRepo != nil {
-		if err := h.roomRepo.IncrementMessageCount(r.Context(), room.ID); err != nil {
-			slog.Error("failed to increment message count", "error", err, "room_id", room.ID)
-		}
-		// Update room activity timestamp (non-fatal).
-		if err := h.roomRepo.UpdateActivity(r.Context(), room.ID); err != nil {
-			slog.Error("failed to update room activity", "error", err, "room_id", room.ID)
-		}
-	}
-
-	h.recordActivationMilestone(r.Context(), room)
-
-	// Broadcast to hub for real-time SSE subscribers (non-fatal).
-	if h.hubMgr != nil {
-		roomHub := h.hubMgr.GetOrCreate(r.Context(), hub.NewRoomID(room.ID))
-		roomHub.Broadcast(hub.RoomEvent{
-			ID:        msg.ID,
-			Type:      hub.EventMessage,
-			RoomID:    hub.NewRoomID(room.ID),
-			AgentName: msg.AgentName,
-			Payload:   msg,
-			Timestamp: msg.CreatedAt,
-		})
-	}
-
-	response := map[string]interface{}{
-		"data": msg,
-	}
-	roomWriteJSON(w, http.StatusCreated, response)
+	roomWriteJSON(w, http.StatusCreated, map[string]interface{}{"data": msg})
 }
 
 // resolveRoomBySlug looks up a room by slug, using testRoomLookup in unit tests.
@@ -378,14 +238,6 @@ func (h *RoomMessagesHandler) resolveRoomBySlug(ctx context.Context, slug string
 		return h.testRoomLookup(ctx, slug)
 	}
 	return h.roomRepo.GetBySlug(ctx, slug)
-}
-
-// createMessage creates a message, using testMsgCreate in unit tests.
-func (h *RoomMessagesHandler) createMessage(ctx context.Context, params models.CreateMessageParams) (*models.Message, error) {
-	if h.testMsgCreate != nil {
-		return h.testMsgCreate(ctx, params)
-	}
-	return h.msgRepo.Create(ctx, params)
 }
 
 // ListMessages handles GET /r/{slug}/messages and GET /v1/rooms/{slug}/messages.

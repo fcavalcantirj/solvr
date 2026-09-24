@@ -209,6 +209,22 @@ func (r *RoomEntryRepository) ListAll(ctx context.Context, roomID uuid.UUID) ([]
 	return collectRoomEntries(ctx, rows, "ListAll")
 }
 
+// ListPage returns up to limit non-deleted entries (messages and events) with a
+// sequence greater than afterSequence, in timeline order. kind filters to "message" or
+// "event" when non-empty. Callers request limit+1 to learn whether more entries exist.
+func (r *RoomEntryRepository) ListPage(ctx context.Context, roomID uuid.UUID, afterSequence int, kind string, limit int) ([]models.RoomEntry, error) {
+	rows, err := r.pool.Query(ctx, `SELECT `+roomEntryColumns+`
+		FROM room_entries
+		WHERE room_id = $1 AND sequence > $2 AND deleted_at IS NULL
+		  AND ($3 = '' OR kind = $3)
+		ORDER BY sequence ASC LIMIT $4`, roomID, afterSequence, kind, limit)
+	if err != nil {
+		LogQueryError(ctx, "ListPage", "room_entries", err)
+		return nil, err
+	}
+	return collectRoomEntries(ctx, rows, "ListPage")
+}
+
 // CountMessages counts non-deleted MESSAGE entries in a room; events are excluded so a
 // room's message count matches the legacy messages-table semantics.
 func (r *RoomEntryRepository) CountMessages(ctx context.Context, roomID uuid.UUID) (int, error) {

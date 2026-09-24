@@ -61,6 +61,29 @@ func mountRoomRoutes(
 		return optionalAuthMiddleware(apimiddleware.RoomAccessGuard(roomRepo, memberRepo, agentTokenRepo)(next))
 	}
 
+	// Canonical timeline routes accept human, agent-account and room-scoped credentials
+	// through ONE authorization policy (RoomPolicyGuard). Writes share the adapters'
+	// rate-limit buckets: an agent write counts against the same 60/min bucket as
+	// POST /r/{slug}/message, a human write against the same 10/min bucket as
+	// POST /v1/rooms/{slug}/messages. Each limiter is built once and mounted on both.
+	entriesHandler := handlers.NewRoomEntriesHandler(db.NewRoomEntryRepository(pool), msgHandler)
+	agentWriteLimit := httprate.LimitByIP(60, time.Minute)
+	humanWriteLimit := httprate.LimitByIP(10, time.Minute)
+	entryWriteLimit := func(next http.Handler) http.Handler {
+		agentNext, humanNext := agentWriteLimit(next), humanWriteLimit(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if actor := apimiddleware.RoomActorFromContext(r.Context()); actor != nil && actor.Type == apimiddleware.RoomActorHuman {
+				humanNext.ServeHTTP(w, r)
+				return
+			}
+			agentNext.ServeHTTP(w, r)
+		})
+	}
+	entriesPolicy := func(access apimiddleware.RoomAccess) func(http.Handler) http.Handler {
+		guard := apimiddleware.RoomPolicyGuard(roomRepo, memberRepo, agentTokenRepo, access)
+		return func(next http.Handler) http.Handler { return optionalAuthMiddleware(guard(next)) }
+	}
+
 	// -- REST routes: /v1/rooms/* (D-18, D-19: public list/detail, auth for write) --
 	r.Route("/v1/rooms", func(r chi.Router) {
 		// List is unconditionally public; it already excludes closed rooms.
@@ -73,6 +96,11 @@ func mountRoomRoutes(
 		r.With(readGuard).Get("/{slug}/messages/{id}", msgHandler.GetMessage)
 		r.With(readGuard).Get("/{slug}/agents", presenceHandler.ListPresence)
 		r.With(readGuard).Get("/{slug}/connect", roomConnectHandler.GetRoomConnect)
+
+		// Canonical timeline: messages and events in one ordered, cursor-paged list.
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/entries", entriesHandler.ListEntries)
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/entries/{entry_id}", entriesHandler.GetEntry)
+		r.With(entriesPolicy(apimiddleware.RoomWrite), entryWriteLimit).Post("/{slug}/entries", entriesHandler.PostEntry)
 
 		// Published outcome posts saved from this room (room links to the published outcome).
 		// OptionalAuth lets the handler gate a private room's outcomes to its participants.
@@ -98,7 +126,7 @@ func mountRoomRoutes(
 			// Human comment endpoint (JWT-authenticated, rate limited per T-16-02).
 			// RoomAccessGuard restricts posting to a PRIVATE room to its owner/family/members
 			// (public rooms stay open to any authenticated human) — BART-156 family scope.
-			r.With(apimiddleware.RoomAccessGuard(roomRepo, memberRepo, agentTokenRepo), httprate.LimitByIP(10, time.Minute)).Post("/{slug}/messages", msgHandler.PostHumanMessage)
+			r.With(apimiddleware.RoomAccessGuard(roomRepo, memberRepo, agentTokenRepo), humanWriteLimit).Post("/{slug}/messages", msgHandler.PostHumanMessage)
 
 			// Per-agent handshake + member allowlist management (mission #3).
 			r.Post("/{slug}/handshake", roomHandler.Handshake)
@@ -121,7 +149,8 @@ func mountRoomRoutes(
 
 		// D-32: Per-room rate limiting on message posting (60 req/min per IP).
 		// Applied only to POST /message, not to read endpoints or SSE stream.
-		r.With(httprate.LimitByIP(60, time.Minute)).Post("/message", msgHandler.PostMessage)
+		// Transport adapter into the same submission path as POST /v1/rooms/{slug}/entries.
+		r.With(agentWriteLimit).Post("/message", msgHandler.PostMessage)
 
 		r.Get("/messages", msgHandler.ListMessages)
 		r.Get("/messages/{id}", msgHandler.GetMessage)

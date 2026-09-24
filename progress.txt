@@ -10021,3 +10021,78 @@ REMAINING FOR idx 70 (next slices):
   - Step 5: SPEC.md — canonical entry contract (message + event) + stream (incl. replay of
     events) + one policy for every /v1/rooms/{slug} route + adapter mapping for /messages
     (reads + writes) and /events.
+
+================================================================================
+2026-09-24 — Task idx 70 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Offer one canonical room API with thin adapters for the existing transport routes"
+SLICE 7 of N (step 4): new connection prompts teach the canonical entries contract and
+an explicit per-step recovery. Verifies + journals commit e96a371, fixes its regression.
+================================================================================
+
+TASK SELECTION: same top-down skips as slices 1-6 (idx 23 ACCEPTANCE needs idx 77; 51/52
+  need idx 92 + 67; 58 needs idx 73; 66 ACCEPTANCE; 67 needs idx 74). Continued idx 70.
+
+STATE FOUND AT START: HEAD e96a371 (message = a truncated journal header, NO journal entry
+  was appended) already held the step-4 prompt work. [REAL] git show --stat e96a371:
+  M   handlers/connect_prompts.go (571 lines): planner/starter/builder/executor/role
+      prompts post via POST /v1/rooms/{slug}/entries {"body","client_entry_id"} and read
+      via GET .../entries (+ meta.next_cursor -> ?cursor= note); waitingRecoverySection
+      now reads /entries; new connectEntriesURL(), connectCursorNote, and
+      stepRecoverySection() ("IF A STEP FAILS": registration / handshake again on 401 /
+      join retry / resend with same client_entry_id -> meta.idempotent_replay / 403).
+      Register, handshake and /r/{slug}/join stay explicit named steps, in that order.
+  NEW handlers/connect_prompts_entries_test.go (100): _PreferCanonicalEntries,
+      _EachFailedStepIsRecoverable over every connect/room prompt, public + private.
+  NEW api/router_rooms_connect_entries_test.go (69): follows the executor prompt
+      literally against the server (handshake, join, POST entry 201, handshake again,
+      resend same client_entry_id -> 200 idempotent_replay same id, GET shows ONE entry
+      attributed to the executor, meta.next_cursor present).
+  M   handlers/connect_test.go + handlers/rooms_connect_test.go — REPLACED ASSERTIONS
+      (behavior this step replaces), per the test rule:
+      (a) TestConnect_PlannerPromptIsCompleteForTask18 and
+          TestRoomsConnect_ExecutorPromptNamesActualRoom;
+      (b) asserted the prompt Contains ".../r/{slug}/message" and ".../r/{slug}/messages";
+      (c) now assert Contains "POST .../v1/rooms/{slug}/entries" + "GET .../entries" and
+          NotContains "/r/{slug}/message"; the same behavior (prompt names the real
+          post/read endpoints) is also covered by TestConnectPrompts_PreferCanonicalEntries
+          and TestRoomConnectPrompt_CanonicalEntriesFlowWorksAsTaught;
+      (d) [TEST] both PASS (/tmp/i70s7_handlers.log), and the two named replacements PASS.
+  [REAL] connect_prompts.go teaches ?cursor=; rooms_entries.go ListEntries reads
+  q.Get("cursor") and returns meta.next_cursor — consistent.
+
+THIS ITERATION'S DIFF ([REAL] git status --porcelain / git diff --stat):
+  M   backend/internal/api/router_rooms_groups_test.go (+8/-1). REGRESSION found by the
+      full run: TestGroupLifecycle_LateJoinPromptRetrievesContextBeforeActing FAILED
+      (prompt "does not contain /r/<slug>/messages") because e96a371 moved history reads
+      to /entries. Replaced per the test rule:
+      (a) that test; (b) asserted Contains "/r/"+slug+"/messages", "prompt must tell the
+      joiner how to retrieve the room history"; (c) now asserts Contains
+      "GET https://api.solvr.dev/v1/rooms/<slug>/entries" with the same message, AND
+      STRENGTHENED: anonymous GET /v1/rooms/<slug>/entries?kind=message on the public room
+      returns 200 with exactly the planner's 2 messages, first body == the task;
+      the "before you post" and task assertions are unchanged; (d) [TEST] PASS
+      (/tmp/i70s7_groups.log, all 5 TestGroupLifecycle_* PASS, 0 SKIP).
+  No production code change this iteration. No test deleted, skipped or loosened.
+  spec.json untouched.
+
+VERIFICATION (DATABASE_URL = shell-profile local docker solvr-postgres
+  localhost:5435/solvr_test):
+  [TEST] handlers prompt tests (/tmp/i70s7_handlers.log): 95 PASS, 0 FAIL, 0 SKIP
+    (TestConnectPrompts_*, TestConnect_*, TestRoomsConnect_*).
+  [TEST] router (/tmp/i70s7_router.log): TestRoomConnectPrompt_CanonicalEntriesFlowWorks-
+    AsTaught + 14 TestRoomEntries* PASS.
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` BEFORE the groups-test fix
+    (/tmp/i70s7_full.log): 3847 PASS, 11 SKIP, 74 unique FAIL — comm vs /tmp/i70s6_full.log:
+    1 new (the groups test above, now fixed + passing in isolation), 0 gone. The full suite
+    was NOT re-run after the one-file test fix [UNVERIFIED as a full run].
+  [REAL] gofmt clean on the 6 touched files; all < 800 lines. check-file-size.sh reports 37
+    pre-existing violations (e.g. router_connect_test.go 939), none in files touched here.
+
+REMAINING FOR idx 70 (next slices):
+  - skill/scripts/solvr.sh room-message still posts to /r/{slug}/message (and
+    test_room_credentials.sh pins it); skill/SKILL.md, references/api.md, frontend/public
+    skill copies and app/docs/protocol still document /r message routes. Decide whether
+    those move to /entries here or under idx 76 (SDK/CLI/skills consistency).
+  - Step 5: SPEC.md — canonical entry contract (message + event) + stream (incl. replay of
+    events) + one policy for every /v1/rooms/{slug} route + adapter mapping for /messages
+    (reads + writes) and /events.

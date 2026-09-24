@@ -82,7 +82,14 @@ func TestGroupLifecycle_LateJoinPromptRetrievesContextBeforeActing(t *testing.T)
 
 	prompt, _ := data["prompt"].(string)
 	require.NotEmpty(t, prompt)
-	require.Contains(t, prompt, "/r/"+slug+"/messages", "prompt must tell the joiner how to retrieve the room history")
+	// History is read through the canonical entries contract (idx 70 step 4), which
+	// replaced the /r/{slug}/messages adapter in new prompts.
+	require.Contains(t, prompt, "GET https://api.solvr.dev/v1/rooms/"+slug+"/entries", "prompt must tell the joiner how to retrieve the room history")
+	st, hist := doJSON(t, "GET", ts.URL+"/v1/rooms/"+slug+"/entries?kind=message", "", "")
+	require.Equal(t, http.StatusOK, st, "the taught history read must work: %v", hist)
+	rows, _ := hist["data"].([]any)
+	require.Len(t, rows, 2, "the taught history read returns the work already started")
+	require.Equal(t, task, rows[0].(map[string]any)["body"])
 	require.Contains(t, prompt, "before you post", "prompt must tell the joiner to read context before acting")
 	require.Contains(t, prompt, task, "prompt must carry the initial task so the joiner has context")
 }

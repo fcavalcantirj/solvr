@@ -9785,3 +9785,69 @@ REMAINING FOR idx 70 (next slices):
   - Step 5: SPEC.md — canonical entry contract (message + event) + adapter mapping for
     /messages and /events.
   - Step 6: extend contract tests to the stream.
+
+================================================================================
+2026-09-24 — Task idx 70 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Offer one canonical room API with thin adapters for the existing transport routes"
+SLICE 3 of N: GET /v1/rooms/{slug}/stream under the single room authorization policy;
+GET /r/{slug}/stream documented as its room-token adapter over the same stream.
+================================================================================
+
+TASK SELECTION: same top-down skips as the slice-1/2 entries (idx 23 ACCEPTANCE needs
+  idx 77; 51/52 need idx 92 + 67; 58 needs idx 73; 66 ACCEPTANCE; 67 needs idx 74).
+  Continued idx 70.
+
+FILES ([REAL] git status --porcelain / git diff --stat before journaling):
+  M   backend/internal/api/router_rooms.go (186): GET /v1/rooms/{slug}/stream now mounts
+    SSENoBuffering + SSEAccessTokenToHeader + entriesPolicy(RoomRead) (optionalAuth +
+    RoomPolicyGuard) instead of readGuard (RoomAccessGuard). Comment on /r/{slug}/stream
+    marks it as the transport adapter.
+  M   backend/internal/api/handlers/rooms_sse.go (278): PublicStream uses the room the
+    guard injected (apimiddleware.RoomFromContext); the slug lookup remains only as the
+    fallback when no guard ran (handler unit tests TestPublicStream_* still use it).
+    Streaming logic untouched (both routes still call the same streamRoom).
+  NEW backend/internal/api/router_rooms_entries_stream_test.go (234 lines, 2 tests).
+  No test deleted, skipped or loosened. No frontend, SPEC.md or migration change.
+
+BEHAVIOR CHANGE (canonical stream only, now identical to GET /v1/rooms/{slug}/entries):
+  - invalid/expired solvr_rt_ token -> 401 (before: ignored; 403 on private, 200 on public)
+  - valid room token of ANOTHER room on a PUBLIC room -> 403 (before: ignored, 200)
+  Anonymous public 200, anonymous private 403, ?access_token= JWT/room token and ?token=
+  all unchanged (TestRoomSSE_AccessTokenQueryParam_AuthorizesPrivateStream still passes).
+
+VERIFICATION (DATABASE_URL = shell-profile local docker solvr-postgres
+  localhost:5435/solvr_test):
+  [TEST] RED (/tmp/i70s3_red.log): _OneAuthorizationPolicyAcrossCredentials FAIL on exactly
+    the 3 cases above ("invalid room token on private" 403!=401, "other room's token on
+    public" 200!=403, "invalid room token on public" 200!=401). _CanonicalAndAdapter...
+    also failed first, but on MY assertion (whole-frame equality included other
+    subscribers' timing-dependent presence_join frames); fixed the test to compare only
+    message/event frames (timelineFrames) — the product already delivered identical frames.
+  [TEST] GREEN (/tmp/i70s3_green.log): both new tests PASS, 0 SKIP, together with all
+    TestRoomEntries_*, TestRoomSSE_*, TestPublicStream_*, TestRoomACL_*, TestRoomEvents_*,
+    TestRoomHumanPost_*, TestSSEAccessTokenToHeader, TestAPIUsage_* —
+    _OneAuthorizationPolicyAcrossCredentials: 20 stream cases (private: anon/outsider key/
+      outsider human/other-room token header+?access_token 403, invalid token 401, member
+      token header/?access_token/?token, member agent key, owner JWT header/?access_token
+      200; public: anon + own token 200, other-room token 403, invalid 401; /r adapter: no
+      token 401, invalid 401, other-room 403, member 200) + the same 2 public-room token
+      decisions on GET /entries.
+    _CanonicalAndAdapterDeliverTheSameEntries: private room, 3 live subscribers (canonical
+      with agent key, canonical with owner JWT via ?access_token, /r adapter with room
+      token); canonical human message + /r agent message + canonical kind=event -> every
+      stream gets message ids [human, agent] and event id [event]; adapter and canonical
+      message/event frames byte-identical; ?after=<human id> replays [agent msg] on both.
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i70s3_full.log): 3816 PASS (slice 2:
+    3814), 11 SKIP, 73 unique FAIL — comm vs /tmp/i70s2_full.log: 0 new, 0 gone.
+  [REAL] gofmt clean on the 3 files; go build ./... and go vet on api + handlers ok.
+    ./scripts/check-file-size.sh exits 1 listing 37 files > 800 lines; none of them is a
+    file touched here (all three are < 300 lines).
+
+REMAINING FOR idx 70 (next slices):
+  - SSE reconnect replay (Last-Event-ID / ?after) replays only messages (msgRepo.ListAfter);
+    typed events are live-only. Entry ids share one id space (000094), so replay can move
+    to room_entries and include events on both routes.
+  - GET /v1/rooms/{slug}/messages list as adapter over entries.
+  - Step 4: connection prompts (connect_prompts.go, skill script) prefer /entries, keeping
+    register + handshake explicit and recoverable.
+  - Step 5: SPEC.md — canonical entry contract (message + event) + stream + adapter mapping.

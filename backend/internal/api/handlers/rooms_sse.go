@@ -100,31 +100,36 @@ func (h *RoomSSEHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	h.streamRoom(w, r, room)
 }
 
-// PublicStream handles GET /v1/rooms/{slug}/stream -- public browser SSE stream.
+// PublicStream handles GET /v1/rooms/{slug}/stream -- the canonical room SSE stream.
 //
-// Unlike Stream (A2A route), this endpoint:
-// - Requires no bearer token (public route, no BearerGuard middleware)
-// - Resolves the room by slug from the chi URL parameter
-// - Supports ?lastEventId= query param in addition to Last-Event-ID header
+// Unlike Stream (the /r adapter, room token only), this endpoint:
+//   - Is authorized by RoomPolicyGuard (anonymous for public rooms; human, agent-account
+//     or room-scoped credentials otherwise), which injects the resolved room
+//   - Falls back to resolving the room by slug when no guard ran (unit tests)
+//   - Supports ?lastEventId= query param in addition to Last-Event-ID header
 //
 // All other behaviour (connection limits, heartbeat, max lifetime, replay) is
 // identical to Stream. T-16-04: global connection limit and per-room capacity
 // check remain enforced to prevent resource exhaustion.
 func (h *RoomSSEHandler) PublicStream(w http.ResponseWriter, r *http.Request) {
-	slug := chi.URLParam(r, "slug")
-	if slug == "" {
-		http.Error(w, `{"error":{"code":"VALIDATION_ERROR","message":"slug is required"}}`, http.StatusBadRequest)
-		return
-	}
-
-	room, err := h.resolveSSERoomBySlug(r.Context(), slug)
-	if err != nil {
-		if errors.Is(err, db.ErrRoomNotFound) {
-			http.Error(w, `{"error":{"code":"NOT_FOUND","message":"room not found"}}`, http.StatusNotFound)
+	room := apimiddleware.RoomFromContext(r.Context())
+	if room == nil {
+		slug := chi.URLParam(r, "slug")
+		if slug == "" {
+			http.Error(w, `{"error":{"code":"VALIDATION_ERROR","message":"slug is required"}}`, http.StatusBadRequest)
 			return
 		}
-		http.Error(w, `{"error":{"code":"INTERNAL_ERROR","message":"failed to get room"}}`, http.StatusInternalServerError)
-		return
+
+		var err error
+		room, err = h.resolveSSERoomBySlug(r.Context(), slug)
+		if err != nil {
+			if errors.Is(err, db.ErrRoomNotFound) {
+				http.Error(w, `{"error":{"code":"NOT_FOUND","message":"room not found"}}`, http.StatusNotFound)
+				return
+			}
+			http.Error(w, `{"error":{"code":"INTERNAL_ERROR","message":"failed to get room"}}`, http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Support ?lastEventId= query param for initial browser connect.

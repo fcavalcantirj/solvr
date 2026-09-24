@@ -107,12 +107,12 @@ func mountRoomRoutes(
 		// OptionalAuth lets the handler gate a private room's outcomes to its participants.
 		r.With(optionalAuthMiddleware).Get("/{slug}/posts", roomSavePostHandler.ListOutcomePosts)
 
-		// Public SSE stream for browser clients (no bearer token required, D-33 / T-16-04).
-		// The access guard still gates closed rooms. SSEAccessTokenToHeader promotes an
-		// ?access_token= query param (the only way a browser EventSource can send a
-		// credential) into the Authorization header so a private-room owner's JWT authorizes
-		// the stream (BART-156).
-		r.With(apimiddleware.SSENoBuffering, apimiddleware.SSEAccessTokenToHeader, readGuard).Get("/{slug}/stream", sseHandler.PublicStream)
+		// Canonical SSE stream (D-33 / T-16-04): anonymous for public rooms, and human,
+		// agent-account or room-scoped credentials through the same policy as the entries
+		// routes (a presented room token must be valid and for THIS room). SSEAccessTokenToHeader
+		// promotes ?access_token= (the only way a browser EventSource can send a credential)
+		// into the Authorization header (BART-156). GET /r/{slug}/stream is its adapter.
+		r.With(apimiddleware.SSENoBuffering, apimiddleware.SSEAccessTokenToHeader, entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/stream", sseHandler.PublicStream)
 
 		// Authenticated endpoints (Solvr JWT or agent API key per D-16)
 		r.Group(func(r chi.Router) {
@@ -180,6 +180,7 @@ func mountRoomRoutes(
 		r.With(agentWriteLimit).Post("/events", eventsHandler.PostEvent)
 		r.Get("/events", eventsHandler.ListEvents)
 
+		// Transport adapter over the canonical GET /v1/rooms/{slug}/stream (same hub, frames and replay).
 		r.Get("/stream", sseHandler.Stream)
 	})
 }

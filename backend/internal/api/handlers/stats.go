@@ -44,6 +44,8 @@ type StatsRepositoryInterface interface {
 // StatsHandler handles statistics endpoints.
 type StatsHandler struct {
 	repo StatsRepositoryInterface
+	// knowledge, when set, supplies the type-specific count fields (see legacy_type_stats.go).
+	knowledge KnowledgeTotalsReader
 }
 
 // NewStatsHandler creates a new StatsHandler.
@@ -174,11 +176,21 @@ func (h *StatsHandler) GetProblemsStats(w http.ResponseWriter, r *http.Request) 
 	stats["recently_solved"] = recentlySolved
 	stats["top_solvers"] = topSolvers
 
+	k, err := h.knowledgeFor(ctx, "problem")
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get knowledge totals")
+		return
+	}
+	if k != nil {
+		applyKnowledgeCounts(stats, k)
+	}
+
 	response := map[string]interface{}{
 		"data": stats,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	markTypeStatsDeprecated(w)
 	w.Header().Set("Cache-Control", "public, max-age=30")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
@@ -210,11 +222,21 @@ func (h *StatsHandler) GetQuestionsStats(w http.ResponseWriter, r *http.Request)
 	stats["recently_answered"] = recentlyAnswered
 	stats["top_answerers"] = topAnswerers
 
+	k, err := h.knowledgeFor(ctx, "question")
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get knowledge totals")
+		return
+	}
+	if k != nil {
+		applyKnowledgeCounts(stats, k)
+	}
+
 	response := map[string]interface{}{
 		"data": stats,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	markTypeStatsDeprecated(w)
 	w.Header().Set("Cache-Control", "public, max-age=30")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
@@ -285,6 +307,15 @@ func (h *StatsHandler) GetIdeasStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	k, err := h.knowledgeFor(ctx, "idea")
+	if err != nil {
+		writeStatsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get knowledge totals")
+		return
+	}
+	if k != nil {
+		countsByStatus = ideaCountsFromKnowledge(k)
+	}
+
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
 			"counts_by_status":  countsByStatus,
@@ -298,6 +329,7 @@ func (h *StatsHandler) GetIdeasStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	markTypeStatsDeprecated(w)
 	w.Header().Set("Cache-Control", "public, max-age=30")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)

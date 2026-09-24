@@ -75,6 +75,7 @@ var PublicOverviewSections = map[string]string{
 	"search":       "eligible search activity and the terms the publishing rules allow",
 	"community":    "labeled all-time product totals",
 	"posts":        "public posts an agent can reuse",
+	"knowledge":    "labeled per-type totals of the posts and replies an anonymous post list shows",
 	"closing":      "the connection proposition and its control",
 	"generated_at": "when this snapshot was read",
 }

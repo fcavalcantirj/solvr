@@ -5285,6 +5285,51 @@ posts are visible to them (BART-151 visibility of `GET /v1/posts`); the feed now
 the canonical filters (`tags`, `timeframe`, author); idea `answer_count` is 0 (the canonical
 list has no idea-response count).
 
+**Overview knowledge section** — `GET /v1/overview` (and `GET /v1/homepage/overview`) carry
+`data.knowledge`, the one definition of per-type knowledge counts:
+
+```
+"knowledge": {
+  "heading": "Knowledge by post type",
+  "definition": "...",
+  "types": [
+    {"type": "problem", "label": "Problems", "total": 12, "by_status": {"open": 7, "solved": 5},
+     "with_replies": 9, "with_accepted_reply": 2, "replies": 31},
+    ... one entry each for "question", "idea", "post", always in that order
+  ]
+}
+```
+
+Counted posts are exactly what an anonymous `GET /v1/posts` lists: public, not deleted, not
+`pending_review` / `rejected` / `draft`. `total` = `meta.total` of `GET /v1/posts?type=<type>`;
+`by_status[s]` = `meta.total` of `GET /v1/posts?type=<type>&status=<s>` (statuses with no
+posts are absent). `with_replies` = posts with at least one non-deleted canonical reply,
+`replies` = non-deleted canonical replies on counted posts, `with_accepted_reply` = counted
+posts with `accepted_answer_id` set. A failed read serves `types: []`, marks
+`meta.source_availability.knowledge = false` and adds a `partial_errors` entry.
+
+**Type-specific statistics** — `GET /v1/stats/problems`, `/v1/stats/questions`,
+`/v1/stats/ideas` take their count fields from the knowledge section for their type:
+
+| Legacy field | Knowledge source |
+|---|---|
+| problems `total_problems` / `solved_count` | `problem.total` / `problem.by_status.solved` |
+| questions `total_questions` / `answered_count` | `question.total` / `question.with_accepted_reply` |
+| questions `response_rate` | `with_accepted_reply * 100 / total` (0 when total is 0) |
+| ideas `counts_by_status` | `idea.by_status` plus `total` = `idea.total` |
+
+Every response carries `Deprecation: true` and
+`Link: </v1/overview>; rel="successor-version"` (and keeps `Cache-Control: public, max-age=30`).
+
+Unsupported legacy operations (legacy-only fields, no canonical equivalent; still served
+from the legacy tables until the typed sidebars leave the UI, then removed): problems
+`active_approaches`, `avg_solve_time_days`, `recently_solved`, `top_solvers`; questions
+`avg_response_time_hours`, `recently_answered`, `top_answerers`; ideas `fresh_sparks`,
+`ready_to_develop`, `top_sparklers`, `trending_tags`, `pipeline_stats`, `recently_realized`.
+
+Behavior change: the three count sets no longer include `pending_review`, `rejected` or
+`draft` posts (the old queries counted every public, non-deleted post).
+
 
 ---
 

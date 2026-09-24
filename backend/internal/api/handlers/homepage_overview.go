@@ -145,6 +145,7 @@ type HomepageOverview struct {
 	Search      OverviewSearch    `json:"search"`
 	Community   OverviewCommunity `json:"community"`
 	Posts       OverviewPosts     `json:"posts"`
+	Knowledge   OverviewKnowledge `json:"knowledge"`
 	Closing     OverviewClosing   `json:"closing"`
 	GeneratedAt time.Time         `json:"generated_at"`
 }
@@ -534,6 +535,11 @@ func (h *HomepageOverviewHandler) buildOverview(ctx Context, window db.RoomStats
 		partialErrors = append(partialErrors, "all-time totals unavailable: "+err.Error())
 	}
 
+	knowledge, knowledgeErr := h.readOverviewKnowledge(ctx)
+	if knowledgeErr != "" {
+		partialErrors = append(partialErrors, knowledgeErr)
+	}
+
 	// Recent completed rooms: the offline fallback shown when no agents are
 	// currently online. Only fetched when presence reports zero; otherwise nil
 	// and never serialized.
@@ -554,6 +560,7 @@ func (h *HomepageOverviewHandler) buildOverview(ctx Context, window db.RoomStats
 		Search:      buildOverviewSearch(searchPulse),
 		Community:   buildOverviewCommunity(totals, stats),
 		Posts:       buildOverviewPosts(posts),
+		Knowledge:   knowledge,
 		Closing:     buildOverviewClosing(),
 		GeneratedAt: time.Now().UTC(),
 	}
@@ -565,7 +572,7 @@ func (h *HomepageOverviewHandler) buildOverview(ctx Context, window db.RoomStats
 // sourceAvailability maps each subsystem name to whether it succeeded. It
 // inspects the partial error strings, which are named by subsystem.
 func sourceAvailability(partialErrors []string) map[string]bool {
-	all := []string{"rooms", "activity", "api_usage", "search", "community", "previews", "posts"}
+	all := []string{"rooms", "activity", "api_usage", "search", "community", "previews", "posts", "knowledge"}
 	avail := make(map[string]bool, len(all))
 	for _, s := range all {
 		avail[s] = true
@@ -681,6 +688,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 		slog.Error("homepage overview: all-time totals failed", "error", err)
 		totals = nil
 	}
+	knowledge, _ := h.readOverviewKnowledge(ctx)
 
 	var recentRooms []db.RecentCompletedRoom
 	if pulse.Presence.AgentsOnline == 0 {
@@ -699,6 +707,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 		Search:      buildOverviewSearch(searchPulse),
 		Community:   buildOverviewCommunity(totals, stats),
 		Posts:       buildOverviewPosts(posts),
+		Knowledge:   knowledge,
 		Closing:     buildOverviewClosing(),
 		GeneratedAt: time.Now().UTC(),
 	}

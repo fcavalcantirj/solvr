@@ -685,6 +685,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		}
 		if statsRepo != nil {
 			statsHandler := handlers.NewStatsHandler(statsRepo)
+			// Task idx 72: type-specific counts come from the overview knowledge aggregate.
+			if k, ok := statsRepo.(handlers.KnowledgeTotalsReader); ok {
+				statsHandler.SetKnowledgeTotals(k)
+			}
 			r.Get("/stats", statsHandler.GetStats)
 			r.Get("/stats/trending", statsHandler.GetTrending)
 			r.Get("/stats/ideas", statsHandler.GetIdeasStats)

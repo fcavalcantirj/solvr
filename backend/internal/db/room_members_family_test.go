@@ -28,9 +28,9 @@ func linkAgent(ctx context.Context, t *testing.T, pool *db.Pool, agentID string,
 	}
 }
 
-// forceUnlink clears agents.human_id. Migration 000018's prevent_agent_reclaim refuses
-// that change today, so the test lifts it for this one committed transaction to prove
-// memberships stay correct if a link ever ends.
+// forceUnlink clears agents.human_id. Migration 000018's prevent_agent_reclaim refused
+// that change until 000100 allowed unlinking; lifting the trigger for this one committed
+// transaction is kept so these tests do not depend on that migration.
 func forceUnlink(ctx context.Context, t *testing.T, pool *db.Pool, agentIDs ...string) {
 	t.Helper()
 	err := pool.WithTx(ctx, func(tx db.Tx) error {

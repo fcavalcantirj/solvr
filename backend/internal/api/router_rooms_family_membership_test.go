@@ -70,3 +70,30 @@ func TestRoomOwnership_HumanOwnerMembershipIsAuthoritative(t *testing.T) {
 	patch.Body.Close()
 	require.Equal(t, http.StatusOK, patch.StatusCode, "heir owner manages the room")
 }
+
+// DELETE /v1/me with a claimed agent (SPEC Part 20.2): the agent is unclaimed, and the
+// human's sole-owner closed room is archived rather than left unmanageable.
+func TestDeleteMe_UnclaimsAgentsAndArchivesSoleOwnerRoom(t *testing.T) {
+	ts, pool, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+	roomPreCleanup(t, pool)
+
+	userID, ownerJWT := createRoomTestUser(t, pool)
+	agentID, _ := registerRoomTestAgent(t, ts)
+	claimAgentToUser(t, pool, agentID, userID)
+	slug, _ := createClosedRoom(t, ts, ownerJWT)
+
+	resp := doRoomRequest(t, "DELETE", ts.URL+"/v1/me", "", ownerJWT)
+	resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode, "account deletion with a claimed agent")
+
+	var humanID *string
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`SELECT human_id::text FROM agents WHERE id = $1`, agentID).Scan(&humanID))
+	require.Nil(t, humanID, "the deleted human's agent is unclaimed")
+
+	var archived bool
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`SELECT archived_at IS NOT NULL FROM rooms WHERE slug = $1`, slug).Scan(&archived))
+	require.True(t, archived, "the deleted human's sole-owner room is archived")
+}

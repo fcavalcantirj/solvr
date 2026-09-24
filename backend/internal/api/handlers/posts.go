@@ -398,6 +398,9 @@ func (h *PostsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Expose the version validator so a client can send it back as an
+	// If-Match precondition on a later edit (idx 73 step 5).
+	w.Header().Set("ETag", postETag(post.UpdatedAt))
 	writePostsJSON(w, http.StatusOK, PostResponse{Data: *post})
 }
 
@@ -621,6 +624,14 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Optimistic concurrency (idx 73 step 5): reject a stale edit whose
+	// If-Match precondition no longer matches the current version so a retry
+	// cannot silently overwrite a newer revision. Checked after ownership so a
+	// non-owner never learns the version. Absent header keeps prior behavior.
+	if enforceIfMatch(w, r, existingPost.UpdatedAt) {
+		return
+	}
+
 	// Status guard — only allow editing if status is editable
 	switch existingPost.Status {
 	case models.PostStatusOpen, models.PostStatusRejected, models.PostStatusPendingReview, models.PostStatusDraft:
@@ -756,6 +767,8 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		go h.moderatePostAsync(postID, updatedPost.Title, updatedPost.Description, updatedPost.Tags, string(updatedPost.Type), string(authInfo.AuthorType), authInfo.AuthorID)
 	}
 
+	// Echo the new version validator so the client's next If-Match is current.
+	w.Header().Set("ETag", postETag(result.UpdatedAt))
 	writePostsJSON(w, http.StatusOK, map[string]interface{}{
 		"data": result,
 	})

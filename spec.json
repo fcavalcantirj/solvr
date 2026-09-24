@@ -821,7 +821,7 @@
       "Verify touch controls have at least 44 by 44 pixel interaction areas, text remains usable at 200 percent zoom, and reduced-motion preference is respected.",
       "Verify mobile users can observe and copy prompts without being forced into a desktop-only terminal mockup or a signup flow."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "performance",

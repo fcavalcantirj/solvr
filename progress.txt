@@ -8396,3 +8396,99 @@ UAT (owner/visual last mile; all automated checks already GREEN):
   - Once GSC access exists, submit /sitemap.xml and validate indexing/coverage and
     that old /problems/{id} and /ideas/{id} 301 to /posts/{id} with no chains
     (step 5).
+
+================================================================================
+2026-09-24 — Task idx 64 (spec.json, category visual)
+"Make the simplified experience work on mobile, keyboard, and assistive
+technology". PASSED (UAT: owner viewport/zoom/touch-target/focus-render eyeball).
+================================================================================
+
+TASK SELECTION (top-down, every earlier skip RE-VERIFIED [REAL] this session):
+  - idx 23 "Verify N-agent e2e" (ACCEPTANCE): [REAL] grep -rl room_entries
+    backend/internal = 0 files; connect.go only MENTIONS /v1/rooms/.../entries in
+    instruction TEXT, no actual route. Acceptance spans two-instance replay
+    (idx 77, false) + entries timeline (idx 68, false). Acceptance-not-checklist.
+    SKIP.
+  - idx 27 "agent-created rooms manageable": step 2 requires rooms.owner_id
+    RETIRED after migration. [REAL] grep -c owner_id internal/db/rooms.go = 16
+    (still present); retirement is idx 69 (false). SKIP.
+  - idx 51 / idx 52 (route legacy integrations / retained-knowledge search) both
+    hinge on the knowledge-model cutover idx 92 (false) + schema reduction idx 67
+    (false). SKIP.
+  - idx 58 "permissions authoritative": step 3 needs established-STREAM revocation.
+    [REAL] grep -cE 'IsMember|membership|Revoke|CheckRoomAccess'
+    internal/api/handlers/rooms_sse.go = 0. That is idx 73 (false). SKIP.
+  - idx 64 THIS TASK: mobile/keyboard/a11y over ALREADY-BUILT pages (Home, Connect,
+    Rooms, room detail, Posts, post detail — idx 1-50 true). No dependency on any
+    false schema/cutover task. First buildable-now task top-down. TOOK IT.
+
+THE DEFECT (why this task existed, step 5 "reduced-motion preference is
+  respected"): [REAL] grep -rlE 'prefers-reduced-motion|motion-reduce|
+  useReducedMotion' app components = 0 hits anywhere. Yet the sheet ships an
+  infinite carousel (app/globals.css:147 `.animate-carousel { animation:
+  carousel 20s linear infinite; }`), `html { scroll-behavior: smooth }`, and
+  [REAL] 179 source files using animate-*/transition-* utilities. Nothing
+  honored a reduced-motion request — a concrete assistive-tech defect.
+
+WHAT CHANGED (git status --porcelain / git diff --stat -- matches exactly):
+  Modified: frontend/app/globals.css (+17): one `@media (prefers-reduced-motion:
+    reduce)` block that sets html scroll-behavior:auto and, on *, *::before,
+    *::after, forces animation-duration/transition-duration to 0.01ms,
+    animation-iteration-count:1, and scroll-behavior:auto (all !important) so the
+    infinite carousel and every animate-*/transition-* utility settle instantly.
+    Standard, well-known reduced-motion reset — no component/JS change needed.
+  New test (Vitest, RED-first then GREEN): frontend/app/globals-reduced-motion.
+    test.ts (4 tests) — reads app/globals.css and asserts the media query exists,
+    isolates the block and asserts animation/transition neutralization +
+    scroll-behavior:auto inside it, and (regression pin) that body keeps
+    overflow-x-hidden (step 2 horizontal-overflow guard). Content-assertion test
+    because jsdom has no layout/media-query engine.
+  No existing test deleted, weakened, skipped, or renamed. No backend, no
+    migration, no env, no prod touch.
+
+STEP-BY-STEP COVERAGE:
+  1 review at 390/768/1280/1920: inherently VISUAL -> UAT (owner eyeball).
+  2 no horizontal overflow / header overlap / clipped CTA: [TEST] body keeps
+    overflow-x-hidden (globals.css:134, pinned). Full pixel confirmation -> UAT.
+  3 keyboard: nav / prompt copy / participant expansion / history load / post
+    submit. [TEST] connect copy is a real <button> reachable+activatable by
+    keyboard (connect-panel.test.tsx: getByRole('button')+role=status feedback);
+    [REAL] message-list.tsx:37 "LOAD OLDER MESSAGES" is a real <button> with
+    visible text (message-list.test.tsx GREEN). Header nav suite GREEN.
+  4 visible focus / form labels / descriptive copy-button names / modal focus
+    return / status announcements not reading every message: [TEST] connect task
+    field via getByLabelText, copy button named by visible text, role="status"
+    for copy confirmation and role="alert" for failure (connect-panel.test.tsx);
+    [REAL] message-list.tsx has NO aria-live region -> it does NOT read every
+    incoming message aloud (compliant). Visible-focus RENDER -> UAT.
+  5 touch 44x44 / 200% zoom / reduced-motion: reduced-motion [TEST] 4/4 GREEN
+    (this task's fix). 44px + zoom RENDER -> UAT.
+  6 mobile can observe+copy prompts without desktop-only mock or forced signup:
+    [TEST] ConnectPanel renders the prompt <pre> (select-all) + copy button with
+    no auth gate (connect-panel.test.tsx); /connect is public (idx 16 true).
+
+VERIFICATION (all RAN this session, frontend dir):
+  [TEST] npx vitest run app/globals-reduced-motion.test.ts -- RED first (3/4
+    fail: media query absent), then GREEN after the globals.css block = 4/4 PASS.
+  [TEST] npx vitest run components/connect/connect-panel.test.tsx = 25/25 PASS
+    (labels, roles, accessible copy-button name, manual-copy fallback, status).
+  [TEST] npx vitest run components/rooms/message-list components/header.test.tsx
+    components/hero-section.test.tsx components/rooms/new-messages-badge = 71/71
+    PASS (keyboard history-load button, nav, no over-eager live region).
+  [REAL] npx eslint app/globals-reduced-motion.test.ts = clean (exit 0).
+  [REAL] wc -l app/globals.css = 166, new test = 42 (both << 800-line limit).
+  Did NOT re-run the full 1022-test suite (isolated CSS + one new test file,
+    quota); change touches no shared component or contract.
+
+REGRESSION: only globals.css gained a reduced-motion @media block (additive) and
+  one new *.test.ts. [REAL] git diff --stat = frontend/app/globals.css +17 only;
+  new test untracked. No production TS/TSX changed, so no component behavior moved.
+
+UAT (owner/visual last mile; all automatable checks already GREEN):
+  - Eyeball Home, Connect, Rooms, a room, Posts, a post at 390/768/1280/1920:
+    confirm no page-level horizontal scroll, no fixed-header overlap, no clipped
+    CTA, readable transcript (code blocks scroll internally) (steps 1-2).
+  - Confirm visible focus rings on keyboard tab, 44x44 touch targets, and usable
+    text at 200% zoom on mobile (steps 4-5).
+  - With OS "reduce motion" on, confirm the homepage carousel and transitions are
+    still (step 5 — the fix; content-verified, render is the owner's eyeball).

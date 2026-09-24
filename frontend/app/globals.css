@@ -147,3 +147,20 @@
 .animate-carousel {
   animation: carousel 20s linear infinite;
 }
+
+/* Respect a visitor's reduced-motion preference: the infinite carousel, every
+   animate-*/transition-* utility, and smooth scrolling all settle instantly so
+   nothing keeps moving for someone who asked the OS to reduce motion. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

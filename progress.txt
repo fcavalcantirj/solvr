@@ -10290,3 +10290,76 @@ REMAINING FOR idx 71:
     listings; then retire the unserved typed List handlers with named test replacement.
   - Step 2: search / rooms / overview filter+ordering+pagination+visibility contracts.
   - Step 5 runtime: status-command migration error (see WHY NOT above; ordering vs idx 51/92).
+
+================================================================================
+2026-09-24 — Task idx 71 (spec.json, category api) — IN PROGRESS, passes STAYS false
+SLICE 3 of N: legacy feed (GET /v1/feed, /v1/feed/stuck, /v1/feed/unanswered) served as
+ADAPTERS over the canonical GET /v1/posts list (step 3, second family); new canonical
+filter needs_help=true replaces the /feed/stuck query.
+================================================================================
+
+TASK SELECTION: same as slices 1-2 — idx 23/51/52/58/66/67 still blocked; idx 71 continues.
+
+FILES ([REAL] git status --porcelain / git diff --stat):
+  NEW backend/internal/api/handlers/legacy_feed.go (125 lines): LenientLegacyPagination(q)
+    (the lenient page/per_page rewrite, moved here from the slice-2 adapter so both legacy
+    families share it) + LegacyFeedAdapter{repo PostsRepositoryInterface} with Feed /
+    Stuck / Unanswered: pin the canonical query (feed: sort=newest; stuck: type=problem&
+    needs_help=true; unanswered: type=question&has_answer=false), set Deprecation: true +
+    Link: <that query>; rel="successor-version", parse via parsePostListOptions, call
+    postsRepo.List, render rows as legacy models.FeedItem (feedItemFromPost).
+  NEW backend/internal/db/posts_list_filters.go (15 lines): needsHelpCondition
+    (status in_progress OR a non-deleted 'stuck' approach — the old GetStuckProblems
+    predicate) + appendNeedsHelpFilter. Kept out of db/posts.go, which is already over 800
+    lines at HEAD (1028 -> 1030, one-line call site + blank).
+  M   backend/internal/models/post.go (+1): PostListOptions.NeedsHelp. (post.go is gofmt-
+    dirty at HEAD, pre-existing, left untouched.)
+  M   backend/internal/api/handlers/posts_list_options.go (+4): needs_help=true parsed.
+  M   backend/internal/db/posts.go (+2): appendNeedsHelpFilter in List's WHERE (count and
+    page queries both use it).
+  M   backend/internal/api/legacy_discovery_adapter.go (-10/+1): uses
+    handlers.LenientLegacyPagination (behavior unchanged; its 4 tests still PASS).
+  M   backend/internal/api/router.go: /feed, /feed/stuck, /feed/unanswered -> legacyFeed.*
+    (handlers.NewLegacyFeedAdapter(postsRepo)); feedRepo var + db.NewFeedRepository and
+    handlers.NewFeedHandler wiring removed.
+  M   SPEC.md (+25): 26.5 "Legacy feed" block — route->canonical table, needs_help filter,
+    behavior changes.
+  NEW backend/internal/api/router_legacy_feed_test.go (253 lines, 4 DB-backed tests):
+    _ServedByCanonicalPostsList (ids+meta equal the canonical query per route; stuck =
+    {in_progress problem, stuck-approach problem}, not the working-approach one),
+    _KeepsFeedItemShape, _AnnouncesCanonicalSuccessor, _AcceptsLenientLegacyQueryShape.
+
+BEHAVIOR CHANGES (documented in SPEC 26.5): feed excludes pending_review/rejected/draft;
+  caller sees own private posts (canonical visibility); canonical filters (tags,
+  timeframe, author) now honored; idea answer_count is 0 (canonical list has no
+  idea-response count; old feed counted responses). Frontend consumer of /v1/feed/stuck
+  (components/problems/problems-sidebar.tsx) gets the same JSON shape — [UNVERIFIED] in a
+  browser, frontend not run (not touched).
+NOW UNSERVED (NOT deleted): handlers.FeedHandler + FeedRepositoryInterface, db.FeedRepository
+  and their tests (handlers/feed_test.go, db/feed_test.go) still compile and PASS; no route
+  reaches them. Retire with the named-replacement procedure in a later slice.
+
+TEST HYGIENE FINDING: seed cleanup registered with t.Cleanup runs AFTER `defer cleanup()`
+  closed the pool, so seeded rows leaked into solvr_test. New file uses t.Cleanup(cleanup)
+  (LIFO) — [REAL] 0 legacyfeed% rows after runs. router_legacy_discovery_test.go (slice 2)
+  has the same bug and still leaks legacydisc% rows (12 after this session's runs) — NOT
+  changed this slice; its assertions filter by unique tag so it stays correct. Purged 18
+  leaked rows (+3 answers, 6 approaches) from LOCAL solvr_test only.
+
+TDD: RED [TEST] /tmp/i71s3_red.log — all 4 FAILED (feed ignored tags, no Deprecation/Link,
+  unanswered ignored pinned filters). GREEN /tmp/i71s3_green.log: 4 new + 4 slice-2 +
+  3 TestRouteFamilies_* PASS, 0 SKIP.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test):
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i71s3_full.log): 3866 PASS, 11 SKIP,
+    73 unique FAIL. comm vs /tmp/i71s2_full.log failure set: NEW 0, GONE 0. The 4 new tests
+    PASS in the full run. Frontend not touched, not run.
+  [REAL] go build ./..., go vet ./internal/api/ ./internal/api/handlers/ ./internal/db/
+    clean; new files gofmt clean and < 800 lines. No test deleted, skipped or loosened.
+
+REMAINING FOR idx 71:
+  - Step 3 rest: type-specific-statistics (/stats/problems|questions|ideas), contribution
+    listings; then retire unserved typed List handlers + FeedHandler/FeedRepository with
+    named test replacement.
+  - Step 2: search / rooms / overview filter+ordering+pagination+visibility contracts.
+  - Step 5 runtime: status-command migration error (ordering vs idx 51/92, see slice 2).

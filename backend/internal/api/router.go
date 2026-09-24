@@ -246,7 +246,6 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	var claimTokenRepo handlers.ClaimTokenRepositoryInterface
 	var postsRepo handlers.PostsRepositoryInterface
 	var searchRepo handlers.SearchRepositoryInterface
-	var feedRepo handlers.FeedRepositoryInterface
 	var userRepo handlers.MeUserRepositoryInterface
 	var problemsRepo handlers.ProblemsRepositoryInterface
 	var questionsRepo handlers.QuestionsRepositoryInterface
@@ -268,7 +267,6 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	claimTokenRepo = db.NewClaimTokenRepository(pool)
 	postsRepo = db.NewPostRepository(pool)
 	searchRepo = db.NewSearchRepository(pool)
-	feedRepo = db.NewFeedRepository(pool)
 	userRepo = db.NewUserRepository(pool)
 	userAPIKeysRepo = db.NewUserAPIKeyRepository(pool)
 	bookmarksRepo = db.NewBookmarkRepository(pool)
@@ -364,8 +362,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	searchAnalyticsRepo := db.NewSearchAnalyticsRepository(pool)
 	searchHandler.SetAnalyticsRepo(searchAnalyticsRepo)
 
-	// Create feed handler (per SPEC.md Part 5.6: GET /feed endpoints)
-	feedHandler := handlers.NewFeedHandler(feedRepo)
+	// Legacy feed (GET /feed endpoints) served as adapters over the canonical posts list (task idx 71)
+	legacyFeed := handlers.NewLegacyFeedAdapter(postsRepo)
 
 	// Create content handlers (API-CRITICAL per PRD-v2)
 	problemsHandler := handlers.NewProblemsHandler(problemsRepo)
@@ -674,11 +672,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 		// Feed endpoints (per SPEC.md Part 5.6 and FIX-004)
 		// GET /v1/feed - recent activity (no auth required)
-		r.Get("/feed", feedHandler.Feed)
+		r.Get("/feed", legacyFeed.Feed)
 		// GET /v1/feed/stuck - problems needing help (no auth required)
-		r.Get("/feed/stuck", feedHandler.Stuck)
+		r.Get("/feed/stuck", legacyFeed.Stuck)
 		// GET /v1/feed/unanswered - unanswered questions (no auth required)
-		r.Get("/feed/unanswered", feedHandler.Unanswered)
+		r.Get("/feed/unanswered", legacyFeed.Unanswered)
 
 		// Stats endpoints (for frontend dashboard)
 		var statsRepo handlers.StatsRepositoryInterface

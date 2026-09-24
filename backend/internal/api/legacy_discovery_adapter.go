@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -20,14 +19,7 @@ func legacyTypedListAdapter(canonicalList http.HandlerFunc, postType models.Post
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		q.Set("type", string(postType))
-		if n, err := strconv.Atoi(q.Get("page")); err != nil || n < 1 {
-			q.Del("page")
-		}
-		if n, err := strconv.Atoi(q.Get("per_page")); err != nil || n < 1 {
-			q.Del("per_page")
-		} else if n > handlers.MaxPerPage {
-			q.Set("per_page", strconv.Itoa(handlers.MaxPerPage))
-		}
+		handlers.LenientLegacyPagination(q)
 
 		r2 := r.Clone(r.Context())
 		r2.URL.RawQuery = q.Encode()

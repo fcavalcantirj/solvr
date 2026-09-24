@@ -114,6 +114,8 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		argNum += 2
 	}
 
+	appendNeedsHelpFilter(&conditions, opts.NeedsHelp)
+
 	// Filter by timeframe
 	if opts.Timeframe != "" {
 		switch opts.Timeframe {

@@ -268,6 +268,7 @@ type PostListOptions struct {
 	AuthorType    AuthorType // Filter by author type (BE-003)
 	AuthorID      string     // Filter by author ID (BE-003)
 	HasAnswer     *bool      // Filter by answer count: nil=no filter, false=0 answers, true=1+ answers
+	NeedsHelp     bool       // Filter to posts needing help: status in_progress or a stuck approach
 	IncludeHidden bool       // When true, include pending_review/rejected/draft posts (author self-view)
 	Sort          string     // Sort order: "newest" (default), "votes", "top", "hot", "approaches", "answers"
 	Timeframe     string     // Timeframe filter: "today", "week", "month"

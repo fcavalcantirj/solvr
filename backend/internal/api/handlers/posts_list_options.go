@@ -52,6 +52,10 @@ func parsePostListOptions(r *http.Request) (models.PostListOptions, error) {
 		opts.HasAnswer = &hasAnswer
 	}
 
+	// Parse needs_help filter (problems in progress or with a stuck approach; replaces
+	// the legacy GET /v1/feed/stuck query stack)
+	opts.NeedsHelp = q.Get("needs_help") == "true"
+
 	// Parse sort parameter
 	if sortParam := q.Get("sort"); sortParam != "" {
 		switch sortParam {

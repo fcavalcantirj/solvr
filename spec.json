@@ -643,7 +643,7 @@
       "Verify redirects have no loops or chains and unknown or deleted IDs return the appropriate unavailable state rather than the Posts homepage.",
       "Verify internal cards, profile activity, notifications, emails generated after cutover, and copied links all use canonical destinations."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

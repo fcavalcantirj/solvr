@@ -12,15 +12,14 @@ const nextConfig = {
   },
   // Increase timeout to allow pages to render
   staticPageGenerationTimeout: 120,
-  // Navigation destinations that do not have their own page yet.
-  // The primary nav points at /posts; until the unified Posts collection page
-  // exists it resolves to the existing combined knowledge listing.
-  // /connect is NOT here: it is a real page now — the prompt-first start flow —
-  // and redirecting it would send the primary action to a login.
+  // Legacy collection/detail routes (/feed, /problems, /ideas, /questions and
+  // their {id}/new/edit sub-paths) permanently redirect to the canonical /posts
+  // collection. That mapping lives in middleware.ts so it stays unit-tested and
+  // preserves the query string; it must NOT be duplicated here. /posts is now a
+  // real page, so the old placeholder `/posts -> /feed` redirect has been
+  // removed — keeping it would make /feed -> /posts -> /feed loop.
   async redirects() {
-    return [
-      { source: '/posts', destination: '/feed', permanent: false },
-    ];
+    return [];
   },
   // SEO: Set proper cache headers for public content pages
   // Self-hosted Next.js (standalone/Docker) doesn't set s-maxage automatically

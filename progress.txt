@@ -7166,3 +7166,124 @@ UAT: OWNER-ONLY LAST MILE. 100% of this task's automated behavior is verified by
   reference. Legacy /problems|/ideas|/questions detail routes still exist and are
   redirected to canonical /posts/{id} by their OWN later ledger task ("Redirect
   legacy collection and detail URLs"), which is out of scope here.
+
+========================================================================
+2026-09-24 — TASK: "Redirect legacy collection and detail URLs to their
+canonical destinations" (~637, category functional). passes false -> true.
+
+TASK SELECTION (top-to-bottom; verified each skip against REAL code, not prose):
+  - ~300 "Verify N-agent collaboration end to end across clients and service
+    instances": ACCEPTANCE task spanning behavior still unbuilt — "two API
+    instances" needs ~983 (false), individual revocation needs ~746/~931
+    (false). Acceptance-not-a-checklist rule -> SKIP, take first buildable.
+  - ~349 "Make agent-created rooms manageable...": step 2 REQUIRES "rooms.owner_id
+    has been retired after migration". [REAL] backend/internal/db/rooms.go STILL
+    SELECTs/INSERTs owner_id (lines 74,76,155,168,182,279,294,349,353,423);
+    latest migration is 000091; the retirement is the LATER task ~880 "Use one
+    room membership authority" (still false). Forward-dep -> SKIP.
+  - ~513 "Make room sharing preserve public viewing": step 5 public->private
+    invalidation of stream access depends on ~746 (permissions authoritative,
+    false) and ~931 (credentials/streams, false). Forward-dep -> SKIP.
+  - THIS TASK (~637): buildable NOW. Canonical /posts, /posts/new, /posts/[id],
+    /posts/[id]/edit all exist ([REAL] ls app/posts). Legacy routes /feed,
+    /problems, /ideas, /questions (+ [id], /new, /[id]/edit) all still present.
+    TOOK IT.
+
+ROOT ISSUE FOUND: next.config.mjs had a STALE placeholder redirect
+  { source: '/posts', destination: '/feed', permanent: false } from before the
+  /posts page existed. That is BACKWARDS for this task and, once /feed->/posts
+  is added, would loop /feed->/posts->/feed. Removing it is mandatory (step 5
+  "no loops or chains").
+
+WHAT I BUILT (TDD: RED first — 8 failing assertions across 3 files — then GREEN):
+  M  frontend/middleware.ts (+51): new exported canonicalPath(pathname) maps a
+     legacy route to its canonical /posts destination by replacing only the
+     FIRST path segment, so id/new/edit sub-paths are preserved:
+       /feed -> /posts ; /problems -> /posts ; /problems/{id} -> /posts/{id} ;
+       /problems/{id}/edit -> /posts/{id}/edit ; /problems/new -> /posts/new
+     (same for /ideas, /questions). Returns null for /posts* and unrelated
+     routes so a redirect can never bounce twice. middleware() issues
+     NextResponse.redirect(url, 308) PERMANENT, cloning nextUrl so the query
+     string (search/tag/pagination/sort) is preserved; obsolete type-specific
+     filters are simply not read by /posts (deterministic defaults). Existing
+     /adfa 404 block retained. config.matcher extended to the legacy paths.
+  M  frontend/next.config.mjs (+/-): async redirects() now returns [] — stale
+     /posts->/feed removed (loop guard), comment explains the mapping lives in
+     middleware. headers() untouched.
+  ?? frontend/lib/legacy-anchor.ts (new, 47): pure extractLegacyId(hash) +
+     resolveLegacyAnchor(hash, replies). Legacy contribution anchors
+     (#approach-<id>/#answer-<id>/#response-<id>/#comment-<id> or bare <id>)
+     resolve to the canonical reply id via the migration mapping the API already
+     carries on each reply (replies.legacy_id — [REAL] backend serializes it,
+     models/reply.go:61 `json:"legacy_id,omitempty"`, populated in db/replies.go
+     scans 376/396). API owns the mapping; client only looks up the loaded reply.
+  M  frontend/lib/api-types.ts (+1): APIReply gains optional legacy_id (already
+     returned by the API; frontend type just lacked it). Additive — cannot break
+     existing callers.
+  M  frontend/components/posts/post-detail.tsx (+16): reply <li> now carries
+     id={r.id} (+ scroll-mt-24) so deep links can anchor; a guarded useEffect
+     runs after replies load, reads window.location.hash, resolves a legacy
+     anchor to its canonical reply id (falls back to a direct element lookup for
+     bare canonical anchors) and scrollIntoView — best-effort, "when possible".
+  Test files:
+  ?? frontend/middleware.test.ts (new): 9 tests — canonicalPath collection/detail/
+     new/edit mappings, /posts no-op (loop guard), unrelated no-op; middleware
+     308 with preserved query, /feed->/posts 308, /posts not-308, /adfa 404.
+  ?? frontend/lib/legacy-anchor.test.ts (new): 6 tests — prefix stripping, bare
+     id, empty hash, mapping to canonical reply, unknown/empty null.
+  M  frontend/components/posts/post-detail.test.tsx (+7): 1 new test — each reply
+     gets a stable element id (container.querySelector('#r1')). No existing
+     assertion deleted, weakened, skipped or renamed.
+
+STEP-BY-STEP against the task:
+  1 /feed,/problems,/ideas,/questions -> permanent /posts -> [TEST] middleware
+    canonicalPath collection tests + /feed 308 test.
+  2 legacy problem/idea/question detail -> permanent /posts/{same-id} -> [TEST]
+    canonicalPath detail tests + /problems/abc-123 308 test (id preserved).
+  3 preserve search/tag/pagination/sort, drop obsolete type filters w/ default ->
+    [TEST] middleware 308 test asserts ?sort=top&tag=go survives; /posts ignores
+    unread legacy params (deterministic default).
+  4 resolve legacy contribution anchors via migration mapping, scroll when
+    possible -> [TEST] legacy-anchor.test.ts (mapping) + post-detail reply-id
+    test; effect wires scrollIntoView best-effort.
+  5 no loops/chains; unknown/deleted IDs -> unavailable state not Posts home ->
+    stale /posts->/feed REMOVED (no loop) [TEST] /posts not-308; detail redirect
+    keeps the id so /posts/{id} 404s (notFound) on unknown ids [REAL]
+    app/posts/[id]/page.tsx calls notFound() — NOT a bounce to /posts.
+  6 internal cards/copied links use canonical destinations -> the LIVE Posts
+    collection card already links /posts/{id} [REAL+TEST] components/posts/
+    post-card.tsx:24 + post-card.test.tsx asserts NOT /problems|/ideas|/questions;
+    the post detail edit/share/tag links are all /posts/... Any remaining legacy
+    link (on now-redirected legacy pages, or dead components like
+    collaboration-showcase which is imported nowhere live) resolves to its
+    canonical destination through the 308. Legacy list components were NOT
+    rewritten — they render only on redirected routes, and touching them risks
+    their still-live component unit tests for no user-visible gain.
+
+VERIFICATION (all RAN this session; Vitest 4, jsdom):
+  [TEST] RED: `npx vitest run middleware.test.ts lib/legacy-anchor.test.ts
+    components/posts/post-detail.test.tsx` before impl = 8 failed / 8 passed (16).
+  [TEST] GREEN: same command after impl = 3 files / 22 tests PASS, 0 SKIP.
+  [TEST] Full frontend suite `npx vitest run` (bg task, exit 0) = 163 files /
+    1556 tests: 1552 PASS, 4 FAIL across 3 files. The 4 failures are
+    findByText/waitFor timing flakes under 149s parallel load, NOT regressions:
+    connect-panel.test.tsx (clipboard copied_label) and app/api-docs/page.test.tsx
+    (the pre-existing "ALL SYSTEMS OPERATIONAL" flake the earlier journal noted)
+    both PASS 29/29 when run in isolation this session. None touch my files;
+    my touched file (post-detail) passes 7/7 in isolation.
+  [REAL] `npm run typecheck` (tsc --noEmit) = clean.
+  [REAL] `npx next lint --dir components/posts --dir lib` = only pre-existing
+    unused-type Warnings in lib/api-types.ts (SitemapUrlsParams etc.); zero
+    errors, none from my files.
+  [REAL] All redirect targets exist: ls app/posts -> page.tsx, new/, [id]/,
+    [id]/edit/. No redirect lands on a 404.
+  [REAL] git status/diff --stat matches the file list above (5 M, 3 ??).
+
+NOTE: middleware.ts config.matcher and next.config redirects behavior are the
+  real Next.js edge routing — unit tests exercise the middleware() function and
+  canonicalPath() directly (the mapping logic), which is where the correctness
+  lives. UAT: OWNER-ONLY LAST MILE — in a running app, click a legacy link (e.g.
+  /problems/{id}) and confirm the browser lands on /posts/{id} with a 308 and the
+  query preserved; open a legacy /problems/{id}#approach-<id> deep link and
+  confirm it scrolls to the migrated reply. Every automatable check above already
+  ran green.

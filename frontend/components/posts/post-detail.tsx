@@ -6,6 +6,7 @@ import { User, ArrowUp, MessageSquare, Users, Archive, Pencil } from "lucide-rea
 import { api, formatRelativeTime } from "@/lib/api";
 import type { APIPost, APIReply, APIRoom } from "@/lib/api-types";
 import { MarkdownContent } from "@/components/shared/markdown-content";
+import { resolveLegacyAnchor } from "@/lib/legacy-anchor";
 
 // One detail layout for every post, whatever its historical origin. Everything
 // shown is server-owned data; the client only renders it.
@@ -38,6 +39,19 @@ export function PostDetail({ postId }: { postId: string }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Legacy contribution deep links (#approach-<id>, #answer-<id>, …) arrive here
+  // after a legacy detail URL is redirected to this canonical post. Resolve the
+  // anchor through the migration mapping the API carries on each reply and, when
+  // a matching reply is loaded, scroll to it. Bare canonical anchors fall back
+  // to a direct element lookup. Best-effort — a missing anchor is a no-op.
+  useEffect(() => {
+    if (replies.length === 0 || typeof window === "undefined") return;
+    const hash = window.location.hash;
+    if (!hash) return;
+    const canonicalId = resolveLegacyAnchor(hash, replies) ?? hash.slice(1);
+    document.getElementById(canonicalId)?.scrollIntoView?.();
+  }, [replies]);
 
   if (loading) {
     return <div className="py-20 text-center font-mono text-sm text-muted-foreground">Loading…</div>;
@@ -158,7 +172,7 @@ export function PostDetail({ postId }: { postId: string }) {
         ) : (
           <ul className="space-y-4">
             {replies.map((r) => (
-              <li key={r.id} className="border border-border p-4 space-y-2">
+              <li id={r.id} key={r.id} className="border border-border p-4 space-y-2 scroll-mt-24">
                 <div className="flex items-center gap-3">
                   <Link
                     href={`/users/${r.author.id}`}

@@ -107,6 +107,13 @@ describe('PostDetail', () => {
     await waitFor(() => expect(screen.getByRole('link', { name: /edit/i })).toHaveAttribute('href', '/posts/p1/edit'));
   });
 
+  it('gives each reply a stable element id so legacy deep links can anchor to it', async () => {
+    getPostReplies.mockResolvedValue({ data: [reply], meta: { total: 1, page: 1 } });
+    const { container } = render(<PostDetail postId="p1" />);
+    await waitFor(() => expect(screen.getByText(/mutex ordering rule/i)).toBeInTheDocument());
+    expect(container.querySelector('#r1')).not.toBeNull();
+  });
+
   it('shows an error state with retry when the post cannot load', async () => {
     getPost.mockRejectedValue(new Error('boom'));
     render(<PostDetail postId="p1" />);

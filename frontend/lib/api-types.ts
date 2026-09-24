@@ -57,6 +57,7 @@ export interface APIReply {
   created_at: string;
   updated_at: string;
   legacy_type?: string;
+  legacy_id?: string | null;
 }
 
 export interface APIRepliesResponse {

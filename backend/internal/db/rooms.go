@@ -21,6 +21,21 @@ var ErrRoomSlugExists = errors.New("room slug already exists")
 // ErrRoomNotFound is returned when a room is not found.
 var ErrRoomNotFound = errors.New("room not found")
 
+// humanOwnerOf selects a room's earliest active human owner membership. rooms.owner_id
+// is retired (000097); this derived value is what API responses expose as owner_id.
+func humanOwnerOf(roomIDExpr string) string {
+	return `SELECT rm.user_id FROM room_members rm
+		WHERE rm.room_id = ` + roomIDExpr + ` AND rm.user_id IS NOT NULL
+		  AND rm.role = 'owner' AND rm.revoked_at IS NULL
+		ORDER BY rm.created_at, rm.id LIMIT 1`
+}
+
+// roomColumns is the column list read by scanRoom/scanRoomRow; owner_id is derived.
+var roomColumns = `id, slug, display_name, description, category, tags, is_private,
+	(` + humanOwnerOf("rooms.id") + `) AS owner_id, token_hash,
+	message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
+	archived_at, result_message_id`
+
 // RoomRepository handles database operations for rooms.
 type RoomRepository struct {
 	pool *Pool
@@ -58,12 +73,6 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 		return nil, "", fmt.Errorf("generate room token: %w", err)
 	}
 
-	// Handle nil owner (uuid.Nil means no owner)
-	var ownerID *uuid.UUID
-	if params.OwnerID != uuid.Nil {
-		ownerID = &params.OwnerID
-	}
-
 	// Normalize tags
 	tags := params.Tags
 	if tags == nil {
@@ -71,16 +80,16 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 	}
 
 	query := `
-		INSERT INTO rooms (slug, display_name, description, category, tags, is_private, owner_id, token_hash, message_count, expires_at, source_post_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10)
-		RETURNING id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
+		INSERT INTO rooms (slug, display_name, description, category, tags, is_private, token_hash, message_count, expires_at, source_post_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9)
+		RETURNING id, slug, display_name, description, category, tags, is_private, token_hash,
 			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
 			archived_at, result_message_id, source_post_id
 	`
 
-	// A room and its owner-membership row are created atomically: if the membership
-	// insert fails, the room is rolled back so we never leave an agent-created room
-	// without a manageable owner.
+	// A room and its owner-membership rows are created atomically: if a membership
+	// insert fails, the room is rolled back so we never leave a room without a
+	// manageable owner. room_members is the only ownership store (000097).
 	var room models.Room
 	txErr := r.pool.WithTx(ctx, func(tx Tx) error {
 		scanErr := tx.QueryRow(ctx, query,
@@ -90,7 +99,6 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 			params.Category,
 			tags,
 			params.IsPrivate,
-			ownerID,
 			hashHex,
 			params.ExpiresAt,
 			params.SourcePostID,
@@ -102,7 +110,6 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 			&room.Category,
 			&room.Tags,
 			&room.IsPrivate,
-			&room.OwnerID,
 			&room.TokenHash,
 			&room.MessageCount,
 			&room.CreatedAt,
@@ -116,6 +123,19 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 		)
 		if scanErr != nil {
 			return scanErr
+		}
+
+		// Register the human owner (uuid.Nil means no human owner).
+		if params.OwnerID != uuid.Nil {
+			if _, mErr := tx.Exec(ctx,
+				`INSERT INTO room_members (room_id, user_id, role, added_by)
+				 VALUES ($1, $2, 'owner', 'system')`,
+				room.ID, params.OwnerID,
+			); mErr != nil {
+				return mErr
+			}
+			ownerID := params.OwnerID
+			room.OwnerID = &ownerID
 		}
 
 		// Register the creating agent as room owner (mission #1/#3 owner fix).
@@ -152,9 +172,7 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 // Returns ErrRoomNotFound if the room doesn't exist or is soft-deleted.
 func (r *RoomRepository) GetBySlug(ctx context.Context, slug string) (*models.Room, error) {
 	query := `
-		SELECT id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
-			archived_at, result_message_id
+		SELECT ` + roomColumns + `
 		FROM rooms
 		WHERE slug = $1 AND deleted_at IS NULL
 	`
@@ -165,9 +183,7 @@ func (r *RoomRepository) GetBySlug(ctx context.Context, slug string) (*models.Ro
 // Returns ErrRoomNotFound if the room doesn't exist or is soft-deleted.
 func (r *RoomRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Room, error) {
 	query := `
-		SELECT id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
-			archived_at, result_message_id
+		SELECT ` + roomColumns + `
 		FROM rooms
 		WHERE id = $1 AND deleted_at IS NULL
 	`
@@ -179,9 +195,7 @@ func (r *RoomRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Roo
 // Used by bearer guard middleware.
 func (r *RoomRepository) GetByTokenHash(ctx context.Context, hash string) (*models.Room, error) {
 	query := `
-		SELECT id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
-			archived_at, result_message_id
+		SELECT ` + roomColumns + `
 		FROM rooms
 		WHERE token_hash = $1 AND deleted_at IS NULL
 	`
@@ -276,7 +290,7 @@ func (r *RoomRepository) ListFiltered(ctx context.Context, params RoomListParams
 
 	query := `
 		SELECT r.id, r.slug, r.display_name, r.description, r.category, r.tags,
-			r.is_private, r.owner_id, r.message_count, r.created_at, r.updated_at,
+			r.is_private, ho.user_id, r.message_count, r.created_at, r.updated_at,
 			r.last_active_at, r.expires_at,
 			(SELECT COUNT(DISTINCT agent_name) FROM agent_presence ap
 			 WHERE ap.room_id = r.id
@@ -291,7 +305,8 @@ func (r *RoomRepository) ListFiltered(ctx context.Context, params RoomListParams
 			 ORDER BY m.created_at DESC, m.id DESC LIMIT 1
 			) AS last_message_preview
 		FROM rooms r
-		LEFT JOIN users u ON u.id = r.owner_id
+		LEFT JOIN LATERAL (` + humanOwnerOf("r.id") + `) ho ON TRUE
+		LEFT JOIN users u ON u.id = ho.user_id
 		WHERE ` + strings.Join(where, " AND ") + `
 		` + orderBy + `
 		LIMIT $` + strconv.Itoa(limitArg) + ` OFFSET $` + strconv.Itoa(offsetArg)
@@ -343,14 +358,16 @@ func (r *RoomRepository) ListFiltered(ctx context.Context, params RoomListParams
 	return rooms, nil
 }
 
-// ListByOwner returns rooms owned by the specified user, ordered by created_at DESC.
+// ListByOwner returns rooms where the specified user holds an active owner
+// membership, ordered by created_at DESC.
 func (r *RoomRepository) ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]models.Room, error) {
 	query := `
-		SELECT id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
-			archived_at, result_message_id
+		SELECT ` + roomColumns + `
 		FROM rooms
-		WHERE owner_id = $1 AND deleted_at IS NULL
+		WHERE deleted_at IS NULL AND EXISTS (
+			SELECT 1 FROM room_members rm
+			WHERE rm.room_id = rooms.id AND rm.user_id = $1
+			  AND rm.role = 'owner' AND rm.revoked_at IS NULL)
 		ORDER BY created_at DESC
 	`
 
@@ -420,25 +437,30 @@ func (r *RoomRepository) Update(ctx context.Context, roomID uuid.UUID, params mo
 	query := fmt.Sprintf(`
 		UPDATE rooms SET %s
 		WHERE id = $%d AND deleted_at IS NULL
-		RETURNING id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
-			archived_at, result_message_id
+		RETURNING `+roomColumns+`
 	`, strings.Join(setClauses, ", "), argIdx)
 	args = append(args, roomID)
 
 	return r.scanRoomFromRow(ctx, "Update", query, args...)
 }
 
-// BackfillOwnerFromMembership sets owner_id on rooms the given agent created while
-// unclaimed (owner_id IS NULL) but where it still holds an 'owner' membership. Used when
-// a human claims the agent so those pre-claim rooms join the human's family scope.
-// humanID is cast to uuid in SQL. Returns the number of rooms updated. Idempotent.
+// BackfillOwnerFromMembership makes the given human an active owner of every live room
+// where the agent holds an active 'owner' membership and no human owns the room yet
+// (rooms the agent created while unclaimed). Used when a human claims the agent so those
+// pre-claim rooms join the human's family scope. humanID is cast to uuid in SQL.
+// Returns the number of rooms that gained a human owner. Idempotent.
 func (r *RoomRepository) BackfillOwnerFromMembership(ctx context.Context, agentID, humanID string) (int64, error) {
 	query := `
-		UPDATE rooms r SET owner_id = $1::uuid, updated_at = NOW()
-		FROM room_members rm
-		WHERE rm.room_id = r.id AND rm.agent_id = $2 AND rm.role = 'owner' AND rm.revoked_at IS NULL
-		  AND r.owner_id IS NULL AND r.deleted_at IS NULL`
+		INSERT INTO room_members (room_id, user_id, role, added_by)
+		SELECT r.id, $1::uuid, 'owner', 'system'
+		FROM rooms r
+		JOIN room_members am ON am.room_id = r.id AND am.agent_id = $2
+		  AND am.role = 'owner' AND am.revoked_at IS NULL
+		WHERE r.deleted_at IS NULL AND NOT EXISTS (
+			SELECT 1 FROM room_members hm
+			WHERE hm.room_id = r.id AND hm.user_id IS NOT NULL
+			  AND hm.role = 'owner' AND hm.revoked_at IS NULL)
+		ON CONFLICT (room_id, user_id) DO UPDATE SET role = 'owner', revoked_at = NULL`
 	result, err := r.pool.Exec(ctx, query, humanID, agentID)
 	if err != nil {
 		LogQueryError(ctx, "BackfillOwnerFromMembership", "rooms", err)
@@ -473,9 +495,7 @@ func (r *RoomRepository) Archive(ctx context.Context, roomID uuid.UUID, resultMe
 			result_message_id = $2,
 			updated_at = NOW()
 		WHERE id = $1 AND deleted_at IS NULL
-		RETURNING id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
-			archived_at, result_message_id
+		RETURNING ` + roomColumns + `
 	`
 	return r.scanRoomFromRow(ctx, "Archive", query, roomID, resultMessageID)
 }
@@ -488,9 +508,7 @@ func (r *RoomRepository) Reopen(ctx context.Context, roomID uuid.UUID) (*models.
 		SET archived_at = NULL,
 			updated_at = NOW()
 		WHERE id = $1 AND deleted_at IS NULL
-		RETURNING id, slug, display_name, description, category, tags, is_private, owner_id, token_hash,
-			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
-			archived_at, result_message_id
+		RETURNING ` + roomColumns + `
 	`
 	return r.scanRoomFromRow(ctx, "Reopen", query, roomID)
 }

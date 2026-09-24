@@ -17,7 +17,8 @@ import (
 //   - agent caller  -> agent.HumanID (unclaimed agent with nil HumanID gets an empty list)
 //   - human caller  -> claims.UserID
 //
-// Only owner_id-scoped rooms are returned (via RoomRepository.ListByOwner); token_hash is
+// Only rooms where the caller holds an active owner membership are returned
+// (via RoomRepository.ListByOwner); token_hash is
 // never serialized (Room.TokenHash is json:"-"). GET /v1/rooms is unaffected — private
 // rooms are still never listed publicly.
 func (h *RoomHandler) ListMyRooms(w http.ResponseWriter, r *http.Request) {

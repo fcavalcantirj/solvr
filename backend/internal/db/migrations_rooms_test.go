@@ -43,10 +43,11 @@ func TestMigrations_RoomsTable(t *testing.T) {
 		t.Fatalf("Rooms table does not exist: %v", err)
 	}
 
-	// Verify all 15 columns exist
+	// Verify the 000073 columns exist. owner_id is retired by 000097 (its absence and
+	// the membership replacement are pinned by TestRoomsOwnerRetired_*).
 	columns := []string{
 		"id", "slug", "display_name", "description", "category",
-		"tags", "is_private", "owner_id", "token_hash", "message_count",
+		"tags", "is_private", "token_hash", "message_count",
 		"created_at", "updated_at", "last_active_at", "expires_at", "deleted_at",
 	}
 	for _, col := range columns {
@@ -61,9 +62,8 @@ func TestMigrations_RoomsTable(t *testing.T) {
 		}
 	}
 
-	// Verify 4 indexes exist
+	// Verify the 000073 indexes exist (idx_rooms_owner_id went with owner_id in 000097)
 	indexes := []string{
-		"idx_rooms_owner_id",
 		"idx_rooms_expires_at",
 		"idx_rooms_active",
 		"idx_rooms_deleted",

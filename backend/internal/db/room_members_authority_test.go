@@ -304,10 +304,18 @@ func TestRoomMembersAuthority_AccountDeletionArchivesOwnerlessRoom(t *testing.T)
 // Before/after capability matrix: every room whose legacy owner_id names a human has
 // exactly that human as an active owner in room_members, and every agent owner
 // membership survives the schema change. Runs over ALL rooms in the database.
+// rooms.owner_id is retired by 000097, so the legacy column is rebuilt by that
+// migration's down file inside a rolled-back transaction and compared from there.
 func TestRoomMembersAuthority_OwnershipMatrixMatchesLegacyOwner(t *testing.T) {
 	ctx, pool := openAuthorityPool(t)
+	tx, err := pool.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer tx.Rollback(context.Background()) //nolint:errcheck
+	runMigrationFile(ctx, t, tx, "000097_retire_rooms_owner_id.down.sql")
 	var missingHuman, strayHuman int
-	if err := pool.QueryRow(ctx, `
+	if err := tx.QueryRow(ctx, `
 		SELECT
 		  (SELECT COUNT(*) FROM rooms r WHERE r.owner_id IS NOT NULL AND NOT EXISTS (
 		     SELECT 1 FROM room_members m WHERE m.room_id = r.id AND m.user_id = r.owner_id

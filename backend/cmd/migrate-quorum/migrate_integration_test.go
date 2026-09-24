@@ -63,18 +63,7 @@ func (d *schemaQuorumMigrationDB) BeginTx(ctx context.Context) (txInterface, err
 }
 
 func (d *schemaQuorumMigrationDB) InsertRoom(ctx context.Context, tx txInterface, r roomInsert) (bool, error) {
-	tag, err := tx.Exec(ctx, `
-		INSERT INTO rooms (id, slug, display_name, description, category, tags, is_private,
-		                   owner_id, token_hash, message_count, created_at, updated_at,
-		                   last_active_at, expires_at, deleted_at)
-		VALUES ($1, $2, $3, NULL, NULL, '{}', $4, $5, $6, 0, $7, $7, $7, NULL, NULL)
-		ON CONFLICT (id) DO NOTHING`,
-		r.ID, r.Slug, r.DisplayName, r.IsPrivate, r.OwnerID, r.TokenHash, r.CreatedAt,
-	)
-	if err != nil {
-		return false, fmt.Errorf("insert room %s: %w", r.Slug, err)
-	}
-	return tag.RowsAffected() > 0, nil
+	return insertSolvrRoom(ctx, tx, r)
 }
 
 func (d *schemaQuorumMigrationDB) InsertAgent(ctx context.Context, tx txInterface, a agentInsert) (bool, error) {
@@ -362,7 +351,7 @@ func TestIntegration_CountAccuracy(t *testing.T) {
 	}
 }
 
-// TestIntegration_OwnerMapping verifies each room's owner_id matches the correct
+// TestIntegration_OwnerMapping verifies each room's human owner membership matches the correct
 // Solvr user UUID resolved from email.
 func TestIntegration_OwnerMapping(t *testing.T) {
 	pool := setupIntegrationDB(t)
@@ -378,8 +367,10 @@ func TestIntegration_OwnerMapping(t *testing.T) {
 
 	// Felipe's rooms.
 	rows, err := pool.Query(ctx, `
-		SELECT slug, owner_id FROM rooms
-		WHERE slug IN ('composio-integration', 'solvr-usage-analysis')
+		SELECT r.slug, rm.user_id FROM rooms r
+		JOIN room_members rm ON rm.room_id = r.id AND rm.user_id IS NOT NULL
+		  AND rm.role = 'owner' AND rm.revoked_at IS NULL
+		WHERE r.slug IN ('composio-integration', 'solvr-usage-analysis')
 	`)
 	if err != nil {
 		t.Fatalf("query felipe rooms: %v", err)
@@ -400,8 +391,10 @@ func TestIntegration_OwnerMapping(t *testing.T) {
 
 	// Marcelo's rooms.
 	rows2, err := pool.Query(ctx, `
-		SELECT slug, owner_id FROM rooms
-		WHERE slug IN ('ballona-trade-v0', 'mackjack-ops', 'jack-mack-msv-trading')
+		SELECT r.slug, rm.user_id FROM rooms r
+		JOIN room_members rm ON rm.room_id = r.id AND rm.user_id IS NOT NULL
+		  AND rm.role = 'owner' AND rm.revoked_at IS NULL
+		WHERE r.slug IN ('ballona-trade-v0', 'mackjack-ops', 'jack-mack-msv-trading')
 	`)
 	if err != nil {
 		t.Fatalf("query marcelo rooms: %v", err)

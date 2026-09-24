@@ -469,18 +469,37 @@ func (d *pgMigrationDB) BeginTx(ctx context.Context) (txInterface, error) {
 }
 
 func (d *pgMigrationDB) InsertRoom(ctx context.Context, tx txInterface, r roomInsert) (bool, error) {
+	return insertSolvrRoom(ctx, tx, r)
+}
+
+// insertSolvrRoom inserts a migrated room and, when it has one, its human owner as an
+// active 'owner' membership (room_members is the only ownership store, 000097).
+func insertSolvrRoom(ctx context.Context, tx txInterface, r roomInsert) (bool, error) {
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO rooms (id, slug, display_name, description, category, tags, is_private,
-		                   owner_id, token_hash, message_count, created_at, updated_at,
+		                   token_hash, message_count, created_at, updated_at,
 		                   last_active_at, expires_at, deleted_at)
-		VALUES ($1, $2, $3, NULL, NULL, '{}', $4, $5, $6, 0, $7, $7, $7, NULL, NULL)
+		VALUES ($1, $2, $3, NULL, NULL, '{}', $4, $5, 0, $6, $6, $6, NULL, NULL)
 		ON CONFLICT (id) DO NOTHING`,
-		r.ID, r.Slug, r.DisplayName, r.IsPrivate, r.OwnerID, r.TokenHash, r.CreatedAt,
+		r.ID, r.Slug, r.DisplayName, r.IsPrivate, r.TokenHash, r.CreatedAt,
 	)
 	if err != nil {
 		return false, fmt.Errorf("insert room %s: %w", r.Slug, err)
 	}
-	return tag.RowsAffected() > 0, nil
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	if r.OwnerID != uuid.Nil {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO room_members (room_id, user_id, role, added_by, created_at)
+			VALUES ($1, $2, 'owner', 'system', $3)
+			ON CONFLICT (room_id, user_id) DO NOTHING`,
+			r.ID, r.OwnerID, r.CreatedAt,
+		); err != nil {
+			return false, fmt.Errorf("insert room owner %s: %w", r.Slug, err)
+		}
+	}
+	return true, nil
 }
 
 func (d *pgMigrationDB) InsertAgent(ctx context.Context, tx txInterface, a agentInsert) (bool, error) {

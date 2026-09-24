@@ -68,8 +68,8 @@ type ClaimTokenRepositoryInterface interface {
 }
 
 // RoomOwnerBackfiller backfills room ownership when an agent is claimed by a human.
-// Rooms an agent created while unclaimed have owner_id = NULL; after the claim links a
-// human, that human should own those rooms so family-scoped access starts working.
+// Rooms an agent created while unclaimed have no human owner membership; after the claim
+// links a human, that human should own those rooms so family-scoped access starts working.
 type RoomOwnerBackfiller interface {
 	BackfillOwnerFromMembership(ctx context.Context, agentID, humanID string) (int64, error)
 }

@@ -413,13 +413,18 @@ func TestRoomRepository_ListByOwner(t *testing.T) {
 		t.Cleanup(func() {
 			cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cleanCancel()
-			pool.Exec(cleanCtx, "DELETE FROM rooms WHERE owner_id = $1", ownerID)    //nolint:errcheck
+			pool.Exec(cleanCtx, "DELETE FROM rooms WHERE slug = $1", slug)          //nolint:errcheck
 			pool.Exec(cleanCtx, "DELETE FROM users WHERE id = $1", ownerID)           //nolint:errcheck
 		})
 
+		// rooms.owner_id is retired (000097): ownership is an active owner membership.
 		_, err = pool.Exec(ctx, `
-			INSERT INTO rooms (slug, display_name, token_hash, owner_id)
-			VALUES ($1, 'Owner Room', 'hash_owner', $2)
+			WITH room AS (
+				INSERT INTO rooms (slug, display_name, token_hash)
+				VALUES ($1, 'Owner Room', 'hash_owner') RETURNING id
+			)
+			INSERT INTO room_members (room_id, user_id, role, added_by)
+			SELECT id, $2, 'owner', 'test' FROM room
 		`, slug, ownerID)
 		if err != nil {
 			t.Fatalf("insert owned room error = %v", err)

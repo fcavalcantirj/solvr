@@ -210,7 +210,7 @@ func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Backfill owner_id on rooms this agent created while unclaimed so they join the
+	// Backfill human owner memberships on rooms this agent created while unclaimed so they join the
 	// human's family scope. Non-fatal: the claim already succeeded and must not fail if
 	// the backfill errors.
 	if h.roomBackfiller != nil {

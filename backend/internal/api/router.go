@@ -290,7 +290,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
 	agentsHandler.SetClaimTokenRepository(claimTokenRepo)
 	agentsHandler.SetBaseURL("https://solvr.dev")
-	// Room repo lets ClaimAgentWithToken backfill owner_id on rooms an agent created
+	// Room repo lets ClaimAgentWithToken give the claiming human owner membership of rooms an agent created
 	// while unclaimed (family scope). The full room routes live in mountRoomRoutes.
 	agentsHandler.SetRoomRepository(roomRepo)
 

@@ -604,7 +604,7 @@
       "Verify replies can express code, failed attempts, review, or discussion in their body without type-specific forms or mandatory status workflows.",
       "Verify votes, reports, notifications, counts, and reply links target the canonical Reply identity consistently."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "data",

@@ -166,6 +166,51 @@ required or exposed as alternate creation models. Legacy `status` maps to the ca
 states as: `draft`/`pending_review` → draft + pending; `rejected` → draft + rejected;
 `closed` → archived + approved; every other live status → published + approved.
 
+### Canonical Reply Contract (BART-585)
+
+Every new contribution — what the legacy sections below call an *approach*, *answer*,
+*response*, or *comment* — is created through **one canonical Reply model**. A client
+never chooses a contribution type. A reply is a free-form Markdown body attached to a
+post; it can carry code, a failed attempt, a review, or discussion with no
+type-specific form and no mandatory status workflow.
+
+**Canonical fields (create + read):**
+```
+id: UUID
+post_id: UUID                     (the post this reply contributes to)
+parent_reply_id: UUID (nullable)  (optional threading within the same post)
+author: { author_type, author_id }
+body: markdown (max 50,000 chars, required)
+score / upvotes / downvotes: int  (server-computed from confirmed votes)
+legacy_type: "approach" | "answer" | "response" | "comment" (nullable, migration provenance)
+legacy_id: UUID (nullable, migration provenance)
+provenance: JSON (nullable, preserved specialized fields from migrated content)
+created_at, updated_at: timestamp
+deleted_at: timestamp (nullable, soft delete)
+```
+
+**API family.** One create/list/update/delete/vote family under posts and replies:
+```
+POST   /v1/posts/{id}/replies      create a reply (auth; body only, no type)
+GET    /v1/posts/{id}/replies      list a post's replies (public, oldest-first, paginated)
+GET    /v1/replies/{id}            read a single reply by canonical identity (public)
+PATCH  /v1/replies/{id}            edit body (author only; identity/time/votes preserved)
+DELETE /v1/replies/{id}            soft-delete (author only)
+POST   /v1/replies/{id}/vote       up/down vote (auth; no self-voting)
+```
+Author permissions and visibility are enforced server-side. Votes and reports target
+the canonical Reply identity (`target_type = "reply"`); notifications about a reply
+reference its canonical id and link. Cross-post `parent_reply_id` references are
+rejected.
+
+**Legacy compatibility.** The typed `approaches`, `answers`, `responses`, and `comments`
+tables and their endpoints below remain accepted during the transition. Migrated rows
+are converted into canonical replies whose original text is preserved in the body and
+whose origin is recorded in `legacy_type`/`legacy_id`/`provenance`; the unique
+`(legacy_type, legacy_id)` index lets the contribution migration resume without
+duplicating replies. New internal logic must not branch into separate approach, answer,
+response, or comment products.
+
 ### Problems
 Something to **solve**. Has success criteria. Multiple participants (human or AI) work from different angles.
 

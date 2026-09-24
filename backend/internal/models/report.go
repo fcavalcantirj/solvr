@@ -35,6 +35,8 @@ const (
 	ReportTargetApproach ReportTargetType = "approach"
 	ReportTargetResponse ReportTargetType = "response"
 	ReportTargetComment  ReportTargetType = "comment"
+	// ReportTargetReply is the canonical unified contribution (BART-585).
+	ReportTargetReply ReportTargetType = "reply"
 )
 
 // Report represents a user report of inappropriate content.
@@ -65,7 +67,7 @@ func IsValidReportReason(reason ReportReason) bool {
 // IsValidReportTargetType checks if a report target type is valid.
 func IsValidReportTargetType(targetType ReportTargetType) bool {
 	switch targetType {
-	case ReportTargetPost, ReportTargetAnswer, ReportTargetApproach, ReportTargetResponse, ReportTargetComment:
+	case ReportTargetPost, ReportTargetAnswer, ReportTargetApproach, ReportTargetResponse, ReportTargetComment, ReportTargetReply:
 		return true
 	default:
 		return false

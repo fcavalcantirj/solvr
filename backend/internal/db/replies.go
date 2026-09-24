@@ -1,0 +1,413 @@
+// Package db provides database access for Solvr.
+package db
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
+)
+
+// Reply-related errors.
+var (
+	// ErrReplyPostNotFound is returned when the target post does not exist.
+	ErrReplyPostNotFound = errors.New("post not found")
+	// ErrReplyForbidden is returned when a caller is not the reply's author.
+	ErrReplyForbidden = errors.New("not the reply author")
+	// ErrParentReplyInvalid is returned when parent_reply_id does not belong to
+	// the same post (cross-post threading is rejected).
+	ErrParentReplyInvalid = errors.New("parent reply is invalid for this post")
+)
+
+// ReplyRepository handles database operations for the canonical Reply model
+// (BART-585). One create/list/update/delete family serves every contribution;
+// there is no approach/answer/response/comment branching.
+type ReplyRepository struct {
+	pool *Pool
+}
+
+// NewReplyRepository creates a new ReplyRepository.
+func NewReplyRepository(pool *Pool) *ReplyRepository {
+	return &ReplyRepository{pool: pool}
+}
+
+// replyAuthorSelect is the shared author-resolution projection.
+const replyAuthorSelect = `
+	COALESCE(
+		CASE WHEN rp.author_type = 'agent' THEN a.display_name
+		     WHEN rp.author_type = 'human' THEN u.display_name
+		     ELSE rp.author_id
+		END,
+		rp.author_id
+	) AS display_name,
+	CASE WHEN rp.author_type = 'human' THEN u.avatar_url ELSE NULL END AS avatar_url`
+
+const replyAuthorJoins = `
+	LEFT JOIN agents a ON rp.author_type = 'agent' AND rp.author_id = a.id
+	LEFT JOIN users u ON rp.author_type = 'human' AND rp.author_id = u.id::text`
+
+// Create inserts a new canonical reply. The post must exist and not be deleted;
+// a parent reply, when supplied, must belong to the same post.
+func (r *ReplyRepository) Create(ctx context.Context, reply *models.Reply) (*models.Reply, error) {
+	var postExists bool
+	err := r.pool.QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM posts WHERE id = $1 AND deleted_at IS NULL)",
+		reply.PostID,
+	).Scan(&postExists)
+	if err != nil {
+		if isInvalidUUIDError(err) {
+			return nil, ErrReplyPostNotFound
+		}
+		LogQueryError(ctx, "Reply.Create.CheckPost", "posts", err)
+		return nil, fmt.Errorf("check post existence: %w", err)
+	}
+	if !postExists {
+		return nil, ErrReplyPostNotFound
+	}
+
+	if reply.ParentReplyID != nil {
+		var parentPost string
+		err = r.pool.QueryRow(ctx,
+			"SELECT post_id FROM replies WHERE id = $1 AND deleted_at IS NULL",
+			*reply.ParentReplyID,
+		).Scan(&parentPost)
+		if err != nil {
+			if isInvalidUUIDError(err) || err.Error() == "no rows in result set" {
+				return nil, ErrParentReplyInvalid
+			}
+			LogQueryError(ctx, "Reply.Create.CheckParent", "replies", err)
+			return nil, fmt.Errorf("check parent reply: %w", err)
+		}
+		if parentPost != reply.PostID {
+			return nil, ErrParentReplyInvalid
+		}
+	}
+
+	var provenance any
+	if len(reply.Provenance) > 0 {
+		provenance = []byte(reply.Provenance)
+	}
+
+	row := r.pool.QueryRow(ctx, `
+		INSERT INTO replies (post_id, parent_reply_id, author_type, author_id, body, legacy_type, legacy_id, provenance)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id, post_id, parent_reply_id, author_type, author_id, body, upvotes, downvotes,
+		          legacy_type, legacy_id, provenance, created_at, updated_at, deleted_at`,
+		reply.PostID, reply.ParentReplyID, reply.AuthorType, reply.AuthorID, reply.Body,
+		reply.LegacyType, reply.LegacyID, provenance,
+	)
+	created, err := scanReply(row)
+	if err != nil {
+		LogQueryError(ctx, "Reply.Create.Insert", "replies", err)
+		return nil, fmt.Errorf("insert reply: %w", err)
+	}
+	return created, nil
+}
+
+// GetByID returns a single non-deleted reply with its author information.
+func (r *ReplyRepository) GetByID(ctx context.Context, id string) (*models.ReplyWithAuthor, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT rp.id, rp.post_id, rp.parent_reply_id, rp.author_type, rp.author_id, rp.body,
+		       rp.upvotes, rp.downvotes, rp.legacy_type, rp.legacy_id, rp.provenance,
+		       rp.created_at, rp.updated_at, rp.deleted_at,`+replyAuthorSelect+`
+		FROM replies rp`+replyAuthorJoins+`
+		WHERE rp.id = $1 AND rp.deleted_at IS NULL`, id)
+	rwa, err := scanReplyWithAuthor(row)
+	if err != nil {
+		if isInvalidUUIDError(err) || err.Error() == "no rows in result set" {
+			return nil, models.ErrReplyNotFound
+		}
+		LogQueryError(ctx, "Reply.GetByID", "replies", err)
+		return nil, fmt.Errorf("get reply: %w", err)
+	}
+	return rwa, nil
+}
+
+// ListByPost returns non-deleted replies for a post, oldest first, paginated.
+func (r *ReplyRepository) ListByPost(ctx context.Context, opts models.ReplyListOptions) ([]models.ReplyWithAuthor, int, error) {
+	page := opts.Page
+	if page < 1 {
+		page = 1
+	}
+	perPage := opts.PerPage
+	if perPage < 1 {
+		perPage = 20
+	}
+	if perPage > 100 {
+		perPage = 100
+	}
+	offset := (page - 1) * perPage
+
+	var total int
+	err := r.pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM replies WHERE post_id = $1 AND deleted_at IS NULL",
+		opts.PostID,
+	).Scan(&total)
+	if err != nil {
+		if isTableNotFoundError(err) {
+			return []models.ReplyWithAuthor{}, 0, nil
+		}
+		if isInvalidUUIDError(err) {
+			return []models.ReplyWithAuthor{}, 0, nil
+		}
+		LogQueryError(ctx, "Reply.ListByPost.Count", "replies", err)
+		return nil, 0, fmt.Errorf("count replies: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT rp.id, rp.post_id, rp.parent_reply_id, rp.author_type, rp.author_id, rp.body,
+		       rp.upvotes, rp.downvotes, rp.legacy_type, rp.legacy_id, rp.provenance,
+		       rp.created_at, rp.updated_at, rp.deleted_at,`+replyAuthorSelect+`
+		FROM replies rp`+replyAuthorJoins+`
+		WHERE rp.post_id = $1 AND rp.deleted_at IS NULL
+		ORDER BY rp.created_at ASC, rp.id ASC
+		LIMIT $2 OFFSET $3`, opts.PostID, perPage, offset)
+	if err != nil {
+		LogQueryError(ctx, "Reply.ListByPost.Query", "replies", err)
+		return nil, 0, fmt.Errorf("list replies: %w", err)
+	}
+	defer rows.Close()
+
+	replies := make([]models.ReplyWithAuthor, 0, perPage)
+	for rows.Next() {
+		rwa, scanErr := scanReplyWithAuthor(rows)
+		if scanErr != nil {
+			LogQueryError(ctx, "Reply.ListByPost.Scan", "replies", scanErr)
+			return nil, 0, fmt.Errorf("scan reply: %w", scanErr)
+		}
+		replies = append(replies, *rwa)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate replies: %w", err)
+	}
+	return replies, total, nil
+}
+
+// CountByPost returns the number of non-deleted replies for a post.
+func (r *ReplyRepository) CountByPost(ctx context.Context, postID string) (int, error) {
+	var total int
+	err := r.pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM replies WHERE post_id = $1 AND deleted_at IS NULL",
+		postID,
+	).Scan(&total)
+	if err != nil {
+		if isTableNotFoundError(err) || isInvalidUUIDError(err) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("count replies: %w", err)
+	}
+	return total, nil
+}
+
+// Update edits a reply's body. Only the author may edit; author identity,
+// creation time, votes, and provenance are never reset.
+func (r *ReplyRepository) Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string) (*models.Reply, error) {
+	owner, err := r.loadOwner(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if owner.AuthorType != authorType || owner.AuthorID != authorID {
+		return nil, ErrReplyForbidden
+	}
+
+	row := r.pool.QueryRow(ctx, `
+		UPDATE replies SET body = $2, updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id, post_id, parent_reply_id, author_type, author_id, body, upvotes, downvotes,
+		          legacy_type, legacy_id, provenance, created_at, updated_at, deleted_at`, id, body)
+	updated, err := scanReply(row)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return nil, models.ErrReplyNotFound
+		}
+		LogQueryError(ctx, "Reply.Update", "replies", err)
+		return nil, fmt.Errorf("update reply: %w", err)
+	}
+	return updated, nil
+}
+
+// Delete soft-deletes a reply. Only the author may delete it.
+func (r *ReplyRepository) Delete(ctx context.Context, id string, authorType models.AuthorType, authorID string) error {
+	owner, err := r.loadOwner(ctx, id)
+	if err != nil {
+		return err
+	}
+	if owner.AuthorType != authorType || owner.AuthorID != authorID {
+		return ErrReplyForbidden
+	}
+	_, err = r.pool.Exec(ctx,
+		"UPDATE replies SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL", id)
+	if err != nil {
+		LogQueryError(ctx, "Reply.Delete", "replies", err)
+		return fmt.Errorf("delete reply: %w", err)
+	}
+	return nil
+}
+
+// loadOwner returns the author identity of a live reply for permission checks.
+func (r *ReplyRepository) loadOwner(ctx context.Context, id string) (*models.Reply, error) {
+	var reply models.Reply
+	err := r.pool.QueryRow(ctx,
+		"SELECT author_type, author_id FROM replies WHERE id = $1 AND deleted_at IS NULL", id,
+	).Scan(&reply.AuthorType, &reply.AuthorID)
+	if err != nil {
+		if isInvalidUUIDError(err) || err.Error() == "no rows in result set" {
+			return nil, models.ErrReplyNotFound
+		}
+		return nil, fmt.Errorf("load reply owner: %w", err)
+	}
+	return &reply, nil
+}
+
+// Vote records or updates a confirmed vote on a reply and keeps the reply's
+// upvote/downvote counters in sync. Votes target the canonical Reply identity
+// (target_type = 'reply'), the same polymorphic votes table posts use.
+func (r *ReplyRepository) Vote(ctx context.Context, replyID, voterType, voterID, direction string) error {
+	if direction != "up" && direction != "down" {
+		return ErrInvalidVoteDirection
+	}
+	if voterType != "human" && voterType != "agent" {
+		return ErrInvalidVoterType
+	}
+
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM replies WHERE id = $1 AND deleted_at IS NULL)", replyID,
+	).Scan(&exists)
+	if err != nil {
+		if isInvalidUUIDError(err) {
+			return models.ErrReplyNotFound
+		}
+		LogQueryError(ctx, "Reply.Vote.CheckExists", "replies", err)
+		return fmt.Errorf("check reply existence: %w", err)
+	}
+	if !exists {
+		return models.ErrReplyNotFound
+	}
+
+	var existingDirection string
+	err = r.pool.QueryRow(ctx,
+		`SELECT direction FROM votes
+		 WHERE target_type = 'reply' AND target_id = $1 AND voter_type = $2 AND voter_id = $3`,
+		replyID, voterType, voterID,
+	).Scan(&existingDirection)
+	if err != nil && err.Error() != "no rows in result set" {
+		LogQueryError(ctx, "Reply.Vote.CheckExisting", "votes", err)
+		return fmt.Errorf("check existing vote: %w", err)
+	}
+	if existingDirection == direction {
+		return nil
+	}
+
+	return r.pool.WithTx(ctx, func(tx Tx) error {
+		if existingDirection == "" {
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed)
+				 VALUES ('reply', $1, $2, $3, $4, true)`,
+				replyID, voterType, voterID, direction,
+			); err != nil {
+				LogQueryError(ctx, "Reply.Vote.Insert", "votes", err)
+				return fmt.Errorf("insert vote: %w", err)
+			}
+			col := "upvotes"
+			if direction == "down" {
+				col = "downvotes"
+			}
+			if _, err := tx.Exec(ctx,
+				fmt.Sprintf("UPDATE replies SET %s = %s + 1 WHERE id = $1", col, col), replyID,
+			); err != nil {
+				LogQueryError(ctx, "Reply.Vote.UpdateCounts", "replies", err)
+				return fmt.Errorf("update reply vote counts: %w", err)
+			}
+			return nil
+		}
+
+		if _, err := tx.Exec(ctx,
+			`UPDATE votes SET direction = $4
+			 WHERE target_type = 'reply' AND target_id = $1 AND voter_type = $2 AND voter_id = $3`,
+			replyID, voterType, voterID, direction,
+		); err != nil {
+			LogQueryError(ctx, "Reply.Vote.UpdateDirection", "votes", err)
+			return fmt.Errorf("update vote: %w", err)
+		}
+		if direction == "up" {
+			_, err = tx.Exec(ctx,
+				"UPDATE replies SET upvotes = upvotes + 1, downvotes = downvotes - 1 WHERE id = $1", replyID)
+		} else {
+			_, err = tx.Exec(ctx,
+				"UPDATE replies SET upvotes = upvotes - 1, downvotes = downvotes + 1 WHERE id = $1", replyID)
+		}
+		if err != nil {
+			LogQueryError(ctx, "Reply.Vote.AdjustCounts", "replies", err)
+			return fmt.Errorf("adjust reply vote counts: %w", err)
+		}
+		return nil
+	})
+}
+
+// GetUserVote returns the caller's current vote direction on a reply, or nil.
+func (r *ReplyRepository) GetUserVote(ctx context.Context, replyID, voterType, voterID string) (*string, error) {
+	var direction string
+	err := r.pool.QueryRow(ctx,
+		`SELECT direction FROM votes
+		 WHERE target_type = 'reply' AND target_id = $1 AND voter_type = $2 AND voter_id = $3`,
+		replyID, voterType, voterID,
+	).Scan(&direction)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return nil, nil
+		}
+		if isInvalidUUIDError(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get user vote: %w", err)
+	}
+	return &direction, nil
+}
+
+// scanReply scans the canonical reply column projection (no author join).
+// rowScanner (defined in room_messages.go) is satisfied by pgx.Row and pgx.Rows.
+func scanReply(row rowScanner) (*models.Reply, error) {
+	var reply models.Reply
+	var provenance []byte
+	if err := row.Scan(
+		&reply.ID, &reply.PostID, &reply.ParentReplyID, &reply.AuthorType, &reply.AuthorID,
+		&reply.Body, &reply.Upvotes, &reply.Downvotes, &reply.LegacyType, &reply.LegacyID,
+		&provenance, &reply.CreatedAt, &reply.UpdatedAt, &reply.DeletedAt,
+	); err != nil {
+		return nil, err
+	}
+	if len(provenance) > 0 {
+		reply.Provenance = provenance
+	}
+	reply.ComputeScore()
+	return &reply, nil
+}
+
+// scanReplyWithAuthor scans the reply projection plus resolved author columns.
+func scanReplyWithAuthor(row rowScanner) (*models.ReplyWithAuthor, error) {
+	var rwa models.ReplyWithAuthor
+	var provenance []byte
+	var displayName string
+	var avatarURL *string
+	if err := row.Scan(
+		&rwa.ID, &rwa.PostID, &rwa.ParentReplyID, &rwa.AuthorType, &rwa.AuthorID,
+		&rwa.Body, &rwa.Upvotes, &rwa.Downvotes, &rwa.LegacyType, &rwa.LegacyID,
+		&provenance, &rwa.CreatedAt, &rwa.UpdatedAt, &rwa.DeletedAt,
+		&displayName, &avatarURL,
+	); err != nil {
+		return nil, err
+	}
+	if len(provenance) > 0 {
+		rwa.Provenance = provenance
+	}
+	rwa.ComputeScore()
+	rwa.Author = models.ReplyAuthor{
+		ID:          rwa.AuthorID,
+		Type:        rwa.AuthorType,
+		DisplayName: displayName,
+		AvatarURL:   avatarURL,
+	}
+	return &rwa, nil
+}

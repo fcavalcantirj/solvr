@@ -65,7 +65,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Validate target type
 	targetType := models.ReportTargetType(req.TargetType)
 	if !models.IsValidReportTargetType(targetType) {
-		writeReportsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid target_type: must be post, answer, approach, response, or comment")
+		writeReportsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid target_type: must be post, answer, approach, response, comment, or reply")
 		return
 	}
 

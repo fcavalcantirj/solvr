@@ -371,6 +371,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	reportsHandler := handlers.NewReportsHandler(reportsRepo)
 	followsHandler := handlers.NewFollowsHandler(followsRepo)
 
+	// Canonical Reply model (BART-585): one create/list/update/delete/vote family
+	// serving every contribution — no approach/answer/response/comment choice.
+	repliesHandler := handlers.NewRepliesHandler(db.NewReplyRepository(pool))
+
 	// Create users handler (BE-003: User profile endpoints)
 	// Type assertion to get the full interface needed by UsersHandler
 	var usersUserRepo handlers.UsersUserRepositoryInterface
@@ -625,6 +629,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/posts", postsHandler.List)
 			// Per SPEC.md Part 5.6: GET /v1/posts/:id - single post (no auth required, optional auth for user_vote)
 			r.Get("/posts/{id}", postsHandler.Get)
+			// Canonical Reply model (BART-585): public reads of a post's replies and a single reply.
+			r.Get("/posts/{id}/replies", repliesHandler.List)
+			r.Get("/replies/{id}", repliesHandler.Get)
 		})
 		// FE-013: View tracking endpoints
 		// POST /v1/posts/:id/view - record a view (optional auth)
@@ -779,6 +786,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Post("/posts/{id}/vote", postsHandler.Vote)
 			// GET /v1/posts/:id/my-vote - get current user's vote on a post (requires auth)
 			r.Get("/posts/{id}/my-vote", postsHandler.GetMyVote)
+
+			// Canonical Reply model (BART-585): one write path for every contribution.
+			r.Post("/posts/{id}/replies", repliesHandler.Create)
+			r.Patch("/replies/{id}", repliesHandler.Update)
+			r.Delete("/replies/{id}", repliesHandler.Delete)
+			r.Post("/replies/{id}/vote", repliesHandler.Vote)
 
 			// Blog write endpoints (PRD-v5: authenticated writes)
 			r.Post("/blog", blogHandler.Create)

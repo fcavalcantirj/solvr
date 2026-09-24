@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
-	"github.com/fcavalcantirj/solvr/internal/token"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -32,7 +31,7 @@ func humanOwnerOf(roomIDExpr string) string {
 
 // roomColumns is the column list read by scanRoom/scanRoomRow; owner_id is derived.
 var roomColumns = `id, slug, display_name, description, category, tags, is_private,
-	(` + humanOwnerOf("rooms.id") + `) AS owner_id, token_hash,
+	(` + humanOwnerOf("rooms.id") + `) AS owner_id,
 	message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
 	archived_at, result_message_id`
 
@@ -59,18 +58,12 @@ func slugify(name string) string {
 }
 
 // Create inserts a new room into the database.
-// Returns the created room and the plaintext bearer token (to give to the creator).
-func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomParams) (*models.Room, string, error) {
+// Returns the created room. Agents obtain per-agent room tokens via the handshake.
+func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomParams) (*models.Room, error) {
 	// Generate slug if not provided
 	slug := params.Slug
 	if slug == "" {
 		slug = slugify(params.DisplayName)
-	}
-
-	// Generate bearer token
-	plaintext, hashHex, err := token.GenerateRoomToken()
-	if err != nil {
-		return nil, "", fmt.Errorf("generate room token: %w", err)
 	}
 
 	// Normalize tags
@@ -80,9 +73,9 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 	}
 
 	query := `
-		INSERT INTO rooms (slug, display_name, description, category, tags, is_private, token_hash, message_count, expires_at, source_post_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9)
-		RETURNING id, slug, display_name, description, category, tags, is_private, token_hash,
+		INSERT INTO rooms (slug, display_name, description, category, tags, is_private, message_count, expires_at, source_post_id)
+		VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8)
+		RETURNING id, slug, display_name, description, category, tags, is_private,
 			message_count, created_at, updated_at, last_active_at, expires_at, deleted_at,
 			archived_at, result_message_id, source_post_id
 	`
@@ -99,7 +92,6 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 			params.Category,
 			tags,
 			params.IsPrivate,
-			hashHex,
 			params.ExpiresAt,
 			params.SourcePostID,
 		).Scan(
@@ -110,7 +102,6 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 			&room.Category,
 			&room.Tags,
 			&room.IsPrivate,
-			&room.TokenHash,
 			&room.MessageCount,
 			&room.CreatedAt,
 			&room.UpdatedAt,
@@ -155,17 +146,17 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 	if txErr != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(txErr, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName != "" && pgErr.TableName == "rooms" {
-			return nil, "", ErrRoomSlugExists
+			return nil, ErrRoomSlugExists
 		}
 		// Slug uniqueness violations may surface without table metadata depending on driver path.
 		if errors.As(txErr, &pgErr) && pgErr.Code == "23505" {
-			return nil, "", ErrRoomSlugExists
+			return nil, ErrRoomSlugExists
 		}
 		LogQueryError(ctx, "Create", "rooms", txErr)
-		return nil, "", txErr
+		return nil, txErr
 	}
 
-	return &room, plaintext, nil
+	return &room, nil
 }
 
 // GetBySlug returns a room by its slug.
@@ -188,18 +179,6 @@ func (r *RoomRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Roo
 		WHERE id = $1 AND deleted_at IS NULL
 	`
 	return r.scanRoom(ctx, "GetByID", query, id)
-}
-
-// GetByTokenHash returns a room by its token hash.
-// Returns ErrRoomNotFound if the room doesn't exist or is soft-deleted.
-// Used by bearer guard middleware.
-func (r *RoomRepository) GetByTokenHash(ctx context.Context, hash string) (*models.Room, error) {
-	query := `
-		SELECT ` + roomColumns + `
-		FROM rooms
-		WHERE token_hash = $1 AND deleted_at IS NULL
-	`
-	return r.scanRoom(ctx, "GetByTokenHash", query, hash)
 }
 
 // RoomListParams controls public room discovery listing. The zero value lists
@@ -513,26 +492,6 @@ func (r *RoomRepository) Reopen(ctx context.Context, roomID uuid.UUID) (*models.
 	return r.scanRoomFromRow(ctx, "Reopen", query, roomID)
 }
 
-// RotateToken generates a new bearer token for a room, replacing the old one.
-// Returns the new plaintext token.
-func (r *RoomRepository) RotateToken(ctx context.Context, roomID uuid.UUID) (string, error) {
-	plaintext, hashHex, err := token.GenerateRoomToken()
-	if err != nil {
-		return "", fmt.Errorf("generate room token: %w", err)
-	}
-
-	query := `UPDATE rooms SET token_hash = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`
-	result, err := r.pool.Exec(ctx, query, hashHex, roomID)
-	if err != nil {
-		LogQueryError(ctx, "RotateToken", "rooms", err)
-		return "", err
-	}
-	if result.RowsAffected() == 0 {
-		return "", ErrRoomNotFound
-	}
-	return plaintext, nil
-}
-
 // UpdateActivity updates last_active_at and updated_at on a room.
 // Called after each message.
 func (r *RoomRepository) UpdateActivity(ctx context.Context, roomID uuid.UUID) error {
@@ -591,7 +550,6 @@ func (r *RoomRepository) scanRoom(ctx context.Context, op, query string, args ..
 		&room.Tags,
 		&room.IsPrivate,
 		&room.OwnerID,
-		&room.TokenHash,
 		&room.MessageCount,
 		&room.CreatedAt,
 		&room.UpdatedAt,
@@ -627,7 +585,6 @@ func (r *RoomRepository) scanRoomRow(rows pgx.Rows, room *models.Room) error {
 		&room.Tags,
 		&room.IsPrivate,
 		&room.OwnerID,
-		&room.TokenHash,
 		&room.MessageCount,
 		&room.CreatedAt,
 		&room.UpdatedAt,

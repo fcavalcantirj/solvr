@@ -29,7 +29,7 @@ func TestRoomRepository_Archive_SetsArchivedState(t *testing.T) {
 	})
 
 	repo := db.NewRoomRepository(pool)
-	room, _, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-a", DisplayName: "Archive A"})
+	room, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-a", DisplayName: "Archive A"})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -93,7 +93,7 @@ func TestRoomRepository_Archive_WithoutResultMessage(t *testing.T) {
 	})
 
 	repo := db.NewRoomRepository(pool)
-	room, _, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-a", DisplayName: "Archive NoResult"})
+	room, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-a", DisplayName: "Archive NoResult"})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -129,7 +129,7 @@ func TestRoomRepository_Archive_PreservesTimestampOnReArchive(t *testing.T) {
 	})
 
 	repo := db.NewRoomRepository(pool)
-	room, _, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-a", DisplayName: "ReArchive"})
+	room, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-a", DisplayName: "ReArchive"})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -166,7 +166,7 @@ func TestRoomRepository_Reopen_ClearsArchivedState(t *testing.T) {
 	})
 
 	repo := db.NewRoomRepository(pool)
-	room, _, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-a", DisplayName: "Reopen"})
+	room, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-a", DisplayName: "Reopen"})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -235,7 +235,7 @@ func TestRoomRepository_Archive_DistinctFromDeleteAndExpiry(t *testing.T) {
 	})
 
 	repo := db.NewRoomRepository(pool)
-	room, _, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-a", DisplayName: "Distinct"})
+	room, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-a", DisplayName: "Distinct"})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -286,7 +286,7 @@ func TestRoomRepository_StartNewFromFinished_Independent(t *testing.T) {
 	})
 
 	repo := db.NewRoomRepository(pool)
-	finished, finishedToken, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-old", DisplayName: "Finished"})
+	finished, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-old", DisplayName: "Finished"})
 	if err != nil {
 		t.Fatalf("Create(old) error = %v", err)
 	}
@@ -300,15 +300,12 @@ func TestRoomRepository_StartNewFromFinished_Independent(t *testing.T) {
 		t.Fatalf("Archive() error = %v", err)
 	}
 
-	fresh, freshToken, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-new", DisplayName: "Fresh"})
+	fresh, err := repo.Create(ctx, models.CreateRoomParams{Slug: prefix + "-new", DisplayName: "Fresh"})
 	if err != nil {
 		t.Fatalf("Create(new) error = %v", err)
 	}
 	if fresh.ID == finished.ID || fresh.Slug == finished.Slug {
 		t.Error("new room reused the finished room identity")
-	}
-	if freshToken == finishedToken {
-		t.Error("new room reused the finished room token")
 	}
 	if fresh.MessageCount != 0 {
 		t.Errorf("new room MessageCount = %d, want 0 (no copied transcript)", fresh.MessageCount)

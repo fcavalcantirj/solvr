@@ -225,8 +225,8 @@ func TestActivationAnalytics_TwoDisplayNamesOneIdentity_DoNotActivate(t *testing
 
 	var room uuid.UUID
 	err := pool.QueryRow(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash, is_private)
-		VALUES ($1, 'two names one identity', 'hash_act_twonames_test', false)
+		INSERT INTO rooms (slug, display_name, is_private)
+		VALUES ($1, 'two names one identity', false)
 		RETURNING id`, slug).Scan(&room)
 	require.NoError(t, err)
 	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM rooms WHERE id = $1`, room) })

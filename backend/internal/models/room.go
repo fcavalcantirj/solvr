@@ -17,7 +17,6 @@ type Room struct {
 	Tags         []string   `json:"tags"`
 	IsPrivate    bool       `json:"is_private"`
 	OwnerID      *uuid.UUID `json:"owner_id,omitempty"`
-	TokenHash    string     `json:"-"`
 	MessageCount int        `json:"message_count"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`

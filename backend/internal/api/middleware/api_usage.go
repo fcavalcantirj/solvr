@@ -88,7 +88,6 @@ var apiUsageOperations = map[string]string{
 	"POST /r/{slug}/join":                        "room.join",
 	"POST /r/{slug}/leave":                       "room.leave",
 	"POST /v1/rooms/{slug}/handshake":            "room.handshake",
-	"POST /v1/rooms/{slug}/rotate-token":         "room.token.rotate",
 	"GET /v1/rooms/{slug}/members":               "room.members.read",
 	"POST /v1/rooms/{slug}/members":              "room.members.add",
 	"DELETE /v1/rooms/{slug}/members/{agent_id}": "room.members.remove",

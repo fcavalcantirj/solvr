@@ -43,9 +43,9 @@ func TestFunnelServerSteps_RecordedEndToEnd(t *testing.T) {
 	createRaw, _ := io.ReadAll(createResp.Body)
 	require.Equal(t, http.StatusCreated, createResp.StatusCode, string(createRaw))
 
-	sharedToken, slug := extractRoomTokenAndSlug(t, string(createRaw))
+	slug := extractRoomSlug(t, string(createRaw))
 
-	_, plannerRoomToken := handshake(t, ts.URL, slug, plannerKey, sharedToken)
+	_, plannerRoomToken := handshake(t, ts.URL, slug, plannerKey, "")
 	doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/join", plannerRoomToken,
 		fmt.Sprintf(`{"agent_name":"%s"}`, plannerName))
 	doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/message", plannerRoomToken,

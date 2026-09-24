@@ -13,8 +13,9 @@ import (
 )
 
 // createPrivateRoomWithAgentKey creates a CLOSED (is_private) room via an agent API key.
-// The room's owner_id is auto-set to the claimed agent's linked human. Returns slug, token.
-func createPrivateRoomWithAgentKey(t *testing.T, ts *httptest.Server, apiKey string) (string, string) {
+// The room's owner_id is auto-set to the claimed agent's linked human. Returns the slug
+// (no shared room token exists any more; agents handshake for their own).
+func createPrivateRoomWithAgentKey(t *testing.T, ts *httptest.Server, apiKey string) string {
 	t.Helper()
 	slug := fmt.Sprintf("test-fam-%d", time.Now().UnixNano()%1000000000)
 	body := fmt.Sprintf(`{"display_name":"Family %s","slug":"%s","is_private":true}`, slug, slug)
@@ -24,11 +25,10 @@ func createPrivateRoomWithAgentKey(t *testing.T, ts *httptest.Server, apiKey str
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create private room via agent: %s", string(raw))
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(raw, &result))
-	token, _ := result["token"].(string)
 	data, _ := result["data"].(map[string]any)
 	roomSlug, _ := data["slug"].(string)
 	require.NotEmpty(t, roomSlug)
-	return roomSlug, token
+	return roomSlug
 }
 
 // meRoomSlugs calls GET /v1/me/rooms with the given bearer and returns the room slugs.
@@ -64,7 +64,7 @@ func TestRoomFamily_SiblingAgent_AccessesAndHandshakesClosedRoom(t *testing.T) {
 	claimAgentToUser(t, pool, agentBID, userA) // sibling: same human as owner
 
 	// Agent A (claimed to userA) creates a closed room -> owner_id = userA.
-	slug, _ := createPrivateRoomWithAgentKey(t, ts, agentAKey)
+	slug := createPrivateRoomWithAgentKey(t, ts, agentAKey)
 
 	// Sibling B is NOT on the allowlist and holds no room token, yet:
 	// 1) family read succeeds (was 403 before this feature).
@@ -93,7 +93,7 @@ func TestRoomFamily_ForeignAndUnclaimedAgents_Still403(t *testing.T) {
 	userA, _ := createRoomTestUser(t, pool)
 	agentAID, agentAKey := registerRoomTestAgent(t, ts)
 	claimAgentToUser(t, pool, agentAID, userA)
-	slug, _ := createPrivateRoomWithAgentKey(t, ts, agentAKey) // owner_id = userA
+	slug := createPrivateRoomWithAgentKey(t, ts, agentAKey) // owner_id = userA
 
 	// Foreign agent: claimed to a DIFFERENT human.
 	userB, _ := createRoomTestUser(t, pool)
@@ -126,7 +126,7 @@ func TestRoomFamily_Discovery_ScopedByHuman(t *testing.T) {
 	agentBID, agentBKey := registerRoomTestAgent(t, ts)
 	claimAgentToUser(t, pool, agentBID, userA) // sibling
 
-	slug, _ := createPrivateRoomWithAgentKey(t, ts, agentAKey) // private, owner_id = userA
+	slug := createPrivateRoomWithAgentKey(t, ts, agentAKey) // private, owner_id = userA
 
 	// Sibling B discovers A's private room via /me/rooms.
 	require.Contains(t, meRoomSlugs(t, ts, agentBKey), slug,

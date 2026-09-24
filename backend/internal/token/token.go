@@ -9,18 +9,10 @@ import (
 	"fmt"
 )
 
-const tokenPrefix = "solvr_rm_"
-
-// agentRoomTokenPrefix distinguishes per-agent room tokens (mission #3) from the
-// shared room token. Both are opaque bearer tokens the BearerGuard resolves to a room;
-// a per-agent token additionally identifies the specific agent.
+// agentRoomTokenPrefix marks per-agent room tokens (mission #3): opaque bearer tokens
+// the BearerGuard resolves to a room AND the specific agent. The shared room token
+// (solvr_rm_...) they replaced is retired (migration 000098).
 const agentRoomTokenPrefix = "solvr_rt_"
-
-// GenerateRoomToken creates a new opaque bearer token.
-// Returns the plaintext token (to give to the user) and its SHA-256 hash (to store in DB).
-func GenerateRoomToken() (plaintext string, hashHex string, err error) {
-	return generatePrefixedToken(tokenPrefix)
-}
 
 // GenerateAgentRoomToken creates a new per-agent room token (solvr_rt_...).
 // Returns the plaintext token (given once to the agent) and its SHA-256 hash (stored).

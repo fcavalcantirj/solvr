@@ -75,8 +75,8 @@ func TestGetRoom_ConnectionStatusReflectsRealActivity(t *testing.T) {
 
 	var roomID uuid.UUID
 	err := pool.QueryRow(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash, is_private)
-		VALUES ($1, 'Conn Status Room', 'hash_conn_status', false)
+		INSERT INTO rooms (slug, display_name, is_private)
+		VALUES ($1, 'Conn Status Room', false)
 		RETURNING id`, slug).Scan(&roomID)
 	require.NoError(t, err)
 

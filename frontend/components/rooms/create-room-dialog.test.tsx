@@ -64,9 +64,11 @@ describe('CreateRoomDialog', () => {
     mockAuth.user = { id: 'u1', type: 'human', displayName: 'Test' };
     mockAuth.isAuthenticated = true;
 
+    // The API no longer returns a shared token (migration 000098); a stray legacy
+    // `token` field must still never reach the page.
     vi.mocked(api.createRoom).mockResolvedValue({
       data: { slug: 'my-new-room', id: 'room-1', display_name: 'My New Room' }, token: 'tok_123',
-    });
+    } as Awaited<ReturnType<typeof api.createRoom>>);
 
     const { baseElement } = render(<CreateRoomDialog />);
     fireEvent.click(screen.getByRole('button', { name: /create room/i }));

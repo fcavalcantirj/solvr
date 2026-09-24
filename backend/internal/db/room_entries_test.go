@@ -25,8 +25,8 @@ func createEntryTestRoom(t *testing.T, ctx context.Context, pool *db.Pool, slug 
 	t.Helper()
 	entryTestCleanup(ctx, pool, slug)
 	_, err := pool.Exec(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash)
-		VALUES ($1, 'Entry Test Room', 'hash_entry_test')
+		INSERT INTO rooms (slug, display_name)
+		VALUES ($1, 'Entry Test Room')
 	`, slug)
 	if err != nil {
 		t.Fatalf("createEntryTestRoom: %v", err)

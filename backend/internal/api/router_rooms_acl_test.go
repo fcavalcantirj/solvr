@@ -15,7 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// createClosedRoom creates a private (closed) room via the API and returns slug, token.
+// createClosedRoom creates a private (closed) room via the API (human JWT) and returns
+// the slug plus the per-agent room token of an agent the owner admitted as a member.
 func createClosedRoom(t *testing.T, ts *httptest.Server, jwt string) (string, string) {
 	t.Helper()
 	slug := fmt.Sprintf("test-closed-%d", time.Now().UnixNano()%1000000000)
@@ -30,12 +31,10 @@ func createClosedRoom(t *testing.T, ts *httptest.Server, jwt string) (string, st
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create closed room: %s", string(raw))
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(raw, &result))
-	token, _ := result["token"].(string)
 	data, _ := result["data"].(map[string]any)
 	roomSlug, _ := data["slug"].(string)
-	require.NotEmpty(t, token)
 	require.NotEmpty(t, roomSlug)
-	return roomSlug, token
+	return roomSlug, admitRoomAgent(t, ts, roomSlug, jwt)
 }
 
 // registerTestAgent registers an agent via the public endpoint and returns (agentID, apiKey).
@@ -87,9 +86,10 @@ func TestRoomACL_ClosedRoom_ReadsAreMembersOnly(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, getStatus(t, detailURL, ""), "anon detail should be 403")
 	require.Equal(t, http.StatusForbidden, getStatus(t, msgURL, ""), "anon messages should be 403")
 
-	// Shared room bearer token grants access (backward compat).
-	require.Equal(t, http.StatusOK, getStatus(t, detailURL, roomToken), "shared token detail should be 200")
-	require.Equal(t, http.StatusOK, getStatus(t, msgURL, roomToken), "shared token messages should be 200")
+	// An admitted member agent's per-agent room token grants access (the shared room
+	// token is retired, 000098; TestRoomSharedTokenRetired_* pins that).
+	require.Equal(t, http.StatusOK, getStatus(t, detailURL, roomToken), "member room token detail should be 200")
+	require.Equal(t, http.StatusOK, getStatus(t, msgURL, roomToken), "member room token messages should be 200")
 
 	// Human room owner (JWT) has access.
 	require.Equal(t, http.StatusOK, getStatus(t, detailURL, ownerJWT), "owner detail should be 200")

@@ -290,7 +290,6 @@ func makeTestRoom(slug string, id uuid.UUID) quorumRoom {
 		ID:          id,
 		Slug:        slug,
 		DisplayName: "Test " + slug,
-		TokenHash:   "hash-" + slug,
 		CreatedAt:   time.Now(),
 	}
 }

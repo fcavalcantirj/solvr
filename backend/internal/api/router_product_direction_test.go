@@ -37,16 +37,17 @@ func pdAgentName(role string, i int) string {
 }
 
 // createAgentOwnedRoom creates a room using an AGENT API key (no human JWT) and returns
-// the slug plus the shared room bearer token handed back once at creation.
-func createAgentOwnedRoom(t *testing.T, ts *httptest.Server, agentKey string) (string, string) {
+// the slug. No shared room token is handed back (000098): every agent, the creator
+// included, handshakes for its own per-agent token.
+func createAgentOwnedRoom(t *testing.T, ts *httptest.Server, agentKey string) string {
 	t.Helper()
 	slug := fmt.Sprintf("test-pd-%d", time.Now().UnixNano()%1000000000)
 	body := fmt.Sprintf(`{"display_name":"Product Direction %s","slug":"%s"}`, slug, slug)
 	status, out := doJSON(t, http.MethodPost, ts.URL+"/v1/rooms", agentKey, body)
 	require.Equal(t, http.StatusCreated, status, "agent must be able to create its own room: %v", out)
 
-	token, _ := out["token"].(string)
-	require.True(t, strings.HasPrefix(token, "solvr_"), "expected a shared room token, got %q", token)
+	_, hasToken := out["token"]
+	require.False(t, hasToken, "room creation must not hand out a shared room token: %v", out)
 
 	data, _ := out["data"].(map[string]any)
 	roomSlug, _ := data["slug"].(string)
@@ -56,7 +57,7 @@ func createAgentOwnedRoom(t *testing.T, ts *httptest.Server, agentKey string) (s
 	_, hasOwner := data["owner_id"]
 	require.False(t, hasOwner, "an agent-created room must have no human owner, got owner_id=%v", data["owner_id"])
 
-	return roomSlug, token
+	return roomSlug
 }
 
 // pdCleanup deletes this file's fixtures. It is registered with defer, NOT t.Cleanup:
@@ -104,7 +105,7 @@ func TestProductDirection_AgentsConnectWithoutHumanAccount(t *testing.T) {
 	require.Nil(t, agentData["human_id"], "a self-registered agent must need no human owner")
 
 	// 2. Planner creates and owns a real room with its own key.
-	slug, roomToken := createAgentOwnedRoom(t, ts, plannerKey)
+	slug := createAgentOwnedRoom(t, ts, plannerKey)
 
 	// 3. The ownerless room is still manageable: its creator holds an owner membership.
 	status, membersOut := doJSON(t, http.MethodGet, ts.URL+"/v1/rooms/"+slug+"/members", plannerKey, "")
@@ -114,16 +115,16 @@ func TestProductDirection_AgentsConnectWithoutHumanAccount(t *testing.T) {
 		"creator agent %s must hold an owner membership, got %v", plannerID, members)
 
 	// 4. A second, independently running agent self-registers and joins the SAME room
-	//    with nothing but its own key. The shared room token is accepted as the invite.
+	//    with nothing but its own key: a public room admits any registered agent.
 	executorID, executorKey := registerTestAgent(t, ts, pdAgentName("exec", 0))
-	status, executorRoomToken := handshake(t, ts.URL, slug, executorKey, roomToken)
+	status, executorRoomToken := handshake(t, ts.URL, slug, executorKey, "")
 	require.Equal(t, http.StatusCreated, status)
 	require.True(t, strings.HasPrefix(executorRoomToken, "solvr_rt_"),
 		"executor must get its OWN per-agent room token, got %q", executorRoomToken)
 
 	// The planner takes its own per-agent token the same way — credentials are per agent,
 	// never shared between them.
-	status, plannerRoomToken := handshake(t, ts.URL, slug, plannerKey, roomToken)
+	status, plannerRoomToken := handshake(t, ts.URL, slug, plannerKey, "")
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEqual(t, plannerRoomToken, executorRoomToken, "each agent must hold a distinct credential")
 
@@ -174,7 +175,7 @@ func TestProductDirection_NoHardCodedParticipantLimit(t *testing.T) {
 
 	// The first agent creates the room; the rest join it exactly like any other agent.
 	hostID, hostKey := registerTestAgent(t, ts, pdAgentName("n", 0))
-	slug, roomToken := createAgentOwnedRoom(t, ts, hostKey)
+	slug := createAgentOwnedRoom(t, ts, hostKey)
 
 	agentIDs := []string{hostID}
 	keys := []string{hostKey}
@@ -184,13 +185,17 @@ func TestProductDirection_NoHardCodedParticipantLimit(t *testing.T) {
 		keys = append(keys, key)
 	}
 
+	var hostRoomToken string
 	for i, key := range keys {
 		name := fmt.Sprintf("worker_%d", i)
 
-		status, roomTok := handshake(t, ts.URL, slug, key, roomToken)
+		status, roomTok := handshake(t, ts.URL, slug, key, "")
 		require.Equal(t, http.StatusCreated, status,
 			"participant %d (%s) must be admitted — no hard-coded participant cap", i, agentIDs[i])
 		require.True(t, strings.HasPrefix(roomTok, "solvr_rt_"))
+		if i == 0 {
+			hostRoomToken = roomTok
+		}
 
 		pdJoin(t, ts.URL, slug, roomTok, name)
 
@@ -210,12 +215,12 @@ func TestProductDirection_NoHardCodedParticipantLimit(t *testing.T) {
 		require.True(t, pdHasMember(members, id), "agent %s missing from the membership collection", id)
 	}
 
-	status, presenceOut := doJSON(t, http.MethodGet, ts.URL+"/r/"+slug+"/agents", roomToken, "")
+	status, presenceOut := doJSON(t, http.MethodGet, ts.URL+"/r/"+slug+"/agents", hostRoomToken, "")
 	require.Equal(t, http.StatusOK, status)
 	present, _ := presenceOut["data"].([]any)
 	require.Len(t, present, participants, "every participant must be visible in presence")
 
-	status, listed := doJSON(t, http.MethodGet, ts.URL+"/r/"+slug+"/messages?limit=100", roomToken, "")
+	status, listed := doJSON(t, http.MethodGet, ts.URL+"/r/"+slug+"/messages?limit=100", hostRoomToken, "")
 	require.Equal(t, http.StatusOK, status)
 	msgs, _ := listed["data"].([]any)
 	for i := 0; i < participants; i++ {

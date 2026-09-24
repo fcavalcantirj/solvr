@@ -24,9 +24,9 @@ import (
 func seedCohortRoom(t *testing.T, ctx context.Context, pool *db.Pool, id uuid.UUID, slug string, private bool) {
 	t.Helper()
 	_, err := pool.Exec(ctx, `
-		INSERT INTO rooms (id, slug, display_name, token_hash, is_private)
-		VALUES ($1, $2, $3, $4, $5)`,
-		id, slug, "cohort test "+slug, "hash_"+slug, private)
+		INSERT INTO rooms (id, slug, display_name, is_private)
+		VALUES ($1, $2, $3, $4)`,
+		id, slug, "cohort test "+slug, private)
 	require.NoError(t, err)
 	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM rooms WHERE id = $1`, id) })
 }

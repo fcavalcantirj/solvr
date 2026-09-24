@@ -9,16 +9,11 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
-	"github.com/fcavalcantirj/solvr/internal/token"
 	"github.com/go-chi/chi/v5"
 )
 
 // handshakeRequest is the JSON body for POST /v1/rooms/{slug}/handshake.
 type handshakeRequest struct {
-	// RoomToken lets an agent bootstrap into a CLOSED room it is not yet a member of by
-	// presenting the shared room bearer token. Optional for public rooms and for agents
-	// already on the allowlist.
-	RoomToken string `json:"room_token,omitempty"`
 	// TTLSeconds optionally makes the issued per-agent token short-lived. 0 = non-expiring.
 	TTLSeconds int `json:"ttl_seconds,omitempty"`
 }
@@ -33,8 +28,9 @@ type handshakeRequest struct {
 //
 // Authorization to handshake:
 //   - Public room: any registered agent may handshake.
-//   - Closed room: the agent must already be on the allowlist, OR present the shared
-//     room bearer token in `room_token` to bootstrap. Otherwise 403.
+//   - Closed room: the agent must already be on the allowlist, OR be a family agent
+//     whose linked human is an active owner. Otherwise 403. (The shared room token
+//     bootstrap is retired, 000098: an owner admits outside agents via POST members.)
 func (h *RoomHandler) Handshake(w http.ResponseWriter, r *http.Request) {
 	agent := auth.AgentFromContext(r.Context())
 	if agent == nil {
@@ -66,13 +62,13 @@ func (h *RoomHandler) Handshake(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	grant, err := h.handshakeAuthorized(r, room, agent, req.RoomToken)
+	grant, err := h.handshakeAuthorized(r, room, agent)
 	if err != nil {
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to authorize handshake")
 		return
 	}
 	if grant == handshakeDenied {
-		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "not authorized to join this closed room; ask the owner to add you or present the room token")
+		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "not authorized to join this closed room; ask the owner to add you as a member")
 		return
 	}
 
@@ -107,7 +103,7 @@ type handshakeGrant int
 
 const (
 	handshakeDenied handshakeGrant = iota
-	// handshakeDirect: public room, shared room token, or an existing membership.
+	// handshakeDirect: public room or an existing membership.
 	handshakeDirect
 	// handshakeFamily: the agent's linked human is an active owner of the closed room.
 	handshakeFamily
@@ -115,13 +111,9 @@ const (
 
 // handshakeAuthorized decides whether (and on what basis) the agent may complete a
 // handshake for the room.
-func (h *RoomHandler) handshakeAuthorized(r *http.Request, room *models.Room, agent *models.Agent, roomToken string) (handshakeGrant, error) {
+func (h *RoomHandler) handshakeAuthorized(r *http.Request, room *models.Room, agent *models.Agent) (handshakeGrant, error) {
 	if !room.IsPrivate {
 		return handshakeDirect, nil // public rooms are open to any registered agent
-	}
-	// Closed room: a valid shared room token bootstraps access.
-	if roomToken != "" && token.VerifyToken(roomToken, room.TokenHash) {
-		return handshakeDirect, nil
 	}
 	if h.memberRepo == nil {
 		return handshakeDenied, nil
@@ -132,7 +124,7 @@ func (h *RoomHandler) handshakeAuthorized(r *http.Request, room *models.Room, ag
 		return boolGrant(isMember, handshakeDirect), err
 	}
 	// Family scope: a sibling whose linked human is an active owner may handshake
-	// without pre-allowlisting or the shared token. It is then admitted with a
+	// without pre-allowlisting. It is then admitted with a
 	// family-sourced membership and its OWN per-agent solvr_rt_ — no token sharing.
 	// Foreign/unclaimed agents never match, so they get 403.
 	isFamily, err := h.memberRepo.IsFamilyOwner(r.Context(), room.ID, agent.ID)

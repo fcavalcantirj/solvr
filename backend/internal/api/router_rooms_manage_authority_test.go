@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Room management (PATCH/DELETE/rotate) is decided by RoomHandler.canManage over
+// Room management (PATCH/DELETE/archive/members) is decided by RoomHandler.canManage over
 // room_members, the membership authority. These tests pin, end to end, the cases the
 // retired DB-free rooms.owner_id helpers (canManageRoom, canRotateRoomToken,
 // agentOwnsRoom, isRoomOwner(OrAdmin), models.SameHumanAsOwner) used to guard.
@@ -34,10 +34,6 @@ func TestRoomManageAuthority_FamilyAgentManagesUntilUnlinked(t *testing.T) {
 	resp := doRoomRequest(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Renamed by Sibling"}`, siblingKey)
 	resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode, "family agent must manage the room")
-
-	resp = doRoomRequest(t, "POST", ts.URL+"/v1/rooms/"+slug+"/rotate-token", "", siblingKey)
-	resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode, "family agent must rotate the token")
 
 	// The unlink fixture mirrors db's forceUnlink: trigger_prevent_agent_reclaim
 	// forbids clearing human_id, so it is suspended inside one transaction.
@@ -71,13 +67,9 @@ func TestRoomManageAuthority_UnclaimedForeignAgentForbidden(t *testing.T) {
 	resp := doRoomRequest(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Hijacked"}`, strangerKey)
 	resp.Body.Close()
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-
-	resp = doRoomRequest(t, "POST", ts.URL+"/v1/rooms/"+slug+"/rotate-token", "", strangerKey)
-	resp.Body.Close()
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 }
 
-// A signed-in human who holds no owner membership can neither manage nor rotate.
+// A signed-in human who holds no owner membership cannot manage the room.
 func TestRoomManageAuthority_NonOwnerHumanForbidden(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -88,10 +80,6 @@ func TestRoomManageAuthority_NonOwnerHumanForbidden(t *testing.T) {
 	_, otherJWT := createRoomTestUser(t, pool)
 
 	resp := doRoomRequest(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Hijacked"}`, otherJWT)
-	resp.Body.Close()
-	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-
-	resp = doRoomRequest(t, "POST", ts.URL+"/v1/rooms/"+slug+"/rotate-token", "", otherJWT)
 	resp.Body.Close()
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 }

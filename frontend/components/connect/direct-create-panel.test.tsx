@@ -63,7 +63,6 @@ describe('DirectCreatePanel', () => {
     mockAuth.isAuthenticated = true;
     vi.mocked(api.createRoom).mockResolvedValue({
       data: { slug: 'debug-the-parser', id: 'room-1', display_name: 'Debug the parser' },
-      token: 'tok_1',
     });
 
     render(<DirectCreatePanel />);

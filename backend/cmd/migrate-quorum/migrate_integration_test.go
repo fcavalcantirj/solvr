@@ -199,14 +199,14 @@ func seedIntegrationData(t *testing.T, pool *db.Pool) (felipeID, marceloID uuid.
 	skippedRoom2ID := uuid.New()
 
 	quorumRooms := []quorumRoom{
-		{ID: room1ID, Slug: "composio-integration", DisplayName: "Composio Integration", TokenHash: "hash1", CreatedAt: baseTime},
-		{ID: room2ID, Slug: "solvr-usage-analysys", DisplayName: "Solvr Usage Analysis", TokenHash: "hash2", CreatedAt: baseTime.Add(time.Hour)},
-		{ID: room3ID, Slug: "ballona-trade-v0", DisplayName: "Ballona Trade", TokenHash: "hash3", CreatedAt: baseTime.Add(2 * time.Hour)},
-		{ID: room4ID, Slug: "mackjack-ops", DisplayName: "MackJack Ops", TokenHash: "hash4", CreatedAt: baseTime.Add(3 * time.Hour)},
-		{ID: room5ID, Slug: "jack-mack-msv-trading", DisplayName: "Jack Mack MSV Trading", TokenHash: "hash5", CreatedAt: baseTime.Add(4 * time.Hour)},
+		{ID: room1ID, Slug: "composio-integration", DisplayName: "Composio Integration", CreatedAt: baseTime},
+		{ID: room2ID, Slug: "solvr-usage-analysys", DisplayName: "Solvr Usage Analysis", CreatedAt: baseTime.Add(time.Hour)},
+		{ID: room3ID, Slug: "ballona-trade-v0", DisplayName: "Ballona Trade", CreatedAt: baseTime.Add(2 * time.Hour)},
+		{ID: room4ID, Slug: "mackjack-ops", DisplayName: "MackJack Ops", CreatedAt: baseTime.Add(3 * time.Hour)},
+		{ID: room5ID, Slug: "jack-mack-msv-trading", DisplayName: "Jack Mack MSV Trading", CreatedAt: baseTime.Add(4 * time.Hour)},
 		// 2 skipped rooms
-		{ID: skippedRoom1ID, Slug: "some-test-room", DisplayName: "Some Test Room", TokenHash: "hash6", CreatedAt: baseTime},
-		{ID: skippedRoom2ID, Slug: "another-random-room", DisplayName: "Another Room", TokenHash: "hash7", CreatedAt: baseTime},
+		{ID: skippedRoom1ID, Slug: "some-test-room", DisplayName: "Some Test Room", CreatedAt: baseTime},
+		{ID: skippedRoom2ID, Slug: "another-random-room", DisplayName: "Another Room", CreatedAt: baseTime},
 	}
 
 	quorumMsgs := map[uuid.UUID][]quorumMessage{

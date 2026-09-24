@@ -42,7 +42,7 @@ func TestRoomRepository_Create(t *testing.T) {
 			DisplayName: "Test Room Create",
 			OwnerID:     uuid.Nil, // no owner
 		}
-		room, plainToken, err := repo.Create(ctx, params)
+		room, err := repo.Create(ctx, params)
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
@@ -57,12 +57,6 @@ func TestRoomRepository_Create(t *testing.T) {
 		}
 		if room.MessageCount != 0 {
 			t.Errorf("MessageCount = %d, want 0", room.MessageCount)
-		}
-		if plainToken == "" {
-			t.Error("Create() returned empty token")
-		}
-		if room.TokenHash == "" {
-			t.Error("Create() returned empty token_hash")
 		}
 		// Clean up
 		pool.Exec(ctx, "DELETE FROM rooms WHERE id = $1", room.ID) //nolint:errcheck
@@ -94,7 +88,7 @@ func TestRoomRepository_GetBySlug(t *testing.T) {
 		DisplayName: "Get By Slug Room",
 		OwnerID:     uuid.Nil,
 	}
-	created, _, err := repo.Create(ctx, params)
+	created, err := repo.Create(ctx, params)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -143,7 +137,7 @@ func TestRoomRepository_List(t *testing.T) {
 			DisplayName: "List Room " + time.Now().Format("150405.000"),
 			OwnerID:     uuid.Nil,
 		}
-		_, _, err := repo.Create(ctx, params)
+		_, err := repo.Create(ctx, params)
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
@@ -172,7 +166,7 @@ func TestRoomRepository_List(t *testing.T) {
 			DisplayName: "To Be Deleted",
 			OwnerID:     uuid.Nil,
 		}
-		room, _, err := repo.Create(ctx, params)
+		room, err := repo.Create(ctx, params)
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
@@ -218,7 +212,7 @@ func TestRoomRepository_Update(t *testing.T) {
 		DisplayName: "Update Test Room",
 		OwnerID:     uuid.Nil,
 	}
-	room, _, err := repo.Create(ctx, params)
+	room, err := repo.Create(ctx, params)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -265,7 +259,7 @@ func TestRoomRepository_SoftDelete(t *testing.T) {
 		DisplayName: "SoftDelete Room",
 		OwnerID:     uuid.Nil,
 	}
-	room, _, err := repo.Create(ctx, params)
+	room, err := repo.Create(ctx, params)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -278,58 +272,6 @@ func TestRoomRepository_SoftDelete(t *testing.T) {
 		_, err = repo.GetBySlug(ctx, room.Slug)
 		if err != db.ErrRoomNotFound {
 			t.Errorf("GetBySlug() after delete: error = %v, want ErrRoomNotFound", err)
-		}
-	})
-}
-
-func TestRoomRepository_RotateToken(t *testing.T) {
-	url := getTestDatabaseURL(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	pool, err := db.NewPool(ctx, url)
-	if err != nil {
-		t.Fatalf("NewPool() error = %v", err)
-	}
-	defer pool.Close()
-
-	repo := db.NewRoomRepository(pool)
-	prefix := "testroomrt"
-	roomRepoTestCleanup(ctx, pool, prefix)
-	t.Cleanup(func() {
-		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cleanCancel()
-		roomRepoTestCleanup(cleanCtx, pool, prefix)
-	})
-
-	// Create room
-	params := models.CreateRoomParams{
-		DisplayName: "Rotate Token Room",
-		OwnerID:     uuid.Nil,
-	}
-	room, oldToken, err := repo.Create(ctx, params)
-	if err != nil {
-		t.Fatalf("Create() error = %v", err)
-	}
-
-	t.Run("returns new token and old token no longer works", func(t *testing.T) {
-		newToken, err := repo.RotateToken(ctx, room.ID)
-		if err != nil {
-			t.Fatalf("RotateToken() error = %v", err)
-		}
-		if newToken == "" {
-			t.Error("RotateToken() returned empty token")
-		}
-		if newToken == oldToken {
-			t.Error("RotateToken() returned same token")
-		}
-		// Verify old token doesn't match the new hash
-		updated, err := repo.GetByID(ctx, room.ID)
-		if err != nil {
-			t.Fatalf("GetByID() error = %v", err)
-		}
-		if updated.TokenHash == room.TokenHash {
-			t.Error("token_hash should have changed")
 		}
 	})
 }
@@ -358,8 +300,8 @@ func TestRoomRepository_DeleteExpiredRooms(t *testing.T) {
 		// Create room with past expiry using direct SQL
 		expiredSlug := "testroomde-exp-" + time.Now().Format("150405")
 		_, err := pool.Exec(ctx, `
-			INSERT INTO rooms (slug, display_name, token_hash, expires_at)
-			VALUES ($1, 'Expired Room', 'hash_expired', NOW() - INTERVAL '1 hour')
+			INSERT INTO rooms (slug, display_name, expires_at)
+			VALUES ($1, 'Expired Room', NOW() - INTERVAL '1 hour')
 		`, expiredSlug)
 		if err != nil {
 			t.Fatalf("insert expired room error = %v", err)
@@ -420,8 +362,8 @@ func TestRoomRepository_ListByOwner(t *testing.T) {
 		// rooms.owner_id is retired (000097): ownership is an active owner membership.
 		_, err = pool.Exec(ctx, `
 			WITH room AS (
-				INSERT INTO rooms (slug, display_name, token_hash)
-				VALUES ($1, 'Owner Room', 'hash_owner') RETURNING id
+				INSERT INTO rooms (slug, display_name)
+				VALUES ($1, 'Owner Room') RETURNING id
 			)
 			INSERT INTO room_members (room_id, user_id, role, added_by)
 			SELECT id, $2, 'owner', 'test' FROM room

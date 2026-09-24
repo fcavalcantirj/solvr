@@ -47,7 +47,7 @@ func TestRoomRepository_ListFiltered(t *testing.T) {
 	// mkRoom creates a public room with the given display name and returns it.
 	mkRoom := func(t *testing.T, name string) *models.Room {
 		t.Helper()
-		room, _, err := repo.Create(ctx, models.CreateRoomParams{
+		room, err := repo.Create(ctx, models.CreateRoomParams{
 			Slug:        prefix + "-" + uuid.New().String()[:8],
 			DisplayName: name,
 			OwnerID:     uuid.Nil,

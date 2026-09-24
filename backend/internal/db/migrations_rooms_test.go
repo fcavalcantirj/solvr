@@ -44,10 +44,11 @@ func TestMigrations_RoomsTable(t *testing.T) {
 	}
 
 	// Verify the 000073 columns exist. owner_id is retired by 000097 (its absence and
-	// the membership replacement are pinned by TestRoomsOwnerRetired_*).
+	// the membership replacement are pinned by TestRoomsOwnerRetired_*); token_hash is
+	// retired by 000098 (pinned by TestRoomSharedTokenRetired_SchemaHasNoTokenHash).
 	columns := []string{
 		"id", "slug", "display_name", "description", "category",
-		"tags", "is_private", "token_hash", "message_count",
+		"tags", "is_private", "message_count",
 		"created_at", "updated_at", "last_active_at", "expires_at", "deleted_at",
 	}
 	for _, col := range columns {
@@ -107,8 +108,8 @@ func TestMigrations_RoomsConstraints(t *testing.T) {
 
 	// Create a valid room first
 	_, err = pool.Exec(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash)
-		VALUES ('test-constraints', 'Test Room', 'hash123')
+		INSERT INTO rooms (slug, display_name)
+		VALUES ('test-constraints', 'Test Room')
 	`)
 	if err != nil {
 		t.Fatalf("Valid room insert failed: %v", err)
@@ -116,8 +117,8 @@ func TestMigrations_RoomsConstraints(t *testing.T) {
 
 	// Test slug UNIQUE: duplicate slug should fail
 	_, err = pool.Exec(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash)
-		VALUES ('test-constraints', 'Test Room 2', 'hash456')
+		INSERT INTO rooms (slug, display_name)
+		VALUES ('test-constraints', 'Test Room 2')
 	`)
 	if err == nil {
 		t.Error("Expected unique constraint violation for duplicate slug, but got nil error")
@@ -125,8 +126,8 @@ func TestMigrations_RoomsConstraints(t *testing.T) {
 
 	// Test tags array_length: 11 tags (> 10 limit) should fail
 	_, err = pool.Exec(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash, tags)
-		VALUES ('test-tags-limit', 'Test Tags', 'hash456',
+		INSERT INTO rooms (slug, display_name, tags)
+		VALUES ('test-tags-limit', 'Test Tags',
 			ARRAY['a','b','c','d','e','f','g','h','i','j','k'])
 	`)
 	if err == nil {
@@ -135,8 +136,8 @@ func TestMigrations_RoomsConstraints(t *testing.T) {
 
 	// Test slug regex: uppercase letters should fail
 	_, err = pool.Exec(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash)
-		VALUES ('UPPERCASE', 'Test', 'hash789')
+		INSERT INTO rooms (slug, display_name)
+		VALUES ('UPPERCASE', 'Test')
 	`)
 	if err == nil {
 		t.Error("Expected check constraint violation for uppercase slug, but got nil error")
@@ -144,8 +145,8 @@ func TestMigrations_RoomsConstraints(t *testing.T) {
 
 	// Test slug regex: too short (2 chars, minimum is 3: pattern requires [a-z0-9]{1,38} in middle)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash)
-		VALUES ('ab', 'Test', 'hash101')
+		INSERT INTO rooms (slug, display_name)
+		VALUES ('ab', 'Test')
 	`)
 	if err == nil {
 		t.Error("Expected check constraint violation for too-short slug 'ab', but got nil error")
@@ -222,8 +223,8 @@ func TestMigrations_AgentPresenceTable(t *testing.T) {
 	})
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash)
-		VALUES ('presence-test-room', 'Presence Test Room', 'hash_presence')
+		INSERT INTO rooms (slug, display_name)
+		VALUES ('presence-test-room', 'Presence Test Room')
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create room for agent_presence test: %v", err)
@@ -334,8 +335,8 @@ func TestMigrations_MessagesConstraints(t *testing.T) {
 
 	// Create a room for FK
 	_, err = pool.Exec(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash)
-		VALUES ('msg-test-room', 'Msg Test', 'hash_msg')
+		INSERT INTO rooms (slug, display_name)
+		VALUES ('msg-test-room', 'Msg Test')
 	`)
 	if err != nil {
 		t.Fatalf("Failed to create room for messages constraint test: %v", err)

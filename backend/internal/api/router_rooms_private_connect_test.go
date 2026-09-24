@@ -18,7 +18,7 @@ import (
 // token. The prompt must reach exactly the callers RoomAccessGuard admits, and the
 // handshake it teaches must work for the owner's own (family) agent.
 
-func createPrivateRoomWithJWT(t *testing.T, baseURL, jwt string) (slug, sharedToken string) {
+func createPrivateRoomWithJWT(t *testing.T, baseURL, jwt string) (slug string) {
 	t.Helper()
 	slug = fmt.Sprintf("test-pconn-%d", time.Now().UnixNano()%1000000000)
 	body := fmt.Sprintf(`{"display_name":"Private %s","slug":"%s","is_private":true}`, slug, slug)
@@ -26,11 +26,7 @@ func createPrivateRoomWithJWT(t *testing.T, baseURL, jwt string) (slug, sharedTo
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "create private room: %s", string(raw))
-	var out struct {
-		Token string `json:"token"`
-	}
-	require.NoError(t, json.Unmarshal(raw, &out))
-	return slug, out.Token
+	return slug
 }
 
 func TestRoomPrivateConnect_OwnerGetsHandshakePrompt(t *testing.T) {
@@ -39,7 +35,7 @@ func TestRoomPrivateConnect_OwnerGetsHandshakePrompt(t *testing.T) {
 	roomPreCleanup(t, pool)
 
 	ownerID, ownerJWT := createRoomTestUser(t, pool)
-	slug, sharedToken := createPrivateRoomWithJWT(t, ts.URL, ownerJWT)
+	slug := createPrivateRoomWithJWT(t, ts.URL, ownerJWT)
 
 	resp := doRoomRequest(t, "GET", ts.URL+"/v1/rooms/"+slug+"/connect?role=collaborator", "", ownerJWT)
 	raw, _ := io.ReadAll(resp.Body)
@@ -60,9 +56,6 @@ func TestRoomPrivateConnect_OwnerGetsHandshakePrompt(t *testing.T) {
 	assert.Equal(t, "collaborator", env.Data.Role)
 	assert.Contains(t, env.Data.Prompt, "/v1/rooms/"+slug+"/handshake")
 	assert.NotContains(t, env.Data.Prompt, "solvr_rm_", "the prompt must never carry a shared room token")
-	if sharedToken != "" {
-		assert.NotContains(t, env.Data.Prompt, sharedToken)
-	}
 
 	// Following the prompt: the owner's own claimed agent handshakes with its OWN key
 	// (family scope) and receives an individual solvr_rt_ — no shared token involved.
@@ -81,7 +74,7 @@ func TestRoomPrivateConnect_OutsidersStillForbidden(t *testing.T) {
 	roomPreCleanup(t, pool)
 
 	_, ownerJWT := createRoomTestUser(t, pool)
-	slug, _ := createPrivateRoomWithJWT(t, ts.URL, ownerJWT)
+	slug := createPrivateRoomWithJWT(t, ts.URL, ownerJWT)
 	_, otherJWT := createRoomTestUser(t, pool)
 	_, strangerKey := registerRoomTestAgent(t, ts)
 

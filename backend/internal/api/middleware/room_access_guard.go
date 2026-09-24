@@ -22,10 +22,10 @@ import (
 // Access rules:
 //   - Public room (is_private = false): always allowed, even anonymously.
 //   - Closed room (is_private = true): allowed only for a member —
-//     1. a request carrying the shared room bearer token (Authorization: Bearer
-//     solvr_rm_... or ?token=...), OR
-//     2. an authenticated agent on the room's member allowlist, OR
-//     3. the human room owner or an admin (JWT / user API key).
+//     1. a request carrying a live per-agent room token for THIS room (Authorization:
+//     Bearer solvr_rt_... or ?token=...), OR
+//     2. an authenticated agent on the room's member allowlist (or family scope), OR
+//     3. a human with an active membership, or an admin (JWT / user API key).
 //     Everyone else gets 403.
 //
 // Apply OptionalAuthMiddleware BEFORE this guard so the caller's agent/human identity
@@ -76,12 +76,7 @@ func RoomAccessGuard(roomRepo *db.RoomRepository, memberRepo *db.RoomMemberRepos
 func roomMemberAccessAllowed(r *http.Request, room *models.Room, memberRepo *db.RoomMemberRepository, agentTokenRepo *db.RoomAgentTokenRepository) (bool, error) {
 	tok := roomBearerToken(r)
 
-	// 1. Shared room bearer token (backward compat: holding the token grants access).
-	if tok != "" && token.VerifyToken(tok, room.TokenHash) {
-		return true, nil
-	}
-
-	// 2. Per-agent room token (mission #3): a live token scoped to THIS room grants
+	// 1. Per-agent room token (mission #3): a live token scoped to THIS room grants
 	//    access. Revoking the agent deletes the token, so this path denies at once.
 	if tok != "" && agentTokenRepo != nil && token.IsAgentRoomToken(tok) {
 		identity, err := agentTokenRepo.ResolveByHash(r.Context(), token.HashToken(tok))
@@ -90,7 +85,7 @@ func roomMemberAccessAllowed(r *http.Request, room *models.Room, memberRepo *db.
 		}
 	}
 
-	// 3. Authenticated agent (its own agent API key): an agent with an active membership,
+	// 2. Authenticated agent (its own agent API key): an agent with an active membership,
 	//    OR a "family" sibling whose CURRENT linked human is a live, active owner of the
 	//    room (room_members, migration 000096). Family scope grants ACCESS only — the
 	//    agent still acts under its own id/token. Foreign and unclaimed agents never match.
@@ -102,7 +97,7 @@ func roomMemberAccessAllowed(r *http.Request, room *models.Room, memberRepo *db.
 		return memberRepo.IsFamilyOwner(r.Context(), room.ID, agent.ID)
 	}
 
-	// 4. Admin, or a human holding an active membership in the room.
+	// 3. Admin, or a human holding an active membership in the room.
 	if claims := auth.ClaimsFromContext(r.Context()); claims != nil {
 		if claims.Role == "admin" {
 			return true, nil

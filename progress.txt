@@ -9311,3 +9311,125 @@ REMAINING FOR idx 69 (why passes stays false) — next slice = SERVER retirement
 UAT (not a pass condition now): after deploy, owner confirms in a browser that creating a
   room lands on /rooms/<slug>?created=1 with planner/executor prompts, and a private
   room's CONNECT AGENT panel shows a handshake prompt (no token displayed anywhere).
+
+================================================================================
+2026-09-24 — Task idx 69 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Use one room membership authority and eliminate duplicate ownership and shared-token state"
+SLICE 6 of N: SERVER retirement of the shared room token (rooms.token_hash, solvr_rm_).
+================================================================================
+
+TASK SELECTION: same top-down skips as slice 1 (idx 23/27/51/52/58/66/67 still blocked
+  on false tasks 77/69/92/67/73/74 or a test deployment). idx 69 is the first buildable.
+
+WHAT THIS SLICE DOES (migration 000098_retire_rooms_token_hash):
+  - up: ALTER TABLE rooms DROP COLUMN token_hash. down: re-adds it TEXT NOT NULL filled
+    with fresh random sha256 hex (retired plaintexts were never stored, so unrecoverable).
+  - POST /v1/rooms no longer returns a top-level "token" (response is {"data": room}).
+  - POST /v1/rooms/{slug}/rotate-token route, RoomHandler.RotateToken and its api_usage
+    map entry ("room.token.rotate") REMOVED.
+  - Handshake: the room_token bootstrap field is gone; a closed room admits only an
+    active member (owner adds via POST /members) or a family agent. 403 text updated.
+  - BearerGuard (/r/{slug}/*): only per-agent solvr_rt_ tokens; anything else 401
+    ("invalid room token; handshake for a per-agent room token").
+  - RoomAccessGuard: shared-token path removed (per-agent token for THIS room, member /
+    family agent, member human, admin remain).
+  - token.GenerateRoomToken + solvr_rm_ prefix const removed (no callers; no tests).
+  - RoomRepository: Create returns (room, err) (no token); GetByTokenHash + RotateToken
+    removed; roomColumns/scanners drop token_hash. models.Room.TokenHash removed.
+  - cmd/migrate-quorum: no longer reads Quorum token_hash nor inserts rooms.token_hash.
+  - Skill docs: SKILL.md credentials table (shared-token row dropped, "Two credentials"),
+    references/api.md (create response, handshake body, closed-room access, /r/ auth,
+    rotate-token section removed), references/examples.md (create -> handshake ->
+    solvr_rt_; rotate example replaced by per-agent DELETE /members revoke).
+  - Frontend: lib/api.ts createRoom return type drops `token`.
+
+FILES ([REAL] git status --porcelain / git diff --stat: 50 modified, +261/-552, 3 new):
+  NEW backend/migrations/000098_retire_rooms_token_hash.{up,down}.sql
+  NEW backend/internal/api/router_rooms_shared_token_retired_test.go (5 tests)
+  PROD M: db/rooms.go, models/room.go, token/token.go, api/router_rooms.go,
+    handlers/rooms.go, handlers/rooms_handshake.go, handlers/rooms_discovery.go (comment),
+    middleware/bearer_guard.go, middleware/room_access_guard.go, middleware/api_usage.go,
+    cmd/migrate-quorum/main.go, frontend/lib/api.ts, skill/SKILL.md,
+    skill/references/api.md, skill/references/examples.md.
+  TEST M (mechanical): Create callers `x, _, err :=` -> `x, err :=` (rooms_archive_test,
+    room_members_test, room_members_authority_test, rooms_listfiltered_test, rooms_test,
+    router_homepage_example/overview_test, router_connect_test, rooms_messages_delivery_test);
+    raw `INSERT INTO rooms (... token_hash ...)` fixtures drop the column+literal
+    (activation_analytics, agent_presence, cohort_comparison, homepage_activity/rooms/
+    totals, room_entries, room_messages, rooms_test, migrations_rooms_test,
+    handlers/rooms_context_test, handlers/room_connection_status_test); migrate-quorum
+    fixtures drop TokenHash fields.
+  TEST M (helpers now hand out per-agent tokens by handshake instead of the create token):
+    createTestRoomWithToken (public room; new admitRoomAgent/handshakeRoomToken helpers in
+    router_rooms_test.go), createTestRoomWithAgentKey (creator handshakes), createClosedRoom
+    (owner adds a fresh agent via POST /members, it handshakes); createPrivateRoomWithAgentKey,
+    createPrivateRoomWithJWT, createAgentOwnedRoom now return the slug only;
+    extractRoomToken/extractRoomTokenAndSlug -> extractRoomSlug. Callers in
+    router_connect_test, router_funnel_test, router_product_direction_test,
+    router_rooms_family(_membership)_test, router_rooms_private_connect_test,
+    router_rooms_acl_test / bart156 (comment + message text only) pass "" as room_token.
+  Frontend tests: direct-create-panel.test.tsx mock drops token; create-room-dialog.test.tsx
+    keeps its legacy `token: 'tok_123'` mock via a type cast so "never shows a token" stays
+    a real assertion.
+
+REPLACED / REMOVED TESTS (named, quoted, with replacements):
+  - TestRoomRoutes_RotateToken_AgentOwner ("new token differs; old token 401 on /r/join,
+    new 200"), _AgentNonOwner (403), _HumanOwner (200), _Admin (200): DELETED; the route is
+    retired. -> TestRoomSharedTokenRetired_RotateTokenRouteGone (404/405, no solvr_rm_) PASS.
+    Management authz they also exercised stays covered by TestRoomRoutes_UpdateRoom_*
+    (AgentOwner/AgentNonOwner/HumanOwner/Admin) PASS; per-credential revocation by
+    TestRoomMembers_AddRevoke_IsolatesAgents PASS.
+  - TestRoomRepository_RotateToken (db; "RotateToken returns a new token, token_hash
+    changes") DELETED — it was ALREADY FAILING in the slice-5 baseline /tmp/s5_full.log.
+    -> TestRoomSharedTokenRetired_SchemaHasNoTokenHash PASS.
+  - TestRoomRepository_Create asserted "plainToken != ''" and "room.TokenHash != ''": those
+    two checks removed. -> TestRoomSharedTokenRetired_CreateReturnsNoToken PASS.
+  - rooms_archive_test "new room reused the finished room token" check removed (no token
+    exists); identity checks (ID/slug) kept.
+  - TestRoomRoutes_CreateRoom_AgentKey asserted `result["token"]` NotEmpty -> now asserts
+    it is absent (same test, inverted on purpose).
+  - router_rooms_manage_authority_test: rotate-token asserts removed from
+    FamilyAgentManagesUntilUnlinked (200), UnclaimedForeignAgentForbidden (403),
+    NonOwnerHumanForbidden (403); each keeps its PATCH assert on the same canManage path.
+  - TestRoomHandshake_ClosedRoom_RequiresMembershipOrToken ("403 without membership;
+    shared room_token bootstrap -> 201") RENAMED+REWRITTEN ->
+    TestRoomHandshake_ClosedRoom_RequiresMembership (403 bare, 403 presenting another
+    member's token as room_token, owner POST /members -> 201, token reads room) PASS.
+  - TestConnectEndpoint_PlannerPromptRunsEndToEndWithoutAHumanAccount: "create returns a
+    solvr_ token" + "per-agent token != shared token" -> "create returns no token"; creator
+    handshakes as owner-member. PASS.
+  - TestRoomACL_ClosedRoom_ReadsAreMembersOnly: "shared token detail/messages 200" now uses
+    an admitted member's solvr_rt_ (same 200 assertions). PASS.
+
+TDD: RED [TEST] before code: 4/5 new tests FAIL (create returned "token":"solvr_rm_...",
+  rotate-token 200, helper token not solvr_rt_, token_hash column present);
+  HandshakeRoomTokenGrantsNothing passed before and after (regression guard).
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test):
+  [REAL] migrate up -> 98/u, schema_migrations 98 dirty=f, token_hash column count 0.
+    Round trip: down 1 -> 917/917 rooms got 64-hex hashes, column NOT NULL; up again -> 98 f.
+  [TEST] room/connect/product/funnel/homepage subset (log /tmp/s6_api_rooms.log): 0 FAIL,
+    0 SKIP; all 5 TestRoomSharedTokenRetired_* PASS.
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (log /tmp/s6_full.log): 3793 PASS lines,
+    73 unique FAIL = slice-5 /tmp/s5_full.log's 74 minus the deleted (pre-failing)
+    TestRoomRepository_RotateToken; no new failure. PASS names gone = exactly the 5 named
+    above; new = the 5 retired-token tests + RequiresMembership + TestE2E_PostAppearsInList
+    (was SKIP on GROQ timing in slice 5). SKIP 11 = the slice-4 set.
+    cmd/migrate-quorum ok, internal/api/middleware ok.
+  [REAL] go build ./... + go vet ./... clean; gofmt clean on touched production files.
+  [TEST] frontend: npm run typecheck exit 0; FULL `npx vitest run` (/tmp/s6_fe_full.log)
+    176 files, 1609/1609 PASS; eslint on the 3 touched files 0 errors.
+  [REAL] check-file-size.sh still reports the 37 pre-existing >800 files; the only touched
+    ones in that list shrank (router_connect_test.go 957->939, skill api.md 1356->1351).
+
+REMAINING FOR idx 69 (why passes stays false):
+  - Bind agent_presence to membership (presence still keyed by free-text agent_name; every
+    /r/ call now carries an authenticated agent id, so this is now unblocked).
+  - Soft-deleted human owners still hold active owner rows (decide archive/transfer).
+  - Owner decision: prevent_agent_reclaim trigger vs DELETE /v1/me unclaim (slice-2 FINDING).
+  - Document the compatibility window + final schema in SPEC.md.
+
+UAT (not a pass condition now, owner-only): production must get migration 000098 AFTER the
+  deploy that ships this code (old code SELECTs token_hash). Before deploying, re-sync the
+  installed skill (~/.claude/skills/solvr/scripts, see slice-4 UAT) — after this deploy any
+  agent still sending solvr_rm_ on /r/ gets 401 and must handshake.

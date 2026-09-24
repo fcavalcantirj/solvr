@@ -65,7 +65,6 @@ type quorumRoom struct {
 	ID          uuid.UUID
 	Slug        string
 	DisplayName string
-	TokenHash   string
 	OwnerID     *uuid.UUID // nullable in Quorum
 	CreatedAt   time.Time
 }
@@ -84,7 +83,6 @@ type roomInsert struct {
 	DisplayName string
 	IsPrivate   bool
 	OwnerID     uuid.UUID
-	TokenHash   string
 	CreatedAt   time.Time
 }
 
@@ -256,7 +254,6 @@ func (m *migrator) run(ctx context.Context) (*migrationResult, error) {
 			DisplayName: cleanDisplayName(qr.DisplayName),
 			IsPrivate:   false,
 			OwnerID:     ownerID,
-			TokenHash:   qr.TokenHash,
 			CreatedAt:   qr.CreatedAt,
 		}
 		plans = append(plans, roomPlan{
@@ -405,7 +402,7 @@ type pgMigrationDB struct {
 
 func (d *pgMigrationDB) ListQuorumRooms(ctx context.Context) ([]quorumRoom, error) {
 	rows, err := d.quorum.Query(ctx,
-		`SELECT id, slug, display_name, token_hash, owner_id, created_at
+		`SELECT id, slug, display_name, owner_id, created_at
 		 FROM rooms ORDER BY created_at`)
 	if err != nil {
 		return nil, fmt.Errorf("query quorum rooms: %w", err)
@@ -415,7 +412,7 @@ func (d *pgMigrationDB) ListQuorumRooms(ctx context.Context) ([]quorumRoom, erro
 	var rooms []quorumRoom
 	for rows.Next() {
 		var r quorumRoom
-		if err := rows.Scan(&r.ID, &r.Slug, &r.DisplayName, &r.TokenHash, &r.OwnerID, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Slug, &r.DisplayName, &r.OwnerID, &r.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan quorum room: %w", err)
 		}
 		rooms = append(rooms, r)
@@ -477,11 +474,11 @@ func (d *pgMigrationDB) InsertRoom(ctx context.Context, tx txInterface, r roomIn
 func insertSolvrRoom(ctx context.Context, tx txInterface, r roomInsert) (bool, error) {
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO rooms (id, slug, display_name, description, category, tags, is_private,
-		                   token_hash, message_count, created_at, updated_at,
+		                   message_count, created_at, updated_at,
 		                   last_active_at, expires_at, deleted_at)
-		VALUES ($1, $2, $3, NULL, NULL, '{}', $4, $5, 0, $6, $6, $6, NULL, NULL)
+		VALUES ($1, $2, $3, NULL, NULL, '{}', $4, 0, $5, $5, $5, NULL, NULL)
 		ON CONFLICT (id) DO NOTHING`,
-		r.ID, r.Slug, r.DisplayName, r.IsPrivate, r.TokenHash, r.CreatedAt,
+		r.ID, r.Slug, r.DisplayName, r.IsPrivate, r.CreatedAt,
 	)
 	if err != nil {
 		return false, fmt.Errorf("insert room %s: %w", r.Slug, err)

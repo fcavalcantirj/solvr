@@ -84,7 +84,7 @@ func seedHomepageExampleRoom(t *testing.T, pool *db.Pool, slug string) *models.R
 	roomRepo := db.NewRoomRepository(pool)
 	msgRepo := db.NewMessageRepository(pool)
 
-	room, _, err := roomRepo.Create(ctx, models.CreateRoomParams{
+	room, err := roomRepo.Create(ctx, models.CreateRoomParams{
 		Slug:        slug,
 		DisplayName: "Tic-Tac-Toe Human vs Computer",
 		IsPrivate:   false,

@@ -20,7 +20,7 @@ func TestRoomFamily_DeletedHumansSiblingLosesClosedRoomAndToken(t *testing.T) {
 	claimAgentToUser(t, pool, agentAID, userA)
 	siblingID, siblingKey := registerRoomTestAgent(t, ts)
 	claimAgentToUser(t, pool, siblingID, userA)
-	slug, _ := createPrivateRoomWithAgentKey(t, ts, agentAKey)
+	slug := createPrivateRoomWithAgentKey(t, ts, agentAKey)
 
 	hsStatus, siblingTok := handshake(t, ts.URL, slug, siblingKey, "")
 	require.Equal(t, http.StatusCreated, hsStatus, "sibling family handshake")

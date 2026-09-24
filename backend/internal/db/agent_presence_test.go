@@ -22,8 +22,8 @@ func createPresenceTestRoom(t *testing.T, ctx context.Context, pool *db.Pool, sl
 	t.Helper()
 	presenceTestCleanup(ctx, pool, slug)
 	_, err := pool.Exec(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash)
-		VALUES ($1, 'Presence Test Room', 'hash_presence_test')
+		INSERT INTO rooms (slug, display_name)
+		VALUES ($1, 'Presence Test Room')
 	`, slug)
 	if err != nil {
 		t.Fatalf("createPresenceTestRoom: %v", err)

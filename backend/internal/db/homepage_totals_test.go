@@ -87,8 +87,8 @@ func (f *allTimeFixture) room(name string, private bool, expiresAt *time.Time, d
 
 	var id uuid.UUID
 	err := f.pool.QueryRow(f.ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash, is_private, expires_at, deleted_at)
-		VALUES ($1, $2, 'hash_homepage_totals_test', $3, $4, $5)
+		INSERT INTO rooms (slug, display_name, is_private, expires_at, deleted_at)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
 	`, fmt.Sprintf("%s-%s", f.suffix, name), "Room "+name, private, expiresAt, deletedAt).Scan(&id)
 	require.NoError(f.t, err, "insert room %s", name)

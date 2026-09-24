@@ -28,7 +28,7 @@ func createMemberTestRoom(ctx context.Context, t *testing.T, pool *db.Pool, slug
 	t.Helper()
 	repo := db.NewRoomRepository(pool)
 	roomsTestCleanup(ctx, pool, slug)
-	room, _, err := repo.Create(ctx, models.CreateRoomParams{
+	room, err := repo.Create(ctx, models.CreateRoomParams{
 		Slug:        slug,
 		DisplayName: slug,
 		IsPrivate:   private,

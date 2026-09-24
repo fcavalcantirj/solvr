@@ -51,7 +51,7 @@ func createAuthorityRoom(ctx context.Context, t *testing.T, pool *db.Pool, slug 
 	roomsTestCleanup(ctx, pool, slug)
 	params.Slug = slug
 	params.DisplayName = slug
-	room, _, err := db.NewRoomRepository(pool).Create(ctx, params)
+	room, err := db.NewRoomRepository(pool).Create(ctx, params)
 	if err != nil {
 		t.Fatalf("create room: %v", err)
 	}

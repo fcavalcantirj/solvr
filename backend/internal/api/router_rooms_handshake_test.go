@@ -72,26 +72,31 @@ func TestRoomHandshake_PublicRoom_IssuesTokenAndAuthoritativeAuthorship(t *testi
 	require.Equal(t, agentID, data["author_id"], "author_id must be the authenticated agent id")
 }
 
-func TestRoomHandshake_ClosedRoom_RequiresMembershipOrToken(t *testing.T) {
+func TestRoomHandshake_ClosedRoom_RequiresMembership(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	roomPreCleanup(t, pool)
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM agents WHERE id LIKE 'agent_%hs%'") }) //nolint:errcheck
 
 	_, jwt := createRoomTestUser(t, pool)
-	slug, roomToken := createClosedRoom(t, ts, jwt)
-	_, agentKey := registerTestAgent(t, ts, uniqName("agent_hs_closed"))
+	slug, memberTok := createClosedRoom(t, ts, jwt)
+	agentID, agentKey := registerTestAgent(t, ts, uniqName("agent_hs_closed"))
 
-	// No membership, no room token -> 403.
+	// No membership -> 403, even when presenting another member's room token as the
+	// retired room_token bootstrap: holding a credential is no longer an invitation.
 	status, _ := handshake(t, ts.URL, slug, agentKey, "")
 	require.Equal(t, http.StatusForbidden, status)
+	status, _ = handshake(t, ts.URL, slug, agentKey, memberTok)
+	require.Equal(t, http.StatusForbidden, status)
 
-	// Bootstrapping with the shared room token -> issued a per-agent token.
-	status, perAgentTok := handshake(t, ts.URL, slug, agentKey, roomToken)
+	// The owner admits the agent -> its handshake issues a per-agent token.
+	code, _ := doJSON(t, "POST", ts.URL+"/v1/rooms/"+slug+"/members", jwt, `{"agent_id":"`+agentID+`"}`)
+	require.Contains(t, []int{http.StatusOK, http.StatusCreated}, code)
+	status, perAgentTok := handshake(t, ts.URL, slug, agentKey, "")
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, perAgentTok)
 
-	// The per-agent token now reads the closed room (it made the agent a member).
+	// The per-agent token now reads the closed room.
 	require.Equal(t, http.StatusOK, getStatus(t, ts.URL+"/v1/rooms/"+slug, perAgentTok))
 }
 

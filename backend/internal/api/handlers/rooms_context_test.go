@@ -36,8 +36,8 @@ func TestGetRoom_ContextCarriesInitialTaskAndLatestPinned(t *testing.T) {
 
 	var roomID uuid.UUID
 	err := pool.QueryRow(ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash, is_private)
-		VALUES ($1, 'Context Room', 'hash_context', false)
+		INSERT INTO rooms (slug, display_name, is_private)
+		VALUES ($1, 'Context Room', false)
 		RETURNING id`, slug).Scan(&roomID)
 	require.NoError(t, err)
 

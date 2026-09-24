@@ -15,8 +15,8 @@ type roomContextKey string
 
 const RoomContextKey roomContextKey = "room"
 
-// roomAgentIDContextKey holds the authenticated agent id when a per-agent room token
-// (solvr_rt_...) was used. Empty for the shared room token (solvr_rm_...).
+// roomAgentIDContextKey holds the agent id authenticated by a per-agent room token
+// (solvr_rt_...).
 type roomAgentIDContextKey struct{}
 
 // RoomFromContext retrieves the resolved room from the request context.
@@ -27,22 +27,19 @@ func RoomFromContext(ctx context.Context) *models.Room {
 }
 
 // RoomAgentIDFromContext returns the authoritatively-authenticated agent id for the
-// request, set only when a per-agent room token was used. Empty string otherwise.
+// request, set by BearerGuard. Empty string when BearerGuard did not run.
 func RoomAgentIDFromContext(ctx context.Context) string {
 	id, _ := ctx.Value(roomAgentIDContextKey{}).(string)
 	return id
 }
 
-// BearerGuard creates middleware that authenticates requests using a room bearer token.
-// It extracts the token from the Authorization header (Bearer <token>) or from a
-// ?token= query parameter (for SSE connections where browsers cannot set headers).
-//
-// It accepts two kinds of token, both resolved by SHA-256 hash:
-//   - the shared room token (solvr_rm_...): resolves the room only (backward compat);
-//   - a per-agent room token (solvr_rt_...): resolves the room AND the authenticated
-//     agent id, which is injected so message authorship is authoritative (mission #3).
-//
-// agentTokenRepo may be nil, in which case only shared tokens are accepted.
+// BearerGuard creates middleware that authenticates /r/{slug}/* requests with a
+// per-agent room token (solvr_rt_...), issued by POST /v1/rooms/{slug}/handshake to an
+// admitted member. It extracts the token from the Authorization header (Bearer <token>)
+// or from a ?token= query parameter (for SSE connections where browsers cannot set
+// headers), resolves it by SHA-256 hash to the room AND the authenticated agent id, and
+// injects both so message authorship is authoritative (mission #3). The shared room
+// token (solvr_rm_...) is retired (000098): anything else is 401.
 func BearerGuard(roomRepo *db.RoomRepository, agentTokenRepo *db.RoomAgentTokenRepository) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -58,34 +55,23 @@ func BearerGuard(roomRepo *db.RoomRepository, agentTokenRepo *db.RoomAgentTokenR
 				bearerGuardUnauthorized(w, "missing bearer token")
 				return
 			}
-
-			hash := token.HashToken(plaintext)
-
-			// Per-agent room token (solvr_rt_...): resolves room + authoritative agent id.
-			if agentTokenRepo != nil && token.IsAgentRoomToken(plaintext) {
-				identity, err := agentTokenRepo.ResolveByHash(r.Context(), hash)
-				if err != nil {
-					bearerGuardUnauthorized(w, "invalid or expired room token")
-					return
-				}
-				room, err := roomRepo.GetByID(r.Context(), identity.RoomID)
-				if err != nil {
-					bearerGuardUnauthorized(w, "invalid room token")
-					return
-				}
-				ctx := context.WithValue(r.Context(), RoomContextKey, room)
-				ctx = context.WithValue(ctx, roomAgentIDContextKey{}, identity.AgentID)
-				next.ServeHTTP(w, r.WithContext(ctx))
+			if agentTokenRepo == nil || !token.IsAgentRoomToken(plaintext) {
+				bearerGuardUnauthorized(w, "invalid room token; handshake for a per-agent room token")
 				return
 			}
 
-			// Shared room token (solvr_rm_...).
-			room, err := roomRepo.GetByTokenHash(r.Context(), hash)
+			identity, err := agentTokenRepo.ResolveByHash(r.Context(), token.HashToken(plaintext))
+			if err != nil {
+				bearerGuardUnauthorized(w, "invalid or expired room token")
+				return
+			}
+			room, err := roomRepo.GetByID(r.Context(), identity.RoomID)
 			if err != nil {
 				bearerGuardUnauthorized(w, "invalid room token")
 				return
 			}
 			ctx := context.WithValue(r.Context(), RoomContextKey, room)
+			ctx = context.WithValue(ctx, roomAgentIDContextKey{}, identity.AgentID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

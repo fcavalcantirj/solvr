@@ -26,7 +26,7 @@ func postHumanMessage(t *testing.T, url, bearer, content string) int {
 
 // TestRoomSSE_AccessTokenQueryParam_AuthorizesPrivateStream proves the BART-156 SSE fix:
 // a browser EventSource (no Authorization header) can authenticate a private room's stream
-// via ?access_token= — with the human owner's JWT or a room bearer token — while an
+// via ?access_token= — with the human owner's JWT or a member's per-agent room token — while an
 // anonymous stream stays 403.
 func TestRoomSSE_AccessTokenQueryParam_AuthorizesPrivateStream(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
@@ -43,7 +43,7 @@ func TestRoomSSE_AccessTokenQueryParam_AuthorizesPrivateStream(t *testing.T) {
 	// ?access_token=<owner JWT> → the owner path in RoomAccessGuard authorizes the stream.
 	require.Equal(t, http.StatusOK, getStatus(t, streamURL+"?access_token="+ownerJWT, ""), "owner JWT via ?access_token should stream (200)")
 
-	// ?access_token=<room bearer token> → also authorized (parity with the header path).
+	// ?access_token=<member's per-agent room token> → also authorized (parity with the header path).
 	require.Equal(t, http.StatusOK, getStatus(t, streamURL+"?access_token="+roomToken, ""), "room token via ?access_token should stream (200)")
 
 	// A present Authorization header still wins / works unchanged.

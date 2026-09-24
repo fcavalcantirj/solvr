@@ -229,7 +229,7 @@ func TestConnectEndpoint_LinksTheRealPublicExampleRoomItIsPointedAt(t *testing.T
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 
-	room, _, err := db.NewRoomRepository(pool).Create(t.Context(), models.CreateRoomParams{
+	room, err := db.NewRoomRepository(pool).Create(t.Context(), models.CreateRoomParams{
 		Slug:        slug,
 		DisplayName: "A public planner and executor collaboration",
 		IsPrivate:   false,
@@ -297,8 +297,8 @@ func TestConnectEndpoint_PlannerPromptRunsEndToEndWithoutAHumanAccount(t *testin
 	require.Equal(t, http.StatusCreated, createResp.StatusCode, "agent must create its own room: %s", string(createRaw))
 	var createResult map[string]any
 	require.NoError(t, json.Unmarshal(createRaw, &createResult))
-	roomToken, _ := createResult["token"].(string)
-	require.True(t, strings.HasPrefix(roomToken, "solvr_"), "expected room bearer token")
+	_, hasToken := createResult["token"]
+	require.False(t, hasToken, "room creation must not hand out a shared room token")
 	roomData, _ := createResult["data"].(map[string]any)
 	require.Equal(t, slug, roomData["slug"])
 	_, hasOwner := roomData["owner_id"]
@@ -317,8 +317,8 @@ func TestConnectEndpoint_PlannerPromptRunsEndToEndWithoutAHumanAccount(t *testin
 	}
 	require.True(t, foundOwner, "creator agent %s must hold an owner membership", agentID)
 
-	// Step 4: HANDSHAKE — take its own per-agent room token.
-	status, plannerRoomToken := handshake(t, ts.URL, slug, apiKey, roomToken)
+	// Step 4: HANDSHAKE — take its own per-agent room token (as the room's owner member).
+	status, plannerRoomToken := handshake(t, ts.URL, slug, apiKey, "")
 	require.Equal(t, http.StatusCreated, status)
 	require.True(t, strings.HasPrefix(plannerRoomToken, "solvr_rt_"),
 		"agent must get its OWN per-agent token, got %q", plannerRoomToken)
@@ -343,11 +343,6 @@ func TestConnectEndpoint_PlannerPromptRunsEndToEndWithoutAHumanAccount(t *testin
 	publicMsgs, _ := publicData["recent_messages"].([]any)
 	require.True(t, pdHasMessage(publicMsgs, "Task: Build a tic-tac-toe AI that plays optimally. Directive: design the minimax algorithm and implement the board representation."),
 		"public view must show the initial task and directive")
-
-	// Verify the room token issued to the creator is NOT the shared one — the
-	// agent's own token must be distinct and per-agent.
-	require.NotEqual(t, roomToken, plannerRoomToken,
-		"per-agent room token must differ from the shared creator token")
 }
 
 // roomConnectContract is the response envelope from GET /v1/rooms/{slug}/connect.
@@ -380,25 +375,16 @@ func getRoomConnectContract(t *testing.T, baseURL, slug string) (roomConnectCont
 	return wrapper.Data, string(body)
 }
 
-// extractRoomToken reads the "token" field from a room creation JSON response.
-func extractRoomToken(t *testing.T, raw string) string {
-	t.Helper()
-	token, _ := extractRoomTokenAndSlug(t, raw)
-	return token
-}
-
-// extractRoomTokenAndSlug reads both the "token" and the nested "data.slug" from a
-// room creation JSON response (which returns {"data": {...}, "token": ...}).
-func extractRoomTokenAndSlug(t *testing.T, raw string) (string, string) {
+// extractRoomSlug reads the nested "data.slug" from a room creation JSON response
+// ({"data": {...}}; no shared room token is returned any more, 000098).
+func extractRoomSlug(t *testing.T, raw string) string {
 	t.Helper()
 	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(raw), &result))
-	token, _ := result["token"].(string)
-	require.NotEmpty(t, token)
 	data, _ := result["data"].(map[string]any)
 	slug, _ := data["slug"].(string)
 	require.NotEmpty(t, slug)
-	return token, slug
+	return slug
 }
 
 // messageContains scans a list of message maps (as returned by the room endpoint)
@@ -444,8 +430,8 @@ func TestConnectEndpoint_RoomInstructionsEndpoint(t *testing.T) {
 	require.Equal(t, http.StatusCreated, createResp.StatusCode, "create room: %s", string(createRaw))
 
 	// Handshake to get the per-agent token, then post the initial task + directive.
-	sharedToken, roomSlug := extractRoomTokenAndSlug(t, string(createRaw))
-	_, plannerRoomToken := handshake(t, ts.URL, roomSlug, agentKey, sharedToken)
+	roomSlug := extractRoomSlug(t, string(createRaw))
+	_, plannerRoomToken := handshake(t, ts.URL, roomSlug, agentKey, "")
 	require.True(t, strings.HasPrefix(plannerRoomToken, "solvr_rt_"))
 
 	doJSON(t, http.MethodPost, ts.URL+"/r/"+roomSlug+"/join", plannerRoomToken,
@@ -532,8 +518,8 @@ func TestConnectEndpoint_ExecutorPromptEndToEnd(t *testing.T) {
 	createRaw, _ := io.ReadAll(createResp.Body)
 	require.Equal(t, http.StatusCreated, createResp.StatusCode, string(createRaw))
 
-	sharedToken, roomSlug := extractRoomTokenAndSlug(t, string(createRaw))
-	_, plannerRoomToken := handshake(t, ts.URL, roomSlug, plannerKey, sharedToken)
+	roomSlug := extractRoomSlug(t, string(createRaw))
+	_, plannerRoomToken := handshake(t, ts.URL, roomSlug, plannerKey, "")
 	require.True(t, strings.HasPrefix(plannerRoomToken, "solvr_rt_"))
 
 	doJSON(t, http.MethodPost, ts.URL+"/r/"+roomSlug+"/join", plannerRoomToken,
@@ -630,8 +616,8 @@ func TestConnectEndpoint_ExecutorPromptNamesOnlyRealRoutes(t *testing.T) {
 	resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode, string(respBody))
 
-	sharedToken, slug := extractRoomTokenAndSlug(t, string(respBody))
-	_, roomToken := handshake(t, ts.URL, slug, agentKey, sharedToken)
+	slug := extractRoomSlug(t, string(respBody))
+	_, roomToken := handshake(t, ts.URL, slug, agentKey, "")
 	doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/join", roomToken, fmt.Sprintf(`{"agent_name":"%s"}`, agentName))
 	st, _ := doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/message", roomToken,
 		fmt.Sprintf(`{"agent_name":"%s","content":"Task: route check directive."}`, agentName))
@@ -735,12 +721,10 @@ func TestConnectEndpoint_MultipleAgentsCanJoinViaAddAgentPrompt(t *testing.T) {
 	createResp, _ := http.DefaultClient.Do(createReq)
 	createRaw, _ := io.ReadAll(createResp.Body)
 	createResp.Body.Close()
-	var createResult map[string]any
-	json.Unmarshal(createRaw, &createResult)
-	roomToken, _ := createResult["token"].(string)
+	require.Equal(t, http.StatusCreated, createResp.StatusCode, "create room: %s", string(createRaw))
 
 	// Planner joins.
-	_, plannerRoomToken := handshake(t, ts.URL, slug, plannerKey, roomToken)
+	_, plannerRoomToken := handshake(t, ts.URL, slug, plannerKey, "")
 	status, _ := doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/join", plannerRoomToken,
 		fmt.Sprintf(`{"agent_name":"%s"}`, plannerName))
 	require.Equal(t, http.StatusOK, status)
@@ -872,12 +856,10 @@ func TestConnectEndpoint_PrivateRoomRequiresOwnerAdmissionForEachAgent(t *testin
 	createResp, _ := http.DefaultClient.Do(createReq)
 	createRaw, _ := io.ReadAll(createResp.Body)
 	createResp.Body.Close()
-	var createResult map[string]any
-	json.Unmarshal(createRaw, &createResult)
-	roomToken, _ := createResult["token"].(string)
+	require.Equal(t, http.StatusCreated, createResp.StatusCode, "create room: %s", string(createRaw))
 
 	// Owner joins.
-	_, ownerRoomToken := handshake(t, ts.URL, slug, ownerKey, roomToken)
+	_, ownerRoomToken := handshake(t, ts.URL, slug, ownerKey, "")
 	doJSON(t, http.MethodPost, ts.URL+"/r/"+slug+"/join", ownerRoomToken, `{"agent_name":"owner"}`)
 
 	// TEST: Register two agents.

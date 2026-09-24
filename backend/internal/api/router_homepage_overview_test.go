@@ -258,7 +258,7 @@ func hpoSeedRoom(t *testing.T, pool *db.Pool, slug, name, purpose string, privat
 	msgRepo := db.NewMessageRepository(pool)
 
 	desc := purpose
-	room, _, err := roomRepo.Create(ctx, models.CreateRoomParams{
+	room, err := roomRepo.Create(ctx, models.CreateRoomParams{
 		Slug:        slug,
 		DisplayName: name,
 		Description: &desc,

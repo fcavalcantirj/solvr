@@ -76,7 +76,7 @@ type createRoomRequest struct {
 
 // CreateRoom handles POST /v1/rooms.
 // Requires Solvr JWT or agent API key authentication.
-// Returns the created room and the plaintext bearer token (shown only once).
+// Returns the created room; agents then handshake for their own room tokens.
 func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	// Extract owner from Solvr JWT claims (Pitfall 2: NEVER use Quorum's mw.UserIDFromContext)
 	claims := auth.ClaimsFromContext(r.Context())
@@ -143,7 +143,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		SourcePostID:   sourcePostID,
 	}
 
-	room, plainToken, err := h.roomRepo.Create(r.Context(), params)
+	room, err := h.roomRepo.Create(r.Context(), params)
 	if err != nil {
 		if errors.Is(err, db.ErrRoomSlugExists) {
 			roomWriteError(w, http.StatusConflict, "DUPLICATE_ROOM", "a room with this name already exists")
@@ -156,12 +156,9 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 
 	h.recordRoomCreatedFunnel(r.Context(), room.ID, claims, agent, req.FlowID)
 
-	// Token is returned ONCE at creation time (D-24). Never shown again in GET responses.
-	response := map[string]interface{}{
-		"data":  room,
-		"token": plainToken,
-	}
-	roomWriteJSON(w, http.StatusCreated, response)
+	// No shared room token is issued (000098): each agent, the creator included, takes
+	// its own per-agent token from POST /v1/rooms/{slug}/handshake.
+	roomWriteJSON(w, http.StatusCreated, map[string]interface{}{"data": room})
 }
 
 // recordRoomCreatedFunnel records the server-side room_created funnel step,
@@ -433,57 +430,7 @@ func (h *RoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// RotateToken handles POST /v1/rooms/{slug}/rotate-token.
-// Requires authentication. The owner (human JWT or claimed agent whose linked
-// human owns the room) or an admin can rotate (D-25, amended to add admin so
-// ownerless rooms stay manageable).
-func (h *RoomHandler) RotateToken(w http.ResponseWriter, r *http.Request) {
-	slug := chi.URLParam(r, "slug")
-	if slug == "" {
-		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "slug is required")
-		return
-	}
-
-	claims := auth.ClaimsFromContext(r.Context())
-	agent := auth.AgentFromContext(r.Context())
-	if claims == nil && agent == nil {
-		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication required")
-		return
-	}
-
-	room, err := h.roomRepo.GetBySlug(r.Context(), slug)
-	if err != nil {
-		if errors.Is(err, db.ErrRoomNotFound) {
-			roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "room not found")
-			return
-		}
-		slog.Error("failed to get room for token rotation", "error", err)
-		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get room")
-		return
-	}
-
-	if !h.canManage(r.Context(), claims, agent, room) {
-		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "only the room owner or admin can rotate the token")
-		return
-	}
-
-	newToken, err := h.roomRepo.RotateToken(r.Context(), room.ID)
-	if err != nil {
-		slog.Error("failed to rotate token", "error", err, "room_id", room.ID)
-		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to rotate token")
-		return
-	}
-
-	response := map[string]interface{}{
-		"data": map[string]string{
-			"token": newToken,
-		},
-	}
-	roomWriteJSON(w, http.StatusOK, response)
-}
-
-// canManage checks if the caller may update, delete, or rotate the token for the
-// room, reading ownership from room_members (the membership authority, migrations
+// canManage checks if the caller may update, archive or delete the room, reading ownership from room_members (the membership authority, migrations
 // 000095/000096) rather than rooms.owner_id: an admin, a human with an active owner
 // membership, an agent with an active owner membership (every room creator gets one,
 // including unclaimed agents), or a family agent whose linked human is an active owner.

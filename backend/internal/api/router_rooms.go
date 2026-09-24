@@ -17,7 +17,7 @@ import (
 // Two route namespaces per D-15:
 //
 //	/v1/rooms/*  -- REST CRUD (Solvr JWT/agent key auth)
-//	/r/{slug}/*  -- A2A protocol (room bearer token auth)
+//	/r/{slug}/*  -- A2A protocol (per-agent room token auth, from the handshake)
 //
 // The authMiddleware parameter is the unified auth middleware used for
 // write operations on /v1/rooms/* (same as other protected endpoints).
@@ -91,7 +91,6 @@ func mountRoomRoutes(
 			r.Post("/", roomHandler.CreateRoom)
 			r.Patch("/{slug}", roomHandler.UpdateRoom)
 			r.Delete("/{slug}", roomHandler.DeleteRoom)
-			r.Post("/{slug}/rotate-token", roomHandler.RotateToken)
 			// Finish / reopen a collaboration (owner-only). Archiving keeps the
 			// transcript readable but refuses new messages and joins until reopened.
 			r.Post("/{slug}/archive", roomHandler.ArchiveRoom)
@@ -115,7 +114,7 @@ func mountRoomRoutes(
 		})
 	})
 
-	// -- A2A protocol routes: /r/{slug}/* (D-17: bearer token auth) --
+	// -- A2A protocol routes: /r/{slug}/* (per-agent solvr_rt_ bearer token auth) --
 	r.Route("/r/{slug}", func(r chi.Router) {
 		r.Use(apimiddleware.SSENoBuffering) // Must be before BearerGuard so header is set even on 401
 		r.Use(apimiddleware.BearerGuard(roomRepo, agentTokenRepo))

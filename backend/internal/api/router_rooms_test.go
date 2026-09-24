@@ -74,7 +74,9 @@ func createRoomTestUser(t *testing.T, pool *db.Pool) (string, string) {
 	return userID, token
 }
 
-// createTestRoomWithToken creates a room via the API and returns slug, token.
+// createTestRoomWithToken creates a public room via the API (human JWT) and returns the
+// slug plus a per-agent room token (solvr_rt_...) for a freshly registered agent that
+// handshook into it. The shared create-response token is retired (000098).
 func createTestRoomWithToken(t *testing.T, ts *httptest.Server, jwt string) (string, string) {
 	t.Helper()
 	slug := fmt.Sprintf("test-%d", time.Now().UnixNano()%1000000)
@@ -94,14 +96,36 @@ func createTestRoomWithToken(t *testing.T, ts *httptest.Server, jwt string) (str
 	err = json.Unmarshal(respBody, &result)
 	require.NoError(t, err)
 
-	token, _ := result["token"].(string)
-	require.NotEmpty(t, token, "expected room token in response")
-
 	data, _ := result["data"].(map[string]interface{})
 	roomSlug, _ := data["slug"].(string)
 	require.NotEmpty(t, roomSlug, "expected slug in response")
 
-	return roomSlug, token
+	return roomSlug, admitRoomAgent(t, ts, roomSlug, "")
+}
+
+// admitRoomAgent registers a fresh agent, has the room manager (ownerBearer: JWT or
+// agent key) add it as a member when ownerBearer is set (required for closed rooms),
+// and returns the per-agent room token its handshake issues.
+func admitRoomAgent(t *testing.T, ts *httptest.Server, slug, ownerBearer string) string {
+	t.Helper()
+	agentID, agentKey := registerRoomTestAgent(t, ts)
+	if ownerBearer != "" {
+		resp := doRoomRequest(t, "POST", ts.URL+"/v1/rooms/"+slug+"/members",
+			fmt.Sprintf(`{"agent_id":%q}`, agentID), ownerBearer)
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		require.Contains(t, []int{http.StatusOK, http.StatusCreated}, resp.StatusCode, "add member: %s", string(raw))
+	}
+	return handshakeRoomToken(t, ts, slug, agentKey)
+}
+
+// handshakeRoomToken handshakes agentKey into the room and returns its per-agent token.
+func handshakeRoomToken(t *testing.T, ts *httptest.Server, slug, agentKey string) string {
+	t.Helper()
+	status, tok := handshake(t, ts.URL, slug, agentKey, "")
+	require.Equal(t, http.StatusCreated, status, "handshake into %s", slug)
+	require.True(t, strings.HasPrefix(tok, "solvr_rt_"), "expected a per-agent room token, got %q", tok)
+	return tok
 }
 
 // roomPreCleanup deletes test rooms and users before a test runs (Phase 13 pattern).

@@ -18,8 +18,7 @@ import (
 //   - human caller  -> claims.UserID
 //
 // Only rooms where the caller holds an active owner membership are returned
-// (via RoomRepository.ListByOwner); token_hash is
-// never serialized (Room.TokenHash is json:"-"). GET /v1/rooms is unaffected — private
+// (via RoomRepository.ListByOwner). GET /v1/rooms is unaffected — private
 // rooms are still never listed publicly.
 func (h *RoomHandler) ListMyRooms(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

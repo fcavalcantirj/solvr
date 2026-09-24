@@ -85,8 +85,8 @@ func (f *roomStatsFixture) room(name string, private bool, expiresAt *time.Time,
 
 	var id uuid.UUID
 	err := f.pool.QueryRow(f.ctx, `
-		INSERT INTO rooms (slug, display_name, token_hash, is_private, expires_at, deleted_at)
-		VALUES ($1, $2, 'hash_homepage_rooms_test', $3, $4, $5)
+		INSERT INTO rooms (slug, display_name, is_private, expires_at, deleted_at)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
 	`, slug, "Room "+name, private, expiresAt, deletedAt).Scan(&id)
 	require.NoError(f.t, err, "insert room %s", slug)

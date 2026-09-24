@@ -31,7 +31,7 @@ func newDeliveryRoom(t *testing.T, pool *db.Pool) *models.Room {
 	ctx := context.Background()
 	roomRepo := db.NewRoomRepository(pool)
 	slug := fmt.Sprintf("deliv-%d", time.Now().UnixNano())
-	room, _, err := roomRepo.Create(ctx, models.CreateRoomParams{
+	room, err := roomRepo.Create(ctx, models.CreateRoomParams{
 		Slug:        slug,
 		DisplayName: "Delivery Test Room",
 		IsPrivate:   false,

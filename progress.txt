@@ -10545,3 +10545,120 @@ REMAINING FOR idx 72:
   - Step 5 runtime: legacy-status-commands migration error (ordering vs idx 51/94; see
     slice 2 WHY NOT — PATCH /v1/approaches/{id} is still dogfooded and canonical replies have
     no status field, so it must wait for first-party client cutover).
+
+================================================================================
+2026-09-24 — Task idx 72 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and
+statistics APIs"
+SLICE 5 of N: retire the DEAD legacy-feed query stack (step 3 "adapt then retire … rather
+than leaving independent query stacks behind"). The /v1/feed* routes were already served by
+the canonical-posts LegacyFeedAdapter (slice 3, commit f559823); this slice removes the now-
+orphaned FeedHandler + FeedRepository that the adapter replaced.
+================================================================================
+
+TASK SELECTION (top-down, unchanged blockers): first-false is idx 23 (ACCEPTANCE, N-agent
+  end-to-end across service instances — needs idx 78 multi-instance, not built). Then 51/52
+  (knowledge cutover, need idx 93/94 + 67), 58 (server-permission audit spans search/social-
+  metadata from 52/63), 66 (ACCEPTANCE, test deployment), 67 (needs cutover). idx 68-71 are
+  passes=true. idx 72 is again the first buildable task; continued it. Step 5 (legacy status-
+  command migration error) still blocked on first-party client cutover (see slice 2 WHY NOT).
+
+WHAT WAS DEAD (verified [REAL] before touching):
+  - `internal/api/handlers/feed.go` FeedHandler + FeedRepositoryInterface: grep of router.go
+    non-test = ZERO refs (router wires `handlers.NewLegacyFeedAdapter(postsRepo)` for /feed,
+    /feed/stuck, /feed/unanswered). Orphaned.
+  - `internal/db/feed.go` FeedRepository (GetRecentActivity/GetStuckProblems/
+    GetUnansweredQuestions/scanFeedItem): grep non-test outside the retired handler = ZERO.
+    Its OWN independent SQL query stack — exactly what step 3 says to retire.
+  - `models.FeedItem` / `models.FeedAuthor` STAY: the live LegacyFeedAdapter renders canonical
+    rows in that shape (feedItemFromPost). NOT removed.
+
+SHARED HELPERS PRESERVED (were in feed.go, used by the LIVE adapter): calculateHasMore,
+  writeFeedJSON, writeFeedError — grep showed legacy_feed.go consumes all three. Moved them
+  VERBATIM into legacy_feed.go (their sole live consumer) + added "encoding/json" import; then
+  deleted feed.go. parseFeedPagination was used only by the retired handler methods -> removed
+  with them. [REAL] post-move grep: each of the 3 helpers now defined exactly once (in
+  legacy_feed.go), no duplicate-decl.
+
+FILES ([REAL] git status --porcelain / git diff --stat: 6 files, +53 / -1633):
+  D backend/internal/api/handlers/feed.go        (whole FeedHandler+interface; 3 helpers moved)
+  D backend/internal/db/feed.go                  (whole FeedRepository query stack)
+  D backend/internal/db/feed_test.go             (tested only the retired repo; see REPLACED)
+  M backend/internal/api/handlers/legacy_feed.go (+encoding/json import, +3 helper funcs)
+  M backend/internal/api/handlers/feed_test.go   (trimmed to the 2 live FeedItem model tests)
+  M backend/internal/api/router_legacy_feed_test.go (+TestLegacyFeed_EmptyResultIsValidNotError)
+
+NAMED-REPLACEMENT (no test deleted without a named live-behavior replacement; all replacements
+  are in internal/api/router_legacy_feed_test.go, the ADAPTER suite from slice 3, which pins
+  the LIVE /v1/feed* behavior end-to-end):
+  handlers/feed_test.go removed (guarded the retired FeedHandler in isolation via a mock repo):
+    - TestFeed_RecentActivity_Success/_IncludesAllTypes ("/feed returns recent items of all
+      types") -> TestLegacyFeed_ServedByCanonicalPostsList (feedIDs == canonical /v1/posts?
+      sort=newest, and `all` has all 6 seeded types).
+    - TestFeed_RecentActivity_Pagination/_PerPageMax/_DefaultPagination ("clamp per_page to 50,
+      default page/per_page") -> TestLegacyFeed_AcceptsLenientLegacyQueryShape (per_page=200 ->
+      50; page=abc&per_page=-1 -> 1/20) + ServedByCanonicalPostsList meta asserts.
+    - TestFeed_Stuck_Success/_Pagination ("stuck route returns problems needing help") ->
+      TestLegacyFeed_ServedByCanonicalPostsList (stuck == {inProgress, stuckApproach}) +
+      TestLegacyFeed_KeepsFeedItemShape (type=problem, snippet, author, ApproachCount).
+      NOTE the semantics were INTENTIONALLY changed by slice 3 (old = approaches.status='stuck'
+      SQL; new = /v1/posts?type=problem&needs_help=true) — the adapter test pins the new,
+      LIVE definition; the old handler test only ever guarded the retired SQL.
+    - TestFeed_Unanswered_Success/_OnlyQuestions/_Pagination -> ServedByCanonicalPostsList
+      (unanswered == {s.unanswered}) + AcceptsLenientLegacyQueryShape (route pins its type).
+    - TestFeed_*_Empty (RecentActivity/Stuck/Unanswered empty) -> NEW
+      TestLegacyFeed_EmptyResultIsValidNotError (each route with a no-match tag: 200, data==[]
+      not null, meta.total=0, page=1, per_page=20, has_more=false).
+    - TestFeedItem_IncludesRequiredFields / TestFeedItem_JSONSerialization: KEPT VERBATIM in
+      the trimmed feed_test.go (models.FeedItem is still live). NOT removed.
+  db/feed_test.go removed (9 tests exercised the retired FeedRepository SQL directly):
+    - TestFeedRepository_GetRecentActivity[_Pagination/_ExcludesDeleted/_CommentCounts/
+      _IncludesCommentCount], _GetStuckProblems[_ApproachCounts], _GetUnansweredQuestions
+      [_Empty] -> the LIVE routes are guarded by TestLegacyFeed_ServedByCanonicalPostsList
+      (equals-canonical-query, incl. deleted-exclusion inherited from /v1/posts List) and
+      TestLegacyFeed_KeepsFeedItemShape (ApproachCount + AnswerCount mapping); CommentCount is
+      mapped by the same feedItemFromPost line and carried on the canonical row.
+      _GetUnansweredQuestions_Empty -> TestLegacyFeed_EmptyResultIsValidNotError.
+    Its 3 local helpers (createFeedTestUser/cleanupFeedTestData/createFeedTestPost) were grep-
+      confirmed used ONLY inside db/feed_test.go — no other db test breaks.
+
+TDD: the retirement itself is a REFACTOR (no new production behavior; the routes already
+  behaved this way since slice 3). The one NEW test, TestLegacyFeed_EmptyResultIsValidNotError,
+  was written and run FIRST to transfer the empty-result guards onto the live adapter BEFORE
+  removing the old empty tests. [TEST] /tmp/i72s5_emptytest.log: 3 subtests PASS, 0 SKIP.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test):
+  [TEST] go test ./internal/api/ -run TestLegacyFeed -v: all 5 PASS, 0 SKIP (Served/KeepsShape/
+    AnnouncesSuccessor/AcceptsLenient/EmptyResult).
+  [TEST] go test ./internal/api/handlers/ -run TestFeedItem -v: both model tests PASS, 0 SKIP.
+  [TEST] go test ./internal/db/ -run TestFeedRepository: "[no tests to run]" (retired, expected).
+  [REAL] go build ./... clean; go vet ./internal/api/... ./internal/db/ clean; gofmt -l clean
+    on the 3 changed .go files; all changed files < 800 lines (150/96/277).
+  [TEST] FULL `go test ./... -p 1 -count=1` (/tmp/i72s5_full.log, task exit 0 per test runner):
+    72 unique --- FAIL. comm vs HEAD baseline /tmp/i72s4_full.log (70 unique):
+      GONE 1 = TestRoomTimelineCutover_CountsExcludeEventsAndFiltersRetained (known DB flake).
+      NEW 3 = TestReputation_CrossEndpointConsistency, TestUsersPage_AgentsCount,
+              TestSearch_MinSimilarity_HonestFilter — ALL feed-UNRELATED, all in internal/db.
+    PROVEN pre-existing / not my change:
+      - TestSearch_MinSimilarity_HonestFilter: PASSES in isolation (`-run` alone) => full-suite
+        data-pollution flake, not a regression.
+      - TestReputation_CrossEndpointConsistency (reputation_integration_test.go:78) and
+        TestUsersPage_AgentsCount (:177): both fail with `List error = can't scan into dest[3]:
+        cannot scan NULL into *string` from AgentRepository.List — CODE I DID NOT TOUCH. Same
+        root cause as the ALWAYS-failing TestAgentRepository_List_* (a residual agent row with a
+        NULL column in the shared solvr_test DB). DECISIVE: `git stash` my 6-file change, ran
+        those two + TestAgentRepository_List_WithAgents on clean HEAD 711b448 against the SAME
+        DB => all three fail with the identical scan-NULL error. Restored tree ([REAL] git
+        status shows the 6 files intact). => ZERO regressions from this slice; the NEW/GONE
+        churn is shared-DB pollution whose footprint shifted because db/feed_test.go's seeded
+        rows no longer run.
+  No test deleted/skipped/renamed/loosened without a named live replacement (see above). No
+    SPEC change (grep of SPEC.md for FeedRepository/GetStuckProblems/etc = ZERO; the route-
+    family registry "legacy-feed" entry stays — the routes still exist via the adapter).
+
+REMAINING FOR idx 72 (unchanged from slice 4 minus this): Step 3 rest — contribution listings
+  (/users/{id}/contributions still reads legacy answers/approaches/responses repos directly;
+  ReplyRepository has NO ListByAuthor yet, so this needs a canonical replies-by-author read +
+  its own slice), then retire the now-unserved typed List methods (problems/questions/ideas
+  .List). Step 2 — search/rooms/overview filter+ordering+pagination+visibility contract tests.
+  Step 5 runtime — legacy status-command migration error (still waits on first-party cutover).

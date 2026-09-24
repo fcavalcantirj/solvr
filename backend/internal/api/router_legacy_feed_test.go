@@ -251,3 +251,27 @@ func TestLegacyFeed_AcceptsLenientLegacyQueryShape(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, []string{s.unanswered}, feedIDs(f), "the route pins its own filters")
 }
+
+// TestLegacyFeed_EmptyResultIsValidNotError: a feed route that matches nothing returns 200 with
+// an empty data array and a valid zero meta (not an error, not a nil body). This transfers the
+// empty-result guards from the retired FeedHandler/FeedRepository query stack (idx 72 step 3):
+// handlers.TestFeed_RecentActivity_EmptyResult, TestFeed_Stuck_Empty, TestFeed_Unanswered_Empty
+// and db.TestFeedRepository_GetUnansweredQuestions_Empty onto the live canonical-posts adapter.
+func TestLegacyFeed_EmptyResultIsValidNotError(t *testing.T) {
+	ts, _, cleanup := setupRoomTestServer(t)
+	t.Cleanup(cleanup) // LIFO: seed cleanup runs before the pool closes
+
+	noMatch := fmt.Sprintf("legacyfeednone%d", time.Now().UnixNano())
+	for _, fr := range legacyFeedRoutes {
+		t.Run(fr.path, func(t *testing.T) {
+			resp, f := getLegacyFeed(t, ts.URL+fr.path+"?tags="+noMatch)
+			require.Equal(t, http.StatusOK, resp.StatusCode, "an empty feed is not an error")
+			assert.NotNil(t, f.Data, "empty data must serialize as [] not null")
+			assert.Empty(t, f.Data)
+			assert.Equal(t, 0, f.Meta.Total)
+			assert.Equal(t, 1, f.Meta.Page)
+			assert.Equal(t, 20, f.Meta.PerPage)
+			assert.False(t, f.Meta.HasMore)
+		})
+	}
+}

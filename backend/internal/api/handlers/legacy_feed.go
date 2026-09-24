@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -122,4 +123,28 @@ func feedItemFromPost(p models.PostWithAuthor) models.FeedItem {
 		CommentCount:  p.CommentsCount,
 		CreatedAt:     p.CreatedAt,
 	}
+}
+
+// calculateHasMore determines if there are more pages.
+func calculateHasMore(page, perPage, total int) bool {
+	return (page * perPage) < total
+}
+
+// writeFeedJSON writes a JSON response for the legacy feed adapter.
+func writeFeedJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}
+
+// writeFeedError writes an error JSON response for the legacy feed adapter.
+func writeFeedError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":    code,
+			"message": message,
+		},
+	})
 }

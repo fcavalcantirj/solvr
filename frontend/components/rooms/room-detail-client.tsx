@@ -73,6 +73,13 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
     }
   }, [room.is_private, room.slug, room.display_name]);
 
+  // room_viewed: a room page was opened. Reported as a bare browser funnel step —
+  // it carries no room identity, so a private room's title never leaks through it.
+  useEffect(() => {
+    void api.postFunnelEvent?.({ event: 'room_viewed' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.slug]);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // The reader is "following the latest exchange" while near the bottom, where
   // the newest message lives. Default true: the page opens pinned to the latest.

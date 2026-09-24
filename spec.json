@@ -768,7 +768,7 @@
       "Keep event names, timestamps, source channel, pseudonymous identifiers, and instruction version documented in one event contract.",
       "Verify analytics excludes credentials, private message bodies, task text, and raw private room titles; keep server funnel measurement available when browser analytics is blocked."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",

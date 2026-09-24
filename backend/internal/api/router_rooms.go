@@ -40,6 +40,14 @@ func mountRoomRoutes(
 	roomHandler := handlers.NewRoomHandler(roomRepo, msgRepo, presenceRepo, memberRepo, agentTokenRepo, eventRepo)
 	msgHandler := handlers.NewRoomMessagesHandler(msgRepo, roomRepo, presenceRepo, eventRepo, hubMgr)
 	presenceHandler := handlers.NewRoomPresenceHandler(presenceRepo, roomRepo, hubMgr, registry)
+
+	// Wire the connection-funnel recorder so room_created, participant_joined and
+	// first_two_way_exchange are recorded from confirmed server actions. Shared by
+	// the three handlers so every server step lands in one funnel_events table.
+	funnelRepo := db.NewFunnelEventRepository(pool)
+	roomHandler.SetFunnelRecorder(funnelRepo)
+	presenceHandler.SetFunnelRecorder(funnelRepo)
+	msgHandler.SetFunnelRecorder(funnelRepo)
 	sseHandler := handlers.NewRoomSSEHandler(hubMgr, msgRepo, roomRepo)
 	claimsHandler := handlers.NewRoomClaimsHandler(claimRepo)
 	eventsHandler := handlers.NewRoomEventsHandler(eventRepo, hubMgr)

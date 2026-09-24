@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"os"
@@ -81,12 +83,16 @@ type ConnectTaskField struct {
 	MaxChars    int    `json:"max_chars"`
 }
 
-// ConnectSelection is what the contract was built for: the task as typed, and
-// the preset and visibility in force.
+// ConnectSelection is what the contract was built for: the task as typed, the
+// preset and visibility in force, and the connection-funnel flow id issued for
+// this response. The browser reads FlowID to report its connection_started and
+// starter_prompt_copied steps, and the same id is embedded in the copied prompt
+// so the room's server steps join the same attempt.
 type ConnectSelection struct {
 	Task       string `json:"task"`
 	Preset     string `json:"preset"`
 	Visibility string `json:"visibility"`
+	FlowID     string `json:"flow_id,omitempty"`
 }
 
 // ConnectPrompt is the one thing the visitor copies.
@@ -245,6 +251,19 @@ func (h *ConnectHandler) SetPostLookup(posts connectPostLookup) {
 	h.posts = posts
 }
 
+// newFlowID mints a non-secret connection-funnel identifier for one connect
+// response. It is a random hex token (never a template placeholder), safe to
+// paste into an agent prompt and to report from the browser. On the vanishingly
+// rare chance randomness is unavailable, the funnel simply goes unattributed for
+// that response rather than blocking the contract.
+func newFlowID() string {
+	b := make([]byte, 12)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return "f_" + hex.EncodeToString(b)
+}
+
 // GetConnect handles GET /v1/connect (public, no auth).
 //
 //	?task=       optional, free text, bounded by ConnectTaskMaxChars
@@ -291,7 +310,7 @@ func (h *ConnectHandler) GetConnect(w http.ResponseWriter, r *http.Request) {
 		task = connectTaskFromPost(source)
 	}
 
-	selection := ConnectSelection{Task: task, Preset: preset, Visibility: visibility}
+	selection := ConnectSelection{Task: task, Preset: preset, Visibility: visibility, FlowID: newFlowID()}
 
 	start := buildConnectStart(selection, h.resolveExample(r.Context()))
 	start.Source = source

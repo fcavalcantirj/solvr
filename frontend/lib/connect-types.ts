@@ -27,11 +27,26 @@ export interface APIConnectTaskField {
   max_chars: number;
 }
 
-// What the contract was built for.
+// What the contract was built for. `flow_id` is the non-secret connection-funnel
+// identifier issued for this response: the browser reports its connection_started
+// and starter_prompt_copied steps with it, and the same id is embedded in the
+// copied prompt so the room's server steps join the same attempt.
 export interface APIConnectSelection {
   task: string;
   preset: string;
   visibility: string;
+  flow_id?: string;
+}
+
+// One connection-funnel step the browser reports to POST /v1/analytics/funnel.
+// Only browser steps are ever sent from here; server steps are recorded server-side.
+export interface APIFunnelEventInput {
+  event: string;
+  flow_id?: string;
+  preset?: string;
+  role?: string;
+  entry_surface?: string;
+  instruction_version?: string;
 }
 
 // The one thing the visitor copies. `instruction` names the agent that must
@@ -103,6 +118,7 @@ export interface APIConnectCustomizeSection {
 }
 
 export interface APIConnectStart {
+  instruction_version: string;
   heading: string;
   intro: string;
   page_url: string;

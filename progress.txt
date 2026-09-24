@@ -7869,3 +7869,144 @@ NOTE (deliberately NOT done, out of ~758 scope): room messages have no per-item
   user-report target in reports.go (design: room content is owner-moderated via
   remove/archive). Adding a message-report feature would be scope creep beyond
   "exercise EXISTING reporting and moderation paths"; left as-is.
+
+2026-09-24 05:20: RALPH ITERATION TIMEOUT — claude was killed after 45m with no result (iteration 1). Ledger untouched.
+
+================================================================================
+2026-09-24 — Task ~758 (spec.json line 760-772, category analytics)
+"Instrument the complete connection funnel across browser and agent activity".
+PASSED.
+================================================================================
+
+TASK SELECTION (top-down, every skip RE-VERIFIED [REAL] this session — did not
+trust prior journal prose):
+  Walked passes=false top-down; skipped the ones that span still-unbuilt
+  foundations, each proven this session:
+  - ~300 "Verify N-agent e2e" (ACCEPTANCE): needs canonical room_entries + two
+    API instances. [REAL] grep -rn room_entries backend/internal = 0; no /entries
+    route (the two '/entries' hits are instruction STRINGS in connect.go:556-557,
+    not routes). Two-instance delivery is ~982 (false). Acceptance-not-checklist.
+  - ~349 "agent-created rooms manageable": step 2 requires rooms.owner_id RETIRED.
+    [REAL] grep -c owner_id backend/internal/db/rooms.go = 16 (present); retirement
+    is ~889 (false). SKIP.
+  - ~649 / ~662 (knowledge integrations + retained-knowledge search): both hinge
+    on "AFTER cutover" / "before and after cutover" = ~1176 cutover (false) and
+    schema reduction ~853 (false). SKIP.
+  - ~735 "permissions authoritative": step 3 needs established-stream revocation.
+    [REAL] rooms_sse.go has no per-tick membership/access re-check (grep
+    IsMember/membership/revoke/CheckAccess = 0 hits). That is ~930's deliverable
+    (false). SKIP.
+  - ~758 THIS TASK: instrumentation over ALREADY-BUILT surfaces (/connect, rooms,
+    presence, messages). No room_entries / owner_id-retirement / cutover /
+    established-stream dependency. First buildable-now task top-down. TOOK IT.
+
+INHERITED WORK: a prior iteration built this funnel task in full then hit the
+  45m RALPH TIMEOUT (see the line above this entry) before it could run the
+  checks, journal, or flip passes. The complete implementation + tests were
+  sitting uncommitted in the working tree. This session's job was to VERIFY it
+  actually runs green (which required a local DB brought to migration head) and
+  to complete/fix any gap, not to trust that it "should work".
+
+ENVIRONMENT: local docker stack (solvr-postgres @ 5435, healthy 16h; solvr-ipfs
+  up). DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr. The local DB
+  was BEHIND at schema_migrations v86 while the committed repo ships migrations
+  87-91 and this task adds 92. Ran `migrate -path migrations up`: applied 87..92
+  cleanly (none of 87-91's objects pre-existed), DB now at v92, funnel_events
+  table created. This is legitimate local test-DB setup, not a prod touch.
+
+WHAT THE FUNNEL DOES (contract in backend/internal/models/funnel_event.go):
+  Seven steps across two channels stitched by a non-secret flow_id issued by
+  GET /v1/connect. BROWSER (self-reported, POST /v1/analytics/funnel):
+  connection_started, starter_prompt_copied, room_viewed, join_prompt_copied.
+  SERVER (recorded from confirmed actions, a client can't fake or suppress them):
+  room_created, participant_joined (per-actor 1-based ordinal), first_two_way_
+  exchange. Stored row keeps flow_id, event, channel, actor_type, PSEUDONYMOUS
+  actor_ref (sha256 hash, never a raw id), opaque room_id UUID, preset, role,
+  ordinal, entry_surface, instruction_version — NEVER a credential, message body,
+  task text or private room title. Milestones dedupe via partial unique indexes +
+  ON CONFLICT DO NOTHING so retries/reconnects/replays can't inflate a count.
+
+STEP-BY-STEP COVERAGE (all six task steps map to code + a passing test):
+  1 connection_started + starter_prompt_copied(after copy)+flow_id+entry_surface:
+    connect-panel.tsx (mount useEffect / post-copy); newFlowID() in connect.go.
+    [TEST] connect-panel.funnel.test.tsx 4/4.
+  2 flow_id travels in planner prompt + create-room body, persisted server-side:
+    connect_prompts.go promptCreateRoomJSON; rooms.go CreateRoom accepts flow_id
+    -> RecordRoomCreated. [TEST] router_funnel_test e2e asserts room_created
+    carries the exact flow.
+  3 room_created / participant_joined(ordinal) / first_two_way_exchange from
+    server events, no participant cap: rooms.go, rooms_presence.go (authoritative
+    agent id, not agent_name), rooms_messages.go. [TEST] e2e asserts ordinals
+    {1,2} and two-way recorded once.
+  4 room_viewed + join_prompt_copied(role); agent invites have no browser event
+    and none is invented: room-detail-client.tsx, connect-agent-panel.tsx.
+    [TEST] room-detail-client.funnel.test + connect-agent-panel.funnel.test; e2e
+    proves server steps record with ZERO browser calls.
+  5 one documented contract: models.FunnelEventContract() + GET
+    /v1/analytics/funnel/contract. [TEST] TestFunnelContract_PublishesVocabulary
+    (7 events, right channels, instruction_version).
+  6 excludes secrets; server measurement survives blocked browser analytics:
+    schema has no body/task/title column; ingest struct accepts none; actor
+    pseudonymized. [TEST] TestPseudonymizeActor (never raw id), IngestRecords
+    (anonymous -> empty ref), e2e (server steps without any browser event).
+
+WHAT I CHANGED THIS SESSION: nothing in production code — the inherited
+  implementation was already complete and consistent. I checked the one place the
+  new required type field could break: connect-types.ts made APIConnectStart.
+  instruction_version REQUIRED; the two extra fixtures
+  (CONNECT_START_PRIVATE_COLLABORATE, CONNECT_START_BUILD_AND_REVIEW) inherit it
+  via `...CONNECT_START` spread and flow_id is optional, so `npx tsc --noEmit` =
+  0 errors [TEST]. No fix needed.
+
+VERIFICATION (all RAN this session against DB v92):
+  [TEST] go build ./... = BUILD_OK; go vet models/db/handlers/api = clean.
+  [TEST] go test ./internal/db/ -run 'Funnel|PseudonymizeActor' = 6/6 PASS.
+  [TEST] go test ./internal/api/handlers/ -run Funnel = 4/4 PASS.
+  [TEST] go test ./internal/api/ -run Funnel = 2/2 PASS (incl. e2e server steps).
+  [TEST] frontend vitest 3 funnel files = 6/6 PASS.
+  [TEST] frontend vitest touched components (connect/, connect-agent-panel,
+    room-detail-client, direct-create) = 44/44 PASS (no regression).
+  [TEST] npx tsc --noEmit = 0 errors.
+
+REGRESSION PROOF (funnel introduces ZERO regressions):
+  A full `go test ./internal/{models,db,api,api/handlers}` showed pre-existing
+  failures (RisingIdeas, Briefing*, Crystallization*, ClaimToken_MarkUsed,
+  ContributionMigration, UserRepository_FindByAuthProvider_NullPasswordHash,
+  CommentsCount*, TypeSpecificListEndpoints, IPFSHealth, 4x GitHub OAuth, and
+  TestHomepageRooms_...ExchangeMilestone). To prove none are mine: `git stash
+  push -u` (removed ALL funnel work), re-ran the SAME named tests at committed
+  HEAD against the SAME DB v92 -> IDENTICAL failures (including the milestone
+  test, which 500s on `rooms_owner_id_fkey` FK violation during room create, a
+  test-data issue in untouched code — funnel records AFTER create succeeds).
+  Then `git stash pop` restored the work. So every failure is pre-existing:
+  legacy-model tests broken by bringing the DB to migration head (88 canonical
+  post states, 89 canonical replies) + env (OAuth network). The funnel-touched
+  code path has no failing test.
+
+FILES (git status --porcelain / git diff --stat — matches exactly):
+  New (funnel): models/funnel_event.go (155), db/funnel_events.go (227) +
+    db/funnel_events_test.go, handlers/funnel.go (124) + funnel_test.go,
+    api/router_funnel.go (43) + router_funnel_test.go,
+    migrations/000092_create_funnel_events.{up,down}.sql, and three
+    *.funnel.test.tsx (connect-panel, connect-agent-panel, room-detail-client).
+  Modified (server hooks + flow_id + wiring): connect.go (+newFlowID, flow_id in
+    ConnectSelection), connect_prompts.go (flow_id in create-room JSON),
+    rooms.go (+recordRoomCreatedFunnel, createRoomRequest.FlowID),
+    rooms_messages.go (first_two_way_exchange beside the existing activation
+    milestone), rooms_presence.go (+recordParticipantJoinedFunnel), router.go
+    (mountFunnelRoutes), router_rooms.go (SetFunnelRecorder on 3 handlers).
+  Frontend: api.ts (postFunnelEvent, best-effort), connect-types.ts
+    (APIConnectStart.instruction_version, APIConnectSelection.flow_id,
+    APIFunnelEventInput), connect-fixture.ts (instruction_version + flow_id),
+    connect-panel.tsx / connect-agent-panel.tsx / room-detail-client.tsx (emit
+    the browser steps).
+  No existing test deleted, weakened, skipped, or renamed.
+
+FILE SIZE: [REAL] all touched Go files < 800 (max connect.go 620). New frontend
+  test files small. No new file-size violation introduced.
+
+NOTE for the next iteration: the local DB is now at migration v92 (was v86). The
+  legacy-model tests listed under REGRESSION PROOF fail at v92 because migrations
+  88/89 introduced the canonical post-state/reply schema those old tests predate;
+  those belong to the still-open migration/cutover tasks (~853, ~1176, etc.), not
+  to this analytics task.

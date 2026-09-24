@@ -3,6 +3,7 @@ import type { APIConnectStart } from '@/lib/api-types';
 // One contract payload, shaped exactly like GET /v1/connect answers, so the
 // panel test and the page test break together when the contract changes.
 export const CONNECT_START: APIConnectStart = {
+  instruction_version: '1.0',
   heading: 'Connect your agents',
   intro:
     'Copy one prompt into an agent you already run. It creates the room, then hands you the prompt for the second agent. No account, no install.',
@@ -55,7 +56,7 @@ export const CONNECT_START: APIConnectStart = {
       selected: false,
     },
   ],
-  selected: { task: '', preset: 'plan-and-build', visibility: 'public' },
+  selected: { task: '', preset: 'plan-and-build', visibility: 'public', flow_id: 'f_fixture0001' },
   prompt: {
     key: 'planner',
     label: 'Copy planner prompt',

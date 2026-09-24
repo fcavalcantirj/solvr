@@ -15,6 +15,7 @@ export * from './api-types';
 // Import types for internal use
 import type {
   APIPost,
+  APIFunnelEventInput,
   APIPostsResponse,
   APISearchResponse,
   APIAnswersResponse,
@@ -488,6 +489,27 @@ class SolvrAPI extends SolvrAPIBase {
     return this.fetch<APIRoomMembersResponse>(
       `/v1/rooms/${encodeURIComponent(slug)}/members`,
     );
+  }
+
+  /**
+   * Report one BROWSER connection-funnel step to POST /v1/analytics/funnel.
+   *
+   * Fire-and-forget and BEST EFFORT: a statistic must never slow down or break
+   * the product it measures, so this never rejects — a failed beacon is
+   * swallowed. Only browser steps (connection_started, starter_prompt_copied,
+   * room_viewed, join_prompt_copied) are sent; the server records its own steps.
+   * The API classifies the actor from the request's own credential, so nothing
+   * identifying is put in the body here.
+   */
+  async postFunnelEvent(input: APIFunnelEventInput): Promise<void> {
+    try {
+      await this.fetch('/v1/analytics/funnel', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    } catch {
+      // Best effort: the funnel is measurement, never a blocking user action.
+    }
   }
 }
 

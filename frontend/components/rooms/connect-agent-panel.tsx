@@ -52,6 +52,13 @@ export function ConnectAgentPanel({ room }: ConnectAgentPanelProps) {
       await navigator.clipboard.writeText(envelope.prompt);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      // join_prompt_copied: reported only after the clipboard write succeeded, for
+      // the role this join prompt recruits (collaborator, in the recruit-another flow).
+      void api.postFunnelEvent?.({
+        event: 'join_prompt_copied',
+        role: 'collaborator',
+        entry_surface: 'room_page',
+      });
     } catch {
       // Clipboard denied — the prompt is already rendered and selectable below.
     }

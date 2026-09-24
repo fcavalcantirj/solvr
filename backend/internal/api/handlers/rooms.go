@@ -25,6 +25,16 @@ type RoomHandler struct {
 	memberRepo     *db.RoomMemberRepository
 	agentTokenRepo *db.RoomAgentTokenRepository
 	eventRepo      *db.RoomEventRepository
+	// funnel records the room_created connection-funnel step. Optional: nil in
+	// unit tests and wherever the funnel is not wired, in which case it is a no-op.
+	funnel *db.FunnelEventRepository
+}
+
+// SetFunnelRecorder wires the connection-funnel recorder so CreateRoom records
+// the server-side room_created step. Optional (like SetPostLookup): with no
+// recorder wired, room creation records nothing and behaves exactly as before.
+func (h *RoomHandler) SetFunnelRecorder(funnel *db.FunnelEventRepository) {
+	h.funnel = funnel
 }
 
 // NewRoomHandler creates a new RoomHandler with the required repositories.
@@ -58,6 +68,10 @@ type createRoomRequest struct {
 	// ("Discuss with agents"). It is a provenance pointer only — the post's content is
 	// never copied into the room. Must be a valid UUID when supplied.
 	SourcePostID *string `json:"source_post_id,omitempty"`
+	// FlowID is the non-secret connection-funnel identifier the planner prompt carried
+	// from GET /v1/connect. It links a browser's connection_started/starter_prompt_copied
+	// steps to this room's server-side steps. Analytics-only: it never affects the room.
+	FlowID *string `json:"flow_id,omitempty"`
 }
 
 // CreateRoom handles POST /v1/rooms.
@@ -140,12 +154,42 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.recordRoomCreatedFunnel(r.Context(), room.ID, claims, agent, req.FlowID)
+
 	// Token is returned ONCE at creation time (D-24). Never shown again in GET responses.
 	response := map[string]interface{}{
 		"data":  room,
 		"token": plainToken,
 	}
 	roomWriteJSON(w, http.StatusCreated, response)
+}
+
+// recordRoomCreatedFunnel records the server-side room_created funnel step,
+// carrying the flow_id the create-room call brought so a browser's earlier steps
+// and this room's later server steps join into one attempt. Best-effort: a funnel
+// row that cannot be written is a statistic that is briefly short, never a room
+// creation that failed. The actor is reduced to a pseudonymous reference.
+func (h *RoomHandler) recordRoomCreatedFunnel(ctx context.Context, roomID uuid.UUID, claims *auth.Claims, agent *models.Agent, flowID *string) {
+	if h.funnel == nil {
+		return
+	}
+	actorType := models.FunnelActorAnonymous
+	actorRef := ""
+	switch {
+	case claims != nil:
+		actorType = models.FunnelActorHuman
+		actorRef = db.PseudonymizeActor(claims.UserID)
+	case agent != nil:
+		actorType = models.FunnelActorAgent
+		actorRef = db.PseudonymizeActor(agent.ID)
+	}
+	flow := ""
+	if flowID != nil {
+		flow = *flowID
+	}
+	if err := h.funnel.RecordRoomCreated(ctx, roomID, actorType, actorRef, flow); err != nil {
+		slog.Warn("failed to record room_created funnel step", "error", err, "room_id", roomID)
+	}
 }
 
 // GetRoom handles GET /v1/rooms/{slug}.

@@ -43,6 +43,19 @@ const (
 	connectBuilderCopiedDetail = "Copied. Paste it into your builder now — it replies with the room link and a reviewer prompt for your second agent."
 )
 
+// promptCreateRoomJSON is the create-room request body a starter prompt tells the
+// agent to POST. When the selection carries a connection-funnel flow id, it travels
+// in this body so the room's server-side steps join the browser's earlier steps of
+// the same attempt. The flow id is a server-generated, non-secret token — never a
+// template placeholder — so it is safe to paste into an agent conversation.
+func promptCreateRoomJSON(isPrivate, flowID string) string {
+	body := `{"display_name": "a short title for the task", "is_private": ` + isPrivate
+	if flowID != "" {
+		body += `, "flow_id": "` + flowID + `"`
+	}
+	return body + "}"
+}
+
 // buildConnectPrompt writes the prompt for one selection.
 func buildConnectPrompt(sel ConnectSelection) ConnectPrompt {
 	if sel.Preset == ConnectPresetCollaborate {
@@ -192,7 +205,7 @@ func plannerPromptText(sel ConnectSelection) string {
 		"",
 		"2. ROOM. Create the room you will own:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms",
-		`     {"display_name": "a short title for the task", "is_private": ` + isPrivate + "}",
+		"     " + promptCreateRoomJSON(isPrivate, sel.FlowID),
 		"   " + visibilityNote,
 		"   The response carries the room slug. Then take your own per-agent room token:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms/" + slug + "/handshake",
@@ -251,7 +264,7 @@ func starterPromptText(sel ConnectSelection) string {
 		"",
 		"2. ROOM. Create the shared room:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms",
-		`     {"display_name": "a short title for the task", "is_private": ` + isPrivate + "}",
+		"     " + promptCreateRoomJSON(isPrivate, sel.FlowID),
 		"   " + visibilityNote,
 		"   The response carries the room slug. Then take your own per-agent room token:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms/" + slug + "/handshake",
@@ -311,7 +324,7 @@ func builderPromptText(sel ConnectSelection) string {
 		"",
 		"2. ROOM. Create the room you will share with the reviewer:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms",
-		`     {"display_name": "a short title for the task", "is_private": ` + isPrivate + "}",
+		"     " + promptCreateRoomJSON(isPrivate, sel.FlowID),
 		"   " + visibilityNote,
 		"   The response carries the room slug. Then take your own per-agent room token:",
 		"     POST " + connectAPIBaseURL + "/v1/rooms/" + slug + "/handshake",

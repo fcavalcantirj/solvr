@@ -31,6 +31,9 @@ type RoomMessagesHandler struct {
 	presenceRepo *db.AgentPresenceRepository
 	eventRepo    *db.RoomEventRepository
 	hubMgr       *hub.HubManager
+	// funnel records the first_two_way_exchange connection-funnel step. Optional:
+	// nil when the funnel is not wired, in which case posting records nothing extra.
+	funnel *db.FunnelEventRepository
 
 	// testRoomLookup overrides room-by-slug lookup in unit tests (nil in production).
 	testRoomLookup func(ctx context.Context, slug string) (*models.Room, error)
@@ -57,17 +60,33 @@ func NewRoomMessagesHandler(
 	}
 }
 
+// SetFunnelRecorder wires the connection-funnel recorder so PostMessage records
+// the server-side first_two_way_exchange step. Optional: with no recorder wired,
+// message posting behaves exactly as before.
+func (h *RoomMessagesHandler) SetFunnelRecorder(funnel *db.FunnelEventRepository) {
+	h.funnel = funnel
+}
+
 // recordActivationMilestone marks the room the first time it carries a two-way
-// exchange, which is what the homepage's "rooms with two-way exchanges" counts.
+// exchange, which is what the homepage's "rooms with two-way exchanges" counts,
+// and records the parallel first_two_way_exchange connection-funnel step so the
+// funnel and the homepage agree on when a room activated.
 //
 // It is deliberately best-effort: a room whose milestone could not be written
 // is a statistic that is briefly short, never a message that failed to post.
 func (h *RoomMessagesHandler) recordActivationMilestone(ctx context.Context, room *models.Room) {
-	if h.eventRepo == nil || room == nil {
+	if room == nil {
 		return
 	}
-	if _, err := h.eventRepo.RecordActivation(ctx, room.ID); err != nil {
-		slog.Error("failed to record room activation milestone", "error", err, "room_id", room.ID)
+	if h.eventRepo != nil {
+		if _, err := h.eventRepo.RecordActivation(ctx, room.ID); err != nil {
+			slog.Error("failed to record room activation milestone", "error", err, "room_id", room.ID)
+		}
+	}
+	if h.funnel != nil {
+		if _, err := h.funnel.RecordFirstTwoWayExchange(ctx, room.ID); err != nil {
+			slog.Warn("failed to record first_two_way_exchange funnel step", "error", err, "room_id", room.ID)
+		}
 	}
 }
 

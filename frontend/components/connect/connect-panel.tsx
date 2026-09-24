@@ -5,7 +5,14 @@ import Link from 'next/link';
 import { ArrowRight, Check, Copy } from 'lucide-react';
 
 import { useConnectStart } from '@/hooks/use-connect-start';
+import { api } from '@/lib/api';
 import type { APIConnectOption, APIConnectStart } from '@/lib/api-types';
+
+// entrySurfaceFor names where a connection-funnel browser step was reported from,
+// so the funnel can tell an index-panel open apart from the full /connect page.
+function entrySurfaceFor(variant: ConnectPanelVariant): string {
+  return variant === 'page' ? 'connect_page' : 'homepage_panel';
+}
 
 // The connection panel: the one surface that starts a connection.
 //
@@ -72,6 +79,7 @@ function ConnectPanelContent({
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const promptText = start.prompt.text;
+  const entrySurface = entrySurfaceFor(variant);
 
   // A new prompt is a new thing to copy: the Copied state belongs to the text
   // that was actually copied, not to the control.
@@ -80,11 +88,35 @@ function ConnectPanelContent({
     setCopyFailed(false);
   }, [promptText]);
 
+  // connection_started: the panel/page meaningfully opened (its contract loaded).
+  // Fired once per open — this component only mounts once the contract exists and
+  // stays mounted across task/preset re-fetches — not on every keystroke.
+  useEffect(() => {
+    void api.postFunnelEvent?.({
+      event: 'connection_started',
+      flow_id: start.selected.flow_id,
+      entry_surface: entrySurface,
+      preset: start.selected.preset,
+      instruction_version: start.instruction_version,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(promptText);
       setCopied(true);
       setCopyFailed(false);
+      // starter_prompt_copied: reported ONLY after the clipboard write succeeded,
+      // with the flow id embedded in the very prompt that was copied.
+      void api.postFunnelEvent?.({
+        event: 'starter_prompt_copied',
+        flow_id: start.selected.flow_id,
+        entry_surface: entrySurface,
+        preset: start.selected.preset,
+        role: start.prompt.key,
+        instruction_version: start.instruction_version,
+      });
     } catch {
       setCopied(false);
       setCopyFailed(true);

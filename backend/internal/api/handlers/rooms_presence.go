@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // maxCardJSONBytes is the maximum allowed card_json size (D-33 and migration CHECK).
@@ -25,6 +27,16 @@ type RoomPresenceHandler struct {
 	roomRepo     *db.RoomRepository
 	hubMgr       *hub.HubManager
 	registry     *hub.PresenceRegistry
+	// funnel records the participant_joined connection-funnel step. Optional:
+	// nil when the funnel is not wired, in which case joining records nothing.
+	funnel *db.FunnelEventRepository
+}
+
+// SetFunnelRecorder wires the connection-funnel recorder so JoinRoom records the
+// server-side participant_joined step. Optional: with no recorder, join behaves
+// exactly as before.
+func (h *RoomPresenceHandler) SetFunnelRecorder(funnel *db.FunnelEventRepository) {
+	h.funnel = funnel
 }
 
 // NewRoomPresenceHandler creates a new RoomPresenceHandler.
@@ -100,6 +112,8 @@ func (h *RoomPresenceHandler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.recordParticipantJoinedFunnel(r.Context(), room.ID)
+
 	// Parse card for in-memory registry and hub subscription
 	var agentCard *a2a.AgentCard
 	if len(req.Card) > 0 {
@@ -126,6 +140,25 @@ func (h *RoomPresenceHandler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 		"data": record,
 	}
 	roomWriteJSON(w, http.StatusOK, response)
+}
+
+// recordParticipantJoinedFunnel records the server-side participant_joined step
+// for the authenticated agent, deduped per (room, agent) and stamped with its
+// 1-based join ordinal. It uses the AUTHORITATIVE agent id from the room token,
+// not the spoofable agent_name, so an agent using two display names is one
+// participant. A shared-token join (no per-agent id) is skipped rather than
+// mis-attributed. Best-effort: a missed step never fails the join.
+func (h *RoomPresenceHandler) recordParticipantJoinedFunnel(ctx context.Context, roomID uuid.UUID) {
+	if h.funnel == nil {
+		return
+	}
+	agentID := apimiddleware.RoomAgentIDFromContext(ctx)
+	if agentID == "" {
+		return
+	}
+	if _, _, err := h.funnel.RecordParticipantJoined(ctx, roomID, models.FunnelActorAgent, db.PseudonymizeActor(agentID)); err != nil {
+		slog.Warn("failed to record participant_joined funnel step", "error", err, "room_id", roomID)
+	}
 }
 
 // heartbeatRequest is the JSON body for POST /r/{slug}/heartbeat.

@@ -132,6 +132,11 @@ func (h *RepliesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeRepliesError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get reply")
 		return
 	}
+	if reply != nil {
+		// Hand the client the validator it can echo as an If-Match precondition
+		// on a later edit (idx 73 step 5).
+		w.Header().Set("ETag", replyETag(reply.UpdatedAt))
+	}
 	writeRepliesJSON(w, http.StatusOK, map[string]any{"data": reply})
 }
 
@@ -154,11 +159,30 @@ func (h *RepliesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read the reply's current version before writing so an opt-in If-Match
+	// precondition can reject a stale edit (idx 73 step 5). The author-only
+	// write check stays authoritative inside repo.Update below.
+	existing, err := h.repo.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, models.ErrReplyNotFound) {
+			writeRepliesError(w, http.StatusNotFound, "NOT_FOUND", "reply not found")
+			return
+		}
+		h.logger.Error("get reply for update failed", "error", err, "id", id)
+		writeRepliesError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get reply")
+		return
+	}
+	if existing != nil && enforceReplyIfMatch(w, r, existing.UpdatedAt) {
+		return
+	}
+
 	updated, err := h.repo.Update(r.Context(), id, authInfo.AuthorType, authInfo.AuthorID, req.Body)
 	if err != nil {
 		h.writeMutationError(w, err, "update", id)
 		return
 	}
+	// Echo the new validator so the client's next If-Match is current.
+	w.Header().Set("ETag", replyETag(updated.UpdatedAt))
 	writeRepliesJSON(w, http.StatusOK, map[string]any{"data": updated})
 }
 

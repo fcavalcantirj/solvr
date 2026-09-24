@@ -11183,3 +11183,113 @@ REMAINING FOR idx 73 (why passes STAYS false): step 1 (one success/error envelop
   REQUIRED on conflicting edits (v0 breaking OK); step 6 (OpenAPI/SPEC documentation of the
   standardized error/pagination/concurrency/CORS/timeout contract). idx 73 is NOT
   cutover-blocked, so it is completable across a few more slices (unlike idx 72). passes=false.
+
+================================================================================
+2026-09-24 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the
+public API"
+SLICE 2 of N: extend the opt-in If-Match / ETag optimistic-concurrency control
+(shipped for posts in slice 1) to the CANONICAL REPLY edit path — step 5
+"Require version or If-Match on conflicting edits and reject stale updates;
+ensure retries cannot overwrite a newer directive ... or duplicate a
+publication." Reply edits (PATCH /v1/replies/{id}) were the remaining canonical
+mutable resource with NO lost-update protection.
+================================================================================
+
+TASK SELECTION (verified MYSELF this session against the code, not from journal):
+  spec.json: 96 tasks, 30 passes=false. Walked the false list top-down; re-proved
+  the deferrals the prior entry recorded rather than trusting them:
+    idx 23 (ACCEPTANCE "N-agent E2E across clients AND service instances"): step 4
+      "Distribute participants across two API instances" needs multi-instance
+      fan-out. [REAL] grep -rniE 'pg_notify|LISTEN |Listen\(|NOTIFY|pubsub' over
+      internal/hub internal/api cmd => only OS signal.Notify + the app notification
+      service; internal/hub is in-memory (hub.go/manager.go/registry.go). No
+      cross-instance transport => acceptance rule DEFERS idx 23.
+    idx 51/52/72(remainder): KNOWLEDGE-MODEL CUTOVER not done. [REAL] migrations tail
+      is 000089..000100 (all room-model + canonical_replies CREATE); no up-migration
+      drops/migrates approaches/answers/responses/comments (only their 0004-0007
+      *.down.sql exist). Pre-cutover => every "after cutover / rebuild embeddings"
+      step out of sequence. DEFERRED.
+    idx 58 (permissions AUDIT spans search surface = idx 52, false) and idx 66
+      (ACCEPTANCE "clean start" journey, owner/deployment) => DEFER.
+  => idx 73 is again the first false task BUILDABLE now without the cutover
+     (its behavior is local API-standardization). Slice 1 (posts If-Match) is
+     committed (092516f); this iteration continues idx 73 with slice 2.
+  idx 73 is a 6-step "standardize ACROSS the public API" acceptance task; it cannot
+  be honestly flipped in one iteration. Per "ACCEPTANCE TASKS ARE NOT CHECKLISTS"
+  I ship a REAL verified slice (a missing feature, not a test-only pin) and leave
+  passes=false.
+
+WHAT WAS MISSING (verified [REAL] before writing):
+  - [REAL] grep If-Match|IfMatch|412|PreconditionFailed over internal/api/handlers
+    (non-slice-1): the ONLY conditional-request support was posts.go (slice 1). The
+    canonical Reply edit path had none.
+  - [REAL] read replies.go Update: it called h.repo.Update(id, authorType, authorID,
+    body) directly — ownership enforced INSIDE the repo, no pre-read of the current
+    version => a retried/concurrent owner edit is silent last-write-wins. Exactly idx
+    73 step 5's "retries cannot overwrite a newer ... publication" gap for replies.
+
+FILES ([REAL] git status --porcelain: 2 modified, 2 new; git diff --stat: +33/-3):
+  M  backend/internal/api/handlers/posts_concurrency.go (+9/-3, 52->57):
+     extracted the shared strong-ETag derivation into entityETag(updatedAt); postETag
+     now delegates to it (byte-identical output, so all slice-1 post tests still pass).
+  NEW backend/internal/api/handlers/replies_concurrency.go (35 lines):
+     replyETag(updatedAt) = entityETag; enforceReplyIfMatch(w,r,updatedAt) writes 412
+     PRECONDITION_FAILED via writeRepliesError + echoes current ETag when a PRESENT
+     If-Match is stale (reuses the generic ifMatchIsStale: absent header never blocks,
+     "*" matches, W/ weak prefix compared by value, comma list supported). Ordering
+     note in the file: for replies the precondition is checked BEFORE repo ownership —
+     a reply's updated_at is already public via GET, so 412 to a non-owner leaks
+     nothing, and the author-only write stays authoritative inside repo.Update.
+  M  backend/internal/api/handlers/replies.go (+24, 255->279):
+     Get: sets ETag: replyETag(reply.UpdatedAt) before the 200 body.
+     Update: after validate, reads existing := repo.GetByID(id) (404 on ErrReplyNotFound,
+     500 otherwise), then `if existing != nil && enforceReplyIfMatch(w,r,existing.UpdatedAt)
+     { return }`, then the unchanged repo.Update, then echoes ETag: replyETag(updated.UpdatedAt).
+     The `existing != nil` guard preserves the two existing Update tests whose mock GetByID
+     returns (nil,nil); the production repo never does (it returns ErrReplyNotFound).
+  NEW backend/internal/api/handlers/replies_concurrency_test.go (136 lines):
+     6 handler tests (MockRepliesRepository, NO DB => they RUN, not SKIP): stale If-Match
+     =>412 & current-ETag echoed & repo.Update NOT reached (sentinel updateErr); matching
+     If-Match=>200 & new-version ETag echoed; "*"=>200; no-If-Match=>200 (opt-in back-compat);
+     GetByID ErrReplyNotFound on edit =>404; GET sets ETag.
+  NO existing test deleted, skipped, renamed, or weakened. Existing
+  TestReplies_UpdateNonAuthorForbidden + TestReplies_UpdateAuthorSucceeds still PASS
+  unchanged (no If-Match header => enforce is a no-op => original repo path). Design is
+  non-breaking: If-Match is OPT-IN.
+
+TDD (RED proven with teeth):
+  [TEST] GREEN: go test ./internal/api/handlers/ -run
+    'TestReplies_Update|TestReplies_GetSetsETag' -count=1 -v => all 6 new + the 2 pre-existing
+    Update tests PASS, 0 SKIP.
+  [REAL] RED-with-teeth mutation: replaced `if ifMatchIsStale(r, current)` with `if false`
+    in replies_concurrency.go (gate never fires). TestReplies_UpdateStaleIfMatchRejected =>
+    FAIL "status = 500, want 412" (the sentinel updateErr surfaced => repo.Update was
+    reached, proving the 412 gate short-circuits the write). Restored => PASS. (A first
+    mutation flipping only `return true`->`return false` did NOT fail — the 412 is written
+    before the return — which correctly identified the CONDITION, not the return, as the
+    load-bearing line.)
+
+VERIFICATION:
+  [REAL] go build ./... EXIT 0. go vet ./internal/api/handlers/ clean. gofmt -l on all four
+    touched files => empty (clean).
+  [TEST] FULL go test ./internal/api/handlers/ -p 1 -count=1: exactly 4 --- FAIL, ALL the
+    documented pre-existing GitHub OAuth callback integration tests
+    (TestGitHubOAuthRedirect_Integration, TestGitHubCallback_MissingCode/GitHubError/InvalidCode
+    _Integration) — identical to the slice-1 baseline. ZERO reply/concurrency failures => this
+    slice introduced NO regression.
+  [REAL] file sizes: replies.go 279, replies_concurrency.go 35, replies_concurrency_test.go 136,
+    posts_concurrency.go 57 — all < 800.
+  No SPEC.md/OpenAPI edit this slice: documenting the standardized conditional-request contract
+    is idx 73 step 6, an unmet step that should land with the step completing idx 73.
+
+REMAINING FOR idx 73 (why passes STAYS false): step 1 (one success/error envelope audit +
+  contract test across handlers); step 2 (opaque cursor pagination default 50 / max 100 for
+  entries AND replies, next_cursor/has_more); step 3 (status-code matrix 400/401/403/404/409/
+  429/5xx pinned); step 4 (Idempotency-Key reuse rejection on post/reply creation +
+  client_entry_id timeline writes, reject reuse with different payload, 24h retention); step 5
+  REST remainder — If-Match on PATCH /v1/rooms/{slug} (concrete: roomRepo is a CONCRETE
+  *db.RoomRepository, not an interface, so that slice needs the local Postgres stack to test,
+  unlike replies) and room directive supersede; consider making If-Match REQUIRED on conflicting
+  edits (v0 breaking OK); step 6 (OpenAPI/SPEC documentation). idx 73 is NOT cutover-blocked =>
+  completable across a few more slices. passes=false.

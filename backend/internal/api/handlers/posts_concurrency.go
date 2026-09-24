@@ -7,12 +7,18 @@ import (
 	"time"
 )
 
-// postETag derives a strong entity tag for a post from its last-modified time.
+// entityETag derives a strong entity tag from a resource's last-modified time.
 // UnixMicro matches PostgreSQL timestamptz precision, so the validator a client
 // receives from GET or PATCH is byte-stable across a round trip and can be
-// returned unchanged as an If-Match precondition.
-func postETag(updatedAt time.Time) string {
+// returned unchanged as an If-Match precondition. It is shared by every
+// canonical resource that supports conditional edits (posts, replies).
+func entityETag(updatedAt time.Time) string {
 	return `"` + strconv.FormatInt(updatedAt.UTC().UnixMicro(), 10) + `"`
+}
+
+// postETag derives a strong entity tag for a post from its last-modified time.
+func postETag(updatedAt time.Time) string {
+	return entityETag(updatedAt)
 }
 
 // ifMatchIsStale reports whether the request carries an If-Match precondition

@@ -7036,3 +7036,133 @@ UAT: OWNER-ONLY LAST MILE. 100% of this task's behavior is verified locally by t
       the right URL; the detail page itself renders once task 596 ships. Legacy
       /feed,/problems,/ideas redirects to /posts are their own later task
       ("Redirect legacy collection and detail URLs").
+
+================================================================================
+2026-09-24  TASK: "Provide a single post composer and detail experience"
+            (functional, spec.json line ~586) -> passes=true
+================================================================================
+
+TASK SELECTION (top-to-bottom; first BUILDABLE false task; VERIFIED IN CODE)
+  - "Verify N-agent collaboration end to end..." (~300): ACCEPTANCE task spanning
+    ownership (false), permissions (false), canonical room API (false), cross-
+    instance delivery (false). SKIP per ACCEPTANCE-TASKS-ARE-NOT-CHECKLISTS.
+  - "Make agent-created rooms manageable..." (~348): step 2 REQUIRES "rooms.owner_id
+    has been retired after migration". RE-VERIFIED in code:
+      [REAL] backend/internal/db/rooms.go still SELECTs/INSERTs owner_id (lines
+        74,76,155,168,182). No room_members-authority migration exists (latest is
+        000091). That retirement is the LATER data task "Use one room membership
+        authority..." (~880, still false). Forward-dep -> SKIP.
+  - "Make room sharing preserve public viewing" (~511): step 5 public->private
+    invalidation of stream access depends on the streams/credentials task (~939,
+    false) and "permissions authoritative" (~746, false). Forward-dep -> SKIP.
+  - THIS TASK (~586): buildable NOW. The canonical Post API is already live:
+      [REAL] backend/internal/api/router.go: POST /v1/posts (Create), GET
+        /v1/posts/{id} (Get), PATCH /v1/posts/{id} (Update), GET
+        /v1/posts/{id}/replies (List), GET /v1/posts/{id}/rooms (related rooms),
+        POST /v1/posts/{id}/vote.
+      [REAL] backend/internal/api/handlers/posts.go Create: `type` is OPTIONAL
+        (lines ~489-492), defaults to models.PostTypePost -> POST /v1/posts with
+        NO type creates a plain canonical post. Backend accepts `visibility`
+        ("public" default / "family") and preserves author/created_at/votes/
+        source_room_id on PATCH (UpdatePostRequest only carries title/desc/tags/
+        status).
+      [REAL] There was NO app/posts/[id] detail, NO app/posts/new composer, and
+        NO app/posts/[id]/edit before this. The legacy components/new-post/
+        new-post-form.tsx has a Problem/Idea TYPE selector and routes to
+        /problems|/ideas/{id} -> exactly what this task must REPLACE.
+    TOOK IT.
+
+WHAT I BUILT (TDD: RED first -> 3 files failed to import -> GREEN)
+  M  frontend/lib/api-types.ts (+32/-1): APIPost gains optional server-owned
+     publication_state, moderation_state, visibility, source_room_id (additive).
+     New APIReply + APIRepliesResponse (canonical unified contribution). New
+     CreatePostData.visibility and CreatePostData.type made OPTIONAL (canonical
+     composer omits type; legacy callers still compile).
+  M  frontend/lib/api-base.ts (+9): getPostReplies(id) -> GET /v1/posts/{id}/replies;
+     getRelatedRooms(id) -> GET /v1/posts/{id}/rooms. (Kept file at exactly 800
+     lines to respect the 800-line rule; note check-file-size.sh has a find
+     precedence bug that skips .ts anyway, but the rule is honored regardless.)
+  ?? frontend/components/posts/post-composer.tsx (193): ONE title field, ONE
+     Markdown body field, optional tags, Public/Family visibility. NO content-type
+     question anywhere (no "problem"/"idea" text). Submits api.createPost WITHOUT a
+     type; routes to canonical /posts/{id}. Client is dumb: no domain validation,
+     renders whatever error the API returns. Auth-required prompt when logged out.
+  ?? frontend/components/posts/post-detail.tsx (181): ONE detail layout for any
+     post. Renders body (MarkdownContent), author link /users/{id}, date, vote
+     score, tag chips -> /posts?q=. Fetches replies (getPostReplies) and related
+     rooms (getRelatedRooms); shows a related-room link -> /rooms/{slug} and a
+     saved-snapshot (crystallization_cid) section when present. Moderation banner
+     ("Awaiting moderation ... public discovery waits for approved moderation")
+     when moderation/publication is not approved+published. Edit link ->
+     /posts/{id}/edit. Loading + error-with-RETRY states.
+  ?? frontend/components/posts/post-editor.tsx (179): loads the post, prefills
+     title/body/tags, saves via api.updatePost(id, {title, description, tags}) --
+     ONLY those three keys, so author/created_at/votes/source_room_id are never
+     reset by an edit. Routes to /posts/{id}; renders API error on failure.
+  ?? frontend/app/posts/new/page.tsx (24): server wrapper, Header + PostComposer,
+     canonical /posts/new, noindex.
+  ?? frontend/app/posts/[id]/page.tsx (66): server wrapper, generateMetadata with
+     canonical /posts/{id} from GET /v1/posts/{id}; Header + PostDetail.
+  ?? frontend/app/posts/[id]/edit/page.tsx (28): server wrapper, Header +
+     PostEditor, noindex.
+  ?? 3 *.test.tsx (composer/detail/editor): the 13 tests below.
+
+VERIFICATION (all RAN this session; Vitest, jsdom)
+  [TEST] RED: `npx vitest run components/posts/{post-composer,post-detail,
+    post-editor}.test.tsx` before impl = 3 files failed to resolve imports.
+  [TEST] GREEN: same command after impl = 3 files / 13 tests PASS, 0 SKIP:
+    post-composer (4): one title+body+tags+visibility and NO type question (step 1);
+      createPost called with NO `type` + visibility, routes /posts/{id} (step 2);
+      shows API error, never says problem/idea (step 5); auth-required gate.
+    post-detail (6): body+author link+date+vote+tags (step 3); replies from
+      canonical endpoint (step 3); related-room link + saved snapshot (step 3);
+      moderation-pending banner (step 2); edit link -> /posts/{id}/edit (step 4
+      entry); error+RETRY (step 5).
+    post-editor (3): prefills from post (step 4); save sends EXACTLY
+      {title,description,tags} and asserts no author/created_at/vote_score/
+      source_room_id keys, routes /posts/{id} (step 4); API error on save (step 5).
+  [TEST] Full frontend suite `npx vitest run` (log /tmp/solvr_fe_595.log) =
+    161 files, 1540 tests: 1539 PASS, 1 FAIL. The single failure is the PRE-
+    EXISTING FLAKY app/api-docs/page.test.tsx "renders without hardcoded ALL
+    SYSTEMS OPERATIONAL text" (a health-check timing test) -- it PASSES 4/4 when
+    run in isolation (`npx vitest run app/api-docs/page.test.tsx`), proving it is
+    load-flake, not a regression from this task. None of my files touch api-docs
+    or the health check.
+  [REAL] `npm run typecheck` (tsc --noEmit) = clean.
+  [REAL] `npx next lint --dir components/posts --dir app/posts` = No ESLint
+    warnings or errors.
+  [REAL] File sizes: new .tsx 24-193 lines; api-base.ts trimmed back to exactly
+    800 (was 791; my +methods pushed it to 805, compacted to 800).
+
+STEP-BY-STEP against the task:
+  1 New post = one title + one Markdown body + optional tags + visibility, NO
+    content-type question -> [TEST] post-composer test 1.
+  2 Publish via canonical API, /posts/{id} same layout, public discovery waits for
+    approved moderation -> [TEST] composer test 2 (no-type create + /posts/{id}
+    route) + detail test 4 (moderation banner).
+  3 Detail shows body/author/date/tags/replies/related room or snapshot -> [TEST]
+    detail tests 1-3.
+  4 Edit updates content+tags without resetting author/created_at/replies/votes/
+    source -> [TEST] editor test 2 (payload keys exactly title/description/tags).
+  5 Consistent validation/moderation/loading/retry messages, never "problem"/
+    "idea" -> [TEST] composer test 3 + detail/editor error+RETRY states; composer
+    test 1 asserts no problem/idea wording in the DOM.
+
+DIFF (git status --porcelain / git diff --stat) - matches the work above:
+  M frontend/lib/api-base.ts (+9)
+  M frontend/lib/api-types.ts (+32/-1)
+  ?? frontend/app/posts/new/page.tsx
+  ?? frontend/app/posts/[id]/page.tsx  (+ [id]/edit/page.tsx)
+  ?? frontend/components/posts/post-composer.tsx (+ .test.tsx)
+  ?? frontend/components/posts/post-detail.tsx (+ .test.tsx)
+  ?? frontend/components/posts/post-editor.tsx (+ .test.tsx)
+  (spec.json: this task passes -> true)
+
+UAT: OWNER-ONLY LAST MILE. 100% of this task's automated behavior is verified by
+  the 13 Vitest tests + typecheck + lint + full-suite green (minus the unrelated
+  pre-existing api-docs flake). One inherently-visual item remains for the owner:
+  open /posts/new, /posts/{id}, and /posts/{id}/edit in a running browser to
+  eyeball the monochrome/Inter/JetBrains-Mono styling against the visual
+  reference. Legacy /problems|/ideas|/questions detail routes still exist and are
+  redirected to canonical /posts/{id} by their OWN later ledger task ("Redirect
+  legacy collection and detail URLs"), which is out of scope here.

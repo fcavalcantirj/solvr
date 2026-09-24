@@ -35,6 +35,33 @@ export interface APIPost {
   original_language?: string;
   original_title?: string;
   original_description?: string;
+  // Canonical post-state fields (server-owned). Present on canonical reads; the
+  // client only displays them and never decides publication itself.
+  publication_state?: 'draft' | 'published' | 'archived';
+  moderation_state?: 'pending' | 'approved' | 'rejected';
+  visibility?: 'public' | 'family';
+  source_room_id?: string | null;
+}
+
+// One canonical Reply — the unified contribution model. A reader never chooses
+// approach/answer/response/comment; the server returns the same shape for all.
+export interface APIReply {
+  id: string;
+  post_id: string;
+  parent_reply_id?: string | null;
+  author: APIAuthor;
+  body: string;
+  score: number;
+  upvotes: number;
+  downvotes: number;
+  created_at: string;
+  updated_at: string;
+  legacy_type?: string;
+}
+
+export interface APIRepliesResponse {
+  data: APIReply[];
+  meta: { total: number; page: number };
 }
 
 export interface APIPostsResponse {
@@ -238,10 +265,13 @@ export interface APICheckReportedResponse {
 }
 
 export interface CreatePostData {
-  type: 'problem' | 'idea';
+  // type is optional and omitted by the canonical composer: POST /v1/posts
+  // defaults to a plain canonical post. Legacy callers may still send it.
+  type?: 'problem' | 'idea';
   title: string;
   description: string;
   tags?: string[];
+  visibility?: 'public' | 'family';
   success_criteria?: string[];
   weight?: number;
 }

@@ -592,7 +592,7 @@
       "Edit the post and verify content and tags update without resetting author identity, original creation time, replies, votes, or source attribution.",
       "Verify validation, moderation, loading, and retry states use one consistent set of messages and do not refer to submitting a problem or idea."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

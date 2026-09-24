@@ -25,6 +25,8 @@ import type {
   CreatePostData,
   UpdatePostData,
   APICreatePostResponse,
+  APIRepliesResponse,
+  APIRoom,
   CreateApproachData,
   APICreateApproachResponse,
   APICreateAnswerResponse,
@@ -210,6 +212,13 @@ export class SolvrAPIBase {
 
   async getPost(id: string): Promise<{ data: APIPost }> {
     return this.fetch<{ data: APIPost }>(`/v1/posts/${id}`);
+  }
+
+  async getPostReplies(id: string): Promise<APIRepliesResponse> {
+    return this.fetch<APIRepliesResponse>(`/v1/posts/${id}/replies`);
+  }
+  async getRelatedRooms(id: string): Promise<{ data: APIRoom[] }> {
+    return this.fetch<{ data: APIRoom[] }>(`/v1/posts/${id}/rooms`);
   }
 
   async getQuestionAnswers(questionId: string, params?: { page?: number; per_page?: number }): Promise<APIAnswersResponse> {

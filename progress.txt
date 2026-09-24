@@ -10888,3 +10888,100 @@ REMAINING FOR idx 72 (unchanged from slice 6 minus this): Step 2 — search/over
   listings rewire (entangled with knowledge cutover idx 93; see TASK SELECTION above). Step 5 —
   legacy status-command migration error (blocked on first-party client cutover, slice-2 WHY NOT).
   idx 72 passes STAYS false.
+
+================================================================================
+2026-09-24 — Task idx 72 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and
+statistics APIs"
+SLICE 8 of N: pin the GET /v1/rooms room-discovery PAGINATION/ORDERING/FILTER contract
+at the handler layer (step 2 "... define filters, ordering, pagination, and visibility
+once for each purpose"). Slice 7 pinned the repo-layer visibility (private-room
+exclusion); the request-parsing clamps that decide which RoomListParams reach
+ListFiltered had NO test, so a dropped bound would silently change the public
+discovery contract with nothing failing. This slice pins that parsing contract.
+================================================================================
+
+TASK SELECTION (verified MYSELF this session, not trusted from journal):
+  - spec.json: 96 tasks, 30 passes=false. First-false is idx 23 (ACCEPTANCE "Verify
+    N-agent collaboration end to end across clients AND service instances"): step 4
+    "Distribute participants across two API instances" = idx 78 (operations, multi-instance),
+    passes=false/not built. Acceptance-task rule => defer. idx 51/52 need the knowledge
+    cutover (idx 93, false). idx 58 (server-permission audit) spans search/social-metadata
+    (idx 52/63). idx 66 (ACCEPTANCE, needs a test deployment) => defer. idx 67 (destructive
+    schema cleanup) needs the migration cutover. idx 68-71 passes=true. => idx 72 is again
+    the first BUILDABLE task; continued it.
+  - Within idx 72, VERIFIED the two documented "blockers" are REAL (not trusted):
+      (b) step-5 legacy-status-commands migration error. Prior journal tagged the WHY-NOT
+          [UNVERIFIED]; I verified it. route_families.go legacy-status-commands (PATCH
+          /v1/approaches/{id}, POST /v1/approaches/{id}/verify, POST
+          /v1/questions/{id}/accept/{aid}, POST /v1/ideas/{id}/evolve) is Disposition=RETIRE,
+          Canonical="no canonical equivalent". Making these return a migration error NOW
+          collides with idx 51 step 3 ("For a 90-day transition AFTER cutover, accept
+          documented legacy write shapes through adapters") + idx 51 step 5 ("AFTER the
+          transition, return a machine-readable migration error"): the knowledge cutover
+          (idx 93) has NOT happened, so we are PRE-cutover and retiring writes now is out of
+          sequence. Also [REAL] grep: 60 in-repo _test.go references pin the current success
+          behaviour of UpdateApproach/VerifyApproach/AcceptAnswer/Evolve, and router.go still
+          registers all four routes (lines 948-963) reaching the live handlers. Blocker CONFIRMED
+          — leave for after idx 51/93.
+      (a) step-3 contribution-listings rewire (GET /v1/users/{id}/contributions, /me/contributions,
+          Disposition=RETIRE, Canonical="GET /v1/posts?author_type=&author_id="): retiring changes
+          the public ContributionItem response shape (type answer|approach|response + approach-only
+          Status), which the canonical Reply model drops; entangled with the knowledge cutover
+          (idx 93, false). Deferred, as prior slices did.
+    => the genuine remaining step-2 gap is room-discovery request parsing (search+overview
+    contracts already pinned by handlers/search_*_test.go + router_homepage_consolidated_test.go;
+    repo-layer room visibility pinned slice 7). Took that.
+
+WHAT WAS MISSING (verified [REAL] before writing):
+  - [REAL] No handler-level backend/internal/api/handlers/rooms_test.go exists; no test named
+    ListRooms at the handler layer. grep for rooms?limit / limit=0 / limit=101 / sort=bogus
+    across backend/internal/api/*_test.go => ZERO. router_rooms_test.go:180 does
+    http.Get(".../v1/rooms") with NO query params, so the limit/offset/sort clamps in
+    RoomHandler.ListRooms (handlers/rooms.go) were entirely unguarded.
+
+FILES ([REAL] git status --porcelain / git diff --stat: 1 modified, 2 new):
+  NEW backend/internal/api/handlers/rooms_list_options.go (48 lines): parseRoomListParams(r)
+    — the GET /v1/rooms parsing MOVED VERBATIM out of RoomHandler.ListRooms (limit default 20,
+    accept 1-100 else default; offset default 0, accept >=0 else 0; sort recent|active, unknown
+    -> recent; q TrimSpace; include_archived == "true"), mirroring the slice-2 posts_list_options.go
+    pattern for the same task. Behaviour-preserving extraction.
+  M   backend/internal/api/handlers/rooms.go (-30/+1): ListRooms now calls parseRoomListParams(r);
+    the 30-line inline parse block removed; now-unused "strconv" and "strings" imports dropped.
+    File 484 -> 454 lines (< 800).
+  NEW backend/internal/api/handlers/rooms_list_options_test.go (120 lines):
+    TestParseRoomListParams — 17 table subtests pinning every clamp/lenient-fallback case
+    (defaults, valid/boundary/over-limit/zero/negative/non-int limit, valid/negative/non-int
+    offset, sort active/recent/unknown, q trimming, include_archived true/other, all-together).
+  NO other production behaviour changed. NO existing test deleted, skipped, renamed or weakened
+    — purely additive plus a behaviour-preserving refactor.
+
+TDD (RED proven with teeth):
+  [TEST] RED compile: go test -run TestParseRoomListParams => "undefined: parseRoomListParams"
+    (/tmp shows FAIL build). Then implemented => GREEN.
+  [TEST] GREEN: go test ./internal/api/handlers/ -run TestParseRoomListParams -count=1 -v =>
+    PASS, all 17 subtests, 0 SKIP.
+  [REAL] RED-with-teeth mutation: temporarily dropped the "&& parsed <= 100" clamp from
+    parseRoomListParams and re-ran => ONLY "limit_above_100_falls_back_to_default_20" FAILED
+    (got Limit:101, want 20). Restored (cp from /tmp/rlo.bak); re-ran => PASS. Proves the test
+    is load-bearing, not a tautology.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test):
+  [REAL] go build ./... EXIT 0; go vet ./internal/api/handlers/ clean; gofmt -l on all 3
+    changed/new files => clean. Sizes: rooms.go 454, rooms_list_options.go 48, test 120 — all < 800.
+  [TEST] FULL go test ./internal/api/handlers/ -p 1 -count=1 (/tmp/i72s8_handlers.log): only 4
+    unique --- FAIL, ALL the documented pre-existing GitHub OAuth callback integration tests
+    (TestGitHubCallback_* / TestGitHubOAuthRedirect_Integration). ZERO room/ListRooms-related
+    failures => this behaviour-preserving slice introduced NO regression.
+  [TEST] go test ./internal/api/ -run TestRoomRoutes_ListRooms -count=1 -v => PASS (route-level
+    GET /v1/rooms unchanged by the refactor).
+  No SPEC.md / PROJECT_KNOWLEDGE.md edit required: no route added/removed, no public contract
+    changed — this pins an EXISTING invariant. route_families.go room-discovery (Keep) unchanged.
+
+REMAINING FOR idx 72 (unchanged from slice 7 minus this): Step 2 — search/overview contracts
+  pinned; repo-layer room visibility pinned (slice 7); handler-layer room-discovery
+  pagination/ordering/filter parsing now pinned (this slice). Step 3 rest — contribution
+  listings rewire (entangled with knowledge cutover idx 93; see TASK SELECTION). Step 5 —
+  legacy-status-commands migration error (out of sequence pre-cutover per idx 51; 60 in-repo
+  tests + live routes still depend on the handlers; blocked on idx 51/93). idx 72 passes STAYS
+  false.

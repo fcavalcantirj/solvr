@@ -6,8 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
-	"strings"
 
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/auth"
@@ -282,34 +280,7 @@ func (h *RoomHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
 // Public endpoint, no authentication required (D-18).
 // Returns a list of public rooms with stats.
 func (h *RoomHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
-	limit := 20
-	offset := 0
-
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
-			limit = parsed
-		}
-	}
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
-			offset = parsed
-		}
-	}
-
-	// Sort control: Recent (default) or Active now. Unknown values fall back to
-	// recent rather than erroring, matching the lenient limit/offset parsing.
-	sort := "recent"
-	if s := r.URL.Query().Get("sort"); s == "active" {
-		sort = "active"
-	}
-
-	rooms, err := h.roomRepo.ListFiltered(r.Context(), db.RoomListParams{
-		Limit:           limit,
-		Offset:          offset,
-		Sort:            sort,
-		Query:           strings.TrimSpace(r.URL.Query().Get("q")),
-		IncludeArchived: r.URL.Query().Get("include_archived") == "true",
-	})
+	rooms, err := h.roomRepo.ListFiltered(r.Context(), parseRoomListParams(r))
 	if err != nil {
 		slog.Error("failed to list rooms", "error", err)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list rooms")

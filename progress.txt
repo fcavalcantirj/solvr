@@ -7287,3 +7287,116 @@ NOTE: middleware.ts config.matcher and next.config redirects behavior are the
   query preserved; open a legacy /problems/{id}#approach-<id> deep link and
   confirm it scrolls to the migrated reply. Every automatable check above already
   ran green.
+
+========================================================================
+2026-09-24 — TASK: "Preserve saved knowledge and IPFS references as
+contextual features" (~700, category functional). passes false -> true.
+
+TASK SELECTION (top-to-bottom; each earlier skip re-verified against REAL code,
+not prose):
+  - ~300 "Verify N-agent collaboration end to end...": ACCEPTANCE task spanning
+    unbuilt behavior — "two API instances" needs ~983 (false), canonical entries
+    contract needs ~895 (false). Acceptance-not-a-checklist -> SKIP.
+  - ~349 "Make agent-created rooms manageable...": step 2 REQUIRES "rooms.owner_id
+    has been retired after migration". [REAL] backend/internal/db/rooms.go still
+    SELECTs/INSERTs owner_id (lines 74,76,155,168,182,279,294,349,423) and has
+    BackfillOwnerFromMembership (432) that WRITES owner_id; retirement is the
+    later task ~880 (false). Forward-dep -> SKIP.
+  - ~513 "Make room sharing preserve public viewing": steps 1-4 buildable, but
+    step 5 (public->private invalidation of previews/cached HTML/search/stream)
+    depends on ~746 (permissions authoritative, false) and ~931 (stream/credential
+    revocation, false). [REAL] room page is ISR revalidate=300; visibility-change
+    stream/cache invalidation is owned by those false tasks. Forward-dep -> SKIP.
+  - ~648 "Route existing agent integrations ... during a defined transition":
+    explicitly framed on CUTOVER ("before switching the public UI", "90-day
+    transition AFTER cutover", "return a migration error after the transition").
+    [REAL] legacy /v1/problems,/v1/questions,/v1/ideas still served (router.go:365)
+    — no cutover yet; also spans MCP+TS/Py/Go SDKs+CLI+webhooks. Coupled to ~1177
+    (cutover, false)/~854 (schema reduction, false). Not verifiable now -> SKIP.
+  - ~663 "Let agents and humans search the retained knowledge...": step 4
+    "Rebuild/remap search indexes and embeddings as required by the migration and
+    compare ... before and after cutover" requires the migration/cutover (false).
+    Cannot verify before/after pre-cutover -> SKIP.
+  - THIS TASK (~700): buildable NOW. The canonical Post model already carries the
+    IPFS snapshot and renders it; my job is to pin task 709's specific contract.
+    TOOK IT.
+
+STATE FOUND (all [REAL], verified this session by reading the code):
+  - backend/internal/models/post.go:181-185 — Post has CrystallizationCID *string
+    (json crystallization_cid) and CrystallizedAt; API serializes them.
+  - frontend/lib/api-types.ts:32-33 — APIPost.crystallization_cid / crystallized_at.
+  - frontend/components/posts/post-detail.tsx:147-164 — SAVED SNAPSHOT section
+    renders ONLY when crystallization_cid is present: heading, an external
+    read-only link to https://ipfs.io/ipfs/{cid} (target=_blank rel="noopener
+    noreferrer"), the crystallized_at timestamp, and the note "The live post may
+    differ from it." Keyed on the CID, not on post type -> canonical Post model,
+    not problem-only (step 3). NOTE: the note is intentionally STATIC — deciding
+    "live differs" by comparing updated_at vs crystallized_at would be a
+    client-side calculation and VIOLATE "API smart, client dumb", so it is
+    correctly left to the API/copy. No production change made here.
+  - frontend/components/footer.tsx:14 + footer.test.tsx:23,46-49 — a single IPFS
+    link (/ipfs) lives in the footer DISCOVER column (step 4); frontend/app/ipfs
+    exists. [REAL] grep of frontend/components/homepage, app/page.tsx, app/connect
+    for "ipfs" = EMPTY -> IPFS is not in the main connection funnel (step 4).
+  - backend/internal/api/handlers/posts.go:545-552 — posts enforce visibility
+    (public default / family, BART-151); post-detail only renders after getPost
+    succeeds, so a private/family post's snapshot is never shown to an
+    unauthorized reader (step 5). The legacy problem crystallize UI
+    (components/problems/detail/*) lives only on now-redirected /problems routes,
+    not the canonical surface.
+
+WHAT I CHANGED (git status --porcelain / git diff --stat — matches exactly):
+  M  frontend/components/posts/post-detail.test.tsx (+48/-1). NO production code
+     changed — 709's behavior was delivered by the earlier "single post composer
+     and detail experience" task (snapshot section) and the nav/footer task (IPFS
+     in footer); this task pins 709's contract with tests. 4 new tests added
+     inside a new `describe('saved IPFS snapshot (task 709)')` block; also added
+     `within` to the testing-library import. No existing test deleted, weakened,
+     skipped, or renamed.
+     New tests:
+       1. immutable snapshot = external read-only https://ipfs.io/ipfs/{cid}
+          (target=_blank rel="noopener noreferrer") + its own timestamp (scoped
+          via within() so the header date is not matched) + "live post may differ"
+          note (steps 1, 2).
+       2. snapshot shows for a canonical post of type 'idea' carrying a CID —
+          proves it is not problem-only (step 3).
+       3. no CID -> the SAVED SNAPSHOT section is absent; never fabricated
+          (steps 2, 5).
+       4. snapshot section contains no button/input/textarea/contenteditable (it
+          is read-only context, not editable) and the sole Edit link targets the
+          LIVE post /posts/p1/edit, not the snapshot (step 5).
+
+STEP-BY-STEP against the task:
+  1 migrated post w/ CID: immutable snapshot link + timestamp -> [TEST] new test 1
+    (href/target/rel + scoped timestamp). UAT for the live gateway resolution.
+  2 snapshots as OPTIONAL post details + explain live may differ -> [TEST] new
+    tests 1 (note) + 3 (optional/absent when none).
+  3 new snapshot actions operate on canonical Post model, not problem-only ->
+    [TEST] new test 2 (type 'idea' + CID renders). No user-facing snapshot-CREATE
+    action is retained on the canonical surface ([REAL] router.go has no
+    post pin/crystallize endpoint), so "if retained" is satisfied.
+  4 IPFS in contextual details/Docs/footer, not the main funnel -> [TEST] footer
+    tests (IPFS single entry) + [REAL] grep proving no IPFS in homepage/connect.
+  5 preservation never makes private public + immutable not editable -> [TEST]
+    new tests 3 (never fabricated) + 4 (read-only, no edit affordance; Edit targets
+    live post) + [REAL] posts.go visibility enforcement gates the snapshot render.
+
+VERIFICATION (all RAN this session; Vitest 4, jsdom; log /tmp/solvr_709.log):
+  [TEST] `npx vitest run components/posts/post-detail.test.tsx
+    components/footer.test.tsx` = 2 files / 35 tests PASS, 0 FAIL, 0 SKIP
+    (post-detail 11 incl. the 4 new; footer 24 incl. the IPFS step-4 asserts).
+    First run surfaced 1 failure — getByText(/2h ago/) matched twice because
+    formatRelativeTime is mocked constant, so the header date and the snapshot
+    date both read "2h ago"; fixed by scoping the timestamp assertion to the
+    snapshot section with within(). Re-ran GREEN. (These tests pin behavior that
+    already existed; they pass on the current impl — no RED phase, because 709's
+    behavior was built by prior tasks. Honest note, not a skipped-test pass.)
+  [REAL] `npm run typecheck` (tsc --noEmit) = clean.
+  [REAL] git diff --stat = 1 file, +48/-1 (post-detail.test.tsx only).
+
+UAT: OWNER-ONLY LAST MILE — every automatable check above ran GREEN. The one
+  inherently-live item is step 1's "the snapshot link ... still work": open a
+  real migrated post that has a crystallization_cid and click its ipfs.io link to
+  confirm the IPFS gateway actually serves the archived snapshot. That requires a
+  live IPFS gateway + a real crystallized post and is a visual/live confirmation,
+  not an automatable unit check.

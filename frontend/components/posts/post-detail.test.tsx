@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import type { APIPost, APIReply, APIRoom } from '@/lib/api-types';
 
 const getPost = vi.fn();
@@ -119,5 +119,52 @@ describe('PostDetail', () => {
     render(<PostDetail postId="p1" />);
     await waitFor(() => expect(screen.getByText(/could not load/i)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+  });
+
+  // Task 709 — Preserve saved knowledge and IPFS references as contextual features.
+  describe('saved IPFS snapshot (task 709)', () => {
+    it('renders the immutable snapshot as an external read-only IPFS link with its timestamp and a live-differs note (steps 1, 2)', async () => {
+      getPost.mockResolvedValue({
+        data: makePost({ crystallization_cid: 'bafycid123', crystallized_at: '2026-09-05T00:00:00Z' }),
+      });
+      render(<PostDetail postId="p1" />);
+      const link = await screen.findByRole('link', { name: /bafycid123/i });
+      // step 1: the snapshot link addresses the CID on the IPFS gateway and opens externally (immutable, read-only).
+      expect(link).toHaveAttribute('href', 'https://ipfs.io/ipfs/bafycid123');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      // step 1: the snapshot section carries its own timestamp (scoped so the header date is not matched).
+      const section = link.closest('section');
+      expect(section).not.toBeNull();
+      expect(within(section!).getByText(/2h ago/i)).toBeInTheDocument();
+      // step 2: it explains the live post may differ from the saved copy.
+      expect(within(section!).getByText(/live post may differ/i)).toBeInTheDocument();
+    });
+
+    it('shows the snapshot for any canonical post carrying a CID, not only a problem type (step 3)', async () => {
+      getPost.mockResolvedValue({ data: makePost({ type: 'idea', crystallization_cid: 'bafyIdea' }) });
+      render(<PostDetail postId="p1" />);
+      expect(await screen.findByRole('link', { name: /bafyIdea/i })).toBeInTheDocument();
+    });
+
+    it('omits the snapshot section entirely when the post has no saved copy — never fabricates one (steps 2, 5)', async () => {
+      getPost.mockResolvedValue({ data: makePost() }); // no crystallization_cid
+      render(<PostDetail postId="p1" />);
+      await waitFor(() => expect(screen.getByText(/body of the post/i)).toBeInTheDocument());
+      expect(screen.queryByText(/saved snapshot/i)).not.toBeInTheDocument();
+    });
+
+    it('presents the snapshot as optional context, never as editable content (step 5)', async () => {
+      getPost.mockResolvedValue({ data: makePost({ crystallization_cid: 'bafycid123' }) });
+      render(<PostDetail postId="p1" />);
+      const heading = await screen.findByText(/saved snapshot/i);
+      const section = heading.closest('section');
+      expect(section).not.toBeNull();
+      // The snapshot is a read-only external reference: no edit control or editable field inside it.
+      expect(section!.querySelector('button')).toBeNull();
+      expect(section!.querySelector('input, textarea, [contenteditable="true"]')).toBeNull();
+      // The only Edit affordance targets the LIVE post, not the immutable snapshot.
+      expect(screen.getByRole('link', { name: /edit/i })).toHaveAttribute('href', '/posts/p1/edit');
+    });
   });
 });

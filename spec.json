@@ -706,7 +706,7 @@
       "Keep IPFS information in contextual details, Docs, and the footer rather than the main connection funnel.",
       "Verify preservation never changes a private post or room into public content as a side effect and existing immutable content is not misrepresented as editable."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

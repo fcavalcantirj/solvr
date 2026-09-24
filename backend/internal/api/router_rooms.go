@@ -48,9 +48,9 @@ func mountRoomRoutes(
 	roomHandler.SetFunnelRecorder(funnelRepo)
 	presenceHandler.SetFunnelRecorder(funnelRepo)
 	msgHandler.SetFunnelRecorder(funnelRepo)
-	sseHandler := handlers.NewRoomSSEHandler(hubMgr, msgRepo, roomRepo)
-	claimsHandler := handlers.NewRoomClaimsHandler(claimRepo)
 	entryRepo := db.NewRoomEntryRepository(pool)
+	sseHandler := handlers.NewRoomSSEHandler(hubMgr, msgRepo, entryRepo, roomRepo)
+	claimsHandler := handlers.NewRoomClaimsHandler(claimRepo)
 	eventsHandler := handlers.NewRoomEventsHandler(entryRepo, hubMgr)
 	roomConnectHandler := handlers.NewRoomConnectHandler(roomRepo, msgRepo)
 	roomSavePostHandler := handlers.NewRoomSavePostHandler(db.NewPostRepository(pool), roomRepo, memberRepo)
@@ -180,7 +180,8 @@ func mountRoomRoutes(
 		r.With(agentWriteLimit).Post("/events", eventsHandler.PostEvent)
 		r.Get("/events", eventsHandler.ListEvents)
 
-		// Transport adapter over the canonical GET /v1/rooms/{slug}/stream (same hub, frames and replay).
+		// Transport adapter over the canonical GET /v1/rooms/{slug}/stream (same hub, frames and
+		// reconnect replay of messages and events).
 		r.Get("/stream", sseHandler.Stream)
 	})
 }

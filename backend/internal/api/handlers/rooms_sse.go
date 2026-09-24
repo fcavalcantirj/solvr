@@ -46,9 +46,10 @@ func SSERoomToContext(ctx context.Context, room *models.Room) context.Context {
 // It provides real-time streaming of room events (messages, presence changes)
 // with Last-Event-ID replay, heartbeat pings, and connection limits.
 type RoomSSEHandler struct {
-	hubMgr   *hub.HubManager
-	msgRepo  *db.MessageRepository
-	roomRepo *db.RoomRepository
+	hubMgr    *hub.HubManager
+	msgRepo   *db.MessageRepository
+	entryRepo *db.RoomEntryRepository
+	roomRepo  *db.RoomRepository
 
 	// testRoomLookup overrides room-by-slug lookup in unit tests (nil in production).
 	testRoomLookup func(ctx context.Context, slug string) (*models.Room, error)
@@ -56,11 +57,13 @@ type RoomSSEHandler struct {
 
 // NewRoomSSEHandler creates a new SSE handler for room event streaming.
 // roomRepo is required for PublicStream (resolves room by slug without bearer token).
-func NewRoomSSEHandler(hubMgr *hub.HubManager, msgRepo *db.MessageRepository, roomRepo *db.RoomRepository) *RoomSSEHandler {
+// entryRepo supplies the typed events a reconnecting stream replays alongside messages.
+func NewRoomSSEHandler(hubMgr *hub.HubManager, msgRepo *db.MessageRepository, entryRepo *db.RoomEntryRepository, roomRepo *db.RoomRepository) *RoomSSEHandler {
 	return &RoomSSEHandler{
-		hubMgr:   hubMgr,
-		msgRepo:  msgRepo,
-		roomRepo: roomRepo,
+		hubMgr:    hubMgr,
+		msgRepo:   msgRepo,
+		entryRepo: entryRepo,
+		roomRepo:  roomRepo,
 	}
 }
 
@@ -78,7 +81,7 @@ func (h *RoomSSEHandler) resolveSSERoomBySlug(ctx context.Context, slug string) 
 // 1. Checks http.Flusher support (required for SSE)
 // 2. Enforces global SSE connection limit (D-05: 1000 max)
 // 3. Sets SSE headers including X-Accel-Buffering: no (D-02)
-// 4. Replays missed messages via Last-Event-ID header (D-07)
+// 4. Replays missed timeline entries (messages and typed events) via Last-Event-ID (D-07)
 // 5. Subscribes to the room hub for real-time events (D-12: lazy room creation)
 // 6. Streams events with 30s heartbeat (D-04) and 30-min max lifetime (D-03)
 //
@@ -181,25 +184,14 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 	flusher.Flush()
 
 	// Step 4: Last-Event-ID replay (D-07).
-	// If the client reconnects with a Last-Event-ID header, replay missed messages
-	// from the database using cursor-based pagination on BIGSERIAL message ID.
-	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" && h.msgRepo != nil {
+	// If the client reconnects with a Last-Event-ID header, replay the timeline entries
+	// (messages and typed events) it missed, in entry id order.
+	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" {
 		afterID, parseErr := strconv.ParseInt(lastID, 10, 64)
 		if parseErr == nil && afterID > 0 {
-			msgs, listErr := h.msgRepo.ListAfter(r.Context(), room.ID, afterID, 100)
-			if listErr == nil {
-				for _, msg := range msgs {
-					evt := hub.RoomEvent{
-						ID:        msg.ID,
-						Type:      hub.EventMessage,
-						RoomID:    hub.NewRoomID(room.ID),
-						AgentName: msg.AgentName,
-						Payload:   msg,
-						Timestamp: msg.CreatedAt,
-					}
-					if evt.Matches(typeFilter, issueFilter) {
-						writeSSEEvent(w, flusher, evt)
-					}
+			for _, evt := range h.replayAfter(r.Context(), room, afterID) {
+				if evt.Matches(typeFilter, issueFilter) {
+					writeSSEEvent(w, flusher, evt)
 				}
 			}
 		}
@@ -254,6 +246,49 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 			return
 		}
 	}
+}
+
+// maxSSEReplay caps how many missed entries one reconnect replays.
+const maxSSEReplay = 100
+
+// replayAfter returns up to maxSSEReplay timeline entries after afterID as stream frames,
+// messages and typed events merged in entry id order (both kinds share one id space).
+// Frames are built exactly as the live broadcasts build them. Best-effort: a failed read
+// replays nothing from that kind rather than breaking the stream.
+func (h *RoomSSEHandler) replayAfter(ctx context.Context, room *models.Room, afterID int64) []hub.RoomEvent {
+	var msgs []hub.RoomEvent
+	if h.msgRepo != nil {
+		if list, err := h.msgRepo.ListAfter(ctx, room.ID, afterID, maxSSEReplay); err == nil {
+			for _, msg := range list {
+				msgs = append(msgs, hub.RoomEvent{
+					ID:        msg.ID,
+					Type:      hub.EventMessage,
+					RoomID:    hub.NewRoomID(room.ID),
+					AgentName: msg.AgentName,
+					Payload:   msg,
+					Timestamp: msg.CreatedAt,
+				})
+			}
+		}
+	}
+	var events []hub.RoomEvent
+	if h.entryRepo != nil {
+		if list, err := h.entryRepo.ListEventsAfter(ctx, room.ID, afterID, maxSSEReplay); err == nil {
+			for i := range list {
+				events = append(events, typedHubEvent(&list[i]))
+			}
+		}
+	}
+
+	merged := make([]hub.RoomEvent, 0, len(msgs)+len(events))
+	for len(merged) < maxSSEReplay && (len(msgs) > 0 || len(events) > 0) {
+		if len(events) == 0 || (len(msgs) > 0 && msgs[0].ID < events[0].ID) {
+			merged, msgs = append(merged, msgs[0]), msgs[1:]
+		} else {
+			merged, events = append(merged, events[0]), events[1:]
+		}
+	}
+	return merged
 }
 
 // writeSSEEvent serializes a RoomEvent as an SSE frame and flushes it.

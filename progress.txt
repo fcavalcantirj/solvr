@@ -9851,3 +9851,62 @@ REMAINING FOR idx 70 (next slices):
   - Step 4: connection prompts (connect_prompts.go, skill script) prefer /entries, keeping
     register + handshake explicit and recoverable.
   - Step 5: SPEC.md — canonical entry contract (message + event) + stream + adapter mapping.
+
+================================================================================
+2026-09-24 — Task idx 70 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Offer one canonical room API with thin adapters for the existing transport routes"
+SLICE 4 of N: SSE reconnect replay (Last-Event-ID / ?after / ?lastEventId) replays the
+canonical timeline — messages AND typed events in entry id order — on both
+GET /v1/rooms/{slug}/stream and its /r/{slug}/stream adapter.
+================================================================================
+
+TASK SELECTION: same top-down skips as slices 1-3 (idx 23 ACCEPTANCE needs idx 77; 51/52
+  need idx 92 + 67; 58 needs idx 73; 66 ACCEPTANCE; 67 needs idx 74). Continued idx 70.
+
+FILES ([REAL] git status --porcelain / git diff --stat before journaling):
+  M   backend/internal/db/room_entries.go (326): +ListEventsAfter(roomID, afterID, limit)
+    — kind=event entries with id > afterID, id ASC.
+  M   backend/internal/api/handlers/rooms_event_submit.go (122): the live hub frame for an
+    event is now built by typedHubEvent(entry) (same fields as before), shared with replay.
+  M   backend/internal/api/handlers/rooms_sse.go (313): RoomSSEHandler holds entryRepo;
+    NewRoomSSEHandler(hubMgr, msgRepo, entryRepo, roomRepo). Replay moved to replayAfter:
+    msgRepo.ListAfter (message frames built exactly as before) merged by id with
+    entryRepo.ListEventsAfter (typedHubEvent frames), capped at maxSSEReplay=100; ?type=/
+    ?issue= filters still applied per frame. Streaming loop otherwise untouched.
+  M   backend/internal/api/router_rooms.go (187): passes entryRepo to the SSE handler.
+  NEW backend/internal/api/router_rooms_entries_replay_test.go (129 lines, 1 test).
+  No test deleted, skipped or loosened. No frontend, SPEC.md or migration change.
+
+BEHAVIOR CHANGE: a reconnecting stream now also receives the typed events it missed
+  (before: messages only; events were live-only). This includes server-recorded event
+  entries that are stored in the timeline but never broadcast live — [REAL] the
+  room.activated milestone (RoomEventRepository.RecordActivation inserts it through the
+  room_events view on the second distinct author). Replay therefore equals
+  GET /v1/rooms/{slug}/entries after the cursor. OPEN QUESTION for owner (not changed here):
+  should room.activated also be broadcast live, so live and replay agree?
+
+VERIFICATION (DATABASE_URL = shell-profile local docker solvr-postgres
+  localhost:5435/solvr_test):
+  [TEST] RED (/tmp/i70s4_red.log): _ReplayIncludesEventsInTimelineOrder FAIL — replay after
+    m1 returned only [m2] (events missing) on canonical ?after, ?lastEventId and adapter;
+    ?type=PR / ?issue=ISSUE-1 replays empty.
+  [TEST] First GREEN run (/tmp/i70s4_green.log) failed on MY hard-coded expectation
+    [e1,m2,e2]: the product replayed a 4th entry, the room.activated milestone. Test changed
+    to assert replay == canonical entries list after the cursor (still requires e1,m2,e2
+    subset + exactly 4); GREEN (/tmp/i70s4_green2.log) PASS, 0 SKIP. It covers: canonical
+    ?after, ?lastEventId, adapter ?after all equal entries-after-cursor; canonical and adapter
+    replay frames byte-identical; replayed e1/e2 frames byte-identical to their live frames;
+    ?type=PR -> [e2], ?issue=ISSUE-1 -> [e1], ?type=message -> [m2], adapter ?type=event ==
+    entries?kind=event; cursor at an event id resumes after it.
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i70s4_full.log): 3817 PASS (slice 3:
+    3816), 11 SKIP, 73 unique FAIL — comm vs /tmp/i70s3_full.log: 0 new, 0 gone. All 3
+    TestRoomEntriesStream_* PASS in it.
+  [REAL] gofmt clean on the 5 files; go build ./... and go vet api/handlers/db ok; all
+    touched files < 800 lines.
+
+REMAINING FOR idx 70 (next slices):
+  - GET /v1/rooms/{slug}/messages list as adapter over entries.
+  - Step 4: connection prompts (connect_prompts.go, skill script) prefer /entries, keeping
+    register + handshake explicit and recoverable.
+  - Step 5: SPEC.md — canonical entry contract (message + event) + stream (incl. replay of
+    events) + adapter mapping for /messages and /events.

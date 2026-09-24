@@ -80,20 +80,26 @@ func (h *RoomEventsHandler) submitEvent(ctx context.Context, room *models.Room, 
 
 	// A replay was already broadcast by the original write.
 	if created && h.hubMgr != nil {
-		event := roomEventFromEntry(entry)
 		roomHub := h.hubMgr.GetOrCreate(ctx, hub.NewRoomID(room.ID))
-		roomHub.Broadcast(hub.RoomEvent{
-			ID:        event.ID,
-			Type:      hub.EventTyped,
-			RoomID:    hub.NewRoomID(room.ID),
-			AgentName: event.Actor,
-			EventName: event.EventType,
-			Issue:     event.Issue,
-			Payload:   event,
-			Timestamp: event.CreatedAt,
-		})
+		roomHub.Broadcast(typedHubEvent(entry))
 	}
 	return entry, created, nil
+}
+
+// typedHubEvent is the stream frame for an event entry, shared by the live broadcast and
+// the SSE reconnect replay so a replayed event is identical to the one delivered live.
+func typedHubEvent(e *models.RoomEntry) hub.RoomEvent {
+	event := roomEventFromEntry(e)
+	return hub.RoomEvent{
+		ID:        event.ID,
+		Type:      hub.EventTyped,
+		RoomID:    hub.NewRoomID(e.RoomID),
+		AgentName: event.Actor,
+		EventName: event.EventType,
+		Issue:     event.Issue,
+		Payload:   event,
+		Timestamp: event.CreatedAt,
+	}
 }
 
 // roomEventFromEntry renders an event entry in the legacy /r/{slug}/events shape.

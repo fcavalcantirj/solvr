@@ -34,6 +34,7 @@ export ENGINE
 
 # Config (override with env vars)
 BATCH_SIZE=${BATCH_SIZE:-3}
+NO_PROGRESS_LIMIT=${NO_PROGRESS_LIMIT:-4}    # batches with no ledger movement before stopping
 WAIT_TIME_MINS=${WAIT_TIME_MINS:-15}         # backoff after API errors
 BATCH_PAUSE_MINS=${BATCH_PAUSE_MINS:-15}     # pause between successful batches
 WAIT_TIME_SECS=$((WAIT_TIME_MINS * 60))
@@ -82,6 +83,18 @@ send_telegram() {
 
 batch_count=0
 total_iterations=0
+# Ledger-movement watch. ralph.sh's own stall guard counts iterations INSIDE one
+# batch, so at BATCH_SIZE=1 it can never trip: each batch is a fresh process and
+# the counter resets. This one lives in the supervisor, which outlives batches.
+count_passed() {
+  if command -v jq >/dev/null 2>&1; then
+    jq '[.[] | select(.passes == true)] | length' "$PRD_FILE" 2>/dev/null || echo 0
+  else
+    grep -cE '"passes"[[:space:]]*:[[:space:]]*true' "$PRD_FILE" 2>/dev/null || echo 0
+  fi
+}
+last_passed=$(count_passed)
+no_progress=0
 runner_start=$(date +%s)
 
 cleanup() {
@@ -283,6 +296,33 @@ No ledger progress for ${STALL_LIMIT:-2} iterations — supervisor stopped.
       sleep $BATCH_PAUSE_SECS
     fi
     echo -e "${GREEN}   ✅ Starting next batch...${NC}"; echo ""
+  fi
+
+  # No ledger movement across batches? A task legitimately sliced over a few
+  # iterations looks identical to an engine spinning, so stop after
+  # NO_PROGRESS_LIMIT batches and let a human read the journal.
+  now_passed=$(count_passed)
+  if [ "$now_passed" = "$last_passed" ]; then
+    no_progress=$((no_progress + 1))
+    echo -e "${YELLOW}   ⏳ No ledger movement for ${no_progress} batch(es) (${now_passed} passing).${NC}"
+  else
+    no_progress=0
+  fi
+  last_passed="$now_passed"
+  if [ "$no_progress" -ge "$NO_PROGRESS_LIMIT" ]; then
+    echo ""
+    echo -e "${RED}${BOLD}   ⛔ RALPH BLOCKED — ${no_progress} batches with no ledger movement. Stopping.${NC}"
+    echo -e "${YELLOW}   Read the tail of progress.txt: the current task may be sliced across${NC}"
+    echo -e "${YELLOW}   iterations (fine) or the engine may be unable to finish it (not fine).${NC}"
+    {
+      echo ""
+      echo "$(date '+%Y-%m-%d %H:%M'): RALPH BLOCKED — ${no_progress} batches with no ledger movement (engine ${ENGINE}, ${now_passed} passing). Supervisor stopped."
+    } >> progress.txt
+    send_telegram "⛔ *Solvr Ralph [${ENGINE}]* - no ledger movement for ${no_progress} batches
+
+📊 $(./progress.sh)
+Supervisor stopped."
+    exit 1
   fi
 
   if [ "$prd_complete" = true ]; then

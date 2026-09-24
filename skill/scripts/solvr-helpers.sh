@@ -389,7 +389,7 @@ cmd_resurrect() {
 
 # room_api_call METHOD SLUG PATH TOKEN [DATA]
 # Calls the A2A namespace at the API root (no /v1 prefix): {root}/r/{slug}{path}
-# authenticated with the room bearer token (solvr_rm_...), NOT the agent API key.
+# authenticated with the per-agent room token (solvr_rt_...), NOT the agent API key.
 room_api_call() {
     local method="$1"
     local slug="$2"
@@ -472,7 +472,9 @@ load_room_token() {
 }
 
 # resolve_room_token SLUG [EXPLICIT]
-# Order: explicit --token value > SOLVR_ROOM_TOKEN env > rooms.json lookup.
+# Order: explicit --token value > SOLVR_ROOM_TOKEN env > stored per-agent token
+# (solvr_rt_...) > a fresh handshake with the agent API key. A stored legacy shared
+# token (solvr_rm_...) is never sent: it is replaced by this agent's own token.
 resolve_room_token() {
     local slug="$1"
     local explicit="${2:-}"
@@ -485,14 +487,34 @@ resolve_room_token() {
         echo "$SOLVR_ROOM_TOKEN"
         return 0
     fi
-    if load_room_token "$slug"; then
-        return 0
-    fi
+    local stored
+    stored=$(load_room_token "$slug" 2>/dev/null || echo "")
+    case "$stored" in
+        solvr_rt_*) echo "$stored"; return 0 ;;
+    esac
+
+    handshake_room_token "$slug" && return 0
 
     echo -e "${RED}Error: No room token for '${slug}'${NC}" >&2
-    echo "Room tokens (solvr_rm_...) are shown once when a room is created." >&2
-    echo "Pass --token <token>, set SOLVR_ROOM_TOKEN, or create the room with: solvr room-create" >&2
+    echo "Room commands use your own per-agent token from: solvr handshake ${slug}" >&2
+    echo "For a closed room, ask the owner to add your Agent ID (solvr whoami) first." >&2
     return 1
+}
+
+# handshake_room_token SLUG [PAYLOAD]
+# Proves this agent's identity (agent API key) and obtains its per-agent room token
+# (solvr_rt_...), saved to rooms.json for the slug. Prints the token.
+handshake_room_token() {
+    local slug="$1"
+    local payload="${2:-}"
+    [ -n "$payload" ] || payload='{}'
+
+    local response token
+    response=$(api_call POST "/rooms/${slug}/handshake" "$payload") || return 1
+    token=$(echo "$response" | jq -r '.data.room_token // empty' 2>/dev/null)
+    [ -n "$token" ] || return 1
+    save_room_token "$slug" "$token"
+    echo "$token"
 }
 
 # resolve_agent_name [EXPLICIT]
@@ -622,16 +644,17 @@ cmd_room_create() {
         return 0
     fi
 
-    local room_slug token
+    local room_slug
     room_slug=$(echo "$response" | jq -r '.data.slug // empty')
-    token=$(echo "$response" | jq -r '.token // empty')
 
     echo -e "${GREEN}Room created: ${room_slug}${NC}"
     echo "  URL: https://solvr.dev/rooms/${room_slug}"
-    if [ -n "$token" ]; then
-        save_room_token "$room_slug" "$token"
-        echo "  Token: ${token}"
-        echo "  Saved to ${SOLVR_ROOMS_FILE} (the API shows it only ONCE — do not lose it)"
+    # The creator is the room owner, so its handshake always succeeds. Room commands
+    # then act as this agent with its own revocable token — never a shared one.
+    if handshake_room_token "$room_slug" >/dev/null; then
+        echo "  Your per-agent room token is saved to ${SOLVR_ROOMS_FILE}"
+    else
+        echo "  Get your per-agent room token with: solvr handshake ${room_slug}"
     fi
     echo ""
     echo "Next: solvr room-join ${room_slug}"
@@ -738,8 +761,9 @@ cmd_room_leave() {
 # Proves this agent's identity (uses your agent API key) and obtains a per-agent room
 # token (solvr_rt_...), saved to rooms.json for this slug. Subsequent room commands then
 # authenticate AS this agent (authoritative authorship) and can be revoked individually.
-# For a closed room you are not yet a member of, pass --room-token (the shared solvr_rm_
-# token) to bootstrap; a stored token for the slug is used automatically if present.
+# A closed room admits you once its owner adds your Agent ID (or you share the owner's
+# human). --room-token (a legacy shared solvr_rm_ token) is only sent when passed
+# explicitly; a stored token is never used to bootstrap.
 cmd_handshake() {
     local slug="$1"; shift || true
 
@@ -752,11 +776,6 @@ cmd_handshake() {
             *) shift ;;
         esac
     done
-
-    # Fall back to any stored (shared) token to bootstrap into a closed room.
-    if [ -z "$room_token" ]; then
-        room_token=$(load_room_token "$slug" 2>/dev/null || echo "")
-    fi
 
     local payload="{}"
     [ -n "$room_token" ] && payload=$(jq -n --arg rt "$room_token" '{room_token: $rt}')
@@ -775,13 +794,6 @@ cmd_handshake() {
     agent_id=$(echo "$response" | jq -r '.data.agent_id // empty')
 
     if [ -n "$peragent" ]; then
-        # Warn if we're replacing a shared (solvr_rm_) token in a config dir — a footgun
-        # when owner+worker share one SOLVR_CONFIG_DIR. Give each agent its own config dir.
-        local prev
-        prev=$(load_room_token "$slug" 2>/dev/null || echo "")
-        case "$prev" in
-            solvr_rm_*) echo -e "${YELLOW}Note: replacing the shared room token for '${slug}' in this config with your per-agent token. Run each agent with its own SOLVR_CONFIG_DIR to avoid clobbering.${NC}" >&2 ;;
-        esac
         save_room_token "$slug" "$peragent"
         echo -e "${GREEN}Handshake complete — you are ${agent_id} in ${slug}${NC}"
         echo "  Per-agent token saved to ${SOLVR_ROOMS_FILE} (authoritative authorship, individually revocable)."

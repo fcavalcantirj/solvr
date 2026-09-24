@@ -9106,3 +9106,127 @@ UAT (when idx 69 completes; NOT a pass condition now): owner applies 000095, 000
   SELECT COUNT(*) FROM rooms r WHERE owner_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM
   room_members m WHERE m.room_id=r.id AND m.user_id=r.owner_id AND m.role='owner' AND
   m.revoked_at IS NULL) -> 0.
+
+================================================================================
+2026-09-24 — Task idx 69 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Use one room membership authority and eliminate duplicate ownership and shared-token state"
+SLICE 4 of N: CREDENTIAL TRANSITION of the in-repo agent CLI (skill/scripts) to per-agent
+room tokens + legacy rooms.owner_id helpers DELETED. Server still accepts the shared
+solvr_rm_ token (retirement = later slice, after the frontend transition below).
+================================================================================
+
+TASK SELECTION: idx 23, 27, 51, 52, 58, 66, 67 skipped for the reasons in the slice-1
+  entry (unchanged); idx 69 continues.
+
+WHY THIS SLICE (evidence, [REAL] grep this session): retiring rooms.token_hash server-side
+  now would break live default clients that still send solvr_rm_: skill/scripts
+  (room-create saved the shared token, room-join/message/claims/stream sent it, handshake
+  bootstrapped with a stored one), frontend create-room-dialog (shows data.token once) and
+  presence-sidebar (owner COPY calls POST rotate-token). idx 73 step 4 also says default
+  flows must use individually attributable credentials BEFORE shared tokens retire. So
+  this slice moves the agent CLI first; server retirement waits for the frontend.
+
+WHAT CHANGED (git status --porcelain / git diff --stat, file by file):
+  M   skill/scripts/solvr-helpers.sh: resolve_room_token = explicit --token > SOLVR_ROOM_TOKEN
+      > stored solvr_rt_ token > NEW handshake_room_token (POST /v1/rooms/{slug}/handshake
+      with the agent API key, saves data.room_token). A stored legacy solvr_rm_ is ignored
+      and overwritten, never sent. room-create no longer saves/prints the shared token; it
+      handshakes (creator = owner). cmd_handshake no longer bootstraps with a STORED token
+      (--room-token still sent only when passed explicitly, until server retirement); the
+      "replacing shared token" note is gone. Comments updated.
+  M   skill/scripts/solvr.sh: help text / comments now say per-agent token (no logic change).
+  M   skill/SKILL.md: room section + raw-curl example use handshake -> solvr_rt_.
+  NEW skill/scripts/test_room_credentials.sh: 13 offline checks with a stub curl on PATH
+      (no network): create/join/message/handshake/reuse flows never store/print/send solvr_rm_.
+  M   backend/internal/api/handlers/rooms.go (-46): deleted isRoomOwnerOrAdmin, agentOwnsRoom,
+      canManageRoom, canRotateRoomToken, isRoomOwner (unused by request paths; h.canManage
+      over room_members is the only rule).
+  D   backend/internal/models/room_ownership.go (models.SameHumanAsOwner, no callers left).
+  D   backend/internal/api/handlers/rooms_test.go + backend/internal/models/room_ownership_test.go
+  NEW backend/internal/api/router_rooms_manage_authority_test.go (4 router tests).
+  NOT MINE, NOT STAGED: ralph-continuous.sh shows M (+40, NO_PROGRESS_LIMIT supervisor
+      guard) — the owner's in-flight harness edit; left untouched in the working tree.
+
+DELETED TESTS AND THEIR REPLACEMENTS (the helpers they pinned are deleted; the behavior
+  now lives in h.canManage over room_members and is pinned end to end):
+  - TestAgentOwnsRoom_ClaimedAgentOwnsRoom / TestCanManageRoom_AgentOwner /
+    TestCanRotateRoomToken_AgentOwner / TestSameHumanAsOwner "match": asserted a claimed
+    agent whose human owns the room may manage + rotate. -> NEW
+    TestRoomManageAuthority_FamilyAgentManagesUntilUnlinked (non-creator sibling PATCH 200,
+    rotate 200) + existing TestRoomRoutes_UpdateRoom_AgentOwner, _RotateToken_AgentOwner.
+  - TestAgentOwnsRoom_ClaimedAgentDifferentOwner / TestCanManageRoom_NonOwnerAgent /
+    SameHumanAsOwner "mismatch": other human's agent may not. -> existing
+    TestRoomRoutes_UpdateRoom_AgentNonOwner, _DeleteRoom_AgentNonOwner, _RotateToken_AgentNonOwner.
+  - TestAgentOwnsRoom_UnclaimedAgent / "unclaimed agent" / TestAgentOwnsRoom_NilAgent /
+    TestCanManageRoom_NilBoth / "nil agent": no link, no right. -> NEW
+    TestRoomManageAuthority_UnclaimedForeignAgentForbidden (PATCH+rotate 403) + existing
+    TestRoomRoutes_UpdateRoom_NoAuth.
+  - TestAgentOwnsRoom_OwnerlessRoom / "ownerless room" / "nil room" / "unparseable HumanID":
+    a link that does not point at a live owner grants nothing. -> NEW
+    TestRoomManageAuthority_FamilyAgentManagesUntilUnlinked (after unlink PATCH 403) +
+    TestRoomMembersFamily_UnlinkEndsFamilyMaterializedMembership. (agents.human_id is a
+    UUID column, so an unparseable id cannot exist in storage.)
+  - TestCanManageRoom_HumanOwner / TestCanRotateRoomToken_HumanOwner: -> existing
+    TestRoomRoutes_UpdateRoom_HumanOwner, _RotateToken_HumanOwner, _DeleteRoom_HumanOwner,
+    plus NEW TestRoomManageAuthority_HumanOwnerFollowsMembership (ownership transfer in one
+    statement: demoted old owner PATCH 403, new owner PATCH 200).
+  - TestCanManageRoom_NonOwnerHuman / TestCanRotateRoomToken_NonOwner: -> NEW
+    TestRoomManageAuthority_NonOwnerHumanForbidden (PATCH+rotate 403).
+  - TestCanManageRoom_Admin / TestCanRotateRoomToken_Admin: -> existing
+    TestRoomRoutes_UpdateRoom_Admin, _RotateToken_Admin.
+  The 4 new router tests passed on first run against the unchanged request path (they
+  are replacement pins, not RED tests; the fixture needed forceUnlink-style trigger
+  suspension and added_by='system', mirroring internal/db test helpers).
+
+TDD (skill): RED [TEST] test_room_credentials.sh before the change: 11 FAIL / 2 PASS (the 2
+  "stored solvr_rt_ reused" checks passed before and after = regression guards; log
+  /tmp/skill_cred_red.log). GREEN after: 13/13 PASS (/tmp/skill_cred_green.log).
+
+VERIFICATION (DATABASE_URL explicitly = local docker solvr-postgres 127.0.0.1:5435/solvr_test,
+  schema_migrations 97 dirty=f):
+  [TEST] TestRoomManageAuthority_* 4/4 PASS (targeted run, then again inside the full run).
+  [TEST] skill/scripts/test.sh with HOME=<empty temp dir> and SOLVR_API_KEY unset (so its
+    credentialed section, which targets api.solvr.dev, SKIPS and production is not touched):
+    91 PASS / 0 FAIL.
+  [REAL] live wire: built ./cmd/api -> /tmp/solvr-api-s4 on :8097 (env -i; DATABASE_URL
+    solvr_test, 32+ char JWT_SECRET, ALLOWED_ORIGINS; no .env touched). Two agents
+    registered; agent A `room-create --slug s4-cred-1790262643` -> rooms.json holds
+    solvr_rt_ (no solvr_rm_ anywhere), room-join 200, room-message 201; agent B with a
+    FRESH config ran room-message with no prior handshake -> auto-handshake, 201.
+    DB: room_members A owner active, B member active; room_entries author_id =
+    agent_s4cred_a_... / agent_s4cred_b_... (authoritative per-agent authorship).
+    Server killed, port clear, binary removed. Rows left in solvr_test (test DB only).
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` on solvr_test (log /tmp/s4_full.log):
+    3789 unique PASS names, 11 SKIP (same pre-existing set), 74 FAIL. Sorted unique FAIL
+    names IDENTICAL to the slice-3 run /tmp/own_full.log (diff empty). PASS names gone vs
+    that run = exactly the 24 deleted helper tests/subtests above; PASS names new = the 4
+    TestRoomManageAuthority_*.
+  [REAL] go build ./... + go vet ./internal/api/... ./internal/models/ clean; gofmt clean on
+    touched Go files; handlers/rooms.go 536 lines. No remaining Go reference to the deleted
+    helpers except the new test's comment.
+  Frontend: not touched this slice (no npm test run).
+
+REMAINING FOR idx 69 (why passes stays false):
+  - FRONTEND transition: create-room-dialog stops showing data.token; presence-sidebar
+    CONNECT AGENT stops calling rotate-token (public rooms: reuse the API-built per-agent
+    prompt, GET /v1/rooms/{slug}/connect; private rooms: NO member-add UI exists today —
+    lib/api.ts only lists members — so an owner-side "add agent by id" control, or the
+    family handshake, must replace the rotated shared token first). Replace/rename
+    presence-sidebar.test.tsx "rotates and copies a REAL bearer token..." with named
+    replacements when that lands.
+  - SERVER retirement of rooms.token_hash: create-response token, POST rotate-token route
+    (+ api_usage map entry), handshake room_token bootstrap, BearerGuard + RoomAccessGuard
+    shared paths, RoomRepository.GetByTokenHash/RotateToken, migrate-quorum insert, then a
+    migration dropping the column. ~15 router test files still authenticate /r/ with the
+    create-response token and must move to handshake tokens (name each replacement).
+    Update skill references/api.md + examples.md (still document solvr_rm_) at that point.
+  - Bind presence to membership (agent_presence is keyed by free-text agent_name; after
+    retirement every /r/ call carries an authenticated agent id).
+  - Soft-deleted human owners still hold active owner rows (decide archive/transfer).
+  - Owner decision: prevent_agent_reclaim trigger vs DELETE /v1/me unclaim (slice-2 FINDING).
+  - Document the compatibility window + final schema in SPEC.md.
+
+UAT (not a pass condition now): after deploy, the owner's installed skill copy at
+  ~/.claude/skills/solvr/scripts matched skill/scripts before this commit ([REAL] diff -q
+  empty) and is now the OLD script; re-install/sync it so live agents stop using solvr_rm_
+  before the server retirement slice.

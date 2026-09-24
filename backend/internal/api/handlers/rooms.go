@@ -482,40 +482,6 @@ func (h *RoomHandler) RotateToken(w http.ResponseWriter, r *http.Request) {
 	roomWriteJSON(w, http.StatusOK, response)
 }
 
-// isRoomOwnerOrAdmin checks if the authenticated user is the room owner or an admin.
-func isRoomOwnerOrAdmin(claims *auth.Claims, room *models.Room) bool {
-	if claims.Role == "admin" {
-		return true
-	}
-	return isRoomOwner(claims, room)
-}
-
-// agentOwnsRoom checks if the agent's linked human owns the room.
-// Unclaimed agents (nil HumanID) and ownerless rooms never match.
-// Delegates to models.SameHumanAsOwner — the single source of truth shared with the
-// closed-room read guard and handshake family clauses.
-func agentOwnsRoom(agent *models.Agent, room *models.Room) bool {
-	return models.SameHumanAsOwner(agent, room)
-}
-
-// canManageRoom is the legacy DB-free ownership rule over rooms.owner_id: the caller
-// is the human owner (JWT/user-key claims), an admin, or a claimed agent whose linked
-// human owns the room (D-21/D-22 amendment). No request path consults it any more —
-// h.canManage reads room_members — and it goes with rooms.owner_id at its retirement.
-func canManageRoom(claims *auth.Claims, agent *models.Agent, room *models.Room) bool {
-	if claims != nil && isRoomOwnerOrAdmin(claims, room) {
-		return true
-	}
-	return agentOwnsRoom(agent, room)
-}
-
-// canRotateRoomToken mirrors canManageRoom: token rotation uses the same ownership
-// rules (D-25). Retained as a distinct name for readability at the call sites and
-// for its dedicated unit tests.
-func canRotateRoomToken(claims *auth.Claims, agent *models.Agent, room *models.Room) bool {
-	return canManageRoom(claims, agent, room)
-}
-
 // canManage checks if the caller may update, delete, or rotate the token for the
 // room, reading ownership from room_members (the membership authority, migrations
 // 000095/000096) rather than rooms.owner_id: an admin, a human with an active owner
@@ -548,18 +514,6 @@ func (h *RoomHandler) ownsRoom(ctx context.Context, claims *auth.Claims, agent *
 		return h.memberRepo.IsUserOwner(ctx, room.ID, claims.UserID)
 	}
 	return false, nil
-}
-
-// isRoomOwner checks if the authenticated user is the room owner.
-func isRoomOwner(claims *auth.Claims, room *models.Room) bool {
-	if room.OwnerID == nil {
-		return false
-	}
-	ownerID, err := uuid.Parse(claims.UserID)
-	if err != nil {
-		return false
-	}
-	return *room.OwnerID == ownerID
 }
 
 // roomWriteJSON writes a JSON response with the given status code.

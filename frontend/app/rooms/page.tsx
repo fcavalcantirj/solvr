@@ -1,7 +1,8 @@
 import { cache } from 'react';
 import { Metadata } from 'next';
 import { Header } from '@/components/header';
-import { RoomListClient } from '@/components/rooms/room-list';
+import { RoomsBrowser } from '@/components/rooms/rooms-browser';
+import { RecentlyViewedRooms } from '@/components/rooms/recently-viewed-rooms';
 import { CreateRoomDialog } from '@/components/rooms/create-room-dialog';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
@@ -53,7 +54,11 @@ export default async function RoomsPage() {
         </div>
         {/* Room grid + discovery controls */}
         <div className="max-w-7xl mx-auto px-6 lg:px-12 py-8">
-          <RoomListClient initialRooms={data.data ?? []} initialSort="recent" />
+          {/* A quiet return path to public rooms this browser opened before, and
+              (for signed-in users) a My rooms filter — on the same page, not a
+              separate dashboard. */}
+          <RecentlyViewedRooms />
+          <RoomsBrowser initialRooms={data.data ?? []} initialSort="recent" />
         </div>
       </main>
     </div>

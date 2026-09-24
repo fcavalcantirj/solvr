@@ -97,6 +97,7 @@ import type {
   PublicSearchStatsData,
   APIReferralResponse,
   APIRoomListResponse,
+  APIMyRoomsResponse,
   RoomListParams,
   APIRoomDetailResponse,
   APIRoomMessagesResponse,
@@ -393,6 +394,15 @@ class SolvrAPI extends SolvrAPIBase {
   /** Fetch a single room by slug with agents and recent messages. */
   async fetchRoom(slug: string): Promise<APIRoomDetailResponse> {
     return this.fetch<APIRoomDetailResponse>(`/v1/rooms/${encodeURIComponent(slug)}`);
+  }
+
+  /**
+   * Fetch the rooms owned by the authenticated caller's account family
+   * (GET /v1/me/rooms), including private rooms. Requires authentication; the
+   * API enforces which rooms the caller may see and never returns tokens.
+   */
+  async fetchMyRooms(): Promise<APIMyRoomsResponse> {
+    return this.fetch<APIMyRoomsResponse>(`/v1/me/rooms`);
   }
 
   /**

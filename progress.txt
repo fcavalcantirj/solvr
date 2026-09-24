@@ -7400,3 +7400,129 @@ UAT: OWNER-ONLY LAST MILE — every automatable check above ran GREEN. The one
   confirm the IPFS gateway actually serves the archived snapshot. That requires a
   live IPFS gateway + a real crystallized post and is a visual/live confirmation,
   not an automatable unit check.
+
+========================================================================
+2026-09-24 — TASK: "Provide a simple return path without building another
+dashboard" (~712, category functional). passes false -> true.
+
+TASK SELECTION (top-to-bottom; earlier passes=false re-verified against REAL
+code this session, not prose):
+  - ~300 "Verify N-agent collaboration end to end...": ACCEPTANCE task spanning
+    unbuilt behavior (two API instances ~983 false, canonical entries ~895
+    false). Acceptance-not-a-checklist -> SKIP.
+  - ~349 "Make agent-created rooms manageable...": step 2 REQUIRES rooms.owner_id
+    retired. [REAL] `grep -c owner_id backend/internal/db/rooms.go` = 16 (still
+    SELECTs/INSERTs owner_id). Retirement is the later task ~880 (false). SKIP.
+  - ~513 "Make room sharing preserve public viewing": step 5 (public->private
+    invalidation of previews/cache/search/stream) is owned by ~746 (permissions
+    authoritative, false) + ~931 (stream/credential revocation, false). Forward
+    -dep -> SKIP.
+  - ~648 "Route existing agent integrations ... during a defined transition":
+    [REAL] `grep -c /problems backend/internal/api/router.go` = 14 (legacy
+    discovery still served, no cutover). Coupled to ~1177 cutover (false). SKIP.
+  - ~663 "Let agents/humans search retained knowledge...": step 4 requires the
+    migration/cutover (false) to compare before/after. SKIP.
+  - THIS TASK (~712): buildable NOW. Pure frontend return-path on the EXISTING
+    Rooms page; the backing GET /v1/me/rooms already exists. TOOK IT.
+
+STATE FOUND (all [REAL], read this session):
+  - backend GET /v1/me/rooms -> RoomHandler.ListMyRooms (router.go:917,
+    handlers/rooms_discovery.go) returns rooms owned by the caller's account
+    family INCLUDING private rooms; token_hash never serialized; requires auth
+    (401 otherwise). This is the API-authorized "My rooms" source.
+  - frontend/app/rooms/page.tsx server-renders public rooms (ISR 60s) via
+    RoomListClient; hooks/use-auth.tsx exposes isAuthenticated + attaches the JWT
+    (api-base.ts:149 Bearer) so a signed-in fetch to /v1/me/rooms carries auth.
+  - [REAL] no feed-style home dashboard competing with Rooms: /feed is edge-
+    redirected 308 -> /posts (middleware.ts:23,58-59; app/feed/page.tsx is dead
+    behind it); /dashboard is a login-gated AGENT-BRIEFING account page, not the
+    home and not a rooms feed; home (/) is the live overview (task ~68). Step 5
+    satisfied WITHOUT changing those (Code Change Protocol: verify, don't edit
+    unrelated code).
+
+WHAT I CHANGED (git status --porcelain / git diff --stat — matches exactly):
+  ?? frontend/lib/recently-viewed-rooms.ts (new, 98 lines): per-browser
+     localStorage store of PUBLIC room refs. Persists ONLY {slug, displayName,
+     viewedAt} — recordRoomView copies just those two input fields so a token or
+     is_private flag a caller passes can never leak (step 3). getRecentRooms
+     tolerates corrupt/absent storage, filters malformed entries, caps at
+     RECENT_ROOMS_MAX=6, newest-first, dedup by slug. removeRecentRoom (used when
+     the API says a room is gone) + clearRecentRooms (the user's Clear).
+  ?? frontend/components/rooms/recently-viewed-rooms.tsx (new, 77 lines): the
+     "Recently viewed" section on /rooms. Renders stored public-room links; a
+     Clear control empties the list; on mount asks the API about each ref via
+     api.fetchRoom and PRUNES any it can no longer read (deleted/turned private)
+     — the API, not the client, decides accessibility (step 3). Renders nothing
+     when empty.
+  ?? frontend/components/rooms/my-rooms-list.tsx (new, 96 lines): signed-in
+     "My rooms" view. Calls api.fetchMyRooms() (GET /v1/me/rooms); loading /
+     error+RETRY / empty (Connect agents CTA) / list states. Renders each room
+     as a link with a PUBLIC/PRIVATE badge, message count, last active. No
+     client-side visibility filtering — shows exactly what the API returns
+     (step 4).
+  ?? frontend/components/rooms/rooms-browser.tsx (new, 57 lines): wraps the list
+     on the SAME Rooms page and adds a "Public rooms" | "My rooms" filter ONLY
+     when isAuthenticated; logged-out visitors keep the plain public discovery
+     with no filter (step 4/5). Deliberately not a separate dashboard.
+  M  frontend/app/rooms/page.tsx (+8/-2): renders <RecentlyViewedRooms/> then
+     <RoomsBrowser initialRooms=... initialSort="recent"/> in place of the bare
+     RoomListClient; public rooms still server-render (SSR preserved, SEO).
+  M  frontend/components/rooms/room-detail-client.tsx (+9/-0): a guarded
+     useEffect records recordRoomView({slug,display_name}) ONLY for public rooms
+     (!room.is_private) when a room page opens (step 1 + step 3: private rooms
+     are never recorded as public refs).
+  M  frontend/lib/api.ts (+9/-0 method, +1 import): new fetchMyRooms() ->
+     GET /v1/me/rooms.
+  M  frontend/lib/api-types.ts (+6): APIMyRoomsResponse { data: APIRoom[] }.
+  Test files (new): recently-viewed-rooms.test.ts (10), recently-viewed-rooms
+     .test.tsx (4), my-rooms-list.test.tsx (3), rooms-browser.test.tsx (2).
+  No existing test deleted, weakened, skipped, or renamed.
+
+STEP-BY-STEP against the task:
+  1 open a public room, navigate away -> [TEST] room-detail-client 7/7 still pass
+    after adding the record effect; recordRoomView store tests prove the ref is
+    stored. [REAL] effect only fires for !is_private.
+  2 small Recently-viewed on Rooms returns to prior public rooms + Clear -> [TEST]
+    recently-viewed-rooms.test.tsx: renders links newest-first; Clear empties and
+    clears storage.
+  3 stores only non-secret public refs + removes inaccessible -> [TEST] store
+    "persists only non-secret fields" (no token/is_private in raw storage) + the
+    component "drops an entry the API reports as inaccessible and forgets it
+    locally" (api.fetchRoom reject -> removeRecentRoom).
+  4 signed-in My rooms filter with only API-authorized rooms -> [TEST]
+    rooms-browser (filter only when authed; switches views) + my-rooms-list
+    (loading/list/empty/error+retry against api.fetchMyRooms). [REAL] backing
+    endpoint is owner/family-scoped server-side.
+  5 login optional + no competing feed-style dashboard -> [TEST] rooms-browser
+    "shows only public rooms and no filter when logged out" + [REAL] /feed 308
+    -> /posts, /dashboard is agent-briefings, home is the overview.
+
+VERIFICATION (all RAN this session; Vitest 4, jsdom):
+  [TEST] RED: `npx vitest run lib/recently-viewed-rooms.test.ts` before impl =
+    1 file failed, "no tests" (module unresolved). GREEN after impl = 10/10.
+  [TEST] `npx vitest run components/rooms lib/recently-viewed-rooms.test.ts` =
+    22 files / 145 tests PASS, 0 FAIL, 0 SKIP (incl. my 4 new files = 19 tests
+    and the touched room-detail-client 7/7).
+  [REAL] `npm run typecheck` (tsc --noEmit) = clean.
+  [REAL] `npx next lint --dir components/rooms --dir lib` = 0 errors; only
+    pre-existing unused-type Warnings in lib/api-types.ts (not my lines).
+  [TEST] Full frontend suite `npx vitest run` (/tmp/solvr_721_full.log) = 167
+    files / 1579 tests: 1578 PASS, 1 FAIL. The 1 failure is next.config.test.ts
+    "resolves the /posts navigation destination" expecting destination '/feed'
+    — a STALE test whose own comment says "Temporary: task 44 replaces this";
+    the /posts->/feed redirect was intentionally removed by the earlier redirect
+    task (3439ca7). [REAL] git status confirms next.config + its test are
+    UNTOUCHED by me, so this deterministic test's state is identical before and
+    after this task — pre-existing, unrelated, and owned by the task-44 cleanup.
+    Not deleted/weakened (golden rule) — left for its owning task.
+
+FILE SIZE: my new files are 57-98 lines. `scripts/check-file-size.sh` exits 1
+  but for 37 PRE-EXISTING violations (api-types.ts was 1594 before my +6;
+  app/privacy/page.tsx 1075; etc.) — repo debt, not introduced here. The 6-line
+  APIMyRoomsResponse belongs with the other room response types in api-types.ts.
+
+UAT: OWNER-ONLY LAST MILE — every automatable check above ran GREEN. The one
+  inherently-visual item is the browser walkthrough: open a public room, go back
+  to /rooms and confirm it appears under RECENTLY VIEWED with a working Clear;
+  sign in and confirm the "My rooms" filter lists your owned/participating rooms
+  from the live /v1/me/rooms.

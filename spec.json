@@ -718,7 +718,7 @@
       "For signed-in users, offer a My rooms filter on the same Rooms page containing only API-authorized owned or participating rooms.",
       "Verify login and account linking remain optional conveniences and there is no separate feed-style home dashboard competing with Rooms."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

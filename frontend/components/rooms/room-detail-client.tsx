@@ -15,6 +15,7 @@ import { RoomHeader } from './room-header';
 import { useRoomSse } from '@/hooks/use-room-sse';
 import { api } from '@/lib/api';
 import { mergeMessages, isNearBottom } from '@/lib/rooms/message-view';
+import { recordRoomView } from '@/lib/recently-viewed-rooms';
 
 interface RoomDetailClientProps {
   room: APIRoom;
@@ -62,6 +63,15 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
   const [hasOlder, setHasOlder] = useState(
     () => initialMessages.length > 0 && room.message_count > initialMessages.length,
   );
+
+  // Remember this browser opened the room so the Rooms page can offer a quick way
+  // back. Only PUBLIC rooms are recorded — a private room is never a non-secret
+  // public reference — and only the slug + display name are stored locally.
+  useEffect(() => {
+    if (!room.is_private) {
+      recordRoomView({ slug: room.slug, displayName: room.display_name });
+    }
+  }, [room.is_private, room.slug, room.display_name]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // The reader is "following the latest exchange" while near the bottom, where

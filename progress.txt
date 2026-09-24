@@ -8594,3 +8594,108 @@ UAT (owner-only measurement last mile; every automatable check already GREEN):
   - Report first-agent and second-agent API latency SEPARATELY from model
     reasoning and human copy/paste time so "setup speed" has a defined meaning
     (step 5).
+
+================================================================================
+2026-09-24 — Task idx 68 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Store room messages and coordination events in one ordered room timeline"
+FOUNDATION SLICE ONLY. room_entries storage + idempotent legacy backfill built and
+TESTED green against the local DB; the reader/writer CUTOVER remains. passes=false.
+================================================================================
+
+TASK SELECTION (top-down, every earlier skip RE-VERIFIED [REAL] this session):
+  - idx 23 (line 310) "Verify N-agent e2e" (ACCEPTANCE): spans ordered-entries
+    timeline (this idx 68, false) + two-instance replay (idx 77, false).
+    Acceptance-not-checklist. SKIP.
+  - idx 27 (line 358) "agent-created rooms manageable": step 2 needs rooms.owner_id
+    RETIRED. [REAL] grep -c owner_id internal/db/rooms.go = 16 (still present);
+    retirement is idx 69 (line 889, false). SKIP.
+  - idx 51/52 (lines 659/672) route legacy integrations / retained-knowledge search:
+    hinge on knowledge-model cutover idx 92 (line 1186) + schema reduction idx 67
+    (line 863), both false. SKIP.
+  - idx 58 (line 746) "permissions authoritative": steps 3-4 need established-STREAM
+    removal + per-token revocation = idx 73 (line 936, false). SKIP.
+  - idx 66 (line 850) "Verify the defining planner/executor journey" (ACCEPTANCE):
+    needs a test deployment + 2 clean agent envs. SKIP.
+  - idx 67 (line 863) "Reduce the live knowledge DB to posts+replies": step 5 removes
+    legacy tables AFTER verified migration; step depends on idx 71 (line 943, migrate
+    dependent jobs, false) so removing tables now breaks live code. SKIP.
+  - idx 68 (line 876) THIS TASK: create the unified room_entries timeline. Not
+    acceptance; blocked by NO later task (it IS the prerequisite of idx 23/77). First
+    buildable-now foundation task top-down. TOOK IT.
+
+WHY passes STAYS false (honest scope): idx 68 is a genuine storage-layer CUTOVER, not
+  a one-shot flip. [REAL] readers/writers of messages + room_events span ~20 files:
+  handlers (rooms.go, rooms_messages.go 565L, rooms_events.go, rooms_sse.go 273L,
+  homepage_example.go, status.go, router_homepage.go, router_rooms.go), db
+  (room_messages.go 14 methods/395L, room_events.go 5 methods, homepage_activity.go,
+  homepage_overview.go, homepage_rooms.go, activation_analytics.go,
+  cohort_comparison.go, funnel_events.go, incidents.go), hub/event.go, models. SSE
+  cursors are bound to messages BIGSERIAL ids. Steps 4 (derive transcript/event-
+  filters/homepage-activity/replay from the timeline; single write path, no duplicate
+  via adapters) and 6 (old message links + SSE cursors resolve; live message_count
+  excludes events) require rewiring all of the above while keeping every green test
+  green. That is multiple iterations. This iteration delivers the load-bearing
+  EXPAND foundation, tested; the next iteration continues the cutover. passes=false.
+
+WHAT I BUILT THIS SESSION (git status --porcelain / git diff --stat MATCH — 5 NEW
+  files, purely ADDITIVE; rooms/messages/room_events tables + all existing code
+  UNTOUCHED):
+  - backend/migrations/000093_create_room_entries.up.sql / .down.sql: creates
+    room_entries (id, room_id, sequence, kind message|event, author_type/author_id/
+    actor_label, body/content_type/reply_to_entry_id/addressed_member_ids/
+    supersedes_entry_id/pinned_at, event_type/issue, extension JSONB, client_entry_id,
+    timestamps). Constraints: CHECK (message requires body, event requires event_type);
+    UNIQUE(room_id, sequence); partial unique client-entry index; event/type/issue +
+    transcript indexes. Plus room_entry_legacy_map(legacy_kind, legacy_id -> entry_id).
+    The up migration also runs an IDEMPOTENT, INCREMENTAL backfill: merges messages +
+    room_events by created_at with a stable tie breaker (messages before events, then
+    legacy id), sequences after the room's current MAX(sequence), builds the legacy
+    map, and remaps reply_to/supersedes from legacy message ids to new entry ids.
+  - backend/internal/models/room_entry.go: RoomEntry, CreateRoomEntryParams,
+    QueryRoomEntryEventsParams, RoomEntryKindMessage/Event.
+  - backend/internal/db/room_entries.go (365L): RoomEntryRepository — Create (per-room
+    sequence allocated inside the tx via room-row FOR UPDATE, so concurrent commits
+    keep stable order; DB CHECK enforces message-body/event-type; same-room reply
+    enforced app-layer -> ErrCrossRoomReference; client_entry_id idempotency mirrors
+    messages with 23505 recovery), GetByID, ListRecent (transcript = messages only),
+    ListAll (full timeline), CountMessages (excludes events), QueryEvents (retains
+    type/issue filters), ResolveLegacy (old id -> new entry id), BackfillFromLegacy
+    (idempotent; same SQL as the migration).
+  - backend/internal/db/room_entries_test.go (386L): 5 integration tests.
+
+VERIFICATION (RAN this session; local DB = docker solvr-postgres 127.0.0.1:5435/solvr):
+  [REAL] migrate -path migrations up applied 000093; schema_migrations = 93, dirty=f;
+    room_entries + room_entry_legacy_map exist.
+  [TEST] go test ./internal/db -run TestRoomEntryRepository -v = 5/5 PASS, 0 FAIL,
+    0 SKIP: CreateMessageAndEvent (shared sequence 1,2; message-without-body and
+    event-without-event_type both REJECTED by the CHECK — the two ERROR log lines are
+    the asserted rejections), TranscriptAndCountsExcludeEvents (transcript=3 msgs,
+    CountMessages=3, QueryEvents(BUILDING)=1), SameRoomReplyEnforced (same-room reply
+    accepted, cross-room reply rejected), ClientEntryIdempotent (retry returns the
+    same id, created=false), BackfillFromLegacy (msg/event/msg order preserved,
+    sequences 1/2/3, legacy id -> entry id, reply_to remapped, re-run inserts 0).
+  [TEST] go test ./internal/db -run 'TestMessageRepository|TestRoomEventRepository|
+    TestRoomEntryRepository' = ALL PASS (no regression in the storage neighbors).
+  [REAL] go build ./... OK; go vet ./internal/db ./internal/models clean;
+    scripts/check-file-size.sh EXIT=0 (my 3 files 365/386/84L, all < 800; the 37
+    reported violations are ALL pre-existing files, none mine).
+
+NOT MY REGRESSION (investigated, root cause found): TestRoomRepository_Create/Update/
+  SoftDelete/RotateToken fail with "room slug already exists". [REAL] room slug
+  'to-be-deleted' exists soft-deleted, created 2026-09-24 08:43:08 (~1.5h before this
+  session). rooms_test uses DisplayName-derived FIXED slugs; the rooms.slug UNIQUE
+  constraint includes soft-deleted rows, so a second run against the persistent local
+  DB collides. Pre-existing test-isolation issue; my change is additive-only and never
+  touches rooms/rooms_test.go/RoomRepository. Left untouched (NEVER weaken a test).
+
+REGRESSION: none introduced — 5 new files only, no existing source or test modified,
+  deleted, skipped, renamed, or weakened.
+
+NEXT ITERATION (continue idx 68, do NOT re-skip it): wire the single write path and
+  reads through room_entries. Suggested order: (a) route MessageRepository.Create /
+  RoomEventRepository.Create writes into room_entries (store once, no duplicate);
+  (b) back the transcript/event/replay/homepage-activity reads with room_entries;
+  (c) resolve old messages.id deep links + SSE cursors via room_entry_legacy_map;
+  (d) make the live room message_count derive from CountMessages (excludes events).
+  Keep every existing green test green. Only then does idx 68 satisfy steps 4 & 6 and
+  flip passes=true.

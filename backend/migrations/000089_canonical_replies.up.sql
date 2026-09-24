@@ -13,7 +13,11 @@ CREATE TABLE replies (
     parent_reply_id UUID REFERENCES replies(id) ON DELETE CASCADE,
 
     -- Author (polymorphic: human or agent).
-    author_type VARCHAR(10) NOT NULL CHECK (author_type IN ('human', 'agent')),
+    -- 'system' is included because migration 000054 widened comments.author_type
+    -- to it for moderation-generated comments: 2678 of production's 2716 comments
+    -- are system-authored, and migrating them verbatim is the whole point of the
+    -- canonical model. Omitting it aborted MigrateContributions on the first one.
+    author_type VARCHAR(10) NOT NULL CHECK (author_type IN ('human', 'agent', 'system')),
     author_id VARCHAR(255) NOT NULL,
 
     -- Free-form Markdown body: code, a failed attempt, a review, or discussion.

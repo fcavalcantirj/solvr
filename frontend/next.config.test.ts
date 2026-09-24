@@ -15,18 +15,18 @@ async function headerRuleFor(source: string): Promise<HeaderRule | undefined> {
 }
 
 /**
- * The header's primary navigation points at /posts, which has no page of its
- * own yet and must still resolve rather than 404 — a navigation destination
- * that dead-ends is a broken one. /connect, by contrast, IS a page now.
+ * The header's primary navigation points at /posts and /connect. Both are real
+ * pages now (app/posts/page.tsx, app/connect), so neither may be redirected
+ * away: a redirect here would send the primary navigation somewhere other than
+ * the page it advertises. The /posts -> /feed redirect that used to live here
+ * was a placeholder from before the Posts collection page existed.
  */
 describe('next.config redirects', () => {
-  it('resolves the /posts navigation destination', async () => {
-    const posts = await redirectFor('/posts');
-
-    expect(posts).toBeDefined();
-    expect(posts?.destination).toBe('/feed');
-    // Temporary: task 44 replaces this with the real Posts collection page.
-    expect(posts?.permanent).toBe(false);
+  it('lets /posts serve its own collection page instead of redirecting it away', async () => {
+    // Replaces the old 'resolves the /posts navigation destination' test, which
+    // asserted the placeholder redirect /posts -> /feed. The real collection
+    // page now exists, so the redirect was removed and this pins the new truth.
+    expect(await redirectFor('/posts')).toBeUndefined();
   });
 
   it('lets /connect serve its own page instead of redirecting it away', async () => {

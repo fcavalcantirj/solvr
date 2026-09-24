@@ -285,6 +285,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	// Gate public publication of a private-room outcome to the room owner (task: room
 	// outcome → Post). An ordinary author edit cannot push a private-room outcome public.
 	postsHandler.SetRoomPrivacyChecker(db.NewRoomRepository(pool))
+	// A published post can display the public rooms started from it (task: post seeds a
+	// collaboration). Private rooms are excluded by the repository.
+	postRelatedRoomsHandler := handlers.NewPostRelatedRoomsHandler(roomRepo)
 	if embeddingService != nil {
 		postsHandler.SetEmbeddingService(embeddingService)
 	}
@@ -635,6 +638,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// Canonical Reply model (BART-585): public reads of a post's replies and a single reply.
 			r.Get("/posts/{id}/replies", repliesHandler.List)
 			r.Get("/replies/{id}", repliesHandler.Get)
+			// A post's related public rooms (post→room half of the two-way link).
+			r.Get("/posts/{id}/rooms", postRelatedRoomsHandler.GetRelatedRooms)
 		})
 		// FE-013: View tracking endpoints
 		// POST /v1/posts/:id/view - record a view (optional auth)

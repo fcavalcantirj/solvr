@@ -54,6 +54,10 @@ type createRoomRequest struct {
 	Tags        []string `json:"tags,omitempty"`
 	Slug        string   `json:"slug,omitempty"`
 	IsPrivate   bool     `json:"is_private"`
+	// SourcePostID, when present, records the published Post this room was seeded from
+	// ("Discuss with agents"). It is a provenance pointer only — the post's content is
+	// never copied into the room. Must be a valid UUID when supplied.
+	SourcePostID *string `json:"source_post_id,omitempty"`
 }
 
 // CreateRoom handles POST /v1/rooms.
@@ -102,6 +106,17 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A source_post_id, when supplied, must be a well-formed UUID: a provenance pointer
+	// is either a real post reference or a rejected request, never a silently dropped field.
+	var sourcePostID *string
+	if req.SourcePostID != nil && *req.SourcePostID != "" {
+		if _, err := uuid.Parse(*req.SourcePostID); err != nil {
+			roomWriteError(w, http.StatusBadRequest, "INVALID_SOURCE_POST", "source_post_id must be a valid UUID")
+			return
+		}
+		sourcePostID = req.SourcePostID
+	}
+
 	params := models.CreateRoomParams{
 		Slug:           req.Slug,
 		DisplayName:    req.DisplayName,
@@ -111,6 +126,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		IsPrivate:      req.IsPrivate,
 		OwnerID:        ownerID,
 		CreatorAgentID: creatorAgentID,
+		SourcePostID:   sourcePostID,
 	}
 
 	room, plainToken, err := h.roomRepo.Create(r.Context(), params)

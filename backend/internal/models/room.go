@@ -31,6 +31,10 @@ type Room struct {
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 	// ResultMessageID optionally points at the room message that captured the outcome.
 	ResultMessageID *int64 `json:"result_message_id,omitempty"`
+	// SourcePostID optionally records the published Post a room was seeded from via
+	// "Discuss with agents" (inverse of posts.source_room_id). Populated on Create; the
+	// shared read scanners leave it nil, so it is exposed only where explicitly selected.
+	SourcePostID *string `json:"source_post_id,omitempty"`
 }
 
 // IsArchived reports whether the room has been marked Finished.
@@ -61,6 +65,9 @@ type CreateRoomParams struct {
 	// in the same transaction as the room. This gives agent-created rooms (including
 	// unclaimed agents) a manageable owner, fixing the ownerless-room bug.
 	CreatorAgentID string `json:"-"`
+	// SourcePostID, when set, records the published Post this room was seeded from.
+	// It is a provenance pointer only — the post's content is never copied into the room.
+	SourcePostID *string `json:"source_post_id,omitempty"`
 }
 
 // UpdateRoomParams holds parameters for updating a room.

@@ -694,7 +694,7 @@
       "Verify protected post content is not copied into a public room by default and its access rules are enforced by the API.",
       "Verify starting a room does not mutate the Post into a Problem, change its publication state, or duplicate its replies."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

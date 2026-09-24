@@ -25,5 +25,8 @@ func mountConnectRoutes(r chi.Router, pool *db.Pool) {
 	}
 
 	connectHandler := handlers.NewConnectHandler(db.NewRoomRepository(pool))
+	// Enable seeding a start flow from a published post (?post=<id>). The lookup only
+	// resolves publicly readable posts, so protected content can never seed the contract.
+	connectHandler.SetPostLookup(db.NewPostRepository(pool))
 	r.Get("/v1/connect", connectHandler.GetConnect)
 }

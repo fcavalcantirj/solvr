@@ -6778,3 +6778,140 @@ NOTE for the next iteration: POST /v1/rooms/{slug}/save-as-post, GET /v1/rooms/{
   the (posted_by_type, posted_by_id, idempotency_key) partial unique index is the dedup anchor.
   The next buildable foundation after this is likely "Allow a Post to seed a collaboration"
   (post -> /connect, additive) or a room data foundation (room_entries / room_members authority).
+
+================================================================================
+2026-09-24  TASK: "Allow a Post to seed a collaboration without introducing another
+            content type" (functional; was spec.json line ~697, passes false->true)
+================================================================================
+WHY THIS TASK (skip analysis unchanged from prior entries + one new pick)
+  - "Verify N-agent collaboration end to end...": ACCEPTANCE task spanning the canonical
+    /entries API (line ~895, false) + multi-instance delivery (line ~985, false). SKIP per
+    ACCEPTANCE-TASKS rule.
+  - "Make agent-created rooms manageable...": step 2 ties acceptance to rooms.owner_id being
+    RETIRED = later "Use one room membership authority" data task (false). Forward-dep. SKIP.
+  - "Make room sharing preserve the public viewing experience": step 5 public->private cache/
+    search/stream invalidation = later credentials/streams task (false) + redesigned room
+    page. Forward-dep. SKIP.
+  - "Replace Feed/Problems/Ideas with one Posts collection", "single post composer",
+    "Redirect legacy URLs": frontend pages that need the migration cutover to populate
+    canonical posts in the live UI. Forward-dep. SKIP.
+  - "Route existing agent integrations...", "search the retained knowledge...": defined
+    "after cutover" / need replies populated in search. Forward-dep. SKIP.
+  - "Turn an intentional room outcome into a reusable Post" (line ~686): DONE last iteration.
+  - THIS TASK "Allow a Post to seed a collaboration" (line ~697): the INVERSE of the completed
+    room->post feature (now post->room). ADDITIVE backend, deps met, verifiable NOW without
+    the cutover and without touching any legacy read path. [REAL] verified buildable by reading
+    the code first: rooms table had NO source_post_id (000073/000086); GET /v1/connect had no
+    post seed; no GET /v1/posts/{id}/rooms route. Built the real feature. TOOK IT.
+
+ENVIRONMENT (checked, not assumed)
+  [REAL] docker ps: solvr-postgres up on 5435, solvr-ipfs up. DATABASE_URL =
+    postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable (isolated test DB,
+    NOT prod). migrate version 90 -> applied 000091 -> 91/clean.
+
+FACTS VERIFIED FIRST (read the real code; no memory answers)
+  [REAL] posts.source_room_id (000088/000090 work) has NO FK -> mirrored: rooms.source_post_id
+    is nullable, no FK, cleanup-safe. Public-eligibility filter for outcomes is
+    publication_state='published' AND moderation_state='approved' AND visibility='public' AND
+    deleted_at IS NULL (db/posts_outcomes.go FindPublishedBySourceRoom) -> reused verbatim.
+  [REAL] db/rooms.go Create is the ONLY room write; its INSERT+RETURNING+Scan are self-contained
+    (GetBySlug/List/Update/etc. have their own column lists). So adding source_post_id to Create
+    only touches Create; the other room reads leave Room.SourcePostID nil (json omitempty ->
+    absent). Same containment trick the 000090 idempotency_key used.
+  [REAL] handlers/connect.go buildConnectStart(sel, example) is called by 3 handler-package
+    tests with 2 args -> did NOT change its signature; instead seed sel.Task BEFORE the call
+    (so the prompt embeds it via promptTaskSection, the prompt-safe path) and attach Source
+    onto the returned struct.
+
+WHAT I BUILT (TDD: RED = 6 router-level tests 404/201-no-record/no-source, then GREEN)
+  ?? migrations/000091_room_source_post.up/.down.sql: rooms.source_post_id UUID (nullable, no
+     FK) + partial index idx_rooms_source_post. APPLIED to solvr_test (version 91).
+  M  models/room.go (+7): Room.SourcePostID *string (json omitempty) + CreateRoomParams.SourcePostID.
+  M  db/rooms.go (+~8): Create INSERT carries source_post_id ($10) in its own RETURNING+Scan;
+     no other room query touched.
+  ?? db/rooms_source_post.go (81): RoomRepository.FindPublicRoomsBySourcePost (public,
+     non-deleted rooms for a source post; PRIVATE rooms excluded so a post reader never learns
+     of a private collaboration) + PostRepository.FindPublicPostRef (returns id+title ONLY for a
+     published+approved+public+non-deleted post; any other post/malformed id -> ErrPostNotFound,
+     the eligibility gate that keeps protected content out of /connect).
+  M  handlers/connect.go (+72): ConnectSource struct + ConnectStart.Source *ConnectSource
+     (omitempty); connectPostLookup interface + SetPostLookup; GET /v1/connect?post={id} seeds
+     the flow from a PUBLIC post only (title + link-back /posts/{id} + a task derived from the
+     post when the visitor typed none); a protected/missing/malformed post degrades to the
+     ordinary contract with NO source and NO title leaked.
+  M  handlers/rooms.go (+16): createRoomRequest.SourcePostID + UUID validation (malformed ->
+     400 INVALID_SOURCE_POST, never a silent drop) -> CreateRoomParams.SourcePostID.
+  ?? handlers/post_related_rooms.go (46): PostRelatedRoomsHandler.GetRelatedRooms for
+     GET /v1/posts/{id}/rooms (public; the post->room half of the two-way link; private rooms
+     excluded by the repo).
+  M  router.go (+5): construct postRelatedRoomsHandler(roomRepo) + mount GET /v1/posts/{id}/rooms
+     in the optional-auth public group.
+  M  router_connect.go (+3): connectHandler.SetPostLookup(db.NewPostRepository(pool)).
+  ?? router_post_seeds_room_test.go (221): the 6 tests below.
+
+VERIFICATION (all RAN this session against solvr_test @ migration 91)
+  [REAL] go build ./... = 0; go vet ./internal/api/... ./internal/db/... ./internal/models/... clean.
+  [TEST] go test ./internal/api/ -run '<the 6 new tests>' = 6/6 PASS, 0 SKIP:
+    - TestConnect_SeededFromPublishedPost: GET /v1/connect?post={id} for a published public post
+      -> data.source{post_id,title,url=/posts/{id}}, selected.task references the title, and the
+      copyable prompt is still generated (steps 1,2).
+    - TestConnect_ProtectedPostNotLeaked: a DRAFT post -> 200 with NO data.source and the title
+      string ABSENT from the whole response body (step 4, no content copied).
+    - TestConnect_UnknownPostDegrades: an unknown UUID -> 200, no source, ordinary contract.
+    - TestPost_RecordsSourceRoomAndDoesNotMutate: POST /v1/rooms {source_post_id} -> 201; the post
+      then lists that room at GET /v1/posts/{id}/rooms (step 3); the post's type/publication_state/
+      reply_count are UNCHANGED after room creation (step 5, no mutation, no duplicated replies).
+    - TestPost_RelatedRoomsExcludePrivate: a private room seeded from the post does NOT appear in
+      the post's public related rooms; the public one does (step 4).
+    - TestCreateRoom_RejectsMalformedSourcePost: source_post_id="not-a-uuid" -> 400 INVALID_SOURCE_POST.
+  [TEST] handler-package Connect|Room tests: ok (buildConnectStart 2-arg tests + prompt safety +
+    version + rooms unaffected). Full ./internal/api/handlers/ run: only the 4 DOCUMENTED
+    pre-existing TestGitHub*OAuth*/Callback failures, no new failures.
+  [REAL] REGRESSION PROOF (git stash -u baseline @ 0b246fe): ran the SAME full
+    ./internal/api/ ./internal/db/ ./internal/models/ suite on baseline (70 failures) and on my
+    branch (66 failures). The failure set is NON-DETERMINISTIC shared-test-DB pollution: tests
+    wholly unrelated to my change (TestAgentRepository_List_*, TestSearchAnalyticsRepository_
+    GetTrending, TestHomepageActivity_*) fail on baseline but PASS on my branch, and vice-versa.
+    The only two "new on branch" suspects (TestE2E_AgentRegistrationAndPosting,
+    TestGetRoomPulse_TwoWayExchanges...) PASS in ISOLATION (-count=1, alone) on my branch. The
+    TestRoomRepository_* failures ("Create() error = room slug already exists", fixed HHMMSS
+    slugs colliding) appear identically in BOTH baseline and branch full runs (5 each). My change
+    adds ZERO deterministic regressions.
+
+FILE SIZE (honest status)
+  [REAL] All NEW files <800 (rooms_source_post.go 81, post_related_rooms.go 46,
+    router_post_seeds_room_test.go 221). Edited files under limit: connect.go 601, rooms.go 524,
+    db/rooms.go 622, models/room.go 80. router.go 1204->1209 was ALREADY over 800 (a pre-existing
+    CI violation, documented in the 000089 entry); my +5 lines are the minimal handler+route
+    wiring, no NEW violating file. Splitting router.go is a separate refactor out of scope.
+
+DIFF (git status --porcelain / git diff --stat) - matches the work above:
+  M backend/internal/api/handlers/connect.go   (+72)
+  M backend/internal/api/handlers/rooms.go     (+16)
+  M backend/internal/api/router.go             (+5)
+  M backend/internal/api/router_connect.go     (+3)
+  M backend/internal/db/rooms.go               (+8/-6)
+  M backend/internal/models/room.go            (+7)
+  ?? backend/internal/api/handlers/post_related_rooms.go
+  ?? backend/internal/api/router_post_seeds_room_test.go
+  ?? backend/internal/db/rooms_source_post.go
+  ?? backend/migrations/000091_room_source_post.up.sql
+  ?? backend/migrations/000091_room_source_post.down.sql
+  (spec.json: this task passes -> true)
+
+UAT: OWNER-ONLY LAST MILE. 100% of this requirement's business logic runs in the API and ran
+  green locally: the connect post-seed contract (title + link-back + derived task, public-only),
+  the source_post_id room provenance, the post->room related-rooms link, the no-mutation
+  guarantee, the private-room exclusion, and malformed-input rejection. Per "API is smart, client
+  is dumb" the API IS the substantive completion (same shape accepted for the room->post task).
+  Owner last miles: (1) surface "Discuss with agents" on the published-post page (opens
+  /connect?post={id}) and render the post's related public rooms (GET /v1/posts/{id}/rooms) as
+  part of the deferred Posts UI; (2) apply migration 000091 to production during the
+  knowledge-model cutover. Do NOT run migrations against live production here.
+
+NOTE for next iteration: live+reusable now -> GET /v1/connect?post={id} (public post seed),
+  POST /v1/rooms {source_post_id}, GET /v1/posts/{id}/rooms. The post->room and room->post links
+  are both keyed off provenance columns with no FK (cleanup-safe). The next buildable additive
+  backend foundation is likely a room-data foundation (room_entries / room_members authority)
+  once its prerequisites are addressed, or another additive endpoint that does not require the
+  cutover.

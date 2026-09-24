@@ -171,6 +171,20 @@ type ConnectRequirements struct {
 	HelpLabel          string   `json:"help_label"`
 }
 
+// ConnectSource records the published Post a start flow was seeded from, when a visitor
+// arrives via "Discuss with agents" on a post. It carries the post's title and a link
+// BACK to the post — an authorized content reference, never a copy of the post body — so
+// the agents read the source through the API's own access rules. Only a publicly readable
+// post ever produces a source; a draft, rejected, family, private, or missing post
+// degrades to the ordinary contract with no source and no title leaked.
+type ConnectSource struct {
+	Kind   string `json:"kind"` // "post"
+	PostID string `json:"post_id"`
+	Title  string `json:"title"`
+	URL    string `json:"url"`
+	Detail string `json:"detail"`
+}
+
 // ConnectStart is the whole contract.
 type ConnectStart struct {
 	InstructionVersion string                  `json:"instruction_version"`
@@ -191,6 +205,8 @@ type ConnectStart struct {
 	Requirements       ConnectRequirements     `json:"requirements"`
 	AddAgent           ConnectAddAgentControl  `json:"add_agent"`
 	Customize          ConnectCustomizeSection `json:"customize"`
+	// Source is set only when the flow was seeded from a published post. Omitted otherwise.
+	Source *ConnectSource `json:"source,omitempty"`
 }
 
 // connectRoomLookup is the slice of the room repository this handler needs.
@@ -198,9 +214,17 @@ type connectRoomLookup interface {
 	GetBySlug(ctx context.Context, slug string) (*models.Room, error)
 }
 
+// connectPostLookup is the slice of the post repository the handler needs to seed a start
+// flow from a published post. FindPublicPostRef returns only publicly readable posts, so
+// the handler cannot expose protected content even if asked for it by id.
+type connectPostLookup interface {
+	FindPublicPostRef(ctx context.Context, id string) (postID, title string, err error)
+}
+
 // ConnectHandler serves GET /v1/connect.
 type ConnectHandler struct {
 	rooms       connectRoomLookup
+	posts       connectPostLookup
 	exampleSlug string
 }
 
@@ -213,6 +237,12 @@ func NewConnectHandler(rooms connectRoomLookup) *ConnectHandler {
 		slug = DefaultCollabExampleRoomSlug
 	}
 	return &ConnectHandler{rooms: rooms, exampleSlug: slug}
+}
+
+// SetPostLookup enables seeding the start flow from a published post (?post=<id>). It is
+// optional: with no lookup wired, ?post= is ignored and the ordinary contract is served.
+func (h *ConnectHandler) SetPostLookup(posts connectPostLookup) {
+	h.posts = posts
 }
 
 // GetConnect handles GET /v1/connect (public, no auth).
@@ -253,11 +283,47 @@ func (h *ConnectHandler) GetConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A ?post=<id> seeds the flow from a published post: it carries the post's title and
+	// a link back, and — only when the visitor typed no task of their own — a task derived
+	// from the post. A protected or missing post degrades to the ordinary contract.
+	source := h.resolvePostSource(r.Context(), strings.TrimSpace(query.Get("post")))
+	if source != nil && task == "" {
+		task = connectTaskFromPost(source)
+	}
+
 	selection := ConnectSelection{Task: task, Preset: preset, Visibility: visibility}
 
-	roomWriteJSON(w, http.StatusOK, map[string]any{
-		"data": buildConnectStart(selection, h.resolveExample(r.Context())),
-	})
+	start := buildConnectStart(selection, h.resolveExample(r.Context()))
+	start.Source = source
+
+	roomWriteJSON(w, http.StatusOK, map[string]any{"data": start})
+}
+
+// resolvePostSource returns a ConnectSource only for a publicly readable post. Anything
+// else — missing, deleted, draft, rejected, family, private, or a malformed id — returns
+// nil so no protected title or body can ever seed the public contract.
+func (h *ConnectHandler) resolvePostSource(ctx context.Context, postID string) *ConnectSource {
+	if h.posts == nil || postID == "" {
+		return nil
+	}
+	id, title, err := h.posts.FindPublicPostRef(ctx, postID)
+	if err != nil {
+		return nil
+	}
+	return &ConnectSource{
+		Kind:   "post",
+		PostID: id,
+		Title:  title,
+		URL:    "/posts/" + id,
+		Detail: "This collaboration starts from a published Solvr post. The agents get a link to it, not a copy of its contents.",
+	}
+}
+
+// connectTaskFromPost seeds a starter task that names the post and points the agents at it.
+// The title flows through the same prompt-safe task section as any typed task, so post
+// content cannot become shell interpolation.
+func connectTaskFromPost(src *ConnectSource) string {
+	return "Discuss and build on this Solvr post: \"" + src.Title + "\" (" + src.URL + "). Read it first, then plan the work."
 }
 
 // resolveExample links the showcase room only while it really is a public room

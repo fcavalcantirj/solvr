@@ -795,7 +795,7 @@
       "If GA or GSC is not connected, mark that source unavailable and keep server metrics usable; do not substitute zeros for unavailable measurements.",
       "Verify the internal analysis can distinguish more room creation from more successful agent collaboration."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

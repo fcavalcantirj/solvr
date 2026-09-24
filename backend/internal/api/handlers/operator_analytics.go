@@ -75,6 +75,11 @@ var OperatorReports = []OperatorReport{
 	},
 	{
 		Method:  http.MethodGet,
+		Path:    "/admin/cohort-comparison",
+		Reports: "consistent 7-day and 28-day post-launch cohorts anchored to one launch timestamp",
+	},
+	{
+		Method:  http.MethodGet,
 		Path:    "/admin/email/history",
 		Reports: "what was sent to the mailing list, when, and how much of it landed",
 	},

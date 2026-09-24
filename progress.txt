@@ -8152,3 +8152,150 @@ FILE SIZE NOTE: router.go is 1219 lines -- a PRE-EXISTING >800 violation (was
   admin-analytics wiring pattern (search-analytics is wired the same way inline);
   extracting a router helper is an unrequested out-of-scope refactor, so this task
   did not touch it. Standing debt, not introduced here.
+
+================================================================================
+2026-09-24 — Task idx 62 (spec.json, category analytics)
+"Compare the redesigned experience using consistent post-launch cohorts". PASSED.
+================================================================================
+
+TASK SELECTION (top-down, every earlier skip RE-VERIFIED [REAL] this session, not
+  trusted from the prior journal):
+  - idx 23 "Verify N-agent e2e" (ACCEPTANCE): [REAL] grep room_entries internal/
+    = 0 rows; no /entries route in internal/api. Step 4 (two API instances,
+    replay/idempotency) is idx 77's deliverable (false). Acceptance-not-checklist.
+    SKIP.
+  - idx 27 "agent-created rooms manageable": step 2 requires rooms.owner_id
+    RETIRED after migration. [REAL] grep -c owner_id internal/db/rooms.go = 16
+    (still present); room_members exists (mig 076) but retirement is idx 69
+    (false). SKIP.
+  - idx 51 / idx 52 (route integrations "after cutover" / retained-knowledge
+    search "before/after cutover"): both hinge on the idx 92 cutover (false) +
+    schema reduction idx 67 (false). SKIP.
+  - idx 58 "permissions authoritative": step 3 needs established-STREAM revocation
+    (deny existing SSE delivery until owner readmits). [REAL] grep
+    IsMember|membership|Revoke|CheckRoomAccess internal/api/handlers/rooms_sse.go
+    = 0 hits; the SSE loop (line 229 for/select) has no per-tick membership check.
+    That is idx 73's deliverable (false). SKIP.
+  - idx 62 THIS TASK: a MEASUREMENT report over funnel_events (mig 092) + rooms
+    + posts.source_room_id (mig 088) + messages, all present. No room_entries /
+    owner_id-retirement / cutover / stream-revocation dependency. First
+    buildable-now task top-down. TOOK IT.
+
+ENVIRONMENT: local docker stack (solvr-postgres @ 5435 healthy 17h; solvr-ipfs up).
+  DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr. DB at migration
+  head (funnel_events 251 rows, posts.source_room_id + rooms.is_private present,
+  all [REAL]-verified via psql). No migration added by this task — it only READS
+  funnel_events + rooms + posts + messages. No prod touch.
+
+WHAT THE MEASUREMENT DOES (contract in internal/db/cohort_comparison.go):
+  A new operator-only report, GET /admin/cohort-comparison?launch=<RFC3339>,
+  backed by db.CohortComparisonRepository.Compare(ctx, launch, now). One launch
+  timestamp anchors two windows, [launch, launch+7d) and [launch, launch+28d),
+  both measured in UTC with IDENTICAL definitions so the redesign is judged over
+  consistent post-launch cohorts, not a moving all-time bag. Per window:
+    - rooms_created and activated_rooms (deduped first_two_way_exchange) reported
+      SEPARATELY, plus room_to_activation conversion with an explicit denominator,
+      so more room CREATION is never conflated with more successful COLLABORATION.
+    - second_agent_connection_failures: rooms where a 2nd agent actually joined
+      (participant ordinal >= 2) but no two-way exchange happened -- the connection
+      was attempted and failed, distinct from "no 2nd agent ever arrived".
+    - time_to_first_exchange_ms as continuous median + p90 (percentile_cont),
+      Count/Median/P90 pointers so an empty window reads as no-measurement.
+    - rooms_with_return: rooms with a later agent session (participant_joined /
+      room_viewed) after the exchange.
+    - room_to_post_publications: non-deleted posts with source_room_id in the
+      window's created rooms.
+    - visibility split (public/private/unknown via rooms.is_private; unknown =
+      created room with no resolvable rooms row, never guessed) and creator split
+      (new/returning by earliest funnel appearance of the creator ref / unknown
+      for a null ref).
+  Window.Complete = now >= window_end; a partial window still reports its numbers
+  labeled incomplete, never omitted or zero-filled. All-time multi-author rooms
+  (message-based, looser) carried as historical_context with a note, never merged
+  into a cohort. external_sources.google_analytics / .search_console report
+  {available:false, note} -- GA/GSC are not connected as data sources ([REAL]:
+  grep found only credential-redaction regex in operator_analytics.go, no data
+  pull), so they are marked unavailable, never substituted with zeros.
+
+STEP-BY-STEP COVERAGE (6 task steps -> code + a passing test):
+  1 launch timestamp, complete 7d & 28d windows, same tz/defs/exclusions:
+    measureWindow anchors both windows to one launch in UTC. [TEST]
+    MeasuresConsistentPostLaunchWindows asserts WindowStart/End and both
+    Complete; IncompleteWindowIsLabeled asserts 7d complete / 28d incomplete with
+    numbers still present.
+  2 activated / second-agent failures / time-to-exchange / returns / room-to-post:
+    measureCounts + firstExchangeDuration + measureReturnsAndPosts. [TEST] W7:
+    activated=1, failures=1 (room B: ord2 joined, no exchange), median=21000ms,
+    returns=1 (room A later join), room_to_post=1 (post on A).
+  3 separate public/private, new/returning, unknown; probes not guessed:
+    visibility + creator splits. [TEST] W7 public=1 private=1 unknown=1;
+    new=1 returning=1 unknown=1. ExclusionsNote documents that internal/probe
+    traffic has no stored flag and is not guessed.
+  4 all-time report is historical context, not a baseline: measureHistorical +
+    CohortHistoricalContext.Note. [TEST] HistoricalContextMatchesCensus checks it
+    against a census recomputed a different way in the same breath.
+  5 GA/GSC unavailable, no zero substitution: ExternalSources both
+    {available:false}. [TEST] asserts Available=false + non-empty Note on both.
+  6 distinguish creation from collaboration: rooms_created, activated_rooms and
+    the conversion are separate fields per window. [TEST] asserts W28 has more
+    rooms_created AND more activated_rooms than W7, each readable on its own.
+
+TEST ISOLATION: funnel + rooms + post seeded in a HISTORICAL slice
+  ([-200d, -172d]) that ambient NOW-traffic from parallel packages cannot reach;
+  the slice is DELETEd before seeding for deterministic re-runs; slugs use a
+  fresh hex suffix ([a-z0-9], rooms_slug_check-safe); rooms + post cleaned up via
+  t.Cleanup. The message-based historical figure uses the census-agreement
+  pattern so ambient rows land in both numbers.
+
+WIRING: the new route is registered under operatorOnly in router.go and added to
+  handlers.OperatorReports. That auto-subjects it to the router contract tests
+  (OperatorReports refused to every product credential; EveryAdminRoute gated +
+  unstorable) -- both RAN GREEN this session. Handler keeps its own operator-key
+  check (checkActivationAnalyticsAuth) as a second lock and reuses
+  writeActivationJSON so answers carry the no-store operator cache policy.
+
+VERIFICATION (all RAN this session against local DB @ 5435):
+  [TEST] go build ./... = OK; go vet ./internal/db ./internal/api/handlers = no
+    cohort findings.
+  [TEST] go test ./internal/db/ -run CohortComparison = 3/3 PASS
+    (MeasuresConsistentPostLaunchWindows, IncompleteWindowIsLabeled,
+    HistoricalContextMatchesCensus).
+  [TEST] go test ./internal/api/handlers/ -run CohortComparison = 4/4 PASS
+    (serves report + passes launch verbatim + no-store header; requires launch;
+    rejects invalid launch; refuses without operator key).
+  [TEST] go test ./internal/api/ -run
+    'OperatorReports|EveryAdminRoute|PublicOverview_NeverShares' = PASS (new route
+    auto-verified gated + unstorable + not sharing the public cache).
+  [REAL] scripts/check-file-size.sh = "All code files within the 800 line limit";
+    new files: cohort_comparison.go 337, its _test 269,
+    handlers/cohort_comparison.go 58, its _test 134 -- all < 800.
+
+REGRESSION PROOF (this change introduces ZERO regressions):
+  Full go test ./internal/{db,api/handlers,api} run ONCE each, captured to
+  /tmp/cohort_{db,api_handlers,api}.log. No Cohort* test appears in any FAIL list.
+  All failures are pre-existing:
+  - db: Briefing*, Crystallization*, RisingIdeas*, TrendingNow*, HardcoreUnsolved*,
+    YouMightLike*, PlatformPulse, RecentVictories*, ClaimToken_MarkUsed,
+    ContributionMigration, UserRepository_NullPasswordHash (legacy problem/idea/
+    approach model tests vs canonical schema -- the set prior sessions documented);
+    RoomRepository_{GetBySlug,List,Update,SoftDelete,RotateToken} (leftover
+    fixed-slug rooms = DB data pollution, proven not-mine before).
+  - db: TestAgentRepository_List_* (4) + TestSearchAnalyticsRepository_GetTrending
+    were NOT in the prior journal's explicit list, so PROVEN pre-existing this
+    session: `git stash push -u` (removed ALL my work incl untracked cohort
+    files) then `go test -run 'TestAgentRepository_List|TestSearchAnalyticsRepository_GetTrending'`
+    = IDENTICAL 5 failures; `git stash pop` restored my work cleanly. My code
+    adds only new files + additive wiring and touches neither repo.
+  - api/handlers: 4x GitHub*OAuth*_Integration -- pre-existing network/env.
+  - api: CommentsCount* (3), TypeSpecificListEndpoints, IPFSHealthEndpoint --
+    documented pre-existing.
+
+FILES (git status --porcelain / git diff --stat -- matches exactly):
+  New: internal/db/cohort_comparison.go (337) + cohort_comparison_test.go (269),
+    internal/api/handlers/cohort_comparison.go (58) + cohort_comparison_test.go
+    (134).
+  Modified: internal/api/handlers/operator_analytics.go (+5: one OperatorReports
+    entry for /admin/cohort-comparison), internal/api/router.go (+9: wire the
+    repo+handler under operatorOnly).
+  No existing test deleted, weakened, skipped, or renamed. No migration, no env,
+  no frontend, no prod touch.

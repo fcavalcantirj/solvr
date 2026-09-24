@@ -183,6 +183,15 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 		r.With(operatorOnly).Get("/admin/activation-analytics", activationHandler.GetReport)
 	}
 
+	// Admin cohort comparison: consistent 7-day and 28-day post-launch windows
+	// anchored to one launch timestamp, so the redesign is judged over the same
+	// cohorts rather than a moving all-time baseline. Operator-only.
+	if pool != nil {
+		cohortRepo := db.NewCohortComparisonRepository(pool)
+		cohortHandler := handlers.NewCohortComparisonHandler(cohortRepo)
+		r.With(operatorOnly).Get("/admin/cohort-comparison", cohortHandler.GetReport)
+	}
+
 	// Admin incident management
 	if pool != nil {
 		incidentRepo := db.NewIncidentRepository(pool)

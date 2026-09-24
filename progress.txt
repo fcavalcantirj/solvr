@@ -10985,3 +10985,85 @@ REMAINING FOR idx 72 (unchanged from slice 7 minus this): Step 2 — search/over
   legacy-status-commands migration error (out of sequence pre-cutover per idx 51; 60 in-repo
   tests + live routes still depend on the handlers; blocked on idx 51/93). idx 72 passes STAYS
   false.
+
+================================================================================
+2026-09-24 — Task idx 72 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and
+statistics APIs"
+SLICE 9 of N: pin the CANONICAL GET /v1/posts filter/ordering/pagination/VISIBILITY
+parse contract at the handler layer (step 2 "... define filters, ordering, pagination,
+and visibility once for each purpose"). Slice 8 pinned the same for GET /v1/rooms
+(rooms_list_options_test.go). GET /v1/posts is the canonical knowledge resource and the
+legacy problem/idea/question feeds are adapters that reach the SAME parser
+(parsePostListOptions, called by posts.go:313 and legacy_feed.go:69) — yet that parser
+had NO dedicated test, so its clamps/whitelists/self-view gate were unguarded.
+================================================================================
+
+TASK SELECTION (verified MYSELF this session, not trusted from journal):
+  - spec.json: 96 tasks, 30 passes=false (python json count). First-false = idx 23
+    (ACCEPTANCE "Verify N-agent collaboration end to end across clients AND service
+    instances"): its step 4 needs idx 78 (operations, multi-instance, false) => acceptance
+    rule defers. idx 51/52 need the knowledge cutover (idx 93, false). idx 58 spans
+    search/social-metadata (idx 52/63). idx 66 ACCEPTANCE needs a test deployment => defer.
+    idx 67 destructive schema cleanup needs the migration cutover. idx 68-71 passes=true.
+    => idx 72 is again the first BUILDABLE task; continued it.
+  - Re-VERIFIED [REAL] the two idx-72 blockers are still real (grep, not trusted):
+      (a) step-3 contribution-listings rewire — entangled with knowledge cutover idx 93.
+      (b) step-5 legacy-status-commands migration error — out of sequence PRE-cutover per
+          idx 51 (90-day transition is AFTER cutover); router.go still registers the four
+          legacy write routes and dozens of _test.go pin their success behaviour.
+    Both unchanged from slice 8. idx 72 CANNOT fully pass until idx 51/93 land, so passes
+    STAYS false; this slice pins the remaining buildable step-2 contract for posts.
+
+WHAT WAS MISSING (verified [REAL] before writing):
+  - [REAL] grep: parsePostListOptions is called by posts.go:313 (canonical GET /v1/posts)
+    and legacy_feed.go:69 (adapter) but referenced by ZERO _test.go. No
+    posts_list_options_test.go existed; parsePaginationParams (posts.go:32) also had no
+    dedicated handler test. So the canonical posts discovery parse contract — pagination
+    bounds, sort/timeframe whitelists, tag split/trim, has_answer tri-state, and the
+    author self-view IncludeHidden gate — was entirely unguarded at the parse layer.
+
+FILES ([REAL] git status --porcelain: 1 new, 0 modified):
+  NEW backend/internal/api/handlers/posts_list_options_test.go (226 lines):
+    TestParsePostListOptions — 28 table subtests pinning:
+      pagination: defaults(page1/per_page20), valid, per_page boundary 50 ok, per_page
+        51/0/-1/non-int rejected, page 0/-2/non-int rejected (parsePaginationParams
+        errors surface through parsePostListOptions);
+      filters: type & status passthrough, tags comma-split+trim, has_answer true/false/
+        other(nil), needs_help true/other;
+      ordering: sort votes/hot honoured, unknown sort ignored(empty), timeframe week
+        honoured, unknown timeframe ignored(empty), author_type/author_id passthrough;
+      visibility: anonymous => no viewer scoping/no hidden; authed human => ViewerType/
+        ViewerID/ViewerHuman set; author self-view => IncludeHidden true; viewing ANOTHER
+        author => IncludeHidden false (via auth.ContextWithClaims injection).
+  NO production file changed. NO existing test deleted, skipped, renamed or weakened —
+    purely additive.
+
+TDD (pinning an EXISTING function => RED shown by mutation, per slice-8 precedent):
+  [TEST] GREEN: go test ./internal/api/handlers/ -run TestParsePostListOptions -count=1 -v
+    => PASS, all 28 subtests, 0 SKIP.
+  [REAL] RED-with-teeth mutation: in posts_list_options.go temporarily replaced the sort
+    whitelist switch with an unconditional `opts.Sort = sortParam` and re-ran => ONLY
+    "unknown_sort_is_ignored_(empty)" FAILED (got Sort:bogus, want Sort:""). Restored from
+    /tmp/plo.bak; gofmt -l clean; re-ran => PASS. git diff confirms posts_list_options.go
+    UNCHANGED vs HEAD. Proves the test is load-bearing, not a tautology.
+
+VERIFICATION (DATABASE_URL = postgres://solvr:***@localhost:5435/solvr_test, local docker
+  solvr-postgres, port 5435):
+  [REAL] go build ./... EXIT 0; go vet ./internal/api/handlers/ clean; gofmt -l on the new
+    file clean. Sizes: posts_list_options_test.go 226, posts_list_options.go 101 — both < 800.
+  [TEST] FULL go test ./internal/api/handlers/ -p 1 -count=1 (/tmp/i72s9_handlers.log):
+    exactly 4 --- FAIL, ALL the documented pre-existing GitHub OAuth callback integration
+    tests (TestGitHubCallback_GitHubError/InvalidCode/MissingCode_Integration,
+    TestGitHubOAuthRedirect_Integration) — identical to slice 8's baseline. ZERO
+    posts/parse-related failures => this test-only slice introduced NO regression.
+  No SPEC.md / PROJECT_KNOWLEDGE.md edit required: no route added/removed, no public
+    contract changed — this pins an EXISTING invariant.
+
+REMAINING FOR idx 72 (unchanged from slice 8 minus this): Step 2 — search/overview
+  contracts pinned; repo-layer room visibility (slice 7) + handler-layer room-discovery
+  parse (slice 8) pinned; canonical GET /v1/posts parse contract now pinned (this slice).
+  Step 3 rest — contribution listings rewire (entangled with knowledge cutover idx 93).
+  Step 5 — legacy-status-commands migration error (out of sequence pre-cutover per idx 51;
+  live routes + in-repo tests still depend on the handlers; blocked on idx 51/93).
+  idx 72 passes STAYS false.

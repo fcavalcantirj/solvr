@@ -886,7 +886,7 @@
       "Bind individual room credentials and presence to authoritative memberships; retire rooms.owner_id and the shared rooms.token_hash after the documented compatibility window and credential transition.",
       "Preserve existing human and agent authentication stores; avoid an unrelated replacement of OAuth or agent identity just to simplify room ownership."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

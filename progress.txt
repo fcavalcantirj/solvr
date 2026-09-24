@@ -9517,3 +9517,69 @@ REMAINING FOR idx 69 (why passes stays false):
 UAT (not a pass condition now, owner-only): production gets 000098 then 000099 AFTER the
   deploy that ships this code. Expect live presence rows whose agent_name is not a member's
   id/display_name to be dropped (agents re-join on their next /r/ call).
+
+================================================================================
+2026-09-24 — Task idx 69 (spec.json, category data) — COMPLETE, passes -> true
+"Use one room membership authority and eliminate duplicate ownership and shared-token state"
+SLICE 8 (account lifecycle, migration 000100) VERIFIED + JOURNALED, and FINAL slice:
+SPEC.md Part 24 documents the final schema and the compatibility window.
+================================================================================
+
+WHY: commit 0cc2a62 ("2026-09-24 — Task idx 69 ... IN PROGRESS, p") is again the ralph
+  host auto-commit backstop; its iteration left NO journal entry. [REAL] git status was
+  clean at the start of this session.
+
+TASK SELECTION: idx 23, 27, 51, 52, 58, 66, 67 skipped for the reasons in the slice-1
+  entry; idx 69 continues.
+
+WHAT 0cc2a62 CONTAINS (git show --stat, 6 files, +264/-7):
+  NEW backend/migrations/000100_room_account_lifecycle.up.sql:
+    - prevent_agent_reclaim now refuses only a direct re-claim X -> Y (both non-null);
+      X -> NULL (unlink, DELETE /v1/me unclaim) allowed. Resolves the slice-2 FINDING that
+      DELETE /v1/me with a claimed agent failed.
+    - trigger users_leave_rooms (AFTER UPDATE OF deleted_at on users, NULL -> set): a live
+      room where the user was the last active owner with a live account is ARCHIVED and
+      that owner row kept (admin recovery restores ownership); every other active
+      membership of the user is revoked.
+  NEW .../000100_room_account_lifecycle.down.sql: restores 000018 prevent_agent_reclaim,
+    drops users_leave_rooms.
+  NEW backend/internal/db/room_members_lifecycle_test.go (5 TestRoomMembersLifecycle_*).
+  M   backend/internal/api/router_rooms_family_membership_test.go: +1 test
+      TestDeleteMe_UnclaimsAgentsAndArchivesSoleOwnerRoom (nothing removed).
+  M   backend/internal/db/room_members_family_test.go: forceUnlink COMMENT only.
+  M   SPEC.md Part 20.2 soft-delete steps: re-claim rule + room membership exit.
+
+THIS ITERATION'S DIFF ([REAL] git status --porcelain / git diff --stat before journaling):
+  M SPEC.md +106 only: new "Part 24: Room Membership Authority" (24.1 overview, 24.2 final
+  schema of room_members / room_agent_tokens / agent_presence, 24.3 DB-enforced rules,
+  24.4 family access, 24.5 credentials, 24.6 compatibility window). No code changed.
+  Facts in it checked this session: \d room_members / room_agent_tokens / agent_presence on
+  solvr_test; rooms columns (no owner_id, no token_hash); 000073 token_hash TEXT NOT NULL
+  with no default (so new code cannot insert rooms before 000098); handshake public/closed/
+  family branches (handlers/rooms_handshake.go:30,115,130); LAST_OWNER
+  (rooms_members.go:150); AGENT_NAME_TAKEN (rooms_presence.go:129).
+  Plus this progress.txt entry and spec.json idx 69 passes -> true.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test):
+  [REAL] solvr_test was at 100 dirty=f, users_leave_rooms trigger present.
+  [TEST] RED: migrate down 1 (-> 99), the 5 TestRoomMembersLifecycle_* + TestDeleteMe_
+    UnclaimsAgentsAndArchivesSoleOwnerRoom all FAIL (/tmp/s8_red.log); migrate up -> 100 f.
+  [TEST] GREEN targeted (/tmp/s8_green.log) Lifecycle/DeleteMe/Family/Ownership/Members:
+    23 PASS, 0 FAIL, 0 SKIP.
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/s8_full.log): 3806 PASS (slice 7:
+    3799), 11 SKIP (same names as /tmp/s7_full.log), 72 unique FAIL = slice-7's 73 minus
+    TestSearchAnalyticsRepository_GetTrending (leftover-data flake); NO new failure.
+    All 6 new tests PASS inside it.
+
+STEP COVERAGE for idx 69 (all slices): 1 schema (000095, slice 1); 2 backfill + ownership
+  matrix (slices 1-2); 3 family access centralized, derived not stored (000096, slice 2);
+  4 final-owner guard (000095) + hard/soft deletion + unlinking (000095, 000100, slice 8);
+  5 credentials/presence bound (000099), owner_id retired (000097), token_hash retired
+  (000098) after the credential transition (slices 4-5), window documented (SPEC 24.6);
+  6 OAuth/password/agent API key stores untouched.
+
+UAT: owner deploys this code, then IMMEDIATELY applies 000095 -> 000100 in order to
+  production via the admin route (checks from the slice-1/2/3 UAT lines), re-syncing
+  installed skill copies (~/.claude/skills/solvr/scripts) before the deploy; then confirms
+  in a browser that room creation lands on /rooms/<slug>?created=1 and a private room's
+  CONNECT AGENT panel shows a handshake prompt with no token.

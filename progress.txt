@@ -10156,3 +10156,71 @@ LEFT FOR idx 76 (SDK/CLI/skills consistency): skill/scripts/solvr.sh room-messag
 UAT: owner deploys the backend (GET /v1/rooms/{slug}, /agents, /connect now answer 401 to an
   invalid room token and 403 to another room's token, per slice 6) and confirms an agent
   following GET /v1/rooms/{slug}/connect can post and read through /entries in production.
+
+================================================================================
+2026-09-24 — Task idx 71 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and
+statistics APIs"
+SLICE 1 of N: a keep/merge/adapt/retire decision for EVERY served route (step 4), the
+exact adapter mapping published (step 5, documentation half), both pinned to the router.
+================================================================================
+
+TASK SELECTION (top-down): idx 23 (ACCEPTANCE, needs idx 77), 51/52 (knowledge cutover
+  idx 92 + idx 67), 58 (needs idx 73), 66 (ACCEPTANCE, test deployment), 67 (needs idx 74)
+  — same blockers as the idx 70 entries. idx 71 is the first buildable task. TOOK IT.
+  Scope split with idx 51: idx 51 owns the 90-day legacy WRITE-shape transition + sunset;
+  idx 71 owns discovery/statistics retirement, route decisions and the status-command error.
+
+FILES ([REAL] git status --porcelain / git diff --stat before journaling):
+  NEW backend/internal/api/route_families.go (486 lines): RouteDisposition (keep, merge,
+    adapt, retire), RouteFamily {Name, Disposition, Canonical, Routes}, and RouteFamilies =
+    37 families covering all 220 "METHOD /path" routes the production router serves.
+    Non-keep families (63 routes): room-message-adapters (adapt -> /v1/rooms/{slug}/entries
+    + stream), homepage-overview-parts + aggregate-statistics (/v1/stats, /stats/trending,
+    /stats/search, /v1/data/*) (merge -> GET /v1/overview), type-specific-statistics
+    (/stats/problems|questions|ideas, retire -> /v1/overview), legacy-feed (/feed,
+    /feed/stuck, /feed/unanswered), legacy-typed-discovery (/problems, /questions, /ideas),
+    legacy-typed-reads, legacy-typed-writes, legacy-comments, legacy-status-commands
+    (PATCH /approaches/{id}, POST /approaches/{id}/verify, POST /questions/{id}/accept/{aid},
+    POST /ideas/{id}/evolve — "no canonical equivalent"), contribution-listings
+    (/users/{id}/contributions, /me/contributions, retire -> GET /v1/posts?author_type=&
+    author_id=, which [REAL] handlers/posts.go already parses), my-posts (merge, same).
+    Kept: posts, replies, post-context, bookmarks, reports, search, room discovery, overview,
+    rooms, room transport, reputation, agent/user accounts, auth, notifications, follows,
+    storage, blog, connect/integrations, service status, seo, product analytics, admin.
+  NEW backend/internal/api/route_families_test.go (131 lines, 3 tests):
+    _CoverEveryServedRoute (chi.Walk of NewRouter(pool, hub, registry): every served route
+    has exactly one family, no phantom registry routes, no route in two families);
+    _EveryNonKeepDecisionNamesItsCanonicalDestination; _PublishedInSpec (SPEC Part 26 has
+    the family row with the same disposition + destination, and one mapping row per
+    non-keep route).
+  M   SPEC.md (+171): NEW Part 26 "Canonical Knowledge API and Route Dispositions" (26.1
+    canonical endpoints per purpose + disposition meanings, 26.2 family table, 26.3 adapter
+    mapping for all 63 non-keep routes, 26.4 kept families). Generated from the registry
+    by a throwaway script (/tmp/i71_gen_spec.py) so no row was hand-typed.
+  No production behavior changed: the registry is data + tests; no handler, route or
+  response differs. No test deleted, skipped or loosened. spec.json untouched.
+
+TDD: RED [TEST] /tmp/i71s1_red.log — both registry tests FAILED with the empty registry
+  (220 undecided routes listed); _PublishedInSpec FAILED "SPEC.md has no Part 26" before
+  Part 26 existed. GREEN /tmp/i71s1_spec.log: 3/3 PASS, 0 SKIP.
+
+VERIFICATION (DATABASE_URL = shell-profile local docker solvr-postgres
+  localhost:5435/solvr_test):
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i71s1_full.log): 3852 PASS, 11 SKIP,
+    73 unique FAIL. comm vs /tmp/i70s8_full.log: NEW 0; GONE 4 (the 4 TestAdminHandler_
+    ListDeleted* DB-connection flakes from the idx 70 slice 8 run). The 3 TestRouteFamilies_*
+    PASS in the full run.
+  [REAL] gofmt clean, go vet ./internal/api/ clean; both new files < 800 lines.
+
+REMAINING FOR idx 71 (next slices):
+  - Step 3 (adapt then retire): serve /v1/feed*, /v1/problems|questions|ideas lists and
+    /stats/problems|questions|ideas through the canonical posts/overview query stack (no
+    independent query stack), with runtime Deprecation/Sunset/Link headers from the
+    registry; frontend still calls several of these (grep frontend/lib/api.ts).
+  - Step 5 runtime half: legacy-status-commands answer an actionable machine-readable
+    migration error (code + canonical destination) instead of succeeding.
+  - Step 2: define filters, ordering, pagination and visibility once for GET /v1/search,
+    GET /v1/rooms, GET /v1/overview (document + contract tests).
+  - Contribution listings: canonical replies-by-author read before retiring
+    /users/{id}/contributions.

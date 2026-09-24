@@ -567,7 +567,7 @@
       "Verify the existing knowledge remains reachable from the global Posts link but does not compete with Connect agents as the site's main action.",
       "Verify list pagination, author links, and detail navigation work identically for every migrated post."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

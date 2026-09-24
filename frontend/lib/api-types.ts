@@ -27,6 +27,7 @@ export interface APIPost {
   answers_count?: number;
   approaches_count?: number;
   comments_count?: number | null;  // Production may return null when comments table doesn't exist
+  reply_count?: number;  // Canonical unified count of all contributions (server-computed)
   evolved_into?: string[];
   crystallization_cid?: string;
   crystallized_at?: string;

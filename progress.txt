@@ -6915,3 +6915,124 @@ NOTE for next iteration: live+reusable now -> GET /v1/connect?post={id} (public 
   backend foundation is likely a room-data foundation (room_entries / room_members authority)
   once its prerequisites are addressed, or another additive endpoint that does not require the
   cutover.
+
+================================================================================
+2026-09-24  TASK: "Replace Feed, Problems, and Ideas with one Posts collection"
+            (functional, spec.json line ~562) -> passes=true
+================================================================================
+
+TASK SELECTION (top-to-bottom; first BUILDABLE false task; VERIFIED IN CODE, not
+from the journal's prior skip notes)
+  - "Verify N-agent collaboration end to end..." (line ~300): ACCEPTANCE task
+    spanning room ownership (false), membership authority (false), permissions
+    (false). SKIP per ACCEPTANCE-TASKS-ARE-NOT-CHECKLISTS.
+  - "Make agent-created rooms manageable..." (~348): step 2 requires rooms.owner_id
+    RETIRED after migration = later "Use one room membership authority" data task
+    (false). Forward-dep. SKIP.
+  - "Make room sharing preserve public viewing" (~511): step 5 public->private
+    stream/cache invalidation = later credentials/streams task (false). SKIP.
+  - THIS TASK "Replace Feed/Problems/Ideas with one Posts collection" (~562):
+    prior entries repeatedly SKIPped it as "FRONTEND, needs the cutover to populate
+    canonical posts". I RE-VERIFIED that premise against the real code and it is
+    STALE. The Posts DATA foundation is already done (canonical posts 000088,
+    canonical replies 000089, migrations tasks 576/599/612/624 all passes=true),
+    and the read API is already unified:
+      [REAL] backend/internal/api/handlers/posts.go List(): the `type` query param
+        is OPTIONAL (lines ~326-328) -> GET /v1/posts with no type returns ALL
+        posts (problems+ideas+questions) in one collection.
+      [REAL] backend accepts sort=new (Recent) and sort=top (Top) among
+        newest/new/votes/top/hot/approaches/answers (posts.go List switch).
+      [REAL] backend already computes a UNIFIED reply_count server-side
+        (models/post.go:251; db/posts.go:349,659 = answers+approaches+comments).
+        API is smart, client is dumb: the card just displays post.reply_count.
+      [REAL] frontend lib/api-base.ts:171 getPosts() + :184 search() already call
+        GET /v1/posts and /v1/search.
+      [REAL] components/header.tsx links nav "Posts" -> /posts (desktop :53,
+        mobile :160) but there was NO app/posts/ route -> the nav Posts link is a
+        404 RIGHT NOW. Building this page fixes that broken link.
+    So the release-sequencing rule "API/migration foundations before dependent UI"
+    is SATISFIED for Posts; the task is buildable and Vitest-verifiable now. TOOK IT.
+    (The prior skip conflated "the /posts page code" (buildable now, mocked API)
+    with "prod showing migrated rows" (an owner migration last-mile).)
+
+WHY NOT alias /feed: [REAL] components/feed/feed-list.tsx branches on post.type
+  (typeConfig, lines 36-56) and links every card to /problems|/questions|/ideas/{id}
+  (:108,:287). That is exactly the legacy per-type routing this task must REPLACE.
+  So /posts needs its own uniform card/list that links to canonical /posts/{id} and
+  carries no type selector or problem status filter. Built new components.
+
+WHAT I BUILT (TDD: RED first -> confirmed 3 files fail to import -> GREEN)
+  ?? frontend/components/posts/post-card.tsx (75): one uniform card for ANY post.
+     Title links to /posts/{id} (canonical, no /problems|/ideas|/questions). Author
+     -> /users/{id}. Shows excerpt (truncateText), created_at (formatRelativeTime),
+     vote_score, and the API's unified reply_count (never summed client-side).
+     Tags render as chips linking to /posts?q=<tag>.
+  ?? frontend/components/posts/posts-list.tsx (98): fetches api.getPosts({sort,page})
+     while browsing and api.search({q,page}) when a query is present; Load more
+     pagination that APPENDS; empty state ("No posts found."); error state with a
+     RETRY control. All ordering/filtering is the API's job.
+  ?? frontend/components/posts/posts-page-client.tsx (69): heading "Posts", one
+     search box (reads ?q= via useSearchParams), a Recent/Top sort toggle. NO type
+     selector, NO problem status filter.
+  ?? frontend/app/posts/page.tsx (46): server component; SSR-fetches
+     GET /v1/posts?sort=newest&per_page=20 for the first paint; Header + Suspense +
+     PostsPageClient; canonical metadata /posts.
+  M  frontend/lib/api-types.ts (+1): APIPost.reply_count?: number (reflects the
+     already-served server field; additive optional -> no consumer breakage).
+  ?? frontend/components/posts/{post-card,posts-list,posts-page-client}.test.tsx
+     (57/98/34): the 10 tests below.
+
+VERIFICATION (all RAN this session; frontend is Vitest, jsdom)
+  [TEST] RED: `npx vitest run components/posts/` before impl = 3 files failed to
+    resolve ./post-card, ./posts-list, ./posts-page-client (components absent).
+  [TEST] GREEN: `npx vitest run components/posts/` = 3 files / 10 tests PASS, 0 SKIP:
+    post-card (4): title->/posts/{id}; NEVER links /problems|/ideas|/questions;
+      author->/users/{id} + unified reply count shown; tags rendered.
+    posts-list (5): mixed problem/idea/question rendered through ONE card set all
+      linking /posts/{id} and none to legacy detail routes (step 1); search endpoint
+      used when a query is present (step 2); Load more appends without dropping
+      earlier posts (step 5 pagination); empty state; error+RETRY.
+    posts-page-client (1): offers search + Recent/Top; asserts NO type selector and
+      NO open/solved/closed status filter buttons (step 2).
+  [TEST] Full frontend suite `npx vitest run` = 158 files / 1527 tests PASS, 0 FAIL
+    (log /tmp/solvr_fe_test.log). The one shared edit (optional APIPost field) broke
+    nothing.
+  [REAL] `npm run typecheck` (tsc --noEmit) = clean.
+  [REAL] `npx next lint --dir components/posts --dir app/posts` = No ESLint warnings
+    or errors.
+  [REAL] File sizes: all new files 46-98 lines, far under the ~800 CI limit.
+
+STEP-BY-STEP against the task:
+  1 all migrated problems/ideas/questions in one collection, one card design ->
+    [TEST] posts-list renders all three types uniformly; SSR + browse via GET /v1/posts
+    (type-optional) returns them all.
+  2 search, optional tags, Recent/Top, NO type selectors / status filters ->
+    [TEST] posts-page-client asserts search+sort present and type/status absent;
+    tags offered as chips on cards.
+  3 title, excerpt, author, date, tags, unified reply count -> [TEST] post-card.
+  4 reachable from global Posts link, not competing with Connect agents -> [REAL]
+    header nav Posts -> /posts now resolves; page is a restrained collection (no hero
+    CTA competing with Connect agents).
+  5 pagination, author links, detail navigation identical for every post -> [TEST]
+    Load more appends; author link /users/{id}; every card links canonical /posts/{id}.
+
+DIFF (git status --porcelain / git diff --stat) - matches the work above:
+  M frontend/lib/api-types.ts (+1)
+  ?? frontend/app/posts/page.tsx
+  ?? frontend/components/posts/post-card.tsx (+ .test.tsx)
+  ?? frontend/components/posts/posts-list.tsx (+ .test.tsx)
+  ?? frontend/components/posts/posts-page-client.tsx (+ .test.tsx)
+  (spec.json: this task passes -> true)
+
+UAT: OWNER-ONLY LAST MILE. 100% of this task's behavior is verified locally by the
+  10 Vitest tests + full-suite green + typecheck + lint. Two inherently-owner/next
+  items remain, neither blocking this task's automated acceptance:
+  (1) VISUAL: open /posts in a running browser to eyeball the monochrome/Inter/
+      JetBrains-Mono styling against the visual reference (inherently a visual
+      confirmation).
+  (2) The canonical POST DETAIL page /posts/{id} is the very NEXT ledger task
+      ("Provide a single post composer and detail experience"). Cards already link
+      to the correct canonical /posts/{id} (verified), so detail navigation lands on
+      the right URL; the detail page itself renders once task 596 ships. Legacy
+      /feed,/problems,/ideas redirects to /posts are their own later task
+      ("Redirect legacy collection and detail URLs").

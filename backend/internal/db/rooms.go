@@ -437,7 +437,7 @@ func (r *RoomRepository) BackfillOwnerFromMembership(ctx context.Context, agentI
 	query := `
 		UPDATE rooms r SET owner_id = $1::uuid, updated_at = NOW()
 		FROM room_members rm
-		WHERE rm.room_id = r.id AND rm.agent_id = $2 AND rm.role = 'owner'
+		WHERE rm.room_id = r.id AND rm.agent_id = $2 AND rm.role = 'owner' AND rm.revoked_at IS NULL
 		  AND r.owner_id IS NULL AND r.deleted_at IS NULL`
 	result, err := r.pool.Exec(ctx, query, humanID, agentID)
 	if err != nil {

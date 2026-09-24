@@ -8805,3 +8805,110 @@ UAT: owner applies migrations 000093 + 000094 to production (manual admin route;
   messages;  (must be <= 16384 or the backfill CHECK fails), then after apply confirm
   SELECT relkind FROM pg_class WHERE relname IN ('messages','room_events') = 'v' and
   that counts of legacy_messages/legacy_room_events equal room_entries message/event.
+
+================================================================================
+2026-09-24 — Task idx 69 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Use one room membership authority and eliminate duplicate ownership and shared-token state"
+SLICE 1 of N: room_members is now the schema-level authority for humans AND agents.
+Readers still consult rooms.owner_id; owner_id/token_hash retirement remains.
+================================================================================
+
+TASK SELECTION (top-down, re-verified this session):
+  - idx 23 (ACCEPTANCE): still needs two-instance delivery/replay = idx 77 (false). SKIP.
+  - idx 27: step 2 needs rooms.owner_id RETIRED = this task idx 69 (false). SKIP.
+  - idx 51/52: hinge on knowledge cutover idx 92 + schema reduction idx 67 (false). SKIP.
+  - idx 58: steps 3-4 need established-stream revocation = idx 73 (false). SKIP.
+  - idx 66 (ACCEPTANCE): needs a test deployment + 2 clean agent envs. SKIP.
+  - idx 67: step 5 drops legacy tables that live jobs still read (idx 74, false). SKIP.
+  - idx 69 THIS TASK: buildable. [REAL] grep of connect_prompts.go: every default
+    planner/executor prompt already takes an individual solvr_rt_ token by handshake,
+    so the credential transition that gates token_hash retirement is mostly in place.
+    TOOK IT.
+
+WHAT THIS SLICE DOES (migration 000095_room_members_authority):
+  - room_members: new surrogate PK id (UUID); agent_id now nullable; new user_id
+    (users FK, ON DELETE CASCADE), display_role (1..64 chars, optional), revoked_at.
+    CHECK num_nonnulls(agent_id,user_id)=1 (exactly one actor). UNIQUE(room_id,agent_id)
+    and UNIQUE(room_id,user_id) = one membership row, so at most one active membership,
+    per actor and room. The unique constraint on (room_id, agent_id) is deliberately
+    NON-partial, so existing ON CONFLICT (room_id, agent_id) callers (RoomRepository.Create,
+    router_rooms_acl_test addMember helper) keep working unchanged. created_at = join time.
+  - Backfill: one active human 'owner' row per rooms.owner_id. Trigger
+    rooms_sync_human_owner mirrors every non-null owner_id (INSERT or UPDATE OF owner_id)
+    during the compatibility window, so room creation (same tx) and claim backfill
+    (BackfillOwnerFromMembership) both establish the human owner membership.
+  - Final-owner guard: deferred constraint trigger room_members_keep_owner refuses to
+    revoke, demote or delete a live room's last active owner (check_violation,
+    CONSTRAINT room_members_final_owner). Deferred so a transfer can promote and demote in
+    any order inside one tx. Allowed when the room is soft- or hard-deleted. When the
+    owner's ACCOUNT is hard-deleted (agent or user row gone), the now-ownerless room is
+    ARCHIVED (archived_at) instead = the documented terminal state. Agent unlinking
+    (human_id -> NULL) touches no membership.
+  - Credential binding: trigger room_members_revoke_credentials deletes the agent's
+    room_agent_tokens row when its membership is revoked.
+  - Repo (internal/db/room_members.go): Remove = UPDATE revoked_at (row kept), NotFound
+    when not active; Add readmits (clears revoked_at, fresh created_at) and maps the
+    guard to new ErrLastRoomOwner; Get/IsMember/IsOwner/ListByRoom only see active rows
+    (ListByRoom agent rows only, so the members API shape is unchanged).
+  - Handler: POST/DELETE /v1/rooms/{slug}/members return 409 LAST_OWNER on
+    ErrLastRoomOwner (before: demote returned 400 INVALID_AGENT, remove returned 500).
+
+FILES (git status --porcelain / git diff --stat, file by file):
+  NEW backend/migrations/000095_room_members_authority.up.sql / .down.sql (down drops
+      human + revoked rows, since the old model had neither, and restores PK(room_id,agent_id)).
+  M   backend/internal/db/room_members.go (+42/-10: revocation, readmit, ErrLastRoomOwner,
+      isFinalOwnerViolation).
+  M   backend/internal/db/rooms.go (1 line: BackfillOwnerFromMembership ignores revoked
+      owner memberships).
+  M   backend/internal/api/handlers/rooms_members.go (+14: writeLastOwnerError -> 409).
+  NEW backend/internal/db/room_members_authority_test.go (8 integration tests).
+  NEW backend/internal/api/router_rooms_membership_authority_test.go (2 router tests).
+  No existing test deleted, skipped, renamed or loosened. spec.json untouched.
+
+TDD: RED [TEST] 7/8 db tests FAIL before the migration (user_id/revoked_at missing,
+  final-owner removal returned nil, deleted owner left room unarchived); the 8th
+  (DeletedRoomReleasesFinalOwner) passed before and after, as a regression guard.
+  Router RED: FinalOwner test got 500, want 409. Both GREEN after the change.
+
+VERIFICATION (DATABASE_URL explicitly = local docker solvr-postgres 127.0.0.1:5435):
+  [REAL] migrate up 94->95 on `solvr`: agent memberships 5 before = 5 after (3 owners);
+    human owner rows 1 = rooms with owner_id 1. schema_migrations 95 dirty=f.
+  [REAL] round trip on `solvr_test`: down 1 restored the 000076 shape (PK room_id+agent_id,
+    agent_id NOT NULL, 5 rows), up again -> 6 rows (5 agent + 1 human). 95 dirty=f.
+  [TEST] targeted on solvr_test: 8/8 TestRoomMembersAuthority_* + 3 TestRoomMemberRepository_*
+    + token/migration/create tests PASS; router TestRoomMembers_* 3/3, TestRoomHandshake_*,
+    and all TestRoomRoutes_* PASS, 0 SKIP.
+  [TEST] FULL `go test ./... -p 1 -count=1` on solvr_test (log /tmp/rm_full.log): 3746
+    PASS, 11 SKIP (pre-existing, none mine), 70 FAIL. Every one of the 25 room membership/handshake/
+    token/cutover tests PASS inside that run. The 70 failures are all outside rooms
+    membership: the families the previous entry listed (CommentsCount, TypeSpecificList,
+    GitHub OAuth x4, AgentRepository_List*, Briefing_*, Crystallization_*, Pulse/Victories/
+    Trending/Hardcore/YouMightLike/RisingIdeas, SearchPulse_*, RoomRepository_* x5 "room slug
+    already exists"). Also these, which that entry did not name. The failure text shows
+    fixture/environment causes: ServiceCheckRepository_* x5 ("expected 0 for no data, got
+    571.63": leftover rows in solvr_test), SearchAnalytics GetTrending (2 vs 3, leftover
+    data), UserRepository_FindByAuthProvider_NullPasswordHash + ClaimTokenRepository_MarkUsed
+    (legacy fixtures insert users without the NOT NULL referral_code). No failure message
+    mentions room_members, owners or room tokens. [UNVERIFIED] that they also fail on a
+    pre-change tree: no pre-change baseline run was captured this session.
+  [REAL] go build ./... + go vet (db, api) clean; golangci-lint no findings in touched files.
+
+REMAINING FOR idx 69 (why passes stays false):
+  - Step 3: move family access (models.SameHumanAsOwner, canManage, access guard,
+    handshake family clause) from rooms.owner_id onto the human's active membership via
+    agents.human_id; prove unlinking removes family access and historical links do not
+    broaden it.
+  - Step 2 matrix for LINKED-HUMAN family access (this slice proves only the human
+    owner rows against owner_id, TestRoomMembersAuthority_OwnershipMatrixMatchesLegacyOwner).
+  - Step 5: switch every owner_id reader to room_members, then drop rooms.owner_id and
+    the rooms_sync_human_owner trigger; bind presence to membership; retire the shared
+    rooms.token_hash (create response token, rotate-token route + frontend
+    presence-sidebar rotate button, closed-room room_token bootstrap in handshake,
+    BearerGuard/RoomAccessGuard shared-token paths). Coordinate with idx 73 step 4.
+  - Document the compatibility window + final schema in SPEC.md when the reader switch
+    lands.
+
+UAT (when idx 69 completes; NOT a pass condition now): owner applies 000095 to
+  production via the admin route. Pre-check: SELECT COUNT(*) FROM room_members; then
+  after apply confirm SELECT COUNT(*) FROM room_members WHERE user_id IS NOT NULL =
+  SELECT COUNT(*) FROM rooms WHERE owner_id IS NOT NULL.

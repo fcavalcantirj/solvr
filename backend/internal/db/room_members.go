@@ -8,10 +8,15 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ErrRoomMemberNotFound is returned when a membership row does not exist.
 var ErrRoomMemberNotFound = errors.New("room member not found")
+
+// ErrLastRoomOwner is returned when a change would leave a live room without an active
+// owner. Hand ownership to another member first, or delete the room.
+var ErrLastRoomOwner = errors.New("room must keep at least one owner")
 
 // RoomMemberRepository handles the room membership allowlist (mission #1 ACL, #3 identity).
 type RoomMemberRepository struct {
@@ -34,7 +39,9 @@ func (r *RoomMemberRepository) Add(ctx context.Context, params models.AddRoomMem
 		INSERT INTO room_members (room_id, agent_id, role, added_by)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (room_id, agent_id)
-		DO UPDATE SET role = EXCLUDED.role, added_by = EXCLUDED.added_by
+		DO UPDATE SET role = EXCLUDED.role, added_by = EXCLUDED.added_by,
+			created_at = CASE WHEN room_members.revoked_at IS NULL THEN room_members.created_at ELSE NOW() END,
+			revoked_at = NULL
 		RETURNING room_id, agent_id, role, added_by, created_at
 	`
 	var m models.RoomMember
@@ -42,17 +49,27 @@ func (r *RoomMemberRepository) Add(ctx context.Context, params models.AddRoomMem
 		&m.RoomID, &m.AgentID, &m.Role, &m.AddedBy, &m.CreatedAt,
 	)
 	if err != nil {
+		if isFinalOwnerViolation(err) {
+			return nil, ErrLastRoomOwner
+		}
 		LogQueryError(ctx, "Add", "room_members", err)
 		return nil, err
 	}
 	return &m, nil
 }
 
-// Remove deletes a membership row. Returns ErrRoomMemberNotFound if the agent was
-// not a member.
+// Remove revokes an active membership: the row stays with revoked_at set (and the
+// agent's per-agent room token is deleted by trigger) until an explicit readmission via
+// Add. Returns ErrRoomMemberNotFound if the agent was not an active member, and
+// ErrLastRoomOwner if it is the live room's final owner.
 func (r *RoomMemberRepository) Remove(ctx context.Context, roomID uuid.UUID, agentID string) error {
-	result, err := r.pool.Exec(ctx, `DELETE FROM room_members WHERE room_id = $1 AND agent_id = $2`, roomID, agentID)
+	result, err := r.pool.Exec(ctx,
+		`UPDATE room_members SET revoked_at = NOW()
+		 WHERE room_id = $1 AND agent_id = $2 AND revoked_at IS NULL`, roomID, agentID)
 	if err != nil {
+		if isFinalOwnerViolation(err) {
+			return ErrLastRoomOwner
+		}
 		LogQueryError(ctx, "Remove", "room_members", err)
 		return err
 	}
@@ -67,7 +84,7 @@ func (r *RoomMemberRepository) Get(ctx context.Context, roomID uuid.UUID, agentI
 	query := `
 		SELECT room_id, agent_id, role, added_by, created_at
 		FROM room_members
-		WHERE room_id = $1 AND agent_id = $2
+		WHERE room_id = $1 AND agent_id = $2 AND revoked_at IS NULL
 	`
 	var m models.RoomMember
 	err := r.pool.QueryRow(ctx, query, roomID, agentID).Scan(
@@ -87,7 +104,7 @@ func (r *RoomMemberRepository) Get(ctx context.Context, roomID uuid.UUID, agentI
 func (r *RoomMemberRepository) IsMember(ctx context.Context, roomID uuid.UUID, agentID string) (bool, error) {
 	var exists bool
 	err := r.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM room_members WHERE room_id = $1 AND agent_id = $2)`,
+		`SELECT EXISTS(SELECT 1 FROM room_members WHERE room_id = $1 AND agent_id = $2 AND revoked_at IS NULL)`,
 		roomID, agentID,
 	).Scan(&exists)
 	if err != nil {
@@ -101,7 +118,7 @@ func (r *RoomMemberRepository) IsMember(ctx context.Context, roomID uuid.UUID, a
 func (r *RoomMemberRepository) IsOwner(ctx context.Context, roomID uuid.UUID, agentID string) (bool, error) {
 	var exists bool
 	err := r.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM room_members WHERE room_id = $1 AND agent_id = $2 AND role = 'owner')`,
+		`SELECT EXISTS(SELECT 1 FROM room_members WHERE room_id = $1 AND agent_id = $2 AND role = 'owner' AND revoked_at IS NULL)`,
 		roomID, agentID,
 	).Scan(&exists)
 	if err != nil {
@@ -111,12 +128,12 @@ func (r *RoomMemberRepository) IsOwner(ctx context.Context, roomID uuid.UUID, ag
 	return exists, nil
 }
 
-// ListByRoom returns all members of a room ordered by role (owners first) then join time.
+// ListByRoom returns the active agent members of a room ordered by role (owners first) then join time.
 func (r *RoomMemberRepository) ListByRoom(ctx context.Context, roomID uuid.UUID) ([]models.RoomMember, error) {
 	query := `
 		SELECT room_id, agent_id, role, added_by, created_at
 		FROM room_members
-		WHERE room_id = $1
+		WHERE room_id = $1 AND agent_id IS NOT NULL AND revoked_at IS NULL
 		ORDER BY (role = 'owner') DESC, created_at ASC
 	`
 	rows, err := r.pool.Query(ctx, query, roomID)
@@ -136,4 +153,11 @@ func (r *RoomMemberRepository) ListByRoom(ctx context.Context, roomID uuid.UUID)
 		members = append(members, m)
 	}
 	return members, rows.Err()
+}
+
+// isFinalOwnerViolation reports whether err is the room_members_final_owner guard of
+// migration 000095 (a live room losing its last active owner).
+func isFinalOwnerViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.ConstraintName == "room_members_final_owner"
 }

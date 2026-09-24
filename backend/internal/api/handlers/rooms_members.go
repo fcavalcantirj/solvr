@@ -81,6 +81,10 @@ func (h *RoomHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 		Role:    role,
 		AddedBy: addedBy,
 	})
+	if errors.Is(err, db.ErrLastRoomOwner) {
+		writeLastOwnerError(w)
+		return
+	}
 	if err != nil {
 		// A missing agent violates the FK — report as a clear 400.
 		roomWriteError(w, http.StatusBadRequest, "INVALID_AGENT", "agent_id does not reference an existing agent")
@@ -106,6 +110,10 @@ func (h *RoomHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	if err := h.memberRepo.Remove(r.Context(), room.ID, agentID); err != nil {
 		if errors.Is(err, db.ErrRoomMemberNotFound) {
 			roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "agent is not a member of this room")
+			return
+		}
+		if errors.Is(err, db.ErrLastRoomOwner) {
+			writeLastOwnerError(w)
 			return
 		}
 		slog.Error("failed to remove room member", "error", err, "room_id", room.ID, "agent", agentID)
@@ -135,6 +143,12 @@ func (h *RoomHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	roomWriteJSON(w, http.StatusOK, map[string]any{"data": members})
+}
+
+// writeLastOwnerError reports the final-owner guard: a live room always keeps an owner.
+func writeLastOwnerError(w http.ResponseWriter) {
+	roomWriteError(w, http.StatusConflict, "LAST_OWNER",
+		"a room must keep at least one owner; add another owner first or delete the room")
 }
 
 // managerIdentity returns a short identifier for who performed a management action,

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -43,10 +44,11 @@ type firstMessageLookup interface {
 // to render that prompt: the slug, the room URL, visibility, the initial task, the
 // expected planner identity, and a link to the first message.
 //
-// The room itself is resolved and access-checked by RoomAccessGuard (readGuard) on
-// public routes. For private rooms, anonymous callers are turned away at 403 before
-// this handler runs. The handler ALSO checks IsPrivate as a defensive measure so the
-// unit tests that call it without the middleware still see the 403.
+// The room itself is resolved and access-checked by RoomAccessGuard (readGuard).
+// For private rooms, non-members are turned away at 403 before this handler runs;
+// members (the owner included) get the private join prompt, whose handshake step
+// replaces sharing the room token. The handler ALSO refuses a private room that the
+// guard did not admit, so calling it without the middleware still yields 403.
 type RoomConnectHandler struct {
 	rooms connectRoomLookup
 	msgs  firstMessageLookup
@@ -89,9 +91,11 @@ func (h *RoomConnectHandler) GetRoomConnect(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Defensive check: RoomAccessGuard already enforces this on the wired route,
-	// but the unit tests call this handler directly without the middleware.
-	if room.IsPrivate {
+	// A private room's prompt is served only to a caller RoomAccessGuard admitted
+	// (it injects the room it checked); the owner uses it to connect agents without
+	// handing out the shared room token. Without that proof (e.g. the handler called
+	// with no guard) a private room stays 403.
+	if room.IsPrivate && !guardAdmitted(r, room) {
 		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "this room is closed to non-members")
 		return
 	}
@@ -105,6 +109,12 @@ func (h *RoomConnectHandler) GetRoomConnect(w http.ResponseWriter, r *http.Reque
 
 	envelope := buildRoomConnectEnvelope(room, firstMsg, role)
 	roomWriteJSON(w, http.StatusOK, map[string]any{"data": envelope})
+}
+
+// guardAdmitted reports whether RoomAccessGuard admitted this request for room.
+func guardAdmitted(r *http.Request, room *models.Room) bool {
+	checked := middleware.RoomFromContext(r.Context())
+	return checked != nil && checked.ID == room.ID
 }
 
 // roomConnectSlugFromRequest extracts the room slug from the request. It prefers the

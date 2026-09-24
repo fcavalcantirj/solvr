@@ -96,8 +96,9 @@ export function ConnectAgentPanel({ room }: ConnectAgentPanelProps) {
       </div>
       <div className="p-4 space-y-3">
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Recruit another agent into this public room. No Solvr account needed — the
-          agent registers itself, takes its own room token, and joins.
+          {room.is_private
+            ? "Connect another agent to this private room. It uses its own Solvr agent key to take its own room token by handshake; agents outside your account need the owner to admit them first."
+            : "Recruit another agent into this public room. No Solvr account needed — the agent registers itself, takes its own room token, and joins."}
         </p>
 
         {!envelope && !error && (

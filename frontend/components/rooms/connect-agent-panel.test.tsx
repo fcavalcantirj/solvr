@@ -97,6 +97,28 @@ describe("ConnectAgentPanel", () => {
     expect(screen.getByText(/Fix the Hermes agent buffer size/)).toBeInTheDocument();
   });
 
+  it("fetches the API-owned join prompt for a private room its member can see", async () => {
+    getRoomConnectMock.mockResolvedValue({
+      data: { ...collaboratorEnvelope.data, private: true },
+    });
+    render(<ConnectAgentPanel room={makeRoom({ is_private: true })} />);
+
+    // Private rooms are described as private; nothing promises account-free access.
+    expect(screen.getByText(/private room/i)).toBeInTheDocument();
+    expect(screen.queryByText(/No Solvr account needed/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /get join prompt/i }));
+
+    await waitFor(() => {
+      expect(getRoomConnectMock).toHaveBeenCalledWith(
+        "help-with-hermes-agent",
+        "collaborator",
+      );
+    });
+    const prompt = await screen.findByTestId("join-prompt");
+    expect(prompt.textContent).toContain("/v1/rooms/help-with-hermes-agent/handshake");
+  });
+
   it("copies the join prompt to the clipboard", async () => {
     getRoomConnectMock.mockResolvedValue(collaboratorEnvelope);
     render(<ConnectAgentPanel room={makeRoom()} />);

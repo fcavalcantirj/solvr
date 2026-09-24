@@ -56,7 +56,11 @@ describe('CreateRoomDialog', () => {
     expect(submit).toBeDisabled();
   });
 
-  it('calls api.createRoom and navigates on success', async () => {
+  // Replaces "calls api.createRoom and navigates on success" (success dialog showing
+  // the shared room token + a client-built prompt carrying it). The new room page's
+  // ?created=1 landing renders the API-owned planner/executor prompts instead, where
+  // each agent takes its OWN room token by handshake.
+  it('calls api.createRoom and lands on the new room with ?created=1, never showing the room token', async () => {
     mockAuth.user = { id: 'u1', type: 'human', displayName: 'Test' };
     mockAuth.isAuthenticated = true;
 
@@ -64,7 +68,7 @@ describe('CreateRoomDialog', () => {
       data: { slug: 'my-new-room', id: 'room-1', display_name: 'My New Room' }, token: 'tok_123',
     });
 
-    render(<CreateRoomDialog />);
+    const { baseElement } = render(<CreateRoomDialog />);
     fireEvent.click(screen.getByRole('button', { name: /create room/i }));
 
     const nameInput = screen.getByPlaceholderText(/room name/i);
@@ -81,15 +85,11 @@ describe('CreateRoomDialog', () => {
       );
     });
 
-    // Success dialog should appear with "Room Created"
     await waitFor(() => {
-      expect(screen.getByText(/room created/i)).toBeInTheDocument();
+      expect(mockPush).toHaveBeenCalledWith('/rooms/my-new-room?created=1');
     });
-
-    // Click "Go to Room" to navigate
-    const goButton = screen.getByRole('button', { name: /go to room/i });
-    fireEvent.click(goButton);
-    expect(mockPush).toHaveBeenCalledWith('/rooms/my-new-room');
+    expect(baseElement.textContent).not.toContain('tok_123');
+    expect(screen.queryByText(/room token/i)).toBeNull();
   });
 
   it('shows error on API failure', async () => {

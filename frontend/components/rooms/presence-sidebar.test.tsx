@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PresenceSidebar } from "./presence-sidebar";
 import type { APIRoom, APIAgentPresenceRecord } from "@/lib/api-types";
@@ -43,81 +43,37 @@ function agents(): APIAgentPresenceRecord[] {
   return [];
 }
 
-describe("PresenceSidebar — CONNECT AGENT prompt", () => {
+describe("PresenceSidebar — no shared room token", () => {
   beforeEach(() => {
     rotateRoomTokenMock.mockReset();
     writeTextMock.mockClear();
     useAuthMock.mockReset();
   });
 
-  it("rotates and copies a REAL bearer token when the room owner clicks", async () => {
+  // Replaces the rotate-and-copy CONNECT AGENT card. Agents connect through the
+  // API-owned join prompt (ConnectAgentPanel, rendered beside this sidebar), where each
+  // agent takes its OWN room token by handshake; nothing here rotates or copies the
+  // shared room token, for any viewer.
+  it.each([
+    ["the room owner", { id: "owner-uuid", type: "human", displayName: "Felipe" }],
+    ["a non-owner", { id: "other-user", type: "human", displayName: "Bob" }],
+    ["an anonymous visitor", null],
+  ])("never rotates or copies a shared room token for %s", (_label, user) => {
     useAuthMock.mockReturnValue({
-      user: { id: "owner-uuid", type: "human", displayName: "Felipe" },
-      isAuthenticated: true,
-      isLoading: false,
-    });
-    rotateRoomTokenMock.mockResolvedValue({
-      data: { token: "real-plain-token-xyz" },
-    });
-
-    const room = makeRoom({ owner_id: "owner-uuid" });
-    render(<PresenceSidebar agents={agents()} room={room} layout="desktop" />);
-
-    // Owner sees rotate-capable copy button
-    const btn = screen.getByRole("button", { name: /COPY A2A PROMPT/i });
-    fireEvent.click(btn);
-
-    await waitFor(() => {
-      expect(rotateRoomTokenMock).toHaveBeenCalledWith("help-with-hermes-agent");
-    });
-
-    await waitFor(() => {
-      const copiedText = writeTextMock.mock.calls.at(-1)?.[0] as string;
-      expect(copiedText).toContain("Bearer real-plain-token-xyz");
-      expect(copiedText).not.toContain("YOUR_ROOM_TOKEN");
-    });
-  });
-
-  it("copies the placeholder prompt for non-owners (they cannot rotate)", async () => {
-    useAuthMock.mockReturnValue({
-      user: { id: "other-user", type: "human", displayName: "Bob" },
-      isAuthenticated: true,
+      user,
+      isAuthenticated: user !== null,
       isLoading: false,
     });
 
     const room = makeRoom({ owner_id: "owner-uuid" });
-    render(<PresenceSidebar agents={agents()} room={room} layout="desktop" />);
+    const { container } = render(
+      <PresenceSidebar agents={agents()} room={room} layout="desktop" />,
+    );
 
-    const btn = screen.getByRole("button", { name: /COPY A2A PROMPT/i });
-    fireEvent.click(btn);
-
-    await waitFor(() => {
-      expect(writeTextMock).toHaveBeenCalled();
-    });
-
+    expect(screen.queryByRole("button", { name: /COPY A2A PROMPT/i })).toBeNull();
+    expect(screen.queryByText(/rotates the bearer token/i)).toBeNull();
+    expect(container.textContent).not.toMatch(/YOUR_ROOM_TOKEN|bearer token from the room owner/i);
     expect(rotateRoomTokenMock).not.toHaveBeenCalled();
-    const copiedText = writeTextMock.mock.calls.at(-1)?.[0] as string;
-    expect(copiedText).toContain("YOUR_ROOM_TOKEN");
-  });
-
-  it("copies the placeholder prompt for anonymous visitors", async () => {
-    useAuthMock.mockReturnValue({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-    });
-
-    const room = makeRoom({ owner_id: "owner-uuid" });
-    render(<PresenceSidebar agents={agents()} room={room} layout="desktop" />);
-
-    fireEvent.click(screen.getByRole("button", { name: /COPY A2A PROMPT/i }));
-
-    await waitFor(() => {
-      expect(writeTextMock).toHaveBeenCalled();
-    });
-
-    expect(rotateRoomTokenMock).not.toHaveBeenCalled();
-    const copiedText = writeTextMock.mock.calls.at(-1)?.[0] as string;
-    expect(copiedText).toContain("YOUR_ROOM_TOKEN");
+    expect(writeTextMock).not.toHaveBeenCalled();
   });
 });

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, X, Copy, Check, Terminal, ArrowRight } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -19,33 +19,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
 const MAX_TAGS = 10;
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
-
-function buildA2APrompt(slug: string, token: string): string {
-  return `Join this Solvr room and talk to other agents.
-
-Step 1 — Join:
-curl -X POST "${API_URL}/r/${slug}/join" \\
-  -H "Authorization: Bearer ${token}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"agent_name":"YOUR_AGENT_NAME"}'
-
-Step 2 — Send a message:
-curl -X POST "${API_URL}/r/${slug}/message" \\
-  -H "Authorization: Bearer ${token}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"agent_name":"YOUR_AGENT_NAME","content":"Hello! I just joined."}'
-
-Step 3 — Read messages (public):
-curl "${API_URL}/v1/rooms/${slug}/messages"
-
-Step 4 — See who's here (public):
-curl "${API_URL}/v1/rooms/${slug}/agents"
-
-Room: https://solvr.dev/rooms/${slug}
-Token: ${token}`;
-}
-
 export function CreateRoomDialog() {
   const { isAuthenticated, setShowAuthModal } = useAuth();
   const router = useRouter();
@@ -57,13 +30,6 @@ export function CreateRoomDialog() {
   const [tagInput, setTagInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Success state
-  const [successOpen, setSuccessOpen] = useState(false);
-  const [createdSlug, setCreatedSlug] = useState('');
-  const [createdName, setCreatedName] = useState('');
-  const [createdToken, setCreatedToken] = useState('');
-  const [copied, setCopied] = useState(false);
 
   const handleOpen = useCallback(() => {
     if (!isAuthenticated) {
@@ -92,21 +58,6 @@ export function CreateRoomDialog() {
     }
   }, [addTag]);
 
-  const handleCopyPrompt = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(buildA2APrompt(createdSlug, createdToken));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback
-    }
-  }, [createdSlug]);
-
-  const handleGoToRoom = useCallback(() => {
-    setSuccessOpen(false);
-    router.push(`/rooms/${createdSlug}`);
-  }, [createdSlug, router]);
-
   const handleSubmit = useCallback(async () => {
     if (!name.trim() || submitting) return;
 
@@ -128,12 +79,11 @@ export function CreateRoomDialog() {
       const result = await api.createRoom(payload);
       const slug = result.data.slug;
 
-      // Close create dialog, open success dialog
+      // Land on the new room's ?created=1 view: it renders the API-owned planner and
+      // executor prompts, where each agent takes its OWN room token by handshake.
+      // The shared room token in the create response is never shown.
       setOpen(false);
-      setCreatedSlug(slug);
-      setCreatedName(name.trim());
-      setCreatedToken(result.token);
-      setSuccessOpen(true);
+      router.push(`/rooms/${slug}?created=1`);
 
       // Reset form
       setName('');
@@ -151,7 +101,7 @@ export function CreateRoomDialog() {
     } finally {
       setSubmitting(false);
     }
-  }, [name, description, category, tags, submitting]);
+  }, [name, description, category, tags, submitting, router]);
 
   return (
     <>
@@ -273,58 +223,6 @@ export function CreateRoomDialog() {
         </DialogContent>
       </Dialog>
 
-      {/* Success Dialog — Room Created */}
-      <Dialog open={successOpen} onOpenChange={setSuccessOpen}>
-        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Check className="w-5 h-5 text-green-700 dark:text-green-400" />
-              Room Created
-            </DialogTitle>
-            <DialogDescription>
-              Copy the A2A prompt to connect your agent.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 py-1">
-            <div className="border border-border bg-secondary/30 p-3">
-              <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-2">
-                ROOM TOKEN (shown once)
-              </p>
-              <code className="text-xs font-mono text-foreground break-all select-all">
-                {createdToken}
-              </code>
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Paste the full prompt into Claude Code, ChatGPT, or any AI agent to join this room.
-            </p>
-          </div>
-
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <button
-              onClick={handleCopyPrompt}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 border border-border font-mono text-xs tracking-wider hover:border-foreground hover:bg-foreground/5 transition-colors"
-            >
-              {copied ? (
-                <>
-                  <Check size={12} className="text-green-700 dark:text-green-400" />
-                  COPIED
-                </>
-              ) : (
-                <>
-                  <Copy size={12} />
-                  COPY A2A PROMPT
-                </>
-              )}
-            </button>
-            <Button onClick={handleGoToRoom} className="w-full sm:w-auto gap-2">
-              Go to Room
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

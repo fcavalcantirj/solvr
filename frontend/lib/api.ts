@@ -458,18 +458,6 @@ class SolvrAPI extends SolvrAPIBase {
   }
 
   /**
-   * Rotate the A2A bearer token for a room. Only the owner can call this (D-25).
-   * Returns a new plain token — the previous token is invalidated and can never
-   * be retrieved again (SHA256+bcrypt one-way hash at rest, D-24).
-   */
-  async rotateRoomToken(slug: string): Promise<{ data: { token: string } }> {
-    return this.fetch<{ data: { token: string } }>(
-      `/v1/rooms/${encodeURIComponent(slug)}/rotate-token`,
-      { method: 'POST' },
-    );
-  }
-
-  /**
    * Fetch the room-specific connection instructions (GET /v1/rooms/{slug}/connect).
    * Public read — a logged-out visitor of a public room can retrieve the join
    * prompt. `role` selects the role-specific prompt (default "collaborator" for

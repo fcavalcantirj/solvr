@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -373,3 +374,34 @@ func TestRoomsConnect_PlannerJoinsFreshlyCreatedRoom(t *testing.T) {
 
 // errRoomNotFound is returned by fakes to simulate a missing room.
 var errRoomNotFound = db.ErrRoomNotFound
+
+// TestRoomsConnect_PrivateRoomServedOnlyWhenGuardAdmittedThatRoom pins the private-room
+// rule: the prompt is served when RoomAccessGuard admitted THIS room, and refused when
+// the context carries a different room (admission never transfers between rooms).
+func TestRoomsConnect_PrivateRoomServedOnlyWhenGuardAdmittedThatRoom(t *testing.T) {
+	privateRoom := &models.Room{ID: uuid.New(), Slug: "private-test-room", IsPrivate: true}
+	h := &RoomConnectHandler{
+		rooms: &fakeRoomConnectRooms{room: privateRoom},
+		msgs:  &fakeFirstMessageLookup{},
+	}
+
+	serve := func(admitted *models.Room) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/v1/rooms/private-test-room/connect?role=collaborator", nil)
+		req = req.WithContext(context.WithValue(req.Context(), middleware.RoomContextKey, admitted))
+		w := httptest.NewRecorder()
+		h.GetRoomConnect(w, req)
+		return w
+	}
+
+	w := serve(privateRoom)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var env struct {
+		Data roomConnectEnvelope `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &env))
+	require.True(t, env.Data.Private)
+	require.Contains(t, env.Data.Prompt, "/v1/rooms/private-test-room/handshake")
+
+	other := &models.Room{ID: uuid.New(), Slug: "other-room", IsPrivate: true}
+	require.Equal(t, http.StatusForbidden, serve(other).Code)
+}

@@ -9230,3 +9230,84 @@ UAT (not a pass condition now): after deploy, the owner's installed skill copy a
   ~/.claude/skills/solvr/scripts matched skill/scripts before this commit ([REAL] diff -q
   empty) and is now the OLD script; re-install/sync it so live agents stop using solvr_rm_
   before the server retirement slice.
+
+================================================================================
+2026-09-24 — Task idx 69 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Use one room membership authority and eliminate duplicate ownership and shared-token state"
+SLICE 5 of N: FRONTEND credential transition — VERIFIED + JOURNALED this iteration.
+================================================================================
+
+WHY THIS ENTRY: the slice-5 code was committed by the previous iteration as 4691513
+  (message truncated "... IN PROGRESS, p") with NO progress.txt entry and no recorded
+  verification. This iteration read that diff, re-ran its checks, and journals it.
+
+WHAT 4691513 CHANGED ([REAL] git show --stat 4691513, file by file):
+  M   backend/internal/api/handlers/rooms_connect.go: GET /v1/rooms/{slug}/connect now
+      serves a PRIVATE room's join prompt when RoomAccessGuard admitted THIS room
+      (guardAdmitted = middleware.RoomFromContext(ctx).ID == room.ID); still 403 without
+      that proof. Members/owner get the handshake prompt instead of a rotated shared token.
+  M   backend/internal/api/handlers/rooms_connect_test.go: NEW
+      TestRoomsConnect_PrivateRoomServedOnlyWhenGuardAdmittedThatRoom (admitted room 200 +
+      prompt contains /handshake; a different admitted room 403).
+  NEW backend/internal/api/router_rooms_private_connect_test.go:
+      TestRoomPrivateConnect_OwnerGetsHandshakePrompt (owner JWT 200, prompt has no
+      solvr_rm_ nor the create-response token; owner's claimed agent handshakes 201 ->
+      solvr_rt_), TestRoomPrivateConnect_OutsidersStillForbidden (anon / non-member human /
+      non-member agent all 403).
+  M   frontend/components/rooms/create-room-dialog.tsx: success dialog that SHOWED the
+      shared token ("ROOM TOKEN (shown once)") + client-built prompt carrying it DELETED;
+      on success router.push('/rooms/<slug>?created=1') (RoomStarterPrompts renders the
+      API-owned planner/executor handshake prompts there).
+  M   frontend/components/rooms/presence-sidebar.tsx: CONNECT AGENT card
+      (ConnectAgentCopyButton -> api.rotateRoomToken -> clipboard) DELETED; ConnectAgentPanel
+      (already rendered beside it in room-detail-client) is the only connect control.
+  M   frontend/components/rooms/connect-agent-panel.tsx: private-room copy text.
+  M   frontend/lib/api.ts: rotateRoomToken() client method DELETED (no callers left).
+  M   tests: create-room-dialog.test.tsx, presence-sidebar.test.tsx, connect-agent-panel.test.tsx.
+THIS ITERATION'S DIFF: M frontend/components/rooms/room-detail-client.tsx (1 comment line:
+  "CONNECT AGENT (owner rotate+copy)" -> "the API-owned CONNECT AGENT prompt"; no logic).
+
+REPLACED TESTS (named, quoted, with replacements):
+  - create-room-dialog "calls api.createRoom and navigates on success": asserted the
+    "Room Created" success dialog then Go to Room -> push('/rooms/my-new-room').
+    -> "calls api.createRoom and lands on the new room with ?created=1, never showing the
+    room token" (push('/rooms/my-new-room?created=1'); page text lacks 'tok_123' and
+    /room token/). PASS.
+  - presence-sidebar "rotates and copies a REAL bearer token when the room owner clicks",
+    "copies the placeholder prompt for non-owners", "copies the placeholder prompt for
+    anonymous visitors": asserted the rotate+copy card. The behavior is RETIRED on purpose
+    (shared token rotation from the UI). -> it.each "never rotates or copies a shared room
+    token for {the room owner, a non-owner, an anonymous visitor}" (3 cases PASS). The
+    positive "a viewer can connect an agent" behavior is covered by connect-agent-panel
+    tests incl. NEW "fetches the API-owned join prompt for a private room its member can
+    see" (PASS) and backend TestRoomPrivateConnect_OwnerGetsHandshakePrompt (PASS).
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres 127.0.0.1:5435/solvr_test,
+  schema_migrations 97 dirty=f):
+  [TEST] handlers TestRoomsConnect_* 11/11 PASS (incl. the new private-room test).
+  [TEST] router TestRoomPrivateConnect_OwnerGetsHandshakePrompt + _OutsidersStillForbidden PASS.
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (log /tmp/s5_full.log): 3791 PASS lines,
+    74 FAIL — sorted unique FAIL names IDENTICAL to slice-4 /tmp/s4_full.log (diff empty).
+    SKIP 12 = the same 11 as slice 4 + TestE2E_PostAppearsInList ("post did not become
+    open within 35s - GROQ rate limited or slow"; GROQ key/network, not room code).
+  [TEST] FULL frontend `npx vitest run` (log /tmp/s5_fe_full.log): 176 files, 1609/1609 PASS.
+  [REAL] npm run typecheck exit 0; eslint on the 5 slice files: no findings.
+
+REMAINING FOR idx 69 (why passes stays false) — next slice = SERVER retirement of
+  rooms.token_hash. Scope ([REAL] grep this iteration): internal/db/rooms.go (11 refs:
+  GetByTokenHash, RotateToken, create token), middleware/bearer_guard.go (4),
+  handlers/rooms.go (3: create-response token, RotateToken), router_rooms.go
+  (POST /{slug}/rotate-token), middleware/room_access_guard.go, middleware/api_usage.go
+  (route map), handlers/rooms_discovery.go, cmd/migrate-quorum/main.go, handshake
+  room_token bootstrap; tests: router_rooms_manage_test.go (9), db/rooms_test.go (9),
+  db/migrations_rooms_test.go (8), router_rooms_manage_authority_test.go (3) + the router
+  tests that authenticate /r/ with the create-response token (move each to handshake
+  tokens, naming replacements). Then a migration dropping rooms.token_hash; skill
+  references/api.md + examples.md still document solvr_rm_.
+  Still open as well: bind agent_presence to membership; soft-deleted human owners'
+  active owner rows; owner decision prevent_agent_reclaim vs DELETE /v1/me unclaim;
+  SPEC.md compatibility window + final schema.
+
+UAT (not a pass condition now): after deploy, owner confirms in a browser that creating a
+  room lands on /rooms/<slug>?created=1 with planner/executor prompts, and a private
+  room's CONNECT AGENT panel shows a handshake prompt (no token displayed anywhere).

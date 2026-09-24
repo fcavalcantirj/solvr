@@ -356,7 +356,7 @@ export function RoomDetailClient({ room, initialMessages, initialAgents, ownerDi
         </div>
 
         {/* Sidebar — stacked below chat on mobile, right rail on desktop.
-            Surfaces CONNECT AGENT (owner rotate+copy) + ROOM INFO on mobile. */}
+            Surfaces the API-owned CONNECT AGENT prompt + ROOM INFO on mobile. */}
         <aside id="connect-agent" className="w-full lg:w-72 shrink-0 lg:overflow-y-auto space-y-4 scroll-mt-24">
           {/* Public-room recruit control — logged-out visitors included (task 26).
               The header's Connect an agent action anchors to this panel (#connect-agent). */}

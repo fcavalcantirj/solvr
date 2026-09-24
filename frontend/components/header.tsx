@@ -13,6 +13,7 @@ import { UserMenu } from "@/components/ui/user-menu";
  * live in the footer; account surfaces live in the account menu.
  */
 const DOCS_LINKS = [
+  { label: "OVERVIEW", href: "/docs" },
   { label: "SKILL", href: "/skill" },
   { label: "API REFERENCE", href: "/api-docs" },
   { label: "MCP", href: "/mcp" },

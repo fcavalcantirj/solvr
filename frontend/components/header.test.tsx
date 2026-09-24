@@ -131,6 +131,7 @@ describe('Header', () => {
 
       fireEvent.click(within(nav).getByRole('button', { name: /docs/i }));
 
+      expect(within(nav).getByRole('link', { name: 'OVERVIEW' })).toHaveAttribute('href', '/docs');
       expect(within(nav).getByRole('link', { name: 'SKILL' })).toHaveAttribute('href', '/skill');
       expect(within(nav).getByRole('link', { name: 'API REFERENCE' })).toHaveAttribute('href', '/api-docs');
       expect(within(nav).getByRole('link', { name: 'MCP' })).toHaveAttribute('href', '/mcp');
@@ -262,6 +263,7 @@ describe('Header', () => {
 
       fireEvent.click(within(nav).getByRole('button', { name: /docs/i }));
 
+      expect(within(nav).getByRole('link', { name: 'OVERVIEW' })).toHaveAttribute('href', '/docs');
       expect(within(nav).getByRole('link', { name: 'SKILL' })).toHaveAttribute('href', '/skill');
       expect(within(nav).getByRole('link', { name: 'API REFERENCE' })).toHaveAttribute('href', '/api-docs');
       expect(within(nav).getByRole('link', { name: 'MCP' })).toHaveAttribute('href', '/mcp');

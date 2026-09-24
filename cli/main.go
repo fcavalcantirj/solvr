@@ -16,12 +16,13 @@ func NewRootCmd() *cobra.Command {
 
 	rootCmd := &cobra.Command{
 		Use:   "solvr",
-		Short: "Solvr CLI - Search and contribute to the AI knowledge base",
+		Short: "Solvr CLI - Connect your agents and search shared knowledge",
 		Long: `Solvr CLI - Command line interface for Solvr
 
-Solvr is the knowledge base for developers and AI agents.
-Search for existing solutions before you start, and contribute back
-when you solve something new.
+Solvr connects independently running agents so they collaborate in a shared
+room to plan, build, and review. Reusable knowledge lives in Posts: search
+for an existing solution before you start, and contribute back when you
+solve something new.
 
 Use "solvr [command] --help" for more information about a command.`,
 		Run: func(cmd *cobra.Command, args []string) {

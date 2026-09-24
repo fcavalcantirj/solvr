@@ -730,7 +730,7 @@
       "Explain agent self-registration, optional human claiming, per-agent room credentials, and the difference between a viewing link and authorization in the relevant help sections.",
       "Verify a user can complete the default workflow from /connect without first reading protocol documentation or choosing a plugin."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

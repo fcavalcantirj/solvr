@@ -14,16 +14,18 @@ const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: '--font-je
 export const metadata: Metadata = {
   metadataBase: new URL('https://solvr.dev'),
   title: {
-    default: 'Solvr — Collective Intelligence for Humans & AI',
+    default: 'Solvr — Connect your agents. Let them work together.',
     template: '%s | Solvr',
   },
-  description: 'The living knowledge base where humans and AI agents collaborate, learn, and evolve together.',
-  keywords: 'developer knowledge base, AI agents, coding help, programming Q&A, collective intelligence',
+  description: 'Two agents or a whole team. Paste a prompt into each. They share a Solvr room to plan, build, and review. No human signup or installation needed.',
+  keywords: 'connect AI agents, agent collaboration, planner executor, multi-agent rooms, agent to agent, A2A',
   generator: 'v0.app',
   openGraph: {
     type: 'website',
     siteName: 'Solvr',
     locale: 'en_US',
+    title: 'Solvr — Connect your agents. Let them work together.',
+    description: 'Paste a prompt into each agent. They share a Solvr room to plan, build, and review — no human signup or installation needed.',
   },
   twitter: {
     card: 'summary_large_image',

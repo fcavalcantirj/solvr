@@ -7526,3 +7526,129 @@ UAT: OWNER-ONLY LAST MILE — every automatable check above ran GREEN. The one
   to /rooms and confirm it appears under RECENTLY VIEWED with a working Clear;
   sign in and confirm the "My rooms" filter lists your owned/participating rooms
   from the live /v1/me/rooms.
+
+================================================================================
+2026-09-24 — Task ~725 "Consolidate help around connection and update all public
+positioning" (functional). PASSED.
+================================================================================
+
+TASK SELECTION (first buildable false, verified this session, not trusted prose):
+  spec.json: 52/95 pass. First passes=false top-down is ~300, but the forward-
+  dep skips still hold — re-verified [REAL] this session:
+  - ~300 "Verify N-agent e2e": ACCEPTANCE spanning unbuilt canonical entries
+    (~895 false) + two API instances (~983 false). Acceptance-not-a-checklist.
+  - ~349 "agent-created rooms manageable": step 2 REQUIRES rooms.owner_id retired.
+    [REAL] `grep -c owner_id backend/internal/db/rooms.go` = 16. Retirement is
+    ~880 (false). SKIP.
+  - ~513 "room sharing preserve public viewing": step 5 public->private
+    invalidation owned by ~746 + ~931 (both still false). SKIP.
+  - ~648 "route agent integrations": [REAL] `grep -c /problems
+    backend/internal/api/router.go` = 14 (no cutover; coupled to ~1177 false).
+  - ~663 "search retained knowledge": step 4 needs the migration/cutover. SKIP.
+  - ~686/~698/~710/~712 now true. First BUILDABLE false = THIS task (~725). TOOK IT.
+
+STATE FOUND (all [REAL], read this session):
+  - No /docs index page existed — only /docs/guides (search-first, OLD product)
+    and /docs/protocol. Header Docs dropdown: SKILL,/skill · API REFERENCE,
+    /api-docs · MCP,/mcp · GUIDES,/docs/guides · PROTOCOL,/docs/protocol.
+  - Stale positioning surfaces: frontend/app/layout.tsx metadata (title
+    "Collective Intelligence", description "living knowledge base", keywords
+    "programming Q&A"); README.md tagline ("living knowledge base" / "Stack
+    Overflow meets Twitter"); frontend/public/skill.md intro (give-before-you-
+    take); cli/main.go Short/Long ("Search and contribute to the AI knowledge
+    base"). The VISIBLE homepage hero + /connect already carry the new
+    proposition (shipped ~40/~208), only the <head>/help copy lagged.
+  - [REAL] /api-docs already canonical: api-quickstart.tsx / api-sdks.tsx use
+    rooms/connect/handshake; grep for old-model create examples (POST /v1/
+    problems|ideas, "create a problem/idea") in components/api + app/api-docs =
+    ZERO. So "API examples" (step 2) needed no de-legacying.
+  - CLI/skill COMMAND migration (approach/answer -> reply etc.) is a SEPARATE
+    task ~969 (false). ~725 is POSITIONING only: proposition + terminology in
+    prose/help. Left commands intact so ~969's surface is untouched.
+
+WHAT I CHANGED (git status --porcelain / git diff --stat — matches exactly):
+  ?? frontend/app/docs/page.tsx (NEW, ~330 lines): the /docs landing. GUIDES
+     array in the REQUIRED order — Connect two agents (->/connect), Private
+     rooms (#private-rooms), Roles and review (#roles-and-review),
+     Troubleshooting (#troubleshooting), Posts (->/posts), API reference
+     (->/api-docs). data-testid hooks (docs-guides, docs-guide,
+     docs-guide-title) pin order. KEY CONCEPTS section (data-testid
+     docs-concepts) explains agent self-registration (POST /v1/agents/register),
+     optional human claiming (never a prerequisite), per-agent room credentials
+     (handshake, no shared key), and "a viewing link is not authorization".
+     On-page sections for private-rooms / roles-and-review / troubleshooting.
+     Header+Footer, existing mono/border/spacing visual language.
+  ?? frontend/app/docs/page.test.tsx (NEW, 8 tests): pins the ordered guide list
+     (Connect two agents first), the /connect + /posts + /api-docs hrefs, all
+     four KEY CONCEPTS strings, an h1 matching /connect/i and NO "Stack
+     Overflow", and Header/Footer render.
+  ?? frontend/app/layout.metadata.test.ts (NEW, 4 tests): imports metadata from
+     ./layout (mocks next/font/google + @next/third-parties GoogleAnalytics),
+     asserts title/description/keywords/openGraph lead with connecting agents
+     and drop the old framing.
+  M  frontend/app/layout.tsx (metadata): title.default -> "Solvr — Connect your
+     agents. Let them work together."; description -> the two-agent room promise;
+     keywords -> connect/collaboration/planner-executor/A2A; openGraph now
+     carries title+description (social preview copy).
+  M  frontend/components/header.tsx (+1): prepend { OVERVIEW, /docs } to
+     DOCS_LINKS so "Open /docs" is reachable from the Docs group (desktop+mobile).
+  M  frontend/components/header.test.tsx (+2): assert the OVERVIEW -> /docs link
+     inside the opened Docs group (desktop + mobile blocks).
+  M  README.md (2 lines): tagline -> "Connect your agents. Let them work
+     together." + one-line room/Posts subtitle. Badges/links untouched.
+  M  frontend/public/skill.md (frontmatter description + intro): lead with the
+     connect-agents proposition and canonical Rooms/Posts terminology while
+     KEEPING the search-first trigger value and all command references
+     (command migration is ~969).
+  M  cli/main.go (Short/Long): "Connect your agents and search shared knowledge"
+     + Long describing rooms + Posts. Subcommands unchanged.
+  No existing test deleted, weakened, skipped, or renamed. No route removed
+  (deep links /docs/guides, /docs/protocol, /skill, /api-docs, /mcp all intact).
+
+STEP-BY-STEP against the task:
+  1 /docs first guide "Connect two agents", then private rooms, roles and
+    review, troubleshooting, Posts, API reference -> [TEST] docs/page.test.tsx
+    "lists the guides in the required order..." asserts the exact 6-title array.
+  2 update homepage metadata / README / skill / API examples / CLI help / social
+    preview / onboarding -> [TEST] layout.metadata (metadata + openGraph) +
+    [REAL] README, skill.md, cli/main.go edits; API examples already canonical
+    (grep=0 old-model); onboarding (hero + /connect) pre-existing new proposition.
+  3 retain deep links via redirects/stable content -> [REAL] no route removed;
+    /docs added without touching the existing Docs destinations.
+  4 explain self-registration, human claiming, per-agent room credentials,
+    viewing-link vs authorization -> [TEST] docs/page.test.tsx three concept
+    tests all green against the KEY CONCEPTS section.
+  5 complete the default workflow from /connect without reading docs/choosing a
+    plugin -> [REAL] /connect prompt-first, no auth modal, no plugin (~208-232
+    passed); [TEST] connect-panel 25/25; the /docs hero states this and links out.
+
+VERIFICATION (all RAN this session; Vitest 4 jsdom / Go / tsc):
+  [TEST] RED docs/page.test.tsx (module unresolved) -> impl -> 8/8 GREEN (after
+    fixing my own matchers from getByText to getAllByText for nested substrings).
+  [TEST] RED layout.metadata.test.ts 4/4 fail -> metadata edit -> 4/4 GREEN.
+  [TEST] touched trio `npx vitest run app/docs/page.test.tsx
+    components/header.test.tsx app/layout.metadata.test.ts` = 3 files / 44 PASS,
+    0 FAIL, 0 SKIP (header 32/32 incl. new OVERVIEW assertions).
+  [TEST] `cd cli && go test ./...` = ok (CLI help tests only assert non-empty +
+    presence of "solvr"/Usage/Version/Flags — my Short/Long text is free to
+    change). Pre-existing lint diagnostics (unusedfunc/QF1003) not my lines.
+  [REAL] `npm run typecheck` (tsc --noEmit) = clean.
+  [TEST] full frontend suite `npx vitest run` (/tmp/solvr_725_full.log) = 169
+    files / 1591 tests: 1589 PASS, 2 FAIL. Both refuted as unrelated to this task:
+      (a) next.config.test.ts "resolves the /posts navigation destination"
+          expecting '/feed' — the SAME pre-existing stale test journaled under
+          ~712; [REAL] git status shows next.config + its test UNTOUCHED by me.
+          Left for its owning cleanup task (do-not-weaken rule).
+      (b) connect-panel.test.tsx "copies the prompt with no task entered..." —
+          clipboard-timing flake under full-suite parallel load ("Unable to find
+          text: Copied"). [TEST] re-ran the file ISOLATED = 25/25 PASS. I touched
+          nothing in the connect flow/clipboard (git diff confirms).
+
+FILE SIZE: new docs/page.tsx ~330 lines (< 800). All touched files under limit.
+
+UAT: OWNER-ONLY LAST MILE — every automatable check above ran GREEN. Inherently
+  visual/prose items for the owner: (1) open /docs in a browser and confirm the
+  connection-first landing renders in Solvr's visual language with the six guides
+  in order; (2) confirm the social preview (openGraph) card reads "Connect your
+  agents. Let them work together." when a link is shared; (3) sanity-read the
+  updated README / skill.md / CLI positioning prose.

@@ -93,10 +93,14 @@ func mountRoomRoutes(
 		// Per-room reads pass through the access guard: open for public rooms,
 		// members-only (403 otherwise) for closed rooms.
 		r.With(readGuard).Get("/{slug}", roomHandler.GetRoom)
-		r.With(readGuard).Get("/{slug}/messages", msgHandler.ListMessages)
-		r.With(readGuard).Get("/{slug}/messages/{id}", msgHandler.GetMessage)
 		r.With(readGuard).Get("/{slug}/agents", presenceHandler.ListPresence)
 		r.With(readGuard).Get("/{slug}/connect", roomConnectHandler.GetRoomConnect)
+
+		// Message reads are adapters over the canonical timeline: the message entries of
+		// GET /{slug}/entries, decided by the same policy (a presented room token must be
+		// valid and for THIS room).
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/messages", msgHandler.ListMessages)
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/messages/{id}", msgHandler.GetMessage)
 
 		// Canonical timeline: messages and events in one ordered, cursor-paged list.
 		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/entries", entriesHandler.ListEntries)

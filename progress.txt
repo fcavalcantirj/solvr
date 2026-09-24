@@ -9910,3 +9910,59 @@ REMAINING FOR idx 70 (next slices):
     register + handshake explicit and recoverable.
   - Step 5: SPEC.md — canonical entry contract (message + event) + stream (incl. replay of
     events) + adapter mapping for /messages and /events.
+
+================================================================================
+2026-09-24 — Task idx 70 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Offer one canonical room API with thin adapters for the existing transport routes"
+SLICE 5 of N: GET /v1/rooms/{slug}/messages and GET /v1/rooms/{slug}/messages/{id} are
+message-read adapters over the canonical timeline, decided by the single room policy.
+================================================================================
+
+TASK SELECTION: same top-down skips as slices 1-4 (idx 23 ACCEPTANCE needs idx 77; 51/52
+  need idx 92 + 67; 58 needs idx 73; 66 ACCEPTANCE; 67 needs idx 74). Continued idx 70.
+
+FILES ([REAL] git status --porcelain / git diff --stat before journaling):
+  M   backend/internal/api/router_rooms.go (191, +6/-2): the two GET message routes moved
+    from readGuard (optionalAuth + RoomAccessGuard) to entriesPolicy(RoomRead)
+    (optionalAuth + RoomPolicyGuard), the same guard as GET /{slug}/entries and /stream.
+    Handlers untouched (ListMessages/GetMessage already read the room the guard injects).
+  NEW backend/internal/api/router_rooms_entries_messages_test.go (161 lines, 2 tests).
+  No test deleted, skipped or loosened. No handler, db, frontend, SPEC.md or migration
+  change. Storage was already shared: the messages view reads room_entries (000094).
+
+BEHAVIOR CHANGE (canonical message reads only, now identical to GET /{slug}/entries):
+  - invalid/expired solvr_rt_ token -> 401 (before: ignored; 403 private, 200 public)
+  - valid room token of ANOTHER room on a PUBLIC room -> 403 (before: ignored, 200)
+  Anonymous public 200, anonymous private 403, member token/agent key/owner JWT 200 all
+  unchanged. [REAL] frontend/lib/api.ts calls these routes with the user JWT only.
+  Still on readGuard (not changed here): GET /{slug}, /{slug}/agents, /{slug}/connect;
+  POST /{slug}/messages still uses authMiddleware + RoomAccessGuard.
+
+VERIFICATION (DATABASE_URL = shell-profile local docker solvr-postgres
+  localhost:5435/solvr_test):
+  [TEST] RED (/tmp/i70s5_red.log): _ReadsFollowTheOnePolicy FAIL on exactly the token
+    decisions above (private invalid 403!=401, public other-room 200!=403, public invalid
+    200!=401, on /messages and /messages/{id}). _ListIsAnAdapterOverEntries PASSED already
+    (the view shares storage) — kept as the contract guard.
+  [TEST] GREEN (/tmp/i70s5_green.log): 69 room tests in internal/api PASS, 0 SKIP, 0 FAIL,
+    incl. both new tests, TestRoomACL_*, TestRoomEntries*, TestRoomSSE_*, TestRoomHumanPost_*.
+    _ListIsAnAdapterOverEntries: private room, canonical human message + canonical event +
+      /r agent message; /v1 /messages with owner JWT, agent key, room token, ?after, and /r
+      /messages all return exactly the 2 entries?kind=message rows (same id, author_type,
+      author_id, body==content, no event); ?before pages back; /messages/{id} returns the
+      message and 404 for the event's entry id on both /v1 and /r.
+    _ReadsFollowTheOnePolicy: 12 credentials x (/messages, /messages/{id}) equal to the
+      /entries decision, plus 11 pinned statuses (private anon 403, invalid 401, other-room
+      403, member 200; public anon 200, other-room 403, invalid 401; unknown room 404; /r
+      adapter other-room 403, invalid 401, member 200).
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i70s5_full.log): 3819 PASS (slice 4:
+    3817), 11 SKIP, 73 unique FAIL — comm vs /tmp/i70s4_full.log: 0 new, 0 gone.
+  [REAL] gofmt clean; go build ./... ok; both files < 800 lines.
+
+REMAINING FOR idx 70 (next slices):
+  - Decide whether GET /{slug}, /agents, /connect and POST /{slug}/messages also move to
+    RoomPolicyGuard (one policy for every /v1/rooms/{slug} route).
+  - Step 4: connection prompts (connect_prompts.go, skill script) prefer /entries, keeping
+    register + handshake explicit and recoverable.
+  - Step 5: SPEC.md — canonical entry contract (message + event) + stream (incl. replay of
+    events) + adapter mapping for /messages (reads + writes) and /events.

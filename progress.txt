@@ -5847,3 +5847,114 @@ remaining confirmation is a real-browser flow, which is not unit-testable here):
   confirm each returns you to that same room. Post a comment; confirm it appears
   with your human identity beside the agent messages and that you did NOT gain
   owner/remove-member controls on the room.
+
+================================================================================
+2026-09-23  TASK: "Describe Solvr's actual A2A-related capabilities without
+            claiming unsupported protocol compatibility" (category api)
+================================================================================
+
+TASK SELECTION (top-to-bottom; first buildable false task)
+  - idx "Verify N-agent collaboration end to end across clients and service
+    instances": ACCEPTANCE task. Spans canonical /entries API (later, false) +
+    multi-instance delivery (later, false). Left passes=false per
+    ACCEPTANCE-TASKS-ARE-NOT-CHECKLISTS. (unchanged from prior journal)
+  - idx "Make agent-created rooms manageable even when no human owns/claims":
+    step 2 needs rooms.owner_id RETIRED after migration — deliverable of the later
+    "Use one room membership authority" data task (false). Forward-dep. SKIP.
+    (unchanged)
+  - idx "Make room sharing preserve the public viewing experience": step 5
+    "public-to-private changes invalidate ... stream access" = enforce visibility
+    change on ESTABLISHED connections, which is the later "Keep credentials safe
+    and revocation reliable across streams" task (false) + cache invalidation.
+    Forward-dep. SKIP. (matches prior journal ~line 4579)
+  - THIS TASK "Describe Solvr's actual A2A-related capabilities": self-contained,
+    documents CURRENT code (no forward dependency). First genuinely buildable.
+    TOOK IT.
+
+FACTS VERIFIED FIRST (read the real code + fetched the spec; no memory answers)
+  [REAL] backend/internal/api/router_rooms.go: two namespaces —
+    /v1/rooms/* (Solvr JWT / agent key; REST CRUD + public reads + browser SSE)
+    and /r/{slug}/* (per-room bearer token; the agent transport). /r/{slug}
+    endpoints: POST /message (60/min), GET /messages, GET /messages/{id},
+    GET /pins, POST/DELETE /messages/{id}/pin, POST /join, /heartbeat, /leave,
+    GET /agents, GET /agents/{agent_name}, POST /claim + /renew + /release,
+    GET /claims, POST /events, GET /events, GET /stream (SSE). Plain HTTP+JSON —
+    NOT JSON-RPC / gRPC.
+  [REAL] backend/internal/hub/registry.go imports
+    github.com/a2aproject/a2a-go/a2a and stores *a2a.AgentCard. So Solvr REUSES
+    the standard A2A Agent Card SCHEMA. publicCard() strips to Name/Description/
+    Skills; URL/Capabilities/SecuritySchemes omitted from public listings.
+    ExtendedCard() returns the full card (bearer-verified). Card is supplied at
+    join (joinRoomRequest.Card json.RawMessage) and read via
+    GET /r/{slug}/agents/{agent_name} (GetAgentCard, rooms_presence.go:210).
+    NO /.well-known agent-card discovery; NO standard GetExtendedAgentCard method.
+  [REAL] postMessageRequest (rooms_messages.go:75): agent_name, content,
+    content_type?, reply_to_entry_id?, client_entry_id? — used verbatim in the
+    doc's curl example.
+  [REAL] WebFetch a2a-protocol.org/latest/specification: official A2A spec
+    current version 1.0.0; bindings JSON-RPC 2.0 / gRPC / HTTP+JSON REST; 11
+    standard operations incl. SendMessage(message/send), SendStreamingMessage
+    (message/stream), GetTask/ListTasks/CancelTask/SubscribeToTask (tasks/*),
+    the 4 push-notification-config ops, and GetExtendedAgentCard.
+  [REAL] The only frontend "jsonrpc" claim (api-endpoint-data-core.ts:832) is the
+    MCP endpoint block — MCP legitimately IS JSON-RPC 2.0. NOT a false A2A claim;
+    left untouched. Product prose ("A2A protocol", "agent-to-agent") is already
+    plain-language and never claims standard A2A conformance; left untouched to
+    avoid scope creep and test churn on components owned by other tasks.
+
+WHAT I BUILT (TDD: RED first, then GREEN) — FRONTEND ONLY
+  NEW frontend/app/docs/protocol/page.tsx (415 lines, server component + SEO
+    metadata). Sections satisfy each step:
+    - "What Solvr is, and what it is not": states plainly Solvr is NOT a
+      conformant A2A protocol server; agent-to-agent is plain product language,
+      protocol detail lives in Docs (steps 3, 4).
+    - "Compared with the A2A specification": records spec version 1.0.0, standard
+      bindings, Solvr transport, what is reused (Agent Card schema) vs not
+      implemented (step 1).
+    - "Two route namespaces" + "Room transport endpoints" table (step 2).
+    - "Executable examples": real curl for join / message / stream / agent-card,
+      all with Authorization: Bearer $ROOM_TOKEN (step 2).
+    - "The Agent Card": supported fields + public-listing strip + no /.well-known
+      (step 2).
+    - "Coordination extensions": claims/events/pins labeled Solvr-only (step 2).
+    - "Unsupported standard A2A operations": explicit list — JSON-RPC/gRPC,
+      message/send, message/stream, tasks/get|list|cancel|resubscribe, push
+      notification configs, GetExtendedAgentCard, /.well-known (step 3).
+    - "What your client needs": default path needs only outbound HTTP; No A2A SDK,
+      gRPC client, or JSON-RPC library required (step 5).
+  M frontend/components/header.tsx: added DOCS_LINKS entry
+    { label: "PROTOCOL", href: "/docs/protocol" } so the page is reachable under
+    the Docs dropdown (still grouped beneath Docs; primary nav unchanged).
+
+TDD
+  RED: frontend/app/docs/protocol/page.test.tsx (8 cases: heading; "not a
+    conformant A2A"; spec version 1.0.0 + "A2A specification"; /r/{slug}
+    message/stream/join endpoints; curl + "Authorization: Bearer"; Agent Card +
+    securitySchemes; unsupported ops message/send + tasks/get + JSON-RPC;
+    "only outbound HTTP" + "No A2A SDK"). Ran with page missing -> import FAIL.
+  GREEN after the page + header edit.
+
+VERIFICATION (all RAN this session; frontend tests need no DB)
+  [TEST] npx vitest run app/docs/protocol/page.test.tsx
+    app/docs/guides/page.test.tsx components/header.test.tsx
+    = 63 PASS (8 + 23 + 32), 0 SKIP. Header/guides confirm the new DOCS_LINKS
+    entry did not break their assertions.
+  [TEST] frontend FULL suite npx vitest run = 155 files, 1514 tests PASS, 0 fail
+    (was 154/1506 last session; +1 file / +8 = the new protocol tests).
+  [REAL] npx tsc --noEmit exit 0.
+  [REAL] file sizes: page.tsx 415, page.test.tsx 76, header.tsx 275 — all < 800.
+  Backend untouched (frontend-only docs task); go test not applicable.
+
+DIFF (git status --porcelain / git diff --stat) — matches the work above:
+  M frontend/components/header.tsx                 (+1 DOCS_LINKS: PROTOCOL)
+  ?? frontend/app/docs/protocol/page.tsx           (the Docs protocol page)
+  ?? frontend/app/docs/protocol/page.test.tsx      (8 RED->GREEN tests)
+  (spec.json: this task passes -> true)
+
+UAT (owner last mile — every automatable check ran GREEN locally; the only
+remaining confirmation is a visual/browser read, not unit-testable here):
+  Open /docs/protocol in a browser. Confirm it reads accurately against the live
+  API, the Docs dropdown shows PROTOCOL, and the curl examples run against
+  api.solvr.dev with a real room bearer token. If the a2a-go dependency or the
+  official A2A spec version changes, update this page's "Compared with the A2A
+  specification" section and the unsupported-operations list to match.

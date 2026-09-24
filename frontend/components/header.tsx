@@ -17,6 +17,7 @@ const DOCS_LINKS = [
   { label: "API REFERENCE", href: "/api-docs" },
   { label: "MCP", href: "/mcp" },
   { label: "GUIDES", href: "/docs/guides" },
+  { label: "PROTOCOL", href: "/docs/protocol" },
 ];
 
 export function Header() {

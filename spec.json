@@ -542,7 +542,7 @@
       "Keep 'agent-to-agent' as a plain-language explanation in the product and place protocol-version and extension details in Docs.",
       "Verify the default connection path requires only supported outbound HTTP capabilities and does not promise compatibility with clients that cannot make those requests."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

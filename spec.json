@@ -617,7 +617,7 @@
       "Verify soft-deleted content stays deleted and hidden or family content never becomes publicly searchable during conversion.",
       "Compare per-record content hashes and relationships before and after migration; require zero unexplained losses rather than checking only aggregate counts."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "data",

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/google/uuid"
 )
 
 // roomsTestCleanup removes all test data by slug prefix or exact name.
@@ -236,20 +237,25 @@ func TestMigrations_AgentPresenceTable(t *testing.T) {
 		t.Fatalf("Failed to get room ID: %v", err)
 	}
 
+	// Presence rows belong to active members (000099): admit two distinct agents.
+	roomUUID := uuid.MustParse(roomID)
+	firstID := admitPresenceMember(ctx, t, pool, roomUUID, "agent_migpres_first")
+	secondID := admitPresenceMember(ctx, t, pool, roomUUID, "agent_migpres_second")
+
 	// Insert first agent presence record
 	_, err = pool.Exec(ctx, `
-		INSERT INTO agent_presence (room_id, agent_name, card_json)
-		VALUES ($1, 'test-agent', '{"name": "test-agent"}')
-	`, roomID)
+		INSERT INTO agent_presence (room_id, agent_id, agent_name, card_json)
+		VALUES ($1, $2, 'test-agent', '{"name": "test-agent"}')
+	`, roomID, firstID)
 	if err != nil {
 		t.Fatalf("First agent_presence insert failed: %v", err)
 	}
 
-	// Insert same (room_id, agent_name) again — should fail unique constraint
+	// Insert same (room_id, agent_name) again from another member — should fail unique constraint
 	_, err = pool.Exec(ctx, `
-		INSERT INTO agent_presence (room_id, agent_name, card_json)
-		VALUES ($1, 'test-agent', '{"name": "test-agent-2"}')
-	`, roomID)
+		INSERT INTO agent_presence (room_id, agent_id, agent_name, card_json)
+		VALUES ($1, $2, 'test-agent', '{"name": "test-agent-2"}')
+	`, roomID, secondID)
 	if err == nil {
 		t.Error("Expected unique constraint violation for duplicate (room_id, agent_name), but got nil error")
 	}

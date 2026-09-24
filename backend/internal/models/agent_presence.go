@@ -8,10 +8,12 @@ import (
 )
 
 // AgentPresenceRecord represents an agent's presence in a room.
-// Fields match migration 000074_create_agent_presence.up.sql.
+// Fields match migrations 000074_create_agent_presence and 000099 (agent_id binds the row
+// to the agent's active room membership; agent_name is its display label).
 type AgentPresenceRecord struct {
 	ID         uuid.UUID       `json:"id"`
 	RoomID     uuid.UUID       `json:"room_id"`
+	AgentID    string          `json:"agent_id"`
 	AgentName  string          `json:"agent_name"`
 	CardJSON   json.RawMessage `json:"card_json"`
 	JoinedAt   time.Time       `json:"joined_at"`
@@ -22,6 +24,7 @@ type AgentPresenceRecord struct {
 // UpsertAgentPresenceParams holds parameters for upserting presence.
 type UpsertAgentPresenceParams struct {
 	RoomID     uuid.UUID       `json:"room_id"`
+	AgentID    string          `json:"agent_id"`
 	AgentName  string          `json:"agent_name"`
 	CardJSON   json.RawMessage `json:"card_json"`
 	TTLSeconds int             `json:"ttl_seconds"`

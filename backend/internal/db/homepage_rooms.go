@@ -166,12 +166,12 @@ const liveRoomPredicate = publicRoomPredicate + ` AND (r.expires_at IS NULL OR r
 // outlived its own TTL.
 const unexpiredPresence = `ap.last_seen > NOW() - (ap.ttl_seconds || ' seconds')::interval`
 
-// verifiedPresence is true when the present agent name belongs to an agent
-// holding a live per-agent token for that same room.
+// verifiedPresence is true when the present member (agent_presence.agent_id,
+// migration 000099) holds a live per-agent token for that same room.
 const verifiedPresence = `EXISTS (
 	SELECT 1 FROM room_agent_tokens rt
 	 WHERE rt.room_id = ap.room_id
-	   AND rt.agent_id = ap.agent_name
+	   AND rt.agent_id = ap.agent_id
 	   AND (rt.expires_at IS NULL OR rt.expires_at > NOW()))`
 
 // GetRoomPulse reads the whole room section for one selected window.
@@ -180,10 +180,10 @@ func (r *HomepageRepository) GetRoomPulse(ctx context.Context, window RoomStatsW
 
 	query := `
 		SELECT
-			(SELECT COUNT(DISTINCT ap.agent_name)
+			(SELECT COUNT(DISTINCT ap.agent_id)
 			   FROM agent_presence ap JOIN rooms r ON r.id = ap.room_id
 			  WHERE ` + liveRoomPredicate + ` AND ` + unexpiredPresence + `),
-			(SELECT COUNT(DISTINCT ap.agent_name)
+			(SELECT COUNT(DISTINCT ap.agent_id)
 			   FROM agent_presence ap JOIN rooms r ON r.id = ap.room_id
 			  WHERE ` + liveRoomPredicate + ` AND ` + unexpiredPresence + `
 			    AND ` + verifiedPresence + `),

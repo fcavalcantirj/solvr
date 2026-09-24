@@ -20,7 +20,8 @@ func TestRoomAgentTokenRepository_IssueResolveExpireRevoke(t *testing.T) {
 	defer pool.Close()
 
 	room := createMemberTestRoom(ctx, t, pool, "rm-agent-tok", true)
-	insertTestAgentForMembers(ctx, t, pool, "agent_tok_x")
+	// Credentials require an active membership (000099), as after a real handshake.
+	admitPresenceMember(ctx, t, pool, room.ID, "agent_tok_x")
 	repo := db.NewRoomAgentTokenRepository(pool)
 
 	// Non-expiring token resolves to (room, agent).

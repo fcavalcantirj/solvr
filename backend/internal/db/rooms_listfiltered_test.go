@@ -63,10 +63,11 @@ func TestRoomRepository_ListFiltered(t *testing.T) {
 		idle := mkRoom(t, "Idle "+token)
 		active := mkRoom(t, "Active "+token)
 		// Give the active room a live agent (non-expired presence).
+		presentID := admitPresenceMember(ctx, t, pool, active.ID, "agent_lf_present_"+uuid.New().String()[:8])
 		if _, err := pool.Exec(ctx, `
-			INSERT INTO agent_presence (room_id, agent_name, card_json, last_seen, ttl_seconds)
-			VALUES ($1, 'presence-agent', '{}', NOW(), 300)
-		`, active.ID); err != nil {
+			INSERT INTO agent_presence (room_id, agent_id, agent_name, card_json, last_seen, ttl_seconds)
+			VALUES ($1, $2, 'presence-agent', '{}', NOW(), 300)
+		`, active.ID, presentID); err != nil {
 			t.Fatalf("insert presence error = %v", err)
 		}
 		// Make the idle room the more recent one so only the sort key decides order.

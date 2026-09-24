@@ -116,9 +116,19 @@ func TestGetRoom_ConnectionStatusReflectsRealActivity(t *testing.T) {
 	require.Equal(t, float64(0), online)
 
 	// Step 2: one agent present -> Waiting for another agent, online count = 1.
+	// Presence belongs to an active member (000099): admit the planner's agent.
+	plannerID := "conn_planner_" + uuid.NewString()[:8]
+	_, err = pool.Exec(ctx, `INSERT INTO agents (id, display_name) VALUES ($1, $1)`, plannerID)
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM agents WHERE id = $1`, plannerID) })
+	_, err = pool.Exec(ctx, `INSERT INTO room_members (room_id, agent_id, role, added_by)
+		VALUES ($1, $2, 'member', 'system')`, roomID, plannerID)
+	require.NoError(t, err)
+
 	presenceRepo := db.NewAgentPresenceRepository(pool)
 	_, err = presenceRepo.Upsert(ctx, models.UpsertAgentPresenceParams{
 		RoomID:     roomID,
+		AgentID:    plannerID,
 		AgentName:  "planner-agent",
 		CardJSON:   json.RawMessage(`{}`),
 		TTLSeconds: 300,

@@ -121,16 +121,17 @@ func (f *roomStatsFixture) presence(roomID uuid.UUID, agentName string, live boo
 	if !live {
 		lastSeen = "NOW() - INTERVAL '2 hours'"
 	}
+	f.member(roomID, agentName)
 	_, err := f.pool.Exec(f.ctx, fmt.Sprintf(`
-		INSERT INTO agent_presence (room_id, agent_name, card_json, last_seen, ttl_seconds)
-		VALUES ($1, $2, '{}'::jsonb, %s, 900)
+		INSERT INTO agent_presence (room_id, agent_id, agent_name, card_json, last_seen, ttl_seconds)
+		VALUES ($1, $2, $2, '{}'::jsonb, %s, 900)
 	`, lastSeen), roomID, agentName)
 	require.NoError(f.t, err, "insert presence for %s", agentName)
 }
 
-// authenticate registers the agent and issues it a per-agent room token, which
-// is what makes its identity verified rather than merely claimed by name.
-func (f *roomStatsFixture) authenticate(roomID uuid.UUID, agentName string) {
+// member registers the agent (id = display name = agentName) and admits it to the
+// room: presence and per-agent tokens both require an active membership (000099).
+func (f *roomStatsFixture) member(roomID uuid.UUID, agentName string) {
 	f.t.Helper()
 
 	_, err := f.pool.Exec(f.ctx, `
@@ -141,6 +142,20 @@ func (f *roomStatsFixture) authenticate(roomID uuid.UUID, agentName string) {
 	f.agents = append(f.agents, agentName)
 
 	_, err = f.pool.Exec(f.ctx, `
+		INSERT INTO room_members (room_id, agent_id, role, added_by)
+		VALUES ($1, $2, 'member', 'system')
+		ON CONFLICT (room_id, agent_id) DO NOTHING
+	`, roomID, agentName)
+	require.NoError(f.t, err, "admit agent %s", agentName)
+}
+
+// authenticate registers the agent and issues it a per-agent room token, which
+// is what makes its identity verified rather than merely claimed by name.
+func (f *roomStatsFixture) authenticate(roomID uuid.UUID, agentName string) {
+	f.t.Helper()
+
+	f.member(roomID, agentName)
+	_, err := f.pool.Exec(f.ctx, `
 		INSERT INTO room_agent_tokens (room_id, agent_id, token_hash)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (room_id, agent_id) DO NOTHING
@@ -203,7 +218,7 @@ func takeRoomCensus(t *testing.T, ctx context.Context, pool *db.Pool, window db.
 		), live_rooms AS (
 			SELECT id FROM public_rooms WHERE expires_at IS NULL OR expires_at > NOW()
 		), online AS (
-			SELECT ap.agent_name, ap.room_id
+			SELECT ap.agent_id, ap.room_id
 			  FROM agent_presence ap
 			 WHERE ap.room_id IN (SELECT id FROM live_rooms)
 			   AND ap.last_seen + make_interval(secs => ap.ttl_seconds) > NOW()
@@ -215,9 +230,9 @@ func takeRoomCensus(t *testing.T, ctx context.Context, pool *db.Pool, window db.
 			   AND m.author_type IN ('agent', 'human')
 		)
 		SELECT
-			(SELECT COUNT(DISTINCT agent_name) FROM online),
-			(SELECT COUNT(DISTINCT o.agent_name) FROM online o
-			  WHERE o.agent_name IN (
+			(SELECT COUNT(DISTINCT agent_id) FROM online),
+			(SELECT COUNT(DISTINCT o.agent_id) FROM online o
+			  WHERE o.agent_id IN (
 			        SELECT rt.agent_id FROM room_agent_tokens rt
 			         WHERE rt.room_id = o.room_id
 			           AND (rt.expires_at IS NULL OR rt.expires_at > NOW()))),

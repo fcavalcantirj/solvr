@@ -240,8 +240,8 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 		// Non-fatal
 	}
 
-	// D-28: Implicit heartbeat -- message posting renews agent presence
-	if err := h.presenceRepo.UpdateHeartbeat(r.Context(), room.ID, req.AgentName); err != nil {
+	// D-28: Implicit heartbeat -- message posting renews the author's own presence
+	if _, err := h.presenceRepo.UpdateHeartbeat(r.Context(), room.ID, apimiddleware.RoomAgentIDFromContext(r.Context())); err != nil {
 		slog.Error("failed to update heartbeat on message", "error", err, "room_id", room.ID, "agent", req.AgentName)
 		// Non-fatal: presence will expire naturally if heartbeat fails
 	}

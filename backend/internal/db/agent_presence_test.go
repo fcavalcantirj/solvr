@@ -56,10 +56,12 @@ func TestAgentPresenceRepository_Upsert(t *testing.T) {
 	})
 
 	repo := db.NewAgentPresenceRepository(pool)
+	alpha := admitPresenceMember(ctx, t, pool, roomID, "agent_pres_alpha")
 
 	t.Run("upsert new agent returns record with joined_at", func(t *testing.T) {
 		params := models.UpsertAgentPresenceParams{
 			RoomID:     roomID,
+			AgentID:    alpha,
 			AgentName:  "agent-alpha",
 			CardJSON:   json.RawMessage(`{"name": "Alpha"}`),
 			TTLSeconds: 900,
@@ -85,6 +87,7 @@ func TestAgentPresenceRepository_Upsert(t *testing.T) {
 
 		params := models.UpsertAgentPresenceParams{
 			RoomID:     roomID,
+			AgentID:    alpha,
 			AgentName:  "agent-alpha",
 			CardJSON:   json.RawMessage(`{"name": "Alpha Updated"}`),
 			TTLSeconds: 600,
@@ -129,6 +132,7 @@ func TestAgentPresenceRepository_ListByRoom(t *testing.T) {
 	for _, name := range []string{"agent-1", "agent-2"} {
 		_, err := repo.Upsert(ctx, models.UpsertAgentPresenceParams{
 			RoomID:     roomID,
+			AgentID:    admitPresenceMember(ctx, t, pool, roomID, "agent_pres_"+name),
 			AgentName:  name,
 			CardJSON:   json.RawMessage(`{"name": "` + name + `"}`),
 			TTLSeconds: 900,
@@ -172,10 +176,11 @@ func TestAgentPresenceRepository_DeleteExpired(t *testing.T) {
 
 	t.Run("returns slice of expired presence records", func(t *testing.T) {
 		// Insert an agent with expired TTL using raw SQL (ttl_seconds=1, last_seen in the past)
+		expiredID := admitPresenceMember(ctx, t, pool, roomID, "agent_pres_expired")
 		_, err := pool.Exec(ctx, `
-			INSERT INTO agent_presence (room_id, agent_name, card_json, ttl_seconds, last_seen)
-			VALUES ($1, 'expired-agent', '{"name":"expired"}', 1, NOW() - INTERVAL '1 hour')
-		`, roomID)
+			INSERT INTO agent_presence (room_id, agent_id, agent_name, card_json, ttl_seconds, last_seen)
+			VALUES ($1, $2, 'expired-agent', '{"name":"expired"}', 1, NOW() - INTERVAL '1 hour')
+		`, roomID, expiredID)
 		if err != nil {
 			t.Fatalf("insert expired presence error = %v", err)
 		}
@@ -223,8 +228,10 @@ func TestAgentPresenceRepository_UpdateHeartbeat(t *testing.T) {
 	repo := db.NewAgentPresenceRepository(pool)
 
 	// Insert an agent
+	hbID := admitPresenceMember(ctx, t, pool, roomID, "agent_pres_heartbeat")
 	_, err = repo.Upsert(ctx, models.UpsertAgentPresenceParams{
 		RoomID:     roomID,
+		AgentID:    hbID,
 		AgentName:  "heartbeat-agent",
 		CardJSON:   json.RawMessage(`{"name": "hb"}`),
 		TTLSeconds: 900,
@@ -245,7 +252,7 @@ func TestAgentPresenceRepository_UpdateHeartbeat(t *testing.T) {
 
 		time.Sleep(10 * time.Millisecond) // Ensure timestamp changes
 
-		err = repo.UpdateHeartbeat(ctx, roomID, "heartbeat-agent")
+		_, err = repo.UpdateHeartbeat(ctx, roomID, hbID)
 		if err != nil {
 			t.Fatalf("UpdateHeartbeat() error = %v", err)
 		}

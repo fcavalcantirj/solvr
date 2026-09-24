@@ -192,10 +192,20 @@ func TestHomepageExample_CallsItLiveOnlyWhilePresenceIsReported(t *testing.T) {
 	before, _ := getHomepageExample(t, ts.URL)
 	require.Equal(t, "completed", before.State)
 
+	// Presence belongs to an active member (000099): admit the participant's agent.
+	participant := before.Participants[0].Name
+	_, err := pool.Exec(context.Background(), `INSERT INTO agents (id, display_name) VALUES ($1, $1)`, participant)
+	require.NoError(t, err)
+	t.Cleanup(func() { pool.Exec(context.Background(), `DELETE FROM agents WHERE id = $1`, participant) }) //nolint:errcheck
+	_, err = pool.Exec(context.Background(), `INSERT INTO room_members (room_id, agent_id, role, added_by)
+		VALUES ($1, $2, 'member', 'system')`, room.ID, participant)
+	require.NoError(t, err)
+
 	presenceRepo := db.NewAgentPresenceRepository(pool)
-	_, err := presenceRepo.Upsert(context.Background(), models.UpsertAgentPresenceParams{
+	_, err = presenceRepo.Upsert(context.Background(), models.UpsertAgentPresenceParams{
 		RoomID:     room.ID,
-		AgentName:  before.Participants[0].Name,
+		AgentID:    participant,
+		AgentName:  participant,
 		CardJSON:   json.RawMessage(`{}`),
 		TTLSeconds: 300,
 	})

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -98,18 +99,49 @@ func (h *RoomPresenceHandler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Upsert presence in database
+	// Presence belongs to the authenticated member (migration 000099): one row per
+	// (room, agent), agent_name is only its display label.
+	agentID := apimiddleware.RoomAgentIDFromContext(r.Context())
+	if agentID == "" {
+		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "a per-agent room token is required to join")
+		return
+	}
+	previousName, err := h.presenceRepo.CurrentName(r.Context(), room.ID, agentID)
+	if err != nil {
+		slog.Error("failed to read presence", "error", err, "room_id", room.ID, "agent_id", agentID)
+		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to join room")
+		return
+	}
+
 	params := models.UpsertAgentPresenceParams{
 		RoomID:     room.ID,
+		AgentID:    agentID,
 		AgentName:  req.AgentName,
 		CardJSON:   req.Card,
 		TTLSeconds: ttl,
 	}
 	record, err := h.presenceRepo.Upsert(r.Context(), params)
+	if errors.Is(err, db.ErrPresenceNotMember) {
+		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "only an active member of this room can join it")
+		return
+	}
+	if errors.Is(err, db.ErrPresenceNameTaken) {
+		roomWriteError(w, http.StatusConflict, "AGENT_NAME_TAKEN", "another member of this room is present under that agent_name")
+		return
+	}
 	if err != nil {
 		slog.Error("failed to upsert presence", "error", err, "room_id", room.ID, "agent", req.AgentName)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to join room")
 		return
+	}
+
+	roomID := hub.NewRoomID(room.ID)
+	if previousName != "" && previousName != req.AgentName {
+		// A repeat join under a new label replaces the member's old in-memory entry.
+		h.registry.Remove(roomID, previousName)
+		if roomHub := h.hubMgr.Get(roomID); roomHub != nil {
+			roomHub.Unsubscribe(previousName)
+		}
 	}
 
 	h.recordParticipantJoinedFunnel(r.Context(), room.ID)
@@ -126,7 +158,6 @@ func (h *RoomPresenceHandler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add to in-memory registry
-	roomID := hub.NewRoomID(room.ID)
 	h.registry.Add(roomID, req.AgentName, agentCard)
 
 	// Subscribe to hub for real-time events
@@ -187,15 +218,19 @@ func (h *RoomPresenceHandler) Heartbeat(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Update heartbeat in database
-	if err := h.presenceRepo.UpdateHeartbeat(r.Context(), room.ID, req.AgentName); err != nil {
+	// Renew the authenticated member's own presence (agent_name cannot select another
+	// member's row). Not present = nothing to renew.
+	name, err := h.presenceRepo.UpdateHeartbeat(r.Context(), room.ID, apimiddleware.RoomAgentIDFromContext(r.Context()))
+	if err != nil {
 		slog.Error("failed to update heartbeat", "error", err, "room_id", room.ID, "agent", req.AgentName)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update heartbeat")
 		return
 	}
 
 	// Update last_seen in in-memory registry
-	h.registry.UpdateLastSeen(hub.NewRoomID(room.ID), req.AgentName)
+	if name != "" {
+		h.registry.UpdateLastSeen(hub.NewRoomID(room.ID), name)
+	}
 
 	response := map[string]interface{}{
 		"data": map[string]bool{
@@ -294,19 +329,23 @@ func (h *RoomPresenceHandler) LeaveRoom(w http.ResponseWriter, r *http.Request) 
 
 	roomID := hub.NewRoomID(room.ID)
 
-	// Remove from database
-	if err := h.presenceRepo.Remove(r.Context(), room.ID, req.AgentName); err != nil {
+	// Remove the authenticated member's own presence (agent_name cannot select another
+	// member's row).
+	name, err := h.presenceRepo.Remove(r.Context(), room.ID, apimiddleware.RoomAgentIDFromContext(r.Context()))
+	if err != nil {
 		slog.Error("failed to remove presence", "error", err, "room_id", room.ID, "agent", req.AgentName)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to leave room")
 		return
 	}
 
-	// Remove from in-memory registry
-	h.registry.Remove(roomID, req.AgentName)
+	if name != "" {
+		// Remove from in-memory registry
+		h.registry.Remove(roomID, name)
 
-	// Unsubscribe from hub (emits presence_leave event per D-27)
-	if roomHub := h.hubMgr.Get(roomID); roomHub != nil {
-		roomHub.Unsubscribe(req.AgentName)
+		// Unsubscribe from hub (emits presence_leave event per D-27)
+		if roomHub := h.hubMgr.Get(roomID); roomHub != nil {
+			roomHub.Unsubscribe(name)
+		}
 	}
 
 	response := map[string]interface{}{

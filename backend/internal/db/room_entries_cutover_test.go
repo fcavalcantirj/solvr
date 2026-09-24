@@ -277,7 +277,8 @@ func TestRoomTimelineCutover_AddressingReferencesSameRoomParticipants(t *testing
 	// Participants of room A: an author, a present agent, and an admitted member.
 	postMessage(t, ctx, msgs, roomA, "hi") // author_id "agent-hi", label "Agent"
 	postMessage(t, ctx, msgs, roomB, "elsewhere")
-	if _, err := pool.Exec(ctx, `INSERT INTO agent_presence (room_id, agent_name, card_json) VALUES ($1, 'present-bot', '{}')`, roomA); err != nil {
+	presentID := admitPresenceMember(ctx, t, pool, roomA, "cutad_present_"+uuid.NewString()[:8])
+	if _, err := pool.Exec(ctx, `INSERT INTO agent_presence (room_id, agent_id, agent_name, card_json) VALUES ($1, $2, 'present-bot', '{}')`, roomA, presentID); err != nil {
 		t.Fatalf("presence: %v", err)
 	}
 	memberID := "cutad_member_" + uuid.NewString()[:8]

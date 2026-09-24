@@ -143,6 +143,10 @@ type Post struct {
 	// SourceRoomID optionally records the room a post was saved from (BART-583).
 	SourceRoomID *string `json:"source_room_id,omitempty"`
 
+	// IdempotencyKey scopes a "Save as post" retry to one draft per (author, key), so
+	// replaying the same save does not create duplicate outcome drafts. Never exposed.
+	IdempotencyKey *string `json:"-"`
+
 	// Upvotes is the number of upvotes.
 	Upvotes int `json:"upvotes"`
 

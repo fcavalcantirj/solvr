@@ -442,10 +442,10 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 			accepted_answer_id, evolved_into,
 			embedding,
 			visibility, owner_human_id,
-			publication_state, moderation_state, source_room_id,
+			publication_state, moderation_state, source_room_id, idempotency_key,
 			created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::vector, $15, $16, $17, $18, $19, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::vector, $15, $16, $17, $18, $19, $20, NOW(), NOW())
 		RETURNING id, type, title, description, tags,
 			posted_by_type, posted_by_id, status,
 			upvotes, downvotes, view_count, success_criteria, weight,
@@ -494,9 +494,17 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 		pub,
 		mod,
 		post.SourceRoomID,
+		post.IdempotencyKey,
 	)
 
-	return r.scanPost(row)
+	created, err := r.scanPost(row)
+	if err != nil {
+		return nil, err
+	}
+	// idempotency_key is intentionally omitted from RETURNING (the shared scanner has a
+	// fixed column set); carry the caller's key back so callers can echo it if needed.
+	created.IdempotencyKey = post.IdempotencyKey
+	return created, nil
 }
 
 // FindByID returns a single post by ID with author information.

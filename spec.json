@@ -682,7 +682,7 @@
       "For a private-room source, prevent public publication until an authorized owner explicitly approves the selected content for publication; do not expose private room metadata to unauthorized post readers.",
       "Verify retrying Save as post with the same idempotency key does not create duplicate outcome drafts."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

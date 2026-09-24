@@ -44,6 +44,7 @@ func mountRoomRoutes(
 	claimsHandler := handlers.NewRoomClaimsHandler(claimRepo)
 	eventsHandler := handlers.NewRoomEventsHandler(eventRepo, hubMgr)
 	roomConnectHandler := handlers.NewRoomConnectHandler(roomRepo, msgRepo)
+	roomSavePostHandler := handlers.NewRoomSavePostHandler(db.NewPostRepository(pool), roomRepo, memberRepo)
 
 	// readGuard resolves the room, enforces the closed-room ACL (mission #1), and
 	// injects the room into context so the handlers below skip a second lookup.
@@ -64,6 +65,10 @@ func mountRoomRoutes(
 		r.With(readGuard).Get("/{slug}/messages/{id}", msgHandler.GetMessage)
 		r.With(readGuard).Get("/{slug}/agents", presenceHandler.ListPresence)
 		r.With(readGuard).Get("/{slug}/connect", roomConnectHandler.GetRoomConnect)
+
+		// Published outcome posts saved from this room (room links to the published outcome).
+		// OptionalAuth lets the handler gate a private room's outcomes to its participants.
+		r.With(optionalAuthMiddleware).Get("/{slug}/posts", roomSavePostHandler.ListOutcomePosts)
 
 		// Public SSE stream for browser clients (no bearer token required, D-33 / T-16-04).
 		// The access guard still gates closed rooms. SSEAccessTokenToHeader promotes an
@@ -93,6 +98,12 @@ func mountRoomRoutes(
 			r.Get("/{slug}/members", roomHandler.ListMembers)
 			r.Post("/{slug}/members", roomHandler.AddMember)
 			r.Delete("/{slug}/members/{agent_id}", roomHandler.RemoveMember)
+
+			// Turn a room outcome into a reusable canonical draft Post (author reviews and
+			// publishes it via the normal Post flow; a private-room outcome is published only
+			// through the owner-approval endpoint below).
+			r.Post("/{slug}/save-as-post", roomSavePostHandler.SaveAsPost)
+			r.Post("/{slug}/posts/{postID}/publish", roomSavePostHandler.ApprovePublication)
 		})
 	})
 

@@ -282,6 +282,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	// Create posts handler
 	postsHandler := handlers.NewPostsHandler(postsRepo)
 	postsHandler.SetApproachChecker(db.NewApproachesRepository(pool))
+	// Gate public publication of a private-room outcome to the room owner (task: room
+	// outcome → Post). An ordinary author edit cannot push a private-room outcome public.
+	postsHandler.SetRoomPrivacyChecker(db.NewRoomRepository(pool))
 	if embeddingService != nil {
 		postsHandler.SetEmbeddingService(embeddingService)
 	}

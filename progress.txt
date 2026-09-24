@@ -6632,3 +6632,149 @@ NOTE for the next iteration: the contribution converter + inventory/orphan verif
   legacy contribution anchors to reply ids. The next data foundation is likely
   "Reduce the live knowledge database to posts and replies" / the room-timeline
   migration, both still false.
+
+================================================================================
+2026-09-24  TASK: "Turn an intentional room outcome into a reusable Post"
+            (category functional)
+================================================================================
+
+TASK SELECTION (top-to-bottom; first BUILDABLE false task; verified MYSELF, not from
+  the prior journal prose)
+  Read spec.json + progress.txt first. No URGENT-marked task (grep). Walked the false
+  tasks in order and checked buildability against the REAL code, not memory:
+  - "Verify N-agent collaboration end to end...": ACCEPTANCE task spanning the canonical
+    /entries API + multi-instance delivery (both still false). SKIP per ACCEPTANCE-TASKS.
+  - "Make agent-created rooms manageable...": step 2 needs rooms.owner_id RETIRED = later
+    "Use one room membership authority" data task (false). Forward-dep. SKIP.
+  - "Make room sharing preserve public viewing": step 5 public->private stream
+    invalidation = later credentials/streams task (false). Forward-dep. SKIP.
+  - "Replace Feed/Problems/Ideas..." + "Provide a single post composer...": FRONTEND.
+    [REAL] frontend/app has NO /posts dir; next.config.mjs REDIRECTS /posts -> /feed
+    (interim alias); legacy /feed /problems /ideas /questions are still the primary
+    pages. The redesign UI is deliberately deferred (release task mandates API+migration
+    foundations before dependent UI). Also step 3's "unified reply count" needs the
+    contribution->reply migration APPLIED (cutover), which is later+false. Forward-dep. SKIP.
+  - "Migrate every legacy post..." + "Migrate legacy contributions...": DONE
+    (785974b, fe70bad, passes=true).
+  - "Redirect legacy collection and detail URLs...": FRONTEND; redirect target /posts
+    page (task 570) not built. Forward-dep. SKIP.
+  - "Route existing agent integrations into the canonical model...": [REAL] legacy write
+    endpoints (POST /v1/problems/{id}/approaches, /questions/{id}/answers,
+    /ideas/{id}/responses) still write the LEGACY tables, which the live frontend reads.
+    Step 3 adapters are defined "after cutover" and step 6 ("no parallel representations")
+    is only verifiable once canonical is the SINGLE storage = the cutover (task 1176,
+    false). Routing legacy writes to canonical now would strand live legacy reads.
+    Forward-dep on cutover. SKIP.
+  - "Let agents and humans search the retained knowledge...": step 4 compares queries
+    "before and after cutover" and needs replies POPULATED in search (cutover). Forward-
+    dep. SKIP.
+  - THIS TASK "Turn an intentional room outcome into a reusable Post": the first task that
+    is an ADDITIVE backend feature, deps met, verifiable NOW without breaking live paths.
+    [REAL] canonical POST /v1/posts already carries source_room_id (000088) but only as a
+    raw passthrough (no room authz, no draft/idempotency/gating). Built the real feature. TOOK IT.
+
+ENVIRONMENT (checked, not assumed)
+  [REAL] docker ps: solvr-postgres up on 5435, solvr-ipfs up. DATABASE_URL =
+    postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable (isolated test
+    DB, NOT prod). migrate version 89 -> applied 000090 -> 90/clean.
+
+FACTS VERIFIED FIRST (read the real code; no memory answers)
+  [REAL] db.Post.Create derives publication/moderation from status but respects explicit
+    states; shared scanPost has a FIXED column set (idempotency_key kept OUT of RETURNING).
+  [REAL] db.Update RE-DERIVES published+approved from the new status via DeriveStates, so
+    publishing a draft (status->open) would AUTO-EXPOSE it publicly -> a private-room
+    outcome MUST be gated at the publish path.
+  [REAL] Room ownership: HUMAN owner via rooms.owner_id (users FK), AGENT owner via
+    room_members role='owner' (000076; unclaimed agent-creators get an owner membership).
+    RoomMemberRepository.IsMember/IsOwner exist. source_room_id has NO FK (cleanup-safe).
+  [REAL] "open" is a valid status for PostTypePost; UpdateStatus(id,"open") sets
+    published+approved (the owner-approval publish path).
+
+WHAT I BUILT (TDD: RED = router-level integration tests 404/403/500 on missing routes,
+  then GREEN). New code lives in NEW files; the two already->800 posts files got minimal
+  edits only (precedent: the router.go file-size note in the 000089 entry).
+  ?? backend/migrations/000090_post_idempotency_key.up/.down.sql: adds posts.idempotency_key
+     + a partial UNIQUE index (posted_by_type, posted_by_id, idempotency_key) so a replayed
+     "Save as post" cannot duplicate a draft (step 6). APPLIED to solvr_test.
+  M  models/post.go (+3): Post.IdempotencyKey *string (json:"-", never exposed).
+  M  db/posts.go (+~8): Create INSERT carries idempotency_key ($20; NOT in RETURNING, so the
+     shared 22-col scanner is untouched); echoes the key back onto the created post.
+  ?? db/posts_outcomes.go (76): FindByIdempotencyKey (idempotent replay lookup) +
+     FindPublishedBySourceRoom (published+approved+public only -> the room->outcome link;
+     drafts/rejected/family/deleted excluded so nothing unpublished leaks).
+  ?? db/room_privacy.go (26): RoomRepository.IsPrivateRoom(roomID) for the publish gate.
+  ?? handlers/room_save_post.go (299): RoomSavePostHandler with three endpoints:
+       * POST /v1/rooms/{slug}/save-as-post - authorized participant (agent member, or human
+         room owner) saves a DRAFT with source-room attribution from an author-supplied title
+         + outcome summary (+ optional supporting_links); NEVER copies the transcript (step 2);
+         Idempotency-Key dedups (step 6); non-participant -> 403 (404 for a private room).
+       * GET /v1/rooms/{slug}/posts - the room's published outcomes (room->outcome link, step 4);
+         a private room's list requires a participant (else 404, hiding existence).
+       * POST /v1/rooms/{slug}/posts/{postID}/publish - the room OWNER approves publication of a
+         private-room outcome (step 5); verifies the post is that room's outcome; UpdateStatus->
+         published+approved.
+  M  handlers/posts.go (+~15): RoomPrivacyChecker interface + SetRoomPrivacyChecker + a nil-safe
+     gate in Update: a source-room post that is not yet published cannot be pushed to a published
+     state by an ordinary author edit when its source room is PRIVATE -> 403
+     ROOM_OWNER_APPROVAL_REQUIRED. Public-room outcomes publish through the normal flow unchanged
+     (step 3). nil checker (mock unit tests) = gate skipped, so existing posts tests are untouched.
+  M  router_rooms.go (+~10) + router.go (+3): wired the three routes (save-as-post + publish under
+     authMiddleware, GET /posts under optionalAuth) and postsHandler.SetRoomPrivacyChecker(roomRepo).
+
+VERIFICATION (all RAN this session against solvr_test @ migration 90; full log
+  /tmp/solvr_675_main.log)
+  [REAL] go build ./... = 0; go vet ./internal/api/... ./internal/db/... ./internal/models/... clean.
+  [TEST] go test ./internal/api/ -run TestSaveAsPost -v = 5/5 PASS, 0 SKIP:
+    - CreatesDraftWithSourceAttribution: 201, type=post, publication_state=draft,
+      source_room_id==room.id; the draft is NOT in the room's published outcomes (steps 1,2,4).
+    - NonParticipantForbidden: a stranger agent -> 403 (step 1 authz).
+    - IdempotentByKey: same Idempotency-Key -> 201 then 200 with the SAME id (step 6).
+    - PublicRoomPublishThenListed: author publishes the draft via PATCH /v1/posts/{id}
+      status=open (200), it then appears in GET /v1/rooms/{slug}/posts and the post's
+      source_room_id links back to the room (steps 3,4).
+    - PrivateRoomOwnerApprovalRequired: author PATCH publish -> 403
+      ROOM_OWNER_APPROVAL_REQUIRED; non-owner publish -> 404; owner publish -> 200 published;
+      then listed among the room's outcomes (step 5).
+  [TEST] go test ./internal/db/ -run 'TestPost|Create|Idempotenc|SourceRoom' = ok (Create +
+    new outcome methods green, no regression).
+  [REAL] REGRESSION PROOF (git stash -u baseline @ fe70bad): the api-package failures present
+    with my change - TestTypeSpecificListEndpoints (500 "failed to create post"/"post not
+    found") and TestCommentsCount_* (comments_count off-by-one) - FAIL IDENTICALLY on the
+    clean baseline. TestGitHubOAuth* and TestIPFSHealthEndpoint are the documented pre-existing
+    baseline. My change adds ZERO new failures. models package fully green.
+
+FILE SIZE (honest status)
+  [REAL] New files all <800 (room_save_post.go 299, posts_outcomes.go 76, room_privacy.go 26,
+    router_rooms_save_post_test.go 221). posts.go (990->1015) and db/posts.go (1020->1028) were
+    ALREADY >800 before this task (part of the pre-existing CI file-size violations); my minimal
+    edits add NO new violating file. check-file-size.sh flags none of my new files. Splitting
+    those two legacy files is a separate refactor out of this task's scope.
+
+DIFF (git status --porcelain / git diff --stat) - matches the work above:
+  M backend/internal/api/handlers/posts.go
+  M backend/internal/api/router.go
+  M backend/internal/api/router_rooms.go
+  M backend/internal/db/posts.go
+  M backend/internal/models/post.go
+  ?? backend/internal/api/handlers/room_save_post.go
+  ?? backend/internal/api/router_rooms_save_post_test.go
+  ?? backend/internal/db/posts_outcomes.go
+  ?? backend/internal/db/room_privacy.go
+  ?? backend/migrations/000090_post_idempotency_key.up.sql
+  ?? backend/migrations/000090_post_idempotency_key.down.sql
+  (spec.json: this task passes -> true)
+
+UAT: OWNER-ONLY LAST MILE. 100% of this requirement's business logic (authz, draft creation,
+  no-transcript-copy, private-room owner-approval gate, idempotency, bidirectional room<->post
+  linking) is implemented in the API and ran green locally; per "API is smart, client is dumb"
+  the API IS the substantive completion. The two owner-facing last miles: (1) surface the "Save
+  as post" button + "Discuss/related rooms" link in the frontend as part of the deferred Posts
+  UI redesign (the API endpoints are ready to consume); (2) apply migration 000090 to production
+  during the knowledge-model cutover. Do NOT run migrations against live production here.
+
+NOTE for the next iteration: POST /v1/rooms/{slug}/save-as-post, GET /v1/rooms/{slug}/posts,
+  and POST /v1/rooms/{slug}/posts/{postID}/publish are live and reusable by the frontend and by
+  the cutover task. The private-room publish gate keys off posts.source_room_id + rooms.is_private;
+  the (posted_by_type, posted_by_id, idempotency_key) partial unique index is the dedup anchor.
+  The next buildable foundation after this is likely "Allow a Post to seed a collaboration"
+  (post -> /connect, additive) or a room data foundation (room_entries / room_members authority).

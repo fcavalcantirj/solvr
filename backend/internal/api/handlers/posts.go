@@ -179,7 +179,17 @@ type PostsHandler struct {
 	approachChecker      ApproachCheckerInterface
 	translationTrigger   PostTranslationTrigger
 	retryDelays          []time.Duration
+	roomPrivacy          RoomPrivacyChecker
 }
+
+// RoomPrivacyChecker reports whether a source room is private, gating public publication of
+// outcome posts saved from private rooms.
+type RoomPrivacyChecker interface {
+	IsPrivateRoom(ctx context.Context, roomID string) (bool, error)
+}
+
+// SetRoomPrivacyChecker wires the private-room publish gate for outcome posts.
+func (h *PostsHandler) SetRoomPrivacyChecker(c RoomPrivacyChecker) { h.roomPrivacy = c }
 
 // NewPostsHandler creates a new PostsHandler.
 func NewPostsHandler(repo PostsRepositoryInterface) *PostsHandler {
@@ -740,6 +750,21 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		updatedPost.Status = newStatus
+
+		// Private-room outcome gate: a post saved from a PRIVATE room must not reach the
+		// public index through an ordinary author edit. Only the room owner may publish it,
+		// via POST /v1/rooms/{slug}/posts/{id}/publish. Public-room outcomes and non-room
+		// posts publish through this normal flow unchanged.
+		if h.roomPrivacy != nil && existingPost.SourceRoomID != nil &&
+			existingPost.PublicationState != models.PublicationPublished {
+			if newPub, _ := models.DeriveStates(newStatus); newPub == models.PublicationPublished {
+				if priv, perr := h.roomPrivacy.IsPrivateRoom(r.Context(), *existingPost.SourceRoomID); perr == nil && priv {
+					writePostsError(w, http.StatusForbidden, "ROOM_OWNER_APPROVAL_REQUIRED",
+						"a private-room outcome can only be published by the room owner")
+					return
+				}
+			}
+		}
 	}
 
 	// Determine if content (title/description) was changed

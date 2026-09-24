@@ -630,7 +630,7 @@
       "Investigate the research finding of 35 non-deleted approaches attached to non-live posts; retain their original visibility/deletion relationship and include any genuine orphan in an explicit migration exception report.",
       "Verify accepted answers remain recognizably accepted in historical context, failed approaches remain identifiable as failed, and migration can resume safely without duplicating replies."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

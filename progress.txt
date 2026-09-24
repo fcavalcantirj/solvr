@@ -7652,3 +7652,108 @@ UAT: OWNER-ONLY LAST MILE — every automatable check above ran GREEN. Inherentl
   in order; (2) confirm the social preview (openGraph) card reads "Connect your
   agents. Let them work together." when a link is shared; (3) sanity-read the
   updated README / skill.md / CLI positioning prose.
+
+================================================================================
+2026-09-24 — Task ~513 "Make room sharing preserve the public viewing
+experience" (functional). PASSED.
+================================================================================
+
+TASK SELECTION (first buildable false, re-verified [REAL] this session — did NOT
+trust prior journal prose):
+  spec.json 52/95 pass. First passes=false top-down = ~300; the forward-dep
+  skips re-checked live this session:
+  - ~300 "Verify N-agent e2e": ACCEPTANCE spanning canonical entries (no
+    room_entries table / no /v1/rooms/{slug}/entries route — grep=0) + two API
+    instances (~983 false). Acceptance-not-a-checklist. SKIP.
+  - ~349 "agent-created rooms manageable": step 2 needs rooms.owner_id retired.
+    [REAL] grep -c owner_id backend/internal/db/rooms.go = 16. Retirement=~880
+    (false). SKIP.
+  - ~513 THIS TASK: the prior journal skipped it assuming step 5 (public->private
+    invalidation) was owned by ~746/~931. RE-VERIFIED and DISPROVED that
+    assumption — every step-5 mechanism already exists (evidence below). Only ONE
+    concrete gap remained (step 4 private-share note), which is a scoped frontend
+    change fully buildable now. TOOK IT.
+
+STATE FOUND (all [REAL], read this session):
+  - backend UpdateRoom (handlers/rooms.go:287) supports visibility change and
+    ALREADY calls InvalidateOverviewCache() when params.IsPrivate != nil
+    (rooms.go:335-337) -> step-5 "previews" invalidation present.
+  - frontend app/rooms/[slug]/page.tsx: no-auth SSR fetch of a PRIVATE room gets
+    403 -> renders <PrivateRoomView/> (no private transcript server-rendered);
+    generateMetadata returns {} when payload has no room (private) -> NO private
+    title/description leak; 404 for unknown slug; ISR revalidate 300s ->
+    step-5 "cached HTML" self-heals + step-4 "public metadata reveals nothing
+    private" present.
+  - room search/discovery excludes private: [REAL] db/rooms.go:239 ListFiltered
+    conditions include "r.is_private = FALSE" -> step-5 "search results" present.
+  - SSE stream: PublicStream (GET /v1/rooms/{slug}/stream) is wrapped by
+    readGuard middleware (router_rooms.go:78); anonymous stream on a private room
+    -> 403. [TEST] TestRoomSSE_AccessTokenQueryParam_AuthorizesPrivateStream
+    ("anon stream should be 403") -> step-5 "stream access" present.
+  - Share control: components/rooms/room-header-actions.tsx copies the CLEAN
+    canonical URL `${origin}/rooms/${slug}` (no token/session param) -> step 3
+    present. BUT it received only {slug, displayName} — NO is_private awareness,
+    so a PRIVATE room's Share control did not explain that recipients still need
+    authorization -> step 4 UNMET. THIS was the only gap.
+
+WHAT I CHANGED (git status --porcelain / git diff --stat — matches exactly):
+  M frontend/components/rooms/room-header-actions.tsx (+34/-18): added optional
+    isPrivate prop (default false). When private, renders a note
+    (data-testid="share-private-note", text "...Recipients still need the
+    owner's authorization to read this room.") beside the Share/Connect buttons;
+    public rooms render no note. Share still copies the clean canonical URL for
+    both visibilities (step 3 preserved). Wrapped the button row in a flex-col so
+    the note stacks under it.
+  M frontend/components/rooms/room-header.tsx (+1/-1): pass
+    isPrivate={room.is_private} into RoomHeaderActions.
+  M frontend/components/rooms/room-header-actions.test.tsx (+26): 3 new tests —
+    private room shows the authorization note (/authoriz/i), public room shows
+    NO note, private-room Share still copies a token-free canonical URL.
+  No existing test deleted, weakened, skipped, or renamed. No backend change (the
+  step-5 backend mechanisms already existed and were only VERIFIED here).
+
+STEP-BY-STEP against the task:
+  1 Copy Share from a public room, open in a fresh session -> [REAL] page.tsx
+    server-renders public rooms with transcript; Share copies /rooms/{slug}.
+  2 room purpose/participants/transcript render without auth + social metadata
+    describes the room -> [REAL] generateMetadata sets title/description/
+    openGraph/canonical for public rooms; SSR renders RoomDetailClient.
+  3 Share copies a clean canonical URL, no credentials/tokens/session params ->
+    [TEST] room-header-actions "shares the canonical room URL" +
+    "...without credentials for a private room".
+  4 Private share explains recipients still need authorization; public metadata
+    reveals nothing private -> [TEST] "explains recipients still need
+    authorization when the room is private" + "shows no authorization note for a
+    public room"; [REAL] generateMetadata returns {} for private rooms.
+  5 public->private invalidates previews / cached HTML / search / stream ->
+    [REAL] InvalidateOverviewCache on visibility change (rooms.go:335);
+    ISR+PrivateRoomView (page.tsx); [REAL] ListFiltered r.is_private=FALSE
+    (rooms.go:239); [TEST] SSE readGuard 403 for anon on private.
+
+VERIFICATION (all RAN this session):
+  [TEST] RED `npx vitest run components/rooms/room-header-actions.test.tsx`
+    before impl = 1 failed (share-private-note missing) / 5 passed.
+  [TEST] GREEN after impl: room-header-actions 6/6 + room-header 6/6 = 12/12.
+  [REAL] `npx tsc --noEmit` = clean.
+  [TEST] backend `go test ./internal/api/ -run
+    'TestRoomSSE_AccessTokenQueryParam_AuthorizesPrivateStream|
+    TestRoomHumanPost_PrivateRoom_MembersOnly'` (DATABASE_URL ->
+    localhost:5435/solvr_test, local isolated) = ok.
+  [TEST] backend `go test ./internal/db/ -run ListFiltered` (same DB) = ok
+    (proves discovery excludes private).
+  [TEST] full frontend suite `npx vitest run` (/tmp/solvr_513_fe.log) = 169
+    files / 1594 tests: 1593 PASS, 1 FAIL. The 1 failure is the SAME pre-existing
+    stale test journaled under ~712/~725: next.config.test.ts "resolves the
+    /posts navigation destination" (expects '/feed', owned by the task-44
+    cleanup). [REAL] git status shows next.config + its test UNTOUCHED by me;
+    identical state before/after. Left for its owning task (do-not-weaken rule).
+
+FILE SIZE: room-header-actions.tsx 66, room-header.tsx 98, its test 65 — all
+  well under 800. `git diff --stat` = 3 files, +62/-18.
+
+UAT: OWNER-ONLY LAST MILE — every automatable check ran GREEN. Visual item for
+  the owner: open a PRIVATE room you own in a browser and confirm the Share
+  control shows the "Recipients still need the owner's authorization..." note,
+  and that a PUBLIC room shows none; optionally flip a public room to private and
+  confirm the shared link opens the private-room gate (no transcript) for a
+  logged-out visitor.

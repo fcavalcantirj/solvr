@@ -36,4 +36,30 @@ describe('RoomHeaderActions (task 33, step 1)', () => {
     expect(url).toMatch(/\/rooms\/demo-room$/);
     expect(url).not.toMatch(/token|access_token/i);
   });
+
+  // Task ~513 step 4: sharing a PRIVATE room must explain that recipients still
+  // need authorization — the public link is a viewing link, never a bearer
+  // credential or invitation.
+  it('explains recipients still need authorization when the room is private', () => {
+    render(<RoomHeaderActions slug="demo-room" isPrivate />);
+    const note = screen.getByTestId('share-private-note');
+    expect(note).toBeInTheDocument();
+    expect(note).toHaveTextContent(/authoriz/i);
+  });
+
+  // A public room carries no such note — anyone with the link can read it.
+  it('shows no authorization note for a public room', () => {
+    render(<RoomHeaderActions slug="demo-room" />);
+    expect(screen.queryByTestId('share-private-note')).not.toBeInTheDocument();
+  });
+
+  // Even for a private room, Share copies the clean canonical URL — never a
+  // token or session parameter (step 3 holds across visibilities).
+  it('shares the canonical URL without credentials for a private room', () => {
+    render(<RoomHeaderActions slug="demo-room" isPrivate />);
+    fireEvent.click(screen.getByRole('button', { name: /share/i }));
+    const url = shareMock.mock.calls[0][1] as string;
+    expect(url).toMatch(/\/rooms\/demo-room$/);
+    expect(url).not.toMatch(/token|access_token/i);
+  });
 });

@@ -518,7 +518,7 @@
       "Share a private room and verify the control explains that recipients still need authorization; public metadata reveals no private title, participants, or message excerpts.",
       "Verify public-to-private changes invalidate previews, cached HTML, search results, and stream access controlled by Solvr."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

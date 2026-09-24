@@ -33,7 +33,7 @@ export function RoomHeader({ room, ownerDisplayName, onlineCount }: RoomHeaderPr
           {room.display_name}
         </h1>
         <div className="shrink-0">
-          <RoomHeaderActions slug={room.slug} displayName={room.display_name} />
+          <RoomHeaderActions slug={room.slug} displayName={room.display_name} isPrivate={room.is_private} />
         </div>
       </div>
       {/* Description */}

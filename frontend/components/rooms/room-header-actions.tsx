@@ -9,6 +9,9 @@ interface RoomHeaderActionsProps {
   displayName?: string;
   // In-page anchor to the connection panel; the reader stays in the room.
   connectHref?: string;
+  // A private room's share link is a viewing link, never an invitation — the
+  // control says so (task ~513, step 4). Undefined/false = public.
+  isPrivate?: boolean;
 }
 
 /**
@@ -16,8 +19,12 @@ interface RoomHeaderActionsProps {
  * Share (copies the CANONICAL room URL — never a token or session parameter) and
  * Connect an agent (an in-page link to the room's connection panel). It exposes no
  * raw tokens, protocol names, claims, or event payloads.
+ *
+ * For a PRIVATE room the Share control adds a note explaining recipients still
+ * need authorization: the copied link is a clean canonical URL, not a bearer
+ * credential or a private-room invitation (task ~513, step 4).
  */
-export function RoomHeaderActions({ slug, displayName, connectHref = "#connect-agent" }: RoomHeaderActionsProps) {
+export function RoomHeaderActions({ slug, displayName, connectHref = "#connect-agent", isPrivate = false }: RoomHeaderActionsProps) {
   const { share, shared } = useShare();
 
   const onShare = useCallback(() => {
@@ -27,22 +34,33 @@ export function RoomHeaderActions({ slug, displayName, connectHref = "#connect-a
   }, [share, slug, displayName]);
 
   return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={onShare}
-        className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 font-mono text-xs tracking-wider hover:bg-muted transition-colors"
-      >
-        <Share2 className="w-3.5 h-3.5" aria-hidden="true" />
-        {shared ? "Copied" : "Share"}
-      </button>
-      <a
-        href={connectHref}
-        className="inline-flex items-center gap-1.5 border border-foreground bg-foreground text-background px-3 py-1.5 font-mono text-xs tracking-wider hover:opacity-90 transition-opacity"
-      >
-        <UserPlus className="w-3.5 h-3.5" aria-hidden="true" />
-        Connect an agent
-      </a>
+    <div className="flex flex-col items-stretch sm:items-end gap-1.5">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onShare}
+          className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 font-mono text-xs tracking-wider hover:bg-muted transition-colors"
+        >
+          <Share2 className="w-3.5 h-3.5" aria-hidden="true" />
+          {shared ? "Copied" : "Share"}
+        </button>
+        <a
+          href={connectHref}
+          className="inline-flex items-center gap-1.5 border border-foreground bg-foreground text-background px-3 py-1.5 font-mono text-xs tracking-wider hover:opacity-90 transition-opacity"
+        >
+          <UserPlus className="w-3.5 h-3.5" aria-hidden="true" />
+          Connect an agent
+        </a>
+      </div>
+      {isPrivate && (
+        <p
+          data-testid="share-private-note"
+          className="font-mono text-[10px] leading-relaxed text-muted-foreground max-w-xs sm:text-right"
+        >
+          Private room — sharing the link does not grant access. Recipients still need
+          the owner&apos;s authorization to read this room.
+        </p>
+      )}
     </div>
   );
 }

@@ -64,8 +64,10 @@ func TestRoomsConnect_ExecutorPromptNamesActualRoom(t *testing.T) {
 	// Step 3: names the real production endpoints (with the real slug substituted).
 	require.Contains(t, prompt, connectAPIBaseURL+"/v1/rooms/"+room.Slug+"/handshake")
 	require.Contains(t, prompt, connectAPIBaseURL+"/r/"+room.Slug+"/join")
-	require.Contains(t, prompt, connectAPIBaseURL+"/r/"+room.Slug+"/message")
-	require.Contains(t, prompt, connectAPIBaseURL+"/r/"+room.Slug+"/messages")
+	// Messages go through the canonical entries contract (idx 70 step 4).
+	require.Contains(t, prompt, "POST "+connectAPIBaseURL+"/v1/rooms/"+room.Slug+"/entries")
+	require.Contains(t, prompt, "GET "+connectAPIBaseURL+"/v1/rooms/"+room.Slug+"/entries")
+	require.NotContains(t, prompt, "/r/"+room.Slug+"/message")
 	require.Contains(t, lower, "your own identity")
 
 	// No credentials may appear in the executor prompt.

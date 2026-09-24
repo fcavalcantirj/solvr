@@ -514,8 +514,11 @@ func TestConnect_PlannerPromptIsCompleteForTask18(t *testing.T) {
 			require.Contains(t, lower, strings.ToLower(connectAPIBaseURL+"/v1/rooms"))
 			require.Contains(t, lower, strings.ToLower(connectAPIBaseURL+"/v1/rooms/"+connectSlugPlaceholder+"/handshake"))
 			require.Contains(t, lower, strings.ToLower(connectAPIBaseURL+"/r/"+connectSlugPlaceholder+"/join"))
-			require.Contains(t, lower, strings.ToLower(connectAPIBaseURL+"/r/"+connectSlugPlaceholder+"/message"))
-			require.Contains(t, lower, strings.ToLower(connectAPIBaseURL+"/r/"+connectSlugPlaceholder+"/messages"))
+			// Messages go through the canonical entries contract (idx 70 step 4), not the
+			// /r/{slug}/message(s) transport adapters.
+			require.Contains(t, lower, strings.ToLower("POST "+connectAPIBaseURL+"/v1/rooms/"+connectSlugPlaceholder+"/entries"))
+			require.Contains(t, lower, strings.ToLower("GET "+connectAPIBaseURL+"/v1/rooms/"+connectSlugPlaceholder+"/entries"))
+			require.NotContains(t, lower, strings.ToLower("/r/"+connectSlugPlaceholder+"/message"))
 			// The message content must be the task and first directive.
 			require.Contains(t, lower, "directive")
 

@@ -148,19 +148,19 @@ func ownerPrivateAdmissionStep(sel ConnectSelection, slug string) []string {
 // participant" with the room link, resume from the last message it saw so it
 // never repeats finished work, and understand that Solvr relays messages between
 // RUNNING agents and does not keep a stopped one executing.
-func waitingRecoverySection(roomURL, messagesURL string) []string {
+func waitingRecoverySection(roomURL, entriesURL string) []string {
 	return []string{
 		"",
 		"WAITING FOR YOUR PARTNER",
 		"Do NOT post repeated readiness messages while you wait for the other agent.",
-		"Poll for new messages with bounded backoff: read " + messagesURL,
+		"Poll for new messages with bounded backoff: read " + entriesURL,
 		"every few seconds at first, then wait longer between reads (up to about a minute).",
 		"Keep waiting about 5 minutes; adjust that window if your task needs longer.",
 		"If nothing arrives, tell me \"Waiting for participant\", give me the room link",
 		roomURL + ", and the resume step below, then stop polling.",
 		"",
 		"RESUMING",
-		"When you or your partner return, read the room again from " + messagesURL,
+		"When you or your partner return, read the room again from " + entriesURL,
 		"and continue from the last message you already saw — never redo work already posted.",
 		"Solvr carries messages between running agents; it does NOT keep a stopped agent",
 		"running. If your CLI exits, start over from this prompt and read the room to catch up.",
@@ -179,6 +179,36 @@ func reviewLoopNote() []string {
 		"assume your work is accepted, and post a review request when you want one.",
 		"When you report completion, present it as your own claim — Solvr carries",
 		"messages but does not certify outcomes.",
+	}
+}
+
+// connectCursorNote tells an agent how to page the canonical timeline forward.
+const connectCursorNote = "and page forward by sending the meta.next_cursor it returns back as ?cursor="
+
+// connectEntriesURL is the canonical room timeline every prompt posts to and reads
+// from. The /r/{slug}/message(s) routes remain as transport adapters for existing
+// clients; new prompts teach only this contract.
+func connectEntriesURL(slug string) string {
+	return connectAPIBaseURL + "/v1/rooms/" + slug + "/entries"
+}
+
+// stepRecoverySection keeps the bootstrap explicit: each of registration, handshake,
+// join and posting can fail on its own, and the agent recovers that one step instead
+// of starting over. A resent post carries the same client_entry_id, so the API stores
+// it once however many times the agent retries.
+func stepRecoverySection() []string {
+	return []string{
+		"",
+		"IF A STEP FAILS",
+		"Each step above can be retried on its own; you never have to start over.",
+		"- If registration fails, nothing was created: retry it, or reuse a key you already have.",
+		"- If the handshake fails, or a room call answers 401 because your room token was lost,",
+		"  expired or revoked, handshake again with your agent API key for a fresh token of your own.",
+		"- If the join fails, retry the join with your room token; it only marks you present.",
+		"- If a post fails or times out, resend the same body with the same client_entry_id:",
+		"  Solvr stores it once and answers the resend with meta.idempotent_replay true.",
+		"- A 403 means you are not admitted to this room: ask the room owner, and never borrow",
+		"  another agent's credential.",
 	}
 }
 
@@ -215,9 +245,11 @@ func plannerPromptText(sel ConnectSelection) string {
 		"3. OPEN THE WORK. With Authorization: Bearer YOUR_ROOM_TOKEN:",
 		"     POST " + connectAPIBaseURL + "/r/" + slug + "/join",
 		`     {"agent_name": "your_agent_name"}`,
-		"     POST " + connectAPIBaseURL + "/r/" + slug + "/message",
-		`     {"agent_name": "your_agent_name", "content": "the task and your first directive"}`,
-		"   Read the replies with GET " + connectAPIBaseURL + "/r/" + slug + "/messages",
+		"   Then post to the room timeline, the canonical entries API:",
+		"     POST " + connectEntriesURL(slug),
+		`     {"body": "the task and your first directive", "client_entry_id": "a unique id you choose for this post"}`,
+		"   Read the replies with GET " + connectEntriesURL(slug),
+		"   " + connectCursorNote,
 		"",
 		"4. HAND ME THE SECOND PROMPT. Reply to me with:",
 		"   - the room link " + connectAppBaseURL + "/rooms/" + slug + " using the REAL slug,",
@@ -231,7 +263,8 @@ func plannerPromptText(sel ConnectSelection) string {
 		"   decisions in the room rather than in this chat.",
 	}
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
-	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectAPIBaseURL+"/r/"+slug+"/messages")...)
+	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectEntriesURL(slug))...)
+	lines = append(lines, stepRecoverySection()...)
 	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
@@ -274,9 +307,11 @@ func starterPromptText(sel ConnectSelection) string {
 		"3. OPEN THE WORK. With Authorization: Bearer YOUR_ROOM_TOKEN:",
 		"     POST " + connectAPIBaseURL + "/r/" + slug + "/join",
 		`     {"agent_name": "your_agent_name"}`,
-		"     POST " + connectAPIBaseURL + "/r/" + slug + "/message",
-		`     {"agent_name": "your_agent_name", "content": "the task and how you propose to split it"}`,
-		"   Read the replies with GET " + connectAPIBaseURL + "/r/" + slug + "/messages",
+		"   Then post to the room timeline, the canonical entries API:",
+		"     POST " + connectEntriesURL(slug),
+		`     {"body": "the task and how you propose to split it", "client_entry_id": "a unique id you choose for this post"}`,
+		"   Read the replies with GET " + connectEntriesURL(slug),
+		"   " + connectCursorNote,
 		"",
 		"4. HAND ME THE SECOND PROMPT. Reply to me with:",
 		"   - the room link " + connectAppBaseURL + "/rooms/" + slug + " using the REAL slug,",
@@ -290,7 +325,8 @@ func starterPromptText(sel ConnectSelection) string {
 		"   the room rather than in this chat.",
 	}
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
-	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectAPIBaseURL+"/r/"+slug+"/messages")...)
+	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectEntriesURL(slug))...)
+	lines = append(lines, stepRecoverySection()...)
 	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
@@ -334,9 +370,11 @@ func builderPromptText(sel ConnectSelection) string {
 		"3. OPEN THE WORK. With Authorization: Bearer YOUR_ROOM_TOKEN:",
 		"     POST " + connectAPIBaseURL + "/r/" + slug + "/join",
 		`     {"agent_name": "your_agent_name"}`,
-		"     POST " + connectAPIBaseURL + "/r/" + slug + "/message",
-		`     {"agent_name": "your_agent_name", "content": "the task and your implementation plan"}`,
-		"   Read the replies with GET " + connectAPIBaseURL + "/r/" + slug + "/messages",
+		"   Then post to the room timeline, the canonical entries API:",
+		"     POST " + connectEntriesURL(slug),
+		`     {"body": "the task and your implementation plan", "client_entry_id": "a unique id you choose for this post"}`,
+		"   Read the replies with GET " + connectEntriesURL(slug),
+		"   " + connectCursorNote,
 		"",
 		"4. HAND ME THE SECOND PROMPT. Reply to me with:",
 		"   - the room link " + connectAppBaseURL + "/rooms/" + slug + " using the REAL slug,",
@@ -350,7 +388,8 @@ func builderPromptText(sel ConnectSelection) string {
 		"   this chat. The reviewer reads your plan and reports issues.",
 	}
 	lines = append(lines, ownerPrivateAdmissionStep(sel, slug)...)
-	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectAPIBaseURL+"/r/"+slug+"/messages")...)
+	lines = append(lines, waitingRecoverySection(connectAppBaseURL+"/rooms/"+slug, connectEntriesURL(slug))...)
+	lines = append(lines, stepRecoverySection()...)
 	lines = append(lines,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never say",
@@ -374,8 +413,7 @@ func executorPromptText(room *models.Room, firstMsg *models.Message) string {
 	roomURL := connectAppBaseURL + "/rooms/" + slug
 	handshakeURL := connectAPIBaseURL + "/v1/rooms/" + slug + "/handshake"
 	joinURL := connectAPIBaseURL + "/r/" + slug + "/join"
-	messageURL := connectAPIBaseURL + "/r/" + slug + "/message"
-	messagesURL := connectAPIBaseURL + "/r/" + slug + "/messages"
+	entriesURL := connectEntriesURL(slug)
 
 	var plannerIdentity, task, taskSection string
 	if firstMsg != nil && firstMsg.AgentName != "" {
@@ -429,21 +467,23 @@ func executorPromptText(room *models.Room, firstMsg *models.Message) string {
 		"3. JOIN AND READ. First join presence, then read the room before you act:",
 		"     POST " + joinURL,
 		`     {"agent_name": "your_agent_name"}`,
-		"     GET " + messagesURL,
+		"     GET " + entriesURL,
+		"   " + connectCursorNote,
 		"If the room has messages you have not seen, read them and follow the planner's",
 		"latest directive before you post your plan.",
 		"",
 		"4. POST YOUR WORK. With Authorization: Bearer YOUR_ROOM_CREDENTIAL:",
-		"     POST " + messageURL,
-		`     {"agent_name": "your_agent_name", "content": "your plan, evidence, or review request"}`,
-		"Retrieve the latest directive any time with GET " + messagesURL,
+		"     POST " + entriesURL,
+		`     {"body": "your plan, evidence, or review request", "client_entry_id": "a unique id you choose for this post"}`,
+		"Retrieve the latest directive any time with GET " + entriesURL,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never",
 		"say an agent connected when it did not.",
 	}
 
 	lines = append(lines, reviewLoopNote()...)
-	lines = append(lines, waitingRecoverySection(roomURL, messagesURL)...)
+	lines = append(lines, waitingRecoverySection(roomURL, entriesURL)...)
+	lines = append(lines, stepRecoverySection()...)
 	return strings.Join(lines, "\n")
 }
 
@@ -456,8 +496,7 @@ func roleSpecificPromptText(room *models.Room, firstMsg *models.Message, role st
 	roomURL := connectAppBaseURL + "/rooms/" + slug
 	handshakeURL := connectAPIBaseURL + "/v1/rooms/" + slug + "/handshake"
 	joinURL := connectAPIBaseURL + "/r/" + slug + "/join"
-	messageURL := connectAPIBaseURL + "/r/" + slug + "/message"
-	messagesURL := connectAPIBaseURL + "/r/" + slug + "/messages"
+	entriesURL := connectEntriesURL(slug)
 
 	var firstAgentIdentity, task, taskSection string
 	if firstMsg != nil && firstMsg.AgentName != "" {
@@ -512,19 +551,21 @@ func roleSpecificPromptText(room *models.Room, firstMsg *models.Message, role st
 		"3. JOIN AND READ. First join presence, then read the room before you act:",
 		"     POST " + joinURL,
 		`     {"agent_name": "your_agent_name"}`,
-		"     GET " + messagesURL,
+		"     GET " + entriesURL,
+		"   " + connectCursorNote,
 		"Read the existing messages and understand the context before you post.",
 		"",
 		"4. POST YOUR WORK. With Authorization: Bearer YOUR_ROOM_CREDENTIAL:",
-		"     POST " + messageURL,
-		`     {"agent_name": "your_agent_name", "content": "your contribution for your role"}`,
-		"Retrieve the latest messages any time with GET " + messagesURL,
+		"     POST " + entriesURL,
+		`     {"body": "your contribution for your role", "client_entry_id": "a unique id you choose for this post"}`,
+		"Retrieve the latest messages any time with GET " + entriesURL,
 		"",
 		"If any call fails, tell me the exact error. Never invent a room link, and never",
 		"say an agent connected when it did not.",
 	}
 
 	lines = append(lines, reviewLoopNote()...)
-	lines = append(lines, waitingRecoverySection(roomURL, messagesURL)...)
+	lines = append(lines, waitingRecoverySection(roomURL, entriesURL)...)
+	lines = append(lines, stepRecoverySection()...)
 	return strings.Join(lines, "\n")
 }

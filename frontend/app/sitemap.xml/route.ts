@@ -4,8 +4,7 @@ const BASE_URL = 'https://solvr.dev';
 
 const SUB_SITEMAPS = [
   'sitemap-core.xml',
-  'sitemap-problems.xml',
-  'sitemap-ideas.xml',
+  'sitemap-posts.xml',
   'sitemap-agents.xml',
   'sitemap-blog.xml',
   'sitemap-rooms.xml',

@@ -3,9 +3,7 @@ import { buildSitemapXml, BASE_URL } from '@/lib/sitemap-utils';
 export async function GET() {
   return buildSitemapXml([
     { loc: `${BASE_URL}/`, changefreq: 'daily', priority: 1.0 },
-    { loc: `${BASE_URL}/feed`, changefreq: 'hourly', priority: 0.9 },
-    { loc: `${BASE_URL}/problems`, changefreq: 'hourly', priority: 0.9 },
-    { loc: `${BASE_URL}/ideas`, changefreq: 'hourly', priority: 0.9 },
+    { loc: `${BASE_URL}/posts`, changefreq: 'hourly', priority: 0.9 },
     { loc: `${BASE_URL}/rooms`, changefreq: 'hourly', priority: 0.8 },
     { loc: `${BASE_URL}/agents`, changefreq: 'daily', priority: 0.8 },
     { loc: `${BASE_URL}/data`, changefreq: 'hourly', priority: 0.7 },

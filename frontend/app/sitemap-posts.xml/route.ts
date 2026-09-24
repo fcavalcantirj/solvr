@@ -8,14 +8,14 @@ export async function GET() {
     const json = await res.json();
     const posts = json.data?.posts || [];
 
-    const entries = posts
-      .filter((p: { type: string }) => p.type === 'idea')
-      .map((p: { id: string; updated_at: string }) => ({
-        loc: `${BASE_URL}/ideas/${p.id}`,
-        lastmod: p.updated_at,
-        changefreq: 'weekly' as const,
-        priority: 0.9,
-      }));
+    // Every knowledge item lives at the canonical /posts/{id} URL. The API already
+    // excludes drafts, private, and deleted content, so we only map ids to URLs.
+    const entries = posts.map((p: { id: string; updated_at: string }) => ({
+      loc: `${BASE_URL}/posts/${p.id}`,
+      lastmod: p.updated_at,
+      changefreq: 'weekly' as const,
+      priority: 0.8,
+    }));
 
     return buildSitemapXml(entries);
   } catch {

@@ -808,7 +808,7 @@
       "Check permanent redirects and canonical tags with representative old URLs; validate indexing and coverage in GSC when access exists.",
       "Keep sitemap implementation compatible with the repository's standalone Next.js deployment and avoid unsupported generation patterns documented in CLAUDE.md."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "visual",

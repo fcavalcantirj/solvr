@@ -8299,3 +8299,100 @@ FILES (git status --porcelain / git diff --stat -- matches exactly):
     repo+handler under operatorOnly).
   No existing test deleted, weakened, skipped, or renamed. No migration, no env,
   no frontend, no prod touch.
+
+================================================================================
+2026-09-24 — Task idx 63 (spec.json, category functional)
+"Make public rooms and canonical posts discoverable without duplicating
+search-engine content". PASSED (UAT: GSC coverage + rendered-crawl visual).
+================================================================================
+
+TASK SELECTION (top-down, every earlier skip RE-VERIFIED [REAL] this session):
+  - idx 23 "Verify N-agent e2e" (ACCEPTANCE): [REAL] grep room_entries backend/
+    internal/ = 0 files; no /entries route in router_rooms. Two-instance replay is
+    idx 77 (false). Acceptance-not-checklist. SKIP.
+  - idx 27 "agent-created rooms manageable": step 2 requires rooms.owner_id RETIRED
+    after migration. [REAL] grep -c owner_id internal/db/rooms.go = 16 (still
+    present); retirement is idx 69 (false). SKIP.
+  - idx 51 / idx 52 (route legacy integrations "after cutover" / retained-knowledge
+    search "before/after cutover"): both hinge on idx 92 cutover (false) + schema
+    reduction idx 67 (false). SKIP.
+  - idx 58 "permissions authoritative": step 3 needs established-STREAM revocation.
+    [REAL] grep IsMember|membership|Revoke|CheckRoomAccess
+    internal/api/handlers/rooms_sse.go = 0 hits. That is idx 73 (false). SKIP.
+  - idx 63 THIS TASK: SEO discovery over ALREADY-BUILT posts (idx 44-50 true) +
+    rooms (idx 31-41 true). No dependency on any false schema/cutover task. First
+    buildable-now task top-down. TOOK IT.
+
+THE DEFECT (why this task existed): the sitemap index still fanned out to
+  sitemap-problems.xml and sitemap-ideas.xml, which emit /problems/{id} and
+  /ideas/{id} URLs. Since idx 50 (legacy redirects) shipped, those URLs now 301
+  to /posts/{id} -- so the sitemap was feeding crawlers a REDIRECT CHAIN, exactly
+  what idx 63 step 2 ("use /posts/{id}, replacing legacy type-specific canonical
+  entries") and step 5 ("no redirect chains") forbid. sitemap-core.xml likewise
+  listed the redirecting /feed, /problems, /ideas collection routes.
+
+WHAT CHANGED (git status --porcelain / git diff --stat -- matches exactly):
+  New: frontend/app/sitemap-posts.xml/route.ts -- one canonical posts sitemap that
+    maps every eligible post to https://solvr.dev/posts/{id} (no legacy type
+    branching). Reads GET /v1/sitemap/urls?type=posts (API already excludes
+    drafts, private, deleted). Empty-urlset fallback on API failure.
+  New tests (Vitest, RED-first then GREEN):
+    frontend/app/sitemap-posts.xml/route.test.ts (2 tests) -- asserts /posts/{id}
+      for problem/idea/question ids, NO /problems/ or /ideas/ substrings, and
+      empty urlset on fetch rejection.
+    frontend/app/sitemap.xml/route.test.ts (1) -- index references sitemap-posts
+      + sitemap-rooms, NOT sitemap-problems/sitemap-ideas.
+    frontend/app/sitemap-core.xml/route.test.ts (1) -- lists /posts + /rooms,
+      NOT /feed, /problems, /ideas.
+  Modified: sitemap.xml/route.ts (index: swap problems+ideas -> posts),
+    sitemap-core.xml/route.ts (swap /feed+/problems+/ideas -> /posts).
+  Deleted (PRODUCTION route handlers, NOT tests): sitemap-problems.xml/route.ts,
+    sitemap-ideas.xml/route.ts. [REAL] grep across app/lib found no source or test
+    referenced them except the index (updated). No test deleted, weakened, skipped
+    or renamed -- these were route.ts handlers emitting the redirecting URLs the
+    task replaces.
+
+STEP-BY-STEP COVERAGE:
+  1 SSR without JS: [REAL] head -1 of app/page.tsx, posts/page.tsx,
+    posts/[id]/page.tsx, rooms/page.tsx, rooms/[slug]/page.tsx = all server
+    components (no 'use client'); posts/[id] generateMetadata fetches getPost()
+    server-side. Full rendered-HTML crawl eyeball -> UAT (visual).
+  2 canonical /posts/{id} + public rooms in sitemap, legacy entries gone: [TEST]
+    4/4 GREEN. Canonical <link> already /posts/{id} ([REAL] posts/[id]/page.tsx:45
+    alternates.canonical), /posts collection canonical ([REAL] posts/page.tsx:15).
+  3 exclude private/deleted/draft/rejected: API-owned. [REAL] backend
+    internal/db/sitemap.go posts query = WHERE deleted_at IS NULL AND
+    visibility='public' AND (quality filter). posts/[id] generateMetadata returns
+    minimal non-article metadata when getPost() yields null (private/404).
+  4 archived public rooms still eligible: [REAL] sitemap.go rooms query =
+    is_private=false AND deleted_at IS NULL (archived/finished = non-deleted =
+    included).
+  5 redirects + canonical tags: canonical [REAL] above; legacy 301s shipped idx 50.
+    GSC indexing/coverage validation -> UAT (GSC not connected: [REAL] earlier
+    grep operator_analytics.go = only credential-redaction regex, no GA/GSC pull).
+  6 standalone-compatible, no generateSitemaps(): [REAL] grep generateSitemaps app
+    = NONE. All sitemaps are manual route.ts handlers (index + per-type), per
+    CLAUDE.md guidance.
+
+VERIFICATION (all RAN this session, frontend dir):
+  [TEST] npx vitest run app/sitemap-posts.xml app/sitemap.xml app/sitemap-core.xml
+    -- RED first (3 files failed: posts route missing, index+core assert-fail),
+    then GREEN after impl = 3 files / 4 tests PASS, 0 FAIL, 0 SKIP.
+  [REAL] npx tsc --noEmit: only 2 errors, both in .next/types/validator.ts (STALE
+    generated build output referencing the deleted routes; .next is git-ignored,
+    regenerates on build). Filtering out ^.next/ = "NONE -- source is clean".
+    Cleared .next/types so it regenerates.
+  [REAL] npx eslint on the 3 touched sitemap route dirs = clean (no output).
+  No backend change, no migration, no env, no prod touch.
+
+REGRESSION: change is isolated to sitemap route handlers. [REAL] no source/test
+  imports the two deleted routes (only the index, updated). Vitest only loads
+  *.test.ts + their imports, so unrelated suites are untouched; the 3 new test
+  files pass. Did NOT re-run the full 1022-test suite (isolated change, quota).
+
+UAT (owner/visual last mile; all automated checks already GREEN):
+  - Crawl the deployed Home, /rooms, a public room, /posts, and a published post
+    with JS disabled and confirm headings + initial content render (step 1).
+  - Once GSC access exists, submit /sitemap.xml and validate indexing/coverage and
+    that old /problems/{id} and /ideas/{id} 301 to /posts/{id} with no chains
+    (step 5).

@@ -15,28 +15,33 @@ import (
 // maxEventPayloadBytes bounds a typed-event payload (matches the DB CHECK).
 const maxEventPayloadBytes = 16384
 
-// RoomEventsHandler serves typed room events (mission #4) on the A2A namespace.
-// All handlers run behind BearerGuard, so the room is in context.
+// RoomEventsHandler serves typed room events (mission #4) on the A2A namespace. Its
+// routes are transport adapters over the canonical timeline: writes go through
+// submitEvent (shared with POST /v1/rooms/{slug}/entries kind=event) and reads come from
+// the same room_entries rows. All handlers run behind BearerGuard, so the room is in
+// context.
 type RoomEventsHandler struct {
-	eventRepo *db.RoomEventRepository
+	entryRepo *db.RoomEntryRepository
 	hubMgr    *hub.HubManager
 }
 
 // NewRoomEventsHandler creates a new RoomEventsHandler.
-func NewRoomEventsHandler(eventRepo *db.RoomEventRepository, hubMgr *hub.HubManager) *RoomEventsHandler {
-	return &RoomEventsHandler{eventRepo: eventRepo, hubMgr: hubMgr}
+func NewRoomEventsHandler(entryRepo *db.RoomEntryRepository, hubMgr *hub.HubManager) *RoomEventsHandler {
+	return &RoomEventsHandler{entryRepo: entryRepo, hubMgr: hubMgr}
 }
 
 type postEventRequest struct {
-	Type    string          `json:"type"`
-	Issue   string          `json:"issue,omitempty"`
-	Actor   string          `json:"actor"`
-	Payload json.RawMessage `json:"payload,omitempty"`
+	Type          string          `json:"type"`
+	Issue         string          `json:"issue,omitempty"`
+	Actor         string          `json:"actor"`
+	Payload       json.RawMessage `json:"payload,omitempty"`
+	ClientEntryID *string         `json:"client_entry_id,omitempty"`
 }
 
-// PostEvent handles POST /r/{slug}/events — append a typed coordination event.
-// Body: {type, issue?, actor, payload?}. The event is persisted and broadcast to the
-// room's SSE stream.
+// PostEvent handles POST /r/{slug}/events — the legacy adapter into submitEvent.
+// Body: {type, issue?, actor, payload?, client_entry_id?}. The per-agent room token's
+// agent is the authoritative author; actor is kept as the display label. Returns 201
+// with the event in the legacy shape, or 200 with idempotent_replay=true on a retry.
 func (h *RoomEventsHandler) PostEvent(w http.ResponseWriter, r *http.Request) {
 	room := apimiddleware.RoomFromContext(r.Context())
 	if room == nil {
@@ -48,52 +53,35 @@ func (h *RoomEventsHandler) PostEvent(w http.ResponseWriter, r *http.Request) {
 		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
 		return
 	}
-	if req.Type == "" {
-		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "type is required")
-		return
+
+	sub := eventSubmission{
+		AuthorType:    "agent",
+		Label:         req.Actor,
+		EventType:     req.Type,
+		Issue:         req.Issue,
+		Payload:       req.Payload,
+		ClientEntryID: req.ClientEntryID,
 	}
-	if req.Actor == "" {
-		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "actor is required")
-		return
-	}
-	if len(req.Payload) > maxEventPayloadBytes {
-		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "payload exceeds maximum size of 16384 bytes")
-		return
+	if authAgentID := apimiddleware.RoomAgentIDFromContext(r.Context()); authAgentID != "" {
+		sub.AuthorID = &authAgentID
 	}
 
-	event, err := h.eventRepo.Create(r.Context(), models.CreateRoomEventParams{
-		RoomID:    room.ID,
-		EventType: req.Type,
-		Issue:     req.Issue,
-		Actor:     req.Actor,
-		Payload:   req.Payload,
-	})
-	if err != nil {
-		slog.Error("failed to create room event", "error", err, "room_id", room.ID, "type", req.Type)
-		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create event")
+	entry, created, serr := h.submitEvent(r.Context(), room, sub)
+	if serr != nil {
+		serr.write(w)
 		return
 	}
-
-	// Broadcast to SSE subscribers so live consumers see the event immediately.
-	if h.hubMgr != nil {
-		roomHub := h.hubMgr.GetOrCreate(r.Context(), hub.NewRoomID(room.ID))
-		roomHub.Broadcast(hub.RoomEvent{
-			ID:        event.ID,
-			Type:      hub.EventTyped,
-			RoomID:    hub.NewRoomID(room.ID),
-			AgentName: event.Actor,
-			EventName: event.EventType,
-			Issue:     event.Issue,
-			Payload:   event,
-			Timestamp: event.CreatedAt,
-		})
+	event := roomEventFromEntry(entry)
+	if !created {
+		roomWriteJSON(w, http.StatusOK, map[string]any{"data": event, "idempotent_replay": true})
+		return
 	}
-
 	roomWriteJSON(w, http.StatusCreated, map[string]any{"data": event})
 }
 
 // ListEvents handles GET /r/{slug}/events?type=&issue=&limit= — query typed events,
-// newest first, optionally filtered by type and/or issue.
+// newest first, optionally filtered by type and/or issue. An adapter over the event
+// entries of the canonical timeline.
 func (h *RoomEventsHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	room := apimiddleware.RoomFromContext(r.Context())
 	if room == nil {
@@ -106,7 +94,7 @@ func (h *RoomEventsHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 			limit = parsed
 		}
 	}
-	events, err := h.eventRepo.Query(r.Context(), models.QueryRoomEventsParams{
+	entries, err := h.entryRepo.QueryEvents(r.Context(), models.QueryRoomEntryEventsParams{
 		RoomID:    room.ID,
 		EventType: r.URL.Query().Get("type"),
 		Issue:     r.URL.Query().Get("issue"),
@@ -116,6 +104,10 @@ func (h *RoomEventsHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to query room events", "error", err, "room_id", room.ID)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to query events")
 		return
+	}
+	events := make([]models.RoomEvent, 0, len(entries))
+	for i := range entries {
+		events = append(events, roomEventFromEntry(&entries[i]))
 	}
 	roomWriteJSON(w, http.StatusOK, map[string]any{"data": events})
 }

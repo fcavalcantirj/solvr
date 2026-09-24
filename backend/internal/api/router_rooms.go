@@ -50,7 +50,8 @@ func mountRoomRoutes(
 	msgHandler.SetFunnelRecorder(funnelRepo)
 	sseHandler := handlers.NewRoomSSEHandler(hubMgr, msgRepo, roomRepo)
 	claimsHandler := handlers.NewRoomClaimsHandler(claimRepo)
-	eventsHandler := handlers.NewRoomEventsHandler(eventRepo, hubMgr)
+	entryRepo := db.NewRoomEntryRepository(pool)
+	eventsHandler := handlers.NewRoomEventsHandler(entryRepo, hubMgr)
 	roomConnectHandler := handlers.NewRoomConnectHandler(roomRepo, msgRepo)
 	roomSavePostHandler := handlers.NewRoomSavePostHandler(db.NewPostRepository(pool), roomRepo, memberRepo)
 
@@ -63,10 +64,10 @@ func mountRoomRoutes(
 
 	// Canonical timeline routes accept human, agent-account and room-scoped credentials
 	// through ONE authorization policy (RoomPolicyGuard). Writes share the adapters'
-	// rate-limit buckets: an agent write counts against the same 60/min bucket as
-	// POST /r/{slug}/message, a human write against the same 10/min bucket as
+	// rate-limit buckets: an agent write (message or event) counts against the same
+	// 60/min bucket as POST /r/{slug}/message and POST /r/{slug}/events, a human write against the same 10/min bucket as
 	// POST /v1/rooms/{slug}/messages. Each limiter is built once and mounted on both.
-	entriesHandler := handlers.NewRoomEntriesHandler(db.NewRoomEntryRepository(pool), msgHandler)
+	entriesHandler := handlers.NewRoomEntriesHandler(entryRepo, msgHandler, eventsHandler)
 	agentWriteLimit := httprate.LimitByIP(60, time.Minute)
 	humanWriteLimit := httprate.LimitByIP(10, time.Minute)
 	entryWriteLimit := func(next http.Handler) http.Handler {
@@ -174,7 +175,9 @@ func mountRoomRoutes(
 		r.Get("/claims", claimsHandler.ListClaims)
 
 		// Typed coordination events (mission #4). Structured, queryable, streamed.
-		r.With(httprate.LimitByIP(60, time.Minute)).Post("/events", eventsHandler.PostEvent)
+		// Transport adapter into the same event submission path and agent write bucket as
+		// POST /v1/rooms/{slug}/entries with kind=event.
+		r.With(agentWriteLimit).Post("/events", eventsHandler.PostEvent)
 		r.Get("/events", eventsHandler.ListEvents)
 
 		r.Get("/stream", sseHandler.Stream)

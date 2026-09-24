@@ -27,28 +27,32 @@ const entryCursorPrefix = "seq:"
 // RoomEntriesHandler serves the canonical room timeline:
 //
 //	GET  /v1/rooms/{slug}/entries             ordered messages and events, cursor paged
-//	POST /v1/rooms/{slug}/entries             submit a message entry
+//	POST /v1/rooms/{slug}/entries             submit a message or typed event entry
 //	GET  /v1/rooms/{slug}/entries/{entry_id}  one entry of this room
 //
 // RoomPolicyGuard runs first, so the room and the authenticated RoomActor are in context.
-// Writes go through RoomMessagesHandler.submitMessage, the same implementation the
-// /r/{slug}/message and /v1/rooms/{slug}/messages adapters use.
+// Message writes go through RoomMessagesHandler.submitMessage, the same implementation
+// the /r/{slug}/message and /v1/rooms/{slug}/messages adapters use; event writes go
+// through RoomEventsHandler.submitEvent, shared with the /r/{slug}/events adapter.
 type RoomEntriesHandler struct {
 	entryRepo *db.RoomEntryRepository
 	messages  *RoomMessagesHandler
+	events    *RoomEventsHandler
 }
 
 // NewRoomEntriesHandler creates the canonical entries handler over the shared
-// submission path.
-func NewRoomEntriesHandler(entryRepo *db.RoomEntryRepository, messages *RoomMessagesHandler) *RoomEntriesHandler {
-	return &RoomEntriesHandler{entryRepo: entryRepo, messages: messages}
+// submission paths.
+func NewRoomEntriesHandler(entryRepo *db.RoomEntryRepository, messages *RoomMessagesHandler, events *RoomEventsHandler) *RoomEntriesHandler {
+	return &RoomEntriesHandler{entryRepo: entryRepo, messages: messages, events: events}
 }
 
-// postEntryRequest is the JSON body for POST /v1/rooms/{slug}/entries. Only kind
-// "message" (the default) is accepted here for now; typed events are still submitted
-// through POST /r/{slug}/events.
+// postEntryRequest is the JSON body for POST /v1/rooms/{slug}/entries. kind is
+// "message" (the default: body, content_type, references) or "event" (event_type,
+// issue); extension carries message metadata or the event payload.
 type postEntryRequest struct {
 	Kind               string          `json:"kind,omitempty"`
+	EventType          string          `json:"event_type,omitempty"`
+	Issue              string          `json:"issue,omitempty"`
 	Body               string          `json:"body"`
 	ContentType        string          `json:"content_type,omitempty"`
 	Extension          json.RawMessage `json:"extension,omitempty"`
@@ -74,33 +78,51 @@ func (h *RoomEntriesHandler) PostEntry(w http.ResponseWriter, r *http.Request) {
 		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
 		return
 	}
-	if req.Kind != "" && req.Kind != models.RoomEntryKindMessage {
-		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR",
-			"kind must be message; typed events are submitted through POST /r/{slug}/events")
-		return
-	}
-
 	authorID := actor.ID
-	msg, created, serr := h.messages.submitMessage(r.Context(), room, messageSubmission{
-		AuthorType:         actor.Type,
-		AuthorID:           &authorID,
-		Label:              actor.Label,
-		Content:            req.Body,
-		ContentType:        req.ContentType,
-		Metadata:           req.Extension,
-		ReplyToEntryID:     req.ReplyToEntryID,
-		AddressedMemberIDs: req.AddressedMemberIDs,
-		SupersedesEntryID:  req.SupersedesEntryID,
-		ClientEntryID:      req.ClientEntryID,
-	})
-	if serr != nil {
-		serr.write(w)
+	var entryID int64
+	var created bool
+	switch req.Kind {
+	case "", models.RoomEntryKindMessage:
+		msg, ok, serr := h.messages.submitMessage(r.Context(), room, messageSubmission{
+			AuthorType:         actor.Type,
+			AuthorID:           &authorID,
+			Label:              actor.Label,
+			Content:            req.Body,
+			ContentType:        req.ContentType,
+			Metadata:           req.Extension,
+			ReplyToEntryID:     req.ReplyToEntryID,
+			AddressedMemberIDs: req.AddressedMemberIDs,
+			SupersedesEntryID:  req.SupersedesEntryID,
+			ClientEntryID:      req.ClientEntryID,
+		})
+		if serr != nil {
+			serr.write(w)
+			return
+		}
+		entryID, created = msg.ID, ok
+	case models.RoomEntryKindEvent:
+		entry, ok, serr := h.events.submitEvent(r.Context(), room, eventSubmission{
+			AuthorType:    actor.Type,
+			AuthorID:      &authorID,
+			Label:         actor.Label,
+			EventType:     req.EventType,
+			Issue:         req.Issue,
+			Payload:       req.Extension,
+			ClientEntryID: req.ClientEntryID,
+		})
+		if serr != nil {
+			serr.write(w)
+			return
+		}
+		entryID, created = entry.ID, ok
+	default:
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "kind must be message or event")
 		return
 	}
 
-	entry, err := h.entryRepo.GetByID(r.Context(), room.ID, msg.ID)
+	entry, err := h.entryRepo.GetByID(r.Context(), room.ID, entryID)
 	if err != nil {
-		slog.Error("failed to read stored entry", "error", err, "room_id", room.ID, "entry_id", msg.ID)
+		slog.Error("failed to read stored entry", "error", err, "room_id", room.ID, "entry_id", entryID)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to read stored entry")
 		return
 	}

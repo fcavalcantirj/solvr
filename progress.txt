@@ -9706,3 +9706,82 @@ REMAINING FOR idx 70 (next slices):
     register + handshake explicit and recoverable.
   - Step 5: SPEC.md — canonical entry contract + adapter mapping for /messages and /events.
   - Step 6: extend contract tests to events and the stream.
+
+================================================================================
+2026-09-24 — Task idx 70 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Offer one canonical room API with thin adapters for the existing transport routes"
+SLICE 2 of N: typed events through the canonical entries contract; /r/{slug}/events
+(POST and GET) become adapters over the same event submission path and storage.
+================================================================================
+
+TASK SELECTION: same top-down skips as the slice-1 entry (idx 23 ACCEPTANCE needs idx 77;
+  51/52 need idx 92 + 67; 58 needs idx 73; 66 ACCEPTANCE; 67 needs idx 74). Continued idx 70.
+
+FILES ([REAL] git status --porcelain / git diff --stat before journaling):
+  NEW handlers/rooms_event_submit.go (116 lines): eventSubmission + submitEvent = THE typed
+    event write (event_type required <=50, issue <=200, actor label required <=200, payload
+    <=16384 bytes -> 400 VALIDATION_ERROR instead of a DB CHECK 500; stores ONE room_entries
+    kind=event row via RoomEntryRepository.Create with author_type/author_id from the
+    credential and client_entry_id idempotency; broadcasts hub EventTyped once, with the
+    legacy RoomEvent payload so SSE consumers see the same shape). roomEventFromEntry renders
+    an entry in the legacy {id, room_id, type, issue, actor, payload, created_at} shape.
+  M   handlers/rooms_events.go (113): RoomEventsHandler now holds RoomEntryRepository (not
+    RoomEventRepository). PostEvent = thin adapter: decodes {type, issue, actor, payload,
+    client_entry_id?}, author_id = the room token's agent (RoomAgentIDFromContext, like the
+    /r/message adapter), actor kept as display label; 201 legacy shape, 200 +
+    idempotent_replay:true on retry (NEW: the legacy route accepts client_entry_id).
+    ListEvents = adapter over RoomEntryRepository.QueryEvents (same filters, newest first,
+    same limit handling), rendered in the legacy shape.
+    BEHAVIOR CHANGE: /r events now carry author_type=agent + author_id (before: stored through
+    the room_events view with NULL author). Archived rooms still accept events (unchanged;
+    only messages refuse on archive) — not decided in this slice.
+  M   handlers/rooms_entries.go (232): POST /v1/rooms/{slug}/entries dispatches on kind:
+    ""/message -> submitMessage (unchanged), event -> submitEvent with event_type, issue,
+    extension (payload), client_entry_id; anything else 400 "kind must be message or event".
+    NewRoomEntriesHandler takes the events handler.
+  M   router_rooms.go (185): one RoomEntryRepository shared by entries + events handlers;
+    POST /r/{slug}/events now uses the shared agentWriteLimit bucket (was its own
+    LimitByIP(60)) — agent messages and events, canonical or adapter, share one 60/min/IP.
+  NEW router_rooms_entries_events_test.go (202 lines, 3 tests).
+  No test deleted, skipped or loosened. TestRoomEvents_PostAndQuery and the SSE ?type=
+  filter test (both on /r/events) still pass unchanged. No frontend, SPEC.md or migration.
+
+VERIFICATION (DATABASE_URL = shell-profile local docker solvr-postgres
+  localhost:5435/solvr_test):
+  [TEST] RED (/tmp/i70s2_red.log): _EventsShareOneSubmissionPath and
+    _AgentEventAndMessageWritesShareOneRateLimit FAIL ("kind must be message; typed events
+    are submitted through POST /r/{slug}/events"); _EventAccessDecisionsMatchAcrossPaths
+    passed already (guards from slice 1 cover it; kept as contract guard).
+    (A first RED attempt with a hand-typed DATABASE_URL failed on password auth — my
+    mistake; the profile's URL is the correct local one.)
+  [TEST] GREEN (/tmp/i70s2_green.log): all 3 new tests PASS, 0 SKIP, plus the 4 slice-1
+    TestRoomEntries_*, TestRoomEvents_PostAndQuery and TestRoomSSE_* PASS —
+    _EventsShareOneSubmissionPath: canonical kind=event with room token (author agent id,
+      event_type, issue, extension), replay 200 same id + 1 row; adapter write legacy shape
+      + canonical read shows same author_type/author_id, actor_label=w1; adapter retry 200
+      idempotent_replay; cross-path replay returns the adapter's entry; account-key event
+      same author_id; GET /r/events 3 newest-first + type/issue filters; entries?kind=event
+      3; message_count stays 0; 10 shared-validation cases -> 400 VALIDATION_ERROR.
+    _EventAccessDecisionsMatchAcrossPaths: other room's token 403 canonical+adapter,
+      outsider agent key 403, anonymous 401 on both.
+    _AgentEventAndMessageWritesShareOneRateLimit: 30 /r/message + 30 canonical events 201,
+      61st write via /r/events -> 429.
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i70s2_full.log): 3814 PASS (slice 1:
+    3812), 11 SKIP, 73 unique FAIL. comm vs /tmp/i70_full.log: 0 gone, 1 new =
+    TestSearchAnalyticsRepository_GetTrending ("expected 3 test trending results, got 2",
+    internal/db/search_analytics_test.go:161). NOT caused by this diff (no db/search code
+    touched): [REAL] solvr_test search_queries holds 5 queries above count 5 plus many
+    count-1 rows (xyzzy*, zqx*mod*) that tie with "test_rare query" for the last of the
+    top-10 slots, so the result depends on tie order in the accumulated shared test DB.
+  [REAL] gofmt clean on the 5 touched files; go vet ./internal/api/... ok; all < 800 lines.
+    NOTE: I ran `gofmt -l -w internal/api/` which reformatted ~55 unrelated files; reverted
+    them with `git checkout --` before the full run — the diff holds only the files above.
+
+REMAINING FOR idx 70 (next slices):
+  - GET /v1/rooms/{slug}/stream under RoomPolicyGuard (room tokens + account keys) with
+    /r/{slug}/stream as adapter; GET /v1/rooms/{slug}/messages list as adapter over entries.
+  - Step 4: connection prompts (connect_prompts.go, skill script) prefer /entries, keeping
+    register + handshake explicit and recoverable.
+  - Step 5: SPEC.md — canonical entry contract (message + event) + adapter mapping for
+    /messages and /events.
+  - Step 6: extend contract tests to the stream.

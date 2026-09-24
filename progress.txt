@@ -9022,3 +9022,87 @@ REMAINING FOR idx 69 (why passes stays false)
 UAT (when idx 69 completes; NOT a pass condition now): owner applies 000095 then 000096 to
   production via the admin route; after 000096 confirm
   SELECT access_source, COUNT(*) FROM room_members GROUP BY 1  -> only 'direct'.
+
+================================================================================
+2026-09-24 — Task idx 69 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Use one room membership authority and eliminate duplicate ownership and shared-token state"
+SLICE 3 of N: rooms.owner_id RETIRED (migration 000097). This iteration only VERIFIED and
+JOURNALED work that was already committed; it changed no code.
+================================================================================
+
+WHY THIS ENTRY EXISTS: commit b742311 ("2026-09-24 — Task idx 69 ... IN PROGRESS, p") is
+  the ralph HOST AUTO-COMMIT backstop (ralph.sh line ~463, message = last dated progress
+  line truncated to 72 chars). The iteration that wrote it left NO journal entry, so its
+  work was unverified in the journal. [REAL] git status was clean at start of this session.
+
+TASK SELECTION: idx 23, 27, 51, 52, 58, 66, 67 skipped for the reasons in the slice-1 entry;
+  idx 69 continues.
+
+WHAT b742311 CONTAINS (git show --stat, file by file):
+  NEW backend/migrations/000097_retire_rooms_owner_id.up.sql: drops trigger+function
+      rooms_sync_human_owner and rooms.owner_id (with its FK and idx_rooms_owner_id).
+  NEW .../000097_retire_rooms_owner_id.down.sql: re-adds owner_id + index, fills it from the
+      earliest active human owner membership, re-creates the sync trigger.
+  M   backend/internal/db/rooms.go: roomColumns derives owner_id from room_members via
+      humanOwnerOf() (earliest active human 'owner' row); Create inserts the human owner
+      membership in the same tx; ListFiltered LEFT JOIN LATERAL humanOwnerOf for owner
+      display name; ListByOwner = EXISTS active human owner membership;
+      BackfillOwnerFromMembership INSERTs the human owner membership (was UPDATE owner_id).
+  M   backend/cmd/migrate-quorum/main.go: insertSolvrRoom writes the owner as a membership.
+  M   handlers/agents.go, agents_claim.go, rooms_discovery.go, api/router.go: comments only.
+  NEW backend/internal/db/rooms_owner_retirement_test.go (4 tests TestRoomsOwnerRetired_*).
+  M   tests adapted to the dropped column (no assertion loosened on live behavior):
+    - internal/db/migrations_rooms_test.go TestMigrations_RoomsTable: dropped "owner_id"
+      from the expected-columns list and "idx_rooms_owner_id" from expected indexes. It
+      asserted those existed; they are intentionally gone. Replacement:
+      TestRoomsOwnerRetired_ColumnTriggerAndIndexGone pins their absence, and
+      TestRoomsOwnerRetired_CreateEstablishesHumanOwnerMembership +
+      _DerivedOwnerFollowsMembershipTransfer pin ownership via room_members. All PASS below.
+    - internal/db/room_members_authority_test.go OwnershipMatrixMatchesLegacyOwner: now
+      rebuilds owner_id via the 000097 down file in a rolled-back tx, same comparison.
+    - internal/db/rooms_test.go ListByOwner: fixture inserts an owner membership instead of
+      owner_id; cleanup by slug.
+    - cmd/migrate-quorum/migrate_integration_test.go: InsertRoom delegates to insertSolvrRoom;
+      OwnerMapping reads owner from room_members.
+  [REAL] remaining owner_id refs in backend Go: models.Room.OwnerID (derived value, JSON
+  shape unchanged), legacy pure helpers in handlers/rooms.go + models/room_ownership.go
+  (unused by request paths, read the derived value), migrate-quorum reading the QUORUM
+  source DB. No SQL reads/writes rooms.owner_id anymore.
+
+VERIFICATION (DATABASE_URL explicitly = local docker solvr-postgres 127.0.0.1:5435/solvr_test)
+  [REAL] solvr and solvr_test both at schema_migrations 97 dirty=f, rooms.owner_id absent.
+  [REAL] solvr_test round trip: active human owner memberships 1; migrate down 1 -> owner_id
+    back, 1 room with owner_id, sync trigger present, 0 rooms whose owner_id lacks a matching
+    active owner membership; migrate up -> 97 dirty=f, still 1 human owner membership.
+  [REAL] go build ./... + go vet (db, api/..., cmd/...) clean; golangci-lint no findings in
+    touched files; rooms.go 640 lines, migrate-quorum/main.go 607 (< 800).
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` on solvr_test (log /tmp/own_full.log):
+    3809 PASS, 11 SKIP (OAuth-integration x5, hybrid search x5, ListAnswersWithHumanAuthor —
+    all pre-existing, none room-related), 74 FAIL. Sorted unique FAIL names IDENTICAL to the
+    slice-2 run /tmp/fam_full.log (comm: none new, none gone). Room-named failures are only
+    TestRoomRepository_{GetBySlug,List,Update,SoftDelete,RotateToken} "Create() error = room
+    slug already exists" (leftover solvr_test fixture rows), same as before.
+    PASS inside that run: 4/4 TestRoomsOwnerRetired_*, 8/8 TestRoomMembersAuthority_*,
+    5/5 TestRoomMembersFamily_*, TestRoomRepository_ListByOwner,
+    TestRoomRepository_BackfillOwnerFromMembership, TestMigrations_RoomsTable,
+    TestIntegration_OwnerMapping; 218 PASS / 6 FAIL (the 5 fixture ones + a subtest) across
+    TestRoom*/TestHandshake*/TestConnect*/TestA2A*/TestSaveAsPost*.
+
+REMAINING FOR idx 69 (why passes stays false):
+  - Delete legacy pure helpers canManageRoom / canRotateRoomToken / agentOwnsRoom /
+    isRoomOwner(OrAdmin) (handlers/rooms.go) and models.SameHumanAsOwner with their unit
+    tests (handlers/rooms_test.go, models/room_ownership_test.go), naming the membership
+    tests that replace them.
+  - Bind presence to membership; retire shared rooms.token_hash (create-response token,
+    rotate-token route + frontend presence-sidebar rotate button, closed-room room_token
+    handshake bootstrap, BearerGuard / RoomAccessGuard shared-token paths). Coordinate with
+    idx 73 step 4.
+  - Soft-deleted human owners still hold active owner rows (decide archive/transfer).
+  - Owner decision: prevent_agent_reclaim trigger vs DELETE /v1/me unclaim (slice-2 FINDING).
+  - Document the compatibility window + final schema in SPEC.md.
+
+UAT (when idx 69 completes; NOT a pass condition now): owner applies 000095, 000096, 000097
+  to production in order via the admin route. Before 000097 confirm
+  SELECT COUNT(*) FROM rooms r WHERE owner_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM
+  room_members m WHERE m.room_id=r.id AND m.user_id=r.owner_id AND m.role='owner' AND
+  m.revoked_at IS NULL) -> 0.

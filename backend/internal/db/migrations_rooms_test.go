@@ -295,20 +295,22 @@ func TestMigrations_MessagesTable(t *testing.T) {
 		}
 	}
 
-	// Verify 2 indexes exist
+	// Verify the 2 transcript indexes exist. Since migration 000094 messages is a view
+	// over the room_entries timeline, so the (room_id, created_at) and active-row
+	// indexes that back it live on room_entries.
 	indexes := []string{
-		"idx_messages_room_created",
-		"idx_messages_room_active",
+		"idx_room_entries_room_created",
+		"idx_room_entries_room_active",
 	}
 	for _, idx := range indexes {
 		var idxName string
 		err = pool.QueryRow(ctx, `
 			SELECT indexname
 			FROM pg_indexes
-			WHERE schemaname = 'public' AND tablename = 'messages' AND indexname = $1
+			WHERE schemaname = 'public' AND tablename = 'room_entries' AND indexname = $1
 		`, idx).Scan(&idxName)
 		if err != nil {
-			t.Errorf("Index %s does not exist on messages table: %v", idx, err)
+			t.Errorf("Index %s does not exist on room_entries (backing messages): %v", idx, err)
 		}
 	}
 }

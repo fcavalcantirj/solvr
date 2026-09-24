@@ -60,9 +60,9 @@ func NewMessageRepository(pool *Pool) *MessageRepository {
 	return &MessageRepository{pool: pool}
 }
 
-// Create inserts a new message with a concurrent-safe sequence_num.
-// The sequence_num is assigned via a subquery: COALESCE(MAX(sequence_num), 0) + 1
-// within the same INSERT, which is serialized by PostgreSQL under concurrent writes.
+// Create inserts a new message. messages is a view over the room_entries timeline
+// (migration 000094): the insert becomes exactly one timeline entry whose
+// sequence_num is allocated under the room lock, shared with coordination events.
 func (r *MessageRepository) Create(ctx context.Context, params models.CreateMessageParams) (*models.Message, error) {
 	msg, _, err := r.CreateWithClientEntry(ctx, params)
 	return msg, err
@@ -90,10 +90,8 @@ func (r *MessageRepository) CreateWithClientEntry(ctx context.Context, params mo
 	}
 
 	query := `
-		INSERT INTO messages (room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, client_entry_id, supersedes_entry_id, sequence_num)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-			(SELECT COALESCE(MAX(sequence_num), 0) + 1 FROM messages WHERE room_id = $1 AND deleted_at IS NULL)
-		)
+		INSERT INTO messages (room_id, author_type, author_id, agent_name, content, content_type, metadata, reply_to_entry_id, addressed_member_ids, client_entry_id, supersedes_entry_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING ` + messageColumns + `
 	`
 
@@ -124,6 +122,9 @@ func (r *MessageRepository) CreateWithClientEntry(ctx context.Context, params mo
 			if existing, gerr := r.getByClientEntryID(ctx, params.RoomID, *params.AuthorID, *params.ClientEntryID); gerr == nil {
 				return existing, false, nil
 			}
+		}
+		if refErr := asInvalidEntryReference(err); refErr != err {
+			return nil, false, refErr
 		}
 		LogQueryError(ctx, "Create", "messages", err)
 		return nil, false, err

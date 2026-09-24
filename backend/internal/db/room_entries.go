@@ -20,6 +20,25 @@ var ErrRoomEntryNotFound = errors.New("room entry not found")
 // the same room (task: "enforce same-room reply and addressing references").
 var ErrCrossRoomReference = errors.New("reference target is not in the same room")
 
+// ErrInvalidEntryReference is returned when a write's reply_to_entry_id,
+// supersedes_entry_id or addressed_member_ids does not reference an entry or
+// participant of the same room (enforced by the room_entries_allocate trigger).
+var ErrInvalidEntryReference = errors.New("entry reference is not part of this room")
+
+// sameRoomReferenceConstraint is the constraint name the timeline trigger raises for a
+// foreign reply, supersede or addressing reference.
+const sameRoomReferenceConstraint = "room_entries_same_room_reference"
+
+// asInvalidEntryReference maps the trigger's same-room violation to
+// ErrInvalidEntryReference and returns any other error unchanged.
+func asInvalidEntryReference(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.ConstraintName == sameRoomReferenceConstraint {
+		return fmt.Errorf("%w: %s", ErrInvalidEntryReference, pgErr.Message)
+	}
+	return err
+}
+
 // roomEntryColumns is the shared read column list. client_entry_id is a write/lookup-
 // only idempotency key and is intentionally never surfaced in read responses.
 const roomEntryColumns = `id, room_id, sequence, kind, author_type, author_id, actor_label, ` +
@@ -48,10 +67,10 @@ func NewRoomEntryRepository(pool *Pool) *RoomEntryRepository {
 
 // Create inserts one entry and reports whether a new row was created.
 //
-// The per-room sequence is allocated within the same transaction that inserts the
-// row: the room row is locked FOR UPDATE, then sequence = MAX+1 is read and written,
-// so concurrent commits preserve a stable order rather than relying on a
-// nontransactional global sequence. A message must carry a body and an event must
+// The per-room sequence (and the entry id) is allocated by the room_entries_allocate
+// trigger (migration 000094) within the inserting transaction while it holds the room
+// row lock, so concurrent commits preserve a stable order in which id order matches
+// sequence order, rather than relying on a nontransactional global sequence. A message must carry a body and an event must
 // carry an event_type (enforced by the DB CHECK). A reply must reference an entry in
 // the same room. When ClientEntryID is set for an authenticated author, a retry with
 // the same (room_id, author_id, client_entry_id) returns the existing entry with
@@ -87,11 +106,6 @@ func (r *RoomEntryRepository) Create(ctx context.Context, params models.CreateRo
 			}
 		}
 
-		// Serialize sequence allocation for this room.
-		if _, lerr := tx.Exec(ctx, `SELECT id FROM rooms WHERE id = $1 FOR UPDATE`, params.RoomID); lerr != nil {
-			return lerr
-		}
-
 		extension := params.Extension
 		if extension == nil {
 			extension = json.RawMessage(`{}`)
@@ -103,11 +117,9 @@ func (r *RoomEntryRepository) Create(ctx context.Context, params models.CreateRo
 
 		query := `
 			INSERT INTO room_entries
-				(room_id, sequence, kind, author_type, author_id, actor_label, body, content_type,
+				(room_id, kind, author_type, author_id, actor_label, body, content_type,
 				 reply_to_entry_id, addressed_member_ids, supersedes_entry_id, event_type, issue, extension, client_entry_id)
-			VALUES ($1,
-				(SELECT COALESCE(MAX(sequence), 0) + 1 FROM room_entries WHERE room_id = $1),
-				$2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 			RETURNING ` + roomEntryColumns
 
 		entry, ierr := scanRoomEntry(tx.QueryRow(ctx, query,
@@ -123,14 +135,14 @@ func (r *RoomEntryRepository) Create(ctx context.Context, params models.CreateRo
 					return nil
 				}
 			}
-			return ierr
+			return asInvalidEntryReference(ierr)
 		}
 		out = &entry
 		created = true
 		return nil
 	})
 	if err != nil {
-		if !errors.Is(err, ErrCrossRoomReference) {
+		if !errors.Is(err, ErrCrossRoomReference) && !errors.Is(err, ErrInvalidEntryReference) {
 			LogQueryError(ctx, "Create", "room_entries", err)
 		}
 		return nil, false, err
@@ -264,102 +276,17 @@ func collectRoomEntries(ctx context.Context, rows pgx.Rows, op string) ([]models
 	return entries, rows.Err()
 }
 
-// backfillInsertSQL merges legacy messages and room_events into room_entries and builds
-// the legacy-ID map. Idempotent and incremental: only legacy rows not already mapped are
-// inserted, sequenced after the room's current MAX(sequence), merged by created_at with a
-// stable tie breaker (messages before events, then legacy id). Kept in sync with the
-// backfill block in migration 000093.
-const backfillInsertSQL = `
-WITH unified AS (
-    SELECT m.room_id, 'message'::text AS kind,
-           m.author_type, m.author_id, m.agent_name AS actor_label,
-           m.content AS body, m.content_type,
-           NULL::text AS event_type, ''::text AS issue,
-           m.metadata AS extension,
-           m.addressed_member_ids, m.client_entry_id, m.pinned_at,
-           m.created_at, m.deleted_at,
-           'message'::text AS legacy_kind, m.id AS legacy_id, 0 AS source_rank
-    FROM messages m
-    WHERE NOT EXISTS (SELECT 1 FROM room_entry_legacy_map lm
-                      WHERE lm.legacy_kind = 'message' AND lm.legacy_id = m.id)
-    UNION ALL
-    SELECT e.room_id, 'event'::text,
-           NULL, NULL, e.actor,
-           NULL, 'text',
-           e.event_type, e.issue,
-           e.payload,
-           NULL, NULL, NULL,
-           e.created_at, NULL,
-           'event'::text, e.id, 1
-    FROM room_events e
-    WHERE NOT EXISTS (SELECT 1 FROM room_entry_legacy_map lm
-                      WHERE lm.legacy_kind = 'event' AND lm.legacy_id = e.id)
-),
-base AS (
-    SELECT room_id, COALESCE(MAX(sequence), 0) AS maxseq FROM room_entries GROUP BY room_id
-),
-seq AS (
-    SELECT u.*,
-        COALESCE(b.maxseq, 0) + ROW_NUMBER() OVER (
-            PARTITION BY u.room_id ORDER BY u.created_at ASC, u.source_rank ASC, u.legacy_id ASC
-        ) AS sequence
-    FROM unified u LEFT JOIN base b ON b.room_id = u.room_id
-),
-ins AS (
-    INSERT INTO room_entries
-        (room_id, sequence, kind, author_type, author_id, actor_label, body, content_type,
-         event_type, issue, extension, addressed_member_ids, client_entry_id, pinned_at, created_at, deleted_at)
-    SELECT room_id, sequence, kind, author_type, author_id, actor_label, body, content_type,
-           event_type, issue, extension, addressed_member_ids, client_entry_id, pinned_at, created_at, deleted_at
-    FROM seq
-    RETURNING id AS entry_id, room_id, sequence
-)
-INSERT INTO room_entry_legacy_map (legacy_kind, legacy_id, entry_id)
-SELECT s.legacy_kind, s.legacy_id, ins.entry_id
-FROM ins JOIN seq s ON s.room_id = ins.room_id AND s.sequence = ins.sequence`
-
-const backfillRemapReplySQL = `
-UPDATE room_entries re
-SET reply_to_entry_id = tgt.entry_id
-FROM room_entry_legacy_map src
-JOIN messages m ON m.id = src.legacy_id AND src.legacy_kind = 'message'
-JOIN room_entry_legacy_map tgt ON tgt.legacy_kind = 'message' AND tgt.legacy_id = m.reply_to_entry_id
-WHERE re.id = src.entry_id
-  AND m.reply_to_entry_id IS NOT NULL
-  AND re.reply_to_entry_id IS DISTINCT FROM tgt.entry_id`
-
-const backfillRemapSupersedeSQL = `
-UPDATE room_entries re
-SET supersedes_entry_id = tgt.entry_id
-FROM room_entry_legacy_map src
-JOIN messages m ON m.id = src.legacy_id AND src.legacy_kind = 'message'
-JOIN room_entry_legacy_map tgt ON tgt.legacy_kind = 'message' AND tgt.legacy_id = m.supersedes_entry_id
-WHERE re.id = src.entry_id
-  AND m.supersedes_entry_id IS NOT NULL
-  AND re.supersedes_entry_id IS DISTINCT FROM tgt.entry_id`
-
-// BackfillFromLegacy migrates legacy messages and room_events into room_entries and
-// remaps reply/supersede references. It is idempotent: re-running inserts nothing for
-// already-mapped rows. Returns the number of new entries inserted.
+// BackfillFromLegacy migrates rows from the frozen legacy_messages and
+// legacy_room_events archives into room_entries via room_entries_backfill_legacy()
+// (migration 000094, the same routine the cutover ran). Message entries keep their
+// legacy id so old links and SSE cursors resolve by identity; events are mapped in
+// room_entry_legacy_map. It is idempotent: re-running inserts nothing for already-mapped
+// rows. Returns the number of new entries inserted.
 func (r *RoomEntryRepository) BackfillFromLegacy(ctx context.Context) (int, error) {
-	var inserted int64
-	err := r.pool.WithTx(ctx, func(tx Tx) error {
-		tag, ierr := tx.Exec(ctx, backfillInsertSQL)
-		if ierr != nil {
-			return ierr
-		}
-		inserted = tag.RowsAffected()
-		if _, rerr := tx.Exec(ctx, backfillRemapReplySQL); rerr != nil {
-			return rerr
-		}
-		if _, serr := tx.Exec(ctx, backfillRemapSupersedeSQL); serr != nil {
-			return serr
-		}
-		return nil
-	})
-	if err != nil {
+	var inserted int
+	if err := r.pool.QueryRow(ctx, `SELECT room_entries_backfill_legacy()`).Scan(&inserted); err != nil {
 		LogQueryError(ctx, "BackfillFromLegacy", "room_entries", err)
 		return 0, err
 	}
-	return int(inserted), nil
+	return inserted, nil
 }

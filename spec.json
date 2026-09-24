@@ -873,7 +873,7 @@
       "Keep room_claims separate because they implement atomic expiring leases, and keep presence separate because it expires; neither is a permanent chat message.",
       "Verify old message links and SSE cursors resolve during transition and that message counts exclude events while event queries retain their original issue and type filters."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "data",

@@ -8699,3 +8699,109 @@ NEXT ITERATION (continue idx 68, do NOT re-skip it): wire the single write path 
   (d) make the live room message_count derive from CountMessages (excludes events).
   Keep every existing green test green. Only then does idx 68 satisfy steps 4 & 6 and
   flip passes=true.
+
+2026-09-24 — Task idx 68 (spec.json, category data) — CUTOVER DONE, passes=true
+"Store room messages and coordination events in one ordered room timeline"
+================================================================================
+TASK SELECTION: same top-down skips as the previous entry (idx 23/27/51/52/58/66/67,
+  reasons unchanged); idx 68 was IN PROGRESS (foundation committed in 04dc3a4), so this
+  iteration continued it as the journal instructed.
+
+DESIGN (single storage, zero reader churn):
+  migration 000094_room_entries_cutover makes room_entries the ONLY storage:
+  - Rebuilds the 000093 backfill so every MESSAGE entry keeps its legacy messages.id
+    (identity). Old deep links + SSE Last-Event-ID / ?after= cursors therefore resolve
+    unchanged; legacy EVENT ids resolve via room_entry_legacy_map. Safe: nothing but the
+    000093 backfill had ever written room_entries (grep: no production caller).
+  - Archives the old tables as legacy_messages / legacy_room_events (frozen; used by the
+    down migration and the idempotent backfill function room_entries_backfill_legacy()).
+    legacy_messages.id default moved onto room_entries_id_seq so no id can collide.
+  - `messages` and `room_events` are now VIEWS over room_entries with INSTEAD OF
+    INSERT/UPDATE/DELETE triggers: each write = exactly one entry, so every existing
+    reader (transcript, event type/issue filters, homepage activity/rooms/overview,
+    activation/cohort/funnel analytics, migrate-quorum) derives from the timeline and no
+    compatibility path can insert a duplicate.
+  - BEFORE INSERT trigger room_entries_allocate: for live writes takes the room row lock
+    (FOR NO KEY UPDATE), allocates sequence = MAX+1 AND a fresh id under that lock (so
+    id order == sequence order within a room), and enforces same-room reply_to /
+    supersedes / addressed_member_ids (constraint name room_entries_same_room_reference).
+    Addressed participant = an identity the room already records: room_members.agent_id,
+    agent_presence.agent_name, or author_id / display label of one of its message
+    entries (union of the existing participant notions in authorizeParticipant and
+    ListRoomParticipants; addressing stays a routing hint). Backfill rows carry an
+    explicit sequence and skip it; backfill nulls any cross-room legacy reply/supersede
+    (0 such rows locally) instead of inventing causality.
+  - rooms.result_message_id FK re-pointed to room_entries(id) (ids unchanged).
+  - New timeline indexes replacing the legacy ones: room_created, message_id,
+    event_recent, room_pinned, supersedes.
+  - room_claims and agent_presence untouched (expiring leases / presence stay separate).
+
+FILES (git status --porcelain / git diff --stat, file by file):
+  NEW backend/migrations/000094_room_entries_cutover.up.sql (299L) / .down.sql (55L;
+      restores real tables AND copies back post-cutover entries + edits).
+  M   backend/internal/db/room_entries.go: Create relies on the trigger for sequence/id
+      (removed its own FOR UPDATE + MAX subquery); BackfillFromLegacy now calls
+      room_entries_backfill_legacy() (the 3 duplicated SQL constants removed); new
+      ErrInvalidEntryReference + asInvalidEntryReference mapper.
+  M   backend/internal/db/room_messages.go: Create no longer computes sequence_num
+      (timeline allocates it); maps same-room violations to ErrInvalidEntryReference.
+  M   backend/internal/api/handlers/rooms_messages.go: agent + human post paths return
+      400 VALIDATION_ERROR (not 500) on ErrInvalidEntryReference.
+  NEW backend/internal/db/room_entries_cutover_test.go (8 integration tests).
+  NEW backend/internal/api/handlers/rooms_messages_references_test.go (2 tests).
+  M   backend/internal/db/migrations_rooms_test.go + room_entries_test.go (see REPLACED).
+
+REPLACED TEST ASSERTIONS (behavior this task replaces — rule (a)-(d)):
+  1. TestMigrations_MessagesTable asserted indexes "idx_messages_room_created" and
+     "idx_messages_room_active" exist with pg_indexes.tablename='messages'. messages is
+     now a view (views have no indexes). Replaced IN THE SAME TEST by the equivalent
+     timeline indexes idx_room_entries_room_created / idx_room_entries_room_active on
+     tablename='room_entries'; the table-exists and all-11-columns assertions are
+     unchanged. [TEST] TestMigrations_MessagesTable PASS.
+  2. TestRoomEntryRepository_BackfillFromLegacy fixtures inserted pre-cutover rows via
+     INSERT INTO messages/room_events; those names now write the live timeline, so the
+     backfill had nothing to migrate ("backfill inserted 0 rows, want >= 3"). Only the
+     fixture TARGET changed to legacy_messages / legacy_room_events; every assertion
+     (order msg/event/msg, sequences 1/2/3, ResolveLegacy, reply remap, idempotent
+     re-run = 0) is unchanged. [TEST] PASS.
+  No test deleted, skipped or loosened.
+
+TDD: RED [TEST] TestRoomTimelineCutover_* 6/6 FAIL before migration (relkind "r",
+  room_entries rows = 0, cross-room reply accepted). Second round RED: Addressing /
+  CrossRoomReferenceIsTyped / RejectsForeignReferences FAIL before the trigger update.
+  Honest note: TestPostHumanMessage_InvalidReferenceIs400 (mock-based) passed on its
+  first run because the handler mapping landed in the same edit as the test.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres 127.0.0.1:5435, DBs `solvr`
+  and `solvr_test`; NOTE the shell profile exports DATABASE_URL=.../solvr_test, so
+  always export it explicitly):
+  [REAL] migrate up on `solvr` (93->94): messages 687 / room_events 219 before ==
+    after; room_entries message=687 event=219; all 687 legacy ids identical in
+    room_entries with same body+room; 60 deleted + pinned states preserved.
+  [REAL] migrate up on `solvr_test` from 92 (93+94 back-to-back = the production path):
+    1033 msgs / 306 events, all 1033 ids identical.
+  [REAL] round trip on solvr_test: down 1 restores real tables with 1100/326 rows
+    (incl. rows written after cutover), up again 1100/326/1426. Re-applied on both DBs
+    after the trigger update; schema_migrations=94 dirty=f on both.
+  [TEST] targeted db suite: 40/40 PASS, 0 SKIP; room/homepage/message/SSE/activity/
+    migrate-quorum subset on solvr_test: 412 PASS, 0 SKIP (only the 5 pre-existing
+    TestRoomRepository_* "room slug already exists" failures).
+  [TEST] FULL `go test ./... -p 1` on `solvr`: 3793 PASS. Failure set diffed against a
+    baseline captured BEFORE any change this session: NEW FAILS = none. Remaining fails
+    are all pre-existing (CommentsCount, TypeSpecificListEndpoints, GitHub OAuth,
+    AgentRepository_List*, Pulse/Victories/Trending/Hardcore/YouMightLike/RisingIdeas,
+    Briefing_*, Crystallization_*, SearchPulse_*, RoomRepository_* slug collisions).
+    All 8 cutover tests + 5 RoomEntryRepository tests + 2 handler reference tests PASS.
+  [REAL] go build ./... + go vet (db, handlers) clean; golangci-lint no findings in the
+    touched files; check-file-size.sh still 37 pre-existing violations, none mine.
+
+[UNVERIFIED] follow-up (not changed, owner decision): room_entries.extension is
+  bounded at 16384 chars (000093), so a message POST with metadata > 16 KB now fails in
+  the DB (500) where the old messages.metadata was unbounded. No handler limit exists.
+  Local max metadata length is 2 chars.
+
+UAT: owner applies migrations 000093 + 000094 to production (manual admin route; no
+  schema_migrations there). Pre-check first: SELECT MAX(length(metadata::text)) FROM
+  messages;  (must be <= 16384 or the backfill CHECK fails), then after apply confirm
+  SELECT relkind FROM pg_class WHERE relname IN ('messages','room_events') = 'v' and
+  that counts of legacy_messages/legacy_room_events equal room_entries message/event.

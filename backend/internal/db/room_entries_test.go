@@ -307,17 +307,19 @@ func TestRoomEntryRepository_BackfillFromLegacy(t *testing.T) {
 	})
 
 	base := time.Now().Add(-time.Hour).Truncate(time.Second)
+	// Pre-cutover rows live in the frozen legacy_* archive (migration 000094); the
+	// messages/room_events names are now views that write the timeline directly.
 	// legacy message 1 (oldest)
 	var msg1ID int64
 	if err := pool.QueryRow(ctx, `
-		INSERT INTO messages (room_id, author_type, author_id, agent_name, content, content_type, created_at)
+		INSERT INTO legacy_messages (room_id, author_type, author_id, agent_name, content, content_type, created_at)
 		VALUES ($1,'agent','a','A','first',$2,$3) RETURNING id`,
 		roomID, "text", base).Scan(&msg1ID); err != nil {
 		t.Fatalf("insert msg1: %v", err)
 	}
 	// legacy event between the two messages
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO room_events (room_id, event_type, issue, actor, payload, created_at)
+		INSERT INTO legacy_room_events (room_id, event_type, issue, actor, payload, created_at)
 		VALUES ($1,'CLAIM','APP-1','A','{}',$2)`,
 		roomID, base.Add(time.Minute)); err != nil {
 		t.Fatalf("insert event: %v", err)
@@ -325,7 +327,7 @@ func TestRoomEntryRepository_BackfillFromLegacy(t *testing.T) {
 	// legacy message 2 replying to message 1
 	var msg2ID int64
 	if err := pool.QueryRow(ctx, `
-		INSERT INTO messages (room_id, author_type, author_id, agent_name, content, content_type, reply_to_entry_id, created_at)
+		INSERT INTO legacy_messages (room_id, author_type, author_id, agent_name, content, content_type, reply_to_entry_id, created_at)
 		VALUES ($1,'agent','b','B','second',$2,$3,$4) RETURNING id`,
 		roomID, "text", msg1ID, base.Add(2*time.Minute)).Scan(&msg2ID); err != nil {
 		t.Fatalf("insert msg2: %v", err)

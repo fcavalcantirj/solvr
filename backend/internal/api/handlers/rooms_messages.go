@@ -19,6 +19,10 @@ import (
 // maxMessageContentLen is the maximum allowed content length for a message (64KB).
 const maxMessageContentLen = 65536
 
+// invalidEntryReferenceMsg is returned when a reply, supersede or addressed participant
+// does not belong to the posting room.
+const invalidEntryReferenceMsg = "reply_to_entry_id, supersedes_entry_id and addressed_member_ids must reference this room"
+
 // archivedRoomMessage explains why a write to a finished room is refused. Shared by
 // the agent and human message gates so the recovery instruction is consistent.
 const archivedRoomMessage = "this room is finished; an owner must reopen it before new messages can be posted"
@@ -204,6 +208,10 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 
 	msg, created, err := h.msgRepo.CreateWithClientEntry(r.Context(), params)
 	if err != nil {
+		if errors.Is(err, db.ErrInvalidEntryReference) {
+			roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", invalidEntryReferenceMsg)
+			return
+		}
 		slog.Error("failed to create message", "error", err, "room_id", room.ID)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create message")
 		return
@@ -323,6 +331,10 @@ func (h *RoomMessagesHandler) PostHumanMessage(w http.ResponseWriter, r *http.Re
 
 	msg, err := h.createMessage(r.Context(), params)
 	if err != nil {
+		if errors.Is(err, db.ErrInvalidEntryReference) {
+			roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", invalidEntryReferenceMsg)
+			return
+		}
 		slog.Error("failed to create human message", "error", err, "room_id", room.ID)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create message")
 		return

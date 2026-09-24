@@ -34,6 +34,8 @@ type outcomeRoomRepo interface {
 type outcomeMemberRepo interface {
 	IsMember(ctx context.Context, roomID uuid.UUID, agentID string) (bool, error)
 	IsOwner(ctx context.Context, roomID uuid.UUID, agentID string) (bool, error)
+	IsUserMember(ctx context.Context, roomID uuid.UUID, userID string) (bool, error)
+	IsUserOwner(ctx context.Context, roomID uuid.UUID, userID string) (bool, error)
 }
 
 // RoomSavePostHandler turns an intentional room outcome into a reusable canonical Post.
@@ -67,27 +69,21 @@ type saveAsPostRequest struct {
 }
 
 // authorizeParticipant reports whether the authenticated caller may act as a participant of
-// the room (agent member, or the room's human owner).
+// the room (an agent or human with an active membership).
 func (h *RoomSavePostHandler) authorizeParticipant(ctx context.Context, room *models.Room, info *AuthInfo) (bool, error) {
 	if info.AuthorType == models.AuthorTypeAgent {
 		return h.members.IsMember(ctx, room.ID, info.AuthorID)
 	}
-	if room.OwnerID != nil && room.OwnerID.String() == info.AuthorID {
-		return true, nil
-	}
-	return false, nil
+	return h.members.IsUserMember(ctx, room.ID, info.AuthorID)
 }
 
 // authorizeOwner reports whether the authenticated caller owns the room (agent owner
-// membership, or the room's human owner).
+// membership, or a human owner membership).
 func (h *RoomSavePostHandler) authorizeOwner(ctx context.Context, room *models.Room, info *AuthInfo) (bool, error) {
 	if info.AuthorType == models.AuthorTypeAgent {
 		return h.members.IsOwner(ctx, room.ID, info.AuthorID)
 	}
-	if room.OwnerID != nil && room.OwnerID.String() == info.AuthorID {
-		return true, nil
-	}
-	return false, nil
+	return h.members.IsUserOwner(ctx, room.ID, info.AuthorID)
 }
 
 // SaveAsPost handles POST /v1/rooms/{slug}/save-as-post: an authorized room participant

@@ -498,10 +498,10 @@ func agentOwnsRoom(agent *models.Agent, room *models.Room) bool {
 	return models.SameHumanAsOwner(agent, room)
 }
 
-// canManageRoom checks the DB-free ownership rules: the caller is the human owner
-// (JWT/user-key claims), an admin, or a claimed agent whose linked human owns the
-// room (D-21/D-22 amendment). Kept as a pure function for straightforward unit
-// testing; h.canManage layers the room_members owner check on top.
+// canManageRoom is the legacy DB-free ownership rule over rooms.owner_id: the caller
+// is the human owner (JWT/user-key claims), an admin, or a claimed agent whose linked
+// human owns the room (D-21/D-22 amendment). No request path consults it any more —
+// h.canManage reads room_members — and it goes with rooms.owner_id at its retirement.
 func canManageRoom(claims *auth.Claims, agent *models.Agent, room *models.Room) bool {
 	if claims != nil && isRoomOwnerOrAdmin(claims, room) {
 		return true
@@ -517,23 +517,37 @@ func canRotateRoomToken(claims *auth.Claims, agent *models.Agent, room *models.R
 }
 
 // canManage checks if the caller may update, delete, or rotate the token for the
-// room. It grants the DB-free ownership cases (canManageRoom) plus an agent holding
-// the 'owner' role in room_members — which every room creator now gets (see the
-// owner fix in RoomRepository.Create). The membership check is what makes
-// agent-created rooms, including those by unclaimed agents, manageable.
+// room, reading ownership from room_members (the membership authority, migrations
+// 000095/000096) rather than rooms.owner_id: an admin, a human with an active owner
+// membership, an agent with an active owner membership (every room creator gets one,
+// including unclaimed agents), or a family agent whose linked human is an active owner.
 func (h *RoomHandler) canManage(ctx context.Context, claims *auth.Claims, agent *models.Agent, room *models.Room) bool {
-	if canManageRoom(claims, agent, room) {
+	if claims != nil && claims.Role == "admin" {
 		return true
 	}
-	if agent == nil || h.memberRepo == nil {
+	if h.memberRepo == nil {
 		return false
 	}
-	isOwner, err := h.memberRepo.IsOwner(ctx, room.ID, agent.ID)
+	isOwner, err := h.ownsRoom(ctx, claims, agent, room)
 	if err != nil {
-		slog.Error("failed to check room owner membership", "error", err, "room_id", room.ID, "agent", agent.ID)
+		slog.Error("failed to check room owner membership", "error", err, "room_id", room.ID)
 		return false
 	}
 	return isOwner
+}
+
+func (h *RoomHandler) ownsRoom(ctx context.Context, claims *auth.Claims, agent *models.Agent, room *models.Room) (bool, error) {
+	if agent != nil {
+		isOwner, err := h.memberRepo.IsOwner(ctx, room.ID, agent.ID)
+		if err != nil || isOwner {
+			return isOwner, err
+		}
+		return h.memberRepo.IsFamilyOwner(ctx, room.ID, agent.ID)
+	}
+	if claims != nil {
+		return h.memberRepo.IsUserOwner(ctx, room.ID, claims.UserID)
+	}
+	return false, nil
 }
 
 // isRoomOwner checks if the authenticated user is the room owner.

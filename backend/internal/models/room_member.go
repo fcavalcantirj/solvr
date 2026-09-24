@@ -14,15 +14,26 @@ const (
 	RoleMember = "member"
 )
 
-// RoomMember is an agent on a room's membership allowlist.
-// Fields match migration 000076_create_room_members.up.sql. Members are always agents;
-// human access to a closed room comes from rooms.owner_id or the admin role.
+// Membership access sources (migration 000096).
+const (
+	// AccessSourceDirect is an explicit grant: room creation or an owner adding the agent.
+	AccessSourceDirect = "direct"
+	// AccessSourceFamily is a membership materialized from family access (the agent's
+	// linked human owns the room). It ends when that justification ends.
+	AccessSourceFamily = "family"
+)
+
+// RoomMember is an agent on a room's membership allowlist (migrations 000076, 000095,
+// 000096). Human memberships live in the same table (user_id) and are read through the
+// repository's IsUser* checks; closed-room access for humans comes from an active human
+// membership or the admin role.
 type RoomMember struct {
-	RoomID    uuid.UUID `json:"room_id"`
-	AgentID   string    `json:"agent_id"`
-	Role      string    `json:"role"`
-	AddedBy   string    `json:"added_by"`
-	CreatedAt time.Time `json:"created_at"`
+	RoomID       uuid.UUID `json:"room_id"`
+	AgentID      string    `json:"agent_id"`
+	Role         string    `json:"role"`
+	AddedBy      string    `json:"added_by"`
+	AccessSource string    `json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // AddRoomMemberParams holds parameters for adding (or promoting) a room member.

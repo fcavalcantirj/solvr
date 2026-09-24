@@ -90,33 +90,25 @@ func roomMemberAccessAllowed(r *http.Request, room *models.Room, memberRepo *db.
 		}
 	}
 
-	// 3. Authenticated agent (its own agent API key): a "family" sibling whose linked
-	//    human owns the room (owner-scoped A2A), OR an agent on the member allowlist.
-	//    Family scope grants ACCESS only — the agent still acts under its own id/token.
-	//    Foreign and unclaimed agents never match SameHumanAsOwner, so the closed-room
-	//    403 holds for non-family callers.
-	if agent := auth.AgentFromContext(r.Context()); agent != nil {
-		if models.SameHumanAsOwner(agent, room) {
-			return true, nil
+	// 3. Authenticated agent (its own agent API key): an agent with an active membership,
+	//    OR a "family" sibling whose CURRENT linked human is a live, active owner of the
+	//    room (room_members, migration 000096). Family scope grants ACCESS only — the
+	//    agent still acts under its own id/token. Foreign and unclaimed agents never match.
+	if agent := auth.AgentFromContext(r.Context()); agent != nil && memberRepo != nil {
+		isMember, err := memberRepo.IsMember(r.Context(), room.ID, agent.ID)
+		if err != nil || isMember {
+			return isMember, err
 		}
-		if memberRepo != nil {
-			isMember, err := memberRepo.IsMember(r.Context(), room.ID, agent.ID)
-			if err != nil {
-				return false, err
-			}
-			if isMember {
-				return true, nil
-			}
-		}
+		return memberRepo.IsFamilyOwner(r.Context(), room.ID, agent.ID)
 	}
 
-	// 4. Human room owner or admin.
+	// 4. Admin, or a human holding an active membership in the room.
 	if claims := auth.ClaimsFromContext(r.Context()); claims != nil {
 		if claims.Role == "admin" {
 			return true, nil
 		}
-		if room.OwnerID != nil && claims.UserID == room.OwnerID.String() {
-			return true, nil
+		if memberRepo != nil {
+			return memberRepo.IsUserMember(r.Context(), room.ID, claims.UserID)
 		}
 	}
 

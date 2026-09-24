@@ -66,18 +66,18 @@ func (h *RoomHandler) Handshake(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	allowed, err := h.handshakeAuthorized(r, room, agent, req.RoomToken)
+	grant, err := h.handshakeAuthorized(r, room, agent, req.RoomToken)
 	if err != nil {
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to authorize handshake")
 		return
 	}
-	if !allowed {
+	if grant == handshakeDenied {
 		roomWriteError(w, http.StatusForbidden, "FORBIDDEN", "not authorized to join this closed room; ask the owner to add you or present the room token")
 		return
 	}
 
 	// Admit to the allowlist (idempotent; preserves an existing owner role).
-	if _, err := h.ensureMember(r, room, agent); err != nil {
+	if _, err := h.ensureMember(r, room, agent, grant); err != nil {
 		slog.Error("handshake: failed to add member", "error", err, "room_id", room.ID, "agent", agent.ID)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to join room")
 		return
@@ -102,34 +102,59 @@ func (h *RoomHandler) Handshake(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handshakeAuthorized decides whether the agent may complete a handshake for the room.
-func (h *RoomHandler) handshakeAuthorized(r *http.Request, room *models.Room, agent *models.Agent, roomToken string) (bool, error) {
+// handshakeGrant is why an agent may complete a handshake.
+type handshakeGrant int
+
+const (
+	handshakeDenied handshakeGrant = iota
+	// handshakeDirect: public room, shared room token, or an existing membership.
+	handshakeDirect
+	// handshakeFamily: the agent's linked human is an active owner of the closed room.
+	handshakeFamily
+)
+
+// handshakeAuthorized decides whether (and on what basis) the agent may complete a
+// handshake for the room.
+func (h *RoomHandler) handshakeAuthorized(r *http.Request, room *models.Room, agent *models.Agent, roomToken string) (handshakeGrant, error) {
 	if !room.IsPrivate {
-		return true, nil // public rooms are open to any registered agent
+		return handshakeDirect, nil // public rooms are open to any registered agent
 	}
 	// Closed room: a valid shared room token bootstraps access.
 	if roomToken != "" && token.VerifyToken(roomToken, room.TokenHash) {
-		return true, nil
+		return handshakeDirect, nil
 	}
-	// Family scope: a sibling agent whose linked human owns the room may handshake
-	// without pre-allowlisting or the shared token. It is then admitted (ensureMember)
-	// and issued its OWN per-agent solvr_rt_ — no token sharing. Foreign/unclaimed
-	// agents never match, so they still fall through to the allowlist check (403).
-	if models.SameHumanAsOwner(agent, room) {
-		return true, nil
+	if h.memberRepo == nil {
+		return handshakeDenied, nil
 	}
-	// Otherwise the agent must already be on the allowlist.
-	if h.memberRepo != nil {
-		return h.memberRepo.IsMember(r.Context(), room.ID, agent.ID)
+	// An agent already on the allowlist.
+	isMember, err := h.memberRepo.IsMember(r.Context(), room.ID, agent.ID)
+	if err != nil || isMember {
+		return boolGrant(isMember, handshakeDirect), err
 	}
-	return false, nil
+	// Family scope: a sibling whose linked human is an active owner may handshake
+	// without pre-allowlisting or the shared token. It is then admitted with a
+	// family-sourced membership and its OWN per-agent solvr_rt_ — no token sharing.
+	// Foreign/unclaimed agents never match, so they get 403.
+	isFamily, err := h.memberRepo.IsFamilyOwner(r.Context(), room.ID, agent.ID)
+	return boolGrant(isFamily, handshakeFamily), err
+}
+
+func boolGrant(ok bool, grant handshakeGrant) handshakeGrant {
+	if ok {
+		return grant
+	}
+	return handshakeDenied
 }
 
 // ensureMember adds the agent to the allowlist if absent, without demoting an existing
-// owner. Returns the resulting membership.
-func (h *RoomHandler) ensureMember(r *http.Request, room *models.Room, agent *models.Agent) (*models.RoomMember, error) {
+// owner. A family grant materializes a family-sourced membership that ends with the
+// family relation (migration 000096). Returns the resulting membership.
+func (h *RoomHandler) ensureMember(r *http.Request, room *models.Room, agent *models.Agent, grant handshakeGrant) (*models.RoomMember, error) {
 	if existing, err := h.memberRepo.Get(r.Context(), room.ID, agent.ID); err == nil {
 		return existing, nil
+	}
+	if grant == handshakeFamily {
+		return h.memberRepo.AddFamily(r.Context(), room.ID, agent.ID)
 	}
 	return h.memberRepo.Add(r.Context(), models.AddRoomMemberParams{
 		RoomID:  room.ID,

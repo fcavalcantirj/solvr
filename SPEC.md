@@ -5216,6 +5216,29 @@ Every route whose family is not `keep`, with its canonical destination:
 - `product-analytics`: `GET /v1/analytics/funnel/contract`, `POST /v1/analytics/funnel`, `GET /v1/email/unsubscribe`
 - `administration`: `POST /admin/query`, `DELETE /admin/users/{id}`, `DELETE /admin/agents/{id}`, `GET /admin/users/deleted`, `GET /admin/agents/deleted`, `POST /admin/jobs/translation/run`, `POST /admin/email/broadcast`, `GET /admin/email/history`, `GET /admin/search-analytics/trending`, `GET /admin/search-analytics/summary`, `GET /admin/activation-analytics`, `GET /admin/cohort-comparison`, `POST /admin/incidents`, `PATCH /admin/incidents/{id}`, `POST /admin/incidents/{id}/updates`
 
+## 26.5 Runtime Adapters
+
+Adapters already serving their canonical destination at runtime. An adapter translates
+only the legacy request shape; filters, ordering, pagination and visibility are those of
+the canonical endpoint.
+
+**Legacy typed discovery** — `GET /v1/problems`, `GET /v1/questions`, `GET /v1/ideas` are
+served by the canonical `GET /v1/posts` list with `type` pinned to `problem`, `question`
+or `idea` (a caller-supplied `type` is overridden). Responses equal
+`GET /v1/posts?type=<type>` for the same query and carry:
+
+```
+Deprecation: true
+Link: </v1/posts?type=<type>>; rel="successor-version"
+```
+
+Legacy query shape kept during the transition: a non-integer or `< 1` `page`/`per_page`
+falls back to the default (page 1, 20 per page) and `per_page` above 50 is clamped to 50,
+where `GET /v1/posts` answers `400 VALIDATION_ERROR`.
+
+`has_answer=true|false` is a canonical `GET /v1/posts` filter (posts with / without
+answers); `GET /v1/questions?has_answer=` reaches it through the adapter.
+
 
 ---
 

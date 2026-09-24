@@ -10224,3 +10224,69 @@ REMAINING FOR idx 71 (next slices):
     GET /v1/rooms, GET /v1/overview (document + contract tests).
   - Contribution listings: canonical replies-by-author read before retiring
     /users/{id}/contributions.
+
+================================================================================
+2026-09-24 — Task idx 71 (spec.json, category api) — IN PROGRESS, passes STAYS false
+SLICE 2 of N: legacy typed discovery (GET /v1/problems, /v1/questions, /v1/ideas) served
+as ADAPTERS over the canonical GET /v1/posts list (step 3, first family), runtime
+Deprecation/Link headers, has_answer defined once on the canonical list.
+================================================================================
+
+TASK SELECTION: same as slice 1 — idx 23/51/52/58/66/67 still blocked; idx 71 continues.
+WHY NOT the step-5 status-command migration error this slice: [UNVERIFIED reasoning]
+  PATCH /v1/approaches/{id} is what the Solvr skill and CLAUDE.md dogfood workflow use
+  today, and canonical replies have no status field (read handlers/replies.go: Update only
+  takes body). Turning it into an error before idx 51 step 2 (first-party clients moved)
+  and idx 92 (cutover) would break live clients. Left for after those, or for a human call.
+
+FILES ([REAL] git status --porcelain / git diff --stat):
+  NEW backend/internal/api/handlers/posts_list_options.go (97 lines): parsePostListOptions(r)
+    — the canonical GET /v1/posts query parsing MOVED verbatim out of PostsHandler.List
+    (pagination validation, type, status, tags, sort, timeframe, author filter,
+    IncludeHidden for own author, viewer vote, BART-151 ViewerHuman) PLUS new has_answer
+    (true/false; other values ignored) — the filter the repo already supported
+    (db/posts.go HasAnswer) but only /v1/questions parsed.
+  M   backend/internal/api/handlers/posts.go (-68/+6): List calls parsePostListOptions;
+    unused "strings" import dropped. File 1023 -> 957 lines (was already > 800 at HEAD;
+    pre-existing, this slice shrinks it). posts.go was already gofmt-dirty at HEAD
+    (struct field alignment) — left untouched.
+  NEW backend/internal/api/legacy_discovery_adapter.go (39 lines): legacyTypedListAdapter
+    (canonicalList, postType) — pins type (overrides caller type), keeps legacy lenient
+    pagination (non-int/<1 page or per_page dropped to defaults, per_page > MaxPerPage=50
+    clamped), sets Deprecation: true and Link: </v1/posts?type=X>; rel="successor-version",
+    then calls PostsHandler.List.
+  M   backend/internal/api/router.go (+6/-3): GET /problems|/questions|/ideas now
+    legacyTypedListAdapter(postsHandler.List, "problem"|"question"|"idea").
+  M   SPEC.md (+23): NEW 26.5 "Runtime Adapters" documenting the above.
+  NEW backend/internal/api/router_legacy_discovery_test.go (212 lines, 4 DB-backed tests).
+
+BEHAVIOR CHANGES (all three legacy lists): now also carry viewer user_vote and BART-151
+  own-private visibility (canonical List does; legacy List did not set ViewerHuman), and
+  accept the canonical extra filters (timeframe, author_type/author_id, more sorts).
+  Response JSON shape identical (ProblemsListResponse == PostsListResponse tags).
+NOW UNSERVED (NOT deleted this slice): handlers ProblemsHandler.List, QuestionsHandler.List,
+  IdeasHandler.List and their unit tests (problems_test.go ~240-403, questions_test.go
+  ~232-417/988, ideas_test.go ~226+) still compile and PASS but no route reaches them.
+  Removing them needs the named-replacement procedure (map each test to the router tests
+  above) — do it in a later slice, do not just delete.
+
+TDD: RED [TEST] /tmp/i71s2_red.log — _AnnouncesCanonicalSuccessor FAILED (Deprecation/Link
+  ""), TestPostsList_HasAnswerFilterDefinedOnce FAILED (/v1/posts?has_answer=false returned
+  2 questions, filter ignored). _ServedByCanonicalPostsList and _AcceptsLenientLegacy-
+  QueryShape passed at RED (legacy lists already used postsRepo.List; they pin parity and
+  the kept legacy shape through the rewire). GREEN /tmp/i71s2_green.log: all PASS, 0 SKIP.
+
+VERIFICATION (DATABASE_URL = shell-profile local docker solvr-postgres
+  localhost:5435/solvr_test):
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i71s2_full.log): 3859 PASS, 11 SKIP,
+    73 unique FAIL. comm vs /tmp/i71s1_full.log failure set: NEW 0, GONE 0. The 4 new tests
+    and 3 TestRouteFamilies_* PASS in the full run. Frontend not touched, not run.
+  [REAL] go build ./..., go vet ./internal/api/ ./internal/api/handlers/ clean; new files
+    gofmt clean and < 800 lines. No test deleted, skipped or loosened. spec.json untouched.
+
+REMAINING FOR idx 71:
+  - Step 3 rest: legacy-feed (/v1/feed, /feed/stuck, /feed/unanswered — own feedRepo query
+    stack), type-specific-statistics (/stats/problems|questions|ideas), contribution
+    listings; then retire the unserved typed List handlers with named test replacement.
+  - Step 2: search / rooms / overview filter+ordering+pagination+visibility contracts.
+  - Step 5 runtime: status-command migration error (see WHY NOT above; ordering vs idx 51/92).

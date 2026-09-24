@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
@@ -311,76 +310,11 @@ type PostResponse struct {
 
 // List handles GET /v1/posts - list posts.
 func (h *PostsHandler) List(w http.ResponseWriter, r *http.Request) {
-	// FIX-029: Validate pagination parameters
-	page, perPage, err := parsePaginationParams(r)
+	opts, err := parsePostListOptions(r)
 	if err != nil {
 		response.WriteValidationError(w, err.Error(), nil)
 		return
 	}
-
-	opts := models.PostListOptions{
-		Page:    page,
-		PerPage: perPage,
-	}
-
-	// Parse type filter
-	if typeParam := r.URL.Query().Get("type"); typeParam != "" {
-		opts.Type = models.PostType(typeParam)
-	}
-
-	// Parse status filter
-	if statusParam := r.URL.Query().Get("status"); statusParam != "" {
-		opts.Status = models.PostStatus(statusParam)
-	}
-
-	// Parse tags filter
-	if tagsParam := r.URL.Query().Get("tags"); tagsParam != "" {
-		opts.Tags = strings.Split(tagsParam, ",")
-		for i, tag := range opts.Tags {
-			opts.Tags[i] = strings.TrimSpace(tag)
-		}
-	}
-
-	// Parse sort parameter
-	if sortParam := r.URL.Query().Get("sort"); sortParam != "" {
-		switch sortParam {
-		case "newest", "new", "votes", "top", "hot", "approaches", "answers":
-			opts.Sort = sortParam
-		}
-	}
-
-	// Parse timeframe filter
-	if tf := r.URL.Query().Get("timeframe"); tf != "" {
-		switch tf {
-		case "today", "week", "month":
-			opts.Timeframe = tf
-		}
-	}
-
-	// FE-024: Parse author filter for user profile pages
-	if authorType := r.URL.Query().Get("author_type"); authorType != "" {
-		opts.AuthorType = models.AuthorType(authorType)
-	}
-	if authorID := r.URL.Query().Get("author_id"); authorID != "" {
-		opts.AuthorID = authorID
-	}
-
-	// Allow authenticated users to see their own hidden posts (pending_review, rejected, draft)
-	if opts.AuthorID != "" {
-		if authInfo := GetAuthInfo(r); authInfo != nil {
-			if authInfo.AuthorID == opts.AuthorID && string(authInfo.AuthorType) == string(opts.AuthorType) {
-				opts.IncludeHidden = true
-			}
-		}
-	}
-
-	// Pass viewer info for user_vote lookup (works when OptionalAuthMiddleware is applied)
-	if authInfo := GetAuthInfo(r); authInfo != nil {
-		opts.ViewerType = authInfo.AuthorType
-		opts.ViewerID = authInfo.AuthorID
-	}
-	// BART-151: caller's family human for visibility scoping ("" = public-only).
-	opts.ViewerHuman = callerHumanID(r)
 
 	// Execute query
 	posts, total, err := h.repo.List(r.Context(), opts)

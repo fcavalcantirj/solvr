@@ -10096,3 +10096,63 @@ REMAINING FOR idx 70 (next slices):
   - Step 5: SPEC.md — canonical entry contract (message + event) + stream (incl. replay of
     events) + one policy for every /v1/rooms/{slug} route + adapter mapping for /messages
     (reads + writes) and /events.
+
+================================================================================
+2026-09-24 — Task idx 70 (spec.json, category api) — DONE, passes=true
+"Offer one canonical room API with thin adapters for the existing transport routes"
+SLICE 8 (final): room-token scope pinned (step 2) + SPEC.md Part 25 (steps 3 and 5).
+================================================================================
+
+TASK SELECTION: same top-down skips as slices 1-7 (idx 23 ACCEPTANCE needs idx 77; 51/52
+  need idx 92 + 67; 58 needs idx 73; 66 ACCEPTANCE; 67 needs idx 74). Continued idx 70.
+
+FILES ([REAL] git status --porcelain / git diff --stat before journaling):
+  NEW backend/internal/api/router_rooms_token_scope_test.go (68 lines, 1 test):
+    TestRoomTokenScope_RoomTokenAuthorizesOnlyParticipantOperations — a member's valid
+    solvr_rt_ token writes/reads its own room's /entries (201/200), is refused 401 on
+    POST /v1/rooms, PATCH/DELETE /{slug}, /archive, /reopen, GET/POST/DELETE members,
+    /handshake, /save-as-post; DB shows the room unchanged (name, not archived, not deleted,
+    no room created) and the token still writes afterwards.
+    It PASSED on first run: the behavior already existed (authMiddleware accepts only account
+    credentials). No RED phase — it is a contract guard for step 2, not new behavior.
+  M   SPEC.md (+126/-2): Part 24.5 room-token row now says the token covers /r/{slug}/* AND
+    the participant routes of /v1/rooms/{slug}, never management. NEW Part 25 "Canonical
+    Room API": route table, single authorization policy (actor resolution order + decision
+    + token scope), entry contract (shape, POST body for message/event, validation,
+    idempotent_replay across routes, shared rate-limit buckets), list/get, stream (frames,
+    type/issue filters, Last-Event-ID / ?lastEventId / ?after replay of messages AND events,
+    ?access_token, 503 at capacity), adapter mapping table (/r message, /v1 human messages,
+    /r + /v1 message reads, /r events POST/GET, /r stream), transport-only /r operations,
+    connection prompts + explicit recoverable bootstrap. Every statement was checked against
+    handlers/rooms_entries.go, rooms_entry_submit.go, rooms_event_submit.go, rooms_events.go,
+    rooms_sse.go, rooms_messages.go, middleware/room_policy.go, router_rooms.go.
+    FOUND while documenting (NOT changed): submitEvent has no archived check, so typed
+    events are accepted on an archived room (messages get 409 ROOM_ARCHIVED). SPEC says so
+    explicitly. Pre-existing; out of this task's scope — ask the owner.
+  M   spec.json: idx 70 passes false -> true (only change; verified by script that no other
+    task differs).
+  No production code change. No test deleted, skipped or loosened.
+
+VERIFICATION (DATABASE_URL = shell-profile local docker solvr-postgres
+  localhost:5435/solvr_test):
+  [TEST] /tmp/i70s8_red.log: TestRoomTokenScope_* PASS, 0 SKIP.
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i70s8_full.log): 3845 PASS, 11 SKIP,
+    77 unique FAIL. comm vs /tmp/i70s7_full.log: GONE 1 (TestGroupLifecycle_LateJoinPrompt-
+    RetrievesContextBeforeActing — slice 7's fix, now green in the full run); NEW 4
+    (TestAdminHandler_ListDeletedAgents_{Pagination,Success,Unauthorized},
+    _ListDeletedUsers_Unauthorized), all "failed to connect to database ... [::1]:5435:
+    failed to receive message: unexpected EOF" — a local connection flake, no assertion ran.
+    Targeted re-run of those 6 admin tests (/tmp/i70s8_admin.log): 6 PASS.
+  [REAL] gofmt clean, go vet ./internal/api/ clean; new file 68 lines.
+
+STEP COVERAGE for idx 70:
+  1 routes: slices 1-3, router_rooms.go. 2 one policy + token scope: slices 1, 6, 8.
+  3 /r adapters, one implementation, shared limits: slices 1, 2, 3, 5; documented SPEC 25.5.
+  4 connection prompts prefer /entries, explicit recoverable bootstrap: slice 7.
+  5 documented: SPEC Part 25. 6 contract tests: slices 1, 2, 4, 5, 6, 7.
+LEFT FOR idx 76 (SDK/CLI/skills consistency): skill/scripts/solvr.sh room-message still
+  posts via the /r/{slug}/message ADAPTER (still valid and documented); moving the CLI,
+  skill docs and frontend/public skill copies to /entries belongs to idx 76.
+UAT: owner deploys the backend (GET /v1/rooms/{slug}, /agents, /connect now answer 401 to an
+  invalid room token and 403 to another room's token, per slice 6) and confirms an agent
+  following GET /v1/rooms/{slug}/connect can post and read through /entries in production.

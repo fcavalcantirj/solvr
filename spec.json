@@ -899,7 +899,7 @@
       "Document ordinary human and agent messages through the same entry submission contract; map existing /messages and /events clients through adapters during transition.",
       "Contract-test canonical and adapter requests for equal attribution, persistence, access decisions, and exactly one stored entry per idempotent request."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

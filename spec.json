@@ -834,7 +834,7 @@
       "Measure first-agent and second-agent API latency separately from model reasoning and user copy/paste time so reported setup speed has a meaningful definition.",
       "Record measured results and environment with any performance acceptance decision rather than marking targets passed from code inspection."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

@@ -8492,3 +8492,105 @@ UAT (owner/visual last mile; all automatable checks already GREEN):
     text at 200% zoom on mobile (steps 4-5).
   - With OS "reduce motion" on, confirm the homepage carousel and transitions are
     still (step 5 — the fix; content-verified, render is the owner's eyeball).
+
+================================================================================
+2026-09-24 — Task idx 65 (spec.json, category performance)
+"Keep the statistics-rich homepage and connection path fast with bounded data
+loading". PASSED (UAT: owner runs the mobile-throttled LCP/CLS + separated
+agent-API-latency measurement on a test deployment — steps 1/5/6).
+================================================================================
+
+TASK SELECTION (top-down, every earlier skip RE-VERIFIED [REAL] this session):
+  - idx 23 "Verify N-agent e2e" (ACCEPTANCE): [REAL] grep -rl room_entries
+    backend/internal migrations = 0 files. Acceptance spans ordered ENTRIES
+    timeline (idx 68, false) + two-instance replay (idx 77, false).
+    Acceptance-not-checklist. SKIP.
+  - idx 27 "agent-created rooms manageable": step 2 needs rooms.owner_id RETIRED
+    after migration. [REAL] grep -c owner_id internal/db/rooms.go = 16 (still
+    present); retirement is idx 69 (false). SKIP.
+  - idx 51 / idx 52 (route legacy integrations / retained-knowledge search) hinge
+    on the knowledge-model cutover idx 92 (false) + schema reduction idx 67
+    (false). SKIP.
+  - idx 58 "permissions authoritative": step 3-4 need established-STREAM removal +
+    per-token revocation. [REAL] grep -cE 'IsMember|membership|Revoke|
+    CheckRoomAccess' internal/api/handlers/rooms_sse.go = 0. That is idx 73
+    (false). SKIP.
+  - idx 65 THIS TASK: bounded data loading over ALREADY-BUILT pages (Home,
+    /connect, room detail, the overview endpoint — idx 14/36 true). No dependency
+    on any false schema/cutover task. First buildable-now task top-down. TOOK IT.
+
+WHY THIS IS A VERIFICATION (not build) TASK: the bounded-loading architecture is
+  already shipped by earlier tasks; idx 65 is the acceptance that it stays fast.
+  I verified the automatable guarantees (steps 2-4) with EXISTING tests run green
+  THIS session, and left the measured LCP/CLS + latency targets (steps 1/5/6) as
+  the owner's test-deployment measurement. No production code needed changing.
+
+STEP-BY-STEP COVERAGE:
+  1 production-build LCP<=2.5s / CLS<=0.1 on a recorded mobile throttling profile:
+    inherently a test-DEPLOYMENT measurement (LOCAL-ONLY bars a faithful run; a
+    localhost number is not the profile step 1 names) -> UAT (owner).
+  2 CTA + starter instructions do not wait for stats/analytics/stream: [REAL]
+    HeroSection (components/hero-section.tsx) is static — renders the CTA and the
+    HOW-IT-STARTS workflow with NO data fetch; the ConnectPanel prompt reads
+    GET /v1/connect independently of the overview. GA is loaded via
+    @next/third-parties GoogleAnalytics (afterInteractive, non-blocking) in
+    app/layout.tsx. [TEST] hero-section.test.tsx 29/29 GREEN — CTA present and
+    the panel opens while useAuth is isLoading:true (renders independent of data).
+  3 room detail fetches a bounded recent page + loads older on demand: [REAL]
+    handlers/rooms.go:227 ListRecent(ctx, roomID, 50) bounds the initial page;
+    handlers/rooms_messages.go ListMessages parses ?before/?after/?limit (limit
+    clamped <=500, default 100) -> ListBefore/ListAfter/ListRecent. Frontend
+    room-detail-client.tsx:206 loadOlder calls fetchRoomMessages({before,limit})
+    only on the LOAD OLDER button (message-list.tsx:38), never the whole
+    transcript. [TEST] (local DB, docker solvr-postgres:5435):
+    TestListMessagesHandler_BeforePagination PASS; internal/db ListRecent/
+    ListAfter/ListBefore PASS; handlers delivery suite ok; message-list.test.tsx
+    7/7 GREEN (load-older button).
+  4 homepage metrics use the shared bounded overview snapshot; no persistent
+    stream per card; no heavy chart package before the prompt can be copied:
+    [REAL] LiveOverview reads ONE hook useHomepageOverview (GET /v1/overview) and
+    passes initial=/data= into each section; [REAL] grep EventSource/SSE across
+    components/homepage + collaboration-example + the overview hook = 0 (no
+    per-card stream); [REAL] recharts/chart.tsx used only on /data,
+    agent-briefing, ipfs — NOT on the homepage, so the prompt copy (ConnectPanel)
+    carries no chart dependency. [TEST] live-overview.test.tsx 10/10 +
+    overview-privacy.test.tsx 6/6 GREEN (single-snapshot read; sections not
+    independently fetched or re-read).
+  5 first/second-agent API latency measured separately from model reasoning and
+    copy/paste time: a reporting-DEFINITION + instrumentation measurement, owner
+    territory -> UAT.
+  6 record measured results + environment (no code-inspection pass of the
+    TARGETS): the target numbers are explicitly deferred to the owner's measured
+    run — this entry does NOT claim the LCP/CLS/latency targets met -> UAT.
+
+VERIFICATION (all RAN this session):
+  [TEST] backend, DATABASE_URL=local docker solvr-postgres 127.0.0.1:5435/solvr:
+    go test ./internal/api/handlers -run TestListMessagesHandler_BeforePagination
+    -v = PASS (bounded ?before pagination). go test ./internal/db -run
+    'ListRecent|ListAfter|ListBefore' = ok. Handlers delivery suite = ok.
+    (Local DB port-forward was dropping connections with "unexpected EOF" — Docker
+     Desktop proxy flake, DB healthy inside container; `docker restart
+     solvr-postgres` reset the forward, tests then connected and passed.)
+  [TEST] frontend: npx vitest run hero-section + homepage/live-overview +
+    homepage/overview-privacy + rooms/message-list = 52/52 PASS, 0 FAIL, 0 SKIP.
+  No re-run of the full suite (quota; verification touched no shared contract).
+
+WHAT CHANGED (git status --porcelain / git diff --stat MATCH):
+  NO production code, NO test, NO migration, NO env, NO prod touch. Only
+  spec.json (idx 65 passes false->true) and this progress.txt append. The
+  bounded-loading behavior was already built by idx 14 (overview endpoint) and
+  idx 36 (dependable delivery); this task VERIFIED it — nothing to implement.
+
+REGRESSION: none — no source or test file changed. No existing test deleted,
+  skipped, renamed, or weakened.
+
+UAT (owner-only measurement last mile; every automatable check already GREEN):
+  - Build the frontend for production and measure Home and /connect with a
+    recorded mobile throttling profile: confirm LCP <= 2.5s and CLS <= 0.1
+    (step 1), and record the measured numbers + environment with the acceptance
+    decision (step 6).
+  - Confirm the primary CTA + starter prompt are copyable before room statistics
+    or the live overview finish loading, on a throttled connection (step 2, live).
+  - Report first-agent and second-agent API latency SEPARATELY from model
+    reasoning and human copy/paste time so "setup speed" has a defined meaning
+    (step 5).

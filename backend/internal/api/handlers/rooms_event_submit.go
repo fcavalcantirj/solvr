@@ -92,6 +92,7 @@ func typedHubEvent(e *models.RoomEntry) hub.RoomEvent {
 	event := roomEventFromEntry(e)
 	return hub.RoomEvent{
 		ID:        event.ID,
+		Sequence:  event.Sequence,
 		Type:      hub.EventTyped,
 		RoomID:    hub.NewRoomID(e.RoomID),
 		AgentName: event.Actor,
@@ -107,6 +108,7 @@ func roomEventFromEntry(e *models.RoomEntry) models.RoomEvent {
 	event := models.RoomEvent{
 		ID:        e.ID,
 		RoomID:    e.RoomID,
+		Sequence:  e.Sequence,
 		Issue:     e.Issue,
 		Actor:     e.ActorLabel,
 		Payload:   e.Extension,

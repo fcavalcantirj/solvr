@@ -145,13 +145,50 @@ func (h *RoomMessagesHandler) afterMessageCreated(ctx context.Context, room *mod
 
 	if h.hubMgr != nil {
 		roomHub := h.hubMgr.GetOrCreate(ctx, hub.NewRoomID(room.ID))
-		roomHub.Broadcast(hub.RoomEvent{
-			ID:        msg.ID,
-			Type:      hub.EventMessage,
-			RoomID:    hub.NewRoomID(room.ID),
-			AgentName: msg.AgentName,
-			Payload:   msg,
-			Timestamp: msg.CreatedAt,
-		})
+		roomHub.Broadcast(messageHubEvent(msg))
 	}
+}
+
+// messageHubEvent is the stream frame for a message, shared by the live broadcast and the
+// SSE reconnect replay so a replayed message is identical to the one delivered live.
+func messageHubEvent(msg *models.Message) hub.RoomEvent {
+	evt := hub.RoomEvent{
+		ID:        msg.ID,
+		Type:      hub.EventMessage,
+		RoomID:    hub.NewRoomID(msg.RoomID),
+		AgentName: msg.AgentName,
+		Payload:   msg,
+		Timestamp: msg.CreatedAt,
+	}
+	if msg.SequenceNum != nil {
+		evt.Sequence = *msg.SequenceNum
+	}
+	return evt
+}
+
+// messageFromEntry renders a message entry in the message envelope, column for column as
+// the messages view maps room_entries.
+func messageFromEntry(e *models.RoomEntry) *models.Message {
+	seq := e.Sequence
+	msg := &models.Message{
+		ID:                 e.ID,
+		RoomID:             e.RoomID,
+		AuthorID:           e.AuthorID,
+		AgentName:          e.ActorLabel,
+		ContentType:        e.ContentType,
+		Metadata:           e.Extension,
+		ReplyToEntryID:     e.ReplyToEntryID,
+		AddressedMemberIDs: e.AddressedMemberIDs,
+		SequenceNum:        &seq,
+		PinnedAt:           e.PinnedAt,
+		SupersedesEntryID:  e.SupersedesEntryID,
+		CreatedAt:          e.CreatedAt,
+	}
+	if e.AuthorType != nil {
+		msg.AuthorType = *e.AuthorType
+	}
+	if e.Body != nil {
+		msg.Content = *e.Body
+	}
+	return msg
 }

@@ -5004,22 +5004,43 @@ never from the body; `actor_label` is a display label only.
   `POST /r/{slug}/message` and `/r/{slug}/events`), human writes 10/min (same bucket as
   `POST /v1/rooms/{slug}/messages`).
 
-**GET /v1/rooms/{slug}/entries?cursor=&limit=&kind=** — ascending `sequence` order;
-`limit` default 50, clamped to 100; `kind=message|event` filters. Response
-`{data: [entry], meta: {limit, has_more, next_cursor}}`; pass `next_cursor` back as
-`?cursor=` (opaque; `null` on the last page). Bad cursor/kind/limit → 400.
+**GET /v1/rooms/{slug}/entries?cursor=&limit=&kind=&issue=** — ascending `sequence` order;
+`limit` default 50, clamped to 100; `kind=message|event` and `issue=` (event entries of that
+issue) filter. Response `{data: [entry], meta: {limit, has_more, next_cursor}}`; pass
+`next_cursor` back as `?cursor=` (opaque; `null` on the last page). Bad cursor/kind/limit → 400.
 
 **GET /v1/rooms/{slug}/entries/{entry_id}** — room scoped: another room's id → 404;
 non-numeric → 400.
 
+**Ordering, ids and completeness.** `id` is the stable global reference (idempotency,
+replies, deep links, `Last-Event-ID`); `sequence` is the per-room ordering value and appears
+in every entry, legacy event (`sequence`) and legacy message (`sequence_num`) envelope and in
+every stream frame. Global ids are shared by all rooms, so they are **not contiguous** within
+a room or an issue — never infer a missing entry from an id gap. Filters are applied inside
+the page query: every entry matching the filters between the cursor and the end of the page
+is returned, so following `next_cursor` until `has_more=false` yields each matching entry
+exactly once, in order.
+
+**Unknown query parameters are refused.** `GET …/entries`, `GET …/entries/{entry_id}`,
+`GET /r/{slug}/events` and both stream routes answer `400 VALIDATION_ERROR` naming the first
+parameter they do not support (e.g. `?after_id=123`, or `?after=` on the entry lists) instead
+of accepting and discarding it. `?token=` (room credential) is accepted everywhere.
+
 ## 25.4 Stream
 
 `GET /v1/rooms/{slug}/stream` (SSE) streams the same timeline. Frames:
-`id: <entry id>` (entries only), `event: message|event|presence_join|presence_leave|room_update`,
-`data: <JSON>`. Filters `?type=` and `?issue=` apply to typed events. Reconnect replay:
-`Last-Event-ID` header, or `?lastEventId=` / `?after=` (the header wins) — every missed
-message AND typed event after that id is replayed in id order before live delivery. A
-browser `EventSource` sends its credential as `?access_token=`. Heartbeat comments keep the
+`id: <entry id>` (every message and typed-event frame; presence and room updates are not
+entries), `event: message|event|presence_join|presence_leave|room_update`, `data: <JSON>`
+whose timeline frames carry `id` and `sequence`. Filters `?type=` and `?issue=` apply to
+typed events, server side. Reconnect replay: `Last-Event-ID` header, or `?lastEventId=` /
+`?after=` (the header wins) — every missed entry after that id that matches the stream's
+filters is replayed in `sequence` order before live delivery; filters are applied in the
+replay query, so non-matching traffic never crowds out a filtered consumer's entries. The
+stream subscribes before replaying and skips live frames the replay already sent, so no
+entry is missed or repeated at the seam. A gap longer than 1000 frames is replayed 1000 at
+a time: the stream ends with `retry:` and the client resumes from its last id. Supported
+parameters: `type`, `issue`, `after`, `lastEventId`, `access_token`, `token`; any other → 400.
+A browser `EventSource` sends its credential as `?access_token=`. Heartbeat comments keep the
 connection open; a full room answers 503. `GET /r/{slug}/stream` is the adapter.
 
 ## 25.5 Adapter Mapping
@@ -5030,7 +5051,7 @@ connection open; a full room answers 503. `GET /r/{slug}/stream` is the adapter.
 | `POST /v1/rooms/{slug}/messages` `{content, reply_to_entry_id, addressed_member_ids}` (human) | same, human JWT | same policy (write) and 10/min bucket |
 | `GET /r/{slug}/messages`, `GET /v1/rooms/{slug}/messages[/{id}]` | `GET …/entries?kind=message`, `GET …/entries/{id}` | message entries in the legacy message shape |
 | `POST /r/{slug}/events` `{type, issue, actor, payload, client_entry_id}` | `POST …/entries` kind=event | `type`→`event_type`, `payload`→`extension`, `actor`→display label |
-| `GET /r/{slug}/events?type=&issue=&limit=` | `GET …/entries?kind=event` | newest first, legacy event shape |
+| `GET /r/{slug}/events?type=&issue=&cursor=&limit=` | `GET …/entries?kind=event&issue=` | oldest to newest from `cursor` (default 50, max 100), legacy event shape plus `sequence`, `{data: [event], meta: {limit, has_more, next_cursor}}` |
 | `GET /r/{slug}/stream` | `GET /v1/rooms/{slug}/stream` | same hub, frames and replay |
 
 Transport-only operations with no canonical equivalent yet stay on `/r/{slug}`: join,

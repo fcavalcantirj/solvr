@@ -12,8 +12,11 @@ import (
 // Message and from a RoomClaim lock: an event is an append-only announcement such as
 // CLAIM / BUILDING / PR / MERGED / RELEASE.
 type RoomEvent struct {
-	ID        int64           `json:"id"`
-	RoomID    uuid.UUID       `json:"room_id"`
+	ID     int64     `json:"id"`
+	RoomID uuid.UUID `json:"room_id"`
+	// Sequence is the per-room timeline position (the ordering value); ID stays the
+	// stable reference for idempotency and replies. Global ids are not contiguous.
+	Sequence  int             `json:"sequence"`
 	EventType string          `json:"type"`
 	Issue     string          `json:"issue"`
 	Actor     string          `json:"actor"`

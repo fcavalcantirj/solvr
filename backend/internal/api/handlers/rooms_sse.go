@@ -154,6 +154,10 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 		return
 	}
 
+	if !rejectUnknownQuery(w, r.URL.Query(), "type", "issue", "after", "lastEventId", "access_token") {
+		return
+	}
+
 	// ?after=<id> is a query alias for the Last-Event-ID reconnect cursor (mission #5),
 	// convenient for clients (curl, non-EventSource) that cannot resend the header. The
 	// explicit Last-Event-ID header, if present, wins.
@@ -174,7 +178,26 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 		return
 	}
 
-	// Step 3: Set SSE headers (D-02) and flush immediately so the client
+	// Step 3: Subscribe to hub (D-12: lazy room creation) BEFORE the reconnect replay, so
+	// an entry committed while the replay reads is buffered rather than lost; live frames
+	// the replay already delivered are skipped below.
+	// Browser subscribers use a unique pseudo-agent name prefixed with _browser_
+	// so they don't appear in agent discovery or presence lists.
+	var ch <-chan hub.RoomEvent
+	if h.hubMgr != nil {
+		subscriberName := "_browser_" + uuid.New().String()[:8]
+		roomHub := h.hubMgr.GetOrCreate(r.Context(), hub.NewRoomID(room.ID))
+		sub, err := roomHub.Subscribe(subscriberName, nil)
+		if err != nil {
+			// ErrRoomAtCapacity — per-room SSE limit reached (T-16-04).
+			http.Error(w, `{"error":{"code":"SERVICE_UNAVAILABLE","message":"room at capacity"}}`, http.StatusServiceUnavailable)
+			return
+		}
+		defer roomHub.Unsubscribe(subscriberName)
+		ch = sub
+	}
+
+	// Step 4: Set SSE headers (D-02) and flush immediately so the client
 	// receives the 200 status + headers before any events arrive.
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -183,38 +206,33 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
-	// Step 4: Last-Event-ID replay (D-07).
-	// If the client reconnects with a Last-Event-ID header, replay the timeline entries
-	// (messages and typed events) it missed, in entry id order.
+	// Step 5: Last-Event-ID replay (D-07). A reconnect replays every timeline entry after
+	// the cursor that matches the stream filters, in sequence order. Filters are applied
+	// in the query, so non-matching traffic never uses up the replay budget. When more
+	// than maxSSEReplay frames are owed, the stream ends after that many with a retry
+	// directive and the client resumes from the last delivered id — never a silent hole.
+	var lastSeq int
 	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" {
 		afterID, parseErr := strconv.ParseInt(lastID, 10, 64)
 		if parseErr == nil && afterID > 0 {
-			for _, evt := range h.replayAfter(r.Context(), room, afterID) {
-				if evt.Matches(typeFilter, issueFilter) {
-					writeSSEEvent(w, flusher, evt)
-				}
+			frames, complete := h.replayAfter(r.Context(), room, afterID, typeFilter, issueFilter)
+			for _, evt := range frames {
+				writeSSEEvent(w, flusher, evt)
+				lastSeq = evt.Sequence
+			}
+			if !complete {
+				fmt.Fprintf(w, "retry: 1000\n\n")
+				flusher.Flush()
+				return
 			}
 		}
 	}
 
-	// Step 5: Subscribe to hub (D-12: lazy room creation).
-	// Browser subscribers use a unique pseudo-agent name prefixed with _browser_
-	// so they don't appear in agent discovery or presence lists.
-	if h.hubMgr == nil {
+	if ch == nil {
 		// No hub available (e.g. test without hub). Hold open until context cancels.
 		<-r.Context().Done()
 		return
 	}
-
-	subscriberName := "_browser_" + uuid.New().String()[:8]
-	roomHub := h.hubMgr.GetOrCreate(r.Context(), hub.NewRoomID(room.ID))
-	ch, err := roomHub.Subscribe(subscriberName, nil)
-	if err != nil {
-		// ErrRoomAtCapacity — per-room SSE limit reached (T-16-04).
-		http.Error(w, `{"error":{"code":"SERVICE_UNAVAILABLE","message":"room at capacity"}}`, http.StatusServiceUnavailable)
-		return
-	}
-	defer roomHub.Unsubscribe(subscriberName)
 
 	// Step 6: Event loop with heartbeat (D-03: 30-min max, D-04: 30s heartbeat).
 	maxLifetime, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
@@ -229,6 +247,9 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 			if !ok {
 				// Hub shut down or we were unsubscribed.
 				return
+			}
+			if evt.Sequence > 0 && evt.Sequence <= lastSeq {
+				continue // already delivered by the replay
 			}
 			if evt.Matches(typeFilter, issueFilter) {
 				writeSSEEvent(w, flusher, evt)
@@ -248,54 +269,90 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 	}
 }
 
-// maxSSEReplay caps how many missed entries one reconnect replays.
-const maxSSEReplay = 100
+// maxSSEReplay caps how many missed entries one connection replays; a longer gap ends the
+// stream with a retry directive so the client reconnects from its last delivered id.
+const maxSSEReplay = 1000
 
-// replayAfter returns up to maxSSEReplay timeline entries after afterID as stream frames,
-// messages and typed events merged in entry id order (both kinds share one id space).
-// Frames are built exactly as the live broadcasts build them. Best-effort: a failed read
-// replays nothing from that kind rather than breaking the stream.
-func (h *RoomSSEHandler) replayAfter(ctx context.Context, room *models.Room, afterID int64) []hub.RoomEvent {
-	var msgs []hub.RoomEvent
-	if h.msgRepo != nil {
-		if list, err := h.msgRepo.ListAfter(ctx, room.ID, afterID, maxSSEReplay); err == nil {
-			for _, msg := range list {
-				msgs = append(msgs, hub.RoomEvent{
-					ID:        msg.ID,
-					Type:      hub.EventMessage,
-					RoomID:    hub.NewRoomID(room.ID),
-					AgentName: msg.AgentName,
-					Payload:   msg,
-					Timestamp: msg.CreatedAt,
-				})
-			}
-		}
-	}
-	var events []hub.RoomEvent
-	if h.entryRepo != nil {
-		if list, err := h.entryRepo.ListEventsAfter(ctx, room.ID, afterID, maxSSEReplay); err == nil {
-			for i := range list {
-				events = append(events, typedHubEvent(&list[i]))
-			}
-		}
-	}
+// sseReplayPage is the read size of one replay query.
+const sseReplayPage = 100
 
-	merged := make([]hub.RoomEvent, 0, len(msgs)+len(events))
-	for len(merged) < maxSSEReplay && (len(msgs) > 0 || len(events) > 0) {
-		if len(events) == 0 || (len(msgs) > 0 && msgs[0].ID < events[0].ID) {
-			merged, msgs = append(merged, msgs[0]), msgs[1:]
-		} else {
-			merged, events = append(merged, events[0]), events[1:]
-		}
+// replayAfter returns the timeline entries after the entry afterID that match the stream
+// filters, as stream frames in sequence order, built exactly as the live broadcasts build
+// them. complete is false when maxSSEReplay frames were returned and more are owed.
+// Best-effort: a failed read ends the replay rather than breaking the stream.
+func (h *RoomSSEHandler) replayAfter(ctx context.Context, room *models.Room, afterID int64, typeFilter, issueFilter string) ([]hub.RoomEvent, bool) {
+	if h.entryRepo == nil {
+		return nil, true
 	}
-	return merged
+	p, ok := replayPageParams(typeFilter, issueFilter)
+	if !ok {
+		return nil, true
+	}
+	after, err := h.entryRepo.SequenceAfterEntry(ctx, room.ID, afterID)
+	if err != nil {
+		return nil, true
+	}
+	p.RoomID = room.ID
+	var frames []hub.RoomEvent
+	for len(frames) < maxSSEReplay {
+		p.AfterSequence, p.Limit = after, min(sseReplayPage, maxSSEReplay-len(frames))
+		entries, err := h.entryRepo.ListPage(ctx, p)
+		if err != nil {
+			return frames, true
+		}
+		for i := range entries {
+			frames = append(frames, timelineHubEvent(&entries[i]))
+		}
+		if len(entries) < p.Limit {
+			return frames, true
+		}
+		after = entries[len(entries)-1].Sequence
+	}
+	more, err := h.entryRepo.ListPage(ctx, models.RoomEntryPageParams{
+		RoomID: room.ID, AfterSequence: after, Kind: p.Kind, EventType: p.EventType, Issue: p.Issue, Limit: 1,
+	})
+	return frames, err != nil || len(more) == 0
+}
+
+// replayPageParams translates the stream's ?type= / ?issue= filters (hub.RoomEvent.Matches)
+// into a timeline query. ok=false means no timeline entry can match (for example
+// ?type=presence_join, or a message filter combined with an issue).
+func replayPageParams(typeFilter, issueFilter string) (models.RoomEntryPageParams, bool) {
+	p := models.RoomEntryPageParams{Issue: issueFilter}
+	switch typeFilter {
+	case "":
+		if issueFilter != "" {
+			p.Kind = models.RoomEntryKindEvent // messages carry no issue
+		}
+	case string(hub.EventMessage):
+		if issueFilter != "" {
+			return p, false
+		}
+		p.Kind = models.RoomEntryKindMessage
+	case string(hub.EventTyped):
+		p.Kind = models.RoomEntryKindEvent
+	case string(hub.EventPresenceJoin), string(hub.EventPresenceLeave), string(hub.EventRoomUpdate):
+		return p, false
+	default:
+		p.Kind, p.EventType = models.RoomEntryKindEvent, typeFilter
+	}
+	return p, true
+}
+
+// timelineHubEvent is the stream frame of a timeline entry: the typed-event frame, or the
+// message frame carrying the message envelope the live broadcast carries.
+func timelineHubEvent(e *models.RoomEntry) hub.RoomEvent {
+	if e.Kind == models.RoomEntryKindEvent {
+		return typedHubEvent(e)
+	}
+	return messageHubEvent(messageFromEntry(e))
 }
 
 // writeSSEEvent serializes a RoomEvent as an SSE frame and flushes it.
 //
 // SSE frame format:
 //
-//	id: <BIGSERIAL message ID>   (only for messages, enables Last-Event-ID reconnection)
+//	id: <entry ID>               (every message and typed-event frame; Last-Event-ID cursor)
 //	event: <event type>          (message, presence_join, presence_leave, room_update)
 //	data: <JSON payload>
 func writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, evt hub.RoomEvent) {

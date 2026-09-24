@@ -136,9 +136,10 @@ func (h *RoomEntriesHandler) PostEntry(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ListEntries handles GET /v1/rooms/{slug}/entries?cursor=&limit=&kind=. Entries are in
-// ascending timeline (sequence) order; limit defaults to 50 and is clamped to 100.
-// meta.next_cursor is an opaque cursor for the following page, null when has_more=false.
+// ListEntries handles GET /v1/rooms/{slug}/entries?cursor=&limit=&kind=&issue=. Entries
+// are in ascending timeline (sequence) order; limit defaults to 50 and is clamped to 100.
+// issue keeps only the event entries of that issue. meta.next_cursor is an opaque cursor
+// for the following page, null when has_more=false. Any other query parameter is a 400.
 func (h *RoomEntriesHandler) ListEntries(w http.ResponseWriter, r *http.Request) {
 	room := apimiddleware.RoomFromContext(r.Context())
 	if room == nil {
@@ -146,42 +147,27 @@ func (h *RoomEntriesHandler) ListEntries(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	q := r.URL.Query()
+	if !rejectUnknownQuery(w, q, "cursor", "limit", "kind", "issue") {
+		return
+	}
 
 	kind := q.Get("kind")
 	if kind != "" && kind != models.RoomEntryKindMessage && kind != models.RoomEntryKindEvent {
 		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "kind must be message or event")
 		return
 	}
-	after := 0
-	if c := q.Get("cursor"); c != "" {
-		seq, ok := decodeEntryCursor(c)
-		if !ok {
-			roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid cursor")
-			return
-		}
-		after = seq
-	}
-	limit := defaultEntryPageLimit
-	if l := q.Get("limit"); l != "" {
-		parsed, err := strconv.Atoi(l)
-		if err != nil || parsed <= 0 {
-			roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "limit must be a positive integer")
-			return
-		}
-		limit = min(parsed, maxEntryPageLimit)
+	after, limit, ok := parseEntryPage(w, q)
+	if !ok {
+		return
 	}
 
-	entries, err := h.entryRepo.ListPage(r.Context(), room.ID, after, kind, limit+1)
+	entries, hasMore, nextCursor, err := listEntryPage(r.Context(), h.entryRepo, models.RoomEntryPageParams{
+		RoomID: room.ID, AfterSequence: after, Kind: kind, Issue: q.Get("issue"), Limit: limit,
+	})
 	if err != nil {
 		slog.Error("failed to list room entries", "error", err, "room_id", room.ID)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list entries")
 		return
-	}
-	hasMore := len(entries) > limit
-	var nextCursor any
-	if hasMore {
-		entries = entries[:limit]
-		nextCursor = encodeEntryCursor(entries[len(entries)-1].Sequence)
 	}
 	roomWriteJSON(w, http.StatusOK, map[string]any{
 		"data": entries,
@@ -195,6 +181,9 @@ func (h *RoomEntriesHandler) GetEntry(w http.ResponseWriter, r *http.Request) {
 	room := apimiddleware.RoomFromContext(r.Context())
 	if room == nil {
 		roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "room not found")
+		return
+	}
+	if !rejectUnknownQuery(w, r.URL.Query()) {
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "entry_id"), 10, 64)

@@ -36,7 +36,10 @@ const (
 type RoomEvent struct {
 	// ID is the BIGSERIAL id for Last-Event-ID SSE reconnection support (D-07): the
 	// message id for message events, or the room_events id for typed events.
-	ID        int64     `json:"id,omitempty"`
+	ID int64 `json:"id,omitempty"`
+	// Sequence is the per-room timeline position of a message or typed-event entry (0
+	// for presence and room updates, which are not timeline entries).
+	Sequence  int       `json:"sequence,omitempty"`
 	Type      EventType `json:"type"`
 	RoomID    RoomID    `json:"room_id"`
 	AgentName string    `json:"agent_name,omitempty"`

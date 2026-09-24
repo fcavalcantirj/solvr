@@ -209,15 +209,19 @@ func (r *RoomEntryRepository) ListAll(ctx context.Context, roomID uuid.UUID) ([]
 	return collectRoomEntries(ctx, rows, "ListAll")
 }
 
-// ListPage returns up to limit non-deleted entries (messages and events) with a
-// sequence greater than afterSequence, in timeline order. kind filters to "message" or
-// "event" when non-empty. Callers request limit+1 to learn whether more entries exist.
-func (r *RoomEntryRepository) ListPage(ctx context.Context, roomID uuid.UUID, afterSequence int, kind string, limit int) ([]models.RoomEntry, error) {
+// ListPage returns up to p.Limit non-deleted entries after p.AfterSequence in ascending
+// sequence order, filtered by kind, event type and issue (empty = any). The filters are
+// applied in the query, so every matching entry between the cursor and the end of the
+// page is returned: a filtered page is complete by construction and a consumer never
+// has to interpret a gap in the (room-shared, non-contiguous) global ids.
+func (r *RoomEntryRepository) ListPage(ctx context.Context, p models.RoomEntryPageParams) ([]models.RoomEntry, error) {
 	rows, err := r.pool.Query(ctx, `SELECT `+roomEntryColumns+`
 		FROM room_entries
 		WHERE room_id = $1 AND sequence > $2 AND deleted_at IS NULL
 		  AND ($3 = '' OR kind = $3)
-		ORDER BY sequence ASC LIMIT $4`, roomID, afterSequence, kind, limit)
+		  AND ($4 = '' OR event_type = $4)
+		  AND ($5 = '' OR issue = $5)
+		ORDER BY sequence ASC LIMIT $6`, p.RoomID, p.AfterSequence, p.Kind, p.EventType, p.Issue, p.Limit)
 	if err != nil {
 		LogQueryError(ctx, "ListPage", "room_entries", err)
 		return nil, err
@@ -225,22 +229,22 @@ func (r *RoomEntryRepository) ListPage(ctx context.Context, roomID uuid.UUID, af
 	return collectRoomEntries(ctx, rows, "ListPage")
 }
 
-// ListEventsAfter returns up to limit non-deleted EVENT entries with an id greater than
-// afterID, in timeline order. Messages and events share one entry id space, so an SSE
-// reconnect cursor (the last delivered entry id) resumes both kinds from the same point.
-func (r *RoomEntryRepository) ListEventsAfter(ctx context.Context, roomID uuid.UUID, afterID int64, limit int) ([]models.RoomEntry, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-	rows, err := r.pool.Query(ctx, `SELECT `+roomEntryColumns+`
-		FROM room_entries
-		WHERE room_id = $1 AND kind = 'event' AND id > $2 AND deleted_at IS NULL
-		ORDER BY id ASC LIMIT $3`, roomID, afterID, limit)
+// SequenceAfterEntry maps an SSE reconnect cursor (the last delivered entry id) to the
+// room sequence to resume after: the sequence of that entry (deleted or not), or, for an
+// id this room never held, the sequence of the room's latest entry with a lower id.
+// Resuming by sequence keeps replay in timeline order even where backfilled message ids
+// do not follow the sequence.
+func (r *RoomEntryRepository) SequenceAfterEntry(ctx context.Context, roomID uuid.UUID, entryID int64) (int, error) {
+	var seq int
+	err := r.pool.QueryRow(ctx, `SELECT COALESCE(
+			(SELECT sequence FROM room_entries WHERE room_id = $1 AND id = $2),
+			(SELECT MAX(sequence) FROM room_entries WHERE room_id = $1 AND id < $2),
+			0)`, roomID, entryID).Scan(&seq)
 	if err != nil {
-		LogQueryError(ctx, "ListEventsAfter", "room_entries", err)
-		return nil, err
+		LogQueryError(ctx, "SequenceAfterEntry", "room_entries", err)
+		return 0, err
 	}
-	return collectRoomEntries(ctx, rows, "ListEventsAfter")
+	return seq, nil
 }
 
 // CountMessages counts non-deleted MESSAGE entries in a room; events are excluded so a

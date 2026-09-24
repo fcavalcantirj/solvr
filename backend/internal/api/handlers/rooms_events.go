@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strconv"
 
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
 	"github.com/fcavalcantirj/solvr/internal/db"
@@ -79,26 +78,33 @@ func (h *RoomEventsHandler) PostEvent(w http.ResponseWriter, r *http.Request) {
 	roomWriteJSON(w, http.StatusCreated, map[string]any{"data": event})
 }
 
-// ListEvents handles GET /r/{slug}/events?type=&issue=&limit= — query typed events,
-// newest first, optionally filtered by type and/or issue. An adapter over the event
-// entries of the canonical timeline.
+// ListEvents handles GET /r/{slug}/events?type=&issue=&cursor=&limit= — an adapter over
+// the event entries of the canonical timeline. Events page oldest to newest from the
+// opaque cursor with the canonical default 50 / maximum 100 limits and meta.next_cursor /
+// has_more; every event matching the filters within a page is returned. Items keep the
+// legacy shape (id, type, issue, actor, payload, created_at) plus the room sequence. Any
+// other query parameter is a 400.
 func (h *RoomEventsHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	room := apimiddleware.RoomFromContext(r.Context())
 	if room == nil {
 		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "room context missing")
 		return
 	}
-	limit := 100
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
-			limit = parsed
-		}
+	q := r.URL.Query()
+	if !rejectUnknownQuery(w, q, "type", "issue", "cursor", "limit") {
+		return
 	}
-	entries, err := h.entryRepo.QueryEvents(r.Context(), models.QueryRoomEntryEventsParams{
-		RoomID:    room.ID,
-		EventType: r.URL.Query().Get("type"),
-		Issue:     r.URL.Query().Get("issue"),
-		Limit:     limit,
+	after, limit, ok := parseEntryPage(w, q)
+	if !ok {
+		return
+	}
+	entries, hasMore, nextCursor, err := listEntryPage(r.Context(), h.entryRepo, models.RoomEntryPageParams{
+		RoomID:        room.ID,
+		AfterSequence: after,
+		Kind:          models.RoomEntryKindEvent,
+		EventType:     q.Get("type"),
+		Issue:         q.Get("issue"),
+		Limit:         limit,
 	})
 	if err != nil {
 		slog.Error("failed to query room events", "error", err, "room_id", room.ID)
@@ -109,5 +115,8 @@ func (h *RoomEventsHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
 	for i := range entries {
 		events = append(events, roomEventFromEntry(&entries[i]))
 	}
-	roomWriteJSON(w, http.StatusOK, map[string]any{"data": events})
+	roomWriteJSON(w, http.StatusOK, map[string]any{
+		"data": events,
+		"meta": map[string]any{"limit": limit, "has_more": hasMore, "next_cursor": nextCursor},
+	})
 }

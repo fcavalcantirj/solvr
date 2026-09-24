@@ -10363,3 +10363,103 @@ REMAINING FOR idx 71:
     named test replacement.
   - Step 2: search / rooms / overview filter+ordering+pagination+visibility contracts.
   - Step 5 runtime: status-command migration error (ordering vs idx 51/92, see slice 2).
+
+================================================================================
+2026-09-24 — Task idx 70 (spec.json, category api) "Let a consumer follow one room issue
+forward without holes and never ignore a paging parameter" — DONE, passes=true
+================================================================================
+
+LEDGER NOTE: this task was inserted by the owner (uncommitted spec.json diff at iteration
+  start) at index 70, BEFORE "Offer one canonical room API…". Every task from the old idx 70
+  on shifted +1: old idx 70 (canonical room API, done) is now 71; the in-progress discovery/
+  statistics task journaled as "idx 71 slices 1-3" is now idx 72; old refs idx 73/74/77/92
+  in earlier entries are now 74/75/78/93. spec.json committed with this iteration unchanged
+  except passes on idx 70.
+
+TASK SELECTION: 23 (ACCEPTANCE, needs old-77=78), 51/52 (knowledge cutover), 58, 66
+  (ACCEPTANCE), 67 — same blockers as before. idx 70 is the first buildable task. TOOK IT.
+
+FILES ([REAL] git status --porcelain / git diff --stat):
+  M   backend/internal/models/room_event.go: legacy RoomEvent gains `sequence`.
+  M   backend/internal/models/room_entry.go: NEW RoomEntryPageParams {RoomID, AfterSequence,
+      Kind, EventType, Issue, Limit}.
+  M   backend/internal/hub/event.go: hub.RoomEvent gains `sequence` (omitempty; 0 for
+      presence/room_update which are not entries).
+  M   backend/internal/db/room_entries.go: ListPage now takes RoomEntryPageParams and
+      filters kind/event_type/issue IN the query (complete filtered pages); NEW
+      SequenceAfterEntry (SSE cursor id -> room sequence; falls back to max sequence with a
+      lower id for unknown ids). REMOVED ListEventsAfter (only caller was the old SSE
+      replay; no test referenced it). QueryEvents kept (still pinned by db/room_entries_test.go
+      :179) but no longer used by any handler.
+  NEW backend/internal/api/handlers/rooms_entry_paging.go (76 lines): rejectUnknownQuery
+      (400 VALIDATION_ERROR "unknown query parameter: X (supported: …)", ?token= always
+      allowed), parseEntryPage (cursor + limit default 50 / max 100), listEntryPage
+      (limit+1 read, has_more, next_cursor).
+  M   handlers/rooms_entries.go: ListEntries accepts issue=, strict params
+      {cursor,limit,kind,issue}; GetEntry rejects any param but token.
+  M   handlers/rooms_events.go: GET /r/{slug}/events = cursor paging OLDEST->NEWEST, default
+      50 / max 100, 400 on bad limit/cursor, strict params {type,issue,cursor,limit},
+      response {data:[legacy event + sequence], meta:{limit,has_more,next_cursor}}.
+  M   handlers/rooms_event_submit.go: event envelope + typed frame carry sequence.
+  M   handlers/rooms_entry_submit.go: NEW messageHubEvent (live broadcast + replay share it,
+      carries sequence) and messageFromEntry (entry -> message envelope, column-for-column as
+      the messages view).
+  M   handlers/rooms_sse.go: strict params {type,issue,after,lastEventId,access_token,token};
+      SUBSCRIBE BEFORE REPLAY (was replay-then-subscribe: an entry committed in between was
+      lost) with live frames dedup'd by sequence <= last replayed; replay is filtered in the
+      query (replayPageParams maps ?type/?issue to kind/event_type/issue), ordered by
+      sequence, paged 100 at a time up to 1000 frames; a longer gap ends the stream with
+      `retry:` so the client resumes from its last id. Old replay read 100 messages + 100
+      events, merged, capped at 100 and THEN filtered — >100 non-matching entries after the
+      cursor hid every matching one. Hub-capacity 503 now happens before headers are sent.
+  M   SPEC.md 25.3/25.4/25.5: issue filter, ids-not-contiguous + completeness, strict params,
+      stream frames/replay/seam/1000 cap, events adapter row (oldest->newest, meta).
+  NEW backend/internal/api/router_rooms_issue_paging_test.go (2 DB tests):
+      _FollowsOneIssueForwardWithoutHoles (2 rooms, 2 issues + messages interleaved, ids
+      asserted non-contiguous, issue followed via canonical AND adapter at limits 1/3/7/50 =
+      exactly the posted ids in order, has_more/next_cursor terminate, legacy fields +
+      sequence, default 50 / clamp 100 / bad limit+cursor 400, message sequence_num present);
+      _RejectsUnrecognisedQueryParameters (after_id and after on entries, entry-by-id, events,
+      both streams -> 400 naming the param; documented params + ?token= still 200).
+  NEW backend/internal/api/router_rooms_issue_stream_test.go (1 DB test):
+      TestRoomSSE_IssueStreamResumesWithoutMissOrRepeat — live issue stream, drop mid-issue,
+      150 seeded other-issue events + message + 2 issue events while disconnected, reconnect
+      with last id: exactly [x3,x4,x5] once in order (x5 live); unfiltered resume replays all
+      154 entries each with id line == data.id and strictly increasing sequence.
+  M   backend/internal/api/router_rooms_entries_events_test.go — see REPLACED ASSERTION.
+
+REPLACED ASSERTION (named-replacement procedure): TestRoomEntries_EventsShareOneSubmissionPath
+  asserted the legacy list is "newest first": `newest := listed[0]; assert "CLAIM"; assert
+  "APP-2"`. This task makes the adapter page oldest->newest (ledger step 2). Now asserts
+  listed[0] = firstID/CLAIM/APP-1 and listed[2] = CLAIM/APP-2. Ordering coverage:
+  TestRoomIssuePaging_FollowsOneIssueForwardWithoutHoles (PASS). Filter counts in that test
+  unchanged. Test not deleted/skipped.
+
+BEHAVIOR CHANGES (v0, documented in SPEC): GET /r/{slug}/events is oldest-first, 50 default
+  (was newest-first, 100 default, up to 500, bad limit silently ignored). Unknown query params
+  on entries/events/stream -> 400. The owner's skill `solvr events` (~/.claude/skills/solvr/
+  scripts/solvr-helpers.sh cmd_events, outside the repo, NOT modified) still works but now
+  prints the OLDEST 50 events rather than the newest 100 — owner may want --cursor support.
+FINDING vs ledger text: step 7 says the stream "emits an id line only for messages". At HEAD
+  typed-event frames already carried `id:` (existing TestRoomEntriesStream_* asserted event
+  frame ids). The real holes were: no sequence in frames, replay cap applied before the
+  filter, and the replay/subscribe race — all fixed above.
+NOT DONE (out of scope, noted): hub.Broadcast still drops frames for a subscriber whose
+  64-slot channel is full, silently; a consumer only recovers on its next reconnect.
+
+TDD: RED [TEST] /tmp/i70_red_saved.log — all 3 new tests FAILED (event envelope had no
+  `sequence`, first assertion). The replay-cap hole (old code hiding x3/x4 behind 150 seeded
+  events) is [UNVERIFIED] as a separate RED run — reasoned from the old replayAfter code, not
+  executed. GREEN /tmp/i70_green.log: 3/3 PASS, 0 SKIP.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test):
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i70_full.log): 3867 PASS, 12 SKIP,
+    74 unique FAIL. vs /tmp/i71s3_full.log failure set: NEW 1 (TestRoomEntries_Events-
+    ShareOneSubmissionPath, the newest-first pin above, expected "APP-2" actual "APP-1"),
+    GONE 0. After the pin update: /tmp/i70_rooms.log — all 17 TestRoomEntries_/
+    TestRoomIssuePaging/TestRoomSSE_/TestRoomEntriesStream_/TestRoomEvents_ PASS, 0 SKIP.
+  [REAL] go build ./..., go vet ./internal/api/... ./internal/db/ ./internal/hub/
+    ./internal/models/ clean; touched files gofmt clean, all < 800 lines
+    (check-file-size.sh still reports the 37 pre-existing oversize files, none touched here).
+  Frontend not touched, not run (use-room-sse.ts only sends lastEventId + access_token,
+    both allowed).

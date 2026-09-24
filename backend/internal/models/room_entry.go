@@ -74,6 +74,19 @@ type CreateRoomEntryParams struct {
 	ClientEntryID *string
 }
 
+// RoomEntryPageParams selects one forward page of a room timeline: the entries after
+// AfterSequence, in ascending sequence order. Empty Kind, EventType or Issue means
+// "any". Every matching entry in the range is returned, so a filtered page never has
+// holes a consumer must interpret.
+type RoomEntryPageParams struct {
+	RoomID        uuid.UUID
+	AfterSequence int
+	Kind          string
+	EventType     string
+	Issue         string
+	Limit         int
+}
+
 // QueryRoomEntryEventsParams filters the event view of the timeline. Empty EventType
 // or Issue means "any"; both retain the original room_events issue/type filters.
 type QueryRoomEntryEventsParams struct {

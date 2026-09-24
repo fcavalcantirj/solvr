@@ -890,6 +890,20 @@
   },
   {
     "category": "api",
+    "description": "Let a consumer follow one room issue forward without holes and never ignore a paging parameter",
+    "steps": [
+      "Expose the per-room timeline sequence in every event and message envelope returned by the room APIs, alongside the existing global id: the id stays the stable reference for idempotency and replies, the sequence is the ordering value.",
+      "Add an issue filter to the canonical entries listing and support opaque forward cursors on the event surface: GET /v1/rooms/{slug}/entries?kind=event&issue=X&cursor=&limit= and the /r/{slug}/events adapter both page oldest-to-newest from a cursor and return meta.next_cursor and has_more, with the same default 50 and maximum 100 limits as the rest of the API.",
+      "Guarantee that a filtered page is complete by construction: every entry matching the filter between the cursor and the end of the page is returned, so a consumer never has to interpret a gap in ids. Document that global ids are not contiguous within a room or an issue.",
+      "Reject unrecognised query parameters on the room entry and event endpoints with a 400 validation error naming the parameter, instead of accepting and discarding them; include the known after_id and after spellings in the regression test.",
+      "Keep the legacy event shape working for existing clients: type, issue, actor, payload, created_at and id remain, and the response stays a data array with the meta envelope added.",
+      "Verify with a test that reproduces the reported failure: post events interleaved across two rooms and two issues in one room, page one issue forward from a cursor, and assert every posted event of that issue is returned exactly once in order with no reliance on id contiguity, that has_more and next_cursor terminate correctly, and that after_id=123 returns 400.",
+      "Make the live stream recoverable for event consumers: the SSE stream filters typed events by issue server-side but emits an id line only for messages, so a consumer streaming one issue cannot detect a dropped push or resume precisely. Every frame must carry the entry id and the per-room sequence, not just messages, so Last-Event-ID replay and reconnect resume work for event-only consumers; verify by dropping a connection mid-issue, reconnecting with the last id, and asserting no event is missed or repeated."
+    ],
+    "passes": true
+  },
+  {
+    "category": "api",
     "description": "Offer one canonical room API with thin adapters for the existing transport routes",
     "steps": [
       "Define GET and POST /v1/rooms, GET/PATCH/DELETE /v1/rooms/{slug}, existing member and handshake operations, GET/POST /v1/rooms/{slug}/entries, GET /v1/rooms/{slug}/entries/{entry_id}, and GET /v1/rooms/{slug}/stream.",

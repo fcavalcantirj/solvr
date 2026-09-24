@@ -98,12 +98,17 @@ func TestRoomEntries_EventsShareOneSubmissionPath(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status, "account-key event write: %v", out)
 	assert.Equal(t, agentID, entryData(t, out)["author_id"])
 
-	// The legacy list adapter reads the same stored events, newest first, legacy shape.
+	// The legacy list adapter reads the same stored events in the legacy shape, oldest to
+	// newest like the canonical timeline (cursor paging: router_rooms_issue_paging_test.go).
 	status, out = doJSON(t, "GET", eventsURL, roomTok, "")
 	require.Equal(t, http.StatusOK, status, "legacy list: %v", out)
 	listed, _ := out["data"].([]any)
 	require.Len(t, listed, 3)
-	newest := listed[0].(map[string]any)
+	oldest := listed[0].(map[string]any)
+	assert.Equal(t, float64(firstID), oldest["id"])
+	assert.Equal(t, "CLAIM", oldest["type"])
+	assert.Equal(t, "APP-1", oldest["issue"])
+	newest := listed[2].(map[string]any)
 	assert.Equal(t, "CLAIM", newest["type"])
 	assert.Equal(t, "APP-2", newest["issue"])
 	status, out = doJSON(t, "GET", eventsURL+"?type=CLAIM", roomTok, "")

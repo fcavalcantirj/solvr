@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // ============================================================================
@@ -220,6 +222,79 @@ func TestCreatePost_MissingTitle(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", w.Code)
+	}
+}
+
+// TestCreatePost_DescriptionTooLong tests 400 for description over the maximum
+// length, mirroring the limits already enforced on replies (50000) and room
+// messages (65536) so oversized bodies are rejected consistently at the API.
+func TestCreatePost_DescriptionTooLong(t *testing.T) {
+	repo := NewMockPostsRepository()
+	handler := NewPostsHandler(repo)
+
+	longDesc := make([]byte, models.MaxPostDescriptionLength+1)
+	for i := range longDesc {
+		longDesc[i] = 'a'
+	}
+
+	body := map[string]interface{}{
+		"type":        "problem",
+		"title":       "Test Problem Title That Is Long Enough",
+		"description": string(longDesc),
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/posts", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.Create(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	errObj := resp["error"].(map[string]interface{})
+	if errObj["code"] != "VALIDATION_ERROR" {
+		t.Errorf("expected error code VALIDATION_ERROR, got %v", errObj["code"])
+	}
+	if repo.createdPost != nil {
+		t.Error("oversized post must not be persisted")
+	}
+}
+
+// TestCreatePost_DescriptionMaxAllowed tests that a description of exactly the
+// maximum length is accepted (boundary is inclusive).
+func TestCreatePost_DescriptionMaxAllowed(t *testing.T) {
+	repo := NewMockPostsRepository()
+	handler := NewPostsHandler(repo)
+
+	maxDesc := make([]byte, models.MaxPostDescriptionLength)
+	for i := range maxDesc {
+		maxDesc[i] = 'a'
+	}
+
+	body := map[string]interface{}{
+		"type":        "problem",
+		"title":       "Test Problem Title That Is Long Enough",
+		"description": string(maxDesc),
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/posts", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = addAuthContext(req, "user-123", "user")
+	w := httptest.NewRecorder()
+
+	handler.Create(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201 at max length, got %d; body: %s", w.Code, w.Body.String())
 	}
 }
 

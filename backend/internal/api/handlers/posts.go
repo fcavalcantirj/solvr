@@ -523,6 +523,10 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "description must be at least 50 characters")
 		return
 	}
+	if len(req.Description) > models.MaxPostDescriptionLength {
+		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", fmt.Sprintf("description must be at most %d characters", models.MaxPostDescriptionLength))
+		return
+	}
 
 	// Validate tags
 	if len(req.Tags) > models.MaxTagsPerPost {
@@ -718,6 +722,10 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.Description != nil {
 		if len(*req.Description) < 50 {
 			writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "description must be at least 50 characters")
+			return
+		}
+		if len(*req.Description) > models.MaxPostDescriptionLength {
+			writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", fmt.Sprintf("description must be at most %d characters", models.MaxPostDescriptionLength))
 			return
 		}
 		updatedPost.Description = *req.Description

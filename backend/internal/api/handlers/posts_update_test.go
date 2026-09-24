@@ -50,6 +50,48 @@ func TestUpdatePost_Success(t *testing.T) {
 	}
 }
 
+// TestUpdatePost_DescriptionTooLong tests 400 when an edit sets a description
+// over the maximum length, matching the limit enforced on create so oversized
+// bodies are rejected consistently on both write paths.
+func TestUpdatePost_DescriptionTooLong(t *testing.T) {
+	repo := NewMockPostsRepository()
+	post := createTestPost("post-123", "Original Title", models.PostTypeProblem)
+	repo.SetPost(&post)
+
+	handler := NewPostsHandler(repo)
+
+	body := map[string]interface{}{
+		"description": strings.Repeat("a", models.MaxPostDescriptionLength+1),
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/posts/post-123", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "post-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = addAuthContext(req, "user-123", "user") // Same as post owner
+	w := httptest.NewRecorder()
+
+	handler.Update(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	errObj := resp["error"].(map[string]interface{})
+	if errObj["code"] != "VALIDATION_ERROR" {
+		t.Errorf("expected error code VALIDATION_ERROR, got %v", errObj["code"])
+	}
+	if repo.updatedPost != nil {
+		t.Error("oversized update must not be persisted")
+	}
+}
+
 // TestUpdatePost_NotOwner tests 403 for non-owner.
 func TestUpdatePost_NotOwner(t *testing.T) {
 	repo := NewMockPostsRepository()

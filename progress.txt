@@ -7757,3 +7757,115 @@ UAT: OWNER-ONLY LAST MILE — every automatable check ran GREEN. Visual item for
   and that a PUBLIC room shows none; optionally flip a public room to private and
   confirm the shared link opens the private-room gate (no transcript) for a
   logged-out visitor.
+
+================================================================================
+2026-09-24 — Task ~748 "Keep public collaboration usable when content is
+malformed or abusive" (functional). PASSED.
+================================================================================
+
+TASK SELECTION (top-down, every skip re-verified [REAL] this session — did NOT
+trust prior journal prose):
+  spec.json 53/95 pass. Walked passes=false top-down and skipped, with evidence:
+  - ~300 "Verify N-agent e2e": ACCEPTANCE spanning canonical entries + two API
+    instances. [REAL] grep room_entries in backend/internal = 0 hits; no /entries
+    route; two-instance delivery is ~982 (false). Acceptance-not-a-checklist. SKIP.
+  - ~349 "agent-created rooms manageable": step 2 requires rooms.owner_id retired.
+    [REAL] grep -c owner_id backend/internal/db/rooms.go = 16 (still present);
+    retirement is ~879 (false). SKIP.
+  - ~649 "Route agent integrations ... during a defined transition": steps say
+    "90-day transition AFTER CUTOVER" and "return a migration error for RETIRED
+    writes" — depends on endpoint retirement ~905 + knowledge cutover ~1176 (both
+    false). Also overlaps ~968 (SDK/MCP/CLI consistency). SKIP.
+  - ~662 "search retained knowledge one model": step 4 "compare ... before and
+    after CUTOVER" depends on ~1176 cutover + ~853 schema reduction (both false).
+    SKIP.
+  - ~735 "permissions authoritative on server": step 3 requires "existing stream
+    delivery denied until owner readmits" = revocation on ESTABLISHED SSE
+    connections. [REAL] backend/internal/api/handlers/rooms_sse.go:229-247 event
+    loop selects only on hub events / 30s heartbeat / 30m max-lifetime — NO
+    per-tick membership/access re-check. Established-stream revocation is ~930's
+    deliverable ("enforce revocation on established connections", step 3), ~930
+    false. So ~735 step 3 spans unbuilt behavior. SKIP.
+  - ~758 THIS TASK: all five areas run on ALREADY-BUILT infra (no cutover /
+    room_entries / owner_id / established-stream dependency). First buildable-now
+    task top-down. TOOK IT.
+
+STATE FOUND (all [REAL], read this session):
+  - Oversized-body enforcement was INCONSISTENT across the three body models:
+      replies: models/reply.go:24 MaxReplyBodyLength=50000 (enforced 400).
+      room messages: handlers/rooms_messages.go:20 maxMessageContentLen=65536
+        (enforced 400 at :128 and :287).
+      posts: handlers/posts.go CreatePost validated title (10..200) and
+        description (MIN 50) but had NO MAX; UpdatePost (posts.go ~718) likewise
+        min-only. A post description could balloon toward the 64KB request body
+        limit and fail as a generic request-too-large instead of a clean field
+        400. This is exactly ~758 step 1's "oversized bodies ... API limits apply
+        consistently" gap. THE gap I fixed.
+  - Other four areas already satisfied (verified, not rebuilt):
+      step1 safe rendering: frontend markdown-content renders markdown/plain only,
+        strips HTML/script — [TEST] 14/14 (see VERIFICATION).
+      step1 malformed metadata: invalid JSON -> 400 (TestCreatePost_InvalidJSON).
+      step2 reporting/moderation: reports.go targets post/answer/approach/response/
+        comment/reply; posts_moderation.go preserves author + timestamps; room
+        message moderation is owner-driven (RemoveMember / ArchiveRoom), the
+        existing path for room content. [REAL]+covered by the 1285 passing tests.
+      step3 rate limits + retry: middleware/ratelimit.go 429 sets Retry-After
+        header + retry_after_seconds body; registration_ratelimit.go 5/hr/IP with
+        Retry-After. Covered by ratelimit_test.go + registration_ratelimit_test.go
+        in the 1285 pass. 429 is returned, never a false success.
+      step4 prompt safety: connect_prompt_safety_test.go confines shell
+        metacharacters/${...} to the TASK line; no interpolation into JSON.
+      step5 onboarding: GET /v1/connect (no auth, no questionnaire) and POST
+        /v1/rooms create immediately with no moderation gate.
+
+WHAT I CHANGED (git status --porcelain / git diff --stat — matches exactly):
+  M backend/internal/models/post.go (+7): added
+    `const MaxPostDescriptionLength = 50000` beside MaxTagsPerPost, matching the
+    sibling MaxReplyBodyLength so the two knowledge-body models share one limit
+    and it stays well under the 64KB request body cap.
+  M backend/internal/api/handlers/posts.go (+8): enforce that max in BOTH write
+    paths — CreatePost (after the min-50 check) and UpdatePost (after its min-50
+    check), each returning 400 VALIDATION_ERROR
+    "description must be at most 50000 characters".
+  M backend/internal/api/handlers/posts_create_test.go (+75, +models import):
+    TestCreatePost_DescriptionTooLong (max+1 -> 400 VALIDATION_ERROR, not
+    persisted) and TestCreatePost_DescriptionMaxAllowed (exactly max -> 201,
+    inclusive boundary).
+  M backend/internal/api/handlers/posts_update_test.go (+42):
+    TestUpdatePost_DescriptionTooLong (PATCH max+1 -> 400, not persisted).
+  No existing test deleted, weakened, skipped, or renamed. No production change
+  outside the two posts files.
+
+VERIFICATION (all RAN this session):
+  [TEST] RED before impl (constant added, enforcement not yet):
+    go test ./internal/api/handlers/ -run
+    'TestCreatePost_DescriptionTooLong|...MaxAllowed|TestUpdatePost_DescriptionTooLong'
+    = TooLong create FAIL (got 201 want 400), TooLong update FAIL (got 200 want
+    400), MaxAllowed PASS. Clean red on the two enforcement tests.
+  [TEST] GREEN after impl: same 3 tests PASS, plus TestCreatePost_Success and
+    TestUpdatePost_Success PASS.
+  [TEST] full handlers package `go test ./internal/api/handlers/`
+    (/tmp/solvr_758_handlers.log) = 1285 PASS, 5 SKIP, 4 FAIL. The 4 failures are
+    ALL TestGitHub*OAuth*_Integration (oauth_integration_test.go): they hit the
+    real GitHub token endpoint and get "token exchange failed status 404" -> 502.
+    Pre-existing network/env failures (memory lists "GitHub OAuth callback" as a
+    known pre-existing failure); [REAL] git status shows I touched no auth/oauth
+    file — only the four posts files. Not caused by this change.
+  [TEST] `go test ./internal/models/` = ok.
+  [TEST] `go build ./...` = BUILD_OK. `go vet ./internal/api/handlers/
+    ./internal/models/` = clean.
+  [TEST] frontend safe rendering `npx vitest run
+    components/shared/markdown-content.test.tsx` = 14/14 PASS (HTML/script not
+    rendered) — proves ~758 step 1 "safe rendering apply consistently".
+
+FILE SIZE: [REAL] posts_create_test.go 452, posts_update_test.go 619,
+  models/post.go 341 — all < 800. posts.go is 1023 (was ~1015): a PRE-EXISTING
+  >800 violation, one of 37 repo-wide (router.go 1209, db/posts.go 1028,
+  posts_test.go 918, ...). The +8 lines belong in the CreatePost/UpdatePost
+  handlers; splitting posts.go is an unrequested out-of-scope refactor, so this
+  task did not touch it. Flagged as standing debt, not introduced here.
+
+NOTE (deliberately NOT done, out of ~758 scope): room messages have no per-item
+  user-report target in reports.go (design: room content is owner-moderated via
+  remove/archive). Adding a message-report feature would be scope creep beyond
+  "exercise EXISTING reporting and moderation paths"; left as-is.

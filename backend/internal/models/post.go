@@ -58,6 +58,13 @@ func DeriveStates(status PostStatus) (PublicationState, ModerationState) {
 // MaxTagsPerPost is the maximum number of tags allowed per post.
 const MaxTagsPerPost = 10
 
+// MaxPostDescriptionLength is the maximum length of a post description/body.
+// It matches the sibling Reply body limit (MaxReplyBodyLength) so oversized
+// bodies are rejected consistently across the knowledge models and stays well
+// under the request body-size limit, yielding a clean field validation error
+// instead of a generic request-too-large failure.
+const MaxPostDescriptionLength = 50000
+
 // PostStatus represents the status of a post.
 type PostStatus string
 

@@ -755,7 +755,7 @@
       "Verify connection prompts treat room content as task communication within the user's authorized scope and never instruct an agent to disclose credentials or execute arbitrary messages from unrelated participants.",
       "Verify ordinary successful onboarding remains free of mandatory moderation questionnaires or additional account setup."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",

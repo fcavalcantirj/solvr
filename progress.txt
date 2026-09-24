@@ -10463,3 +10463,85 @@ VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_te
     (check-file-size.sh still reports the 37 pre-existing oversize files, none touched here).
   Frontend not touched, not run (use-room-sse.ts only sends lastEventId + access_token,
     both allowed).
+
+================================================================================
+2026-09-24 — Task idx 72 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and
+statistics APIs"
+SLICE 4 of N: pin the type-specific-statistics adapter (family "type-specific-statistics",
+step 3 "adapt") with the tests it was committed WITHOUT.
+================================================================================
+
+TASK SELECTION (top-down, same blockers as slices 1-3 and the idx 70/71 entries):
+  idx 23 (ACCEPTANCE, needs idx 78 multi-instance), 51/52 (knowledge cutover, need idx 94 +
+  idx 67), 58 (server-permission audit spans search/social-metadata built by 52/63), 66
+  (ACCEPTANCE, test deployment), 67 (needs the idx 94 cutover). idx 70 and idx 71 are now
+  passes=true, so idx 72 is again the first buildable task. Continued it.
+
+FINDING (journal/diff gap in an EARLIER commit, not this one): the type-specific-statistics
+  adaptation was ALREADY implemented AND documented at HEAD but never journaled or tested.
+  handlers/legacy_type_stats.go (KnowledgeTotalsReader, SetKnowledgeTotals, knowledgeFor,
+  applyKnowledgeCounts, ideaCountsFromKnowledge, markTypeStatsDeprecated) and the
+  markTypeStatsDeprecated + knowledgeFor calls inside handlers/stats.go, plus SPEC 26.5
+  "Type-specific statistics" (field mapping table + deprecation headers + unsupported
+  legacy-only fields), were all created by commit 4318ba9 (the idx 70 final `git add .`
+  sweep) — the idx 70 journal FILES list does NOT mention them. [REAL] git log --diff-filter=A
+  -- handlers/legacy_type_stats.go => only 4318ba9. [REAL] grep of stats_test.go /
+  stats_questions_test.go for Deprecation|markTypeStats|KnowledgeTotals|GetKnowledgeTotals =>
+  ZERO: the adapter was untested. The existing StatsHandler unit tests use MockStatsRepository,
+  which does NOT implement GetKnowledgeTotals, so they only ever exercised the legacy
+  nil-knowledge path. This slice adds the missing guards; no natural RED is reproducible
+  against already-committed code, so the count test is DIFFERENTIAL (legacy repo returns 999,
+  aggregate returns 7) — a build that stopped sourcing counts from the aggregate returns 999
+  and fails. No SPEC or handler behavior was changed this slice.
+
+WIRING VERIFIED [REAL]: *db.StatsRepository implements GetKnowledgeTotals
+  (db/knowledge_totals.go) so the router's `if k, ok := statsRepo.(handlers.
+  KnowledgeTotalsReader); ok { SetKnowledgeTotals(k) }` (router.go ~689) wires it, and
+  db/homepage_knowledge.go feeds GET /v1/overview from the SAME GetKnowledgeTotals — so the
+  three typed stats counts and the overview knowledge section share one source (step 3
+  "no independent query stack"), by construction.
+
+FILES ([REAL] git status --porcelain / git diff --stat):
+  NEW backend/internal/api/handlers/stats_type_deprecation_test.go (156 lines, 2 tests):
+    - TestTypeStats_AnnounceCanonicalSuccessor: /v1/stats/problems|questions|ideas each set
+      Deprecation: true, Link: </v1/overview>; rel="successor-version", and keep
+      Cache-Control: public, max-age=30 (SPEC 26.5), header set even with no knowledge wired.
+    - TestTypeStats_CountsSourcedFromCanonicalKnowledgeAggregate: with knowledge wired, the
+      count fields come from the aggregate not the legacy count query — problems total=7 /
+      solved=3, questions total=5 / answered=2 / response_rate=40, ideas counts_by_status
+      {spark:8,developing:3,total:11}; a legacy-only field (active_approaches=4) stays served.
+      Local test-only mock knowledgeStatsRepo embeds *MockStatsRepository + GetKnowledgeTotals.
+  NO production code, SPEC or spec.json changed (only spec.json `passes` untouched, task
+  stays false). git diff --stat empty; one ?? untracked test file.
+
+TDD: RED not naturally reproducible (impl committed at HEAD). Test is a DIFFERENTIAL guard as
+  described above. GREEN [TEST] `go test ./internal/api/handlers/ -run TestTypeStats_ -count=1
+  -v`: TestTypeStats_AnnounceCanonicalSuccessor (problems/questions/ideas) +
+  TestTypeStats_CountsSourcedFromCanonicalKnowledgeAggregate (problems/questions/ideas) =
+  8 subtests PASS, 0 SKIP.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test):
+  [TEST] FULL `go test ./... -p 1 -count=1` (/tmp/i72s4_full.log): 3 packages FAIL (api,
+    handlers, db — the documented pre-existing set), 74 unique --- FAIL names. comm vs the
+    idx 70 HEAD baseline /tmp/i70_fails.txt: GONE 1 = TestRoomEntries_EventsShareOne-
+    SubmissionPath (the pin idx 70 committed after i70_full.log was captured — expected);
+    NEW 1 = TestRoomTimelineCutover_CountsExcludeEventsAndFiltersRetained, which is a DB
+    connection flake ("NewPool() error = failed to ping database: context deadline exceeded",
+    60.01s, in internal/db — a package a handlers-only test file cannot affect). [TEST] Run
+    isolated: `go test ./internal/db/ -run TestRoomTimelineCutover_CountsExcludeEventsAnd-
+    FiltersRetained -count=1 -v` => PASS 0.19s. So the effective failure set is unchanged by
+    this slice; zero stats/TypeStats failures; the 2 new tests PASS in the full run's package.
+  [REAL] gofmt -l clean; go vet ./internal/api/handlers/ clean; new file 156 < 800 lines.
+    No test deleted, skipped, renamed away or loosened.
+
+REMAINING FOR idx 72:
+  - Step 3 rest: contribution listings (/users/{id}/contributions, /me/contributions ->
+    canonical replies-by-author read); then retire the unserved typed List handlers
+    (ProblemsHandler/QuestionsHandler/IdeasHandler.List) + FeedHandler/FeedRepository with
+    the named-replacement procedure (map each to the router adapter tests from slices 2-3).
+  - Step 2: search / rooms / overview filter+ordering+pagination+visibility contracts
+    (document once + contract tests).
+  - Step 5 runtime: legacy-status-commands migration error (ordering vs idx 51/94; see
+    slice 2 WHY NOT — PATCH /v1/approaches/{id} is still dogfooded and canonical replies have
+    no status field, so it must wait for first-party client cutover).

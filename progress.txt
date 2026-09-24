@@ -9433,3 +9433,87 @@ UAT (not a pass condition now, owner-only): production must get migration 000098
   deploy that ships this code (old code SELECTs token_hash). Before deploying, re-sync the
   installed skill (~/.claude/skills/solvr/scripts, see slice-4 UAT) — after this deploy any
   agent still sending solvr_rm_ on /r/ gets 401 and must handshake.
+
+================================================================================
+2026-09-24 — Task idx 69 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Use one room membership authority and eliminate duplicate ownership and shared-token state"
+SLICE 7 of N: room presence + per-agent credentials BOUND to room_members (migration
+000099). This iteration only VERIFIED and JOURNALED work that was already committed; it
+changed no code.
+================================================================================
+
+WHY THIS ENTRY EXISTS: commit f7c48d4 ("2026-09-24 — Task idx 69 ... IN PROGRESS, p") is
+  again the ralph host auto-commit backstop; the iteration that wrote it left NO journal
+  entry. [REAL] git status was clean at the start of this session.
+
+TASK SELECTION: idx 23, 27, 51, 52, 58, 66, 67 skipped for the reasons in the slice-1
+  entry; idx 69 continues.
+
+WHAT f7c48d4 CONTAINS (git show --stat, 18 files, +607/-148):
+  NEW backend/migrations/000099_bind_presence_to_membership.up.sql:
+    - room_agent_tokens: deletes tokens without an ACTIVE membership, then FK
+      (room_id, agent_id) -> room_members ON DELETE CASCADE.
+    - agent_presence: new agent_id; backfill binds a row only when its free-text
+      agent_name matches exactly ONE active agent member (id or display_name); unmatched
+      rows are dropped (ephemeral TTL rows, the agent reappears on its next /r/ join);
+      duplicates keep the latest; agent_id NOT NULL, UNIQUE(room_id, agent_id), FK to
+      room_members ON DELETE CASCADE. UNIQUE(room_id, agent_name) from 000074 is kept.
+    - trigger room_member_active_required on agent_presence AND room_agent_tokens:
+      writes need an ACTIVE membership (the FK alone would accept a revoked row).
+    - room_members_revoke_credentials now also deletes the member's presence.
+  NEW .../000099_bind_presence_to_membership.down.sql: drops triggers/FKs/agent_id,
+    restores the 000095 credential-revoke function.
+  PROD M: db/agent_presence.go (Upsert keyed by (room, agent_id), clears another member's
+    EXPIRED row under the same name, maps errors to ErrPresenceNotMember /
+    ErrPresenceNameTaken; new CurrentName; Remove/UpdateHeartbeat keyed by agent_id and
+    return the name), handlers/rooms_presence.go (join needs the authenticated room agent
+    id: 401 without, 403 FORBIDDEN not member, 409 AGENT_NAME_TAKEN; a re-join under a new
+    name replaces the old in-memory registry/hub entry; heartbeat/leave act only on the
+    caller's own row, whatever agent_name is sent), handlers/rooms_messages.go (implicit
+    heartbeat on the author's agent id), db/homepage_rooms.go (online/verified counts by
+    agent_id; verifiedPresence joins tokens on ap.agent_id), models/agent_presence.go
+    (AgentID on record + upsert params; JSON gains "agent_id"), skill/references/api.md
+    (join: presence belongs to the token's agent, response agent_id, 409/403 errors).
+  NEW tests: db/presence_membership_test.go (5 TestPresenceMembership_*),
+    api/router_rooms_presence_membership_test.go (TestRoomPresence_BoundToAuthenticatedMember).
+  TEST M (fixtures only — each now admits the agent as a member before writing presence
+    or a token; [REAL] read the diff: no assertion removed, loosened or skipped):
+    db/agent_presence_test.go, homepage_rooms_test.go (new member() helper; authenticate()
+    calls it; census counts by agent_id to match the production query),
+    migrations_rooms_test.go (AgentPresenceTable: the duplicate-(room_id, agent_name)
+    violation is still asserted, now from a second member), room_agent_tokens_test.go,
+    room_entries_cutover_test.go, rooms_listfiltered_test.go,
+    api/router_homepage_example_test.go, handlers/room_connection_status_test.go.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test)
+  [REAL] solvr_test was at 99 dirty=f. Round trip: down 1 -> 98, agent_presence.agent_id
+    gone, 20 presence rows; up -> 99 dirty=f, 11 rows all bound (9 unresolvable free-text
+    rows dropped by design); the 3 constraints + 2 member_active triggers present.
+  [REAL] local dev `solvr` was at 97: before 19 presence rows, 1 token (1 without an active
+    membership). migrate up 97->98->99, 99 dirty=f. After: 0 presence rows (none of the 19
+    names matched an active agent member), 0 tokens. Local dev data only.
+  [TEST] RED: the 5 TestPresenceMembership_* run against the 98 schema (down 1) all FAIL
+    (column "agent_id" does not exist); schema put back to 99 afterwards.
+  [TEST] targeted (/tmp/s7_targeted.log): presence/membership/token/homepage/room stats/
+    cutover/ListFiltered/connection-status tests: 79 PASS, 0 FAIL, 0 SKIP, incl. all 6 new.
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/s7_full.log): 3799 PASS (slice 6:
+    3793, +6 = the new tests), 11 SKIP (same names as /tmp/s6_full.log), 73 unique FAIL
+    names — IDENTICAL set to /tmp/s6_full.log (comm: none new, none gone). Failing packages
+    internal/api, internal/api/handlers, internal/db, same pre-existing families.
+  [REAL] go build ./... + go vet (db, api/..., models) clean; gofmt clean on the 5 touched
+    production files; all touched files < 600 lines. Frontend untouched by f7c48d4.
+
+NOTE [UNVERIFIED]: the in-memory registry/hub is still keyed by agent_name (the display
+  label); the DB row is the authority and a rename on re-join replaces the old entry.
+
+REMAINING FOR idx 69 (why passes stays false):
+  - Step 4: soft-deleted human owners still hold active owner rows (decide archive/transfer
+    like hard deletion does).
+  - Step 4: prevent_agent_reclaim (000018) blocks human_id -> NULL, so agent unlinking and
+    DELETE /v1/me with claimed agents cannot happen (slice-2 FINDING). Needs an owner
+    decision or a migration that allows unlink but still forbids X -> Y re-claim.
+  - Document the compatibility window + final schema in SPEC.md.
+
+UAT (not a pass condition now, owner-only): production gets 000098 then 000099 AFTER the
+  deploy that ships this code. Expect live presence rows whose agent_name is not a member's
+  id/display_name to be dropped (agents re-join on their next /r/ call).

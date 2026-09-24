@@ -10793,3 +10793,98 @@ REMAINING FOR idx 72 (unchanged from slice 5 minus this): Step 3 rest — contri
   read + its own slice). Step 2 — search/rooms/overview filter+ordering+pagination+visibility
   contract tests. Step 5 runtime — legacy status-command migration error (still blocked on
   first-party client cutover, see slice 2 WHY NOT). idx 72 passes STAYS false.
+
+================================================================================
+2026-09-24 — Task idx 72 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and
+statistics APIs"
+SLICE 7 of N: pin the ROOM-DISCOVERY VISIBILITY contract (step 2 "... GET /v1/rooms for
+room discovery ... define filters, ordering, pagination, and visibility once for each
+purpose"). GET /v1/rooms is served by exactly one query path — RoomRepository.ListFiltered
+(router_rooms.go:84 -> handlers.ListRooms -> ListFiltered). Its where-clause already
+excludes private rooms ("r.is_private = FALSE", rooms.go:232) but NO test guarded that
+invariant, so a dropped clause would silently leak every private room into public discovery
+with no failing test. This slice adds the missing guard.
+================================================================================
+
+TASK SELECTION (verified MYSELF this session, not trusted from journal):
+  - Confirmed spec.json is 0-based, 96 entries. First-false is idx 23 (ACCEPTANCE "Verify
+    N-agent collaboration end to end across clients AND service instances"): step 4 requires
+    "Distribute participants across two API instances" = idx 78 (operations, multi-instance),
+    passes=false/not built. Acceptance-task rule => defer. idx 51/52 need the knowledge cutover
+    (idx 67/93, false). idx 58 (server-permission audit) spans search/social-metadata from
+    idx 52/63. idx 66 (ACCEPTANCE, test deployment) => defer. idx 67 needs migration cutover.
+    idx 68-71 passes=true. => idx 72 is again the first BUILDABLE task; continued it.
+  - Within idx 72, of the three named "remaining" items I chose the step-2 room-discovery
+    visibility contract over the other two, and verified WHY the other two are NOT buildable now:
+      (a) step-3 contributions rewire: the contribution-listings route family (route_families.go
+          :282) is Disposition=RETIRE, Canonical="GET /v1/posts?author_type=&author_id=". But
+          GET /v1/users/{id}/contributions today returns a ContributionItem shape (type
+          answer|approach|response + an approach-only Status field) that the canonical Reply
+          model deliberately DROPS (models/reply.go: "no mandatory status workflow"). Retiring
+          it therefore CHANGES the public response contract and is entangled with the knowledge
+          cutover (idx 93, false) — not a clean additive slice. Deferred, as prior slices did.
+      (b) step-5 legacy-status-commands migration error: still blocked on first-party client
+          cutover (PATCH /v1/approaches/{id} still dogfooded); see slice-2 WHY NOT. Deferred.
+    search (GET /v1/search) and overview (GET /v1/overview) contracts are ALREADY pinned once:
+    search by handlers/search_test.go (type/tags/status/author/author_type/date filters, sort
+    newest|votes|activity|default, page/per_page/max-50/has_more pagination) + search_public_
+    test.go (TestSearch_PublicReadContract visibility); overview by router_homepage_consolidated
+    _test.go (EnvelopeShape, WindowValidation, CacheControl, NeverLeaksAPrivateRoom, ...). Only
+    room-discovery lacked a visibility guard — so that is the genuine, non-redundant gap.
+
+WHAT WAS MISSING (verified [REAL] before writing):
+  - grep -niE "private|is_private|visib" backend/internal/db/rooms_listfiltered_test.go => NONE.
+    The 8 existing ListFiltered subtests cover sort=active/recent, search, expired-exclusion,
+    empty-abandoned-exclusion, archived flag, last-message preview, List-delegation — but NOT
+    private-room exclusion. The only "private + discovery" tests in the tree are router_rooms_
+    family_test.go, which cover GET /v1/me/rooms (family-scoped, intentionally SHOWS a family's
+    private rooms to siblings) — a DIFFERENT endpoint/contract, not public discovery.
+
+FILES ([REAL] git status --porcelain / git diff --stat: 1 file, +45 / -2):
+  M backend/internal/db/rooms_listfiltered_test.go
+    - New subtest TestRoomRepository_ListFiltered/"never leaks a private room via browse or
+      search": creates a FRESH private room (IsPrivate:true, ownerless) that satisfies every
+      OTHER discovery filter (not archived, not expired, not empty-abandoned) so it WOULD appear
+      if the is_private clause were dropped; plus a public sibling sharing the search token as a
+      positive control. Asserts the private room is absent from BOTH default browse and search
+      (search surfaces archived rooms, so the test proves it does NOT also surface private ones),
+      and that the public sibling IS returned by search.
+    - Expanded the test-level doc comment to record private exclusion + that ListFiltered is the
+      single query path behind GET /v1/rooms (its visibility contract is the endpoint's).
+  NO production files changed (git diff backend/internal/db/rooms.go = EMPTY). NO existing test
+  deleted, skipped, renamed or weakened — the change is purely additive (1 new subtest + comment).
+
+TDD (RED proven with teeth, then reverted — production never committed dirty):
+  [TEST] GREEN: go test ./internal/db/ -run 'TestRoomRepository_ListFiltered/never_leaks_a_
+    private_room' -count=1 -v => PASS, 0 SKIP.
+  [REAL] RED: temporarily removed "r.is_private = FALSE" from rooms.go:232 and re-ran the same
+    subtest => FAIL on BOTH assertions ("default discovery leaked a private room" line 255,
+    "search discovery leaked a private room" line 264). Restored the clause; git diff
+    backend/internal/db/rooms.go is now EMPTY (confirmed). This proves the guard is load-bearing,
+    not a tautology.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test):
+  [TEST] Full TestRoomRepository_ListFiltered (all 9 subtests incl. the new one): PASS, 0 SKIP.
+  [REAL] go build ./... EXIT 0; go vet ./internal/db/ clean; gofmt -l rooms_listfiltered_test.go
+    clean. File 313 lines (< 800). scripts/check-file-size.sh: 36 PRE-EXISTING violations (e.g.
+    frontend/app/privacy/page.tsx 1075) — the changed file is NOT among them; this slice only
+    added 45 lines to a 268-line file.
+  [TEST] FULL go test ./internal/db/ -p 1 -count=1 (/tmp/i72s7_db.log): 65 unique --- FAIL.
+    DECISIVE: clean-tree baseline (git stash the test file, re-run: /tmp/i72s7_db_baseline.log)
+    is ALSO 65; comm of the sorted unique FAIL sets => NEW=0, GONE=0 — IDENTICAL. This additive
+    test introduced ZERO regressions. The 65 are the documented pre-existing shared-solvr_test
+    failures (AgentRepository.List NULL-column scan pollution, service_checks aggregates,
+    crystallization/briefing/trending/rising-ideas contamination). TestRoomRepository_ListFiltered
+    is in NEITHER FAIL set (passes in both trees).
+  No SPEC.md / PROJECT_KNOWLEDGE.md edit required: no route added/removed, no public contract
+    changed — this pins an EXISTING invariant. route_families.go room-discovery decision (Keep)
+    is unchanged.
+
+REMAINING FOR idx 72 (unchanged from slice 6 minus this): Step 2 — search/overview contracts
+  already pinned; room-discovery visibility now pinned (this slice); pagination/ordering clamps
+  at the ListRooms HANDLER level (limit 1-100 / offset>=0 / sort lenient) remain unpinned at the
+  handler layer (repo layer covered) — a possible future micro-slice. Step 3 rest — contribution
+  listings rewire (entangled with knowledge cutover idx 93; see TASK SELECTION above). Step 5 —
+  legacy status-command migration error (blocked on first-party client cutover, slice-2 WHY NOT).
+  idx 72 passes STAYS false.

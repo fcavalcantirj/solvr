@@ -22,8 +22,10 @@ func containsRoomID(rooms []models.RoomWithStats, id uuid.UUID) bool {
 
 // TestRoomRepository_ListFiltered covers the public-discovery listing behaviour
 // required by the "focused public discovery page" mission: Recent vs Active-now
-// sorting, free-text search, exclusion of expired / empty-abandoned / archived
-// rooms, an include-archived escape hatch, and a last-message preview.
+// sorting, free-text search, exclusion of expired / empty-abandoned / archived /
+// private rooms, an include-archived escape hatch, and a last-message preview.
+// ListFiltered is the single query path behind GET /v1/rooms (idx 71/72 room-
+// discovery route family), so its visibility contract is the endpoint's.
 func TestRoomRepository_ListFiltered(t *testing.T) {
 	url := getTestDatabaseURL(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -222,6 +224,47 @@ func TestRoomRepository_ListFiltered(t *testing.T) {
 		}
 		if !containsRoomID(found, archived.ID) {
 			t.Error("search did not surface the archived room")
+		}
+	})
+
+	t.Run("never leaks a private room via browse or search", func(t *testing.T) {
+		token := "privatetok" + time.Now().Format("150405.000")
+		// A fresh private room that satisfies every OTHER discovery filter (not
+		// archived, not expired, not empty-abandoned): it would appear if the
+		// r.is_private = FALSE clause were dropped, so its absence is what guards
+		// the public-discovery visibility contract.
+		private, err := repo.Create(ctx, models.CreateRoomParams{
+			Slug:        prefix + "-priv-" + uuid.New().String()[:8],
+			DisplayName: "Secret " + token,
+			OwnerID:     uuid.Nil,
+			IsPrivate:   true,
+		})
+		if err != nil {
+			t.Fatalf("Create(private) error = %v", err)
+		}
+		// A public sibling sharing the search token proves discovery still works
+		// (positive control): search excludes the private room, not everything.
+		public := mkRoom(t, "Open "+token)
+
+		// Default browse must not expose the private room.
+		def, err := repo.ListFiltered(ctx, db.RoomListParams{Limit: 100})
+		if err != nil {
+			t.Fatalf("ListFiltered(default) error = %v", err)
+		}
+		if containsRoomID(def, private.ID) {
+			t.Error("default discovery leaked a private room")
+		}
+
+		// Search surfaces archived rooms, but must STILL exclude private ones.
+		found, err := repo.ListFiltered(ctx, db.RoomListParams{Limit: 100, Query: token})
+		if err != nil {
+			t.Fatalf("ListFiltered(search) error = %v", err)
+		}
+		if containsRoomID(found, private.ID) {
+			t.Error("search discovery leaked a private room")
+		}
+		if !containsRoomID(found, public.ID) {
+			t.Error("search dropped the public sibling room")
 		}
 	})
 

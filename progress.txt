@@ -9966,3 +9966,58 @@ REMAINING FOR idx 70 (next slices):
     register + handshake explicit and recoverable.
   - Step 5: SPEC.md — canonical entry contract (message + event) + stream (incl. replay of
     events) + adapter mapping for /messages (reads + writes) and /events.
+
+================================================================================
+2026-09-24 — Task idx 70 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Offer one canonical room API with thin adapters for the existing transport routes"
+SLICE 6 of N: every /v1/rooms/{slug} read and the human message adapter write are decided
+by the single room policy (RoomPolicyGuard); RoomAccessGuard is no longer mounted.
+================================================================================
+
+TASK SELECTION: same top-down skips as slices 1-5 (idx 23 ACCEPTANCE needs idx 77; 51/52
+  need idx 92 + 67; 58 needs idx 73; 66 ACCEPTANCE; 67 needs idx 74). Continued idx 70.
+
+FILES ([REAL] git status --porcelain / git diff --stat before journaling):
+  M   backend/internal/api/router_rooms.go (186, +11/-16): GET /{slug}, /{slug}/agents,
+    /{slug}/connect moved from readGuard (optionalAuth + RoomAccessGuard) to
+    entriesPolicy(RoomRead); POST /{slug}/messages (inside the authMiddleware group) moved
+    from RoomAccessGuard to RoomPolicyGuard(RoomWrite) + the same humanWriteLimit; the
+    now-unused readGuard closure removed. Handlers untouched.
+  NEW backend/internal/api/router_rooms_entries_policy_test.go (131 lines, 2 tests).
+  No test deleted, skipped or loosened. No handler, db, frontend, SPEC.md or migration
+  change. middleware/room_access_guard.go is KEPT (not deleted): RoomAccessGuard has no
+  production mount any more ([REAL] grep: only its own file), but its helpers
+  roomBearerToken/roomGuardError are shared and its behavior tests stay live.
+
+BEHAVIOR CHANGE (GET /{slug}, /agents, /connect only; now identical to GET /{slug}/entries):
+  - invalid/expired solvr_rt_ token -> 401 (before: ignored; 403 private, 200 public)
+  - valid room token of ANOTHER room -> 403 on a public room (before: ignored, 200)
+  Anonymous public 200, anonymous/outsider private 403, member token/agent key/owner 200
+  unchanged. POST /{slug}/messages decisions unchanged (authMiddleware still requires an
+  account credential first; human-only is still enforced by the handler) — moved only so
+  one policy implementation decides every /v1/rooms/{slug} route.
+
+VERIFICATION (DATABASE_URL = shell-profile local docker solvr-postgres
+  localhost:5435/solvr_test):
+  [TEST] RED (/tmp/i70s6_red.log): _RoomReadsFollowTheOnePolicy FAIL on exactly the token
+    decisions above for "", /agents, /connect (401!=403 private invalid, 403!=200 public
+    other-room, 401!=200 public invalid). _HumanMessageAdapterDecidesLikeCanonicalWrite
+    PASSED already (neutral move) — kept as contract guard.
+  [TEST] GREEN (/tmp/i70s6_green.log): both PASS, 0 SKIP.
+    _RoomReadsFollowTheOnePolicy: 12 credentials x 3 routes equal to the /entries
+      decision + 11 pinned statuses x 3 routes (private anon/outsider/other-room 403,
+      invalid 401, member token/key/owner 200; public anon 200, other-room 403, invalid 401;
+      unknown room 404).
+    _HumanMessageAdapterDecidesLikeCanonicalWrite: owner private 201, outsider private 403,
+      public owner/outsider 201, unknown 404 — equal on /entries and /messages; private
+      room holds exactly 2 human rows (one per path); anonymous 401 on both.
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i70s6_full.log): 3821 PASS (slice 5:
+    3819), 11 SKIP, 73 unique FAIL — comm vs /tmp/i70s5_full.log: 0 new, 0 gone.
+  [REAL] gofmt clean; go build ./... ok; both files < 800 lines.
+
+REMAINING FOR idx 70 (next slices):
+  - Step 4: connection prompts (connect_prompts.go, skill script) prefer /entries, keeping
+    register + handshake explicit and recoverable.
+  - Step 5: SPEC.md — canonical entry contract (message + event) + stream (incl. replay of
+    events) + one policy for every /v1/rooms/{slug} route + adapter mapping for /messages
+    (reads + writes) and /events.

@@ -55,13 +55,6 @@ func mountRoomRoutes(
 	roomConnectHandler := handlers.NewRoomConnectHandler(roomRepo, msgRepo)
 	roomSavePostHandler := handlers.NewRoomSavePostHandler(db.NewPostRepository(pool), roomRepo, memberRepo)
 
-	// readGuard resolves the room, enforces the closed-room ACL (mission #1), and
-	// injects the room into context so the handlers below skip a second lookup.
-	// optionalAuth runs first so the guard sees the caller's agent/human identity.
-	readGuard := func(next http.Handler) http.Handler {
-		return optionalAuthMiddleware(apimiddleware.RoomAccessGuard(roomRepo, memberRepo, agentTokenRepo)(next))
-	}
-
 	// Canonical timeline routes accept human, agent-account and room-scoped credentials
 	// through ONE authorization policy (RoomPolicyGuard). Writes share the adapters'
 	// rate-limit buckets: an agent write (message or event) counts against the same
@@ -90,11 +83,12 @@ func mountRoomRoutes(
 		// List is unconditionally public; it already excludes closed rooms.
 		r.Get("/", roomHandler.ListRooms)
 
-		// Per-room reads pass through the access guard: open for public rooms,
-		// members-only (403 otherwise) for closed rooms.
-		r.With(readGuard).Get("/{slug}", roomHandler.GetRoom)
-		r.With(readGuard).Get("/{slug}/agents", presenceHandler.ListPresence)
-		r.With(readGuard).Get("/{slug}/connect", roomConnectHandler.GetRoomConnect)
+		// Per-room reads are decided by the same policy as GET /{slug}/entries: open for
+		// public rooms, members-only (403 otherwise) for closed rooms, and a presented room
+		// token must be valid (401) and for THIS room (403).
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}", roomHandler.GetRoom)
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/agents", presenceHandler.ListPresence)
+		r.With(entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/connect", roomConnectHandler.GetRoomConnect)
 
 		// Message reads are adapters over the canonical timeline: the message entries of
 		// GET /{slug}/entries, decided by the same policy (a presented room token must be
@@ -128,10 +122,11 @@ func mountRoomRoutes(
 			// transcript readable but refuses new messages and joins until reopened.
 			r.Post("/{slug}/archive", roomHandler.ArchiveRoom)
 			r.Post("/{slug}/reopen", roomHandler.ReopenRoom)
-			// Human comment endpoint (JWT-authenticated, rate limited per T-16-02).
-			// RoomAccessGuard restricts posting to a PRIVATE room to its owner/family/members
-			// (public rooms stay open to any authenticated human) — BART-156 family scope.
-			r.With(apimiddleware.RoomAccessGuard(roomRepo, memberRepo, agentTokenRepo), humanWriteLimit).Post("/{slug}/messages", msgHandler.PostHumanMessage)
+			// Human comment endpoint (JWT-authenticated, rate limited per T-16-02): adapter
+			// into the canonical message submission, decided by the same write policy as
+			// POST /{slug}/entries — a PRIVATE room only for its owner/family/members, a
+			// public room open to any authenticated human (BART-156 family scope).
+			r.With(apimiddleware.RoomPolicyGuard(roomRepo, memberRepo, agentTokenRepo, apimiddleware.RoomWrite), humanWriteLimit).Post("/{slug}/messages", msgHandler.PostHumanMessage)
 
 			// Per-agent handshake + member allowlist management (mission #3).
 			r.Post("/{slug}/handshake", roomHandler.Handshake)

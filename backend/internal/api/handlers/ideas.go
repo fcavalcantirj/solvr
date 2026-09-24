@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -16,9 +15,6 @@ import (
 
 // IdeasRepositoryInterface defines the database operations for ideas.
 type IdeasRepositoryInterface interface {
-	// ListIdeas returns ideas matching the given options.
-	ListIdeas(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error)
-
 	// FindIdeaByID returns a single idea by ID.
 	FindIdeaByID(ctx context.Context, id string) (*models.PostWithAuthor, error)
 
@@ -99,12 +95,6 @@ func (h *IdeasHandler) findIdea(ctx context.Context, id string) (*models.PostWit
 	return idea, nil
 }
 
-// IdeasListResponse is the response for listing ideas.
-type IdeasListResponse struct {
-	Data []models.PostWithAuthor `json:"data"`
-	Meta IdeasListMeta           `json:"meta"`
-}
-
 // IdeasListMeta contains metadata for list responses.
 type IdeasListMeta struct {
 	Total   int  `json:"total"`
@@ -129,69 +119,6 @@ type CreateIdeaRequest struct {
 // EvolveRequest is the request body for evolving an idea.
 type EvolveRequest struct {
 	EvolvedPostID string `json:"evolved_post_id"`
-}
-
-// List handles GET /v1/ideas - list ideas.
-// Per FIX-020: Uses shared PostsRepository if set, to ensure consistency with /v1/posts?type=idea.
-func (h *IdeasHandler) List(w http.ResponseWriter, r *http.Request) {
-	// Parse query parameters
-	opts := models.PostListOptions{
-		Type:    models.PostTypeIdea, // Always filter by idea type
-		Page:    parseIdeasIntParam(r.URL.Query().Get("page"), 1),
-		PerPage: parseIdeasIntParam(r.URL.Query().Get("per_page"), 20),
-	}
-
-	if opts.Page < 1 {
-		opts.Page = 1
-	}
-	if opts.PerPage < 1 {
-		opts.PerPage = 20
-	}
-	if opts.PerPage > 50 {
-		opts.PerPage = 50 // Cap at 50 per SPEC.md
-	}
-
-	// Parse status filter
-	if statusParam := r.URL.Query().Get("status"); statusParam != "" {
-		opts.Status = models.PostStatus(statusParam)
-	}
-
-	// Parse tags filter
-	if tagsParam := r.URL.Query().Get("tags"); tagsParam != "" {
-		opts.Tags = strings.Split(tagsParam, ",")
-		for i, tag := range opts.Tags {
-			opts.Tags[i] = strings.TrimSpace(tag)
-		}
-	}
-
-	// Execute query - prefer postsRepo for consistent data with /v1/posts
-	var ideas []models.PostWithAuthor
-	var total int
-	var err error
-	if h.postsRepo != nil {
-		ideas, total, err = h.postsRepo.List(r.Context(), opts)
-	} else {
-		ideas, total, err = h.repo.ListIdeas(r.Context(), opts)
-	}
-	if err != nil {
-		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list ideas")
-		return
-	}
-
-	// Calculate has_more
-	hasMore := (opts.Page * opts.PerPage) < total
-
-	response := IdeasListResponse{
-		Data: ideas,
-		Meta: IdeasListMeta{
-			Total:   total,
-			Page:    opts.Page,
-			PerPage: opts.PerPage,
-			HasMore: hasMore,
-		},
-	}
-
-	writeIdeasJSON(w, http.StatusOK, response)
 }
 
 // Get handles GET /v1/ideas/:id - get a single idea with responses.

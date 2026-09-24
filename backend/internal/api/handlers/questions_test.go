@@ -19,11 +19,8 @@ import (
 
 // MockQuestionsRepository implements QuestionsRepositoryInterface for testing.
 type MockQuestionsRepository struct {
-	questions       []models.PostWithAuthor
 	question        *models.PostWithAuthor
-	total           int
 	err             error
-	listOpts        models.PostListOptions
 	answers         []models.AnswerWithAuthor
 	answer          *models.AnswerWithAuthor
 	answersErr      error
@@ -36,17 +33,8 @@ type MockQuestionsRepository struct {
 
 func NewMockQuestionsRepository() *MockQuestionsRepository {
 	return &MockQuestionsRepository{
-		questions: []models.PostWithAuthor{},
-		answers:   []models.AnswerWithAuthor{},
+		answers: []models.AnswerWithAuthor{},
 	}
-}
-
-func (m *MockQuestionsRepository) ListQuestions(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error) {
-	m.listOpts = opts
-	if m.err != nil {
-		return nil, 0, m.err
-	}
-	return m.questions, m.total, nil
 }
 
 func (m *MockQuestionsRepository) FindQuestionByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {
@@ -125,11 +113,6 @@ func (m *MockQuestionsRepository) VoteOnAnswer(ctx context.Context, answerID, vo
 		return m.err
 	}
 	return nil
-}
-
-func (m *MockQuestionsRepository) SetQuestions(questions []models.PostWithAuthor, total int) {
-	m.questions = questions
-	m.total = total
 }
 
 func (m *MockQuestionsRepository) SetQuestion(question *models.PostWithAuthor) {
@@ -213,225 +196,6 @@ func addQuestionsAuthContext(r *http.Request, userID, role string) *http.Request
 	}
 	ctx := auth.ContextWithClaims(r.Context(), claims)
 	return r.WithContext(ctx)
-}
-
-// ============================================================================
-// GET /v1/questions - List Questions Tests
-// ============================================================================
-
-// TestListQuestions_Success tests successful listing of questions.
-func TestListQuestions_Success(t *testing.T) {
-	repo := NewMockQuestionsRepository()
-	repo.SetQuestions([]models.PostWithAuthor{
-		createTestQuestion("question-1", "First Question"),
-		createTestQuestion("question-2", "Second Question"),
-	}, 2)
-
-	handler := NewQuestionsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/questions", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	var resp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	data, ok := resp["data"].([]interface{})
-	if !ok {
-		t.Fatal("expected data array in response")
-	}
-
-	if len(data) != 2 {
-		t.Errorf("expected 2 questions, got %d", len(data))
-	}
-}
-
-// TestListQuestions_FiltersType tests that type is automatically set to question.
-func TestListQuestions_FiltersType(t *testing.T) {
-	repo := NewMockQuestionsRepository()
-	repo.SetQuestions([]models.PostWithAuthor{}, 0)
-
-	handler := NewQuestionsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/questions", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	// Verify the filter was set to question
-	if repo.listOpts.Type != models.PostTypeQuestion {
-		t.Errorf("expected type filter 'question', got '%s'", repo.listOpts.Type)
-	}
-}
-
-// TestListQuestions_FilterByStatus tests filtering by status.
-func TestListQuestions_FilterByStatus(t *testing.T) {
-	repo := NewMockQuestionsRepository()
-	repo.SetQuestions([]models.PostWithAuthor{}, 0)
-
-	handler := NewQuestionsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/questions?status=answered", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.listOpts.Status != models.PostStatusAnswered {
-		t.Errorf("expected status filter 'answered', got '%s'", repo.listOpts.Status)
-	}
-}
-
-// TestListQuestions_Pagination tests pagination parameters.
-func TestListQuestions_Pagination(t *testing.T) {
-	repo := NewMockQuestionsRepository()
-	repo.SetQuestions([]models.PostWithAuthor{}, 100)
-
-	handler := NewQuestionsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/questions?page=2&per_page=10", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.listOpts.Page != 2 {
-		t.Errorf("expected page 2, got %d", repo.listOpts.Page)
-	}
-
-	if repo.listOpts.PerPage != 10 {
-		t.Errorf("expected per_page 10, got %d", repo.listOpts.PerPage)
-	}
-}
-
-// TestListQuestions_SortByVotes tests sort=votes parameter.
-func TestListQuestions_SortByVotes(t *testing.T) {
-	repo := NewMockQuestionsRepository()
-	repo.SetQuestions([]models.PostWithAuthor{}, 0)
-
-	handler := NewQuestionsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/questions?sort=votes", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.listOpts.Sort != "votes" {
-		t.Errorf("expected sort 'votes', got '%s'", repo.listOpts.Sort)
-	}
-}
-
-// TestListQuestions_SortByAnswers tests sort=answers parameter.
-func TestListQuestions_SortByAnswers(t *testing.T) {
-	repo := NewMockQuestionsRepository()
-	repo.SetQuestions([]models.PostWithAuthor{}, 0)
-
-	handler := NewQuestionsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/questions?sort=answers", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.listOpts.Sort != "answers" {
-		t.Errorf("expected sort 'answers', got '%s'", repo.listOpts.Sort)
-	}
-}
-
-// TestListQuestions_SortByNewest tests sort=newest parameter.
-func TestListQuestions_SortByNewest(t *testing.T) {
-	repo := NewMockQuestionsRepository()
-	repo.SetQuestions([]models.PostWithAuthor{}, 0)
-
-	handler := NewQuestionsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/questions?sort=newest", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.listOpts.Sort != "newest" {
-		t.Errorf("expected sort 'newest', got '%s'", repo.listOpts.Sort)
-	}
-}
-
-// TestListQuestions_InvalidSortDefaultsToEmpty tests that invalid sort values are silently ignored.
-func TestListQuestions_InvalidSortDefaultsToEmpty(t *testing.T) {
-	repo := NewMockQuestionsRepository()
-	repo.SetQuestions([]models.PostWithAuthor{}, 0)
-
-	handler := NewQuestionsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/questions?sort=invalid", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.listOpts.Sort != "" {
-		t.Errorf("expected empty sort (default), got '%s'", repo.listOpts.Sort)
-	}
-}
-
-// TestListQuestions_HasMore tests has_more pagination flag.
-func TestListQuestions_HasMore(t *testing.T) {
-	repo := NewMockQuestionsRepository()
-	repo.SetQuestions([]models.PostWithAuthor{
-		createTestQuestion("q-1", "Question 1"),
-	}, 50) // Total 50, showing first 20
-
-	handler := NewQuestionsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/questions", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	var resp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	meta := resp["meta"].(map[string]interface{})
-	if meta["has_more"] != true {
-		t.Errorf("expected has_more=true, got %v", meta["has_more"])
-	}
 }
 
 // ============================================================================
@@ -938,79 +702,5 @@ func TestListAnswers_QuestionFromPostsRepo(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("FIX-023: expected status 200, got %d; body: %s", w.Code, w.Body.String())
 		t.Errorf("FIX-023: Question exists in postsRepo but handler returned 404 - handler must use postsRepo.FindByID when available")
-	}
-}
-
-func TestQuestionsHandler_List_HasAnswerFilter(t *testing.T) {
-	repo := NewMockQuestionsRepository()
-	handler := NewQuestionsHandler(repo)
-
-	// Create test questions with different answer counts
-	q1 := createTestQuestion("q1", "Question with 0 answers")
-	q1.AnswersCount = 0
-	
-	q2 := createTestQuestion("q2", "Question with 1 answer")
-	q2.AnswersCount = 1
-	
-	q3 := createTestQuestion("q3", "Question with 3 answers")
-	q3.AnswersCount = 3
-
-	tests := []struct {
-		name           string
-		hasAnswerParam string
-		expectNil      bool
-		expectValue    bool
-	}{
-		{
-			name:           "has_answer=false filters for unanswered",
-			hasAnswerParam: "false",
-			expectNil:      false,
-			expectValue:    false,
-		},
-		{
-			name:           "has_answer=true filters for answered",
-			hasAnswerParam: "true",
-			expectNil:      false,
-			expectValue:    true,
-		},
-		{
-			name:           "no has_answer parameter means no filter",
-			hasAnswerParam: "",
-			expectNil:      true,
-			expectValue:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			repo.SetQuestions([]models.PostWithAuthor{q1, q2, q3}, 3)
-
-			url := "/v1/questions"
-			if tt.hasAnswerParam != "" {
-				url += "?has_answer=" + tt.hasAnswerParam
-			}
-
-			req := httptest.NewRequest(http.MethodGet, url, nil)
-			w := httptest.NewRecorder()
-
-			handler.List(w, req)
-
-			if w.Code != http.StatusOK {
-				t.Errorf("expected status 200, got %d", w.Code)
-			}
-
-			// Verify that the repository received the correct opts
-			if tt.expectNil {
-				if repo.listOpts.HasAnswer != nil {
-					t.Errorf("expected HasAnswer to be nil, got %v", *repo.listOpts.HasAnswer)
-				}
-			} else {
-				if repo.listOpts.HasAnswer == nil {
-					t.Errorf("expected HasAnswer to be %v, got nil", tt.expectValue)
-				} else if *repo.listOpts.HasAnswer != tt.expectValue {
-					t.Errorf("expected HasAnswer to be %v, got %v", tt.expectValue, *repo.listOpts.HasAnswer)
-				}
-			}
-		})
 	}
 }

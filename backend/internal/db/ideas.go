@@ -33,15 +33,6 @@ func NewIdeasRepository(pool *Pool) *IdeasRepository {
 	}
 }
 
-// ListIdeas returns ideas matching the given options.
-// Automatically filters to type='idea' posts only.
-func (r *IdeasRepository) ListIdeas(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error) {
-	// Force type filter to 'idea'
-	opts.Type = models.PostTypeIdea
-
-	return r.postRepo.List(ctx, opts)
-}
-
 // FindIdeaByID returns a single idea by ID.
 // Returns ErrIdeaNotFound if the post doesn't exist or is not an idea.
 func (r *IdeasRepository) FindIdeaByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {

@@ -21,11 +21,8 @@ var ErrResponseNotFound = errors.New("response not found")
 
 // MockIdeasRepository implements IdeasRepositoryInterface for testing.
 type MockIdeasRepository struct {
-	ideas           []models.PostWithAuthor
 	idea            *models.PostWithAuthor
-	total           int
 	err             error
-	listOpts        models.PostListOptions
 	responses       []models.ResponseWithAuthor
 	response        *models.ResponseWithAuthor
 	responsesErr    error
@@ -38,17 +35,8 @@ type MockIdeasRepository struct {
 
 func NewMockIdeasRepository() *MockIdeasRepository {
 	return &MockIdeasRepository{
-		ideas:     []models.PostWithAuthor{},
 		responses: []models.ResponseWithAuthor{},
 	}
-}
-
-func (m *MockIdeasRepository) ListIdeas(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error) {
-	m.listOpts = opts
-	if m.err != nil {
-		return nil, 0, m.err
-	}
-	return m.ideas, m.total, nil
 }
 
 func (m *MockIdeasRepository) FindIdeaByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {
@@ -129,11 +117,6 @@ func (m *MockIdeasRepository) FindPostByID(ctx context.Context, id string) (*mod
 	return nil, ErrIdeaNotFound
 }
 
-func (m *MockIdeasRepository) SetIdeas(ideas []models.PostWithAuthor, total int) {
-	m.ideas = ideas
-	m.total = total
-}
-
 func (m *MockIdeasRepository) SetIdea(idea *models.PostWithAuthor) {
 	m.idea = idea
 }
@@ -212,123 +195,6 @@ func addIdeasAuthContext(r *http.Request, userID, role string) *http.Request {
 	claims := &auth.Claims{UserID: userID, Role: role}
 	ctx := auth.ContextWithClaims(r.Context(), claims)
 	return r.WithContext(ctx)
-}
-
-// TestListIdeas_Success tests successful listing of ideas.
-func TestListIdeas_Success(t *testing.T) {
-	repo := NewMockIdeasRepository()
-	repo.SetIdeas([]models.PostWithAuthor{
-		createTestIdea("idea-1", "First Idea"),
-		createTestIdea("idea-2", "Second Idea"),
-	}, 2)
-
-	handler := NewIdeasHandler(repo)
-	req := httptest.NewRequest(http.MethodGet, "/v1/ideas", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	var resp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	data, ok := resp["data"].([]interface{})
-	if !ok {
-		t.Fatal("expected data array in response")
-	}
-	if len(data) != 2 {
-		t.Errorf("expected 2 ideas, got %d", len(data))
-	}
-}
-
-// TestListIdeas_FiltersType tests that type is automatically set to idea.
-func TestListIdeas_FiltersType(t *testing.T) {
-	repo := NewMockIdeasRepository()
-	repo.SetIdeas([]models.PostWithAuthor{}, 0)
-
-	handler := NewIdeasHandler(repo)
-	req := httptest.NewRequest(http.MethodGet, "/v1/ideas", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-	if repo.listOpts.Type != models.PostTypeIdea {
-		t.Errorf("expected type filter 'idea', got '%s'", repo.listOpts.Type)
-	}
-}
-
-// TestListIdeas_FilterByStatus tests filtering by status.
-func TestListIdeas_FilterByStatus(t *testing.T) {
-	repo := NewMockIdeasRepository()
-	repo.SetIdeas([]models.PostWithAuthor{}, 0)
-
-	handler := NewIdeasHandler(repo)
-	req := httptest.NewRequest(http.MethodGet, "/v1/ideas?status=active", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-	if repo.listOpts.Status != models.PostStatusActive {
-		t.Errorf("expected status filter 'active', got '%s'", repo.listOpts.Status)
-	}
-}
-
-// TestListIdeas_Pagination tests pagination parameters.
-func TestListIdeas_Pagination(t *testing.T) {
-	repo := NewMockIdeasRepository()
-	repo.SetIdeas([]models.PostWithAuthor{}, 100)
-
-	handler := NewIdeasHandler(repo)
-	req := httptest.NewRequest(http.MethodGet, "/v1/ideas?page=2&per_page=10", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-	if repo.listOpts.Page != 2 {
-		t.Errorf("expected page 2, got %d", repo.listOpts.Page)
-	}
-	if repo.listOpts.PerPage != 10 {
-		t.Errorf("expected per_page 10, got %d", repo.listOpts.PerPage)
-	}
-}
-
-// TestListIdeas_HasMore tests has_more pagination flag.
-func TestListIdeas_HasMore(t *testing.T) {
-	repo := NewMockIdeasRepository()
-	repo.SetIdeas([]models.PostWithAuthor{createTestIdea("i-1", "Idea 1")}, 50)
-
-	handler := NewIdeasHandler(repo)
-	req := httptest.NewRequest(http.MethodGet, "/v1/ideas", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	var resp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	meta := resp["meta"].(map[string]interface{})
-	if meta["has_more"] != true {
-		t.Errorf("expected has_more=true, got %v", meta["has_more"])
-	}
 }
 
 // TestGetIdea_Success tests successful retrieval of an idea.

@@ -19,9 +19,6 @@ import (
 
 // ProblemsRepositoryInterface defines the database operations for problems.
 type ProblemsRepositoryInterface interface {
-	// ListProblems returns problems matching the given options.
-	ListProblems(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error)
-
 	// FindProblemByID returns a single problem by ID.
 	FindProblemByID(ctx context.Context, id string) (*models.PostWithAuthor, error)
 
@@ -134,12 +131,6 @@ func (h *ProblemsHandler) findProblem(ctx context.Context, id string) (*models.P
 	return problem, nil
 }
 
-// ProblemsListResponse is the response for listing problems.
-type ProblemsListResponse struct {
-	Data []models.PostWithAuthor `json:"data"`
-	Meta ProblemsListMeta        `json:"meta"`
-}
-
 // ProblemsListMeta contains metadata for list responses.
 type ProblemsListMeta struct {
 	Total   int  `json:"total"`
@@ -160,78 +151,6 @@ type CreateProblemRequest struct {
 	Tags            []string `json:"tags,omitempty"`
 	SuccessCriteria []string `json:"success_criteria,omitempty"`
 	Weight          *int     `json:"weight,omitempty"`
-}
-
-// List handles GET /v1/problems - list problems.
-// Per FIX-020: Uses shared PostsRepository if set, to ensure consistency with /v1/posts?type=problem.
-func (h *ProblemsHandler) List(w http.ResponseWriter, r *http.Request) {
-	// Parse query parameters
-	opts := models.PostListOptions{
-		Type:    models.PostTypeProblem, // Always filter by problem type
-		Page:    parseProblemsIntParam(r.URL.Query().Get("page"), 1),
-		PerPage: parseProblemsIntParam(r.URL.Query().Get("per_page"), 20),
-	}
-
-	if opts.Page < 1 {
-		opts.Page = 1
-	}
-	if opts.PerPage < 1 {
-		opts.PerPage = 20
-	}
-	if opts.PerPage > 50 {
-		opts.PerPage = 50 // Cap at 50 per SPEC.md
-	}
-
-	// Parse status filter
-	if statusParam := r.URL.Query().Get("status"); statusParam != "" {
-		opts.Status = models.PostStatus(statusParam)
-	}
-
-	// Parse sort parameter
-	if sortParam := r.URL.Query().Get("sort"); sortParam != "" {
-		switch sortParam {
-		case "newest", "votes", "approaches":
-			opts.Sort = sortParam
-		}
-		// Invalid values are silently ignored (defaults to newest)
-	}
-
-	// Parse tags filter
-	if tagsParam := r.URL.Query().Get("tags"); tagsParam != "" {
-		opts.Tags = strings.Split(tagsParam, ",")
-		for i, tag := range opts.Tags {
-			opts.Tags[i] = strings.TrimSpace(tag)
-		}
-	}
-
-	// Execute query - prefer postsRepo for consistent data with /v1/posts
-	var problems []models.PostWithAuthor
-	var total int
-	var err error
-	if h.postsRepo != nil {
-		problems, total, err = h.postsRepo.List(r.Context(), opts)
-	} else {
-		problems, total, err = h.repo.ListProblems(r.Context(), opts)
-	}
-	if err != nil {
-		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list problems")
-		return
-	}
-
-	// Calculate has_more
-	hasMore := (opts.Page * opts.PerPage) < total
-
-	response := ProblemsListResponse{
-		Data: problems,
-		Meta: ProblemsListMeta{
-			Total:   total,
-			Page:    opts.Page,
-			PerPage: opts.PerPage,
-			HasMore: hasMore,
-		},
-	}
-
-	writeProblemsJSON(w, http.StatusOK, response)
 }
 
 // Get handles GET /v1/problems/:id - get a single problem.

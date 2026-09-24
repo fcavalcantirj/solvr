@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -19,9 +18,6 @@ import (
 
 // QuestionsRepositoryInterface defines the database operations for questions.
 type QuestionsRepositoryInterface interface {
-	// ListQuestions returns questions matching the given options.
-	ListQuestions(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error)
-
 	// FindQuestionByID returns a single question by ID.
 	FindQuestionByID(ctx context.Context, id string) (*models.PostWithAuthor, error)
 
@@ -122,12 +118,6 @@ func (h *QuestionsHandler) findQuestion(ctx context.Context, id string) (*models
 	return question, nil
 }
 
-// QuestionsListResponse is the response for listing questions.
-type QuestionsListResponse struct {
-	Data []models.PostWithAuthor `json:"data"`
-	Meta QuestionsListMeta       `json:"meta"`
-}
-
 // QuestionsListMeta contains metadata for list responses.
 type QuestionsListMeta struct {
 	Total   int  `json:"total"`
@@ -150,89 +140,6 @@ type CreateQuestionRequest struct {
 }
 
 // Note: VoteRequest is defined in posts.go and shared across handlers.
-
-// List handles GET /v1/questions - list questions.
-// Per FIX-020: Uses shared PostsRepository if set, to ensure consistency with /v1/posts?type=question.
-func (h *QuestionsHandler) List(w http.ResponseWriter, r *http.Request) {
-	// Parse query parameters
-	opts := models.PostListOptions{
-		Type:    models.PostTypeQuestion, // Always filter by question type
-		Page:    parseQuestionsIntParam(r.URL.Query().Get("page"), 1),
-		PerPage: parseQuestionsIntParam(r.URL.Query().Get("per_page"), 20),
-	}
-
-	if opts.Page < 1 {
-		opts.Page = 1
-	}
-	if opts.PerPage < 1 {
-		opts.PerPage = 20
-	}
-	if opts.PerPage > 50 {
-		opts.PerPage = 50 // Cap at 50 per SPEC.md
-	}
-
-	// Parse status filter
-	if statusParam := r.URL.Query().Get("status"); statusParam != "" {
-		opts.Status = models.PostStatus(statusParam)
-	}
-
-	// Parse sort parameter
-	if sortParam := r.URL.Query().Get("sort"); sortParam != "" {
-		switch sortParam {
-		case "newest", "votes", "top", "answers": // "top" is frontend alias for vote-based sorting
-			opts.Sort = sortParam
-		}
-		// Invalid values are silently ignored (defaults to newest)
-	}
-
-	// Parse tags filter
-	if tagsParam := r.URL.Query().Get("tags"); tagsParam != "" {
-		opts.Tags = strings.Split(tagsParam, ",")
-		for i, tag := range opts.Tags {
-			opts.Tags[i] = strings.TrimSpace(tag)
-		}
-	}
-
-	// Parse has_answer filter
-	if hasAnswerParam := r.URL.Query().Get("has_answer"); hasAnswerParam != "" {
-		if hasAnswerParam == "true" {
-			trueVal := true
-			opts.HasAnswer = &trueVal
-		} else if hasAnswerParam == "false" {
-			falseVal := false
-			opts.HasAnswer = &falseVal
-		}
-	}
-
-	// Execute query - prefer postsRepo for consistent data with /v1/posts
-	var questions []models.PostWithAuthor
-	var total int
-	var err error
-	if h.postsRepo != nil {
-		questions, total, err = h.postsRepo.List(r.Context(), opts)
-	} else {
-		questions, total, err = h.repo.ListQuestions(r.Context(), opts)
-	}
-	if err != nil {
-		writeQuestionsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list questions")
-		return
-	}
-
-	// Calculate has_more
-	hasMore := (opts.Page * opts.PerPage) < total
-
-	response := QuestionsListResponse{
-		Data: questions,
-		Meta: QuestionsListMeta{
-			Total:   total,
-			Page:    opts.Page,
-			PerPage: opts.PerPage,
-			HasMore: hasMore,
-		},
-	}
-
-	writeQuestionsJSON(w, http.StatusOK, response)
-}
 
 // Get handles GET /v1/questions/:id - get a single question with answers.
 // Per FIX-023: Uses findQuestion() to find questions from either postsRepo or questionsRepo.

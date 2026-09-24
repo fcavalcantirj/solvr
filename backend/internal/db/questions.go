@@ -31,15 +31,6 @@ func NewQuestionsRepository(pool *Pool) *QuestionsRepository {
 	}
 }
 
-// ListQuestions returns questions matching the given options.
-// Automatically filters to type='question' posts only.
-func (r *QuestionsRepository) ListQuestions(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error) {
-	// Force type filter to 'question'
-	opts.Type = models.PostTypeQuestion
-
-	return r.postRepo.List(ctx, opts)
-}
-
 // FindQuestionByID returns a single question by ID.
 // Returns ErrQuestionNotFound if the post doesn't exist or is not a question.
 func (r *QuestionsRepository) FindQuestionByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {

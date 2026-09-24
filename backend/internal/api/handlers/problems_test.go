@@ -17,11 +17,8 @@ import (
 
 // MockProblemsRepository implements ProblemsRepositoryInterface for testing.
 type MockProblemsRepository struct {
-	posts           []models.PostWithAuthor
 	post            *models.PostWithAuthor
-	total           int
 	err             error
-	listOpts        models.PostListOptions
 	approaches      []models.ApproachWithAuthor
 	approach        *models.ApproachWithAuthor
 	approachesErr   error
@@ -33,17 +30,8 @@ type MockProblemsRepository struct {
 
 func NewMockProblemsRepository() *MockProblemsRepository {
 	return &MockProblemsRepository{
-		posts:      []models.PostWithAuthor{},
 		approaches: []models.ApproachWithAuthor{},
 	}
-}
-
-func (m *MockProblemsRepository) ListProblems(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error) {
-	m.listOpts = opts
-	if m.err != nil {
-		return nil, 0, m.err
-	}
-	return m.posts, m.total, nil
 }
 
 func (m *MockProblemsRepository) FindProblemByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {
@@ -126,11 +114,6 @@ func (m *MockProblemsRepository) UpdateProblemStatus(ctx context.Context, proble
 		return m.err
 	}
 	return nil
-}
-
-func (m *MockProblemsRepository) SetPosts(posts []models.PostWithAuthor, total int) {
-	m.posts = posts
-	m.total = total
 }
 
 func (m *MockProblemsRepository) SetPost(post *models.PostWithAuthor) {
@@ -221,198 +204,6 @@ func addProblemsAuthContext(r *http.Request, userID, role string) *http.Request 
 	}
 	ctx := auth.ContextWithClaims(r.Context(), claims)
 	return r.WithContext(ctx)
-}
-
-// ============================================================================
-// GET /v1/problems - List Problems Tests
-// ============================================================================
-
-// TestListProblems_Success tests successful listing of problems.
-func TestListProblems_Success(t *testing.T) {
-	repo := NewMockProblemsRepository()
-	repo.SetPosts([]models.PostWithAuthor{
-		createTestProblem("problem-1", "First Problem"),
-		createTestProblem("problem-2", "Second Problem"),
-	}, 2)
-
-	handler := NewProblemsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/problems", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	var resp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	data, ok := resp["data"].([]interface{})
-	if !ok {
-		t.Fatal("expected data array in response")
-	}
-
-	if len(data) != 2 {
-		t.Errorf("expected 2 problems, got %d", len(data))
-	}
-}
-
-// TestListProblems_FiltersType tests that type is automatically set to problem.
-func TestListProblems_FiltersType(t *testing.T) {
-	repo := NewMockProblemsRepository()
-	repo.SetPosts([]models.PostWithAuthor{}, 0)
-
-	handler := NewProblemsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/problems", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	// Verify the filter was set to problem
-	if repo.listOpts.Type != models.PostTypeProblem {
-		t.Errorf("expected type filter 'problem', got '%s'", repo.listOpts.Type)
-	}
-}
-
-// TestListProblems_FilterByStatus tests filtering by status.
-func TestListProblems_FilterByStatus(t *testing.T) {
-	repo := NewMockProblemsRepository()
-	repo.SetPosts([]models.PostWithAuthor{}, 0)
-
-	handler := NewProblemsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/problems?status=solved", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.listOpts.Status != models.PostStatusSolved {
-		t.Errorf("expected status filter 'solved', got '%s'", repo.listOpts.Status)
-	}
-}
-
-// TestListProblems_Pagination tests pagination parameters.
-func TestListProblems_Pagination(t *testing.T) {
-	repo := NewMockProblemsRepository()
-	repo.SetPosts([]models.PostWithAuthor{}, 100)
-
-	handler := NewProblemsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/problems?page=2&per_page=10", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.listOpts.Page != 2 {
-		t.Errorf("expected page 2, got %d", repo.listOpts.Page)
-	}
-
-	if repo.listOpts.PerPage != 10 {
-		t.Errorf("expected per_page 10, got %d", repo.listOpts.PerPage)
-	}
-}
-
-// TestListProblems_SortByVotes tests sorting by vote score.
-func TestListProblems_SortByVotes(t *testing.T) {
-	repo := NewMockProblemsRepository()
-	repo.SetPosts([]models.PostWithAuthor{}, 0)
-
-	handler := NewProblemsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/problems?sort=votes", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.listOpts.Sort != "votes" {
-		t.Errorf("expected sort 'votes', got '%s'", repo.listOpts.Sort)
-	}
-}
-
-// TestListProblems_SortByApproaches tests sorting by approach count.
-func TestListProblems_SortByApproaches(t *testing.T) {
-	repo := NewMockProblemsRepository()
-	repo.SetPosts([]models.PostWithAuthor{}, 0)
-
-	handler := NewProblemsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/problems?sort=approaches", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	if repo.listOpts.Sort != "approaches" {
-		t.Errorf("expected sort 'approaches', got '%s'", repo.listOpts.Sort)
-	}
-}
-
-// TestListProblems_DefaultSortNewest tests that no sort param defaults to newest.
-func TestListProblems_DefaultSortNewest(t *testing.T) {
-	repo := NewMockProblemsRepository()
-	repo.SetPosts([]models.PostWithAuthor{}, 0)
-
-	handler := NewProblemsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/problems", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	// Default sort should be empty (repo interprets as newest)
-	if repo.listOpts.Sort != "" {
-		t.Errorf("expected empty sort (default newest), got '%s'", repo.listOpts.Sort)
-	}
-}
-
-// TestListProblems_InvalidSortIgnored tests that invalid sort values are ignored.
-func TestListProblems_InvalidSortIgnored(t *testing.T) {
-	repo := NewMockProblemsRepository()
-	repo.SetPosts([]models.PostWithAuthor{}, 0)
-
-	handler := NewProblemsHandler(repo)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/problems?sort=invalid", nil)
-	w := httptest.NewRecorder()
-
-	handler.List(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	// Invalid sort should be ignored (empty = default newest)
-	if repo.listOpts.Sort != "" {
-		t.Errorf("expected empty sort for invalid value, got '%s'", repo.listOpts.Sort)
-	}
 }
 
 // ============================================================================

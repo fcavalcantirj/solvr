@@ -32,15 +32,6 @@ func NewProblemsRepository(pool *Pool) *ProblemsRepository {
 	}
 }
 
-// ListProblems returns problems matching the given options.
-// Automatically filters to type='problem' posts only.
-func (r *ProblemsRepository) ListProblems(ctx context.Context, opts models.PostListOptions) ([]models.PostWithAuthor, int, error) {
-	// Force type filter to 'problem'
-	opts.Type = models.PostTypeProblem
-
-	return r.postRepo.List(ctx, opts)
-}
-
 // FindProblemByID returns a single problem by ID.
 // Returns ErrProblemNotFound if the post doesn't exist or is not a problem.
 func (r *ProblemsRepository) FindProblemByID(ctx context.Context, id string) (*models.PostWithAuthor, error) {

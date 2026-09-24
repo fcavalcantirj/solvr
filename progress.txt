@@ -10662,3 +10662,134 @@ REMAINING FOR idx 72 (unchanged from slice 4 minus this): Step 3 rest — contri
   its own slice), then retire the now-unserved typed List methods (problems/questions/ideas
   .List). Step 2 — search/rooms/overview filter+ordering+pagination+visibility contract tests.
   Step 5 runtime — legacy status-command migration error (still waits on first-party cutover).
+
+================================================================================
+2026-09-24 — Task idx 72 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and
+statistics APIs"
+SLICE 6 of N: retire the DEAD typed-discovery query stack (step 3 "Adapt then retire ...
+specialized problem/idea/question discovery ... rather than leaving independent query stacks
+behind"). The /v1/problems, /v1/questions, /v1/ideas LIST routes were already served by the
+canonical-posts adapter legacyTypedListAdapter(postsHandler.List, <type>) (idx 71, commits
+f559823/711b448-era + router_legacy_discovery_test.go); this slice removes the now-orphaned
+typed handler .List methods and their thin repo List wrappers that the adapter replaced. Same
+pattern as slice 5 (feed retirement).
+================================================================================
+
+TASK SELECTION (verified MYSELF this session, not trusted from journal):
+  - Confirmed spec.json indexing is 0-based (matches git "idx 72" + journal). First-false is
+    idx 23 (ACCEPTANCE, "Verify N-agent collaboration end to end across clients and service
+    instances"): step 4 requires "Distribute participants across two API instances" = idx 78
+    (operations, multi-instance) which is passes=false/not built. Acceptance-task rule =>
+    defer. idx 51/52 (route agent integrations / search retained knowledge) need the knowledge
+    cutover (idx 67/93) — not built. idx 58 (server-permission audit) spans search/social-
+    metadata from idx 52/63. idx 66 (ACCEPTANCE planner/executor journey on a test deployment)
+    — defer. idx 67 (reduce knowledge DB) needs migration/cutover. idx 68-71 passes=true.
+    => idx 72 is again the first BUILDABLE task; continued it.
+  - Within idx 72, chose typed-List retirement OVER the contributions-rewire slice the slice-5
+    journal named "next": (a) it is the next literal item in step 3's own enumeration
+    (feed -> problem/idea/question discovery -> contributions); (b) it is provably dead code
+    (routes use the adapter, not these methods); (c) named-replacement tests ALREADY EXIST
+    (router_legacy_discovery_test.go); (d) far lower risk than the contributions rewire, which
+    needs a NEW ReplyRepository.ListByAuthor + verification of migration data state. Left
+    contributions + step-2 search/rooms/overview contract tests + step-5 legacy status
+    migration error (still blocked on first-party client cutover) for later slices.
+
+WHAT WAS DEAD (verified [REAL] before touching):
+  - handlers ProblemsHandler.List / QuestionsHandler.List / IdeasHandler.List: grep of router.go
+    (non-test) = ZERO refs to these methods; the routes wire legacyTypedListAdapter(
+    postsHandler.List, "problem"|"question"|"idea"). Only callers were their own unit tests.
+  - db ProblemsRepository.ListProblems / QuestionsRepository.ListQuestions /
+    IdeasRepository.ListIdeas: each is a THIN delegator to postRepo.List(opts) with the type
+    forced; grep non-test outside the retired handler = ZERO. (ListIdeas also had two direct db
+    tests — see REPLACED.)
+
+FILES ([REAL] git status --porcelain / git diff --stat: 10 files, +1 / -1085):
+  M backend/internal/api/handlers/problems.go   (-81: iface ListProblems, ProblemsListResponse
+      struct, List method; KEPT ProblemsListMeta + parseProblemsIntParam — both used by
+      approaches_handler.go)
+  M backend/internal/api/handlers/questions.go  (-93: iface ListQuestions, QuestionsListResponse
+      struct, List method, now-unused "strings" import; KEPT QuestionsListMeta +
+      parseQuestionsIntParam — both used by ListAnswers/AnswersListResponse)
+  M backend/internal/api/handlers/ideas.go      (-73: iface ListIdeas, IdeasListResponse struct,
+      List method, now-unused "strings" import; KEPT IdeasListMeta + parseIdeasIntParam — both
+      used by ListResponses/ResponsesListResponse)
+  M backend/internal/db/problems.go             (-9: ListProblems wrapper)
+  M backend/internal/db/questions.go            (-9: ListQuestions wrapper)
+  M backend/internal/db/ideas.go                (-9: ListIdeas wrapper)
+  M backend/internal/api/handlers/problems_test.go  (-209: 8 TestListProblems_* + mock
+      ListProblems + orphaned SetPosts/posts/total/listOpts)
+  M backend/internal/api/handlers/questions_test.go (-312/+ : 9 TestListQuestions_* +
+      TestQuestionsHandler_List_HasAnswerFilter + mock ListQuestions + orphaned
+      SetQuestions/questions/total/listOpts)
+  M backend/internal/api/handlers/ideas_test.go     (-134/+1: 5 TestListIdeas_* + mock ListIdeas
+      + orphaned SetIdeas/ideas/total/listOpts; +1 = one blank separator line restored)
+  M backend/internal/db/ideas_test.go               (-157: 2 db-level ListIdeas tests)
+  postsHandler.List / the /v1/problems|/questions|/ideas routes / models.Post* : UNCHANGED.
+
+NAMED-REPLACEMENT (no test deleted without a named live-behavior replacement):
+  handlers .List tests (TestListProblems_*/TestListQuestions_*/TestListIdeas_* +
+  TestQuestionsHandler_List_HasAnswerFilter) guarded the RETIRED typed handler List path in
+  isolation (mock repo). The LIVE /v1/{type} behavior they proxied is pinned end-to-end by
+  internal/api/router_legacy_discovery_test.go:
+    - TestLegacyTypedDiscovery_ServedByCanonicalPostsList (problem|question|idea == canonical
+      /v1/posts?type=<t>): replaces the *_Success / _FiltersType tests.
+    - TestLegacyTypedDiscovery_AcceptsLenientLegacyQueryShape (per_page=200 -> clamp 50;
+      page=abc&per_page=0 -> defaults): replaces the *_Pagination / _HasMore / invalid-sort /
+      _FilterByStatus handler tests (lenient legacy pagination + type pin).
+    - TestLegacyTypedDiscovery_AnnouncesCanonicalSuccessor: deprecation headers.
+    - TestPostsList_HasAnswerFilterDefinedOnce (GET /v1/questions?has_answer= reaches canonical
+      once): replaces TestQuestionsHandler_List_HasAnswerFilter.
+  The underlying filter/sort/pagination logic (now the canonical postsHandler.List /
+  PostRepository.List) is guarded by internal/db/posts_test.go: List_FilterByType,
+  List_FilterByStatus, List_Pagination, List_SortByVotes, List_SortByApproaches,
+  List_SortByAnswers, List_HasAnswerTrue/False, List_ExcludesDeleted (unchanged, all pass).
+  db/ideas_test.go removed (2 tests exercised the retired ListIdeas wrapper directly):
+    - TestIdeasRepository_ListIdeas_FiltersToIdeasOnly -> TestPostRepository_List_FilterByType
+      (posts_test.go:214, guards List(type=idea) returns only ideas) + the router adapter test
+      above (live /v1/ideas -> canonical type=idea).
+    - TestIdeasRepository_ListIdeas_FilterByStatus -> TestPostRepository_List_FilterByStatus
+      (posts_test.go:278, guards status pass-through on the same underlying query).
+    Kept db/ideas_test.go tests (FindIdeaByID_*, CreateIdea_SetsType, AddEvolvedInto_Success)
+    are untouched; "context/testing/time/models/uuid" imports all still used.
+
+ORPHANED-HELPER CLEANUP (dead ONLY because these tests were removed; grep-confirmed unused
+  package-wide before removal — MockProblemsRepository.SetPosts/posts/total/listOpts,
+  MockQuestionsRepository.SetQuestions/questions/total/listOpts,
+  MockIdeasRepository.SetIdeas/ideas/total/listOpts). posts_vote_test.go:341 SetPosts belongs
+  to MockPostsRepository (a DIFFERENT mock) — verified, not touched.
+
+TDD: this is a REFACTOR (removing a dead, adapter-replaced query stack; no new production
+  behavior). Per the golden rule for refactors, the behavior is pinned by the pre-existing
+  named-replacement tests, run GREEN before and after. RED is not applicable (no new behavior);
+  the only +1 line is a restored blank separator, not new logic.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test):
+  [TEST] go test ./internal/api/ -run 'TestLegacyTypedDiscovery|TestPostsList_HasAnswerFilter\
+    DefinedOnce' -count=1 -v: all PASS, 0 SKIP.
+  [TEST] go test ./internal/db/ -run 'TestPostRepository_List_FilterByType|TestPostRepository_\
+    List_FilterByStatus|TestIdeasRepository_' -count=1: ok (named replacements + kept idea db
+    tests PASS, 0 SKIP).
+  [REAL] go build ./... EXIT 0; go vet ./internal/api/... ./internal/db/ clean; gofmt -l on the
+    10 changed files reports ONLY internal/db/problems.go — a PRE-EXISTING struct-field
+    alignment issue (git show HEAD:...db/problems.go | gofmt -l => already dirty at HEAD, on
+    lines 20-24 of the ProblemsRepository struct which this slice did NOT touch; left untouched
+    to avoid modifying lines I did not author). All 10 files < 800 lines (max = questions_test.go
+    706; check-file-size only shrinks).
+  [TEST] FULL go test ./... -p 1 -count=1 (/tmp/i72s6_full.log, runner exit 0): 72 unique
+    --- FAIL, 3 packages FAIL (api, handlers, db). DECISIVE: comm of the sorted unique FAIL set
+    vs the slice-5 HEAD baseline (/tmp/i72s5_full.log, also 72): GONE = 0, NEW = 0 — the failure
+    set is IDENTICAL. => this slice introduced ZERO regressions. The 72 are the documented pre-
+    existing environmental failures (IPFS "node unreachable", relation "service_checks" does not
+    exist, AgentRepository.List NULL-column scan pollution in the shared solvr_test DB). No
+    Problem/Question/Idea/Feed/List handler or repo test flipped.
+  No SPEC.md / PROJECT_KNOWLEDGE.md / route-family registry reference to any removed symbol
+    (grep = ZERO); the /v1/problems|/questions|/ideas routes still exist via the adapter, so the
+    "legacy-typed-discovery" route-family decision is unchanged — no SPEC edit required.
+
+REMAINING FOR idx 72 (unchanged from slice 5 minus this): Step 3 rest — contribution listings
+  (/users/{id}/contributions + /me/contributions still read legacy answers/approaches/responses
+  repos directly; ReplyRepository has NO ListByAuthor yet, needs a canonical replies-by-author
+  read + its own slice). Step 2 — search/rooms/overview filter+ordering+pagination+visibility
+  contract tests. Step 5 runtime — legacy status-command migration error (still blocked on
+  first-party client cutover, see slice 2 WHY NOT). idx 72 passes STAYS false.

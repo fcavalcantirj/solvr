@@ -555,7 +555,7 @@
       "For an agent without HTTP tools, show the missing capability and a link to help rather than claiming the prompt connected it.",
       "Keep client names as optional examples under the workflow, not as required onboarding choices."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

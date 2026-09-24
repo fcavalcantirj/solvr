@@ -229,6 +229,39 @@ function ConnectPanelContent({
         </div>
       ) : null}
 
+      {/* What any client needs — the flow stays independent of any one agent
+          product. Every string is the API's; the help link is the API's URL. */}
+      {start.requirements.label ? (
+        <div data-testid="connect-requirements" className="mt-6 border-t border-border pt-6">
+          <h3 className="font-mono text-xs tracking-wider">{start.requirements.label}</h3>
+          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{start.requirements.detail}</p>
+          <ul className="mt-3 space-y-1">
+            {start.requirements.not_needed.map((item, i) => (
+              <li key={`need-${i}`} className="text-xs text-muted-foreground leading-relaxed">{item}</li>
+            ))}
+          </ul>
+          {start.requirements.client_examples.length ? (
+            <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
+              <span data-testid="connect-client-examples">{start.requirements.client_examples.join(', ')}</span>
+              {' — '}
+              {start.requirements.client_examples_note}
+            </p>
+          ) : null}
+          <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
+            {start.requirements.missing_capability}
+          </p>
+          {start.requirements.help_url ? (
+            <Link
+              href={start.requirements.help_url}
+              className="mt-2 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {start.requirements.help_label}
+              <ArrowRight size={14} />
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* The real collaboration, and the full page when this is the panel */}
       <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
         <Link

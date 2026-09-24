@@ -5958,3 +5958,116 @@ remaining confirmation is a visual/browser read, not unit-testable here):
   api.solvr.dev with a real room bearer token. If the a2a-go dependency or the
   official A2A spec version changes, update this page's "Compared with the A2A
   specification" section and the unsupported-operations list to match.
+
+================================================================================
+2026-09-23  TASK: "Demonstrate client independence with tested connection
+            instructions" (category functional)
+================================================================================
+
+TASK SELECTION (top-to-bottom; first buildable false task)
+  - idx "Verify N-agent collaboration end to end across clients and service
+    instances": ACCEPTANCE task spanning the canonical /entries API + multi-
+    instance delivery (both later, false). Left passes=false per
+    ACCEPTANCE-TASKS-ARE-NOT-CHECKLISTS. (unchanged)
+  - idx "Make agent-created rooms manageable even when no human owns/claims":
+    step 2 needs rooms.owner_id RETIRED after migration = later "Use one room
+    membership authority" data task (false). Forward-dep. SKIP. (unchanged)
+  - idx "Make room sharing preserve the public viewing experience": step 5
+    invalidate STREAM access on public->private = later "Keep credentials safe
+    and revocation reliable across streams" task (false). Forward-dep. SKIP.
+    (unchanged)
+  - THIS TASK "Demonstrate client independence with tested connection
+    instructions": the underlying prompt-first flow is ALREADY built (connect
+    tasks pass). Unlike the N-agent E2E task it spans NO unbuilt behavior — its
+    guarantees are API-ownable and testable NOW with PURE tests (precedent:
+    connect_identity_test.go). Only the real multi-client demonstration
+    (Claude Code / OpenClaw / Kimi Code E2E) is inherently owner. TOOK IT as a
+    build task with an owner last-mile.
+
+FACTS VERIFIED FIRST (read the real code; no memory answers)
+  [REAL] Connect flow is fully API-owned: GET /v1/connect (connect.go) is a pure
+    builder the panel renders. Prompts already say "Everything below is plain
+    HTTPS: no Solvr CLI and no human account" and each step detail says "Any
+    agent with HTTPS access will do" (connect.go:277,450,463,476;
+    connect_prompts.go:239). So step 3 (no SDK/vendor/filesystem) was already
+    the design.
+  [REAL] The connect contract had NO client-name choice — client names
+    (Claude Code/OpenClaw/Kimi) appear only in docs/guides as examples, never as
+    a required onboarding field. Presets are role shapes (plan-and-build /
+    build-and-review / collaborate); visibility is public/private. So step 6 was
+    structurally satisfied; no "tested compatibility" badge existed anywhere
+    (step 4).
+  [REAL] Step 5 ("agent without HTTP tools -> show missing capability + help
+    link, not a fake connect") had NO dedicated API-owned surface. This is the
+    net-new buildable behavior of THIS task.
+  [REAL] /docs/protocol already has a "What your client needs" section (built
+    last session) -> the honest help target; no new doc created.
+
+WHAT I BUILT (TDD: RED first via a missing struct field -> compile fail, then
+GREEN) — the API OWNS the client-independence guarantee; the panel renders it.
+  M backend/internal/api/handlers/connect.go (+55): new ConnectRequirements
+    struct + Requirements field on ConnectStart + connectRequirements() builder,
+    wired into buildConnectStart. It states: only outbound HTTPS is needed (3);
+    NotNeeded disclaims SDK/plugin/MCP/CLI, model-vendor subscription, shared
+    filesystem, human account (3); ClientExamples = Claude Code/OpenClaw/Kimi
+    Code as OPTIONAL examples (6); ClientExamplesNote declines tested
+    compatibility for unverified clients (4); MissingCapability + HelpURL
+    (/docs/protocol) + HelpLabel give the honest failure for an agent that
+    cannot make HTTPS requests, forbidding a false "connected" (5).
+  M frontend/lib/connect-types.ts (+19): APIConnectRequirements interface +
+    requirements field on APIConnectStart.
+  M frontend/components/connect/connect-fixture.ts (+18): requirements added to
+    the shared CONNECT_START fixture (spread variants inherit it).
+  M frontend/components/connect/connect-panel.tsx (+33): renders the
+    requirements block from start.requirements.* only — no hardcoded API text
+    (the "dumb terminal" source test still passes); help link uses the API URL.
+  ?? backend/internal/api/handlers/connect_client_independence_test.go (82):
+    4 PURE tests (no DB) pinning steps 3,4,5,6.
+  M frontend/components/connect/connect-panel.test.tsx (+36): 3 tests pinning
+    the rendered requirements block, client examples not being a required
+    choice, and the help link for a missing HTTPS capability.
+
+VERIFICATION (all RAN this session)
+  [TEST] backend go test ./internal/api/handlers/ -run 'ConnectClientIndependence'
+    = 4 PASS, 0 SKIP:
+      TestConnectClientIndependence_RequiresOnlyHTTPS
+      TestConnectClientIndependence_ClientNamesAreOptionalExamples
+      TestConnectClientIndependence_NoTestedCompatibilityBadge
+      TestConnectClientIndependence_MissingHTTPPointsToHelp
+  [TEST] backend go test ./internal/api/handlers/ -run 'Connect' = ok (additive
+    field did not break the connect HTTP/version/identity tests).
+  [REAL] backend go vet ./internal/api/handlers/ clean; go build ./... exit 0.
+  [TEST] frontend npx vitest run components/connect/connect-panel.test.tsx
+    app/connect/page.test.tsx = 31 PASS (25 panel incl. 3 new + 6 page), 0 fail.
+  [TEST] frontend FULL suite npx vitest run = 155 files, 1517 tests PASS
+    (was 1514 last session; +3 = the new client-independence panel tests).
+  [REAL] frontend npx tsc --noEmit exit 0.
+  [REAL] file sizes of every changed file < 800: connect.go 535,
+    connect_client_independence_test.go 82, connect-types.ts 135,
+    connect-panel.tsx 330, connect-panel.test.tsx 347, connect-fixture.ts 222.
+    (The repo's 37 pre-existing check-file-size.sh violations are in files this
+    task did not touch — out of scope.)
+
+DIFF (git status --porcelain / git diff --stat) — matches the work above:
+  M backend/internal/api/handlers/connect.go
+  M frontend/components/connect/connect-fixture.ts
+  M frontend/components/connect/connect-panel.test.tsx
+  M frontend/components/connect/connect-panel.tsx
+  M frontend/lib/connect-types.ts
+  ?? backend/internal/api/handlers/connect_client_independence_test.go
+  (spec.json: this task passes -> true)
+
+UAT (owner last mile — inherently the owner's; every automatable check ran GREEN
+locally. Steps 1-2 need real external clients against a deployment, which this
+sandbox does not have — and step 4 explicitly says an unavailable client stays
+labeled unverified with NO tested-compatibility badge, which the contract now
+enforces):
+  Run the prompt-first flow in two independently configured agent environments
+  (record their product versions + HTTP capabilities). Exercise representative
+  Claude Code, OpenClaw, and Kimi Code paths where available, including a mixed-
+  client pair. Confirm none needs a provider SDK, a specific model-vendor
+  subscription, or a shared filesystem. For an agent with no HTTP tool, confirm
+  it reports the missing capability and links to /docs/protocol rather than
+  claiming it connected. Keep verified clients labeled tested and unavailable
+  ones labeled unverified internally; never show a tested-compatibility badge
+  for a client not actually run.

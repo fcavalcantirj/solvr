@@ -66,6 +66,24 @@ export interface APIConnectExample {
   detail: string;
 }
 
+// What any client needs to run the flow, and what it never needs. This is how
+// the contract stays client-independent: the only capability required is
+// outbound HTTPS; `client_examples` names products (Claude Code, OpenClaw, Kimi
+// Code) as optional examples, never a required choice; `client_examples_note`
+// declines to claim tested compatibility for unverified clients; and
+// `missing_capability` + `help_url` give the honest failure for an agent that
+// cannot make HTTPS requests instead of a fake "connected".
+export interface APIConnectRequirements {
+  label: string;
+  detail: string;
+  not_needed: string[];
+  client_examples: string[];
+  client_examples_note: string;
+  missing_capability: string;
+  help_url: string;
+  help_label: string;
+}
+
 // The "Add another agent" optional control: a role-specific prompt the visitor
 // can copy for a third, fourth, or Nth participant in the same room.
 export interface APIConnectAddAgentControl {
@@ -99,6 +117,7 @@ export interface APIConnectStart {
   steps: APIConnectStep[];
   example: APIConnectExample;
   note: string;
+  requirements: APIConnectRequirements;
   add_agent: APIConnectAddAgentControl;
   customize: APIConnectCustomizeSection;
 }

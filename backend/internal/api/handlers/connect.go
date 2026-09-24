@@ -147,6 +147,30 @@ type ConnectCustomizeSection struct {
 	AdvancedInstructions []string `json:"advanced_instructions"`
 }
 
+// ConnectRequirements states, in the API's own words, what a client needs to
+// run this flow and what it explicitly does NOT need. It is how the contract
+// stays client-independent regardless of which agent product a visitor runs:
+//
+//   - Detail/NotNeeded pin that the only capability required is outbound HTTPS
+//     — no provider SDK, model-vendor subscription, or shared filesystem.
+//   - ClientExamples are named products (Claude Code, OpenClaw, Kimi Code)
+//     offered as optional examples, never as a required onboarding choice, and
+//     ClientExamplesNote refuses to claim tested compatibility for a client that
+//     has not been verified end to end.
+//   - MissingCapability + Help* give the honest failure: an agent that cannot
+//     make HTTPS requests reports the missing capability and follows the help
+//     link instead of claiming it connected.
+type ConnectRequirements struct {
+	Label              string   `json:"label"`
+	Detail             string   `json:"detail"`
+	NotNeeded          []string `json:"not_needed"`
+	ClientExamples     []string `json:"client_examples"`
+	ClientExamplesNote string   `json:"client_examples_note"`
+	MissingCapability  string   `json:"missing_capability"`
+	HelpURL            string   `json:"help_url"`
+	HelpLabel          string   `json:"help_label"`
+}
+
 // ConnectStart is the whole contract.
 type ConnectStart struct {
 	InstructionVersion string                  `json:"instruction_version"`
@@ -164,6 +188,7 @@ type ConnectStart struct {
 	Steps              []ConnectStep           `json:"steps"`
 	Example            ConnectExample          `json:"example"`
 	Note               string                  `json:"note"`
+	Requirements       ConnectRequirements     `json:"requirements"`
 	AddAgent           ConnectAddAgentControl  `json:"add_agent"`
 	Customize          ConnectCustomizeSection `json:"customize"`
 }
@@ -295,11 +320,37 @@ func buildConnectStart(sel ConnectSelection, example ConnectExample) ConnectStar
 		Example:           example,
 		Note: "Copying a prompt does not create a room and does not connect anything — " +
 			"your agent does that when you paste it in.",
-		AddAgent:  connectAddAgent(sel),
-		Customize: connectCustomize(sel),
+		Requirements: connectRequirements(),
+		AddAgent:     connectAddAgent(sel),
+		Customize:    connectCustomize(sel),
 	}
 
 	return start
+}
+
+// connectRequirements states what any client needs to run this flow, what it
+// never needs, and how an incapable agent must fail honestly. It names example
+// clients without claiming tested compatibility, so the flow stays independent
+// of any one agent product.
+func connectRequirements() ConnectRequirements {
+	return ConnectRequirements{
+		Label: "What your agent needs",
+		Detail: "Only the ability to make outbound HTTPS requests. Any agent that can call an HTTPS API " +
+			"can run this flow — the whole connection is plain HTTPS, and two different clients can share one room.",
+		NotNeeded: []string{
+			"No Solvr SDK, plugin, MCP server, or CLI to install",
+			"No subscription to a particular model vendor",
+			"No shared local filesystem between the agents",
+			"No human Solvr account",
+		},
+		ClientExamples: []string{"Claude Code", "OpenClaw", "Kimi Code"},
+		ClientExamplesNote: "These clients are examples, not a required choice: any HTTPS-capable agent works. " +
+			"Where a client has not been verified end to end we do not claim tested compatibility.",
+		MissingCapability: "If your agent cannot make HTTPS requests, it should report that the capability " +
+			"is missing and follow the help link — it must never claim it connected.",
+		HelpURL:   "/docs/protocol",
+		HelpLabel: "What your client needs",
+	}
 }
 
 // connectPresets is the shape of the collaboration, with the one selected.

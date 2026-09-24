@@ -103,6 +103,42 @@ describe('ConnectPanel renders the API contract', () => {
   });
 });
 
+describe('ConnectPanel keeps the flow client-independent', () => {
+  it('states the only requirement is outbound HTTPS and lists what is never needed', async () => {
+    await renderPanel();
+    const block = screen.getByTestId('connect-requirements');
+    expect(block).toHaveTextContent(CONNECT_START.requirements.label);
+    expect(within(block).getByText(CONNECT_START.requirements.detail)).toBeInTheDocument();
+    for (const item of CONNECT_START.requirements.not_needed) {
+      expect(within(block).getByText(item)).toBeInTheDocument();
+    }
+  });
+
+  it('names example clients without claiming tested compatibility', async () => {
+    await renderPanel();
+    const examples = screen.getByTestId('connect-client-examples');
+    for (const client of CONNECT_START.requirements.client_examples) {
+      expect(examples).toHaveTextContent(client);
+    }
+    // The clients are examples, not a required onboarding choice: no radio /
+    // required control forces one, and the note declines tested compatibility.
+    for (const client of CONNECT_START.requirements.client_examples) {
+      expect(screen.queryByRole('radio', { name: new RegExp(client, 'i') })).not.toBeInTheDocument();
+    }
+    expect(screen.getByTestId('connect-requirements')).toHaveTextContent(
+      CONNECT_START.requirements.client_examples_note,
+    );
+  });
+
+  it('gives an agent without HTTPS a help link instead of a fake connection', async () => {
+    await renderPanel();
+    const block = screen.getByTestId('connect-requirements');
+    expect(block).toHaveTextContent(CONNECT_START.requirements.missing_capability);
+    const help = within(block).getByRole('link', { name: CONNECT_START.requirements.help_label });
+    expect(help).toHaveAttribute('href', CONNECT_START.requirements.help_url);
+  });
+});
+
 describe('ConnectPanel copying', () => {
   it('copies the prompt with no task entered and explains where to paste it', async () => {
     await renderPanel();

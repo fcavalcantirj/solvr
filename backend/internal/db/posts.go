@@ -226,7 +226,10 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			COALESCE(cmt_cnt.cnt, 0) as comments_count,
 			COALESCE(ag.human_id::text, '') as agent_human_id,
 			%s,
-			p.visibility
+			p.visibility,
+			p.publication_state,
+			p.moderation_state,
+			p.source_room_id::text
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
@@ -323,6 +326,9 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 		&post.AgentHumanID,
 		&post.UserVote,
 		&post.Visibility,
+		&post.PublicationState,
+		&post.ModerationState,
+		&post.SourceRoomID,
 	)
 	if err != nil {
 		return nil, err
@@ -338,6 +344,9 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 
 	// Compute vote score
 	post.VoteScore = post.Upvotes - post.Downvotes
+
+	// Canonical unified reply count = answers + approaches + comments (BART-583).
+	post.ReplyCount = post.AnswersCount + post.ApproachesCount + post.CommentsCount
 
 	return &post, nil
 }
@@ -368,6 +377,9 @@ func (r *PostRepository) scanPost(row pgx.Row) (*models.Post, error) {
 		&post.CrystallizationCID,
 		&post.CrystallizedAt,
 		&post.Visibility,
+		&post.PublicationState,
+		&post.ModerationState,
+		&post.SourceRoomID,
 	)
 
 	if err != nil {
@@ -430,21 +442,36 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 			accepted_answer_id, evolved_into,
 			embedding,
 			visibility, owner_human_id,
+			publication_state, moderation_state, source_room_id,
 			created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::vector, $15, $16, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::vector, $15, $16, $17, $18, $19, NOW(), NOW())
 		RETURNING id, type, title, description, tags,
 			posted_by_type, posted_by_id, status,
 			upvotes, downvotes, view_count, success_criteria, weight,
 			accepted_answer_id, evolved_into,
 			created_at, updated_at, deleted_at,
-			crystallization_cid, crystallized_at, visibility
+			crystallization_cid, crystallized_at, visibility,
+			publication_state, moderation_state, source_room_id
 	`
 
 	// Default status to 'draft' if not provided
 	status := post.Status
 	if status == "" {
 		status = models.PostStatusDraft
+	}
+
+	// Canonical publication/moderation states (BART-583): derive from the status
+	// unless the caller set them explicitly, keeping the two columns consistent.
+	pub, mod := post.PublicationState, post.ModerationState
+	if pub == "" || mod == "" {
+		dp, dm := models.DeriveStates(status)
+		if pub == "" {
+			pub = dp
+		}
+		if mod == "" {
+			mod = dm
+		}
 	}
 
 	row := r.pool.QueryRow(ctx, query,
@@ -464,6 +491,9 @@ func (r *PostRepository) Create(ctx context.Context, post *models.Post) (*models
 		post.EmbeddingStr,
 		visibilityOrDefault(post.Visibility),
 		post.OwnerHumanID,
+		pub,
+		mod,
+		post.SourceRoomID,
 	)
 
 	return r.scanPost(row)
@@ -524,7 +554,10 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 			COALESCE(cmt_cnt.cnt, 0) as comments_count,
 			COALESCE(ag.human_id::text, '') as agent_human_id,
 			%s,
-			p.visibility
+			p.visibility,
+			p.publication_state,
+			p.moderation_state,
+			p.source_room_id::text
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
@@ -585,6 +618,9 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 		&post.AgentHumanID,
 		&post.UserVote,
 		&post.Visibility,
+		&post.PublicationState,
+		&post.ModerationState,
+		&post.SourceRoomID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -611,6 +647,9 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 	// Compute vote score
 	post.VoteScore = post.Upvotes - post.Downvotes
 
+	// Canonical unified reply count = answers + approaches + comments (BART-583).
+	post.ReplyCount = post.AnswersCount + post.ApproachesCount + post.CommentsCount
+
 	return &post, nil
 }
 
@@ -631,6 +670,8 @@ func (r *PostRepository) Update(ctx context.Context, post *models.Post) (*models
 			accepted_answer_id = $8,
 			evolved_into = $9,
 			embedding = COALESCE($10::vector, embedding),
+			publication_state = $11,
+			moderation_state = $12,
 			updated_at = NOW()
 		WHERE id = $1 AND deleted_at IS NULL
 		RETURNING id, type, title, description, tags,
@@ -638,8 +679,13 @@ func (r *PostRepository) Update(ctx context.Context, post *models.Post) (*models
 			upvotes, downvotes, view_count, success_criteria, weight,
 			accepted_answer_id, evolved_into,
 			created_at, updated_at, deleted_at,
-			crystallization_cid, crystallized_at, visibility
+			crystallization_cid, crystallized_at, visibility,
+			publication_state, moderation_state, source_room_id
 	`
+
+	// Keep the canonical states consistent with the new status (BART-583). The Update
+	// request never carries moderation_state, so an author edit cannot self-approve.
+	pub, mod := models.DeriveStates(post.Status)
 
 	row := r.pool.QueryRow(ctx, query,
 		post.ID,
@@ -652,6 +698,8 @@ func (r *PostRepository) Update(ctx context.Context, post *models.Post) (*models
 		post.AcceptedAnswerID,
 		post.EvolvedInto,
 		post.EmbeddingStr,
+		pub,
+		mod,
 	)
 
 	return r.scanPost(row)
@@ -931,12 +979,16 @@ func (r *PostRepository) SetCrystallizationCID(ctx context.Context, postID, cid 
 
 // UpdateStatus updates only the status of a post.
 func (r *PostRepository) UpdateStatus(ctx context.Context, postID string, status models.PostStatus) error {
+	// Keep the canonical states in step with the legacy status (BART-583): a moderator
+	// approving (status -> open) also marks it published+approved; rejecting marks it
+	// draft+rejected. This is the only path that can set moderation_state to approved.
+	pub, mod := models.DeriveStates(status)
 	query := `
-		UPDATE posts SET status = $1, updated_at = NOW()
+		UPDATE posts SET status = $1, publication_state = $3, moderation_state = $4, updated_at = NOW()
 		WHERE id = $2 AND deleted_at IS NULL
 	`
 
-	result, err := r.pool.Exec(ctx, query, status, postID)
+	result, err := r.pool.Exec(ctx, query, status, postID, pub, mod)
 	if err != nil {
 		if isInvalidUUIDError(err) {
 			return ErrPostNotFound

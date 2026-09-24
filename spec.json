@@ -580,7 +580,7 @@
       "Verify type, weight, success criteria, accepted-answer ID, and evolved-into fields are no longer required or exposed as alternate creation models.",
       "Retain old specialized data only as preserved migration provenance, optional historical context, or compatibility inputs; new internal logic must not branch into Problem, Idea, and Question products."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

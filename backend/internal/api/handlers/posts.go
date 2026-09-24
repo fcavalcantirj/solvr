@@ -264,6 +264,7 @@ type CreatePostRequest struct {
 	SuccessCriteria []string `json:"success_criteria,omitempty"` // For problems
 	Weight          *int     `json:"weight,omitempty"`           // For problems
 	Visibility      string   `json:"visibility,omitempty"`       // "public" (default) or "family" (BART-151)
+	SourceRoomID    *string  `json:"source_room_id,omitempty"`   // Optional room provenance (BART-583)
 }
 
 // UpdatePostRequest is the request body for updating a post.
@@ -473,11 +474,15 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate type
-	postType := models.PostType(req.Type)
-	if !models.IsValidPostType(postType) {
-		writePostsError(w, http.StatusBadRequest, "INVALID_TYPE", "type must be one of: problem, question, idea")
-		return
+	// Type is optional (BART-583): an omitted type creates a canonical untyped post.
+	// A provided type must still be valid, so unknown values are still rejected.
+	postType := models.PostTypePost
+	if req.Type != "" {
+		postType = models.PostType(req.Type)
+		if !models.IsValidPostType(postType) {
+			writePostsError(w, http.StatusBadRequest, "INVALID_TYPE", "type must be one of: problem, question, idea")
+			return
+		}
 	}
 
 	// Validate title
@@ -561,19 +566,27 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		initialStatus = models.PostStatusOpen
 	}
 
+	// Canonical publication/moderation states derived from the initial status (BART-583).
+	// The request never carries moderation_state, so an author cannot self-approve: a
+	// public post starts published-pending and is not publicly eligible until moderated.
+	pubState, modState := models.DeriveStates(initialStatus)
+
 	// Create post with author info from authentication
 	post := &models.Post{
-		Type:            postType,
-		Title:           req.Title,
-		Description:     req.Description,
-		Tags:            req.Tags,
-		PostedByType:    authInfo.AuthorType,
-		PostedByID:      authInfo.AuthorID,
-		Status:          initialStatus,
-		SuccessCriteria: req.SuccessCriteria,
-		Weight:          req.Weight,
-		Visibility:      visibility,
-		OwnerHumanID:    ownerHumanID,
+		Type:             postType,
+		Title:            req.Title,
+		Description:      req.Description,
+		Tags:             req.Tags,
+		PostedByType:     authInfo.AuthorType,
+		PostedByID:       authInfo.AuthorID,
+		Status:           initialStatus,
+		PublicationState: pubState,
+		ModerationState:  modState,
+		SourceRoomID:     req.SourceRoomID,
+		SuccessCriteria:  req.SuccessCriteria,
+		Weight:           req.Weight,
+		Visibility:       visibility,
+		OwnerHumanID:     ownerHumanID,
 	}
 
 	// Synchronous embedding adds ~50-100ms latency but ensures post is immediately searchable

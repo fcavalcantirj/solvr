@@ -12,7 +12,48 @@ const (
 	PostTypeProblem  PostType = "problem"
 	PostTypeQuestion PostType = "question"
 	PostTypeIdea     PostType = "idea"
+	// PostTypePost is the canonical untyped post (BART-583). New posts created
+	// without a type use it; the API no longer requires a problem/question/idea choice.
+	PostTypePost PostType = "post"
 )
+
+// PublicationState is the canonical publication lifecycle of a post, independent
+// of the moderation decision (BART-583).
+type PublicationState string
+
+const (
+	PublicationDraft     PublicationState = "draft"
+	PublicationPublished PublicationState = "published"
+	PublicationArchived  PublicationState = "archived"
+)
+
+// ModerationState is the canonical moderation decision on a post, independent of
+// its publication lifecycle (BART-583). Authors can move publication_state but
+// never moderation_state, so editing a post cannot bypass moderation.
+type ModerationState string
+
+const (
+	ModerationPending  ModerationState = "pending"
+	ModerationApproved ModerationState = "approved"
+	ModerationRejected ModerationState = "rejected"
+)
+
+// DeriveStates maps a legacy post status to the canonical (publication, moderation)
+// state pair (BART-583). It is kept consistent with migration 000088's backfill so
+// created, updated, and migrated rows agree.
+func DeriveStates(status PostStatus) (PublicationState, ModerationState) {
+	switch status {
+	case PostStatusDraft, PostStatusPendingReview:
+		return PublicationDraft, ModerationPending
+	case PostStatusRejected:
+		return PublicationDraft, ModerationRejected
+	case PostStatusClosed:
+		return PublicationArchived, ModerationApproved
+	default:
+		// open, in_progress, solved, answered, active, dormant, evolved, stale
+		return PublicationPublished, ModerationApproved
+	}
+}
 
 // MaxTagsPerPost is the maximum number of tags allowed per post.
 const MaxTagsPerPost = 10
@@ -88,8 +129,19 @@ type Post struct {
 	// PostedByID is the author's ID (user UUID or agent ID).
 	PostedByID string `json:"posted_by_id"`
 
-	// Status is the current status of the post.
+	// Status is the current (legacy) status of the post.
 	Status PostStatus `json:"status"`
+
+	// PublicationState is the canonical publication lifecycle: draft, published,
+	// or archived (BART-583). Separate from moderation.
+	PublicationState PublicationState `json:"publication_state"`
+
+	// ModerationState is the canonical moderation decision: pending, approved, or
+	// rejected (BART-583). Authors cannot set it; only moderation changes it.
+	ModerationState ModerationState `json:"moderation_state"`
+
+	// SourceRoomID optionally records the room a post was saved from (BART-583).
+	SourceRoomID *string `json:"source_room_id,omitempty"`
 
 	// Upvotes is the number of upvotes.
 	Upvotes int `json:"upvotes"`
@@ -161,6 +213,19 @@ func (p *Post) VoteScore() int {
 	return p.Upvotes - p.Downvotes
 }
 
+// PublicEligible reports whether a post may be shown to anonymous visitors: it must
+// be published, moderation-approved, and publicly visible (BART-583). This is the
+// canonical public-eligibility rule — publication alone never grants public exposure,
+// so an author cannot bypass moderation by publishing.
+func (p *Post) PublicEligible() bool {
+	if p.DeletedAt != nil {
+		return false
+	}
+	return p.PublicationState == PublicationPublished &&
+		p.ModerationState == ModerationApproved &&
+		(p.Visibility == "" || p.Visibility == VisibilityPublic)
+}
+
 // PostAuthor contains author information for display.
 type PostAuthor struct {
 	Type        AuthorType `json:"type"`
@@ -177,6 +242,9 @@ type PostWithAuthor struct {
 	AnswersCount    int        `json:"answers_count"`
 	ApproachesCount int        `json:"approaches_count"`
 	CommentsCount   int        `json:"comments_count"`
+	// ReplyCount is the canonical unified count of all contributions on the post
+	// (answers + approaches + comments), computed server-side (BART-583).
+	ReplyCount int `json:"reply_count"`
 	UserVote        *string    `json:"user_vote"`
 	AgentHumanID    string     `json:"-"` // agent's owning human UUID, never in JSON
 }
@@ -207,7 +275,7 @@ func ValidPostTypes() []PostType {
 // IsValidPostType checks if a post type is valid.
 func IsValidPostType(t PostType) bool {
 	switch t {
-	case PostTypeProblem, PostTypeQuestion, PostTypeIdea:
+	case PostTypeProblem, PostTypeQuestion, PostTypeIdea, PostTypePost:
 		return true
 	default:
 		return false
@@ -235,6 +303,13 @@ func IsValidPostStatus(status PostStatus, postType PostType) bool {
 	case PostTypeIdea:
 		switch status {
 		case PostStatusDraft, PostStatusOpen, PostStatusActive, PostStatusDormant, PostStatusEvolved:
+			return true
+		}
+	case PostTypePost:
+		// Canonical untyped posts use the generic lifecycle statuses; publication
+		// and moderation are tracked separately by publication_state/moderation_state.
+		switch status {
+		case PostStatusDraft, PostStatusOpen, PostStatusClosed, PostStatusStale:
 			return true
 		}
 	}

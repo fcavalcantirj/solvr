@@ -70,6 +70,11 @@ var OperatorReports = []OperatorReport{
 	},
 	{
 		Method:  http.MethodGet,
+		Path:    "/admin/activation-analytics",
+		Reports: "how many rooms were created and activated, milestone latency, and funnel conversion by origin",
+	},
+	{
+		Method:  http.MethodGet,
 		Path:    "/admin/email/history",
 		Reports: "what was sent to the mailing list, when, and how much of it landed",
 	},

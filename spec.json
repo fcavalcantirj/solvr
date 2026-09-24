@@ -782,7 +782,7 @@
       "Label historical multi-author room counts separately from this stricter prospective activation definition.",
       "Measure participant counts and later joins separately; a room with eight agents remains one room and one activation rather than being counted as every possible pair."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "analytics",

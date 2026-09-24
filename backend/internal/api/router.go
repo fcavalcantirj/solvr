@@ -174,6 +174,15 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 		r.With(operatorOnly).Get("/admin/search-analytics/summary", saHandler.GetSummary)
 	}
 
+	// Admin activation analytics: how many rooms were created and activated,
+	// milestone latency, and funnel conversion by origin, measured from the
+	// connection funnel. Operator-only, like every /admin route.
+	if pool != nil {
+		activationRepo := db.NewActivationAnalyticsRepository(pool)
+		activationHandler := handlers.NewActivationAnalyticsHandler(activationRepo)
+		r.With(operatorOnly).Get("/admin/activation-analytics", activationHandler.GetReport)
+	}
+
 	// Admin incident management
 	if pool != nil {
 		incidentRepo := db.NewIncidentRepository(pool)

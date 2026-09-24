@@ -8010,3 +8010,145 @@ NOTE for the next iteration: the local DB is now at migration v92 (was v86). The
   88/89 introduced the canonical post-state/reply schema those old tests predate;
   those belong to the still-open migration/cutover tasks (~853, ~1176, etc.), not
   to this analytics task.
+
+================================================================================
+2026-09-24 — Task ~785 (spec.json line 774-785, category analytics)
+"Measure activation by an exchange between at least two agents while supporting
+N participants". PASSED.
+================================================================================
+
+TASK SELECTION (top-down, every skip RE-VERIFIED [REAL] this session):
+  Walked passes=false top-down; the same foundation-blocked skips as last session
+  still hold, each re-proven this session, not trusted from prose:
+  - ~310 "Verify N-agent e2e" (ACCEPTANCE): [REAL] grep room_entries internal/*.go
+    = 0 rows; no /entries route mounted. Needs canonical room_entries + two API
+    instances (~982 false). Acceptance-not-checklist. SKIP.
+  - ~358 "agent-created rooms manageable": step 2 requires rooms.owner_id RETIRED.
+    [REAL] grep -c owner_id internal/db/rooms.go = 16 (present); retirement is ~889
+    (false). SKIP.
+  - ~659 / ~672 (route integrations "after cutover" / retained-knowledge search
+    "before/after cutover"): both hinge on the ~1176 cutover (false) + schema
+    reduction ~853 (false). SKIP.
+  - ~746 "permissions authoritative": step 3 needs established-STREAM revocation.
+    [REAL] internal/api/rooms_sse.go grep IsMember/membership/revoke/CheckAccess
+    = 0 hits; that is ~930's deliverable (false). SKIP.
+  - ~785 THIS TASK: MEASUREMENT over the funnel_events table task ~758 already
+    built (room_created / participant_joined ordinals / first_two_way_exchange /
+    entry_surface). No room_entries / owner_id-retirement / cutover / stream
+    dependency. First buildable-now task top-down. TOOK IT.
+
+ENVIRONMENT: local docker stack (solvr-postgres @ 5435 healthy 17h; solvr-ipfs up).
+  DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr. DB at migration
+  v92 (funnel_events present, 120 rows). No migration added by this task — it only
+  READS funnel_events + messages. No prod touch.
+
+WHAT THE MEASUREMENT DOES (contract in internal/db/activation_analytics.go):
+  A new operator-only report, GET /admin/activation-analytics?window=24h|7d|30d
+  (default 30d), backed by db.ActivationAnalyticsRepository.Measure(ctx,from,to).
+  It reads the funnel back into the numbers an operator needs, over rooms whose
+  room_created step falls in [from,to):
+    - rooms_created, activated_rooms (strict prospective = deduped
+      first_two_way_exchange milestones), room_to_activation conversion with an
+      explicit denominator.
+    - flow_to_room conversion split by ORIGIN: website (has a browser
+      connection_started to divide by -> real rate), direct_api and unknown (no
+      browser start -> count only, denominator+rate reported as absent, never 0).
+    - time_to_second_agent_ms and time_to_first_exchange_ms as continuous
+      median + p90 (SQL percentile_cont), Count/Median/P90 pointers so an empty
+      window reads as no-measurement not a misleading zero.
+    - participants: rooms_with_participants, max_participants, rooms_with_later
+      _joins (a 3rd+ ordinal) -- kept separate from activation, so an 8-agent
+      room is ONE room and ONE activation.
+    - historical_multi_author_rooms (loose, message display-name based, all-time)
+      reported BESIDE prospective activation with an explicit historical_note,
+      never merged into it.
+  All aggregates; no room body/title/task text; room_id opaque. Includes private
+  rooms in the aggregate (funnel carries no visibility) without exposing content.
+
+STEP-BY-STEP COVERAGE (7 task steps -> code + a passing test):
+  1 activation definition (>=2 distinct AUTHENTICATED identities, exclude
+    system/bootstrap): the existing first_two_way milestone fires on
+    COUNT(DISTINCT COALESCE(author_id,agent_name))>=2 over author_type='agent',
+    deleted_at IS NULL -> authenticated identity when present. Documented in
+    ActivationDefinition (returned in the response). [TEST]
+    TwoDisplayNamesOneIdentity_DoNotActivate drives the REAL recorder: 2 msgs,
+    same author_id, 2 display names -> recorded=false.
+  2 deduped first_two_way once/room incl. private rooms: milestone deduped by
+    partial unique index (built ~758); report counts one per room. [TEST]
+    MeasuresProspectiveActivation asserts activated=2 with a repeated exchange row.
+  3 durations median+p90: durationStats() with percentile_cont. [TEST] oracle
+    percentileCont() in Go (exact linear-interpolation replica) asserts median/p90
+    for {2000,10000}ms and {20000,40000}ms within 0.5ms.
+  4 flow->room + room->activation conversion, explicit denominators, website/
+    direct-api/unknown origins: measureCounts(). [TEST] website denom=2 num=1
+    rate=0.5; direct_api denom=nil num=1 rate=nil; unknown denom=nil num=1; three
+    origin numerators partition rooms_created; room->activation 2/3.
+  5 repeated events / reconnects / two display names / browser viewers do not
+    inflate: milestones deduped; room_viewed never counted; two-names handled by
+    COALESCE. [TEST] seeded room_viewed + duplicate-ready exchange; activated
+    still 2; TwoDisplayNames test.
+  6 label historical multi-author separately: measureHistorical() + HistoricalNote.
+    [TEST] HistoricalMultiAuthorMatchesCensus checks it against a census
+    recomputed a different way in the same breath (robust to ambient rows).
+  7 participants + later joins measured separately, 8 agents = 1 room 1 activation:
+    measureParticipants(). [TEST] roomD has 8 joins -> max_participants=8,
+    rooms_with_later_joins=1, still ONE activation.
+
+TEST ISOLATION: funnel-based assertions seed a HISTORICAL window ([~100d,~90d]
+  ago) that ambient NOW-traffic from parallel packages cannot reach -> fully
+  deterministic. The message-based historical figure uses the codebase's census-
+  agreement pattern (recompute a different way in the same breath) so ambient
+  rows land in both numbers.
+
+WIRING: the new route is registered under operatorOnly in router.go and added to
+  handlers.OperatorReports. That auto-subjects it to the two router contract tests
+  (TestOperatorReports_AreRefusedToEveryProductCredential and
+  TestEveryAdminRoute_IsGatedAndUnstorable) -> gated to the operator key only and
+  no-store/uncacheable, both green. Handler keeps its own key check as second lock.
+
+VERIFICATION (all RAN this session against DB v92):
+  [TEST] go build ./... = OK; go vet api/handlers/db = clean (only pre-existing
+    lint HINTS in other files).
+  [TEST] go test ./internal/db/ -run ActivationAnalytics = 3/3 PASS.
+  [TEST] go test ./internal/api/handlers/ -run ActivationAnalytics = 5/5 PASS
+    (serves report, passes selected window to repo, rejects unknown window,
+    refuses no-key/missing-header/wrong-key).
+  [TEST] go test ./internal/api/ -run
+    'OperatorReports|EveryAdminRoute|PublicOverview_NeverShares' = PASS (new route
+    auto-verified gated + unstorable + not sharing the public cache).
+  [REAL] file sizes: activation_analytics.go 306, its _test 296,
+    handlers/activation_analytics.go 108, its _test 145 -- all < 800.
+
+REGRESSION PROOF (this change introduces ZERO regressions):
+  Full go test ./internal/{db,api/handlers,api} (once each, captured to
+  /tmp/act_{db,handlers,api}.log). Failures are ALL pre-existing:
+  - db: Briefing*, Crystallization*, RisingIdeas*, TrendingNow*, HardcoreUnsolved*,
+    YouMightLike*, PlatformPulse, RecentVictories*, ClaimToken_MarkUsed,
+    ContributionMigration, UserRepository_NullPasswordHash -- legacy problem/idea/
+    approach model tests broken by DB at migration head (88/89 canonical schema),
+    the set last session documented.
+  - db: TestRoomRepository_{GetBySlug,List,Update,SoftDelete,RotateToken} fail on
+    "room slug already exists" = leftover fixed-slug rooms from PRIOR runs (DB data
+    pollution). PROVEN not mine: `git stash push -u` (removed all my work) then
+    `go test -run TestRoomRepository` = IDENTICAL 5 failures; `git stash pop`
+    restored. My code creates no fixed-slug rooms.
+  - api: CommentsCount* (3), TypeSpecificListEndpoints, IPFSHealthEndpoint --
+    documented pre-existing.
+  - handlers: 4x GitHub*OAuth*_Integration -- pre-existing network/env.
+  No Activation* test appears in any FAIL list.
+
+FILES (git status --porcelain / git diff --stat -- matches exactly):
+  New: internal/db/activation_analytics.go (306) + activation_analytics_test.go,
+    internal/api/handlers/activation_analytics.go (108) + activation_analytics
+    _test.go.
+  Modified: internal/api/handlers/operator_analytics.go (+5: one OperatorReports
+    entry for /admin/activation-analytics), internal/api/router.go (+9: wire the
+    repo+handler under operatorOnly).
+  No existing test deleted, weakened, skipped, or renamed. No migration, no env,
+  no frontend, no prod touch.
+
+FILE SIZE NOTE: router.go is 1219 lines -- a PRE-EXISTING >800 violation (was
+  1209 last session), one of 37 repo-wide. The +9 lines follow the existing inline
+  admin-analytics wiring pattern (search-analytics is wired the same way inline);
+  extracting a router helper is an unrequested out-of-scope refactor, so this task
+  did not touch it. Standing debt, not introduced here.

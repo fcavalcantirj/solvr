@@ -9583,3 +9583,51 @@ UAT: owner deploys this code, then IMMEDIATELY applies 000095 -> 000100 in order
   installed skill copies (~/.claude/skills/solvr/scripts) before the deploy; then confirms
   in a browser that room creation lands on /rooms/<slug>?created=1 and a private room's
   CONNECT AGENT panel shows a handshake prompt with no token.
+
+================================================================================
+2026-09-24 — Task idx 27 (spec.json, category functional) — COMPLETE, passes -> true
+"Make agent-created rooms manageable even when no human owns or claims the agent"
+================================================================================
+
+TASK SELECTION: idx 23 still ACCEPTANCE (needs idx 77 two-instance replay, false). SKIP.
+  idx 27 was blocked ONLY by step 2 "rooms.owner_id has been retired" = idx 69, which
+  the previous entry flipped true. [REAL] information_schema on solvr_test: rooms has no
+  owner_id and no token_hash column. TOOK IT.
+
+WHAT THIS ITERATION DID: verification only. The behavior was built by earlier tasks
+  (db/rooms.go Create inserts the creator's owner room_members row inside the room tx;
+  handlers/rooms.go canManage reads room_members; agents_claim.go ->
+  BackfillOwnerFromMembership). NO production code changed.
+  NOTE on TDD: the new tests went GREEN on first correct run; the only failures seen
+  (/tmp/i27_run1.log) were my own assertion bugs (member-list ordering; GET /v1/rooms/
+  {slug} nests the room under data.room). No RED against production behavior exists
+  to show, because the behavior already existed.
+
+FILES ([REAL] git status --porcelain before journaling):
+  NEW backend/internal/api/router_rooms_agent_owned_test.go (~180 lines, 2 tests):
+    - TestAgentOwnedRoom_UnclaimedAgentManagesRoomAndSurvivesLaterClaim, over HTTP:
+      step 1 self-registered agent (human_id NULL) creates the room; step 2 active
+      memberships are exactly agent:<owner>:owner (no human), owner_id null in the
+      response, rooms.owner_id/token_hash absent from the schema; step 3 owner
+      handshakes with its own key + posts, adds executor (member) and a temp member,
+      removes the temp member (204), PATCH display_name (200), PATCH is_private=true
+      (200), archive (200), reopen (200), re-handshakes for a fresh token and posts
+      again; step 4 executor (admitted member of the private room, can handshake/post)
+      gets 403 on PATCH name, PATCH visibility, add member, self-promote to owner,
+      remove owner, archive, reopen, DELETE room; step 5 real claim flow
+      (POST /v1/agents/me/claim -> POST /v1/agents/claim with a human JWT) then same
+      slug resolves to the same room id + name, message count unchanged (3), agent
+      memberships unchanged plus user:<human>:owner, owner agent still PATCHes (200)
+      and still posts with its pre-claim room token.
+    - TestAgentOwnedRoom_CreationRollsBackWithoutOwnerMembership: RoomRepository.Create
+      with a CreatorAgentID that does not exist errors and leaves no rooms row (atomic).
+  Plus this progress.txt entry and spec.json idx 27 passes -> true.
+
+VERIFICATION (DATABASE_URL = local docker solvr-postgres localhost:5435/solvr_test,
+  migrate version 100):
+  [TEST] targeted (/tmp/i27_run3.log): both TestAgentOwnedRoom_* PASS, 0 SKIP.
+  [TEST] FULL `go test ./... -p 1 -count=1 -v` (/tmp/i27_full.log, run BEFORE the
+    rollback test was added): 3807 PASS (slice 8: 3806, +1 new), 11 SKIP, 72 unique
+    FAIL = identical set to /tmp/s8_full.log (comm: 0 new, 0 gone). New test PASS in it.
+  [REAL] gofmt clean, go vet ./internal/api ok. check-file-size.sh reports the same
+    pre-existing oversized files; the new file is ~180 lines.

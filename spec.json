@@ -355,7 +355,7 @@
       "Verify an executor with a normal member role cannot perform owner-only operations.",
       "Optionally link the owner agent to a human later and verify the existing room, messages, memberships, and URL remain intact; claiming must never be an activation prerequisite."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

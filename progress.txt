@@ -11576,3 +11576,109 @@ REMAINING FOR idx 73 (passes STAYS false): step 1 remainder — "error" STRING s
   directive supersede under retry (pinned-directive path, messages pin) and
   ownership-change-by-retry audit; step 6 OpenAPI/SPEC contract docs (CORS origins,
   credential transport, request-size limits, stream resume, timeouts, If-Match/ETag).
+
+================================================================================
+2026-09-24 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the
+public API"
+SLICE 6 of N: DURABLE Idempotency-Key on room/post/reply creation — step 4
+"Use Idempotency-Key for room/post/reply creation ...; scope keys to authenticated
+actor and operation, retain create results for at least 24 hours, and reject reuse
+with a different payload."
+================================================================================
+
+TASK SELECTION: same top-down deferrals as slices 1-5 (idx 23 multi-instance not
+  built; 51/52/67/72-remainder cutover-gated on idx 93; 58 audit spans unbuilt
+  search cutover; 66 needs a test deployment). idx 73 continues.
+
+FINDING [REAL]: before this slice, grep -rliE 'idempot' over backend (non-test) showed
+  only the timeline client_entry_id dedupe (db/room_entries.go CreateWithClientEntry,
+  scoped (room_id, author_id, client_entry_id)). POST /v1/posts, POST
+  /v1/posts/{id}/replies and POST /v1/rooms had NO retry dedupe: the wiring test's
+  RED run created a SECOND post on retry (ids 2034670c... vs 5e11f9ce...).
+
+DIFF (git status --porcelain / git diff --stat: 2 modified +8/-3, 8 new):
+  M backend/internal/api/router.go (+6/-1... 9 lines changed): builds
+    idempotencyStore = db.NewIdempotencyRepository(pool) when pool != nil; mounts
+    apimiddleware.Idempotency(store, "post.create") on POST /v1/posts and
+    (store, "reply.create") on POST /v1/posts/{id}/replies, INSIDE the
+    UnifiedAuthMiddleware group (so the actor is known). router.go was already 1234
+    lines (pre-existing check-file-size violation); now 1239.
+  M backend/internal/api/router_rooms.go (1 line): POST /v1/rooms gets
+    Idempotency(db.NewIdempotencyRepository(pool), "room.create") inside authMiddleware.
+  A backend/migrations/000101_idempotency_keys.{up,down}.sql: table idempotency_keys
+    PK (actor_type, actor_id, operation, idempotency_key), request_hash TEXT, status
+    pending|completed, response_status/content_type/body(BYTEA), created_at,
+    completed_at; index on created_at. (request_hash first drafted CHAR(64) — the repo
+    test caught blank-padding breaking hash equality => changed to TEXT.)
+  A backend/internal/models/idempotency.go (29): IdempotencyScope, IdempotencyRecord,
+    IdempotencyPending/Completed.
+  A backend/internal/db/idempotency.go (104): IdempotencyRepository. Reserve = ONE
+    INSERT ... ON CONFLICT DO UPDATE ... WHERE (row older than IdempotencyRetention=24h)
+    OR (pending AND older than IdempotencyPendingLease=5m) RETURNING — atomic, one
+    winner; otherwise returns the held record. Complete (pending->completed + stored
+    response), Release (delete pending).
+  A backend/internal/api/middleware/idempotency.go (209): Idempotency(store, op).
+    No header / anonymous / nil store => pass-through. Key trimmed, 1-255 chars else
+    400 VALIDATION_ERROR. Body read once (MaxBytesError => 413) and restored. Hash =
+    sha256(method, path, body) (path included: same key on another post's replies is
+    a different request). Reserved => handler runs through a tee recorder; 2xx stored,
+    non-2xx or panic => Release (key reusable). Held + hash differs => 409
+    IDEMPOTENCY_KEY_REUSED; held + pending => 409 IDEMPOTENCY_REQUEST_IN_PROGRESS +
+    Retry-After: 1; held + completed => replay stored status/Content-Type/body with
+    Idempotent-Replayed: true. Store error => 503 fail-closed (handler never runs
+    without the requested dedupe). Record/release use context.WithoutCancel.
+  A tests: middleware/idempotency_test.go (12 unit tests, test-only fake store),
+    db/idempotency_test.go (5 integration), api/router_idempotency_test.go (1 E2E
+    through the real NewRouter). No existing test modified or removed.
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, the isolated
+  schema-only DB in the local solvr-postgres container; migration 000101 applied there
+  via docker exec psql):
+  [TEST] RED middleware: pass-through skeleton => 7 FAIL (replay, reuse, path, release,
+    in-flight, invalid key, fail-closed). GREEN => 12/12 PASS.
+  [TEST] RED repo: no-op stub => 5 FAIL. GREEN => 5/5 PASS incl.
+    ConcurrentReserveHasOneWinner (10 goroutines, exactly 1 reserved), 23h-old
+    completed key retained / 25h-old taken over, 10-min-old pending taken over.
+  [TEST] RED wiring: retry created a 2nd post. GREEN =>
+    TestIdempotency_CreateRoutesReplayRetries PASS: post retry same id +
+    Idempotent-Replayed + byte-identical body + 1 row; changed body => 409
+    IDEMPOTENCY_KEY_REUSED with request_id (slice-4 envelope) and still 1 row; reply
+    retry same id, 1 row; room retry replays 201 (not 409 on the taken slug), 1 row.
+  [REAL] go build ./... ok; go vet internal/api/... internal/db internal/models clean;
+    gofmt applied.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 run ONCE to /tmp/solvr_idx73_s6_full.log:
+  FAIL only in internal/api, internal/api/handlers, internal/db. 79 FAIL lines vs 76
+  in s5. Sorted diff: 3 names not in s5's set, all attributed:
+    - TestPinsCreateWithAgentAPIKey: 409 "pin already exists for this CID and owner".
+      [REAL] solvr_test holds 36 leftover pins for agent_pins_test_xxx000 on the same
+      CID; randomSuffix() yields xxx000 names => name collision with a prior run's
+      leftovers. Pins route untouched by this diff.
+    - TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring and
+      TestHomepageSearch_ChartAddsUpToTheTotalBesideIt (24h series sum != total).
+      [REAL] reproduced on a CLEAN HEAD worktree (git worktree add HEAD, same DB):
+      same FAIL (expected 880 / actual 834) => PRE-EXISTING, not caused by this slice
+      (ran ~01:10 UTC; cause not investigated [UNVERIFIED: likely window/day-boundary
+      or shared-row dependent]).
+  Everything else = the documented pre-existing set (CommentsCount/TypeSpecificList,
+  GitHub OAuth callback, internal/db shared-state incl. rooms slug collisions).
+
+NOT DONE / NOTES:
+  - The local DEV database (solvr on 5435) and production are NOT migrated. UAT (when
+    idx 73 closes): owner applies migrations/000101_idempotency_keys.up.sql on prod via
+    the admin query route before deploying code that mounts the middleware — without
+    the table, keyed creates return 503 (fail-closed); unkeyed creates are unaffected.
+  - No pruning job yet: expired rows are taken over on reuse but never deleted. A
+    CleanupJob hook (DELETE WHERE created_at < NOW() - 24h) is still to add.
+  - Stale-pending takeover after 5 min means a request that legitimately runs >5 min
+    could be re-run by a retry [UNVERIFIED as a practical risk; creates finish in <1s].
+
+REMAINING FOR idx 73 (passes STAYS false): step 1 remainder ("error" STRING shapes in
+  unsubscribe.go/admin.go; field-error docs); step 3 status-code matrix pinned; step 4
+  remainder — client_entry_id reuse with a DIFFERENT payload is still silently replayed
+  (db/room_entries.go returns the existing entry, no payload compare) => must 409;
+  idempotency_keys pruning; step 5 remainder (directive supersede under retry,
+  ownership-change-by-retry audit); step 6 OpenAPI/SPEC docs (incl. Idempotency-Key,
+  Idempotent-Replayed, the two 409 codes, CORS, credential transport, size limits,
+  stream resume, timeouts, If-Match/ETag).

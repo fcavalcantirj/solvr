@@ -258,6 +258,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	var viewsRepo handlers.ViewsRepositoryInterface
 	var reportsRepo handlers.ReportsRepositoryInterface
 	var pinsRepo handlers.PinRepositoryInterface
+	// Durable Idempotency-Key store for the create routes (idx 73 step 4).
+	var idempotencyStore apimiddleware.IdempotencyStore
+	if pool != nil {
+		idempotencyStore = db.NewIdempotencyRepository(pool)
+	}
 	if pool == nil {
 		log.Println("WARNING: Database pool is nil. V1 API routes will not be mounted.")
 		return
@@ -810,7 +815,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Use(auth.UnifiedAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
 
 			// Per SPEC.md Part 5.6: POST /v1/posts - create post (requires auth)
-			r.Post("/posts", postsHandler.Create)
+			r.With(apimiddleware.Idempotency(idempotencyStore, "post.create")).Post("/posts", postsHandler.Create)
 			// Per SPEC.md Part 5.6: PATCH /v1/posts/:id - update post (requires auth)
 			r.Patch("/posts/{id}", postsHandler.Update)
 			// Per SPEC.md Part 5.6: DELETE /v1/posts/:id - delete post (requires auth)
@@ -821,7 +826,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/posts/{id}/my-vote", postsHandler.GetMyVote)
 
 			// Canonical Reply model (BART-585): one write path for every contribution.
-			r.Post("/posts/{id}/replies", repliesHandler.Create)
+			r.With(apimiddleware.Idempotency(idempotencyStore, "reply.create")).Post("/posts/{id}/replies", repliesHandler.Create)
 			r.Patch("/replies/{id}", repliesHandler.Update)
 			r.Delete("/replies/{id}", repliesHandler.Delete)
 			r.Post("/replies/{id}/vote", repliesHandler.Vote)

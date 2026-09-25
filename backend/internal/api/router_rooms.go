@@ -115,7 +115,7 @@ func mountRoomRoutes(
 		// Authenticated endpoints (Solvr JWT or agent API key per D-16)
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
-			r.Post("/", roomHandler.CreateRoom)
+			r.With(apimiddleware.Idempotency(db.NewIdempotencyRepository(pool), "room.create")).Post("/", roomHandler.CreateRoom)
 			r.Patch("/{slug}", roomHandler.UpdateRoom)
 			r.Delete("/{slug}", roomHandler.DeleteRoom)
 			// Finish / reopen a collaboration (owner-only). Archiving keeps the

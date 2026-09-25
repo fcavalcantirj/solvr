@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
@@ -204,8 +205,13 @@ func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Link agent to human
+	// Link agent to human. Only one claim can link an unclaimed agent; a concurrent or
+	// retried claim that lost is a conflict and grants nothing below.
 	if err := h.repo.LinkHuman(r.Context(), agent.ID, claims.UserID); err != nil {
+		if errors.Is(err, db.ErrAgentAlreadyClaimed) {
+			writeAgentError(w, http.StatusConflict, "ALREADY_CLAIMED", "agent is already claimed")
+			return
+		}
 		writeAgentError(w, http.StatusInternalServerError, "LINK_FAILED", "failed to claim agent")
 		return
 	}

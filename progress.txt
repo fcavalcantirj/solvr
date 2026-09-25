@@ -2705,3 +2705,105 @@ UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on
   the admin query route, then deploys). No migration in this slice.
   CORRECTION (slice 11 TDD line above): green1 counts are 20 top-level tests = 19 PASS + 1 FAIL
     (the CHANGED TEST), plus 5 PASS subtests, 0 SKIP ("24 of 25" mixed the two levels).
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 12 of N. Step 5 remainder: agent claim concurrency ("retries cannot ... change
+ownership"), the item slice 11 left as [UNVERIFIED].
+================================================================================
+
+TASK SELECTION: idx 24 acceptance still needs idx 75/78 pieces; idx 52/53, 68 and 73's
+  remainder are gated on the knowledge cutover idx 93; idx 67 needs a test deployment.
+  idx 74 stays the first buildable false task.
+
+FINDING [TEST] (RED, /tmp/solvr_idx74_s12_red.log, 5 of 5 runs FAIL in round 0):
+  POST /v1/agents/claim checked "token unused" and "agent unclaimed" with reads, then ran an
+  unconditional LinkHuman. The 000100 trigger allows X -> X, so:
+  - same human, 16 parallel claims with one token: up to 9 x 200, and the +50 claim bonus
+    was granted once per 200;
+  - 4 humans racing one token: losers got 500 LINK_FAILED (trigger exception, mapped to
+    ErrAgentAlreadyClaimed but never handled), and 2-4 x 200 for the same human.
+  First attempt without connection warm-up passed by luck (/tmp/solvr_idx74_s12_probe.log:
+  2 of 3 runs showed the race, 1 passed), so the test now opens its 16 connections with a
+  public GET /v1/claim/{token} burst before releasing the claims, over 4 rounds per case.
+
+DIFF ([REAL] git status --porcelain / git diff --numstat: 2 modified +7/-81, 3 new):
+  M backend/internal/db/agents.go (+0/-80): the "Agent-Human Linking methods" section
+    (LinkHuman, AddReputation, GrantHumanBackedBadge) moved verbatim to agents_linking.go;
+    agents.go goes 1148 -> 1068 lines (still a pre-existing >800 violator, now smaller).
+  A backend/internal/db/agents_linking.go (99 lines): the moved section. Only change inside:
+    LinkHuman's UPDATE is now `WHERE id = $1 AND human_id IS NULL`; zero rows -> EXISTS
+    check -> ErrAgentAlreadyClaimed (agent exists) or ErrAgentNotFound. The NULL -> human
+    transition happens once; a retried or concurrent link, even by the same human, is
+    refused and human_claimed_at does not move.
+  M backend/internal/api/handlers/agents_claim.go (+7/-1): LinkHuman's
+    db.ErrAgentAlreadyClaimed -> 409 ALREADY_CLAIMED (was 500 LINK_FAILED); the bonus,
+    badge and MarkUsed below it run only for the one winning claim. Imports db.
+  A backend/internal/api/router_agent_claim_retry_test.go (170 lines, real NewRouter):
+    TestAgentClaim_RetriesAndRacesLinkTheAgentOnce — subtests "same human retries in
+    parallel" and "several humans race one token": exactly one 200, every other attempt 409
+    TOKEN_USED or ALREADY_CLAIMED (never 500), human_id = the winner, reputation +50 exactly
+    once, claim_tokens.used_by_human_id = the winner; a later retry by every human is 409
+    TOKEN_USED and changes nothing.
+  A backend/internal/db/agents_linking_test.go (95 lines):
+    TestAgentRepository_LinkHuman_LinksOnce — "same human again" (ErrAgentAlreadyClaimed,
+    human_id and human_claimed_at unchanged) and "parallel links" (12 goroutines, 2 humans:
+    exactly one nil, the rest ErrAgentAlreadyClaimed).
+  No migration. Frontend untouched. No existing test changed or removed. spec.json unchanged.
+
+TDD / EVIDENCE (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, the local
+  isolated test DB in the solvr-postgres container):
+  [TEST] GREEN -race -v: /tmp/solvr_idx74_s12_green_api.log 3 PASS 0 SKIP
+    (TestAgentClaim_* + 2 subtests, TestAgentOwnedRoom_* x2 incl. the real claim flow);
+    /tmp/solvr_idx74_s12_green_db.log 9 top-level PASS 0 SKIP (LinksOnce + 2 subtests,
+    LinkHuman_Success/_RejectReclaim/_AgentNotFound, AddReputation x2, GrantHumanBacked x2);
+    /tmp/solvr_idx74_s12_green_handlers.log 21 PASS 0 SKIP (TestClaimAgent_*,
+    TestGenerateClaim_*, TestGetClaimInfo_* mock tests, all unchanged).
+  [REAL] mutation 1: `AND human_id IS NULL` removed -> both new tests FAIL
+    (/tmp/solvr_idx74_s12_mut_db.log, /tmp/solvr_idx74_s12_mut_api.log); file restored from
+    a copy, grep re-confirmed the condition.
+  [REAL] mutation 2: 409 mapping disabled -> API test FAIL with 500 LINK_FAILED
+    (/tmp/solvr_idx74_s12_mut_handler.log); restored, grep confirmed.
+  [REAL] go build ./... ok; go vet internal/db internal/api internal/api/handlers clean;
+    gofmt clean on every touched file.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 run ONCE -> /tmp/solvr_idx74_s12_full.log:
+  FAIL only in internal/api, internal/api/handlers, internal/db (pre-existing set). Unique
+  --- FAIL names: 85 vs 82 in /tmp/solvr_idx74_s11_full.log; 0 gone, 3 new, all fixture
+  collisions, none in code this slice changed:
+  - TestAgentRepository_AddReputation_Success, TestAgentRepository_GrantHumanBackedBadge_
+    Success: "failed to create agent: agent ID already exists". They never delete their
+    agents and use fixed display names ("Reputation Test Agent", "Badge Test Agent") under
+    the unique idx_agents_display_name_unique; my focused GREEN run minutes earlier left
+    those rows. [TEST] proven: -count=2 on just those two -> run 1 PASS, run 2 FAIL with the
+    same line (/tmp/solvr_idx74_s12_leftover_probe.log). The 2 leftover rows were deleted
+    from the local solvr_test afterwards.
+  - TestNAgentRoom_ConcurrentFirstMessagesOnTwoInstancesActivateOnce: setup failure
+    `duplicate key value violates unique constraint "users_username_key"` in
+    createRoomTestUser (roomtest_%d from UnixNano()%1e6), same class as slice 9's
+    referral_code collision. [TEST] PASS alone -race (/tmp/solvr_idx74_s12_nagent.log).
+  check-file-size.sh: same 36 pre-existing violations; agents.go shrank (1148 -> 1068);
+    every new file is under 200 lines.
+
+BEHAVIOR CHANGE (v0, for step 6 docs): a claim that loses a race or retries after a
+  successful claim is 409 (TOKEN_USED or ALREADY_CLAIMED), never 500; LinkHuman refuses to
+  re-link an already linked agent, even to the same human.
+
+OUT OF SCOPE, FOUND HERE (not fixed): the two agents_test.go fixtures above are not
+  re-runnable against a persistent test DB (no cleanup + fixed unique display names), and
+  createRoomTestUser's username/referral_code suffix can collide. Test-fixture hygiene only.
+
+REMAINING FOR idx 74 (passes STAYS false):
+  - step 5: [UNVERIFIED, not run] the winning claim is still 4 separate statements (link,
+    bonus, badge, MarkUsed); a transient failure after the link leaves the agent claimed
+    without its bonus. No retry can double anything any more; atomicity is the only gap.
+  - step 3: status-code matrix 400/401/403/404/409/429/5xx pinned in one contract test.
+  - step 6: OpenAPI contract (openapi_paths.go / openapi_schemas.go already over 800 lines ->
+    split before adding): Idempotency-Key, Idempotent-Replayed, the 409 codes
+    (IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_REQUEST_IN_PROGRESS, CLIENT_ENTRY_ID_REUSED,
+    SUPERSEDE_CONFLICT, PUBLICATION_STATE_CONFLICT, ALREADY_CLAIMED), error envelope, CORS,
+    credential transport, size limits, stream resume, timeouts, If-Match/ETag.
+
+UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on prod via the
+  admin query route, then deploys). No migration in this slice.

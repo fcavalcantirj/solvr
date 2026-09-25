@@ -128,7 +128,16 @@ func (r *MessageRepository) CreateWithClientEntry(ctx context.Context, params mo
 				return nil, false, ErrClientEntryConflict
 			}
 		}
-		if refErr := asInvalidEntryReference(err); refErr != err {
+		refErr := asInvalidEntryReference(err)
+		if errors.Is(refErr, ErrEntryAlreadySuperseded) && dedupable {
+			// A concurrent identical retry of a revision loses the latest-revision check
+			// to the winner it duplicates; replay the winner rather than refusing it.
+			existing, gerr := r.getByClientEntryID(ctx, params.RoomID, *params.AuthorID, *params.ClientEntryID)
+			if gerr == nil {
+				return replayMessage(existing, params)
+			}
+		}
+		if refErr != err {
 			return nil, false, refErr
 		}
 		LogQueryError(ctx, "Create", "messages", err)

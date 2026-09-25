@@ -30,16 +30,31 @@ var ErrInvalidEntryReference = errors.New("entry reference is not part of this r
 // retry replays only the same write; nothing is stored for the conflicting one.
 var ErrClientEntryConflict = errors.New("client_entry_id was already used with a different payload")
 
+// ErrEntryAlreadySuperseded is returned when a write supersedes an entry that already
+// has a live superseding entry: only the latest revision of a directive/result can be
+// revised, so a stale or retried revision can never fork or overwrite a newer one.
+var ErrEntryAlreadySuperseded = errors.New("entry was already superseded by a newer entry")
+
 // sameRoomReferenceConstraint is the constraint name the timeline trigger raises for a
 // foreign reply, supersede or addressing reference.
 const sameRoomReferenceConstraint = "room_entries_same_room_reference"
 
+// supersedeLatestConstraint is the constraint name the timeline trigger raises when a
+// write supersedes an entry that already has a live superseding entry (migration 000102).
+const supersedeLatestConstraint = "room_entries_supersede_latest"
+
 // asInvalidEntryReference maps the trigger's same-room violation to
-// ErrInvalidEntryReference and returns any other error unchanged.
+// ErrInvalidEntryReference and its latest-revision violation to
+// ErrEntryAlreadySuperseded, and returns any other error unchanged.
 func asInvalidEntryReference(err error) error {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.ConstraintName == sameRoomReferenceConstraint {
-		return fmt.Errorf("%w: %s", ErrInvalidEntryReference, pgErr.Message)
+	if errors.As(err, &pgErr) {
+		switch pgErr.ConstraintName {
+		case sameRoomReferenceConstraint:
+			return fmt.Errorf("%w: %s", ErrInvalidEntryReference, pgErr.Message)
+		case supersedeLatestConstraint:
+			return fmt.Errorf("%w: %s", ErrEntryAlreadySuperseded, pgErr.Message)
+		}
 	}
 	return err
 }
@@ -154,7 +169,7 @@ func (r *RoomEntryRepository) Create(ctx context.Context, params models.CreateRo
 		return nil
 	})
 	if err != nil {
-		if !errors.Is(err, ErrCrossRoomReference) && !errors.Is(err, ErrInvalidEntryReference) && !errors.Is(err, ErrClientEntryConflict) {
+		if !errors.Is(err, ErrCrossRoomReference) && !errors.Is(err, ErrInvalidEntryReference) && !errors.Is(err, ErrClientEntryConflict) && !errors.Is(err, ErrEntryAlreadySuperseded) {
 			LogQueryError(ctx, "Create", "room_entries", err)
 		}
 		return nil, false, err

@@ -42,6 +42,12 @@ type submitError struct {
 var clientEntryReusedError = &submitError{http.StatusConflict, "CLIENT_ENTRY_ID_REUSED",
 	"client_entry_id was already used with a different payload; send a new client_entry_id for a new entry"}
 
+// supersedeConflictError refuses a revision of an entry that already has a newer
+// revision: only the latest revision can be superseded, so a stale or retried
+// directive never forks or overwrites the newer one.
+var supersedeConflictError = &submitError{http.StatusConflict, "SUPERSEDE_CONFLICT",
+	"supersedes_entry_id was already superseded by a newer entry; supersede the latest revision instead"}
+
 func (e *submitError) write(w http.ResponseWriter) {
 	roomWriteError(w, e.status, e.code, e.message)
 }
@@ -109,6 +115,9 @@ func (h *RoomMessagesHandler) submitMessage(ctx context.Context, room *models.Ro
 		}
 		if errors.Is(err, db.ErrClientEntryConflict) {
 			return nil, false, clientEntryReusedError
+		}
+		if errors.Is(err, db.ErrEntryAlreadySuperseded) {
+			return nil, false, supersedeConflictError
 		}
 		slog.Error("failed to create message", "error", err, "room_id", room.ID)
 		return nil, false, &submitError{http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create message"}

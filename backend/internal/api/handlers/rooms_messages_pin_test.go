@@ -167,3 +167,55 @@ func TestPostMessageHandler_SupersedeCrossRoomRejected(t *testing.T) {
 		t.Fatalf("expected 400 for cross-room supersede, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// A revision of an entry that was already superseded is stale: it is refused with
+// 409 SUPERSEDE_CONFLICT (idx 73 step 5) and nothing is stored, so a retried or
+// stale directive can never fork or overwrite the newer one.
+func TestPostMessageHandler_StaleSupersedeIsConflict(t *testing.T) {
+	pool := getTestPool(t)
+	if pool == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	room := newDeliveryRoom(t, pool)
+	msgRepo := db.NewMessageRepository(pool)
+	original := postAgentMsg(t, msgRepo, room.ID, "planner", "Directive v1: use REST")
+	postAgentMsg(t, msgRepo, room.ID, "planner", "placeholder")
+	handler := newDeliveryHandler(pool)
+
+	post := func(content string) *httptest.ResponseRecorder {
+		body := fmt.Sprintf(`{"agent_name":"planner","content":%q,"supersedes_entry_id":%d}`, content, original.ID)
+		req := httptest.NewRequest(http.MethodPost, "/r/"+room.Slug+"/message", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), apimiddleware.RoomContextKey, room))
+		w := httptest.NewRecorder()
+		handler.PostMessage(w, req)
+		return w
+	}
+
+	if w := post("Directive v2: use SSE"); w.Code != http.StatusCreated {
+		t.Fatalf("first revision: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	w := post("Directive v2: use polling (stale)")
+	if w.Code != http.StatusConflict {
+		t.Fatalf("stale revision: expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("bad json: %v", err)
+	}
+	if resp.Error.Code != "SUPERSEDE_CONFLICT" {
+		t.Fatalf("error code = %q, want SUPERSEDE_CONFLICT", resp.Error.Code)
+	}
+
+	var n int
+	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM messages WHERE room_id = $1`, room.ID).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("messages = %d, want 3 (the stale revision must not be stored)", n)
+	}
+}

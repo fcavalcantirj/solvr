@@ -2120,3 +2120,73 @@ REMAINING FOR idx 59 (passes STAYS false): steps 1/2 surface matrix (HTML, REST,
   for it); the new route is only in route_families.go.
 
 UAT (for when idx 59 closes): as slice 1 (000104 on prod, then deploy).
+
+2026-09-25 — Task idx 59 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Keep room and content permissions authoritative on the server"
+SLICE 3 of N: the room HTML page follows visibility/deletion changes (step 6, cached responses).
+================================================================================
+
+TASK SELECTION: same as slices 1/2; idx 59 stays the first buildable false task.
+  Considered the expiry gap from slice 1's note: [REAL] no API path sets rooms.expires_at
+  (grep of handlers/services), and the presence reaper hard-deletes expired rooms every
+  60s, so that gap is a DB-only, <=60s window — lower value, left open (see REMAINING).
+  Took step 6 after finding, in the code, two stores for the room page:
+    frontend/app/rooms/[slug]/page.tsx: `revalidate = 300` + fetch `next.revalidate 300`
+    (Next data cache), and next.config.mjs `/rooms/:slug` ->
+    `public, s-maxage=3600, stale-while-revalidate=86400` (any shared cache may keep it a day).
+
+SPIKE / RED [REAL] (production build, `next build` + `next start -p 3091`, NEXT_PUBLIC_API_URL
+  = local API built from HEAD on :8091 over postgres solvr_test on 5435; both killed after):
+  registered agent, created public room spike-cache-room, posted marker entry
+  SECRET-TRANSCRIPT-MARKER-42. Page: Cache-Control public, s-maxage=3600..., marker present.
+  PATCH is_private=true -> API anonymous GET 403, but the Next page STILL served the marker
+  to an anonymous request (count 2 in the HTML). The API was right; the page cache was not.
+
+FIX:
+  - app/rooms/[slug]/page.tsx: `export const dynamic = "force-dynamic"` (replaces
+    revalidate = 300) and the room fetch uses `{ cache: "no-store" }` (replaces
+    next.revalidate 300). Every request asks the API, which decides.
+  - next.config.mjs: `/rooms/:slug` gets new `noStore` =
+    `private, no-cache, no-store, max-age=0, must-revalidate` (was cache1h).
+  Cost: every room page view now hits GET /v1/rooms/{slug} (no ISR reuse). SEO crawl of
+  public rooms is unaffected in content; shared-cache hits for room pages are gone.
+
+DIFF ([REAL] git status --porcelain / git diff --stat: 3 modified +27/-5, 1 new):
+  M frontend/app/rooms/[slug]/page.tsx (+5/-4)
+  M frontend/next.config.mjs (+4/-1)
+  M frontend/next.config.test.ts (+18, new describe; existing tests unchanged)
+  A frontend/app/rooms/[slug]/page.test.tsx (2 tests; mocks react cache() as pass-through
+    because vitest loads the client React build where cache is undefined)
+  M progress.txt: this entry. spec.json NOT changed. No backend change. No test removed.
+
+TDD:
+  [TEST] RED /tmp/solvr_idx59_s3_red.log + _red_page.log: 3 new tests FAIL ("expected
+    undefined to be 'force-dynamic'", "expected { next: { revalidate: 300 } } to match
+    object { cache: 'no-store' }", config value lacked no-store).
+  [TEST] GREEN /tmp/solvr_idx59_s3_green.log: 6/6 PASS (2 files).
+  [REAL] after the fix, same rebuilt spike: public -> Cache-Control private, no-store...,
+    marker present; PATCH private -> the very next anonymous page request has NO marker;
+    back to public -> marker present; DELETE room (204) -> page 404, no marker.
+
+FULL SUITE [TEST]: cd frontend && npm test once -> /tmp/solvr_idx59_s3_full_fe.log: 178 files,
+  1616 tests passed, 0 failed. tsc --noEmit clean (0 errors). check-file-size.sh output
+  identical to the clean tree (36 pre-existing violations, none in touched files).
+  Backend untouched (not re-run).
+  NOTE [REAL]: frontend/.next now holds the spike build baked with
+  NEXT_PUBLIC_API_URL=http://localhost:8091 (gitignored); rebuild before any local `next start`.
+
+REMAINING FOR idx 59 (passes STAYS false):
+  - step 6 other stores: /rooms list page (revalidate 60 + cache5m header) and
+    sitemap-rooms.xml can list a room's name/slug after it turns private for up to
+    their windows (transcript not exposed there) [UNVERIFIED in a build]; backend
+    homepage overview/rooms `public, max-age=30` responses (overview snapshot is
+    already dropped on visibility change by idx 23 slice 4; browser/proxy copy up to 30s).
+  - steps 1/2 surface matrix (HTML, REST, SSE, instructions, message lookup, search, social
+    metadata x anonymous/member/owner/unrelated; deletion + expiry — guard does not check
+    expires_at, bounded by the 60s reaper).
+  - step 5 default prompts use per-agent tokens + no secrets in public APIs (prompts in
+    handlers/connect_prompts.go already describe per-agent handshake tokens; not yet swept).
+
+UAT (for when idx 59 closes): as slice 1 (000104 on prod, then deploy); after the frontend
+  deploy, owner confirms https://solvr.dev/rooms/<slug> returns Cache-Control
+  private, no-store and that any CDN in front of solvr.dev is not overriding it.

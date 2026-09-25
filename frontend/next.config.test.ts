@@ -45,3 +45,21 @@ describe('next.config cache headers', () => {
     expect(posts?.headers[0].key).toBe('Cache-Control');
   });
 });
+
+/**
+ * A room can turn private or be deleted at any moment, and the API refuses it to
+ * anonymous readers from that moment on. A shared cache holding the room page
+ * would keep serving the old transcript (s-maxage=3600 + stale-while-revalidate
+ * let a proxy serve it for a day), so the room page must never be stored by one.
+ */
+describe('next.config room page cache headers', () => {
+  it('never lets a shared cache store a room page', async () => {
+    const room = await headerRuleFor('/rooms/:slug');
+
+    expect(room).toBeDefined();
+    const value = room!.headers.find((h) => h.key === 'Cache-Control')?.value ?? '';
+    expect(value).toContain('no-store');
+    expect(value).toContain('private');
+    expect(value).not.toMatch(/public|s-maxage|stale-while-revalidate/);
+  });
+});

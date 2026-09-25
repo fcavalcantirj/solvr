@@ -27,6 +27,7 @@ const nextConfig = {
     const cache1h = [{ key: 'Cache-Control', value: 'public, s-maxage=3600, stale-while-revalidate=86400' }];
     const cache5m = [{ key: 'Cache-Control', value: 'public, s-maxage=300, stale-while-revalidate=3600' }];
     const cache1d = [{ key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=604800' }];
+    const noStore = [{ key: 'Cache-Control', value: 'private, no-cache, no-store, max-age=0, must-revalidate' }];
 
     return [
       // Homepage
@@ -38,7 +39,9 @@ const nextConfig = {
       { source: '/agents/:id', headers: cache1h },
       { source: '/users/:id', headers: cache1h },
       { source: '/blog/:slug', headers: cache1h },
-      { source: '/rooms/:slug', headers: cache1h },
+      // Room pages are never stored by a shared cache: a room can turn private or be
+      // deleted at any moment, and the API refuses it from then on.
+      { source: '/rooms/:slug', headers: noStore },
       // List pages (5m cache)
       { source: '/problems', headers: cache5m },
       { source: '/ideas', headers: cache5m },

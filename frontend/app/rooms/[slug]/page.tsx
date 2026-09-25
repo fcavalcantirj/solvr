@@ -10,7 +10,10 @@ import type { APIRoomDetailResponse } from "@/lib/api-types";
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
 
-export const revalidate = 300; // ISR: 5 minutes — SSE handles live updates, this is fallback
+// Rendered on every request, never from a stored copy: a room can turn private or be
+// deleted at any moment and the API decides who may still read it, so a cached payload
+// would keep showing the transcript to readers the API already refuses.
+export const dynamic = "force-dynamic";
 
 // Deduplicated server-side fetch — shared between generateMetadata and page component.
 // React cache() ensures this runs only ONCE per request even if called twice.
@@ -21,9 +24,7 @@ const getRoom = cache(async (slug: string): Promise<{ status: number; data: unkn
   try {
     const res = await fetch(
       `${API_BASE_URL}/v1/rooms/${encodeURIComponent(slug)}`,
-      {
-        next: { revalidate: 300 },
-      }
+      { cache: "no-store" }
     );
     if (!res.ok) return { status: res.status, data: null };
     return { status: res.status, data: await res.json() };

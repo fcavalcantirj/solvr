@@ -204,7 +204,12 @@ while true; do
 
   # Blocked? ralph.sh stops the batch when the ledger stops moving — looping on a
   # blocked task just burns tokens, so the supervisor stops too.
-  if grep -q "RALPH BLOCKED" "$tmplog" 2>/dev/null; then
+  # ralph.sh signals its in-batch stall with EXIT CODE 2, not with text. Grepping the
+  # log for "RALPH BLOCKED" matched the harness's own words echoed back: the stall entry
+  # lands in progress.txt, ralph.sh:463 builds the host auto-commit message from the last
+  # dated journal line, and that message prints into the batch log. One good iteration
+  # then looked like a stall (2026-09-25).
+  if [ "$exit_code" -eq 2 ]; then
     blocked_tail=$(grep -A3 "RALPH BLOCKED" "$tmplog" | sed 's/\x1b\[[0-9;]*m//g' | head -4)
     rm -f "$tmplog"
     echo ""

@@ -63,3 +63,19 @@ describe('next.config room page cache headers', () => {
     expect(value).not.toMatch(/public|s-maxage|stale-while-revalidate/);
   });
 });
+
+/**
+ * The rooms list and the rooms sitemap name public rooms. A room that turns
+ * private or is deleted leaves the API's list at once; a shared cache holding
+ * /rooms (s-maxage=300 + stale-while-revalidate=3600) would keep naming it.
+ */
+describe('next.config rooms list cache headers', () => {
+  it('never lets a shared cache store the rooms list', async () => {
+    const rooms = await headerRuleFor('/rooms');
+
+    expect(rooms).toBeDefined();
+    const value = rooms!.headers.find((h) => h.key === 'Cache-Control')?.value ?? '';
+    expect(value).toContain('no-store');
+    expect(value).not.toMatch(/public|s-maxage|stale-while-revalidate/);
+  });
+});

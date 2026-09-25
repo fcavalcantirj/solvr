@@ -52,7 +52,7 @@ const nextConfig = {
       { source: '/users', headers: cache5m },
       { source: '/blog', headers: cache5m },
       { source: '/leaderboard', headers: cache5m },
-      { source: '/rooms', headers: cache5m },
+      { source: '/rooms', headers: noStore },
       // Static pages (1d cache)
       { source: '/about', headers: cache1d },
       { source: '/how-it-works', headers: cache1d },

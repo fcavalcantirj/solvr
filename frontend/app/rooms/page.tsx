@@ -7,7 +7,9 @@ import { CreateRoomDialog } from '@/components/rooms/create-room-dialog';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.solvr.dev';
 
-export const revalidate = 60; // ISR: revalidate every 60 seconds (rooms are relatively active)
+// Ask the API on every request: a room that turns private or is deleted leaves
+// its public list at once, and a stored copy would keep advertising it.
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Rooms - Solvr',
@@ -19,7 +21,7 @@ export const metadata: Metadata = {
 const getRooms = cache(async () => {
   try {
     const res = await fetch(`${API_BASE_URL}/v1/rooms?limit=20&offset=0&sort=recent`, {
-      next: { revalidate: 60 },
+      cache: 'no-store',
     });
     if (!res.ok) return { data: [] };
     return res.json();

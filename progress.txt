@@ -2190,3 +2190,73 @@ REMAINING FOR idx 59 (passes STAYS false):
 UAT (for when idx 59 closes): as slice 1 (000104 on prod, then deploy); after the frontend
   deploy, owner confirms https://solvr.dev/rooms/<slug> returns Cache-Control
   private, no-store and that any CDN in front of solvr.dev is not overriding it.
+
+2026-09-25 — Task idx 59 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Keep room and content permissions authoritative on the server"
+SLICE 4 of N: rooms list page + rooms sitemap stop storing rooms that turned private/deleted (step 6).
+================================================================================
+
+TASK SELECTION: same as slices 1-3 (idx 24 acceptance still needs idx 59/75/78 pieces; idx
+  52/53 still before the knowledge cutover). idx 59 stays the first buildable false task.
+  Took the step-6 item slice 3 left in REMAINING.
+
+PROBLEM [REAL, code read]: backend lists only public, non-deleted rooms (db/sitemap.go
+  WHERE is_private = false AND deleted_at IS NULL; GET /v1/rooms public list), but the
+  frontend stored those lists:
+    app/rooms/page.tsx: `revalidate = 60` + fetch next.revalidate 60; next.config `/rooms`
+    -> cache5m (public, s-maxage=300, stale-while-revalidate=3600).
+    app/sitemap-rooms.xml/route.ts: fetch next.revalidate 21600; buildSitemapXml headers
+    public, s-maxage=21600, swr=86400 + CDN-Cache-Control max-age=43200.
+  => a room's name/description (list) and slug (sitemap index) stayed advertised after it
+  turned private or was deleted. [UNVERIFIED in a build pre-fix: stale behavior inferred
+  from the config; slice 3 proved the same Next data-cache mechanism for the room page.]
+
+FIX:
+  - app/rooms/page.tsx: `export const dynamic = 'force-dynamic'` (replaces revalidate 60);
+    fetch `{ cache: 'no-store' }` (replaces next.revalidate 60).
+  - next.config.mjs: `/rooms` -> noStore (was cache5m).
+  - app/sitemap-rooms.xml/route.ts: force-dynamic, fetch no-store, response Cache-Control
+    overridden to `private, no-cache, no-store, max-age=0, must-revalidate` and
+    CDN-Cache-Control removed (also on the empty fallback). Shared buildSitemapXml and the
+    other sitemaps unchanged.
+  Cost: each /rooms view and each rooms-sitemap fetch hits the API.
+
+DIFF ([REAL] git status --porcelain / git diff --stat: 4 modified +36/-6, 2 new):
+  M frontend/app/rooms/page.tsx (+4/-2)
+  M frontend/app/sitemap-rooms.xml/route.ts (+15/-3)
+  M frontend/next.config.mjs (+1/-1)
+  M frontend/next.config.test.ts (+16, new describe; existing tests unchanged)
+  A frontend/app/rooms/page.test.tsx (2 tests)
+  A frontend/app/sitemap-rooms.xml/route.test.ts (4 tests)
+  M progress.txt: this entry. spec.json NOT changed. No backend change. No test removed.
+
+TDD:
+  [TEST] RED /tmp/solvr_idx59_s4_red.log: 6 new tests FAIL (dynamic undefined, fetch init
+    lacked cache no-store, sitemap/list header public...), 5 pass (incl. new "lists exactly
+    the rooms the API returns", which pins existing behavior).
+  [TEST] GREEN /tmp/solvr_idx59_s4_green.log: 11/11 PASS (3 files).
+  [REAL] production build (`next build` + `next start -p 3091`, NEXT_PUBLIC_API_URL = local
+    API built from HEAD on :8091 over postgres solvr_test on 5435; build lists /rooms and
+    /sitemap-rooms.xml as ƒ dynamic): agent registered, public room s4-list-room-113801
+    (description LISTMARKER-DESC-77). public -> /rooms marker present, sitemap has slug,
+    both Cache-Control private, no-store; PATCH is_private=true (200) -> the very next
+    requests: marker 0, slug 0; back to public -> both present; DELETE (204) -> both 0.
+    Both servers killed after (ports 3091/8091 free).
+
+FULL SUITE [TEST]: cd frontend && npm test once -> /tmp/solvr_idx59_s4_full_fe.log: 180 files,
+  1623 tests passed, 0 failed (+7 vs slice 3). tsc --noEmit clean. check-file-size.sh: same
+  36 pre-existing violations, none in touched files. Backend untouched (not re-run).
+  NOTE [REAL]: frontend/.next again holds a build baked with NEXT_PUBLIC_API_URL=
+  http://localhost:8091 (gitignored); rebuild before any local `next start`.
+
+REMAINING FOR idx 59 (passes STAYS false):
+  - step 6: backend homepage overview/rooms `public, max-age=30` (browser/proxy copy up to
+    30s; overview snapshot itself dropped on visibility change by idx 23 slice 4).
+  - steps 1/2 surface matrix (HTML, REST, SSE, instructions, message lookup, search, social
+    metadata x anonymous/member/owner/unrelated; deletion + expiry — guard and sitemap
+    query do not check expires_at, bounded by the 60s reaper).
+  - step 5 default prompts use per-agent tokens + no secrets in public APIs.
+
+UAT (for when idx 59 closes): as slices 1/3; after the frontend deploy, owner also confirms
+  https://solvr.dev/rooms and https://solvr.dev/sitemap-rooms.xml return Cache-Control
+  private, no-store and that any CDN in front of solvr.dev does not override it.

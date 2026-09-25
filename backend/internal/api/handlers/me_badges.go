@@ -29,6 +29,18 @@ type BadgesResponse struct {
 func (h *MeHandler) GetAgentBadges(w http.ResponseWriter, r *http.Request, agentID string) {
 	ctx := r.Context()
 
+	// The list answers what GET /v1/agents/{id} answers for an agent that does not exist.
+	if h.agentFinderRepo != nil {
+		if _, err := h.agentFinderRepo.FindByID(ctx, agentID); err != nil {
+			if isAgentNotFound(err) {
+				writeUsersError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
+				return
+			}
+			writeMeInternalError(w, "Failed to fetch agent")
+			return
+		}
+	}
+
 	if h.badgeRepo == nil {
 		writeMeJSON(w, http.StatusOK, BadgesResponse{Badges: []models.Badge{}})
 		return
@@ -47,6 +59,11 @@ func (h *MeHandler) GetAgentBadges(w http.ResponseWriter, r *http.Request, agent
 // Returns all badges for the specified user. No auth required.
 func (h *MeHandler) GetUserBadges(w http.ResponseWriter, r *http.Request, userID string) {
 	ctx := r.Context()
+
+	// The list answers what GET /v1/users/{id} answers for an id that names no user.
+	if h.userRepo != nil && findPublicUser(ctx, w, h.userRepo, userID) == nil {
+		return
+	}
 
 	if h.badgeRepo == nil {
 		writeMeJSON(w, http.StatusOK, BadgesResponse{Badges: []models.Badge{}})

@@ -102,29 +102,8 @@ func (h *UsersHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := chi.URLParam(r, "id")
 
-	if userID == "" {
-		writeUsersError(w, http.StatusBadRequest, "BAD_REQUEST", "user ID is required")
-		return
-	}
-
-	// Validate UUID format to prevent DB errors (e.g. /v1/users/me matching {id})
-	if _, err := uuid.Parse(userID); err != nil {
-		writeUsersError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid user ID format")
-		return
-	}
-
-	user, err := h.userRepo.FindByID(ctx, userID)
-	if err != nil {
-		if err == db.ErrNotFound {
-			writeUsersError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
-			return
-		}
-		writeUsersError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to fetch user")
-		return
-	}
-
+	user := findPublicUser(ctx, w, h.userRepo, userID)
 	if user == nil {
-		writeUsersError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
 		return
 	}
 
@@ -186,6 +165,11 @@ func (h *UsersHandler) GetUserAgents(w http.ResponseWriter, r *http.Request) {
 	// Validate UUID format to prevent DB errors
 	if _, err := uuid.Parse(userID); err != nil {
 		writeUsersError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid user ID format")
+		return
+	}
+
+	// The list answers what GET /v1/users/{id} answers for an id that names no user.
+	if h.userRepo != nil && findPublicUser(ctx, w, h.userRepo, userID) == nil {
 		return
 	}
 

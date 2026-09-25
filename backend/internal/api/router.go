@@ -311,7 +311,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	postsHandler.SetRoomPrivacyChecker(db.NewRoomRepository(pool))
 	// A published post can display the public rooms started from it (task: post seeds a
 	// collaboration). Private rooms are excluded by the repository.
-	postRelatedRoomsHandler := handlers.NewPostRelatedRoomsHandler(roomRepo)
+	postRelatedRoomsHandler := handlers.NewPostRelatedRoomsHandler(roomRepo, db.NewPostRepository(pool))
 	if embeddingService != nil {
 		postsHandler.SetEmbeddingService(embeddingService)
 	}
@@ -640,7 +640,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// Per prd-v5: GET /v1/agents/{id}/badges and /v1/users/{id}/badges (no auth required)
 		if pool != nil {
 			badgeRepo := db.NewBadgeRepository(pool)
-			badgesHandler := handlers.NewMeHandler(oauthConfig, nil, nil, nil, nil)
+			// The owner lookups make an absent owner a 404, as on GET /v1/{agents,users}/{id}.
+			badgesHandler := handlers.NewMeHandler(oauthConfig, accounts, nil, nil, nil)
+			badgesHandler.SetAgentFinderRepo(agentRepoConcrete)
 			badgesHandler.SetBadgeRepo(badgeRepo)
 			r.Get("/agents/{id}/badges", func(w http.ResponseWriter, req *http.Request) {
 				agentID := chi.URLParam(req, "id")

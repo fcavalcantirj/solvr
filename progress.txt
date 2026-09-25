@@ -3125,3 +3125,170 @@ REMAINING FOR idx 74 (passes STAYS false):
 
 UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on prod via the
   admin query route, then deploys). No migration in this slice.
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 15 of N. Step 3 status-code matrix, part 3: "403 or documented privacy-preserving 404
+for denied access, 404 for absent resources". A list under a parent answers what the parent's
+own GET answers; the canonical reply surfaces follow their post's visibility.
+================================================================================
+
+TASK SELECTION: idx 24 acceptance still needs idx 75/78 pieces; idx 52/53, 68 and 73's
+  remainder are gated on the knowledge cutover idx 93; idx 67 needs a test deployment.
+  idx 74 stays the first buildable false task. Took slice 13/14's "lists on an absent parent
+  still 200" item.
+
+SPIKE FIRST [REAL] (throwaway backend/internal/api/zz_spike15_test.go + zz_spike15b_test.go,
+  both deleted before commit; /tmp/solvr_idx74_s15_spike.tsv, /tmp/solvr_idx74_s15_spikeb.log):
+  - chi.Walk over every GET route with a path param, malformed + absent id x anonymous /
+    agent key / human JWT: 200 for a parent that does not exist on GET /v1/posts/{id}/replies,
+    /posts/{id}/rooms (absent; malformed was 400 INVALID_POST_ID while GET /v1/posts/{bad} is
+    404), /users/{id}/agents (absent), /users/{id}/badges, /agents/{id}/badges,
+    /agents/{id}/checkpoints. Left as designed: /v1/claim/{token} (token_valid:false status
+    answer), /v1/leaderboard/tags/{tag} (a tag is not a resource), /v1/users/me/bookmarks/{id}
+    ({"bookmarked":false}, slice 13).
+  - A family-only post (visibility family, owner_human_id = user A): GET /v1/posts/{id} is 404
+    for anonymous and a foreign agent (BART-151), BUT GET /v1/posts/{id}/replies and
+    GET /v1/replies/{reply} returned 200 WITH the reply body to anonymous and to the foreign
+    agent, the foreign agent could POST /v1/posts/{id}/replies (201) and POST
+    /v1/replies/{reply}/vote (200). Replies of a soft-deleted post stayed readable by id.
+
+DIFF ([REAL] git status --porcelain / git diff --numstat: 10 modified +157/-35, 4 new):
+  Production:
+  M backend/internal/db/visibility.go (+36): postVisibleTo(ctx, pool, postID, callerHuman) —
+    EXISTS(posts p WHERE p.id = $1 AND p.deleted_at IS NULL AND searchVisibilityClause), the
+    same predicate findByIDInternal (GET /v1/posts/{id}) uses; 22P02 -> false, nil. Exposed as
+    PostRepository.VisibleTo and ReplyRepository.PostVisibleTo.
+  M backend/internal/api/handlers/replies.go (+42): RepliesRepositoryInterface gains
+    PostVisibleTo. List (after cursor/limit parsing) and Create answer 404 NOT_FOUND "post not
+    found"; Get and Vote (after loading the reply) answer 404 "reply not found" when the
+    caller (callerHumanID: the JWT user, or a claimed agent's human; "" = public-only) may not
+    read the post. A failed check is 500. PATCH/DELETE stay author-only (unchanged).
+  M backend/internal/api/handlers/post_related_rooms.go (+17/-6): NewPostRelatedRoomsHandler
+    (rooms, posts) — checks PostRepository.VisibleTo first: 404 NOT_FOUND "post not found" for
+    an absent, malformed, deleted or family-only post; the uuid.Parse 400 INVALID_POST_ID is
+    gone (malformed now 404, like the parent).
+  A backend/internal/api/handlers/parent_lookup.go (51): findPublicUser (GET /v1/users/{id}'s
+    exact answers: 400 BAD_REQUEST missing/malformed, 404 NOT_FOUND absent/deleted, 500 lookup
+    failure) and isAgentNotFound (handler + db sentinels, as GetAgent checks).
+  M backend/internal/api/handlers/users.go (+6/-22): GetUserProfile uses findPublicUser (same
+    answers); GetUserAgents checks the user first when userRepo is set.
+  M backend/internal/api/handlers/users_contributions.go (+2/-4): findPublicUser; a lookup
+    failure is now 500 (was 404), like the parent.
+  M backend/internal/api/handlers/me_badges.go (+17): GetAgentBadges 404 "agent not found"
+    via agentFinderRepo, GetUserBadges via findPublicUser, each when the lookup is wired.
+  M backend/internal/api/handlers/checkpoints.go (+16): ListCheckpoints 404 "agent not found"
+    for an absent agent via the (already wired) agentFinder; other lookup errors 500.
+  M backend/internal/api/router.go (+4/-2, 1241 -> 1243, pre-existing violator): related rooms
+    get db.NewPostRepository(pool); the badges MeHandler gets `accounts` (UserRepository) and
+    SetAgentFinderRepo(agentRepoConcrete).
+  Tests:
+  A backend/internal/api/router_child_list_contract_test.go (224, real NewRouter with hub):
+    TestStatusContract_ChildListsAnswerLikeTheirParent — for posts {replies, rooms}, users
+    {agents, badges}, agents {badges, checkpoints} x ids {live, malformed, absent; posts also
+    family-only and soft-deleted} x callers {anonymous, agent key, human JWT, family owner
+    JWT}: the child's status equals the parent GET's; on refusal same code, a message, and
+    error.request_id == X-Request-ID. The parent's own answer is asserted too (live 200,
+    absent/deleted/foreign family 404, malformed 4xx). TestReplySurfaces_FollowTheParentPost
+    Visibility — family post + reply by a claimed sibling agent: anonymous / foreign agent /
+    foreign human get 404 (body never holds the reply) on GET reply + list; foreign agent and
+    foreign human POST reply and vote -> 404, reply count and upvotes unchanged; replies of a
+    soft-deleted post 404 for everyone incl. the family; owner JWT and sibling agent read (200,
+    body present), sibling replies (201), owner votes (200, upvotes 1).
+    Helpers childContractPost / childContractReply (UUID-named, cleanup incl. votes).
+  A backend/internal/api/handlers/replies_visibility_test.go (96): TestReplies_HiddenPostIsNot
+    FoundOnEverySurface (list/create/get/vote -> 404 with the right message, no leak, the
+    repository never reached: sentinel create/vote errors), TestReplies_VisibilityIsChecked
+    ForTheCallersFamily (claimed agent -> its human; unclaimed -> ""),
+    TestReplies_VisibilityCheckFailureIsAServerError (500).
+  M backend/internal/api/handlers/replies_test.go (+13): MockRepliesRepository gains
+    postHidden/postVisibleErr/visibleCaller and PostVisibleTo (zero value = readable post, so
+    every existing reply test runs unchanged).
+  A backend/internal/db/post_visible_test.go (106): TestPostVisibleTo_FollowsTheSinglePost
+    ReadRule — both repositories x 10 cases (public anon/other, family owner/anon/other,
+    deleted, deleted family owner, absent, malformed, empty). Own UUID-suffixed user fixtures
+    through UserRepository.Create + cleanup.
+  M backend/internal/api/router_rooms_expiry_listings_test.go (+4/-1): see CHANGED TESTS.
+  No migration. Frontend untouched. spec.json unchanged. SPEC.md unchanged (step 6 docs).
+
+CHANGED TESTS (fixture only; every assertion kept):
+  (a) TestRoomExpiry_ExpiredRoomLeavesEveryListingBeforeTheReaper.
+  (b) it set rooms.source_post_id to `uuid.NewString()` — a post that does not exist — and
+      asserted `require.Equal(t, http.StatusOK, resp.StatusCode, ...)` (getBody) plus
+      Contains/NotContains the slug on GET /v1/posts/{that id}/rooms before/after expiry.
+  (c) related rooms of an absent post are now 404 (the parent's answer), pinned by
+      TestStatusContract_ChildListsAnswerLikeTheirParent//v1/posts/{id}/rooms/absent/*; the
+      fixture now points the room at a real public post (childContractPost), so the test still
+      proves the expired room leaves the post's related rooms. It failed only in the full run
+      (/tmp/solvr_idx74_s15_full.log line 3862: expected 200, actual 404 "post not found").
+  (d) [TEST] /tmp/solvr_idx74_s15_expiry.log -race: both TestRoomExpiry_* PASS.
+
+TDD / EVIDENCE (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, the local
+  isolated test DB in the solvr-postgres container):
+  [TEST] RED /tmp/solvr_idx74_s15_red.log: 69 FAIL lines (both new API tests); only the
+    member rows (read, reply, vote) and the already-equal users/{id}/agents malformed rows
+    passed. Write path: "expected: 404 actual: 201".
+  [TEST] GREEN -race -v /tmp/solvr_idx74_s15_green_api.log: TestStatusContract_ChildLists...,
+    TestReplySurfaces_..., TestDeletedAccount_*, TestStatusContract_UnknownResourceIDIsNotFound,
+    TestStatusContract_NoRouteAnswers5xxForAnUnknownID: 146 PASS lines, 0 FAIL, 0 SKIP.
+    /tmp/solvr_idx74_s15_db_green.log: 21 PASS (1 + 20 subtests), 0 SKIP.
+    /tmp/solvr_idx74_s15_green_handlers.log -race (Replies, GetUserAgents/Profile/
+    Contributions, badges, checkpoints, AgentMe/UserMe): 96 top-level PASS, 0 FAIL, 0 SKIP.
+  [REAL] mutation 1: `p.deleted_at IS NULL` removed from postVisibleTo -> db test 4 deleted
+    rows FAIL and API deleted rows FAIL (/tmp/solvr_idx74_s15_mut1_{db,api}.log); restored from
+    a copy, grep count 1. mutation 2: badges MeHandler unwired (nil userRepo, no agent finder)
+    -> 16 badges rows FAIL (/tmp/solvr_idx74_s15_mut2_api.log); restored. mutation 3: the
+    Vote gate removed -> outsider write rows FAIL (expected 404, actual 200) and the handler
+    vote row FAIL (/tmp/solvr_idx74_s15_mut3_{api,handlers}.log); restored, grep count 2.
+  [REAL] go build ./... ok; go vet ./internal/api/... clean; gofmt clean on every touched and
+    new file.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 run ONCE -> /tmp/solvr_idx74_s15_full.log:
+  FAIL only in internal/api, internal/api/handlers, internal/db (pre-existing set). Unique
+  top-level --- FAIL names (/tmp/s14_failnames.sh): 76 vs 77 in slice 14; 2 gone
+  (TestHomepageSearch_ChartAddsUpToTheTotalBesideIt, TestSearchPulse_SeriesCoversTheWindow
+  AndExcludesMonitoring: shared-DB search window flakes, untouched), 1 new =
+  TestRoomExpiry_ExpiredRoomLeavesEveryListingBeforeTheReaper, caused by this slice and fixed
+  above (not re-run in the full suite; its focused -race run is green). No other failure
+  message in the log names a changed route (grep of Error/Messages lines).
+  check-file-size.sh (/tmp/solvr_idx74_s15_filesize.log): same 36 violations; router.go
+  1241 -> 1243 (already a violator); every new file under 230 lines.
+
+BEHAVIOR CHANGES (v0, for step 6 docs): GET /v1/posts/{id}/replies and /v1/posts/{id}/rooms
+  answer 404 NOT_FOUND "post not found" whenever GET /v1/posts/{id} does (absent, malformed,
+  soft-deleted, or a family-only post the caller's family does not own) — rooms' malformed-id
+  400 INVALID_POST_ID is gone. GET /v1/replies/{id} and POST /v1/replies/{id}/vote answer 404
+  "reply not found" when the reply's post is hidden or deleted; POST /v1/posts/{id}/replies
+  answers 404 for a hidden post (a foreign agent could reply to a family post before).
+  GET /v1/users/{id}/agents|badges answer as GET /v1/users/{id} (404 absent/deleted, 400
+  malformed); GET /v1/agents/{id}/badges|checkpoints 404 "agent not found" for an absent or
+  deleted agent. GET /v1/users/{id}/contributions: a lookup failure is 500 (was 404).
+  [UNVERIFIED] frontend: callers of these lists only fetch them for a parent the page already
+  loaded (agent/user profile, post page), so only already-404 pages see the new answers; no
+  frontend test was run this slice (frontend untouched).
+
+OUT OF SCOPE, FOUND HERE (not fixed):
+  - [REAL, spike] comments and views on a family-only post: GET /v1/posts/{id}/comments and
+    /views answer 200 to outsiders (empty list / view_count 0), i.e. they reveal that the id
+    exists; comment TargetExists does not apply the family rule. Same privacy rule applies.
+  - A reply a foreign agent already wrote on a family post before this slice stays in the DB
+    (now unreadable to it; it can still PATCH/DELETE it as author).
+
+REMAINING FOR idx 74 (passes STAYS false):
+  - step 3 remainder: comments/views family rule above; 401 for invalid (not deleted)
+    credentials on optional-auth routes (needs a frontend check for expired JWTs on public
+    pages); 400/409/429 rows in the contract file.
+  - step 5: [UNVERIFIED, not run] claim atomicity (link, bonus, badge, MarkUsed are 4
+    statements).
+  - step 6: OpenAPI contract (openapi_paths.go / openapi_schemas.go already over 800 lines ->
+    split first): Idempotency-Key, Idempotent-Replayed, the 409 codes, error envelope, CORS,
+    credential transport, size limits, stream resume, timeouts, If-Match/ETag, the 404 rules
+    (slices 13 and 15) and the deleted-account 401/503 rules (slice 14).
+
+UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on prod via the
+  admin query route, then deploys). No migration in this slice.
+  CORRECTION (this entry): the RED run's 33 PASS lines were the rows that already behaved —
+    every "live" row (24), the family owner's family-only rows (2), users/{id}/agents malformed
+    (4, 400 = 400) and the 3 member rows — not only the member and malformed rows. And
+    router_child_list_contract_test.go is 222 lines, not 224.

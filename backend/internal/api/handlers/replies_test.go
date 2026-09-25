@@ -34,6 +34,11 @@ type MockRepliesRepository struct {
 	pageResult     []models.ReplyWithAuthor
 	pageTotal      int
 	lastPageParams *models.ReplyPageParams
+	// postHidden/postVisibleErr drive PostVisibleTo (the zero value = a readable post);
+	// visibleCaller records the caller human the handler passed.
+	postHidden     bool
+	postVisibleErr error
+	visibleCaller  *string
 }
 
 func (m *MockRepliesRepository) Create(_ context.Context, reply *models.Reply) (*models.Reply, error) {
@@ -81,6 +86,14 @@ func (m *MockRepliesRepository) Delete(_ context.Context, _ string, _ models.Aut
 
 func (m *MockRepliesRepository) Vote(_ context.Context, _, _, _, _ string) error {
 	return m.voteErr
+}
+
+func (m *MockRepliesRepository) PostVisibleTo(_ context.Context, _, callerHuman string) (bool, error) {
+	m.visibleCaller = &callerHuman
+	if m.postVisibleErr != nil {
+		return false, m.postVisibleErr
+	}
+	return !m.postHidden, nil
 }
 
 func (m *MockRepliesRepository) GetUserVote(_ context.Context, _, _, _ string) (*string, error) {

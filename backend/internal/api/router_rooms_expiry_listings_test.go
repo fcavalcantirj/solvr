@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -39,7 +40,9 @@ func TestRoomExpiry_ExpiredRoomLeavesEveryListingBeforeTheReaper(t *testing.T) {
 	t.Cleanup(func() { hpoCleanup(t, a.pool) })
 	ownerJWT := overviewRoom(t, a, slug)
 
-	sourcePost := uuid.NewString()
+	// A real public post: a post's related-rooms list answers 404 for a post that does not
+	// exist, exactly as GET /v1/posts/{id} does.
+	sourcePost := childContractPost(t, a.pool, "agent_expiry_fixture_"+uuid.NewString()[:8], models.VisibilityPublic, "", false)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	// Rooms expire by the clock (expires_at is set at creation): nothing announces the moment.

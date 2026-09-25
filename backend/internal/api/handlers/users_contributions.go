@@ -70,10 +70,8 @@ func (h *UsersHandler) GetUserContributions(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Look up user to get author type
-	user, err := h.userRepo.FindByID(ctx, userID)
-	if err != nil || user == nil {
-		writeUsersError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
+	// Look up user to get author type; the list answers what GET /v1/users/{id} answers.
+	if findPublicUser(ctx, w, h.userRepo, userID) == nil {
 		return
 	}
 

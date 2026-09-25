@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -64,4 +65,39 @@ func publicOnlyVisibility(alias string) string {
 		return "visibility = 'public'"
 	}
 	return alias + ".visibility = 'public'"
+}
+
+// postVisibleTo reports whether callerHuman may read the post under the rule GET
+// /v1/posts/{id} applies: the post exists, is not deleted, and passes
+// searchVisibilityClause (public, or owned by the caller's family). Anything under a post
+// (its replies, its related rooms) answers 404 exactly when this is false. A malformed id
+// names no post, so it is false rather than an error.
+func postVisibleTo(ctx context.Context, pool *Pool, postID, callerHuman string) (bool, error) {
+	args := []any{postID}
+	argNum := 2
+	clause := searchVisibilityClause("p", callerHuman, &args, &argNum)
+	var visible bool
+	err := pool.QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM posts p WHERE p.id = $1 AND p.deleted_at IS NULL AND "+clause+")",
+		args...,
+	).Scan(&visible)
+	if err != nil {
+		if isInvalidUUIDError(err) {
+			return false, nil
+		}
+		LogQueryError(ctx, "Post.VisibleTo", "posts", err)
+		return false, fmt.Errorf("check post visibility: %w", err)
+	}
+	return visible, nil
+}
+
+// VisibleTo reports whether callerHuman ("" = anonymous or unclaimed) may read the post.
+func (r *PostRepository) VisibleTo(ctx context.Context, postID, callerHuman string) (bool, error) {
+	return postVisibleTo(ctx, r.pool, postID, callerHuman)
+}
+
+// PostVisibleTo reports whether callerHuman may read the post a reply belongs to (or
+// would belong to), so the reply surfaces never show or accept what the post hides.
+func (r *ReplyRepository) PostVisibleTo(ctx context.Context, postID, callerHuman string) (bool, error) {
+	return postVisibleTo(ctx, r.pool, postID, callerHuman)
 }

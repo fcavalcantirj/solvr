@@ -25,6 +25,9 @@ type RepliesRepositoryInterface interface {
 	Delete(ctx context.Context, id string, authorType models.AuthorType, authorID string) error
 	Vote(ctx context.Context, replyID, voterType, voterID, direction string) error
 	GetUserVote(ctx context.Context, replyID, voterType, voterID string) (*string, error)
+	// PostVisibleTo applies the GET /v1/posts/{id} read rule, so a reply surface answers
+	// 404 for a post the caller may not read (absent, deleted, or another family's).
+	PostVisibleTo(ctx context.Context, postID, callerHuman string) (bool, error)
 }
 
 // RepliesHandler serves the one create/list/update/delete/vote reply API family
@@ -68,6 +71,10 @@ func (h *RepliesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.postReadable(w, r, postID) {
+		return
+	}
+
 	reply := &models.Reply{
 		PostID:        postID,
 		ParentReplyID: req.ParentReplyID,
@@ -103,6 +110,9 @@ func (h *RepliesHandler) List(w http.ResponseWriter, r *http.Request) {
 	// surface (idx 73 step 2). A malformed cursor or limit is a 400.
 	afterCreatedAt, afterID, limit, ok := parseReplyPage(w, r.URL.Query())
 	if !ok {
+		return
+	}
+	if !h.postReadable(w, r, postID) {
 		return
 	}
 
@@ -145,6 +155,9 @@ func (h *RepliesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 		h.logger.Error("get reply failed", "error", err, "id", id)
 		writeRepliesError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get reply")
+		return
+	}
+	if reply != nil && !h.replyReadable(w, r, reply.PostID) {
 		return
 	}
 	if reply != nil {
@@ -247,6 +260,9 @@ func (h *RepliesHandler) Vote(w http.ResponseWriter, r *http.Request) {
 		writeRepliesError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to load reply")
 		return
 	}
+	if !h.replyReadable(w, r, reply.PostID) {
+		return
+	}
 	if reply.AuthorType == authInfo.AuthorType && reply.AuthorID == authInfo.AuthorID {
 		writeRepliesError(w, http.StatusForbidden, "FORBIDDEN", "cannot vote on your own content")
 		return
@@ -264,6 +280,32 @@ func (h *RepliesHandler) Vote(w http.ResponseWriter, r *http.Request) {
 	writeRepliesJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{"voted": true, "direction": req.Direction},
 	})
+}
+
+// postReadable answers 404 "post not found" (the answer GET /v1/posts/{id} gives) and
+// returns false when the caller may not read the post; a failed check is a 500.
+func (h *RepliesHandler) postReadable(w http.ResponseWriter, r *http.Request, postID string) bool {
+	return h.checkPostVisible(w, r, postID, "post not found")
+}
+
+// replyReadable is postReadable for a reply reached by its own id: the reply is hidden
+// ("reply not found") whenever its post is.
+func (h *RepliesHandler) replyReadable(w http.ResponseWriter, r *http.Request, postID string) bool {
+	return h.checkPostVisible(w, r, postID, "reply not found")
+}
+
+func (h *RepliesHandler) checkPostVisible(w http.ResponseWriter, r *http.Request, postID, notFound string) bool {
+	visible, err := h.repo.PostVisibleTo(r.Context(), postID, callerHumanID(r))
+	if err != nil {
+		h.logger.Error("post visibility check failed", "error", err, "postID", postID)
+		writeRepliesError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to load post")
+		return false
+	}
+	if !visible {
+		writeRepliesError(w, http.StatusNotFound, "NOT_FOUND", notFound)
+		return false
+	}
+	return true
 }
 
 // writeMutationError maps repository errors for update/delete to HTTP responses.

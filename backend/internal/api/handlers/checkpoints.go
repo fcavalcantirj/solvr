@@ -238,6 +238,22 @@ func (h *CheckpointsHandler) asyncPin(pinID, cid string) {
 func (h *CheckpointsHandler) ListCheckpoints(w http.ResponseWriter, r *http.Request, agentID string) {
 	ctx := r.Context()
 
+	// The list answers what GET /v1/agents/{id} answers for an agent that does not exist.
+	if h.agentFinder != nil {
+		if _, err := h.agentFinder.FindByID(ctx, agentID); err != nil {
+			if isAgentNotFound(err) {
+				response.WriteNotFound(w, "agent not found")
+				return
+			}
+			response.WriteInternalErrorWithLog(w, "failed to fetch agent", err, response.LogContext{
+				Operation: "ListCheckpoints.FindAgent",
+				Resource:  "agent",
+				RequestID: r.Header.Get("X-Request-ID"),
+			}, h.logger)
+			return
+		}
+	}
+
 	// Check agent API key auth first
 	authAgent := auth.AgentFromContext(ctx)
 	if authAgent != nil {

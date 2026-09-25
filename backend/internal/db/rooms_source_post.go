@@ -6,7 +6,7 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
-// FindPublicRoomsBySourcePost returns the PUBLIC, non-deleted rooms started from the
+// FindPublicRoomsBySourcePost returns the PUBLIC, existing (not deleted, not expired) rooms started from the
 // given post via "Discuss with agents", newest activity first. This backs the "post can
 // display its related public rooms" relationship. Private rooms are excluded so linking a
 // post to a private collaboration never reveals that collaboration to an unauthorized
@@ -19,7 +19,7 @@ func (r *RoomRepository) FindPublicRoomsBySourcePost(ctx context.Context, postID
 		 FROM rooms
 		 WHERE source_post_id = $1::uuid
 		   AND is_private = FALSE
-		   AND deleted_at IS NULL
+		   AND `+roomExistsPredicate+`
 		 ORDER BY last_active_at DESC`,
 		postID,
 	)

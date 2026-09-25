@@ -15,8 +15,8 @@ import (
 //
 // Three rules are enforced HERE, by the query, so no caller can widen them:
 //
-//  1. Public rooms only: `is_private = FALSE AND deleted_at IS NULL`. A room
-//     taken private disappears from the next read.
+//  1. Public, live rooms only (liveRoomPredicate: not private, not deleted, not
+//     past expires_at). A room taken private or expired disappears from the next read.
 //  2. Deleted and system messages are not activity. A deleted message is gone
 //     from the next read; an edited one is re-read from the row, never cached.
 //  3. Typed events pass an ALLOW-LIST, not a noise blocklist. Heartbeats,
@@ -78,7 +78,7 @@ const publicRoomFeedCTE = `
 		  LEFT JOIN users u ON m.author_type = 'human'
 		                   AND u.id::text = m.author_id
 		                   AND u.deleted_at IS NULL
-		 WHERE m.deleted_at IS NULL AND r.deleted_at IS NULL AND r.is_private = FALSE
+		 WHERE m.deleted_at IS NULL AND ` + liveRoomPredicate + `
 		   AND m.author_type <> 'system'
 		UNION ALL
 		SELECT 'event', e.id, NULL::int,
@@ -86,7 +86,7 @@ const publicRoomFeedCTE = `
 		       FALSE,
 		       '', '{}'::jsonb, e.event_type, e.issue, e.created_at
 		  FROM room_events e JOIN rooms r ON r.id = e.room_id
-		 WHERE r.deleted_at IS NULL AND r.is_private = FALSE
+		 WHERE ` + liveRoomPredicate + `
 		   AND upper(e.event_type) = ANY($1::text[])
 	)
 `

@@ -2402,3 +2402,83 @@ UAT (for when idx 59 closes): as slices 1/3/4; after deploy, owner confirms
   CORRECTION (slice 6 DIFF line above): git diff --stat shows homepage_rooms.go +9/-1 = 10 changed lines, matching the +17/-9 total.
 
 2026-09-25 12:29: RALPH BLOCKED — 8 batches with no ledger movement (engine claude, 67 passing). Supervisor stopped.
+
+2026-09-25 — Task idx 59 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Keep room and content permissions authoritative on the server"
+SLICE 7 of N: a room past expires_at leaves every LISTING the moment it expires (steps 1/2, expiry).
+================================================================================
+
+TASK SELECTION: same as slices 1-6 (idx 24 acceptance still needs idx 59/75/78 pieces; idx
+  52/53 still before the knowledge cutover). idx 59 stays the first buildable false task.
+  Swept the remaining surface list from slice 6 REMAINING.
+
+SWEEP [REAL, code read] (no change needed):
+  - message lookup: GET /v1/rooms/{slug}/messages/{id} and /entries/{id} and /r pins all
+    query by (room.ID, id) — no cross-room lookup.
+  - IsPrivateRoom (post publish gate) ignoring expiry: NOT a leak. Expiry does not change
+    privacy; a public room's outcome was publishable anyway. Left unchanged.
+  - GET /v1/rooms (ListFiltered), homepage GetRecentCompletedRooms, homepage previews
+    (GetBySlug) already exclude expired rooms.
+PROBLEM [REAL, code read + RED test]: three listings ignored expires_at, so a room whose own
+  routes answer 404 (slice 5) was still listed until the 60s reaper deleted it:
+  - homepage/overview activity feed (ListPublicRoomFeed: slug + message content),
+  - GET /v1/posts/{id}/rooms (FindPublicRoomsBySourcePost),
+  - GET /v1/me/rooms (ListByOwner).
+  Plus GET /v1/overview's 30s server snapshot: rooms expire by the CLOCK (expires_at is set
+  at creation, no notice fires), so the snapshot could keep an expired room up to 30s.
+
+FIX:
+  - db/homepage_activity.go: feed CTE uses liveRoomPredicate (both message and event halves).
+  - db/rooms_source_post.go + db/rooms.go ListByOwner: roomExistsPredicate.
+  - db/homepage_rooms.go: new HomepageRepository.NextPublicRoomExpiry (MIN future
+    expires_at of public undeleted rooms; NULL when none — the common case).
+  - handlers/overview_cache.go: entry field `until`; Get treats an entry as stale at/after
+    until; new SetUntil (Set = SetUntil with zero); new handler method snapshotDeadline.
+  - handlers/homepage_overview.go GetOverviewConsolidated: reads the deadline BEFORE building,
+    caches with SetUntil; if the deadline query fails the snapshot is not cached.
+
+DIFF ([REAL] git status --porcelain / git diff --stat -- backend: 6 modified +55/-13, 1 new):
+  M backend/internal/api/handlers/homepage_overview.go (+4/-2; now 777 lines)
+  M backend/internal/api/handlers/overview_cache.go (+28/-2)
+  M backend/internal/db/homepage_activity.go (+4/-4)
+  M backend/internal/db/homepage_rooms.go (+15)
+  M backend/internal/db/rooms.go (+3/-3)
+  M backend/internal/db/rooms_source_post.go (+2/-2)
+  A backend/internal/api/router_rooms_expiry_listings_test.go (1 integration test)
+  M progress.txt: this entry. spec.json NOT changed. Frontend untouched. No test changed or removed.
+  NOT COMMITTED: ralph-continuous.sh (owner's uncommitted harness edit, present before this
+  iteration; left in the working tree untouched).
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local isolated DB):
+  [TEST] RED /tmp/solvr_idx59_s7_red.log: TestRoomExpiry_ExpiredRoomLeavesEveryListingBefore
+    TheReaper FAIL "homepage overview drops the room the moment it expires...".
+  [TEST] GREEN -race -v /tmp/solvr_idx59_s7_green.log: 19 PASS, 0 FAIL, 0 SKIP (new test +
+    TestRoomExpiry_*, TestHomepageRoomSurfaces_*, TestRoomOverview_*, TestOverviewConsolidated_*,
+    TestHomepageActivity_*). New test: public room with 2 messages, source_post_id and
+    expires_at = NOW()+3s; all 6 listings (homepage overview, /v1/overview, both activity
+    paths, post related rooms, owner's /v1/me/rooms) show the slug; after the clock passes
+    expires_at (no UPDATE, no reaper, no notice) none of them nor /v1/homepage/rooms does.
+  [REAL] mutations (each restored): (1) Get ignores `until` -> FAIL "overview drops the room..."
+    (/tmp/solvr_idx59_s7_mut1.log); (2) source-post query back to deleted_at only -> FAIL
+    "post related rooms drops the room..." (/tmp/solvr_idx59_s7_mut2.log).
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 once -> /tmp/solvr_idx59_s7_full.log. 78 unique
+  FAIL names vs 78 in slice 6's full2 log: 1 gone (TestPublicOverview_NeverSharesACacheEntry
+  WithAnOperatorReport, fixed by slice 6's no-cache switch), 1 new:
+  TestSearchAnalyticsRepository_GetZeroResults ("expected 'test_missing topic' in zero-result
+  queries"). [REAL] it FAILS identically on clean HEAD (git stash, /tmp/solvr_idx59_s7_zero_head.log);
+  search analytics code untouched => shared-test-DB data, same class as its sibling
+  GetTrending (already in the pre-existing set). Package FAILs remain internal/api,
+  internal/api/handlers, internal/db (pre-existing set). go build ok; go vet db/handlers
+  clean; gofmt clean on touched files; check-file-size.sh no violation in touched files.
+
+REMAINING FOR idx 59 (passes STAYS false):
+  - step 5: sweep every public room/agent read response for token hashes, account API keys,
+    member-management secrets (models already json:"-" on DeletedAt/CreatorAgentID/
+    AccessSource [REAL code read]; no response-body test yet), and confirm default prompts
+    only use per-agent tokens (connect_prompts.go wording + TestRoomsConnect_ExecutorPrompt
+    NeverLeaksCredentials exist; other prompt builders not swept).
+  - steps 1/2: social metadata (frontend generateMetadata for /rooms/[slug]) and site search
+    x anonymous/member/owner/unrelated not yet exercised by a test.
+
+UAT (for when idx 59 closes): as slices 1/3/4/6. No migration in this slice.

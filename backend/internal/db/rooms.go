@@ -342,13 +342,13 @@ func (r *RoomRepository) ListFiltered(ctx context.Context, params RoomListParams
 	return rooms, nil
 }
 
-// ListByOwner returns rooms where the specified user holds an active owner
-// membership, ordered by created_at DESC.
+// ListByOwner returns existing (not deleted, not expired) rooms where the specified user
+// holds an active owner membership, ordered by created_at DESC.
 func (r *RoomRepository) ListByOwner(ctx context.Context, ownerID uuid.UUID) ([]models.Room, error) {
 	query := `
 		SELECT ` + roomColumns + `
 		FROM rooms
-		WHERE deleted_at IS NULL AND EXISTS (
+		WHERE ` + roomExistsPredicate + ` AND EXISTS (
 			SELECT 1 FROM room_members rm
 			WHERE rm.room_id = rooms.id AND rm.user_id = $1
 			  AND rm.role = 'owner' AND rm.revoked_at IS NULL)

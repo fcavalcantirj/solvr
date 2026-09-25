@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -44,6 +46,8 @@ type OverviewCache struct {
 type overviewCacheEntry struct {
 	data     []byte
 	cachedAt time.Time
+	// until, when set, ends the entry before its TTL: the moment a room it may show expires.
+	until time.Time
 }
 
 const (
@@ -85,7 +89,7 @@ func (c *OverviewCache) Get(window string) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	if time.Since(e.cachedAt) > c.ttl {
+	if time.Since(e.cachedAt) > c.ttl || (!e.until.IsZero() && !time.Now().Before(e.until)) {
 		return nil, false
 	}
 	// Return a copy so a caller mutating the slice cannot poison the cache.
@@ -97,6 +101,11 @@ func (c *OverviewCache) Get(window string) ([]byte, bool) {
 // Set stores a payload under the window-scoped key, evicting the oldest entry
 // when the cache is full.
 func (c *OverviewCache) Set(window string, data []byte) {
+	c.SetUntil(window, data, time.Time{})
+}
+
+// SetUntil is Set for a payload that must not be served at or after until (zero: TTL only).
+func (c *OverviewCache) SetUntil(window string, data []byte, until time.Time) {
 	if c == nil {
 		return
 	}
@@ -116,7 +125,7 @@ func (c *OverviewCache) Set(window string, data []byte) {
 	}
 	out := make([]byte, len(data))
 	copy(out, data)
-	c.entries[key] = &overviewCacheEntry{data: out, cachedAt: time.Now()}
+	c.entries[key] = &overviewCacheEntry{data: out, cachedAt: time.Now(), until: until}
 }
 
 // Invalidate drops every cache entry. Called from the room write path when a
@@ -129,4 +138,21 @@ func (c *OverviewCache) Invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries = make(map[string]*overviewCacheEntry)
+}
+
+// snapshotDeadline is when an overview read now may no longer be served from the cache: the
+// next moment a public room expires (zero when none will). Rooms expire by the clock and no
+// notice announces it, so without this cap an expired room could stay on the homepage for up
+// to the TTL after its own routes answer 404. ok is false when the deadline cannot be read;
+// the snapshot is then not cached at all.
+func (h *HomepageOverviewHandler) snapshotDeadline(ctx context.Context) (time.Time, bool) {
+	next, err := h.homeRepo.NextPublicRoomExpiry(ctx)
+	if err != nil {
+		slog.Error("homepage overview: next room expiry failed; snapshot not cached", "error", err)
+		return time.Time{}, false
+	}
+	if next == nil {
+		return time.Time{}, true
+	}
+	return *next, true
 }

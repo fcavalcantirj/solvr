@@ -431,3 +431,18 @@ func (r *HomepageRepository) GetRecentCompletedRooms(ctx context.Context, window
 	}
 	return results, nil
 }
+
+// NextPublicRoomExpiry returns the earliest expires_at still ahead among public, undeleted
+// rooms, or nil when none is set. A cached public overview must not outlive it: the room
+// leaves every listing at that moment and nothing announces it.
+func (r *HomepageRepository) NextPublicRoomExpiry(ctx context.Context) (*time.Time, error) {
+	var next *time.Time
+	err := r.pool.QueryRow(ctx,
+		`SELECT MIN(r.expires_at) FROM rooms r WHERE `+publicRoomPredicate+` AND r.expires_at > NOW()`,
+	).Scan(&next)
+	if err != nil {
+		LogQueryError(ctx, "NextPublicRoomExpiry", "rooms", err)
+		return nil, fmt.Errorf("next public room expiry: %w", err)
+	}
+	return next, nil
+}

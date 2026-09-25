@@ -2400,3 +2400,5 @@ REMAINING FOR idx 59 (passes STAYS false):
 UAT (for when idx 59 closes): as slices 1/3/4; after deploy, owner confirms
   https://api.solvr.dev/v1/overview returns Cache-Control: public, no-cache.
   CORRECTION (slice 6 DIFF line above): git diff --stat shows homepage_rooms.go +9/-1 = 10 changed lines, matching the +17/-9 total.
+
+2026-09-25 12:29: RALPH BLOCKED — 8 batches with no ledger movement (engine claude, 67 passing). Supervisor stopped.

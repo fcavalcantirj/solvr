@@ -8,12 +8,13 @@ import (
 )
 
 // IsPrivateRoom reports whether the room identified by a UUID string is private (is_private).
-// A missing or deleted room reports false with ErrRoomNotFound so callers can decide; the
-// post publish-gate treats a lookup error as "do not block" to stay fail-open for edits.
+// A soft-deleted room still reports its privacy: deleting a private room must not make what
+// was saved from it public. A room that no longer exists at all (hard-deleted, e.g. by the
+// expiry reaper) reports false with ErrRoomNotFound so callers can decide.
 func (r *RoomRepository) IsPrivateRoom(ctx context.Context, roomID string) (bool, error) {
 	var isPrivate bool
 	err := r.pool.QueryRow(ctx,
-		`SELECT is_private FROM rooms WHERE id = $1::uuid AND deleted_at IS NULL`,
+		`SELECT is_private FROM rooms WHERE id = $1::uuid`,
 		roomID,
 	).Scan(&isPrivate)
 	if err != nil {

@@ -707,11 +707,14 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		// Private-room outcome gate: a post saved from a PRIVATE room must not reach the
 		// public index through an ordinary author edit. Only the room owner may publish it,
 		// via POST /v1/rooms/{slug}/posts/{id}/publish. Public-room outcomes and non-room
-		// posts publish through this normal flow unchanged.
+		// posts publish through this normal flow unchanged. A source room that no longer
+		// exists cannot prove it was public, so its outcome stays unpublished; only a failed
+		// lookup (DB error) lets the edit through.
 		if h.roomPrivacy != nil && existingPost.SourceRoomID != nil &&
 			existingPost.PublicationState != models.PublicationPublished {
 			if newPub, _ := models.DeriveStates(newStatus); newPub == models.PublicationPublished {
-				if priv, perr := h.roomPrivacy.IsPrivateRoom(r.Context(), *existingPost.SourceRoomID); perr == nil && priv {
+				priv, perr := h.roomPrivacy.IsPrivateRoom(r.Context(), *existingPost.SourceRoomID)
+				if (perr == nil && priv) || errors.Is(perr, db.ErrRoomNotFound) {
 					writePostsError(w, http.StatusForbidden, "ROOM_OWNER_APPROVAL_REQUIRED",
 						"a private-room outcome can only be published by the room owner")
 					return

@@ -3807,3 +3807,115 @@ omitted-versus-invalid optional-auth rule.
 UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: unchanged from slices 6/10 — owner
 applies migrations 000101 and 000102 to production through the admin query route, then
 deploys. [REAL] This slice adds no migration or deployment action.
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 20 of N. Step 3 "400 for invalid requests" / step 1 error envelope: a spike over every
+no-path-parameter mutating route with a malformed JSON body found one route family whose 403
+is not in the public error envelope.
+================================================================================
+
+TASK SELECTION [REAL]: idx 24 remains an acceptance task gated by later multi-instance/client
+work; idx 52/53, 68 and 73's remainder remain gated on the canonical knowledge cutover; idx 67
+needs a test deployment. [REAL] No description starts with URGENT. idx 74 is the first
+buildable false task and its step 3 still listed the 400/409/429 rows.
+
+SPIKE (throwaway test, deleted before the commit; full output
+/private/tmp/solvr_idx74_s20_spike.log) [REAL]: walked chi routes for POST/PUT/PATCH with no
+path parameter, excluding /admin and /stream: 25 routes x 3 identities (anonymous, agent key,
+human JWT) = 75 answers to the body `{"broken":`.
+  MEASURED: no 5xx. 400 answers = 40, split across four codes for the same condition:
+    VALIDATION_ERROR 29, INVALID_REQUEST 5, INVALID_JSON 5, BAD_REQUEST 1. 401 = 24
+    (UNAUTHORIZED 22, INVALID_TOKEN 1, INVALID_API_KEY 1). 403 FORBIDDEN with envelope = 3.
+    2xx = 6: POST /v1/mcp x3 (200; handlers/mcp.go:170 answers a JSON-RPC -32700 parse error,
+    which I read but did not run), POST /v1/notifications/read-all x2 (200) and POST
+    /v1/agents/me/claim x1 (201) [UNVERIFIED: I did not read these two handlers, so "they
+    take no body" is inferred]. 403 WITHOUT the envelope = 2: POST /v1/auth/login and POST
+    /v1/auth/register with an agent key.
+  SCOPE LIMIT [UNVERIFIED]: routes with path parameters were not walked with a malformed
+    body, so their 400 behavior is not measured.
+  ROOT CAUSE [REAL, read the code]: BlockAgentAPIKeys (middleware/block_agent_auth.go)
+    wrote a flat {"code","message","details"} object. ErrorEnvelope leaves any JSON object
+    without an "error" key untouched (error_envelope.go: `if !ok { return raw, false }`), so
+    the flat body reached clients with no error object and no request_id. The middleware is
+    mounted on six routes: POST /v1/auth/register, POST /v1/auth/login, and the GitHub and
+    Google redirect and callback GETs (router.go:559-571).
+  SOURCE SCAN [REAL, heuristic grep for `"code":` with two lines of context over non-test Go
+    under internal/ and cmd/]: block_agent_auth.go was the only production writer of a
+    top-level code/message body; every other hit is nested under "error" (or is an OAuth form
+    value / OpenAPI schema). Not exhaustive for hand-written raw-string bodies.
+
+TDD RED [TEST], DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local
+isolated test DB, healthy solvr-postgres container): both new tests failed before the change.
+  TestBlockAgentAPIKeys_ForbiddenUsesTheErrorEnvelope FAIL (flat body).
+  TestStatusContract_AgentKeyOnHumanAuthRoutesUsesTheErrorEnvelope FAIL on all six subtests
+  with `expected: "FORBIDDEN" actual: ""` (error.code absent).
+
+IMPLEMENTATION [REAL]: BlockAgentAPIKeys now writes
+{"error":{"code":"FORBIDDEN","message":"Agents cannot register as humans. Use POST
+/v1/agents/register instead.","details":"..."}} — the same three fields and the same message
+text, nested under "error"; status stays 403. ErrorEnvelope then adds request_id.
+
+FILES ([REAL] final pre-journal `git status --porcelain` and `git diff --numstat`):
+  Production:
+  M backend/internal/api/middleware/block_agent_auth.go (+7/-4, 60 lines): error envelope
+    nesting plus the doc comment.
+  Tests:
+  M backend/internal/api/middleware/block_agent_auth_test.go (+43/-0, 216 lines): appended
+    TestBlockAgentAPIKeys_ForbiddenUsesTheErrorEnvelope and the encoding/json + strings
+    imports; every existing test in the file is untouched.
+  A backend/internal/api/router_block_agent_envelope_test.go (36 lines):
+    TestStatusContract_AgentKeyOnHumanAuthRoutesUsesTheErrorEnvelope, full router, a real
+    registered agent key, six routes, asserts 403, code FORBIDDEN, message naming
+    POST /v1/agents/register, and envelope request_id == X-Request-ID header.
+  ralph.sh shows ` M` (+5, an OPENAI_API_KEY unset for the codex branch) but it was already
+    modified before this iteration started and is the owner's harness edit, not mine; I did
+    NOT stage it for this commit. progress.txt is this append. spec.json and SPEC.md are
+    unchanged.
+  TEST REPLACEMENT: none. No test was deleted, skipped or loosened. The old
+  TestBlockAgentAPIKeys_AgentAPIKeyBlocked asserted only status 403 and a non-empty body; it
+  is unchanged and still PASS, and the new test pins the shape it never checked.
+
+GREEN / VERIFICATION (same solvr_test database):
+  [TEST] `go test -race ./internal/api/middleware -count=1 -v`: ok, 129 PASS lines, 0 FAIL,
+    0 SKIP; the new unit test PASS.
+  [TEST] `go test -race ./internal/api -run '^TestStatusContract_' -count=1 -v`: ok (20.163s)
+    — the new test and all six subtests PASS, plus the four earlier status-contract tests
+    (child lists, optional-auth, unknown resource ID, no-5xx walk) still PASS; 0 SKIP.
+  [REAL] `go build ./...`, `go vet ./internal/api/middleware ./internal/api`, gofmt on the
+    three touched files, and `git diff --check` were clean. Editor hints (interface{} vs any
+    in block_agent_auth.go) were left: the file and its neighbors use interface{}.
+  [REAL] all three touched/new code files are <=216 lines; no oversized file was enlarged.
+
+FULL SUITE [REAL, executed once on final code; NOT GREEN]:
+`DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test go test ./... -p 1
+-count=1` exited 1; raw output /private/tmp/solvr_idx74_s20_final_full.log. [TEST] Every
+package outside internal/api, internal/api/handlers and internal/db passed, including
+internal/api/middleware. [REAL] 110 unique top-level failures — the exact same name set as
+slice 19's final run (`comm` of the two sorted lists: 0 gone, 0 new). Neither new test is in
+the failure set. These are the established shared-database families, unchanged by this slice.
+The required full suite is therefore not green and the task remains open.
+
+BEHAVIOR CHANGE (v0, for step 6 OpenAPI work) [REAL]: an agent API key sent to any of the six
+human-auth routes above gets 403 with body
+{"error":{"code":"FORBIDDEN","message":...,"details":...,"request_id":...}} instead of a flat
+{"code","message","details"} object. Clients that read a top-level `code` from this 403 must
+read `error.code`.
+
+REMAINING FOR idx 74 [UNVERIFIED]:
+  - step 3: the dead flags handler decision — [REAL] `NewFlagsHandler` has no non-test
+    caller and no /v1/flags route is mounted, so it serves nothing; its own unscoped
+    TargetExists stays unaddressed. The same 400 condition is answered with four different
+    codes (VALIDATION_ERROR, INVALID_REQUEST, INVALID_JSON, BAD_REQUEST); whether to unify
+    them is a contract decision not made here. Path-parameter routes still need a
+    malformed-body walk. The 409 and 429 rows are not yet pinned.
+  - step 6: OpenAPI contract after splitting the pre-existing oversized openapi files:
+    Idempotency-Key/Idempotent-Replayed, 409 codes, error envelope, CORS, credential
+    transport, request-size limits, stream resume, timeouts, If-Match/ETag, accumulated 404
+    rules, deleted-account 401/503 rules, the omitted-versus-invalid optional-auth rule, and
+    this slice's agent-key 403 envelope.
+
+UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: unchanged from slices 6/10 — owner
+applies migrations 000101 and 000102 to production through the admin query route, then
+deploys. [REAL] This slice adds no migration or deployment action.

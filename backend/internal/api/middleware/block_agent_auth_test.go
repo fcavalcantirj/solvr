@@ -1,8 +1,10 @@
 package middleware
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -169,5 +171,46 @@ func TestBlockAgentAPIKeys_BasicAuthNotBlocked(t *testing.T) {
 	// Assert
 	if rec.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", rec.Code)
+	}
+}
+
+// A blocked agent key gets the public error envelope, {"error": {"code", "message", ...}},
+// so clients read one error shape on every route. The body must not be a flat object.
+func TestBlockAgentAPIKeys_ForbiddenUsesTheErrorEnvelope(t *testing.T) {
+	handler := BlockAgentAPIKeys(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("Handler should not be called when agent API key is present")
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", nil)
+	req.Header.Set("Authorization", "Bearer solvr_test_key_123")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("Expected status 403, got %d", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Expected Content-Type application/json, got %q", ct)
+	}
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("Expected a JSON body, got %q: %v", rec.Body.String(), err)
+	}
+	if len(body) != 1 {
+		t.Errorf("Expected only the error envelope at the top level, got %s", rec.Body.String())
+	}
+	var envelope struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body["error"], &envelope); err != nil {
+		t.Fatalf("Expected an error object, got %s: %v", rec.Body.String(), err)
+	}
+	if envelope.Code != "FORBIDDEN" {
+		t.Errorf("Expected error.code FORBIDDEN, got %q", envelope.Code)
+	}
+	if !strings.Contains(envelope.Message, "POST /v1/agents/register") {
+		t.Errorf("Expected error.message to point agents at POST /v1/agents/register, got %q", envelope.Message)
 	}
 }

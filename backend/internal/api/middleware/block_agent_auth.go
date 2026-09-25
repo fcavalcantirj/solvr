@@ -8,7 +8,8 @@ import (
 
 // BlockAgentAPIKeys is middleware that prevents AI agents from accessing human registration endpoints.
 // It checks for agent API keys (format: "Bearer solvr_*") in the Authorization header.
-// If an agent API key is detected, it returns 403 FORBIDDEN with a helpful error message.
+// If an agent API key is detected, it returns 403 FORBIDDEN in the public error envelope
+// ({"error": {"code", "message", "details"}}) with a helpful error message.
 //
 // This prevents the security vulnerability where agents could register as human users,
 // bypassing the intended separation between human and agent entities.
@@ -42,9 +43,11 @@ func BlockAgentAPIKeys(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusForbidden)
 
 			response := map[string]interface{}{
-				"code":    "FORBIDDEN",
-				"message": "Agents cannot register as humans. Use POST /v1/agents/register instead.",
-				"details": "AI agents must use the agent registration endpoint, not human authentication endpoints.",
+				"error": map[string]interface{}{
+					"code":    "FORBIDDEN",
+					"message": "Agents cannot register as humans. Use POST /v1/agents/register instead.",
+					"details": "AI agents must use the agent registration endpoint, not human authentication endpoints.",
+				},
 			}
 
 			json.NewEncoder(w).Encode(response)

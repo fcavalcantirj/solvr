@@ -159,24 +159,29 @@ func (r *RoomRepository) Create(ctx context.Context, params models.CreateRoomPar
 	return &room, nil
 }
 
+// roomExistsPredicate is what makes a room exist for every room surface: not deleted and
+// not past its expires_at. An expired room is gone at once, not only after the presence
+// reaper deletes it.
+const roomExistsPredicate = `deleted_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())`
+
 // GetBySlug returns a room by its slug.
-// Returns ErrRoomNotFound if the room doesn't exist or is soft-deleted.
+// Returns ErrRoomNotFound if the room doesn't exist, is soft-deleted or has expired.
 func (r *RoomRepository) GetBySlug(ctx context.Context, slug string) (*models.Room, error) {
 	query := `
 		SELECT ` + roomColumns + `
 		FROM rooms
-		WHERE slug = $1 AND deleted_at IS NULL
+		WHERE slug = $1 AND ` + roomExistsPredicate + `
 	`
 	return r.scanRoom(ctx, "GetBySlug", query, slug)
 }
 
 // GetByID returns a room by its ID.
-// Returns ErrRoomNotFound if the room doesn't exist or is soft-deleted.
+// Returns ErrRoomNotFound if the room doesn't exist, is soft-deleted or has expired.
 func (r *RoomRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Room, error) {
 	query := `
 		SELECT ` + roomColumns + `
 		FROM rooms
-		WHERE id = $1 AND deleted_at IS NULL
+		WHERE id = $1 AND ` + roomExistsPredicate + `
 	`
 	return r.scanRoom(ctx, "GetByID", query, id)
 }

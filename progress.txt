@@ -2260,3 +2260,60 @@ REMAINING FOR idx 59 (passes STAYS false):
 UAT (for when idx 59 closes): as slices 1/3; after the frontend deploy, owner also confirms
   https://solvr.dev/rooms and https://solvr.dev/sitemap-rooms.xml return Cache-Control
   private, no-store and that any CDN in front of solvr.dev does not override it.
+
+2026-09-25 — Task idx 59 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Keep room and content permissions authoritative on the server"
+SLICE 5 of N: expired rooms are gone on every surface at once, not after the reaper (step 2 expiry).
+================================================================================
+
+TASK SELECTION: same as slices 1-4 (idx 24 acceptance still needs idx 59/75/78 pieces; idx
+  52/53 still before the knowledge cutover). idx 59 stays the first buildable false task.
+  Took the "expiry" item left in REMAINING (guard + sitemap did not check expires_at).
+
+PROBLEM [REAL, code read]: RoomRepository.GetBySlug/GetByID filtered only deleted_at, so a
+  room past expires_at kept serving room view, entries, stream, handshake, writes and owner
+  PATCH until the presence reaper's DeleteExpiredRooms ran (up to ~60s); open streams kept
+  running (recheck uses GetByID). db/sitemap.go room queries (flat list, count, paged list)
+  also ignored expires_at. The public list (ListFiltered) and homepage listings already
+  excluded expired rooms.
+
+FIX: db/rooms.go new const roomExistsPredicate = `deleted_at IS NULL AND (expires_at IS NULL
+  OR expires_at > NOW())`, used by GetBySlug, GetByID and the 3 sitemap room queries. Every
+  room guard/handler that resolves a room through these now answers 404 (the token-only /r
+  adapter answers 401 "invalid room token", same as for a deleted room). Open streams end
+  at once when expires_at is UPDATEd (000104 trigger notifies on expires_at change); a room
+  that expires by the clock alone ends open streams at the next heartbeat recheck (<=30s).
+  Homepage all-time/aggregate counts intentionally unchanged (stats, not room content).
+  Behavior change: an owner can no longer PATCH a room after it expired (404).
+
+DIFF ([REAL] git status --porcelain / git diff --stat: 2 modified +12/-7, 1 new):
+  M backend/internal/db/rooms.go (+9/-4: predicate const, GetBySlug, GetByID, doc comments)
+  M backend/internal/db/sitemap.go (+3/-3: 3 room queries)
+  A backend/internal/api/router_rooms_expiry_test.go (1 integration test)
+  M progress.txt: this entry. spec.json NOT changed. Frontend untouched. No test removed.
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local isolated DB):
+  [TEST] RED /tmp/solvr_idx59_s5_red.log: TestRoomExpiry_ExpiredRoomIsGoneOnEverySurface
+    BeforeTheReaper FAIL ("the anonymous stream on B ends when the room expires").
+  [TEST] GREEN -race -v /tmp/solvr_idx59_s5_green.log: PASS, 0 SKIP. Two instances; public
+    room expired via SQL UPDATE: anonymous, member-token and /r adapter streams on B end
+    within 3s with access_revoked; on A and B room view (anon + owner), entries (token, key,
+    anon), handshake, owner PATCH, member write -> 404; /r messages -> 401; slug leaves both
+    sitemap URL forms and /v1/sitemap/counts rooms drops by 1.
+  [REAL] mutation: sitemap.go reverted to HEAD alone -> test FAIL "the expired room leaves
+    the sitemap" (/tmp/solvr_idx59_s5_mut.log); fix restored.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 once -> /tmp/solvr_idx59_s5_full.log. 78 unique
+  FAIL names vs 79 in slice 2's log: 0 new, 1 gone (TestRouteFamilies_CoverEveryServedRoute).
+  Package FAILs remain internal/api, internal/api/handlers, internal/db (pre-existing set).
+  go build ok; go vet db/api clean; gofmt clean on touched files; check-file-size.sh no
+  violation in touched files.
+
+REMAINING FOR idx 59 (passes STAYS false):
+  - step 6: backend homepage overview/rooms `public, max-age=30`.
+  - steps 1/2 surface matrix still to sweep (instructions, message lookup, search, social
+    metadata x anonymous/member/owner/unrelated). IsPrivateRoom (post publish gate) still
+    ignores expiry [UNVERIFIED impact].
+  - step 5 default prompts use per-agent tokens + no secrets in public APIs.
+
+UAT (for when idx 59 closes): as slices 1/3/4. No migration in this slice.

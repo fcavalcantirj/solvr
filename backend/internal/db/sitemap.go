@@ -119,7 +119,7 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		SELECT slug, last_active_at
 		FROM rooms
 		WHERE is_private = false
-		AND deleted_at IS NULL
+		AND `+roomExistsPredicate+`
 		ORDER BY last_active_at DESC
 	`)
 	if err != nil {
@@ -194,7 +194,7 @@ func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.Sitem
 
 	// Count public, non-deleted rooms
 	err = r.pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM rooms WHERE is_private = false AND deleted_at IS NULL
+		SELECT COUNT(*) FROM rooms WHERE is_private = false AND `+roomExistsPredicate+`
 	`).Scan(&counts.Rooms)
 	if err != nil {
 		return nil, err
@@ -328,7 +328,7 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 			SELECT slug, last_active_at
 			FROM rooms
 			WHERE is_private = false
-			AND deleted_at IS NULL
+			AND `+roomExistsPredicate+`
 			ORDER BY last_active_at DESC
 			LIMIT $1 OFFSET $2
 		`, opts.PerPage, offset)

@@ -121,6 +121,25 @@ func (r *AgentPresenceRepository) ListByRoom(ctx context.Context, roomID uuid.UU
 	return r.list(ctx, "ListByRoom", query, roomID)
 }
 
+// LiveCard returns the card_json of the agent present in the room under agentName while its
+// presence has not expired; found is false otherwise. Every API instance answers from this
+// shared row, so an agent that joined through one instance is visible through all of them.
+func (r *AgentPresenceRepository) LiveCard(ctx context.Context, roomID uuid.UUID, agentName string) (json.RawMessage, bool, error) {
+	var card json.RawMessage
+	err := r.pool.QueryRow(ctx, `
+		SELECT card_json FROM agent_presence
+		WHERE room_id = $1 AND agent_name = $2
+		  AND last_seen > NOW() - (ttl_seconds || ' seconds')::interval`, roomID, agentName).Scan(&card)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		LogQueryError(ctx, "LiveCard", "agent_presence", err)
+		return nil, false, err
+	}
+	return card, true, nil
+}
+
 // UpdateHeartbeat renews the member's presence in the room and returns the agent_name it
 // is present under ("" when it is not present; nothing is written then).
 func (r *AgentPresenceRepository) UpdateHeartbeat(ctx context.Context, roomID uuid.UUID, agentID string) (string, error) {

@@ -147,15 +147,7 @@ func (h *RoomPresenceHandler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 	h.recordParticipantJoinedFunnel(r.Context(), room.ID)
 
 	// Parse card for in-memory registry and hub subscription
-	var agentCard *a2a.AgentCard
-	if len(req.Card) > 0 {
-		agentCard = &a2a.AgentCard{}
-		if err := json.Unmarshal(req.Card, agentCard); err != nil {
-			// Card is optional metadata; log but don't fail
-			slog.Warn("failed to parse agent card", "error", err, "agent", req.AgentName)
-			agentCard = nil
-		}
-	}
+	agentCard := parseAgentCard(req.Card, req.AgentName)
 
 	// Add to in-memory registry
 	h.registry.Add(roomID, req.AgentName, agentCard)
@@ -288,17 +280,38 @@ func (h *RoomPresenceHandler) GetAgentCard(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Look up in the in-memory registry for the full card
-	card, found := h.registry.ExtendedCard(hub.NewRoomID(room.ID), agentName)
+	// Read the card from unexpired database presence, not this instance's memory: the
+	// agent may have joined through another API instance.
+	raw, found, err := h.presenceRepo.LiveCard(r.Context(), room.ID, agentName)
+	if err != nil {
+		slog.Error("failed to read agent card", "error", err, "room_id", room.ID, "agent", agentName)
+		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to read agent card")
+		return
+	}
 	if !found {
 		roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "agent not found in room")
 		return
 	}
+	card := parseAgentCard(raw, agentName)
 
 	response := map[string]interface{}{
 		"data": card,
 	}
 	roomWriteJSON(w, http.StatusOK, response)
+}
+
+// parseAgentCard decodes a stored or submitted card. The card is optional metadata: an
+// empty or undecodable one is nil, never an error.
+func parseAgentCard(raw json.RawMessage, agentName string) *a2a.AgentCard {
+	if len(raw) == 0 {
+		return nil
+	}
+	card := &a2a.AgentCard{}
+	if err := json.Unmarshal(raw, card); err != nil {
+		slog.Warn("failed to parse agent card", "error", err, "agent", agentName)
+		return nil
+	}
+	return card
 }
 
 // leaveRoomRequest is the JSON body for POST /r/{slug}/leave.

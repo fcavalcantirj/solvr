@@ -1740,3 +1740,83 @@ REMAINING FOR idx 23 (passes STAYS false):
     whole service (check what reads PresenceRegistry / per-process counters vs DB).
   - GetAgentCard reads the per-process PresenceRegistry: an agent joined on instance A is
     404 on instance B [UNVERIFIED, from code read of rooms_presence.go].
+
+================================================================================
+2026-09-25 — Task idx 23 (spec.json, category operations) — IN PROGRESS, passes STAYS false
+"Preserve room delivery and statistics across restarts and more than one API instance"
+SLICE 2 of N: online presence across instances (step 5 + heartbeat-expiry part of step 4).
+================================================================================
+
+TASK SELECTION: first-false is still idx 23 (slice 1 left it open with REMAINING items).
+
+AUDIT [REAL, code read this session]:
+  - Homepage "agents online now"/"rooms with agents online now" (db/homepage_rooms.go),
+    room detail online_count (handlers/rooms.go, len of presenceRepo.ListByRoom) and
+    GET /r/{slug}/agents (ListByRoom) all read unexpired agent_presence rows in the DB =>
+    already service-wide. /v1/agents meta.active_count is a DB count. No per-process
+    atomic counter feeds a published figure (api_usage `dropped` is operational only).
+  - The ONLY presence READ from process memory was GetAgentCard
+    (registry.ExtendedCard): 404 on any instance the agent did not join through, and it
+    kept serving an expired agent's card until that instance's reaper ran.
+  - Step 4 limits: global SSE limit 1000 is per process (rooms_sse.go); per-room limit 0 in
+    main.go (D-05); replay bounded at maxSSEReplay=1000 in pages of 100; slow streams are
+    closed (slice 1). Heartbeat expiry: every presence read filters by last_seen+ttl in SQL,
+    so expiry is visible on every instance without waiting for a reaper.
+
+CHANGE:
+  - db/agent_presence.go: + LiveCard(roomID, agentName) — card_json of the unexpired row.
+  - handlers/rooms_presence.go: GetAgentCard reads LiveCard (500 on DB error, 404 when absent
+    or expired) instead of the in-memory registry; card decoding shared with JoinRoom via
+    new parseAgentCard (same semantics: empty/undecodable card => nil, logged).
+
+DIFF (git status --porcelain / git diff --stat):
+  M internal/api/handlers/rooms_presence.go (+23/-12)
+  M internal/db/agent_presence.go (+19)
+  M internal/api/router_rooms_multi_instance_test.go (+newAgentPairRoom(private); 
+    newTwoAgentRoom now calls it with true — same behavior for existing callers)
+  A internal/api/router_rooms_multi_instance_presence_test.go (2 integration tests)
+  M internal/hub/relay_test.go (pacing fix, see TEST CHANGES)
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local isolated DB):
+  [TEST] RED /tmp/solvr_idx23_s2_red.log:
+    TestRoomPresence_AgentJoinedOnOneInstanceIsSeenByEveryInstance -> "expected: 200 actual:
+      404 ... agent not found in room" (card of agent joined on A, fetched on B).
+    TestRoomPresence_HeartbeatAndExpiryApplyOnEveryInstance -> "expected: 404 actual: 200 ...
+      instance A still serves an expired agent's card".
+  [TEST] GREEN (-race, /tmp/solvr_idx23_s2_green.log): both pass, 0 SKIP. They assert, across
+    two/three instances (own pool+hub+relay+router each): join via A is listed, card-served,
+    counted in B's room online_count and B's homepage agents_online_now (+1 vs baseline);
+    a heartbeat through B keeps it present on A past its original TTL; after the renewed TTL,
+    A and B list nothing, 404 the card, online_count 0, and a fresh instance's homepage is
+    back to baseline — with no reaper run.
+
+TEST CHANGES (no test deleted, skipped or loosened):
+  internal/hub/relay_test.go TestHub_SlowStreamSubscriberIsClosedNotSkipped (written in
+    slice 1) FAILED in the full run: "fast subscriber got 64 of 200 frames". Cause: the test
+    burst 200 broadcasts at a 64-slot fast reader goroutine; under suite load the reader
+    fell behind and the hub (correctly) closed it too. Fix: the loop now waits for the fast
+    reader to take each frame before sending the next (2s stall guard). Assertion unchanged
+    (fast must get all 200; slow gets a gap-free prefix and is closed). [TEST] go test -race
+    ./internal/hub -count=3 ok.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 once -> /tmp/solvr_idx23_s2_full.log. FAIL set vs
+  slice 1 log: gone = TestHomepageSearch_ChartAddsUpToTheTotalBesideIt,
+  TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring (clock-dependent, see slice 1);
+  new = TestHub_SlowStream... (fixed above) and
+  TestRoomEntriesPolicy_HumanMessageAdapterDecidesLikeCanonicalWrite: "duplicate key value
+  violates unique constraint users_username_key ... failed to create test user" —
+  createRoomTestUser names users roomtest_<UnixNano%1e6>; a collision flake in an untouched
+  helper [UNVERIFIED that it is only a collision; not in files this slice touched].
+  go vet api/handlers/db/hub clean; gofmt clean on touched files; check-file-size.sh has 36
+  pre-existing violations at HEAD, none in touched files (largest touched: 370 lines).
+
+REMAINING FOR idx 23 (passes STAYS false):
+  - Live presence_join/presence_leave SSE events are hub-local broadcasts (not timeline
+    entries): a stream on instance B does not see a join/leave that happened on A
+    [code read: hub.go Run subscribe/unsubscribe, not relayed].
+  - Homepage overview 30s cache invalidation (InvalidateOverviewCache on visibility/
+    moderation change, rooms.go/rooms_archive.go) is process-local: another instance can
+    keep a room that just went private in its cached preview for up to 30s [code read].
+  - Reaper on instance X deletes expired rows (DeleteExpired is atomic, one winner); the
+    in-memory registry/hub subscription of an agent that joined on instance Y is never
+    cleaned there (memory only; no read path uses the registry any more after this slice).

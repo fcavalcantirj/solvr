@@ -279,19 +279,29 @@ func TestHub_SlowStreamSubscriberIsClosedNotSkipped(t *testing.T) {
 	const n = 200
 	var fastSeqs []int
 	fastDone := make(chan struct{})
+	fastGot := make(chan struct{}, n)
 	go func() {
 		defer close(fastDone)
 		for evt := range fast {
 			if evt.Sequence > 0 {
 				fastSeqs = append(fastSeqs, evt.Sequence)
+				fastGot <- struct{}{}
 				if len(fastSeqs) == n {
 					return
 				}
 			}
 		}
 	}()
+	// The fast stream keeps up (each frame is read before the next is sent), so only the
+	// slow one can fall behind, whatever the scheduler does under load.
 	for i := 1; i <= n; i++ {
 		h.Broadcast(hub.RoomEvent{Sequence: i, Type: hub.EventMessage, RoomID: room})
+		select {
+		case <-fastGot:
+		case <-fastDone:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("fast subscriber stalled at frame %d", i)
+		}
 	}
 	<-fastDone
 	if len(fastSeqs) != n {

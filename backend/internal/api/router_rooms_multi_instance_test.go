@@ -114,12 +114,18 @@ type twoAgentRoom struct {
 
 func newTwoAgentRoom(t *testing.T, a *roomInstance) *twoAgentRoom {
 	t.Helper()
+	return newAgentPairRoom(t, a, true)
+}
+
+// newAgentPairRoom is newTwoAgentRoom with the room's visibility chosen by the caller.
+func newAgentPairRoom(t *testing.T, a *roomInstance, private bool) *twoAgentRoom {
+	t.Helper()
 	pool, err := db.NewPool(context.Background(), os.Getenv("DATABASE_URL"))
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
 	roomPreCleanup(t, pool)
 	_, ownerJWT := createRoomTestUser(t, pool)
-	slug := entriesTestRoom(t, a.ts.URL, ownerJWT, true)
+	slug := entriesTestRoom(t, a.ts.URL, ownerJWT, private)
 	r := &twoAgentRoom{slug: slug, pool: pool}
 	var memberID string
 	memberID, r.plannerKey = registerRoomTestAgent(t, a.ts)

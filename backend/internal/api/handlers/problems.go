@@ -34,6 +34,9 @@ type ProblemsRepositoryInterface interface {
 	// FindApproachByID returns a single approach by ID.
 	FindApproachByID(ctx context.Context, id string) (*models.ApproachWithAuthor, error)
 
+	// ApproachVisibleTo reports whether the approach's owning problem is visible to the caller.
+	ApproachVisibleTo(ctx context.Context, approachID, callerHuman string) (bool, error)
+
 	// UpdateApproach updates an existing approach and returns it.
 	UpdateApproach(ctx context.Context, approach *models.Approach) (*models.Approach, error)
 
@@ -129,6 +132,19 @@ func (h *ProblemsHandler) findProblem(ctx context.Context, id string) (*models.P
 		return nil, ErrProblemNotFound
 	}
 	return problem, nil
+}
+
+// findVisibleApproach applies the owning problem's visibility before returning a legacy
+// approach. This keeps every child route aligned with GET /v1/posts/{problem_id}.
+func (h *ProblemsHandler) findVisibleApproach(ctx context.Context, id string) (*models.ApproachWithAuthor, error) {
+	visible, err := h.repo.ApproachVisibleTo(ctx, id, callerHumanFromCtx(ctx))
+	if err != nil {
+		return nil, err
+	}
+	if !visible {
+		return nil, ErrApproachNotFound
+	}
+	return h.repo.FindApproachByID(ctx, id)
 }
 
 // ProblemsListMeta contains metadata for list responses.

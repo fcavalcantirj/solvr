@@ -227,8 +227,8 @@ func (r *ApproachRelationshipsRepository) getApproachWithAuthor(ctx context.Cont
 	err := r.pool.QueryRow(ctx, `
 		SELECT
 			a.id, a.problem_id, a.author_type, a.author_id,
-			a.angle, a.method, a.status, a.is_latest,
-			a.outcome, a.solution,
+			COALESCE(a.angle, ''), COALESCE(a.method, ''), a.status, a.is_latest,
+			COALESCE(a.outcome, ''), COALESCE(a.solution, ''),
 			a.created_at, a.updated_at, a.deleted_at,
 			a.forget_after, a.archived_at, a.archived_cid,
 			COALESCE(ag.display_name, u.display_name, a.author_id) as author_display_name,

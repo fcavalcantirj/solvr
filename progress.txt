@@ -3467,3 +3467,140 @@ REMAINING FOR idx 74 (passes STAYS false):
 
 UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on prod via the
   admin query route, then deploys). No migration in this slice.
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 17 of N. Step 3 status-code matrix, part 5: the remaining active legacy-child routes
+found by slice 16 follow their parent post's 404/privacy contract, and ordinary absence is
+not reported as a 5xx.
+================================================================================
+
+TASK SELECTION [REAL]: idx 24 acceptance still needs idx 75/78 pieces; idx 52/53, 68 and
+73's remainder are gated on the knowledge cutover idx 93; idx 67 needs a test deployment.
+No description starts with URGENT. idx 74 remains the first buildable false task. This slice
+took five concrete failures recorded under slice 16 OUT OF SCOPE: approach history, approach
+progress, answer voting, post my-vote and idea evolution with an absent evolved post.
+
+TDD RED [REAL] (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, the local
+isolated test DB in the healthy solvr-postgres container):
+  `go test ./internal/api -run '^TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract$' -count=1 -v`
+  exited 1 after actually executing the new integration test. Public approach history was
+  500 `failed to get version history`; a foreign agent's progress write on a family problem
+  was 403 instead of the privacy-preserving 404; voting on an answer whose question was
+  soft-deleted returned 200 and incremented it; foreign callers got 200 `{"vote":null}` for
+  a family-only post; and evolving into an absent UUID returned 500. The control rows that
+  executed before or after those fatal subtest assertions retained their old behavior.
+
+DIFF ([REAL] `git status --porcelain`, `git diff --stat`, `git diff --numstat`, plus `wc -l`
+for the two untracked files, run immediately before this entry): 12 tracked code/test files
+were +110/-221 and 2 new files total 449 lines. progress.txt is this append. No migration;
+frontend untouched; spec.json unchanged; SPEC.md unchanged (step 6 documentation remains).
+  Production:
+  M backend/internal/db/visibility.go (+22): ApproachesRepository.ApproachVisibleTo uses the
+    shared visiblePostExists predicate, including a live child and live/public-or-family
+    parent, and treats malformed UUIDs as invisible rather than a database failure.
+  M backend/internal/db/problems.go (+8/-3): delegates ApproachVisibleTo; the three deleted
+    columns are pre-existing alignment made gofmt-clean.
+  M backend/internal/api/handlers/problems.go (+16): the repository interface and
+    findVisibleApproach helper apply that gate before loading a legacy approach.
+  M backend/internal/api/handlers/approaches_handler.go (+7/-3): AddProgressNote and
+    GetApproachHistory use findVisibleApproach; history also rejects a URL problem id that
+    does not own the approach.
+  M backend/internal/db/approach_relationships.go (+2/-2): COALESCE nullable angle, method,
+    outcome and solution while reading a version-chain node; this is why a normal one-node
+    public history no longer fails its scan.
+  M backend/internal/db/answers.go (+20/-3): preserves legacy FindAnswerByID's public-parent
+    behavior and adds FindAnswerByIDForViewer, whose parent predicate is visiblePostExists.
+  M backend/internal/db/questions.go (+5): delegates FindAnswerByIDForViewer.
+  M backend/internal/api/handlers/questions.go (+4/-1): VoteOnAnswer uses the viewer-aware
+    answer lookup before it mutates vote counts.
+  M backend/internal/api/handlers/ideas.go (+2/-1): db.ErrPostNotFound from FindPostByID maps
+    to the existing 404 `evolved post not found` answer (malformed and absent IDs alike).
+  M backend/internal/api/handlers/posts.go (+13/-208, 988 -> 778 lines): Delete, Vote and
+    GetMyVote moved to the new responsibility file; gofmt also normalized two pre-existing
+    alignment blocks.
+  A backend/internal/api/handlers/posts_votes.go (221): carries Delete and Vote unchanged;
+    GetMyVote first performs the same family-scoped FindByIDForViewer read as GET post, so a
+    hidden id cannot leak via a null vote.
+  Tests:
+  A backend/internal/api/router_legacy_child_visibility_test.go (228): full-router fixture
+    with public, family-only and soft-deleted problem/question/idea parents. It pins history,
+    progress, answer voting, my-vote and absent/malformed evolution-target responses for
+    anonymous, foreign, owner and sibling-agent callers, and directly proves refused writes
+    do not change progress/vote/evolution state.
+  M backend/internal/api/handlers/problems_test.go (+7): the existing mock implements
+    ApproachVisibleTo from its existing approach/error state; no assertion changed.
+  M backend/internal/api/handlers/questions_test.go (+4): the existing mock delegates the
+    new viewer lookup to its existing FindAnswerByID behavior; no assertion changed.
+
+GREEN / VERIFY:
+  [REAL] The first post-change invocation did not compile because Go attempted to write
+    `/Users/fcavalcanti/Library/Caches/go-build/...` and returned `operation not permitted`.
+    Subsequent commands used the writable `/private/tmp/solvr-go-build-cache-slice17/go-build`;
+    this was a cache-location issue, not a skipped behavioral check.
+  [TEST] Focused GREEN: the new integration test completed `ok` against solvr_test (0.962s).
+    The detailed run exercised every subtest and showed public/family-member 200/201 controls,
+    outsider/deleted 404 envelopes carrying request_id, and unchanged counts after refusals.
+  [TEST] Final race run completed `ok` (28.108s) for seven real-database contracts:
+    TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract,
+    TestStatusContract_UnknownResourceIDIsNotFound,
+    TestStatusContract_NoRouteAnswers5xxForAnUnknownID,
+    TestStatusContract_ChildListsAnswerLikeTheirParent,
+    TestReplySurfaces_FollowTheParentPostVisibility,
+    TestCommentAndViewSurfaces_FollowTheParentPostVisibility and
+    TestDeletedAccount_CredentialsStopAuthenticating. DATABASE_URL was set; none skipped.
+  [TEST] Focused handler regression command completed `ok` for GetApproachHistory,
+    AddProgressNote, VoteOnAnswer, GetMyVote and Evolve (0.908s); an earlier broader focused
+    handler command also printed 47 PASS lines across update/delete/verify/accept/vote/evolve;
+    no existing assertion changed.
+  [REAL] `go build ./...`, `go vet ./internal/api/... ./internal/db/...`, `git diff --check`
+    and `gofmt -d` on all 14 touched/new Go files completed cleanly.
+  [REAL] `./scripts/check-file-size.sh` still exits 1 on the pre-existing violation set, now
+    35 files instead of slice 16's 36: posts.go is no longer a violation (778); both new
+    files are <= 228. No other listed violator was enlarged by this slice.
+
+FULL SUITE [REAL, executed; NOT GREEN]: final-code command
+  `DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test go test ./... -p 1 -count=1`
+  exited 1; raw output is `/private/tmp/solvr_idx74_s17_full.log` (8,223 lines). Only
+  internal/api, internal/api/handlers and internal/db failed, the same packages as slice 16;
+  all other packages completed ok/no-test-files. There were 78 unique top-level FAIL names.
+  Comparing the exact name sets with `/private/tmp/solvr_idx74_s16_full.log` shows all 76
+  slice-16 names remained and exactly two data-state failures returned: (1)
+  TestAgentClaim_RetriesAndRacesLinkTheAgentOnce failed while creating its fixture on a
+  duplicate `users_username_key`; (2) TestReputation_CrossEndpointConsistency failed on the
+  previously journaled nullable-agent scan (`cannot scan NULL into *string`). Neither names a
+  changed route/file. The new TestLegacyChildRoutes_* does not occur in the FAIL log and its
+  isolated/race runs above are green. Task passes therefore remains false; this entry does
+  not represent the required full suite as green.
+
+BEHAVIOR CHANGES (v0, for step 6 docs) [REAL, exercised by the full router]:
+  - GET /v1/problems/{problem}/approaches/{approach}/history is 404 NOT_FOUND when the
+    problem is family-hidden, soft-deleted, or not the problem in the URL; owner-family
+    callers can read family history, and a live public approach with nullable optional text
+    returns 200 rather than 500.
+  - POST /v1/approaches/{id}/progress returns 404 before ownership/body handling when its
+    problem is hidden or deleted, and writes nothing; the approach author still writes on a
+    readable public or family problem.
+  - POST /v1/answers/{id}/vote returns 404 and does not move counts when the question is
+    hidden/deleted; family members can vote on their family's question and public voting is
+    unchanged.
+  - GET /v1/posts/{id}/my-vote follows GET post visibility: foreign callers get 404 for a
+    family post, family members get 200, and deleted posts remain 404.
+  - POST /v1/ideas/{id}/evolve returns 404 `evolved post not found` for an absent or malformed
+    evolved_post_id and leaves the source idea unchanged.
+
+REMAINING FOR idx 74 (passes STAYS false):
+  - step 3: the dead/unmounted flags handler still has its own unscoped TargetExists; invalid
+    (not deleted) credentials on optional-auth routes need the frontend expired-JWT decision;
+    complete/pin the remaining 400/409/429 status rows.
+  - step 5: [UNVERIFIED, not run] claim atomicity (link, bonus, badge and MarkUsed are four
+    statements).
+  - step 6: OpenAPI contract (openapi_paths.go / openapi_schemas.go are pre-existing >800 and
+    must be split first): Idempotency-Key, Idempotent-Replayed, 409 codes, error envelope,
+    CORS, credential transport, size limits, stream resume, timeouts, If-Match/ETag, the 404
+    rules (slices 13, 15-17) and deleted-account 401/503 rules (slice 14).
+
+UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: as slices 6/10, the owner applies
+000101 and 000102 on production through the admin query route, then deploys. No migration in
+this slice.

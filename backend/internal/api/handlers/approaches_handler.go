@@ -314,7 +314,7 @@ func (h *ProblemsHandler) AddProgressNote(w http.ResponseWriter, r *http.Request
 	}
 
 	// Get existing approach
-	existingApproach, err := h.repo.FindApproachByID(r.Context(), approachID)
+	existingApproach, err := h.findVisibleApproach(r.Context(), approachID)
 	if err != nil {
 		if errors.Is(err, ErrApproachNotFound) {
 			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "approach not found")
@@ -465,14 +465,18 @@ func (h *ProblemsHandler) GetApproachHistory(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Verify approach exists
-	_, err := h.repo.FindApproachByID(r.Context(), approachID)
+	// Verify the approach and its owning problem are visible to this caller.
+	approach, err := h.findVisibleApproach(r.Context(), approachID)
 	if err != nil {
 		if errors.Is(err, ErrApproachNotFound) {
 			writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "approach not found")
 			return
 		}
 		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get approach")
+		return
+	}
+	if problemID := chi.URLParam(r, "id"); problemID == "" || problemID != approach.ProblemID {
+		writeProblemsError(w, http.StatusNotFound, "NOT_FOUND", "approach not found")
 		return
 	}
 

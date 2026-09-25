@@ -77,6 +77,11 @@ func (r *QuestionsRepository) FindAnswerByID(ctx context.Context, id string) (*m
 	return r.answersRepo.FindAnswerByID(ctx, id)
 }
 
+// FindAnswerByIDForViewer returns an answer only when its question is visible to the caller.
+func (r *QuestionsRepository) FindAnswerByIDForViewer(ctx context.Context, answerID, callerHuman string) (*models.AnswerWithAuthor, error) {
+	return r.answersRepo.FindAnswerByIDForViewer(ctx, answerID, callerHuman)
+}
+
 // UpdateAnswer updates an existing answer.
 // Delegates to AnswersRepository.
 func (r *QuestionsRepository) UpdateAnswer(ctx context.Context, answer *models.Answer) (*models.Answer, error) {

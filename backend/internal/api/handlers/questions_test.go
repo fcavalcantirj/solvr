@@ -85,6 +85,10 @@ func (m *MockQuestionsRepository) FindAnswerByID(ctx context.Context, id string)
 	return m.answer, nil
 }
 
+func (m *MockQuestionsRepository) FindAnswerByIDForViewer(ctx context.Context, answerID, callerHuman string) (*models.AnswerWithAuthor, error) {
+	return m.FindAnswerByID(ctx, answerID)
+}
+
 func (m *MockQuestionsRepository) UpdateAnswer(ctx context.Context, answer *models.Answer) (*models.Answer, error) {
 	if m.err != nil {
 		return nil, m.err

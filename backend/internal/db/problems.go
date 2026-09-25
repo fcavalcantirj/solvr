@@ -18,9 +18,9 @@ var (
 // It wraps PostRepository (for posts with type='problem') and ApproachesRepository.
 // Per SPEC.md Part 2.1: Problems are a post type, stored in the posts table.
 type ProblemsRepository struct {
-	pool          *Pool
-	postRepo      *PostRepository
-	approachRepo  *ApproachesRepository
+	pool         *Pool
+	postRepo     *PostRepository
+	approachRepo *ApproachesRepository
 }
 
 // NewProblemsRepository creates a new ProblemsRepository.
@@ -70,6 +70,11 @@ func (r *ProblemsRepository) ListApproaches(ctx context.Context, problemID strin
 // Delegates to ApproachesRepository.
 func (r *ProblemsRepository) FindApproachByID(ctx context.Context, id string) (*models.ApproachWithAuthor, error) {
 	return r.approachRepo.FindApproachByID(ctx, id)
+}
+
+// ApproachVisibleTo reports whether an approach's owning problem is visible to the caller.
+func (r *ProblemsRepository) ApproachVisibleTo(ctx context.Context, approachID, callerHuman string) (bool, error) {
+	return r.approachRepo.ApproachVisibleTo(ctx, approachID, callerHuman)
 }
 
 // CreateApproach creates a new approach and returns it.

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -422,7 +423,7 @@ func (h *IdeasHandler) Evolve(w http.ResponseWriter, r *http.Request) {
 	// Verify evolved post exists
 	_, err = h.repo.FindPostByID(r.Context(), req.EvolvedPostID)
 	if err != nil {
-		if errors.Is(err, ErrIdeaNotFound) {
+		if errors.Is(err, ErrIdeaNotFound) || errors.Is(err, db.ErrPostNotFound) {
 			writeIdeasError(w, http.StatusNotFound, "NOT_FOUND", "evolved post not found")
 			return
 		}

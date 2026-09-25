@@ -83,6 +83,13 @@ func (m *MockProblemsRepository) FindApproachByID(ctx context.Context, id string
 	return m.approach, nil
 }
 
+func (m *MockProblemsRepository) ApproachVisibleTo(ctx context.Context, approachID, callerHuman string) (bool, error) {
+	if m.approachesErr != nil {
+		return false, m.approachesErr
+	}
+	return m.approach != nil, nil
+}
+
 func (m *MockProblemsRepository) UpdateApproach(ctx context.Context, approach *models.Approach) (*models.Approach, error) {
 	if m.err != nil {
 		return nil, m.err

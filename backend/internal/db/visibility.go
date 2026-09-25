@@ -111,3 +111,25 @@ func (r *ReplyRepository) PostVisibleTo(ctx context.Context, postID, callerHuman
 func (r *ViewsRepository) PostVisibleTo(ctx context.Context, postID, callerHuman string) (bool, error) {
 	return postVisibleTo(ctx, r.pool, postID, callerHuman)
 }
+
+// ApproachVisibleTo reports whether callerHuman may read the live post that owns a live
+// approach. Legacy approach routes use this before reading or mutating the child so an
+// approach id cannot bypass its problem's family/deletion rules.
+func (r *ApproachesRepository) ApproachVisibleTo(ctx context.Context, approachID, callerHuman string) (bool, error) {
+	args := []any{approachID}
+	argNum := 2
+	query := `SELECT EXISTS(
+		SELECT 1 FROM approaches a
+		WHERE a.id = $1 AND a.deleted_at IS NULL AND ` +
+		visiblePostExists("a.problem_id", callerHuman, &args, &argNum) + `
+	)`
+	var visible bool
+	if err := r.pool.QueryRow(ctx, query, args...).Scan(&visible); err != nil {
+		if isInvalidUUIDError(err) {
+			return false, nil
+		}
+		LogQueryError(ctx, "Approach.VisibleTo", "approaches", err)
+		return false, fmt.Errorf("check approach visibility: %w", err)
+	}
+	return visible, nil
+}

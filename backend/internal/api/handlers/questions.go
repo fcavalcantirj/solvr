@@ -33,6 +33,9 @@ type QuestionsRepositoryInterface interface {
 	// FindAnswerByID returns a single answer by ID.
 	FindAnswerByID(ctx context.Context, id string) (*models.AnswerWithAuthor, error)
 
+	// FindAnswerByIDForViewer returns an answer only when its question is visible to the caller.
+	FindAnswerByIDForViewer(ctx context.Context, id, callerHuman string) (*models.AnswerWithAuthor, error)
+
 	// UpdateAnswer updates an existing answer and returns it.
 	UpdateAnswer(ctx context.Context, answer *models.Answer) (*models.Answer, error)
 
@@ -556,7 +559,7 @@ func (h *QuestionsHandler) VoteOnAnswer(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Verify answer exists
-	_, err := h.repo.FindAnswerByID(r.Context(), answerID)
+	_, err := h.repo.FindAnswerByIDForViewer(r.Context(), answerID, callerHumanID(r))
 	if err != nil {
 		if errors.Is(err, ErrAnswerNotFound) {
 			writeQuestionsError(w, http.StatusNotFound, "NOT_FOUND", "answer not found")

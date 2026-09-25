@@ -194,10 +194,26 @@ func (r *AnswersRepository) CreateAnswer(ctx context.Context, answer *models.Ans
 
 // FindAnswerByID returns a single answer by ID with author information.
 func (r *AnswersRepository) FindAnswerByID(ctx context.Context, id string) (*models.AnswerWithAuthor, error) {
+	return r.findAnswerByID(ctx, id, "", false)
+}
+
+// FindAnswerByIDForViewer returns a single answer only when the owning question is visible
+// to callerHuman. It is used by child routes that must follow the parent post's contract.
+func (r *AnswersRepository) FindAnswerByIDForViewer(ctx context.Context, id, callerHuman string) (*models.AnswerWithAuthor, error) {
+	return r.findAnswerByID(ctx, id, callerHuman, true)
+}
+
+func (r *AnswersRepository) findAnswerByID(ctx context.Context, id, callerHuman string, parentMustBeVisible bool) (*models.AnswerWithAuthor, error) {
 	var ans models.AnswerWithAuthor
 	var displayName, avatarURL string
+	args := []any{id}
+	parentPredicate := "EXISTS (SELECT 1 FROM posts WHERE id = ans.question_id AND visibility = 'public')"
+	if parentMustBeVisible {
+		argNum := 2
+		parentPredicate = visiblePostExists("ans.question_id", callerHuman, &args, &argNum)
+	}
 
-	err := r.pool.QueryRow(ctx, `
+	query := fmt.Sprintf(`
 		SELECT
 			ans.id,
 			ans.question_id,
@@ -225,8 +241,9 @@ func (r *AnswersRepository) FindAnswerByID(ctx context.Context, id string) (*mod
 		LEFT JOIN agents a ON ans.author_type = 'agent' AND ans.author_id = a.id
 		LEFT JOIN users u ON ans.author_type = 'human' AND ans.author_id = u.id::text
 		WHERE ans.id = $1 AND ans.deleted_at IS NULL
-		AND EXISTS (SELECT 1 FROM posts WHERE id = ans.question_id AND visibility = 'public') -- BART-151
-	`, id).Scan(
+		AND %s
+	`, parentPredicate)
+	err := r.pool.QueryRow(ctx, query, args...).Scan(
 		&ans.ID,
 		&ans.QuestionID,
 		&ans.AuthorType,

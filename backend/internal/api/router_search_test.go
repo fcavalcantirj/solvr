@@ -50,7 +50,8 @@ func TestSearchEndpoint_NoAuthRequired(t *testing.T) {
 	}
 }
 
-// TestSearchEndpoint_WithValidAuth verifies search still works with valid auth
+// Historical test name retained: this fixture-shaped key is not registered, so the
+// optional-auth contract must reject it instead of silently serving an anonymous search.
 func TestSearchEndpoint_WithValidAuth(t *testing.T) {
 	router := setupTestRouter(t)
 
@@ -61,15 +62,13 @@ func TestSearchEndpoint_WithValidAuth(t *testing.T) {
 
 	router.ServeHTTP(w, req)
 
-	// Should return 200 OK (or 401 if key invalid, but either way auth is attempted)
-	// For search being public, even invalid auth should return 200
-	if w.Code != http.StatusOK && w.Code != http.StatusUnauthorized {
-		t.Errorf("Expected 200 OK or 401, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected 401 for an unknown API key, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
-// TestSearchEndpoint_WithInvalidAuth verifies search works even with invalid auth
-// (auth is optional, invalid auth should be ignored for public endpoints)
+// TestSearchEndpoint_WithInvalidAuth verifies that public means credentials may be
+// omitted, not that presented invalid credentials are ignored.
 func TestSearchEndpoint_WithInvalidAuth(t *testing.T) {
 	router := setupTestRouter(t)
 
@@ -80,8 +79,7 @@ func TestSearchEndpoint_WithInvalidAuth(t *testing.T) {
 
 	router.ServeHTTP(w, req)
 
-	// Should return 200 OK (auth is optional, invalid auth is ignored for public endpoints)
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected 200 OK for search with invalid auth (should be ignored). Got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected 401 for search with invalid auth. Got %d: %s", w.Code, w.Body.String())
 	}
 }

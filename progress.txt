@@ -3684,3 +3684,126 @@ Claim atomicity is no longer in the remaining list.
 UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: unchanged from slices 6/10 — owner
 applies migrations 000101 and 000102 to production through the admin query route, then
 deploys. [REAL] This slice adds no migration or deployment action.
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 19 of N. Step 3 invalid-authentication status: optional-auth routes remain anonymous
+when credentials are omitted, but reject credentials that are actually presented and invalid.
+================================================================================
+
+TASK SELECTION [REAL]: idx 24 remains an acceptance task gated by later multi-instance/client
+work; idx 52/53, 68 and 73 remain gated on the canonical knowledge cutover; idx 67 needs a
+test deployment. [REAL] No description starts with URGENT. [REAL] The slice-18 journal named
+invalid credentials on optional-auth routes as an explicit idx-74 remainder, so this slice
+addressed only that contract.
+
+DEFECT [REAL]: OptionalAuthMiddleware treated every authentication failure as anonymous. A
+malformed Authorization header, malformed/expired JWT, unknown agent key, unknown human key,
+deleted-account JWT, and account-check outage could therefore reach a public handler without
+the caller learning that its credential had failed. This contradicted step 3's 401 requirement
+for invalid authentication (and the already-established 503 rule for an unavailable account
+check). Requests with no Authorization header are still valid anonymous public requests.
+
+TDD RED [TEST]: before implementation,
+`GOCACHE=/private/tmp/solvr-go-build-cache-slice19 go test ./internal/auth -run
+'^TestOptionalAuthMiddleware_RejectsPresentedInvalidCredentials$' -count=1 -v` executed all
+six new cases and exited 1: the anonymous/no-header control passed, while non-Bearer,
+malformed JWT, expired JWT, unknown agent-key and unknown user-key cases each got 200 and ran
+the next handler instead of returning 401. No case skipped.
+
+IMPLEMENTATION [REAL]: OptionalAuthMiddleware now distinguishes absence from failure. An
+absent Authorization header proceeds anonymously. A malformed scheme, invalid/expired JWT or
+unknown API key answers 401 with the existing stable auth code; a JWT for a deleted account
+answers 401; an account-store failure preserves the existing retryable 503. Valid JWT, agent
+key and human key context population is unchanged. The full router's comments now describe
+this contract. [REAL, code read; frontend not changed or run] the existing frontend API client
+already emits its auth-state event on 401, while the server-rendered public fetches do not send
+a bearer token.
+
+EXISTING-TEST REPLACEMENT RECORD (required because this task replaces the old behavior; no
+test was deleted, skipped, commented out, renamed away, or loosened):
+  - TestOptionalAuthMiddleware previously asserted, verbatim, "handler must ALWAYS be called
+    (never 401)" and "status must ALWAYS be 200 (never 401)" for invalid/expired/malformed
+    credentials. The same named test remains and now preserves the valid-credential and omitted-
+    credential 200 cases while requiring 401 for every presented-invalid case. New differential
+    TestOptionalAuthMiddleware_RejectsPresentedInvalidCredentials pins exact stable codes.
+  - TestOptionalAuth_JWTOfAGoneAccountIsAnonymous previously asserted optional auth "must
+    always continue" and served a gone/uncheckable account anonymously. The historical test
+    name remains; it now pins live=200, gone=401 UNAUTHORIZED, unavailable=503
+    SERVICE_UNAVAILABLE and proves the downstream handler does not run for either failure.
+  - TestSearchEndpoint_WithValidAuth (its key was never registered) previously allowed either
+    200 or 401; it now requires 401. TestSearchEndpoint_WithInvalidAuth,
+    TestSearchEndpointWithInvalidAPIKey and TestSearchEndpointWithMalformedAuth previously
+    asserted that invalid auth was ignored and returned 200; the same named tests now require
+    401 (including INVALID_API_KEY where decoded). TestSearchEndpoint_NoAuthRequired remains
+    unchanged and passes, preserving genuinely anonymous public search.
+  - New TestStatusContract_OptionalAuthRejectsInvalidCredentials covers real full-router
+    search, posts, blog, legacy typed-list and room-policy groups, requiring 401 INVALID_TOKEN
+    plus the same nonempty request_id in header and error envelope.
+
+FILES ([REAL] final pre-journal `git status --porcelain`, `git diff --stat`, `git diff
+--numstat`, and `wc -l` for untracked files): six tracked files are +90/-71 and two new tests
+are 116 lines total. progress.txt is this append. spec.json and SPEC.md are unchanged.
+  Production:
+  M backend/internal/auth/middleware.go (+24/-18): omitted-vs-invalid credential branch and
+    stable 401/503 error dispatch.
+  M backend/internal/api/router.go (+5/-6, 1241 -> 1240): correct the four stale optional-auth
+    comments; no routing change.
+  Tests:
+  A backend/internal/auth/middleware_optional_credentials_test.go (81 lines): RED/GREEN unit
+    matrix for omission, malformed scheme/JWT, expiry and both API-key kinds.
+  A backend/internal/api/router_optional_auth_contract_test.go (35 lines): full-router status
+    and request-id envelope contract across five optional-auth route groups.
+  M backend/internal/auth/middleware_test.go (+25/-14, 794 lines) and
+    backend/internal/auth/accounts_test.go (+15/-6): retain and tighten the superseded tests.
+  M backend/internal/api/router_search_test.go (+8/-10) and
+    backend/internal/api/router_test.go (+13/-17, net -4 lines): retain and tighten the four
+    old invalid-auth search assertions; gofmt also normalized one pre-existing indentation
+    expression in router_test.go.
+
+GREEN / VERIFICATION (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test for
+the database tests; healthy local solvr-postgres container on port 5435):
+  [TEST] focused unit GREEN: the new six-case test PASS, 0 SKIP.
+  [TEST] final race-enabled auth command covering TestOptionalAuthMiddleware,
+    TestOptionalAuthMiddleware_RejectsPresentedInvalidCredentials and
+    TestOptionalAuth_JWTOfAGoneAccountIsAnonymous completed `ok` (7.680s), 0 SKIP.
+  [TEST] final race-enabled API command covering the anonymous search control, all four
+    retained search auth tests and the new five-route full-router contract completed `ok`
+    (2.925s), 0 SKIP. An earlier verbose run showed every named subtest PASS.
+  [REAL] `go build ./...`, `go vet ./internal/auth ./internal/api/...` and `git diff --check`
+    completed cleanly on final code.
+  [REAL] `scripts/check-file-size.sh` still exits 1 with the same 35 pre-existing files. This
+    slice reduced router.go to 1240 and router_test.go to 1257; middleware_test.go is 794 and
+    both new files are <=81 lines. No oversized file was enlarged.
+
+FULL SUITE [REAL, executed twice; NOT GREEN]: final-code command
+`DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test
+GOCACHE=/private/tmp/solvr-go-build-cache-slice19 go test ./... -p 1 -count=1` exited 1; raw
+output is `/private/tmp/solvr_idx74_s19_final_full.log`. [TEST] Every package except the
+established internal/api, internal/api/handlers and internal/db set passed; internal/auth is
+green. [REAL] The run has 110 unique top-level failure names, including the established
+shared-database families (nullable-agent scans, accumulated counters/search data, time-window
+state and database timeouts). The first pre-adjustment run had 113: exactly
+TestSearchEndpointWithInvalidAPIKey, TestSearchEndpointWithMalformedAuth and
+TestSearchEndpoint_WithInvalidAuth disappeared after their required same-name contract update;
+none of this slice's focused/new tests is in the final failure set. The required full suite is
+therefore not green, so passes remains false.
+
+BEHAVIOR CHANGE (v0, for step 6 OpenAPI work) [REAL]: every route using
+OptionalAuthMiddleware treats a missing Authorization header as anonymous. Once the header is
+present, non-Bearer syntax is 401 UNAUTHORIZED, malformed JWT is 401 INVALID_TOKEN, expired JWT
+is 401 TOKEN_EXPIRED, and unknown agent/human keys are 401 INVALID_API_KEY. Deleted-account JWT
+is 401 UNAUTHORIZED; inability to verify the account is 503 SERVICE_UNAVAILABLE. Router-level
+errors gain request_id from the common envelope middleware.
+
+REMAINING FOR idx 74 [UNVERIFIED]: step 3 still needs the dead/unmounted flags-handler
+decision and the remaining 400/409/429 status rows. Step 6 still needs the OpenAPI contract
+after splitting its pre-existing oversized files: Idempotency-Key/Idempotent-Replayed, 409
+codes, error envelope, CORS, credential transport, request-size limits, stream resume,
+timeouts, If-Match/ETag, accumulated 404 rules, deleted-account 401/503 rules, and this slice's
+omitted-versus-invalid optional-auth rule.
+
+UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: unchanged from slices 6/10 — owner
+applies migrations 000101 and 000102 to production through the admin query route, then
+deploys. [REAL] This slice adds no migration or deployment action.

@@ -231,9 +231,8 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 		userAPIKeyValidator := auth.NewUserAPIKeyValidator(userAPIKeyRepo)
 		accounts := db.NewUserRepository(pool)
 		authMW := auth.UnifiedAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts)
-		// Optional auth for public read routes: identifies the caller (agent/human)
-		// without rejecting anonymous requests, so the RoomAccessGuard can enforce
-		// closed-room membership while public rooms stay open.
+		// Optional auth identifies callers without rejecting omitted credentials, so
+		// RoomAccessGuard can enforce closed rooms. Presented invalid credentials are 401.
 		optionalAuthMW := auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts)
 		mountRoomRoutes(r, pool, hubMgr, registry, authMW, optionalAuthMW)
 	}
@@ -582,7 +581,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 		// Search endpoint (API-CRITICAL per SPEC.md Part 5.5)
 		// GET /v1/search - search the knowledge base (public access per SPEC.md Part 5.6)
-		// OptionalAuth: never returns 401, but populates context for analytics identity
+		// OptionalAuth admits omitted credentials; presented invalid credentials are 401.
 		r.Group(func(r chi.Router) {
 			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
 			r.Get("/search", searchHandler.Search)
@@ -656,7 +655,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 		// Posts endpoints (API-CRITICAL requirement)
 		// Per SPEC.md Part 5.6: GET /v1/posts - list posts (no auth required, optional auth for user_vote)
-		// OptionalAuthMiddleware parses auth if present (for user_vote in response) but never returns 401
+		// OptionalAuth: omitted credentials are anonymous; presented invalid ones are 401.
 		r.Group(func(r chi.Router) {
 			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
 			r.Get("/posts", postsHandler.List)
@@ -764,7 +763,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 		// BART-151: wrap the problems/questions/ideas GETs in OptionalAuth so a family
 		// caller's identity reaches findProblem/findQuestion/findIdea and it sees its OWN
-		// private posts here too (anonymous callers still see public-only). Never 401s.
+		// private posts here too. Omitted credentials see public-only; invalid ones are 401.
 		r.Group(func(r chi.Router) {
 			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
 

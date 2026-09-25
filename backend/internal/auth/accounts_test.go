@@ -108,16 +108,25 @@ func TestRequiredAuth_JWTMustNameALiveAccount(t *testing.T) {
 	}
 }
 
-// Routes where authentication is optional never answer 401 (TestOptionalAuthMiddleware),
-// so a JWT whose account is gone, or cannot be checked, is served as an anonymous caller.
+// Historical test name retained: optional-auth routes now distinguish an omitted credential
+// from a presented JWT. A gone account is 401 and an unavailable account store is 503.
 func TestOptionalAuth_JWTOfAGoneAccountIsAnonymous(t *testing.T) {
 	secret := "test-secret-key-for-testing-purposes-only"
+	want := map[string]struct {
+		status int
+		code   string
+		called bool
+	}{
+		"live account":              {http.StatusOK, "", true},
+		"deleted or absent account": {http.StatusUnauthorized, ErrCodeUnauthorized, false},
+		"account lookup fails":      {http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", false},
+	}
 	for _, tc := range accountCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			mw := OptionalAuthMiddleware(secret, NewAPIKeyValidator(NewMockAgentDB()), NewUserAPIKeyValidator(NewMockUserAPIKeyDB()), tc.accounts)
-			status, _, claims, called := serveWithJWT(t, mw, secret, tc.subject)
-			if !called || status != http.StatusOK {
-				t.Fatalf("handler called = %v, status = %d; optional auth must always continue", called, status)
+			status, code, claims, called := serveWithJWT(t, mw, secret, tc.subject)
+			if status != want[tc.name].status || code != want[tc.name].code || called != want[tc.name].called {
+				t.Fatalf("got status=%d code=%q called=%v, want status=%d code=%q called=%v", status, code, called, want[tc.name].status, want[tc.name].code, want[tc.name].called)
 			}
 			if tc.accounts.calls != 1 {
 				t.Errorf("IsActiveUser calls = %d, want 1", tc.accounts.calls)
@@ -127,7 +136,7 @@ func TestOptionalAuth_JWTOfAGoneAccountIsAnonymous(t *testing.T) {
 					t.Errorf("claims = %+v, want subject %q", claims, tc.subject)
 				}
 			} else if claims != nil {
-				t.Errorf("claims = %+v, want an anonymous caller", claims)
+				t.Errorf("claims = %+v, want no authenticated caller", claims)
 			}
 		})
 	}

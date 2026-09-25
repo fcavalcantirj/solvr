@@ -554,7 +554,7 @@ func TestUnifiedAuthMiddleware(t *testing.T) {
 			name:           "valid user API key authentication",
 			authHeader:     "Bearer " + testUserAPIKey,
 			wantStatusCode: http.StatusOK,
-			wantClaims:     true,  // User API keys should populate claims
+			wantClaims:     true, // User API keys should populate claims
 			wantAgent:      false,
 			expectUserID:   testUserID,
 		},
@@ -627,9 +627,8 @@ func TestUnifiedAuthMiddleware(t *testing.T) {
 	}
 }
 
-// TestOptionalAuthMiddleware tests the middleware that tries all three auth types
-// (user API key, agent API key, JWT) but NEVER returns 401.
-// If auth succeeds → context populated. If fails → request continues without auth.
+// TestOptionalAuthMiddleware tests the middleware that tries all three auth types.
+// Omitted credentials continue anonymously; presented invalid credentials are rejected.
 func TestOptionalAuthMiddleware(t *testing.T) {
 	secret := "test-secret-key-for-testing-purposes-only"
 
@@ -667,6 +666,8 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 		wantAgent     bool
 		expectUserID  string
 		expectAgentID string
+		wantStatus    int
+		wantCalled    bool
 	}{
 		{
 			name:         "valid JWT sets claims and continues",
@@ -674,6 +675,8 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 			wantClaims:   true,
 			wantAgent:    false,
 			expectUserID: "jwt-user-123",
+			wantStatus:   http.StatusOK,
+			wantCalled:   true,
 		},
 		{
 			name:          "valid agent API key sets agent and continues",
@@ -681,6 +684,8 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 			wantClaims:    false,
 			wantAgent:     true,
 			expectAgentID: "test_agent",
+			wantStatus:    http.StatusOK,
+			wantCalled:    true,
 		},
 		{
 			name:         "valid user API key sets claims and continues",
@@ -688,36 +693,44 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 			wantClaims:   true,
 			wantAgent:    false,
 			expectUserID: testUserID,
+			wantStatus:   http.StatusOK,
+			wantCalled:   true,
 		},
 		{
 			name:       "no auth header continues without auth (no 401)",
 			authHeader: "",
 			wantClaims: false,
 			wantAgent:  false,
+			wantStatus: http.StatusOK,
+			wantCalled: true,
 		},
 		{
-			name:       "invalid token continues without auth (no 401)",
+			name:       "invalid token is rejected",
 			authHeader: "Bearer invalid_token_here",
 			wantClaims: false,
 			wantAgent:  false,
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
-			name:       "expired JWT continues without auth (no 401)",
+			name:       "expired JWT is rejected",
 			authHeader: "Bearer " + expiredJWT,
 			wantClaims: false,
 			wantAgent:  false,
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
-			name:       "invalid API key format continues without auth (no 401)",
+			name:       "invalid API key is rejected",
 			authHeader: "Bearer solvr_invalidkey1234567890123456789012345",
 			wantClaims: false,
 			wantAgent:  false,
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
-			name:       "missing Bearer prefix continues without auth (no 401)",
+			name:       "missing Bearer prefix is rejected",
 			authHeader: validJWT,
 			wantClaims: false,
 			wantAgent:  false,
+			wantStatus: http.StatusUnauthorized,
 		},
 	}
 
@@ -743,14 +756,12 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 			rr := httptest.NewRecorder()
 			middleware.ServeHTTP(rr, req)
 
-			// CRITICAL: handler must ALWAYS be called (never 401)
-			if !handlerCalled {
-				t.Error("handler was not called — OptionalAuthMiddleware must never block requests")
+			if handlerCalled != tt.wantCalled {
+				t.Errorf("handler called = %v, want %v", handlerCalled, tt.wantCalled)
 			}
 
-			// CRITICAL: status must ALWAYS be 200 (never 401)
-			if rr.Code != http.StatusOK {
-				t.Errorf("status code = %v, want %v — OptionalAuthMiddleware must never return 401", rr.Code, http.StatusOK)
+			if rr.Code != tt.wantStatus {
+				t.Errorf("status code = %v, want %v", rr.Code, tt.wantStatus)
 			}
 
 			if tt.wantClaims && gotClaims == nil {

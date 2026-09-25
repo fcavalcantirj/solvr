@@ -362,8 +362,8 @@ func contains(s, substr string) bool {
 	// Simple substring check for comma-separated values
 	return s == substr ||
 		len(s) >= len(substr) && (s[:len(substr)] == substr && (len(s) == len(substr) || s[len(substr)] == ',') ||
-		len(s) > len(substr)+1 && (s[len(s)-len(substr):] == substr && s[len(s)-len(substr)-1] == ',' ||
-		len(s) > len(substr)+2 && (s[1:len(substr)+1] == substr || findInCSV(s, substr))))
+			len(s) > len(substr)+1 && (s[len(s)-len(substr):] == substr && s[len(s)-len(substr)-1] == ',' ||
+				len(s) > len(substr)+2 && (s[1:len(substr)+1] == substr || findInCSV(s, substr))))
 }
 
 // findInCSV checks if substr exists in a comma-separated string
@@ -1216,20 +1216,18 @@ func TestSearchEndpointWithAPIKey(t *testing.T) {
 	}
 }
 
-// TestSearchEndpointWithInvalidAPIKey verifies GET /v1/search works even with invalid API key.
-// UPDATED: Search is public - invalid auth is ignored
+// TestSearchEndpointWithInvalidAPIKey verifies GET /v1/search rejects an invalid API key.
+// Search remains public when the Authorization header is omitted.
 func TestSearchEndpointWithInvalidAPIKey(t *testing.T) {
 	router := setupTestRouter(t)
 
-	// GET /v1/search with invalid API key should return 200 OK (auth is optional)
 	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)
 	req.Header.Set("Authorization", "Bearer solvr_invalid_api_key_12345678901234567890")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Should return 200 OK (search is public, invalid auth is ignored)
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200 (public access), got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d: %s", w.Code, w.Body.String())
 	}
 
 	var resp map[string]interface{}
@@ -1237,25 +1235,23 @@ func TestSearchEndpointWithInvalidAPIKey(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	// Should have data array (not error object)
-	if resp["data"] == nil {
-		t.Error("expected data in response")
+	errObj, ok := resp["error"].(map[string]interface{})
+	if !ok || errObj["code"] != "INVALID_API_KEY" {
+		t.Errorf("expected INVALID_API_KEY error, got %#v", resp)
 	}
 }
 
-// TestSearchEndpointWithMalformedAuth verifies GET /v1/search works even with malformed auth.
-// UPDATED: Search is public - malformed auth is ignored
+// TestSearchEndpointWithMalformedAuth verifies GET /v1/search rejects a malformed
+// Authorization header instead of silently treating it as anonymous.
 func TestSearchEndpointWithMalformedAuth(t *testing.T) {
 	router := setupTestRouter(t)
 
-	// GET /v1/search with malformed auth header should return 200 OK (auth is optional)
 	req := httptest.NewRequest(http.MethodGet, "/v1/search?q=test", nil)
 	req.Header.Set("Authorization", "NotBearer something")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Should return 200 OK (search is public, malformed auth is ignored)
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200 (public access), got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d: %s", w.Code, w.Body.String())
 	}
 }

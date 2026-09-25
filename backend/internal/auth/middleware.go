@@ -295,19 +295,22 @@ func APIKeyTierFromContext(ctx context.Context) string {
 	return tier
 }
 
-// OptionalAuthMiddleware creates middleware that tries all three authentication types
-// (user API key, agent API key, JWT) but NEVER returns 401.
-// If any auth method succeeds, the context is populated with the identity.
-// If all fail or no auth header is present, the request continues without auth context.
-// A JWT whose account accounts reports gone (or cannot confirm) counts as a failure.
-// This is safe to apply to public routes where auth is optional.
+// OptionalAuthMiddleware tries all three authentication types while permitting
+// requests that omit credentials to continue anonymously.
+// If any auth method succeeds, the context is populated with the identity. A request
+// with no Authorization header continues anonymously; a request that presents invalid
+// credentials is rejected instead of being silently downgraded to anonymous.
 func OptionalAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, userValidator *UserAPIKeyValidator, accounts AccountChecker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Authorization") == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			token, err := extractBearerToken(r)
 			if err != nil {
-				// No valid auth header — continue without auth
-				next.ServeHTTP(w, r)
+				writeAuthError(w, err)
 				return
 			}
 
@@ -326,8 +329,10 @@ func OptionalAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, u
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return
 				}
-				// User API key validation failed — continue without auth
-				next.ServeHTTP(w, r)
+				writeAuthError(w, NewAuthError(ErrCodeInvalidAPIKey, "invalid user API key"))
+				return
+			} else if IsUserAPIKey(token) {
+				writeAuthError(w, NewAuthError(ErrCodeInvalidAPIKey, "user API keys not supported"))
 				return
 			}
 
@@ -339,21 +344,22 @@ func OptionalAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, u
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return
 				}
-				// Agent API key validation failed — continue without auth
-				next.ServeHTTP(w, r)
+				writeAuthError(w, NewAuthError(ErrCodeInvalidAPIKey, "invalid API key"))
 				return
 			}
 
 			// Try JWT
 			claims, err := ValidateJWT(jwtSecret, token)
-			if err == nil && claims != nil && checkJWTAccount(r.Context(), accounts, claims) == nil {
-				ctx := ContextWithClaims(r.Context(), claims)
-				next.ServeHTTP(w, r.WithContext(ctx))
+			if err != nil {
+				writeAuthError(w, err)
 				return
 			}
-
-			// All methods failed — continue without auth
-			next.ServeHTTP(w, r)
+			if err := checkJWTAccount(r.Context(), accounts, claims); err != nil {
+				writeJWTAccountError(w, err)
+				return
+			}
+			ctx := ContextWithClaims(r.Context(), claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

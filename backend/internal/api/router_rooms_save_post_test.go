@@ -125,7 +125,8 @@ func TestSaveAsPost_IdempotentByKey(t *testing.T) {
 	require.NotEmpty(t, id1)
 
 	second := saveAsPost(t, ts, slug, apiKey, "Idempotent outcome save", outcomeSummary, "idem-key-123")
-	require.Equal(t, http.StatusOK, second.StatusCode, "a replayed save returns the existing draft")
+	require.Equal(t, http.StatusCreated, second.StatusCode, "a replayed save replays the original 201 with the existing draft")
+	require.Equal(t, "true", second.Header.Get("Idempotent-Replayed"))
 	id2, _ := dataObj(t, second)["id"].(string)
 	assert.Equal(t, id1, id2, "the same idempotency key must not create a duplicate outcome draft")
 }

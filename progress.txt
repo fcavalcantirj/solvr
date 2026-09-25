@@ -2590,3 +2590,118 @@ UAT: owner applies backend/migrations/000104_room_access_notify.up.sql on prod t
   return Cache-Control private, no-store (no CDN override) and https://api.solvr.dev/v1/overview
   returns Cache-Control: public, no-cache. Without 000104, open streams are still re-checked
   every 30s heartbeat.
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 11 of N (slices 1-10 were journaled as "idx 73": the owner's 09-25 ledger edit moved
+the multi-instance task to idx 23 and shifted this task to idx 74). Step 5 remainder:
+"ensure retries cannot ... change ownership, or duplicate a publication".
+================================================================================
+
+TASK SELECTION: idx 24 acceptance still needs idx 75/78 pieces; idx 52/53 (old 51/52), 68
+  (old 67) and 73's remainder (old 72) are gated on the knowledge cutover idx 93; idx 67
+  (old 66) needs a test deployment. idx 74 is the first buildable false task.
+
+AUDIT [REAL, code read] of every retry-exposed path that publishes or changes ownership:
+  - rooms: PATCH /v1/rooms/{slug} cannot touch ownership (UpdateRoomParams has no owner
+    field) and already has If-Match (slice 5). Ownership lives in room_members.
+  - agent claim: DB trigger prevent_agent_reclaim (000100) refuses human_id X -> Y, so a
+    retried or concurrent claim cannot move an agent to another human. See REMAINING.
+  - FINDING 1 [TEST]: POST /v1/rooms/{slug}/save-as-post (a post creation) was NOT under the
+    durable Idempotency middleware. Its own posts.idempotency_key lookup (author + key,
+    no room, no payload) returned the first draft with 200 for ANY reuse: another title,
+    or ANOTHER ROOM (RED: room B's save answered with room A's draft).
+  - FINDING 2 [TEST]: POST /v1/rooms/{slug}/posts/{postID}/publish always ran
+    UpdateStatus(open). A retried approval wrote again (RED: updated_at moved), and a late
+    one would reopen an outcome the author archived since, or publish one moderation
+    rejected (it also sets moderation_state=approved).
+  - FINDING 3 [TEST]: POST /v1/rooms/{slug}/members with no role defaulted to "member", so a
+    plain re-add (or its retry) DEMOTED an owner promoted in between (RED: "owner" expected,
+    "member" actual). Keyed member adds/removals had no replay either.
+
+DIFF ([REAL] git status --porcelain / git diff --numstat: 6 modified +82/-29, 1 new):
+  M backend/internal/api/router_rooms.go (+7/-4): one idempotencyStore for the auth group;
+    Idempotency mounted on save-as-post ("room.save_as_post"), POST members
+    ("room.member.add") and DELETE members/{agent_id} ("room.member.remove"); room.create
+    now uses the shared store (same behavior).
+  M backend/internal/api/handlers/room_save_post.go (+39/-15): answerKeyedDraft replaces the
+    two inline FindByIdempotencyKey lookups — a key that already names the author's draft
+    returns it for the SAME room and is 409 IDEMPOTENCY_KEY_REUSED for another room
+    (matters past the 24h window, when the middleware no longer holds the key).
+    ApprovePublication uses PublishDraftOutcome: published -> 200 with the current post and
+    no write; archived or rejected -> 409 PUBLICATION_STATE_CONFLICT, nothing changes.
+    outcomePostRepo: UpdateStatus replaced by PublishDraftOutcome.
+  M backend/internal/db/posts_outcomes.go (+22): PostRepository.PublishDraftOutcome — one
+    conditional UPDATE (publication_state = draft AND moderation_state <> rejected), so a
+    concurrent moderator rejection cannot be overwritten between read and write.
+  M backend/internal/db/room_members.go (+8/-4): Add with empty Role inserts/readmits as
+    member but keeps an ACTIVE member's role (CASE on $5); explicit Role unchanged.
+  M backend/internal/api/handlers/rooms_members.go (+4/-5): omitted role passed through as ""
+    (validation still refuses anything but "", member, owner).
+  A backend/internal/api/router_rooms_retry_safety_test.go (227 lines, 3 integration tests
+    through the real NewRouter): TestSaveAsPost_IdempotencyKeyNamesOneOutcome,
+    TestApprovePublication_RetryCannotRepublish, TestRoomMembers_RetryCannotChangeOwnership.
+  M backend/internal/api/router_rooms_save_post_test.go (+2/-1): see CHANGED TEST.
+  No migration. Frontend untouched. spec.json not changed.
+
+CHANGED TEST (behavior this slice replaces, per the golden rule):
+  (a) TestSaveAsPost_IdempotentByKey (router_rooms_save_post_test.go:128);
+  (b) it asserted `require.Equal(t, http.StatusOK, second.StatusCode, "a replayed save
+      returns the existing draft")` — the legacy 200 replay;
+  (c) a keyed retry now replays the ORIGINAL 201 like every other keyed create; the line
+      now expects 201 and additionally requires Idempotent-Replayed: true; its id1 == id2
+      "must not create a duplicate outcome draft" assertion is unchanged. The same behavior
+      is also covered by TestSaveAsPost_IdempotencyKeyNamesOneOutcome (replay 201, byte-
+      identical body, exactly 1 post);
+  (d) both PASS (/tmp/solvr_idx74_s11_green2.log).
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, the local isolated
+  schema-only test DB in the solvr-postgres container; 000101 idempotency_keys present):
+  [TEST] RED /tmp/solvr_idx74_s11_red.log: all 3 new tests FAIL (findings 1-3 above).
+  [TEST] RED2 /tmp/solvr_idx74_s11_red2.log: with only the middleware mounted, the >24h
+    cross-room save still got room A's draft (200 at retry_safety_test.go:93) -> handler fix.
+  [TEST] GREEN -race -v /tmp/solvr_idx74_s11_green2.log: 8 PASS, 0 FAIL, 0 SKIP (3 new +
+    5 TestSaveAsPost_*). /tmp/solvr_idx74_s11_green1.log: 24 of 25 PASS before the test
+    change (TestRoomPermissionMatrix_* x2, TestIdempotency_*, TestRoomMembers_* x4,
+    TestRoomFamily_* x4, TestProductDirection_* x2, TestSaveAsPost_*), the 1 FAIL being
+    the CHANGED TEST above. /tmp/solvr_idx74_s11_db.log: internal/db TestRoomMember* 21 PASS,
+    0 SKIP (family/authority/final-owner guards with the new Add).
+  [REAL] mutation: member Idempotency mounts removed -> TestRoomMembers_RetryCannotChange
+    Ownership FAIL (Idempotent-Replayed "" != "true", /tmp/solvr_idx74_s11_mut_members.log);
+    router_rooms.go restored from a copy, both mounts re-grepped.
+  [REAL] go build ./... ok; go vet internal/db internal/api internal/api/handlers clean;
+    gofmt clean on every touched file.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 run ONCE -> /tmp/solvr_idx74_s11_full.log:
+  FAIL only in internal/api, internal/api/handlers, internal/db (pre-existing set). Unique
+  --- FAIL names (same extraction on both logs): 82 now vs 83 in /tmp/solvr_idx59_s9_full.log;
+  0 new, 1 gone (TestRoomFamily_ForeignAndUnclaimedAgents_Still403, last iteration's
+  referral_code fixture collision). No touched-area test in the FAIL set.
+  check-file-size.sh: same 36 pre-existing violations, no touched file among them (largest
+  touched: room_save_post.go 319 lines).
+
+BEHAVIOR CHANGES (v0, for step 6 docs): save-as-post keyed retries replay 201 +
+  Idempotent-Replayed (was 200) and reuse with another payload/room is 409
+  IDEMPOTENCY_KEY_REUSED; approving an already-published outcome is a 200 no-op, an
+  archived/rejected one is 409 PUBLICATION_STATE_CONFLICT; POST members without "role" no
+  longer changes an existing member's role; members POST/DELETE accept Idempotency-Key.
+
+REMAINING FOR idx 74 (passes STAYS false):
+  - step 5: agent claim concurrency. [REAL code read] ClaimAgentWithToken checks IsUsed and
+    HumanID, then LinkHuman, AddReputation(+50) and an unconditional MarkUsed. A concurrent
+    claim by ANOTHER human loses at the trigger but gets 500 LINK_FAILED (not 409);
+    [UNVERIFIED, not run] two concurrent claims by the SAME human could both pass (X -> X is
+    allowed) and grant the +50 bonus twice. Needs a RED concurrency test first.
+  - step 3: status-code matrix 400/401/403/404/409/429/5xx pinned in one contract test.
+  - step 6: OpenAPI contract (discovery.go + openapi_paths.go 880 / openapi_schemas.go 867
+    lines, BOTH already over the 800 limit -> split before adding): Idempotency-Key,
+    Idempotent-Replayed, IDEMPOTENCY_KEY_REUSED / IDEMPOTENCY_REQUEST_IN_PROGRESS /
+    CLIENT_ENTRY_ID_REUSED / SUPERSEDE_CONFLICT / PUBLICATION_STATE_CONFLICT, error envelope
+    incl. details, field errors, CORS, credential transport, size limits, stream resume,
+    timeouts, If-Match/ETag. [REAL] the served spec has no rooms/replies paths today.
+
+UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on prod via
+  the admin query route, then deploys). No migration in this slice.
+  CORRECTION (slice 11 TDD line above): green1 counts are 20 top-level tests = 19 PASS + 1 FAIL
+    (the CHANGED TEST), plus 5 PASS subtests, 0 SKIP ("24 of 25" mixed the two levels).

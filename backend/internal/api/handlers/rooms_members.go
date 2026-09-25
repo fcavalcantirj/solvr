@@ -50,7 +50,7 @@ func (h *RoomHandler) resolveRoomForManage(w http.ResponseWriter, r *http.Reques
 }
 
 // AddMember handles POST /v1/rooms/{slug}/members — owner adds an agent to the
-// allowlist (mission #3). Idempotent; may also promote/demote via role.
+// allowlist (mission #3). Idempotent; an explicit role promotes or demotes.
 func (h *RoomHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 	room := h.resolveRoomForManage(w, r)
 	if room == nil {
@@ -65,11 +65,10 @@ func (h *RoomHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "agent_id is required")
 		return
 	}
+	// An omitted role adds a new agent as a member and leaves an existing member's role
+	// as it is (a plain re-add or its retry never demotes an owner).
 	role := req.Role
-	if role == "" {
-		role = models.RoleMember
-	}
-	if role != models.RoleMember && role != models.RoleOwner {
+	if role != "" && role != models.RoleMember && role != models.RoleOwner {
 		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "role must be 'member' or 'owner'")
 		return
 	}

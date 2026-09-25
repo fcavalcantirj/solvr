@@ -22,7 +22,7 @@ type outcomePostRepo interface {
 	FindByIdempotencyKey(ctx context.Context, authorType, authorID, key string) (*models.PostWithAuthor, error)
 	FindPublishedBySourceRoom(ctx context.Context, roomID string) ([]*models.PostWithAuthor, error)
 	FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string, callerHuman string) (*models.PostWithAuthor, error)
-	UpdateStatus(ctx context.Context, postID string, status models.PostStatus) error
+	PublishDraftOutcome(ctx context.Context, postID string) (bool, error)
 }
 
 // outcomeRoomRepo looks up rooms by slug. *db.RoomRepository satisfies it.
@@ -145,13 +145,11 @@ func (h *RoomSavePostHandler) SaveAsPost(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Idempotency: a retried save with the same key returns the existing draft.
+	// Idempotency: within 24h the Idempotency middleware replays or refuses a retry; past
+	// it, the draft still carries the key, so a retry gets that draft back.
 	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if key != "" {
-		if existing, e := h.posts.FindByIdempotencyKey(r.Context(), string(info.AuthorType), info.AuthorID, key); e == nil {
-			writePostsJSON(w, http.StatusOK, map[string]interface{}{"data": existing})
-			return
-		}
+	if key != "" && h.answerKeyedDraft(w, r, info, key, room) {
+		return
 	}
 
 	body := req.Summary
@@ -194,17 +192,30 @@ func (h *RoomSavePostHandler) SaveAsPost(w http.ResponseWriter, r *http.Request)
 	created, err := h.posts.Create(r.Context(), post)
 	if err != nil {
 		// A concurrent save under the same key trips the unique index; return the winner.
-		if key != "" {
-			if existing, e := h.posts.FindByIdempotencyKey(r.Context(), string(info.AuthorType), info.AuthorID, key); e == nil {
-				writePostsJSON(w, http.StatusOK, map[string]interface{}{"data": existing})
-				return
-			}
+		if key != "" && h.answerKeyedDraft(w, r, info, key, room) {
+			return
 		}
 		h.logger.Error("failed to create outcome post", "error", err, "slug", slug)
 		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to save outcome as post")
 		return
 	}
 	writePostsJSON(w, http.StatusCreated, map[string]interface{}{"data": created})
+}
+
+// answerKeyedDraft answers a save whose Idempotency-Key already names one of the author's
+// drafts and reports whether it did. A key names one outcome: the same room gets that
+// draft back, another room is refused rather than handed a different room's draft.
+func (h *RoomSavePostHandler) answerKeyedDraft(w http.ResponseWriter, r *http.Request, info *AuthInfo, key string, room *models.Room) bool {
+	existing, err := h.posts.FindByIdempotencyKey(r.Context(), string(info.AuthorType), info.AuthorID, key)
+	if err != nil {
+		return false
+	}
+	if existing.SourceRoomID == nil || *existing.SourceRoomID != room.ID.String() {
+		writePostsError(w, http.StatusConflict, "IDEMPOTENCY_KEY_REUSED", "Idempotency-Key was already used with a different request")
+		return true
+	}
+	writePostsJSON(w, http.StatusOK, map[string]interface{}{"data": existing})
+	return true
 }
 
 // ListOutcomePosts handles GET /v1/rooms/{slug}/posts: the room's published outcome posts.
@@ -282,14 +293,27 @@ func (h *RoomSavePostHandler) ApprovePublication(w http.ResponseWriter, r *http.
 		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "post is not an outcome of this room")
 		return
 	}
-	if err := h.posts.UpdateStatus(r.Context(), postID, models.PostStatusOpen); err != nil {
+	// Only an undecided draft is published. A retry of an approval answers with the
+	// published outcome without writing again; an outcome archived or rejected since
+	// cannot be republished by a late approval.
+	changed, err := h.posts.PublishDraftOutcome(r.Context(), postID)
+	if err != nil {
 		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to publish outcome")
 		return
 	}
-	published, err := h.posts.FindByIDForViewer(r.Context(), postID, "", "", "")
+	current, err := h.posts.FindByIDForViewer(r.Context(), postID, "", "", "")
 	if err != nil {
 		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to load published post")
 		return
 	}
-	writePostsJSON(w, http.StatusOK, map[string]interface{}{"data": published})
+	if !changed && current.PublicationState != models.PublicationPublished {
+		state := string(current.PublicationState)
+		if current.ModerationState == models.ModerationRejected {
+			state = "rejected by moderation"
+		}
+		writePostsError(w, http.StatusConflict, "PUBLICATION_STATE_CONFLICT",
+			"outcome is "+state+"; only a draft outcome can be approved for publication")
+		return
+	}
+	writePostsJSON(w, http.StatusOK, map[string]interface{}{"data": current})
 }

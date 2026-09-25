@@ -120,7 +120,8 @@ func mountRoomRoutes(
 		// Authenticated endpoints (Solvr JWT or agent API key per D-16)
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
-			r.With(apimiddleware.Idempotency(db.NewIdempotencyRepository(pool), "room.create")).Post("/", roomHandler.CreateRoom)
+			idempotencyStore := db.NewIdempotencyRepository(pool)
+			r.With(apimiddleware.Idempotency(idempotencyStore, "room.create")).Post("/", roomHandler.CreateRoom)
 			r.Patch("/{slug}", roomHandler.UpdateRoom)
 			r.Delete("/{slug}", roomHandler.DeleteRoom)
 			// Finish / reopen a collaboration (owner-only). Archiving keeps the
@@ -136,15 +137,17 @@ func mountRoomRoutes(
 			// Per-agent handshake + member allowlist management (mission #3).
 			r.Post("/{slug}/handshake", roomHandler.Handshake)
 			r.Get("/{slug}/members", roomHandler.ListMembers)
-			r.Post("/{slug}/members", roomHandler.AddMember)
-			r.Delete("/{slug}/members/{agent_id}", roomHandler.RemoveMember)
+			// Membership is where room ownership lives: a keyed retry replays its first
+			// result instead of re-applying a role change or removal made stale since.
+			r.With(apimiddleware.Idempotency(idempotencyStore, "room.member.add")).Post("/{slug}/members", roomHandler.AddMember)
+			r.With(apimiddleware.Idempotency(idempotencyStore, "room.member.remove")).Delete("/{slug}/members/{agent_id}", roomHandler.RemoveMember)
 			// Revoke one participant's room token; the membership and peers are untouched.
 			r.Delete("/{slug}/members/{agent_id}/token", roomHandler.RevokeMemberToken)
 
 			// Turn a room outcome into a reusable canonical draft Post (author reviews and
 			// publishes it via the normal Post flow; a private-room outcome is published only
 			// through the owner-approval endpoint below).
-			r.Post("/{slug}/save-as-post", roomSavePostHandler.SaveAsPost)
+			r.With(apimiddleware.Idempotency(idempotencyStore, "room.save_as_post")).Post("/{slug}/save-as-post", roomSavePostHandler.SaveAsPost)
 			r.Post("/{slug}/posts/{postID}/publish", roomSavePostHandler.ApprovePublication)
 		})
 	})

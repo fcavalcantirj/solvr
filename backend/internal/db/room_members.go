@@ -29,22 +29,26 @@ func NewRoomMemberRepository(pool *Pool) *RoomMemberRepository {
 }
 
 // Add inserts a member or, if the agent is already a member, updates its role and
-// added_by. Idempotent by (room_id, agent_id).
+// added_by. Idempotent by (room_id, agent_id). An empty Role adds a new or readmitted
+// agent as a member and keeps the role of an active one, so a plain re-add (or its
+// retry) never demotes an owner; only an explicit Role changes it.
 func (r *RoomMemberRepository) Add(ctx context.Context, params models.AddRoomMemberParams) (*models.RoomMember, error) {
 	role := params.Role
-	if role == "" {
+	keepRole := role == ""
+	if keepRole {
 		role = models.RoleMember
 	}
 	query := `
 		INSERT INTO room_members (room_id, agent_id, role, added_by)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (room_id, agent_id)
-		DO UPDATE SET role = EXCLUDED.role, added_by = EXCLUDED.added_by, access_source = 'direct',
+		DO UPDATE SET role = CASE WHEN $5 AND room_members.revoked_at IS NULL THEN room_members.role ELSE EXCLUDED.role END,
+			added_by = EXCLUDED.added_by, access_source = 'direct',
 			created_at = CASE WHEN room_members.revoked_at IS NULL THEN room_members.created_at ELSE NOW() END,
 			revoked_at = NULL
 		RETURNING ` + memberColumns + `
 	`
-	m, err := scanMember(r.pool.QueryRow(ctx, query, params.RoomID, params.AgentID, role, params.AddedBy))
+	m, err := scanMember(r.pool.QueryRow(ctx, query, params.RoomID, params.AgentID, role, params.AddedBy, keepRole))
 	if err != nil {
 		if isFinalOwnerViolation(err) {
 			return nil, ErrLastRoomOwner

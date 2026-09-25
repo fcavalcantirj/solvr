@@ -97,6 +97,18 @@ type ReplyListOptions struct {
 	PerPage int
 }
 
+// ReplyPageParams controls opaque forward (keyset) pagination of a post's
+// replies (idx 73 step 2). The keyset is (created_at, id): a reader pages
+// oldest-to-newest from AfterCreatedAt/AfterID and never re-sees an earlier
+// reply or skips a committed one, so ordering stays stable under concurrent
+// writes. A nil AfterCreatedAt starts from the beginning.
+type ReplyPageParams struct {
+	PostID         string
+	AfterCreatedAt *time.Time
+	AfterID        string
+	Limit          int
+}
+
 // CreateReplyRequest is the request body for creating a reply. There is no
 // content-type field: a client never chooses approach, answer, response, or
 // comment.

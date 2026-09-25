@@ -11293,3 +11293,134 @@ REMAINING FOR idx 73 (why passes STAYS false): step 1 (one success/error envelop
   unlike replies) and room directive supersede; consider making If-Match REQUIRED on conflicting
   edits (v0 breaking OK); step 6 (OpenAPI/SPEC documentation). idx 73 is NOT cutover-blocked =>
   completable across a few more slices. passes=false.
+
+================================================================================
+2026-09-24 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the
+public API"
+SLICE 3 of N: opaque CURSOR PAGINATION for the canonical reply list — step 2
+"Define opaque cursor pagination with default limit 50 and maximum 100 for
+entries and replies; return next_cursor and has_more and preserve stable
+ordering under concurrent writes." Entries already had this (idx for
+"follow one room issue forward", passes=true, default 50/max 100 cursors);
+GET /v1/posts/{id}/replies was the remaining list still on page/per_page OFFSET
+pagination with meta {total,page} and NO next_cursor/has_more.
+================================================================================
+
+TASK SELECTION (verified MYSELF this session against the code, not the journal):
+  spec.json: 30 passes=false. Walked the false list top-down and re-proved the
+  deferrals rather than trusting the prior entry:
+    idx 23 (line 310, ACCEPTANCE "N-agent E2E across clients AND service
+      instances"): step 4 "Distribute participants across two API instances" needs
+      cross-instance fan-out. [REAL] grep -rniE 'pg_notify|LISTEN|NOTIFY|pubsub|redis'
+      over internal/hub internal/api cmd (excl _test.go) => only OS signal.Notify +
+      the app notification service; internal/hub is in-memory. No cross-instance
+      transport => DEFER (its builder task, line 1005 "Preserve room delivery ...
+      more than one API instance", is itself still false).
+    lines 659/672/863/928 (route-into-canonical / search-retained-knowledge /
+      reduce-DB-to-posts-replies / retire-discovery-APIs): KNOWLEDGE-MODEL CUTOVER
+      not done. [REAL] ls backend/migrations tail = 000091..000100, ALL room-model
+      (room_source_post, funnel_events, room_entries create+cutover, room_members
+      authority, retire owner_id/token_hash, presence binding, account lifecycle).
+      NO up-migration drops/migrates approaches/answers/responses/comments. Every
+      "after cutover / rebuild embeddings / retire" step is out of sequence. DEFER.
+    line 746 (permissions AUDIT) spans the search surface (line 672, cutover) and
+      line 850 (ACCEPTANCE "clean-start planner/executor journey") => DEFER.
+  => idx 73 (line 941) is again the first false task BUILDABLE now without the
+     cutover: its behavior is local API-standardization. Slices 1 (posts If-Match,
+     092516f) and 2 (reply If-Match, e323a73) are committed. This iteration ships
+     step 2 for replies.
+
+WHAT WAS MISSING (verified [REAL] before writing):
+  - [REAL] read replies.go List + db/replies.go ListByPost: replies used ?page= /
+    ?per_page= OFFSET pagination (repo default 20, max 100) and returned meta
+    {total, page} — no opaque cursor, no next_cursor, no has_more, and OFFSET does
+    not preserve stable ordering under concurrent writes (step 2's explicit
+    requirement).
+  - [REAL] read the entries reference (rooms_entry_paging.go + rooms_entries.go):
+    entries page via a base64 opaque cursor over a monotonic `sequence`, fetch
+    limit+1, default 50 / max 100. Replies have no sequence column; they order by
+    (created_at, id), so the reply keyset is the composite (created_at, id).
+  - [REAL] grep: the ONLY caller of ListByPost is the handler; no frontend/lib
+    consumer of the replies-list meta (grep frontend/lib => none). Safe to switch.
+
+FILES ([REAL] git status --porcelain: 5 modified, 1 new; git diff --stat +344/-10):
+  M internal/models/reply.go (+12, 133->145): added ReplyPageParams{PostID,
+    AfterCreatedAt *time.Time, AfterID string, Limit int} documenting the
+    (created_at,id) keyset. ReplyListOptions kept (still used by ListByPost).
+  M internal/db/replies.go (+78, 414->491, +import "time"): added ListPageByPost —
+    counts the post-wide non-deleted total, then a SINGLE static keyset query
+    "WHERE post_id=$1 AND deleted_at IS NULL AND ($2::boolean=false OR created_at>$3
+    OR (created_at=$3 AND id>$4::uuid)) ORDER BY created_at ASC, id ASC LIMIT $5".
+    $2 = has-cursor flag => when false the predicate short-circuits (sentinel
+    time/uuid never evaluated). created_at bound as time.Time (timestamptz, micro
+    precision) matches the cursor's UnixMicro round-trip exactly; id compared as
+    uuid so byte-order == ORDER BY id. Defensive cap maxReplyPageFetch=201 (handler
+    clamps user input to 100 first). ListByPost left intact.
+  NEW internal/api/handlers/replies_paging.go (79 lines): defaultReplyPageLimit=50,
+    maxReplyPageLimit=100, replyCursorPrefix "rpc1:". parseReplyPage(w,q) => 400
+    VALIDATION_ERROR on limit<=0/non-int and on malformed cursor, clamps limit to
+    100; encodeReplyCursor(createdAt,id)=base64url("rpc1:"+UnixMicro+":"+id);
+    decodeReplyCursor reverses it (rejects bad base64, wrong prefix, empty id, bad
+    micros).
+  M internal/api/handlers/replies.go (+31/-10, drops "strconv" import): List now
+    parses cursor/limit, fetches Limit+1 via ListPageByPost, trims the look-ahead
+    row, and emits meta {total, has_more, next_cursor(only when has_more)}. Added
+    ListPageByPost to RepliesRepositoryInterface.
+  M internal/api/handlers/replies_test.go (+157): MockRepliesRepository gains
+    ListPageByPost (records lastPageParams) + pageResult/pageTotal fields. 6 NEW
+    handler tests (mock, NO DB => they RUN): DefaultPageEnvelope (has_more=false,
+    no next_cursor, repo Limit=51), HasMoreAndNextCursor (51 rows -> 50 + has_more
+    + cursor decodes to last RETURNED row, not the trimmed one), RejectsBadCursor
+    =>400, RejectsBadLimit(limit=0)=>400, ClampsLimit(limit=500 -> repo Limit=101),
+    DecodesCursor (AfterID+AfterCreatedAt threaded to repo). TestReplies_ListIsPublic
+    KEPT and still green — seeded pageResult/pageTotal so total==1 survives the
+    switch; its meta["total"] assertion is unchanged. NO existing test deleted,
+    skipped, renamed, or weakened.
+  M internal/db/replies_test.go (+76, +imports strconv,time): NEW
+    TestReplyRepository_ListPageByPost_Keyset (integration, RUNS with DATABASE_URL):
+    creates 5 replies, pages with limit=2, asserts paged order == full ListByPost
+    order, no duplicate, no skip, post-wide total constant across pages, loop
+    terminates.
+
+TDD (genuine RED, both layers):
+  [TEST] RED handler: ran the 6 new tests against the OLD List (still page/per_page)
+    BEFORE changing it => all 6 FAIL (data len 0, "want 400" got 200, "repo not
+    called"); TestReplies_ListIsPublic stayed PASS. Then switched List => all GREEN.
+  [TEST] RED-with-teeth db: mutated the keyset `rp.id > $4::uuid` -> `>= $4::uuid`
+    (re-includes the cursor boundary row). TestReplyRepository_ListPageByPost_Keyset
+    => FAIL "paged 9 replies, want 5" (boundary rows duplicated across pages).
+    Restored (diff -q => identical) => PASS again.
+
+VERIFICATION:
+  [REAL] go build ./... EXIT 0. go vet ./internal/api/handlers/ ./internal/db/ clean.
+    gofmt -l on all 6 touched files => empty.
+  [TEST] go test ./internal/api/handlers/ -run 'TestReplies_' -count=1 -v => ALL
+    reply tests PASS, 0 SKIP (6 new + TestReplies_ListIsPublic + the slice-1/2
+    concurrency tests).
+  [TEST] Isolated DB: created a dedicated solvr_test database in the local
+    solvr-postgres container (port 5435) from the dev schema (pg_dump --schema-only,
+    NO data) so the integration test never touches real dev rows. Ran
+    DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test
+    go test ./internal/db/ -run 'ListPageByPost_Keyset|ListOrdersOldestFirst'
+    => both PASS, 0 SKIP (proves keyset order/no-dup/no-skip against real
+    timestamptz, and the existing offset list still works).
+  [TEST] FULL go test ./internal/api/handlers/ -p 1 -count=1 => exactly 4 --- FAIL,
+    ALL the documented pre-existing GitHub OAuth callback integration tests
+    (TestGitHubOAuthRedirect_Integration, TestGitHubCallback_MissingCode/GitHubError/
+    InvalidCode_Integration). ZERO reply/pagination failures => no regression.
+  [REAL] file sizes: replies.go 294, replies_paging.go 79, replies_test.go 386,
+    db/replies.go 491, db/replies_test.go 406, models/reply.go 145 — all < 800.
+    scripts/check-file-size.sh reports 36 PRE-EXISTING violations (frontend
+    privacy/page.tsx etc.), NONE mine (grep replies|reply => none).
+
+REMAINING FOR idx 73 (why passes STAYS false): step 1 (one success/error envelope
+  with request_id — audit + contract-test across handlers); step 3 (status-code
+  matrix 400/401/403/404/409/429/5xx pinned); step 4 (Idempotency-Key reuse
+  rejection on room/post/reply creation + client_entry_id timeline writes, reject
+  reuse with different payload, >=24h retention — needs a durable store, NOT
+  in-memory); step 5 REST remainder (If-Match on PATCH /v1/rooms/{slug} — roomRepo
+  is a CONCRETE *db.RoomRepository, needs local Postgres — and room directive
+  supersede); step 6 (OpenAPI/SPEC docs of the standardized contract). Step 2 is
+  now DONE for both entries (prior) and replies (this slice). idx 73 is NOT
+  cutover-blocked => completable across a few more slices. passes=false.

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
@@ -180,6 +181,83 @@ func (r *ReplyRepository) ListByPost(ctx context.Context, opts models.ReplyListO
 	}
 	if err := rows.Err(); err != nil {
 		return nil, 0, fmt.Errorf("iterate replies: %w", err)
+	}
+	return replies, total, nil
+}
+
+// maxReplyPageFetch bounds a single keyset page defensively; the handler clamps
+// user-supplied limits to the API-wide maximum (100) before the +1 look-ahead.
+const maxReplyPageFetch = 201
+
+// ListPageByPost returns one opaque forward page of a post's replies plus the
+// post-wide non-deleted total (idx 73 step 2). Rows are ordered oldest first by
+// the keyset (created_at, id); when params.AfterCreatedAt is set only replies
+// strictly after that keyset position are returned, so paging forward under
+// concurrent writes never duplicates or skips a committed reply. The caller may
+// fetch Limit+1 to detect whether more pages follow.
+func (r *ReplyRepository) ListPageByPost(ctx context.Context, params models.ReplyPageParams) ([]models.ReplyWithAuthor, int, error) {
+	limit := params.Limit
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > maxReplyPageFetch {
+		limit = maxReplyPageFetch
+	}
+
+	var total int
+	err := r.pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM replies WHERE post_id = $1 AND deleted_at IS NULL",
+		params.PostID,
+	).Scan(&total)
+	if err != nil {
+		if isTableNotFoundError(err) || isInvalidUUIDError(err) {
+			return []models.ReplyWithAuthor{}, 0, nil
+		}
+		LogQueryError(ctx, "Reply.ListPageByPost.Count", "replies", err)
+		return nil, 0, fmt.Errorf("count replies: %w", err)
+	}
+
+	// A single static query: $2 is the "has cursor" flag; when false the keyset
+	// predicate short-circuits and every reply is eligible, so the sentinel time
+	// and id in $3/$4 are never evaluated.
+	hasCursor := params.AfterCreatedAt != nil
+	afterTime := time.Unix(0, 0)
+	afterID := "00000000-0000-0000-0000-000000000000"
+	if hasCursor {
+		afterTime = *params.AfterCreatedAt
+		if params.AfterID != "" {
+			afterID = params.AfterID
+		}
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT rp.id, rp.post_id, rp.parent_reply_id, rp.author_type, rp.author_id, rp.body,
+		       rp.upvotes, rp.downvotes, rp.legacy_type, rp.legacy_id, rp.provenance,
+		       rp.created_at, rp.updated_at, rp.deleted_at,`+replyAuthorSelect+`
+		FROM replies rp`+replyAuthorJoins+`
+		WHERE rp.post_id = $1 AND rp.deleted_at IS NULL
+		  AND ($2::boolean = false
+		       OR rp.created_at > $3
+		       OR (rp.created_at = $3 AND rp.id > $4::uuid))
+		ORDER BY rp.created_at ASC, rp.id ASC
+		LIMIT $5`, params.PostID, hasCursor, afterTime, afterID, limit)
+	if err != nil {
+		LogQueryError(ctx, "Reply.ListPageByPost.Query", "replies", err)
+		return nil, 0, fmt.Errorf("list reply page: %w", err)
+	}
+	defer rows.Close()
+
+	replies := make([]models.ReplyWithAuthor, 0, limit)
+	for rows.Next() {
+		rwa, scanErr := scanReplyWithAuthor(rows)
+		if scanErr != nil {
+			LogQueryError(ctx, "Reply.ListPageByPost.Scan", "replies", scanErr)
+			return nil, 0, fmt.Errorf("scan reply: %w", scanErr)
+		}
+		replies = append(replies, *rwa)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate reply page: %w", err)
 	}
 	return replies, total, nil
 }

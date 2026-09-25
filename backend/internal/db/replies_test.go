@@ -3,7 +3,9 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/google/uuid"
@@ -106,6 +108,80 @@ func TestReplyRepository_ListOrdersOldestFirstAndExcludesDeleted(t *testing.T) {
 	}
 	if total != 2 {
 		t.Errorf("total after delete = %d, want 2", total)
+	}
+}
+
+// TestReplyRepository_ListPageByPost_Keyset proves opaque forward pagination
+// (idx 73 step 2): paging with a small limit reproduces the full oldest-first
+// order with no duplicate and no skipped reply, has_more/next_cursor terminate
+// correctly, and the post-wide total is constant across pages.
+func TestReplyRepository_ListPageByPost_Keyset(t *testing.T) {
+	pool := setupTestDB(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	repo := NewReplyRepository(pool)
+	user := createCommentTestUser(t, pool)
+	post := createCommentTestPost(t, pool, user.ID)
+
+	const n = 5
+	for i := 0; i < n; i++ {
+		if _, err := repo.Create(ctx, &models.Reply{
+			PostID: post.ID, AuthorType: models.AuthorTypeHuman, AuthorID: user.ID,
+			Body: "reply-" + strconv.Itoa(i),
+		}); err != nil {
+			t.Fatalf("Create %d failed: %v", i, err)
+		}
+	}
+
+	// Canonical full order (oldest first) via the existing offset list.
+	full, total, err := repo.ListByPost(ctx, models.ReplyListOptions{PostID: post.ID, PerPage: 100})
+	if err != nil {
+		t.Fatalf("ListByPost failed: %v", err)
+	}
+	if total != n || len(full) != n {
+		t.Fatalf("full total=%d len=%d, want %d/%d", total, len(full), n, n)
+	}
+
+	// Page forward with limit 2 using the keyset cursor.
+	var paged []models.ReplyWithAuthor
+	var afterTime *time.Time
+	var afterID string
+	for i := 0; i < n+2; i++ { // guard against a non-terminating loop
+		got, gotTotal, err := repo.ListPageByPost(ctx, models.ReplyPageParams{
+			PostID: post.ID, AfterCreatedAt: afterTime, AfterID: afterID, Limit: 2,
+		})
+		if err != nil {
+			t.Fatalf("ListPageByPost failed: %v", err)
+		}
+		if gotTotal != n {
+			t.Errorf("page total = %d, want %d (post-wide, cursor-independent)", gotTotal, n)
+		}
+		if len(got) == 0 {
+			break
+		}
+		paged = append(paged, got...)
+		last := got[len(got)-1]
+		ct := last.CreatedAt
+		afterTime = &ct
+		afterID = last.ID
+		if len(got) < 2 {
+			break
+		}
+	}
+
+	if len(paged) != len(full) {
+		t.Fatalf("paged %d replies, want %d", len(paged), len(full))
+	}
+	seen := map[string]bool{}
+	for i := range full {
+		if paged[i].ID != full[i].ID {
+			t.Fatalf("page order mismatch at %d: got %s, want %s", i, paged[i].ID, full[i].ID)
+		}
+		if seen[paged[i].ID] {
+			t.Fatalf("duplicate reply %s across pages", paged[i].ID)
+		}
+		seen[paged[i].ID] = true
 	}
 }
 

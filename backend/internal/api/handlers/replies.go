@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -21,6 +20,7 @@ type RepliesRepositoryInterface interface {
 	Create(ctx context.Context, reply *models.Reply) (*models.Reply, error)
 	GetByID(ctx context.Context, id string) (*models.ReplyWithAuthor, error)
 	ListByPost(ctx context.Context, opts models.ReplyListOptions) ([]models.ReplyWithAuthor, int, error)
+	ListPageByPost(ctx context.Context, params models.ReplyPageParams) ([]models.ReplyWithAuthor, int, error)
 	Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string) (*models.Reply, error)
 	Delete(ctx context.Context, id string, authorType models.AuthorType, authorID string) error
 	Vote(ctx context.Context, replyID, voterType, voterID, direction string) error
@@ -98,23 +98,38 @@ func (h *RepliesHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeRepliesError(w, http.StatusBadRequest, "VALIDATION_ERROR", "post ID is required")
 		return
 	}
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
 
-	replies, total, err := h.repo.ListByPost(r.Context(), models.ReplyListOptions{
-		PostID: postID, Page: page, PerPage: perPage,
+	// Opaque cursor pagination, default 50 / max 100, matching the room entries
+	// surface (idx 73 step 2). A malformed cursor or limit is a 400.
+	afterCreatedAt, afterID, limit, ok := parseReplyPage(w, r.URL.Query())
+	if !ok {
+		return
+	}
+
+	// Fetch one extra row to detect whether a following page exists.
+	replies, total, err := h.repo.ListPageByPost(r.Context(), models.ReplyPageParams{
+		PostID:         postID,
+		AfterCreatedAt: afterCreatedAt,
+		AfterID:        afterID,
+		Limit:          limit + 1,
 	})
 	if err != nil {
 		h.logger.Error("list replies failed", "error", err, "postID", postID)
 		writeRepliesError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to list replies")
 		return
 	}
-	if page < 1 {
-		page = 1
+
+	meta := map[string]any{"total": total, "has_more": false}
+	if len(replies) > limit {
+		replies = replies[:limit]
+		last := replies[len(replies)-1]
+		meta["has_more"] = true
+		meta["next_cursor"] = encodeReplyCursor(last.CreatedAt, last.ID)
 	}
+
 	writeRepliesJSON(w, http.StatusOK, map[string]any{
 		"data": replies,
-		"meta": map[string]any{"total": total, "page": page},
+		"meta": meta,
 	})
 }
 

@@ -216,9 +216,14 @@ func TestRoomEntriesStream_CanonicalAndAdapterDeliverTheSameEntries(t *testing.T
 
 	time.Sleep(700 * time.Millisecond)
 	streams := map[string][]sseFrame{"agent key": stopKey(), "human JWT": stopHuman(), "adapter": stopAdapter()}
+	// Every committed event entry streams live: the posted CLAIM and the room.activated
+	// milestone the server recorded when the second distinct author wrote.
+	events := entriesAfter(t, ts.URL, slug, memberKey, 0, "event")
+	require.Contains(t, events, eventID)
+	require.Len(t, events, 2, "the CLAIM and the room.activated milestone: %v", events)
 	for name, frames := range streams {
 		assert.Equal(t, []int64{humanMsg, agentMsg}, frameIDs(frames, "message"), "%s: message frames", name)
-		assert.Equal(t, []int64{eventID}, frameIDs(frames, "event"), "%s: event frames", name)
+		assert.Equal(t, events, frameIDs(frames, "event"), "%s: event frames", name)
 	}
 	// Timeline frames (not presence, which depends on subscriber timing) are byte-identical.
 	assert.Equal(t, timelineFrames(streams["adapter"]), timelineFrames(streams["agent key"]), "canonical and adapter frames must be identical")

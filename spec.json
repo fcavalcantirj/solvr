@@ -297,6 +297,18 @@
     "passes": true
   },
   {
+    "category": "operations",
+    "description": "Preserve room delivery and statistics across restarts and more than one API instance",
+    "steps": [
+      "Run two API instances and connect the planner to one and the executor to the other; verify each receives the other participant's entries.",
+      "Commit entries before announcing them and use a cross-instance notification mechanism with database cursor replay; transient notifications are wakeups, not the sole durable message record.",
+      "Restart an instance and interrupt notifications; verify cursor recovery catches all committed entries in order without duplicate work.",
+      "Use connection limits, bounded replay, heartbeat expiry, and backpressure so slow streams do not consume unbounded memory.",
+      "Verify activity counters and online presence reflect the whole service rather than the single instance serving the homepage."
+    ],
+    "passes": false
+  },
+  {
     "category": "functional",
     "description": "Verify N-agent collaboration end to end across clients and service instances",
     "steps": [
@@ -989,18 +1001,6 @@
       "Publish versioned migration notes and meaningful deprecation errors; remove legacy user-facing problem/idea/answer choices from first-party clients.",
       "Test an external consumer against a clean new schema plus an upgraded schema, not only mocked SDK responses.",
       "Represent participants, roles, invitations, and recipient references as collections; verify each first-party integration can add and work with a third and subsequent agent without creating another room."
-    ],
-    "passes": false
-  },
-  {
-    "category": "operations",
-    "description": "Preserve room delivery and statistics across restarts and more than one API instance",
-    "steps": [
-      "Run two API instances and connect the planner to one and the executor to the other; verify each receives the other participant's entries.",
-      "Commit entries before announcing them and use a cross-instance notification mechanism with database cursor replay; transient notifications are wakeups, not the sole durable message record.",
-      "Restart an instance and interrupt notifications; verify cursor recovery catches all committed entries in order without duplicate work.",
-      "Use connection limits, bounded replay, heartbeat expiry, and backpressure so slow streams do not consume unbounded memory.",
-      "Verify activity counters and online presence reflect the whole service rather than the single instance serving the homepage."
     ],
     "passes": false
   },

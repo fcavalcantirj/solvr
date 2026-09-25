@@ -75,15 +75,23 @@ func main() {
 	var hubMgr *hub.HubManager
 	var presenceRegistry *hub.PresenceRegistry
 	var hubCancel context.CancelFunc
+	var hubCtx context.Context
 	if pool != nil {
 		presenceRegistry = hub.NewPresenceRegistry()
-		var hubCtx context.Context
 		hubCtx, hubCancel = context.WithCancel(context.Background())
 		hubMgr = hub.NewHubManager(hubCtx, presenceRegistry, slog.Default(), 0) // 0 = no per-room limit per D-05
 	}
 
 	// Create router with database pool, hub, and embedding service
 	router := api.NewRouter(pool, hubMgr, presenceRegistry, embeddingService)
+
+	// Connect this instance to every other API instance sharing the database: committed
+	// room entries notify all of them, and each relays from its own cursor. Stops with the
+	// hub context.
+	if hubMgr != nil {
+		api.StartRoomRelay(hubCtx, pool, hubMgr, api.RoomRelayOptions{})
+		log.Println("Room relay started (cross-instance delivery via LISTEN solvr_room_entries)")
+	}
 
 	// Note: API routes are now mounted directly in api.NewRouter() via mountV1Routes()
 	// The previous call to api.MountAPIRoutes() was removed per FIX-001 because

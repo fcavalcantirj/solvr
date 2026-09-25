@@ -49,6 +49,10 @@ func mountRoomRoutes(
 	presenceHandler.SetFunnelRecorder(funnelRepo)
 	msgHandler.SetFunnelRecorder(funnelRepo)
 	entryRepo := db.NewRoomEntryRepository(pool)
+	if hubMgr != nil {
+		// Live delivery reads committed entries back from the timeline (see StartRoomRelay).
+		hubMgr.EnableRelay(handlers.NewTimelineFrameSource(entryRepo))
+	}
 	sseHandler := handlers.NewRoomSSEHandler(hubMgr, msgRepo, entryRepo, roomRepo)
 	claimsHandler := handlers.NewRoomClaimsHandler(claimRepo)
 	eventsHandler := handlers.NewRoomEventsHandler(entryRepo, hubMgr)

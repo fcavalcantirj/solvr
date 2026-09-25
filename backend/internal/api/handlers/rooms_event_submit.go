@@ -83,8 +83,7 @@ func (h *RoomEventsHandler) submitEvent(ctx context.Context, room *models.Room, 
 
 	// A replay was already broadcast by the original write.
 	if created && h.hubMgr != nil {
-		roomHub := h.hubMgr.GetOrCreate(ctx, hub.NewRoomID(room.ID))
-		roomHub.Broadcast(typedHubEvent(entry))
+		h.hubMgr.Publish(hub.NewRoomID(room.ID), typedHubEvent(entry))
 	}
 	return entry, created, nil
 }

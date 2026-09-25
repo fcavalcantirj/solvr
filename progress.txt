@@ -1626,3 +1626,117 @@ REMAINING FOR idx 73 (passes STAYS false): step 3 status-code matrix pinned; ste
   CLIENT_ENTRY_ID_REUSED / SUPERSEDE_CONFLICT, error envelope incl. details, field
   errors, CORS, credential transport, size limits, stream resume, timeouts,
   If-Match/ETag).
+
+================================================================================
+2026-09-25 — Task idx 23 (spec.json, category operations) — IN PROGRESS, passes STAYS false
+"Preserve room delivery and statistics across restarts and more than one API instance"
+SLICE 1 of N: cross-instance delivery (steps 1-3) + slow-stream backpressure (part of step 4).
+================================================================================
+
+TASK SELECTION: spec.json had an UNCOMMITTED owner edit at iteration start that moved this
+  task from idx 78 to idx 23 (above the N-agent acceptance task, now idx 24). I did not
+  edit the ledger order; `git add .` commits that owner edit with this slice. First-false
+  is now this task, and it is buildable.
+
+DESIGN [REAL, code read]: the DB timeline is the delivery record; notifications are wakeups.
+  - migration 000103: AFTER INSERT trigger on room_entries does pg_notify('solvr_room_entries',
+    room_id). NOTIFY is sent only at commit (rolled-back entries never announced).
+  - hub relay (internal/hub/relay.go): per-room cursor (last fanned-out sequence) set to
+    MAX(sequence) when the hub is created (history not re-broadcast). Announce/WakeAll run
+    one drain per room (dirty flag, no concurrent drains) that reads ListPage after the
+    cursor in pages of RelayPageSize=100 and broadcasts in sequence order; cursor advances
+    only past frames handed to the hub; a failed read retries on the next wake.
+  - Local writes (submitMessage/submitEvent) call HubManager.Publish: with a relay it just
+    wakes the drain (frame re-read from the DB); without one (handler unit tests) it
+    broadcasts directly as before. mountRoomRoutes enables the relay on every router.
+  - api.StartRoomRelay (main.go, bound to hubCtx): dedicated pgx connection outside the
+    pool (application_name solvr-room-relay) LISTENs; each notification -> Announce(room);
+    after every (re)LISTEN -> WakeAll (catches lost notifications); 30s sweep -> WakeAll.
+  - Backpressure: SSE now uses RoomHub.SubscribeStream; when its 64-slot buffer is full the
+    hub CLOSES that stream (removed from registry, sseCount--) instead of silently dropping
+    a frame; the SSE handler then writes "retry: 1000" so the client resumes from its
+    Last-Event-ID via the existing DB replay. Agent join subscriptions (Subscribe) keep the
+    old drop semantics (their channels are never read).
+
+DIFF (git status --porcelain / git diff --stat):
+  A migrations/000103_room_entries_notify.{up,down}.sql
+  A internal/hub/relay.go (EnableRelay, Publish, Announce, WakeAll, WaitIdle, drain)
+  M internal/hub/manager.go (+relay field; relay.start at hub creation)
+  M internal/hub/hub.go (subscriber{ch,stream}; SubscribeStream; deliver() closes full
+    stream subscribers)
+  A internal/db/room_entry_listener.go (Pool.ListenRoomEntries with reconnect backoff)
+  M internal/db/room_entries.go (+MaxSequence)
+  A internal/api/handlers/rooms_relay_source.go (TimelineFrameSource over ListPage +
+    timelineHubEvent — same frames as replay)
+  M internal/api/handlers/rooms_entry_submit.go, rooms_event_submit.go (Broadcast -> Publish)
+  M internal/api/handlers/rooms_sse.go (SubscribeStream; retry directive on closed channel)
+  A internal/api/room_relay.go (StartRoomRelay, RoomRelayOptions, RoomRelayApplicationName)
+  M internal/api/router_rooms.go (EnableRelay with the timeline source)
+  M cmd/api/main.go (hubCtx hoisted; StartRoomRelay)
+  A internal/hub/relay_test.go (9 unit tests), A internal/api/router_rooms_multi_instance_test.go
+    (4 integration tests, each "instance" = own pool + hub manager + relay + router)
+  M 2 existing tests (see TEST CHANGES) ; M spec.json (owner's reorder, not mine).
+
+BEHAVIOR CHANGE: server-recorded timeline entries (the room.activated milestone) now stream
+  LIVE; before, they were stored and replayed but never broadcast. Live == replay now.
+
+TEST CHANGES (existing tests; no test deleted or skipped):
+  (1) router_rooms_entries_replay_test.go TestRoomEntriesStream_ReplayIncludesEventsInTimelineOrder
+      asserted `require.Equal(t, []int64{m1, e1, m2, e2}, timelineIDs(live), "live stream
+      delivered the whole timeline")` and its comment said room.activated is "stored but not
+      broadcast live". Replaced by: live == entriesAfter(...,0,"") (committed timeline),
+      which must contain m1,e1,m2,e2 and have len 5 (+room.activated). Stronger. PASS.
+  (2) router_rooms_entries_stream_test.go TestRoomEntriesStream_CanonicalAndAdapterDeliverTheSameEntries
+      asserted `assert.Equal(t, []int64{eventID}, frameIDs(frames, "event"), ...)`. Replaced
+      by: event frames == committed event entries (entriesAfter kind=event), which must
+      contain eventID and have len 2 (CLAIM + room.activated). Message-frame assertion
+      unchanged. PASS.
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, isolated test DB in
+  local solvr-postgres; 000103 applied via docker exec psql, up->down->up clean,
+  schema_migrations set to 103):
+  [TEST] RED: hub tests build-failed (EnableRelay/Announce/... undefined); api tests
+    build-failed (RoomRelayOptions/StartRoomRelay undefined); eviction test build-failed
+    (SubscribeStream undefined).
+  [TEST] GREEN (-race): TestRelay_* x8, TestHub_SlowStreamSubscriberIsClosedNotSkipped,
+    TestRoomRelay_PlannerAndExecutorOnDifferentInstancesSeeEachOther,
+    TestRoomRelay_UncommittedEntryIsNeverAnnounced (incl. rollback never delivered),
+    TestRoomRelay_ListenerInterruptionRecoversEveryEntryInOrder (pg_terminate_backend on
+    both listeners, 5 entries committed during the gap, sweep disabled -> all 5 in order,
+    once), TestRoomRelay_RestartedInstanceResumesTheStreamWithoutHolesOrDuplicates. 0 SKIP.
+  [REAL] mutations: dropping the NOTIFY trigger -> two-instance test FAIL (B missed A's
+    entry); commenting out WakeAll on (re)LISTEN -> interruption test FAIL (actual nil).
+    Both restored.
+  [REAL] two actual API processes (go build ./cmd/api, PORT 18081/18082, test DB, throwaway
+    JWT_SECRET): planner posted via :18081, executor via :18082; curl streams on BOTH
+    ports showed ids 51427 message, 51429 message, 51431 event (room.activated). Both
+    processes showed 2 solvr-room-relay backends in pg_stat_activity. Processes killed.
+  [TEST] first full run exposed a real hole: TestRelay_BacklogIsReadInBoundedPages lost
+    seq 194 ("subscriber channel full, dropping") under suite load -> led to the
+    SubscribeStream eviction above; the test now asserts a gap-free prefix.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 run once after the final change ->
+  /tmp/solvr_idx23_s1_full2.log: hub/jobs/... ok; FAIL in internal/api, internal/api/handlers,
+  internal/db (the documented pre-existing set). Unique FAIL names vs idx73 s10 log:
+  0 gone, 2 new: TestHomepageSearch_ChartAddsUpToTheTotalBesideIt and
+  TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring (chart sum != total, e.g.
+  974 vs 900). [REAL] both FAIL identically in a clean HEAD worktree against the same DB
+  => pre-existing, clock/data-dependent (ran ~03:00 UTC), not this slice.
+  Also [REAL]: TestPublicStream_StreamHeadersAndNoAuth FAILs under -race at HEAD too (test
+  reads headers while handler goroutine writes); passes without -race.
+  go build ./... ok; go vet hub/api/db/cmd/api clean; gofmt clean on my files
+  (cmd/api/main.go has a pre-existing extra blank line at HEAD, left alone). Largest new
+  file 329 lines (relay_test.go); none of the touched files is over 800.
+
+UAT (for when idx 23 closes): owner applies migrations/000103_room_entries_notify.up.sql on
+  prod via the admin query route. Without it, a single instance still delivers (local
+  Publish wakes the drain) and other instances catch up only on the 30s sweep.
+
+REMAINING FOR idx 23 (passes STAYS false):
+  - step 4 remainder: audit connection limits (global 1000 per process, per-room limit is 0
+    in main.go), replay bound (1000/connection exists), presence heartbeat expiry across
+    instances (reaper removes only its own in-memory registry/hub; DB is shared).
+  - step 5 not started: homepage activity counters and online presence must reflect the
+    whole service (check what reads PresenceRegistry / per-process counters vs DB).
+  - GetAgentCard reads the per-process PresenceRegistry: an agent joined on instance A is
+    404 on instance B [UNVERIFIED, from code read of rooms_presence.go].

@@ -256,6 +256,19 @@ func (r *RoomEntryRepository) ListPage(ctx context.Context, p models.RoomEntryPa
 	return collectRoomEntries(ctx, rows, "ListPage")
 }
 
+// MaxSequence is the room's latest timeline sequence, deleted entries included (0 for an
+// empty room): the position a new live subscriber starts after.
+func (r *RoomEntryRepository) MaxSequence(ctx context.Context, roomID uuid.UUID) (int, error) {
+	var seq int
+	if err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE(MAX(sequence), 0) FROM room_entries WHERE room_id = $1`, roomID,
+	).Scan(&seq); err != nil {
+		LogQueryError(ctx, "MaxSequence", "room_entries", err)
+		return 0, err
+	}
+	return seq, nil
+}
+
 // SequenceAfterEntry maps an SSE reconnect cursor (the last delivered entry id) to the
 // room sequence to resume after: the sequence of that entry (deleted or not), or, for an
 // id this room never held, the sequence of the room's latest entry with a lower id.

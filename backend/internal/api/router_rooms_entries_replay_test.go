@@ -77,7 +77,13 @@ func TestRoomEntriesStream_ReplayIncludesEventsInTimelineOrder(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 	live := stopLive()
-	require.Equal(t, []int64{m1, e1, m2, e2}, timelineIDs(live), "live stream delivered the whole timeline")
+	// Live delivery reads committed entries back from the timeline, so the live stream is
+	// the whole committed timeline: the posted entries plus the room.activated milestone
+	// the server recorded on the second distinct author.
+	whole := entriesAfter(t, ts.URL, slug, memberKey, 0, "")
+	require.Subset(t, whole, []int64{m1, e1, m2, e2})
+	require.Len(t, whole, 5, "m1, e1, m2, e2 and the room.activated milestone: %v", whole)
+	require.Equal(t, whole, timelineIDs(live), "live stream delivered the whole timeline")
 
 	replay := func(url, bearer string) []sseFrame {
 		stop := streamCapture(t, url, bearer)
@@ -87,9 +93,8 @@ func TestRoomEntriesStream_ReplayIncludesEventsInTimelineOrder(t *testing.T) {
 	after := strconv.FormatInt(m1, 10)
 
 	// Every missed entry, messages and events, in timeline order — on both routes and
-	// with both cursor spellings. The replay is the canonical timeline after the cursor:
-	// it also carries server-recorded entries that are stored but not broadcast live
-	// (the room.activated milestone recorded on the second distinct author).
+	// with both cursor spellings. The replay is the canonical timeline after the cursor,
+	// server-recorded entries (the room.activated milestone) included, exactly as live.
 	want := entriesAfter(t, ts.URL, slug, memberKey, m1, "")
 	require.Subset(t, want, []int64{e1, m2, e2})
 	require.Len(t, want, 4, "e1, m2, e2 and the room.activated milestone: %v", want)

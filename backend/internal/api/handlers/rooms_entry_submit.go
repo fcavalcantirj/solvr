@@ -162,8 +162,7 @@ func (h *RoomMessagesHandler) afterMessageCreated(ctx context.Context, room *mod
 	h.recordActivationMilestone(ctx, room)
 
 	if h.hubMgr != nil {
-		roomHub := h.hubMgr.GetOrCreate(ctx, hub.NewRoomID(room.ID))
-		roomHub.Broadcast(messageHubEvent(msg))
+		h.hubMgr.Publish(hub.NewRoomID(room.ID), messageHubEvent(msg))
 	}
 }
 

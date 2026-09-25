@@ -19,7 +19,17 @@ type subscribeCmd struct {
 	agentName string
 	card      *a2a.AgentCard
 	ch        chan<- RoomEvent
+	stream    bool
 	resp      chan error
+}
+
+// subscriber is one registered channel. A stream subscriber (an SSE connection) is
+// closed when its buffer is full instead of silently missing a frame: its client
+// resumes from the last frame it received (Last-Event-ID replay from the database), so
+// a slow stream costs a reconnect, never a hole, and never unbounded memory.
+type subscriber struct {
+	ch     chan<- RoomEvent
+	stream bool
 }
 
 // unsubscribeCmd is sent to the hub's command loop to remove a subscriber.
@@ -97,7 +107,7 @@ func NewRoomHub(id RoomID, _ *PresenceRegistry, logger *slog.Logger, maxSSEPerRo
 func (h *RoomHub) Run(ctx context.Context, registry *PresenceRegistry) {
 	// subscribers maps agentName -> buffered event channel.
 	// This map is ONLY touched inside this goroutine -- no external locking needed.
-	subscribers := make(map[string]chan<- RoomEvent)
+	subscribers := make(map[string]subscriber)
 
 	h.logger.Debug("hub started", "room", h.ID.String())
 
@@ -111,7 +121,7 @@ func (h *RoomHub) Run(ctx context.Context, registry *PresenceRegistry) {
 			}
 
 			// Register new subscriber.
-			subscribers[cmd.agentName] = cmd.ch
+			subscribers[cmd.agentName] = subscriber{ch: cmd.ch, stream: cmd.stream}
 			registry.Add(h.ID, cmd.agentName, cmd.card)
 			h.sseCount.Add(1)
 
@@ -123,30 +133,24 @@ func (h *RoomHub) Run(ctx context.Context, registry *PresenceRegistry) {
 				Payload:   cmd.card,
 				Timestamp: time.Now(),
 			}
-			for name, ch := range subscribers {
+			for name, sub := range subscribers {
 				if name == cmd.agentName {
 					continue
 				}
-				select {
-				case ch <- evt:
-				default:
-					// Slow consumer -- drop event rather than blocking the hub.
-					h.logger.Warn("subscriber channel full, dropping presence_join event",
-						"room", h.ID.String(), "target", name)
-				}
+				h.deliver(subscribers, registry, name, sub, evt)
 			}
 			// Emit to the SSE events channel (non-blocking).
 			h.emitToEvents(evt)
 			cmd.resp <- nil
 
 		case cmd := <-h.unsubscribe:
-			ch, ok := subscribers[cmd.agentName]
+			sub, ok := subscribers[cmd.agentName]
 			if !ok {
-				// Agent was already removed -- no-op.
+				// Agent was already removed (or its slow stream was closed) -- no-op.
 				break
 			}
 			delete(subscribers, cmd.agentName)
-			close(ch)
+			close(sub.ch)
 			registry.Remove(h.ID, cmd.agentName)
 			h.sseCount.Add(-1)
 
@@ -157,32 +161,22 @@ func (h *RoomHub) Run(ctx context.Context, registry *PresenceRegistry) {
 				AgentName: cmd.agentName,
 				Timestamp: time.Now(),
 			}
-			for _, remainingCh := range subscribers {
-				select {
-				case remainingCh <- evt:
-				default:
-					h.logger.Warn("subscriber channel full, dropping presence_leave event",
-						"room", h.ID.String())
-				}
+			for name, sub := range subscribers {
+				h.deliver(subscribers, registry, name, sub, evt)
 			}
 			h.emitToEvents(evt)
 
 		case cmd := <-h.broadcast:
 			// Fanout the message to all subscribers.
-			for name, ch := range subscribers {
-				select {
-				case ch <- cmd.event:
-				default:
-					h.logger.Warn("subscriber channel full, dropping message event",
-						"room", h.ID.String(), "target", name)
-				}
+			for name, sub := range subscribers {
+				h.deliver(subscribers, registry, name, sub, cmd.event)
 			}
 			h.emitToEvents(cmd.event)
 
 		case <-ctx.Done():
 			// Clean shutdown: close all subscriber channels so they can drain.
-			for _, ch := range subscribers {
-				close(ch)
+			for _, sub := range subscribers {
+				close(sub.ch)
 			}
 			h.sseCount.Store(0)
 			close(h.done)
@@ -211,6 +205,17 @@ func (h *RoomHub) Subscribe(agentName string, card *a2a.AgentCard) (<-chan RoomE
 	return ch, <-resp
 }
 
+// SubscribeStream subscribes a stream consumer (an SSE connection) under a unique name.
+// Unlike Subscribe, the returned channel is closed as soon as the consumer falls a full
+// buffer behind, so it never silently misses a frame: the consumer ends its stream and
+// the client resumes from its last delivered entry.
+func (h *RoomHub) SubscribeStream(name string) (<-chan RoomEvent, error) {
+	ch := make(chan RoomEvent, 64)
+	resp := make(chan error, 1)
+	h.subscribe <- subscribeCmd{agentName: name, ch: ch, stream: true, resp: resp}
+	return ch, <-resp
+}
+
 // Unsubscribe removes an agent from the room. The subscriber's channel is closed
 // by the hub goroutine. Callers should drain and discard the channel after calling Unsubscribe.
 func (h *RoomHub) Unsubscribe(agentName string) {
@@ -233,6 +238,28 @@ func (h *RoomHub) Events() <-chan RoomEvent {
 // Done returns a channel that is closed when the hub goroutine exits.
 func (h *RoomHub) Done() <-chan struct{} {
 	return h.done
+}
+
+// deliver hands evt to one subscriber without blocking the hub. When its buffer is full
+// a stream subscriber is closed and removed (its client resumes from its cursor); any
+// other subscriber misses the event. Runs only on the hub goroutine.
+func (h *RoomHub) deliver(subscribers map[string]subscriber, registry *PresenceRegistry, name string, sub subscriber, evt RoomEvent) {
+	select {
+	case sub.ch <- evt:
+		return
+	default:
+	}
+	if !sub.stream {
+		h.logger.Warn("subscriber channel full, dropping event",
+			"room", h.ID.String(), "target", name, "type", string(evt.Type))
+		return
+	}
+	delete(subscribers, name)
+	close(sub.ch)
+	registry.Remove(h.ID, name)
+	h.sseCount.Add(-1)
+	h.logger.Warn("stream fell behind; closed so its client resumes from its last entry",
+		"room", h.ID.String(), "target", name)
 }
 
 // emitToEvents sends an event to the non-subscriber events channel (non-blocking).

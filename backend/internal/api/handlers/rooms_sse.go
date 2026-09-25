@@ -187,7 +187,7 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 	if h.hubMgr != nil {
 		subscriberName := "_browser_" + uuid.New().String()[:8]
 		roomHub := h.hubMgr.GetOrCreate(r.Context(), hub.NewRoomID(room.ID))
-		sub, err := roomHub.Subscribe(subscriberName, nil)
+		sub, err := roomHub.SubscribeStream(subscriberName)
 		if err != nil {
 			// ErrRoomAtCapacity — per-room SSE limit reached (T-16-04).
 			http.Error(w, `{"error":{"code":"SERVICE_UNAVAILABLE","message":"room at capacity"}}`, http.StatusServiceUnavailable)
@@ -245,7 +245,10 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 		select {
 		case evt, ok := <-ch:
 			if !ok {
-				// Hub shut down or we were unsubscribed.
+				// Hub shut down, or this stream fell a full buffer behind and the hub closed
+				// it: ask the client to reconnect; it resumes after its Last-Event-ID.
+				fmt.Fprintf(w, "retry: 1000\n\n")
+				flusher.Flush()
 				return
 			}
 			if evt.Sequence > 0 && evt.Sequence <= lastSeq {

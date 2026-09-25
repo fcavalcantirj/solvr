@@ -18,7 +18,8 @@ type HubManager struct {
 	ctx           context.Context // long-lived context for hub goroutines
 	registry      *PresenceRegistry
 	logger        *slog.Logger
-	maxSSEPerRoom int // per-room SSE subscriber limit passed to each new RoomHub
+	maxSSEPerRoom int    // per-room SSE subscriber limit passed to each new RoomHub
+	relay         *relay // nil until EnableRelay; see relay.go
 }
 
 // NewHubManager creates an empty HubManager backed by the given PresenceRegistry.
@@ -60,6 +61,9 @@ func (m *HubManager) GetOrCreate(_ context.Context, id RoomID) *RoomHub {
 	}
 
 	h := NewRoomHub(id, m.registry, m.logger, m.maxSSEPerRoom)
+	if m.relay != nil {
+		m.relay.start(m.ctx, id)
+	}
 	m.hubs[id] = h
 	go h.Run(m.ctx, m.registry)
 	m.logger.Info("hub created", "room", id.String())

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -342,4 +343,36 @@ func TestBuildStaleLabel_SingularAndPlural(t *testing.T) {
 
 	many := buildStaleLabel([]string{"search unavailable", "activity unavailable"})
 	assert.Contains(t, many, "2 statistics sections")
+}
+
+func TestOverviewPreviews_StateTheRealParticipantCountBeyondTheShownNames(t *testing.T) {
+	names := make([]db.RoomParticipant, 0, 6)
+	for i := 0; i < 6; i++ {
+		names = append(names, db.RoomParticipant{Name: fmt.Sprintf("agent-%d", i), AuthorType: "agent", MessageCount: 1})
+	}
+	big := db.PreviewSource{
+		Room:             models.Room{Slug: "twenty-agents", DisplayName: "Twenty agents", LastActiveAt: time.Now()},
+		Participants:     names,
+		ParticipantCount: 20,
+	}
+	pair := db.PreviewSource{
+		Room:             models.Room{Slug: "two-agents", DisplayName: "Two agents", LastActiveAt: time.Now()},
+		Participants:     names[:2],
+		ParticipantCount: 2,
+	}
+	oneMore := db.PreviewSource{
+		Room:             models.Room{Slug: "seven-agents", DisplayName: "Seven agents", LastActiveAt: time.Now()},
+		Participants:     names,
+		ParticipantCount: 7,
+	}
+
+	section := buildOverviewPreviews([]db.PreviewSource{big, pair, oneMore}, []string{"twenty-agents", "two-agents", "seven-agents"})
+
+	require.Len(t, section.Rooms, 3)
+	assert.Len(t, section.Rooms[0].Participants, 6, "the card still lists a bounded set of names")
+	assert.Equal(t, 20, section.Rooms[0].ParticipantCount, "but states how many took part")
+	assert.Equal(t, "+14 more participants", section.Rooms[0].MoreParticipantsLabel)
+	assert.Equal(t, 2, section.Rooms[1].ParticipantCount)
+	assert.Empty(t, section.Rooms[1].MoreParticipantsLabel, "nothing hidden, nothing to say")
+	assert.Equal(t, "+1 more participant", section.Rooms[2].MoreParticipantsLabel)
 }

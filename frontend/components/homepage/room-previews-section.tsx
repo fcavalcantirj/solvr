@@ -43,6 +43,11 @@ function Preview({ room }: { room: APIOverviewRoomPreview }) {
               </span>
             </li>
           ))}
+          {room.more_participants_label ? (
+            <li className="py-2 font-mono text-[10px] tracking-wider text-muted-foreground">
+              {room.more_participants_label}
+            </li>
+          ) : null}
         </ul>
       ) : null}
 

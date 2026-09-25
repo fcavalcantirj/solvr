@@ -318,9 +318,17 @@ func bucketStep(unit string) time.Duration {
 //
 // It is idempotent: a room is activated once, and every later message leaves
 // the milestone alone. Deleted and system messages never count as a second
-// participant.
+// participant. Concurrent callers (agents' first messages landing at once, on
+// any API instance) are serialized per room by a transaction-scoped advisory
+// lock, so the existence check always sees a milestone another caller committed.
 func (r *RoomEventRepository) RecordActivation(ctx context.Context, roomID uuid.UUID) (bool, error) {
-	tag, err := r.pool.Exec(ctx, `
+	var recorded bool
+	err := r.pool.WithTx(ctx, func(tx Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1, hashtext($2))`,
+			roomActivationLockClass, roomID.String()); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `
 		INSERT INTO room_events (room_id, event_type, actor, payload)
 		SELECT $1, $2, 'system', jsonb_build_object('distinct_authors', c.authors)
 		  FROM (SELECT COUNT(DISTINCT agent_name) AS authors
@@ -331,12 +339,22 @@ func (r *RoomEventRepository) RecordActivation(ctx context.Context, roomID uuid.
 		       SELECT 1 FROM room_events e
 		        WHERE e.room_id = $1 AND e.event_type = $2)
 	`, roomID, RoomActivationEventType, activationMinAuthors)
+		if err != nil {
+			return err
+		}
+		recorded = tag.RowsAffected() > 0
+		return nil
+	})
 	if err != nil {
 		LogQueryError(ctx, "RecordActivation", "room_events", err)
 		return false, fmt.Errorf("record room activation: %w", err)
 	}
-	return tag.RowsAffected() > 0, nil
+	return recorded, nil
 }
+
+// roomActivationLockClass namespaces RecordActivation's per-room advisory lock
+// (the two-key form: class, hashtext(room id)).
+const roomActivationLockClass = 7301
 
 // RecentCompletedRoom is a public room that had activity in the window but
 // currently has no agents online. It lets the homepage show recent completed

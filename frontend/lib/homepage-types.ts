@@ -167,6 +167,8 @@ export interface APIOverviewRoomPreview {
   url: string;
   purpose: string;
   participants: APIOverviewPreviewParticipant[];
+  participant_count: number;
+  more_participants_label?: string;
   exchange: APIOverviewPreviewMessage[];
   message_count: number;
   message_count_label: string;

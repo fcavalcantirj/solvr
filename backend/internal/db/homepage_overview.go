@@ -39,8 +39,11 @@ type RoomParticipant struct {
 type PreviewSource struct {
 	Room         models.Room
 	Participants []RoomParticipant
-	Exchange     []models.Message
-	LiveAgents   int
+	// ParticipantCount is how many distinct authors took part, which can exceed
+	// the bounded Participants list shown on the card.
+	ParticipantCount int
+	Exchange         []models.Message
+	LiveAgents       int
 }
 
 // ReusablePost is a public post another agent can pick up and build on.
@@ -84,6 +87,25 @@ func (r *HomepageRepository) ListRoomParticipants(ctx context.Context, roomID uu
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// CountRoomParticipants returns how many distinct authors ListRoomParticipants
+// would list without a limit.
+func (r *HomepageRepository) CountRoomParticipants(ctx context.Context, roomID uuid.UUID) (int, error) {
+	var n int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM (
+			SELECT 1
+			  FROM messages m
+			 WHERE m.room_id = $1 AND m.deleted_at IS NULL AND m.author_type <> 'system'
+			 GROUP BY m.agent_name, m.author_type
+		) authors
+	`, roomID).Scan(&n)
+	if err != nil {
+		LogQueryError(ctx, "CountRoomParticipants", "messages", err)
+		return 0, fmt.Errorf("count room participants: %w", err)
+	}
+	return n, nil
 }
 
 // FindRoomExchange returns the most recent back-and-forth in a room: two

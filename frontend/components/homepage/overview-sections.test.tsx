@@ -117,6 +117,26 @@ describe('RoomPreviewsSection', () => {
       screen.queryByRole('link', { name: /Open the original message/ }),
     ).not.toBeInTheDocument();
   });
+
+  it('says how many participants the bounded name list leaves out, as the API words it', () => {
+    const crowded = {
+      ...OVERVIEW.previews,
+      rooms: [
+        {
+          ...OVERVIEW.previews.rooms[0],
+          participant_count: 20,
+          more_participants_label: '+18 more participants',
+        },
+      ],
+    };
+    render(<RoomPreviewsSection data={crowded} />);
+    expect(screen.getByText('+18 more participants')).toBeInTheDocument();
+  });
+
+  it('adds nothing when every participant is already listed', () => {
+    render(<RoomPreviewsSection data={OVERVIEW.previews} />);
+    expect(screen.queryByText(/more participant/)).not.toBeInTheDocument();
+  });
 });
 
 // ApiUsageSection grew a window selector, a series and its own measurement at

@@ -36,17 +36,21 @@ type OverviewPreviewMessage struct {
 
 // OverviewRoomPreview is one editorially selected room.
 type OverviewRoomPreview struct {
-	Slug              string                       `json:"slug"`
-	DisplayName       string                       `json:"display_name"`
-	URL               string                       `json:"url"`
-	Purpose           string                       `json:"purpose"`
-	Participants      []OverviewPreviewParticipant `json:"participants"`
-	Exchange          []OverviewPreviewMessage     `json:"exchange"`
-	MessageCount      int                          `json:"message_count"`
-	MessageCountLabel string                       `json:"message_count_label"`
-	LastActivityLabel string                       `json:"last_activity_label"`
-	LiveAgentCount    int                          `json:"live_agent_count"`
-	SelectedReason    string                       `json:"selected_reason"`
+	Slug         string                       `json:"slug"`
+	DisplayName  string                       `json:"display_name"`
+	URL          string                       `json:"url"`
+	Purpose      string                       `json:"purpose"`
+	Participants []OverviewPreviewParticipant `json:"participants"`
+	// ParticipantCount is how many took part; Participants is a bounded list of
+	// names, and MoreParticipantsLabel says how many of them it leaves out.
+	ParticipantCount      int                      `json:"participant_count"`
+	MoreParticipantsLabel string                   `json:"more_participants_label,omitempty"`
+	Exchange              []OverviewPreviewMessage `json:"exchange"`
+	MessageCount          int                      `json:"message_count"`
+	MessageCountLabel     string                   `json:"message_count_label"`
+	LastActivityLabel     string                   `json:"last_activity_label"`
+	LiveAgentCount        int                      `json:"live_agent_count"`
+	SelectedReason        string                   `json:"selected_reason"`
 }
 
 // OverviewPreviews is the editorial previews section.
@@ -154,23 +158,34 @@ func buildOneRoomPreview(source db.PreviewSource) OverviewRoomPreview {
 		exchange = append(exchange, msg)
 	}
 
+	participantCount := source.ParticipantCount
+	if participantCount < len(participants) {
+		participantCount = len(participants)
+	}
+	moreLabel := ""
+	if hidden := participantCount - len(participants); hidden > 0 {
+		moreLabel = "+" + pluralise(hidden, "more participant", "more participants")
+	}
+
 	reason := "Selected by the Solvr team"
 	if room.Slug == DefaultCollabExampleRoomSlug {
 		reason = "The coding example this homepage is built around"
 	}
 
 	return OverviewRoomPreview{
-		Slug:              room.Slug,
-		DisplayName:       room.DisplayName,
-		URL:               "/rooms/" + room.Slug,
-		Purpose:           purpose,
-		Participants:      participants,
-		Exchange:          exchange,
-		MessageCount:      room.MessageCount,
-		MessageCountLabel: pluralise(room.MessageCount, "message", "messages"),
-		LastActivityLabel: overviewRelativeTime(room.LastActiveAt),
-		LiveAgentCount:    source.LiveAgents,
-		SelectedReason:    reason,
+		Slug:                  room.Slug,
+		DisplayName:           room.DisplayName,
+		URL:                   "/rooms/" + room.Slug,
+		Purpose:               purpose,
+		Participants:          participants,
+		ParticipantCount:      participantCount,
+		MoreParticipantsLabel: moreLabel,
+		Exchange:              exchange,
+		MessageCount:          room.MessageCount,
+		MessageCountLabel:     pluralise(room.MessageCount, "message", "messages"),
+		LastActivityLabel:     overviewRelativeTime(room.LastActiveAt),
+		LiveAgentCount:        source.LiveAgents,
+		SelectedReason:        reason,
 	}
 }
 
@@ -195,6 +210,11 @@ func (h *HomepageOverviewHandler) loadPreviewSources(ctx context.Context) []db.P
 			source.Participants = participants
 		} else {
 			slog.Error("homepage previews: participants failed", "error", err, "slug", slug)
+		}
+		if count, err := h.homeRepo.CountRoomParticipants(ctx, room.ID); err == nil {
+			source.ParticipantCount = count
+		} else {
+			slog.Error("homepage previews: participant count failed", "error", err, "slug", slug)
 		}
 
 		if exchange, err := h.homeRepo.FindRoomExchange(ctx, room.ID, 20); err == nil {

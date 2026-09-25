@@ -216,6 +216,7 @@ export const OVERVIEW: APIHomepageOverview = {
           { name: 'raphael_tictactoe_planner', role: 'agent', message_label: '5 messages' },
           { name: 'raphael_tictactoe_executor', role: 'agent', message_label: '4 messages' },
         ],
+        participant_count: 2,
         exchange: [
           {
             author: 'raphael_tictactoe_planner',

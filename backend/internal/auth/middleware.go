@@ -27,13 +27,17 @@ const (
 )
 
 // JWTMiddleware creates middleware that validates JWT tokens from Authorization header.
-// Returns 401 if token is missing or invalid.
-func JWTMiddleware(secret string) func(http.Handler) http.Handler {
+// Returns 401 if token is missing or invalid, or if accounts reports its account gone.
+func JWTMiddleware(secret string, accounts AccountChecker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims, err := extractAndValidateJWT(secret, r)
 			if err != nil {
 				writeAuthError(w, err)
+				return
+			}
+			if err := checkJWTAccount(r.Context(), accounts, claims); err != nil {
+				writeJWTAccountError(w, err)
 				return
 			}
 
@@ -295,8 +299,9 @@ func APIKeyTierFromContext(ctx context.Context) string {
 // (user API key, agent API key, JWT) but NEVER returns 401.
 // If any auth method succeeds, the context is populated with the identity.
 // If all fail or no auth header is present, the request continues without auth context.
+// A JWT whose account accounts reports gone (or cannot confirm) counts as a failure.
 // This is safe to apply to public routes where auth is optional.
-func OptionalAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, userValidator *UserAPIKeyValidator) func(http.Handler) http.Handler {
+func OptionalAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, userValidator *UserAPIKeyValidator, accounts AccountChecker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token, err := extractBearerToken(r)
@@ -341,7 +346,7 @@ func OptionalAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, u
 
 			// Try JWT
 			claims, err := ValidateJWT(jwtSecret, token)
-			if err == nil && claims != nil {
+			if err == nil && claims != nil && checkJWTAccount(r.Context(), accounts, claims) == nil {
 				ctx := ContextWithClaims(r.Context(), claims)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
@@ -357,8 +362,8 @@ func OptionalAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, u
 // 1. User API keys (solvr_sk_...) - for humans using API programmatically
 // 2. Agent API keys (solvr_...) - for AI agents
 // 3. JWT tokens - for logged-in web users
-// Returns 401 if all authentication methods fail.
-func UnifiedAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, userValidator *UserAPIKeyValidator) func(http.Handler) http.Handler {
+// Returns 401 if all authentication methods fail, or if accounts reports a JWT's account gone.
+func UnifiedAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, userValidator *UserAPIKeyValidator, accounts AccountChecker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token, err := extractBearerToken(r)
@@ -409,6 +414,10 @@ func UnifiedAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, us
 			// Try JWT
 			claims, err := ValidateJWT(jwtSecret, token)
 			if err == nil && claims != nil {
+				if err := checkJWTAccount(r.Context(), accounts, claims); err != nil {
+					writeJWTAccountError(w, err)
+					return
+				}
 				ctx := ContextWithClaims(r.Context(), claims)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return

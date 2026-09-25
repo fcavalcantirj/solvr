@@ -7,11 +7,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 )
 
 // groqThrottle sleeps 2 seconds to respect GROQ's 30 RPM rate limit.
@@ -36,6 +41,44 @@ func setupTestRouter(t *testing.T) *chi.Mux {
 	}
 	t.Cleanup(func() { pool.Close() })
 	return NewRouter(pool, nil, nil)
+}
+
+// createLiveTestUser creates a live account with role through the repository every signup
+// uses and returns its id and a JWT for it, removing the account (and its API keys) when the
+// test ends. Authentication accepts a JWT only while its account is live, so a JWT for an
+// invented user id is refused with 401. Unique fields come from a fresh UUID, so rows other
+// tests leave in a shared test database cannot collide.
+func createLiveTestUser(t *testing.T, pool *db.Pool, role string) (userID, jwt string) {
+	t.Helper()
+	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")
+	username := "stc_" + suffix[:12]
+	user, err := db.NewUserRepository(pool).Create(context.Background(), &models.User{
+		Username:       username,
+		DisplayName:    "Live Test User",
+		Email:          username + "@test.solvr.dev",
+		AuthProvider:   models.AuthProviderGitHub,
+		AuthProviderID: "stc_" + suffix,
+		Role:           role,
+	})
+	require.NoError(t, err, "create test user")
+	jwt, err = auth.GenerateJWT("test-jwt-secret-32-chars-long!!", user.ID, user.Email, role, time.Hour)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ctx := context.Background()
+		pool.Exec(ctx, "DELETE FROM user_api_keys WHERE user_id = $1", user.ID) //nolint:errcheck
+		pool.Exec(ctx, "DELETE FROM users WHERE id = $1", user.ID)              //nolint:errcheck
+	})
+	return user.ID, jwt
+}
+
+// liveTestUserJWT is createLiveTestUser for tests that hold only a router.
+func liveTestUserJWT(t *testing.T, role string) string {
+	t.Helper()
+	pool, err := db.NewPool(context.Background(), os.Getenv("DATABASE_URL"))
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	_, jwt := createLiveTestUser(t, pool, role)
+	return jwt
 }
 
 // waitForPostOpen polls GET /v1/posts/:id until the post status is "open" (moderation approved).

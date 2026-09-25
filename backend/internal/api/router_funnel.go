@@ -37,7 +37,7 @@ func mountFunnelRoutes(r chi.Router, pool *db.Pool) {
 	}
 	apiKeyValidator := auth.NewAPIKeyValidator(db.NewAgentRepository(pool))
 	userAPIKeyValidator := auth.NewUserAPIKeyValidator(db.NewUserAPIKeyRepository(pool))
-	optionalAuth := auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator)
+	optionalAuth := auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, db.NewUserRepository(pool))
 
 	r.With(optionalAuth).Post("/v1/analytics/funnel", h.IngestBrowserEvent)
 }

@@ -2955,3 +2955,173 @@ REMAINING FOR idx 74 (passes STAYS false):
 
 UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on prod via the
   admin query route, then deploys). No migration in this slice.
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 14 of N. Step 3 status-code matrix, part 2: "401 for invalid authentication". A deleted
+account's credentials must stop authenticating (SPEC Part 20.2: "User cannot log in after
+deletion"; 20.3 for agents).
+================================================================================
+
+TASK SELECTION: idx 24 acceptance still needs idx 75/78 pieces; idx 52/53, 68 and 73's
+  remainder are gated on the knowledge cutover idx 93; idx 67 needs a test deployment.
+  idx 74 stays the first buildable false task. Took slice 13's "deleted-account JWTs" item.
+
+SPIKE FIRST [REAL] (throwaway backend/internal/api/zz_spike14_test.go, deleted before commit;
+  table in /tmp/solvr_idx74_s14_spike.tsv): live user + JWT, GET every no-param route, soft-
+  delete the user (UPDATE users SET deleted_at = NOW()), GET again with the same JWT.
+  - The deleted user's JWT still authenticated: /v1/heartbeat, /v1/me/posts, /v1/notifications,
+    /v1/users/me/api-keys ... 200; /v1/me, /v1/me/storage, /v1/users/me/referral 500; and
+    POST /v1/problems 201 (a deleted account could still publish).
+  - Also GET lists on an absent parent answer 200 (posts/{id}/replies, posts/{id}/rooms,
+    users/{id}/agents|badges, agents/{id}/badges|checkpoints): NOT this slice, see REMAINING.
+  ROOT CAUSES [REAL, code read]: (1) JWTMiddleware / UnifiedAuthMiddleware /
+    OptionalAuthMiddleware trust the signature alone; nothing looks at the account. (2)
+    UserAPIKeyRepository.GetUserByAPIKey joins users without `u.deleted_at IS NULL` (both the
+    sha256 and the bcrypt-fallback query), and DELETE /v1/me revokes no user API keys. (3)
+    Agent keys were already fine: the agents key lookups filter deleted_at.
+  /v1/auth/refresh (OAuthHandlers.RefreshToken, 500 for a deleted user) is NOT mounted in
+    router*.go [REAL grep], so it is not a live path; left alone.
+
+DIFF ([REAL] git status --porcelain / git diff --numstat: 10 modified +98/-75, 5 new):
+  Production:
+  A backend/internal/auth/accounts.go (55): AccountChecker interface (IsActiveUser); a JWT whose
+    account is gone -> AuthError UNAUTHORIZED "account no longer exists"; a failed lookup ->
+    503 SERVICE_UNAVAILABLE "could not verify the account, retry shortly" (a transient outage
+    must not read as a bad credential); nil checker = signature alone (old behavior).
+  M backend/internal/auth/middleware.go (+15/-6): JWTMiddleware(secret, accounts),
+    UnifiedAuthMiddleware(..., accounts): 401 / 503 as above; OptionalAuthMiddleware(...,
+    accounts): a gone or unverifiable account is an anonymous caller (keeps its never-401
+    contract). CombinedAuthMiddleware and OptionalJWTMiddleware are unchanged: [REAL grep]
+    neither is mounted anywhere in production. SSE ?access_token= is promoted to the header
+    (sse_access_token.go) and so goes through the checked middlewares.
+  A backend/internal/db/users_active.go (21): UserRepository.IsActiveUser — EXISTS(id = $1 AND
+    deleted_at IS NULL); 22P02 (not a UUID, or empty) -> false, nil.
+  M backend/internal/db/user_api_keys.go (+3/-2): both GetUserByAPIKey queries add
+    `AND u.deleted_at IS NULL`; doc comment says so.
+  M backend/internal/api/router.go (+11/-9, 1239 -> 1241 lines, a pre-existing >800 violator):
+    `accounts := db.NewUserRepository(pool)` in mountV1Routes and in the rooms block, passed to
+    all 9 JWT-accepting mounts (claim JWTMiddleware, 6 Optional, 2 Unified incl. rooms).
+  M backend/internal/api/router_funnel.go (+1/-1): the funnel's OptionalAuthMiddleware too.
+  Tests:
+  A backend/internal/auth/accounts_test.go (153): TestRequiredAuth_JWTMustNameALiveAccount
+    (JWT + Unified x live/gone/lookup-fails: 200 / 401 UNAUTHORIZED / 503, handler never runs
+    unless live, exactly one lookup), TestOptionalAuth_JWTOfAGoneAccountIsAnonymous,
+    TestJWTMiddlewares_NilAccountCheckerTrustsTheSignature.
+  A backend/internal/db/users_active_test.go (144): TestUserRepository_IsActiveUser (live,
+    absent, malformed, empty, soft-deleted), TestUserAPIKeyRepository_GetUserByAPIKey_
+    DeletedAccount (sha256 path and bcrypt-fallback path: found while live, nothing once the
+    user is soft-deleted). Own UUID-suffixed fixtures + cleanup, no table wipes.
+  A backend/internal/api/router_deleted_account_test.go (138, real NewRouter with hub):
+    TestDeletedAccount_CredentialsStopAuthenticating — live user makes a user API key
+    through POST /v1/users/me/api-keys and a private room; a registered agent; all three
+    credentials GET /v1/me 200 while live; then DELETE /v1/agents/me and DELETE /v1/me through
+    the API. Subtests: (1) 7 required routes x 3 deleted credentials (+ POST /v1/agents/claim
+    with the JWT) -> 401 UNAUTHORIZED|INVALID_API_KEY with the envelope request_id; (2) the
+    deleted owner reads its archived private room (/v1/rooms/{slug}, /messages, /members) with
+    the same status as an anonymous caller, never 200; (3) chi.Walk over EVERY mounted route
+    (minus /admin and /stream, >150 routes, absent UUIDs for params): the deleted credential's
+    status must equal that of a never-issued credential of the same kind (JWT signed with
+    another secret, random solvr_sk_ key, random solvr_ key).
+  M backend/internal/api/router_test_helpers_test.go (+43): createLiveTestUser(t, pool, role)
+    (UserRepository.Create, UUID-suffixed, JWT, cleanup incl. user_api_keys) and
+    liveTestUserJWT(t, role) for tests that hold only a router.
+  M backend/internal/api/router_status_contract_test.go (+12/-17): statusContractIdentities
+    now uses createLiveTestUser + new statusContractAgent; its raw-SQL user INSERT (which left
+    avatar_url/bio NULL, unlike every real signup) is gone. Same identities, same assertions.
+  M backend/internal/auth/middleware_test.go (+3/-3): the 3 existing call sites pass a nil
+    checker (`JWTMiddleware(secret, nil)` etc.); no assertion touched.
+  M router_content_test.go (+3/-13), router_user_endpoints_test.go (+5/-20),
+    router_rooms_manage_test.go (+2/-4): see CHANGED TESTS. Helpers createTestJWTToken and
+    createUserEndpointsTestJWT removed (their only callers now use the live-user helpers).
+  No migration. Frontend untouched. spec.json unchanged. SPEC.md unchanged (step 6 docs).
+
+CHANGED TESTS (fixture only; every assertion kept):
+  (a) TestUserEndpoints_NotificationsWithJWT, TestUserEndpoints_APIKeysListWithJWT
+      (router_user_endpoints_test.go), TestRoomRoutes_UpdateRoom_Admin
+      (router_rooms_manage_test.go), TestTypeSpecificListEndpoints (router_content_test.go).
+  (b) they minted JWTs for accounts that do not exist: "00000000-0000-0000-0000-000000000001",
+      a random uuid.New() admin, and "user-123"; the first three asserted 200 (`expected status
+      200, got %d`, `assert.Equal(t, http.StatusOK, resp.StatusCode)`) and PASSED before this
+      slice; TestTypeSpecificListEndpoints already FAILED (500 "failed to create post", the
+      non-UUID subject) in /tmp/solvr_idx74_s13_full.log.
+  (c) with the account check a JWT for an invented user is 401 ([TEST]
+      /tmp/solvr_idx74_s14_fakesubject.log: all 4 FAIL "account no longer exists"); the tests
+      now use liveTestUserJWT / createLiveTestUser (admin role for the admin case), so they
+      still prove the same thing with a real account. The 401 itself is covered by
+      TestRequiredAuth_JWTMustNameALiveAccount and TestDeletedAccount_*.
+  (d) [TEST] /tmp/solvr_idx74_s14_green2.log -race: the 3 PASS; TestTypeSpecificListEndpoints
+      PASS at top level with problem + idea subtests PASS and the question subtest SKIP through
+      its own pre-existing GROQ-moderation skip ("did not become open within 35s").
+
+TDD / EVIDENCE (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, the local
+  isolated test DB in the solvr-postgres container):
+  [TEST] RED /tmp/solvr_idx74_s14_red.log: all 3 subtests FAIL — GET /v1/me with the deleted
+    JWT 500 INTERNAL_ERROR; the deleted owner read the archived private room 200; the walk
+    found 173 answers where a deleted human JWT or user API key did better than a never-issued
+    one (14 x 200, 3 x 500, 3 x 403, 25 x 400, 42 x 404 per kind). Deleted agent key: 0
+    mismatches (already correct, now pinned). (A first RED attempt failed earlier on my own
+    fixture: raw-SQL user with NULL avatar_url made the user API key lookup scan fail — fixed
+    by creating users through UserRepository.Create.)
+  [TEST] GREEN -race -v: /tmp/solvr_idx74_s14_green_auth.log (internal/auth, 150 PASS lines,
+    0 FAIL, 0 SKIP, incl. the 3 new tests + 12 subtests); /tmp/solvr_idx74_s14_green_db.log
+    (2 new tests + 7 subtests PASS, 0 SKIP); /tmp/solvr_idx74_s14_green_api.log (TestDeleted
+    Account_* 3/3 subtests, both TestStatusContract_* PASS, 0 SKIP).
+  [REAL] mutation 1: `u.deleted_at IS NULL` removed from the sha256 query -> db test
+    (indexed subtest) and API test (401 subtest + walk, user API key rows) FAIL
+    (/tmp/solvr_idx74_s14_mut1_{db,api}.log); file restored from a copy, grep count 2.
+    mutation 2: Unified's account check removed -> accounts_test Unified rows FAIL and all 3
+    API subtests FAIL (/tmp/solvr_idx74_s14_mut2_{auth,api}.log); restored, grep count 3.
+    mutation 3: rooms optionalAuthMW given a nil checker -> the private-room subtest FAIL
+    (/tmp/solvr_idx74_s14_mut3_api.log); restored, line re-printed.
+  [REAL] go build ./... ok; go vet ./... clean (all test packages compile); gofmt clean on every
+    touched file except router_test_helpers_test.go, which was already not gofmt-clean at HEAD
+    (waitForPostOpen's inline interface), left as is.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 -> /tmp/solvr_idx74_s14_full.log (one run; a
+  first start was stopped within a minute because the spike file was still in the tree:
+  /tmp/solvr_idx74_s14_full_aborted.log, then the spike was deleted and the run restarted).
+  FAIL only in the pre-existing set. Unique top-level --- FAIL names (/tmp/s14_failnames.sh,
+  same extraction gives 76 on /tmp/solvr_idx74_s13_full.log): 77 now; 1 gone
+  (TestTypeSpecificListEndpoints, fixture fixed above), 2 back that slice 13 listed as gone
+  data-state flakes, both in code this slice did not touch:
+  - TestReputation_CrossEndpointConsistency: "List error = can't scan into dest[3]: cannot scan
+    NULL into *string" (UserRepository.List, users.avatar_url NULL). [REAL] psql: the 2 NULL
+    rows (usernames bf152828, fxhf15281731594) were created 15:28:17/15:28:28 local during this
+    full run by db fixtures (rooms_backfill_test.go family), not by this slice's tests, which
+    now create users through UserRepository.Create.
+  - TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring: homepage_search_test.go:353
+    expected 1017, actual 973 (shared-DB search_queries window drift; db-level test, no auth).
+  check-file-size.sh (/tmp/solvr_idx74_s14_filesize.log): same 36 violations; router.go
+    1239 -> 1241 (already a violator); every new file under 160 lines.
+
+BEHAVIOR CHANGES (v0, for step 6 docs): a JWT whose account is soft-deleted or absent is 401
+  UNAUTHORIZED "account no longer exists" on every route that requires authentication
+  (including POST /v1/agents/claim) and an anonymous caller where authentication is optional;
+  if the account lookup itself fails the required routes answer 503 SERVICE_UNAVAILABLE. The
+  user API keys of a soft-deleted account are 401 INVALID_API_KEY. Deleted agent keys were
+  already refused. One extra primary-key lookup per JWT-authenticated request.
+
+OUT OF SCOPE, FOUND HERE (not fixed):
+  - DELETE /v1/me still leaves the account's user_api_keys rows un-revoked (they no longer
+    authenticate, but an admin recovery of the account would bring them back live).
+  - POST /v1/users/me/api-keys with a JWT for an absent user was a 500 FK failure; now
+    unreachable (401 first).
+  - Test fixtures that INSERT users by raw SQL leave avatar_url/bio NULL (createRoomTestUser,
+    rooms_backfill fixtures); UserRepository.List and GetUserByAPIKey cannot scan those rows.
+
+REMAINING FOR idx 74 (passes STAYS false):
+  - step 3 remainder: 404 on the absent-parent lists above; 401 for invalid (not deleted)
+    credentials on optional-auth routes (pinned today by TestOptionalAuthMiddleware's
+    never-401 contract; needs a frontend check for expired JWTs on public pages);
+    400/409/429 rows in the contract file.
+  - step 5: [UNVERIFIED, not run] claim atomicity (link, bonus, badge, MarkUsed are 4
+    statements).
+  - step 6: OpenAPI contract (openapi_paths.go / openapi_schemas.go already over 800 lines ->
+    split first): Idempotency-Key, Idempotent-Replayed, the 409 codes, error envelope, CORS,
+    credential transport, size limits, stream resume, timeouts, If-Match/ETag, the 404 rules
+    and the deleted-account 401/503 rules above.
+
+UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on prod via the
+  admin query route, then deploys). No migration in this slice.

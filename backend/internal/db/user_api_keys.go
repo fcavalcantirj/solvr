@@ -205,6 +205,7 @@ func (r *UserAPIKeyRepository) scanUserAPIKeyFromRows(rows pgx.Rows) (*models.Us
 }
 
 // GetUserByAPIKey validates a plain text API key and returns the associated user and key.
+// Keys of a soft-deleted account match nothing: the account can no longer authenticate.
 // Uses SHA256 for O(1) indexed lookup. Falls back to O(n) bcrypt scan for keys
 // that haven't been backfilled yet, and lazy-backfills their SHA256 on match.
 // Returns nil, nil, nil if no matching key is found.
@@ -232,7 +233,7 @@ func (r *UserAPIKeyRepository) getUserByKeySHA256(ctx context.Context, keySHA256
 		       u.avatar_url, u.bio, u.role, u.created_at, u.updated_at
 		FROM user_api_keys k
 		JOIN users u ON k.user_id = u.id
-		WHERE k.key_sha256 = $1 AND k.revoked_at IS NULL
+		WHERE k.key_sha256 = $1 AND k.revoked_at IS NULL AND u.deleted_at IS NULL
 	`
 
 	key := &models.UserAPIKey{}
@@ -270,7 +271,7 @@ func (r *UserAPIKeyRepository) getUserByKeyBcryptFallback(ctx context.Context, p
 		       u.avatar_url, u.bio, u.role, u.created_at, u.updated_at
 		FROM user_api_keys k
 		JOIN users u ON k.user_id = u.id
-		WHERE k.revoked_at IS NULL AND k.key_sha256 IS NULL
+		WHERE k.revoked_at IS NULL AND k.key_sha256 IS NULL AND u.deleted_at IS NULL
 	`
 
 	rows, err := r.pool.Query(ctx, query)

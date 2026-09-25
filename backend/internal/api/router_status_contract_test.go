@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/hub"
+	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -47,29 +47,24 @@ func newStatusContractServer(t *testing.T) (*httptest.Server, *chi.Mux, *db.Pool
 }
 
 // statusContractIdentities returns an anonymous caller, an agent API key and a human JWT,
-// removing the agent and the human when the test ends. The human's unique fields come from
-// a fresh UUID, so rows other tests leave in a shared test database cannot collide.
+// removing the agent and the human when the test ends.
 func statusContractIdentities(t *testing.T, ts *httptest.Server, pool *db.Pool) map[string]string {
 	t.Helper()
-	userID := uuid.NewString()
-	suffix := strings.ReplaceAll(userID, "-", "")
-	username := "stc_" + suffix[:12]
-	email := username + "@test.solvr.dev"
-	_, err := pool.Exec(context.Background(),
-		`INSERT INTO users (id, username, display_name, email, auth_provider, auth_provider_id, role, referral_code)
-		 VALUES ($1, $2, 'Status Contract User', $3, 'test', $4, 'user', $5)`,
-		userID, username, email, userID, strings.ToUpper(suffix[12:20]))
-	require.NoError(t, err, "create test user")
-	jwt, err := auth.GenerateJWT(roomTestJWTSecret, userID, email, "user", time.Hour)
-	require.NoError(t, err)
-	agentID, agentKey := registerRoomTestAgent(t, ts)
+	_, jwt := createLiveTestUser(t, pool, models.UserRoleUser)
+	_, agentKey := statusContractAgent(t, ts, pool)
+	return map[string]string{"anonymous": "", "agent key": agentKey, "human JWT": jwt}
+}
+
+// statusContractAgent registers an agent through the API and removes it when the test ends.
+func statusContractAgent(t *testing.T, ts *httptest.Server, pool *db.Pool) (agentID, agentKey string) {
+	t.Helper()
+	agentID, agentKey = registerRoomTestAgent(t, ts)
 	t.Cleanup(func() {
 		ctx := context.Background()
 		pool.Exec(ctx, "DELETE FROM claim_tokens WHERE agent_id = $1", agentID) //nolint:errcheck
 		pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", agentID)             //nolint:errcheck
-		pool.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)               //nolint:errcheck
 	})
-	return map[string]string{"anonymous": "", "agent key": agentKey, "human JWT": jwt}
+	return agentID, agentKey
 }
 
 type statusContractAnswer struct {

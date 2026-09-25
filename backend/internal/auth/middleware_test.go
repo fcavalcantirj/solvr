@@ -79,7 +79,7 @@ func TestJWTMiddleware(t *testing.T) {
 			})
 
 			// Create the middleware
-			middleware := JWTMiddleware(secret)(nextHandler)
+			middleware := JWTMiddleware(secret, nil)(nextHandler)
 
 			// Create request
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -584,7 +584,7 @@ func TestUnifiedAuthMiddleware(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			middleware := UnifiedAuthMiddleware(secret, agentValidator, userValidator)(nextHandler)
+			middleware := UnifiedAuthMiddleware(secret, agentValidator, userValidator, nil)(nextHandler)
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			if tt.authHeader != "" {
@@ -733,7 +733,7 @@ func TestOptionalAuthMiddleware(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			middleware := OptionalAuthMiddleware(secret, agentValidator, userValidator)(nextHandler)
+			middleware := OptionalAuthMiddleware(secret, agentValidator, userValidator, nil)(nextHandler)
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			if tt.authHeader != "" {

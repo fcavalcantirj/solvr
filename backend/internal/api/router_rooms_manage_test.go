@@ -11,9 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
-	"github.com/google/uuid"
+	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -221,8 +220,7 @@ func TestRoomRoutes_UpdateRoom_Admin(t *testing.T) {
 	_, jwt := createRoomTestUser(t, pool)
 	slug, _ := createTestRoomWithToken(t, ts, jwt)
 
-	adminJWT, err := auth.GenerateJWT(roomTestJWTSecret, uuid.New().String(), "admin@test.solvr.dev", "admin", time.Hour)
-	require.NoError(t, err)
+	_, adminJWT := createLiveTestUser(t, pool, models.UserRoleAdmin)
 
 	resp := doRoomRequest(t, "PATCH", ts.URL+"/v1/rooms/"+slug, `{"display_name":"Renamed by Admin"}`, adminJWT)
 	defer resp.Body.Close()

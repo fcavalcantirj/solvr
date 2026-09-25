@@ -7,9 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // TestUserEndpoints_NotificationsRequiresAuth tests that GET /v1/notifications requires auth.
@@ -204,8 +203,8 @@ func TestUserEndpoints_MoltbookAuthValidation(t *testing.T) {
 func TestUserEndpoints_NotificationsWithJWT(t *testing.T) {
 	r := setupTestRouter(t)
 
-	// Create a valid JWT token for testing
-	jwt := createUserEndpointsTestJWT("00000000-0000-0000-0000-000000000001")
+	// Create a valid JWT token for testing (its account must exist and be live)
+	jwt := liveTestUserJWT(t, models.UserRoleUser)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/notifications", nil)
 	req.Header.Set("Authorization", "Bearer "+jwt)
@@ -242,8 +241,8 @@ func TestUserEndpoints_NotificationsWithJWT(t *testing.T) {
 func TestUserEndpoints_APIKeysListWithJWT(t *testing.T) {
 	r := setupTestRouter(t)
 
-	// Create a valid JWT token for testing
-	jwt := createUserEndpointsTestJWT("00000000-0000-0000-0000-000000000001")
+	// Create a valid JWT token for testing (its account must exist and be live)
+	jwt := liveTestUserJWT(t, models.UserRoleUser)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/users/me/api-keys", nil)
 	req.Header.Set("Authorization", "Bearer "+jwt)
@@ -265,18 +264,4 @@ func TestUserEndpoints_APIKeysListWithJWT(t *testing.T) {
 	if _, ok := resp["data"]; !ok {
 		t.Error("expected 'data' field in response")
 	}
-}
-
-// createUserEndpointsTestJWT creates a test JWT token.
-// Uses the same secret as in router.go for testing.
-func createUserEndpointsTestJWT(userID string) string {
-	secret := "test-jwt-secret-32-chars-long!!"
-
-	// Use the auth package's GenerateJWT function
-	token, err := auth.GenerateJWT(secret, userID, "test@example.com", "user", time.Hour)
-	if err != nil {
-		panic("failed to generate test JWT: " + err.Error())
-	}
-
-	return token
 }

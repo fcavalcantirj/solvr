@@ -229,11 +229,12 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 		apiKeyValidator := auth.NewAPIKeyValidator(agentRepo)
 		userAPIKeyRepo := db.NewUserAPIKeyRepository(pool)
 		userAPIKeyValidator := auth.NewUserAPIKeyValidator(userAPIKeyRepo)
-		authMW := auth.UnifiedAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator)
+		accounts := db.NewUserRepository(pool)
+		authMW := auth.UnifiedAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts)
 		// Optional auth for public read routes: identifies the caller (agent/human)
 		// without rejecting anonymous requests, so the RoomAccessGuard can enforce
 		// closed-room membership while public rooms stay open.
-		optionalAuthMW := auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator)
+		optionalAuthMW := auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts)
 		mountRoomRoutes(r, pool, hubMgr, registry, authMW, optionalAuthMW)
 	}
 
@@ -518,6 +519,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	// Create API key validator for agent authentication
 	// The agentRepo implements auth.AgentDB interface with GetAgentByAPIKeyHash
 	apiKeyValidator := auth.NewAPIKeyValidator(agentRepo)
+	accounts := db.NewUserRepository(pool) // a JWT authenticates only while its account is live
 
 	// Create user API key validator for human programmatic access
 	// userAPIKeysRepo implements auth.UserAPIKeyDB interface when backed by db.UserAPIKeyRepository
@@ -543,7 +545,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// SECURE agent claiming endpoint (requires JWT auth - humans only)
 		// POST /v1/agents/claim - claim agent with token from request body
 		r.Group(func(r chi.Router) {
-			r.Use(auth.JWTMiddleware(jwtSecret))
+			r.Use(auth.JWTMiddleware(jwtSecret, accounts))
 			r.Post("/agents/claim", agentsHandler.ClaimAgentWithToken)
 		})
 
@@ -582,7 +584,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// GET /v1/search - search the knowledge base (public access per SPEC.md Part 5.6)
 		// OptionalAuth: never returns 401, but populates context for analytics identity
 		r.Group(func(r chi.Router) {
-			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
+			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
 			r.Get("/search", searchHandler.Search)
 		})
 
@@ -654,7 +656,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// Per SPEC.md Part 5.6: GET /v1/posts - list posts (no auth required, optional auth for user_vote)
 		// OptionalAuthMiddleware parses auth if present (for user_vote in response) but never returns 401
 		r.Group(func(r chi.Router) {
-			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
+			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
 			r.Get("/posts", postsHandler.List)
 			// Per SPEC.md Part 5.6: GET /v1/posts/:id - single post (no auth required, optional auth for user_vote)
 			r.Get("/posts/{id}", postsHandler.Get)
@@ -748,13 +750,13 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 		// Blog endpoints (PRD-v5: public reads with optional auth for user_vote)
 		r.Group(func(r chi.Router) {
-			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
+			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
 			r.Get("/blog", blogHandler.List)
 		})
 		r.Get("/blog/featured", blogHandler.GetFeatured)
 		r.Get("/blog/tags", blogHandler.ListTags)
 		r.Group(func(r chi.Router) {
-			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
+			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
 			r.Get("/blog/{slug}", blogHandler.GetBySlug)
 		})
 		r.Post("/blog/{slug}/view", blogHandler.RecordView)
@@ -763,7 +765,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// caller's identity reaches findProblem/findQuestion/findIdea and it sees its OWN
 		// private posts here too (anonymous callers still see public-only). Never 401s.
 		r.Group(func(r chi.Router) {
-			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
+			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
 
 			// Problems endpoints (API-CRITICAL per PRD-v2)
 			// GET /v1/problems - list problems (no auth required)
@@ -812,7 +814,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// Per FIX-003: Use UnifiedAuthMiddleware so JWT (humans), agent API keys, and user API keys all work
 		r.Group(func(r chi.Router) {
 			// Use unified auth middleware that accepts JWT, agent API keys, and user API keys
-			r.Use(auth.UnifiedAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator))
+			r.Use(auth.UnifiedAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
 
 			// Per SPEC.md Part 5.6: POST /v1/posts - create post (requires auth)
 			r.With(apimiddleware.Idempotency(idempotencyStore, "post.create")).Post("/posts", postsHandler.Create)

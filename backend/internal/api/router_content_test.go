@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
 // TestProblemsEndpoints verifies problems endpoints are wired.
@@ -303,11 +303,8 @@ func TestCommentsEndpoints(t *testing.T) {
 func TestTypeSpecificListEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
-	// Create a valid JWT token for auth
-	token, err := createTestJWTToken("user-123", "testuser", "user")
-	if err != nil {
-		t.Fatalf("Failed to create test JWT: %v", err)
-	}
+	// Create a valid JWT token for auth (its account must exist and be live)
+	token := liveTestUserJWT(t, models.UserRoleUser)
 
 	// Helper to make authenticated requests
 	authPost := func(path, body string) *httptest.ResponseRecorder {
@@ -527,11 +524,4 @@ func TestPostCommentsEndpoints(t *testing.T) {
 			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
 		}
 	})
-}
-
-// createTestJWTToken creates a test JWT token for router content tests.
-// Uses the same secret as in router.go ("test-jwt-secret").
-func createTestJWTToken(userID, username, role string) (string, error) {
-	secret := "test-jwt-secret-32-chars-long!!"
-	return auth.GenerateJWT(secret, userID, username+"@example.com", role, time.Hour)
 }

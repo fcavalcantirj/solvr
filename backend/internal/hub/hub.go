@@ -61,6 +61,7 @@ type RoomHub struct {
 	subscribe   chan subscribeCmd
 	unsubscribe chan unsubscribeCmd
 	broadcast   chan broadcastCmd
+	presence    chan presenceCmd
 
 	// events is a buffered channel consumed by the SSE fanout handler.
 	// Size 256 allows transient bursts without blocking the hub goroutine.
@@ -93,6 +94,7 @@ func NewRoomHub(id RoomID, _ *PresenceRegistry, logger *slog.Logger, maxSSEPerRo
 		subscribe:   make(chan subscribeCmd),
 		unsubscribe: make(chan unsubscribeCmd),
 		broadcast:   make(chan broadcastCmd, 64),
+		presence:    make(chan presenceCmd),
 		events:      make(chan RoomEvent, 256),
 		done:        make(chan struct{}),
 		maxSSECount: int32(maxSSEPerRoom),
@@ -144,22 +146,21 @@ func (h *RoomHub) Run(ctx context.Context, registry *PresenceRegistry) {
 			cmd.resp <- nil
 
 		case cmd := <-h.unsubscribe:
-			sub, ok := subscribers[cmd.agentName]
-			if !ok {
-				// Agent was already removed (or its slow stream was closed) -- no-op.
+			// No-op when the agent was already removed (or its slow stream was closed).
+			h.remove(subscribers, registry, cmd.agentName)
+
+		case cmd := <-h.presence:
+			// A presence change this hub did not see as a subscription: a departure of an
+			// agent it holds closes that subscription; anything else is announced as is.
+			if _, held := subscribers[cmd.agentName]; held {
+				if !cmd.joined {
+					h.remove(subscribers, registry, cmd.agentName)
+				}
 				break
 			}
-			delete(subscribers, cmd.agentName)
-			close(sub.ch)
-			registry.Remove(h.ID, cmd.agentName)
-			h.sseCount.Add(-1)
-
-			// Announce departure to remaining subscribers.
-			evt := RoomEvent{
-				Type:      EventPresenceLeave,
-				RoomID:    h.ID,
-				AgentName: cmd.agentName,
-				Timestamp: time.Now(),
+			evt := RoomEvent{Type: EventPresenceLeave, RoomID: h.ID, AgentName: cmd.agentName, Timestamp: time.Now()}
+			if cmd.joined {
+				evt.Type, evt.Payload = EventPresenceJoin, cmd.card
 			}
 			for name, sub := range subscribers {
 				h.deliver(subscribers, registry, name, sub, evt)
@@ -260,6 +261,30 @@ func (h *RoomHub) deliver(subscribers map[string]subscriber, registry *PresenceR
 	h.sseCount.Add(-1)
 	h.logger.Warn("stream fell behind; closed so its client resumes from its last entry",
 		"room", h.ID.String(), "target", name)
+}
+
+// remove closes agentName's subscription and announces its departure to the remaining
+// subscribers. Runs only on the hub goroutine.
+func (h *RoomHub) remove(subscribers map[string]subscriber, registry *PresenceRegistry, agentName string) {
+	sub, ok := subscribers[agentName]
+	if !ok {
+		return
+	}
+	delete(subscribers, agentName)
+	close(sub.ch)
+	registry.Remove(h.ID, agentName)
+	h.sseCount.Add(-1)
+
+	evt := RoomEvent{
+		Type:      EventPresenceLeave,
+		RoomID:    h.ID,
+		AgentName: agentName,
+		Timestamp: time.Now(),
+	}
+	for name, sub := range subscribers {
+		h.deliver(subscribers, registry, name, sub, evt)
+	}
+	h.emitToEvents(evt)
 }
 
 // emitToEvents sends an event to the non-subscriber events channel (non-blocking).

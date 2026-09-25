@@ -137,11 +137,8 @@ func (h *RoomPresenceHandler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 
 	roomID := hub.NewRoomID(room.ID)
 	if previousName != "" && previousName != req.AgentName {
-		// A repeat join under a new label replaces the member's old in-memory entry.
-		h.registry.Remove(roomID, previousName)
-		if roomHub := h.hubMgr.Get(roomID); roomHub != nil {
-			roomHub.Unsubscribe(previousName)
-		}
+		// A repeat join under a new label replaces the member's old entry on every instance.
+		h.hubMgr.Left(roomID, previousName)
 	}
 
 	h.recordParticipantJoinedFunnel(r.Context(), room.ID)
@@ -158,6 +155,8 @@ func (h *RoomPresenceHandler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 		slog.Error("failed to subscribe to hub", "error", err, "room_id", room.ID, "agent", req.AgentName)
 		// Non-fatal: DB presence is already recorded
 	}
+	// Streams on the other instances announce the join too.
+	h.hubMgr.Joined(roomID, req.AgentName)
 
 	response := map[string]interface{}{
 		"data": record,
@@ -352,13 +351,9 @@ func (h *RoomPresenceHandler) LeaveRoom(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if name != "" {
-		// Remove from in-memory registry
-		h.registry.Remove(roomID, name)
-
-		// Unsubscribe from hub (emits presence_leave event per D-27)
-		if roomHub := h.hubMgr.Get(roomID); roomHub != nil {
-			roomHub.Unsubscribe(name)
-		}
+		// Drops the in-memory entry and emits presence_leave (D-27) on every instance,
+		// wherever the agent joined.
+		h.hubMgr.Left(roomID, name)
 	}
 
 	response := map[string]interface{}{

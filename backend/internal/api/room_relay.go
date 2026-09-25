@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/a2aproject/a2a-go/a2a"
 	"github.com/google/uuid"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
@@ -49,6 +52,8 @@ func (r *RoomRelay) Wait() { r.wg.Wait() }
 // committed entries after its cursor. After a reconnect, and on every sweep, all local
 // rooms catch up from their cursors, so a lost notification delays an entry but never
 // loses or duplicates it. The router must have enabled the hub relay (mountRoomRoutes).
+// Presence changes made here are announced to the other instances, and theirs are shown
+// on this instance's streams (see presenceRelay).
 func StartRoomRelay(ctx context.Context, pool *db.Pool, hubMgr *hub.HubManager, opts RoomRelayOptions) *RoomRelay {
 	backoff := opts.ReconnectBackoff
 	if backoff <= 0 {
@@ -66,11 +71,14 @@ func StartRoomRelay(ctx context.Context, pool *db.Pool, hubMgr *hub.HubManager, 
 		hubMgr.WakeAll()
 	}
 	onEntry := func(roomID uuid.UUID) { hubMgr.Announce(hub.NewRoomID(roomID)) }
+	onPresence := presenceRelay(ctx, pool, hubMgr)
 
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
-		pool.ListenRoomEntries(ctx, RoomRelayApplicationName, backoff, onListening, onEntry)
+		pool.ListenRooms(ctx, RoomRelayApplicationName, backoff, db.RoomListener{
+			OnListening: onListening, OnEntry: onEntry, OnPresence: onPresence,
+		})
 	}()
 	if sweep > 0 {
 		r.wg.Add(1)
@@ -89,4 +97,44 @@ func StartRoomRelay(ctx context.Context, pool *db.Pool, hubMgr *hub.HubManager, 
 		}()
 	}
 	return r
+}
+
+// presenceNotifyTimeout bounds sending one presence change notice.
+const presenceNotifyTimeout = 5 * time.Second
+
+// presenceRelay makes hubMgr announce the presence changes made on this instance to the
+// others, and returns the handler that shows theirs here. A remote join carries the
+// agent's card read from its live presence row, as a local join does; it is read only
+// when this instance has a hub (someone to show it to) for the room.
+func presenceRelay(ctx context.Context, pool *db.Pool, hubMgr *hub.HubManager) func(payload string) {
+	hubMgr.SetPresenceNotifier(func(c hub.PresenceChange) {
+		payload, err := json.Marshal(c)
+		if err != nil {
+			return
+		}
+		nctx, cancel := context.WithTimeout(ctx, presenceNotifyTimeout)
+		defer cancel()
+		if err := pool.NotifyRoomPresence(nctx, string(payload)); err != nil {
+			slog.Warn("presence change not announced to other instances", "error", err,
+				"room", c.RoomID.String(), "agent", c.AgentName)
+		}
+	})
+	presenceRepo := db.NewAgentPresenceRepository(pool)
+	return func(payload string) {
+		var c hub.PresenceChange
+		if err := json.Unmarshal([]byte(payload), &c); err != nil {
+			return
+		}
+		var card *a2a.AgentCard
+		if c.Joined && c.Origin != hubMgr.InstanceID() && hubMgr.Get(c.RoomID) != nil {
+			raw, found, err := presenceRepo.LiveCard(ctx, c.RoomID.UUID(), c.AgentName)
+			if err == nil && found && len(raw) > 0 {
+				var parsed a2a.AgentCard
+				if json.Unmarshal(raw, &parsed) == nil {
+					card = &parsed
+				}
+			}
+		}
+		hubMgr.ApplyRemotePresence(c, card)
+	}
 }

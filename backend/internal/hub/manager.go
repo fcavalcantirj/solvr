@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
 // HubManager manages the lifecycle of per-room RoomHub instances.
@@ -20,6 +22,8 @@ type HubManager struct {
 	logger        *slog.Logger
 	maxSSEPerRoom int    // per-room SSE subscriber limit passed to each new RoomHub
 	relay         *relay // nil until EnableRelay; see relay.go
+	instanceID    string
+	notifier      func(PresenceChange) // nil until SetPresenceNotifier; see presence.go
 }
 
 // NewHubManager creates an empty HubManager backed by the given PresenceRegistry.
@@ -34,6 +38,7 @@ func NewHubManager(ctx context.Context, registry *PresenceRegistry, logger *slog
 		registry:      registry,
 		logger:        logger,
 		maxSSEPerRoom: maxSSEPerRoom,
+		instanceID:    uuid.NewString(),
 	}
 }
 

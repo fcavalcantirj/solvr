@@ -25,8 +25,11 @@ import (
 // instance, which reads the committed entries after its cursor and fans them out.
 
 type roomInstance struct {
-	ts   *httptest.Server
-	stop func()
+	ts       *httptest.Server
+	stop     func()
+	pool     *db.Pool
+	hubMgr   *hub.HubManager
+	registry *hub.PresenceRegistry
 }
 
 // startRoomInstance runs one API instance against DATABASE_URL and waits until its relay
@@ -58,7 +61,7 @@ func startRoomInstance(t *testing.T, opts RoomRelayOptions) *roomInstance {
 		pool.Close()
 	})
 	t.Cleanup(stop)
-	return &roomInstance{ts: ts, stop: stop}
+	return &roomInstance{ts: ts, stop: stop, pool: pool, hubMgr: hubMgr, registry: registry}
 }
 
 // liveStream is an SSE stream whose frames can be read while it is still open.

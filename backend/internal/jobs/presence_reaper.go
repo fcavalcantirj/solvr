@@ -36,7 +36,7 @@ type PresenceReaperResult struct {
 // On each cycle it:
 //  1. Calls PresenceExpirer.DeleteExpired to atomically evict expired agents from DB
 //  2. Removes each evicted agent from the in-memory PresenceRegistry
-//  3. Calls Hub.Unsubscribe to emit presence_leave SSE events (D-27)
+//  3. Calls HubManager.Left to emit presence_leave SSE events on every instance (D-27)
 //  4. Calls RoomExpirer.DeleteExpiredRooms to soft-delete rooms past expires_at (D-29)
 type PresenceReaperJob struct {
 	presenceExpirer PresenceExpirer
@@ -76,13 +76,12 @@ func (j *PresenceReaperJob) RunOnce(ctx context.Context) PresenceReaperResult {
 	} else {
 		result.ExpiredAgents = len(removed)
 
-		// Step 2 & 3: Remove from registry and hub (emit presence_leave per D-27).
+		// Step 2 & 3: Remove from registry and hub (emit presence_leave per D-27) on
+		// every instance: the agent may have joined through another one.
 		for _, row := range removed {
 			roomID := hub.NewRoomID(row.RoomID)
 			j.registry.Remove(roomID, row.AgentName)
-			if h := j.hubMgr.Get(roomID); h != nil {
-				h.Unsubscribe(row.AgentName) // emits presence_leave event
-			}
+			j.hubMgr.Left(roomID, row.AgentName)
 		}
 	}
 

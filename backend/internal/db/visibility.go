@@ -67,20 +67,24 @@ func publicOnlyVisibility(alias string) string {
 	return alias + ".visibility = 'public'"
 }
 
+// visiblePostExists returns an EXISTS predicate that is true when the post whose id is the
+// SQL expression postExpr may be read by callerHuman under the rule GET /v1/posts/{id}
+// applies: the post exists, is not deleted, and passes searchVisibilityClause (public, or
+// owned by the caller's family). postExpr must be trusted SQL, never caller input.
+func visiblePostExists(postExpr, callerHuman string, args *[]any, argNum *int) string {
+	return "EXISTS(SELECT 1 FROM posts p WHERE p.id = " + postExpr + " AND p.deleted_at IS NULL AND " +
+		searchVisibilityClause("p", callerHuman, args, argNum) + ")"
+}
+
 // postVisibleTo reports whether callerHuman may read the post under the rule GET
-// /v1/posts/{id} applies: the post exists, is not deleted, and passes
-// searchVisibilityClause (public, or owned by the caller's family). Anything under a post
-// (its replies, its related rooms) answers 404 exactly when this is false. A malformed id
-// names no post, so it is false rather than an error.
+// /v1/posts/{id} applies. Anything under a post (its replies, comments, view count, related
+// rooms) answers 404 exactly when this is false. A malformed id names no post, so it is
+// false rather than an error.
 func postVisibleTo(ctx context.Context, pool *Pool, postID, callerHuman string) (bool, error) {
 	args := []any{postID}
 	argNum := 2
-	clause := searchVisibilityClause("p", callerHuman, &args, &argNum)
 	var visible bool
-	err := pool.QueryRow(ctx,
-		"SELECT EXISTS(SELECT 1 FROM posts p WHERE p.id = $1 AND p.deleted_at IS NULL AND "+clause+")",
-		args...,
-	).Scan(&visible)
+	err := pool.QueryRow(ctx, "SELECT "+visiblePostExists("$1", callerHuman, &args, &argNum), args...).Scan(&visible)
 	if err != nil {
 		if isInvalidUUIDError(err) {
 			return false, nil
@@ -99,5 +103,11 @@ func (r *PostRepository) VisibleTo(ctx context.Context, postID, callerHuman stri
 // PostVisibleTo reports whether callerHuman may read the post a reply belongs to (or
 // would belong to), so the reply surfaces never show or accept what the post hides.
 func (r *ReplyRepository) PostVisibleTo(ctx context.Context, postID, callerHuman string) (bool, error) {
+	return postVisibleTo(ctx, r.pool, postID, callerHuman)
+}
+
+// PostVisibleTo reports whether callerHuman may read the post, so its view count is never
+// shown or moved for a caller the post is hidden from.
+func (r *ViewsRepository) PostVisibleTo(ctx context.Context, postID, callerHuman string) (bool, error) {
 	return postVisibleTo(ctx, r.pool, postID, callerHuman)
 }

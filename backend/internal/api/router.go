@@ -667,12 +667,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/replies/{id}", repliesHandler.Get)
 			// A post's related public rooms (post→room half of the two-way link).
 			r.Get("/posts/{id}/rooms", postRelatedRoomsHandler.GetRelatedRooms)
+			// FE-013: POST /v1/posts/:id/view records a view, GET /v1/posts/:id/views reads the
+			// count; both follow the post's visibility for the caller's family.
+			r.Post("/posts/{id}/view", viewsHandler.RecordView)
+			r.Get("/posts/{id}/views", viewsHandler.GetViewCount)
 		})
-		// FE-013: View tracking endpoints
-		// POST /v1/posts/:id/view - record a view (optional auth)
-		r.Post("/posts/{id}/view", viewsHandler.RecordView)
-		// GET /v1/posts/:id/views - get view count (no auth required)
-		r.Get("/posts/{id}/views", viewsHandler.GetViewCount)
 
 		// Email unsubscribe — public endpoint, HMAC-signed token validates identity
 		if pool != nil {
@@ -801,16 +800,15 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// GET /v1/ideas/:id/responses - list responses (no auth required)
 			// Per FIX-024: Allow viewing responses before responding
 			r.Get("/ideas/{id}/responses", ideasHandler.ListResponses)
-		}) // end BART-151 OptionalAuth group for problems/questions/ideas GETs
 
-		// Comments endpoints (API-CRITICAL per PRD-v2)
-		// GET /v1/{target_type}/{id}/comments - list comments (no auth required)
-		// Note: Routes use singular form (approach, answer, response) to match handler expectations
-		r.Get("/approaches/{id}/comments", wrapCommentsListWithType(commentsHandler, "approach"))
-		r.Get("/answers/{id}/comments", wrapCommentsListWithType(commentsHandler, "answer"))
-		r.Get("/responses/{id}/comments", wrapCommentsListWithType(commentsHandler, "response"))
-		// FIX-019: GET /v1/posts/{id}/comments - list comments on posts (no auth required)
-		r.Get("/posts/{id}/comments", wrapCommentsListWithType(commentsHandler, "post"))
+			// Comments endpoints (API-CRITICAL per PRD-v2); FIX-019 added posts. GET
+			// /v1/{target_type}/{id}/comments follows the target's post visibility.
+			// Note: Routes use singular form (approach, answer, response) to match handler expectations
+			r.Get("/approaches/{id}/comments", wrapCommentsListWithType(commentsHandler, "approach"))
+			r.Get("/answers/{id}/comments", wrapCommentsListWithType(commentsHandler, "answer"))
+			r.Get("/responses/{id}/comments", wrapCommentsListWithType(commentsHandler, "response"))
+			r.Get("/posts/{id}/comments", wrapCommentsListWithType(commentsHandler, "post"))
+		}) // end BART-151 OptionalAuth group for problems/questions/ideas/comments GETs
 
 		// Protected posts routes (require authentication)
 		// Per FIX-003: Use UnifiedAuthMiddleware so JWT (humans), agent API keys, and user API keys all work

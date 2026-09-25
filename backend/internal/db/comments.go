@@ -121,13 +121,20 @@ func (r *CommentsRepository) List(ctx context.Context, opts models.CommentListOp
 	}
 	offset := (opts.Page - 1) * opts.PerPage
 
+	// BART-151: comments inherit the visibility of the post their target belongs to, so the
+	// total and the page both count only what the caller's family may read.
+	postExpr, err := commentTargetPostExpr(opts.TargetType, "c.target_id")
+	if err != nil {
+		return nil, 0, err
+	}
+	args := []any{opts.TargetType, opts.TargetID}
+	argNum := 3
+	visible := visiblePostExists(postExpr, opts.CallerHuman, &args, &argNum)
+	where := "c.target_type = $1 AND c.target_id = $2 AND c.deleted_at IS NULL AND " + visible
+
 	// Count total
-	countQuery := `
-		SELECT COUNT(*) FROM comments
-		WHERE target_type = $1 AND target_id = $2 AND deleted_at IS NULL
-	`
 	var total int
-	err := r.pool.QueryRow(ctx, countQuery, opts.TargetType, opts.TargetID).Scan(&total)
+	err = r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM comments c WHERE "+where, args...).Scan(&total)
 	if err != nil {
 		LogQueryError(ctx, "List.Count", "comments", err)
 		return nil, 0, err
@@ -151,14 +158,12 @@ func (r *CommentsRepository) List(ctx context.Context, opts models.CommentListOp
 		FROM comments c
 		LEFT JOIN users u ON c.author_type = 'human' AND c.author_id = u.id::text
 		LEFT JOIN agents a ON c.author_type = 'agent' AND c.author_id = a.id
-		WHERE c.target_type = $1 AND c.target_id = $2 AND c.deleted_at IS NULL
-		-- BART-151: comments on a private post inherit its visibility (public-only here)
-		AND (c.target_type <> 'post' OR EXISTS (SELECT 1 FROM posts WHERE id = c.target_id AND visibility = 'public'))
+		WHERE ` + where + fmt.Sprintf(`
 		ORDER BY c.created_at ASC
-		LIMIT $3 OFFSET $4
-	`
+		LIMIT $%d OFFSET $%d
+	`, argNum, argNum+1)
 
-	rows, err := r.pool.Query(ctx, query, opts.TargetType, opts.TargetID, opts.PerPage, offset)
+	rows, err := r.pool.Query(ctx, query, append(args, opts.PerPage, offset)...)
 	if err != nil {
 		LogQueryError(ctx, "List.Query", "comments", err)
 		return nil, 0, err
@@ -223,31 +228,43 @@ func (r *CommentsRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// TargetExists checks if a target entity exists.
-func (r *CommentsRepository) TargetExists(ctx context.Context, targetType models.CommentTargetType, targetID string) (bool, error) {
-	var query string
+// commentTargetPostExpr returns the SQL expression for the id of the post a comment target
+// belongs to, where ref is trusted SQL naming the target id: a post is its own post, an
+// approach, answer or response belongs to its problem, question or idea. A deleted
+// approach or answer belongs to no post.
+func commentTargetPostExpr(targetType models.CommentTargetType, ref string) (string, error) {
 	switch targetType {
 	case models.CommentTargetPost:
-		query = `SELECT EXISTS(SELECT 1 FROM posts WHERE id = $1 AND deleted_at IS NULL)`
+		return ref, nil
 	case models.CommentTargetApproach:
-		query = `SELECT EXISTS(SELECT 1 FROM approaches WHERE id = $1 AND deleted_at IS NULL)`
+		return "(SELECT problem_id FROM approaches WHERE id = " + ref + " AND deleted_at IS NULL)", nil
 	case models.CommentTargetAnswer:
-		query = `SELECT EXISTS(SELECT 1 FROM answers WHERE id = $1 AND deleted_at IS NULL)`
+		return "(SELECT question_id FROM answers WHERE id = " + ref + " AND deleted_at IS NULL)", nil
 	case models.CommentTargetResponse:
-		query = `SELECT EXISTS(SELECT 1 FROM responses WHERE id = $1)`
+		return "(SELECT idea_id FROM responses WHERE id = " + ref + ")", nil
 	default:
-		return false, fmt.Errorf("unknown target type: %s", targetType)
+		return "", fmt.Errorf("unknown target type: %s", targetType)
 	}
+}
 
-	var exists bool
-	err := r.pool.QueryRow(ctx, query, targetID).Scan(&exists)
+// TargetVisibleTo reports whether callerHuman ("" = public only) may read the comment
+// target: it exists, is not deleted, and the post it belongs to passes the rule GET
+// /v1/posts/{id} applies. An id that names nothing (absent or malformed) is false.
+func (r *CommentsRepository) TargetVisibleTo(ctx context.Context, targetType models.CommentTargetType, targetID, callerHuman string) (bool, error) {
+	postExpr, err := commentTargetPostExpr(targetType, "$1")
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) || isInvalidUUIDError(err) {
-			return false, nil
-		}
-		LogQueryError(ctx, "TargetExists", "comments", err)
 		return false, err
 	}
-
-	return exists, nil
+	args := []any{targetID}
+	argNum := 2
+	var visible bool
+	err = r.pool.QueryRow(ctx, "SELECT "+visiblePostExists(postExpr, callerHuman, &args, &argNum), args...).Scan(&visible)
+	if err != nil {
+		if isInvalidUUIDError(err) {
+			return false, nil
+		}
+		LogQueryError(ctx, "TargetVisibleTo", "comments", err)
+		return false, err
+	}
+	return visible, nil
 }

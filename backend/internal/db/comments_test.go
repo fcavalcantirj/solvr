@@ -286,7 +286,7 @@ func TestCommentsRepository_TargetExists(t *testing.T) {
 	post := createCommentTestPost(t, pool, user.ID)
 
 	// Post should exist
-	exists, err := repo.TargetExists(ctx, models.CommentTargetPost, post.ID)
+	exists, err := repo.TargetVisibleTo(ctx, models.CommentTargetPost, post.ID, "")
 	if err != nil {
 		t.Fatalf("TargetExists failed: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestCommentsRepository_TargetExists(t *testing.T) {
 	}
 
 	// Non-existent post should not exist
-	exists, err = repo.TargetExists(ctx, models.CommentTargetPost, "00000000-0000-0000-0000-000000000000")
+	exists, err = repo.TargetVisibleTo(ctx, models.CommentTargetPost, "00000000-0000-0000-0000-000000000000", "")
 	if err != nil {
 		t.Fatalf("TargetExists for non-existent failed: %v", err)
 	}

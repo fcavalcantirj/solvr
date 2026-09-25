@@ -89,6 +89,7 @@ func TestPostVisibleTo_FollowsTheSinglePostReadRule(t *testing.T) {
 	checkers := map[string]func(ctx context.Context, postID, callerHuman string) (bool, error){
 		"PostRepository.VisibleTo":      NewPostRepository(pool).VisibleTo,
 		"ReplyRepository.PostVisibleTo": NewReplyRepository(pool).PostVisibleTo,
+		"ViewsRepository.PostVisibleTo": NewViewsRepository(pool).PostVisibleTo,
 	}
 	for name, visible := range checkers {
 		for _, tc := range cases {

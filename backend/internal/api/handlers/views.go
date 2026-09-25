@@ -19,6 +19,8 @@ type ViewsRepositoryInterface interface {
 	RecordView(ctx context.Context, postID, viewerType, viewerID string) (int, error)
 	RecordAnonymousView(ctx context.Context, postID, sessionID string) (int, error)
 	GetViewCount(ctx context.Context, postID string) (int, error)
+	// PostVisibleTo reports whether callerHuman ("" = public only) may read the post.
+	PostVisibleTo(ctx context.Context, postID, callerHuman string) (bool, error)
 }
 
 // ViewsHandler handles view tracking HTTP requests.
@@ -47,6 +49,10 @@ func (h *ViewsHandler) RecordView(w http.ResponseWriter, r *http.Request) {
 	postID := chi.URLParam(r, "id")
 	if postID == "" {
 		writeViewsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "post ID is required")
+		return
+	}
+
+	if !h.postVisible(w, r, postID, "RecordView") {
 		return
 	}
 
@@ -103,6 +109,10 @@ func (h *ViewsHandler) GetViewCount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.postVisible(w, r, postID, "GetViewCount") {
+		return
+	}
+
 	viewCount, err := h.repo.GetViewCount(r.Context(), postID)
 	if err != nil {
 		if errors.Is(err, db.ErrPostNotFound) {
@@ -124,6 +134,28 @@ func (h *ViewsHandler) GetViewCount(w http.ResponseWriter, r *http.Request) {
 			"view_count": viewCount,
 		},
 	})
+}
+
+// postVisible answers 404 (as GET /v1/posts/{id} does) when the caller may not read the
+// post — absent, deleted, or family-only for another family — and 500 when the check
+// fails, so a hidden post's count is never shown or moved. It reports whether to go on.
+func (h *ViewsHandler) postVisible(w http.ResponseWriter, r *http.Request, postID, operation string) bool {
+	visible, err := h.repo.PostVisibleTo(r.Context(), postID, callerHumanID(r))
+	if err != nil {
+		ctx := response.LogContext{
+			Operation: operation,
+			Resource:  "view",
+			RequestID: r.Header.Get("X-Request-ID"),
+			Extra:     map[string]string{"postID": postID},
+		}
+		response.WriteInternalErrorWithLog(w, "failed to check post visibility", err, ctx, h.logger)
+		return false
+	}
+	if !visible {
+		writeViewsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
+		return false
+	}
+	return true
 }
 
 // writeViewsJSON writes a JSON response.

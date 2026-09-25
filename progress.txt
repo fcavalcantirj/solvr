@@ -3292,3 +3292,178 @@ UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on
     every "live" row (24), the family owner's family-only rows (2), users/{id}/agents malformed
     (4, 400 = 400) and the 3 member rows — not only the member and malformed rows. And
     router_child_list_contract_test.go is 222 lines, not 224.
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 16 of N. Step 3 status-code matrix, part 4: "403 or documented privacy-preserving 404
+for denied access". Comments (on a post and on its approaches/answers/responses) and the
+view routes follow their post's visibility, like the reply surfaces in slice 15.
+================================================================================
+
+TASK SELECTION: idx 24 acceptance still needs idx 75/78 pieces; idx 52/53, 68 and 73's
+  remainder are gated on the knowledge cutover idx 93; idx 67 needs a test deployment.
+  idx 74 stays the first buildable false task. Took slice 15's "comments/views family rule"
+  item.
+
+SPIKE FIRST [REAL] (throwaway backend/internal/api/zz_spike16_test.go, deleted before the full
+  run; /tmp/solvr_idx74_s16_spike.tsv, /tmp/solvr_idx74_s16_spike.log): one problem + approach,
+  question + answer, idea + response, and a comment holding a marker on each of the 4 targets,
+  in 3 sets (public / family-only owned by user A / public then soft-deleted), 28 surfaces x 5
+  callers (anonymous, foreign agent, foreign human, owner JWT, owner's claimed agent):
+  - GET /v1/{approaches,answers,responses}/{id}/comments: 200 WITH the comment body to every
+    caller on the family AND the deleted set.
+  - POST comments on all 4 target kinds: 201 for foreign agent/human on a family post; 201 on a
+    deleted post's approach/answer/response (the post target was already 404 when deleted).
+  - GET /v1/posts/{id}/comments on a family post: 200 {"data":[],"meta":{"total":1}} to
+    EVERYONE, the owner included (the list query was public-only, the count unscoped).
+  - GET /v1/posts/{id}/views and POST /v1/posts/{id}/view: 200 on family and deleted posts for
+    every caller, and POST moved view_count. Both routes sat outside any auth middleware, so
+    RecordView's authenticated branch was dead (every view was "anonymous").
+  Everything else on the family set (GET /v1/{problems,questions,ideas}/{id} + their child
+  lists, creates, /posts/{id}/vote) already answered 404 to outsiders. See OUT OF SCOPE for the
+  rest of what the spike showed.
+
+DIFF ([REAL] git status --porcelain / git diff --numstat: 9 modified +137/-69, 4 new):
+  Production:
+  M backend/internal/db/visibility.go (+19/-9): visiblePostExists(postExpr, callerHuman, args,
+    argNum) — the EXISTS(posts p WHERE p.id = <expr> AND p.deleted_at IS NULL AND
+    searchVisibilityClause) predicate; postVisibleTo now builds its query from it (same SQL
+    text as before). New ViewsRepository.PostVisibleTo.
+  M backend/internal/db/comments.go (+42/-25): TargetExists REPLACED by TargetVisibleTo(ctx,
+    targetType, targetID, callerHuman) through commentTargetPostExpr: a post is its own post; an
+    approach/answer/response belongs to its problem/question/idea; a deleted approach or answer
+    belongs to no post; unknown type = error; 22P02 = false. List: count and page share one
+    WHERE with visiblePostExists(c.target_id's post, opts.CallerHuman), so the total counts
+    exactly what the caller sees; this replaces the old post-only public-only clause (BART-151).
+  M backend/internal/models/comment.go (+2): CommentListOptions.CallerHuman.
+  M backend/internal/api/handlers/comments.go (+13/-10): interface TargetExists ->
+    TargetVisibleTo; List and Create ask with callerHumanID(r) (claimed agent -> its human,
+    JWT -> user, else ""); List sets opts.CallerHuman. Same 404 "target not found" / 500.
+  M backend/internal/api/handlers/views.go (+32): interface gains PostVisibleTo; RecordView and
+    GetViewCount call postVisible first: 404 NOT_FOUND "post not found" when hidden/absent/
+    deleted, 500 "failed to check post visibility" when the check fails.
+  M backend/internal/api/router.go (+13/-15, 1243 -> 1241, pre-existing violator): POST
+    /posts/{id}/view and GET /posts/{id}/views moved into the posts OptionalAuth group; the 4
+    GET comment routes moved into the BART-151 OptionalAuth group (never 401s).
+  Tests:
+  A backend/internal/api/router_comment_view_visibility_test.go (198, real NewRouter):
+    TestCommentAndViewSurfaces_FollowTheParentPostVisibility — family set: anonymous / foreign
+    agent / foreign human get 404 NOT_FOUND (request_id == X-Request-ID, no marker, no
+    view_count) on GET comments x 4 targets, GET views, POST view; the 2 writers also on POST
+    comments x 4; comment rows and view_count unchanged. Deleted set: same 404s for anonymous,
+    foreign agent, family owner and sibling agent. Members (owner JWT, claimed sibling agent):
+    200 with the marker and meta.total == len(data) on all 4 lists, 201 on all 4 creates, views
+    200, POST view 200 and view_count +1. Public control: anonymous reads 200 with the marker,
+    foreign agent comments 201, foreign human's view makes view_count 1.
+  A backend/internal/db/comments_visibility_test.go (158): TestCommentsRepository_
+    TargetVisibleTo_FollowsTheOwningPost (4 kinds x 9 cases + deleted approach/answer on a
+    public post = 38 subtests, plus unknown type -> error); TestCommentsRepository_List_
+    FollowsTheCallersFamily (4 kinds x owner/stranger/anonymous: rows == total == 1/0/0).
+  A backend/internal/api/handlers/comments_visibility_test.go (96): caller propagation to
+    TargetVisibleTo and opts.CallerHuman for claimed agent / unclaimed agent / JWT / anonymous
+    (list) and the 3 authenticated callers (create); a hidden target 404s before the list runs.
+  A backend/internal/api/handlers/views_visibility_test.go (143): hidden post -> 404 on both
+    routes, nothing recorded; caller family per identity and the view recorded as
+    anonymous:anonymous / agent:agent-1 / human:user-9; visibility error -> 500, nothing recorded.
+  M backend/internal/db/post_visible_test.go (+1): ViewsRepository.PostVisibleTo added to the
+    checkers map (10 more subtests; nothing removed).
+  M backend/internal/api/handlers/comments_test.go (+13/-8): see CHANGED TESTS.
+  M backend/internal/db/comments_test.go (+2/-2): see CHANGED TESTS.
+  No migration. Frontend untouched. spec.json unchanged. SPEC.md unchanged (step 6 docs).
+
+CHANGED TESTS (call sites/fixture only; every assertion kept):
+  (a) TestCommentsRepository_TargetExists (db/comments_test.go) and the
+      MockCommentsRepository fixture (handlers/comments_test.go).
+  (b) the db test called repo.TargetExists(ctx, CommentTargetPost, id) and asserted true for a
+      live public post and false for "00000000-0000-0000-0000-000000000000"; the mock
+      implemented TargetExists returning targetExists/targetExistsErr, which ~10 handler tests
+      use (e.g. targetExists:false -> 404).
+  (c) TargetExists no longer exists (replaced by TargetVisibleTo, which adds the caller's
+      family). The db test now calls TargetVisibleTo(..., "") with the same two assertions
+      (function name kept). The mock method is now TargetVisibleTo, returns the same fields and
+      also records the caller; the mock gained visibleCaller/lastListOpts and List records its
+      opts. gofmt realigned the mock's field block (whitespace only). New coverage:
+      TestCommentsRepository_TargetVisibleTo_FollowsTheOwningPost, TestComments_*.
+  (d) [TEST] /tmp/solvr_idx74_s16_green_db.log: TestCommentsRepository_TargetExists PASS;
+      /tmp/solvr_idx74_s16_green_handlers.log: every comments handler test PASS.
+
+TDD / EVIDENCE (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, the local
+  isolated test DB in the solvr-postgres container):
+  [TEST] RED /tmp/solvr_idx74_s16_red_api.log: 9 of 10 subtests FAIL ("expected: 404 actual:
+    200"; members: body `{"data":[],"meta":{"total":1,...}}` does not contain the marker); only
+    the public control passed. db + handlers RED = compile failure
+    (/tmp/solvr_idx74_s16_red_compile.log: "repo.TargetVisibleTo undefined", "unknown field
+    CallerHuman", "ViewsRepository has no field or method PostVisibleTo", mock "missing method
+    TargetExists").
+  [TEST] GREEN -race -v: /tmp/solvr_idx74_s16_green_api.log — TestCommentAndViewSurfaces_*
+    (10 subtests), TestReplySurfaces_*, TestStatusContract_ChildLists..., _UnknownResourceID...,
+    _NoRouteAnswers5xx..., TestDeletedAccount_* all PASS, 0 SKIP; the only FAILs in that log are
+    TestCommentsCount_{Problems,Ideas,Feed}* (matched by -run 'TestComment'), which failed
+    identically in the slice 14 and 15 full runs (pre-existing: count off by one).
+    /tmp/solvr_idx74_s16_green_db.log: 95 PASS lines, 0 FAIL, 0 SKIP.
+    /tmp/solvr_idx74_s16_green_handlers.log: 51 PASS lines, 0 FAIL, 0 SKIP.
+  [REAL] mutation 1: RecordView's gate removed -> TestViews_* (3 tests) and the API outsider
+    rows FAIL (/tmp/solvr_idx74_s16_mut1_{handlers,api}.log); restored, grep count 2.
+    mutation 2: List given "" instead of opts.CallerHuman -> db List owner rows (4) and both API
+    member subtests FAIL (/tmp/solvr_idx74_s16_mut2_{db,api}.log); restored, grep count 1.
+    mutation 3: approach subquery without `deleted_at IS NULL` -> db "deleted contribution"
+    row FAILs (/tmp/solvr_idx74_s16_mut3_db.log); restored, grep count 1.
+    mutation 4: GET /posts/{id}/comments moved back outside OptionalAuth -> both API member
+    subtests FAIL with 404 "target not found" (/tmp/solvr_idx74_s16_mut4_api.log); restored.
+  [REAL] go build ./... ok; go vet ./internal/api/... ./internal/db/ clean; gofmt clean on
+    every touched file except handlers/comments.go, which was already not gofmt-clean at HEAD
+    (a trailing blank line), left as is.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 run ONCE -> /tmp/solvr_idx74_s16_full.log
+  (completed; spike deleted beforehand). FAIL only in internal/api, internal/api/handlers,
+  internal/db (pre-existing set). Unique top-level --- FAIL names (/tmp/s14_failnames.sh): 76,
+  same as slice 15. Gone: TestReputation_CrossEndpointConsistency (data-state flake),
+  TestRoomExpiry_ExpiredRoomLeavesEveryListingBeforeTheReaper (fixed in slice 15). Back:
+  TestHomepageSearch_ChartAddsUpToTheTotalBesideIt (expected 992, actual 947) and
+  TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring (expected 1020, actual 975), the
+  shared-DB search window flakes slice 15 listed as gone; untouched code. None of this slice's
+  tests appear in the FAIL list.
+  check-file-size.sh (/tmp/solvr_idx74_s16_filesize.log): same violator set as slice 15;
+  router.go 1243 -> 1241; handlers/comments_test.go 980 -> 985 (already a violator); new files
+  all under 200 lines.
+
+BEHAVIOR CHANGES (v0, for step 6 docs): GET and POST /v1/{posts,approaches,answers,
+  responses}/{id}/comments answer 404 NOT_FOUND "target not found" whenever the target's post
+  is absent, soft-deleted or family-only for another family (and for a deleted approach or
+  answer), for every caller; a family's own callers now see their comments, and meta.total
+  counts only visible comments. GET /v1/posts/{id}/views and POST /v1/posts/{id}/view answer 404
+  "post not found" under the same rule (a hidden post's count is neither shown nor moved; a
+  check failure is 500). Those 6 routes now read optional auth (never 401): an authenticated
+  caller's view is counted under its own identity (human:<user id> / agent:<agent id>) instead
+  of the X-Session-ID / "anonymous" viewer. [REAL, code read] the web client sends its bearer
+  token on these calls (lib/api-base.ts fetch sets Authorization when authToken is set), so a
+  signed-in viewer's views now de-duplicate per account. [UNVERIFIED] no frontend test run
+  this slice (frontend untouched).
+
+OUT OF SCOPE, FOUND HERE (not fixed) [REAL, spike]:
+  - GET /v1/problems/{id}/approaches/{approachId}/history: 500 INTERNAL_ERROR "failed to get
+    version history" for EVERY caller on a live public problem with one approach.
+  - POST /v1/ideas/{id}/evolve with an absent evolved_post_id: 500 "failed to get evolved post"
+    (should be 400/404).
+  - POST /v1/answers/{id}/vote: 404 "answer not found" for the family's OWN members on a
+    family-only question; 200 for everyone on a soft-deleted question's answer.
+  - POST /v1/approaches/{id}/progress: the approach's author still writes (201) on a
+    soft-deleted problem.
+  - GET /v1/posts/{id}/my-vote: 200 {"vote":null} to a foreign agent/human on a family-only
+    post (reveals the id exists; deleted is already 404).
+  - Flags (handlers/flags.go) has its own TargetExists, not checked for the family rule.
+
+REMAINING FOR idx 74 (passes STAYS false):
+  - step 3 remainder: the OUT OF SCOPE rows above; 401 for invalid (not deleted) credentials
+    on optional-auth routes (needs a frontend check for expired JWTs on public pages);
+    400/409/429 rows in the contract file.
+  - step 5: [UNVERIFIED, not run] claim atomicity (link, bonus, badge, MarkUsed are 4
+    statements).
+  - step 6: OpenAPI contract (openapi_paths.go / openapi_schemas.go already over 800 lines ->
+    split first): Idempotency-Key, Idempotent-Replayed, the 409 codes, error envelope, CORS,
+    credential transport, size limits, stream resume, timeouts, If-Match/ETag, the 404 rules
+    (slices 13, 15, 16) and the deleted-account 401/503 rules (slice 14).
+
+UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on prod via the
+  admin query route, then deploys). No migration in this slice.

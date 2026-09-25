@@ -69,6 +69,8 @@ type CommentListOptions struct {
 	TargetID   string
 	Page       int
 	PerPage    int
+	// CallerHuman scopes the list to what that human's family may read ("" = public only).
+	CallerHuman string
 }
 
 // CreateCommentRequest is the request body for creating a comment.

@@ -17,17 +17,20 @@ import (
 
 // MockCommentsRepository is a mock implementation of CommentsRepositoryInterface.
 type MockCommentsRepository struct {
-	comments       []models.CommentWithAuthor
-	createErr      error
-	listErr        error
-	deleteErr      error
-	findByIDResult *models.CommentWithAuthor
-	findByIDErr    error
-	targetExists   bool
+	comments        []models.CommentWithAuthor
+	createErr       error
+	listErr         error
+	deleteErr       error
+	findByIDResult  *models.CommentWithAuthor
+	findByIDErr     error
+	targetExists    bool
 	targetExistsErr error
+	visibleCaller   *string
+	lastListOpts    *models.CommentListOptions
 }
 
 func (m *MockCommentsRepository) List(ctx context.Context, opts models.CommentListOptions) ([]models.CommentWithAuthor, int, error) {
+	m.lastListOpts = &opts
 	if m.listErr != nil {
 		return nil, 0, m.listErr
 	}
@@ -64,7 +67,9 @@ func (m *MockCommentsRepository) Delete(ctx context.Context, id string) error {
 	return m.deleteErr
 }
 
-func (m *MockCommentsRepository) TargetExists(ctx context.Context, targetType models.CommentTargetType, targetID string) (bool, error) {
+// TargetVisibleTo answers targetExists for every caller and records whose family was asked.
+func (m *MockCommentsRepository) TargetVisibleTo(ctx context.Context, targetType models.CommentTargetType, targetID, callerHuman string) (bool, error) {
+	m.visibleCaller = &callerHuman
 	if m.targetExistsErr != nil {
 		return false, m.targetExistsErr
 	}

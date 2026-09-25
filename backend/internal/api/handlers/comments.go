@@ -30,8 +30,9 @@ type CommentsRepositoryInterface interface {
 	// Delete soft-deletes a comment by ID.
 	Delete(ctx context.Context, id string) error
 
-	// TargetExists checks if the target (approach, answer, response) exists.
-	TargetExists(ctx context.Context, targetType models.CommentTargetType, targetID string) (bool, error)
+	// TargetVisibleTo reports whether callerHuman ("" = public only) may read the target:
+	// it exists and the post it belongs to is readable under GET /v1/posts/{id}'s rule.
+	TargetVisibleTo(ctx context.Context, targetType models.CommentTargetType, targetID, callerHuman string) (bool, error)
 }
 
 // CommentsAgentRepositoryInterface defines agent lookup for ownership checks.
@@ -85,10 +86,11 @@ func (h *CommentsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Parse pagination params
 	opts := models.CommentListOptions{
-		TargetType: targetType,
-		TargetID:   targetID,
-		Page:       parseIntParam(r.URL.Query().Get("page"), 1),
-		PerPage:    parseIntParam(r.URL.Query().Get("per_page"), 20),
+		TargetType:  targetType,
+		TargetID:    targetID,
+		Page:        parseIntParam(r.URL.Query().Get("page"), 1),
+		PerPage:     parseIntParam(r.URL.Query().Get("per_page"), 20),
+		CallerHuman: callerHumanID(r),
 	}
 
 	if opts.Page < 1 {
@@ -101,8 +103,9 @@ func (h *CommentsHandler) List(w http.ResponseWriter, r *http.Request) {
 		opts.PerPage = 50
 	}
 
-	// A target that does not exist (or an id that names nothing) is 404, not an empty list.
-	exists, err := h.repo.TargetExists(r.Context(), targetType, targetID)
+	// A target that does not exist, or whose post the caller may not read (deleted, or
+	// family-only for another family), is 404 like GET /v1/posts/{id}, not an empty list.
+	exists, err := h.repo.TargetVisibleTo(r.Context(), targetType, targetID, opts.CallerHuman)
 	if err != nil {
 		writeCommentsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to verify target")
 		return
@@ -179,8 +182,8 @@ func (h *CommentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if target exists
-	exists, err := h.repo.TargetExists(r.Context(), targetType, targetID)
+	// Nobody comments on what they may not read: same 404 as the list.
+	exists, err := h.repo.TargetVisibleTo(r.Context(), targetType, targetID, callerHumanID(r))
 	if err != nil {
 		writeCommentsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to verify target")
 		return

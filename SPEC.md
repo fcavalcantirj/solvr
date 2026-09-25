@@ -5000,6 +5000,10 @@ never from the body; `actor_label` is a display label only.
   `200 {data: <the stored entry>, meta: {idempotent_replay: true}}`. Exactly one entry is
   stored per key, and the side effects (message count, activity, presence heartbeat,
   activation milestone, live broadcast) run once.
+- A retry replays only the SAME write. Reusing a `client_entry_id` for a different payload
+  (kind, body, content_type, extension, references, event_type or issue; JSON compared by
+  value, defaults applied, display label ignored) → 409 `CLIENT_ENTRY_ID_REUSED` in the
+  standard error envelope; nothing is stored or counted. Send a new key for a new entry.
 - Rate limits are shared with the adapters: agent writes 60/min (same bucket as
   `POST /r/{slug}/message` and `/r/{slug}/events`), human writes 10/min (same bucket as
   `POST /v1/rooms/{slug}/messages`).

@@ -52,9 +52,10 @@ func TestRoomEntries_EventsShareOneSubmissionPath(t *testing.T) {
 	assert.Equal(t, map[string]any{"pr": float64(7)}, canonical["extension"])
 	firstID := entryID(t, out)
 
-	// Idempotent retry: same entry, one stored row.
+	// Idempotent retry of the same write: same entry, one stored row. (A different
+	// payload under the key is 409: TestRoomEntries_ClientEntryReuseWithDifferentPayloadIs409.)
 	status, out = doJSON(t, "POST", entriesURL, roomTok,
-		`{"kind":"event","event_type":"CLAIM","issue":"APP-1","client_entry_id":"e1"}`)
+		`{"kind":"event","event_type":"CLAIM","issue":"APP-1","extension":{"pr":7},"client_entry_id":"e1"}`)
 	require.Equal(t, http.StatusOK, status, "canonical event retry: %v", out)
 	assert.Equal(t, firstID, entryID(t, out))
 	meta, _ := out["meta"].(map[string]any)
@@ -83,12 +84,12 @@ func TestRoomEntries_EventsShareOneSubmissionPath(t *testing.T) {
 
 	// Adapter retry and cross-path replay return the one stored entry.
 	status, out = doJSON(t, "POST", eventsURL, roomTok,
-		`{"type":"BUILDING","issue":"APP-1","actor":"w1","client_entry_id":"e2"}`)
+		`{"type":"BUILDING","issue":"APP-1","actor":"w1","payload":{"step":2},"client_entry_id":"e2"}`)
 	require.Equal(t, http.StatusOK, status, "adapter event retry: %v", out)
 	assert.Equal(t, adapterID, entryID(t, out))
 	assert.Equal(t, true, out["idempotent_replay"])
 	status, out = doJSON(t, "POST", entriesURL, roomTok,
-		`{"kind":"event","event_type":"BUILDING","client_entry_id":"e2"}`)
+		`{"kind":"event","event_type":"BUILDING","issue":"APP-1","extension":{"step":2},"client_entry_id":"e2"}`)
 	require.Equal(t, http.StatusOK, status, "cross-path event replay: %v", out)
 	assert.Equal(t, adapterID, entryID(t, out))
 	assert.Equal(t, 1, storedWithKey("e2"))

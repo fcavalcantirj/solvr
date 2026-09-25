@@ -74,6 +74,9 @@ func (h *RoomEventsHandler) submitEvent(ctx context.Context, room *models.Room, 
 		if errors.Is(err, db.ErrInvalidEntryReference) {
 			return nil, false, &submitError{http.StatusBadRequest, "VALIDATION_ERROR", invalidEntryReferenceMsg}
 		}
+		if errors.Is(err, db.ErrClientEntryConflict) {
+			return nil, false, clientEntryReusedError
+		}
 		slog.Error("failed to create room event", "error", err, "room_id", room.ID, "type", s.EventType)
 		return nil, false, &submitError{http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create event"}
 	}

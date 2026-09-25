@@ -95,8 +95,8 @@ func TestMessageDelivery_ClientEntryIdempotentRetry(t *testing.T) {
 		t.Fatalf("expected first write to create a new entry")
 	}
 
-	// Retry the same logical write (client re-sends after a lost response).
-	params.Content = "retry payload should be ignored"
+	// Retry the same write (client re-sends after a lost response). Reusing the key for a
+	// different payload is refused: TestClientEntry_ReuseWithDifferentPayloadConflicts.
 	second, created2, err := msgRepo.CreateWithClientEntry(ctx, params)
 	if err != nil {
 		t.Fatalf("retry write: %v", err)

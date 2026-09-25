@@ -11682,3 +11682,102 @@ REMAINING FOR idx 73 (passes STAYS false): step 1 remainder ("error" STRING shap
   ownership-change-by-retry audit); step 6 OpenAPI/SPEC docs (incl. Idempotency-Key,
   Idempotent-Replayed, the two 409 codes, CORS, credential transport, size limits,
   stream resume, timeouts, If-Match/ETag).
+
+================================================================================
+2026-09-24 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the
+public API"
+SLICE 7 of N: client_entry_id reuse with a DIFFERENT payload => 409 — step 4
+"... client_entry_id for timeline writes; ... reject reuse with a different payload."
+================================================================================
+
+TASK SELECTION: same top-down deferrals as slices 1-6 (idx 23 multi-instance not
+  built; 51/52/67/72-remainder cutover-gated on idx 93; 58 audit spans unbuilt
+  search cutover; 66 needs a test deployment). idx 73 continues.
+
+FINDING [TEST]: before this slice a retry reusing a client_entry_id with a different
+  body/extension/issue/event_type silently replayed the first entry (RED run: 10 of 10
+  mutated writes returned created=false, no error), and an event's key reused for a
+  message leaked the raw unique-index error (23505) => HTTP 500 INTERNAL_ERROR.
+
+DIFF (git status --porcelain / git diff --stat: 7 modified +57/-14, 3 new):
+  A backend/internal/db/client_entry_match.go (78): sameMessageWrite / sameEntryWrite —
+    "same write" = kind, body, content_type (default text), extension/metadata (JSON by
+    value, absent = {}), reply_to/supersedes refs, addressed_member_ids (absent = null),
+    event_type, issue. Display label (agent_name/actor_label) deliberately NOT compared:
+    the author is fixed by the credential that scopes the key.
+  M backend/internal/db/room_entries.go: new ErrClientEntryConflict; Create returns it
+    on pre-check or 23505-race lookup when the stored entry differs; not logged as a
+    query error.
+  M backend/internal/db/room_messages.go: CreateWithClientEntry same rule via
+    replayMessage(); on 23505 where the messages view finds no row (key held by an
+    EVENT of this author) => ErrClientEntryConflict instead of the raw 500.
+  M backend/internal/api/handlers/rooms_entry_submit.go: clientEntryReusedError =
+    409 CLIENT_ENTRY_ID_REUSED; submitMessage maps ErrClientEntryConflict to it.
+  M backend/internal/api/handlers/rooms_event_submit.go: submitEvent maps it too.
+    => covers POST /v1/rooms/{slug}/entries (message + event), /r/{slug}/message
+    (incl. legacy client_message_id), /r/{slug}/events. Envelope gets request_id from
+    the slice-4 stamping.
+  M SPEC.md (+4, entries contract section ~line 5002): documents the 409 rule.
+  A backend/internal/db/room_entries_client_entry_test.go: TestClientEntry_Reuse
+    WithDifferentPayloadConflicts (integration).
+  A backend/internal/api/router_rooms_client_entry_test.go: TestRoomEntries_Client
+    EntryReuseWithDifferentPayloadIs409 (E2E through the real router).
+  M 2 existing tests — REPLACED BEHAVIOR, per the golden rule:
+    (1) backend/internal/api/handlers/rooms_messages_delivery_test.go
+        TestMessageDelivery_ClientEntryIdempotentRetry: the retry set
+        `params.Content = "retry payload should be ignored"` and asserted replay
+        (created=false, same id, original content). Step 4 now REJECTS that. Change:
+        the mutation line removed so the retry is the identical write; every replay
+        assertion (same id, created=false, original content, 1 row, other author not
+        deduped) is kept unchanged. Different-payload behavior now covered by
+        TestClientEntry_ReuseWithDifferentPayloadConflicts ("different body" case) —
+        PASS [TEST].
+    (2) backend/internal/api/router_rooms_entries_events_test.go
+        TestRoomEntries_EventsShareOneSubmissionPath: three retries omitted fields the
+        original sent (canonical e1 retry omitted "extension":{"pr":7}; adapter e2 retry
+        omitted "payload":{"step":2}; cross-path e2 replay omitted issue APP-1 and the
+        payload) and asserted 200 replay. Change: those three bodies now carry the same
+        fields as the original; all status/id/replay-flag/row-count assertions kept.
+        Different-payload behavior covered by TestRoomEntries_ClientEntryReuseWith
+        DifferentPayloadIs409 ("canonical event, different issue", "adapter event,
+        different payload") and the DB test's "payload dropped" case — PASS [TEST].
+    No test deleted, skipped or loosened otherwise.
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, the isolated
+  schema-only test DB in the local solvr-postgres container):
+  [TEST] RED db (sentinel error only): 10 mutated writes replayed + cross-kind 23505.
+    GREEN => TestClientEntry_ReuseWithDifferentPayloadConflicts PASS,
+    TestRoomEntryRepository_ClientEntryIdempotent PASS.
+  [TEST] RED api (db rule in, handlers unmapped): 500 INTERNAL_ERROR. GREEN =>
+    TestRoomEntries_ClientEntryReuseWithDifferentPayloadIs409 PASS (8 conflict cases,
+    2 entries / message_count 1 after them, identical retries still 200 incl. JSON
+    whitespace difference and adapter path).
+  [TEST] after the test updates: TestRoomEntries_EventsShareOneSubmissionPath PASS,
+    TestMessageDelivery_ClientEntryIdempotentRetry PASS, TestRoomEntries_Canonical
+    AndAdapterWritesShareOneSubmissionPath PASS (untouched; its adapter replay differs
+    only in label), TestPostMessageHandler_AcceptsClientEntryFields PASS, connect-prompt
+    entries tests PASS.
+  [REAL] go vet internal/db internal/api internal/api/handlers clean; gofmt clean on
+    touched files; check-file-size.sh flags none of the touched files (its exit 1 is
+    the pre-existing router.go etc. set).
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 run ONCE to /tmp/solvr_idx73_s7_full.log:
+  FAIL only in internal/api, internal/api/handlers, internal/db — 78 unique FAIL names
+  vs 79 in s6; sorted comm: NO new names; TestPinsCreateWithAgentAPIKey gone (leftover-
+  pins collision, s6 note). Everything else = the documented pre-existing set.
+
+NOT DONE / NOTES:
+  - No migration in this slice; nothing for the owner beyond s6's 000101 UAT.
+  - Clients: repo grep found no SDK/CLI/MCP code that resends client_entry_id with a
+    changed body; frontend/app/docs/protocol/page.tsx only shows an example key.
+    [UNVERIFIED] external agents that resend a MODIFIED body under the old key now get
+    409 instead of a silent replay — intended by step 4.
+
+REMAINING FOR idx 73 (passes STAYS false): step 1 remainder ("error" STRING shapes in
+  unsubscribe.go/admin.go; field-error docs); step 3 status-code matrix pinned; step 4
+  remainder — idempotency_keys pruning job; step 5 remainder (directive supersede under
+  retry, ownership-change-by-retry audit); step 6 OpenAPI/SPEC docs (incl.
+  Idempotency-Key, Idempotent-Replayed, IDEMPOTENCY_KEY_REUSED / IDEMPOTENCY_REQUEST_
+  IN_PROGRESS / CLIENT_ENTRY_ID_REUSED, CORS, credential transport, size limits, stream
+  resume, timeouts, If-Match/ETag).

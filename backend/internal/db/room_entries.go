@@ -25,6 +25,11 @@ var ErrCrossRoomReference = errors.New("reference target is not in the same room
 // participant of the same room (enforced by the room_entries_allocate trigger).
 var ErrInvalidEntryReference = errors.New("entry reference is not part of this room")
 
+// ErrClientEntryConflict is returned when an author reuses a client_entry_id in a room
+// for a write whose payload differs from the entry already stored under that key. A
+// retry replays only the same write; nothing is stored for the conflicting one.
+var ErrClientEntryConflict = errors.New("client_entry_id was already used with a different payload")
+
 // sameRoomReferenceConstraint is the constraint name the timeline trigger raises for a
 // foreign reply, supersede or addressing reference.
 const sameRoomReferenceConstraint = "room_entries_same_room_reference"
@@ -74,7 +79,8 @@ func NewRoomEntryRepository(pool *Pool) *RoomEntryRepository {
 // carry an event_type (enforced by the DB CHECK). A reply must reference an entry in
 // the same room. When ClientEntryID is set for an authenticated author, a retry with
 // the same (room_id, author_id, client_entry_id) returns the existing entry with
-// created=false instead of duplicating it.
+// created=false instead of duplicating it; reusing the key for a different payload
+// returns ErrClientEntryConflict and stores nothing.
 func (r *RoomEntryRepository) Create(ctx context.Context, params models.CreateRoomEntryParams) (*models.RoomEntry, bool, error) {
 	dedupable := params.ClientEntryID != nil && *params.ClientEntryID != "" && params.AuthorID != nil
 
@@ -85,6 +91,9 @@ func (r *RoomEntryRepository) Create(ctx context.Context, params models.CreateRo
 		if dedupable {
 			existing, gerr := getRoomEntryByClientEntry(ctx, tx, params.RoomID, *params.AuthorID, *params.ClientEntryID)
 			if gerr == nil {
+				if !sameEntryWrite(existing, params) {
+					return ErrClientEntryConflict
+				}
 				out = existing
 				return nil
 			}
@@ -131,6 +140,9 @@ func (r *RoomEntryRepository) Create(ctx context.Context, params models.CreateRo
 			var pgErr *pgconn.PgError
 			if dedupable && errors.As(ierr, &pgErr) && pgErr.Code == "23505" {
 				if existing, gerr := getRoomEntryByClientEntry(ctx, tx, params.RoomID, *params.AuthorID, *params.ClientEntryID); gerr == nil {
+					if !sameEntryWrite(existing, params) {
+						return ErrClientEntryConflict
+					}
 					out = existing
 					return nil
 				}
@@ -142,7 +154,7 @@ func (r *RoomEntryRepository) Create(ctx context.Context, params models.CreateRo
 		return nil
 	})
 	if err != nil {
-		if !errors.Is(err, ErrCrossRoomReference) && !errors.Is(err, ErrInvalidEntryReference) {
+		if !errors.Is(err, ErrCrossRoomReference) && !errors.Is(err, ErrInvalidEntryReference) && !errors.Is(err, ErrClientEntryConflict) {
 			LogQueryError(ctx, "Create", "room_entries", err)
 		}
 		return nil, false, err

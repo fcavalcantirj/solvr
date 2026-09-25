@@ -37,13 +37,19 @@ type submitError struct {
 	message string
 }
 
+// clientEntryReusedError refuses a client_entry_id reused by the same author for a
+// different payload: a retry replays only the same write.
+var clientEntryReusedError = &submitError{http.StatusConflict, "CLIENT_ENTRY_ID_REUSED",
+	"client_entry_id was already used with a different payload; send a new client_entry_id for a new entry"}
+
 func (e *submitError) write(w http.ResponseWriter) {
 	roomWriteError(w, e.status, e.code, e.message)
 }
 
 // submitMessage is the ONE message submission implementation. It validates the write,
 // stores exactly one timeline entry (a retry with the same client_entry_id from the same
-// author returns the existing entry with created=false), and on a new entry applies the
+// author returns the existing entry with created=false; the same key with a different
+// payload is 409 CLIENT_ENTRY_ID_REUSED), and on a new entry applies the
 // side effects once: message count, room activity, the author's presence heartbeat, the
 // activation milestone and the live broadcast.
 func (h *RoomMessagesHandler) submitMessage(ctx context.Context, room *models.Room, s messageSubmission) (*models.Message, bool, *submitError) {
@@ -100,6 +106,9 @@ func (h *RoomMessagesHandler) submitMessage(ctx context.Context, room *models.Ro
 	if err != nil {
 		if errors.Is(err, db.ErrInvalidEntryReference) {
 			return nil, false, &submitError{http.StatusBadRequest, "VALIDATION_ERROR", invalidEntryReferenceMsg}
+		}
+		if errors.Is(err, db.ErrClientEntryConflict) {
+			return nil, false, clientEntryReusedError
 		}
 		slog.Error("failed to create message", "error", err, "room_id", room.ID)
 		return nil, false, &submitError{http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create message"}

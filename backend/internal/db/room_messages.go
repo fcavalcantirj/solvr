@@ -72,8 +72,8 @@ func (r *MessageRepository) Create(ctx context.Context, params models.CreateMess
 //
 // When params.ClientEntryID is set for an authenticated author (AuthorID != nil),
 // the write is idempotent: a retry with the same (room_id, author_id, client_entry_id)
-// returns the already-persisted entry with created=false instead of duplicating it.
-// This lets an agent that lost the response to its write safely retry without posting
+// returns the already-persisted entry with created=false instead of duplicating it,
+// and reusing the key for a different payload returns ErrClientEntryConflict. This lets an agent that lost the response to its write safely retry without posting
 // the message twice. Writes without a client entry id, or from a shared token
 // (AuthorID == nil), always create a new row.
 func (r *MessageRepository) CreateWithClientEntry(ctx context.Context, params models.CreateMessageParams) (*models.Message, bool, error) {
@@ -82,7 +82,7 @@ func (r *MessageRepository) CreateWithClientEntry(ctx context.Context, params mo
 	if dedupable {
 		existing, err := r.getByClientEntryID(ctx, params.RoomID, *params.AuthorID, *params.ClientEntryID)
 		if err == nil {
-			return existing, false, nil
+			return replayMessage(existing, params)
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return nil, false, err
@@ -119,8 +119,13 @@ func (r *MessageRepository) CreateWithClientEntry(ctx context.Context, params mo
 		// index rejects the second insert. Return the entry the winner persisted.
 		var pgErr *pgconn.PgError
 		if dedupable && errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			if existing, gerr := r.getByClientEntryID(ctx, params.RoomID, *params.AuthorID, *params.ClientEntryID); gerr == nil {
-				return existing, false, nil
+			existing, gerr := r.getByClientEntryID(ctx, params.RoomID, *params.AuthorID, *params.ClientEntryID)
+			if gerr == nil {
+				return replayMessage(existing, params)
+			}
+			if errors.Is(gerr, pgx.ErrNoRows) {
+				// The key is held by a non-message entry (an event) of this author.
+				return nil, false, ErrClientEntryConflict
 			}
 		}
 		if refErr := asInvalidEntryReference(err); refErr != err {
@@ -131,6 +136,15 @@ func (r *MessageRepository) CreateWithClientEntry(ctx context.Context, params mo
 	}
 
 	return &msg, true, nil
+}
+
+// replayMessage returns the stored message for a retry of the same write, or
+// ErrClientEntryConflict when the key is reused for a different payload.
+func replayMessage(existing *models.Message, params models.CreateMessageParams) (*models.Message, bool, error) {
+	if !sameMessageWrite(existing, params) {
+		return nil, false, ErrClientEntryConflict
+	}
+	return existing, false, nil
 }
 
 // getByClientEntryID returns the non-deleted message an author already persisted

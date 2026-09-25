@@ -11424,3 +11424,92 @@ REMAINING FOR idx 73 (why passes STAYS false): step 1 (one success/error envelop
   supersede); step 6 (OpenAPI/SPEC docs of the standardized contract). Step 2 is
   now DONE for both entries (prior) and replies (this slice). idx 73 is NOT
   cutover-blocked => completable across a few more slices. passes=false.
+
+================================================================================
+2026-09-24 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the
+public API"
+SLICE 4 of N: ONE ERROR ENVELOPE WITH request_id — step 1 "errors contain a
+stable code, human-readable message, request_id, and optional field errors or
+retry_after_seconds without secrets."
+================================================================================
+
+TASK SELECTION: same top-down deferrals as slices 1-3 (idx 23 multi-instance not
+  built; 51/52/67/72-remainder cutover-gated on idx 93; 58 audit spans unbuilt
+  search cutover; 66 needs a test deployment). idx 73 continues.
+
+FINDING [REAL]: before this slice NO error body carried request_id. The router's
+  requestIDMiddleware set only the X-Request-ID RESPONSE header; response.WriteError,
+  router writeError, leaderboard writeError, auth writeErrorResponse, the 429
+  writers and ~55 handler files that encode bodies themselves all emit
+  {"error":{"code","message"}} with no correlation id. chi Recoverer's panic path
+  emitted a bare 500 with NO body at all. The main RateLimiter 429 only had the
+  Retry-After header, no retry_after_seconds in the body.
+
+DESIGN: one boundary middleware instead of editing ~60 writers.
+  A backend/internal/api/middleware/error_envelope.go (202 lines): ErrorEnvelope.
+    Buffers ONLY 4xx/5xx bodies (success + SSE stream straight through; Flush is
+    delegated, Unwrap exposed for http.ResponseController). On finish:
+      - JSON body whose "error" is an object => adds request_id (from the
+        X-Request-ID response header) and, on 429/503, retry_after_seconds (from
+        Retry-After) — only when absent; all other bytes preserved via
+        json.RawMessage (numbers not re-encoded).
+      - empty or text/plain body => synthesizes {"error":{code,message,request_id}}
+        with a status-derived stable code (BAD_REQUEST/UNAUTHORIZED/FORBIDDEN/
+        NOT_FOUND/METHOD_NOT_ALLOWED/CONFLICT/PAYLOAD_TOO_LARGE/RATE_LIMITED/
+        INTERNAL_ERROR, else upper-snake status text) and the text as message.
+      - text/html bodies and JSON whose "error" is a STRING (unsubscribe.go,
+        admin.go "error":"CODE" shapes) are left UNTOUCHED — see REMAINING.
+      - HEAD errors: status only, no body.
+  M backend/internal/api/router.go (+1): r.Use(apimiddleware.ErrorEnvelope) right
+    after requestIDMiddleware and OUTSIDE middleware.Recoverer (so panics get an
+    envelope). router.go was ALREADY 1233 lines (pre-existing >800 violation);
+    this adds one line, no split attempted in this slice.
+  A backend/internal/api/middleware/error_envelope_test.go (9 unit tests)
+  A backend/internal/api/error_envelope_contract_test.go (router-level contract:
+    404 unknown route with generated id, 404 with client-supplied X-Request-ID
+    echoed, 405 — each asserts error.code, non-empty message, and
+    error.request_id == X-Request-ID header).
+  git status --porcelain: M router.go; ?? the 3 new files above. Nothing else.
+
+TDD:
+  [TEST] RED: TestErrorEnvelopeContract ran BEFORE the middleware existed => 3/3
+    subtests FAIL `error.request_id = "", want X-Request-ID "..."`.
+  [TEST] GREEN: go test ./internal/api/middleware/ -run TestErrorEnvelope -v =>
+    9/9 PASS, 0 SKIP. go test ./internal/api/ -run
+    'TestErrorEnvelopeContract|TestMethodNotAllowed|TestRouter' -v => all PASS
+    (existing TestRouterRequestID, TestMethodNotAllowedReturnsJSON,
+    TestRouterJSONContentType unchanged and green).
+  [REAL] go vet ./internal/api/middleware/ ./internal/api/ clean; gofmt -l lists
+    none of my files.
+
+FULL SUITE [TEST]: DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test
+  (isolated schema-only test DB in the local solvr-postgres container) go test
+  ./... -p 1 -count=1, saved ONCE to /tmp/solvr_idx73_s4_full.log: 15 packages ok,
+  3 FAIL (internal/api, internal/api/handlers, internal/db). Triage from that log:
+    - internal/api/handlers: exactly the 4 documented pre-existing GitHub OAuth
+      callback integration tests.
+    - internal/db: agent List / pulse / trending / victories / hardcore /
+      you-might-like / rising-ideas tests — the db package does not import
+      internal/api at all, so unaffected by construction; solvr_test shared-state.
+    - internal/api: TestCommentsCount_{Problems,Ideas,Feed}* + TestTypeSpecificList
+      Endpoints ("failed to create post": repo returns "post not found") —
+      BASELINE with my change git-stashed (/tmp/solvr_idx73_s4_baseline.log): the
+      SAME 4 FAIL identically => pre-existing, not mine.
+      TestRoomRoutes_SSE_NoBufferingHeader (handshake 404) + TestRoomRoutes_Presence
+      _JoinAndList (join 409 ROOM_ARCHIVED on a time-derived test-NNN000 slug) —
+      run ISOLATED WITH my change (/tmp/solvr_idx73_s4_rooms.log) => both PASS;
+      the full-run failure is cross-test shared state on 'test-%' room slugs, not
+      the middleware (SSE stream verified by TestErrorEnvelope_StreamsSuccessWithFlush).
+
+SIDE NOTE [REAL, not fixed — not asked]: requestIDMiddleware generates an id
+  only onto the RESPONSE header, so middleware.Logging (reads r.Header) logs no
+  request_id for server-generated ids (visible in the RED run log lines).
+
+REMAINING FOR idx 73 (passes STAYS false): step 1 remainder — "error" STRING
+  shapes (unsubscribe.go, admin.go) and field-error shape documentation; step 3
+  status-code matrix pinned; step 4 durable Idempotency-Key (room/post/reply
+  create) + client_entry_id reuse rejection, >=24h retention; step 5 If-Match on
+  PATCH /v1/rooms/{slug} + directive supersede; step 6 OpenAPI/SPEC contract docs
+  (CORS origins, credential transport, request-size limits, stream resume,
+  timeouts). Step 2 done (slices prior + 3).

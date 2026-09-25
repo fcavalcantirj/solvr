@@ -39,6 +39,7 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 
 	// Middleware stack
 	r.Use(requestIDMiddleware)
+	r.Use(apimiddleware.ErrorEnvelope) // after request ID, outside Recoverer
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 

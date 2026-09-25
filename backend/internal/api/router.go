@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -44,27 +43,12 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	r.Use(middleware.Recoverer)
 
 	// CORS configuration - MUST be early in the chain so error responses include CORS headers
-	// Read from ALLOWED_ORIGINS env var or use defaults
-	allowedOrigins := []string{"http://localhost:3000", "https://solvr.dev", "https://www.solvr.dev"}
-	if envOrigins := os.Getenv("ALLOWED_ORIGINS"); envOrigins != "" {
-		allowedOrigins = strings.Split(envOrigins, ",")
-		// Trim whitespace from each origin
-		for i, origin := range allowedOrigins {
-			allowedOrigins[i] = strings.TrimSpace(origin)
-		}
-	}
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   allowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID", "X-Session-ID"},
-		ExposedHeaders:   []string{"X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"},
-		AllowCredentials: true,
-		MaxAge:           int(12 * time.Hour / time.Second),
-	}))
+	// Policy lives in cors_policy.go (ALLOWED_ORIGINS env var or defaults).
+	r.Use(cors.Handler(corsOptions()))
 
 	// Other middleware after CORS
 	r.Use(apimiddleware.Logging)
-	r.Use(apimiddleware.BodyLimit(64 * 1024)) // FIX-028: 64KB request body limit
+	r.Use(apimiddleware.BodyLimit(requestBodyLimitBytes)) // FIX-028: 64KB request body limit
 	r.Use(securityHeadersMiddleware)
 	r.Use(jsonContentTypeMiddleware)
 

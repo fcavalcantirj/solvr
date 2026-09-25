@@ -25,6 +25,16 @@ var globalSSEConnections int64
 // MaxGlobalSSEConnections is the global SSE connection limit per D-05.
 const MaxGlobalSSEConnections int64 = 1000
 
+// Stream timing the public contract publishes (OpenAPI x-solvr-conventions.streams).
+const (
+	// SSEHeartbeatInterval is the default period of the ": heartbeat" comment and the
+	// access re-check (D-04).
+	SSEHeartbeatInterval = 30 * time.Second
+	// SSEMaxLifetime is how long one stream connection lives before the server ends it
+	// and the client reconnects with its cursor (D-03).
+	SSEMaxLifetime = 30 * time.Minute
+)
+
 // sseRoomContextKey is the context key for the room resolved by bearer guard middleware.
 // Plan 03 provides the BearerGuard middleware that sets this value.
 type sseRoomContextKey struct{}
@@ -255,12 +265,12 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 	}
 
 	// Step 6: Event loop with heartbeat (D-03: 30-min max, D-04: 30s heartbeat).
-	maxLifetime, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
+	maxLifetime, cancel := context.WithTimeout(r.Context(), SSEMaxLifetime)
 	defer cancel()
 
 	interval := h.heartbeatInterval
 	if interval <= 0 {
-		interval = 30 * time.Second
+		interval = SSEHeartbeatInterval
 	}
 	heartbeat := time.NewTicker(interval)
 	defer heartbeat.Stop()
@@ -328,7 +338,10 @@ func writeAccessRevoked(w http.ResponseWriter, flusher http.Flusher) {
 
 // maxSSEReplay caps how many missed entries one connection replays; a longer gap ends the
 // stream with a retry directive so the client reconnects from its last delivered id.
-const maxSSEReplay = 1000
+const maxSSEReplay = SSEMaxReplayFrames
+
+// SSEMaxReplayFrames is maxSSEReplay as published in the contract.
+const SSEMaxReplayFrames = 1000
 
 // sseReplayPage is the read size of one replay query.
 const sseReplayPage = 100

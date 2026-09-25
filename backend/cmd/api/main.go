@@ -239,12 +239,12 @@ func main() {
 	server := &http.Server{
 		Addr:        ":" + port,
 		Handler:     router,
-		ReadTimeout: 15 * time.Second,
+		ReadTimeout: api.ServerReadTimeout,
 		// WriteTimeout intentionally omitted: SSE connections are long-lived.
 		// BodyLimit(64KB) middleware prevents slow-body write attacks.
 		// ReadTimeout remains, protecting against slow-header attacks.
 		// Matches Quorum's production configuration on the same Traefik/Easypanel stack.
-		IdleTimeout: 60 * time.Second,
+		IdleTimeout: api.ServerIdleTimeout,
 	}
 
 	// Start server in goroutine

@@ -80,6 +80,12 @@ func wellKnownAIAgentHandler(w http.ResponseWriter, r *http.Request) {
 // getOpenAPISpec returns the comprehensive OpenAPI spec.
 // Moved to a function to keep file size manageable.
 func getOpenAPISpec() map[string]interface{} {
+	spec := baseOpenAPISpec()
+	addConventions(spec)
+	return spec
+}
+
+func baseOpenAPISpec() map[string]interface{} {
 	return map[string]interface{}{
 		"openapi": "3.0.3",
 		"info": map[string]interface{}{

@@ -3919,3 +3919,152 @@ REMAINING FOR idx 74 [UNVERIFIED]:
 UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: unchanged from slices 6/10 — owner
 applies migrations 000101 and 000102 to production through the admin query route, then
 deploys. [REAL] This slice adds no migration or deployment action.
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 21 of N. Step 6 (OpenAPI contract: CORS origins, credential transport, request-size
+limits, stream resume, timeouts) — the only step never started in slices 1-20. Reading the
+CORS code to document it exposed a defect: the browser CORS policy did not allow the very
+headers steps 4/5 make part of the API.
+================================================================================
+
+TASK SELECTION [REAL]: idx 24 is still an acceptance task (steps need two API instances, more
+than one client product and individual revocation; idx 75 and 78 are still false). idx 52/53,
+68, 73's remainder and idx 67 are gated as recorded in slices 11-20; no description starts
+with URGENT. idx 74 is the first buildable false task. [UNVERIFIED: I re-read idx 24's steps
+and the ledger flags but did not re-derive the other gates.]
+
+SPIKE (throwaway test internal/api/zz_spike_cors_test.go, deleted before the commit; output
+read in the session) [REAL]: full router, Origin https://solvr.dev, OPTIONS /v1/rooms.
+  MEASURED: a preflight naming Idempotency-Key, If-Match or Last-Event-ID answers 200 with NO
+  Access-Control-Allow-Origin / -Methods / -Headers, so a browser page cannot send them; the
+  same preflight with Authorization/Content-Type is allowed. Access-Control-Expose-Headers was
+  only X-Request-Id and the three X-Ratelimit-*, so ETag, Idempotent-Replayed and Retry-After
+  were unreadable to cross-origin JS. [REAL, read] router.go allowed Accept, Authorization,
+  Content-Type, X-Request-ID, X-Session-ID only. A grep found no PUT route in production code
+  (no `.Put(` / MethodPut), so the method list needed no change.
+  [UNVERIFIED] whether a native EventSource cross-origin reconnect sends Last-Event-ID without
+  a preflight (I did not test a browser); the header is allowed either way, and ?after= /
+  ?lastEventId= already exist for header-less clients.
+
+TDD RED [TEST]:
+  router_cors_contract_test.go: TestCORSContract_PreflightAllowsTheContractRequestHeaders (5
+    subtests) and TestCORSContract_ExposesTheContractResponseHeaders failed as measured above;
+    TestCORSContract_PreflightStillRefusesUnknownHeadersAndOrigins passed (it guards against
+    over-opening).
+  openapi_conventions_test.go: first a compile failure (undefined handlers.SSEHeartbeatInterval,
+    ServerReadTimeout, ...), then after the constants existed 7 of 8 tests failed with
+    `spec has no x-solvr-conventions...` (TestOpenAPIConventions_EveryReferenceResolves passed
+    on the old spec: it is a guard).
+
+IMPLEMENTATION [REAL]:
+  - transport_policy.go (new): one definition of the CORS policy (origins from ALLOWED_ORIGINS
+    or the same three defaults, methods unchanged, allowed request headers now also
+    Idempotency-Key, If-Match, Last-Event-ID, exposed response headers now also ETag,
+    Idempotent-Replayed, Retry-After, credentials true, preflight max-age 12h), the 64KB body
+    limit and the server read/idle timeouts. router.go and cmd/api/main.go now use it; the
+    values 64KB / 15s / 60s are unchanged.
+  - handlers/rooms_sse.go: exported SSEHeartbeatInterval (30s), SSEMaxLifetime (30m) and
+    SSEMaxReplayFrames (1000); the stream code uses them instead of the same literals.
+  - openapi_conventions.go (new): addConventions adds components.parameters (IdempotencyKey,
+    IfMatch, LastEventID, StreamAccessToken), components.headers (ETag, IdempotentReplayed,
+    RetryAfter, RequestID), components.responses (400/401/403/404/409/412/413/429/503, each
+    with the Error envelope and X-Request-ID), a fuller schemas.Error (required code, message,
+    request_id; details; retry_after_seconds) and the root extension x-solvr-conventions:
+    cors, credential_transport, request_limits, streams (resume), timeouts, idempotency,
+    conditional_requests. Every number is read from the value the server enforces
+    (transport_policy.go, middleware.IdempotencyKeyHeader / IdempotentReplayedHeader,
+    db.IdempotencyRetention, the handlers stream constants); a test pins each one.
+  - discovery.go: getOpenAPISpec = baseOpenAPISpec() + addConventions. The two oversized
+    openapi_paths.go / openapi_schemas.go were NOT touched (not enlarged), so no split was needed.
+  Facts documented were read from code, not from earlier journal entries: bodylimit.go,
+  error_envelope.go, idempotency.go, posts_concurrency.go, rooms_sse.go, sse_access_token.go,
+  main.go; a grep found no cookie read or set in api/ or auth/ (credential_transport.cookies =
+  false). A first draft claimed private rooms answer 404; I checked the guards, found they
+  answer 403 to non-members (room_access_guard.go:64) and that the verified privacy-404 rule
+  (slice 15) is for family-visibility posts and their replies, and corrected the wording.
+
+FILES ([REAL] final pre-journal `git status --porcelain` and `git diff --numstat`):
+  Production:
+  M backend/cmd/api/main.go (+2/-2): ReadTimeout / IdleTimeout read api.ServerReadTimeout /
+    api.ServerIdleTimeout.
+  M backend/internal/api/discovery.go (+6/-0): getOpenAPISpec split as above.
+  M backend/internal/api/handlers/rooms_sse.go (+16/-3): the three exported stream constants.
+  M backend/internal/api/router.go (+3/-19): CORS block and body limit call the policy file;
+    unused "strings" import removed. router.go 1224 lines (pre-existing >800, reduced).
+  A backend/internal/api/transport_policy.go (71 lines)
+  A backend/internal/api/openapi_conventions.go (176 lines)
+  Tests:
+  A backend/internal/api/router_cors_contract_test.go (77 lines, 3 tests)
+  A backend/internal/api/openapi_conventions_test.go (261 lines, 8 tests)
+  progress.txt is this append. spec.json and SPEC.md are unchanged (SPEC.md is not named by
+  this step). TEST REPLACEMENT: none; no test was deleted, skipped or loosened. The existing
+  TestCORS* tests (origins, credentials, exposed rate-limit headers, methods, disallowed origin,
+  TestCORS_DoesNotAdmitTheOperatorCredential) are untouched and still PASS.
+  gofmt is clean on every file I created and on router.go / rooms_sse.go; cmd/api/main.go and
+  discovery.go were ALREADY not gofmt-clean at HEAD (checked with `git show HEAD:... | gofmt
+  -l`) and I did not reformat them, to keep the diff scoped.
+
+GREEN / VERIFICATION:
+  [TEST] `go test ./internal/api -run '^(TestOpenAPI|TestCORS|TestDiscovery|TestWellKnown)'
+    -count=1 -v`: ok (0.866s), every listed test PASS, 0 SKIP — all 11 new tests, the 5+1
+    pre-existing OpenAPI tests, TestOpenAPISpec_IncludesPinEndpoints/PinSchemas,
+    TestDiscoveryEndpointsNoCORS and the 8 pre-existing CORS tests. These tests use
+    NewRouter(nil, nil, nil): no database involved, so DATABASE_URL is irrelevant to them.
+  [REAL] `go build ./...` and `go vet ./internal/api ./internal/api/handlers` clean.
+  [UNVERIFIED] scripts/check-file-size.sh was not run this iteration; sizes were checked with
+    wc -l (above): every new file <=261 lines, no oversized file enlarged.
+
+FULL SUITE [REAL, executed once on final code; NOT GREEN]:
+`DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test go test ./... -p 1
+-count=1` (local isolated test DB, healthy solvr-postgres container) exited 1; raw output
+/private/tmp/solvr_idx74_s21_final_full.log. [TEST] Every package except internal/api,
+internal/api/handlers and internal/db passed. 111 unique top-level failures vs slice 20's 110
+(`comm`): 0 gone, 1 new = TestPinsCreateWithAgentAPIKey. None of this slice's tests is in the
+failure set.
+  TestPinsCreateWithAgentAPIKey: MEASURED in the log: 409 DUPLICATE_CONTENT "pin already
+  exists for this CID and owner" (unique (cid, owner_id), migration 000037). MEASURED after:
+  the same test alone `-count=3` PASSes 3/3, and solvr_test holds 70 pins of that fixed CID
+  with 70 distinct owners (accumulated by earlier runs). INFERRED, NOT ESTABLISHED: a
+  shared-database collision (the test registers `pins_test_<UnixNano%1e6>` and posts a fixed
+  CID); I did not find which owner collided. [REAL, read] nothing this slice changed is on
+  the /v1/agents/register -> /v1/pins path (CORS options, body-limit constant, OpenAPI).
+  Classification of the 111 failures by the first error line of each (heuristic awk, counts
+  are approximate): 52 assertion/data-state, 44 `null value in column "referral_code" ...
+  violates not-null constraint` raised by test-fixture user INSERTs, 6 `cannot scan NULL into
+  *string`, 9 other. So about 40% of the standing failures are test fixtures that predate the
+  NOT NULL referral_code and would need fixing in the tests; that is outside this task's
+  steps and I did not touch them. The required full suite is therefore not green and idx 74
+  stays open.
+
+BEHAVIOR CHANGE (v0) [REAL]:
+  - A cross-origin browser page may now send Idempotency-Key, If-Match and Last-Event-ID and
+    may read ETag, Idempotent-Replayed and Retry-After; preflights naming any other header or
+    origin are still refused (pinned).
+  - GET /v1/openapi.json and /v1/openapi.yaml gain x-solvr-conventions, components.parameters,
+    components.headers, components.responses; schemas.Error is a superset of the old shape.
+
+OBSERVED, NOT CHANGED [REAL, read the code]:
+  - Step 5 says "Require version or If-Match on conflicting edits". The code makes If-Match
+    OPTIONAL (posts_concurrency.go: "a request without the header is never stale"), and no
+    428 exists. The contract documents it as optional (conditional_requests.required=false,
+    pinned), so step 5's "require" is still unmet and is a decision for the owner or a later
+    slice; earlier journals only said "consider".
+  - PublicStream applies ?lastEventId= with an unconditional Header.Set, so the query value
+    overrides an explicit Last-Event-ID header, while the comment above ?after= says the header
+    wins. Only the accepted forms are documented, not their precedence.
+
+REMAINING FOR idx 74 [UNVERIFIED]:
+  - step 6: the served OpenAPI still has no rooms / entries / replies paths [REAL: no "rooms"
+    in openapi_paths.go, openapi_schemas.go or discovery.go], so the new parameters, headers
+    and responses are defined but not yet attached to any operation, and the pagination rules
+    (default 50, max 100, next_cursor, has_more) are not in the contract.
+  - step 5: "require" If-Match (see OBSERVED).
+  - step 3: unchanged from slice 20 (dead flags handler, four codes for one 400 condition,
+    malformed-body walk of path-parameter routes, 409 and 429 rows not pinned).
+
+UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: unchanged from slices 6/10 — owner
+applies migrations 000101 and 000102 to production through the admin query route, then
+deploys. [REAL] This slice adds no migration; the CORS header change takes effect only on
+deploy, and a browser check against api.solvr.dev after deploy is the owner's.

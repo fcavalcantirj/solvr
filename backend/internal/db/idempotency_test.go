@@ -148,3 +148,57 @@ func TestIdempotencyRepository_ConcurrentReserveHasOneWinner(t *testing.T) {
 		t.Fatalf("%d concurrent reservations won, want exactly 1", winners)
 	}
 }
+
+func TestIdempotencyRepository_DeleteExpiredPrunesOnlyPastRetention(t *testing.T) {
+	repo, pool, actor := setupIdempotencyTest(t)
+	ctx := context.Background()
+	scope := func(key string) models.IdempotencyScope {
+		return models.IdempotencyScope{ActorType: "agent", ActorID: actor, Operation: "post.create", Key: key}
+	}
+	for _, key := range []string{"old-completed", "old-pending", "recent-completed", "fresh-pending"} {
+		if _, reserved, err := repo.Reserve(ctx, scope(key), "h"); err != nil || !reserved {
+			t.Fatalf("reserve %s: reserved=%v err=%v", key, reserved, err)
+		}
+	}
+	for _, key := range []string{"old-completed", "recent-completed"} {
+		if err := repo.Complete(ctx, scope(key), http.StatusCreated, "application/json", []byte(`{}`)); err != nil {
+			t.Fatalf("complete %s: %v", key, err)
+		}
+	}
+	age := map[string]string{"old-completed": "25 hours", "old-pending": "25 hours", "recent-completed": "23 hours"}
+	for key, ago := range age {
+		if _, err := pool.Exec(ctx, "UPDATE idempotency_keys SET created_at = NOW() - $3::interval WHERE actor_id = $1 AND idempotency_key = $2", actor, key, ago); err != nil {
+			t.Fatalf("age %s: %v", key, err)
+		}
+	}
+
+	deleted, err := repo.DeleteExpired(ctx)
+	if err != nil {
+		t.Fatalf("DeleteExpired: %v", err)
+	}
+	if deleted < 2 {
+		t.Fatalf("deleted = %d, want at least this test's 2 expired rows", deleted)
+	}
+
+	rows, err := pool.Query(ctx, "SELECT idempotency_key FROM idempotency_keys WHERE actor_id = $1 ORDER BY idempotency_key", actor)
+	if err != nil {
+		t.Fatalf("query remaining: %v", err)
+	}
+	defer rows.Close()
+	var remaining []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		remaining = append(remaining, k)
+	}
+	if len(remaining) != 2 || remaining[0] != "fresh-pending" || remaining[1] != "recent-completed" {
+		t.Fatalf("remaining keys = %v, want [fresh-pending recent-completed]", remaining)
+	}
+
+	// The pruned key is immediately reusable as a brand-new request.
+	if _, reserved, err := repo.Reserve(ctx, scope("old-completed"), "h2"); err != nil || !reserved {
+		t.Fatalf("reserve pruned key: reserved=%v err=%v, want reserved", reserved, err)
+	}
+}

@@ -102,3 +102,16 @@ func (r *IdempotencyRepository) Release(ctx context.Context, scope models.Idempo
 		scope.ActorType, scope.ActorID, scope.Operation, scope.Key)
 	return err
 }
+
+// DeleteExpired removes records past IdempotencyRetention; Reserve already treats
+// them as free, so this only reclaims storage.
+func (r *IdempotencyRepository) DeleteExpired(ctx context.Context) (int64, error) {
+	tag, err := r.pool.Exec(ctx, `
+		DELETE FROM idempotency_keys
+		WHERE created_at < NOW() - make_interval(secs => $1)`,
+		IdempotencyRetention.Seconds())
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}

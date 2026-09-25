@@ -103,7 +103,7 @@ func main() {
 		var cleanupCtx context.Context
 		cleanupCtx, cleanupCancel = context.WithCancel(context.Background())
 		tokenRepo := db.NewClaimTokenRepository(pool)
-		cleanupJob := jobs.NewCleanupJob(tokenRepo)
+		cleanupJob := jobs.NewCleanupJob(tokenRepo).WithIdempotencyPruner(db.NewIdempotencyRepository(pool))
 		go cleanupJob.RunScheduled(cleanupCtx, jobs.DefaultCleanupInterval)
 		log.Println("Cleanup job started (runs every hour)")
 	}

@@ -11781,3 +11781,61 @@ REMAINING FOR idx 73 (passes STAYS false): step 1 remainder ("error" STRING shap
   Idempotency-Key, Idempotent-Replayed, IDEMPOTENCY_KEY_REUSED / IDEMPOTENCY_REQUEST_
   IN_PROGRESS / CLIENT_ENTRY_ID_REUSED, CORS, credential transport, size limits, stream
   resume, timeouts, If-Match/ETag).
+
+================================================================================
+2026-09-24 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the
+public API"
+SLICE 8 of N: prune expired Idempotency-Key records — step 4 remainder
+("retain create results for at least 24 hours"; s6 noted rows were taken over on
+reuse but never deleted).
+================================================================================
+
+TASK SELECTION: same top-down deferrals as slices 1-7 (idx 23 multi-instance not
+  built; 51/52/67/72-remainder cutover-gated on idx 93; 58 audit spans unbuilt
+  search cutover; 66 needs a test deployment). idx 73 continues.
+
+DIFF (git status --porcelain / git diff --stat: 5 modified, 0 new, +147/-5):
+  M backend/internal/db/idempotency.go (+13): IdempotencyRepository.DeleteExpired —
+    DELETE FROM idempotency_keys WHERE created_at < NOW() - IdempotencyRetention (24h),
+    returns rows affected. Pending AND completed rows past 24h go; rows inside 24h stay
+    (retention guarantee untouched; Reserve already treated them as free).
+  M backend/internal/jobs/cleanup.go (+34/-4): IdempotencyKeyPruner interface,
+    CleanupJob.WithIdempotencyPruner(p), PruneExpiredIdempotencyKeys (0/nil when no
+    pruner). runCleanup now runs BOTH sweeps: a token-cleanup error is logged and no
+    longer returns early (previously `return` — only the log path changed, the token
+    sweep itself is unchanged), so one failing sweep cannot starve the other.
+  M backend/cmd/api/main.go (1 line): NewCleanupJob(tokenRepo).WithIdempotencyPruner(
+    db.NewIdempotencyRepository(pool)) — hourly, same job/interval.
+  M backend/internal/db/idempotency_test.go (+54): TestIdempotencyRepository_Delete
+    ExpiredPrunesOnlyPastRetention (integration): 25h completed + 25h pending deleted,
+    23h completed + fresh pending kept, pruned key reservable again.
+  M backend/internal/jobs/cleanup_test.go (+49): TestCleanupJob_PrunesExpired
+    IdempotencyKeys, TestCleanupJob_RunPrunesEvenWhenTokenCleanupFails,
+    TestCleanupJob_NoPrunerIsNoop. No existing test modified or removed.
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, isolated
+  schema-only test DB in local solvr-postgres container):
+  [TEST] RED: both packages failed to build (WithIdempotencyPruner /
+    PruneExpiredIdempotencyKeys / DeleteExpired undefined).
+  [TEST] GREEN: internal/jobs 7/7 Cleanup tests PASS; internal/db 6/6
+    TestIdempotencyRepository_* PASS incl. the new one (no SKIP).
+  [REAL] go build ./... ok; go vet internal/jobs internal/db cmd/api clean; gofmt clean
+    on touched files except cmd/api/main.go, which gofmt -l flags on HEAD too
+    (pre-existing, left alone). All touched files far under 800 lines.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 run ONCE to /tmp/solvr_idx73_s8_full.log:
+  FAIL only in internal/api, internal/api/handlers, internal/db — 78 unique FAIL names,
+  sorted comm vs s7's log: 0 new, 0 gone (the documented pre-existing set).
+  internal/jobs ok.
+
+NOT DONE / NOTES:
+  - No migration; UAT for 000101 (s6) unchanged. Pruning starts on the owner's next
+    deploy [UNVERIFIED on prod].
+
+REMAINING FOR idx 73 (passes STAYS false): step 1 remainder ("error" STRING shapes in
+  unsubscribe.go/admin.go; field-error docs); step 3 status-code matrix pinned; step 5
+  remainder (directive supersede under retry, ownership-change-by-retry audit); step 6
+  OpenAPI/SPEC docs (Idempotency-Key, Idempotent-Replayed, IDEMPOTENCY_KEY_REUSED /
+  IDEMPOTENCY_REQUEST_IN_PROGRESS / CLIENT_ENTRY_ID_REUSED, CORS, credential transport,
+  size limits, stream resume, timeouts, If-Match/ETag).

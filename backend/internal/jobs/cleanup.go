@@ -20,9 +20,15 @@ type ClaimTokenCleaner interface {
 	DeleteExpiredTokens(ctx context.Context) (int64, error)
 }
 
+// IdempotencyKeyPruner deletes Idempotency-Key records past their retention window.
+type IdempotencyKeyPruner interface {
+	DeleteExpired(ctx context.Context) (int64, error)
+}
+
 // CleanupJob handles periodic cleanup of expired data.
 type CleanupJob struct {
-	tokenRepo ClaimTokenCleaner
+	tokenRepo       ClaimTokenCleaner
+	idempotencyKeys IdempotencyKeyPruner
 }
 
 // NewCleanupJob creates a new cleanup job with the given repository.
@@ -36,6 +42,21 @@ func NewCleanupJob(tokenRepo ClaimTokenCleaner) *CleanupJob {
 // Returns the number of deleted tokens.
 func (j *CleanupJob) CleanupExpiredTokens(ctx context.Context) (int64, error) {
 	return j.tokenRepo.DeleteExpiredTokens(ctx)
+}
+
+// WithIdempotencyPruner adds the Idempotency-Key retention sweep to the job.
+func (j *CleanupJob) WithIdempotencyPruner(p IdempotencyKeyPruner) *CleanupJob {
+	j.idempotencyKeys = p
+	return j
+}
+
+// PruneExpiredIdempotencyKeys runs the Idempotency-Key sweep once.
+// Returns the number of deleted records (0 when no pruner is configured).
+func (j *CleanupJob) PruneExpiredIdempotencyKeys(ctx context.Context) (int64, error) {
+	if j.idempotencyKeys == nil {
+		return 0, nil
+	}
+	return j.idempotencyKeys.DeleteExpired(ctx)
 }
 
 // RunScheduled runs the cleanup job on a schedule.
@@ -64,9 +85,14 @@ func (j *CleanupJob) runCleanup(ctx context.Context) {
 	deleted, err := j.CleanupExpiredTokens(ctx)
 	if err != nil {
 		log.Printf("Failed to cleanup expired tokens: %v", err)
-		return
-	}
-	if deleted > 0 {
+	} else if deleted > 0 {
 		log.Printf("Cleaned up %d expired claim tokens", deleted)
+	}
+
+	pruned, err := j.PruneExpiredIdempotencyKeys(ctx)
+	if err != nil {
+		log.Printf("Failed to prune expired idempotency keys: %v", err)
+	} else if pruned > 0 {
+		log.Printf("Pruned %d expired idempotency keys", pruned)
 	}
 }

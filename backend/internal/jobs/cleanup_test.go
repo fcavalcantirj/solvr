@@ -105,3 +105,52 @@ func TestCleanupJob_DefaultInterval(t *testing.T) {
 		t.Errorf("expected default interval %v, got %v", expected, DefaultCleanupInterval)
 	}
 }
+
+type mockIdempotencyPruner struct {
+	calls  int
+	result int64
+	err    error
+}
+
+func (m *mockIdempotencyPruner) DeleteExpired(ctx context.Context) (int64, error) {
+	m.calls++
+	return m.result, m.err
+}
+
+// TestCleanupJob_PrunesExpiredIdempotencyKeys pins idx 73 step 4: Idempotency-Key
+// rows past their 24h retention are deleted by the hourly cleanup.
+func TestCleanupJob_PrunesExpiredIdempotencyKeys(t *testing.T) {
+	pruner := &mockIdempotencyPruner{result: 7}
+	job := NewCleanupJob(&MockClaimTokenRepository{}).WithIdempotencyPruner(pruner)
+
+	deleted, err := job.PruneExpiredIdempotencyKeys(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if deleted != 7 || pruner.calls != 1 {
+		t.Fatalf("deleted=%d calls=%d, want 7/1", deleted, pruner.calls)
+	}
+}
+
+// TestCleanupJob_RunPrunesEvenWhenTokenCleanupFails: one failing sweep must not
+// starve the other.
+func TestCleanupJob_RunPrunesEvenWhenTokenCleanupFails(t *testing.T) {
+	pruner := &mockIdempotencyPruner{}
+	tokens := &MockClaimTokenRepository{DeleteExpiredTokensError: context.DeadlineExceeded}
+	job := NewCleanupJob(tokens).WithIdempotencyPruner(pruner)
+
+	job.runCleanup(context.Background())
+
+	if !tokens.DeleteExpiredTokensCalled || pruner.calls != 1 {
+		t.Fatalf("token called=%v pruner calls=%d, want both swept", tokens.DeleteExpiredTokensCalled, pruner.calls)
+	}
+}
+
+// TestCleanupJob_NoPrunerIsNoop keeps the token-only job valid.
+func TestCleanupJob_NoPrunerIsNoop(t *testing.T) {
+	job := NewCleanupJob(&MockClaimTokenRepository{})
+	if deleted, err := job.PruneExpiredIdempotencyKeys(context.Background()); err != nil || deleted != 0 {
+		t.Fatalf("deleted=%d err=%v, want 0/nil", deleted, err)
+	}
+	job.runCleanup(context.Background())
+}

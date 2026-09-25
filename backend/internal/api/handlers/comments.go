@@ -8,12 +8,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
 
-// ErrCommentNotFound is returned when a comment is not found.
-var ErrCommentNotFound = errors.New("comment not found")
+// ErrCommentNotFound is returned when a comment is not found (the repository's value).
+var ErrCommentNotFound = db.ErrCommentNotFound
 
 // CommentsRepositoryInterface defines the database operations for comments.
 type CommentsRepositoryInterface interface {
@@ -98,6 +99,17 @@ func (h *CommentsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	if opts.PerPage > 50 {
 		opts.PerPage = 50
+	}
+
+	// A target that does not exist (or an id that names nothing) is 404, not an empty list.
+	exists, err := h.repo.TargetExists(r.Context(), targetType, targetID)
+	if err != nil {
+		writeCommentsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to verify target")
+		return
+	}
+	if !exists {
+		writeCommentsError(w, http.StatusNotFound, "NOT_FOUND", "target not found")
+		return
 	}
 
 	// Query comments

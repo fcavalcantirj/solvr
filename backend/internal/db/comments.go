@@ -94,7 +94,7 @@ func (r *CommentsRepository) FindByID(ctx context.Context, id string) (*models.C
 		&avatarURL,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) || isInvalidUUIDError(err) {
 			return nil, ErrCommentNotFound
 		}
 		LogQueryError(ctx, "FindByID", "comments", err)
@@ -242,7 +242,7 @@ func (r *CommentsRepository) TargetExists(ctx context.Context, targetType models
 	var exists bool
 	err := r.pool.QueryRow(ctx, query, targetID).Scan(&exists)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) || isInvalidUUIDError(err) {
 			return false, nil
 		}
 		LogQueryError(ctx, "TargetExists", "comments", err)

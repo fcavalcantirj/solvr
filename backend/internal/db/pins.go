@@ -77,7 +77,7 @@ func (r *PinRepository) GetByID(ctx context.Context, id string) (*models.Pin, er
 	pin := &models.Pin{}
 	err := r.scanPin(r.pool.QueryRow(ctx, query, id), pin)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) || isInvalidUUIDError(err) {
 			return nil, ErrPinNotFound
 		}
 		LogQueryError(ctx, "GetByID", "pins", err)

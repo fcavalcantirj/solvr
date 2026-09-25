@@ -64,6 +64,9 @@ func (r *BookmarkRepository) Remove(ctx context.Context, userType, userID, postI
 
 	result, err := r.pool.Exec(ctx, query, userType, userID, postID)
 	if err != nil {
+		if isInvalidUUIDError(err) {
+			return ErrBookmarkNotFound
+		}
 		return err
 	}
 
@@ -170,7 +173,7 @@ func (r *BookmarkRepository) IsBookmarked(ctx context.Context, userType, userID,
 	var exists bool
 	err := r.pool.QueryRow(ctx, query, userType, userID, postID).Scan(&exists)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) || isInvalidUUIDError(err) {
 			return false, nil
 		}
 		return false, err

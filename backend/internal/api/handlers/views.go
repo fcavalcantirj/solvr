@@ -4,11 +4,13 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -72,6 +74,10 @@ func (h *ViewsHandler) RecordView(w http.ResponseWriter, r *http.Request) {
 
 	viewCount, err := h.repo.RecordView(r.Context(), postID, viewerType, viewerID)
 	if err != nil {
+		if errors.Is(err, db.ErrPostNotFound) {
+			writeViewsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
+			return
+		}
 		ctx := response.LogContext{
 			Operation: "RecordView",
 			Resource:  "view",
@@ -99,6 +105,10 @@ func (h *ViewsHandler) GetViewCount(w http.ResponseWriter, r *http.Request) {
 
 	viewCount, err := h.repo.GetViewCount(r.Context(), postID)
 	if err != nil {
+		if errors.Is(err, db.ErrPostNotFound) {
+			writeViewsError(w, http.StatusNotFound, "NOT_FOUND", "post not found")
+			return
+		}
 		ctx := response.LogContext{
 			Operation: "GetViewCount",
 			Resource:  "view",

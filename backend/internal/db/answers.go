@@ -240,7 +240,7 @@ func (r *AnswersRepository) FindAnswerByID(ctx context.Context, id string) (*mod
 		&avatarURL,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) || isInvalidUUIDError(err) {
 			return nil, ErrAnswerNotFound
 		}
 		return nil, fmt.Errorf("query answer: %w", err)

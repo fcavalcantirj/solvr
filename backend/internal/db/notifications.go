@@ -311,7 +311,7 @@ func (r *NotificationsRepository) FindByID(ctx context.Context, id string) (*mod
 		&n.CreatedAt,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) || isInvalidUUIDError(err) {
 			return nil, models.ErrNotificationNotFound
 		}
 		LogQueryError(ctx, "FindByID", "notifications", err)

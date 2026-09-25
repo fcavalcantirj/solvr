@@ -1,6 +1,10 @@
 package handlers
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/fcavalcantirj/solvr/internal/db"
+)
 
 // Common errors for handlers
 var (
@@ -8,8 +12,9 @@ var (
 	ErrIdeaNotFound     = errors.New("idea not found")
 	ErrProblemNotFound  = errors.New("problem not found")
 	ErrQuestionNotFound = errors.New("question not found")
-	ErrApproachNotFound = errors.New("approach not found")
-	ErrAnswerNotFound   = errors.New("answer not found")
+	// The repositories return these, so handlers must match the same values.
+	ErrApproachNotFound = db.ErrApproachNotFound
+	ErrAnswerNotFound   = db.ErrAnswerNotFound
 	ErrDuplicateVote    = errors.New("duplicate vote")
 )
 

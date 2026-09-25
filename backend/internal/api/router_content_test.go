@@ -12,6 +12,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -221,16 +222,53 @@ func TestIdeasEndpoints(t *testing.T) {
 	})
 }
 
+// createCommentTargetProblem creates a problem with apiKey and returns its id.
+func createCommentTargetProblem(t *testing.T, router http.Handler, apiKey string) string {
+	t.Helper()
+	body := fmt.Sprintf(`{"type":"problem","title":"Comment list wiring target %d","description":"A problem that exists so the comment list route answers with a list of its comments"}`, time.Now().UnixNano())
+	return createCommentTarget(t, router, apiKey, "/v1/posts", body)
+}
+
+// createCommentTargetApproach creates an approach on problemID with apiKey and returns its id.
+func createCommentTargetApproach(t *testing.T, router http.Handler, apiKey, problemID string) string {
+	t.Helper()
+	return createCommentTarget(t, router, apiKey, "/v1/problems/"+problemID+"/approaches", `{"angle":"Comment list wiring approach"}`)
+}
+
+func createCommentTarget(t *testing.T, router http.Handler, apiKey, path, body string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("POST %s: %d %s", path, w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil || resp.Data.ID == "" {
+		t.Fatalf("POST %s: no id in response (%v)", path, err)
+	}
+	return resp.Data.ID
+}
+
 // TestCommentsEndpoints verifies comments endpoints are wired.
 func TestCommentsEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
 	t.Run("GET /v1/approaches/:id/comments returns list", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/approaches/00000000-0000-0000-0000-000000000001/comments", nil)
+		// An approach that exists: a missing one is 404 (TestStatusContract_UnknownResourceIDIsNotFound).
+		apiKey := testCommentsSetup(t, router)
+		approachID := createCommentTargetApproach(t, router, apiKey, createCommentTargetProblem(t, router, apiKey))
+		req := httptest.NewRequest(http.MethodGet, "/v1/approaches/"+approachID+"/comments", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		// Should return 200 with empty list (in-memory repo)
+		// Should return 200 with empty list
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
 		}
@@ -457,7 +495,9 @@ func TestPostCommentsEndpoints(t *testing.T) {
 	router := setupTestRouter(t)
 
 	t.Run("GET /v1/posts/:id/comments returns list (no auth required)", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/posts/00000000-0000-0000-0000-000000000001/comments", nil)
+		// A post that exists: a missing one is 404 (TestStatusContract_UnknownResourceIDIsNotFound).
+		postID := createCommentTargetProblem(t, router, testCommentsSetup(t, router))
+		req := httptest.NewRequest(http.MethodGet, "/v1/posts/"+postID+"/comments", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 

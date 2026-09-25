@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -32,8 +33,9 @@ func (r *ViewsRepository) RecordView(ctx context.Context, postID, viewerType, vi
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
-			// Handle invalid UUID
-			if pgErr.Code == "22P02" {
+			// Handle invalid UUID (22P02) and a post that does not exist (23503,
+			// post_views.post_id references posts).
+			if pgErr.Code == "22P02" || pgErr.Code == "23503" {
 				return 0, ErrPostNotFound
 			}
 		}
@@ -72,6 +74,9 @@ func (r *ViewsRepository) GetViewCount(ctx context.Context, postID string) (int,
 	var viewCount int
 	err := r.pool.QueryRow(ctx, query, postID).Scan(&viewCount)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || isInvalidUUIDError(err) {
+			return 0, ErrPostNotFound
+		}
 		return 0, err
 	}
 

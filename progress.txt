@@ -2807,3 +2807,151 @@ REMAINING FOR idx 74 (passes STAYS false):
 
 UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on prod via the
   admin query route, then deploys). No migration in this slice.
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 13 of N. Step 3 status-code matrix, part 1: "404 for absent resources ... 5xx for
+transient service failures". A path id that names nothing must never be a 500.
+================================================================================
+
+TASK SELECTION: idx 24 acceptance still needs idx 75/78 pieces; idx 52/53, 68 and 73's
+  remainder are gated on the knowledge cutover idx 93; idx 67 needs a test deployment.
+  idx 74 stays the first buildable false task. Took step 3 (slice 12's list: step 3, step 5
+  claim atomicity, step 6 docs).
+
+SPIKE FIRST [REAL] (throwaway test, deleted before commit; tables kept in /tmp):
+  chi.Walk over the router, every route probed with a malformed id ("not-a-valid-id") and a
+  random absent UUID as agent key / human JWT / bad key / bad JWT / anonymous.
+  - /tmp/solvr_idx74_s13_spike.tsv (984 probes, hub-less router): its JWT/agent columns were
+    corrupted by the spike itself (DELETE /v1/me and DELETE /v1/agents/me ran first in sort
+    order, so later /v1/me and /v1/users/me/referral 500s were artifacts; [REAL] re-probed
+    alone with a live user: both 200, /tmp/solvr_idx74_s13_spike_one.log).
+  - spike2 (self-deleting routes skipped) + spike3 (hub-enabled router, only param routes,
+    109 routes incl. 38 room routes): room routes 0 x 5xx. 5xx set = 19 method/route pairs:
+    comments lists GET /v1/{posts,answers,approaches,responses}/{id}/comments (malformed:
+    22P02 in List.Count); PATCH/DELETE /v1/answers/{id}; PATCH /v1/approaches/{id}, POST
+    .../progress, .../verify, GET /v1/problems/{id}/approaches/{approachId}/history;
+    DELETE /v1/comments/{id}; POST /v1/notifications/{id}/read + DELETE (malformed);
+    GET/DELETE /v1/pins/{requestid} (malformed); GET/DELETE /v1/users/me/bookmarks/{id}
+    (malformed); POST /v1/posts/{id}/view, GET /v1/posts/{id}/views (malformed and absent).
+  ROOT CAUSES [REAL, code read]: (1) handlers/errors.go and handlers/comments.go declared
+    their OWN errors.New sentinels (ErrApproachNotFound, ErrAnswerNotFound, ErrCommentNotFound)
+    while the db repositories return db.Err*NotFound, so errors.Is never matched in production
+    (handler unit tests passed because their mocks return the handler values); (2) several
+    repositories did not map 22P02 (invalid UUID) to their not-found sentinel, the convention
+    posts/replies/approaches already follow; (3) views: RecordView on an absent post hit the
+    post_views -> posts FK (23503) and GetViewCount returned pgx.ErrNoRows, both unmapped;
+    (4) comments lists never checked the target, so an absent target was 200 [] while every
+    sibling list (question answers, problem approaches, idea responses) is 404.
+
+DIFF ([REAL] git status --porcelain / git diff --numstat: 10 modified +91/-16, 1 new):
+  M backend/internal/api/handlers/errors.go (+8/-3): ErrApproachNotFound =
+    db.ErrApproachNotFound, ErrAnswerNotFound = db.ErrAnswerNotFound (imports db).
+  M backend/internal/api/handlers/comments.go (+14/-2): ErrCommentNotFound =
+    db.ErrCommentNotFound; List calls TargetExists first -> 404 NOT_FOUND "target not found"
+    (same wording as Create). (comments.go was already not gofmt-clean at HEAD: one trailing
+    blank line; left as is.)
+  M backend/internal/api/handlers/views.go (+10): db.ErrPostNotFound -> 404 NOT_FOUND "post not
+    found" in RecordView and GetViewCount.
+  M backend/internal/db/answers.go (+1/-1) FindAnswerByID, db/comments.go (+2/-2) FindByID and
+    TargetExists, db/notifications.go (+1/-1) FindByID, db/pins.go (+1/-1) GetByID,
+    db/bookmarks.go (+4/-1) Remove and IsBookmarked: isInvalidUUIDError -> the not-found
+    sentinel (TargetExists/IsBookmarked -> false, nil).
+  M backend/internal/db/views.go (+7/-2): RecordView maps 23503 -> ErrPostNotFound;
+    GetViewCount maps ErrNoRows/22P02 -> ErrPostNotFound.
+  A backend/internal/api/router_status_contract_test.go (232 lines, real NewRouter with hub):
+    TestStatusContract_UnknownResourceIDIsNotFound — 19 routes x {malformed, absent} = 38
+    subtests: 404, code NOT_FOUND, message, error.request_id == X-Request-ID.
+    TestStatusContract_NoRouteAnswers5xxForAnUnknownID — walks EVERY mounted route with a
+    path parameter (minus /admin and the SSE /stream routes; asserts >60 routes and >20 room
+    routes so a hub-less router cannot pass it) with malformed + absent ids x anonymous /
+    agent key / human JWT, 10s deadline per request; every answer must be < 500. Its human
+    fixture takes username/referral_code from a fresh UUID (createRoomTestUser's RT%06d code
+    collided with shared-DB rows on my first mutation run) and deletes its user and agent.
+  M backend/internal/api/router_content_test.go (+43/-3): see CHANGED TESTS.
+  No migration. Frontend untouched. spec.json unchanged.
+
+CHANGED TESTS (behavior this slice replaces, per the golden rule):
+  (a) TestCommentsEndpoints/"GET /v1/approaches/:id/comments returns list" and
+      TestPostCommentsEndpoints/"GET /v1/posts/:id/comments returns list (no auth required)"
+      (router_content_test.go).
+  (b) both asserted `if w.Code != http.StatusOK { t.Errorf("Expected status 200, ...") }` for
+      the NON-EXISTENT target 00000000-0000-0000-0000-000000000001 ("Should return 200 with
+      empty list (in-memory repo)"); the posts one also required a "data" field.
+  (c) the absent-target case is now 404 and is covered by TestStatusContract_UnknownResource
+      IDIsNotFound/list_comments_on_{a_post,an_answer,an_approach,a_response}/{malformed,
+      absent}_id. The two subtests keep their names and EVERY assertion (200; "data" field);
+      only the fixture changed: they now create a real problem (and approach) with a
+      registered agent key via new helpers createCommentTargetProblem/Approach, so they
+      still prove the route is wired and returns a list anonymously.
+  (d) all PASS: /tmp/solvr_idx74_s13_green2.log (TestCommentsEndpoints 3/3,
+      TestPostCommentsEndpoints 2/2, both TestStatusContract_*).
+
+TDD / EVIDENCE (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, the local
+  isolated test DB in the solvr-postgres container):
+  [TEST] RED /tmp/solvr_idx74_s13_red.log: 32 of 38 subtests FAIL (6 absent-id rows already
+    404: comment create, notifications x2, pins x2, bookmark remove) and the walker reports
+    66 5xx answers over the 19 routes above.
+  [TEST] GREEN -race -v /tmp/solvr_idx74_s13_green.log: 2 top-level + 38 subtests PASS,
+    0 FAIL, 0 SKIP.
+  [REAL] mutation 1: ErrApproachNotFound back to errors.New -> exactly the 8 approach rows
+    FAIL + walker lists the 4 approach routes (/tmp/solvr_idx74_s13_mut1c.log); restored,
+    grep re-confirmed. mutation 2: 22P02 mapping removed from TargetExists -> 5 malformed
+    comment rows FAIL + walker (/tmp/solvr_idx74_s13_mut2.log); restored. mutation 3: 23503
+    mapping removed -> record_a_post_view/absent_id FAIL (/tmp/solvr_idx74_s13_mut3.log);
+    restored, grep confirmed. (mut1/mut1b logs are the fixture collision and my fixture's
+    $1 type bug, fixed before mut1c.)
+  [TEST] focused: /tmp/solvr_idx74_s13_green_handlers.log 199 top-level PASS, 0 FAIL, 0 SKIP
+    (Comment|View|Approach|Answer|Notification|Pin|Bookmark|Problem|Question handler tests,
+    all unchanged). /tmp/solvr_idx74_s13_green_api.log and _green_db.log FAILs are all in the
+    pre-existing set except TestCommentsEndpoints/TestPostCommentsEndpoints (fixed above) and
+    TestUserReputation_AfterCommenting: "failed to list users: can't scan into dest[3]:
+    cannot scan NULL into *string" — UserRepository.List (untouched) scanning users.avatar_url
+    NULL; [REAL] psql: the 2 NULL-avatar rows in solvr_test were created 14:26:29/14:26:40,
+    during the previous iteration's full run (log closed 14:26:55). It PASSES in this
+    iteration's full run.
+  [REAL] go build ./... ok; go vet internal/api internal/api/handlers internal/db clean;
+    gofmt clean on every touched file except the pre-existing comments.go nit above.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 run ONCE -> /tmp/solvr_idx74_s13_full.log:
+  FAIL only in internal/api, internal/api/handlers, internal/db (pre-existing set). Unique
+  top-level --- FAIL names: 76 vs 81 in /tmp/solvr_idx74_s12_full.log (same extraction):
+  0 new, 5 gone (TestAgentRepository_AddReputation_Success, ..._GrantHumanBackedBadge_Success,
+  TestNAgentRoom_ConcurrentFirstMessagesOnTwoInstancesActivateOnce, TestReputation_Cross
+  EndpointConsistency, TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring — fixture/
+  data-state flakes, none touched here). No StatusContract/CommentsEndpoints failure.
+  check-file-size.sh: same 36 pre-existing violations, no touched file among them (largest
+  touched: router_content_test.go 537).
+
+BEHAVIOR CHANGES (v0, for step 6 docs): comments lists on an absent or malformed target are
+  404 NOT_FOUND (were 200 [] / 500); malformed or absent ids on answers, approaches (edit,
+  progress, verify, history), comment delete, notifications, pins, bookmark remove and post
+  views are 404 NOT_FOUND (were 500). GET /v1/users/me/bookmarks/{malformed} is 200
+  {"bookmarked": false}, the same as an absent id.
+
+OUT OF SCOPE, FOUND HERE (not fixed):
+  - GET /v1/users and GET /v1/agents answer 500 when any row has a NULL the list scans into a
+    string (users.avatar_url; agents dest[2]); test fixtures insert such rows. [UNVERIFIED]
+    whether production holds NULLs (UserRepository.Create writes strings).
+  - A JWT for a soft-deleted user still authenticates; GET /v1/me with it is 500 "Failed to
+    fetch user" (FindByID returns ErrNotFound, handler expects nil) — should be 401.
+  - OptionalAuthMiddleware treats an invalid key/JWT as anonymous (200 on public reads)
+    instead of 401 "invalid authentication"; changing it needs a frontend check (expired
+    human JWTs on public pages).
+  - Other lists on an absent parent still 200 (posts/{id}/replies, posts/{id}/rooms,
+    users/{id}/agents|badges, agents/{id}/badges|checkpoints).
+  - GET /v1/health/ipfs 503 body is not the error envelope and echoes the IPFS URL.
+
+REMAINING FOR idx 74 (passes STAYS false):
+  - step 3 remainder: 401 for invalid credentials on optional-auth routes and deleted-account
+    JWTs; 404 on the absent-parent lists above; 429/409/400 rows pinned in the contract file.
+  - step 5: [UNVERIFIED, not run] claim atomicity (link, bonus, badge, MarkUsed are 4
+    statements).
+  - step 6: OpenAPI contract (openapi_paths.go / openapi_schemas.go already over 800 lines ->
+    split first): Idempotency-Key, Idempotent-Replayed, the 409 codes, error envelope, CORS,
+    credential transport, size limits, stream resume, timeouts, If-Match/ETag, and the 404
+    rules above.
+
+UAT (for when idx 74 closes): as slices 6/10 (owner applies 000101 and 000102 on prod via the
+  admin query route, then deploys). No migration in this slice.

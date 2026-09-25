@@ -86,7 +86,7 @@ func (h *RoomHandler) ArchiveRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// A finished room must not linger as live activity in the public overview.
-	InvalidateOverviewCache()
+	h.invalidateOverview(r.Context())
 
 	roomWriteJSON(w, http.StatusOK, map[string]interface{}{"data": archived})
 }
@@ -135,7 +135,7 @@ func (h *RoomHandler) ReopenRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	InvalidateOverviewCache()
+	h.invalidateOverview(r.Context())
 
 	roomWriteJSON(w, http.StatusOK, map[string]interface{}{"data": reopened})
 }

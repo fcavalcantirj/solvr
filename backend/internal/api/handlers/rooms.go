@@ -26,6 +26,28 @@ type RoomHandler struct {
 	// funnel records the room_created connection-funnel step. Optional: nil in
 	// unit tests and wherever the funnel is not wired, in which case it is a no-op.
 	funnel *db.FunnelEventRepository
+	// overviewChanged announces a change to the public overview (visibility, archive,
+	// delete) to every instance's cache. Optional: nil falls back to the process-local
+	// InvalidateOverviewCache hook.
+	overviewChanged func(ctx context.Context) error
+}
+
+// SetOverviewChangeNotifier wires the announcement of public overview changes (see
+// db.Pool.OverviewChanged), so every API instance drops its cached overview, not only
+// the one serving the change.
+func (h *RoomHandler) SetOverviewChangeNotifier(fn func(ctx context.Context) error) {
+	h.overviewChanged = fn
+}
+
+// invalidateOverview drops the cached public overview after a committed room change.
+func (h *RoomHandler) invalidateOverview(ctx context.Context) {
+	if h.overviewChanged == nil {
+		InvalidateOverviewCache()
+		return
+	}
+	if err := h.overviewChanged(ctx); err != nil {
+		slog.Warn("overview change not announced to other instances", "error", err)
+	}
 }
 
 // SetFunnelRecorder wires the connection-funnel recorder so CreateRoom records
@@ -354,7 +376,7 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 	// snapshot. Moderation changes to posts also affect the reusable-posts
 	// section, so they invalidate too.
 	if params.IsPrivate != nil {
-		InvalidateOverviewCache()
+		h.invalidateOverview(r.Context())
 	}
 
 	response := map[string]interface{}{
@@ -405,7 +427,7 @@ func (h *RoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 	// Invalidate the public overview cache when a room is deleted — a deleted
 	// room must not leave a stale preview or activity item in the cached
 	// snapshot.
-	InvalidateOverviewCache()
+	h.invalidateOverview(r.Context())
 
 	w.WriteHeader(http.StatusNoContent)
 }

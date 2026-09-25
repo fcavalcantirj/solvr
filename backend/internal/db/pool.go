@@ -20,6 +20,9 @@ var ErrTest = errors.New("test error")
 // Pool wraps pgxpool.Pool with helper methods.
 type Pool struct {
 	pool *pgxpool.Pool
+	// overview holds the local snapshots dropped when the public overview changes (see
+	// OverviewChanged).
+	overview overviewHooks
 }
 
 // Tx represents a database transaction interface.

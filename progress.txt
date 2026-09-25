@@ -1896,3 +1896,72 @@ REMAINING FOR idx 23 (passes STAYS false):
   - Presence notices are best-effort (lost while a listener reconnects: that stream misses
     one presence frame; lists/counts stay correct from the DB) — by design, journal only.
 UAT (unchanged, for when idx 23 closes): owner applies migration 000103 on prod.
+
+2026-09-25 10:04: RALPH BLOCKED — 4 batches with no ledger movement (engine claude, 66 passing). Supervisor stopped.
+
+================================================================================
+2026-09-25 — Task idx 23 (spec.json, category operations) — DONE, passes=true
+"Preserve room delivery and statistics across restarts and more than one API instance"
+SLICE 4 of 4: homepage overview cache invalidation across instances (last REMAINING item).
+================================================================================
+
+TASK SELECTION: first-false still idx 23; the supervisor BLOCKED line above (10:04) was the
+  loop stopping with no ledger movement; the one open code item was the overview cache.
+
+PROBLEM [REAL, code read]: UpdateRoom (is_private), DeleteRoom, ArchiveRoom, ReopenRoom
+  called the process-global handlers.InvalidateOverviewCache hook -> only this process's
+  30s /v1/overview snapshot was dropped; other instances kept a now-private room's preview
+  up to 30s. The global hook is also last-router-wins, so in a two-router test process
+  A's change invalidated B's cache and NOT A's (the RED below shows it).
+
+CHANGE:
+  - A db/overview_changes.go: OverviewChannel "solvr_overview_changed"; Pool.OnOverviewChanged
+    (register local snapshot drop), Pool.OverviewChanged(ctx) (run local hooks at once,
+    then pg_notify so other instances drop theirs). No migration.
+  - M db/pool.go: Pool gains an `overview overviewHooks` field (mutex + fns).
+  - M db/room_entry_listener.go: the relay's listener connection also LISTENs on
+    OverviewChannel; each notice runs the hooks; every (re)LISTEN runs them too (notices
+    lost while disconnected -> snapshot dropped on reconnect).
+  - M handlers/rooms.go: RoomHandler.SetOverviewChangeNotifier + invalidateOverview(ctx)
+    (falls back to the global hook when no notifier is wired, e.g. handler unit tests;
+    notify error is logged, never fails the request). UpdateRoom/DeleteRoom use it.
+  - M handlers/rooms_archive.go: ArchiveRoom/ReopenRoom use it.
+  - M router_homepage.go: pool.OnOverviewChanged(overviewHandler.InvalidateCache) (global
+    hook registration kept: TestOverviewConsolidated_CacheInvalidatedOnVisibilityChange
+    calls it directly, still PASS).
+  - M router_rooms.go: roomHandler.SetOverviewChangeNotifier(pool.OverviewChanged).
+  - A internal/api/router_rooms_multi_instance_overview_test.go (2 integration tests).
+  spec.json: only idx 23 passes -> true.
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local isolated DB):
+  [TEST] RED /tmp/solvr_idx23_s4_red.log: TestRoomOverview_VisibilityChangeOnOneInstance
+    ClearsEveryInstanceSnapshot FAIL "A drops the room at once" (global hook pointed at B).
+    TestRoomOverview_InvalidationLostDuringListenerGap... PASSED at RED only through that
+    global cross-link; after per-instance wiring it is meaningful (see mutation 1).
+  [TEST] GREEN (-race -v, /tmp/solvr_idx23_s4_green.log): both new tests + existing
+    TestOverviewConsolidated_CacheInvalidatedOnVisibilityChange PASS, 0 SKIP. Asserted: PATCH
+    is_private through A -> A's overview drops the slug at once, B's within 3s (not 30s);
+    listeners of both instances pg_terminate'd, PATCH during the gap -> B drops it after
+    reconnect (backoff 1.5s, sweep off) within 6s.
+  [REAL] mutations (restored, grep-confirmed): (1) no hook run on (re)LISTEN -> gap test FAIL;
+    (2) pg_notify replaced by a no-op SELECT -> cross-instance test FAIL on B.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 once -> /tmp/solvr_idx23_s4_full.log. FAIL
+  names (76) identical to slice 3's log (comm: 0 new, 0 gone); package FAILs remain
+  internal/api, internal/api/handlers, internal/db (documented pre-existing set).
+  go build ./... ok; go vet db/api/hub/jobs clean; gofmt clean on touched files; largest
+  touched file 485 lines (handlers/rooms.go).
+
+STEP COVERAGE for idx 23 (all [TEST] unless noted):
+  1 two instances, planner/executor see each other: slice 1 (+[REAL] two API processes).
+  2 commit-then-NOTIFY, DB cursor replay: slice 1 (uncommitted/rollback never delivered).
+  3 restart + interrupted notifications recover in order, once: slice 1.
+  4 limits/replay bound/heartbeat expiry/backpressure: SSE limit (hub TestSSEConnectionLimit*),
+    replay bound 1000 in pages of 100, slow stream closed (slice 1), expiry in SQL on every
+    instance (slice 2).
+  5 counters + presence service-wide: slice 2 (DB-read counters, card, online_count),
+    slice 3 (presence frames), slice 4 (overview snapshot).
+  Known by-design: presence/overview notices are best-effort wakeups; data is re-read from DB.
+
+UAT: owner applies backend/migrations/000103_room_entries_notify.up.sql on prod (admin query
+  route) and deploys; slices 3-4 need no migration (pg_notify channels only).

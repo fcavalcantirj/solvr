@@ -52,6 +52,9 @@ func mountHomepageRoutes(r chi.Router, pool *db.Pool) {
 	)
 	overviewHandler.SetOverviewCache(handlers.NewOverviewCache())
 	handlers.SetOverviewCacheInvalidator(overviewHandler.InvalidateCache)
+	// Room changes on any instance sharing the database drop this instance's snapshot
+	// (the room relay's listener delivers the other instances' notices).
+	pool.OnOverviewChanged(overviewHandler.InvalidateCache)
 	r.Get("/v1/homepage/overview", overviewHandler.GetOverview)
 	r.Get("/v1/homepage/activity", overviewHandler.GetActivity)
 	r.Get("/v1/homepage/rooms", overviewHandler.GetRooms)

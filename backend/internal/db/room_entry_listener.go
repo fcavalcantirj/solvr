@@ -42,7 +42,8 @@ func (p *Pool) ListenRoomEntries(ctx context.Context, applicationName string, ba
 
 // ListenRooms holds one dedicated connection (outside the pool, so it never takes a pool
 // slot) LISTENing on RoomEntryChannel (and RoomPresenceChannel when l.OnPresence is set),
-// and hands each notification to l. It blocks until ctx ends. When the connection drops
+// and hands each notification to l. It also LISTENs on OverviewChannel and runs the
+// pool's OnOverviewChanged hooks for each notice and after every (re)LISTEN. It blocks until ctx ends. When the connection drops
 // it reconnects after backoff and calls l.OnListening again: notifications sent while it
 // was down are lost, so OnListening is where the caller catches up from its cursors.
 // OnListening also runs after the first LISTEN, which is when the instance starts hearing
@@ -81,11 +82,20 @@ func (p *Pool) listenOnce(ctx context.Context, applicationName string, l RoomLis
 			return err
 		}
 	}
+	if _, err := conn.Exec(ctx, "LISTEN "+OverviewChannel); err != nil {
+		return err
+	}
+	// Overview notices sent while the listener was down are lost: drop the snapshots.
+	p.overview.run()
 	l.OnListening()
 	for {
 		n, err := conn.WaitForNotification(ctx)
 		if err != nil {
 			return err
+		}
+		if n.Channel == OverviewChannel {
+			p.overview.run()
+			continue
 		}
 		if n.Channel == RoomPresenceChannel {
 			l.OnPresence(n.Payload)

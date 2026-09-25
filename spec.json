@@ -306,7 +306,7 @@
       "Use connection limits, bounded replay, heartbeat expiry, and backpressure so slow streams do not consume unbounded memory.",
       "Verify activity counters and online presence reflect the whole service rather than the single instance serving the homepage."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

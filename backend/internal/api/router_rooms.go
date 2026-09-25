@@ -46,6 +46,7 @@ func mountRoomRoutes(
 	// the three handlers so every server step lands in one funnel_events table.
 	funnelRepo := db.NewFunnelEventRepository(pool)
 	roomHandler.SetFunnelRecorder(funnelRepo)
+	roomHandler.SetOverviewChangeNotifier(pool.OverviewChanged)
 	presenceHandler.SetFunnelRecorder(funnelRepo)
 	msgHandler.SetFunnelRecorder(funnelRepo)
 	entryRepo := db.NewRoomEntryRepository(pool)

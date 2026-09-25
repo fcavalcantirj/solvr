@@ -354,6 +354,11 @@ for ((i=1; i<=$1; i++)); do
     done
   else
     # codex exec: one task then exit; final answer -> stdout, progress -> stderr.
+    # OPENAI_API_KEY in the environment (~/.zshrc exports one) makes the codex CLI use
+    # API-key auth instead of the ChatGPT subscription in ~/.codex/auth.json, and that key
+    # is not valid for the codex backend: every call 401s after five websocket reconnects
+    # (measured 2026-09-25 under tmux, which starts a login shell and sources .zshrc).
+    unset OPENAI_API_KEY
     codex_args=(exec --skip-git-repo-check --sandbox workspace-write
       -c 'sandbox_workspace_write.network_access=true'
       -m "$CODEX_MODEL" -c "model_reasoning_effort=\"$CODEX_EFFORT\"")

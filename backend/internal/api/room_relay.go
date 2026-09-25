@@ -53,7 +53,8 @@ func (r *RoomRelay) Wait() { r.wg.Wait() }
 // rooms catch up from their cursors, so a lost notification delays an entry but never
 // loses or duplicates it. The router must have enabled the hub relay (mountRoomRoutes).
 // Presence changes made here are announced to the other instances, and theirs are shown
-// on this instance's streams (see presenceRelay).
+// on this instance's streams (see presenceRelay). Access changes (migration 000104) make
+// this instance's open streams of that room re-authorize.
 func StartRoomRelay(ctx context.Context, pool *db.Pool, hubMgr *hub.HubManager, opts RoomRelayOptions) *RoomRelay {
 	backoff := opts.ReconnectBackoff
 	if backoff <= 0 {
@@ -69,15 +70,19 @@ func StartRoomRelay(ctx context.Context, pool *db.Pool, hubMgr *hub.HubManager, 
 	onListening := func() {
 		readyOnce.Do(func() { close(r.ready) })
 		hubMgr.WakeAll()
+		// Access changes announced while the listener was down are lost: every open
+		// stream re-authorizes.
+		hubMgr.AccessChangedAll()
 	}
 	onEntry := func(roomID uuid.UUID) { hubMgr.Announce(hub.NewRoomID(roomID)) }
 	onPresence := presenceRelay(ctx, pool, hubMgr)
+	onAccess := func(roomID uuid.UUID) { hubMgr.AccessChanged(hub.NewRoomID(roomID)) }
 
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
 		pool.ListenRooms(ctx, RoomRelayApplicationName, backoff, db.RoomListener{
-			OnListening: onListening, OnEntry: onEntry, OnPresence: onPresence,
+			OnListening: onListening, OnEntry: onEntry, OnPresence: onPresence, OnAccess: onAccess,
 		})
 	}()
 	if sweep > 0 {

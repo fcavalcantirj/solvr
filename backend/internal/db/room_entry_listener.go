@@ -25,6 +25,10 @@ func (p *Pool) NotifyRoomPresence(ctx context.Context, payload string) error {
 	return err
 }
 
+// RoomAccessChannel carries the room id of every committed change that can take read
+// access away from a caller (migration 000104): open streams of that room re-authorize.
+const RoomAccessChannel = "solvr_room_access"
+
 // RoomListener receives the room notifications of every instance sharing the database.
 type RoomListener struct {
 	// OnListening runs after every (re)LISTEN; see ListenRooms.
@@ -33,6 +37,8 @@ type RoomListener struct {
 	OnEntry func(roomID uuid.UUID)
 	// OnPresence receives each presence change notice payload (nil: not listened to).
 	OnPresence func(payload string)
+	// OnAccess receives the room id of each access change (nil: not listened to).
+	OnAccess func(roomID uuid.UUID)
 }
 
 // ListenRoomEntries is ListenRooms for timeline entries only.
@@ -82,6 +88,11 @@ func (p *Pool) listenOnce(ctx context.Context, applicationName string, l RoomLis
 			return err
 		}
 	}
+	if l.OnAccess != nil {
+		if _, err := conn.Exec(ctx, "LISTEN "+RoomAccessChannel); err != nil {
+			return err
+		}
+	}
 	if _, err := conn.Exec(ctx, "LISTEN "+OverviewChannel); err != nil {
 		return err
 	}
@@ -101,8 +112,14 @@ func (p *Pool) listenOnce(ctx context.Context, applicationName string, l RoomLis
 			l.OnPresence(n.Payload)
 			continue
 		}
-		if id, perr := uuid.Parse(n.Payload); perr == nil {
-			l.OnEntry(id)
+		id, perr := uuid.Parse(n.Payload)
+		if perr != nil {
+			continue
 		}
+		if n.Channel == RoomAccessChannel {
+			l.OnAccess(id)
+			continue
+		}
+		l.OnEntry(id)
 	}
 }

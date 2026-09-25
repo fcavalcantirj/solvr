@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"sync/atomic"
@@ -50,6 +51,9 @@ type RoomSSEHandler struct {
 	msgRepo   *db.MessageRepository
 	entryRepo *db.RoomEntryRepository
 	roomRepo  *db.RoomRepository
+
+	// heartbeatInterval is the heartbeat (and access re-check) period; 0 means 30s.
+	heartbeatInterval time.Duration
 
 	// testRoomLookup overrides room-by-slug lookup in unit tests (nil in production).
 	testRoomLookup func(ctx context.Context, slug string) (*models.Room, error)
@@ -228,6 +232,22 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 		}
 	}
 
+	// Access is re-authorized while the stream is open (a member removed, a token revoked,
+	// the room made private or deleted): on every access-change signal for this room and
+	// on every heartbeat, so a lost signal is bounded by the heartbeat interval. Checking
+	// once right after watching closes the gap between the guard's check and the watch.
+	recheck := apimiddleware.RoomAccessRecheckFromContext(r.Context())
+	var accessCh <-chan struct{}
+	if recheck != nil && h.hubMgr != nil {
+		var stopWatch func()
+		accessCh, stopWatch = h.hubMgr.WatchAccess(hub.NewRoomID(room.ID))
+		defer stopWatch()
+		if !streamStillAuthorized(r.Context(), recheck, room) {
+			writeAccessRevoked(w, flusher)
+			return
+		}
+	}
+
 	if ch == nil {
 		// No hub available (e.g. test without hub). Hold open until context cancels.
 		<-r.Context().Done()
@@ -238,7 +258,11 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 	maxLifetime, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
 	defer cancel()
 
-	heartbeat := time.NewTicker(30 * time.Second)
+	interval := h.heartbeatInterval
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	heartbeat := time.NewTicker(interval)
 	defer heartbeat.Stop()
 
 	for {
@@ -258,7 +282,17 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 				writeSSEEvent(w, flusher, evt)
 			}
 
+		case <-accessCh:
+			if !streamStillAuthorized(r.Context(), recheck, room) {
+				writeAccessRevoked(w, flusher)
+				return
+			}
+
 		case <-heartbeat.C:
+			if recheck != nil && !streamStillAuthorized(r.Context(), recheck, room) {
+				writeAccessRevoked(w, flusher)
+				return
+			}
 			// D-04: Send heartbeat comment to keep connection alive and detect dead clients.
 			fmt.Fprintf(w, ": heartbeat\n\n")
 			flusher.Flush()
@@ -270,6 +304,26 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 			return
 		}
 	}
+}
+
+// streamStillAuthorized re-runs the guard's decision for an open stream. A decision that
+// cannot be read (database error) keeps the stream: the next signal or heartbeat retries.
+func streamStillAuthorized(ctx context.Context, recheck apimiddleware.RoomAccessRecheck, room *models.Room) bool {
+	ok, err := recheck(ctx)
+	if err != nil {
+		if ctx.Err() == nil {
+			slog.Warn("room stream access recheck failed; keeping the stream", "error", err, "room_id", room.ID)
+		}
+		return true
+	}
+	return ok
+}
+
+// writeAccessRevoked ends a stream whose caller lost read access. No retry directive: a
+// reconnect is refused by the guard (403/401/404) until access is granted again.
+func writeAccessRevoked(w http.ResponseWriter, flusher http.Flusher) {
+	fmt.Fprintf(w, "event: access_revoked\ndata: {\"code\":\"ACCESS_REVOKED\",\"message\":\"read access to this room was removed\"}\n\n")
+	flusher.Flush()
 }
 
 // maxSSEReplay caps how many missed entries one connection replays; a longer gap ends the

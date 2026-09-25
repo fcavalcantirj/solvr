@@ -1965,3 +1965,100 @@ STEP COVERAGE for idx 23 (all [TEST] unless noted):
 
 UAT: owner applies backend/migrations/000103_room_entries_notify.up.sql on prod (admin query
   route) and deploys; slices 3-4 need no migration (pg_notify channels only).
+
+================================================================================
+2026-09-25 — Task idx 59 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Keep room and content permissions authoritative on the server"
+SLICE 1 of N: open streams lose access when access changes, on every instance (step 3).
+================================================================================
+
+TASK SELECTION (checked against the code this session, not taken from the journal):
+  idx 24 (ACCEPTANCE "Verify N-agent collaboration E2E across clients and service
+    instances"): its multi-instance blocker (idx 23) is now done, BUT step 5 "individual
+    revocation in a private room; unauthorized browser and agent reads remain blocked"
+    needed stream revocation: [REAL] read rooms_sse.go streamRoom, the loop never
+    re-checked access after the guard ran, and RemoveMember only revoked the token/row.
+    A removed agent kept getting private entries on its open stream for up to 30 min.
+    That is idx 59 step 3 / idx 75 step 3 (both false). Step 3 "no SDK assumes a pair"
+    is idx 78 step 7 (false). Acceptance rule => DEFER idx 24.
+  idx 52/53: still before the knowledge-model cutover ([REAL] migrations tail 000101-000103,
+    no drop/migrate of approaches/answers/responses/comments) => DEFER.
+  => idx 59 is the first false task that can be built now. Took step 3 (the gap above).
+
+DESIGN:
+  - migration 000104: triggers pg_notify('solvr_room_access', room_id), sent at commit, on
+    room_members UPDATE of revoked_at/role (when changed) + DELETE; room_agent_tokens
+    UPDATE of token_hash/expires_at (when changed) + DELETE; rooms UPDATE of
+    is_private/deleted_at/expires_at (when changed) + DELETE. This catches every path
+    (handlers, jobs, cascades) without wiring each handler.
+  - listener: RoomListener.OnAccess; LISTENs RoomAccessChannel when set.
+  - hub/access.go: HubManager.WatchAccess(room) (buffered-1 signal, cancel func),
+    AccessChanged(room), AccessChangedAll(). StartRoomRelay: OnAccess -> AccessChanged;
+    every (re)LISTEN -> AccessChangedAll (covers notices lost while disconnected).
+  - middleware/room_access_recheck.go: RoomAccessRecheck closure left in the request
+    context by RoomPolicyGuard (reload room by id; room-token actor: token must still be
+    live for the room, via new read-only RoomAgentTokenRepository.IsLive; then the same
+    roomActorAllowed) and by BearerGuard (/r adapter: room exists + token live).
+  - rooms_sse.go streamRoom: watches access; re-checks once right after watching (closes
+    the gap between guard check and watch), on each signal, and on each heartbeat
+    (fallback bound = heartbeat, 30s). Denied -> writes `event: access_revoked`
+    (data {"code":"ACCESS_REVOKED",...}) and ends, with NO retry directive (a reconnect
+    gets 401/403/404 from the guard). A re-check that cannot be read (DB error) keeps the
+    stream and logs. New field heartbeatInterval (0 = 30s) for unit tests.
+
+DIFF ([REAL] git status --porcelain / git diff --stat: 7 modified +100/-6, 7 new):
+  M backend/internal/api/handlers/rooms_sse.go (+56; 427 lines)
+  M backend/internal/api/middleware/bearer_guard.go (+4/-1), room_policy.go (+1)
+  M backend/internal/api/room_relay.go (+9/-1)
+  M backend/internal/db/room_agent_tokens.go (+14 IsLive), room_entry_listener.go (+21/-5)
+  M backend/internal/hub/manager.go (+1 access field)
+  A backend/migrations/000104_room_access_notify.{up,down}.sql
+  A backend/internal/hub/access.go, access_test.go (3 unit tests)
+  A backend/internal/api/middleware/room_access_recheck.go
+  A backend/internal/api/handlers/rooms_sse_access_test.go (4 unit tests)
+  A backend/internal/api/router_rooms_stream_revocation_test.go (3 integration tests)
+  M spec.json: NOT changed. M progress.txt: this entry.
+  No existing test changed or removed.
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local isolated DB;
+  000104 applied there with psql -f):
+  [TEST] RED /tmp/solvr_idx59_s1_red.log: all 3 integration tests FAIL (streams did not end).
+  [TEST] GREEN -race -v /tmp/solvr_idx59_s1_green.log: 3/3 PASS, 0 SKIP. Asserted, with two
+    instances (own pool+hub+relay+router each): owner removes executor through A -> the
+    executor's streams on B (room token, account API key, /r adapter) end within 3s with
+    access_revoked; planner stream stays open and gets a new entry the executor never
+    sees; after removal handshake 403, entries read 403 (key) / 401 (revoked token),
+    write 403; owner readmits -> new handshake + stream works. Room made private through
+    A -> anonymous + non-member agent streams on B end, member keeps streaming; room
+    deleted -> member stream ends. Both listeners pg_terminate'd, removal during the gap
+    -> B's stream ends after reconnect (backoff 1.5s) within 6s.
+  [TEST] unit: hub TestAccessChanged_* (3) and handlers TestStreamAccess_* (4: heartbeat
+    fallback with no signal, signal before heartbeat, revoked-before-watch, DB error keeps
+    stream) PASS -race.
+  [REAL] mutations (restored, verified): (1) removed AccessChangedAll on (re)LISTEN -> gap
+    test FAIL; (2) dropped the 000104 triggers -> both cross-instance tests FAIL (only the
+    30s heartbeat left); triggers re-applied (6 present).
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 once -> /tmp/solvr_idx59_s1_full.log. 76
+  unique FAIL names, identical to idx 23 slice 4 (comm: 0 new, 0 gone); package FAILs
+  remain internal/api, internal/api/handlers, internal/db (documented pre-existing set).
+  go build ok; go vet hub/db/api clean; gofmt clean on touched files. Frontend untouched.
+  NOTE [REAL]: handlers TestPublicStream_StreamHeadersAndNoAuth has a DATA RACE under
+  -race on the CLEAN tree too (git stash -u check: 3 races, test reads headers while the
+  handler writes them); passes without -race. Pre-existing, not changed.
+
+BEHAVIOR CHANGE: an agent whose token is replaced by a second handshake now also loses the
+  stream opened with the old token (REST already refused that token). Two-session
+  handshake rotation is idx 75 step 1.
+
+REMAINING FOR idx 59 (passes STAYS false): step 1/2 surface matrix (HTML, REST, SSE,
+  instructions, message lookup, search, social metadata x anonymous/member/owner/
+  unrelated; deletion + expiry), step 4 individual token revoke without membership
+  change (check for an endpoint), step 5 default prompts use per-agent tokens + no
+  secrets in public APIs, step 6 cached responses/indexes follow permission changes.
+  [UNVERIFIED] rooms past expires_at but not yet deleted by the job: guard does not
+  check expiry (unchanged here).
+
+UAT (for when idx 59 closes): owner applies backend/migrations/000104_room_access_notify.up.sql
+  on prod via the admin query route, then deploys. Without it open streams are still
+  re-checked on every 30s heartbeat.

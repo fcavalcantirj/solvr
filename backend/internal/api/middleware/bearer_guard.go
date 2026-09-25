@@ -61,7 +61,8 @@ func BearerGuard(roomRepo *db.RoomRepository, agentTokenRepo *db.RoomAgentTokenR
 				return
 			}
 
-			identity, err := agentTokenRepo.ResolveByHash(r.Context(), token.HashToken(plaintext))
+			tokenHash := token.HashToken(plaintext)
+			identity, err := agentTokenRepo.ResolveByHash(r.Context(), tokenHash)
 			if err != nil {
 				bearerGuardUnauthorized(w, "invalid or expired room token")
 				return
@@ -79,6 +80,7 @@ func BearerGuard(roomRepo *db.RoomRepository, agentTokenRepo *db.RoomAgentTokenR
 			}
 			ctx := context.WithValue(r.Context(), RoomContextKey, room)
 			ctx = context.WithValue(ctx, roomAgentIDContextKey{}, identity.AgentID)
+			ctx = WithRoomAccessRecheck(ctx, tokenRecheck(room, tokenHash, roomRepo, agentTokenRepo))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

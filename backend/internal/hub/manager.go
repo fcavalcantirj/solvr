@@ -24,6 +24,7 @@ type HubManager struct {
 	relay         *relay // nil until EnableRelay; see relay.go
 	instanceID    string
 	notifier      func(PresenceChange) // nil until SetPresenceNotifier; see presence.go
+	access        accessWatchers       // open streams re-authorizing on access changes; see access.go
 }
 
 // NewHubManager creates an empty HubManager backed by the given PresenceRegistry.

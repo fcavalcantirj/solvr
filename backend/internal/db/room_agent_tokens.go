@@ -79,6 +79,20 @@ func (r *RoomAgentTokenRepository) ResolveByHash(ctx context.Context, hash strin
 	return &id, nil
 }
 
+// IsLive reports whether hash is a live (unexpired) per-agent token for roomID. Unlike
+// ResolveByHash it only reads: open streams re-check their token with it.
+func (r *RoomAgentTokenRepository) IsLive(ctx context.Context, hash string, roomID uuid.UUID) (bool, error) {
+	var ok bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM room_agent_tokens
+		              WHERE token_hash = $1 AND room_id = $2 AND (expires_at IS NULL OR expires_at > NOW()))
+	`, hash, roomID).Scan(&ok)
+	if err != nil {
+		LogQueryError(ctx, "IsLive", "room_agent_tokens", err)
+	}
+	return ok, err
+}
+
 // Revoke deletes an agent's per-agent token for a room. It is not an error if none exists.
 func (r *RoomAgentTokenRepository) Revoke(ctx context.Context, roomID uuid.UUID, agentID string) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM room_agent_tokens WHERE room_id = $1 AND agent_id = $2`, roomID, agentID)

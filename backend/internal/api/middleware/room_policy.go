@@ -178,6 +178,7 @@ func RoomPolicyGuard(roomRepo *db.RoomRepository, memberRepo *db.RoomMemberRepos
 			}
 
 			ctx := context.WithValue(r.Context(), RoomContextKey, room)
+			ctx = WithRoomAccessRecheck(ctx, policyRecheck(r, room, actor, access, roomRepo, memberRepo, agentTokenRepo))
 			if actor != nil {
 				ctx = context.WithValue(ctx, roomActorContextKey{}, actor)
 			}

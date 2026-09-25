@@ -11513,3 +11513,66 @@ REMAINING FOR idx 73 (passes STAYS false): step 1 remainder — "error" STRING
   PATCH /v1/rooms/{slug} + directive supersede; step 6 OpenAPI/SPEC contract docs
   (CORS origins, credential transport, request-size limits, stream resume,
   timeouts). Step 2 done (slices prior + 3).
+
+2026-09-24 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+  Slice 5: If-Match optimistic concurrency on PATCH /v1/rooms/{slug} (step 5 remainder).
+
+TASK SELECTION: same top-down deferrals as slices 1-4 (idx 23 multi-instance not
+  built; 51/52/67/72-remainder cutover-gated on idx 93; 58 audit spans unbuilt
+  search cutover; 66 needs a test deployment). idx 73 continues.
+
+FINDING [REAL]: UpdateRoom (handlers/rooms.go) was last-write-wins: no ETag on
+  GET /v1/rooms/{slug} or PATCH, no If-Match check. rooms.updated_at is also bumped
+  by RoomRepository.UpdateActivity after every message (rooms_entry_submit.go:132),
+  Archive and Reopen — so the room validator tracks the full GET representation
+  (incl. last_active_at). Consequence: an owner editing settings in a busy room may
+  get 412 and must refetch; conservative (no lost update), documented in roomETag.
+
+DIFF (git status --porcelain / git diff --stat):
+  M backend/internal/api/handlers/rooms.go (+9): GetRoom sets ETag =
+    roomETag(room.UpdatedAt); UpdateRoom calls enforceRoomIfMatch AFTER canManage
+    (non-manager of a private room gets 403, learns no version) and BEFORE decoding
+    the body, and echoes ETag of the updated row on 200.
+  A backend/internal/api/handlers/rooms_concurrency.go (35 lines): roomETag (shared
+    entityETag format, UnixMicro of updated_at) + enforceRoomIfMatch (412
+    PRECONDITION_FAILED via roomWriteError, echoes current ETag). If-Match stays
+    opt-in, same ifMatchIsStale semantics as posts/replies (*, weak, lists).
+  A backend/internal/api/handlers/rooms_concurrency_test.go (176 lines, 5
+    integration tests on real repos): TestGetRoom_ExposesETag,
+    TestUpdateRoom_StaleIfMatchRejected (412, ETag echoed, description and
+    updated_at unchanged in DB), TestUpdateRoom_MatchingIfMatchThenReplayRejected
+    (200 + new ETag, then replay with old ETag => 412 and first edit preserved),
+    TestUpdateRoom_NoIfMatchStillApplies, TestUpdateRoom_NonManagerGetsForbidden
+    BeforePrecondition. No existing test modified or removed.
+  Check atomicity: like posts/replies, the precondition is a read-then-write check
+  in the handler (small race window between GetBySlug and Update), not a
+  conditional UPDATE ... WHERE updated_at = $x. [UNVERIFIED under true concurrency.]
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, the isolated
+  schema-only test DB in the local solvr-postgres container):
+  [TEST] RED: with enforceRoomIfMatch returning false and no ETag writes => 4 FAIL
+    (ETag "" / stale edit returned 200 and persisted / replay 200); the 403-ordering
+    test already passed (canManage precedes).
+  [TEST] GREEN: go test ./internal/api/handlers/ -run 'TestGetRoom|TestUpdateRoom|Room'
+    -count=1 -v => ok, 107 PASS, 0 SKIP (/tmp/solvr_idx73_s5_rooms.log); all 5 new PASS.
+  [REAL] go vet ./internal/api/handlers/ clean; gofmt -l does not list my files.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 run ONCE to /tmp/solvr_idx73_s5_full.log:
+  FAIL in internal/api, internal/api/handlers, internal/db only; 76 FAIL lines vs 78 in
+  slice 4's /tmp/solvr_idx73_s4_full.log. Sorted diff of failing test names: the s5
+  set is a strict SUBSET of s4 (the two shared-state room-route flakes
+  TestRoomRoutes_Presence_JoinAndList / _SSE_NoBufferingHeader passed this time).
+  Remaining = documented pre-existing: 4 TestCommentsCount_*/TestTypeSpecificList
+  Endpoints, 4 GitHub OAuth callback integration tests, internal/db shared-state
+  (agents list/pulse/trending/victories/hardcore/you-might-like/rising-ideas/
+  briefing) — db package does not import handlers.
+
+No SPEC.md edit this slice (step 6 documentation still outstanding).
+
+REMAINING FOR idx 73 (passes STAYS false): step 1 remainder — "error" STRING shapes
+  (unsubscribe.go, admin.go) and field-error shape docs; step 3 status-code matrix
+  pinned; step 4 durable Idempotency-Key (room/post/reply create) + client_entry_id
+  reuse rejection with different payload, >=24h retention; step 5 remainder —
+  directive supersede under retry (pinned-directive path, messages pin) and
+  ownership-change-by-retry audit; step 6 OpenAPI/SPEC contract docs (CORS origins,
+  credential transport, request-size limits, stream resume, timeouts, If-Match/ETag).

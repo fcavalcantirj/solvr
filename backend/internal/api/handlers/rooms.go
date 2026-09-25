@@ -273,6 +273,8 @@ func (h *RoomHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
 			"online_count":      onlineCount,
 		},
 	}
+	// Expose the version validator for a later If-Match edit (idx 73 step 5).
+	w.Header().Set("ETag", roomETag(room.UpdatedAt))
 	roomWriteJSON(w, http.StatusOK, response)
 }
 
@@ -327,6 +329,11 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reject a stale If-Match so a retry cannot overwrite a newer revision.
+	if enforceRoomIfMatch(w, r, room.UpdatedAt) {
+		return
+	}
+
 	var params models.UpdateRoomParams
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
@@ -339,6 +346,8 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update room")
 		return
 	}
+	// Echo the new validator so the client's next If-Match is current.
+	w.Header().Set("ETag", roomETag(updated.UpdatedAt))
 
 	// Invalidate the public overview cache when a room's visibility changes —
 	// a room that goes private must not leave a stale preview in the cached

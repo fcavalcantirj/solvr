@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/api/response"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/emailutil"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -125,9 +126,7 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 
 	// Check email service configured
 	if h.emailSender == nil {
-		writeAdminJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"error": "EMAIL_NOT_CONFIGURED",
-		})
+		writeAdminError(w, http.StatusServiceUnavailable, "EMAIL_NOT_CONFIGURED", "email service is not configured")
 		return
 	}
 
@@ -183,14 +182,14 @@ func (h *AdminHandler) BroadcastEmail(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if recent != nil {
-			writeAdminJSON(w, http.StatusConflict, map[string]interface{}{
-				"error":              "DUPLICATE_BROADCAST",
-				"message":            fmt.Sprintf("A broadcast with this subject was already sent %d/%d recipients (status: %s). Use force=true to send anyway.", recent.SentCount, recent.TotalRecipients, recent.Status),
-				"previous_broadcast": recent.ID,
-				"previous_sent":      recent.SentCount,
-				"previous_status":    recent.Status,
-				"previous_started":   recent.StartedAt,
-			})
+			response.WriteErrorWithDetails(w, http.StatusConflict, "DUPLICATE_BROADCAST",
+				fmt.Sprintf("A broadcast with this subject was already sent %d/%d recipients (status: %s). Use force=true to send anyway.", recent.SentCount, recent.TotalRecipients, recent.Status),
+				map[string]interface{}{
+					"previous_broadcast": recent.ID,
+					"previous_sent":      recent.SentCount,
+					"previous_status":    recent.Status,
+					"previous_started":   recent.StartedAt,
+				})
 			return
 		}
 	}

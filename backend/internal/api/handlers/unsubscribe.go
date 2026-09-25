@@ -41,20 +41,14 @@ func (h *UnsubscribeHandler) Unsubscribe(w http.ResponseWriter, r *http.Request)
 	token := r.URL.Query().Get("token")
 
 	if email == "" || token == "" {
-		writeAdminJSON(w, http.StatusBadRequest, map[string]string{
-			"error":   "MISSING_PARAMS",
-			"message": "email and token query parameters are required",
-		})
+		writeAdminError(w, http.StatusBadRequest, "MISSING_PARAMS", "email and token query parameters are required")
 		return
 	}
 
 	// Validate HMAC token
 	expected := GenerateUnsubscribeToken(email, h.hmacKey)
 	if !hmac.Equal([]byte(token), []byte(expected)) {
-		writeAdminJSON(w, http.StatusForbidden, map[string]string{
-			"error":   "INVALID_TOKEN",
-			"message": "invalid unsubscribe token",
-		})
+		writeAdminError(w, http.StatusForbidden, "INVALID_TOKEN", "invalid unsubscribe token")
 		return
 	}
 
@@ -63,10 +57,7 @@ func (h *UnsubscribeHandler) Unsubscribe(w http.ResponseWriter, r *http.Request)
 	defer cancel()
 
 	if err := h.repo.UnsubscribeByEmail(ctx, email); err != nil {
-		writeAdminJSON(w, http.StatusInternalServerError, map[string]string{
-			"error":   "INTERNAL_ERROR",
-			"message": "failed to process unsubscribe",
-		})
+		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to process unsubscribe")
 		return
 	}
 

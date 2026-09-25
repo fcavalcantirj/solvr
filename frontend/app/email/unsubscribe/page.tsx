@@ -28,7 +28,7 @@ function UnsubscribeContent() {
           setMessage(data.message || "You have been unsubscribed.");
         } else {
           setStatus("error");
-          setMessage(data.message || "Failed to unsubscribe. The link may be invalid.");
+          setMessage(data.error?.message || "Failed to unsubscribe. The link may be invalid.");
         }
       })
       .catch(() => {

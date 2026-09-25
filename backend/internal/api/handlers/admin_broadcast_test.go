@@ -783,8 +783,9 @@ func TestBroadcastEmail_Deduplication_BlocksDuplicate(t *testing.T) {
 
 	var resp map[string]interface{}
 	json.NewDecoder(rr.Body).Decode(&resp)
-	if resp["error"] != "DUPLICATE_BROADCAST" {
-		t.Errorf("expected DUPLICATE_BROADCAST error, got %v", resp["error"])
+	errObj, _ := resp["error"].(map[string]interface{})
+	if errObj["code"] != "DUPLICATE_BROADCAST" {
+		t.Errorf("expected DUPLICATE_BROADCAST error code, got %v", resp["error"])
 	}
 
 	// No emails should be sent

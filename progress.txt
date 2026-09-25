@@ -11839,3 +11839,85 @@ REMAINING FOR idx 73 (passes STAYS false): step 1 remainder ("error" STRING shap
   OpenAPI/SPEC docs (Idempotency-Key, Idempotent-Replayed, IDEMPOTENCY_KEY_REUSED /
   IDEMPOTENCY_REQUEST_IN_PROGRESS / CLIENT_ENTRY_ID_REUSED, CORS, credential transport,
   size limits, stream resume, timeouts, If-Match/ETag).
+
+================================================================================
+2026-09-24 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the
+public API"
+SLICE 9 of N: last "error" STRING shapes -> standard envelope — step 1 remainder
+(unsubscribe.go, admin.go; slice 4's ErrorEnvelope middleware deliberately left
+JSON whose "error" is a string untouched, so these bodies got no request_id).
+================================================================================
+
+TASK SELECTION: same top-down deferrals as slices 1-8 (idx 23 multi-instance not
+  built; 51/52/67/72-remainder cutover-gated on idx 93; 58 audit spans unbuilt
+  search cutover; 66 needs a test deployment). idx 73 continues.
+
+FINDING [REAL]: grep of non-test Go for `"error": "` found exactly 5 writers:
+  unsubscribe.go MISSING_PARAMS/INVALID_TOKEN/INTERNAL_ERROR ({"error":"CODE",
+  "message":...} top-level), admin.go EMAIL_NOT_CONFIGURED ({"error":"CODE"}, no
+  message at all) and DUPLICATE_BROADCAST (string code + top-level previous_*).
+  After this slice the same grep returns none. Remaining http.Error(...) JSON
+  literals (rooms_sse.go, response.go, router.go) already use the object shape and
+  the middleware parses them regardless of text/plain content type.
+
+DIFF (git status --porcelain / git diff --stat: 4 modified, 2 new, +17/-26 in M):
+  M backend/internal/api/handlers/unsubscribe.go: 3 writers -> writeAdminError
+    (same status codes and codes/messages; body now {"error":{code,message}}).
+  M backend/internal/api/handlers/admin.go: EMAIL_NOT_CONFIGURED -> writeAdminError
+    with message "email service is not configured"; DUPLICATE_BROADCAST ->
+    response.WriteErrorWithDetails(409, ..., details{previous_broadcast,
+    previous_sent, previous_status, previous_started}); imports api/response.
+  M backend/internal/api/handlers/admin_broadcast_test.go: ONE assertion changed in
+    TestBroadcastEmail_Deduplication_BlocksDuplicate — behavior intentionally
+    replaced (v0 breaking OK). It asserted `resp["error"] != "DUPLICATE_BROADCAST"`
+    (string shape); now asserts resp.error.code == DUPLICATE_BROADCAST. Same
+    behavior (409 + no sends) still pinned; the new
+    TestBroadcastEmail_DuplicateUsesEnvelopeWithDetails also pins code + details.
+    Both PASS [TEST]. TestBroadcastEmail_EmailNotConfigured (bytes.Contains) unchanged
+    and PASS.
+  M frontend/app/email/unsubscribe/page.tsx: error branch reads data.error?.message
+    (was data.message, which the envelope no longer has at top level) — display only.
+  A backend/internal/api/handlers/error_envelope_shapes_test.go:
+    TestUnsubscribe_ErrorsUseEnvelope (3 subtests, also asserts "db down" not leaked),
+    TestBroadcastEmail_NotConfiguredUsesEnvelope,
+    TestBroadcastEmail_DuplicateUsesEnvelopeWithDetails.
+  A frontend/app/email/unsubscribe/page.test.tsx (vitest): success message shown;
+    envelope error.message shown.
+
+TDD:
+  [TEST] RED: 5 new backend (sub)tests FAIL `"error" is string, want object
+    envelope`; frontend envelope test FAIL (message not rendered).
+  [TEST] GREEN: go test ./internal/api/handlers -run 'TestUnsubscribe|TestBroadcastEmail'
+    -v => all PASS, 0 SKIP (/tmp/solvr_idx73_s9_targeted.log after the one assertion
+    update); vitest page.test.tsx 2/2 PASS.
+  [REAL] go build ./... ok; go vet ./internal/api/handlers clean; gofmt -l flags
+    unsubscribe.go but HEAD's version is flagged too (pre-existing struct alignment).
+    admin.go 671, unsubscribe.go 68 lines.
+
+FULL SUITES [TEST] (run ONCE each):
+  backend: DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (isolated
+    schema-only test DB, local solvr-postgres) go test ./... -p 1 -count=1 ->
+    /tmp/solvr_idx73_s9_full.log: 15 ok, 3 FAIL (internal/api, internal/api/handlers,
+    internal/db). Unique FAIL names 72 vs 74 in s8: 0 new; gone =
+    TestHomepageSearch_ChartAddsUpToTheTotalBesideIt,
+    TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring (time/shared-state db
+    tests). Rest = documented pre-existing set.
+  frontend: npm test -- --run -> /tmp/solvr_idx73_s9_frontend.log: 177 files, 1611
+    tests passed.
+
+NOTES:
+  - [UNVERIFIED] ~/.claude/skills/solvr/scripts/solvr-admin.sh (outside repo, not
+    touched) prints errors with jq '.error // .message': for these endpoints it will
+    now print the error OBJECT as JSON instead of the bare code — still readable; owner
+    may switch it to '.error.message // .error'.
+  - .planning/phases/03-admin-broadcast-handler/*.md describe the old flat shape;
+    historical planning docs, left alone.
+  - No migration; UAT for 000101 (s6) unchanged.
+
+REMAINING FOR idx 73 (passes STAYS false): step 1 remainder — field-error shape docs
+  (folds into step 6); step 3 status-code matrix pinned; step 5 remainder (directive
+  supersede under retry, ownership-change-by-retry audit); step 6 OpenAPI/SPEC docs
+  (Idempotency-Key, Idempotent-Replayed, IDEMPOTENCY_KEY_REUSED / IDEMPOTENCY_REQUEST_
+  IN_PROGRESS / CLIENT_ENTRY_ID_REUSED, CORS, credential transport, size limits,
+  stream resume, timeouts, If-Match/ETag, error envelope incl. details).

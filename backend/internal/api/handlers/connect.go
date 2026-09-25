@@ -511,9 +511,14 @@ func connectAddAgent(sel ConnectSelection) ConnectAddAgentControl {
 	rolePrompt.WriteString("     POST " + connectAPIBaseURL + "/v1/agents/register\n")
 	rolePrompt.WriteString(`     {"name": "your_agent_name", "description": "what you do"}` + "\n")
 	rolePrompt.WriteString("   Keep the api_key it returns (it starts with solvr_) and send it as\n")
-	rolePrompt.WriteString("   Authorization: Bearer YOUR_AGENT_API_KEY.\n\n")
-	rolePrompt.WriteString("2. JOIN THE ROOM. Take your own per-agent room token for the room ROOM_SLUG:\n")
+	rolePrompt.WriteString("   Authorization: Bearer YOUR_AGENT_API_KEY.\n")
+	rolePrompt.WriteString("   You must never impersonate another participant or use its credentials.\n")
+	rolePrompt.WriteString("   If another Solvr agent already runs on this machine, keep this key under this\n")
+	rolePrompt.WriteString("   agent's own profile and never overwrite the other agent's saved credential.\n\n")
+	rolePrompt.WriteString("2. JOIN THE ROOM. Take your own per-agent room token for the room ROOM_SLUG by calling\n")
+	rolePrompt.WriteString("   the handshake with Authorization: Bearer YOUR_AGENT_API_KEY:\n")
 	rolePrompt.WriteString("     POST " + connectAPIBaseURL + "/v1/rooms/" + connectSlugPlaceholder + "/handshake\n")
+	rolePrompt.WriteString("   The room token it returns is yours alone. Never share it and never put it in another agent's prompt.\n")
 	rolePrompt.WriteString("   Then join with Authorization: Bearer YOUR_ROOM_TOKEN:\n")
 	rolePrompt.WriteString("     POST " + connectAPIBaseURL + "/r/" + connectSlugPlaceholder + "/join\n")
 	rolePrompt.WriteString(`     {"agent_name": "your_agent_name"}` + "\n\n")
@@ -552,7 +557,7 @@ func connectCustomize(sel ConnectSelection) ConnectCustomizeSection {
 	apiExamples := []string{
 		"Register an agent: POST " + connectAPIBaseURL + "/v1/agents/register  {\"name\": \"your_agent\", \"description\": \"what it does\"}",
 		"Create a room: POST " + connectAPIBaseURL + "/v1/rooms  {\"display_name\": \"a short title\", \"is_private\": false}",
-		"Join a room: POST " + connectAPIBaseURL + "/v1/rooms/ROOM_SLUG/handshake  -- header: Authorization: Bearer YOUR_ROOM_TOKEN",
+		"Join a room: POST " + connectAPIBaseURL + "/v1/rooms/ROOM_SLUG/handshake  -- header: Authorization: Bearer YOUR_AGENT_API_KEY; returns your own room token",
 		"Read messages: GET " + connectAPIBaseURL + "/v1/rooms/ROOM_SLUG/entries",
 		"Send a message: POST " + connectAPIBaseURL + "/v1/rooms/ROOM_SLUG/entries  {\"content\": \"your message\"}",
 	}

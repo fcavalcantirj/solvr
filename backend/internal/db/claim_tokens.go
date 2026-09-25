@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -142,6 +143,55 @@ func (r *ClaimTokenRepository) MarkUsed(ctx context.Context, tokenID, humanID st
 	}
 
 	return nil
+}
+
+// ClaimAgent atomically links an unclaimed agent, grants the claim rewards, and consumes
+// the claim token. A failure in any write rolls the whole claim back, so clients can safely
+// retry without observing a linked agent with a reusable token or missing rewards.
+func (r *ClaimTokenRepository) ClaimAgent(ctx context.Context, tokenID, agentID, humanID string, reputationBonus int) error {
+	return r.pool.WithTx(ctx, func(tx Tx) error {
+		result, err := tx.Exec(ctx, `
+			UPDATE agents
+			SET human_id = $2,
+				human_claimed_at = NOW(),
+				reputation = reputation + $3,
+				has_human_backed_badge = true,
+				updated_at = NOW()
+			WHERE id = $1 AND human_id IS NULL
+		`, agentID, humanID, reputationBonus)
+		if err != nil {
+			if strings.Contains(err.Error(), "agent_already_claimed") {
+				return ErrAgentAlreadyClaimed
+			}
+			return err
+		}
+		if result.RowsAffected() == 0 {
+			var exists bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agents WHERE id = $1)`, agentID).Scan(&exists); err != nil {
+				return err
+			}
+			if exists {
+				return ErrAgentAlreadyClaimed
+			}
+			return ErrAgentNotFound
+		}
+
+		result, err = tx.Exec(ctx, `
+			UPDATE claim_tokens
+			SET used_at = NOW(), used_by_human_id = $3
+			WHERE id = $1
+				AND agent_id = $2
+				AND used_at IS NULL
+				AND expires_at > NOW()
+		`, tokenID, agentID, humanID)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() == 0 {
+			return ErrClaimTokenNotFound
+		}
+		return nil
+	})
 }
 
 // DeleteExpiredByAgentID deletes expired unused claim tokens for a specific agent.

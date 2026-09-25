@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -18,6 +19,12 @@ import (
 
 // ReputationBonusOnClaim is the reputation bonus granted when a human claims an agent.
 const ReputationBonusOnClaim = 50
+
+// AtomicAgentClaimer is implemented by the database claim-token repository. It keeps the
+// agent link, claim rewards, and token consumption in one transaction.
+type AtomicAgentClaimer interface {
+	ClaimAgent(ctx context.Context, tokenID, agentID, humanID string, reputationBonus int) error
+}
 
 // GenerateClaimResponse is the response for POST /v1/agents/me/claim.
 // Per SECURE-CLAIMING requirement: generate claim TOKEN for agent-human linking.
@@ -205,11 +212,22 @@ func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Link agent to human. Only one claim can link an unclaimed agent; a concurrent or
-	// retried claim that lost is a conflict and grants nothing below.
-	if err := h.repo.LinkHuman(r.Context(), agent.ID, claims.UserID); err != nil {
+	// Production repositories commit the link, rewards, and token consumption together.
+	// The fallback preserves compatibility with focused handler mocks that do not own a DB
+	// transaction; it is not used by the router's database-backed repository.
+	atomicClaimer, atomic := h.claimTokenRepo.(AtomicAgentClaimer)
+	if atomic {
+		err = atomicClaimer.ClaimAgent(r.Context(), claimToken.ID, agent.ID, claims.UserID, ReputationBonusOnClaim)
+	} else {
+		err = h.repo.LinkHuman(r.Context(), agent.ID, claims.UserID)
+	}
+	if err != nil {
 		if errors.Is(err, db.ErrAgentAlreadyClaimed) {
 			writeAgentError(w, http.StatusConflict, "ALREADY_CLAIMED", "agent is already claimed")
+			return
+		}
+		if errors.Is(err, db.ErrClaimTokenNotFound) {
+			writeAgentError(w, http.StatusConflict, "TOKEN_USED", "token has already been used")
 			return
 		}
 		writeAgentError(w, http.StatusInternalServerError, "LINK_FAILED", "failed to claim agent")
@@ -227,20 +245,12 @@ func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	// Grant +50 reputation bonus
-	if err := h.repo.AddReputation(r.Context(), agent.ID, ReputationBonusOnClaim); err != nil {
-		// Log error but don't fail the claim
-		// The link was successful, reputation is secondary
-	}
-
-	// Grant Human-Backed badge
-	if err := h.repo.GrantHumanBackedBadge(r.Context(), agent.ID); err != nil {
-		// Log error but don't fail the claim
-	}
-
-	// Mark token as used
-	if err := h.claimTokenRepo.MarkUsed(r.Context(), claimToken.ID, claims.UserID); err != nil {
-		// Log error but don't fail - the claim was successful
+	if !atomic {
+		// Unit-test repositories use the legacy individual operations. The real repository
+		// took all three actions inside ClaimAgent above.
+		_ = h.repo.AddReputation(r.Context(), agent.ID, ReputationBonusOnClaim)
+		_ = h.repo.GrantHumanBackedBadge(r.Context(), agent.ID)
+		_ = h.claimTokenRepo.MarkUsed(r.Context(), claimToken.ID, claims.UserID)
 	}
 
 	// Fetch updated agent

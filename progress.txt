@@ -3604,3 +3604,83 @@ REMAINING FOR idx 74 (passes STAYS false):
 UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: as slices 6/10, the owner applies
 000101 and 000102 on production through the admin query route, then deploys. No migration in
 this slice.
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 18 of N. Step 5 retry safety: make an agent claim's link, +50 reputation bonus,
+human-backed badge, and token consumption one database transaction.
+================================================================================
+
+TASK SELECTION [REAL]: idx 24 acceptance still needs the later client/capacity work; idx
+52/53, 68 and 73's remainder remain gated on the knowledge cutover; idx 67 needs a test
+deployment. [REAL] No description starts with URGENT. [REAL] The recent journal identified
+idx 74 as the first buildable false task and named claim atomicity as its unverified step-5
+remainder, so this slice addressed only that behavior.
+
+DEFECT [REAL]: production ClaimAgentWithToken performed LinkHuman, AddReputation,
+GrantHumanBackedBadge, and claim_tokens.MarkUsed as four independent statements; errors in
+the final three were ignored after the link committed. [REAL] A failed token write could
+therefore leave a claimed agent with a reusable token or missing claim rewards.
+
+TDD RED [TEST]: with
+DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (the local isolated test DB
+in the healthy solvr-postgres container),
+`go test ./internal/db -run '^TestClaimTokenRepository_ClaimAgentAtomically$' -count=1 -v`
+failed to compile because ClaimTokenRepository.ClaimAgent did not exist. [TEST] The test was
+written before the implementation and contains a commit case plus a deliberately absent
+token case that requires every agent-field change to roll back.
+
+IMPLEMENTATION [REAL]: ClaimTokenRepository.ClaimAgent now uses Pool.WithTx to conditionally
+link the unclaimed agent while granting the bonus and badge, then conditionally consumes the
+matching, live, unused token. [REAL] Zero-row agent updates map to ErrAgentAlreadyClaimed or
+ErrAgentNotFound; zero-row token updates return ErrClaimTokenNotFound and roll back the agent
+update. [REAL] ClaimAgentWithToken detects the database repository's AtomicAgentClaimer and
+uses this transaction; ErrClaimTokenNotFound becomes the stable 409 TOKEN_USED response.
+[REAL] The old individual calls remain only as the compatibility path for focused unit-test
+mocks that do not own a database transaction; NewRouter wires *db.ClaimTokenRepository, so
+the production path is atomic. [REAL] Room-owner membership backfill remains after commit
+and non-fatal, as before; it is derived repair work rather than part of the four claim facts.
+
+FILES ([REAL] final pre-journal `git status --porcelain`, `git diff --stat`, and
+`git diff --numstat`):
+  M backend/internal/api/handlers/agents_claim.go (+27/-17): AtomicAgentClaimer dispatch,
+    transactional error mapping, and legacy mock-only fallback.
+  M backend/internal/db/claim_tokens.go (+50): real PostgreSQL transaction implementation.
+  A backend/internal/db/agent_claim_atomic_test.go (93 lines): commit and rollback integration
+    cases. [REAL] No migration, frontend, SPEC.md, or spec.json change; passes stays false.
+
+GREEN / VERIFICATION:
+  [TEST] `go test -race ./internal/db -run '^TestClaimTokenRepository_ClaimAgentAtomically$'
+  -count=1 -v`: both commit and rollback subtests PASS, 0 SKIP, against solvr_test.
+  [TEST] `go test -race ./internal/api -run
+  '^TestAgentClaim_RetriesAndRacesLinkTheAgentOnce$' -count=1`: PASS against solvr_test; its
+  128 concurrent attempts across same-human retries and several-human races still produce
+  one owner, one +50 bonus, one consumed token, 409 losers, and stable later retries.
+  [TEST] focused handlers `go test ./internal/api/handlers -run
+  '^(TestClaimAgent_|TestGenerateClaim_)' -count=1`: PASS, 0 SKIP.
+  [REAL] `go build ./...`, `go vet ./internal/api/... ./internal/db/...`, and
+  `git diff --check` completed cleanly on final code. [REAL] The three touched/new code files
+  are 350, 230, and 93 lines. [REAL] `scripts/check-file-size.sh` still reports the same 35
+  pre-existing >800-line files as slice 17; this slice did not modify or enlarge one.
+
+FULL SUITE [REAL, executed on final code; NOT GREEN]:
+`DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test go test ./... -p 1
+-count=1` exited 1; raw output is `/private/tmp/solvr_idx74_s18_final_full.log`. [TEST] Every
+package outside internal/api, internal/api/handlers, and internal/db passed. [REAL] There were
+77 unique top-level failures versus slice 17's 78; exact name-set comparison shows the only
+gone failure is TestAgentClaim_RetriesAndRacesLinkTheAgentOnce, which this slice also proved
+with its isolated race run. [REAL] The new TestClaimTokenRepository_ClaimAgentAtomically is
+absent from the failure set. [REAL] Existing TestClaimTokenRepository_MarkUsed failed because
+its fixed user fixture was absent and the token update hit claim_tokens_used_by_human_id_fkey;
+the same full run contains the established shared-data failure families. [REAL] The required
+full suite is therefore not green and the task remains open.
+
+REMAINING FOR idx 74 [UNVERIFIED]: step 3 still needs the dead flags-handler decision,
+invalid-credential behavior on optional-auth routes, and remaining 400/409/429 rows; step 6
+still needs the OpenAPI contract after splitting its pre-existing oversized files. [REAL]
+Claim atomicity is no longer in the remaining list.
+
+UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: unchanged from slices 6/10 — owner
+applies migrations 000101 and 000102 to production through the admin query route, then
+deploys. [REAL] This slice adds no migration or deployment action.

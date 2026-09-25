@@ -2062,3 +2062,61 @@ REMAINING FOR idx 59 (passes STAYS false): step 1/2 surface matrix (HTML, REST, 
 UAT (for when idx 59 closes): owner applies backend/migrations/000104_room_access_notify.up.sql
   on prod via the admin query route, then deploys. Without it open streams are still
   re-checked on every 30s heartbeat.
+
+2026-09-25 — Task idx 59 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Keep room and content permissions authoritative on the server"
+SLICE 2 of N: revoke ONE participant's room token without touching membership (step 4).
+================================================================================
+
+TASK SELECTION: same as slice 1 (idx 24 acceptance still needs idx 59/75/78 pieces; idx
+  52/53 still before the knowledge cutover). idx 59 stays the first buildable false task.
+  [REAL] router_rooms.go had no per-token revoke route; RoomAgentTokenRepository.Revoke was
+  only reachable through RemoveMember (which also ends the membership).
+
+DESIGN:
+  DELETE /v1/rooms/{slug}/members/{agent_id}/token (authMiddleware + resolveRoomForManage:
+  owner/admin/family owner only; room token => 401 at authMiddleware). 404 NOT_FOUND when
+  the agent has no active membership (or unknown room); otherwise deletes the token row
+  and answers 204, idempotently. The 000104 room_agent_tokens DELETE trigger (slice 1)
+  ends the token's open streams on every instance; no new migration. The agent stays a
+  member and may re-handshake with its own API key for a NEW token (old one stays dead).
+
+DIFF ([REAL] git status --porcelain / git diff --stat: 3 modified +33, 1 new):
+  M backend/internal/api/handlers/rooms_members.go (+30, RevokeMemberToken; 194 lines)
+  M backend/internal/api/router_rooms.go (+2, route)
+  M backend/internal/api/route_families.go (+1, route added to canonical-rooms keep family;
+    TestRouteFamilies_CoverEveryServedRoute failed in the full run until it was listed)
+  A backend/internal/api/router_rooms_token_revoke_test.go (2 integration tests)
+  M progress.txt: this entry. spec.json NOT changed. No existing test changed or removed.
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local isolated DB):
+  [TEST] RED /tmp/solvr_idx59_s2_red.log: both tests FAIL (404 route not found).
+  [TEST] GREEN -race -v /tmp/solvr_idx59_s2_green.log: 2/2 PASS + the 3 slice-1 stream
+    revocation tests PASS, 0 SKIP. Asserted with two instances: owner revokes executor's
+    token via A -> executor's room-token stream and /r adapter stream on B end with
+    access_revoked within 3s; executor's account-key stream and planner stream continue
+    and both receive a new planner entry; revoked token 401 on entries read/write and
+    /r messages/message on A and B; owner still lists executor as member; re-handshake
+    gives a different token that works while the old stays 401; planner token untouched.
+    Auth: anonymous 401, fellow member key 403, unrelated agent 403, room token 401,
+    refused attempts leave token alive; non-member 404, unknown room 404, second revoke
+    204, after member removal 404.
+  [REAL] mutation: Revoke call replaced by a no-op -> RevokedTokenIsDead test FAILS;
+    restored (verified grep).
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 once -> /tmp/solvr_idx59_s2_full.log.
+  75 unique FAIL names vs slice 1's 76: new = TestRouteFamilies_CoverEveryServedRoute
+  (fixed as above, re-run PASS with TestRouteFamilies_PublishedInSpec); gone =
+  TestHomepageSearch_ChartAddsUpToTheTotalBesideIt and TestSearchPulse_SeriesCoversThe
+  WindowAndExcludesMonitoring (pre-existing, data/time-dependent: HomepageSearch FAILED
+  again in the targeted re-run, untouched here). go vet api/handlers clean; touched files
+  gofmt clean. Frontend untouched.
+
+REMAINING FOR idx 59 (passes STAYS false): steps 1/2 surface matrix (HTML, REST, SSE,
+  instructions, message lookup, search, social metadata x anonymous/member/owner/
+  unrelated; deletion + expiry — [UNVERIFIED] guard does not check expires_at), step 5
+  default prompts use per-agent tokens + no secrets in public APIs, step 6 cached
+  responses/indexes follow permission changes. SPEC.md not updated (task steps do not ask
+  for it); the new route is only in route_families.go.
+
+UAT (for when idx 59 closes): as slice 1 (000104 on prod, then deploy).

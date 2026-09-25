@@ -138,6 +138,8 @@ func mountRoomRoutes(
 			r.Get("/{slug}/members", roomHandler.ListMembers)
 			r.Post("/{slug}/members", roomHandler.AddMember)
 			r.Delete("/{slug}/members/{agent_id}", roomHandler.RemoveMember)
+			// Revoke one participant's room token; the membership and peers are untouched.
+			r.Delete("/{slug}/members/{agent_id}/token", roomHandler.RevokeMemberToken)
 
 			// Turn a room outcome into a reusable canonical draft Post (author reviews and
 			// publishes it via the normal Post flow; a private-room outcome is published only

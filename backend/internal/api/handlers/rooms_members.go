@@ -130,6 +130,36 @@ func (h *RoomHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// RevokeMemberToken handles DELETE /v1/rooms/{slug}/members/{agent_id}/token — owner
+// revokes ONE participant's per-agent room token without touching its membership or any
+// other participant. The token is dead at once on every surface (REST, /r adapter, open
+// streams on every instance via the room access notice); the agent, still a member, may
+// prove its identity again with its own API key to get a new token. Idempotent while the
+// membership is active.
+func (h *RoomHandler) RevokeMemberToken(w http.ResponseWriter, r *http.Request) {
+	room := h.resolveRoomForManage(w, r)
+	if room == nil {
+		return
+	}
+	agentID := chi.URLParam(r, "agent_id")
+	isMember, err := h.memberRepo.IsMember(r.Context(), room.ID, agentID)
+	if err != nil {
+		slog.Error("failed to check room member for token revoke", "error", err, "room_id", room.ID, "agent", agentID)
+		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to revoke token")
+		return
+	}
+	if !isMember {
+		roomWriteError(w, http.StatusNotFound, "NOT_FOUND", "agent is not a member of this room")
+		return
+	}
+	if err := h.agentTokenRepo.Revoke(r.Context(), room.ID, agentID); err != nil {
+		slog.Error("failed to revoke per-agent room token", "error", err, "room_id", room.ID, "agent", agentID)
+		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to revoke token")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ListMembers handles GET /v1/rooms/{slug}/members — owner views the allowlist.
 func (h *RoomHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	room := h.resolveRoomForManage(w, r)

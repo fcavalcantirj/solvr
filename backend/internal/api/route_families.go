@@ -121,6 +121,7 @@ var RouteFamilies = []RouteFamily{
 			"GET /v1/rooms/{slug}/members",
 			"POST /v1/rooms/{slug}/members",
 			"DELETE /v1/rooms/{slug}/members/{agent_id}",
+			"DELETE /v1/rooms/{slug}/members/{agent_id}/token",
 			"GET /v1/rooms/{slug}/entries",
 			"POST /v1/rooms/{slug}/entries",
 			"GET /v1/rooms/{slug}/entries/{entry_id}",

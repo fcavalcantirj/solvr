@@ -2317,3 +2317,86 @@ REMAINING FOR idx 59 (passes STAYS false):
   - step 5 default prompts use per-agent tokens + no secrets in public APIs.
 
 UAT (for when idx 59 closes): as slices 1/3/4. No migration in this slice.
+
+2026-09-25 — Task idx 59 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Keep room and content permissions authoritative on the server"
+SLICE 6 of N: homepage room surfaces are revalidated, never reused unasked by a browser/proxy (step 6).
+================================================================================
+
+TASK SELECTION: same as slices 1-5 (idx 24 acceptance still needs idx 59/75/78 pieces; idx
+  52/53 still before the knowledge cutover). idx 59 stays the first buildable false task.
+  Took the step 6 item left in REMAINING (backend homepage `public, max-age=30`).
+  NOTE [REAL]: /tmp/solvr_idx59_s6_{first,full,mut}.log (12:04-12:05) predate this
+  iteration (an earlier iteration that never committed; tree was clean at start). Ignored.
+
+PROBLEM [REAL, code read]: GET /v1/homepage/overview, /v1/overview, /v1/homepage/activity,
+  /v1/overview/activity and /v1/homepage/rooms carry room slugs/names/messages and are
+  fetched by the browser (frontend lib/api-base.ts, client LiveOverview). They sent
+  `public, max-age=30`, so a browser or proxy could keep showing a room up to 30s after it
+  turned private/deleted, even though the server snapshot is dropped at once (idx 23 s4).
+
+FIX: handlers/homepage_rooms.go new const roomContentCacheControl = "public, no-cache", used
+  by those 5 responses (homepage_overview.go x3, homepage_activity.go, homepage_rooms.go).
+  Caches may keep the bytes but must ask the API before every reuse (no validators, so every
+  reuse is a full fetch that the server-side snapshot absorbs). First tried "no-store"; the
+  full suite showed TestPublicOverview_NeverSharesACacheEntryWithAnOperatorReport asserts
+  the public overview carries NO no-store ("the public overview is meant to be cacheable"),
+  so no-cache was chosen: satisfies both. /v1/homepage/search, /api-usage and /v1/stats*
+  unchanged (no room content).
+
+DIFF ([REAL] git status --porcelain / git diff --stat: 6 modified +17/-9, 1 new):
+  M backend/internal/api/handlers/homepage_rooms.go (+9/-1: const + GetRooms header)
+  M backend/internal/api/handlers/homepage_overview.go (3 header lines; still 775 lines)
+  M backend/internal/api/handlers/homepage_activity.go (1 header line)
+  M backend/internal/api/handlers/overview_cache.go (comment only)
+  M backend/internal/api/router_homepage_rooms_test.go (1 assertion, see REPLACED)
+  M backend/internal/api/router_homepage_consolidated_test.go (1 assertion, see REPLACED)
+  A backend/internal/api/router_homepage_cache_privacy_test.go (1 integration test)
+  M progress.txt: this entry. spec.json NOT changed. Frontend untouched. No test removed.
+
+REPLACED ASSERTIONS (behavior this slice replaces; tests kept, names unchanged):
+  (a) TestHomepageRooms_IsCacheableAndNeedsNoCredentials (b) asserted
+      Equal "public, max-age=30"; now Equal "public, no-cache" (still cacheable, no creds).
+  (a) TestOverviewConsolidated_CacheControl (b) asserted Contains "max-age=30" ("Cache-Control
+      must advertise 30s"); now Equal "public, no-cache".
+  (c) new TestHomepageRoomSurfaces_AreRevalidatedAndDropARoomTheMomentItTurnsPrivate covers
+      all 5 endpoints (d) PASS below.
+
+TDD (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local isolated DB):
+  [TEST] RED /tmp/solvr_idx59_s6_red.log: FAIL `"public, max-age=30" does not contain "no-store"`
+    (first version of the test; later changed to no-cache, see FIX).
+  [TEST] GREEN -race -v /tmp/solvr_idx59_s6_green3.log: 31 PASS, 0 FAIL, 0 SKIP
+    (new test; TestHomepageRooms_*, TestOverviewConsolidated_*,
+    TestPublicOverview_NeverSharesACacheEntryWithAnOperatorReport 4 subtests,
+    TestRoomOverview_*, TestHomepageActivity_*). New test asserts: public room with 2
+    messages; all 5 endpoints send no-cache and no max-age; 4 show the slug; PATCH private
+    -> the very next request on all 5 has no slug.
+  [REAL] mutation: homepage_activity.go header back to max-age=30 -> new test FAIL
+    "/v1/homepage/activity: a browser or proxy must ask the API before reusing room content"
+    (/tmp/solvr_idx59_s6_mut2.log); restored.
+
+FULL SUITE [TEST]: go test ./... -p 1 -count=1 once (with the no-store version) ->
+  /tmp/solvr_idx59_s6_full2.log: 78 unique FAIL names; vs slice 5: 4 new, listed:
+  - TestPublicOverview_NeverSharesACacheEntryWithAnOperatorReport: caused by no-store;
+    fixed by switching to no-cache, PASS in green3 above.
+  - TestHomepageOverview_ServesEverySectionToALoggedOutVisitor,
+    TestHomepageSearch_NeverPublishesAProtectedOrUnrepeatedTerm,
+    TestHomepageSearch_NeverPublishesPastedSecretsOrPersonalData: all fail on the search
+    top-terms list being filled by other rows in solvr_test ("zqxfamsearch", ...). [REAL]
+    the overview one FAILED alone on clean HEAD (git stash, /tmp/solvr_idx59_s6_head_overview.log);
+    all three PASS alone on this tree (/tmp/solvr_idx59_s6_mine_search.log) and the search
+    two PASS alone on HEAD. homepage_search.go untouched => data/time-dependent in the
+    shared test DB, not this change. Suite NOT re-run after the no-cache switch.
+  Package FAILs remain internal/api, internal/api/handlers, internal/db (pre-existing set).
+  go build ok; go vet handlers clean; gofmt clean on touched files; check-file-size.sh no
+  violation in touched files.
+
+REMAINING FOR idx 59 (passes STAYS false):
+  - steps 1/2 surface matrix still to sweep (instructions, message lookup, search, social
+    metadata x anonymous/member/owner/unrelated). IsPrivateRoom (post publish gate) still
+    ignores expiry [UNVERIFIED impact].
+  - step 5 default prompts use per-agent tokens + no secrets in public APIs.
+
+UAT (for when idx 59 closes): as slices 1/3/4; after deploy, owner confirms
+  https://api.solvr.dev/v1/overview returns Cache-Control: public, no-cache.
+  CORRECTION (slice 6 DIFF line above): git diff --stat shows homepage_rooms.go +9/-1 = 10 changed lines, matching the +17/-9 total.

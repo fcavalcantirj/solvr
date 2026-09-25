@@ -398,6 +398,14 @@ func parseRoomStatsWindow(r *http.Request) db.RoomStatsWindow {
 	return db.DefaultRoomStatsWindow()
 }
 
+// roomContentCacheControl is the Cache-Control of every homepage response that can
+// carry a room's name, slug or messages. Browsers read these endpoints directly, so a
+// copy reused without asking would keep showing a room after it turns private or is
+// deleted. Caches may keep it, but no-cache makes them ask the API before every reuse;
+// the server-side overview snapshot, dropped on every visibility change, is the only
+// reuse that skips the database.
+const roomContentCacheControl = "public, no-cache"
+
 // GetRooms handles GET /v1/homepage/rooms. Public, no auth.
 //
 // It serves the room section alone so the window selector re-reads four
@@ -420,6 +428,6 @@ func (h *HomepageOverviewHandler) GetRooms(w http.ResponseWriter, r *http.Reques
 	section := buildOverviewRooms(pulse, recentRooms)
 	enforcePublicRoomsMetrics(&section)
 
-	w.Header().Set("Cache-Control", "public, max-age=30")
+	w.Header().Set("Cache-Control", roomContentCacheControl)
 	roomWriteJSON(w, http.StatusOK, map[string]any{"data": section})
 }

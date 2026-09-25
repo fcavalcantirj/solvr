@@ -333,6 +333,6 @@ func TestHomepageRooms_IsCacheableAndNeedsNoCredentials(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, "public, max-age=30", resp.Header.Get("Cache-Control"))
+	assert.Equal(t, "public, no-cache", resp.Header.Get("Cache-Control"), "cacheable, but revalidated so room names never outlive a visibility change")
 	_ = time.Now()
 }

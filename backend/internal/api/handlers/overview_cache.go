@@ -47,8 +47,8 @@ type overviewCacheEntry struct {
 }
 
 const (
-	// overviewCacheTTL is the server-side cache lifetime, matching the
-	// Cache-Control: public, max-age=30 header on the response.
+	// overviewCacheTTL is the server-side cache lifetime. The response itself
+	// is sent with Cache-Control: public, no-cache (roomContentCacheControl).
 	overviewCacheTTL = 30 * time.Second
 
 	// overviewCacheMaxEntries bounds the cache so it cannot grow unbounded

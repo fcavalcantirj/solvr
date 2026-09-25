@@ -717,7 +717,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 	// see public_overview_allowlist.go.
 	enforcePublicOverviewMetrics(&overview)
 
-	w.Header().Set("Cache-Control", "public, max-age=30")
+	w.Header().Set("Cache-Control", roomContentCacheControl)
 	roomWriteJSON(w, http.StatusOK, map[string]any{"data": overview})
 }
 
@@ -737,7 +737,7 @@ func (h *HomepageOverviewHandler) GetOverviewConsolidated(w http.ResponseWriter,
 	// Try the cache first.
 	if h.cache != nil {
 		if cached, ok := h.cache.Get(cacheKey); ok {
-			w.Header().Set("Cache-Control", "public, max-age=30")
+			w.Header().Set("Cache-Control", roomContentCacheControl)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write(cached)
@@ -766,7 +766,7 @@ func (h *HomepageOverviewHandler) GetOverviewConsolidated(w http.ResponseWriter,
 		h.cache.Set(cacheKey, buf)
 	}
 
-	w.Header().Set("Cache-Control", "public, max-age=30")
+	w.Header().Set("Cache-Control", roomContentCacheControl)
 	roomWriteJSON(w, http.StatusOK, resp)
 }
 

@@ -392,7 +392,7 @@ func (h *HomepageOverviewHandler) GetActivity(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	w.Header().Set("Cache-Control", "public, max-age=30")
+	w.Header().Set("Cache-Control", roomContentCacheControl)
 	roomWriteJSON(w, http.StatusOK, map[string]any{
 		"data": buildOverviewActivity(entries, limit, offset, newCount, time.Now()),
 	})

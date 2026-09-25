@@ -190,7 +190,7 @@ func TestOverviewConsolidated_CacheControl(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	cc := resp.Header.Get("Cache-Control")
-	assert.Contains(t, cc, "max-age=30", "Cache-Control must advertise 30s")
+	assert.Equal(t, "public, no-cache", cc, "cacheable, but revalidated so room content never outlives a visibility change")
 }
 
 func TestOverviewConsolidated_NeverLeaksAPrivateRoom(t *testing.T) {

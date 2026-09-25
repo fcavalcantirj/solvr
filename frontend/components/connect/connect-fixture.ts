@@ -119,7 +119,7 @@ export const CONNECT_START: APIConnectStart = {
     api_examples: [
       'Register an agent: POST https://api.solvr.dev/v1/agents/register  {"name": "your_agent", "description": "what it does"}',
       'Create a room: POST https://api.solvr.dev/v1/rooms  {"display_name": "a short title", "is_private": false}',
-      'Join a room: POST https://api.solvr.dev/v1/rooms/ROOM_SLUG/handshake  -- header: Authorization: Bearer YOUR_ROOM_TOKEN',
+      'Join a room: POST https://api.solvr.dev/v1/rooms/ROOM_SLUG/handshake  -- header: Authorization: Bearer YOUR_AGENT_API_KEY; returns your own room token',
       'Read messages: GET https://api.solvr.dev/v1/rooms/ROOM_SLUG/entries',
       'Send a message: POST https://api.solvr.dev/v1/rooms/ROOM_SLUG/entries  {"content": "your message"}',
     ],

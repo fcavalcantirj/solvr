@@ -2483,3 +2483,110 @@ REMAINING FOR idx 59 (passes STAYS false):
 
 UAT (for when idx 59 closes): as slices 1/3/4/6. No migration in this slice.
   CORRECTION (slice 7 DIFF line above): git diff --stat -- backend showed 6 files +56/-13 (overview_cache.go +28/-2 counts 30 changed lines), not +55/-13.
+
+2026-09-25 — Task idx 59 (spec.json, category api) — DONE, passes=true
+"Keep room and content permissions authoritative on the server"
+SLICE 8 (journal for 3 commits that landed with no entry) + SLICE 9 (HTML/social metadata test,
+connect fixture) + closing verification.
+================================================================================
+
+TASK SELECTION: idx 24 acceptance still needs idx 75/78 pieces; idx 52/53 still before the
+  knowledge cutover. idx 59 stays the first buildable false task.
+
+UNJOURNALED COMMITS FOUND ([REAL] git show --numstat; the harness auto-committed each under the
+  last dated journal line, so their subjects read "Task idx 59 ... IN PROGRESS" / "RALPH BLOCKED"):
+  - f44649f (12:06): A backend/internal/api/router_rooms_secrets_test.go (+152).
+    TestRoomSecrets_NoRoomSurfaceRevealsCredentials: public + private room; 25 GET surfaces
+    (/v1/rooms/{slug} and /agents,/messages[/id],/entries[/id],/posts,/members,/stream,
+    /connect?role=executor|planner|reviewer, /v1/connect, /v1/rooms, /v1/search, /v1/sitemap/urls,
+    /v1/agents/{id} x2, /r/{slug}/messages[/id],/agents,/pins,/claims,/events,/stream) x anonymous,
+    member room token, member account key, owner JWT, unrelated agent; no body contains any API
+    key, room token, owner JWT, agents.api_key_hash/key_sha256 or room_agent_tokens.token_hash;
+    the owner's connect prompt names /handshake and holds no solvr_(rt|rm|sk)_ token.
+  - e338268 (12:43, subject "RALPH BLOCKED"): M handlers/posts.go (+5/-2), M db/room_privacy.go
+    (+4/-3), A router_rooms_permission_matrix_test.go (+250), progress.txt (+2, the BLOCKED line).
+    Production change: IsPrivateRoom no longer filters deleted_at (a soft-deleted private room
+    still reports private), and the posts PATCH publish gate also refuses (403
+    ROOM_OWNER_APPROVAL_REQUIRED) when the source room no longer exists (ErrRoomNotFound), so an
+    author cannot publish a private room's saved outcome by a plain edit after the room is
+    deleted or reaped. Public-room outcomes still publish (tested).
+    Tests: TestRoomPermissionMatrix_EverySurfaceFollowsVisibilityMembershipOwnershipAndDeletion
+    (public + private x anonymous, member token, member key, owner, unrelated agent, unrelated
+    human over v1 reads incl. connect instructions, message lookup, stream, /r adapter, search;
+    writes; 7 owner-only actions refused for everyone else and nothing changes; member removal;
+    deletion) and TestRoomPermissionMatrix_PrivateOutcomeStaysOwnerOnlyAfterTheRoomIsGone.
+    Earlier-iteration logs [REAL, read]: /tmp/solvr_idx59_s7_outcome_red.log 2 FAIL before the
+    fix, _outcome_mut.log FAIL under mutation, _matrix3.log + _outcome_green.log PASS.
+  - 41483be (13:26): M handlers/connect.go (+8/-3), A handlers/connect_add_agent_tokens_test.go
+    (+92). The "Add another agent" role prompt now says the handshake takes the agent's own API
+    key, the room token is "yours alone" and never goes in another agent's prompt, never
+    impersonate, keep the key under this agent's own profile; the Customize "Join a room"
+    example used `Bearer YOUR_ROOM_TOKEN` for the handshake that issues it -> now
+    `Bearer YOUR_AGENT_API_KEY; returns your own room token`. /tmp/solvr_idx59_s8_red.log shows
+    the RED run; that iteration's full-suite log is truncated (329 bytes), i.e. it never finished.
+
+THIS ITERATION'S DIFF ([REAL] git status --porcelain / git diff --stat: 1 modified +1/-1, 1 new):
+  M frontend/components/connect/connect-fixture.ts (+1/-1): the fixture that mirrors GET
+    /v1/connect still carried the old handshake example; now the exact string connect.go:560
+    serves. Test-only file (imported by connect-panel tests); no assertion changed.
+  A frontend/app/rooms/[slug]/page.visibility.test.tsx (4 tests, 117 lines): the room page's
+    HTML and social metadata come only from the API answer — 200: title/description/openGraph
+    and JSON-LD from the payload, transcript rendered; 401 and 403 (even with a room in the
+    refused body): generateMetadata {} and only the authenticated gate, no name/description/
+    transcript/JSON-LD in the HTML; 404: {} metadata and notFound().
+  M progress.txt (this entry), M spec.json (idx 59 passes=true). No backend change. No test
+  changed or removed.
+
+TDD / EVIDENCE:
+  [TEST] page.visibility.test.tsx PASSED on its first run (/tmp/solvr_idx59_s9_fe_first.log):
+    it pins behavior slices 3 built, so no RED. [REAL] mutation: getRoom made to read the body
+    of a refused response -> 3/4 FAIL (/tmp/solvr_idx59_s9_fe_mut.log); page.tsx restored
+    (git checkout, git diff --quiet confirmed).
+  [TEST] backend idx 59 set, -race -v, DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/
+    solvr_test (local isolated DB; 000104's 6 access triggers present, psql-checked):
+    /tmp/solvr_idx59_s9_api.log 16 PASS, 0 SKIP (TestRoomPermissionMatrix_* x2, TestRoomSecrets_*,
+    TestRoomStream_* x3, TestRoomTokenRevoke_* x2, TestRoomExpiry_* x2,
+    TestHomepageRoomSurfaces_*, TestRoomACL_* x3, TestRoomPrivateConnect_* x2);
+    /tmp/solvr_idx59_s9_handlers.log 6 PASS, 0 SKIP (TestConnectAddAgent_*, TestConnectCustomize_*,
+    TestStreamAccess_* x4).
+  [TEST] backend full suite go test ./... -p 1 -count=1 once -> /tmp/solvr_idx59_s9_full.log:
+    79 unique FAIL names vs slice 7's 78: 0 gone, 1 new = TestRoomFamily_ForeignAndUnclaimedAgents
+    _Still403, failing in SETUP: `duplicate key value violates unique constraint
+    "users_referral_code_key"` at router_rooms_test.go:70 (createRoomTestUser builds
+    referral_code "RT%06d" from UnixNano()%1e6, so it can collide with rows already in the shared
+    solvr_test). [TEST] PASS alone (/tmp/solvr_idx59_s9_family.log, 4/4). Backend untouched this
+    iteration; fixture left as is (not this task). Package FAILs remain internal/api,
+    internal/api/handlers, internal/db (pre-existing set).
+  [TEST] frontend full suite npm test once -> /tmp/solvr_idx59_s9_full_fe.log: 181 files, 1627
+    tests passed, 0 failed (+1 file / +4 tests vs slice 4). tsc --noEmit clean (0 lines).
+    check-file-size.sh: same 36 pre-existing violations; handlers/posts.go (973) was already
+    970 before e338268; new/touched files are under the limit.
+
+STEP COVERAGE (every row ran green this iteration unless marked):
+  1 surfaces x callers: permission matrix (REST, SSE, connect instructions, message lookup,
+    search, /r adapter; GET /v1/rooms/{slug} is the social-metadata payload) + page.visibility
+    (HTML + metadata) + slices 3/4 [REAL] production-build spikes (earlier iterations).
+  2 visibility/membership/deletion/owner-only: matrix; expiry: TestRoomExpiry_* x2.
+  3 removal until readmitted: TestRoomStream_RemovedMember... (readmit re-handshakes) + matrix.
+  4 individual token revoke: TestRoomTokenRevoke_* x2.
+  5 per-agent default prompts + no secrets: TestConnectAddAgent_*, TestConnectCustomize_*,
+    TestRoomSecrets_*.
+  6 caches/indexes: TestHomepageRoomSurfaces_*, TestRoomExpiry_ExpiredRoomLeavesEveryListing...,
+    matrix search probe, slice 3/4 frontend cache tests (in the full FE run).
+
+OUT OF SCOPE, FOUND HERE (for the tasks that own them; not fixed):
+  - [REAL] frontend/public/skill.md and frontend/public/references/api.md (served at
+    solvr.dev) still describe the retired shared `solvr_rm_` room token ("Three credentials",
+    "pass the shared room token in the body to bootstrap"); skill/SKILL.md and
+    skill/references/api.md are already per-agent. scripts/sync-skill.sh copies skill/ over
+    public/, but public/skill.md has newer positioning text (3bb120d) that a plain sync would
+    overwrite -> needs a merge. The server refuses shared tokens, so this is agent guidance
+    drift, not a permission gap. Owner: idx 78 step 1 (agent-facing skills) / idx 75 step 4.
+  - Two sessions of one agent re-handshaking rotate each other's token: idx 75 step 1.
+
+UAT: owner applies backend/migrations/000104_room_access_notify.up.sql on prod through the admin
+  query route, then deploys backend + frontend. After deploy, owner confirms
+  https://solvr.dev/rooms/<slug>, https://solvr.dev/rooms and https://solvr.dev/sitemap-rooms.xml
+  return Cache-Control private, no-store (no CDN override) and https://api.solvr.dev/v1/overview
+  returns Cache-Control: public, no-cache. Without 000104, open streams are still re-checked
+  every 30s heartbeat.

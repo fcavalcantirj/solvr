@@ -755,7 +755,7 @@
       "Verify new default prompts use per-agent tokens and public APIs never reveal token hashes, account API keys, or member-management secrets.",
       "Verify cached responses and indexes respect permission changes rather than relying only on client-side hiding."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

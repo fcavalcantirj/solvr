@@ -126,6 +126,7 @@ var RouteFamilies = []RouteFamily{
 			"POST /v1/rooms/{slug}/entries",
 			"GET /v1/rooms/{slug}/entries/{entry_id}",
 			"GET /v1/rooms/{slug}/stream",
+			"POST /v1/rooms/{slug}/stream-ticket",
 			"GET /v1/rooms/{slug}/posts",
 			"POST /v1/rooms/{slug}/save-as-post",
 			"POST /v1/rooms/{slug}/posts/{postID}/publish",

@@ -4678,3 +4678,193 @@ UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: owner applies migrations 
   and the new token answers 200.
 
 ================================================================================
+
+================================================================================
+2026-09-26 — Task idx 75 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep credentials safe and revocation reliable across streams and multiple agent sessions"
+SLICE 2 of N. Step 2: browser streams authenticate with a short-lived stream ticket instead of a
+long-lived bearer in the URL; a ticket cannot authorize writes. (Close-out of code that was
+committed without a journal entry; see PROVENANCE.)
+================================================================================
+
+TASK SELECTION [REAL, read this session]: idx 24 (acceptance) still needs idx 75/78 pieces; idx
+  52/53, 68, 73's remainder and idx 67 are gated as recorded in slices 11-24 of idx 74 and in
+  idx 75 slice 1; no description starts with URGENT. idx 74 stays open (step 5 If-Match is an
+  owner call, see slice 1). idx 75 is the first buildable false task; step 2 is what slice 1's
+  REMAINING line named.
+
+PROVENANCE [REAL]: the slice 2 code is in commit 9c61d90, whose message is the truncated
+  auto-commit "2026-09-25 — Task idx 75 (spec.json, category functional) — IN PROGR" (30 files, 940
+  insertions, 121 deletions). The iteration that wrote it ended before appending a journal entry
+  and before running the whole suite, so nothing recorded what it did or whether it was green.
+  This iteration did not re-derive the design: it READ the diff, ran everything once, found ONE
+  defect and fixed it, and journals the slice from what it read and measured.
+
+DEFECT FOUND AND FIXED [REAL]: TestRouteFamilies_CoverEveryServedRoute FAILED on the code as
+  committed: "served routes with no keep/merge/adapt/retire decision: POST
+  /v1/rooms/{slug}/stream-ticket" (log /tmp/solvr_idx75_s2_api.log). Fix: one line in
+  backend/internal/api/route_families.go, the route added to the canonical-rooms family (keep),
+  next to GET /v1/rooms/{slug}/stream. [TEST] the full run after the fix does not list it.
+
+WHAT SLICE 2 DOES [REAL, read from the code]:
+  - auth/stream_ticket.go: IssueStreamTicket / ParseStreamTicket. Stateless HMAC-SHA256 ticket,
+    prefix solvr_st_ (none of the bearer prefixes, not a JWT), TTL 60 s (StreamTicketTTL), key
+    derived from the JWT secret with its own domain string so it is not the JWT key. Claims: room
+    id, credential kind (human | agent_api_key | room_token), subject, admin flag, and for a room
+    token only the STORED HASH (no secret inside the ticket). Errors ErrStreamTicketInvalid /
+    ErrStreamTicketExpired.
+  - handlers/rooms_stream_ticket.go: POST /v1/rooms/{slug}/stream-ticket behind the room READ
+    policy (credential in the Authorization header) and httprate 30 per minute per IP; 201 with
+    ticket, expires_at, ttl_seconds, stream; Cache-Control no-store; anonymous is 401.
+  - middleware/stream_ticket.go: SSEStreamTicket wired ONLY on GET /v1/rooms/{slug}/stream. Reads
+    ?ticket= only when there is no Authorization header; ?access_token= and ?token= are refused
+    with 400 VALIDATION_ERROR that names the replacement and never echoes the value; expired /
+    forged ticket is 401 STREAM_TICKET_EXPIRED / STREAM_TICKET_INVALID (recoverable: mint again).
+    middleware/sse_access_token.go (the BART-156 query-to-header promotion) is DELETED.
+  - middleware/room_policy.go streamTicketActor: the ticket is bound to one room (another room is
+    403); a room-token ticket is re-resolved through the token table at open time, so a token
+    revoked or rotated after minting opens nothing (rotation answers CREDENTIAL_ROTATED via
+    tokenMiss); room_access_recheck.go uses RoomTokenHash(r) so the 30 s recheck of an OPEN stream
+    checks the stored hash carried in the ticket. handlers/rooms_sse.go allows ?ticket= instead of
+    ?access_token= in the stream's query allowlist.
+  - middleware/logging.go: "ticket" added to the redacted query parameters.
+  - OpenAPI: operation createRoomStreamTicket, StreamTicketResponse, StreamTicket parameter
+    (replaces StreamAccessToken), x-solvr-conventions credential_transport.stream_query_parameter
+    now name ticket + mint_route + ttl_seconds, shared 401 row names the two ticket codes.
+  - Frontend: api.createRoomStreamTicket(slug); hooks/use-room-sse.ts mints a ticket for every
+    (re)connect when a JWT is in localStorage and opens EventSource with ?ticket=; if minting
+    fails it retries instead of opening an unauthenticated stream; unmount before the ticket
+    arrives opens nothing. Anonymous viewers open the stream at once with no ticket.
+  - Agent docs: frontend/public/references/api.md and skill/references/api.md describe the ticket.
+
+CHANGED / REMOVED EXISTING TESTS (the behavior they pinned is what this slice replaces):
+  (a) DELETED middleware/sse_access_token_test.go, TestSSEAccessTokenToHeader. It asserted three
+      cases: "promotes query when no header" (?access_token=jwt123 gives Authorization "Bearer
+      jwt123"), "leaves existing header untouched", "no query, no header -> empty". The promotion
+      is exactly what this slice retires. Replacement: middleware/stream_ticket_test.go
+      TestSSEStreamTicket, whose cases "a header wins: the ticket is not read" and "no query, no
+      header: anonymous, untouched" carry the last two, and whose cases "?access_token= is
+      retired", "?token= is retired", "retired even beside a header" (400 VALIDATION_ERROR, value
+      never echoed) pin the retirement. [TEST] PASSES (/tmp/solvr_idx75_s2_unit.log).
+  (b) router_rooms_bart156_test.go: TestRoomSSE_AccessTokenQueryParam_AuthorizesPrivateStream is
+      RENAMED TestRoomSSE_StreamTicket_AuthorizesPrivateStream. Same guarantees (anonymous 403,
+      owner 200, member room token 200, header 200); the query credential became a ticket minted
+      with the same credential.
+  (c) router_rooms_entries_stream_test.go table rows: "other room's token via ?access_token" (403)
+      became "other room's ticket" (403); "member room token ?access_token" (200) became a ticket
+      (200); "owner human JWT ?access_token" (200) became a ticket (200); "member room token
+      ?token" (200) became "?token is retired" (400). The canonical/adapter equal-entries test
+      opens its human stream with a ticket.
+  (d) router_rooms_n_agent_instances_test.go: two assertions "unrelated human / revoked browser
+      stream via ?access_token= is 401/403" became "no ticket is minted for that caller (mint POST
+      401/403)". The refusal of the URL bearer itself is pinned by TestStreamTicket_RetiresLong
+      LivedBearersInTheStreamURL and (c).
+  (e) openapi_operations_test.go / openapi_conventions_test.go: the StreamAccessToken parameter
+      ref became StreamTicket; the documented stream query parameter name "access_token" became
+      "ticket" (plus mint_route and ttl_seconds assertions).
+  (f) frontend/hooks/use-room-sse.test.ts: "appends the JWT as ?access_token when a token is in
+      localStorage" became "opens the stream with a ticket from the API and never puts the JWT in
+      the URL" (asserts the ticket param, access_token null, and the JWT string absent from the
+      URL); "omits access_token for an anonymous viewer" is kept and also asserts no ticket and no
+      mint call. Three new hook tests (fresh ticket per reconnect keeping lastEventId, mint failure
+      retries, unmount before the ticket) and a lib/api.test.ts test for the mint call.
+  No test was skipped or loosened; every replaced assertion is re-pinned by a named test above.
+
+VERIFICATION [REAL, database = local docker solvr-postgres, localhost:5435/solvr_test, schema
+  version 105; nothing else touched]:
+  - go test ./internal/auth ./internal/api/middleware -run 'StreamTicket|TestRedactURLPath|Logging|
+    TestSSE': ok, 46 PASS, 0 SKIP.
+  - go test ./internal/api -run 'StreamTicket|TestRoomSSE|TestRoomEntriesStream|TestNAgentRoom|
+    TestOpenAPI|TestRouteFamilies|TestRoomToken...': 60 PASS, 0 SKIP, 1 FAIL = the defect above.
+    These include TestStreamTicket_EveryCredentialKindOpensItsStreamWithATicket, _IsBoundToOneRoom
+    AndOpensNothingButItsStream, _ForgedAndExpiredTicketsAreRefusedWithARecoverableCode, _Retires
+    LongLivedBearersInTheStreamURL, _WorksOnAnyInstanceAndTheOpenStreamStillEndsWhenAccessDoes (two
+    API instances), _ARotatedRoomTokenEndsItsTicketStreamAsRotated.
+  - MUTATION CHECKS (production reverted after each; `git status` afterwards showed only
+    route_families.go): (A) drop the room-binding check in streamTicketActor -> TestStreamTicket_
+    IsBoundToOneRoomAndOpensNothingButItsStream FAILS; (B) disable the ?access_token / ?token
+    refusal -> TestStreamTicket_RetiresLongLivedBearersInTheStreamURL and TestSSEStreamTicket (3
+    subtests) FAIL. Logs /tmp/solvr_idx75_s2_mutA.log, _mutB.log, _mutB_unit.log.
+  - Frontend: hooks/use-room-sse.test.ts + lib/api.test.ts 12 PASS; components/rooms/* all pass
+    (room-detail-client 7, funnel 1, sse-status-badge 4, room-header-actions 6, room-header 6,
+    room-starter-prompts 2, rooms-browser + room-list 14); npx tsc --noEmit exit 0. NOTE the first
+    components/rooms run reported "Failed to start forks worker ... Timeout waiting for worker to
+    respond" for 5 files; those did not execute, so they were re-run and the numbers above are
+    from the re-runs. Full `npm test` was NOT run [UNVERIFIED for the rest of the frontend].
+  - FULL SUITE [REAL, executed once on the final production code, NOT GREEN]: `go test ./... -p 1
+    -count=1` exit 1, /tmp/solvr_idx75_s2_full.log; failing packages internal/api,
+    internal/api/handlers, internal/db (the documented set). 74 unique top-level FAIL names vs 77
+    in slice 1: 2 new, 5 gone.
+      new  TestAgentRepository_List_Empty (db): "can't scan into dest[2]: cannot scan NULL into
+           *string". The shared solvr_test DB holds 23 agents with NULL bio, all from internal/db
+           room fixtures (agent_rm_*, agent_bf_* in room_members_test.go / rooms_backfill_test.go).
+           Data-state, not this slice [I did not trace when those rows appeared: UNVERIFIED].
+      new  TestTypeSpecificListEndpoints (api): failed in the suite with TOKEN_EXPIRED and groq
+           "context deadline exceeded". The machine slept mid-run (my own `date` read Sep 25 23:3x
+           at the start and Sep 26 10:07 after; the log timestamps jump the same way; internal/api
+           took 600 s vs 326 s in slice 1). Run alone it PASSES (9.57 s, /tmp/solvr_idx75_s2_
+           typespecific.log) [TEST].
+      gone TestGetRoomPulse_SeparatesVerifiedIdentitiesFromNameOnlyPresence (slice 1's fixture fix)
+           and four TestHomepage* tests (data-state flips, not touched by me).
+    The other failures are the standing set (fixtures with referral_code NOT NULL, data-state).
+  - gofmt clean on every Go file this slice and this iteration touched; go vet clean on
+    internal/api, internal/api/middleware, internal/api/handlers, internal/auth;
+    check-file-size.sh: 35 violations, the same count as slice 1; of the files this slice touched
+    only router.go is listed (1224 lines, an older violation, 1 line changed); every new file is
+    under 300 lines.
+
+FILES [REAL, `git status --porcelain` / `git diff --stat` before this append: only M backend/
+  internal/api/route_families.go (+1); the rest is commit 9c61d90]:
+  Production (9c61d90): A auth/stream_ticket.go (86), A handlers/rooms_stream_ticket.go (58),
+    A middleware/stream_ticket.go (79), D middleware/sse_access_token.go, M middleware/
+    room_policy.go (+38), room_access_recheck.go, logging.go (+1), handlers/rooms_sse.go (1 line),
+    router.go (1 line), router_rooms.go (+15), openapi_conventions.go, openapi_operation_schemas.go
+    (+6), openapi_room_paths.go; frontend hooks/use-room-sse.ts, lib/api.ts (+13), lib/api-types.ts
+    (+13); docs frontend/public/references/api.md, skill/references/api.md.
+  Production (this iteration): M backend/internal/api/route_families.go (+1).
+  Tests (9c61d90): A auth/stream_ticket_test.go, A middleware/stream_ticket_test.go, A middleware/
+    logging_ticket_test.go, A api/router_rooms_stream_ticket_test.go (224), D middleware/
+    sse_access_token_test.go, M the router/openapi/frontend tests named in (b)-(f).
+  progress.txt is this append. spec.json and SPEC.md unchanged. Frontend needs no change from me.
+
+BEHAVIOR CHANGE (v0) [REAL from the tests above]:
+  - GET /v1/rooms/{slug}/stream with ?access_token= or ?token= is now 400 VALIDATION_ERROR, for
+    every credential and every room, public ones included. A browser opens the stream with
+    ?ticket= (POST /v1/rooms/{slug}/stream-ticket first). A client that can set headers just sends
+    Authorization: Bearer on the stream.
+
+DEPLOY ORDER WARNING [REAL, read the code; no migration in this slice]:
+  - Backend and frontend go together. The OLD frontend bundle puts ?access_token= on the stream for
+    any logged-in viewer (public rooms too) and now gets 400; the NEW frontend against an OLD API
+    gets 404 on the mint route and never opens the stream for a logged-in viewer. Anonymous viewers
+    are fine both ways. Migrations 000101/000102/000104/000105 are still the owner's (slice 1).
+  - Tickets are signed with the JWT secret: rotating it kills outstanding tickets (at most 60 s of
+    them); the hook mints a fresh one on the next reconnect.
+
+NOT VERIFIED [UNVERIFIED]:
+  - SPEC.md (about lines 5046-5047) still says the stream accepts `access_token`, `token` and that
+    a browser EventSource sends its credential as ?access_token=. STALE. Not edited: idx 75's
+    steps do not name SPEC.md.
+  - Analytics: middleware/api_usage.go apiUsageCredential still reads ?access_token= / ?token= and
+    knows nothing of ?ticket=, so a ticket-opened stream is counted as an anonymous actor
+    ([REAL, read] the code; [REAL, read] no api_usage test mentions access_token; the effect on the
+    numbers was not measured). Step 5 territory: the next slice.
+  - No real browser and no real EventSource: the hook runs against a mock EventSource.
+  - A human ticket keeps an open stream only as far as the 30 s policy recheck goes (membership /
+    visibility); a deleted or suspended ACCOUNT under an open human stream was not checked.
+  - The /r/{slug}/stream adapter (router_rooms.go, no SSEStreamTicket on it) was not examined
+    for the retired query parameters.
+
+REMAINING FOR idx 75 [UNVERIFIED]: step 5 (credentials in analytics classification, error
+  reports, screenshots, copied links: only logging redaction of ticket is proven so far), step 4
+  (private-room admission through the owner allowlist; individually attributable credentials before
+  retiring shared room tokens), step 3 close-out (built in idx 59 slices, not re-verified here).
+REMAINING FOR idx 74 (untouched): step 5 "require" If-Match — owner decision, blast radius in
+  idx 75 slice 1.
+
+UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: after deploying backend and frontend
+  together, log in as the owner in a browser, open a PRIVATE room and confirm live messages arrive;
+  in DevTools Network the stream request is GET .../v1/rooms/<slug>/stream?ticket=solvr_st_...
+  (no JWT anywhere in the URL) and a POST .../stream-ticket answered 201.
+
+================================================================================

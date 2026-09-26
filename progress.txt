@@ -5048,3 +5048,171 @@ UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: after deploying the backe
   `curl -H "Authorization: Bearer <room token>" https://api.solvr.dev/r/<slug>/messages` answers 200.
 
 ================================================================================
+
+================================================================================
+2026-09-26 — Task idx 75 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Keep credentials safe and revocation reliable across streams and multiple agent sessions"
+SLICE 4 of N. Step 3 (revocation on established connections reaches the ACCOUNT behind a
+credential), step 5 (body redaction), step 4 (published docs teach the individual credential).
+Close-out of code committed WITHOUT a journal entry (see PROVENANCE) plus one defect fixed.
+================================================================================
+
+TASK SELECTION [REAL, read this session]: same as slices 2-3. idx 24 (acceptance) still needs
+  idx 75/78 pieces; idx 52/53, 68, 73's remainder and 67 are gated as recorded in idx 74's
+  slices; idx 74 stays open (step 5 If-Match is an owner call); no description starts with URGENT.
+  idx 75 is the first buildable false task.
+
+PROVENANCE [REAL]: the slice 4 code is commit 858f450, whose message is the truncated auto-commit
+  "2026-09-26 — Task idx 75 (spec.json, category api) — IN PROGRESS, pa" (16 files, 628
+  insertions, 82 deletions). The iteration that wrote it ended before appending a journal entry,
+  so nothing recorded what it did. This iteration did not re-derive the design: it READ the diff,
+  ran everything once, mutation-checked the new production code, found ONE defect (docs) and fixed
+  it. `git show --stat 858f450` lists no modified pre-existing test file: every test in it is new.
+
+WHAT 858f450 DOES [REAL, read from the diff]:
+  - migration 000106_room_access_account_deletion.{up,down}.sql: function account_deleted_access_
+    notify() and triggers users_deleted_access_notify / agents_deleted_access_notify (AFTER UPDATE
+    OF deleted_at, only on NULL -> not NULL). They pg_notify the solvr_room_access channel (000104's)
+    with the id of every room where the account holds an active membership, so open streams on
+    EVERY API instance re-check in about a second instead of at the 30 s heartbeat.
+  - db/room_agent_tokens.go: liveAgentToken = liveToken AND the agent's agents row has deleted_at
+    IS NULL; ResolveByHash and IsLive use it. A deleted agent's per-agent room token stops
+    resolving everywhere (REST, /r adapter, tickets, open streams) without sweeping token rows, and
+    an admin recovery restores it. A deletion is NOT a rotation (401 UNAUTHORIZED, not CREDENTIAL_
+    ROTATED).
+  - db/room_members.go AccountLive(actorType, id): human -> users.deleted_at IS NULL, agent ->
+    agents.deleted_at IS NULL, unknown type or malformed id -> not live.
+  - middleware/room_access_recheck.go accountStillLive + policyRecheck: every recheck of an open
+    stream (except a room-token actor, which the token repository already covers) asks whether the
+    account still exists. middleware/room_policy.go resolveRoomActor (new memberRepo parameter,
+    callers updated in room_access_guard.go and RoomPolicyGuard): a stream TICKET minted before the
+    deletion is refused (errRoomAccountGone -> 401) because no account middleware saw it.
+  - middleware/logging.go: request-body redaction is no longer "JSON object, field named exactly
+    password/token". Field names are matched by fragment (password, passwd, apikey, token, secret,
+    credential, ticket, authorization, privatekey; exact `key`) blind to _ - . and case; arrays
+    and nested arrays are walked; a body that is not a JSON object/array (malformed, truncated,
+    form-encoded, single-quoted) goes through secretTextPattern, which keeps the name and replaces
+    the value. This CORRECTS slice 3's NOT VERIFIED note that said the body redactor "has no
+    ticket, claim_token or key, and returns a non-object body unchanged": that gap is closed.
+  - Docs: frontend/public/{skill.md, references/api.md, references/examples.md} stop describing the
+    shared solvr_rm_ token, /rooms/:slug/rotate-token and the handshake `room_token` body field;
+    api.md documents presence as the authenticated member's own row (AGENT_NAME_TAKEN 409, 403 for
+    a non-member) [REAL, read] which matches handlers/rooms_presence.go (JoinRoom returns 409
+    AGENT_NAME_TAKEN, `agent_id` is in models/agent_presence.go).
+  - Tests (all new): middleware/logging_body_secrets_test.go, db/room_account_deletion_test.go,
+    db/room_members_account_live_test.go, api/router_rooms_deleted_account_streams_test.go (two API
+    instances), api/published_docs_room_credentials_test.go.
+
+VERIFICATION OF 858f450 [REAL, database = local docker solvr-postgres, localhost:5435/solvr_test,
+  schema version 106 with both triggers present at the start; nothing else touched], none SKIP:
+  - middleware TestRedactRequestBody* / TestLogging_*: 5 PASS (/tmp/solvr_idx75_s4_mw.log);
+    db TestRoomAgentTokenRepository_* / TestAccountDeletion_* / TestRoomMemberRepository_AccountLive:
+    12 PASS (/tmp/solvr_idx75_s4_db.log); api TestDeletedAgent_ / TestDeletedHuman_ /
+    TestPublishedAgentDocs_TeachNoSharedRoomToken: 3 PASS, -race (/tmp/solvr_idx75_s4_api.log).
+  - MUTATIONS [REAL], each restored from a cp copy and cmp-verified (git status afterwards showed
+    only this iteration's files): (M1) liveAgentToken without the agents EXISTS -> TestDeletedAgent_
+    RoomCredentialsAndStreamsEndWithTheAccount FAILS "the deleted agent's room token stream on B
+    ends" and the db token test FAILS; (M2) policyRecheck stops asking accountStillLive -> the
+    deleted agent's agent-key stream AND the deleted human's stream stay open, both tests FAIL;
+    (M3) resolveRoomActor stops asking it for tickets -> "the deleted agent's agent-key ticket
+    reopens no stream" and "a ticket minted before the deletion opens no stream" FAIL; (M4) SCHEMA
+    mutation: `migrate down 1` (drops the 000106 triggers) -> both api tests FAIL on the 3 s "stream
+    ends" bound and TestAccountDeletion_AnnouncesRoomAccess... FAILS; `migrate up` restored it
+    (schema version 106, 2 triggers). Logs /tmp/solvr_idx75_s4_mut{1,2,3}.log, _mut4_api.log,
+    _mut4_db.log. So the deletion tests are not vacuous, and the ~1 s bound depends on the trigger.
+
+DEFECT FOUND AND FIXED [REAL]: TestPublishedAgentDocs_TeachNoSharedRoomToken only forbade the
+  literal "solvr_rm_", "rotate-token" and "Shared room token", so skill/SKILL.md and
+  frontend/public/skill.md (identical lines 380 and 393) still told agents: "they skip
+  `room-add-member` and the shared token entirely", "`room-add-member`/`--room-token` is only
+  needed for cross-human (foreign) agents" and "closed room you're not in yet? add --room-token
+  <shared>". The server ignores that flag's body field and refuses every shared token; what admits a
+  foreign agent is the owner adding its Agent ID. RED [TEST]: new
+  TestPublishedAgentDocs_NeverSendAnAgentAfterTheRetiredSharedToken failed
+  "../../../skill/SKILL.md:380 tells an agent to pass a shared room token"
+  (/tmp/solvr_idx75_s4_red_docs.log). Fix: those two lines in skill/SKILL.md and
+  frontend/public/skill.md (each file: 2 lines changed) now say the owner adds the Agent ID first
+  (room-add-member) and never mention a shared token or the flag. GREEN [TEST]: both docs tests PASS
+  (/tmp/solvr_idx75_s4_green_docs.log). The new test scans the six agent-facing documents line by
+  line: no `--room-token`, no `<shared>`, and "shared (room) token" only where it is denied
+  ("no shared token", "There is no shared room token").
+
+FULL SUITE [REAL, executed once on the final code, NOT GREEN]: `go test ./... -p 1 -count=1` exit
+  1, /tmp/solvr_idx75_s4_full.log; failing packages internal/api (303 s), internal/api/handlers,
+  internal/db (the documented set). 0 SKIP lines. Same extraction on both logs (unique `--- FAIL:`
+  names, subtests included): 79 now vs 79 in slice 3 (/tmp/solvr_idx75_s3_full.log; slice 3
+  journalled 78 by counting top-level tests only). 2 new, 3 gone; none of my tests in the list.
+    new  TestAgentClaim_RetriesAndRacesLinkTheAgentOnce/several_humans_race_one_token: fixture
+         "duplicate key value violates unique constraint users_referral_code_key" while creating a
+         test user (the standing fixture collision). [TEST] run alone: PASS.
+    new  TestHomepageAPIUsage_DoesNotCountTheOverviewOrHealthChecks: expected 49831 actual 49759
+         "displaying the statistics must not inflate them" (a count that fell by 72 between two
+         reads in a shared DB: data-state / window drift, not caused by docs edits). [TEST] run
+         alone: PASS (/tmp/solvr_idx75_s4_two_alone.log).
+    gone TestRoomRoutes_UpdateRoom_AgentNonOwner, TestSearchPulse_SeriesCoversTheWindowAndExcludes
+         Monitoring, TestServiceCheckRepository_GetUptimePercentage (data-state flips).
+  go vet ./internal/api exit 0; gofmt clean on the file I touched; check-file-size.sh: 35
+  violations, the same count as slice 3, none a file I touched (my test file is 81 lines).
+  Frontend: no frontend CODE changed (docs only); npm test NOT run.
+  TestListAPIKeys_* (handlers, mock repository, 0.00 s) 7 PASS incl. MasksKeyValue.
+
+FILES [REAL, `git status --porcelain` / `git diff --stat` before this append]:
+  M backend/internal/api/published_docs_room_credentials_test.go (+33: the new docs test and the
+    regexp import); M frontend/public/skill.md (2 lines); M skill/SKILL.md (2 lines).
+  progress.txt is this append. No production Go code changed in THIS iteration (all of it is in
+  858f450). spec.json and SPEC.md unchanged.
+
+BEHAVIOR CHANGE (v0) [TEST, from 858f450's tests]:
+  - Deleting an agent ends its room tokens, its agent-key streams and its tickets at once on every
+    instance (401 UNAUTHORIZED); deleting a human ends their streams and pending tickets; every
+    other participant keeps streaming. An admin recovering the account restores the tokens.
+  - Request-body logs redact more: any body field whose name contains token/secret/password/...
+    (input_tokens or max_tokens included) shows ***REDACTED*** in the log. Harmless over-redaction.
+
+DEPLOY ORDER [REAL, read the migration and the code]: 000106 only adds a function and two triggers;
+  the code reads agents.deleted_at / users.deleted_at, which already exist. So either order is
+  safe; without 000106 an open stream of a deleted account ends at the 30 s heartbeat instead of in
+  about a second. Migrations 000101/000102/000104/000105/000106 are still the owner's.
+
+NOT VERIFIED [UNVERIFIED]:
+  - Agent-facing SCRIPT drift (idx 78): skill/scripts/solvr-helpers.sh cmd_handshake still accepts
+    --room-token and sends {"room_token": ...} (the server's handshake body has no such field);
+    skill/scripts/solvr.sh:1226 still prints `[--room-token <solvr_rm_...>]`; test_room_credentials.sh
+    mentions it. Not changed (script/CLI consistency is idx 78 step 1).
+  - frontend/public/solvr-skill.zip (tracked, dated Sep 21) is STALE: [REAL] `unzip -p ... '*SKILL.md'
+    | grep -c -E 'solvr_rm_|--room-token <shared>|Shared room token'` prints 3. Regenerating it means
+    running scripts/sync-skill.sh, which also does `cp skill/SKILL.md frontend/public/skill.md`; that
+    would overwrite the frontend copy, which differs from skill/SKILL.md (at least its front-matter
+    description and intro paragraph). NOT run: owner call.
+  - Family agent x deleted human: existing TestRoomFamily_DeletedHumansSiblingLosesClosedRoomAndToken
+    covers the REST/token side; DELETE /v1/me unclaims the agents (handlers/me.go unclaimAgents) and
+    000096's trigger on agents.human_id ends the family membership, which the members trigger
+    announces [REAL, read]. I did NOT test an OPEN stream of a family agent through that path. (000106's
+    header comment says family access is "covered by the heartbeat"; from the code it is announced
+    sooner, so the comment is understated, not wrong.)
+  - Frontend api-keys page [REAL, read]: the created key lives in React state, is shown in a modal
+    ("You won't be able to see it again") and cleared on close; no browser check. The room share
+    button copies origin + /rooms/{slug} only [REAL, read room-header-actions.tsx].
+  - SPEC.md still says `?token=` is accepted and describes the retired stream credentials (slice 3).
+
+REMAINING FOR idx 75 [UNVERIFIED]: step 5 is NOT closed, so idx 75 cannot pass yet:
+  F5 (slice 3): the OAuth callback redirects to {frontend}/auth/callback?token=<JWT> (handlers/
+    oauth.go lines 300 and 443) and <GoogleAnalytics> is mounted on every page; /claim/[token] puts a
+    claim token in the page path. Recommendation for the next slice: a ONE-TIME CODE exchanged by POST
+    for the tokens, because it does not depend on whether GA drops a URL fragment (which I cannot
+    measure without a browser). It needs real storage (NO in-memory, so a migration) and backend +
+    frontend deployed together, as slice 2 did.
+  claim_tokens.token is stored in the clear (migration 000017; handlers/agents_claim.go re-issues the
+    stored value): needs a migration and a changed re-issue rule.
+  Then the zip/script drift above (idx 78 overlaps). Steps 1-4 are covered by the tests named in
+  slices 1-4.
+REMAINING FOR idx 74 (untouched): step 5 "require" If-Match — owner decision.
+
+UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: owner applies 000106 after 000105 on
+  production through the admin query route, then deploys backend and frontend. Then: (1) with a
+  throwaway agent that holds a room token, `DELETE /v1/agents/me` as that agent and confirm
+  `curl -i -H "Authorization: Bearer <its room token>" https://api.solvr.dev/v1/rooms/<slug>/entries`
+  answers 401 with error.code UNAUTHORIZED; (2) `curl -s https://solvr.dev/skill.md | grep -c --
+  '--room-token'` prints 0.
+
+================================================================================

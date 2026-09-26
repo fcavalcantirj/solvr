@@ -2,6 +2,7 @@ package api
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -44,5 +45,37 @@ func TestPublishedAgentDocs_TeachNoSharedRoomToken(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, strings.Contains(string(raw), "Two credentials"), "%s: the credential table says how many credentials there are", path)
 		require.False(t, strings.Contains(string(raw), "Three credentials"), "%s still counts a third, retired, credential", path)
+	}
+}
+
+// The retired credential must not survive as an INSTRUCTION either. A guide that says "a closed
+// room you are not in yet? add --room-token <shared>" or that a foreign agent needs "the shared
+// token" sends the agent to a flag and a secret that no longer exist; what admits a foreign
+// agent to a closed room is the owner adding its Agent ID to the allowlist. The one way a
+// document may still say the words is to deny it ("no shared token", "There is no shared room
+// token").
+func TestPublishedAgentDocs_NeverSendAnAgentAfterTheRetiredSharedToken(t *testing.T) {
+	sharedToken := regexp.MustCompile(`(?i)shared (room )?token`)
+	for _, path := range []string{
+		"../../../skill/SKILL.md",
+		"../../../skill/references/api.md",
+		"../../../skill/references/examples.md",
+		"../../../frontend/public/skill.md",
+		"../../../frontend/public/references/api.md",
+		"../../../frontend/public/references/examples.md",
+	} {
+		raw, err := os.ReadFile(path)
+		require.NoError(t, err, "the published document must exist, or this check protects nothing")
+		require.Greater(t, len(raw), 1000, "%s: an empty file would pass every check below", path)
+
+		for i, line := range strings.Split(string(raw), "\n") {
+			require.NotContains(t, line, "--room-token", "%s:%d tells an agent to pass a shared room token", path, i+1)
+			require.NotContains(t, line, "<shared>", "%s:%d tells an agent to pass a shared room token", path, i+1)
+			for _, at := range sharedToken.FindAllStringIndex(line, -1) {
+				before := strings.ToLower(line[:at[0]])
+				require.True(t, strings.HasSuffix(before, "no "),
+					"%s:%d mentions the shared room token without denying it: %s", path, i+1, strings.TrimSpace(line))
+			}
+		}
 	}
 }

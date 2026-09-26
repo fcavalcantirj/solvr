@@ -44,6 +44,12 @@ func NewRoomAgentTokenRepository(pool *Pool) *RoomAgentTokenRepository {
 // rotation nor past its expiry.
 const liveToken = `rotated_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())`
 
+// liveAgentToken is what a token needs to be honoured: it is live AND the agent it belongs to
+// still exists. A per-agent token proves admission to a room, not that its account survives,
+// so deleting the agent (agents.deleted_at) ends every session it holds without a sweep of the
+// token rows, and an admin recovery restores them.
+const liveAgentToken = liveToken + ` AND EXISTS (SELECT 1 FROM agents a WHERE a.id = room_agent_tokens.agent_id AND a.deleted_at IS NULL)`
+
 // Issue adds a session: a new per-agent token for (room, agent), returned in plaintext once.
 // The agent's earlier tokens keep working, so a second session that handshakes does not
 // invalidate the first. It fails with ErrAgentRoomTokenLimit when the agent already holds
@@ -117,13 +123,13 @@ func (r *RoomAgentTokenRepository) issue(ctx context.Context, roomID uuid.UUID, 
 }
 
 // ResolveByHash returns the (room, agent) a live per-agent token identifies. Expired and
-// rotated tokens are treated as not found. Updates last_used_at on success (best-effort).
+// rotated tokens, and tokens of a deleted agent, are treated as not found. Updates last_used_at on success (best-effort).
 func (r *RoomAgentTokenRepository) ResolveByHash(ctx context.Context, hash string) (*AgentRoomTokenIdentity, error) {
 	var id AgentRoomTokenIdentity
 	err := r.pool.QueryRow(ctx, `
 		SELECT room_id, agent_id
 		FROM room_agent_tokens
-		WHERE token_hash = $1 AND `+liveToken, hash).Scan(&id.RoomID, &id.AgentID)
+		WHERE token_hash = $1 AND `+liveAgentToken, hash).Scan(&id.RoomID, &id.AgentID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrAgentRoomTokenNotFound
@@ -135,13 +141,13 @@ func (r *RoomAgentTokenRepository) ResolveByHash(ctx context.Context, hash strin
 	return &id, nil
 }
 
-// IsLive reports whether hash is a live (unexpired, not rotated) per-agent token for
-// roomID. Unlike ResolveByHash it only reads: open streams re-check their token with it.
+// IsLive reports whether hash is a live (unexpired, not rotated, agent not deleted) per-agent
+// token for roomID. Unlike ResolveByHash it only reads: open streams re-check their token with it.
 func (r *RoomAgentTokenRepository) IsLive(ctx context.Context, hash string, roomID uuid.UUID) (bool, error) {
 	var ok bool
 	err := r.pool.QueryRow(ctx, `
 		SELECT EXISTS(SELECT 1 FROM room_agent_tokens
-		              WHERE token_hash = $1 AND room_id = $2 AND `+liveToken+`)
+		              WHERE token_hash = $1 AND room_id = $2 AND `+liveAgentToken+`)
 	`, hash, roomID).Scan(&ok)
 	if err != nil {
 		LogQueryError(ctx, "IsLive", "room_agent_tokens", err)

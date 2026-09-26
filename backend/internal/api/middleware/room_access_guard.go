@@ -75,7 +75,7 @@ func RoomAccessGuard(roomRepo *db.RoomRepository, memberRepo *db.RoomMemberRepos
 // that a room token which cannot act on this room is ignored rather than refused, so the
 // caller's account identity (if any) still decides.
 func roomMemberAccessAllowed(r *http.Request, room *models.Room, memberRepo *db.RoomMemberRepository, agentTokenRepo *db.RoomAgentTokenRepository) (bool, error) {
-	actor, err := resolveRoomActor(r, room, agentTokenRepo)
+	actor, err := resolveRoomActor(r, room, memberRepo, agentTokenRepo)
 	if err != nil {
 		actor = accountRoomActor(r)
 	}

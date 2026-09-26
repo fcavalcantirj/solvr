@@ -63,9 +63,21 @@ var (
 // resolveRoomActor identifies the caller for a room request. A per-agent room token is
 // checked first and authorizes only its own room; otherwise the account identity set by
 // the (optional) unified auth middleware is used. Returns (nil, nil) for anonymous.
-func resolveRoomActor(r *http.Request, room *models.Room, agentTokenRepo *db.RoomAgentTokenRepository) (*RoomActor, error) {
+func resolveRoomActor(r *http.Request, room *models.Room, memberRepo *db.RoomMemberRepository, agentTokenRepo *db.RoomAgentTokenRepository) (*RoomActor, error) {
 	if ticket := StreamTicketFromContext(r.Context()); ticket != nil {
-		return streamTicketActor(r.Context(), room, ticket, agentTokenRepo)
+		actor, err := streamTicketActor(r.Context(), room, ticket, agentTokenRepo)
+		if err != nil {
+			return nil, err
+		}
+		// A ticket outlives the request that minted it by up to its TTL, and no account
+		// middleware saw it: ask whether the account it stands for still exists.
+		if live, err := accountStillLive(r.Context(), memberRepo, actor); err != nil || !live {
+			if err != nil {
+				slog.Error("room policy guard: account check failed", "error", err, "room_id", room.ID)
+			}
+			return nil, errRoomAccountGone
+		}
+		return actor, nil
 	}
 	if tok := roomBearerToken(r); tok != "" && token.IsAgentRoomToken(tok) {
 		if agentTokenRepo == nil {
@@ -184,7 +196,7 @@ func RoomPolicyGuard(roomRepo *db.RoomRepository, memberRepo *db.RoomMemberRepos
 				return
 			}
 
-			actor, err := resolveRoomActor(r, room, agentTokenRepo)
+			actor, err := resolveRoomActor(r, room, memberRepo, agentTokenRepo)
 			switch {
 			case errors.Is(err, errRoomTokenScope), errors.Is(err, errStreamTicketScope):
 				roomGuardError(w, http.StatusForbidden, "FORBIDDEN", err.Error())

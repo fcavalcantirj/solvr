@@ -135,6 +135,24 @@ func (r *RoomMemberRepository) IsMember(ctx context.Context, roomID uuid.UUID, a
 	return exists, nil
 }
 
+// AccountLive reports whether the account behind a room actor still exists: a human whose
+// users row is not soft-deleted, an agent whose agents row is not. A deleted account no
+// longer authenticates, so a stream it opened before its deletion must not outlive it. An
+// unknown actor type, a malformed human id or an unknown account is not live.
+func (r *RoomMemberRepository) AccountLive(ctx context.Context, actorType, id string) (bool, error) {
+	switch actorType {
+	case "agent":
+		return r.exists(ctx, "AccountLive", `SELECT EXISTS(SELECT 1 FROM agents WHERE id = $1 AND deleted_at IS NULL)`, id)
+	case "human":
+		uid, err := uuid.Parse(id)
+		if err != nil {
+			return false, nil
+		}
+		return r.exists(ctx, "AccountLive", `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL)`, uid)
+	}
+	return false, nil
+}
+
 // IsOwner reports whether the agent is a member with the owner role.
 func (r *RoomMemberRepository) IsOwner(ctx context.Context, roomID uuid.UUID, agentID string) (bool, error) {
 	var exists bool

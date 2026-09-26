@@ -316,19 +316,29 @@ func RedactURLPath(path string) string {
 	return u.String()
 }
 
-// sensitiveBodyFields lists JSON field names that contain secrets.
-// Values of these fields will be redacted in request body logs.
+// sensitiveBodyFields lists the fragments that mark a body field (JSON key, form field) as a
+// secret. A field is sensitive when its lower-cased name, with "_", "-" and "." removed,
+// contains one: new_password, room_token, Client-Secret and X.API.Key are all secrets, not just
+// a field spelled exactly `password`. A field named exactly `key` is one too (see
+// isSensitiveField).
 var sensitiveBodyFields = []string{
 	"password",
-	"api_key",
+	"passwd",
 	"apikey",
 	"token",
-	"access_token",
-	"refresh_token",
 	"secret",
 	"credential",
-	"credentials",
+	"ticket",
+	"authorization",
+	"privatekey",
 }
+
+// secretTextPattern finds `name: value` and `name=value` pairs of sensitive names in text that
+// is not a JSON object or array (malformed JSON, a truncated body, a form): the value may be
+// double- or single-quoted, cut off before its closing quote, or bare. It keeps the name and
+// replaces the value, so the log still shows which field the client sent. The boundary group
+// stops a name from being matched from the middle of a longer word (monkey is not key).
+var secretTextPattern = regexp.MustCompile(`(?i)((?:^|[^A-Za-z0-9_.\-])["']?(?:[A-Za-z0-9_.\-]*(?:password|passwd|token|secret|api[_-]?key|credential|ticket|authorization|private[_-]?key)[A-Za-z0-9_.\-]*|key)["']?\s*[:=]\s*)(?:"(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?|[^&\s,}\]"']*)`)
 
 // maxRequestBodyLogSize is the maximum size of request body to log (1KB).
 const maxRequestBodyLogSize = 1024
@@ -346,60 +356,56 @@ func prepareRequestBodyForLog(body string) string {
 	return redacted
 }
 
-// RedactRequestBody redacts sensitive fields from a JSON request body.
-// Fields like password, api_key, token will have their values replaced with ***REDACTED***.
+// RedactRequestBody redacts secrets from a request body before it is logged. In a JSON object
+// or array (however deeply nested) the value of every sensitive field is replaced with
+// ***REDACTED***. Anything else, which is what a malformed or truncated body is, is scanned
+// for sensitive `name: value` and `name=value` pairs instead, because the body of a request
+// that failed validation is exactly the kind that arrives malformed.
 func RedactRequestBody(body string) string {
 	if body == "" {
 		return body
 	}
 
-	// Try to parse as JSON
-	var data map[string]interface{}
-	if err := json.Unmarshal([]byte(body), &data); err != nil {
-		// Not valid JSON, return as-is (or could apply simple regex redaction)
-		return body
-	}
-
-	// Recursively redact sensitive fields
-	redactMapValues(data)
-
-	// Re-serialize
-	result, err := json.Marshal(data)
-	if err != nil {
-		return body
-	}
-
-	return string(result)
-}
-
-// redactMapValues recursively redacts sensitive field values in a map.
-func redactMapValues(data map[string]interface{}) {
-	for key, value := range data {
-		// Check if this key is sensitive
-		if isSensitiveField(key) {
-			data[key] = "***REDACTED***"
-			continue
-		}
-
-		// Recursively handle nested maps
-		switch v := value.(type) {
-		case map[string]interface{}:
-			redactMapValues(v)
-		case []interface{}:
-			for _, item := range v {
-				if m, ok := item.(map[string]interface{}); ok {
-					redactMapValues(m)
-				}
+	var data any
+	if err := json.Unmarshal([]byte(body), &data); err == nil {
+		switch data.(type) {
+		case map[string]any, []any:
+			redactValue(data)
+			if result, err := json.Marshal(data); err == nil {
+				return string(result)
 			}
 		}
 	}
+	return secretTextPattern.ReplaceAllString(body, `${1}"***REDACTED***"`)
 }
 
-// isSensitiveField checks if a field name is sensitive (case-insensitive).
+// redactValue redacts sensitive fields in place, recursing through objects and arrays.
+func redactValue(value any) {
+	switch v := value.(type) {
+	case map[string]any:
+		for key, item := range v {
+			if isSensitiveField(key) {
+				v[key] = "***REDACTED***"
+				continue
+			}
+			redactValue(item)
+		}
+	case []any:
+		for _, item := range v {
+			redactValue(item)
+		}
+	}
+}
+
+// isSensitiveField reports whether a body field name marks a secret (case-insensitive, and
+// blind to "_", "-" and "." between words).
 func isSensitiveField(fieldName string) bool {
-	lowerField := strings.ToLower(fieldName)
+	name := strings.NewReplacer("_", "", "-", "", ".", "").Replace(strings.ToLower(fieldName))
+	if name == "key" {
+		return true
+	}
 	for _, sensitive := range sensitiveBodyFields {
-		if lowerField == sensitive {
+		if strings.Contains(name, sensitive) {
 			return true
 		}
 	}

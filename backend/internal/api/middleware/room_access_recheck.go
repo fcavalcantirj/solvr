@@ -30,6 +30,22 @@ func WithRoomAccessRecheck(ctx context.Context, fn RoomAccessRecheck) context.Co
 	return context.WithValue(ctx, roomAccessRecheckKey{}, fn)
 }
 
+// errRoomAccountGone classifies a credential whose account was deleted: a stream ticket minted
+// before the deletion, or a check that could not be read at open time (it fails closed).
+var errRoomAccountGone = errors.New("the account behind this credential is no longer active")
+
+// accountStillLive reports whether the account behind a room actor still exists. A per-agent
+// room token is not asked here: the token repository refuses a deleted agent's tokens wherever
+// they resolve, at open time and in every recheck. Everyone else was authenticated once, by a
+// JWT, an API key or a stream ticket, so an established stream has to ask again: a deleted
+// account no longer authenticates and must not keep reading through a stream it opened before.
+func accountStillLive(ctx context.Context, memberRepo *db.RoomMemberRepository, actor *RoomActor) (bool, error) {
+	if actor == nil || actor.Credential == RoomCredentialRoomToken || memberRepo == nil {
+		return true, nil
+	}
+	return memberRepo.AccountLive(ctx, actor.Type, actor.ID)
+}
+
 // currentRoom re-reads the room; (nil, nil) when it was deleted.
 func currentRoom(ctx context.Context, roomRepo *db.RoomRepository, room *models.Room) (*models.Room, error) {
 	fresh, err := roomRepo.GetByID(ctx, room.ID)
@@ -39,8 +55,8 @@ func currentRoom(ctx context.Context, roomRepo *db.RoomRepository, room *models.
 	return fresh, err
 }
 
-// policyRecheck re-applies roomActorAllowed with the current room and, for a room-token
-// actor, the token's current liveness.
+// policyRecheck re-applies roomActorAllowed with the current room, for a room-token actor
+// the token's current liveness, and for every other actor that its account still exists.
 func policyRecheck(r *http.Request, room *models.Room, actor *RoomActor, access RoomAccess,
 	roomRepo *db.RoomRepository, memberRepo *db.RoomMemberRepository, agentTokenRepo *db.RoomAgentTokenRepository) RoomAccessRecheck {
 	var tokenHash string
@@ -56,6 +72,9 @@ func policyRecheck(r *http.Request, room *models.Room, actor *RoomActor, access 
 			if live, err := tokenLive(ctx, agentTokenRepo, tokenHash, fresh.ID); err != nil || !live {
 				return false, err
 			}
+		}
+		if live, err := accountStillLive(ctx, memberRepo, actor); err != nil || !live {
+			return false, err
 		}
 		return roomActorAllowed(ctx, fresh, actor, access, memberRepo)
 	}

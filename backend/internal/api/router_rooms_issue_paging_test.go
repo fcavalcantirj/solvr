@@ -162,12 +162,13 @@ func TestRoomIssuePaging_RejectsUnrecognisedQueryParameters(t *testing.T) {
 		assert.True(t, strings.Contains(msg, c.param), "%s: error must name %q, got %q", c.url, c.param, msg)
 	}
 
-	// Every documented parameter, including the ?token= credential, is still accepted.
+	// Every documented parameter is still accepted; the credential now rides in the
+	// Authorization header, never in the URL (idx 75 step 5, TestURLCredentials_*).
 	for _, u := range []string{
-		entries + "?kind=event&issue=APP-1&limit=5&token=" + tok,
-		events + "?type=CLAIM&issue=APP-1&limit=5&token=" + tok,
+		entries + "?kind=event&issue=APP-1&limit=5",
+		events + "?type=CLAIM&issue=APP-1&limit=5",
 	} {
-		status, out := doJSON(t, "GET", u, "", "")
+		status, out := doJSON(t, "GET", u, tok, "")
 		assert.Equal(t, http.StatusOK, status, "%s: %v", u, out)
 	}
 }

@@ -54,6 +54,13 @@ func conventions() map[string]interface{} {
 			"scheme", "Bearer",
 			"bearer_credentials", []string{"human JWT", "agent API key", "user API key", "room token"},
 			"cookies", false,
+			"url_credentials", obj(
+				"refused_parameters", []string{"token", "access_token"},
+				"routes", []string{"/v1/rooms/*", "/r/{slug}/*"},
+				"status", http.StatusBadRequest,
+				"code", "VALIDATION_ERROR",
+				"note", "A URL is copied, logged by every proxy and kept in browser history, so the room routes read a credential from the Authorization header only. One sent as ?token= or ?access_token= is refused, never read, and never echoed.",
+			),
 			"stream_query_parameter", obj(
 				"name", "ticket",
 				"routes", []string{"/v1/rooms/{slug}/stream"},

@@ -58,9 +58,11 @@ var apiUsageExcludedPrefixes = []string{
 }
 
 // apiUsageExcludedSuffixes are transport concerns rather than operations: a
-// stream is one connection held open, and a heartbeat is a timer.
+// stream is one connection held open, a stream ticket is the browser preparing
+// to open one (minted again on every reconnect), and a heartbeat is a timer.
 var apiUsageExcludedSuffixes = []string{
 	"/stream",
+	"/stream-ticket",
 	"/heartbeat",
 	"/events/stream",
 }
@@ -312,15 +314,12 @@ func apiUsageActorType(r *http.Request) string {
 }
 
 // apiUsageCredential returns the credential presented, without storing,
-// logging or publishing it. A browser stream can only send one as a query
-// parameter, so both places are read.
+// logging or publishing it. It reads the Authorization header ONLY, the one
+// place the API honours a credential: a token in the query string authenticates
+// nobody (the room routes refuse it), so it cannot say who the caller is.
 func apiUsageCredential(r *http.Request) string {
 	if header := r.Header.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
 		return strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
 	}
-	query := r.URL.Query()
-	if token := query.Get("access_token"); token != "" {
-		return token
-	}
-	return query.Get("token")
+	return ""
 }

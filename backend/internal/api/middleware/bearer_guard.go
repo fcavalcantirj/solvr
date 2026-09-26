@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -38,21 +37,14 @@ func RoomAgentIDFromContext(ctx context.Context) string {
 // BearerGuard creates middleware that authenticates /r/{slug}/* requests with a
 // per-agent room token (solvr_rt_...), issued by POST /v1/rooms/{slug}/handshake to an
 // admitted member. It extracts the token from the Authorization header (Bearer <token>)
-// or from a ?token= query parameter (for SSE connections where browsers cannot set
-// headers), resolves it by SHA-256 hash to the room AND the authenticated agent id, and
+// ONLY (a credential in the URL is refused by RefuseURLCredentials, idx 75 step 5),
+// resolves it by SHA-256 hash to the room AND the authenticated agent id, and
 // injects both so message authorship is authoritative (mission #3). The shared room
 // token (solvr_rm_...) is retired (000098): anything else is 401.
 func BearerGuard(roomRepo *db.RoomRepository, agentTokenRepo *db.RoomAgentTokenRepository) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var plaintext string
-			authHeader := r.Header.Get("Authorization")
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				plaintext = strings.TrimPrefix(authHeader, "Bearer ")
-			} else {
-				plaintext = r.URL.Query().Get("token")
-			}
-
+			plaintext := roomBearerToken(r)
 			if plaintext == "" {
 				bearerGuardUnauthorized(w, "missing bearer token")
 				return

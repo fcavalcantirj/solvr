@@ -4868,3 +4868,183 @@ UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: after deploying backend a
   (no JWT anywhere in the URL) and a POST .../stream-ticket answered 201.
 
 ================================================================================
+
+================================================================================
+2026-09-26 — Task idx 75 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Keep credentials safe and revocation reliable across streams and multiple agent sessions"
+SLICE 3 of N. Step 5 (credentials in URLs, HTTP logging, analytics, storage) plus the /r adapter
+half of step 2 that slice 2 left unexamined.
+================================================================================
+
+TASK SELECTION [REAL, read this session]: same as slice 2. idx 24 (acceptance) still needs idx
+  75/78 pieces; idx 52/53, 68, 73's remainder, 67 are gated as recorded in idx 74's slices; idx
+  74 stays open (step 5 If-Match is an owner call); no description starts with URGENT. idx 75 is
+  the first buildable false task; slice 2's REMAINING line named step 5.
+
+AUDIT FIRST (read the code, then a RED test for every defect; nothing below is from memory):
+  F1 [TEST, RED] a credential in the URL was honoured on every room route. middleware/
+     bearer_guard.go and room_access_guard.go roomBearerToken read `?token=` (per-agent room
+     token) on all of /v1/rooms/* and /r/{slug}/*; slice 2 refused it only on GET /v1/rooms/
+     {slug}/stream. SPEC.md (about 4952, 5031) and references/api.md advertised it. RED: GET
+     /v1/rooms/{slug}/messages?token=<room token> answered 200 (/tmp/solvr_idx75_s3_red_api.log).
+     A copied link carrying that URL carries a live room credential.
+  F2 [TEST, RED] a secret routed in the PATH was written to the access log verbatim: GET
+     /v1/claim/{token} logged "path":"/v1/claim/<claim token>" (logging.go redacted query
+     parameters only). Whoever can read the log can claim the agent.
+  F3 [TEST, RED] two analytics defects in middleware/api_usage.go. (a) POST /v1/rooms/{slug}/
+     stream-ticket was recorded as a "write" (operation post /v1/rooms/{slug}/stream-ticket,
+     family room): a person who merely watches a room mints a ticket on every reconnect, so
+     watching counted as writing. That is a defect of slice 2. (b) apiUsageCredential still
+     read ?token= / ?access_token=, which no route honours, so an unauthenticated URL parameter
+     decided whether the caller was counted as agent or human.
+     CORRECTION to slice 2's NOT VERIFIED note: it said a ticket-opened stream is counted as an
+     anonymous actor. WRONG: /stream is in apiUsageExcludedSuffixes (existing test lists
+     GET /v1/rooms/some-room/stream as excluded), so streams are never recorded at all.
+  F4 [TEST] storage: TestCredentials_AreStoredAsHashesOnly passes on the real DB: room_agent_
+     tokens.token_hash == sha256(token) and never the token; agents.api_key_hash is not the key
+     nor contains it. [REAL, read] refresh_tokens has token_hash (migration 000014).
+     EXCEPTION [REAL, read, NOT CHANGED]: claim_tokens.token is stored in the CLEAR (migration
+     000017 `token VARCHAR(64) UNIQUE NOT NULL`; db/claim_tokens.go Create inserts token.Token;
+     handlers/agents_claim.go:85 hands the same stored token back on a repeat request; expiry 4 h,
+     line 113). Hashing it needs a migration and a changed re-issue rule: owner call.
+  F5 [REAL, read; effect UNVERIFIED, NOT FIXED] the OAuth flow puts the access JWT (15 min) in a
+     URL: backend/internal/api/handlers/oauth.go lines 300 and 443 redirect to
+     {frontend}/auth/callback?token=<JWT>, and frontend/app/layout.tsx mounts <GoogleAnalytics>
+     on every page, whose page view carries the page URL. So the JWT very probably reaches
+     Google Analytics, the frontend host's access log and browser history; /claim/[token]
+     (frontend/app/claim/[token]) puts the claim token in the page PATH the same way. I have no
+     browser and no GA property here, so what GA actually stores is [UNVERIFIED]. Two fixes, both
+     change the login contract and need backend+frontend to deploy together, so I left both:
+     (1) redirect with a URL fragment (#token=) and history.replaceState it away (a fragment is
+     never sent to a server; whether GA drops it is UNVERIFIED), or (2) redirect with a
+     one-time code exchanged by POST for the tokens.
+  F6 [REAL, read] connect prompts (handlers/connect_prompts.go) use placeholders YOUR_AGENT_API_KEY
+     and YOUR_ROOM_TOKEN, never a live secret. No error-reporting SDK is wired in [REAL]:
+     go.mod and frontend/package.json have no sentry/bugsnag/rollbar; config/env.go reads
+     SENTRY_DSN into cfg.SentryDSN and nothing uses it.
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` / `git diff --stat` before this append: 10
+  files modified, 7 new; 82 insertions, 39 deletions in the tracked files]:
+  Production:
+  A middleware/url_credentials.go (32): RefuseURLCredentials. `?token=` or `?access_token=` on a
+    room route is 400 VALIDATION_ERROR whose message names the Authorization header and the
+    stream ticket, never echoes the value, and carries the request_id.
+  M router_rooms.go (+4): the middleware is mounted first on r.Route("/v1/rooms") and on
+    r.Route("/r/{slug}") (after SSENoBuffering, before BearerGuard).
+  M middleware/room_access_guard.go: roomBearerToken reads the Authorization header ONLY.
+  M middleware/bearer_guard.go: BearerGuard uses roomBearerToken (header only); unused import gone.
+  M handlers/rooms_entry_paging.go: rejectUnknownQuery no longer treats `token` as always
+    allowed (const roomTokenQueryParam removed); the "supported:" list no longer advertises it.
+  M middleware/logging.go (+46/-3): redactPathSecrets replaces a path segment bound by the matched
+    chi route to a parameter named token, claim_token, ticket, secret, api_key or key with
+    ***REDACTED*** (after the handler, when the route is known); the query part is redacted as
+    before (RedactURLPath("?"+RawQuery), so the path is never re-escaped).
+  M middleware/api_usage.go: "/stream-ticket" joins the excluded suffixes; apiUsageCredential
+    reads the Authorization header only.
+  M openapi_conventions.go (+7): x-solvr-conventions.credential_transport.url_credentials
+    (refused_parameters, routes, status 400, code VALIDATION_ERROR, note).
+  Docs: skill/references/api.md and frontend/public/references/api.md line 933 no longer say
+    `?token=` is accepted.
+  Tests (new): middleware/url_credentials_test.go (TestRefuseURLCredentials 8 cases,
+    TestRoomBearerToken_NeverReadsTheURL), middleware/api_usage_credentials_test.go,
+    middleware/logging_path_secret_test.go (TestLogging_RedactsASecretRoutedInThePath,
+    TestLogging_KeepsOrdinaryPathValuesReadable: ordinary ids and slugs stay readable),
+    api/router_rooms_url_credentials_test.go (11 GET routes on the real router incl. a public
+    room, the /r adapter and its stream, 2 writes, header path still 200, public room still
+    readable anonymously), api/router_credentials_exposure_test.go (bogus room token / agent key
+    / JWT on 8 routes: no echo; real credentials and a ticket in URLs: no echo and NOT in the
+    captured access log, with a non-vacuous-capture assertion), api/openapi_url_credentials_test.go.
+
+TDD / EVIDENCE:
+  RED [TEST]: url_credentials_test.go did not compile (RefuseURLCredentials undefined,
+    /tmp/solvr_idx75_s3_red_mw.log); TestURLCredentials_AreRefusedOnEveryRoomRoute expected 400
+    actual 200 (/tmp/solvr_idx75_s3_red_api.log); TestAPIUsage_AStreamTicketMintIsTransportNotUsage
+    and TestAPIUsage_ActorIsReadFromTheHeaderOnly failed as described in F3; TestLogging_
+    RedactsASecretRoutedInThePath failed (claim token in the log line); the OpenAPI test failed
+    "spec has no credential_transport.url_credentials.refused_parameters". The two exposure tests
+    (F4, and no-echo/no-log) PASSED at first run: they verify behavior that already held, so I
+    proved they are not vacuous by mutation instead:
+  MUTATIONS [REAL], production restored from a copy and cmp-verified each time: (A) log query
+    redaction bypassed -> TestCredentials_AreNeverEchoedInResponsesOrLogs FAILS "a credential
+    reached the log" (/tmp/solvr_idx75_s3_mutA.log); (B) RefuseURLCredentials unmounted from
+    /r/{slug} -> TestURLCredentials_AreRefusedOnEveryRoomRoute FAILS on "adapter messages"
+    (/tmp/solvr_idx75_s3_mutB.log). (My first attempt at A used a sed that errored and changed
+    nothing; it was redone with python and the failure above is from the redo.)
+  GREEN [TEST], DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+    solvr-postgres, nothing else touched), none SKIP: go test ./internal/api/middleware ok (whole
+    package); go test ./internal/api -run 'TestURLCredentials_|TestRoomIssuePaging|TestStreamTicket|
+    TestRoomStream|TestRoomSSE|TestRoomEntriesStream|TestNAgentRoom|TestRoomToken|TestRoomHandshake|
+    TestRoomFamily|TestRouteFamilies|TestOpenAPI' ok 89 s; TestCredentials_* 2 PASS; the OpenAPI
+    url_credentials test PASS with TestOpenAPI* and TestRouteFamilies_* ok. go vet clean on
+    internal/api, middleware, handlers; gofmt clean on every file I touched (gofmt -l lists 50+
+    older files I did not touch); check-file-size.sh from the repo root: 35 violations, the same
+    count as before, none of them a file I touched.
+
+CHANGED EXISTING TEST (the behavior it pinned is what this slice replaces):
+  TestRoomIssuePaging_RejectsUnrecognisedQueryParameters (api/router_rooms_issue_paging_test.go).
+  It asserted: "Every documented parameter, including the ?token= credential, is still accepted":
+  GET entries?kind=event&issue=APP-1&limit=5&token=<tok> and GET events?type=CLAIM&issue=APP-1&
+  limit=5&token=<tok>, both sent with NO header, answer 200. Now both send the SAME parameters
+  minus token, with the token as Authorization: Bearer, and answer 200 (every documented
+  paging/filter parameter is still accepted; the 9 rejected-parameter cases above it are
+  untouched). The URL-credential acceptance it used to pin is replaced by TestURLCredentials_
+  AreRefusedOnEveryRoomRoute, which PASSES. No test deleted, skipped or loosened otherwise.
+
+FULL SUITE [REAL, executed once on the final production code, NOT GREEN]: `go test ./... -p 1
+  -count=1` /tmp/solvr_idx75_s3_full.log; failing packages internal/api, internal/api/handlers,
+  internal/db (the documented set); internal/api/middleware is ok. 78 unique FAIL names vs 74 in
+  slice 2 (/tmp/solvr_idx75_s2_full.log): 6 new, 2 gone. None of the tests I wrote or changed is
+  in the 78.
+    new  five homepage tests (TestHomepageOverview_ServesEverySectionToALoggedOutVisitor,
+         TestHomepageSearch_ChartAddsUpToTheTotalBesideIt, _EveryPublishedTermLinksToCanonicalPosts
+         Search, _NeverPublishesAProtectedOrUnrepeatedTerm, _NeverPublishesPastedSecretsOrPersonal
+         Data): data-state in the shared solvr_test DB (its published search terms now include
+         "async handlers" and "room-token-optional-auth", and a URL check trips on the word
+         "token"). [TEST] they fail IDENTICALLY on the committed HEAD in a clean git worktree,
+         without my changes (/tmp/solvr_idx75_s3_head_baseline.log); worktree removed.
+    new  TestRoomRoutes_UpdateRoom_AgentNonOwner: fixture error "duplicate key value violates
+         unique constraint users_referral_code_key" while creating a test user; [TEST] PASSES
+         alone on my tree (0.35 s) and passes on HEAD in the baseline run.
+    gone TestAgentRepository_List_Empty, TestTypeSpecificListEndpoints (slice 2's data-state and
+         machine-sleep failures).
+  Frontend: only public/references/api.md changed; no frontend code; npm test NOT run.
+
+BEHAVIOR CHANGE (v0) [TEST]:
+  - `?token=` and `?access_token=` on any /v1/rooms/* or /r/{slug}/* route is now 400
+    VALIDATION_ERROR, public rooms included. Only the Authorization header carries a credential;
+    the one URL parameter left is the stream's short-lived ?ticket=.
+  - The claim token no longer appears in the access log; the stream-ticket mint no longer counts
+    as an API-usage write.
+  - [REAL, grep of *.go/*.ts/*.tsx/*.sh/*.md/*.json outside node_modules and .planning] no
+    first-party client (frontend, skill scripts, mcp-server, cli) sends ?token= to a room route;
+    only external agents that followed the old docs would break.
+
+DEPLOY [REAL, read]: backend only, no migration in this slice. Migrations 000101/000102/000104/
+  000105 are still the owner's (slice 1).
+
+NOT VERIFIED [UNVERIFIED]:
+  - SPEC.md (about lines 4952 and 5031) still says `?token=` is accepted everywhere, and about
+    5046-5047 still describes the retired stream credentials. STALE, not edited: idx 75's steps
+    do not name SPEC.md. frontend/public/references/api.md still describes the retired shared
+    solvr_rm_ token (older drift; skill/references/api.md is the current copy).
+  - F5 (OAuth JWT and claim token in URLs seen by Google Analytics) is a finding, not a fix.
+  - The request-body log redactor (logging.go sensitiveBodyFields) has no `ticket`, `claim_token`
+    or `key`, and returns a non-object body (array, text) unchanged [REAL, read]; not changed.
+  - "screenshots": frontend/app/settings/api-keys/page.tsx copies a key to the clipboard; I did
+    not check that a created key is shown once and masked afterwards. Error boundaries in the
+    frontend were not read.
+  - No real browser; the 30 s recheck for a deleted or suspended ACCOUNT under an open human
+    stream (slice 2) is still unchecked.
+
+REMAINING FOR idx 75 [UNVERIFIED]: F5 (owner call between fragment and code exchange; the claim
+  link needs its own answer), claim-token hashing (F4 exception), body-redactor gaps, step 4
+  (private-room admission through the owner allowlist; individually attributable credentials
+  before retiring shared room tokens), step 3 close-out (built in idx 59 slices, not re-verified).
+REMAINING FOR idx 74 (untouched): step 5 "require" If-Match, owner decision.
+
+UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: after deploying the backend,
+  `curl -i "https://api.solvr.dev/v1/rooms/<public-slug>/entries?token=x"` answers 400 with
+  error.code VALIDATION_ERROR, the same URL without the parameter answers 200, and
+  `curl -H "Authorization: Bearer <room token>" https://api.solvr.dev/r/<slug>/messages` answers 200.
+
+================================================================================

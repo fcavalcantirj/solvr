@@ -21,7 +21,7 @@ import (
 //   - Public room (is_private = false): always allowed, even anonymously.
 //   - Closed room (is_private = true): allowed only for a member —
 //     1. a request carrying a live per-agent room token for THIS room (Authorization:
-//     Bearer solvr_rt_... or ?token=...), OR
+//     Bearer solvr_rt_...), OR
 //     2. an authenticated agent on the room's member allowlist (or family scope), OR
 //     3. a human with an active membership, or an admin (JWT / user API key).
 //     Everyone else gets 403.
@@ -82,13 +82,13 @@ func roomMemberAccessAllowed(r *http.Request, room *models.Room, memberRepo *db.
 	return roomActorAllowed(r.Context(), room, actor, RoomRead, memberRepo)
 }
 
-// roomBearerToken extracts a candidate room token from the Authorization header or the
-// ?token= query parameter (SSE clients cannot set headers).
+// roomBearerToken extracts a candidate room token from the Authorization header. It never
+// reads the URL: a credential in a query string is refused by RefuseURLCredentials.
 func roomBearerToken(r *http.Request) string {
 	if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
 		return strings.TrimPrefix(authHeader, "Bearer ")
 	}
-	return r.URL.Query().Get("token")
+	return ""
 }
 
 // roomGuardError writes a JSON error response mirroring the room handlers' shape.

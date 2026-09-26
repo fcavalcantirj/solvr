@@ -89,6 +89,9 @@ func mountRoomRoutes(
 
 	// -- REST routes: /v1/rooms/* (D-18, D-19: public list/detail, auth for write) --
 	r.Route("/v1/rooms", func(r chi.Router) {
+		// Header-only credentials (idx 75 step 5): a credential in the URL is refused, never read.
+		r.Use(apimiddleware.RefuseURLCredentials)
+
 		// List is unconditionally public; it already excludes closed rooms.
 		r.Get("/", roomHandler.ListRooms)
 
@@ -162,6 +165,7 @@ func mountRoomRoutes(
 	// -- A2A protocol routes: /r/{slug}/* (per-agent solvr_rt_ bearer token auth) --
 	r.Route("/r/{slug}", func(r chi.Router) {
 		r.Use(apimiddleware.SSENoBuffering) // Must be before BearerGuard so header is set even on 401
+		r.Use(apimiddleware.RefuseURLCredentials)
 		r.Use(apimiddleware.BearerGuard(roomRepo, agentTokenRepo))
 
 		// D-32: Per-room rate limiting on message posting (60 req/min per IP).

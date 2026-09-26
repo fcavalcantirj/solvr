@@ -9,8 +9,11 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // sensitiveParams lists URL query parameter names that contain secrets.
@@ -24,6 +27,18 @@ var sensitiveParams = []string{
 	"refresh_token",
 	"secret",
 	"password",
+	"key",
+}
+
+// sensitivePathParams lists route parameter names whose VALUE in the URL path is a
+// secret (the claim link GET /v1/claim/{token}). The value is redacted in logs, exactly as
+// a sensitive query parameter is.
+var sensitivePathParams = []string{
+	"token",
+	"claim_token",
+	"ticket",
+	"secret",
+	"api_key",
 	"key",
 }
 
@@ -118,10 +133,11 @@ func Logging(next http.Handler) http.Handler {
 		// Calculate duration
 		duration := time.Since(start)
 
-		// Build log entry with redacted path (removes sensitive query params)
-		logPath := r.URL.Path
+		// Build log entry with redacted path (removes sensitive path segments and
+		// sensitive query params)
+		logPath := redactPathSecrets(r, r.URL.Path)
 		if r.URL.RawQuery != "" {
-			logPath = RedactURLPath(r.URL.Path + "?" + r.URL.RawQuery)
+			logPath += RedactURLPath("?" + r.URL.RawQuery)
 		}
 
 		entry := LogEntry{
@@ -235,6 +251,33 @@ func RedactSensitiveData(value string) string {
 	}
 
 	return value
+}
+
+// redactPathSecrets replaces every path segment that the matched route bound to a
+// sensitive parameter (see sensitivePathParams) with ***REDACTED***. The route is only
+// known once routing has happened, so this runs after the handler; a request that matched
+// no route has no bound parameters and its path is returned as is.
+func redactPathSecrets(r *http.Request, path string) string {
+	rctx := chi.RouteContext(r.Context())
+	if rctx == nil {
+		return path
+	}
+	var secrets []string
+	for i, key := range rctx.URLParams.Keys {
+		if i < len(rctx.URLParams.Values) && rctx.URLParams.Values[i] != "" && slices.Contains(sensitivePathParams, key) {
+			secrets = append(secrets, rctx.URLParams.Values[i])
+		}
+	}
+	if len(secrets) == 0 {
+		return path
+	}
+	segments := strings.Split(path, "/")
+	for i, segment := range segments {
+		if slices.Contains(secrets, segment) {
+			segments[i] = "***REDACTED***"
+		}
+	}
+	return strings.Join(segments, "/")
 }
 
 // RedactURLPath redacts sensitive query parameters from a URL path.

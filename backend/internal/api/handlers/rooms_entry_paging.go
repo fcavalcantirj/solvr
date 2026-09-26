@@ -13,13 +13,10 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
-// roomTokenQueryParam is the room-credential query parameter the room guards read
-// (SSE and curl clients that cannot set an Authorization header).
-const roomTokenQueryParam = "token"
-
 // rejectUnknownQuery writes a 400 VALIDATION_ERROR naming the first query parameter not
 // in allowed and returns false; a paging or filter parameter a route does not understand
-// is refused rather than silently ignored. ?token= is always allowed.
+// is refused rather than silently ignored. A credential in the URL never reaches here:
+// RefuseURLCredentials answers it first.
 func rejectUnknownQuery(w http.ResponseWriter, q url.Values, allowed ...string) bool {
 	names := make([]string, 0, len(q))
 	for name := range q {
@@ -27,9 +24,9 @@ func rejectUnknownQuery(w http.ResponseWriter, q url.Values, allowed ...string) 
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if name != roomTokenQueryParam && !slices.Contains(allowed, name) {
+		if !slices.Contains(allowed, name) {
 			roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR",
-				"unknown query parameter: "+name+" (supported: "+strings.Join(append(allowed, roomTokenQueryParam), ", ")+")")
+				"unknown query parameter: "+name+" (supported: "+strings.Join(allowed, ", ")+")")
 			return false
 		}
 	}

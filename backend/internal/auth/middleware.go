@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
+	roomtoken "github.com/fcavalcantirj/solvr/internal/token"
 )
 
 // contextKey is the type for context keys to avoid collisions.
@@ -299,7 +300,8 @@ func APIKeyTierFromContext(ctx context.Context) string {
 // requests that omit credentials to continue anonymously.
 // If any auth method succeeds, the context is populated with the identity. A request
 // with no Authorization header continues anonymously; a request that presents invalid
-// credentials is rejected instead of being silently downgraded to anonymous.
+// credentials is rejected instead of being silently downgraded to anonymous. A per-agent
+// room token is the one credential it does not judge: the room layer owns it.
 func OptionalAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, userValidator *UserAPIKeyValidator, accounts AccountChecker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -311,6 +313,15 @@ func OptionalAuthMiddleware(jwtSecret string, agentValidator *APIKeyValidator, u
 			token, err := extractBearerToken(r)
 			if err != nil {
 				writeAuthError(w, err)
+				return
+			}
+
+			// A per-agent room token (solvr_rt_) is no account credential. The room guard
+			// resolves it on the routes that accept one (401 unknown, 403 another room); on
+			// every other optional route the caller stays anonymous, as a room agent that sends
+			// its token on every call expects.
+			if roomtoken.IsAgentRoomToken(token) {
+				next.ServeHTTP(w, r)
 				return
 			}
 

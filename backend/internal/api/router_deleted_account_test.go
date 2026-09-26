@@ -86,8 +86,11 @@ func TestDeletedAccount_CredentialsStopAuthenticating(t *testing.T) {
 			require.NoError(t, err)
 			owner, err := callStatusContract(client, "GET", ts.URL+path, jwt, "")
 			require.NoError(t, err)
+			require.NotEqual(t, http.StatusOK, anonymous.status, "GET %s: %s", path, anonymous.body)
 			require.NotEqual(t, http.StatusOK, owner.status, "GET %s: %s", path, owner.body)
-			require.Equal(t, anonymous.status, owner.status, "GET %s: %s", path, owner.body)
+			// idx 74 slice 19: a presented credential that no longer validates is invalid
+			// authentication (401), not an anonymous caller; it was `anonymous.status` before.
+			require.Equal(t, http.StatusUnauthorized, owner.status, "GET %s: %s", path, owner.body)
 		}
 	})
 

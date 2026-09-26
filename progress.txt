@@ -4068,3 +4068,163 @@ UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: unchanged from slices 6/1
 applies migrations 000101 and 000102 to production through the admin query route, then
 deploys. [REAL] This slice adds no migration; the CORS header change takes effect only on
 deploy, and a browser check against api.solvr.dev after deploy is the owner's.
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 22 of N. Planned as step 3's unpinned 409/429 rows. A spike for the 429 row exposed a
+REGRESSION that slice 19 (2e316f4) introduced and slices 19-21 carried unnoticed: a valid
+per-agent room token (solvr_rt_...) answered 401 INVALID_API_KEY on every optional-auth route,
+which is the whole agent room flow. This slice fixes it and pins the 409/429 rows.
+================================================================================
+
+TASK SELECTION [REAL]: idx 24 is still an acceptance task (needs idx 75/78 pieces); idx 52/53,
+68, 73's remainder and idx 67 are gated as recorded in slices 11-21; no description starts with
+URGENT. idx 74 is the first buildable false task. [UNVERIFIED: I did not re-derive the other
+gates.]
+
+SPIKES (throwaway tests, deleted before the commit; logs /tmp/solvr_idx74_s22_spike*.log):
+  [REAL] 429 through the full router, room write over budget: 429, Content-Type json,
+    Retry-After: 60, body {"error":{"code":"RATE_LIMITED","message":"Too Many Requests",
+    "request_id":<= X-Request-Id>,"retry_after_seconds":60}}, Access-Control-Expose-Headers
+    lists Retry-After (slice 21). The producer is httprate.LimitByIP(60|10, 1m) in
+    router_rooms.go; the error envelope middleware turns its plain-text 429 into the envelope.
+  [REAL, MEASURED] the global per-actor rate limiter NEVER fires on the full router: a human
+    JWT GET /v1/me x45 (configured limit 30/min), an agent key GET /v1/posts x70 (limit 60/min)
+    and 80 anonymous GETs all answered 200, and no response carried X-Ratelimit-Limit.
+    [REAL, read] router.go:68 mounts rateLimiter.Middleware with r.Use at the top of the
+    router, before any per-group auth middleware puts an identity in the context, and
+    ratelimit.go returns next.ServeHTTP when getIdentityInfo has no identifier ("If no identity,
+    allow through"). Its middleware/e2e tests inject the identity themselves, which is why
+    they pass. The configured limits (agent/human general, search 30/min, posts 5/3 per hour,
+    answers) are therefore not enforced in this build. [REAL, read] RegistrationRateLimiter has
+    no non-test caller, so POST /v1/agents/register has no per-IP limit either.
+    NOT CHANGED: enforcing them would start throttling every human and agent (3 posts/hour)
+    and is an owner decision; it belongs with idx 79 step 5 ("verify ... rate limits").
+  [TEST, bisect] the existing TestRoomEntries_ClientEntryReuseWithDifferentPayloadIs409 and
+    TestRoomEntries_CanonicalAndAdapterWritesShareOneSubmissionPath PASS at 2e316f4~1 (worktree
+    checkout, removed afterwards) and FAIL at HEAD with 401 INVALID_API_KEY. Cause [REAL, read
+    the slice-19 diff]: auth.IsAPIKey is a bare "solvr_" prefix check, so a solvr_rt_ token was
+    sent to the agent-key validator; before slice 19 a failed validation continued anonymously
+    and RoomPolicyGuard (which reads the Authorization header itself: 401 unknown, 403 another
+    room) judged the token; slice 19 made the failed validation a 401 first.
+    Blast radius [REAL, from the saved slice-21 log]: 750 INVALID_API_KEY lines; 66 x 401 on
+    /v1/rooms/{slug}/entries, 53 on .../stream, plus /messages, /agents, /connect, room reads,
+    and /v1/search with a room token; ~30 Room* tests in the slice-21 failure list.
+  CORRECTION TO EARLIER JOURNALS: slice 21 recorded "111 standing failures, about 40% are
+    fixtures" and slices 19-20 recorded ~110 "no new failures". The pre-slice-19 baseline is
+    the slice-17 log: 78 unique FAIL names (/private/tmp/solvr_idx74_s17_full.log). About 35 of
+    the 111 were this regression, not standing debt. My slice-21 classification ran over a set
+    that contained them.
+
+TDD RED [TEST] on the unchanged production code:
+  auth/middleware_optional_room_token_test.go: TestOptionalAuthMiddleware_DoesNotJudgeRoomTokens
+    "a room token passes" FAILED (status 401, INVALID_API_KEY, want 200); the three
+    still-rejected cases passed (guards).
+  api/router_room_token_optional_auth_test.go: TestRoomTokens_AreJudgedByTheRoomGuardNotByAccountAuth
+    4 of 5 subtests FAILED (valid room token write 201 -> 401; search/posts with a room token
+    200 -> 401; unknown token wanted guard 401 UNAUTHORIZED got INVALID_API_KEY; other room's
+    token wanted 403 FORBIDDEN got 401); "an account credential that does not validate is
+    still 401" passed (guard).
+  Log /tmp/solvr_idx74_s22_red2.log.
+
+IMPLEMENTATION [REAL]:
+  auth/middleware.go OptionalAuthMiddleware: right after the bearer token is extracted, a token
+  for which token.IsAgentRoomToken is true continues anonymously and untouched (import alias
+  roomtoken; internal/token has no internal imports, so no cycle). Every account credential
+  (user key, agent key, JWT, non-Bearer) is still rejected when it does not validate. A first
+  draft (a DeferRoomTokens wrapper on the room routes only, in middleware/room_policy.go +
+  router_rooms.go) was discarded before commit: the existing
+  TestRoomPermissionMatrix_EverySurfaceFollowsVisibilityMembershipOwnershipAndDeletion pins
+  "search as member room token" = 200, so the room token has to be ignored on every optional
+  route, not only the room ones.
+
+TEST CHANGE UNDER THE "NEVER WEAKEN" RULE (named, quoted, replaced):
+  router_deleted_account_test.go, TestDeletedAccount_CredentialsStopAuthenticating, subtest
+  "the deleted owner reads the private room no better than an anonymous caller" asserted
+  `require.Equal(t, anonymous.status, owner.status)` (403 on the private room). Slice 19
+  deliberately replaced that behavior: a presented credential that no longer validates on an
+  optional route is 401, not anonymous. The subtest was NOT renamed or removed; its
+  `NotEqual(200, owner.status)` is kept, `NotEqual(200, anonymous.status)` added, and the
+  equality became `Equal(401, owner.status)`. Same behavior also covered by the sibling subtest
+  "every route answers a deleted credential like one never issued" and by
+  TestStatusContract_OptionalAuthRejectsInvalidCredentials; all three PASS in
+  /tmp/solvr_idx74_s22_green2.log. This subtest had been failing since slice 19 (403 vs 401).
+
+PINS ADDED (guards that passed on first run: the behavior was already right):
+  api/router_status_rows_test.go: TestStatusRows_ConflictsAnswerAStableCodeInTheEnvelope
+    (DUPLICATE_ROOM, which had NO test anywhere; DUPLICATE_NAME through the full router with
+    its suggestions kept; both assert code, message, request_id == X-Request-Id) and
+    TestStatusRows_RateLimitAnswers429WithRetryAfterInTheEnvelope (human 10/min and agent
+    60/min room-write budgets: RATE_LIMITED, request_id, Retry-After >= 1, retry_after_seconds
+    == Retry-After, Retry-After readable cross-origin). The agent subtest could only be written
+    after the fix (its room token was 401).
+  CORRECTION: slice 20/21 listed "409 rows not pinned". Existing full-router tests already pin
+    IDEMPOTENCY_KEY_REUSED (router_idempotency_test.go), CLIENT_ENTRY_ID_REUSED
+    (router_rooms_client_entry_test.go), LAST_OWNER (router_rooms_membership_authority_test.go)
+    and the claim conflicts (router_agent_claim_retry_test.go), each with request_id. What was
+    missing is now added above. [REAL, read] every 409 producer writes {"error":{code,message}}
+    and the envelope middleware adds request_id.
+
+FILES ([REAL] final pre-journal `git status --porcelain` / `git diff --stat`):
+  Production:
+  M backend/internal/auth/middleware.go (+12/-1): the room-token pass-through, import, doc line.
+  Tests:
+  M backend/internal/api/router_deleted_account_test.go (+4/-1): the subtest above.
+  A backend/internal/auth/middleware_optional_room_token_test.go (59 lines, 1 test, 4 cases)
+  A backend/internal/api/router_room_token_optional_auth_test.go (61 lines, 1 test, 5 subtests)
+  A backend/internal/api/router_status_rows_test.go (133 lines, 2 tests, 4 subtests)
+  progress.txt is this append. spec.json and SPEC.md unchanged. No test deleted, skipped or
+  renamed. The spike files (zz_spike_*_test.go) and the /tmp worktree were removed.
+
+GREEN / VERIFICATION [TEST], DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test
+  (local docker solvr-postgres):
+  `go test ./internal/auth` ok. `go test ./internal/api -run '^(TestOptionalAuth|TestRoomTokens_|
+  TestStatusRows_|TestStatusContract_|TestDeletedAccount_|TestRoomPermissionMatrix_|TestRoomEntries|
+  TestRoomTokenRevoke|TestRoomStream|TestRoomACL|TestRoomMembers|TestRoomSecrets|TestRoomTokenScope|
+  TestRoomConnectPrompt|TestRoomSSE|TestRoomHandshake|TestRoomExpiry|TestRoomIssuePaging)' -v`:
+  ok (93s), 51 top-level PASS, 0 FAIL, 0 SKIP (/tmp/solvr_idx74_s22_green2.log).
+  [REAL] `go build ./...` and `go vet ./internal/auth ./internal/api` clean; gofmt clean on
+  every file touched.
+
+FULL SUITE [REAL, executed once on the final code; NOT GREEN]:
+  `go test ./... -p 1 -count=1` exit 1, /tmp/solvr_idx74_s22_full2.log; 76 unique FAIL names,
+  only internal/api, internal/api/handlers, internal/db fail. Against slice 21 (111): 37 gone,
+  2 new (TestHomepageSearch_ChartAddsUpToTheTotalBesideIt, TestSearchPulse_SeriesCovers...).
+  Against slice 17 (78, pre-regression): 2 gone, 0 new: the 76 are a subset of the standing set.
+  The 2 "new vs 21" are in the slice-17 list and passed at 23:41Z in slice 21; they failed at
+  00:07Z-00:13Z with a constant 24h-window gap of 52 (series sum 1027/1040/1044 vs total
+  1079/1092/1096), also alone, and the db one cannot reach this code (go list -deps
+  internal/db has no internal/api). Cause NOT established; INFERRED time-of-day/data-state
+  dependence, not investigated. Residual room-named failures are only TestRoomRepository_*
+  ("room slug already exists", db package, in the slice-17 set).
+  An earlier full run on the discarded first draft is /tmp/solvr_idx74_s22_full.log (78).
+
+BEHAVIOR CHANGE (v0) [REAL]:
+  - A per-agent room token sent to any optional-auth route (room routes, /v1/search, /v1/posts,
+    ...) is no longer 401 INVALID_API_KEY. On room routes RoomPolicyGuard judges it (401
+    UNAUTHORIZED unknown/expired, 403 another room); elsewhere the caller is anonymous.
+    Mandatory-auth routes still reject a room token (401).
+  - Trade-off, OBSERVED: a garbage solvr_rt_... on a non-room optional route (search, posts)
+    is anonymous 200, because nothing there can validate a room token; this is the pre-slice-19
+    behavior for that prefix only.
+  - DEPLOY WARNING [REAL]: nothing here is deployed. Slices 19-21 must NOT ship without this
+    commit, or every room agent gets 401.
+
+REMAINING FOR idx 74 [UNVERIFIED]:
+  - step 6: served OpenAPI still has no rooms / entries / replies operations (the parameters,
+    headers and responses from slice 21 are defined but attached to nothing) and the pagination
+    rules (default 50, max 100, next_cursor, has_more) are not in the contract.
+  - step 5: "require" If-Match: code keeps it optional (no 428); owner decision.
+  - step 3: dead flags handler (no /v1/flags route), four codes for one 400 condition, malformed
+    -body walk of path-parameter routes.
+  - full suite: 76 standing failures, fixtures (44 log lines with a referral_code NOT NULL
+    violation) and data-state; unchanged by this slice apart from the 37 fixed.
+  - owner decision, not idx 74's to make silently: the global rate limiter never fires
+    (see SPIKES); wire it after auth or drop it, and give POST /v1/agents/register a limit.
+
+UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: unchanged from slices 6/10 — owner
+applies migrations 000101 and 000102 to production through the admin query route, then
+deploys (with slice 22 included). [REAL] This slice adds no migration.
+
+================================================================================

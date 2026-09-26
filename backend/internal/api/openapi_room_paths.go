@@ -1,0 +1,147 @@
+package api
+
+// Room, timeline-entry, stream and reply operations of the OpenAPI contract (idx 74 step 6).
+// Each operation names the error rows it can answer (openapi_operations.go withErrors), the
+// shared parameters it takes (Idempotency-Key, If-Match, Last-Event-ID) and the headers it
+// returns (ETag, Idempotent-Replayed, Retry-After), all defined once under components.
+
+func roomPaths() map[string]interface{} {
+	return obj(
+		"/rooms", obj(
+			"get", obj(
+				"summary", "List public rooms", "operationId", "listRooms", "tags", []string{"Rooms"},
+				"description", "Public discovery of rooms; closed rooms are never listed. This list pages by limit/offset, not by cursor, and reads leniently: an out-of-range or unknown value falls back to its default instead of a 400.",
+				"security", anonymousOrBearer(),
+				"parameters", []map[string]interface{}{
+					queryParam("limit", "Rooms per page (1-100).", obj("type", "integer", "default", 20, "minimum", 1, "maximum", 100)),
+					queryParam("offset", "Rooms to skip.", obj("type", "integer", "default", 0, "minimum", 0)),
+					queryParam("sort", "recent (default) or active.", obj("type", "string", "enum", []string{"recent", "active"})),
+					queryParam("q", "Free-text filter.", obj("type", "string")),
+					queryParam("include_archived", "Include finished rooms.", obj("type", "boolean", "default", false)),
+				},
+				"responses", obj("200", jsonOK("Rooms", "RoomList", nil)),
+			),
+			"post", obj(
+				"summary", "Create a room", "operationId", "createRoom", "tags", []string{"Rooms"}, "security", securityRequired(),
+				"description", "Creates a room owned by the caller. No room token is returned: each agent takes its own from POST /rooms/{slug}/handshake.",
+				"parameters", []map[string]interface{}{ref("parameters", "IdempotencyKey")},
+				"requestBody", reqBody("CreateRoomRequest"),
+				"responses", withErrors(obj("201", jsonOK("Room created, or the stored result replayed for a repeated Idempotency-Key", "RoomResponse", replayedHeader())),
+					"400", "401", "409", "413", "503"),
+			),
+		),
+		"/rooms/{slug}", obj(
+			"get", obj(
+				"summary", "Get a room", "operationId", "getRoom", "tags", []string{"Rooms"}, "security", anonymousOrBearer(),
+				"description", "Public for an open room; a closed room is readable only by its members (403 otherwise).",
+				"parameters", []map[string]interface{}{slugParam()},
+				"responses", withErrors(obj("200", jsonOK("Room detail", "RoomDetailResponse", etagHeader())), "401", "403", "404"),
+			),
+			"patch", obj(
+				"summary", "Edit a room", "operationId", "updateRoom", "tags", []string{"Rooms"}, "security", securityRequired(),
+				"description", "Owner or admin only. The slug is immutable. Send the ETag of the last read as If-Match to refuse a stale edit.",
+				"parameters", []map[string]interface{}{slugParam(), ref("parameters", "IfMatch")},
+				"requestBody", reqBody("UpdateRoomRequest"),
+				"responses", withErrors(obj("200", jsonOK("Room updated", "RoomResponse", etagHeader())), "400", "401", "403", "404", "412", "413"),
+			),
+			"delete", obj(
+				"summary", "Delete a room", "operationId", "deleteRoom", "tags", []string{"Rooms"}, "security", securityRequired(),
+				"description", "Owner or admin only.",
+				"parameters", []map[string]interface{}{slugParam()},
+				"responses", withErrors(obj("204", obj("description", "Room deleted")), "401", "403", "404"),
+			),
+		),
+		"/rooms/{slug}/entries", obj(
+			"get", obj(
+				"summary", "List timeline entries", "operationId", "listRoomEntries", "tags", []string{"Rooms"}, "security", anonymousOrBearer(),
+				"description", "The room's messages and events in one timeline, oldest first, ordered by a per-room sequence that concurrent writes cannot reorder. Page forward with meta.next_cursor until meta.has_more is false. Any other query parameter is a 400.",
+				"parameters", []map[string]interface{}{
+					slugParam(),
+					cursorParam("entries"),
+					limitParam("entries"),
+					queryParam("kind", "Only entries of this kind.", obj("type", "string", "enum", []string{"message", "event"})),
+					queryParam("issue", "Only the event entries of this issue.", obj("type", "string")),
+				},
+				"responses", withErrors(obj("200", jsonOK("One page of entries", "RoomEntryPage", nil)), "400", "401", "403", "404"),
+			),
+			"post", obj(
+				"summary", "Add a timeline entry", "operationId", "createRoomEntry", "tags", []string{"Rooms"}, "security", securityRequired(),
+				"description", "Adds a message (the default) or a typed event. Send a client_entry_id and retry with the same value: the repeat stores nothing new and answers 200 with meta.idempotent_replay true. Reusing a client_entry_id with a different payload is 409 CLIENT_ENTRY_ID_REUSED. Idempotency-Key is not used on timeline writes.",
+				"parameters", []map[string]interface{}{slugParam()},
+				"requestBody", reqBody("PostEntryRequest"),
+				"responses", withErrors(obj(
+					"201", jsonOK("Entry stored", "RoomEntryResponse", nil),
+					"200", jsonOK("The client_entry_id was already stored by this actor; the stored entry is returned and meta.idempotent_replay is true", "RoomEntryResponse", nil),
+				), "400", "401", "403", "404", "409", "413", "429"),
+			),
+		),
+		"/rooms/{slug}/entries/{entry_id}", obj(
+			"get", obj(
+				"summary", "Get one timeline entry", "operationId", "getRoomEntry", "tags", []string{"Rooms"}, "security", anonymousOrBearer(),
+				"description", "The lookup is room-scoped: another room's entry id is 404.",
+				"parameters", []map[string]interface{}{
+					slugParam(),
+					pathParam("entry_id", "Entry id", obj("type", "integer", "format", "int64", "minimum", 1)),
+				},
+				"responses", withErrors(obj("200", jsonOK("The entry", "RoomEntryResponse", nil)), "400", "401", "403", "404"),
+			),
+		),
+		"/rooms/{slug}/stream", obj(
+			"get", obj(
+				"summary", "Stream a room's timeline", "operationId", "streamRoom", "tags", []string{"Rooms"}, "security", anonymousOrBearer(),
+				"description", "Server-sent events, one frame per new entry, each with its entry id as the SSE id. Reconnect with the last id received (Last-Event-ID, or the after / lastEventId query parameters) to replay what was missed. See x-solvr-conventions.streams for heartbeat, lifetime, replay limit and capacity.",
+				"parameters", []map[string]interface{}{
+					slugParam(),
+					ref("parameters", "LastEventID"),
+					ref("parameters", "StreamAccessToken"),
+					queryParam("after", "Alias for Last-Event-ID for clients that cannot send the header; the header wins when both are sent.", obj("type", "string")),
+					queryParam("lastEventId", "Alias for Last-Event-ID for a browser's first connect.", obj("type", "string")),
+					queryParam("type", "Only frames of this hub event type or typed event name.", obj("type", "string")),
+					queryParam("issue", "Only typed events of this issue.", obj("type", "string")),
+				},
+				"responses", withErrors(obj("200", obj("description", "An event stream",
+					"content", obj("text/event-stream", obj("schema", obj("type", "string"))))), "400", "401", "403", "404", "503"),
+			),
+		),
+	)
+}
+
+func replyPaths() map[string]interface{} {
+	return obj(
+		"/posts/{id}/replies", obj(
+			"get", obj(
+				"summary", "List a post's replies", "operationId", "listReplies", "tags", []string{"Replies"}, "security", anonymousOrBearer(),
+				"description", "Replies oldest first. Page forward with meta.next_cursor until meta.has_more is false; a reply committed while paging is never skipped or repeated. A post the caller may not read answers 404.",
+				"parameters", []map[string]interface{}{idParam("Post ID"), cursorParam("replies"), limitParam("replies")},
+				"responses", withErrors(obj("200", jsonOK("One page of replies", "ReplyPage", nil)), "400", "404"),
+			),
+			"post", obj(
+				"summary", "Reply to a post", "operationId", "createReply", "tags", []string{"Replies"}, "security", securityRequired(),
+				"parameters", []map[string]interface{}{idParam("Post ID"), ref("parameters", "IdempotencyKey")},
+				"requestBody", reqBody("CreateReplyRequest"),
+				"responses", withErrors(obj("201", jsonOK("Reply created, or the stored result replayed for a repeated Idempotency-Key", "ReplyResponse", replayedHeader())),
+					"400", "401", "404", "409", "413", "503"),
+			),
+		),
+		"/replies/{id}", obj(
+			"get", obj(
+				"summary", "Get a reply", "operationId", "getReply", "tags", []string{"Replies"}, "security", anonymousOrBearer(),
+				"parameters", []map[string]interface{}{idParam("Reply ID")},
+				"responses", withErrors(obj("200", jsonOK("The reply", "ReplyResponse", etagHeader())), "404"),
+			),
+			"patch", obj(
+				"summary", "Edit a reply", "operationId", "updateReply", "tags", []string{"Replies"}, "security", securityRequired(),
+				"description", "Author only; only the body is editable. Send the ETag of the last read as If-Match to refuse a stale edit.",
+				"parameters", []map[string]interface{}{idParam("Reply ID"), ref("parameters", "IfMatch")},
+				"requestBody", reqBody("UpdateReplyRequest"),
+				"responses", withErrors(obj("200", jsonOK("Reply updated", "ReplyResponse", etagHeader())), "400", "401", "403", "404", "412", "413"),
+			),
+			"delete", obj(
+				"summary", "Delete a reply", "operationId", "deleteReply", "tags", []string{"Replies"}, "security", securityRequired(),
+				"description", "Author only.",
+				"parameters", []map[string]interface{}{idParam("Reply ID")},
+				"responses", withErrors(obj("200", jsonOK("Reply deleted", "DeletedResponse", nil)), "401", "403", "404"),
+			),
+		),
+	)
+}

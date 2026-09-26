@@ -87,6 +87,17 @@ func conventions() map[string]interface{} {
 			"server_write_timeout", "none",
 			"client_guidance", "Send the request headers and body promptly (the read timeout covers them). Ordinary requests answer quickly, so use a client timeout of tens of seconds and retry 5xx and 429 with backoff, honoring Retry-After. Do not put a total-duration timeout on the stream; reconnect with the resume cursor instead. Keep-alive connections idle for more than server_idle_seconds are closed.",
 		),
+		"pagination", obj(
+			"style", "opaque cursor",
+			"applies_to", []string{"/v1/rooms/{slug}/entries", "/v1/posts/{id}/replies"},
+			"cursor_parameter", "cursor",
+			"limit_parameter", "limit",
+			"default_limit", handlers.EntryPageDefaultLimit,
+			"max_limit", handlers.EntryPageMaxLimit,
+			"response_meta", []string{"next_cursor", "has_more"},
+			"ordering", "Oldest first, on a keyset position (the entry sequence, or created_at then id for replies), so an item committed while a client pages is never skipped or repeated.",
+			"note", "Read meta.has_more; when it is true send meta.next_cursor back as ?cursor= to get the next page. The cursor is opaque: never parse or build one. A limit above max_limit is clamped to it; a zero, negative or non-integer limit or a malformed cursor is 400 VALIDATION_ERROR. Other list routes still page by page/per_page or limit/offset and are outside this rule.",
+		),
 		"idempotency", obj(
 			"header", apimiddleware.IdempotencyKeyHeader,
 			"replayed_response_header", apimiddleware.IdempotentReplayedHeader,

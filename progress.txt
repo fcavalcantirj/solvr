@@ -4228,3 +4228,122 @@ applies migrations 000101 and 000102 to production through the admin query route
 deploys (with slice 22 included). [REAL] This slice adds no migration.
 
 ================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 23 of N. Step 6 remainder named by slice 22: the served OpenAPI had no rooms / entries /
+replies operations (slice 21's parameters, headers and responses were attached to nothing) and
+the cursor-pagination rules (default 50, max 100, next_cursor, has_more) were not in the contract.
+================================================================================
+
+TASK SELECTION [REAL]: idx 24 is still an acceptance task (steps need two API instances, more
+than one client product and individual revocation; idx 75 and 78 are still false); idx 52/53, 68,
+73's remainder and idx 67 are gated as recorded in slices 11-22; no description starts with
+URGENT. idx 74 is the first buildable false task. [UNVERIFIED: I did not re-derive the other
+gates; I re-read idx 24's steps and the slice 22 selection note only.]
+
+WHAT WAS BUILT [REAL, read back from the served document by the tests below]:
+  - 14 operations added to GET /v1/openapi.json (and .yaml, same map): GET/POST /rooms,
+    GET/PATCH/DELETE /rooms/{slug}, GET/POST /rooms/{slug}/entries, GET
+    /rooms/{slug}/entries/{entry_id}, GET /rooms/{slug}/stream, GET/POST /posts/{id}/replies,
+    GET/PATCH/DELETE /replies/{id}. Tags Rooms and Replies added.
+  - The shared components from slice 21 are now attached: Idempotency-Key on POST /rooms,
+    POST /posts, POST /posts/{id}/replies (201 documents Idempotent-Replayed, 409 Conflict);
+    If-Match + ETag on PATCH/GET of /posts/{id}, /rooms/{slug}, /replies/{id} (412
+    PreconditionFailed); Last-Event-ID + access_token on the stream; timeline writes document
+    client_entry_id (200 replay with meta.idempotent_replay, 409) and NOT Idempotency-Key.
+  - Every operation lists its error rows as $refs to components.responses (400/401/403/404/409/
+    412/413/429/503, per operation, read from the handlers). Reads a caller may make anonymously
+    carry security [{}, bearer]; writes require bearer.
+  - x-solvr-conventions.pagination: cursor/limit parameter names, default_limit 50, max_limit
+    100, response_meta next_cursor/has_more, applies_to the entry and reply lists, ordering
+    note. Values come from handlers.EntryPageDefaultLimit / EntryPageMaxLimit (and Reply*),
+    exported aliases of the constants the page parsers enforce.
+  - Schemas: Room, RoomSummary, RoomList, RoomResponse, RoomDetailResponse, CreateRoomRequest,
+    UpdateRoomRequest, RoomEntry, RoomEntryResponse, RoomEntryPage, PostEntryRequest,
+    ReplyAuthor, Reply, ReplyResponse, ReplyPage, CreateReplyRequest, UpdateReplyRequest,
+    DeletedResponse. The entry page says next_cursor is null on the last page; the reply page
+    says it is absent (both are what the handlers do).
+  - GET /rooms is documented as what it is: limit/offset (default 20, max 100), lenient, not
+    cursor paged; the pagination note says other lists are outside the cursor rule.
+
+TDD RED [TEST] (log /tmp/solvr_idx74_s23_red.log): tests written first; the only production
+  code present was the additive constant export handlers/page_limits.go, which the tests need
+  to compile. All 10 TestOpenAPIOperations_* tests FAILED for the intended reasons: "spec has no
+  paths./rooms.get", "spec has no x-solvr-conventions.pagination", "PATCH /posts/{id} must
+  accept If-Match", "spec has no components.schemas.Reply.properties".
+GREEN [TEST]: first GREEN run had 1 failure, both mine: the cursor description said "Opaque"
+  (test wants "opaque": production wording fixed) and the test wrongly expected next_cursor
+  nullable on the reply page (test corrected: reply cursor is absent, not null; the entry cursor
+  is nullable). An 11th test (structural soundness) passed on first run, a guard.
+  Log /tmp/solvr_idx74_s23_green2.log, DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/
+  solvr_test (local docker solvr-postgres): TestOpenAPIOperations_* 10 PASS 0 FAIL 0 SKIP,
+  TestOpenAPIConventions_* 8 PASS, TestRouteFamilies_* 3 PASS, the 8 pre-existing
+  TestOpenAPI*/Discovery tests PASS. Structural test /tmp/solvr_idx74_s23_struct.log PASS.
+
+TESTS ADDED (backend/internal/api/openapi_operations_test.go, 456 lines, 11 tests):
+  RoomEntryAndReplyOperationsArePublished (14 ops, unique operationIds, path params declared),
+  CursorPaginationRulesMatchTheHandlers, CreatesAreRetrySafe,
+  EditsAreConditionalAndReadsHandBackTheValidator, StreamPublishesResumeAndCredentialTransport,
+  EveryOperationNamesItsErrorRows, SecurityFollowsWhoMayCall,
+  SchemasDescribeTheJSONTheHandlersReturn (JSON tags of models.RoomEntry, ReplyWithAuthor,
+  ReplyAuthor, Room, RoomWithStats, CreateReplyRequest, UpdateReplyRequest, UpdateRoomParams
+  == schema properties, both directions), PublishedOperationsAreStructurallySound,
+  EveryDocumentedOperationIsAServedRoute (chi.Walk of the production-shaped router),
+  EntryListContractHoldsAgainstTheRunningAPI (real room + messages: each documented query
+  parameter is accepted 200, an undocumented one is 400 VALIDATION_ERROR, limit=100000 comes back
+  as meta.limit == the documented maximum, next_cursor round-trips).
+  No existing test deleted, skipped, renamed or loosened.
+
+FILES ([REAL] final `git status --porcelain` / `git diff --stat`, taken before this append):
+  Production:
+  M backend/internal/api/discovery.go (+1): getOpenAPISpec calls addOperations after addConventions.
+  M backend/internal/api/openapi_conventions.go (+11): the pagination block in conventions().
+  A backend/internal/api/handlers/page_limits.go (11 lines): exported aliases of the four page bounds.
+  A backend/internal/api/openapi_operations.go (109): addOperations, shared helpers, wiring of the
+    post create/edit operations (Idempotency-Key, If-Match, ETag, error rows).
+  A backend/internal/api/openapi_room_paths.go (147): room/entry/stream/reply operations.
+  A backend/internal/api/openapi_operation_schemas.go (164): the schemas above.
+  Tests:
+  A backend/internal/api/openapi_operations_test.go (456).
+  progress.txt is this append. spec.json and SPEC.md unchanged. No handler behavior changed:
+  the only runtime-visible change is the content of /v1/openapi.json|yaml. In that document the
+  inline 401/404 of POST /posts and PATCH /posts/{id} became $refs to the shared responses
+  (same Error schema, richer description). check-file-size.sh lists none of the touched files.
+  gofmt clean on every file I touched (the repo has ~50 older unformatted files; not touched).
+
+FULL SUITE [REAL, executed once on the final code; NOT GREEN, unchanged]:
+  `go test ./... -p 1 -count=1` exit 1, /tmp/solvr_idx74_s23_full.log; 76 unique FAIL names, only
+  internal/api, internal/api/handlers, internal/db fail. Compared name by name with slice 22's
+  76 (/tmp/solvr_idx74_s22_full2.log): 0 new, 0 gone; identical set. So the standing failures
+  (fixtures with referral_code NOT NULL, data-state) are neither caused nor fixed by this slice.
+  Frontend untouched, npm test not run.
+
+NOT VERIFIED [UNVERIFIED]:
+  - No OpenAPI validator exists on this machine (openapi_spec_validator, redocly, swagger-cli
+    all absent); document validity rests on my own structural test plus the existing $ref
+    resolution test. A generator run against the served document has not happened.
+  - The error rows per operation are read from the handlers; only the ones the existing status
+    tests already pin are exercised (slices 20-22). The 500 row is not listed.
+  - CreateRoomRequest, PostEntryRequest and RoomDetailResponse are not reflection-pinned
+    (unexported handler type / map-built response); their property lists were read from the code.
+  - Not documented yet: room handshake/members/archive/reopen/save-as-post/publish, the /r/*
+    adapters, reply/post votes.
+
+REMAINING FOR idx 74 [UNVERIFIED]:
+  - step 5: "require" If-Match: code keeps it optional (no 428); owner decision.
+  - step 3: dead flags handler (no /v1/flags route), four codes for one 400 condition, malformed
+    -body walk of path-parameter routes.
+  - full suite: 76 standing failures.
+  - owner decision (unchanged from slice 22): the global rate limiter never fires; wire it after
+    auth or drop it, and give POST /v1/agents/register a limit (idx 79 step 5).
+  - step 6 is now covered for rooms, entries, replies and posts create/edit; the legacy
+    problem/question/idea operations in the same document still carry no conventions (idx 73
+    retires them).
+
+UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: unchanged from slices 6/10/22 — owner
+applies migrations 000101 and 000102 to production through the admin query route, then deploys
+(with slice 22 included; slices 19-21 must not ship without it). After that deploy, open
+https://api.solvr.dev/v1/openapi.json and confirm paths contains /rooms/{slug}/entries and
+x-solvr-conventions.pagination. This slice adds no migration.
+
+================================================================================

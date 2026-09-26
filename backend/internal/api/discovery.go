@@ -82,6 +82,7 @@ func wellKnownAIAgentHandler(w http.ResponseWriter, r *http.Request) {
 func getOpenAPISpec() map[string]interface{} {
 	spec := baseOpenAPISpec()
 	addConventions(spec)
+	addOperations(spec)
 	return spec
 }
 

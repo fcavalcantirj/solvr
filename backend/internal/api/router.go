@@ -218,7 +218,7 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 		// Optional auth identifies callers without rejecting omitted credentials, so
 		// RoomAccessGuard can enforce closed rooms. Presented invalid credentials are 401.
 		optionalAuthMW := auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts)
-		mountRoomRoutes(r, pool, hubMgr, registry, authMW, optionalAuthMW)
+		mountRoomRoutes(r, pool, hubMgr, registry, authMW, optionalAuthMW, jwtSecret)
 	}
 
 	return r

@@ -162,3 +162,34 @@ describe('SolvrAPI Auth Event Handling', () => {
     });
   });
 });
+
+describe('SolvrAPI room stream ticket (idx 75 step 2)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+  });
+
+  afterEach(() => {
+    api.clearAuthToken();
+    vi.restoreAllMocks();
+  });
+
+  it('POSTs to the ticket route with the credential in the Authorization header, not the URL', async () => {
+    api.setAuthToken('jwt-abc');
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { ticket: 'solvr_st_t', expires_at: '2026-09-25T00:00:00Z', ttl_seconds: 60, stream: '/v1/rooms/a b/stream' } }),
+    });
+
+    const res = await api.createRoomStreamTicket('a b');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain('/v1/rooms/a%20b/stream-ticket');
+    expect(url).not.toContain('jwt-abc');
+    expect(init.method).toBe('POST');
+    expect(init.headers['Authorization']).toBe('Bearer jwt-abc');
+    expect(res.data.ticket).toBe('solvr_st_t');
+  });
+});

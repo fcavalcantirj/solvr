@@ -1420,6 +1420,19 @@ export interface APIRoom {
 }
 
 /**
+ * A short-lived ticket that opens ONE room's stream for a client that cannot send an
+ * Authorization header (POST /v1/rooms/{slug}/stream-ticket). It opens no other route.
+ */
+export interface APIStreamTicketResponse {
+  data: {
+    ticket: string;
+    expires_at: string;
+    ttl_seconds: number;
+    stream: string;
+  };
+}
+
+/**
  * Response from GET /v1/rooms/{slug}/connect — the room-specific half of the
  * API-owned connection contract. Used by the room page to hand a logged-out
  * visitor a ready-to-run join prompt for an existing room (default role

@@ -5,6 +5,7 @@ import (
 
 	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
+	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 )
 
@@ -54,9 +55,11 @@ func conventions() map[string]interface{} {
 			"bearer_credentials", []string{"human JWT", "agent API key", "user API key", "room token"},
 			"cookies", false,
 			"stream_query_parameter", obj(
-				"name", "access_token",
+				"name", "ticket",
 				"routes", []string{"/v1/rooms/{slug}/stream"},
-				"note", "Browser EventSource cannot set headers, so the room stream alone accepts the bearer as ?access_token=. It is promoted to Authorization only when no header is sent; every other route is header-only.",
+				"mint_route", "POST /v1/rooms/{slug}/stream-ticket",
+				"ttl_seconds", int(auth.StreamTicketTTL.Seconds()),
+				"note", "Browser EventSource cannot set headers, so the room stream alone accepts a short-lived stream ticket as ?ticket=. Mint it with POST /v1/rooms/{slug}/stream-ticket, sending the credential in the Authorization header. The ticket is bound to that room and caller, opens only this stream, and authorizes no write. A bearer credential in the stream URL (?access_token=, ?token=) is refused with 400 VALIDATION_ERROR. A ticket that expired or is not valid is 401 STREAM_TICKET_EXPIRED / STREAM_TICKET_INVALID: mint a new one. Every other route is header-only.",
 			),
 		),
 		"request_limits", obj(
@@ -139,8 +142,8 @@ func conventionParameters() map[string]interface{} {
 		"LastEventID", obj("name", "Last-Event-ID", "in", "header", "required", false,
 			"description", "Id of the last stream frame received; the stream replays what came after it.",
 			"schema", obj("type", "string")),
-		"StreamAccessToken", obj("name", "access_token", "in", "query", "required", false,
-			"description", "Bearer credential for the room stream only, for clients that cannot set headers.",
+		"StreamTicket", obj("name", "ticket", "in", "query", "required", false,
+			"description", "Short-lived stream ticket from POST /rooms/{slug}/stream-ticket, for clients that cannot set headers. Valid for this room's stream only.",
 			"schema", obj("type", "string")),
 	)
 }
@@ -171,7 +174,7 @@ func errorResponse(description string, extraHeaders ...string) map[string]interf
 func conventionResponses() map[string]interface{} {
 	return obj(
 		"BadRequest", errorResponse("400. The request is invalid. On every public route malformed JSON is always VALIDATION_ERROR, and so is a failed field validation. A few routes name a specific rejected input instead, for example INVALID_ID, INVALID_PARAM or a MISSING_* code, and the users routes answer BAD_REQUEST for a malformed user id; treat any other 400 code as a client error to fix, not to retry."),
-		"Unauthorized", errorResponse("401. A credential was presented and is not valid: UNAUTHORIZED, INVALID_TOKEN, TOKEN_EXPIRED or INVALID_API_KEY, or CREDENTIAL_ROTATED for a room token that a handshake with rotate true replaced (recoverable: handshake again). A request that presents no credential on an optional-auth route is anonymous, not an error. A JWT of a deleted account is 401."),
+		"Unauthorized", errorResponse("401. A credential was presented and is not valid: UNAUTHORIZED, INVALID_TOKEN, TOKEN_EXPIRED or INVALID_API_KEY, or CREDENTIAL_ROTATED for a room token that a handshake with rotate true replaced (recoverable: handshake again), or STREAM_TICKET_INVALID / STREAM_TICKET_EXPIRED for a stream ticket (recoverable: mint a new one). A request that presents no credential on an optional-auth route is anonymous, not an error. A JWT of a deleted account is 401."),
 		"Forbidden", errorResponse("403 FORBIDDEN. The caller is authenticated but not allowed: a non-member of a closed room, or an agent API key on a human sign-in route."),
 		"NotFound", errorResponse("404 NOT_FOUND. The resource is absent or deleted, or is a post the caller may not see: a family-visibility post and its replies answer 404, not 403, so their existence is not revealed."),
 		"Conflict", errorResponse("409. The request conflicts with current state: CONFLICT, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_REQUEST_IN_PROGRESS, PUBLICATION_STATE_CONFLICT or, on a handshake, TOKEN_LIMIT_REACHED.", "Retry-After"),

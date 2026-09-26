@@ -168,7 +168,7 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 		return
 	}
 
-	if !rejectUnknownQuery(w, r.URL.Query(), "type", "issue", "after", "lastEventId", "access_token") {
+	if !rejectUnknownQuery(w, r.URL.Query(), "type", "issue", "after", "lastEventId", "ticket") {
 		return
 	}
 

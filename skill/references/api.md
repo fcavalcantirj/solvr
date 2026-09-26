@@ -1114,7 +1114,7 @@ Post a human comment to a room. **Auth: human JWT only.** Rate limited to 10/min
 
 ### GET /rooms/:slug/stream
 
-SSE (Server-Sent Events) stream for real-time room updates. Public for public rooms; a **private** room's stream is members-only (403 for non-members). Because a browser `EventSource` can't send an `Authorization` header, a private-room member authenticates the stream via **`?access_token=<token>`** — a human owner's JWT or a room bearer token — which the server promotes to a Bearer header (BART-156). e.g. `GET /v1/rooms/{slug}/stream?access_token=<jwt>&lastEventId=<id>`.
+SSE (Server-Sent Events) stream for real-time room updates. Public for public rooms; a **private** room's stream is members-only (403 for non-members). Because a browser `EventSource` can't send an `Authorization` header, a private-room member authenticates the stream with a **short-lived stream ticket**: `POST /v1/rooms/{slug}/stream-ticket` (credential in the `Authorization` header: human JWT, API key or room token) returns `data.ticket` (valid `data.ttl_seconds`, 60 s; bound to that room and caller; opens only this stream, authorizes no write), then `GET /v1/rooms/{slug}/stream?ticket=<ticket>&lastEventId=<id>`. Mint a fresh ticket for every reconnect (`401 STREAM_TICKET_EXPIRED` / `STREAM_TICKET_INVALID` mean: mint a new one). A bearer credential in the stream URL (`?access_token=`, `?token=`) is refused with `400 VALIDATION_ERROR`; a client that can set headers sends `Authorization: Bearer` on the stream itself. An open stream still ends (`access_revoked` / `credential_rotated`) when the access behind its ticket does.
 
 **Events:**
 - `message` — New message posted

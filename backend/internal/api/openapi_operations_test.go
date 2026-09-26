@@ -268,7 +268,7 @@ func TestOpenAPIOperations_StreamPublishesResumeAndCredentialTransport(t *testin
 	stream := operation(t, spec, "get", "/rooms/{slug}/stream")
 
 	assert.True(t, hasParamRef(stream, "LastEventID"))
-	assert.True(t, hasParamRef(stream, "StreamAccessToken"))
+	assert.True(t, hasParamRef(stream, "StreamTicket"))
 	for _, name := range []string{"after", "lastEventId", "type", "issue"} {
 		assert.Equal(t, "query", param(t, spec, stream, name)["in"], name)
 	}
@@ -281,7 +281,7 @@ func TestOpenAPIOperations_StreamPublishesResumeAndCredentialTransport(t *testin
 		if o.path == "/rooms/{slug}/stream" {
 			continue
 		}
-		assert.False(t, hasParamRef(operation(t, spec, o.method, o.path), "StreamAccessToken"),
+		assert.False(t, hasParamRef(operation(t, spec, o.method, o.path), "StreamTicket"),
 			"%s %s must be header-only", o.method, o.path)
 	}
 }
@@ -453,4 +453,21 @@ func mapKeys(m map[string]bool) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+func TestOpenAPIOperations_StreamTicketMintIsPublishedWithItsRecoverableErrors(t *testing.T) {
+	spec := servedSpec(t)
+	mint := operation(t, spec, "post", "/rooms/{slug}/stream-ticket")
+
+	assert.Equal(t, "createRoomStreamTicket", mint["operationId"])
+	assert.Equal(t, "#/components/schemas/StreamTicketResponse", refName(at(t, mint, "responses", "201", "content", "application/json", "schema")))
+	for _, code := range []string{"401", "403", "404", "429"} {
+		at(t, mint, "responses", code)
+	}
+	assert.False(t, hasParamRef(mint, "StreamTicket"), "a ticket cannot mint the next ticket: the mint route is header-only")
+
+	unauthorized, _ := at(t, spec, "components", "responses", "Unauthorized", "description").(string)
+	for _, code := range []string{"STREAM_TICKET_INVALID", "STREAM_TICKET_EXPIRED"} {
+		assert.Contains(t, unauthorized, code, "the shared 401 row names %s", code)
+	}
 }

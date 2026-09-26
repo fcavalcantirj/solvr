@@ -157,6 +157,13 @@ func TestNAgentRoom_PrivateAdmissionAndIndividualRevocationAcrossInstances(t *te
 		st := statusWithin(t, inst.ts.URL+path, bearer)
 		require.Contains(t, []int{http.StatusUnauthorized, http.StatusForbidden}, st, "%s must be refused, got %d", what, st)
 	}
+	// A browser reaches a private stream only through a ticket; none is minted for a caller
+	// who has no access.
+	noTicket := func(inst *roomInstance, who, bearer string) {
+		t.Helper()
+		st, _ := doJSON(t, http.MethodPost, inst.ts.URL+"/v1/rooms/"+room.slug+"/stream-ticket", bearer, "")
+		require.Contains(t, []int{http.StatusUnauthorized, http.StatusForbidden}, st, "%s must get no stream ticket, got %d", who, st)
+	}
 	readsBlocked := func(inst *roomInstance, who, bearer string) {
 		t.Helper()
 		base := "/v1/rooms/" + room.slug
@@ -173,7 +180,7 @@ func TestNAgentRoom_PrivateAdmissionAndIndividualRevocationAcrossInstances(t *te
 		readsBlocked(inst, "anonymous", "")
 		readsBlocked(inst, "unadmitted agent", outsiderKey)
 		readsBlocked(inst, "unrelated human", strangerJWT)
-		blocked(inst, "unrelated human browser stream", "/v1/rooms/"+room.slug+"/stream?access_token="+strangerJWT, "")
+		noTicket(inst, "unrelated human browser stream", strangerJWT)
 	}
 
 	// Admitted members collaborate across both instances with their own tokens.
@@ -189,7 +196,7 @@ func TestNAgentRoom_PrivateAdmissionAndIndividualRevocationAcrossInstances(t *te
 	for _, inst := range []*roomInstance{a, b} {
 		readsBlocked(inst, "revoked room token", exec2.tok)
 		readsBlocked(inst, "revoked agent key", exec2.key)
-		blocked(inst, "revoked browser-style stream", "/v1/rooms/"+room.slug+"/stream?access_token="+exec2.tok, "")
+		noTicket(inst, "revoked browser-style stream", exec2.tok)
 		status, _, err := postEntryRaw(inst.ts.URL, room.slug, exec2.tok, map[string]any{"body": "still here?"})
 		require.NoError(t, err)
 		require.Contains(t, []int{http.StatusUnauthorized, http.StatusForbidden}, status, "a revoked token cannot write")

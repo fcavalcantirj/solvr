@@ -19,6 +19,7 @@ import (
 //	/v1/rooms/*  -- REST CRUD (Solvr JWT/agent key auth)
 //	/r/{slug}/*  -- A2A protocol (per-agent room token auth, from the handshake)
 //
+// streamTicketSecret signs the stream tickets a browser opens the room stream with.
 // The authMiddleware parameter is the unified auth middleware used for
 // write operations on /v1/rooms/* (same as other protected endpoints).
 func mountRoomRoutes(
@@ -28,6 +29,7 @@ func mountRoomRoutes(
 	registry *hub.PresenceRegistry,
 	authMiddleware func(http.Handler) http.Handler,
 	optionalAuthMiddleware func(http.Handler) http.Handler,
+	streamTicketSecret string,
 ) {
 	roomRepo := db.NewRoomRepository(pool)
 	msgRepo := db.NewMessageRepository(pool)
@@ -59,6 +61,8 @@ func mountRoomRoutes(
 	eventsHandler := handlers.NewRoomEventsHandler(entryRepo, hubMgr)
 	roomConnectHandler := handlers.NewRoomConnectHandler(roomRepo, msgRepo)
 	roomSavePostHandler := handlers.NewRoomSavePostHandler(db.NewPostRepository(pool), roomRepo, memberRepo)
+	streamTicketHandler := handlers.NewRoomStreamTicketHandler(streamTicketSecret)
+	streamTicketLimit := httprate.LimitByIP(30, time.Minute)
 
 	// Canonical timeline routes accept human, agent-account and room-scoped credentials
 	// through ONE authorization policy (RoomPolicyGuard). Writes share the adapters'
@@ -112,10 +116,13 @@ func mountRoomRoutes(
 
 		// Canonical SSE stream (D-33 / T-16-04): anonymous for public rooms, and human,
 		// agent-account or room-scoped credentials through the same policy as the entries
-		// routes (a presented room token must be valid and for THIS room). SSEAccessTokenToHeader
-		// promotes ?access_token= (the only way a browser EventSource can send a credential)
-		// into the Authorization header (BART-156). GET /r/{slug}/stream is its adapter.
-		r.With(apimiddleware.SSENoBuffering, apimiddleware.SSEAccessTokenToHeader, entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/stream", sseHandler.PublicStream)
+		// routes (a presented room token must be valid and for THIS room). A browser
+		// EventSource cannot send Authorization, so it opens the stream with a short-lived,
+		// room-bound ?ticket= (SSEStreamTicket) minted just above, never with a long-lived
+		// bearer in the URL (idx 75 step 2, retiring ?access_token= of BART-156).
+		// GET /r/{slug}/stream is its adapter.
+		r.With(entriesPolicy(apimiddleware.RoomRead), streamTicketLimit).Post("/{slug}/stream-ticket", streamTicketHandler.Issue)
+		r.With(apimiddleware.SSENoBuffering, apimiddleware.SSEStreamTicket(streamTicketSecret), entriesPolicy(apimiddleware.RoomRead)).Get("/{slug}/stream", sseHandler.PublicStream)
 
 		// Authenticated endpoints (Solvr JWT or agent API key per D-16)
 		r.Group(func(r chi.Router) {

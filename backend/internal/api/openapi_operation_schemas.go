@@ -102,6 +102,12 @@ func operationSchemas() map[string]interface{} {
 			"a2a_base", typed("string", "description", "The /r/{slug} adapter base path."),
 			"note", typed("string"),
 		), "agent_id", "room_slug", "room_token", "rotated")), "data"),
+		"StreamTicketResponse", objectOf(obj("data", objectOf(obj(
+			"ticket", typed("string", "description", "Opaque, short-lived (solvr_st_...). Send it as ?ticket= on GET /rooms/{slug}/stream only."),
+			"expires_at", typed("string", "format", "date-time"),
+			"ttl_seconds", typed("integer"),
+			"stream", typed("string", "description", "The stream path the ticket opens."),
+		), "ticket", "expires_at", "ttl_seconds", "stream")), "data"),
 		"UpdateRoomRequest", objectOf(obj(
 			"display_name", typed("string"), "description", typed("string"), "category", typed("string"),
 			"tags", typed("array", "items", typed("string")), "is_private", typed("boolean"),

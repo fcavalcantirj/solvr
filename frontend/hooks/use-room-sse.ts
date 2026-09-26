@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { api } from '@/lib/api';
 import type { APIRoomMessage, APIAgentPresenceRecord } from '@/lib/api-types';
 
 export type SseStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
@@ -40,9 +41,22 @@ export function useRoomSse(slug: string, lastKnownMessageId?: number): UseRoomSs
   useEffect(() => {
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
     let retryCount = 0;
+    let cancelled = false;
     const MAX_RETRIES = 5;
 
-    const connect = () => {
+    const scheduleReconnect = () => {
+      retryCount++;
+      if (retryCount >= MAX_RETRIES) {
+        setStatus('disconnected');
+        return;
+      }
+      setStatus('reconnecting');
+      // Exponential backoff: 3s, 6s, 12s, 24s, 48s
+      const delay = 3000 * Math.pow(2, retryCount - 1);
+      reconnectTimeout = setTimeout(connect, delay);
+    };
+
+    const connect = async () => {
       // Stop reconnecting after max retries (prevents hammering on deleted rooms)
       if (retryCount >= MAX_RETRIES) {
         setStatus('disconnected');
@@ -53,13 +67,21 @@ export function useRoomSse(slug: string, lastKnownMessageId?: number): UseRoomSs
       if (lastEventIdRef.current) {
         url.searchParams.set('lastEventId', lastEventIdRef.current);
       }
-      // EventSource can't send an Authorization header, so a logged-in human's JWT rides
-      // in ?access_token= — the backend promotes it to a Bearer header, authorizing the
-      // stream of a PRIVATE room the caller owns (BART-156). Public rooms need no token.
+      // EventSource can't send an Authorization header and a long-lived JWT must not ride in
+      // the URL, so a logged-in viewer asks the API for a short-lived, room-bound ticket and
+      // opens the stream with ?ticket= — authorizing the stream of a PRIVATE room the caller
+      // belongs to. A fresh ticket per (re)connection; public rooms need none.
       const authToken = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
       if (authToken) {
-        url.searchParams.set('access_token', authToken);
+        try {
+          const minted = await api.createRoomStreamTicket(slug);
+          url.searchParams.set('ticket', minted.data.ticket);
+        } catch {
+          if (!cancelled) scheduleReconnect();
+          return;
+        }
       }
+      if (cancelled) return;
 
       const es = new EventSource(url.toString());
       esRef.current = es;
@@ -123,21 +145,14 @@ export function useRoomSse(slug: string, lastKnownMessageId?: number): UseRoomSs
 
       es.onerror = () => {
         es.close();
-        retryCount++;
-        if (retryCount >= MAX_RETRIES) {
-          setStatus('disconnected');
-          return;
-        }
-        setStatus('reconnecting');
-        // Exponential backoff: 3s, 6s, 12s, 24s, 48s
-        const delay = 3000 * Math.pow(2, retryCount - 1);
-        reconnectTimeout = setTimeout(connect, delay);
+        scheduleReconnect();
       };
     };
 
     connect();
 
     return () => {
+      cancelled = true;
       if (esRef.current) {
         esRef.current.close();
       }

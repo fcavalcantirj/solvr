@@ -56,12 +56,17 @@ func RoomActorFromContext(ctx context.Context) *RoomActor {
 var (
 	errRoomTokenInvalid = errors.New("invalid or expired room token")
 	errRoomTokenScope   = errors.New("room token is not valid for this room")
+
+	errStreamTicketScope = errors.New("stream ticket is not valid for this room")
 )
 
 // resolveRoomActor identifies the caller for a room request. A per-agent room token is
 // checked first and authorizes only its own room; otherwise the account identity set by
 // the (optional) unified auth middleware is used. Returns (nil, nil) for anonymous.
 func resolveRoomActor(r *http.Request, room *models.Room, agentTokenRepo *db.RoomAgentTokenRepository) (*RoomActor, error) {
+	if ticket := StreamTicketFromContext(r.Context()); ticket != nil {
+		return streamTicketActor(r.Context(), room, ticket, agentTokenRepo)
+	}
 	if tok := roomBearerToken(r); tok != "" && token.IsAgentRoomToken(tok) {
 		if agentTokenRepo == nil {
 			return nil, errRoomTokenInvalid
@@ -77,6 +82,34 @@ func resolveRoomActor(r *http.Request, room *models.Room, agentTokenRepo *db.Roo
 		return &RoomActor{Type: RoomActorAgent, ID: identity.AgentID, Label: identity.AgentID, Credential: RoomCredentialRoomToken}, nil
 	}
 	return accountRoomActor(r), nil
+}
+
+// streamTicketActor is the actor a verified stream ticket stands for. The ticket is bound
+// to one room, and a room-token ticket is re-resolved through the token table right now, so
+// a token revoked or rotated after the ticket was minted opens nothing.
+func streamTicketActor(ctx context.Context, room *models.Room, ticket *auth.StreamTicketClaims, agentTokenRepo *db.RoomAgentTokenRepository) (*RoomActor, error) {
+	if ticket.RoomID != room.ID.String() {
+		return nil, errStreamTicketScope
+	}
+	switch ticket.Kind {
+	case RoomCredentialHuman:
+		return &RoomActor{Type: RoomActorHuman, ID: ticket.Subject, Label: "human:" + ticket.Subject, Credential: RoomCredentialHuman, Admin: ticket.Admin}, nil
+	case RoomCredentialAgentKey:
+		return &RoomActor{Type: RoomActorAgent, ID: ticket.Subject, Label: ticket.Subject, Credential: RoomCredentialAgentKey}, nil
+	case RoomCredentialRoomToken:
+		if agentTokenRepo == nil {
+			return nil, errRoomTokenInvalid
+		}
+		identity, err := agentTokenRepo.ResolveByHash(ctx, ticket.TokenHash)
+		if err != nil {
+			return nil, tokenMiss(ctx, agentTokenRepo, ticket.TokenHash)
+		}
+		if identity.RoomID != room.ID {
+			return nil, errStreamTicketScope
+		}
+		return &RoomActor{Type: RoomActorAgent, ID: identity.AgentID, Label: identity.AgentID, Credential: RoomCredentialRoomToken}, nil
+	}
+	return nil, errRoomTokenInvalid
 }
 
 // accountRoomActor returns the account identity (agent API key, or human JWT / user API
@@ -135,7 +168,8 @@ func roomActorAllowed(ctx context.Context, room *models.Room, actor *RoomActor, 
 // Apply the optional unified auth middleware first so account identities are present.
 //
 // Errors: 404 unknown room; 401 for an invalid/expired room token or an anonymous
-// write (CREDENTIAL_ROTATED for a token an explicit rotation replaced); 403 for a room token of another room or a caller who is not a participant.
+// write (CREDENTIAL_ROTATED for a token an explicit rotation replaced); 403 for a room token
+// or stream ticket of another room or a caller who is not a participant.
 func RoomPolicyGuard(roomRepo *db.RoomRepository, memberRepo *db.RoomMemberRepository, agentTokenRepo *db.RoomAgentTokenRepository, access RoomAccess) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -152,7 +186,7 @@ func RoomPolicyGuard(roomRepo *db.RoomRepository, memberRepo *db.RoomMemberRepos
 
 			actor, err := resolveRoomActor(r, room, agentTokenRepo)
 			switch {
-			case errors.Is(err, errRoomTokenScope):
+			case errors.Is(err, errRoomTokenScope), errors.Is(err, errStreamTicketScope):
 				roomGuardError(w, http.StatusForbidden, "FORBIDDEN", err.Error())
 				return
 			case errors.Is(err, ErrRoomCredentialRotated):

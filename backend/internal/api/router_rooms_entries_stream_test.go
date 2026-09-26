@@ -128,6 +128,9 @@ func TestRoomEntriesStream_OneAuthorizationPolicyAcrossCredentials(t *testing.T)
 	_, outsiderKey := registerRoomTestAgent(t, ts)
 	publicTok := handshakeRoomToken(t, ts, public, outsiderKey) // valid, but only for the public room
 	const invalidTok = "solvr_rt_notarealtoken"
+	publicTicket := mintTicketAt(t, ts.URL, public, publicTok) // bound to the public room
+	memberTicket := mintTicketAt(t, ts.URL, private, memberTok)
+	ownerTicket := mintTicketAt(t, ts.URL, private, ownerJWT)
 
 	privStream := ts.URL + "/v1/rooms/" + private + "/stream"
 	pubStream := ts.URL + "/v1/rooms/" + public + "/stream"
@@ -144,14 +147,14 @@ func TestRoomEntriesStream_OneAuthorizationPolicyAcrossCredentials(t *testing.T)
 		{"outsider agent key on private", privStream, outsiderKey, http.StatusForbidden},
 		{"outsider human on private", privStream, outsiderJWT, http.StatusForbidden},
 		{"other room's token on private", privStream, publicTok, http.StatusForbidden},
-		{"other room's token via ?access_token", privStream + "?access_token=" + publicTok, "", http.StatusForbidden},
+		{"other room's ticket", privStream + "?ticket=" + publicTicket, "", http.StatusForbidden},
 		{"invalid room token on private", privStream, invalidTok, http.StatusUnauthorized},
 		{"member room token header", privStream, memberTok, http.StatusOK},
-		{"member room token ?access_token", privStream + "?access_token=" + memberTok, "", http.StatusOK},
-		{"member room token ?token", privStream + "?token=" + memberTok, "", http.StatusOK},
+		{"member room token ticket", privStream + "?ticket=" + memberTicket, "", http.StatusOK},
+		{"member room token ?token is retired", privStream + "?token=" + memberTok, "", http.StatusBadRequest},
 		{"member agent key", privStream, memberKey, http.StatusOK},
 		{"owner human JWT header", privStream, ownerJWT, http.StatusOK},
-		{"owner human JWT ?access_token", privStream + "?access_token=" + ownerJWT, "", http.StatusOK},
+		{"owner human JWT ticket", privStream + "?ticket=" + ownerTicket, "", http.StatusOK},
 		// Canonical stream, public room: reads are open, but a presented room token must
 		// be valid and for THIS room — the same decision as GET /v1/rooms/{slug}/entries.
 		{"anonymous on public", pubStream, "", http.StatusOK},
@@ -199,7 +202,7 @@ func TestRoomEntriesStream_CanonicalAndAdapterDeliverTheSameEntries(t *testing.T
 
 	// Three live subscribers with three credentials on two routes.
 	stopKey := streamCapture(t, canonical, memberKey)
-	stopHuman := streamCapture(t, canonical+"?access_token="+ownerJWT, "")
+	stopHuman := streamCapture(t, canonical+"?ticket="+mintTicketAt(t, ts.URL, slug, ownerJWT), "")
 	stopAdapter := streamCapture(t, adapter, memberTok)
 	time.Sleep(300 * time.Millisecond) // let the subscriptions register
 

@@ -60,6 +60,14 @@ func roomPaths() map[string]interface{} {
 				"responses", withErrors(obj("201", jsonOK("Token issued", "HandshakeResponse", nil)), "400", "401", "403", "404", "409"),
 			),
 		),
+		"/rooms/{slug}/stream-ticket", obj(
+			"post", obj(
+				"summary", "Mint a short-lived ticket to open a room's stream", "operationId", "createRoomStreamTicket", "tags", []string{"Rooms"}, "security", securityRequired(),
+				"description", "A browser EventSource cannot set an Authorization header, and a long-lived credential in a URL is copied, logged and screenshotted. Send the credential here in the Authorization header (human JWT, user or agent API key, or room token) and open GET /rooms/{slug}/stream with ?ticket= for the ticket returned. The ticket is bound to this room and to the caller, lives ttl_seconds, opens only that stream and authorizes no write and no further ticket. The stream it opens still ends when the caller's access does (a removed member, a revoked or rotated room token). A stream that must reopen after the ticket expired asks for a new one: STREAM_TICKET_EXPIRED and STREAM_TICKET_INVALID are recoverable. An anonymous caller needs none: a public room's stream is open.",
+				"parameters", []map[string]interface{}{slugParam()},
+				"responses", withErrors(obj("201", jsonOK("Ticket issued", "StreamTicketResponse", nil)), "401", "403", "404", "429"),
+			),
+		),
 		"/rooms/{slug}/entries", obj(
 			"get", obj(
 				"summary", "List timeline entries", "operationId", "listRoomEntries", "tags", []string{"Rooms"}, "security", anonymousOrBearer(),
@@ -102,7 +110,7 @@ func roomPaths() map[string]interface{} {
 				"parameters", []map[string]interface{}{
 					slugParam(),
 					ref("parameters", "LastEventID"),
-					ref("parameters", "StreamAccessToken"),
+					ref("parameters", "StreamTicket"),
 					queryParam("after", "Alias for Last-Event-ID for clients that cannot send the header; the header wins when both are sent.", obj("type", "string")),
 					queryParam("lastEventId", "Alias for Last-Event-ID for a browser's first connect.", obj("type", "string")),
 					queryParam("type", "Only frames of this hub event type or typed event name.", obj("type", "string")),

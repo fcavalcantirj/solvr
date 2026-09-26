@@ -7,7 +7,6 @@ import (
 
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
-	"github.com/fcavalcantirj/solvr/internal/token"
 )
 
 // RoomAccessRecheck re-runs a room guard's authorization decision for a request that is
@@ -46,7 +45,7 @@ func policyRecheck(r *http.Request, room *models.Room, actor *RoomActor, access 
 	roomRepo *db.RoomRepository, memberRepo *db.RoomMemberRepository, agentTokenRepo *db.RoomAgentTokenRepository) RoomAccessRecheck {
 	var tokenHash string
 	if actor != nil && actor.Credential == RoomCredentialRoomToken {
-		tokenHash = token.HashToken(roomBearerToken(r))
+		tokenHash = RoomTokenHash(r)
 	}
 	return func(ctx context.Context) (bool, error) {
 		fresh, err := currentRoom(ctx, roomRepo, room)

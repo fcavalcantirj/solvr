@@ -20,6 +20,7 @@ var sensitiveParams = []string{
 	"apikey",
 	"token",
 	"access_token",
+	"ticket",
 	"refresh_token",
 	"secret",
 	"password",

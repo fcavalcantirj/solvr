@@ -24,11 +24,11 @@ func postHumanMessage(t *testing.T, url, bearer, content string) int {
 	return resp.StatusCode
 }
 
-// TestRoomSSE_AccessTokenQueryParam_AuthorizesPrivateStream proves the BART-156 SSE fix:
-// a browser EventSource (no Authorization header) can authenticate a private room's stream
-// via ?access_token= — with the human owner's JWT or a member's per-agent room token — while an
-// anonymous stream stays 403.
-func TestRoomSSE_AccessTokenQueryParam_AuthorizesPrivateStream(t *testing.T) {
+// TestRoomSSE_StreamTicket_AuthorizesPrivateStream keeps the BART-156 guarantee (a browser
+// EventSource, which has no Authorization header, can open a private room's stream as its
+// owner or a member, while an anonymous stream stays 403) and moves the transport from a
+// long-lived bearer in ?access_token= to a short-lived ?ticket= (idx 75 step 2).
+func TestRoomSSE_StreamTicket_AuthorizesPrivateStream(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	roomPreCleanup(t, pool)
@@ -37,14 +37,14 @@ func TestRoomSSE_AccessTokenQueryParam_AuthorizesPrivateStream(t *testing.T) {
 	slug, roomToken := createClosedRoom(t, ts, ownerJWT)
 	streamURL := ts.URL + "/v1/rooms/" + slug + "/stream"
 
-	// Anonymous EventSource (no header, no query token) → 403 on a closed room.
+	// Anonymous EventSource (no header, no ticket) → 403 on a closed room.
 	require.Equal(t, http.StatusForbidden, getStatus(t, streamURL, ""), "anon stream should be 403")
 
-	// ?access_token=<owner JWT> → the owner path in RoomAccessGuard authorizes the stream.
-	require.Equal(t, http.StatusOK, getStatus(t, streamURL+"?access_token="+ownerJWT, ""), "owner JWT via ?access_token should stream (200)")
+	// ?ticket=<ticket minted with the owner JWT> → the owner path authorizes the stream.
+	require.Equal(t, http.StatusOK, getStatus(t, streamURL+"?ticket="+mintTicketAt(t, ts.URL, slug, ownerJWT), ""), "owner ticket should stream (200)")
 
-	// ?access_token=<member's per-agent room token> → also authorized (parity with the header path).
-	require.Equal(t, http.StatusOK, getStatus(t, streamURL+"?access_token="+roomToken, ""), "room token via ?access_token should stream (200)")
+	// ?ticket=<ticket minted with a member's per-agent room token> → also authorized.
+	require.Equal(t, http.StatusOK, getStatus(t, streamURL+"?ticket="+mintTicketAt(t, ts.URL, slug, roomToken), ""), "room token ticket should stream (200)")
 
 	// A present Authorization header still wins / works unchanged.
 	require.Equal(t, http.StatusOK, getStatus(t, streamURL, ownerJWT), "owner JWT via header should stream (200)")

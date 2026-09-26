@@ -106,6 +106,7 @@ import type {
   APIRoomMember,
   APIRoomMembersResponse,
   APIRoomConnectResponse,
+  APIStreamTicketResponse,
 } from './api-types';
 
 class SolvrAPI extends SolvrAPIBase {
@@ -466,6 +467,18 @@ class SolvrAPI extends SolvrAPIBase {
   async getRoomConnect(slug: string, role = 'collaborator'): Promise<APIRoomConnectResponse> {
     return this.fetch<APIRoomConnectResponse>(
       `/v1/rooms/${encodeURIComponent(slug)}/connect?role=${encodeURIComponent(role)}`,
+    );
+  }
+
+  /**
+   * Mint a short-lived ticket to open a room's live stream (POST /v1/rooms/{slug}/stream-ticket).
+   * A browser EventSource cannot send Authorization, and a long-lived credential must not
+   * ride in the URL, so the stream is opened with ?ticket= from this call instead.
+   */
+  async createRoomStreamTicket(slug: string): Promise<APIStreamTicketResponse> {
+    return this.fetch<APIStreamTicketResponse>(
+      `/v1/rooms/${encodeURIComponent(slug)}/stream-ticket`,
+      { method: 'POST' },
     );
   }
 

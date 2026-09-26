@@ -7,9 +7,11 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	apimiddleware "github.com/fcavalcantirj/solvr/internal/api/middleware"
+	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 )
 
@@ -114,8 +116,14 @@ func TestOpenAPIConventions_CredentialTransportAndRequestLimits(t *testing.T) {
 	if at(t, conv, "credential_transport", "cookies") != false {
 		t.Error("the API reads no cookies; credential_transport.cookies must be false")
 	}
-	if at(t, conv, "credential_transport", "stream_query_parameter", "name") != "access_token" {
-		t.Error("the stream-only access_token query parameter is not documented")
+	if at(t, conv, "credential_transport", "stream_query_parameter", "name") != "ticket" {
+		t.Error("the stream-only ticket query parameter is not documented")
+	}
+	if at(t, conv, "credential_transport", "stream_query_parameter", "mint_route") != "POST /v1/rooms/{slug}/stream-ticket" {
+		t.Error("the route that mints a stream ticket is not documented")
+	}
+	if at(t, conv, "credential_transport", "stream_query_parameter", "ttl_seconds") != float64(auth.StreamTicketTTL/time.Second) {
+		t.Error("the stream ticket lifetime is not documented")
 	}
 	sameSet(t, "stream_query_parameter.routes", strings_(t, at(t, conv, "credential_transport", "stream_query_parameter", "routes")),
 		[]string{"/v1/rooms/{slug}/stream"})

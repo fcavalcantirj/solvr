@@ -331,6 +331,7 @@ var sensitiveBodyFields = []string{
 	"ticket",
 	"authorization",
 	"privatekey",
+	"logincode",
 }
 
 // secretTextPattern finds `name: value` and `name=value` pairs of sensitive names in text that
@@ -338,7 +339,7 @@ var sensitiveBodyFields = []string{
 // double- or single-quoted, cut off before its closing quote, or bare. It keeps the name and
 // replaces the value, so the log still shows which field the client sent. The boundary group
 // stops a name from being matched from the middle of a longer word (monkey is not key).
-var secretTextPattern = regexp.MustCompile(`(?i)((?:^|[^A-Za-z0-9_.\-])["']?(?:[A-Za-z0-9_.\-]*(?:password|passwd|token|secret|api[_-]?key|credential|ticket|authorization|private[_-]?key)[A-Za-z0-9_.\-]*|key)["']?\s*[:=]\s*)(?:"(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?|[^&\s,}\]"']*)`)
+var secretTextPattern = regexp.MustCompile(`(?i)((?:^|[^A-Za-z0-9_.\-])["']?(?:[A-Za-z0-9_.\-]*(?:password|passwd|token|secret|api[_-]?key|credential|ticket|authorization|private[_-]?key|login[_-]?code)[A-Za-z0-9_.\-]*|key)["']?\s*[:=]\s*)(?:"(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?|[^&\s,}\]"']*)`)
 
 // maxRequestBodyLogSize is the maximum size of request body to log (1KB).
 const maxRequestBodyLogSize = 1024

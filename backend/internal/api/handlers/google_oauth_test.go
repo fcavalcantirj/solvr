@@ -397,7 +397,7 @@ func TestGoogleCallback_CompleteFlow_NewUser(t *testing.T) {
 		users: make(map[string]*MockGoogleUserData),
 	}
 
-	handler := NewOAuthHandlersWithAllDeps(cfg, nil, nil, mockUserService, "", mockGoogleServer.URL)
+	handler := NewOAuthHandlersWithAllDeps(cfg, nil, nil, mockUserService, "", mockGoogleServer.URL).WithLoginCodes(&fakeLoginCodes{})
 
 	// Make request with valid code
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/google/callback?code=valid-code&state=state", nil)
@@ -405,18 +405,18 @@ func TestGoogleCallback_CompleteFlow_NewUser(t *testing.T) {
 
 	handler.GoogleCallback(rec, req)
 
-	// Should redirect to frontend with token
+	// Should redirect to frontend with a one-time login code
 	if rec.Code != http.StatusFound {
 		t.Errorf("expected status %d, got %d. Body: %s", http.StatusFound, rec.Code, rec.Body.String())
 	}
 
-	// Check redirect location contains token
+	// Check redirect location carries the code, never a token
 	location := rec.Header().Get("Location")
 	if location == "" {
 		t.Fatal("expected Location header to be set")
 	}
-	if !strings.Contains(location, "/auth/callback?token=") {
-		t.Errorf("expected redirect to /auth/callback?token=..., got %s", location)
+	if !strings.Contains(location, "/auth/callback?code=") || strings.Contains(location, "token=") {
+		t.Errorf("expected redirect to /auth/callback?code=... and no token, got %s", location)
 	}
 }
 
@@ -465,25 +465,25 @@ func TestGoogleCallback_CompleteFlow_ExistingUser(t *testing.T) {
 		},
 	}
 
-	handler := NewOAuthHandlersWithAllDeps(cfg, nil, nil, mockUserService, "", mockGoogleServer.URL)
+	handler := NewOAuthHandlersWithAllDeps(cfg, nil, nil, mockUserService, "", mockGoogleServer.URL).WithLoginCodes(&fakeLoginCodes{})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/google/callback?code=valid-code&state=state", nil)
 	rec := httptest.NewRecorder()
 
 	handler.GoogleCallback(rec, req)
 
-	// Should redirect to frontend with token
+	// Should redirect to frontend with a one-time login code
 	if rec.Code != http.StatusFound {
 		t.Errorf("expected status %d, got %d. Body: %s", http.StatusFound, rec.Code, rec.Body.String())
 	}
 
-	// Check redirect location contains token
+	// Check redirect location carries the code, never a token
 	location := rec.Header().Get("Location")
 	if location == "" {
 		t.Fatal("expected Location header to be set")
 	}
-	if !strings.Contains(location, "/auth/callback?token=") {
-		t.Errorf("expected redirect to /auth/callback?token=..., got %s", location)
+	if !strings.Contains(location, "/auth/callback?code=") || strings.Contains(location, "token=") {
+		t.Errorf("expected redirect to /auth/callback?code=... and no token, got %s", location)
 	}
 }
 

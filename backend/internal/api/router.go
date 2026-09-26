@@ -488,7 +488,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		authMethodRepoForOAuth := db.NewAuthMethodRepository(pool)
 		oauthUserService := services.NewOAuthUserService(userRepoForOAuth, authMethodRepoForOAuth)
 		oauthUserAdapter := services.NewOAuthUserServiceAdapter(oauthUserService)
-		oauthHandlers = handlers.NewOAuthHandlersWithUserService(oauthConfig, pool, nil, oauthUserAdapter)
+		oauthHandlers = handlers.NewOAuthHandlersWithUserService(oauthConfig, pool, nil, oauthUserAdapter).
+			WithLoginCodes(db.NewOAuthLoginCodeRepository(pool))
 		authUserRepo = db.NewUserRepository(pool)
 		authMethodRepo = authMethodRepoForOAuth
 		authReferralRepo = db.NewReferralRepository(pool)
@@ -546,6 +547,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// Per SPEC.md Part 5.2: Google OAuth
 		r.With(apimiddleware.BlockAgentAPIKeys).Get("/auth/google", oauthHandlers.GoogleRedirect)
 		r.With(apimiddleware.BlockAgentAPIKeys).Get("/auth/google/callback", oauthHandlers.GoogleCallback)
+
+		// One-time login code -> access token: the OAuth callbacks redirect with a code, never a JWT in a URL.
+		r.With(apimiddleware.BlockAgentAPIKeys).Post("/auth/oauth/exchange", oauthHandlers.ExchangeLoginCode)
 
 		// Email/password authentication (API-CRITICAL per PRD Task 48 & 49)
 		// SECURITY: Wrapped with BlockAgentAPIKeys middleware to prevent agents from

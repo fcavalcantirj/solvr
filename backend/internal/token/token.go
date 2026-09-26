@@ -20,6 +20,17 @@ func GenerateAgentRoomToken() (plaintext string, hashHex string, err error) {
 	return generatePrefixedToken(agentRoomTokenPrefix)
 }
 
+// loginCodePrefix marks the one-time code the OAuth callback hands to the browser instead of a
+// JWT. Like a stream ticket it is none of the bearer prefixes and not a JWT, so it can never be
+// replayed as a credential; it only ever works as the body of POST /v1/auth/oauth/exchange.
+const loginCodePrefix = "solvr_lc_"
+
+// GenerateLoginCode creates a one-time OAuth login code (solvr_lc_...).
+// Returns the plaintext code (given once to the browser) and its SHA-256 hash (stored).
+func GenerateLoginCode() (plaintext string, hashHex string, err error) {
+	return generatePrefixedToken(loginCodePrefix)
+}
+
 // IsAgentRoomToken reports whether a plaintext token is a per-agent room token.
 func IsAgentRoomToken(plaintext string) bool {
 	return len(plaintext) > len(agentRoomTokenPrefix) && plaintext[:len(agentRoomTokenPrefix)] == agentRoomTokenPrefix

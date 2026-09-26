@@ -76,6 +76,7 @@ type OAuthHandlers struct {
 	refreshDB     RefreshTokenDBInterface      // For refresh token lookup
 	userRepo      UserRepositoryInterface      // For user lookup
 	logoutDB      LogoutRefreshTokenDBInterface // For logout token deletion
+	loginCodes    OAuthLoginCodeStore           // One-time codes the callbacks redirect with (idx 75 step 5)
 }
 
 // NewOAuthHandlers creates a new OAuthHandlers instance.
@@ -262,20 +263,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Step 4: Generate JWT
-	jwtExpiry, err := time.ParseDuration(h.config.JWTExpiry)
-	if err != nil {
-		jwtExpiry = 15 * time.Minute // Default
-	}
-
-	accessToken, err := auth.GenerateJWT(h.config.JWTSecret, user.ID, user.Email, user.Role, jwtExpiry)
-	if err != nil {
-		slog.Error("JWT generation failed", "error", err)
-		writeInternalError(w, "Failed to generate access token")
-		return
-	}
-
-	// Step 5: Generate refresh token
+	// Step 4: Generate refresh token
 	refreshToken := auth.GenerateRefreshToken()
 
 	// Store refresh token if token store is available
@@ -291,14 +279,9 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Step 6: Redirect to frontend with token
-	// Per FE-022: Browser OAuth flow redirects to frontend callback page
-	frontendURL := h.config.FrontendURL
-	if frontendURL == "" {
-		frontendURL = "http://localhost:3000"
-	}
-	callbackURL := fmt.Sprintf("%s/auth/callback?token=%s", frontendURL, url.QueryEscape(accessToken))
-	http.Redirect(w, r, callbackURL, http.StatusFound)
+	// Step 5: Redirect to the frontend with a one-time login code. The access token is minted by
+	// POST /v1/auth/oauth/exchange, so no JWT ever rides in a URL.
+	h.redirectWithLoginCode(w, r, user.ID)
 }
 
 // GoogleRedirect handles GET /v1/auth/google
@@ -405,20 +388,7 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Step 4: Generate JWT
-	jwtExpiry, err := time.ParseDuration(h.config.JWTExpiry)
-	if err != nil {
-		jwtExpiry = 15 * time.Minute // Default
-	}
-
-	accessToken, err := auth.GenerateJWT(h.config.JWTSecret, user.ID, user.Email, user.Role, jwtExpiry)
-	if err != nil {
-		slog.Error("JWT generation failed", "error", err)
-		writeInternalError(w, "Failed to generate access token")
-		return
-	}
-
-	// Step 5: Generate refresh token
+	// Step 4: Generate refresh token
 	refreshToken := auth.GenerateRefreshToken()
 
 	// Store refresh token if token store is available
@@ -434,14 +404,9 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Step 6: Redirect to frontend with token
-	// Per FE-022: Browser OAuth flow redirects to frontend callback page
-	frontendURL := h.config.FrontendURL
-	if frontendURL == "" {
-		frontendURL = "http://localhost:3000"
-	}
-	callbackURL := fmt.Sprintf("%s/auth/callback?token=%s", frontendURL, url.QueryEscape(accessToken))
-	http.Redirect(w, r, callbackURL, http.StatusFound)
+	// Step 5: Redirect to the frontend with a one-time login code. The access token is minted by
+	// POST /v1/auth/oauth/exchange, so no JWT ever rides in a URL.
+	h.redirectWithLoginCode(w, r, user.ID)
 }
 
 // generateState generates a random state parameter for CSRF protection.

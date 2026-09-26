@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { Suspense } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -12,10 +12,17 @@ function AuthCallbackContent() {
   const { setToken } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(true);
+  // The login code works once. Taking it out of the address bar makes the search params
+  // change and re-runs the effect, and React StrictMode runs effects twice in development;
+  // neither may try the exchange again.
+  const startedRef = useRef(false);
 
   useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+
     const handleCallback = async () => {
-      const token = searchParams.get("token");
+      const code = searchParams.get("code");
       const errorParam = searchParams.get("error");
 
       if (errorParam) {
@@ -24,13 +31,31 @@ function AuthCallbackContent() {
         return;
       }
 
-      if (!token) {
-        setError("No authentication token received");
+      if (!code) {
+        setError("No login code received");
         setIsProcessing(false);
         return;
       }
 
+      // The redirect carries a one-time login code, never a token. Take it out of the
+      // address bar (history, analytics page views) before doing anything else.
+      window.history.replaceState(null, "", window.location.pathname);
+
       try {
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
+        const exchange = await fetch(`${apiBase}/v1/auth/oauth/exchange`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ login_code: code }),
+        });
+        const payload = await exchange.json().catch(() => null);
+        const token: string | undefined = payload?.data?.access_token;
+        if (!exchange.ok || !token) {
+          setError(payload?.error?.message || "Failed to authenticate. Please try again.");
+          setIsProcessing(false);
+          return;
+        }
+
         // Store token and fetch user info
         await setToken(token);
 
@@ -39,7 +64,6 @@ function AuthCallbackContent() {
         if (refCode) {
           localStorage.removeItem("solvr_referral_code");
           try {
-            const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.solvr.dev";
             await fetch(`${apiBase}/v1/auth/claim-referral`, {
               method: "POST",
               headers: {

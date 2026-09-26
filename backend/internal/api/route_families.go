@@ -370,6 +370,7 @@ var RouteFamilies = []RouteFamily{
 			"GET /v1/auth/github/callback",
 			"GET /v1/auth/google",
 			"GET /v1/auth/google/callback",
+			"POST /v1/auth/oauth/exchange",
 			"POST /v1/auth/claim-referral",
 			"POST /v1/auth/moltbook",
 		},

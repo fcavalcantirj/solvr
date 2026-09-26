@@ -528,7 +528,7 @@ func TestGitHubCallback_CompleteFlow_NewUser(t *testing.T) {
 		users: make(map[string]*MockUserData),
 	}
 
-	handler := NewOAuthHandlersWithDeps(cfg, nil, nil, mockUserService, mockGitHubServer.URL)
+	handler := NewOAuthHandlersWithDeps(cfg, nil, nil, mockUserService, mockGitHubServer.URL).WithLoginCodes(&fakeLoginCodes{})
 
 	// Make request with valid code
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback?code=valid-code&state=state", nil)
@@ -536,7 +536,7 @@ func TestGitHubCallback_CompleteFlow_NewUser(t *testing.T) {
 
 	handler.GitHubCallback(rec, req)
 
-	// Should redirect to frontend with token
+	// Should redirect to frontend with a one-time login code
 	if rec.Code != http.StatusFound {
 		t.Errorf("expected status %d, got %d. Body: %s", http.StatusFound, rec.Code, rec.Body.String())
 	}
@@ -558,10 +558,12 @@ func TestGitHubCallback_CompleteFlow_NewUser(t *testing.T) {
 		t.Errorf("expected redirect to frontend callback, got %s", location)
 	}
 
-	// Verify token is present in URL
-	token := redirectURL.Query().Get("token")
-	if token == "" {
-		t.Error("expected token parameter in redirect URL")
+	// Verify a login code, and no token, is present in the URL
+	if redirectURL.Query().Get("code") == "" {
+		t.Error("expected code parameter in redirect URL")
+	}
+	if redirectURL.Query().Has("token") {
+		t.Error("the redirect URL must not carry a token")
 	}
 }
 
@@ -615,14 +617,14 @@ func TestGitHubCallback_CompleteFlow_ExistingUser(t *testing.T) {
 		},
 	}
 
-	handler := NewOAuthHandlersWithDeps(cfg, nil, nil, mockUserService, mockGitHubServer.URL)
+	handler := NewOAuthHandlersWithDeps(cfg, nil, nil, mockUserService, mockGitHubServer.URL).WithLoginCodes(&fakeLoginCodes{})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback?code=valid-code&state=state", nil)
 	rec := httptest.NewRecorder()
 
 	handler.GitHubCallback(rec, req)
 
-	// Should redirect to frontend with token
+	// Should redirect to frontend with a one-time login code
 	if rec.Code != http.StatusFound {
 		t.Errorf("expected status %d, got %d. Body: %s", http.StatusFound, rec.Code, rec.Body.String())
 	}
@@ -644,10 +646,12 @@ func TestGitHubCallback_CompleteFlow_ExistingUser(t *testing.T) {
 		t.Errorf("expected redirect to frontend callback, got %s", location)
 	}
 
-	// Verify token is present in URL
-	token := redirectURL.Query().Get("token")
-	if token == "" {
-		t.Error("expected token parameter in redirect URL")
+	// Verify a login code, and no token, is present in the URL
+	if redirectURL.Query().Get("code") == "" {
+		t.Error("expected code parameter in redirect URL")
+	}
+	if redirectURL.Query().Has("token") {
+		t.Error("the redirect URL must not carry a token")
 	}
 }
 

@@ -112,14 +112,19 @@ curl -v http://localhost:8080/v1/auth/github
 1. Open your browser to: `http://localhost:8080/v1/auth/github`
 2. You'll be redirected to GitHub's authorization page
 3. Click **"Authorize [Your App Name]"**
-4. You'll be redirected to: `http://localhost:3000/auth/callback?token=eyJhbG...`
-5. The frontend can now extract the token from the URL
+4. You'll be redirected to: `http://localhost:3000/auth/callback?code=solvr_lc_...`
+5. The redirect carries a one-time login code (single use, 60 seconds), never a token: a JWT in a URL would reach browser history, host access logs and analytics. The frontend POSTs the code to `/v1/auth/oauth/exchange` and receives the token in the response body.
 
 ### 3. Verify the Token
 
-Extract the token from the redirect URL and test it:
+Exchange the login code from the redirect URL for a token, then test it:
 
 ```bash
+LOGIN_CODE="solvr_lc_..."
+curl -s -X POST http://localhost:8080/v1/auth/oauth/exchange \
+  -H "Content-Type: application/json" \
+  -d "{\"login_code\": \"$LOGIN_CODE\"}"   # data.access_token is the JWT
+
 TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
 # Test authenticated endpoint

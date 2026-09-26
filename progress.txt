@@ -5216,3 +5216,167 @@ UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: owner applies 000106 afte
   '--room-token'` prints 0.
 
 ================================================================================
+
+================================================================================
+2026-09-26 — Task idx 75 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Keep credentials safe and revocation reliable across streams and multiple agent sessions"
+SLICE 5 of N. Step 5 finding F5 (a JWT in the OAuth redirect URL) is fixed: one-time login code
+exchanged by POST. Backend + migration 000107 + frontend callback page.
+================================================================================
+
+TASK SELECTION [REAL, read this session]: same as slices 2-4. idx 24 (acceptance) still needs
+  idx 75/78 pieces; idx 52/53, 68, 73's remainder, 67 are gated as recorded in idx 74's slices;
+  idx 74 stays open (step 5 If-Match is an owner call); no description starts with URGENT. idx 75
+  is the first buildable false task; slice 4's REMAINING line named F5 with the recommended
+  one-time-code design, which this slice implements.
+
+WHAT WAS WRONG (F5 of slice 3, re-read in the code this session) [REAL]: handlers/oauth.go
+  GitHubCallback and GoogleCallback minted the 15-minute access JWT and redirected to
+  {frontend}/auth/callback?token=<JWT>; frontend/app/auth/callback/page.tsx read searchParams
+  "token"; frontend/app/layout.tsx mounts <GoogleAnalytics> on every page. A bearer credential in a
+  URL reaches browser history, the frontend host's access log and the analytics page view. What GA
+  stores is still [UNVERIFIED] (no browser/GA property here); the fix does not depend on it.
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` / `git diff --stat` before this append: 9
+  files modified (91 insertions, 76 deletions), 10 new files]:
+  Design: the callback redirects with ?code=<solvr_lc_...>, a single-use 60-second code. The
+  frontend POSTs it to POST /v1/auth/oauth/exchange {"login_code": ...} and receives
+  {data:{access_token, token_type:"Bearer", expires_in}} in the response body (Cache-Control:
+  no-store). The JWT is minted at exchange time from the redeemed account. Only the SHA-256 of a
+  code is stored; nothing is held in process memory; two API instances share the table.
+  Production (backend):
+  N migrations/000107_oauth_login_codes.{up,down}.sql: table oauth_login_codes(id, code_hash
+    CHAR(64) UNIQUE, user_id -> users ON DELETE CASCADE, expires_at, consumed_at, created_at) and an
+    index on expires_at.
+  N db/oauth_login_codes.go: OAuthLoginCodeRepository.Issue (generates the code, deletes codes that
+    expired more than an hour ago, inserts hash + DB-clock expiry) and Redeem (one CTE: UPDATE ...
+    SET consumed_at WHERE code_hash AND consumed_at IS NULL AND expires_at > NOW() RETURNING user_id,
+    joined to users with deleted_at IS NULL). ErrLoginCodeInvalid for unknown, used, expired or
+    deleted-account codes (indistinguishable to the caller). OAuthLoginUser{ID, Email, Role}.
+  M token/token.go: GenerateLoginCode (prefix solvr_lc_, 256 bits; not a bearer prefix, not a JWT).
+  N auth/login_code.go: LoginCodeTTL = 60 s.
+  N handlers/oauth_login_code.go: OAuthLoginCodeStore interface, OAuthHandlers.WithLoginCodes,
+    redirectWithLoginCode (500 INTERNAL_ERROR, no Location, when there is no store or Issue fails:
+    it never falls back to a token in the URL), ExchangeLoginCode (4 KiB body cap; 400
+    VALIDATION_ERROR for bad JSON / missing login_code; 401 INVALID_LOGIN_CODE; 500 on a store
+    failure).
+  M handlers/oauth.go (9 insertions, 44 deletions): OAuthHandlers gets a loginCodes field; the
+    "Generate JWT" step is gone from both callbacks (steps renumbered), and the redirect is
+    h.redirectWithLoginCode(w, r, user.ID). The refresh-token step is untouched.
+  M router.go: the OAuth handlers get db.NewOAuthLoginCodeRepository(pool); route
+    r.With(BlockAgentAPIKeys).Post("/auth/oauth/exchange", ...). M route_families.go: the route joins
+    the "auth" family (keep). M middleware/logging.go: body fields containing "logincode" (and
+    login_code text pairs) are redacted, since a FAILED exchange logs its request body.
+  Frontend: M app/auth/callback/page.tsx: reads ?code= (not ?token=), calls history.replaceState to
+    strip it before any request, POSTs to ${NEXT_PUBLIC_API_URL}/v1/auth/oauth/exchange, then
+    setToken(access_token) and the unchanged referral claim / return-URL logic. A startedRef guard
+    stops the effect from exchanging twice (React StrictMode runs effects twice in dev, and
+    replaceState changes the search params, which re-runs the effect). A URL that still carries
+    ?token= is refused ("No login code received"): it is not exchanged, stored or trusted.
+  Docs: M backend/docs/oauth-setup.md (the browser flow and the "verify the token" curl now
+    describe the code + exchange). SPEC.md NOT edited (idx 75's steps do not name it).
+  Tests (new): db/oauth_login_codes_test.go (6), handlers/oauth_login_code_test.go (3 callback
+    tests over GitHub and Google mock providers, 3 exchange tests), api/router_oauth_login_code_test.go
+    (5, real router + Postgres, two router instances), frontend/app/auth/callback/page.test.tsx (7).
+
+TDD / EVIDENCE:
+  RED [TEST]: db tests did not compile (repo undefined, /tmp/solvr_idx75_s5_red_db.log), then with
+    the code but without the table every test failed at runtime (/tmp/solvr_idx75_s5_red2_db.log);
+    handler tests did not compile (OAuthLoginCodeStore, WithLoginCodes, ExchangeLoginCode,
+    auth.LoginCodeTTL undefined, /tmp/solvr_idx75_s5_red_handlers.log); router tests got 404 on the
+    new route (/tmp/solvr_idx75_s5_red_api.log); frontend: 5 of 7 failed (/tmp/solvr_idx75_s5_red_fe.log;
+    the 2 that passed pin unchanged behavior: network failure and provider ?error=).
+  One RED-phase mistake of mine, fixed in the test only: my db fixture omitted users.referral_code
+    (NOT NULL, no default), so the first GREEN attempt failed on "null value in column referral_code".
+  GREEN [TEST]: DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+    solvr-postgres; migration 000107 applied there with `migrate up`, schema version 107; nothing else
+    touched), 0 SKIP: db TestOAuthLoginCode_ 6 PASS, api TestOAuthLoginCode_ 5 PASS, handlers
+    TestOAuthCallbacks_/TestExchangeLoginCode_/the four changed tests 10 PASS
+    (/tmp/solvr_idx75_s5_final_new.log, _four_changed.log); frontend page.test.tsx 7 PASS
+    (/tmp/solvr_idx75_s5_green_fe.log). go vet clean on the six touched Go packages; tsc --noEmit exit 0.
+  MUTATIONS [REAL], each restored from a cp copy and cmp-verified: (M1) logging.go without the
+    login_code redaction -> TestOAuthLoginCode_TheCodeNeverReachesTheAccessLog FAILS "the login code
+    reached the access log" (/tmp/solvr_idx75_s5_mut1.log); (M2) Redeem without `consumed_at IS
+    NULL` -> db TestOAuthLoginCode_RedeemsOnce... and ...ManyRacingRedeemsHaveOneWinner FAIL, and api
+    ...ExchangeOnTheRealRouter... and ...RacingExchangesAcrossTwoInstances... FAIL
+    (/tmp/solvr_idx75_s5_mut2.log). So the single-use and log tests are not vacuous.
+
+CHANGED EXISTING TESTS (the behavior they pinned is exactly what this slice replaces):
+  handlers/google_oauth_test.go TestGoogleCallback_CompleteFlow_NewUser and _ExistingUser asserted
+  strings.Contains(location, "/auth/callback?token="). handlers/oauth_test.go
+  TestGitHubCallback_CompleteFlow_NewUser and _ExistingUser asserted that the redirect URL's
+  `token` query parameter is non-empty. Each now builds its handler with .WithLoginCodes(
+  &fakeLoginCodes{}) (a test double for the store interface) and asserts "/auth/callback?code=" with
+  no "token=" (Google) / a non-empty `code` and no `token` parameter (GitHub). Same four tests, same
+  providers, same mocks otherwise. Covered additionally by the new TestOAuthCallbacks_Redirect
+  WithAOneTimeCodeAndNeverAJWT (both providers, also no JWT "eyJ", no fragment). All 4 PASS
+  (/tmp/solvr_idx75_s5_four_changed.log). No test deleted, skipped or loosened otherwise.
+
+FULL SUITES [REAL, each executed once on the final code, saved to a file]:
+  Backend `go test ./... -p 1 -count=1` exit 1, /tmp/solvr_idx75_s5_full.log; failing packages
+  internal/api (280 s), internal/api/handlers, internal/db (the documented set); 0 SKIP lines. Unique
+  `--- FAIL:` names (portable awk, subtests included): 77 now vs 79 in slice 4. None of my tests is in
+  the list. Diff: 1 new = TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring (expected 1050
+  actual 980, "the series must add up to the eligible total": data-state in the shared DB); [TEST] it
+  fails IDENTICALLY on a clean HEAD worktree (/tmp/solvr_idx75_s5_pulse_head.log, worktree removed);
+  slice 4 recorded it as one of the tests that flip with data. 3 gone (the two fixture/data-state
+  ones of slice 4). The handlers failures are the pre-existing TestGitHubOAuthRedirect_Integration
+  and TestGitHub{MissingCode,GitHubError,InvalidCode}_Integration (expect 302 where the handler
+  answers 400/502/200), all four present in slice 4's log.
+  go vet OK; gofmt clean on every file I created; oauth.go was ALREADY not gofmt-clean before my
+  change (`gofmt -l` on the original copy lists it) and I did not reformat it; check-file-size.sh:
+  35 violations, the same count as slice 4; router.go is one of them (1224 -> 1228 lines, one route
+  and its comment) and I did not split it.
+  Frontend `npx vitest run` (182 files): 1637 passed, 1 failed = app/api-docs/page.test.tsx "shared
+  Footer has /status link" "Test timed out in 5000ms" under the full parallel run; [TEST] the same
+  file run alone: 4 passed (/tmp/solvr_idx75_s5_fe_apidocs_alone.log). Unrelated to auth.
+
+BEHAVIOR CHANGE (v0) [TEST]:
+  - The OAuth callbacks (GitHub, Google) no longer put a JWT in the redirect; they redirect to
+    /auth/callback?code=solvr_lc_... . POST /v1/auth/oauth/exchange redeems it once within 60 s.
+  - The frontend refuses a /auth/callback?token= URL. An old bookmark or an in-flight login during
+    a mixed deploy fails with "No login code received" and the user signs in again.
+  - A failed exchange body is logged with login_code redacted.
+
+DEPLOY ORDER [REAL, read]: migration 000107 FIRST (the callbacks and the exchange read/write
+  oauth_login_codes; without it every OAuth login answers 500 INTERNAL_ERROR), then backend and
+  frontend TOGETHER (a new backend with the old frontend redirects to ?code= which the old page does
+  not read; a new frontend with the old backend gets ?token= which it now refuses). Migrations
+  000101/000102/000104/000105/000106/000107 are the owner's.
+
+NOT VERIFIED [UNVERIFIED]:
+  - No real browser: the page was tested in jsdom with fetch, history.replaceState and location mocked;
+    an actual GitHub/Google login, Next's replaceState/useSearchParams interplay and the GA page view
+    were not observed. The GA page_view for /auth/callback may still record ?code= for the moment
+    before replaceState; by then the code is single-use and 60 s, so a recorded copy opens nothing
+    once the browser has exchanged it.
+  - [REAL, read] router.go passes tokenStore nil to NewOAuthHandlersWithUserService, so the callbacks'
+    "store refresh token" block never runs in production and no refresh token reaches the browser.
+    Pre-existing, unchanged here. [REAL, read comment] generateState() is not verified in the
+    callbacks (login CSRF); pre-existing, out of idx 75's steps, not touched.
+  - The provider's own ?code= on GET /v1/auth/github/callback is not in logging.go sensitiveParams;
+    it is single-use at the provider and already redeemed when logged. Not changed.
+  - SPEC.md still describes ?token= on the room routes and the retired stream credentials (slice 3);
+    frontend/public/solvr-skill.zip is still stale (slice 4); agent scripts still accept --room-token
+    (idx 78 step 1).
+
+REMAINING FOR idx 75 [UNVERIFIED]: step 5 is NOT fully closed, so idx 75 cannot pass yet:
+  (a) The claim link: /claim/[token] (frontend/app/claim/[token]) still puts the claim token in the
+      page PATH, so GA/host logs see it, and claim_tokens.token is stored in the CLEAR (migration
+      000017; handlers/agents_claim.go re-issues the stored token on a repeat request). The claim
+      link is shared with a human on purpose, so the fix is a design choice (hash the stored token +
+      change the re-issue rule, and decide how the page hands the token to the API without a path
+      segment GA can see); it needs a migration and backend+frontend together.
+  (b) The stale zip / script drift above (idx 78 overlaps).
+  Steps 1-4 are covered by the tests named in slices 1-4.
+REMAINING FOR idx 74 (untouched): step 5 "require" If-Match, owner decision.
+
+UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: (1) apply 000107 on production through the admin
+  query route after 000106, then deploy backend AND frontend together; (2) sign in with GitHub and
+  with Google in a real browser and confirm you land signed in and the address bar never shows a
+  token (only /auth/callback?code=... for an instant, then /auth/callback); (3)
+  `curl -s -X POST https://api.solvr.dev/v1/auth/oauth/exchange -H 'Content-Type: application/json'
+  -d '{"login_code":"solvr_lc_bogus"}'` answers 401 with error.code INVALID_LOGIN_CODE; (4) in GA
+  Realtime/DebugView confirm no page_location contains "token=eyJ".
+
+================================================================================

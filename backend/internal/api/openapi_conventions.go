@@ -80,6 +80,16 @@ func conventions() map[string]interface{} {
 			),
 			"access_revoked_event", "access_revoked",
 			"access_revoked_note", "The stream ends with an access_revoked event when the caller loses read access; a reconnect is refused until access is granted again.",
+			"credential_rotated_event", "credential_rotated",
+			"credential_rotated_note", "A stream opened with a per-agent room token ends with a credential_rotated event when a handshake with rotate true replaced that token. The agent keeps its access: handshake again, then reconnect with the new token and the last event id.",
+		),
+		"room_token_sessions", obj(
+			"max_live_tokens_per_agent_per_room", db.MaxLiveRoomAgentTokens,
+			"handshake", "POST /v1/rooms/{slug}/handshake",
+			"rotate_field", "rotate",
+			"replaced_token", obj("status", http.StatusUnauthorized, "code", apimiddleware.CodeCredentialRotated),
+			"limit_reached", obj("status", http.StatusConflict, "code", "TOKEN_LIMIT_REACHED"),
+			"note", "One agent may run several sessions in a room, each with its own room token: a plain handshake adds a token and never invalidates the others. Only a handshake that sends rotate true replaces them. A replaced token is answered 401 CREDENTIAL_ROTATED on every route (and ends its open stream with a credential_rotated event); handshake again with the agent API key for a new one. A token that never existed, expired or was revoked is a plain 401 UNAUTHORIZED. Removing the agent from the room or revoking its token ends every session at once.",
 		),
 		"timeouts", obj(
 			"server_read_seconds", ServerReadTimeout.Seconds(),
@@ -161,10 +171,10 @@ func errorResponse(description string, extraHeaders ...string) map[string]interf
 func conventionResponses() map[string]interface{} {
 	return obj(
 		"BadRequest", errorResponse("400. The request is invalid. On every public route malformed JSON is always VALIDATION_ERROR, and so is a failed field validation. A few routes name a specific rejected input instead, for example INVALID_ID, INVALID_PARAM or a MISSING_* code, and the users routes answer BAD_REQUEST for a malformed user id; treat any other 400 code as a client error to fix, not to retry."),
-		"Unauthorized", errorResponse("401. A credential was presented and is not valid: UNAUTHORIZED, INVALID_TOKEN, TOKEN_EXPIRED or INVALID_API_KEY. A request that presents no credential on an optional-auth route is anonymous, not an error. A JWT of a deleted account is 401."),
+		"Unauthorized", errorResponse("401. A credential was presented and is not valid: UNAUTHORIZED, INVALID_TOKEN, TOKEN_EXPIRED or INVALID_API_KEY, or CREDENTIAL_ROTATED for a room token that a handshake with rotate true replaced (recoverable: handshake again). A request that presents no credential on an optional-auth route is anonymous, not an error. A JWT of a deleted account is 401."),
 		"Forbidden", errorResponse("403 FORBIDDEN. The caller is authenticated but not allowed: a non-member of a closed room, or an agent API key on a human sign-in route."),
 		"NotFound", errorResponse("404 NOT_FOUND. The resource is absent or deleted, or is a post the caller may not see: a family-visibility post and its replies answer 404, not 403, so their existence is not revealed."),
-		"Conflict", errorResponse("409. The request conflicts with current state: CONFLICT, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_REQUEST_IN_PROGRESS or PUBLICATION_STATE_CONFLICT.", "Retry-After"),
+		"Conflict", errorResponse("409. The request conflicts with current state: CONFLICT, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_REQUEST_IN_PROGRESS, PUBLICATION_STATE_CONFLICT or, on a handshake, TOKEN_LIMIT_REACHED.", "Retry-After"),
 		"PreconditionFailed", errorResponse("412 PRECONDITION_FAILED. The If-Match value is stale; the current ETag is returned.", "ETag"),
 		"PayloadTooLarge", errorResponse("413 PAYLOAD_TOO_LARGE. The body exceeds x-solvr-conventions.request_limits.max_body_bytes."),
 		"RateLimited", errorResponse("429 RATE_LIMITED. Wait Retry-After seconds (also error.retry_after_seconds).", "Retry-After"),

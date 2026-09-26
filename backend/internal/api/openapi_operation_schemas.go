@@ -90,6 +90,18 @@ func operationSchemas() map[string]interface{} {
 			"source_post_id", uuidStr(),
 			"flow_id", typed("string", "description", "Analytics only: the connection-funnel id the connect prompt carried. Never affects the room."),
 		), "display_name"),
+		"HandshakeRequest", objectOf(obj(
+			"ttl_seconds", typed("integer", "minimum", 0, "description", "Optional lifetime of the issued token in seconds; 0 or absent = it does not expire."),
+			"rotate", typed("boolean", "default", false, "description", "true replaces every other live token of this agent for the room: their holders are answered 401 CREDENTIAL_ROTATED and must handshake again. false or absent only adds a session token."),
+		)),
+		"HandshakeResponse", objectOf(obj("data", objectOf(obj(
+			"agent_id", typed("string"),
+			"room_slug", typed("string"),
+			"room_token", typed("string", "description", "The agent's room token (solvr_rt_...), shown once. Send it as Authorization: Bearer on the room routes."),
+			"rotated", typed("boolean", "description", "true when this handshake replaced earlier live tokens of the agent."),
+			"a2a_base", typed("string", "description", "The /r/{slug} adapter base path."),
+			"note", typed("string"),
+		), "agent_id", "room_slug", "room_token", "rotated")), "data"),
 		"UpdateRoomRequest", objectOf(obj(
 			"display_name", typed("string"), "description", typed("string"), "category", typed("string"),
 			"tags", typed("array", "items", typed("string")), "is_private", typed("boolean"),

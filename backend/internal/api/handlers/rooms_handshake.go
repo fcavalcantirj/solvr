@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -16,6 +17,9 @@ import (
 type handshakeRequest struct {
 	// TTLSeconds optionally makes the issued per-agent token short-lived. 0 = non-expiring.
 	TTLSeconds int `json:"ttl_seconds,omitempty"`
+	// Rotate replaces every live token this agent holds for the room. Without it a handshake
+	// only ADDS a session token and the agent's other sessions keep working.
+	Rotate bool `json:"rotate,omitempty"`
 }
 
 // Handshake handles POST /v1/rooms/{slug}/handshake (mission #3).
@@ -25,6 +29,13 @@ type handshakeRequest struct {
 // admitted to the room's member allowlist and issued its own per-agent room token
 // (solvr_rt_...), returned once. It then uses that token on /r/{slug}/* so its message
 // authorship is authoritative and it can be revoked individually.
+//
+// Sessions and rotation (idx 75 step 1): one agent may run several sessions, each holding
+// its own token, so a session that merely follows the connect instructions never
+// invalidates another. A plain handshake ADDS a token (409 TOKEN_LIMIT_REACHED once the agent
+// holds db.MaxLiveRoomAgentTokens live ones). {"rotate": true} is the explicit replacement:
+// every other live token of the agent stops working and its holder is answered 401
+// CREDENTIAL_ROTATED (recoverable: handshake again), on REST, the /r adapters and open streams.
 //
 // Authorization to handshake:
 //   - Public room: any registered agent may handshake.
@@ -79,8 +90,20 @@ func (h *RoomHandler) Handshake(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Issue the per-agent room token (shown once).
-	plaintext, err := h.agentTokenRepo.Issue(r.Context(), room.ID, agent.ID, req.TTLSeconds)
+	// Issue the per-agent room token (shown once): an extra session, or a rotation.
+	var plaintext string
+	replaced := 0
+	if req.Rotate {
+		plaintext, replaced, err = h.agentTokenRepo.Rotate(r.Context(), room.ID, agent.ID, req.TTLSeconds)
+	} else {
+		plaintext, err = h.agentTokenRepo.Issue(r.Context(), room.ID, agent.ID, req.TTLSeconds)
+	}
+	if errors.Is(err, db.ErrAgentRoomTokenLimit) {
+		roomWriteError(w, http.StatusConflict, "TOKEN_LIMIT_REACHED", fmt.Sprintf(
+			"this agent already holds %d live room tokens; reuse one of them, or handshake with rotate true to replace them all (the other sessions then get CREDENTIAL_ROTATED and must handshake again)",
+			db.MaxLiveRoomAgentTokens))
+		return
+	}
 	if err != nil {
 		slog.Error("handshake: failed to issue token", "error", err, "room_id", room.ID, "agent", agent.ID)
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to issue token")
@@ -92,8 +115,9 @@ func (h *RoomHandler) Handshake(w http.ResponseWriter, r *http.Request) {
 			"agent_id":   agent.ID,
 			"room_slug":  room.Slug,
 			"room_token": plaintext,
+			"rotated":    replaced > 0,
 			"a2a_base":   "/r/" + room.Slug,
-			"note":       "Use room_token as 'Authorization: Bearer' on /r/{slug}/* endpoints. It authenticates you as this agent and can be revoked without affecting others.",
+			"note":       "Use room_token as 'Authorization: Bearer' on /r/{slug}/* endpoints. It authenticates you as this agent and can be revoked without affecting others. Other sessions of this agent keep their own tokens; only a handshake with rotate true replaces them.",
 		},
 	})
 }

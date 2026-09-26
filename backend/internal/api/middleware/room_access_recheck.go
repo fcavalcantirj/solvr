@@ -13,7 +13,8 @@ import (
 // RoomAccessRecheck re-runs a room guard's authorization decision for a request that is
 // still open (a stream). It returns false when the caller no longer has the access the
 // guard granted: the room is gone, the room token was revoked or replaced, or the room
-// policy now refuses the actor. A non-nil error means the decision could not be read.
+// policy now refuses the actor. A non-nil error means the decision could not be read, except
+// ErrRoomCredentialRotated, which comes with false: the token was replaced by a rotation.
 type RoomAccessRecheck func(ctx context.Context) (bool, error)
 
 type roomAccessRecheckKey struct{}
@@ -53,7 +54,7 @@ func policyRecheck(r *http.Request, room *models.Room, actor *RoomActor, access 
 			return false, err
 		}
 		if tokenHash != "" {
-			if live, err := agentTokenRepo.IsLive(ctx, tokenHash, fresh.ID); err != nil || !live {
+			if live, err := tokenLive(ctx, agentTokenRepo, tokenHash, fresh.ID); err != nil || !live {
 				return false, err
 			}
 		}
@@ -69,6 +70,6 @@ func tokenRecheck(room *models.Room, tokenHash string, roomRepo *db.RoomReposito
 		if err != nil || fresh == nil {
 			return false, err
 		}
-		return agentTokenRepo.IsLive(ctx, tokenHash, fresh.ID)
+		return tokenLive(ctx, agentTokenRepo, tokenHash, fresh.ID)
 	}
 }

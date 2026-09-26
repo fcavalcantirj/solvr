@@ -66,9 +66,10 @@ func resolveRoomActor(r *http.Request, room *models.Room, agentTokenRepo *db.Roo
 		if agentTokenRepo == nil {
 			return nil, errRoomTokenInvalid
 		}
-		identity, err := agentTokenRepo.ResolveByHash(r.Context(), token.HashToken(tok))
+		hash := token.HashToken(tok)
+		identity, err := agentTokenRepo.ResolveByHash(r.Context(), hash)
 		if err != nil {
-			return nil, errRoomTokenInvalid
+			return nil, tokenMiss(r.Context(), agentTokenRepo, hash)
 		}
 		if identity.RoomID != room.ID {
 			return nil, errRoomTokenScope
@@ -134,7 +135,7 @@ func roomActorAllowed(ctx context.Context, room *models.Room, actor *RoomActor, 
 // Apply the optional unified auth middleware first so account identities are present.
 //
 // Errors: 404 unknown room; 401 for an invalid/expired room token or an anonymous
-// write; 403 for a room token of another room or a caller who is not a participant.
+// write (CREDENTIAL_ROTATED for a token an explicit rotation replaced); 403 for a room token of another room or a caller who is not a participant.
 func RoomPolicyGuard(roomRepo *db.RoomRepository, memberRepo *db.RoomMemberRepository, agentTokenRepo *db.RoomAgentTokenRepository, access RoomAccess) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -153,6 +154,9 @@ func RoomPolicyGuard(roomRepo *db.RoomRepository, memberRepo *db.RoomMemberRepos
 			switch {
 			case errors.Is(err, errRoomTokenScope):
 				roomGuardError(w, http.StatusForbidden, "FORBIDDEN", err.Error())
+				return
+			case errors.Is(err, ErrRoomCredentialRotated):
+				roomGuardError(w, http.StatusUnauthorized, CodeCredentialRotated, rotatedTokenMessage(room.Slug))
 				return
 			case err != nil:
 				roomGuardError(w, http.StatusUnauthorized, "UNAUTHORIZED", err.Error())

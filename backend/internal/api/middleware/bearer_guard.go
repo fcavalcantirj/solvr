@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -64,6 +65,10 @@ func BearerGuard(roomRepo *db.RoomRepository, agentTokenRepo *db.RoomAgentTokenR
 			tokenHash := token.HashToken(plaintext)
 			identity, err := agentTokenRepo.ResolveByHash(r.Context(), tokenHash)
 			if err != nil {
+				if errors.Is(tokenMiss(r.Context(), agentTokenRepo, tokenHash), ErrRoomCredentialRotated) {
+					roomGuardError(w, http.StatusUnauthorized, CodeCredentialRotated, rotatedTokenMessage(chi.URLParam(r, "slug")))
+					return
+				}
 				bearerGuardUnauthorized(w, "invalid or expired room token")
 				return
 			}

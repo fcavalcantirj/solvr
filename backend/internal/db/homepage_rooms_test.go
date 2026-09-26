@@ -158,7 +158,7 @@ func (f *roomStatsFixture) authenticate(roomID uuid.UUID, agentName string) {
 	_, err := f.pool.Exec(f.ctx, `
 		INSERT INTO room_agent_tokens (room_id, agent_id, token_hash)
 		VALUES ($1, $2, $3)
-		ON CONFLICT (room_id, agent_id) DO NOTHING
+		ON CONFLICT (token_hash) DO NOTHING
 	`, roomID, agentName, "hash_"+f.suffix+"_"+agentName)
 	require.NoError(f.t, err, "issue room token to %s", agentName)
 }

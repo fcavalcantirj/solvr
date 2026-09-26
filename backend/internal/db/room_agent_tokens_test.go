@@ -37,10 +37,12 @@ func TestRoomAgentTokenRepository_IssueResolveExpireRevoke(t *testing.T) {
 		t.Fatalf("resolved identity = %+v; want room=%s agent=agent_tok_x", id, room.ID)
 	}
 
-	// Re-issuing replaces the previous token (old hash no longer resolves).
-	tok2, err := repo.Issue(ctx, room.ID, "agent_tok_x", 3600)
+	// Rotating replaces the previous token (old hash no longer resolves). Issue used to do
+	// this on every call; since idx 75 step 1 a plain Issue ADDS a session (see
+	// room_agent_tokens_sessions_test.go) and only the explicit Rotate replaces.
+	tok2, _, err := repo.Rotate(ctx, room.ID, "agent_tok_x", 3600)
 	if err != nil {
-		t.Fatalf("Issue #2: %v", err)
+		t.Fatalf("Rotate: %v", err)
 	}
 	if _, err := repo.ResolveByHash(ctx, token.HashToken(tok)); err != db.ErrAgentRoomTokenNotFound {
 		t.Fatalf("old token still resolves; err=%v want ErrAgentRoomTokenNotFound", err)

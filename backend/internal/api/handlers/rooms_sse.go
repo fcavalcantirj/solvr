@@ -252,8 +252,8 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 		var stopWatch func()
 		accessCh, stopWatch = h.hubMgr.WatchAccess(hub.NewRoomID(room.ID))
 		defer stopWatch()
-		if !streamStillAuthorized(r.Context(), recheck, room) {
-			writeAccessRevoked(w, flusher)
+		if end := streamEndReason(r.Context(), recheck, room); end != nil {
+			end.write(w, flusher)
 			return
 		}
 	}
@@ -293,15 +293,17 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 			}
 
 		case <-accessCh:
-			if !streamStillAuthorized(r.Context(), recheck, room) {
-				writeAccessRevoked(w, flusher)
+			if end := streamEndReason(r.Context(), recheck, room); end != nil {
+				end.write(w, flusher)
 				return
 			}
 
 		case <-heartbeat.C:
-			if recheck != nil && !streamStillAuthorized(r.Context(), recheck, room) {
-				writeAccessRevoked(w, flusher)
-				return
+			if recheck != nil {
+				if end := streamEndReason(r.Context(), recheck, room); end != nil {
+					end.write(w, flusher)
+					return
+				}
 			}
 			// D-04: Send heartbeat comment to keep connection alive and detect dead clients.
 			fmt.Fprintf(w, ": heartbeat\n\n")
@@ -316,24 +318,42 @@ func (h *RoomSSEHandler) streamRoom(w http.ResponseWriter, r *http.Request, room
 	}
 }
 
-// streamStillAuthorized re-runs the guard's decision for an open stream. A decision that
-// cannot be read (database error) keeps the stream: the next signal or heartbeat retries.
-func streamStillAuthorized(ctx context.Context, recheck apimiddleware.RoomAccessRecheck, room *models.Room) bool {
+// streamEnd is why the server ends an open stream. No retry directive follows it: a
+// reconnect is refused by the guard until the caller has the access, or a new token, again.
+type streamEnd struct{ event, code, message string }
+
+var (
+	// endAccessRevoked: the caller lost read access (member removed, token revoked, room
+	// made private or deleted).
+	endAccessRevoked = &streamEnd{"access_revoked", "ACCESS_REVOKED", "read access to this room was removed"}
+	// endCredentialRotated: an explicit rotation replaced the room token the stream was
+	// opened with. The caller keeps its access and recovers by handshaking again.
+	endCredentialRotated = &streamEnd{"credential_rotated", apimiddleware.CodeCredentialRotated,
+		"this room token was replaced by a rotation; handshake again with your agent API key for a new one"}
+)
+
+func (e *streamEnd) write(w http.ResponseWriter, flusher http.Flusher) {
+	fmt.Fprintf(w, "event: %s\ndata: {\"code\":%q,\"message\":%q}\n\n", e.event, e.code, e.message)
+	flusher.Flush()
+}
+
+// streamEndReason re-runs the guard's decision for an open stream and returns why it must
+// end, or nil while the caller is still authorized. A decision that cannot be read
+// (database error) keeps the stream: the next signal or heartbeat retries.
+func streamEndReason(ctx context.Context, recheck apimiddleware.RoomAccessRecheck, room *models.Room) *streamEnd {
 	ok, err := recheck(ctx)
-	if err != nil {
+	switch {
+	case errors.Is(err, apimiddleware.ErrRoomCredentialRotated):
+		return endCredentialRotated
+	case err != nil:
 		if ctx.Err() == nil {
 			slog.Warn("room stream access recheck failed; keeping the stream", "error", err, "room_id", room.ID)
 		}
-		return true
+		return nil
+	case !ok:
+		return endAccessRevoked
 	}
-	return ok
-}
-
-// writeAccessRevoked ends a stream whose caller lost read access. No retry directive: a
-// reconnect is refused by the guard (403/401/404) until access is granted again.
-func writeAccessRevoked(w http.ResponseWriter, flusher http.Flusher) {
-	fmt.Fprintf(w, "event: access_revoked\ndata: {\"code\":\"ACCESS_REVOKED\",\"message\":\"read access to this room was removed\"}\n\n")
-	flusher.Flush()
+	return nil
 }
 
 // maxSSEReplay caps how many missed entries one connection replays; a longer gap ends the

@@ -4476,3 +4476,205 @@ After that deploy, POST https://api.solvr.dev/v1/rooms with body `{"broken":` an
 credential and confirm 400 with error.code VALIDATION_ERROR.
 
 ================================================================================
+
+================================================================================
+2026-09-25 — Task idx 75 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep credentials safe and revocation reliable across streams and multiple agent sessions"
+SLICE 1 of N. Step 1: two sessions of one agent must not silently invalidate each other by
+following the same instructions; define handshake rotation explicitly; return a recoverable
+credential-rotated error.
+================================================================================
+
+TASK SELECTION [REAL, read this session]: idx 24 (acceptance) still needs idx 75/78 pieces;
+  idx 52/53, 68, 73's remainder and idx 67 are gated as recorded in slices 11-24; no description
+  starts with URGENT. idx 74 was the first buildable false task for 24 slices. What is left of
+  it is NOT buildable without an owner call: step 5 says "Require version or If-Match" and the
+  code keeps it optional. Measured this session what requiring it would touch: 3 routes (PATCH
+  /v1/posts/{id}, /v1/replies/{id}, /v1/rooms/{slug}); the frontend's api.updatePost is called by
+  components/posts/post-editor.tsx and components/shared/edit-post-form.tsx and sends no
+  If-Match ([REAL, read] the fetch wrapper in lib/api-base.ts returns response.json() only, so
+  it has no ETag to send); [REAL, heuristic same-line grep] 68 backend test lines mention PATCH
+  together with /v1/posts/, /v1/replies/ or /v1/rooms/ (33 / 7 / 28) and 40 backend test files
+  mention PATCH, not checked call by call; every external agent that PATCHes a post. The
+  other leftovers are owner decisions already recorded (global rate limiter never fires ->
+  idx 79 step 5; dead flags handler) or not in idx 74's steps (undocumented room ops). So idx 74
+  stays open with passes=false and I did NOT flip it. idx 75 is the next false task that can be
+  built now; step 1 is the gap earlier journals named (slice 1 of idx 59: "Two-session
+  handshake rotation is idx 75 step 1").
+
+SPIKE FIRST [REAL, MEASURED] (throwaway backend/internal/api/zz_spike25_test.go, deleted before
+  the commit; log /tmp/solvr_idx75_s1_spike.log; DATABASE_URL=postgres://solvr:solvr_dev@
+  localhost:5435/solvr_test, the local docker solvr-postgres): one agent, two sessions on one
+  room. Session B handshakes (the connect prompt tells every session to). Result:
+  - tokA != tokB; room_agent_tokens holds ONE row per (room, agent) (PRIMARY KEY (room_id,
+    agent_id); Issue = INSERT ... ON CONFLICT DO UPDATE SET token_hash).
+  - session A: GET /v1/rooms/{slug}/entries 401 UNAUTHORIZED "invalid or expired room token";
+    POST /r/{slug}/message 401 the same; identical to the answer a garbage token gets.
+  - session A's already-open stream ended with event access_revoked (wrong cause: access was
+    never revoked, the credential was replaced).
+  - ping-pong: A recovers by handshaking again -> B's token is dead (401), A(new) 200.
+
+DESIGN [mine, v0 = no backwards compat]:
+  - A handshake ADDS a session token; the agent's other tokens keep working.
+  - {"rotate": true} is the explicit replacement: in one transaction (advisory lock per
+    (room, agent)) every live token is marked rotated_at = NOW() and a new one is inserted.
+  - A rotated token is answered 401 CREDENTIAL_ROTATED (message names POST
+    /v1/rooms/{slug}/handshake) on RoomPolicyGuard routes and BearerGuard (/r) routes, and its
+    open streams end with event credential_rotated (not access_revoked). A token that never
+    existed, expired or was revoked stays 401 UNAUTHORIZED: revoke DELETES every row of the
+    pair (tombstones included), so an owner action is never disguised as "just handshake again".
+  - Bound: MaxLiveRoomAgentTokens = 10 live tokens per (room, agent); one more is 409
+    TOKEN_LIMIT_REACHED (message names rotate), never a silent eviction. Rotation is never
+    refused for the limit. MaxRotatedRoomAgentTokens = 20 tombstones per pair, none older than
+    30 days, purged inside Rotate.
+  - Handshake 201 gains data.rotated (true when earlier live tokens were replaced).
+
+TDD RED [TEST]:
+  - db (a compile failure, recorded as such): room_agent_tokens_sessions_test.go
+    did not compile: repo.Rotate, repo.WasRotated, db.MaxLiveRoomAgentTokens,
+    db.ErrAgentRoomTokenLimit undefined.
+  - api (/tmp/solvr_idx75_s1_red_api.log, after adding only the constants + error var the tests
+    need to compile): 4 of 5 FAIL for the intended reasons (data.rotated missing: expected
+    false actual nil; 11th handshake 201 not 409; rotate:"yes" 201 not 400). The 5th,
+    RevokingAnAgentIsNotReportedAsARotation, PASSES on the old code by construction; it is a
+    guard for the new behavior, not a RED.
+  - openapi (/tmp/solvr_idx75_s1_red_openapi.log): "spec has no paths./rooms/{slug}/handshake.post"
+    and "spec has no x-solvr-conventions.room_token_sessions". prompt (/tmp/..._red_prompt.log):
+    12 subtests FAIL (CREDENTIAL_ROTATED not named).
+GREEN [TEST], DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, -race, all PASS
+  none SKIP:
+  - db TestRoomAgentTokenRepository_* 9 PASS (8 new + the edited old one), /tmp/..._green_db.log.
+    New: IssueAddsASessionAndKeepsTheOthers, RotateReplacesEverySessionAndRemembersThem,
+    RotateOnAnAgentWithNoTokenJustIssues, LiveTokensAreCappedAndRotationClearsTheCap (an expired
+    token frees its slot), ConcurrentHandshakesNeverExceedTheCap (30 goroutines: exactly 10
+    issued, 20 refused), ConcurrentRotationsLeaveExactlyOneLiveToken (8 goroutines),
+    RevokeForgetsRotatedTokensToo, RotatedTokensAreRememberedOnlyUpToABound (25 rotations).
+  - api TestRoomTokenSessions_* 4 + TestRoomHandshake_RotateMustBeABoolean, plus the 18
+    neighbours I ran with them (TestRoomHandshake_*, TestRoomTokenRevoke_*, TestRoomStream_*,
+    TestRoomSharedTokenRetired_*, TestRoomPrivateConnect_*, TestRoomFamily_*): 23 PASS,
+    /tmp/solvr_idx75_s1_green_api.log. The new tests use two API instances on one database:
+    the rotation reaches the other instance's open streams (/v1 stream, /r stream) through the
+    000104 NOTIFY path, the account-key stream and the planner keep running, every replaced
+    token is CREDENTIAL_ROTATED on GET/POST of /v1/rooms/{slug}/entries and GET/POST of /r/...
+    on both instances with request_id in the envelope, a reconnect with a replaced token is
+    refused 401 CREDENTIAL_ROTATED, and recovering by handshaking again does not kill the
+    session that rotated.
+  - openapi TestOpenAPI*/TestRouteFamilies_*/discovery: 34 PASS incl. the 2 new,
+    /tmp/solvr_idx75_s1_green_openapi.log. prompts: 65 PASS incl. the new
+    TestConnectPrompts_ExplainSessionsAndRotation (12 subtests), /tmp/..._green_prompt.log.
+  [REAL] mutations, each restored from a copy and cmp-verified: (1) plain Issue made to rotate
+    -> IssueAddsASession... and SecondHandshakeLeavesTheFirstSessionAlone FAIL; (2) BearerGuard's
+    rotation branch disabled -> ExplicitRotation FAILS on "POST /r/{slug}/message"; (3) tokenLive
+    no longer reports rotation -> ExplicitRotation FAILS on "stream says the credential was
+    rotated". Logs /tmp/solvr_idx75_s1_mut{1,2,3}.log.
+  [REAL] migration 000105 applied to the LOCAL test DB only. That DB reported schema_migrations
+    version 103 although the 000104 triggers were present (applied by hand earlier); `migrate up`
+    re-ran 000104 (idempotent: CREATE OR REPLACE / DROP TRIGGER IF EXISTS) then 000105. `migrate
+    down 1` restored the exact old schema (PK (room_id, agent_id), unique idx_room_agent_tokens_hash,
+    the 000104 trigger) and `up` re-applied it. DB is now at version 105.
+
+CHANGED EXISTING TESTS (the behavior they pinned is what this task replaces):
+  (a) TestRoomAgentTokenRepository_IssueResolveExpireRevoke (db/room_agent_tokens_test.go).
+      It asserted: "Re-issuing replaces the previous token (old hash no longer resolves)" via
+      repo.Issue #2, then `ResolveByHash(old) == ErrAgentRoomTokenNotFound` and the new token
+      resolves. Since this slice a plain Issue ADDS a session, so I pointed that call at the
+      explicit replacement, repo.Rotate; every assertion is byte-identical (old token no longer
+      resolves, new resolves, expiry, revoke). The additive behavior it used to contradict is
+      pinned by the new IssueAddsASessionAndKeepsTheOthers. PASSES (green_db.log).
+  (b) TestGetRoomPulse_SeparatesVerifiedIdentitiesFromNameOnlyPresence (db/homepage_rooms_test.go)
+      failed in the full suite: its fixture issues a token with raw SQL `ON CONFLICT (room_id,
+      agent_id) DO NOTHING`, a constraint migration 000105 drops (ERROR 42P10). Fixture only: the
+      conflict target is now (token_hash), the new primary key; every assertion is unchanged.
+      PASSES with the 11 other homepage room tests (/tmp/solvr_idx75_s1_homepage.log).
+  No test deleted, skipped, renamed or loosened. router_rooms_token_revoke_test.go's "the old
+  token stays dead after the re-handshake" (401) still passes unchanged: a revoked token is
+  deleted, not rotated.
+
+FILES ([REAL] `git status --porcelain` / `git diff --numstat` before this append):
+  Production:
+  A backend/migrations/000105_room_token_sessions.{up,down}.sql (34 + 23): rotated_at column;
+    PK moves from (room_id, agent_id) to token_hash (ADD PRIMARY KEY USING INDEX); index on
+    (room_id, agent_id); the notify trigger also fires on rotated_at.
+  M backend/internal/db/room_agent_tokens.go (+100/-30, 173 lines): Issue (additive, capped),
+    Rotate (returns plaintext, replaced count), WasRotated; ResolveByHash / IsLive exclude
+    rotated; constants and ErrAgentRoomTokenLimit.
+  A backend/internal/api/middleware/room_token_rotation.go (51): CodeCredentialRotated,
+    ErrRoomCredentialRotated, tokenMiss, tokenLive.
+  M middleware/bearer_guard.go (+5), room_policy.go (+7/-3), room_access_recheck.go (+4/-3).
+  M handlers/rooms_handshake.go (+27/-3): rotate flag, 409 TOKEN_LIMIT_REACHED, data.rotated.
+  M handlers/rooms_sse.go (+40/-20): streamEnd (access_revoked / credential_rotated) replaces
+    streamStillAuthorized + writeAccessRevoked; the access_revoked bytes are unchanged.
+  M handlers/connect_prompts.go (+3): the recovery section names CREDENTIAL_ROTATED and rotate true.
+  M db/homepage_rooms.go (+3/-1): verifiedPresence also requires rotated_at IS NULL.
+  M openapi_room_paths.go (+9), openapi_operation_schemas.go (+12), openapi_conventions.go (+12/-2):
+    POST /rooms/{slug}/handshake operation, HandshakeRequest / HandshakeResponse,
+    x-solvr-conventions.room_token_sessions, streams.credential_rotated_event, and the shared
+    401 / 409 rows now name CREDENTIAL_ROTATED / TOKEN_LIMIT_REACHED.
+  Tests: A db/room_agent_tokens_sessions_test.go (265), A api/router_rooms_token_sessions_test.go
+    (236), A api/openapi_handshake_test.go (71), A handlers/connect_prompts_sessions_test.go
+    (24); M db/room_agent_tokens_test.go (+5/-3), M db/homepage_rooms_test.go (+1/-1).
+  progress.txt is this append. spec.json and SPEC.md unchanged (step 1 does not ask for SPEC.md).
+  Frontend untouched. gofmt clean on every touched file, go build ./... ok, go vet clean on
+  internal/api, internal/api/handlers, internal/api/middleware, internal/db. check-file-size.sh:
+  35 violations, none of them files I touched (openapi_paths.go 880 and openapi_schemas.go 867 are
+  older); every touched or new file is under 460 lines.
+
+FULL SUITE [REAL, executed once on the final production code, NOT GREEN]: `go test ./... -p 1
+  -count=1` exit 1, /tmp/solvr_idx75_s1_full.log; failing packages internal/api,
+  internal/api/handlers, internal/db (the documented set). Unique FAIL names vs slice 24's
+  (/tmp/solvr_idx74_s24_full.log, 76): 77 now, 2 new, 1 gone.
+    new  TestGetRoomPulse_SeparatesVerifiedIdentitiesFromNameOnlyPresence: CAUSED by this slice
+         (raw-SQL fixture, see (b)); fixed after the run, [TEST] PASSES in its focused run.
+         The full suite was NOT re-run after that one-line fixture fix.
+    new  TestHomepageSearch_ChartAddsUpToTheTotalBesideIt: standing data-state failure, not
+         caused here. [REAL] run alone it fails with "window 24h: the chart and the total are one
+         measurement" expected 1139 actual 1133 (search analytics rows); slice 24 recorded the
+         same test failing alone and passing in the full run by data-state luck.
+    gone TestRoomEntriesStream_OneAuthorizationPolicyAcrossCredentials (the slice-24 fixture
+         username collision; data-state, not fixed by me).
+  The other 75 are the standing set (fixtures with referral_code NOT NULL, data-state).
+  Frontend untouched, npm test not run.
+
+BEHAVIOR CHANGE (v0) [REAL]:
+  - POST /v1/rooms/{slug}/handshake no longer replaces the agent's earlier token: it adds one.
+    An external client that relied on "a new handshake kills the old token" as a way to revoke
+    a leaked token must now send {"rotate": true} (or ask the owner to revoke).
+  - New codes: 401 CREDENTIAL_ROTATED (replaced token), 409 TOKEN_LIMIT_REACHED (11th live token),
+    stream event credential_rotated. A stream whose token was replaced no longer says
+    access_revoked.
+  - Sessions accumulate until rotated: tokens without ttl_seconds never expire, so an agent that
+    handshakes on every start and never rotates hits the limit after 10 sessions and gets
+    409 TOKEN_LIMIT_REACHED with the way out named in the message.
+
+DEPLOY ORDER WARNING [REAL, read]: migration 000105 and this code go together. Old code on the
+  new schema fails every handshake (its INSERT ... ON CONFLICT (room_id, agent_id) has no
+  constraint any more: 500). New code on the old schema fails every token lookup (no rotated_at
+  column: room agents get 401). Owner applies 000105 (and the still-pending 000101/000102/000104
+  from earlier slices) on production via the admin query route, then deploys immediately.
+
+NOT VERIFIED [UNVERIFIED]:
+  - Rotation across THREE instances / a lost NOTIFY: the tests use two instances; the 30 s
+    heartbeat recheck (idx 59) covers a lost notice by design but I did not fault-inject it here.
+  - The rest of idx 75 steps 2-5 was not touched or re-derived: step 2 (short-lived stream
+    tickets instead of ?access_token= bearer credentials in URLs) is not built; step 3
+    (revocation on established connections) was built in idx 59 slices; step 4 (private-room
+    admission through the owner allowlist, no shared tokens) and step 5 (credentials in logs,
+    analytics, error reports, screenshots, copied links) are unchecked by me.
+  - No OpenAPI validator on this machine (unchanged); the handshake operation rests on the
+    structural tests and the served-route walk.
+  - Agent-facing skill drift, for idx 78 step 1: skill/scripts/solvr.sh stores the per-agent token
+    in ~/.config/solvr/rooms.json and reuses it without handshaking again (test_room_credentials.sh
+    check 5); on a 401 CREDENTIAL_ROTATED it should handshake again. frontend/public/skill.md and
+    references/api.md still describe the retired shared token (slice 6 of idx 59 noted it).
+
+REMAINING FOR idx 75 [UNVERIFIED]: step 2 (stream ticket), then verify/close steps 3-5.
+REMAINING FOR idx 74 (untouched): step 5 "require" If-Match — owner decision, blast radius above.
+
+UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: owner applies migrations 000101, 000102,
+  000104 and 000105 to production through the admin query route, then deploys backend. After
+  that, with two sessions of one agent on a room: handshake twice and confirm both tokens read
+  https://api.solvr.dev/v1/rooms/<slug>/entries 200; handshake a third time with
+  {"rotate": true} and confirm the first two now answer 401 with error.code CREDENTIAL_ROTATED
+  and the new token answers 200.
+
+================================================================================

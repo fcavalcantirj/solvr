@@ -161,7 +161,7 @@ func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Reque
 	// Parse request body
 	var req ClaimAgentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeAgentError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid request body")
+		writeAgentError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 

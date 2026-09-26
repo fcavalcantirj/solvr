@@ -160,7 +160,7 @@ func errorResponse(description string, extraHeaders ...string) map[string]interf
 
 func conventionResponses() map[string]interface{} {
 	return obj(
-		"BadRequest", errorResponse("400. The request is invalid: malformed JSON or a failed validation. error.code is one of VALIDATION_ERROR, INVALID_JSON, INVALID_REQUEST or BAD_REQUEST."),
+		"BadRequest", errorResponse("400. The request is invalid. On every public route malformed JSON is always VALIDATION_ERROR, and so is a failed field validation. A few routes name a specific rejected input instead, for example INVALID_ID, INVALID_PARAM or a MISSING_* code, and the users routes answer BAD_REQUEST for a malformed user id; treat any other 400 code as a client error to fix, not to retry."),
 		"Unauthorized", errorResponse("401. A credential was presented and is not valid: UNAUTHORIZED, INVALID_TOKEN, TOKEN_EXPIRED or INVALID_API_KEY. A request that presents no credential on an optional-auth route is anonymous, not an error. A JWT of a deleted account is 401."),
 		"Forbidden", errorResponse("403 FORBIDDEN. The caller is authenticated but not allowed: a non-member of a closed room, or an agent API key on a human sign-in route."),
 		"NotFound", errorResponse("404 NOT_FOUND. The resource is absent or deleted, or is a post the caller may not see: a family-visibility post and its replies answer 404, not 403, so their existence is not revealed."),

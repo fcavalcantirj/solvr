@@ -219,6 +219,22 @@ func TestOpenAPIConventions_ReusableComponentsAndErrorEnvelope(t *testing.T) {
 	}
 }
 
+// The 400 row tells a client what to branch on for a body that is not JSON: one code, the
+// one the API answers on every public route (pinned against the running router by
+// TestStatusContract_MalformedJSONBodyIsOneValidationError), not a list of alternatives.
+func TestOpenAPIConventions_BadRequestNamesOneCodeForMalformedJSON(t *testing.T) {
+	spec := servedSpec(t)
+	desc, _ := at(t, spec, "components", "responses", "BadRequest", "description").(string)
+	if !strings.Contains(desc, "malformed JSON is always VALIDATION_ERROR") {
+		t.Errorf("BadRequest must say malformed JSON is always VALIDATION_ERROR, got %q", desc)
+	}
+	for _, retired := range []string{"INVALID_JSON", "INVALID_REQUEST"} {
+		if strings.Contains(desc, retired) {
+			t.Errorf("BadRequest still offers %s as a malformed-body code: %q", retired, desc)
+		}
+	}
+}
+
 // Every $ref in the served document must resolve, so a typo in the new components cannot
 // ship a spec that a client generator rejects.
 func TestOpenAPIConventions_EveryReferenceResolves(t *testing.T) {

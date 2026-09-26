@@ -136,7 +136,7 @@ func (h *RoomMessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request
 
 	var req postMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 	if req.AgentName == "" {
@@ -211,7 +211,7 @@ func (h *RoomMessagesHandler) PostHumanMessage(w http.ResponseWriter, r *http.Re
 
 	var req postHumanMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 

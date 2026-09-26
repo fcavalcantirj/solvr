@@ -78,7 +78,7 @@ func (h *RoomPresenceHandler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 
 	var req joinRoomRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 
@@ -200,7 +200,7 @@ func (h *RoomPresenceHandler) Heartbeat(w http.ResponseWriter, r *http.Request) 
 
 	var req heartbeatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 
@@ -330,7 +330,7 @@ func (h *RoomPresenceHandler) LeaveRoom(w http.ResponseWriter, r *http.Request) 
 
 	var req leaveRoomRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 

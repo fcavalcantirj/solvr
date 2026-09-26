@@ -75,7 +75,7 @@ func (h *RoomEntriesHandler) PostEntry(w http.ResponseWriter, r *http.Request) {
 
 	var req postEntryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 	authorID := actor.ID

@@ -326,7 +326,7 @@ func (h *UsersHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	// Parse request body
 	var req UpdateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeUsersError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid request body")
+		writeUsersError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 

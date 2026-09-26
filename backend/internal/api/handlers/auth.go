@@ -118,7 +118,7 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	// Step 1: Parse request body
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+		writeErrorResponse(w, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request body")
 		return
 	}
 
@@ -290,7 +290,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	// Step 1: Parse request body
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body")
+		writeErrorResponse(w, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid request body")
 		return
 	}
 

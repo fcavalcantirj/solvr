@@ -131,7 +131,7 @@ func (h *RoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 
 	var req createRoomRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 
@@ -358,7 +358,7 @@ func (h *RoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 
 	var params models.UpdateRoomParams
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 

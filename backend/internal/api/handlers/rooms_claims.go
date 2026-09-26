@@ -47,7 +47,7 @@ func (h *RoomClaimsHandler) Claim(w http.ResponseWriter, r *http.Request) {
 	}
 	var req acquireClaimRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 	if req.Key == "" {
@@ -157,7 +157,7 @@ func (h *RoomClaimsHandler) ListClaims(w http.ResponseWriter, r *http.Request) {
 func decodeClaimAction(w http.ResponseWriter, r *http.Request) (claimActionRequest, bool) {
 	var req claimActionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return req, false
 	}
 	if req.Key == "" {

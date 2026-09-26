@@ -57,7 +57,7 @@ func (h *RoomHandler) ArchiveRoom(w http.ResponseWriter, r *http.Request) {
 	// Body is optional: an empty body archives without a result reference.
 	var req archiveRoomRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-		roomWriteError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		roomWriteError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 

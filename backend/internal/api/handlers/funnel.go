@@ -53,7 +53,7 @@ type ingestFunnelRequest struct {
 func (h *FunnelHandler) IngestBrowserEvent(w http.ResponseWriter, r *http.Request) {
 	var req ingestFunnelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body")
+		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 		return
 	}
 

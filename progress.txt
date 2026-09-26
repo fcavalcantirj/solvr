@@ -4347,3 +4347,132 @@ https://api.solvr.dev/v1/openapi.json and confirm paths contains /rooms/{slug}/e
 x-solvr-conventions.pagination. This slice adds no migration.
 
 ================================================================================
+
+================================================================================
+2026-09-25 — Task idx 74 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Standardize errors, pagination, concurrency, and retry behavior across the public API"
+SLICE 24 of N. Step 3's malformed-body walk of path-parameter routes (the measurement slice 20
+left open) and the "four codes for one 400 condition" remainder it exposed.
+================================================================================
+
+TASK SELECTION [REAL]: idx 24 is an acceptance task (steps need two API instances, more than one
+client product and individual revocation; idx 75 and 78 are still false). I re-read the steps of
+idx 52, 53, 67, 68 and 73: 52 (90-day transition after cutover), 53 (rebuild indexes across the
+cutover), 68 (drop live legacy tables), 73's remainder (retire endpoints) and 67 (two clean agent
+environments against a test deployment) cannot be built or verified locally today. No description
+starts with URGENT. idx 74 is the first buildable false task.
+
+SPIKE (throwaway test, deleted before the commit; logs /tmp/solvr_idx74_s24_spike.log and
+_spike2.log; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local docker
+solvr-postgres):
+  [REAL, MEASURED] 45 mounted POST/PUT/PATCH routes with a path parameter (excluding /admin and
+  /stream) x anonymous / agent key / human JWT / room owner's agent key x {malformed id, absent
+  id, live id} sent the body `{"broken":`. 0 answers were 5xx, 0 errors/timeouts, 0 error
+  answers outside the envelope (every 4xx had error.code and request_id). Malformed and absent
+  ids: 401/404 or 400 VALIDATION_ERROR, no route read the body ahead of the lookup in a way that
+  produced a 5xx. Live 2xx answers to a malformed body: POST /v1/posts/{id}/view (x3) and POST
+  /v1/rooms/{slug}/reopen — routes that take no body.
+  [REAL, MEASURED] the split slice 20 saw is real for path-parameter routes too. Live-resource
+  400s for a malformed body: rooms family (PATCH /rooms/{slug}, /archive, /entries, /handshake,
+  /members, /messages) answered INVALID_JSON; posts/replies/comments/votes/save-as-post answered
+  VALIDATION_ERROR. Slice 20 also saw INVALID_REQUEST (auth, agents/claim) and BAD_REQUEST
+  (PATCH /v1/me).
+  [REAL, read] every INVALID_JSON / INVALID_REQUEST writer in the tree is a json Decode failure;
+  no test, no frontend, cli, mcp-server or SDK file and no ~/.claude/skills/solvr script reads
+  INVALID_JSON, INVALID_REQUEST, or BAD_REQUEST (only .planning/.../03-01-PLAN.md mentions them).
+  VALIDATION_ERROR is the code of 246 StatusBadRequest sites (heuristic grep) vs 24 malformed-body
+  sites for the other codes (19 changed here + 5 admin), so it has the smallest blast radius.
+
+DECISION [mine, v0 = no backwards compat]: a body that is not valid JSON is 400 VALIDATION_ERROR
+on every public route. The 5 admin-surface writers (handlers/admin.go x2, incidents_admin.go x3,
+INVALID_JSON) are operator routes, not the public API, and are NOT changed.
+
+TDD RED [TEST]: TestStatusContract_MalformedJSONBodyIsOneValidationError (new) walked every
+  POST/PUT/PATCH route outside /admin (50 walked) with live post / reply / room and five callers
+  (anonymous, agent key, human JWT, room owner agent key, its per-agent room token). It FAILED
+  on 31 calls across 22 routes, all for the intended reason (INVALID_JSON, INVALID_REQUEST or
+  BAD_REQUEST where VALIDATION_ERROR is required). Two bugs of mine on the way, both fixed in the
+  test, neither in production code: the walk-size floor I guessed (55) was above the measured 50
+  (now > 45); and the test created a room without cleanup so a re-run hit DUPLICATE_ROOM (now
+  roomPreCleanup at start and in t.Cleanup, the convention of the room tests).
+  TestOpenAPIConventions_BadRequestNamesOneCodeForMalformedJSON (new) FAILED: the served 400 row
+  said "error.code is one of VALIDATION_ERROR, INVALID_JSON, INVALID_REQUEST or BAD_REQUEST".
+GREEN [TEST]: both PASS (--- PASS, not SKIP). Same local test DB. go build ./... ok, go vet on
+  internal/api and internal/api/handlers clean, gofmt -l clean on every touched file.
+  Targeted run: TestOpenAPI* (8 older + 11 operations + 9 conventions incl. the new one),
+  TestRouteFamilies_* 3, TestStatusContract_MalformedJSONBodyIsOneValidationError: all PASS.
+
+IMPLEMENTATION [REAL, read back from git diff]: 19 one-word code changes, nothing else in the
+handlers. INVALID_JSON -> VALIDATION_ERROR in funnel.go(1), rooms.go(2), rooms_archive.go(1),
+rooms_claims.go(2), rooms_entries.go(1), rooms_events.go(1), rooms_handshake.go(1),
+rooms_members.go(1), rooms_messages.go(2), rooms_presence.go(3). INVALID_REQUEST ->
+VALIDATION_ERROR in auth.go(2, login and register) and agents_claim.go(1). BAD_REQUEST ->
+VALIDATION_ERROR in users.go(1, the PATCH /v1/me decode site only; the users routes' BAD_REQUEST
+for a malformed user id is untouched, pinned by TestGetUserProfile_InvalidUUID). Messages and
+statuses unchanged. openapi_conventions.go: the BadRequest response now says "On every public
+route malformed JSON is always VALIDATION_ERROR, and so is a failed field validation" and names
+the exceptions (INVALID_ID, INVALID_PARAM, MISSING_*, users' BAD_REQUEST). The old sentence
+listed four codes and was also incomplete: the tree writes ~28 distinct 400 codes.
+
+FILES ([REAL] `git status --porcelain` / `git diff --stat` before this append):
+  Production (13 handlers, +1 openapi text): M handlers/agents_claim.go, auth.go, funnel.go,
+    rooms.go, rooms_archive.go, rooms_claims.go, rooms_entries.go, rooms_events.go,
+    rooms_handshake.go, rooms_members.go, rooms_messages.go, rooms_presence.go, users.go
+    (19 lines each 1:1) and M openapi_conventions.go (1 line).
+  Tests: A backend/internal/api/router_malformed_body_contract_test.go (118 lines, 1 test);
+    M backend/internal/api/openapi_conventions_test.go (+16, 1 test, appended).
+  progress.txt is this append. spec.json and SPEC.md unchanged. Frontend untouched.
+  No existing test deleted, skipped, renamed or loosened: none asserted the old codes (grep of
+  every _test.go for INVALID_JSON and INVALID_REQUEST: no hit; BAD_REQUEST hits are query-param
+  and user-id rows, not the decode site). check-file-size.sh lists none of the touched files.
+
+BEHAVIOR CHANGE (v0) [REAL]: malformed JSON on POST /v1/auth/login, /v1/auth/register,
+  /v1/agents/claim, /v1/analytics/funnel, /v1/rooms, PATCH /v1/rooms/{slug}, POST
+  /v1/rooms/{slug}/{archive,entries,handshake,members,messages} and the /r/{slug}/* adapters
+  (claim, claim/release, claim/renew, events, heartbeat, join, leave, message), and PATCH
+  /v1/me, now answers error.code VALIDATION_ERROR instead of INVALID_JSON / INVALID_REQUEST /
+  BAD_REQUEST. Status stays 400. Any external client that branched on the old strings breaks
+  (none found in this repo).
+
+FULL SUITE [REAL, executed once on the final code, NOT GREEN]: `go test ./... -p 1 -count=1`
+  exit 1, /tmp/solvr_idx74_s24_full.log; failing packages internal/api, internal/api/handlers,
+  internal/db. Failing names compared with slice 23's (/tmp/solvr_idx74_s23_full.log): 77 vs 77
+  unique names, 1 new and 1 gone, both data-state dependent:
+    new  TestRoomEntriesStream_OneAuthorizationPolicyAcrossCredentials: `duplicate key value
+         violates unique constraint "users_username_key"` inserting the fixture user in
+         createRoomTestUser (router_rooms_test.go:70) — the username is
+         roomtest_<UnixNano%1e6>, which on this clock has ~1000 distinct values, so leftover rows
+         from an earlier test collide. Failed before any HTTP request. [TEST] PASSES run alone
+         (log lines of that run only: --- PASS). Not caused by this diff (that fixture does not
+         touch error codes); a fixture defect, not fixed here.
+    gone TestHomepageSearch_ChartAddsUpToTheTotalBesideIt: FAILS run alone against the same DB,
+         so it is a standing failure that passed in the full run by data-state luck.
+  The standing failures (fixtures with referral_code NOT NULL, data-state) are otherwise
+  unchanged. Frontend untouched, npm test not run.
+
+NOT VERIFIED [UNVERIFIED]:
+  - Routes whose first path parameter is neither a post, reply nor room (users, agents, pins,
+    notifications, comments, answers, approaches, ...) were walked with malformed and absent ids
+    only in the spike, not with a live id, so their body-read 400 code is not pinned by the new
+    test. Where they answer 400 for a malformed body in the spike they were VALIDATION_ERROR.
+  - The 5 admin writers still answer INVALID_JSON (intentional, see DECISION).
+  - No OpenAPI validator on this machine; unchanged from slice 23.
+
+REMAINING FOR idx 74 [UNVERIFIED]:
+  - step 5: "require" If-Match: code keeps it optional (no 428); owner decision (unchanged).
+  - step 3: dead flags handler (no /v1/flags route, own unscoped TargetExists) — delete or keep
+    is an owner call; the malformed-body walk is now done for posts/replies/rooms.
+  - full suite: ~77 standing failures, fixtures and data-state; room fixture usernames collide
+    (see above).
+  - owner decision (unchanged from slice 22): the global rate limiter never fires; wire it
+    after auth or drop it, and give POST /v1/agents/register a limit (idx 79 step 5).
+  - undocumented in OpenAPI still: room handshake/members/archive/reopen/save-as-post/publish,
+    the /r/* adapters, post/reply votes.
+
+UAT (for when idx 74 closes) [UNVERIFIED, owner-only]: unchanged from slices 6/10/22/23 — owner
+applies migrations 000101 and 000102 to production through the admin query route, then deploys
+(with slice 22 included; slices 19-21 must not ship without it). This slice adds no migration.
+After that deploy, POST https://api.solvr.dev/v1/rooms with body `{"broken":` and a valid
+credential and confirm 400 with error.code VALIDATION_ERROR.
+
+================================================================================

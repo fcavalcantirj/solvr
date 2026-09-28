@@ -6203,3 +6203,141 @@ REMAINING (next slices, in order):
 
 UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
   000105-000108. This slice adds no migration.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 5 of N: step 5, static-query half of the dropped-table probe (checks the step-1 source
+scan's regex limits with the database's own name resolution). Steps 3/4 and the step-6 gate
+still open.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated exactly as
+  slice 1 recorded. idx 76 continues from slice 4's REMAINING list (static queries first).
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` before this append: 3 tracked files
+  modified, 3 untracked new files; `git diff --stat`: legacy_dependencies.go +3/-2,
+  legacy_dependencies_test.go +20, legacy_dropped_workers_test.go +9/-4]:
+  A backend/internal/db/legacy_static_sql.go (177): StaticSQLStatement{File, Line, SQL};
+    ExtractStaticSQL(root) parses every non-test .go file (vendor/node_modules/dot dirs
+    skipped, same walk as ScanLegacySourceDependencies) with go/parser and returns, sorted by
+    file+line, every string that folds at compile time (literal, raw string, + concatenation,
+    package constants incl. ones declared in another file of the same directory, resolved to
+    a fixpoint) and starts with an upper-case SELECT/INSERT/UPDATE/DELETE/WITH + whitespace.
+    A concatenation with a runtime value yields its constant parts; fmt verbs stay in the text.
+    A bare constant identifier is recorded at its declaration, not at each use. An unparsable
+    file is an error naming the file.
+  A backend/internal/db/legacy_static_sql_test.go (63, 2 tests, pure):
+    TestExtractStaticSQL_FoldsLiteralsAndPackageConstants (cross-file constant, raw string with
+    line, runtime-concat prefix, Sprintf format, prose "hello SELECT"/"update failed" ignored,
+    another package's same-named constant not mixed in, _test.go and vendor excluded);
+    TestExtractStaticSQL_ReportsUnparsableSource.
+  A backend/internal/jobs/legacy_dropped_queries_test.go (118, 1 test):
+    TestLegacyDroppedDatabase_StaticQueriesExposeOnlyRegisteredDependencies: extracts the
+    backend's static SQL, prepares each statement (pgconn unnamed Prepare, nothing executes) on
+    the scratch database migrated to head BEFORE the drop, then again AFTER the legacy tables
+    are dropped. A statement that prepared before and fails after must fail on a missing legacy
+    relation (anything else fails the test), its file must be found by the regex source scan
+    ("hidden legacy dependency" otherwise) and carry a non-keep, not-Done code: disposition.
+    Positive controls: >0 statements prepared; internal/db/approaches.go must fail after the
+    drop. Logs coverage, the per-file count of statements that do not prepare, and the pending
+    code: entries no static statement exercised.
+  M backend/internal/jobs/legacy_dropped_workers_test.go: newLegacyDroppedDatabase gains a
+    variadic beforeDrop hook (runs on the migrated schema before DROP TABLE) and a url field on
+    the returned struct. The existing worker test's call site and assertions are unchanged.
+  M backend/internal/db/legacy_dependencies.go: legacySQLTableRe also matches a legacy table
+    qualified with the public schema and/or quoted (`FROM public.approaches`, `JOIN "answers"`,
+    `INTO public."comments"`): mutation 2 below showed the scan missing it.
+  M backend/internal/db/legacy_dependencies_test.go: new test
+    TestScanLegacySourceDependencies_FindsSchemaQualifiedAndQuotedTables (3 legacy files found,
+    `FROM public.replies` / `JOIN "posts"` not). Existing tests untouched.
+  No registry entry changed (the probe found no hidden dependency). No migration, handler,
+  job or frontend change. No existing test changed, skipped or removed.
+
+RESULT [TEST] /tmp/solvr_idx76_s5_probe1.log (local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test; scratch DB created and dropped there):
+  571 static statements extracted, 504 prepared on the migrated schema, 67 did not. 24 files
+  have statements that prepare before and fail after the drop; ALL 24 are registered pending
+  code: entries the regex scan already finds (e.g. answers.go 12, approaches.go 11,
+  contribution_migration.go 11, briefing.go 9, approach_relationships.go 8, responses.go 7,
+  stats.go 6, cmd/backfill-embeddings 6, cmd/moderate-existing 1, posts.go 1 at :916 = the
+  crystallization candidate query slice 4 measured). So for static SQL the step-1 inventory has
+  no hidden file [TEST].
+  The 67 that do not prepare [REAL, one debug run /tmp/solvr_idx76_s5_debug.log, debug line
+  removed and the file restored from cp]: runtime-built SQL (fmt verbs / a dynamic WHERE or
+  tail), 22 HTTP route strings ("DELETE /v1/...", route_families.go 19 +
+  middleware/api_usage.go 3), one "WITH RESULTS" text in homepage_search.go, and one quorum-database
+  query in cmd/migrate-quorum. The only SQL whose TABLE name is built at runtime is
+  legacy_relation_remap.go:94/121 (grep `(FROM|JOIN|INTO|UPDATE|TABLE) *(%s|%v|"|`+)`), already a
+  registered pending entry. Legacy tables visible in non-preparable text are only in registered
+  files (answers.go, comments.go, search.go, visibility.go).
+  Pending code: entries no static statement exercised (regex scan is their only evidence):
+  briefing_diff, ideas, leaderboard, leaderboard_tags, posts_list_filters, problems, questions,
+  sitemap, visibility, reputation/sql_builder (type-literal filters or runtime-built SQL).
+
+TDD:
+  RED [TEST] /tmp/solvr_idx76_s5_red.log: build failed, undefined ExtractStaticSQL /
+    StaticSQLStatement. GREEN /tmp/solvr_idx76_s5_green1.log: 2 PASS.
+  The probe test passed on its first run (there was no hidden dependency to find); its power
+  is shown by mutations instead.
+  Scan RED [TEST] /tmp/solvr_idx76_s5_scan_red.log: new scan test FAIL, actual []string(nil).
+    GREEN /tmp/solvr_idx76_s5_db_green.log: -run 'Legacy|TestExtractStaticSQL' 19 PASS, 0 FAIL,
+    0 SKIP (incl. CoversTheSourceTree + catalog test: widening found no new file).
+  MUTATIONS [TEST], sources restored from cp and cmp-verified:
+    mut1 code:internal/db/answers.go marked done -> FAIL "reaches dropped legacy relations
+      [...] but is recorded as retire (done=true)" (mut1.log);
+    mut2 new file const `SELECT id FROM public.approaches WHERE id = $1` (before the regex
+      change) -> FAIL "the regex source scan does not find it: a hidden legacy dependency" +
+      "has no disposition" (mut2.log). This is what motivated the regex widening;
+    mut2b same file after the widening -> probe FAIL "has no disposition" and
+      TestLegacyDependencyRegistry_CoversTheSourceTree FAIL "discovered legacy dependency
+      without a disposition: code:internal/db/zz_hidden_probe.go" (mut2b.log, mut2b_scan.log);
+      file deleted afterwards (test ! -e checked);
+    mut3 before-drop hook prepares nothing -> FAIL, 67 "prepared before the drop but fails
+      after it for an unrelated reason" (mut3.log): the before gate is what keeps runtime SQL
+      out of the verdict;
+    mut4 extractor stops resolving constants -> TestExtractStaticSQL_FoldsLiterals... FAIL
+      (mut4.log).
+  jobs package [TEST] `go test ./internal/jobs/ -count=1 -v` -> /tmp/solvr_idx76_s5_jobs.log:
+    55 PASS, 0 FAIL, 0 SKIP, incl. both TestLegacyDroppedDatabase_* (worker probe still green
+    with the refactored helper).
+  FULL internal/db PACKAGE [TEST] once, -p 1 -v, same DB -> /tmp/solvr_idx76_s5_dbpkg.log:
+    657 PASS, 66 FAIL, 6 SKIP vs slice 4 (657/63/6). comm vs /tmp/solvr_idx76_s4_dbpkg.log:
+    0 gone, 3 new: TestGetTrendingPosts_ExcludesDraft/PendingReview/Rejected ("expected open post
+    ... to appear in trending, but it did not"). Cause [REAL, psql + targeted rerun]: every full
+    db-package run leaves 3 'test-user' posts from internal/db/search_test.go
+    ("xqzsortvotes<ns> high votes" net 9, "... low votes" net 2, "Pattern: Solvr API Key Not in
+    Environment" net 5); with 4 full runs today (11:25, 11:49, 12:16, 12:40 UTC) 12 of them
+    outrank a fresh 0-vote post in GetTrendingPosts' 7-day score, so LIMIT 10 drops it (slice 4
+    had 9, still under 10). The 3 tests FAIL alone on that data
+    (/tmp/solvr_idx76_s5_trend_before.log); after deleting those 12 rows from solvr_test (no
+    approaches/answers referenced them) they PASS alone (/tmp/solvr_idx76_s5_trend_after.log).
+    Not caused by this slice; tests left unchanged. Pre-existing hygiene issue: search_test.go
+    leaves rows behind, so the trending tests fail again after ~4 full runs on a shared DB.
+    New in the log and passing: the 2 TestExtractStaticSQL_* and the new scan test.
+  go vet ./internal/db/ ./internal/jobs/ clean; gofmt -l on the 6 touched files empty.
+    check-file-size.sh: 35 violations, same as slices 1-4, none of these files.
+    Scratch databases left behind: 0 (pg_database checked).
+  FULL BACKEND (`go test ./...`): not run; changes are test code, one regex and one new file
+    in internal/db with no caller outside tests.
+
+NOT VERIFIED / LIMITS [UNVERIFIED unless stated]:
+  - Runtime-built SQL (67 statements, listed above) is not checked by the probe: for those the
+    regex scan stays the only evidence, and a legacy table named only in a runtime fragment
+    that is not in SQL position would be missed by both.
+  - Upper-case keywords only: a lower-case SQL literal would not be extracted (none starts a
+    literal today [REAL, grep for `select|insert|update|delete|with` after a backtick]).
+  - Type-literal dependencies (`type = 'problem'`) do not fail after a table drop; they remain
+    covered by the regex scan and the posts_type check only.
+  - CI's backend job has no DATABASE_URL, so this probe SKIPs there; local only.
+
+REMAINING (next slices, in order):
+  step 3/4: refactor or retire each pending code:/feature:/job: entry, incl. the translation
+    moderation verdict (comment -> reply) and embedding workers writing replies.embedding;
+    preserve earned badges/reputation as history, award nothing from migrated rows. Both
+    dropped-table probes (jobs + static queries) must stay green as entries flip to Done.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
+  000105-000108. This slice adds no migration.

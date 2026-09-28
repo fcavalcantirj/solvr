@@ -89,8 +89,9 @@ func LegacyCleanupBlockers(deps []LegacyDependency, registry map[string]LegacyDe
 
 var (
 	legacyTableWord = `(approaches|answers|responses|comments|approach_relationships|progress_notes)`
-	// A legacy table named in SQL position (not merely in prose or a Go identifier).
-	legacySQLTableRe = regexp.MustCompile(`(?i)\b(?:FROM|JOIN|INTO|UPDATE|TABLE)\s+` + legacyTableWord + `\b`)
+	// A legacy table named in SQL position (not merely in prose or a Go identifier), also
+	// when qualified with the public schema or quoted.
+	legacySQLTableRe = regexp.MustCompile(`(?i)\b(?:FROM|JOIN|INTO|UPDATE|TABLE)\s+(?:"?public"?\.)?"?` + legacyTableWord + `\b`)
 	// A legacy post type or contribution target type compared in SQL.
 	legacySQLTypeRe = regexp.MustCompile(`(?i)\btype\s*(?:=|IN|<>|!=)\s*\(?\s*'(problem|question|idea|approach|answer|response|comment)'`)
 	// A quoted legacy type literal inside a catalog definition (checks, partial indexes).

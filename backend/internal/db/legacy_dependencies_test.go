@@ -60,6 +60,26 @@ func TestScanLegacySourceDependencies_FindsQueriesJobsAndConsumers(t *testing.T)
 	}
 }
 
+// A legacy table stays visible to the scan when the SQL qualifies it with the public schema
+// or quotes it; the dropped-table query probe found the unqualified-only regex missing
+// `FROM public.approaches`.
+func TestScanLegacySourceDependencies_FindsSchemaQualifiedAndQuotedTables(t *testing.T) {
+	root := t.TempDir()
+	writeSource(t, root, "internal/db/qualified.go", "package db\nconst q = `SELECT id FROM public.approaches WHERE id = $1`\n")
+	writeSource(t, root, "internal/db/quoted.go", "package db\nconst q = `LEFT JOIN \"answers\" a ON a.question_id = p.id`\n")
+	writeSource(t, root, "internal/db/both.go", "package db\nconst q = `INSERT INTO public.\"comments\" (id) VALUES ($1)`\n")
+	writeSource(t, root, "internal/db/clean.go", "package db\nconst q = `SELECT id FROM public.replies r JOIN \"posts\" p ON p.id = r.post_id`\n")
+
+	deps, err := ScanLegacySourceDependencies(root)
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{
+		"code:internal/db/both.go",
+		"code:internal/db/qualified.go",
+		"code:internal/db/quoted.go",
+	}, depKeys(deps))
+}
+
 // Schema cleanup is complete only when every discovered dependency has an explicit
 // disposition and every non-keep disposition is done; an owned object (an index on a
 // legacy table) inherits its owner's disposition unless it has its own.

@@ -100,15 +100,16 @@ func missingLegacyObject(e tracedError) (string, bool) {
 type legacyDroppedDatabase struct {
 	pool   *db.Pool
 	tracer *dbErrorTracer
+	url    string
 	// dependents are the objects outside the legacy tables that a plain DROP TABLE named
 	// as depending on them (the DETAIL of SQLSTATE 2BP01).
 	dependents []string
 }
 
 // newLegacyDroppedDatabase creates a scratch database, applies every up migration in
-// order, drops the legacy tables and returns a traced pool on it. The database is
-// dropped when the test ends.
-func newLegacyDroppedDatabase(t *testing.T) *legacyDroppedDatabase {
+// order, runs beforeDrop on the fully migrated schema, drops the legacy tables and returns
+// a traced pool on it. The database is dropped when the test ends.
+func newLegacyDroppedDatabase(t *testing.T, beforeDrop ...func(ctx context.Context, conn *pgx.Conn)) *legacyDroppedDatabase {
 	t.Helper()
 	base := os.Getenv("DATABASE_URL")
 	if base == "" {
@@ -169,7 +170,11 @@ func newLegacyDroppedDatabase(t *testing.T) *legacyDroppedDatabase {
 		}
 	}
 
-	d := &legacyDroppedDatabase{tracer: &dbErrorTracer{}}
+	for _, hook := range beforeDrop {
+		hook(ctx, conn)
+	}
+
+	d := &legacyDroppedDatabase{tracer: &dbErrorTracer{}, url: scratchURL}
 	list := strings.Join(db.LegacyTables, ", ")
 	_, err = conn.Exec(ctx, "DROP TABLE "+list)
 	var pgErr *pgconn.PgError

@@ -457,10 +457,23 @@ func (r *UserRepository) GetUserStats(ctx context.Context, userID string) (*mode
 	return stats, nil
 }
 
-// List returns a paginated list of users with public info.
-// Per prd-v4: GET /v1/users endpoint - includes agents_count via subquery.
-// Supports sort: newest (created_at DESC), reputation, agents.
+// List returns a paginated list of users with public info, scored with the legacy
+// reputation.BuildReputationSQL formula. Per prd-v4: GET /v1/users endpoint.
+// Unwired (task idx 76, feature:reputation): the API serves CanonicalReputationUserRepository.List.
 func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOptions) ([]models.UserListItem, int, error) {
+	return r.list(ctx, opts, reputation.BuildReputationSQL(reputation.SQLBuilderOptions{
+		EntityType:     "user",
+		EntityIDColumn: "u.id::text",
+		AuthorType:     "human",
+		TimeFilter:     "", // All-time for list
+		IncludeBonus:   false,
+	}))
+}
+
+// list returns a paginated list of users with public info, scoring each user's reputation with
+// reputationSQL, an expression over the users row u (also what sort=reputation orders by).
+// Includes agents_count via subquery. Supports sort: newest (created_at DESC), reputation, agents.
+func (r *UserRepository) list(ctx context.Context, opts models.PublicUserListOptions, reputationSQL string) ([]models.UserListItem, int, error) {
 	// Determine sort order
 	var orderBy string
 	switch opts.Sort {
@@ -473,22 +486,14 @@ func (r *UserRepository) List(ctx context.Context, opts models.PublicUserListOpt
 	}
 
 	// Query with agents_count subquery
-	// Filters out soft-deleted users (WHERE deleted_at IS NULL)
-	// Reputation calculated using centralized reputation.BuildReputationSQL
-	reputationSQL := reputation.BuildReputationSQL(reputation.SQLBuilderOptions{
-		EntityType:     "user",
-		EntityIDColumn: "u.id::text",
-		AuthorType:     "human",
-		TimeFilter:     "", // All-time for list
-		IncludeBonus:   false,
-	})
-
+	// Filters out soft-deleted users (WHERE deleted_at IS NULL). avatar_url is nullable: a
+	// NULL must not fail the scan into a string.
 	query := `
 		SELECT
 			u.id,
 			u.username,
 			u.display_name,
-			u.avatar_url,
+			COALESCE(u.avatar_url, ''),
 			` + reputationSQL + ` as reputation,
 			(SELECT COUNT(*) FROM agents WHERE human_id = u.id) as agents_count,
 			u.created_at

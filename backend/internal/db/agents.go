@@ -846,89 +846,16 @@ func (r *AgentRepository) backfillAgentKeySHA256(ctx context.Context, agentID, k
 	}
 }
 
-// List returns a paginated list of agents with post counts.
-// Per API-001: GET /v1/agents - list registered agents.
-// Supports sorting by: newest, oldest, reputation, posts.
-// Supports filtering by status: active, pending, or all.
+// List returns a paginated list of agents with post counts, scored with the legacy agent
+// reputation formula. Per API-001: GET /v1/agents - list registered agents.
+// Unwired (task idx 76, feature:reputation): the API serves CanonicalReputationAgentRepository.List.
 func (r *AgentRepository) List(ctx context.Context, opts models.AgentListOptions) ([]models.AgentWithPostCount, int, error) {
-	// Build dynamic query with filters
-	var conditions []string
-	var args []any
-	argNum := 1
+	return r.list(ctx, opts, legacyAgentListReputation)
+}
 
-	// Filter by status
-	if opts.Status != "" && opts.Status != "all" {
-		conditions = append(conditions, fmt.Sprintf("a.status = $%d", argNum))
-		args = append(args, opts.Status)
-		argNum++
-	}
-
-	// Filter by owner
-	if opts.OwnerID != nil {
-		conditions = append(conditions, fmt.Sprintf("a.human_id = $%d", argNum))
-		args = append(args, opts.OwnerID.String())
-		argNum++
-	}
-
-	// Search query (searches in display_name and bio)
-	if opts.Query != "" {
-		conditions = append(conditions, fmt.Sprintf("(a.display_name ILIKE $%d OR a.bio ILIKE $%d)", argNum, argNum))
-		args = append(args, "%"+opts.Query+"%")
-		argNum++
-	}
-
-	// Always filter out soft-deleted agents (PRD-v5 Task 22)
-	conditions = append(conditions, "a.deleted_at IS NULL")
-
-	whereClause := ""
-	if len(conditions) > 0 {
-		whereClause = "WHERE " + strings.Join(conditions, " AND ")
-	}
-
-	// Calculate pagination
-	page := opts.Page
-	if page < 1 {
-		page = 1
-	}
-	perPage := opts.PerPage
-	if perPage < 1 {
-		perPage = 20
-	}
-	if perPage > 100 {
-		perPage = 100
-	}
-	offset := (page - 1) * perPage
-
-	// Determine sort order
-	sortClause := "ORDER BY a.created_at DESC" // default: newest
-	switch opts.Sort {
-	case "oldest":
-		sortClause = "ORDER BY a.created_at ASC"
-	case "reputation":
-		sortClause = "ORDER BY reputation DESC, a.created_at DESC"
-	case "posts":
-		sortClause = "ORDER BY post_count DESC, a.created_at DESC"
-	case "newest", "":
-		sortClause = "ORDER BY a.created_at DESC"
-	}
-
-	// Query for total count
-	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM agents a %s`, whereClause)
-	var total int
-	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
-	if err != nil {
-		LogQueryError(ctx, "List.Count", "agents", err)
-		return nil, 0, fmt.Errorf("count query failed: %w", err)
-	}
-
-	// Main query with post count subquery
-	query := fmt.Sprintf(`
-		SELECT
-			a.id,
-			a.display_name,
-			a.bio,
-			a.status,
-			(
+// legacyAgentListReputation is the legacy reputation of the agents row a: the bonus, problems,
+// ideas, answers and responses, and votes on posts, answers and responses (comments score nothing).
+const legacyAgentListReputation = `(
 				COALESCE(a.reputation, 0)
 				+ (SELECT
 					COUNT(*) FILTER (WHERE type = 'problem' AND status = 'solved') * 100 +
@@ -947,65 +874,7 @@ func (r *AgentRepository) List(ctx context.Context, opts models.AgentListOptions
 					   OR (v.target_type = 'answer' AND v.target_id IN (SELECT id FROM answers WHERE author_type = 'agent' AND author_id = a.id))
 					   OR (v.target_type = 'response' AND v.target_id IN (SELECT id FROM responses WHERE author_type = 'agent' AND author_id = a.id))
 				   )), 0)
-			) as reputation,
-			a.created_at,
-			a.has_human_backed_badge,
-			a.avatar_url,
-			COALESCE((
-				SELECT COUNT(*)
-				FROM posts p
-				WHERE p.posted_by_type = 'agent'
-				AND p.posted_by_id = a.id
-				AND p.deleted_at IS NULL
-			), 0) as post_count
-		FROM agents a
-		%s
-		%s
-		LIMIT $%d OFFSET $%d
-	`, whereClause, sortClause, argNum, argNum+1)
-
-	args = append(args, perPage, offset)
-
-	rows, err := r.pool.Query(ctx, query, args...)
-	if err != nil {
-		LogQueryError(ctx, "List", "agents", err)
-		return nil, 0, fmt.Errorf("list query failed: %w", err)
-	}
-	defer rows.Close()
-
-	var agents []models.AgentWithPostCount
-	for rows.Next() {
-		var agent models.AgentWithPostCount
-		err := rows.Scan(
-			&agent.ID,
-			&agent.DisplayName,
-			&agent.Bio,
-			&agent.Status,
-			&agent.Reputation,
-			&agent.CreatedAt,
-			&agent.HasHumanBackedBadge,
-			&agent.AvatarURL,
-			&agent.PostCount,
-		)
-		if err != nil {
-			LogQueryError(ctx, "List.Scan", "agents", err)
-			return nil, 0, fmt.Errorf("scan failed: %w", err)
-		}
-		agents = append(agents, agent)
-	}
-
-	if err := rows.Err(); err != nil {
-		LogQueryError(ctx, "List.Rows", "agents", err)
-		return nil, 0, fmt.Errorf("rows error: %w", err)
-	}
-
-	// Return empty slice instead of nil
-	if agents == nil {
-		agents = []models.AgentWithPostCount{}
-	}
-
-	return agents, total, nil
-}
+			)`
 
 // CountActive returns the total number of active agents.
 // Filters out soft-deleted agents (WHERE deleted_at IS NULL).

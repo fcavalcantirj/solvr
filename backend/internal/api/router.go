@@ -252,13 +252,13 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		return
 	}
 
-	agentRepoConcrete := db.NewAgentRepository(pool)
+	agentRepoConcrete := db.NewCanonicalReputationAgentRepository(pool) // idx 76: canonical reputation
 	agentRepo = agentRepoConcrete
 	claimTokenRepoConcrete := db.NewClaimTokenRepository(pool)
 	claimTokenRepo = claimTokenRepoConcrete
 	postsRepo = db.NewPostRepository(pool)
 	searchRepo = db.NewSearchRepository(pool)
-	userRepo = db.NewUserRepository(pool)
+	userRepo = db.NewCanonicalReputationUserRepository(pool)
 	userAPIKeysRepo = db.NewUserAPIKeyRepository(pool)
 	bookmarksRepo = db.NewBookmarkRepository(pool)
 	viewsRepo = db.NewViewsRepository(pool)
@@ -400,9 +400,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	var usersPostRepo handlers.UsersPostRepositoryInterface
 	var usersListRepo handlers.UsersUserListRepositoryInterface
 	if pool != nil {
-		usersUserRepo = db.NewUserRepository(pool)
+		usersUserRepo = db.NewCanonicalReputationUserRepository(pool)
 		usersPostRepo = db.NewPostRepository(pool)
-		usersListRepo = db.NewUserRepository(pool)
+		usersListRepo = db.NewCanonicalReputationUserRepository(pool)
 	}
 	usersHandler := handlers.NewUsersHandler(usersUserRepo, usersPostRepo)
 	// Per prd-v4: Set agent repository for GET /v1/users/{id}/agents endpoint

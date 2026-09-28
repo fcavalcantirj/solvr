@@ -251,16 +251,16 @@ func (d *pgModerationDB) RejectPost(ctx context.Context, postID string) error {
 	return err
 }
 
+// CreateSystemComment records the verdict as a system reply on the post (canonical replies,
+// not the legacy comments table).
 func (d *pgModerationDB) CreateSystemComment(ctx context.Context, postID, content string) error {
-	_, err := d.pool.Exec(ctx,
-		`INSERT INTO comments (target_type, target_id, author_type, author_id, content)
-		 VALUES ($1, $2, $3, $4, $5)`,
-		string(models.CommentTargetPost),
-		postID,
-		string(models.AuthorTypeSystem),
-		services.ModerationAuthorID,
-		content,
-	)
+	_, err := db.NewModerationReplyWriter(d.pool).Create(ctx, &models.Comment{
+		TargetType: models.CommentTargetPost,
+		TargetID:   postID,
+		AuthorType: models.AuthorTypeSystem,
+		AuthorID:   services.ModerationAuthorID,
+		Content:    content,
+	})
 	return err
 }
 

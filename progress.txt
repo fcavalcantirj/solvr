@@ -6341,3 +6341,138 @@ REMAINING (next slices, in order):
 
 UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
   000105-000108. This slice adds no migration.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 6 of N: step 3, first refactor — moderation verdicts move from the legacy comments
+table to canonical system replies (post moderation, translation re-moderation,
+cmd/moderate-existing). job:TranslationJob flips Done. Other step 3/4 entries and the step-6
+gate still open.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated exactly as
+  slice 1 recorded. idx 76 continues from slice 5's REMAINING list (step 3/4, starting with the
+  translation moderation verdict it named).
+
+SPIKE [REAL, reading code + psql on local solvr_test]:
+  - Three production paths write a moderation verdict as a legacy comment through
+    CommentCreatorInterface.Create(*models.Comment): PostsHandler.moderatePostAsync
+    (handlers/posts_moderation.go:107-129), ModerationTrigger.moderate (handlers/
+    moderation_trigger.go:151-167) wired twice (router.go reModTrigger for inline translation,
+    cmd/api/main.go TranslationJob trigger), and cmd/moderate-existing pgModerationDB.
+    CreateSystemComment (raw `INSERT INTO comments`). services.CreateModerationComment has no
+    production caller (tests only); left as is.
+  - Content moderation itself only moderates posts (ModerateContent callers: posts_moderation,
+    moderation_trigger, moderate-existing, cmd/test-groq); no comment content is moderated.
+  - replies allows author_type 'system' (replies_author_type_check); solvr_test already holds 26
+    system replies (migrated moderation comments).
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` before this append: 5 tracked files
+  modified, 3 untracked new files; `git diff --stat`: main.go +3/-2, moderate-existing/main.go
+  +9/-9, router.go +4/-2, legacy_dependency_registry.go +2/-3, legacy_dropped_workers_test.go
+  +4/-1]:
+  A backend/internal/db/moderation_reply_writer.go (46): ErrModerationNoteTarget;
+    ModerationReplyWriter{replies *ReplyRepository}; NewModerationReplyWriter(pool);
+    Create(ctx, *models.Comment) writes the verdict through ReplyRepository.Create as a
+    top-level native reply (post_id = TargetID, same author_type/author_id, body = Content) and
+    returns the verdict with the reply's id and created_at. Non-post targets are refused with
+    ErrModerationNoteTarget; a missing post returns ErrReplyPostNotFound. It satisfies the
+    existing handler/services comment-creator interfaces, so the verdict text, author
+    (system/solvr-moderator) and handler logic are unchanged; only storage moves.
+  A backend/internal/db/moderation_reply_writer_test.go (112, 2 integration tests, own cleanup
+    of the post and user they create):
+    TestModerationReplyWriter_RecordsVerdictAsSystemReply (reply row: post, no parent, no
+    legacy_type, system/solvr-moderator, exact body; 0 comments rows for the post);
+    TestModerationReplyWriter_RejectsVerdictsNotOnAPost (answer target -> ErrModerationNoteTarget,
+    missing post -> ErrReplyPostNotFound, 0 replies written).
+  A backend/cmd/moderate-existing/pg_moderation_db_test.go (71, 1 integration test, skips
+    without DATABASE_URL like cmd/migrate-quorum): TestPGModerationDB_CreateSystemCommentRecords
+    AReply (seeded agent + open post; the rejection verdict is a system reply on the post; 0
+    comments rows; cleans up).
+  M backend/cmd/moderate-existing/main.go: pgModerationDB.CreateSystemComment now calls
+    db.NewModerationReplyWriter(pool).Create; method name and moderationDB interface unchanged,
+    so main_test.go's mock and its 11 tests are untouched.
+  M backend/internal/api/router.go: postsHandler.SetCommentRepo and reModTrigger.SetCommentRepo
+    take one db.NewModerationReplyWriter(pool) instead of commentsRepo (commentsRepo still
+    serves the legacy comment routes; not this slice).
+  M backend/cmd/api/main.go: the TranslationJob trigger takes db.NewModerationReplyWriter(pool)
+    instead of db.NewCommentsRepository(pool).
+  M backend/internal/jobs/legacy_dropped_workers_test.go: the probe's TranslationJob wiring
+    mirrors main.go (NewModerationReplyWriter) and now also asserts the traced statements
+    include "INSERT INTO replies" (the verdict really lands in replies). No assertion removed.
+  M backend/internal/db/legacy_dependency_registry.go: job:TranslationJob -> done(refactor);
+    code:cmd/moderate-existing/main.go REMOVED because the file no longer holds legacy SQL
+    (TestLegacyDependencyRegistry_CoversTheSourceTree fails on an entry for a dependency that no
+    longer exists — shown RED below); feature:moderation stays pending with the note narrowed to
+    what is still owed: flag target validation (handlers/flags.go:39/69 accepts post, comment,
+    answer, approach, response — not reply).
+  No migration, no frontend change. No existing test deleted, skipped or weakened.
+
+TDD [all runs against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test]:
+  RED  [TEST] /tmp/solvr_idx76_s6_red.log: build failed, undefined NewModerationReplyWriter /
+    ErrModerationNoteTarget. GREEN /tmp/solvr_idx76_s6_green1.log: 2 PASS, 0 SKIP.
+  RED  [TEST] /tmp/solvr_idx76_s6_probe_red.log: registry flipped first, probe still wired to
+    comments -> FAIL "job:TranslationJob reaches dropped legacy relations [comments] but is
+    recorded as refactor (done=true)". GREEN /tmp/solvr_idx76_s6_probe_green.log after the
+    rewiring: PASS; job:TranslationJob 6 statements, dropped legacy relations reached: [].
+  RED  [TEST] /tmp/solvr_idx76_s6_modexist_red.log: FAIL "the rejection verdict is not a reply
+    on the post: no rows in result set". GREEN /tmp/solvr_idx76_s6_modexist_green.log: package
+    12 PASS (11 existing + 1 new), 0 FAIL, 0 SKIP. The RED run left one legacy comment row in
+    solvr_test (its post was deleted); removed by id afterwards.
+  RED  [TEST] /tmp/solvr_idx76_s6_registry_red.log: FAIL "disposition for a dependency that no
+    longer exists: code:cmd/moderate-existing/main.go". GREEN after removing the entry:
+    /tmp/solvr_idx76_s6_db_green.log -run 'Legacy|TestExtractStaticSQL|TestModerationReplyWriter'
+    21 PASS, 0 FAIL, 0 SKIP.
+  jobs package [TEST] /tmp/solvr_idx76_s6_jobs.log: 55 PASS (same name set as slice 5), 0 FAIL,
+    0 SKIP. Static-query probe: 570 statements extracted (slice 5: 571; the removed
+    `INSERT INTO comments`), 503 prepared, 67 did not (same per-file list as slice 5).
+  api + cmd [TEST] once, -p 1 -v -> /tmp/solvr_idx76_s6_api_cmd.log: 2986 PASS, 5 FAIL, 6 SKIP.
+    43 tests named *Moderat* PASS, 0 FAIL/SKIP (posts_moderation_test.go and
+    moderation_trigger_test.go untouched). The 5 FAILs: 4 TestGitHub*_Integration (known
+    pre-existing, GitHub OAuth) and TestNAgentRoom_OneActivationExactCountsNoTrafficLeakAnd
+    PermittedPublicView failing in SETUP at router_rooms_test.go:70 "duplicate key value
+    violates unique constraint users_referral_code_key" — the createRoomTestUser RT%06d
+    collision already journaled at idx 59 s9 and idx 75; untouched file, not this slice.
+  FULL internal/db PACKAGE [TEST] once, -p 1 -v -> /tmp/solvr_idx76_s6_dbpkg.log: 661 PASS, 64
+    FAIL, 6 SKIP vs slice 5 (657/66/6). comm vs slice 5: 4 gone (TestAgentRepository_List_Empty,
+    3 TestGetTrendingPosts_Excludes*), 2 new: TestListPosts_AuthorSeesOwnHidden ("expected
+    total=1 ... got 2") and TestSearch_Similarity_PopulatedAndTopSimilarity ("post B missing").
+    Cause [REAL, psql]: fixed-identifier fixtures left behind by earlier full runs whose batch
+    cleanup (search_test.go:497) fails on approaches_problem_id_fkey: 2 posts by
+    'test-hidden-author' (12:40 = slice 5's run, 13:08 = this run) and 30 'zebracorn%' posts
+    since 11:25. Deleted those 32 rows from solvr_test (0 approaches referenced them); both
+    tests then PASS alone (/tmp/solvr_idx76_s6_two_after.log). Not caused by this slice; tests
+    left unchanged. Same shared-DB hygiene class as slice 5's trending failures.
+  go build ./... and go vet ./cmd/... ./internal/api/... ./internal/db/ ./internal/jobs/ clean.
+    gofmt -l: the 3 new files and router.go/registry/probe clean; cmd/api/main.go and
+    cmd/moderate-existing/main.go were already gofmt-dirty at HEAD (checked with git show |
+    gofmt -l) and were not reformatted. check-file-size.sh: 35 violations, same as slices 1-5;
+    router.go was already one (1235 -> 1237), no new file near the limit.
+  FULL BACKEND (`go test ./...`): not run as one command; cmd, internal/api/..., internal/db and
+    internal/jobs (every package this slice touches) ran as above.
+
+OBSERVED, NOT CHANGED [REAL, read frontend/components/posts/post-detail.tsx:177-181]: every
+  reply author links to /users/<author.id>, so agent and system replies (already 171 agent + 26
+  system replies in solvr_test) link to a users page. Pre-existing; not this task's scope.
+
+NOT VERIFIED / LIMITS [UNVERIFIED unless stated]:
+  - The live Groq path is not exercised: all verdict tests use fake moderators; the writer is
+    the only new code on that path and it is tested against the real database.
+  - Handlers still speak models.Comment to the writer (CommentCreatorInterface). Renaming the
+    interface would rewrite 9 SetCommentRepo test call sites for no behavior change; left for the
+    comment-model retirement (code:internal/db/comments.go).
+
+REMAINING (next slices, in order):
+  step 3/4: feature:moderation's flag target validation (accept reply, map legacy types);
+    feature:embedding-workers (+ code:cmd/backfill-embeddings) writing replies.embedding;
+    crystallization, briefing, badges, leaderboards, reputation, duplicate detection, stats
+    and the other pending code: entries; retire stale-content/auto-solve/forgetting. Preserve
+    earned badges/reputation as history, award nothing from migrated rows. Both dropped-table
+    probes must stay green as entries flip to Done.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
+  000105-000108. This slice adds no migration.

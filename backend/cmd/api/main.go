@@ -175,7 +175,8 @@ func main() {
 		}
 		translationPostRepo := db.NewPostRepository(pool)
 		translationModSvc := services.NewContentModerationService(os.Getenv("GROQ_API_KEY"))
-		translationCommentRepo := db.NewCommentsRepository(pool)
+		// Moderation verdicts are recorded as system replies on the post, not legacy comments.
+		translationVerdictWriter := db.NewModerationReplyWriter(pool)
 		translationNotifRepo := db.NewNotificationsRepository(pool)
 		translationNotifSvc := api.NewModerationNotificationService(translationNotifRepo.Create)
 		trigger := handlers.NewModerationTrigger(
@@ -183,7 +184,7 @@ func main() {
 			translationPostRepo,
 			slog.Default(),
 		)
-		trigger.SetCommentRepo(translationCommentRepo)
+		trigger.SetCommentRepo(translationVerdictWriter)
 		trigger.SetNotificationService(translationNotifSvc)
 
 		batchSize := jobs.DefaultTranslationBatchSize

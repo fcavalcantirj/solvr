@@ -276,7 +276,7 @@ func scheduledWorkers(pool *db.Pool, tracer *dbErrorTracer) []probeWorker {
 		}},
 		{"job:TranslationJob", func(ctx context.Context, t *testing.T) {
 			trigger := handlers.NewModerationTrigger(probeModeration{}, postRepo, logger)
-			trigger.SetCommentRepo(db.NewCommentsRepository(pool))
+			trigger.SetCommentRepo(db.NewModerationReplyWriter(pool))
 			trigger.SetNotificationService(api.NewModerationNotificationService(notifRepo.Create))
 			translated, _ := jobs.NewTranslationJob(postRepo, postRepo, probeTranslator{}, trigger, jobs.DefaultTranslationBatchSize, 0).RunOnce(ctx)
 			if translated != 1 {
@@ -291,6 +291,9 @@ func scheduledWorkers(pool *db.Pool, tracer *dbErrorTracer) []probeWorker {
 					return
 				}
 				time.Sleep(50 * time.Millisecond)
+			}
+			if !tracer.saw("INSERT INTO replies") {
+				t.Errorf("translation moderation did not record its verdict as a reply")
 			}
 		}},
 		{"job:HealthCheckJob", func(ctx context.Context, _ *testing.T) {

@@ -310,7 +310,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		if pr, ok := postsRepo.(*db.PostRepository); ok {
 			postsHandler.SetPostStatusUpdater(pr)
 		}
-		postsHandler.SetCommentRepo(commentsRepo)
+		// Moderation verdicts are recorded as system replies on the post, not legacy comments.
+		moderationVerdicts := db.NewModerationReplyWriter(pool)
+		postsHandler.SetCommentRepo(moderationVerdicts)
 		notifSvc := NewModerationNotificationService(notificationsRepoConcrete.Create)
 		postsHandler.SetNotificationService(notifSvc)
 
@@ -327,7 +329,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 				pr,
 				slog.Default(),
 			)
-			reModTrigger.SetCommentRepo(commentsRepo)
+			reModTrigger.SetCommentRepo(moderationVerdicts)
 			reModTrigger.SetNotificationService(notifSvc)
 			translationTrigger := NewTranslationTriggerAdapter(translationSvc, pr, reModTrigger, slog.Default())
 			postsHandler.SetTranslationTrigger(translationTrigger)

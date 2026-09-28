@@ -57,7 +57,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"feature:reputation":          pending(LegacyActionRefactor, "sql_builder scores answers/responses/comments; preserve earned totals as history"),
 	"feature:crystallization":     pending(LegacyActionRefactor, "pins solved problems; redefine eligibility on canonical post states"),
 	"feature:forgetting":          pending(LegacyActionRetire, "approach forget_after/archived_at lifecycle has no reply equivalent"),
-	"feature:moderation":          pending(LegacyActionRefactor, "moderation and cmd/moderate-existing cover comments; must cover replies"),
+	"feature:moderation":          pending(LegacyActionRefactor, "verdicts of post moderation, translation re-moderation and cmd/moderate-existing are system replies (ModerationReplyWriter); still owed: flag target validation (handlers/flags.go) takes legacy contribution types, not reply"),
 	"feature:duplicate-detection": pending(LegacyActionRefactor, "similarity check in services/moderation.go must run on posts and replies"),
 	"feature:embedding-workers":   pending(LegacyActionRefactor, "backfill and create/update still embed approaches/answers only; must embed replies.embedding"),
 
@@ -65,7 +65,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"job:CleanupJob":               keep("prunes claim tokens and idempotency keys; touches no legacy table"),
 	"job:HealthCheckJob":           keep("checks API, database and IPFS health; touches no legacy table"),
 	"job:PresenceReaperJob":        keep("reaps room presence; the room model is not the knowledge model"),
-	"job:TranslationJob":           pending(LegacyActionRefactor, "translation itself uses posts original_* columns, but its moderation trigger writes the verdict as a legacy comment (comments table), found by the dropped-table job probe; must write a reply (feature:moderation)"),
+	"job:TranslationJob":           done(LegacyActionRefactor, "translation uses posts original_* columns; its moderation trigger now writes the verdict as a system reply (ModerationReplyWriter), not a legacy comment"),
 	"job:CrystallizationJob":       pending(LegacyActionRefactor, "see feature:crystallization; runs on posts.go legacy queries"),
 	"job:StaleContentJob":          pending(LegacyActionRetire, "warns/abandons approaches and marks ideas dormant: legacy lifecycles"),
 	"job:AutoSolveJob":             pending(LegacyActionRetire, "auto-solves problems from succeeded approaches; no status workflow remains"),
@@ -107,5 +107,4 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"code:internal/db/stale_content.go":            pending(LegacyActionRetire, "see job:StaleContentJob and feature:forgetting"),
 	"code:internal/reputation/sql_builder.go":      pending(LegacyActionRefactor, "see feature:reputation"),
 	"code:cmd/backfill-embeddings/main.go":         pending(LegacyActionRefactor, "see feature:embedding-workers"),
-	"code:cmd/moderate-existing/main.go":           pending(LegacyActionRefactor, "see feature:moderation"),
 }

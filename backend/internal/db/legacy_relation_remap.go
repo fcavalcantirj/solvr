@@ -27,6 +27,7 @@ type LegacyRelationRemapReport struct {
 	ApproachRelationships int64
 	ProgressNotes         int64
 	NotificationLinks     int64
+	Embeddings            int64
 	Exceptions            []ContributionMigrationException
 }
 
@@ -46,7 +47,8 @@ func (r *LegacyRelationRemapReport) unresolved(kind, id, detail string) {
 // through the (legacy_type, legacy_id) map (task idx 76 step 2). Accepted answers, votes,
 // reports and flags are retargeted; approach relationships are kept in the from-reply's
 // provenance; progress notes become child replies; stored notification links are rewritten
-// to canonical destinations. It only updates or inserts rows in replies, posts, votes,
+// to canonical destinations; answer/approach embeddings are copied onto their replies
+// (step 5). It only updates or inserts rows in replies, posts, votes,
 // reports, flags and notifications.link: it never creates a notification or sends email.
 // Every step is idempotent, so a partial run can simply be repeated.
 func RemapLegacyRelations(ctx context.Context, pool *Pool) (*LegacyRelationRemapReport, error) {
@@ -75,7 +77,29 @@ func RemapLegacyRelations(ctx context.Context, pool *Pool) (*LegacyRelationRemap
 	if err := rewriteNotificationLinks(ctx, pool, rep); err != nil {
 		return rep, err
 	}
+	if rep.Embeddings, err = copyLegacyEmbeddings(ctx, pool); err != nil {
+		return rep, err
+	}
 	return rep, nil
+}
+
+// copyLegacyEmbeddings copies each answer/approach embedding onto the reply migrated from it,
+// so migrated knowledge stays semantically searchable through hybrid_search_replies without
+// calling the embedding API. A reply that already has an embedding keeps it.
+func copyLegacyEmbeddings(ctx context.Context, pool *Pool) (int64, error) {
+	var total int64
+	for _, src := range [][2]string{{"answer", "answers"}, {"approach", "approaches"}} {
+		tag, err := pool.Exec(ctx, `
+			UPDATE replies r SET embedding = l.embedding
+			FROM `+src[1]+` l
+			WHERE r.legacy_type = $1 AND r.legacy_id = l.id
+			  AND r.embedding IS NULL AND l.embedding IS NOT NULL`, src[0])
+		if err != nil {
+			return total, fmt.Errorf("copy %s embeddings: %w", src[0], err)
+		}
+		total += tag.RowsAffected()
+	}
+	return total, nil
 }
 
 // remapContributionFlags retargets flags like RemapContributionVotesAndReports does reports.

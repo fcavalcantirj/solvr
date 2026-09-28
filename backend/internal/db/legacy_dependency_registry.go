@@ -27,10 +27,10 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"table:progress_notes":         pending(LegacyActionRetire, "drop once relation:progress-notes is remapped onto replies"),
 
 	// Catalog objects outside the legacy tables' own indexes and constraints.
-	"function:hybrid_search_approaches":         pending(LegacyActionRefactor, "replace with one replies search function over a replies embedding"),
-	"function:hybrid_search_answers":            pending(LegacyActionRefactor, "replace with one replies search function over a replies embedding"),
-	"index:approaches.idx_approaches_embedding": pending(LegacyActionRefactor, "replies need an embedding column and an HNSW index before this drops"),
-	"index:answers.idx_answers_embedding":       pending(LegacyActionRefactor, "replies need an embedding column and an HNSW index before this drops"),
+	"function:hybrid_search_approaches":         done(LegacyActionRefactor, "replaced by hybrid_search_replies (000110); no Go code calls it; drops with its table"),
+	"function:hybrid_search_answers":            done(LegacyActionRefactor, "replaced by hybrid_search_replies (000110); no Go code calls it; drops with its table"),
+	"index:approaches.idx_approaches_embedding": done(LegacyActionRefactor, "replies.embedding + HNSW idx_replies_embedding (000110); the cutover copies the vectors"),
+	"index:answers.idx_answers_embedding":       done(LegacyActionRefactor, "replies.embedding + HNSW idx_replies_embedding (000110); the cutover copies the vectors"),
 	"check:posts.posts_type_check":              pending(LegacyActionRefactor, "legacy post types stay readable in transition; narrow to 'post' at cleanup"),
 	"check:votes.votes_target_type_check":       pending(LegacyActionRemap, "votes retarget to 'reply'; drop approach/answer/response after remap"),
 	"check:reports.reports_target_type_check":   pending(LegacyActionRemap, "reports retarget to 'reply'; drop legacy target types after remap"),
@@ -59,7 +59,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"feature:forgetting":          pending(LegacyActionRetire, "approach forget_after/archived_at lifecycle has no reply equivalent"),
 	"feature:moderation":          pending(LegacyActionRefactor, "moderation and cmd/moderate-existing cover comments; must cover replies"),
 	"feature:duplicate-detection": pending(LegacyActionRefactor, "similarity check in services/moderation.go must run on posts and replies"),
-	"feature:embedding-workers":   pending(LegacyActionRefactor, "backfill embeds approaches/answers; replies have no embedding column yet"),
+	"feature:embedding-workers":   pending(LegacyActionRefactor, "backfill and create/update still embed approaches/answers only; must embed replies.embedding"),
 
 	// Scheduled jobs (cmd/api/main.go) and LISTEN consumers.
 	"job:CleanupJob":               keep("prunes claim tokens and idempotency keys; touches no legacy table"),

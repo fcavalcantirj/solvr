@@ -5961,3 +5961,126 @@ REMAINING (next slices, in order):
     code entries (the 9 remaps above are the only non-keep entries now Done).
 
 UAT (for when idx 76 closes, not now): owner applies 000109 to production after 000105-000108.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 3 of N: step 5, first half (search functions + vector index move with the schema).
+Step 5 second half (workers on a database with the legacy tables dropped), steps 3/4 and the
+step-6 gate still open.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated exactly as
+  slice 1 recorded. idx 76 continues from slice 2's REMAINING list (step 5 first).
+
+SPIKE [REAL, psql on local solvr_test + grep]:
+  - replies had no embedding column; answers/approaches have vector(1024) + HNSW
+    (idx_answers_embedding / idx_approaches_embedding, migration 000044).
+  - hybrid_search_answers / hybrid_search_approaches (000045) have NO Go caller: search.go only
+    carries TODO comments naming them; searchAnswers/searchApproaches are plain full text.
+  - The canonical read rule is models.Post.PublicEligible (published + approved + public, not
+    deleted; archived is NOT eligible) plus the family branch of searchVisibilityClause. The
+    posts hybrid_search (000080) still filters on legacy status; left untouched (idx 53).
+  - Test helpers insertTestPost* leave publication_state/moderation_state at their defaults
+    (draft/pending), so the new tests insert posts with explicit states.
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` before this append: 2 tracked files
+  modified, 3 untracked new files; `git diff --stat`: legacy_dependency_registry.go +5/-5,
+  legacy_relation_remap.go +25/-1]:
+  A backend/migrations/000110_replies_search.up.sql (65): replies.embedding vector(1024);
+    idx_replies_embedding HNSW (vector_cosine_ops); idx_replies_body_tsvector GIN over
+    to_tsvector('english', body) WHERE deleted_at IS NULL; hybrid_search_replies(query_text,
+    query_embedding, match_count, fts_weight, vec_weight, rrf_k, viewer_human) RETURNS
+    TABLE(reply_id, post_id, rrf_score): same RRF shape, to_tsquery input and 0.85 semantic
+    cutoff as hybrid_search; eligible = reply live AND post live, published, approved, and
+    public or owner_human_id = viewer_human. Legacy functions/indexes are NOT dropped (they go
+    with their tables, idx 68).
+  A backend/migrations/000110_replies_search.down.sql (6): drops the function, both indexes and
+    the column (reply embeddings are derived copies; the legacy rows keep theirs).
+  M backend/internal/db/legacy_relation_remap.go: report field Embeddings; RemapLegacyRelations
+    ends with copyLegacyEmbeddings = UPDATE replies SET embedding = legacy embedding for
+    legacy_type answer/approach, only WHERE reply embedding IS NULL AND legacy embedding IS NOT
+    NULL (idempotent, never overwrites, calls no embedding API). Doc comment updated.
+  M backend/internal/db/legacy_dependency_registry.go: Done=true on
+    function:hybrid_search_answers, function:hybrid_search_approaches (replaced by
+    hybrid_search_replies, no Go caller), index:answers.idx_answers_embedding,
+    index:approaches.idx_approaches_embedding (replies.embedding + HNSW; cutover copies the
+    vectors). feature:embedding-workers note reworded, still pending.
+  A backend/internal/db/replies_search_test.go (267, 3 tests):
+    TestHybridSearchReplies_FusesTextAndVectorOverEligibleReplies (7 posts: public, family of
+      an owner, draft, published+pending, rejected, archived, deleted; replies matching by
+      text+vector, text only, vector only, far vector, deleted reply; anonymous / owner /
+      stranger / no-embedding calls; asserts the exact eligible set, text+vector ranks first,
+      every hit scores > 0, reply resolves to its post_id);
+    TestRemapLegacyRelations_CopiesLegacyEmbeddingsOntoReplies (approach + answer with
+      embeddings, answer without, a reply that already has its own embedding; after
+      MigrateContributions + RemapLegacyRelations the vectors are copied, the own one is kept,
+      the migrated approach is found by its vector alone, second run Embeddings == 0; cleans up
+      its approaches/answers/posts/agent);
+    TestLegacyDependencyRegistry_SearchReplacementsDoneAreTheVerifiedOnes (function + HNSW index
+      exist in the live schema and the 4 registry entries are Done).
+  No existing test changed, skipped or removed. No handler, search.go, job or frontend change.
+
+DATABASE [REAL]: local docker solvr-postgres, DB solvr_test on 5435. `migrate ... up` applied
+  000110 (109 -> 110), `down 1` (column gone) and `up` again clean; version now 110.
+
+TDD:
+  RED [TEST] /tmp/solvr_idx76_s3_red.log: build failed, report.Embeddings undefined.
+  RED 2 [TEST] (field added, no logic) /tmp/solvr_idx76_s3_red2.log + red3.log: column
+    "embedding" of relation "replies" does not exist (x2); "hybrid_search_replies must exist".
+    One test-helper bug of mine fixed on the way ("inconsistent types deduced for parameter $1"
+    in the users insert).
+  GREEN [TEST] DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test,
+    /tmp/solvr_idx76_s3_green.log: 23 PASS, 0 FAIL, 0 SKIP (3 new + every Legacy*, Remap*,
+    ContributionMigration, CanonicalNotificationLink and 10 TestReplyRepository_* tests).
+  MUTATIONS [TEST] (SQL via CREATE OR REPLACE, restored by migrate down 1/up and md5(prosrc)
+    compared; Go restored from cp and cmp-verified):
+    mut1 moderation_state check removed -> FAIL 6 errors (mut1.log);
+    mut2 visibility check removed -> FAIL 4 errors (mut2.log);
+    mut3 vector term removed from rrf_score -> first SURVIVED (tied text ranks kept the order),
+      so the test gained "every hit scores > 0"; rerun -> FAIL "0" is not greater than "0";
+    mut4 `r.embedding IS NULL` guard removed -> FAIL "a reply's own embedding is never
+      overwritten" + second run not zero (mut4.log);
+    mut5 copy step not called -> FAIL 2 errors (mut5.log).
+  FULL internal/db PACKAGE [TEST] once, -p 1 -v, same DB -> /tmp/solvr_idx76_s3_dbpkg.log:
+    655 PASS, 64 FAIL, 6 SKIP. vs slice 2 (653/63/6): comm shows 0 gone and 1 new,
+    TestListPosts_AuthorSeesOwnHidden ("expected total=1 ..., got 2"). Cause [REAL]: that test
+    inserts a post by 'test-hidden-author' and never deletes it, and setupTestDB's cleanup does
+    not cover that author; solvr_test held two such rows created at 11:25 UTC (slice 2's full
+    run) and 11:49 UTC (this run). After deleting them it PASSES alone; its own row deleted again
+    afterwards. Not caused by this slice; test left unchanged (pre-existing hygiene issue: it
+    will fail on every second full run against a shared DB).
+  API [TEST] `go test ./internal/api/ ./internal/api/handlers/ -run
+    'Repl|ChildList|PostSeedsRoom|LegacyTypeStats'` -> /tmp/solvr_idx76_s3_api.log: 145 PASS,
+    0 FAIL, 0 SKIP (replies gained a nullable column; no positional replies INSERT exists [REAL,
+    grep]).
+  go build ./... ok; go vet ./internal/db/ clean; gofmt -l on the touched files empty.
+    check-file-size.sh: 35 violations, same as slices 1-2, none of these files.
+  FULL BACKEND (`go test ./...`): not run.
+  Leftover rows from my pre-cleanup runs (agent_lre_* posts/approaches/answers) were deleted
+    from solvr_test.
+
+NOT VERIFIED / LIMITS [UNVERIFIED unless stated]:
+  - hybrid_search_replies has no Go caller yet: /v1/search still runs searchAnswers /
+    searchApproaches over legacy tables. Wiring it (and the before/after query comparison) is
+    idx 53 step 4 / code:internal/db/search.go, which stays pending.
+  - Migrated approach replies get the approach's embedding (angle + method per
+    approaches_handler.go), not an embedding of the full reply body; comment, response and
+    progress-note replies have none. Re-embedding replies is feature:embedding-workers (step 3).
+  - Nothing embeds NEW replies yet (feature:embedding-workers).
+  - Semantic ranking was tested with synthetic unit vectors, not Voyage embeddings.
+  - HNSW build time on production's reply volume not measured (the column starts empty there).
+
+REMAINING (next slices, in order):
+  step 5 second half: scratch database migrated to 110 with the 6 legacy tables DROPPED; run
+    each job's RunOnce and the scanned code: queries there; expect DROP TABLE without CASCADE to
+    stop on hybrid_search_answers/approaches (they return SETOF the table type) and record it;
+    every failure must map to a registered non-keep, not-Done disposition, and every keep job
+    must run clean.
+  step 3/4: refactor or retire each pending code:/feature:/job: entry, incl. embedding workers
+    writing replies.embedding; preserve earned badges/reputation as history.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
+  000105-000108.

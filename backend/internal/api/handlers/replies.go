@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -21,7 +22,8 @@ type RepliesRepositoryInterface interface {
 	GetByID(ctx context.Context, id string) (*models.ReplyWithAuthor, error)
 	ListByPost(ctx context.Context, opts models.ReplyListOptions) ([]models.ReplyWithAuthor, int, error)
 	ListPageByPost(ctx context.Context, params models.ReplyPageParams) ([]models.ReplyWithAuthor, int, error)
-	Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string) (*models.Reply, error)
+	// Update writes the new body with its embedding; a nil embedding clears the stored vector.
+	Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string, embedding *string) (*models.Reply, error)
 	Delete(ctx context.Context, id string, authorType models.AuthorType, authorID string) error
 	Vote(ctx context.Context, replyID, voterType, voterID, direction string) error
 	GetUserVote(ctx context.Context, replyID, voterType, voterID string) (*string, error)
@@ -33,8 +35,9 @@ type RepliesRepositoryInterface interface {
 // RepliesHandler serves the one create/list/update/delete/vote reply API family
 // under posts and replies. There is no approach/answer/response/comment choice.
 type RepliesHandler struct {
-	repo   RepliesRepositoryInterface
-	logger *slog.Logger
+	repo             RepliesRepositoryInterface
+	embeddingService EmbeddingServiceInterface
+	logger           *slog.Logger
 }
 
 // NewRepliesHandler creates a new RepliesHandler.
@@ -47,6 +50,27 @@ func NewRepliesHandler(repo RepliesRepositoryInterface) *RepliesHandler {
 
 // SetLogger sets a custom logger.
 func (h *RepliesHandler) SetLogger(logger *slog.Logger) { h.logger = logger }
+
+// SetEmbeddingService makes create and edit embed the reply body so replies are
+// semantically searchable (hybrid_search_replies). Without it no vector is stored.
+func (h *RepliesHandler) SetEmbeddingService(svc EmbeddingServiceInterface) { h.embeddingService = svc }
+
+// embedBody returns the vector literal for a reply body, or nil when no service is
+// set or embedding fails; a failure is logged and never fails the write.
+func (h *RepliesHandler) embedBody(ctx context.Context, body, replyID string) *string {
+	if h.embeddingService == nil {
+		return nil
+	}
+	embedCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	embedding, err := h.embeddingService.GenerateEmbedding(embedCtx, body)
+	if err != nil {
+		h.logger.Warn("failed to generate embedding for reply", "error", err, "replyID", replyID)
+		return nil
+	}
+	vecStr := float32SliceToVectorString(embedding)
+	return &vecStr
+}
 
 // Create handles POST /v1/posts/{id}/replies.
 func (h *RepliesHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +106,8 @@ func (h *RepliesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		AuthorID:      authInfo.AuthorID,
 		Body:          req.Body,
 	}
+	// Synchronous like posts: the reply is semantically searchable as soon as it exists.
+	reply.EmbeddingStr = h.embedBody(r.Context(), req.Body, "")
 	created, err := h.repo.Create(r.Context(), reply)
 	if err != nil {
 		switch {
@@ -203,8 +229,14 @@ func (h *RepliesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if existing != nil && enforceReplyIfMatch(w, r, existing.UpdatedAt) {
 		return
 	}
+	// Refuse a non-author before paying for an embedding; repo.Update re-checks.
+	if existing != nil && (existing.AuthorType != authInfo.AuthorType || existing.AuthorID != authInfo.AuthorID) {
+		writeRepliesError(w, http.StatusForbidden, "FORBIDDEN", "you can only modify your own replies")
+		return
+	}
 
-	updated, err := h.repo.Update(r.Context(), id, authInfo.AuthorType, authInfo.AuthorID, req.Body)
+	embedding := h.embedBody(r.Context(), req.Body, id)
+	updated, err := h.repo.Update(r.Context(), id, authInfo.AuthorType, authInfo.AuthorID, req.Body, embedding)
 	if err != nil {
 		h.writeMutationError(w, err, "update", id)
 		return

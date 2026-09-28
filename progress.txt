@@ -6584,3 +6584,189 @@ REMAINING (next slices, in order):
 
 UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
   000105-000108. This slice adds no migration.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 8 of N: step 3, embedding workers — reply create/edit embed the body into
+replies.embedding, backfill-embeddings gains a 'replies' content type, and
+feature:embedding-workers flips Done. Other step 3/4 entries and the step-6 gate still open.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated as slice 1
+  recorded. idx 76 continues from slice 7's REMAINING list (first item: feature:embedding-
+  workers + code:cmd/backfill-embeddings).
+
+SPIKE [REAL, grep + psql on local solvr_test]:
+  - Embeddings were generated only by PostsHandler (posts), QuestionsHandler (legacy answers),
+    ProblemsHandler/approaches_handler (legacy approaches) and cmd/backfill-embeddings
+    (posts/answers/approaches). RepliesHandler/ReplyRepository wrote no vector: solvr_test had
+    652 replies, 0 with an embedding (144 native, 0 embedded).
+  - replies.embedding vector(1024) + HNSW + hybrid_search_replies exist since 000110 (slice 3);
+    no Go code calls hybrid_search_replies yet (search.go refactor is its own pending entry).
+  - Legacy write routes are still mounted (router.go POST /problems/{id}/approaches, PATCH
+    /approaches/{id}, answers), so legacy tables still receive rows during the transition; the
+    backfill keeps its answers/approaches types until the tables drop.
+  - Moderation writes a system reply on EVERY moderated post ("Post approved by Solvr
+    moderation..." on approval), so embedding system replies would put identical boilerplate
+    vectors on every approved post: the backfill excludes author_type 'system'.
+  - replies.updated_at is the reply ETag validator (If-Match, idx 73 step 5): a backfill must
+    not move it.
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` before this append: 9 tracked files
+  modified, 5 untracked new files; `git diff --stat`: backfill_test.go +8/-5, backfill main.go
+  +24/-14, handlers/replies.go +36/-4, handlers/replies_test.go +1/-1, router.go +3,
+  legacy_dependency_registry.go +2/-2, db/replies.go +10/-6, db/replies_test.go +2/-2,
+  models/reply.go +4]:
+  M backend/internal/models/reply.go: Reply.EmbeddingStr *string `json:"-"` (vector literal from
+    handler to repository, like Post/Answer/Approach; never serialized).
+  M backend/internal/db/replies.go: Create inserts embedding = $9::vector (NULL when nil).
+    Update gains a 6th parameter `embedding *string` and sets embedding = $3::vector with the
+    body, so nil CLEARS the stored vector (a stale vector never describes edited text; the
+    backfill re-embeds NULLs). Author check unchanged.
+  M backend/internal/api/handlers/replies.go: RepliesHandler.embeddingService +
+    SetEmbeddingService(EmbeddingServiceInterface) + embedBody (5s timeout, failure logged at
+    Warn and never fails the write, returns nil). Create embeds req.Body AFTER the post-
+    visibility check (a refused reply costs no embedding call). Update: a non-author (known from
+    the GetByID it already did) is now refused with the same 403 FORBIDDEN "you can only modify
+    your own replies" BEFORE embedding; repo.Update still re-checks. The interface's Update takes
+    the embedding.
+  M backend/internal/api/router.go: repliesHandler.SetEmbeddingService(embeddingService) when
+    configured (same guard as posts/problems/questions).
+  M backend/internal/api/handlers/replies_test.go: MockRepliesRepository.Update signature gains
+    the `_ *string` parameter. Mechanical; no assertion changed.
+  M backend/internal/db/replies_test.go: TestReplyRepository_UpdateAuthorOnly's two repo.Update
+    calls pass `, nil` for the new parameter. No assertion changed.
+  A backend/cmd/backfill-embeddings/replies.go (126): replyRow{ID, Body}; runReplies (same
+    OFFSET-0 + attempted-set loop as the other types); pgBackfillDB GetRepliesWithoutEmbedding /
+    CountRepliesWithoutEmbedding over live, NULL-embedding, non-system replies; UpdateReply
+    Embedding sets the vector only (no updated_at) for non-deleted replies.
+  M backend/cmd/backfill-embeddings/main.go (641 -> 653): backfillDB interface + backfillResult
+    gain the replies methods/counters; run() processes "replies" and sums it into the totals;
+    parseContentTypes accepts "replies" and "all"/""/invalid now mean posts, answers,
+    approaches, replies; flag help and the final summary lines name replies. File was already
+    gofmt-dirty at HEAD (struct field alignment; checked with git show | gofmt -l); not
+    reformatted.
+  M backend/cmd/backfill-embeddings/backfill_test.go: mockDB gains replies/updateReplyCalls/
+    updateReplyErr fields; two expectations change (see REPLACED ASSERTIONS). Already gofmt-
+    dirty at HEAD; not reformatted.
+  A backend/cmd/backfill-embeddings/backfill_replies_test.go (230): mockDB replies methods +
+    TestBackfillWorker_RepliesOnly, TestBackfillWorker_ReplyErrorsAreCountedAndSkipped,
+    TestBackfillWorker_DryRunCountsReplies, TestParseContentTypes_Replies, and integration
+    TestPGBackfillDB_EmbedsLiveHumanAndAgentRepliesOnly (seeded agent/post/live/system/deleted
+    replies: only the live agent reply is pending; Count == direct SQL count == listed rows;
+    UpdateReplyEmbedding stores 1024 dims, leaves updated_at unchanged, writes nothing on the
+    deleted reply; the embedded reply leaves the pending set; own cleanup).
+  A backend/internal/db/replies_embedding_test.go (99): TestReplyRepository_CreateStoresTheBody
+    Embedding (vector stored; nil stores NULL; hybrid_search_replies finds the embedded reply by
+    vector with a query matching no body word, and not the plain one);
+    TestReplyRepository_UpdateReplacesOrClearsTheEmbedding (non-author edit leaves the vector;
+    author edit replaces it; edit with nil clears it).
+  A backend/internal/api/handlers/replies_embedding_test.go (143): 6 tests — create embeds the
+    body ("[0.5,0.25]" handed to the repo), create succeeds with no vector when embedding fails,
+    hidden post -> 404 with 0 embedding calls, update re-embeds the edited body, update with a
+    failed embedding hands nil (clear), non-author update -> 403 with 0 embedding and 0 Update
+    calls.
+  A backend/internal/api/router_replies_embedding_test.go (93): TestRepliesRoute_EmbedsTheBody
+    OnCreateAndEdit — real router (NewRouter(pool, nil, nil, axisEmbedding)), live JWT user,
+    public published approved post seeded by SQL; POST /v1/posts/{id}/replies stores axis 5,
+    PATCH /v1/replies/{id} through a router built with axis 9 stores axis 9.
+  M backend/internal/db/legacy_dependency_registry.go: feature:embedding-workers -> done
+    (refactor), note: reply create/edit embed replies.embedding, edit without a vector clears
+    it, backfill embeds replies ('replies', in 'all'); legacy answer/approach embedding stays only
+    on the legacy routes and backfill types that drop with their tables.
+    code:cmd/backfill-embeddings/main.go STAYS pending(refactor), note narrowed to: the answers/
+    approaches content types still read the legacy tables; remove them with the tables (the
+    cutover copies their vectors onto replies). The file still holds that legacy SQL, so the
+    entry must stay (the registry test fails on an entry for a gone dependency, and on a
+    missing one).
+  No migration, no frontend change, no SPEC.md change (reply API shapes unchanged; embedding is
+  never serialized). No existing test deleted, skipped or weakened.
+
+REPLACED ASSERTIONS (behavior this slice changes: "all" now includes replies):
+  - TestParseContentTypes_All asserted `len(types) != 3` -> Fatal "expected 3 types for 'all'"
+    and the exact set {posts, answers, approaches}. It now asserts 4 and the exact set {posts,
+    answers, approaches, replies} (still an exact-set check, not loosened). Covers the same
+    behavior: 'all' expands to every supported content type.
+  - TestParseContentTypes_EmptyDefaultsToAll asserted `len(types) != 3` -> "expected 3 types
+    for empty string"; now 4. Same behavior: empty defaults to all.
+  Both PASS [TEST] in /tmp/solvr_idx76_s8_green.log and /tmp/solvr_idx76_s8_api_cmd.log.
+
+TDD [all runs against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable]:
+  RED  [TEST] /tmp/solvr_idx76_s8_red.log: 3 packages build failed — "too many arguments in
+    call to repo.Update", "h.SetEmbeddingService undefined", "mock.lastCreated.EmbeddingStr
+    undefined", "undefined: replyRow", "result.repliesFound undefined".
+  GREEN [TEST] /tmp/solvr_idx76_s8_green.log (-run TestReplyRepository_|TestReplies_|
+    TestBackfillWorker_|TestParseContentTypes_|TestPGBackfillDB_|TestHybridSearchReplies over db,
+    handlers, backfill): 67 PASS, 0 FAIL, 0 SKIP; all 13 new tests listed PASS.
+  Router wiring RED [TEST] /tmp/solvr_idx76_s8_route_red.log with only router.go stashed: FAIL
+    "the reply has no stored embedding". GREEN /tmp/solvr_idx76_s8_route_green.log: PASS.
+  Registry/legacy/replies [TEST] /tmp/solvr_idx76_s8_db_green.log (-run Legacy|
+    TestExtractStaticSQL|TestModerationReplyWriter|TestFlagTargetTypes|TestReplyRepository_|
+    TestHybridSearchReplies|TestRemapLegacyRelations): 46 PASS, 0 FAIL, 0 SKIP.
+  jobs package [TEST] /tmp/solvr_idx76_s8_jobs.log: 53 top-level PASS, PASS name set identical to
+    slice 7 (diffed), 0 FAIL, 0 SKIP. Static-query probe: 573 extracted (+3 backfill replies
+    statements), 506 prepared, 67 did not — per-file list identical to slice 7 (diffed). Worker
+    probe unchanged: Cleanup/Translation/HealthCheck/PresenceReaper reach no dropped relation;
+    Crystallization/StaleContent/AutoSolve reach [approaches] (pending, as before).
+  api/... + models + cmd/... [TEST] once, -p 1 -v -> /tmp/solvr_idx76_s8_api_cmd.log: 1933
+    top-level PASS, 6 FAIL, 5 SKIP (slice 7 by the same count: 1920/7/5). comm of PASS sets vs
+    slice 7: +12 new tests of this slice, +3 homepage tests slice 7 cleaned, -2 newly failing:
+    4 FAILs = TestGitHub*_Integration (known pre-existing). The 2 others, cause [REAL, psql]:
+    * TestPinsCreateWithAgentAPIKey 409 "pin already exists for this CID and owner": 84 leftover
+      pins of CID QmYwAPJz... owned by deleted agents agent_pins_test_NNN000 — randomSuffix()
+      is UnixNano%1e6 and macOS clocks tick in microseconds, so only 1000 suffixes exist and
+      84 were taken (~8% collision per run).
+    * TestHomepageSearch_EveryPublishedTermLinksToCanonicalPostsSearch '"/posts?q=room-token-
+      optional-auth" should not contain "token"': router_room_token_optional_auth_test.go:38
+      searches that term once per run and never deletes it; its 4th row today (09:55-14:00 UTC)
+      made it a published term.
+    Deleted from solvr_test: 83 orphan agent_pins_test_% pins and the 4 room-token-optional-auth
+    search rows; both tests then PASS alone (/tmp/solvr_idx76_s8_two_after.log). No pins,
+    homepage or search code touched by this slice; tests left unchanged.
+  FULL internal/db PACKAGE [TEST] once, -p 1 -v -> /tmp/solvr_idx76_s8_dbpkg.log: 665 PASS, 63
+    FAIL, 6 SKIP vs slice 7 (664/62/6). comm of FAIL names: 1 gone (TestReputation_CrossEndpoint
+    Consistency), 2 new, cause [REAL, psql]:
+    * TestSearchUnified_PostsAndAnswers "expected to find answer ... in unified results (total:
+      386)": 14 leftover 'Golang concurrency patterns for web servers'/'Best practices for Go
+      APIs' posts (11:25-14:05 UTC today; search_test.go:497 batch cleanup fails on
+      approaches_problem_id_fkey) crowd the 20-per-page result.
+    * TestSearchPulse_WithResultsCountsOnlyProductiveSearches '"[]" should have 1 item(s)': the
+      top-5 pulse was crowded by zqx* terms (36/16/12 rows) and matrix-marker-* terms (7 each)
+      other tests never delete.
+    Deleted those 14 posts (0 approaches, 0 replies referenced them) and 86 zqx%/matrix-marker-%
+    search rows; both tests then PASS alone (/tmp/solvr_idx76_s8_dbtwo_after.log). Tests left
+    unchanged.
+  go build ./... and go vet on cmd/backfill-embeddings, handlers, db, models clean. gofmt -l
+    clean on every touched file except backfill main.go/backfill_test.go (dirty at HEAD).
+    check-file-size.sh: 35 violations, same as slices 1-7; router.go was already one (1237 ->
+    1240); no new file near the limit (largest new: backfill_replies_test.go 230).
+  FULL BACKEND (`go test ./...`): not run as one command; internal/api/..., internal/models,
+    cmd/..., internal/db and internal/jobs ran as above. Frontend untouched, not run.
+
+NOT VERIFIED / LIMITS [UNVERIFIED unless stated]:
+  - The live Voyage/Ollama services are not called: every test uses a fake embedding service
+    (vectors verified against the real database and the real router).
+  - Production reply counts, and so the Voyage cost of a first `backfill-embeddings` run with
+    the new default 'all', are unknown here (no production access); `--dry-run` prints them.
+  - Legacy routes still embed legacy answers/approaches; idx 52 owns routing them to replies.
+  - OBSERVED, NOT CHANGED: router_pins_test.go randomSuffix collides (above); several tests
+    leave search_queries rows (zqx*, matrix-marker-*, room-token-optional-auth) that crowd the
+    homepage/pulse tests again after a few full runs.
+
+REMAINING (next slices, in order):
+  step 3/4: feature:duplicate-detection on posts and replies; crystallization, briefing,
+    badges, leaderboards, reputation, stats and the other pending code: entries; retire
+    stale-content/auto-solve/forgetting. Preserve earned badges/reputation as history, award
+    nothing from migrated rows. Both dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
+  000105-000108, deploys, then runs `backfill-embeddings --content-types replies --dry-run`
+  and, if the count/cost is acceptable, the real run. This slice adds no migration.
+  CORRECTION to the slice 8 entry above [REAL, `git diff --numstat` after the append]: backfill
+    main.go is +25/-13 (not +24/-14), db/replies.go +9/-7 (not +10/-6); new-file line counts are
+    handlers/replies_embedding_test.go 137 (not 143) and router_replies_embedding_test.go 92
+    (not 93). All other figures stand.

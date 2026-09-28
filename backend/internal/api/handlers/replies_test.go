@@ -70,7 +70,7 @@ func (m *MockRepliesRepository) ListPageByPost(_ context.Context, params models.
 	return m.pageResult, m.pageTotal, nil
 }
 
-func (m *MockRepliesRepository) Update(_ context.Context, id string, _ models.AuthorType, _, body string) (*models.Reply, error) {
+func (m *MockRepliesRepository) Update(_ context.Context, id string, _ models.AuthorType, _, body string, _ *string) (*models.Reply, error) {
 	if m.updateErr != nil {
 		return nil, m.updateErr
 	}

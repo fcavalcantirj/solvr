@@ -1,5 +1,5 @@
 // Package main implements the backfill-embeddings CLI tool.
-// It generates embeddings for existing posts, answers, and approaches that don't have one.
+// It generates embeddings for existing posts, answers, approaches, and replies that don't have one.
 package main
 
 import (
@@ -49,6 +49,9 @@ type backfillDB interface {
 	GetApproachesWithoutEmbedding(ctx context.Context, limit, offset int) ([]approachRow, error)
 	CountApproachesWithoutEmbedding(ctx context.Context) (int, error)
 	UpdateApproachEmbedding(ctx context.Context, id string, embedding []float32) error
+	GetRepliesWithoutEmbedding(ctx context.Context, limit, offset int) ([]replyRow, error)
+	CountRepliesWithoutEmbedding(ctx context.Context) (int, error)
+	UpdateReplyEmbedding(ctx context.Context, id string, embedding []float32) error
 }
 
 // backfillResult holds the summary of a backfill run.
@@ -65,6 +68,9 @@ type backfillResult struct {
 	approachesFound    int
 	approachesEmbedded int
 	approachesErrors   int
+	repliesFound       int
+	repliesEmbedded    int
+	repliesErrors      int
 }
 
 // backfillWorker orchestrates the backfill process.
@@ -78,21 +84,21 @@ type backfillWorker struct {
 }
 
 // parseContentTypes parses a comma-separated content types string.
-// Valid values: "posts", "answers", "approaches", "all" (default).
+// Valid values: "posts", "answers", "approaches", "replies", "all" (default).
 func parseContentTypes(s string) []string {
 	if s == "" || s == "all" {
-		return []string{"posts", "answers", "approaches"}
+		return []string{"posts", "answers", "approaches", "replies"}
 	}
 	parts := strings.Split(s, ",")
 	var result []string
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
-		if p == "posts" || p == "answers" || p == "approaches" {
+		if p == "posts" || p == "answers" || p == "approaches" || p == "replies" {
 			result = append(result, p)
 		}
 	}
 	if len(result) == 0 {
-		return []string{"posts", "answers", "approaches"}
+		return []string{"posts", "answers", "approaches", "replies"}
 	}
 	return result
 }
@@ -129,10 +135,16 @@ func (w *backfillWorker) run(ctx context.Context) (*backfillResult, error) {
 		}
 	}
 
+	if w.shouldProcess("replies") {
+		if err := w.runReplies(ctx, result); err != nil {
+			return result, err
+		}
+	}
+
 	// Aggregate totals
-	result.totalFound = result.postsFound + result.answersFound + result.approachesFound
-	result.embedded = result.postsEmbedded + result.answersEmbedded + result.approachesEmbedded
-	result.errors = result.postsErrors + result.answersErrors + result.approachesErrors
+	result.totalFound = result.postsFound + result.answersFound + result.approachesFound + result.repliesFound
+	result.embedded = result.postsEmbedded + result.answersEmbedded + result.approachesEmbedded + result.repliesEmbedded
+	result.errors = result.postsErrors + result.answersErrors + result.approachesErrors + result.repliesErrors
 
 	return result, nil
 }
@@ -574,7 +586,7 @@ func main() {
 	batchSize := flag.Int("batch-size", 100, "Number of items to process per batch")
 	dryRun := flag.Bool("dry-run", false, "Show what would be embedded without making changes")
 	delayMs := flag.Int("delay-ms", 20, "Delay in milliseconds between each embedding API call (default 20ms ≈ 50/sec; use 22000 for ~3 RPM free tier)")
-	contentTypesFlag := flag.String("content-types", "all", "Content types to embed: posts, answers, approaches, all (comma-separated)")
+	contentTypesFlag := flag.String("content-types", "all", "Content types to embed: posts, answers, approaches, replies, all (comma-separated)")
 	flag.Parse()
 
 	contentTypes := parseContentTypes(*contentTypesFlag)
@@ -632,10 +644,10 @@ func main() {
 		log.Fatalf("Backfill failed: %v", err)
 	}
 
-	fmt.Printf("Backfill complete: %d posts, %d answers, %d approaches embedded\n",
-		result.postsEmbedded, result.answersEmbedded, result.approachesEmbedded)
+	fmt.Printf("Backfill complete: %d posts, %d answers, %d approaches, %d replies embedded\n",
+		result.postsEmbedded, result.answersEmbedded, result.approachesEmbedded, result.repliesEmbedded)
 	if result.errors > 0 {
-		fmt.Printf("Errors: %d posts, %d answers, %d approaches\n",
-			result.postsErrors, result.answersErrors, result.approachesErrors)
+		fmt.Printf("Errors: %d posts, %d answers, %d approaches, %d replies\n",
+			result.postsErrors, result.answersErrors, result.approachesErrors, result.repliesErrors)
 	}
 }

@@ -202,12 +202,12 @@ func TestReplyRepository_UpdateAuthorOnly(t *testing.T) {
 	}
 
 	// A non-author cannot edit.
-	if _, err := repo.Update(ctx, created.ID, models.AuthorTypeAgent, "intruder", "hacked"); err != ErrReplyForbidden {
+	if _, err := repo.Update(ctx, created.ID, models.AuthorTypeAgent, "intruder", "hacked", nil); err != ErrReplyForbidden {
 		t.Fatalf("non-author Update err = %v, want ErrReplyForbidden", err)
 	}
 
 	// The author can edit; identity and creation time are preserved.
-	updated, err := repo.Update(ctx, created.ID, models.AuthorTypeHuman, user.ID, "edited body")
+	updated, err := repo.Update(ctx, created.ID, models.AuthorTypeHuman, user.ID, "edited body", nil)
 	if err != nil {
 		t.Fatalf("author Update failed: %v", err)
 	}

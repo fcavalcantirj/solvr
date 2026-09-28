@@ -59,7 +59,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"feature:forgetting":          pending(LegacyActionRetire, "approach forget_after/archived_at lifecycle has no reply equivalent"),
 	"feature:moderation":          done(LegacyActionRefactor, "verdicts are system replies (ModerationReplyWriter); flags accept 'reply' and the API list is pinned to flags_target_type_check, so its legacy types narrow with check:flags at cleanup"),
 	"feature:duplicate-detection": pending(LegacyActionRefactor, "similarity check in services/moderation.go must run on posts and replies"),
-	"feature:embedding-workers":   pending(LegacyActionRefactor, "backfill and create/update still embed approaches/answers only; must embed replies.embedding"),
+	"feature:embedding-workers":   done(LegacyActionRefactor, "reply create/edit embed the body into replies.embedding (an edit without a vector clears it) and backfill-embeddings embeds replies (content type 'replies', in 'all'); legacy answer/approach embedding stays only on the legacy routes and backfill types that drop with their tables"),
 
 	// Scheduled jobs (cmd/api/main.go) and LISTEN consumers.
 	"job:CleanupJob":               keep("prunes claim tokens and idempotency keys; touches no legacy table"),
@@ -106,5 +106,5 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"code:internal/db/auto_solve.go":               pending(LegacyActionRetire, "see job:AutoSolveJob"),
 	"code:internal/db/stale_content.go":            pending(LegacyActionRetire, "see job:StaleContentJob and feature:forgetting"),
 	"code:internal/reputation/sql_builder.go":      pending(LegacyActionRefactor, "see feature:reputation"),
-	"code:cmd/backfill-embeddings/main.go":         pending(LegacyActionRefactor, "see feature:embedding-workers"),
+	"code:cmd/backfill-embeddings/main.go":         pending(LegacyActionRefactor, "answers/approaches content types still read the legacy tables; remove them with the tables (the cutover copies their vectors onto replies)"),
 }

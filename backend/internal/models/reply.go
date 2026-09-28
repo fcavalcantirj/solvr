@@ -63,6 +63,10 @@ type Reply struct {
 	LegacyID   *string         `json:"legacy_id,omitempty"`
 	Provenance json.RawMessage `json:"provenance,omitempty"`
 
+	// EmbeddingStr carries the PostgreSQL vector literal of the body from handler to
+	// repository. Nil stores NULL; the backfill embeds it later.
+	EmbeddingStr *string `json:"-"`
+
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`

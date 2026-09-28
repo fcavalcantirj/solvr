@@ -390,6 +390,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	// Canonical Reply model (BART-585): one create/list/update/delete/vote family
 	// serving every contribution — no approach/answer/response/comment choice.
 	repliesHandler := handlers.NewRepliesHandler(db.NewReplyRepository(pool))
+	if embeddingService != nil {
+		repliesHandler.SetEmbeddingService(embeddingService)
+	}
 
 	// Create users handler (BE-003: User profile endpoints)
 	// Type assertion to get the full interface needed by UsersHandler

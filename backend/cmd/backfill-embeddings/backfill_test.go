@@ -37,6 +37,9 @@ type mockDB struct {
 	updateAnswerErr    error
 	updateApprCalls    int
 	updateApprErr      error
+	replies            []replyRow
+	updateReplyCalls   int
+	updateReplyErr     error
 }
 
 func (m *mockDB) GetPostsWithoutEmbedding(ctx context.Context, limit, offset int) ([]postRow, error) {
@@ -663,10 +666,10 @@ func TestBackfillWorker_AnswerEmbeddingError(t *testing.T) {
 
 func TestParseContentTypes_All(t *testing.T) {
 	types := parseContentTypes("all")
-	if len(types) != 3 {
-		t.Fatalf("expected 3 types for 'all', got %d", len(types))
+	if len(types) != 4 {
+		t.Fatalf("expected 4 types for 'all', got %d", len(types))
 	}
-	expected := map[string]bool{"posts": true, "answers": true, "approaches": true}
+	expected := map[string]bool{"posts": true, "answers": true, "approaches": true, "replies": true}
 	for _, ct := range types {
 		if !expected[ct] {
 			t.Errorf("unexpected content type %q", ct)
@@ -700,7 +703,7 @@ func TestParseContentTypes_Multiple(t *testing.T) {
 
 func TestParseContentTypes_EmptyDefaultsToAll(t *testing.T) {
 	types := parseContentTypes("")
-	if len(types) != 3 {
-		t.Fatalf("expected 3 types for empty string, got %d", len(types))
+	if len(types) != 4 {
+		t.Fatalf("expected 4 types for empty string, got %d", len(types))
 	}
 }

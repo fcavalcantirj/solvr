@@ -91,12 +91,12 @@ func (r *ReplyRepository) Create(ctx context.Context, reply *models.Reply) (*mod
 	}
 
 	row := r.pool.QueryRow(ctx, `
-		INSERT INTO replies (post_id, parent_reply_id, author_type, author_id, body, legacy_type, legacy_id, provenance)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO replies (post_id, parent_reply_id, author_type, author_id, body, legacy_type, legacy_id, provenance, embedding)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector)
 		RETURNING id, post_id, parent_reply_id, author_type, author_id, body, upvotes, downvotes,
 		          legacy_type, legacy_id, provenance, created_at, updated_at, deleted_at`,
 		reply.PostID, reply.ParentReplyID, reply.AuthorType, reply.AuthorID, reply.Body,
-		reply.LegacyType, reply.LegacyID, provenance,
+		reply.LegacyType, reply.LegacyID, provenance, reply.EmbeddingStr,
 	)
 	created, err := scanReply(row)
 	if err != nil {
@@ -279,8 +279,10 @@ func (r *ReplyRepository) CountByPost(ctx context.Context, postID string) (int, 
 }
 
 // Update edits a reply's body. Only the author may edit; author identity,
-// creation time, votes, and provenance are never reset.
-func (r *ReplyRepository) Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string) (*models.Reply, error) {
+// creation time, votes, and provenance are never reset. embedding is the vector
+// literal of the new body; nil clears the stored vector so a stale one never
+// describes edited text (the backfill re-embeds it).
+func (r *ReplyRepository) Update(ctx context.Context, id string, authorType models.AuthorType, authorID, body string, embedding *string) (*models.Reply, error) {
 	owner, err := r.loadOwner(ctx, id)
 	if err != nil {
 		return nil, err
@@ -290,10 +292,10 @@ func (r *ReplyRepository) Update(ctx context.Context, id string, authorType mode
 	}
 
 	row := r.pool.QueryRow(ctx, `
-		UPDATE replies SET body = $2, updated_at = NOW()
+		UPDATE replies SET body = $2, embedding = $3::vector, updated_at = NOW()
 		WHERE id = $1 AND deleted_at IS NULL
 		RETURNING id, post_id, parent_reply_id, author_type, author_id, body, upvotes, downvotes,
-		          legacy_type, legacy_id, provenance, created_at, updated_at, deleted_at`, id, body)
+		          legacy_type, legacy_id, provenance, created_at, updated_at, deleted_at`, id, body, embedding)
 	updated, err := scanReply(row)
 	if err != nil {
 		if err.Error() == "no rows in result set" {

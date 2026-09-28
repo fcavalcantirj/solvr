@@ -5572,3 +5572,156 @@ UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: apply 000108 on productio
 
 ================================================================================
 CORRECTION to the slice 6 entry above [REAL, git diff --numstat]: 23 tracked files are modified or deleted besides progress.txt (2 of them deleted), plus 1 staged add (app/claim/page.tsx) and 9 untracked new files; not 22.
+
+================================================================================
+2026-09-28 — Task idx 75 (spec.json, category api) — DONE, passes=true
+"Keep credentials safe and revocation reliable across streams and multiple agent sessions"
+SLICE 7 (closing). Slice 6's REMAINING (a) GA and the claim fragment, and (b) the closure pass.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73-95;
+  no description starts with URGENT; idx 24/52/53/67/68/73/74 stay gated exactly as slices 2-6
+  recorded; idx 75 is the first buildable false task.
+
+SPIKE FIRST [REAL, measured in a real browser; harness /tmp/solvr_idx75_s7_ga_probe.cjs and
+  probe2.cjs, NOT committed]: production build (`npm run build` + `next start -p 3091`) with
+  NEXT_PUBLIC_API_URL=http://localhost:8091 (an API built from HEAD, /tmp/solvr-api-s7, over
+  the local solvr_test on 5435) and NEXT_PUBLIC_GA_ID=G-S7LOCALTEST (fake). Headless Chromium
+  (playwright-core from frontend/node_modules, chromium-1228). Every off-localhost request except
+  the public gtag.js download was recorded and ABORTED, so no hit reached any GA property and
+  nothing touched api.solvr.dev.
+  - Tracked page with a fragment, /rooms#token=S7PROBE...: the GA hit had dl=http://localhost/rooms.
+    gtag.js DROPPED the fragment; no off-site request carried the marker.
+  - Tracked page with a query, /rooms?code=solvr_lc_S7PROBE&token=S7PROBE-QUERY: dl carried both
+    values, sent to google-analytics.com AND google.com/g/collect. A query secret reaches GA.
+  - HEAD layout (ungated; RED, /tmp/solvr_idx75_s7_ga_probe_mutant.log): /claim#token= loaded GA
+    and sent dl=/claim (no token); /auth/callback?code= sent dl=/auth/callback (the page had
+    already stripped the code: a race the page won here); /email/unsubscribe?email=&token= SENT
+    the email address and the unsubscribe token to GA (dl=...?email=s7probe%40example.com&token=
+    S7PROBE). So slice 6's claim link did NOT leak to GA in this measurement, and the unsubscribe
+    page DID.
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` / `git diff --stat` before this append:
+  1 tracked file modified (frontend/app/layout.tsx, +2/-2), 2 untracked new files]:
+  A frontend/components/site-analytics.tsx (26): SiteAnalytics, a client component using
+    usePathname, renders the stock <GoogleAnalytics> EXCEPT on /claim, /auth/callback and
+    /email/unsubscribe (trailing slash tolerated; an unknown pathname also renders nothing).
+    isUntrackedPath is exported for the tests. Moving on to another page loads the tag with that
+    page's own address.
+  M frontend/app/layout.tsx: <GoogleAnalytics gaId=...> -> <SiteAnalytics gaId=...>; the direct
+    @next/third-parties import is gone from the layout.
+  A frontend/components/site-analytics.test.tsx (110, 17 tests): GA loads on /, /rooms/x, /feed,
+    /claimed, /auth, /email; not on the 3 secret pages (+ /claim/); nothing when the pathname is
+    null; it loads after a rerender from /claim to /dashboard; layout.tsx must not name
+    GoogleAnalytics and must render <SiteAnalytics; and a guard that walks app/**/page.tsx and
+    requires every page reading searchParams.get("token"|"code"|"key"|"secret"|"api_key"|
+    "access_token") or location.hash to be untracked (it finds exactly the 3 pages today).
+  No backend change (`git diff --quiet HEAD -- backend` true). No existing test changed, skipped
+  or removed. progress.txt (this entry) and spec.json (idx 75 passes) are the other changes.
+
+TDD:
+  RED [TEST] /tmp/solvr_idx75_s7_red.log: "Failed to resolve import ./site-analytics".
+  GREEN [TEST] /tmp/solvr_idx75_s7_green.log: site-analytics 17 + layout.metadata 4 = 21 PASS.
+  MUTATIONS [REAL], each restored from a cp copy and cmp-verified: (M1) "/claim" removed from
+    the list -> 4 FAIL (/tmp/solvr_idx75_s7_mut1.log); (M2) HEAD layout.tsx -> "does not render
+    the GA component directly" FAIL (/tmp/solvr_idx75_s7_mut2.log).
+  BROWSER GREEN [REAL] final source rebuilt (/tmp/solvr_idx75_s7_build_final.log), probe
+    /tmp/solvr_idx75_s7_ga_probe_final.log: /claim, /auth/callback, /email/unsubscribe ->
+    window.dataLayer null, 0 GA/GTM requests, 0 off-site requests carrying the marker; the claim
+    and callback address bars end with no secret; / (control) -> gtag.js + a collect hit.
+  API LOG [REAL] /tmp/solvr_idx75_s7_api.log during the probes: 0 lines contain the markers'
+    secrets; POST /v1/agents/claim/lookup logs no body; /v1/auth/oauth/exchange logs
+    {"login_code":"***REDACTED***"}; GET /v1/email/unsubscribe logs token=***REDACTED*** but
+    the email address in the clear (PII, not a credential; not changed).
+
+CLOSURE PASS [TEST] (slice 6 REMAINING (b)), DATABASE_URL=postgres://solvr:solvr_dev@
+  localhost:5435/solvr_test, executed ONCE: `go test -p 1 -count=1 -v -run '<46 families>'
+  ./internal/db/... ./internal/api/...` -> /tmp/solvr_idx75_s7_closure.log: 391 PASS, 0 SKIP,
+  1 FAIL. Per step (PASS lines incl. subtests, all 0 FAIL unless stated):
+  step 1: TestRoomAgentTokenRepository 10, TestRoomTokenSessions 4, TestRoomHandshake 3,
+    TestConnectPrompts_ExplainSessionsAndRotation 13.
+  step 2: TestStreamTicket 6, TestSSEStreamTicket 9, TestRoomSSE 4, TestURLCredentials 1,
+    TestRoomBearerToken 1, TestRefuseURLCredentials 9, TestAPIUsage_AStreamTicket... 1.
+  step 3: TestRoomTokenRevoke 2, TestRoomStream 3, TestRoomEntriesStream 3, TestRoomFamily 4,
+    TestDeletedAgent 1, TestDeletedHuman 1, TestAccountDeletion 1,
+    TestRoomMemberRepository_AccountLive 1, TestRoomPermissionMatrix 5 PASS / 2 FAIL (below).
+  step 4: TestRoomPrivateConnect 2, TestConnectPrivateAdmission 4, TestRoomSharedTokenRetired 5,
+    TestPublishedAgentDocs 2.
+  step 5: TestCredentials 2, TestLogging_Redacts 1, TestRedact 36, TestOAuthLoginCode 11,
+    TestExchangeLoginCode 11, TestOAuthCallbacks 9, TestGenerateClaim 12,
+    TestClaimTokenRepository 23, TestClaimTokenSealer 9, TestClaimLink 3, TestAgentClaim 3,
+    TestLookupClaim 7, TestGetClaimInfo 6; plus TestOpenAPI 33, TestRouteFamilies 3.
+  The 1 FAIL: TestRoomPermissionMatrix_EverySurfaceFollowsVisibilityMembershipOwnershipAndDeletion
+    /private=false, in SETUP: router_rooms_test.go:70 "duplicate key value violates unique
+    constraint users_username_key" / "failed to create test user". Run ALONE: PASS, both
+    private=false and private=true (/tmp/solvr_idx75_s7_matrix_alone.log). Same fixture
+    collision slice 6 (claim race) and idx 59 slice 9 (TestRoomFamily_*) recorded.
+  ROOT CAUSE OF THAT FLAKE [REAL, measured]: createRoomTestUser names users
+    roomtest_<time.Now().UnixNano()%1000000>. On this Mac UnixNano() is always a multiple of
+    1000 (a throwaway go program: 20000 samples, 966 distinct values, 0 not divisible by 1000),
+    so only ~1000 names exist; any two roomtest_ users alive at once collide at 1 in 1000, and
+    solvr_test holds 1 leftover roomtest_ user. The referral code RT%06d uses the same value.
+    NOT CHANGED (test infrastructure, not this task). Suggested fix for the owner: build the
+    username and referral code from uuid.New() hex (e.g. "roomtest_"+12 hex = 21 chars <= 30).
+  FULL BACKEND: not re-run. The backend is byte-identical to HEAD 5635169, whose full run is
+    slice 6's /tmp/solvr_idx75_s6_full.log (72 unique FAIL names, the documented standing set;
+    none of idx 75's tests among them). Same basis idx 59 closed on.
+  FULL FRONTEND [TEST] `npx vitest run` once: 183 files, 1662 tests passed, 0 failed
+    (/tmp/solvr_idx75_s7_fe_full.log; slice 6 had 182 / 1645). `npx tsc --noEmit` exit 0, no
+    output. eslint on the 3 touched files: 0 errors, 2 warnings (layout.tsx lines 11-12 unused
+    font vars, untouched lines). check-file-size.sh: 35 violations, same as slice 6, none new.
+
+STEP 5, ITEM BY ITEM [evidence class per line]:
+  storage [TEST+REAL read]: room tokens and agent API keys hashed (TestCredentials_*); claim
+    tokens hash + sealed copy (000108, slice 6); login codes SHA-256 only (000107, read);
+    refresh tokens hashed (000014, slice 3); stream tickets are stateless HMAC
+    (auth/stream_ticket.go, read), never stored.
+  HTTP logging [TEST+REAL]: TestRedact* 36, TestLogging_*, TestOAuthLoginCode_TheCodeNeverReaches
+    TheAccessLog, the router exposure test; plus this session's API log (above).
+  analytics [TEST+REAL]: this slice.
+  error reports [REAL, grep]: SENTRY_DSN is read into config and used nowhere; no reporting SDK
+    in go.mod or package.json; app/global-error.tsx renders error.message on screen only, and API
+    errors never echo credentials (TestCredentials_AreNeverEchoedInResponsesOrLogs).
+  screenshots / copied links [REAL]: claim and callback address bars end clean (probe); the room
+    share button copies origin + /rooms/{slug} (slice 4, read); connect prompts use placeholders
+    (slice 3 F6); new API keys are shown once in a modal (slice 4, read). The claim link carries
+    its token by design (a human is meant to receive it), in the fragment.
+
+SIDE EFFECTS OF THIS ITERATION, ALL UNDONE OR NAMED [REAL]:
+  - `npm run build`'s prebuild hook (scripts/sync-skill.sh) copied skill/SKILL.md over
+    frontend/public/skill.md and rebuilt frontend/public/solvr-skill.zip. The two copies DIFFER
+    (skill/SKILL.md still has the old "knowledge base" description; public/skill.md has the
+    connection framing), so any local build silently reverts the served skill.md. I restored both
+    files with `git checkout --` (git status clean for them before this append). NOT FIXED: it is
+    agent-facing skill drift, which idx 78 step 1 owns.
+  - Killed a stale /tmp/solvr-api (PID 96094, started 2026-09-22, listening on :8092), a leftover
+    of an earlier iteration. Stopped my own API (:8091) and next start (:3091) after the probes.
+  - frontend/.next now holds a build baked with NEXT_PUBLIC_API_URL=http://localhost:8091 and GA
+    id G-S7LOCALTEST (gitignored). Rebuild before any local `next start`.
+
+NOT VERIFIED [UNVERIFIED]:
+  - What the real GA property stores (no GA access). The gate does not depend on it.
+  - A tab that already loaded gtag on another page, moves to /claim in-app and then gets a
+    #token= pasted into the same document: gtag stays loaded (unmounting the tag does not unload
+    it). The measured fragment drop covers it today; that is Google's behavior, not ours.
+  - /email/unsubscribe keeps email + unsubscribe token in its address bar. Emails link to the
+    API directly (handlers/admin.go:242), not to this page [REAL, grep]; the token only
+    unsubscribes that address. Not changed.
+  - No Playwright suite exists in the repo: CI runs `npm run test:e2e`, but package.json has no
+    such script and there is no playwright config [REAL, read]. The browser check above is
+    therefore a /tmp spike, not a committed test.
+
+REMAINING FOR idx 74 (untouched): step 5 "require" If-Match, owner decision.
+REMAINING, handed to idx 78 step 1: stale solvr-skill.zip / scripts accepting --room-token
+  (slices 4-6), and the skill/SKILL.md vs frontend/public/skill.md drift found above.
+
+UAT: owner applies migrations 000105, 000106, 000107 and 000108, in that order, to production
+  through the admin query route (after 000101-000104 from their own tasks), and deploys backend
+  AND frontend in the same window. Then run the UAT checks written in slices 1, 4, 5 and 6 of this
+  task (two-session rotation 401 CREDENTIAL_ROTATED; deleted agent's room token 401; OAuth login
+  lands signed in with no token in the address bar and POST /v1/auth/oauth/exchange with a bogus
+  code 401 INVALID_LOGIN_CODE; a repeated claim link is identical and starts with
+  https://solvr.dev/claim#token=, GET /v1/claim/x 404, claim_tokens has no token column). New here:
+  open https://solvr.dev/claim#token=x and https://solvr.dev/auth/callback?code=x with DevTools
+  Network open and confirm no request goes to googletagmanager.com or google-analytics.com, while
+  https://solvr.dev/ still sends one (GA Realtime shows the / visit).

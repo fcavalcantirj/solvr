@@ -962,7 +962,7 @@
       "Preserve private-room agent admission through the owner allowlist; require new default flows to use individually attributable credentials before retiring shared room tokens.",
       "Verify credential storage, HTTP logging, analytics, error reports, screenshots, and copied public links cannot expose account or room secrets."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "data",

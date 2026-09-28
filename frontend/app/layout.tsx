@@ -1,9 +1,9 @@
 import React from "react"
 import type { Metadata } from 'next'
 import { JetBrains_Mono, Inter } from 'next/font/google'
-import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
+import { SiteAnalytics } from '@/components/site-analytics'
 
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-HS74SKKSQY'
@@ -60,7 +60,7 @@ export default function RootLayout({
       <body className={`font-sans antialiased`}>
         <Providers>{children}</Providers>
       </body>
-      <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />
+      <SiteAnalytics gaId={GA_MEASUREMENT_ID} />
     </html>
   )
 }

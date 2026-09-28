@@ -8171,3 +8171,170 @@ UAT (for when idx 76 closes, not now): owner applies 000109, 000110 and 000111 t
   `backfill-embeddings --content-types replies --dry-run` and, if the count/cost is
   acceptable, the real run; optionally counts production posts the crystallization rule
   makes eligible (slice 10).
+
+2026-09-28 19:50 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 17 of N: steps 3-4, profile stats counts (the agents.go/users.go stats on profiles).
+This entry VERIFIES AND JOURNALS work that is already committed: HEAD 3cfab499 is a ralph.sh
+HOST AUTO-COMMIT (its message is the truncated header of slice 16's entry). Same pattern as
+slices 14-16: the engine call that wrote the code ended without journaling or committing; why
+is [UNVERIFIED]. This iteration changes no code, only this journal.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated as slice 1
+  recorded. idx 76 continues; slice 16's REMAINING list starts with the agents.go/users.go
+  stats counts, which HEAD already holds unjournaled. Tree clean at start [REAL, git status
+  --porcelain].
+
+WHAT HEAD 3cfab499 CHANGED [REAL, `git show --stat HEAD` + diff read]: 6 files, +475/-62.
+  A backend/internal/db/profile_stats_canonical.go (123): CanonicalReputationAgentRepository.
+    GetAgentStats and CanonicalReputationUserRepository.GetUserStats now come from ONE query
+    each (WITH o AS (owner row + canonical reputation) + canonicalProfileCounts): posts
+    (created, solved problems, problems, questions, ideas; deleted posts excluded), live
+    replies of the owner on any post (answers = top-level replies on questions, responses =
+    top-level replies on ideas, accepted = replies named by their post's accepted_answer_id,
+    user contributions = every live reply), confirmed upvotes on the owner's posts and
+    replies. Problem/question/idea types are parameters ($2-$4). Unknown or deleted agent ->
+    zero stats (no row); user stats are computed whether or not the account exists, like the
+    legacy GetUserStats. UserStats.ProblemsSolved stays unset, as in the legacy query.
+  M backend/internal/db/reputation_canonical.go (-61): the previous overrides (legacy counts +
+    a separate reputation query: canonicalAgentReputationQuery, canonicalUserReputationQuery,
+    queryReputation) are removed; List overrides unchanged.
+  M backend/internal/db/legacy_dependency_registry.go (notes only): code:internal/db/agents.go
+    stays pending(refactor), note now names GetActivity (GET /v1/agents/{id}/activity still
+    lists answers/approaches/responses) as the remaining legacy reader; code:internal/db/
+    users.go stays pending(refactor), its legacy GetUserStats/BuildReputationSQL are unwired.
+    Registry counts unchanged [REAL, grep]: 30 pending retire, 12 pending refactor, 3 remap.
+  A backend/internal/db/profile_stats_canonical_test.go (204): TestLegacyProfileStats_Served
+    Canonically (source guard + registry flags) and TestCanonicalProfileStats_KeepsLegacyCounts
+    AcrossTheCutover on a scratch DB: legacy stats before MigrateContributions +
+    RemapLegacyRelations == canonical after, except the deliberate changes (a comment on a
+    question becomes an answer, an approach upvote counts, user contributions include
+    approaches and comments); unchanged after dropping the legacy tables; native replies, a
+    native accepted reply and reply votes move them (child reply not an answer, deleted reply
+    and downvote count nothing).
+  A backend/internal/api/router_profile_stats_canonical_test.go (135): TestProfileStatsRoutes_
+    CountCanonicalReplies through the real router: GET /v1/agents/{id}, /v1/users/{id} and
+    /v1/me (user JWT) show native replies, the accepted native reply and reply upvotes.
+  M backend/internal/db/reputation_canonical_test.go — EXISTING TEST CHANGED (golden rule):
+    (a) TestCanonicalReputation_ProfilesAndListsAgreeWithTheServedLeaderboard, line ~205.
+    (b) It asserted `assert.Equal(t, legacyNow, canonicalStats, "only Reputation differs from
+        the legacy stats")` where legacyNow = legacy GetAgentStats(holder) read AFTER the
+        cutover. Now: `assert.Equal(t, &legacyBefore, canonicalStats, "only Reputation
+        differs from the legacy stats before the cutover")`, legacyBefore = the legacy stats
+        snapshot the test already took BEFORE the cutover. Same claim (every count but
+        Reputation equals the legacy one), compared against the pre-cutover legacy numbers.
+    (c) Why [TEST, /tmp/solvr_idx76_s17_oldassert.log]: I put the HEAD~1 version of the test
+        back and ran it against HEAD code: FAIL :208 expected UpvotesReceived 1, actual 2.
+        The cutover remaps the answer vote onto the reply, so the legacy query READ AFTER the
+        cutover loses it (1); canonical keeps it (2, = the pre-cutover legacy value). The old
+        comparison had become a comparison with a legacy reading the cutover itself breaks.
+        The same behavior (counts preserved across the cutover) is also pinned field by field
+        by TestCanonicalProfileStats_KeepsLegacyCountsAcrossTheCutover.
+    (d) Both PASS on HEAD (targeted and full runs below). File restored, `git diff --quiet`.
+
+WIRING [REAL, router.go read]: agentRepoConcrete = NewCanonicalReputationAgentRepository serves
+  AgentsHandler (handlers/agents.go:475 GetAgent, :605 UpdateAgent, :803 UpdateIdentity),
+  usersHandler.SetAgentRepository (/v1/users/{id}/agents), MeHandler agent stats (router.go
+  :868) and the resurrection bundle (router.go:433-438); usersUserRepo/userRepo =
+  NewCanonicalReputationUserRepository serve /v1/users/{id} and /v1/me. BadgeService (the only
+  other GetAgentStats/GetUserStats caller) is not constructed in production [REAL, grep;
+  retired in slice 13]. Route-tested this slice: /v1/agents/{id}, /v1/users/{id}, /v1/me
+  (user). /v1/me as agent is covered for reputation by TestReputationRoutes_ (same method;
+  mut1 fails it). Resurrection bundle stats: wired, not route-tested [UNVERIFIED by test].
+
+VERIFICATION [all against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable; scratch DBs on the same
+  server, dropped after (0 solvr_scratch* left [REAL, psql])]:
+  go build ./... clean; go vet ./internal/db/ ./internal/api/... clean; gofmt -l prints nothing
+    for the 6 HEAD files.
+  Targeted DB [TEST] /tmp/solvr_idx76_s17_db.log (-run TestLegacyProfileStats_|TestCanonical
+    ProfileStats_|TestLegacyReputation_|TestCanonicalReputation_|TestCanonicalLeaderboard_|
+    TestLegacyStats_|TestCanonicalStats_|TestLegacyDependency|TestExtractStaticSQL|
+    TestFreezeLegacyReputation_): 15 PASS, 0 FAIL, 0 SKIP.
+  API/handlers [TEST] /tmp/solvr_idx76_s17_api.log (-run TestProfileStatsRoutes_|TestReputation
+    Routes_|TestStatsRoutes_|TestLegacy|Resurrection|TestUsers|TestAgents|TestMe|GetMe|
+    Profile): 2 packages ok, 81 PASS, 0 FAIL, 0 SKIP.
+  Dropped-table probes [TEST] /tmp/solvr_idx76_s17_jobs.log: both TestLegacyDroppedDatabase_*
+    PASS. Static probe: 621 extracted (+1 vs slice 16), 551 prepared (=), 70 did not (+1).
+    The +1 did-not is internal/db/profile_stats_canonical.go:1. Which statement [REAL for the
+    fragment, INFERRED that it is the one counted]: PREPARE of the canonicalProfileCounts
+    fragment alone fails `relation "o" does not exist` (it only runs inside the two WITH o AS
+    queries); the two full queries run after dropLegacy() in TestCanonicalProfileStats_ [TEST].
+    Net: reputation_canonical.go lost its 2 queries, profile_stats_canonical.go adds 3.
+  MUTATIONS [TEST] (RED was never captured by the writing iteration). Source restored from cp
+    after each; `git diff --quiet` confirmed. Logs /tmp/solvr_idx76_s17_mut{1..5}.log:
+    mut1 both overrides renamed away (embedded legacy GetAgentStats/GetUserStats serve) ->
+      TestCanonicalProfileStats_ FAIL :169/:176/:182, TestCanonicalReputation_ FAIL
+      :197/:208/:223/:227, TestProfileStatsRoutes_ FAIL :111/:112/:115, TestReputationRoutes_
+      FAIL. TestLegacyProfileStats_ServedCanonically still PASSES under mut1: its source guard
+      greps "AgentRepository.GetAgentStats(" literally and cannot see this; the behavior
+      tests are what catch it.
+    mut2 answers without `parent_reply_id IS NULL` -> TestCanonicalProfileStats_ FAIL
+      :176/:199/:203, TestProfileStatsRoutes_ FAIL :111 (child reply counted as an answer).
+    mut3 accepted = FILTER (WHERE false) -> TestCanonicalProfileStats_ FAIL :169/:176/:199,
+      TestCanonicalReputation_ FAIL :208, TestProfileStatsRoutes_ FAIL :112.
+    mut4 reply-vote branch disabled -> TestCanonicalProfileStats_ FAIL :169/:176/:199/:203,
+      TestCanonicalReputation_ FAIL :208, TestProfileStatsRoutes_ FAIL :115/:131/:134.
+    mut5 replies without `deleted_at IS NULL` -> TestCanonicalProfileStats_ FAIL :169/:199
+      (only this test has a deleted reply; the route tests do not).
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 40m ./...` ->
+    /tmp/solvr_idx76_s17_full.log: 4684 PASS, 63 FAIL, 12 SKIP (slice 16: 4678/65/13, same
+    counting). Packages FAIL: internal/api/handlers (only the 4 standing GitHub OAuth
+    integration tests) and internal/db (58 top-level). All 3 HEAD tests, the changed
+    reputation test, both dropped-table probes, the slice 14-16 leaderboard/reputation/stats
+    tests and the legacy TestAgentRepository_GetAgentStats PASS in it. 0 "cannot scan NULL".
+    vs slice 16 (comm of FAIL names): 3 gone (TestAgentRepository_GetAgentStats and
+    _List_FilterByStatus: no fixed-name collision this time, I kept my targeted runs off them;
+    TestSearchPulse_WithResultsCountsOnlyProductiveSearches), 1 new:
+    * TestSearch_Similarity_PopulatedAndTopSimilarity: search_similarity_test.go:88 "post A
+      missing or similarity nil: <nil>". Cause [REAL]: solvr_test held 66 leftover
+      'zebracorn%' posts from today's earlier runs (its cleanup fails on the standing
+      approaches_problem_id_fkey error, search_test.go:497), so post A fell off the first page
+      of 20. Alone with them: FAIL (/tmp/solvr_idx76_s17_sim_before.log); after deleting the
+      68 zebracorn posts by 'test-user' from solvr_test ONLY: PASS (_sim_after.log); I then
+      deleted the 2 that run left. HEAD touches no search code. Slice 15 listed the same test.
+    Skips: the GROQ-timed TestTypeSpecificListEndpoints/Idea subtest did not skip this time; no
+      new skip.
+    The other 62 failures are the standing set (46 referral_code NOT NULL fixture lines, the 4
+      OAuth tests, approaches_problem_id_fkey cleanup errors, TestSearch_MinSimilarity_Honest
+      Filter, ...).
+  check-file-size.sh: 35 violations, same as slices 1-16; agents.go 937 and router.go 1244
+    unchanged; HEAD files at most 204 lines.
+  My tests left 0 agent_pstats*/agent_rp*/psr_* agents, 0 of their probe posts, 0 fixed-name
+    agents, 0 scratch databases [REAL, psql].
+  NOT RUN: frontend (untouched by HEAD).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL, code read + tests above, unless stated]:
+  - DEPLOY ORDER (same shape as slices 14-16). Profile counts read replies, posts and votes
+    only. Deployed BEFORE the cutover [UNVERIFIED for production numbers, inferred from SQL;
+    mut1 shows the reverse locally]: questions_answered/answers_given/responses_given/
+    contributions drop to native replies; answers_accepted drops to 0 (posts.accepted_answer_id
+    holds answer ids until RemapAcceptedAnswerReferences); upvotes_received drops to post
+    votes plus votes on native replies (legacy answer/response votes are remapped by the
+    cutover). Posts counts (created, problems, questions, ideas, solved) are unchanged.
+  - After the cutover: a comment written on a question counts as an answer, and one on an idea
+    as a response (both become top-level replies); upvotes on former approaches and comments
+    count; a user's contributions count every live reply (approaches, comments, progress
+    notes), not answers + responses; accepted comes from the post's accepted_answer_id, not
+    answers.is_accepted; a deleted response no longer counts (the legacy responses count had
+    no deleted_at filter).
+  - One query per profile instead of the legacy stats query plus a reputation query.
+  - Stale guard: TestLegacyProfileStats_ServedCanonically's string guard does not detect the
+    overrides disappearing (mut1); the DB and route tests do. Test code, not changed here.
+
+REMAINING (next slices, in order):
+  step 3/4: agents.go GetActivity (/v1/agents/{id}/activity), homepage_overview.go counts,
+    search, posts joins/filters, visibility, resurrection, sitemap, backfill-embeddings, the
+    ideas sidebar in stats.go and the other pending code: entries; retire stale-content/
+    auto-solve/forgetting. Both dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109, 000110 and 000111 to production
+  after 000105-000108, then runs the cutover (MigrateContributions + RemapLegacyRelations; the
+  freeze is its first step) BEFORE or together with the deploy that serves the canonical
+  leaderboard, profile/list reputation, statistics AND profile stats counts (see DEPLOY ORDER
+  above), then `backfill-embeddings --content-types replies --dry-run` and, if the count/cost
+  is acceptable, the real run; optionally counts production posts the crystallization rule
+  makes eligible (slice 10).

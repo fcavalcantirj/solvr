@@ -7484,3 +7484,147 @@ UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to produ
   000105-000108, deploys, then runs `backfill-embeddings --content-types replies --dry-run`
   and, if the count/cost is acceptable, the real run; optionally counts production posts the
   crystallization rule makes eligible (slice 10). This slice adds no migration.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 13 of N: steps 3-4, badges. Milestone awarding is RETIRED (not refactored); earned
+badges are kept as history and the cutover awards none. feature:badges flips Done (retire).
+Other step 3/4 entries and the step-6 gate stay open.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated as slice 1
+  recorded. idx 76 continues from slice 12's REMAINING list (first item: badges). Working
+  tree clean at start [REAL, git status].
+
+SPIKE [REAL, grep + git log + psql on local solvr_test]:
+  - services.BadgeService / CheckAndAwardBadges has NO production caller, and never had one:
+    `git log -S CheckAndAwardBadges` and `-S NewBadgeService` show only 1ef751c8 (the commit
+    that added the service). Nothing in production writes the badges table: the only INSERT
+    is BadgeRepository.Award, whose only caller is that service. has_human_backed_badge is an
+    agents column set on claim, not a badges row.
+  - The rules are first_solve / ten_solves (ProblemsSolved), hundred_upvotes, and
+    first_answer_accepted (AnswersAccepted), read from GetAgentStats/GetUserStats. They depend
+    on solved problems and accepted answers, and the canonical model has neither (posts have
+    no 'solved' status; replies have no accept workflow, is_accepted lives only in provenance).
+  - Readers of earned badges (the history): GET /v1/agents/{id}/badges and
+    /v1/users/{id}/badges (BadgeRepository.ListForOwner), GET /v1/me for agents and humans,
+    and /v1/me/diff badges_earned (BriefingDiffRepository.ListAwardedSince). None of them
+    reads a legacy table.
+  DECISION: retire milestone awarding. Refactoring an unwired service onto invented canonical
+    milestones would change nothing in production, and choosing new achievements is a product
+    decision (idx 94/95). Wiring it now would award badges retroactively from migrated rows,
+    which step 4 forbids. The service and its 8 mock tests stay (no test deleted), marked
+    retired, until the legacy tables go.
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` before this append: 2 tracked files
+  modified, 2 untracked new files; `git diff --numstat`: db/legacy_dependency_registry.go
+  +1/-1, services/badges.go +4/-0]:
+  M backend/internal/db/legacy_dependency_registry.go: feature:badges
+    pending(refactor) -> done(LegacyActionRetire, "milestone awarding retired: ... earned badge
+    rows stay as history, served unchanged by /v1/agents/{id}/badges, /v1/users/{id}/badges,
+    /v1/me and /me/diff, and the cutover awards none").
+  M backend/internal/services/badges.go: 4-line doc comment on BadgeService: "Retired (task idx
+    76, feature:badges) ... do not wire it. It goes with the legacy tables." No code change.
+  A backend/internal/db/legacy_badges_test.go (60, 1 test):
+    TestLegacyBadgeMilestones_RetiredWithoutAProductionCaller: walks every non-test .go file
+    under backend (skipping vendor, node_modules and dot-dirs, same as the source scan) and
+    requires that none except internal/services/badges.go contains "NewBadgeService(" or
+    "CheckAndAwardBadges("; asserts feature:badges is Action retire and Done.
+  A backend/internal/api/router_badges_history_test.go (182, 1 integration test):
+    TestBadgeRoutes_ServeEarnedBadgesAsHistoryAcrossTheCutover. Through the real router:
+    registers a holder agent and a newcomer agent and creates a live user. It inserts earned
+    badges (holder: first_solve with metadata and first_answer_accepted; user: first_solve;
+    awarded 2026-01-02T03:04:05Z). The newcomer gets a succeeded approach on a solved problem
+    and an accepted answer (posts.accepted_answer_id set). Then it runs db.MigrateContributions
+    and db.RemapLegacyRelations and asserts:
+      - both of the newcomer's contributions became replies;
+      - the holder and user badge endpoints return JSON equal to their pre-cutover responses;
+      - the newcomer's badge list is {"data":{"badges":[]}};
+      - holder /v1/me has 2 badges with the original awarded_at, newcomer /v1/me has none;
+      - /v1/me/diff badges_earned is non-nil and empty for both agents;
+      - exactly 3 badge rows exist for the three owners.
+    Cleanup order: the user's posts are deleted last (a first version leaked 10 posts because
+    the approaches FK blocked the delete; those 10 fixture rows were deleted from solvr_test
+    and the test fixed; later runs leave 0 rows [REAL, psql]).
+  No migration, no handler, no frontend, no SPEC.md change (badge endpoints unchanged). No
+  existing test deleted, skipped, renamed or weakened; no existing test file touched.
+
+TDD [all runs against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable]:
+  RED [TEST] /tmp/solvr_idx76_s13_red.log: TestLegacyBadgeMilestones_... FAIL
+    legacy_badges_test.go:58 expected "retire" actual "refactor", :59 "feature:badges is
+    retired and verified". The history test already PASSED here: it pins behavior the cutover
+    already had (characterization). Mutations 2 and 3 below show it catches regressions.
+  GREEN [TEST] /tmp/solvr_idx76_s13_green.log (-p 1 over db, api, services, jobs; -run
+    TestLegacyBadgeMilestones_|TestBadgeRoutes_|Legacy|TestExtractStaticSQL|TestBadge): 85
+    PASS, 0 FAIL, 0 SKIP. Static probe unchanged: 592 extracted, 525 prepared, 67 did not.
+    After the cleanup-order fix: TestBadgeRoutes_ PASS again
+    (/tmp/solvr_idx76_s13_green_cleanup.log).
+  MUTATIONS [TEST], sources restored from cp; `git diff --quiet` confirmed each restore:
+    mut1 router.go calls services.NewBadgeService(...) next to the badge routes (builds) ->
+      guard FAIL "Should be empty, but was [internal/api/router.go]" (mut1.log).
+    mut2 RemapLegacyRelations inserts first_answer_accepted for migrated answer authors. The
+      first attempt left description NULL and failed differently (GET badges 500 "Failed to
+      fetch badges"; see OBSERVED below). mut2b with a description -> FAIL :143 "migrated
+      contributions award no badge", actual list holds the backfilled badge (mut2b.log).
+    mut3 RemapLegacyRelations sets awarded_at = NOW() on the fixture's earned badges -> FAIL
+      :141 "earned agent badges are history: unchanged by the cutover" (mut3.log).
+  go build ./... clean; go vet on db, api and services clean; gofmt -l clean on all 4 files.
+    check-file-size.sh: 35 violations, same as slices 1-12; none of the 4 files (largest 182).
+
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v ./...` -> /tmp/solvr_idx76_s13_full.log.
+    4665 PASS, 69 FAIL, 12 SKIP. Every package ok except internal/api/handlers (the 4 standing
+    TestGitHubOAuth*/TestGitHubCallback_* failures) and internal/db. internal/api is ok
+    (241s), so slice 12's flaky claim-race and homepage failures did not recur. Both new tests
+    PASS in this run.
+    FAIL names vs slice 12 (s12 dbpkg + apipkg logs), with comm: 8 gone (TestAgentClaim_
+    RetriesAndRaces..., 3 TestHomepage*, TestReputation_CrossEndpointConsistency, 2
+    TestSearchPulse_*, TestUsersPage_AgentsCount) and 4 new:
+    * TestBadges_AwardAndList / _IdempotentAward / _HasBadge: badges_test.go:59/145/186
+      "failed to create test agent: agent ID already exists". Cause [REAL, code + psql]:
+      badges_test.go creates agents with fixed display names ("Badge Test Agent awardlist",
+      ...), never cleans them up, and idx_agents_display_name_unique is unique;
+      AgentRepository.Create reports any unique violation as ErrDuplicateAgentID. A full db
+      run clears them later: users_test.go:1410 and user_api_keys_test.go:731 run
+      `DELETE FROM agents`. My filtered GREEN run created them without that wipe, so the full
+      run collided. After the full run: all 4 TestBadges_* PASS alone [TEST]
+      (/tmp/solvr_idx76_s13_newfails_alone.log). I then deleted the 3 badge_agent_* agents,
+      the 1 badge_* user and their 5 badge rows that run left, from solvr_test only.
+    * TestSearch_Similarity_PopulatedAndTopSimilarity: search_similarity_test.go:96 "post B
+      missing or similarity nil". It PASSES alone [TEST] (same log), and slice 12 passed it.
+      This slice changes no search code: the only production diffs are a registry string and a
+      comment. Treated as shared-data ranking noise; the neighbouring
+      TestSearch_MinSimilarity_HonestFilter is a standing failure in slice 12 and here, and
+      still fails alone ("got total=21").
+    The approaches_problem_id_fkey cleanup warning from search_test.go:497 appears 157 times in
+    both slice 12 and this run (standing).
+  NOT RUN: frontend (untouched).
+
+OBSERVED, NOT CHANGED [REAL, code read + mut2 log]: badges.description is nullable
+  (000051 `description TEXT`). BadgeRepository.ListForOwner scans it into a string without
+  COALESCE, so a badge row with NULL description makes GET /v1/{agents,users}/{id}/badges
+  return 500. Award always writes a string, so rows it writes are safe. A row inserted another
+  way (for example through the admin query route) would break that owner's badge list.
+  Owner's call; not in this task's scope.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW: none in production. Milestone badges were never
+  awarded by the running API, and they still are not. Earned badges are still served as before.
+  To bring achievements back, write a new rule over canonical facts (posts, replies, upvotes,
+  room outcomes) and decide whether migrated rows count. That is a product decision
+  (idx 94/95), and the guard test must be updated when it is made.
+
+REMAINING (next slices, in order):
+  step 3/4: leaderboards, reputation (sql_builder; keep earned totals as history), stats
+    (stats.go, stats_questions.go, agents/users GetAgentStats/GetUserStats), homepage overview,
+    search, posts joins/filters, visibility, resurrection, sitemap and the other pending code:
+    entries; retire stale-content/auto-solve/forgetting. Both dropped-table probes must stay
+    green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
+  000105-000108, deploys, then runs `backfill-embeddings --content-types replies --dry-run`
+  and, if the count/cost is acceptable, the real run; optionally counts production posts the
+  crystallization rule makes eligible (slice 10). This slice adds no migration.
+CORRECTION (slice 13 entry above) [REAL, wc -l after commit]: router_badges_history_test.go is 180 lines, not 182; the largest file this slice touches is 180 lines.

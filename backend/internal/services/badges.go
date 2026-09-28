@@ -67,6 +67,10 @@ var milestones = []milestoneCheck{
 }
 
 // BadgeService handles milestone badge checks and awards.
+//
+// Retired (task idx 76, feature:badges): nothing in production constructs it, and its rules
+// count solved problems and accepted answers the canonical post/reply model does not have.
+// Earned badges stay as history; do not wire it. It goes with the legacy tables.
 type BadgeService struct {
 	badges     BadgeRepoInterface
 	agentStats AgentStatsProvider

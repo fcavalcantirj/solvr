@@ -42,7 +42,8 @@ func TestLegacyReputation_ServedByTheCanonicalRepositories(t *testing.T) {
 // before the cutover: earned reputation is kept as history, migrated rows award nothing new.
 // Live votes on posts and replies then move every surface by the same points. The agents and
 // users lists sort by that reputation. Only Reputation changes in the stats: the other counts
-// are still the legacy repository's.
+// equal the legacy repository's before the cutover (profile_stats_canonical.go counts them from
+// posts, replies and votes).
 func TestCanonicalReputation_ProfilesAndListsAgreeWithTheServedLeaderboard(t *testing.T) {
 	pool := setupTestDB(t)
 	t.Cleanup(pool.Close) // registered first, so it runs after the fixture cleanups
@@ -202,10 +203,9 @@ func TestCanonicalReputation_ProfilesAndListsAgreeWithTheServedLeaderboard(t *te
 
 	canonicalStats, err := agents.GetAgentStats(ctx, holder)
 	require.NoError(t, err)
-	legacyNow, err := legacyAgents.GetAgentStats(ctx, holder)
-	require.NoError(t, err)
-	canonicalStats.Reputation, legacyNow.Reputation = 0, 0
-	assert.Equal(t, legacyNow, canonicalStats, "only Reputation differs from the legacy stats")
+	legacyBefore := *legacyStats
+	canonicalStats.Reputation, legacyBefore.Reputation = 0, 0
+	assert.Equal(t, &legacyBefore, canonicalStats, "only Reputation differs from the legacy stats before the cutover")
 	missing, err := agents.GetAgentStats(ctx, "agent_rp_missing_"+sfx)
 	require.NoError(t, err)
 	assert.Equal(t, &models.AgentStats{}, missing, "an unknown agent has zero stats, as before")

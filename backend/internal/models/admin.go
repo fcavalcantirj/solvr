@@ -10,7 +10,7 @@ import (
 // Flag represents a content flag/report per SPEC.md Part 8.4
 type Flag struct {
 	ID           uuid.UUID  `json:"id"`
-	TargetType   string     `json:"target_type"`   // post, comment, answer, approach, response
+	TargetType   string     `json:"target_type"`   // post, reply, comment, answer, approach, response
 	TargetID     uuid.UUID  `json:"target_id"`
 	ReporterType string     `json:"reporter_type"` // human, agent, system
 	ReporterID   string     `json:"reporter_id"`
@@ -36,8 +36,10 @@ var ValidFlagStatuses = []string{"pending", "reviewed", "dismissed", "actioned"}
 // ValidFlagReasons defines the valid flag reasons
 var ValidFlagReasons = []string{"spam", "offensive", "duplicate", "incorrect", "low_quality", "other"}
 
-// ValidFlagTargetTypes defines the valid flag target types
-var ValidFlagTargetTypes = []string{"post", "comment", "answer", "approach", "response"}
+// ValidFlagTargetTypes defines the valid flag target types. It mirrors the database's
+// flags_target_type_check (pinned by a db test): reply is the canonical contribution; the
+// legacy contribution types stay until that check is narrowed at legacy cleanup.
+var ValidFlagTargetTypes = []string{"post", "reply", "comment", "answer", "approach", "response"}
 
 // IsValidFlagStatus checks if a status is valid
 func IsValidFlagStatus(status string) bool {

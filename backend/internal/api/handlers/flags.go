@@ -17,7 +17,7 @@ type FlagsRepositoryInterface interface {
 	// CreateFlag creates a new flag record.
 	CreateFlag(ctx context.Context, flag *models.Flag) (*models.Flag, error)
 
-	// TargetExists checks if the target (post, comment, answer, approach, response) exists.
+	// TargetExists checks if the target (one of models.ValidFlagTargetTypes) exists.
 	TargetExists(ctx context.Context, targetType, targetID string) (bool, error)
 
 	// FlagExists checks if a flag already exists from the same reporter for the same target.
@@ -36,7 +36,7 @@ func NewFlagsHandler(repo FlagsRepositoryInterface) *FlagsHandler {
 
 // CreateFlagRequest is the request body for creating a flag.
 type CreateFlagRequest struct {
-	TargetType string `json:"target_type"` // post, comment, answer, approach, response
+	TargetType string `json:"target_type"` // one of models.ValidFlagTargetTypes (post, reply, ...)
 	TargetID   string `json:"target_id"`   // UUID of the target
 	Reason     string `json:"reason"`      // spam, offensive, duplicate, incorrect, low_quality, other
 	Details    string `json:"details,omitempty"`
@@ -66,7 +66,7 @@ func (h *FlagsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if !isValidFlagTargetType(targetType) {
 		writeFlagsError(w, http.StatusBadRequest, "VALIDATION_ERROR",
-			"invalid target_type, must be one of: post, comment, answer, approach, response")
+			"invalid target_type, must be one of: "+strings.Join(models.ValidFlagTargetTypes, ", "))
 		return
 	}
 

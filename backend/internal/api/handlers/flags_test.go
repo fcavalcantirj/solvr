@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -701,5 +702,60 @@ func TestIsValidFlagReason(t *testing.T) {
 				t.Errorf("IsValidFlagReason(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+// TestCreateFlag_AcceptsCanonicalReplyTarget: since the knowledge model's contributions are
+// replies (task idx 76), a reply can be flagged; the type reaches the target check, the
+// duplicate check and the stored flag unchanged, and a rejection names reply as accepted.
+func TestCreateFlag_AcceptsCanonicalReplyTarget(t *testing.T) {
+	var existsType, duplicateType string
+	mockRepo := &MockFlagsRepository{
+		TargetExistsFunc: func(ctx context.Context, targetType, targetID string) (bool, error) {
+			existsType = targetType
+			return true, nil
+		},
+		FlagExistsFunc: func(ctx context.Context, targetType, targetID, reporterType, reporterID string) (bool, error) {
+			duplicateType = targetType
+			return false, nil
+		},
+	}
+	handler := NewFlagsHandler(mockRepo)
+	claims := &auth.Claims{UserID: uuid.New().String(), Email: "test@example.com", Role: "user"}
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"target_type": "reply",
+		"target_id":   uuid.New().String(),
+		"reason":      "incorrect",
+	})
+	req := addFlagsAuthContext(httptest.NewRequest("POST", "/v1/flags", bytes.NewReader(body)), claims)
+	w := httptest.NewRecorder()
+	handler.Create(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201 for target_type 'reply', got %d: %s", w.Code, w.Body.String())
+	}
+	if existsType != "reply" || duplicateType != "reply" {
+		t.Errorf("target and duplicate checks got %q/%q, want reply/reply", existsType, duplicateType)
+	}
+	var resp map[string]map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["data"]["target_type"] != "reply" {
+		t.Errorf("stored flag target_type = %v, want reply", resp["data"]["target_type"])
+	}
+
+	body, _ = json.Marshal(map[string]interface{}{
+		"target_type": "thread",
+		"target_id":   uuid.New().String(),
+		"reason":      "spam",
+	})
+	req = addFlagsAuthContext(httptest.NewRequest("POST", "/v1/flags", bytes.NewReader(body)), claims)
+	w = httptest.NewRecorder()
+	handler.Create(w, req)
+	var errResp map[string]map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &errResp)
+	message, _ := errResp["error"]["message"].(string)
+	if w.Code != http.StatusBadRequest || !strings.Contains(message, "reply") {
+		t.Errorf("unknown target type: got %d %q, want 400 naming reply as accepted", w.Code, message)
 	}
 }

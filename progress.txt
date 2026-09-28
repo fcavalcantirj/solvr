@@ -6476,3 +6476,111 @@ REMAINING (next slices, in order):
 
 UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
   000105-000108. This slice adds no migration.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 7 of N: step 3, moderation finished — flags accept the canonical 'reply' target, the
+API's flag target list is pinned to the live flags_target_type_check, and
+feature:moderation flips Done. Other step 3/4 entries and the step-6 gate still open.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated as slice 1
+  recorded. idx 76 continues from slice 6's REMAINING list (first item: feature:moderation's
+  flag target validation).
+
+SPIKE [REAL, grep + psql on local solvr_test]:
+  - FlagsHandler (handlers/flags.go) is NOT routed: no router*.go mentions flags, and nothing
+    outside flags.go/flags_test.go constructs it. No production type implements
+    FlagsRepositoryInterface or FlagCreatorInterface (no CreateFlag/TargetExists/FlagExists
+    outside tests); PostsHandler.SetFlagCreator and ModerationTrigger.SetFlagCreator have no
+    production caller. The flags table is written in Go only by the cutover remap
+    (legacy_relation_remap.go:108). No frontend/cli/mcp-server code calls /v1/flags.
+  - Validation list models.ValidFlagTargetTypes was post/comment/answer/approach/response while
+    solvr_test's flags_target_type_check (000109) allows those plus 'reply'.
+  - Remaining moderation code (posts_moderation.go, moderation_trigger.go,
+    services/content_moderation.go, cmd/moderate-existing) uses models.Comment only as the DTO
+    handed to ModerationReplyWriter (slice 6); no legacy table SQL. Duplicate detection
+    (services/moderation.go) is its own entry, untouched.
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` before this append: 4 tracked files
+  modified, 1 untracked new file; `git diff --stat`: flags.go +3/-3, flags_test.go +56,
+  legacy_dependency_registry.go +1/-1, models/admin.go +5/-3]:
+  M backend/internal/models/admin.go: ValidFlagTargetTypes gains "reply" (canonical
+    contribution); comment says it mirrors flags_target_type_check and that legacy types stay
+    until the check is narrowed at cleanup. Flag.TargetType field comment lists reply. File was
+    already gofmt-dirty at HEAD (struct tag alignment; checked with git stash + gofmt -l); not
+    reformatted.
+  M backend/internal/api/handlers/flags.go: the invalid target_type message is built from
+    models.ValidFlagTargetTypes instead of a hard-coded list; two doc comments point at it.
+  M backend/internal/api/handlers/flags_test.go (705 -> 761): +TestCreateFlag_AcceptsCanonical
+    ReplyTarget (target_type reply -> 201; TargetExists and FlagExists receive "reply"; stored
+    flag target_type reply; an unknown type -> 400 whose message names reply). "strings" import
+    added. No existing test changed: TestCreateFlag_ValidTargetTypes and
+    TestIsValidFlagTargetType still assert the 5 legacy-era types are accepted (still true).
+  A backend/internal/db/flag_target_types_test.go (43, 1 integration test, read-only):
+    TestFlagTargetTypes_MatchTheFlagsCheckConstraint reads pg_get_constraintdef of
+    flags_target_type_check and requires its literal set == models.ValidFlagTargetTypes. This
+    binds cleanup: narrowing check:flags (still pending) fails the test until the API list
+    narrows with it.
+  M backend/internal/db/legacy_dependency_registry.go: feature:moderation -> done(refactor),
+    note: verdicts are system replies; flags accept 'reply'; API list pinned to the check so
+    its legacy types narrow with check:flags at cleanup. check:flags entry unchanged (pending).
+  No migration, no frontend change, no router change (FlagsHandler stays unrouted — wiring a
+  flag route/repository is not in this task). No existing test deleted, skipped or weakened.
+
+TDD [all runs against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable]:
+  RED  [TEST] /tmp/solvr_idx76_s7_red.log: TestCreateFlag_AcceptsCanonicalReplyTarget FAIL
+    "expected status 201 for target_type 'reply', got 400 ... must be one of: post, comment,
+    answer, approach, response"; TestFlagTargetTypes_MatchTheFlagsCheckConstraint FAIL "flag
+    target types accepted by the API [answer approach comment post response] differ from
+    flags_target_type_check [answer approach comment post reply response]".
+  GREEN [TEST] /tmp/solvr_idx76_s7_green.log: 19 flag handler tests PASS (18 existing + 1 new)
+    + the db test PASS, 0 SKIP.
+  Registry/legacy [TEST] /tmp/solvr_idx76_s7_db_green.log -run 'Legacy|TestExtractStaticSQL|
+    TestModerationReplyWriter|TestFlagTargetTypes': 33 PASS (incl. subtests), 0 FAIL, 0 SKIP.
+  jobs package [TEST] /tmp/solvr_idx76_s7_jobs.log: 55 PASS, same name set as slice 6 (diffed),
+    0 FAIL, 0 SKIP. Static-query probe: 570 extracted, 503 prepared, 67 did not (= slice 6).
+    Worker probe: TranslationJob/Cleanup/HealthCheck/PresenceReaper reach no dropped relation;
+    Crystallization/StaleContent/AutoSolve reach [approaches] (registered pending, as before).
+  go build ./... and go vet on handlers/models/db clean.
+  api + models + cmd [TEST] once, -p 1 -v -> /tmp/solvr_idx76_s7_api_cmd.log: 3064 PASS, 7 FAIL,
+    5 SKIP. 4 = TestGitHub*_Integration (known pre-existing). 3 homepage tests failed:
+    TestHomepageOverview_ServesEverySectionToALoggedOutVisitor (router_homepage_overview_test.go
+    :464) and TestHomepageSearch_NeverPublishes{AProtectedOrUnrepeatedTerm,PastedSecretsOr
+    PersonalData} (router_homepage_search_test.go:235/260), each "[matrix-marker-... x6] does
+    not contain 'hpo ...'". Cause [REAL, grep + psql]: router_rooms_permission_matrix_test.go:57
+    searches each MATRIX-MARKER-<nanos> term 7 times and never deletes its search_queries rows;
+    9 such terms (63 rows, 09:57-13:32 UTC today, from earlier slices' runs and this one) filled
+    the homepage top-terms list. Deleted those 63 rows from solvr_test; the 3 tests then PASS
+    alone (/tmp/solvr_idx76_s7_homepage_after.log). Not caused by this slice (no homepage,
+    search or rooms code touched); tests left unchanged. Slice 6's TestNAgentRoom setup
+    collision did not recur this run.
+  FULL internal/db PACKAGE [TEST] once, -p 1 -v -> /tmp/solvr_idx76_s7_dbpkg.log: 664 PASS, 62
+    FAIL, 6 SKIP vs slice 6 (661/64/6). comm of FAIL names: 0 new; 2 gone
+    (TestSearchPulse_WithResultsCountsOnlyProductiveSearches, TestSearch_Similarity_Populated
+    AndTopSimilarity — fixture rows cleaned in slices 6/7).
+  check-file-size.sh: 35 violations, same as slices 1-6; none of this slice's files (largest:
+    flags_test.go 761).
+  FULL BACKEND (`go test ./...`): not run as one command; internal/api/..., internal/models,
+    cmd/..., internal/db and internal/jobs ran as above. Frontend untouched, not run.
+
+NOT VERIFIED / LIMITS [UNVERIFIED unless stated]:
+  - Flag creation is unreachable in production (unrouted handler, no repository) [REAL]; the
+    reply acceptance is verified at the handler with a mock repository only. A future flags
+    route needs a TargetExists that resolves 'reply' against replies.
+  - OBSERVED, NOT CHANGED: router_rooms_permission_matrix_test.go leaves search_queries rows
+    behind; they will crowd the homepage tests again after ~6 more marker terms accumulate.
+
+REMAINING (next slices, in order):
+  step 3/4: feature:embedding-workers (+ code:cmd/backfill-embeddings) writing
+    replies.embedding; feature:duplicate-detection on posts and replies; crystallization,
+    briefing, badges, leaderboards, reputation, stats and the other pending code: entries;
+    retire stale-content/auto-solve/forgetting. Preserve earned badges/reputation as history,
+    award nothing from migrated rows. Both dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
+  000105-000108. This slice adds no migration.

@@ -57,7 +57,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"feature:reputation":          pending(LegacyActionRefactor, "sql_builder scores answers/responses/comments; preserve earned totals as history"),
 	"feature:crystallization":     pending(LegacyActionRefactor, "pins solved problems; redefine eligibility on canonical post states"),
 	"feature:forgetting":          pending(LegacyActionRetire, "approach forget_after/archived_at lifecycle has no reply equivalent"),
-	"feature:moderation":          pending(LegacyActionRefactor, "verdicts of post moderation, translation re-moderation and cmd/moderate-existing are system replies (ModerationReplyWriter); still owed: flag target validation (handlers/flags.go) takes legacy contribution types, not reply"),
+	"feature:moderation":          done(LegacyActionRefactor, "verdicts are system replies (ModerationReplyWriter); flags accept 'reply' and the API list is pinned to flags_target_type_check, so its legacy types narrow with check:flags at cleanup"),
 	"feature:duplicate-detection": pending(LegacyActionRefactor, "similarity check in services/moderation.go must run on posts and replies"),
 	"feature:embedding-workers":   pending(LegacyActionRefactor, "backfill and create/update still embed approaches/answers only; must embed replies.embedding"),
 

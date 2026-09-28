@@ -7825,3 +7825,185 @@ CORRECTION (slice 14 entry above) [REAL, ralph.sh:385-397 + grep progress.txt]: 
   2026-09-26 13:37, and the auto-commit ran, so that engine call ENDED without journaling or
   committing. Why it ended that way is [UNVERIFIED]. Also, the agents-list reputation
   expression is agents.go:931-950, not 925-950.
+
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 15 of N: steps 3-4, reputation. This entry VERIFIES AND JOURNALS work that is
+already committed: HEAD e331b02d is a ralph.sh HOST AUTO-COMMIT (its message is the truncated
+header of slice 14, the last dated journal line). The engine call that wrote the code ended
+without journaling or committing; why is [UNVERIFIED] (no RALPH ITERATION TIMEOUT line after
+2026-09-26 13:37). feature:reputation was already flipped to done in that commit; the
+evidence below backs it. This iteration changes no code, only this journal.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated as slice 1
+  recorded. idx 76 continues; slice 14's REMAINING list starts with reputation, which HEAD
+  already holds unjournaled. Working tree clean at start [REAL, git status --porcelain].
+
+WHAT HEAD e331b02d CHANGED [REAL, `git show --stat HEAD` + diff read]: 8 files, +683/-162.
+  A backend/internal/db/reputation_canonical.go (124): canonicalReputationPoints = UNION ALL
+    of reputation_history points, confirmed votes on posts (+2/-1 to posted_by) and confirmed
+    votes on replies (+2/-1 to the reply author) whose vote id is NOT frozen in history under
+    answer/response up/down or approach_vote. canonicalAgentReputation = agents.reputation
+    bonus + those points; canonicalUserReputation = points only (owner_type human, u.id::text).
+    CanonicalReputationAgentRepository / CanonicalReputationUserRepository embed the legacy
+    repositories and override only GetAgentStats/GetUserStats (legacy counts, Reputation
+    replaced by the canonical query; unknown agent -> 0 via ErrNoRows) and List (shared
+    list(...) with the canonical expression, so sort=reputation orders by it too). No time
+    window: undated events count, as in the legacy profile formulas.
+  A backend/internal/db/agents_list.go (152): AgentRepository.List body moved here as
+    list(ctx, opts, reputationSQL); AgentRepository.List keeps the legacy expression
+    (legacyAgentListReputation const, agents.go). BEHAVIOR FIX bundled in: the select now
+    COALESCEs a.bio and a.avatar_url to '' (NULL bio made the agents list fail with "can't
+    scan into dest[2]: cannot scan NULL into *string" — slice 13/14's standing
+    TestAgentRepository_List_SortByReputation failure).
+  M backend/internal/db/agents.go (1068 -> 937 lines): list body moved out, legacy formula
+    kept as a const. Still over 800 (standing violation, now smaller).
+  M backend/internal/db/users.go (604 -> 609): List delegates to list(ctx, opts,
+    reputationSQL); UserRepository.List keeps reputation.BuildReputationSQL. BEHAVIOR FIX
+    bundled in: COALESCE(u.avatar_url, '') (slice 14's "dest[3]" NULL avatar_url failures of
+    TestReputation_CrossEndpointConsistency / TestUserReputation_AfterCommenting).
+  M backend/internal/api/router.go (1244, net 0): agentRepoConcrete (GET /v1/agents,
+    /v1/agents/{id}, /v1/me as agent, heartbeat, resurrection, users/{id}/agents via
+    usersHandler.SetAgentRepository, ...) = NewCanonicalReputationAgentRepository; userRepo
+    (/v1/me as user) and usersUserRepo/usersListRepo (/v1/users/{id}, /v1/users) =
+    NewCanonicalReputationUserRepository. The legacy constructors stay only where no
+    reputation is served [REAL, grep]: room/auth API-key validators (router.go:212/216/515),
+    OAuth/auth user repos, unsubscribe, admin hard-delete/list-deleted, badges owner lookup
+    (accounts; badges routes read no stats).
+  M backend/internal/db/legacy_dependency_registry.go: feature:reputation pending -> done
+    (refactor); code:internal/db/agents.go and users.go notes updated (stay pending refactor:
+    their stats counts still count legacy contributions); code:internal/reputation/
+    sql_builder.go pending(refactor) -> pending(retire, unwired).
+  A tests (new files only; no existing test touched [REAL, git diff HEAD~1 HEAD --stat --
+    '*_test.go' = 2 added files]):
+    internal/db/reputation_canonical_test.go (228): TestLegacyReputation_ServedByThe
+      CanonicalRepositories (source guard: router constructs both canonical repos; only
+      leaderboard.go and users.go build BuildReputationSQL; registry flags; the vote CASE
+      equals reputation.PointsUpvoteReceived/PointsDownvoteReceived) and TestCanonical
+      Reputation_ProfilesAndListsAgreeWithTheServedLeaderboard: legacy leaderboard before the
+      cutover (holder 217, user 139, newcomer 0) == canonical leaderboard == GetAgentStats/
+      GetUserStats == agents/users list after MigrateContributions + RemapLegacyRelations;
+      a history-only agent (1000) sorts first in the agents list; only Reputation differs from
+      the legacy stats; unknown agent = zero stats; live votes on a migrated reply, a native
+      post and a native reply move every surface by the same points; a second cutover run
+      changes nothing.
+    internal/api/router_reputation_canonical_test.go (143): TestReputationRoutes_ServeThe
+      LeaderboardScore, through the real router: frozen history + a live post upvote show the
+      same number on /v1/leaderboard (agents, users), GET /v1/agents/{id}, /v1/users/{id},
+      /v1/me (JWT user and agent API key), /v1/agents?sort=reputation, /v1/users?sort=
+      reputation and /v1/users/{id}/agents.
+
+VERIFICATION [all runs against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable]:
+  go build ./... clean; go vet ./internal/db/ ./internal/api/ clean; gofmt -l prints nothing
+    for any .go file in HEAD.
+  Targeted DB [TEST] /tmp/solvr_idx76_s15_db.log (-run TestLegacyReputation_|TestCanonical
+    Reputation_|TestCanonicalLeaderboard_|TestLegacyLeaderboards_|TestFreezeLegacyReputation_|
+    TestAgentRepository_List|TestUserRepository_List|Reputation|TestLegacyDependency|
+    TestExtractStaticSQL|Remap): 35 PASS, 3 FAIL, 0 SKIP. Both new DB tests PASS;
+    TestAgentRepository_List_SortByReputation, TestReputation_CrossEndpointConsistency and
+    TestUserReputation_AfterCommenting PASS. The 3 FAIL are TestBriefing_Reputation_
+    {UpvoteOnApproach,DownvoteOnPost,AcceptedAnswer}: "null value in column referral_code"
+    fixture (standing since slice 12).
+  API/handlers/jobs [TEST] /tmp/solvr_idx76_s15_api.log (-run Reputation|Legacy|Leaderboard|
+    TestUsers|TestAgents|TestMe): 3 packages ok, 69 PASS, 0 FAIL, 0 SKIP.
+    TestReputationRoutes_ServeTheLeaderboardScore PASS; both TestLegacyDroppedDatabase_*
+    PASS. Static probe: 611 extracted (+3 vs slice 14), 542 prepared (+3), 69 did not
+    (unchanged); reputation_canonical.go is not in the did-not list. The canonical queries read
+    only reputation_history, votes, posts, replies, agents, users.
+  MUTATIONS [TEST] (RED was never captured by the writing iteration). Sources restored from
+    cp; `git diff --quiet` confirmed after each:
+    mut1 router back to NewAgentRepository/NewUserRepository -> router test FAIL on every
+      surface: GET /v1/agents/{id}, /v1/me (agent), /v1/agents, /v1/users/{id}/agents
+      "expected: 102 actual: 2"; /v1/users/{id}, /v1/me (user), /v1/users "expected: 42
+      actual: 2" (_mut1_api.log); TestLegacyReputation_ FAIL :20/:21 (_mut1_db.log).
+    mut2 frozen-vote NOT EXISTS removed -> TestCanonicalReputation_ FAIL :196/:223/:227: stats
+      and list +1..+2 over the leaderboard on holder, user and newcomer (frozen reply votes
+      scored twice) (_mut2.log).
+    mut3 canonical agent List switched to legacyAgentListReputation -> FAIL :196 list 214 vs
+      217, history-only agent 0 vs 1000; :200 sort order wrong; :223/:227 (_mut3.log).
+    mut4 COALESCE(a.bio/a.avatar_url) removed -> TestCanonicalReputation_ FAIL :156 "scan
+      failed: can't scan into dest[2]: cannot scan NULL into *string" (its fixture agents have
+      NULL bio) (_mut4.log). My seed insert for that run failed (zsh did not word-split a
+      $P variable: "command not found"), so the seed played no part. The other failures in
+      that log (TestAgentRepository_List_WithAgents/SortByReputation/SortByNewest/
+      FilterByStatus/ListDeleted) are "agent ID already exists" fixture collisions (below),
+      NOT evidence for the COALESCE.
+    mut5 COALESCE(u.avatar_url) removed, with a NULL-avatar user seeded in solvr_test ->
+      TestReputationRoutes_ FAIL: /v1/users?sort=reputation 500 "cannot scan NULL into
+      *string"; restored + same seed -> PASS (_mut5b.log / _mut5b_fixed.log). The first
+      attempt at this through the db package (_mut5*.log) proved nothing: users_test.go:1142
+      runs `DELETE FROM users`, which removed the seed before the mutated run. Seed deleted
+      after (DELETE 1).
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 30m ./...` ->
+    /tmp/solvr_idx76_s15_full.log: 4674 PASS, 67 FAIL, 12 SKIP (slice 14: 4664/74/12, same
+    grep '^\s*--- (PASS|FAIL|SKIP)' counting). Packages FAIL: internal/api/handlers (the 4
+    standing GitHub OAuth tests) and internal/db. All HEAD tests, both dropped-table probes
+    and slice 14's leaderboard/freeze tests PASS in it. 0 "cannot scan NULL" lines in the whole
+    log. vs slice 14 (comm of names): 7 gone (its transient TestAgentClaim race,
+    AddReputation_Success, 3 TestGetTrendingPosts_Excludes*, 2 TestSearchPulse_*), 1 new:
+    * TestAgentRepository_ListDeleted: agents_test.go:440 "agent ID already exists". Cause
+      [REAL, log timestamps + code]: it and TestAgentRepository_List_{WithAgents,SortBy
+      Reputation,SortByNewest,FilterByStatus} create agents with FIXED display names
+      ("Deleted Agent 1", "Low Reputation Agent", ...; display_name is unique) and never
+      delete them. My own targeted runs at 15:4x-15:55 created them, so the full run (and the
+      mut4 run) collided. All 5 also collided in the full run; the other 4 were already in
+      slice 14's fail list, the same class. A later test in the full run removed those rows
+      (0 left). Run alone on that clean state all 7 TestAgentRepository_List*/ListDeleted
+      PASS [TEST] (/tmp/solvr_idx76_s15_collided_alone.log); I then deleted the 14 fixture
+      agents that run left, from solvr_test ONLY, in one transaction (0 remain).
+    The other 62 failures are the standing set: 46 referral_code NOT NULL fixture lines, 160
+    approaches_problem_id_fkey cleanup errors (search_test.go cleanupTestData), the 4 OAuth
+    tests, TestSearch_MinSimilarity_HonestFilter, ...
+  check-file-size.sh: 35 violations, same as slices 1-14; agents.go shrank 1068 -> 937 but
+    stays one; router.go 1244 unchanged; new files at most 228 lines.
+  My tests left 0 agent_rp*/rpr_* agents, 0 rpc* users, 0 of their posts, votes and
+    reputation_history rows [REAL, psql].
+  NOT RUN: frontend (untouched by HEAD).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL, code read + tests above, unless stated]:
+  - Every reputation surface now matches the served leaderboard's all_time number: profiles,
+    /v1/me, /v1/users/{id}/agents and the agents/users lists (incl. sort=reputation). The
+    legacy formulas disagreed with each other (agent stats/list skip comments,
+    BuildReputationSQL counts them); after this, one rule.
+  - DEPLOY ORDER (same as slice 14, now wider): without 000111 the canonical query fails on
+    the missing relation [UNVERIFIED, inferred from SQL]. The wrapper then returns the error
+    instead of the legacy counts, and the handlers turn a stats error into EMPTY stats
+    (handlers/agents.go:475/605/803, users.go:111, me.go:436), so profiles would show ALL
+    stats as 0, not only reputation. GET /v1/users returns 500 "failed to list users"
+    (users.go:267), and so does GET /v1/agents [UNVERIFIED, same pattern]. With 000111 but
+    before the freeze runs, profiles and lists show only the bonus plus votes on posts and
+    replies, as the leaderboard does.
+  - Stats COUNTS on profiles (problems solved, answers, ...) are still the legacy repository's;
+    only Reputation changed (asserted by the DB test). code:internal/db/agents.go and users.go
+    stay pending.
+  - The two NULL-scan fixes are real behavior fixes: before, one agent with a NULL bio or
+    avatar (or one user with a NULL avatar) made GET /v1/agents or GET /v1/users fail with a
+    500 for every page that included that row [TEST mut4/mut5].
+  - Per-row cost: each listed agent/user runs a correlated SUM over the UNION ALL (history +
+    post votes + reply votes); sort=reputation computes it for every matching row. The
+    legacy list did the same kind of per-row subqueries. Production-scale latency is
+    [UNVERIFIED].
+  - TEST HYGIENE (no code changed): TestAgentRepository_List_* and _ListDeleted cannot run
+    twice against one database without something wiping agents in between, because they
+    keep fixed display names and leave their rows. Existing tests, not touched here.
+
+REMAINING (next slices, in order):
+  step 3/4: stats (stats.go, stats_questions.go), the agents.go/users.go stats counts,
+    homepage overview, search, posts joins/filters, visibility, resurrection, sitemap and the
+    other pending code: entries; retire stale-content/auto-solve/forgetting. Both
+    dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109, 000110 and 000111 to production
+  after 000105-000108, then runs the cutover freeze (FreezeLegacyReputation, first step of
+  RemapLegacyRelations) BEFORE or together with the deploy that serves the canonical
+  leaderboard AND the canonical profile/list reputation (see DEPLOY ORDER above), then
+  `backfill-embeddings --content-types replies --dry-run` and, if the count/cost is
+  acceptable, the real run; optionally counts production posts the crystallization rule
+  makes eligible (slice 10).
+CORRECTION (slice 15 entry above) [REAL, code read]: GET /v1/agents returning 500 is no longer
+  [UNVERIFIED]: handlers/agents.go:1045-1048 writes 500 "failed to list agents" on any
+  List error, the same as GET /v1/users.

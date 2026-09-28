@@ -8007,3 +8007,167 @@ UAT (for when idx 76 closes, not now): owner applies 000109, 000110 and 000111 t
 CORRECTION (slice 15 entry above) [REAL, code read]: GET /v1/agents returning 500 is no longer
   [UNVERIFIED]: handlers/agents.go:1045-1048 writes 500 "failed to list agents" on any
   List error, the same as GET /v1/users.
+
+2026-09-28 17:10: RALPH BLOCKED — 20 batches with no ledger movement (engine claude, 69 passing). Supervisor stopped.
+
+2026-09-28 18:10 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 16 of N: steps 3-4, public statistics (stats.go, stats_questions.go, the overview's
+community totals). This entry VERIFIES AND JOURNALS work that is already committed: HEAD
+e7ec1626 is a ralph.sh HOST AUTO-COMMIT (its message is a truncated line of slice 15's entry).
+Same pattern as slices 14 and 15: the engine call that wrote the code ended without
+journaling or committing, and why is [UNVERIFIED]. The supervisor's "RALPH BLOCKED — 20
+batches with no ledger movement" line (17:10) was uncommitted in the tree at start and is
+committed with this entry. This iteration changes no code, only this journal.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated as slice 1
+  recorded. idx 76 continues; slice 15's REMAINING list starts with stats, which HEAD already
+  holds unjournaled. Tree at start [REAL, git status --porcelain]: only ` M progress.txt`
+  (the supervisor line above).
+
+WHAT HEAD e7ec1626 CHANGED [REAL, `git show --stat HEAD` + diff read]: 9 files, +871/-7.
+  A backend/internal/db/stats_canonical.go (330): CanonicalStatsRepository embeds
+    StatsRepository and overrides the 9 methods that read legacy tables: GetTotalContributions
+    Count, GetAllStats, GetTrendingPosts, GetProblemsStats, GetRecentlySolvedProblems,
+    GetTopProblemSolvers (stats.go:133/163/208/339/370/447, the 6 statements the dropped-table
+    probe lists for stats.go) and GetQuestionsStats, GetRecentlyAnsweredQuestions,
+    GetTopAnswerers (stats_questions.go:13/54/125). Rules: a contribution = a live human/agent
+    reply (liveContributorReply, briefing_canonical.go:34) on a live public post; system
+    verdicts are not counted. active_approaches is always 0 (status workflow retired). A
+    problem's solver = author of its latest reply with legacy_type 'approach' and
+    provenance->>'status' = 'succeeded', else "unknown". A question's answers = top-level
+    contributor replies; accepted = the reply named by posts.accepted_answer_id; the response
+    time = time to the first top-level contributor reply. Problem/question figures pass the
+    post type as a parameter. No legacy StatsRepository method calls an overridden one
+    internally [REAL, grep: the only self-call is GetIdeasCountByStatus at stats.go:715, not
+    overridden].
+  M backend/internal/api/router.go (net 0) and router_homepage.go (net 0): /v1/stats* and the
+    homepage overview are built with db.NewCanonicalStatsRepository(pool).
+  M backend/internal/api/handlers/homepage_overview.go (+3/-3) + homepage_knowledge.go (+7):
+    the handler takes an OverviewStatsReader interface instead of *db.StatsRepository. The
+    total_contributions definition text changed from "Answers, approaches and progress notes
+    recorded on public posts." to "Replies by people and agents on public posts. Answers,
+    approaches, responses, comments and progress notes written before the move to replies
+    count as replies. Moderation verdicts are not counted." No test, frontend file or SPEC.md
+    holds the old text [REAL, grep].
+  M backend/internal/db/legacy_dependency_registry.go: code:internal/db/stats.go stays
+    pending(refactor) (note: its legacy methods are unwired; the /v1/stats/ideas sidebar still
+    filters on the idea type); code:internal/db/stats_questions.go pending(refactor) ->
+    pending(retire, unwired).
+  A tests (new files only; no existing test file touched [REAL, `git show --stat HEAD --
+    '*_test.go'` = 3 added files]):
+    internal/db/scratch_database_test.go (76): newMigratedScratchDatabase creates a fresh
+      database next to DATABASE_URL's, applies every up migration, drops it on cleanup;
+      dropLegacy drops LegacyTables CASCADE. Needs CREATEDB (the local solvr role has it).
+    internal/db/stats_canonical_test.go (315): TestLegacyStats_ServedByTheCanonicalRepository
+      (source guard: only router.go/router_homepage.go construct the canonical repo; only
+      stats.go/stats_canonical.go build NewStatsRepository; stats_canonical.go names no legacy
+      table; registry flags) and TestCanonicalStats_KeepsLegacyFiguresAcrossTheCutover on a
+      scratch DB: legacy snapshot before MigrateContributions + RemapLegacyRelations == the
+      canonical snapshot after, except the deliberate changes (contributions 10 -> 12,
+      active_approaches 2 -> 0, trending response counts, avg response time 2h -> 1h, the
+      comment on q1 becomes a top answerer); unchanged after dropping the legacy tables; native
+      replies move the figures (a child reply is not an answer, a verdict or a deleted reply
+      counts nowhere).
+    internal/api/router_stats_canonical_test.go (136): TestStatsRoutes_ServeCanonicalReplies
+      through the real router on solvr_test: native replies +2 on /v1/stats and the overview
+      (a verdict not counted), /v1/overview equal, /v1/stats/problems names the solver from a
+      succeeded-approach reply, /v1/stats/questions names the accepted reply's author.
+
+VERIFICATION [all against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable; scratch DBs are created
+  on the same server and dropped after (0 solvr_scratch* left [REAL, psql])]:
+  go build ./... clean; go vet ./internal/db/ ./internal/api/... clean; gofmt -l prints nothing
+    for any .go file in HEAD.
+  Targeted DB [TEST] /tmp/solvr_idx76_s16_db.log (-run TestLegacyStats_|TestCanonicalStats_|
+    Stats|Trending|TestLegacyDependency|TestExtractStaticSQL|TestCanonicalReputation_|
+    TestCanonicalLeaderboard_|Remap): 29 PASS, 6 FAIL, 0 SKIP. Both new DB tests PASS. The 6
+    (TestGetTrendingNow_* x5: referral_code NOT NULL fixture; TestSearchAnalyticsRepository_
+    GetTrending: "expected 3 test trending results, got 2") are all in slice 15's full fail
+    list.
+  API/handlers/jobs [TEST] /tmp/solvr_idx76_s16_api.log (-run Stats|Overview|Homepage|Legacy|
+    TestStatsRoutes_): 3 packages ok, 224 PASS, 0 FAIL, 0 SKIP. TestStatsRoutes_ PASS; both
+    TestLegacyDroppedDatabase_* PASS. Static probe: 620 extracted (+9 vs slice 15), 551
+    prepared (+9), 69 did not (unchanged); stats_canonical.go is not in the did-not list.
+    stats.go still has 6 and stats_questions.go 3 statements reaching dropped relations
+    (registered, unwired).
+  MUTATIONS [TEST] (RED was never captured by the writing iteration). Sources restored from
+    cp after each; `git diff --quiet -- backend` confirmed:
+    mut1 router.go + router_homepage.go back to db.NewStatsRepository -> TestStatsRoutes_ FAIL
+      :108 /v1/stats "expected: 151 actual: 149", :111 overview same, :124 solver_name
+      "unknown", :132 recently_answered empty; TestLegacyStats_ FAIL :19/:22 (_mut1.log).
+    mut2 contribution count without the system-author filter -> TestCanonicalStats_ FAIL
+      :277/:278/:308/:309, TestStatsRoutes_ FAIL :108/:111 (verdicts counted) (_mut2.log).
+    mut3 canonicalAnswerReply without parent_reply_id IS NULL -> TestCanonicalStats_ FAIL
+      :294 and :314 (child replies become answers) (_mut3.log).
+    mut4 succeeded-approach filter without the provenance status -> TestCanonicalStats_ FAIL
+      :288 "solvers are kept across the cutover" (_mut4.log).
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 35m ./...` ->
+    /tmp/solvr_idx76_s16_full.log: 4678 PASS, 65 FAIL, 13 SKIP (slice 15: 4674/67/12, same
+    counting). Packages FAIL: internal/api/handlers (the 4 standing GitHub OAuth tests) and
+    internal/db. All 3 HEAD tests, both dropped-table probes and slices 14-15's leaderboard/
+    reputation/freeze tests PASS in it. vs slice 15 (comm of names): 5 gone
+    (TestAgentRepository_ListDeleted, _List_SortByNewest, _List_SortByReputation,
+    _List_WithAgents, TestSearch_Similarity_PopulatedAndTopSimilarity), 3 new:
+    * TestAgentRepository_GetAgentStats: agents_test.go:229 "agent ID already exists". Cause
+      [REAL, code + psql]: the test uses the FIXED display name "Stats Agent" (unique) and
+      never deletes it; my targeted run's `-run ...Stats...` pattern matched it, it PASSED
+      there and left the row, and the full run collided. Alone it PASSES [TEST]
+      (/tmp/solvr_idx76_s16_new3_alone.log). Same class as slice 15's TestAgentRepository_
+      List_*. I deleted the one "Stats Agent" row that run left, from solvr_test ONLY.
+    * TestSearchPulse_PublishesOnlyPublicScopeTerms / _WithResultsCountsOnlyProductiveSearches:
+      homepage_search_test.go:259 "[]" should have 1 item. Cause [REAL, psql]: the top 5
+      public terms were leftovers of other tests (test x25, async handlers x9, 4
+      MATRIX-MARKER-* x5, zqxprivatekw x5), so the fixture's "public term" x2 cannot enter the
+      top 5 (slices 12 and 14 hit the same). HEAD touches no search code. Deleted 74 of today's
+      MATRIX-MARKER-*/zqxfamsearch/zqxprivatekw/zqxviewerkw/room-token-optional-auth rows
+      from solvr_test ONLY, in one transaction; then both PASS alone [TEST]
+      (/tmp/solvr_idx76_s16_pulse_after_cleanup.log).
+    New SKIP: TestTypeSpecificListEndpoints/Idea_created_via_/v1/posts_appears_in_/v1/ideas
+      (router_content_test.go:457 "did not become open within 35s (GROQ may be slow ...)";
+      external moderation timing; slice 15 skipped the Question subtest the same way).
+    The other 62 failures are the standing set (referral_code NOT NULL fixtures, the 4 OAuth
+    tests, approaches_problem_id_fkey cleanup errors, TestSearch_MinSimilarity_HonestFilter...).
+  check-file-size.sh: 35 violations, same as slices 1-15; router.go 1244 unchanged;
+    homepage_overview.go 777; new files at most 330 lines.
+  My tests left 0 agent_stc_* agents, 0 "stats route probe" posts, 0 orphan replies, 0
+    scratch databases [REAL, psql].
+  NOT RUN: frontend (untouched by HEAD).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL, code read + tests above, unless stated]:
+  - DEPLOY ORDER. The served statistics read ONLY replies (plus posts/agents/users). Until the
+    cutover runs, replies hold only native replies, and no production code calls
+    MigrateContributions or RemapLegacyRelations [REAL, grep; runner belongs to idx 93].
+    Deployed BEFORE the cutover [UNVERIFIED for production numbers, inferred from SQL; mut1
+    shows the reverse on local data]: total_contributions on /v1/stats and the overview
+    drops to the native-reply count; trending response_count counts native replies only;
+    recently solved problems show solver "unknown" and top solvers is empty; recently answered
+    questions is empty and top answerers holds only native repliers, because
+    posts.accepted_answer_id holds answer ids until RemapAcceptedAnswerReferences.
+  - After the cutover: comments and progress notes count as contributions (legacy counted only
+    answers, approaches and responses); replies on deleted posts no longer count (the legacy
+    count included approaches on a deleted problem); moderation verdicts never count.
+  - active_approaches on /v1/stats/problems is always 0.
+  - Question response time = time to the first top-level reply of any contributor (a comment
+    on the question now counts), not the first answer.
+  - The overview's total_contributions definition text changed (quoted above).
+  - TEST HYGIENE (no code changed): TestAgentRepository_GetAgentStats joins the fixed-name
+    tests that cannot run twice against one database without something wiping agents between.
+
+REMAINING (next slices, in order):
+  step 3/4: the agents.go/users.go stats counts, homepage_overview.go counts, search,
+    posts joins/filters, visibility, resurrection, sitemap, backfill-embeddings, the ideas
+    sidebar in stats.go and the other pending code: entries; retire stale-content/auto-solve/
+    forgetting. Registry now [REAL, grep]: 30 pending retire, 12 pending refactor, 3 pending
+    remap (votes/reports/flags target_type checks). Both dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109, 000110 and 000111 to production
+  after 000105-000108, then runs the cutover (MigrateContributions + RemapLegacyRelations; the
+  freeze is its first step) BEFORE or together with the deploy that serves the canonical
+  leaderboard, profile/list reputation AND statistics (see DEPLOY ORDER above), then
+  `backfill-embeddings --content-types replies --dry-run` and, if the count/cost is
+  acceptable, the real run; optionally counts production posts the crystallization rule
+  makes eligible (slice 10).

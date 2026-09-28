@@ -6770,3 +6770,152 @@ UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to produ
     main.go is +25/-13 (not +24/-14), db/replies.go +9/-7 (not +10/-6); new-file line counts are
     handlers/replies_embedding_test.go 137 (not 143) and router_replies_embedding_test.go 92
     (not 93). All other figures stand.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 9 of N: step 3, duplicate detection — the moderation service gains a finder that reads
+the canonical posts and replies tables (post: same title+description; reply: same body on
+the same post; 24h window), and feature:duplicate-detection flips Done. Other step 3/4
+entries and the step-6 gate still open.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated as slice 1
+  recorded. idx 76 continues from slice 8's REMAINING list (first item:
+  feature:duplicate-detection on posts and replies).
+
+SPIKE [REAL, grep + psql on local solvr_test]:
+  - Duplicate detection lived only in services/duplicate.go (SHA-256 of title|description in a
+    DuplicateStore) and services/moderation.go (ModerationService.CheckDuplicate /
+    AutoFlagIfNeeded). NOTHING outside internal/services constructs NewModerationService,
+    NewDuplicateDetectionService or NewInMemoryDuplicateStore; the only DuplicateStore is the
+    in-memory one. No legacy table SQL on this path; it was post-shaped (title+description,
+    "duplicate of post X") with no reply notion.
+  - SpamDetector.CheckSpam is post-shaped too: an empty title always adds "too_short", so
+    AutoFlagIfNeeded on a reply would spam-flag every reply.
+  - replies has idx_replies_post (post_id, created_at) WHERE deleted_at IS NULL but no
+    created_at-leading index; posts has idx_posts_created. A global 24h body match on replies
+    would scan the table, so the reply lookup is scoped to the reply's post (uses
+    idx_replies_post; no migration needed). System replies are excluded: moderation writes the
+    same verdict text on every post (slice 8 finding).
+  - All existing AutoFlagIfNeeded callers (tests only) pass target type "post".
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` before this append: 2 tracked files
+  modified, 5 untracked new files; `git diff --numstat`: services/moderation.go +80/-5,
+  legacy_dependency_registry.go +1/-1]:
+  A backend/internal/models/content_duplicate.go (13): ContentDuplicate{TargetType ("post" |
+    "reply"), TargetID, PostID, CreatedAt}.
+  A backend/internal/db/content_duplicates.go (63): ContentDuplicateRepository
+    (NewContentDuplicateRepository(pool)). FindPost(title, description, since, excludeID):
+    earliest live post (deleted_at IS NULL) with equal title AND description, created_at >=
+    since, id <> excludeID. FindReply(postID, body, since, excludeID): earliest live, non-system
+    reply on that post with equal body, same window/exclusion. nil,nil when none. Reads the
+    authoritative tables, so there is no hash store to rebuild.
+  M backend/internal/services/moderation.go (399 -> 474): ContentDuplicateFinder interface
+    (FindPost/FindReply); ModerationContent.PostID (reply targets; Description carries the reply
+    body); DuplicateCheckResult.OriginalTargetType/OriginalTargetID; ModerationService.
+    duplicateFinder + SetDuplicateFinder; CheckContentDuplicate(targetID, targetType, content):
+    "post" -> FindPost, "reply" -> FindReply, legacy target types (answer/approach/response/
+    comment) are not looked up; window = DefaultDuplicateMaxAge (24h); excludes targetID.
+    AutoFlagIfNeeded: reply targets skip the post-shaped spam rules; when a finder is set it is
+    used INSTEAD of the hash store; flag details "duplicate of post <id>" (unchanged wording for
+    posts) or "duplicate of reply <id> on post <post>". Without a finder the old hash-store path
+    runs exactly as before (else-if branch; all pre-existing moderation/duplicate tests PASS).
+  A backend/internal/db/content_duplicates_test.go (144, 2 integration tests):
+    TestContentDuplicateRepository_FindPost (stale 30h, deleted, original 2h, edited-description
+    and newer posts: newer -> original; original -> newer; 48h window -> stale; different
+    description -> nil) and TestContentDuplicateRepository_FindReply (stale, system, deleted,
+    original, other-post and newer replies: newer -> original; original -> newer; post B ->
+    its own reply; different body -> nil). Unique uuid fixture text; own cleanup.
+  A backend/internal/services/moderation_duplicates_test.go (213, 7 unit tests with a fake
+    finder): duplicate post flagged (lookup carries content, excludes the post, 24h window),
+    duplicate reply flagged with reply details, unique short reply not flagged (no spam flag on
+    replies), CheckContentDuplicate returns the original, legacy target types not looked up,
+    finder error returned with no flag, finder takes precedence over the hash store.
+  A backend/internal/services/moderation_duplicates_db_test.go (91): compile-time assertion
+    `var _ ContentDuplicateFinder = (*db.ContentDuplicateRepository)(nil)` and integration
+    TestModerationService_DuplicateFinderOnTheDatabase: real ModerationService + real
+    repository on seeded rows flags the repeated post and the repeated reply with the expected
+    targets and details (the two halves tested together).
+  M backend/internal/db/legacy_dependency_registry.go: feature:duplicate-detection ->
+    done(refactor) with a note naming the finder, both match rules, the 24h window and that
+    legacy target types are not looked up.
+  No migration, no router/handler/frontend change, no SPEC.md change (no API shape changed).
+  No existing test deleted, skipped or weakened.
+
+TDD [all runs against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable]:
+  RED  [TEST] /tmp/solvr_idx76_s9_red.log: both packages build failed — "undefined:
+    NewContentDuplicateRepository", "undefined: models.ContentDuplicate", "svc.SetDuplicateFinder
+    undefined", "unknown field PostID in struct literal of type ModerationContent".
+  GREEN [TEST] /tmp/solvr_idx76_s9_green.log (-run TestContentDuplicateRepository_|
+    TestModerationService_|TestDuplicate|TestHashContent|TestSpam|TestInMemory over db +
+    services): 32 PASS, 0 FAIL, 0 SKIP; the 9 new tests listed PASS.
+  Integration [TEST] /tmp/solvr_idx76_s9_e2e.log: TestModerationService_DuplicateFinderOnThe
+    Database PASS (first run failed in MY fixture: "inconsistent types deduced for parameter
+    $1" in the agent seed SQL; fixed the seed, not the code under test).
+  MUTATION [TEST] /tmp/solvr_idx76_s9_mut.log: with `deleted_at IS NULL` removed from FindPost
+    and `author_type <> 'system'` removed from FindReply, both DB tests FAIL (wrong TargetID);
+    source restored byte-identical (diff against the backup).
+  Registry/legacy [TEST] /tmp/solvr_idx76_s9_db_green.log (-run Legacy|TestExtractStaticSQL|
+    TestModerationReplyWriter|TestFlagTargetTypes|TestContentDuplicateRepository_|
+    TestReplyRepository_|TestHybridSearchReplies|TestRemapLegacyRelations): 48 PASS, 0 FAIL,
+    0 SKIP.
+  services + jobs + models [TEST] once, -p 1 -v -> /tmp/solvr_idx76_s9_svc_jobs.log: 3 packages
+    ok, 333 top-level PASS, 0 FAIL, 0 SKIP. Every slice-8 jobs PASS name still passes (diffed).
+    Static-query probe: 575 extracted (+2: the two finder statements), 508 prepared (+2), 67 did
+    not — per-file "reach dropped relations" list identical to slice 8 (diffed). Worker probe
+    unchanged: Cleanup/Translation/HealthCheck/PresenceReaper reach no dropped relation;
+    Crystallization/StaleContent/AutoSolve reach [approaches] (pending, as before).
+  go build ./... and go vet ./internal/services/ ./internal/db/ ./internal/models/ clean;
+    gofmt -l clean on all 7 touched files. check-file-size.sh: 35 violations, same as slices
+    1-8; none of this slice's files (largest: services/moderation.go 474).
+  FULL internal/db PACKAGE [TEST] once, -p 1 -v -> /tmp/solvr_idx76_s9_dbpkg.log: 666 PASS, 64
+    FAIL, 6 SKIP vs slice 8 (665/63/6); both new DB tests PASS in it. comm of FAIL names vs
+    slice 8: 4 gone (TestSearchAnalyticsRepository_GetTrending, TestSearchPulse_PublishesOnly
+    PublicScopeTerms, TestSearchPulse_WithResultsCountsOnlyProductiveSearches,
+    TestSearchUnified_PostsAndAnswers), 5 new, cause [REAL, psql + exact assertion text]:
+    * TestAgentRepository_List_Empty "cannot scan NULL into *string" (dest[2] = agents.bio):
+      23 leftover NULL-bio fixture agents from other tests (agent_rm_*, agent_bf_owner,
+      agent_migpres_*, ... created 14:31 UTC by this run's other tests).
+    * TestReputation_CrossEndpointConsistency "cannot scan NULL into *string" (dest[3] =
+      users.avatar_url): 2 leftover NULL-avatar users (bf113125, fxhf11311691742) from other
+      tests in this run.
+    * TestGetTrendingPosts_Excludes{Draft,PendingReview,Rejected} "expected open post ... to
+      appear in trending": 400 'Performance test post about async programming...' posts
+      (search_test.go, 11:25-14:31 UTC; its batch cleanup at search_test.go:497 fails on
+      approaches_problem_id_fkey) plus 12 high-vote xqzsortvotes*/'Pattern: Solvr API Key Not
+      in Environment' posts from today's four full runs outrank a new zero-vote post.
+    My tests left 0 posts and 0 agents behind (psql). Deleted from solvr_test: those 400 + 12
+    posts (0 approaches, 0 replies referenced them), the 23 agents and the 2 users; all 5 tests
+    then PASS alone (/tmp/solvr_idx76_s9_five_after2.log; the first re-run after deleting only
+    the 400 posts and 23 agents fixed List_Empty and still failed the other 4 on the remaining
+    rows — /tmp/solvr_idx76_s9_five_after.log). No agents, users, stats or trending code touched
+    by this slice; tests left unchanged.
+  internal/api/... and cmd/... [NOT RUN this slice]: neither was modified; they import services
+    but nothing outside internal/services references ModerationContent, DuplicateCheckResult or
+    ModerationService (grep), and go build ./... is clean. Frontend untouched, not run.
+
+NOT VERIFIED / LIMITS [UNVERIFIED unless stated]:
+  - Duplicate detection is still NOT WIRED in production [REAL, grep]: nothing constructs
+    ModerationService and there is no production FlagCreator (flags handler unrouted, slice 7).
+    The finder is verified against the real database and through the real service; wiring it
+    into post/reply creation needs a flags repository and route, which this task does not own.
+  - Reply duplicates are scoped to the same post by design (index use, no generic-"thanks"
+    cross-post noise); the same body pasted onto many different posts is NOT caught.
+  - Replies get the duplicate check only; the rule-based spam checks are post-shaped and are
+    skipped for reply targets (there was no reply moderation before).
+  - services/duplicate.go keeps InMemoryDuplicateStore (off every production path; its tests
+    pin it). The canonical path is the DB finder.
+
+REMAINING (next slices, in order):
+  step 3/4: crystallization, briefing, badges, leaderboards, reputation, stats and the other
+    pending code: entries; retire stale-content/auto-solve/forgetting. Preserve earned badges/
+    reputation as history, award nothing from migrated rows. Both dropped-table probes must
+    stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
+  000105-000108, deploys, then runs `backfill-embeddings --content-types replies --dry-run`
+  and, if the count/cost is acceptable, the real run. This slice adds no migration.

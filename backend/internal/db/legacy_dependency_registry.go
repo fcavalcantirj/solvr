@@ -58,7 +58,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"feature:crystallization":     pending(LegacyActionRefactor, "pins solved problems; redefine eligibility on canonical post states"),
 	"feature:forgetting":          pending(LegacyActionRetire, "approach forget_after/archived_at lifecycle has no reply equivalent"),
 	"feature:moderation":          done(LegacyActionRefactor, "verdicts are system replies (ModerationReplyWriter); flags accept 'reply' and the API list is pinned to flags_target_type_check, so its legacy types narrow with check:flags at cleanup"),
-	"feature:duplicate-detection": pending(LegacyActionRefactor, "similarity check in services/moderation.go must run on posts and replies"),
+	"feature:duplicate-detection": done(LegacyActionRefactor, "ModerationService.SetDuplicateFinder + db.ContentDuplicateRepository read the canonical tables: a post repeats a live post's title and description, a reply repeats a live non-system reply's body on the same post (24h window); legacy target types are not looked up"),
 	"feature:embedding-workers":   done(LegacyActionRefactor, "reply create/edit embed the body into replies.embedding (an edit without a vector clears it) and backfill-embeddings embeds replies (content type 'replies', in 'all'); legacy answer/approach embedding stays only on the legacy routes and backfill types that drop with their tables"),
 
 	// Scheduled jobs (cmd/api/main.go) and LISTEN consumers.

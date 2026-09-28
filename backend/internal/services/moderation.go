@@ -3,6 +3,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -20,13 +21,21 @@ type RateLimitChecker interface {
 	GetRecentPostCount(ctx context.Context, userType, userID string, window time.Duration) (int, error)
 }
 
+// ContentDuplicateFinder reads the canonical posts and replies tables for the earlier live
+// post or reply that new content repeats (db.ContentDuplicateRepository).
+type ContentDuplicateFinder interface {
+	FindPost(ctx context.Context, title, description string, since time.Time, excludeID string) (*models.ContentDuplicate, error)
+	FindReply(ctx context.Context, postID, body string, since time.Time, excludeID string) (*models.ContentDuplicate, error)
+}
+
 // ModerationContent represents content to be moderated.
 type ModerationContent struct {
 	Title       string
-	Description string
+	Description string // for a reply target: the reply body
 	Tags        []string
 	AuthorType  string // human, agent
 	AuthorID    string
+	PostID      string // for a reply target: the post the reply belongs to
 }
 
 // SpamCheckResult contains the result of spam detection.
@@ -41,6 +50,10 @@ type DuplicateCheckResult struct {
 	IsDuplicate    bool
 	OriginalPostID uuid.UUID
 	Similarity     float64
+	// OriginalTargetType and OriginalTargetID name the repeated post or reply; set by
+	// CheckContentDuplicate only.
+	OriginalTargetType string
+	OriginalTargetID   string
 }
 
 // RateAbuseResult contains the result of rate abuse detection.
@@ -184,6 +197,7 @@ func (d *SpamDetector) CheckLinkSpam(content ModerationContent) LinkSpamResult {
 type ModerationService struct {
 	flagCreator     FlagCreator
 	duplicateDetect *DuplicateDetectionService
+	duplicateFinder ContentDuplicateFinder
 	rateChecker     RateLimitChecker
 	spamDetector    *SpamDetector
 	rateConfig      RateAbuseConfig
@@ -250,6 +264,51 @@ func (s *ModerationService) CheckDuplicate(ctx context.Context, content Moderati
 	}, nil
 }
 
+// SetDuplicateFinder makes duplicate detection read the canonical posts and replies
+// tables. Once set, AutoFlagIfNeeded uses it instead of the hash store.
+func (s *ModerationService) SetDuplicateFinder(finder ContentDuplicateFinder) {
+	s.duplicateFinder = finder
+}
+
+// CheckContentDuplicate reports whether the post or reply targetID repeats an earlier live
+// post (same title and description) or an earlier live reply on the same post (same body)
+// created within DefaultDuplicateMaxAge. Legacy contribution target types are not looked up.
+func (s *ModerationService) CheckContentDuplicate(ctx context.Context, targetID uuid.UUID, targetType string, content ModerationContent) (*DuplicateCheckResult, error) {
+	if s.duplicateFinder == nil {
+		return &DuplicateCheckResult{IsDuplicate: false}, nil
+	}
+
+	since := time.Now().Add(-DefaultDuplicateMaxAge)
+	var match *models.ContentDuplicate
+	var err error
+	switch targetType {
+	case "post":
+		match, err = s.duplicateFinder.FindPost(ctx, content.Title, content.Description, since, targetID.String())
+	case "reply":
+		match, err = s.duplicateFinder.FindReply(ctx, content.PostID, content.Description, since, targetID.String())
+	default:
+		return &DuplicateCheckResult{IsDuplicate: false}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if match == nil {
+		return &DuplicateCheckResult{IsDuplicate: false}, nil
+	}
+
+	postID, err := uuid.Parse(match.PostID)
+	if err != nil {
+		return nil, fmt.Errorf("duplicate %s %s: invalid post id %q: %w", match.TargetType, match.TargetID, match.PostID, err)
+	}
+	return &DuplicateCheckResult{
+		IsDuplicate:        true,
+		OriginalPostID:     postID,
+		Similarity:         1.0, // exact match
+		OriginalTargetType: match.TargetType,
+		OriginalTargetID:   match.TargetID,
+	}, nil
+}
+
 // CheckRateAbuse checks if a user is posting too frequently.
 func (s *ModerationService) CheckRateAbuse(ctx context.Context, userType, userID string) (*RateAbuseResult, error) {
 	if s.rateChecker == nil {
@@ -270,15 +329,31 @@ func (s *ModerationService) CheckRateAbuse(ctx context.Context, userType, userID
 }
 
 // AutoFlagIfNeeded checks content and creates a flag if moderation rules are violated.
+// A reply has no title, so the post-shaped spam rules skip it and only the duplicate
+// check runs.
 func (s *ModerationService) AutoFlagIfNeeded(ctx context.Context, targetID uuid.UUID, targetType string, content ModerationContent) error {
 	// Check for spam
-	spamResult := s.spamDetector.CheckSpam(content)
-	if spamResult.IsSpam {
-		return s.createSystemFlag(ctx, targetID, targetType, "spam", strings.Join(spamResult.Reasons, ", "))
+	if targetType != "reply" {
+		spamResult := s.spamDetector.CheckSpam(content)
+		if spamResult.IsSpam {
+			return s.createSystemFlag(ctx, targetID, targetType, "spam", strings.Join(spamResult.Reasons, ", "))
+		}
 	}
 
 	// Check for duplicate
-	if s.duplicateDetect != nil {
+	if s.duplicateFinder != nil {
+		dupResult, err := s.CheckContentDuplicate(ctx, targetID, targetType, content)
+		if err != nil {
+			return err
+		}
+		if dupResult.IsDuplicate {
+			details := "duplicate of " + dupResult.OriginalTargetType + " " + dupResult.OriginalTargetID
+			if dupResult.OriginalTargetType == "reply" {
+				details += " on post " + dupResult.OriginalPostID.String()
+			}
+			return s.createSystemFlag(ctx, targetID, targetType, "duplicate", details)
+		}
+	} else if s.duplicateDetect != nil {
 		dupResult, err := s.CheckDuplicate(ctx, content)
 		if err != nil {
 			return err

@@ -33,6 +33,8 @@ const (
 	ReplyLegacyAnswer   ReplyLegacyType = "answer"
 	ReplyLegacyResponse ReplyLegacyType = "response"
 	ReplyLegacyComment  ReplyLegacyType = "comment"
+	// ReplyLegacyProgressNote: a progress note, now a child reply of its approach's reply.
+	ReplyLegacyProgressNote ReplyLegacyType = "progress_note"
 )
 
 // Reply is the canonical unified contribution model (BART-585). Every new

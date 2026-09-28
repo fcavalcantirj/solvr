@@ -4,6 +4,11 @@ func pending(action LegacyDependencyAction, note string) LegacyDependencyDisposi
 	return LegacyDependencyDisposition{Action: action, Note: note}
 }
 
+// done marks a disposition whose replacement is implemented and verified by a test.
+func done(action LegacyDependencyAction, note string) LegacyDependencyDisposition {
+	return LegacyDependencyDisposition{Action: action, Done: true, Note: note}
+}
+
 func keep(note string) LegacyDependencyDisposition {
 	return LegacyDependencyDisposition{Action: LegacyActionKeep, Note: note}
 }
@@ -29,21 +34,21 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"check:posts.posts_type_check":              pending(LegacyActionRefactor, "legacy post types stay readable in transition; narrow to 'post' at cleanup"),
 	"check:votes.votes_target_type_check":       pending(LegacyActionRemap, "votes retarget to 'reply'; drop approach/answer/response after remap"),
 	"check:reports.reports_target_type_check":   pending(LegacyActionRemap, "reports retarget to 'reply'; drop legacy target types after remap"),
-	"check:flags.flags_target_type_check":       pending(LegacyActionRemap, "flags are not remapped yet; retarget to 'reply' like reports, then narrow"),
+	"check:flags.flags_target_type_check":       pending(LegacyActionRemap, "RemapLegacyRelations retargets flags to 'reply' (000109); drop legacy target types at cleanup"),
 	"check:replies.replies_legacy_type_check":   keep("provenance of migrated replies; the compact legacy mapping outlives cleanup"),
-	"column:posts.accepted_answer_id":           pending(LegacyActionRemap, "RemapAcceptedAnswerReferences points it at the reply migrated from the answer"),
+	"column:posts.accepted_answer_id":           done(LegacyActionRemap, "RemapAcceptedAnswerReferences points it at the reply migrated from the answer"),
 
 	// Declared relationships (task step 2).
-	"relation:votes":                      pending(LegacyActionRemap, "RemapContributionVotesAndReports retargets contribution votes to replies"),
+	"relation:votes":                      done(LegacyActionRemap, "RemapContributionVotesAndReports retargets contribution votes to replies"),
 	"relation:bookmarks":                  keep("bookmarks hold only post_id and posts keep their UUIDs, so no identity moves"),
-	"relation:reports":                    pending(LegacyActionRemap, "RemapContributionVotesAndReports retargets contribution and comment reports"),
-	"relation:notifications":              pending(LegacyActionRemap, "stored links may name legacy pages or anchors; rewrite, send nothing new"),
-	"relation:accepted-answer-provenance": pending(LegacyActionRemap, "is_accepted kept in reply provenance; accepted_answer_id remapped to the reply"),
-	"relation:approach-relationships":     pending(LegacyActionRemap, "from/to approach ids must resolve to replies through legacy_id; not built yet"),
-	"relation:progress-notes":             pending(LegacyActionRemap, "notes hang off approach_id; carry them onto the migrated reply; not built yet"),
-	"relation:verification-records":       pending(LegacyActionRemap, "approach status/outcome/solution are kept in reply body and provenance"),
+	"relation:reports":                    done(LegacyActionRemap, "RemapContributionVotesAndReports retargets contribution and comment reports"),
+	"relation:notifications":              done(LegacyActionRemap, "RemapLegacyRelations rewrites stored links to /posts/<post>#<reply>; sends nothing new"),
+	"relation:accepted-answer-provenance": done(LegacyActionRemap, "is_accepted kept in reply provenance; accepted_answer_id remapped to the reply"),
+	"relation:approach-relationships":     done(LegacyActionRemap, "kept in the from-reply's provenance with both ends as reply and approach ids"),
+	"relation:progress-notes":             done(LegacyActionRemap, "each note becomes a child reply (legacy_type progress_note) of its approach's reply"),
+	"relation:verification-records":       done(LegacyActionRemap, "approach status/outcome/solution are kept in reply body and provenance"),
 	"relation:translations":               keep("translation state lives on posts (original_* columns) whose UUIDs stay"),
-	"relation:archived-cids":              pending(LegacyActionRemap, "approach archived_cid is copied into reply provenance; post CIDs stay"),
+	"relation:archived-cids":              done(LegacyActionRemap, "approach archived_cid is copied into reply provenance; post CIDs stay"),
 
 	// Declared workers and features (task step 3).
 	"feature:briefing":            pending(LegacyActionRefactor, "briefing reads approaches/answers/comments and legacy post types"),
@@ -79,6 +84,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"code:internal/db/questions.go":                pending(LegacyActionRetire, "type-filtered question listing; canonical listing is posts"),
 	"code:internal/db/ideas.go":                    pending(LegacyActionRetire, "type-filtered idea listing and evolution; canonical listing is posts"),
 	"code:internal/db/contribution_migration.go":   pending(LegacyActionRetire, "the migration reads legacy tables by design; remove with them"),
+	"code:internal/db/legacy_relation_remap.go":    pending(LegacyActionRetire, "the cutover remap reads legacy tables by design; remove with them"),
 	"code:internal/db/posts.go":                    pending(LegacyActionRefactor, "post reads join approach/answer/comment counts; count replies"),
 	"code:internal/db/posts_list_filters.go":       pending(LegacyActionRefactor, "list filter tests approaches; filter on replies"),
 	"code:internal/db/search.go":                   pending(LegacyActionRefactor, "searches approaches/answers/comments; search posts and replies"),

@@ -13,13 +13,28 @@ import (
 // ClaimTokenRepository handles database operations for claim tokens.
 // Claim tokens are used for agent-human linking flow.
 // See SPEC.md Part 12.3 and PRD AGENT-LINKING category.
+//
+// A claim token is a credential, so a row never holds it: a row keeps token_hash (SHA-256,
+// how a claim is looked up) and, when the repository has a seal secret, token_sealed (the
+// token under a key derived from that secret, see claimTokenSealer).
 type ClaimTokenRepository struct {
-	pool *Pool
+	pool   *Pool
+	sealer *claimTokenSealer
 }
 
-// NewClaimTokenRepository creates a new ClaimTokenRepository.
+// NewClaimTokenRepository creates a new ClaimTokenRepository. Without WithSealSecret it
+// keeps only hashes: a live token cannot be shown again (FindActiveByAgentID returns it
+// with an empty Token).
 func NewClaimTokenRepository(pool *Pool) *ClaimTokenRepository {
 	return &ClaimTokenRepository{pool: pool}
+}
+
+// WithSealSecret lets the repository keep a sealed copy of each token it creates and open
+// the copies it wrote, so a repeat request for a claim link gets the same link back. An
+// empty secret keeps the repository hash-only. Call it before the repository serves.
+func (r *ClaimTokenRepository) WithSealSecret(secret string) *ClaimTokenRepository {
+	r.sealer = newClaimTokenSealer(secret)
+	return r
 }
 
 // ErrDuplicateClaimToken is returned when attempting to create a token with a duplicate value.
@@ -33,12 +48,19 @@ var ErrClaimTokenNotFound = errors.New("claim token not found")
 // Returns ErrDuplicateClaimToken if the token value already exists.
 func (r *ClaimTokenRepository) Create(ctx context.Context, token *models.ClaimToken) error {
 	query := `
-		INSERT INTO claim_tokens (token, agent_id, expires_at)
-		VALUES ($1, $2, $3)
+		INSERT INTO claim_tokens (token_hash, token_sealed, agent_id, expires_at)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at
 	`
 
-	err := r.pool.QueryRow(ctx, query, token.Token, token.AgentID, token.ExpiresAt).
+	hash := hashClaimToken(token.Token)
+	sealed, err := r.sealer.seal(token.Token, hash)
+	if err != nil {
+		LogQueryError(ctx, "Create", "claim_tokens", err)
+		return err
+	}
+
+	err = r.pool.QueryRow(ctx, query, hash, sealed, token.AgentID, token.ExpiresAt).
 		Scan(&token.ID, &token.CreatedAt)
 
 	if err != nil {
@@ -55,20 +77,19 @@ func (r *ClaimTokenRepository) Create(ctx context.Context, token *models.ClaimTo
 	return nil
 }
 
-// FindByToken retrieves a claim token by its token value.
-// Returns nil, nil if no token is found (not an error).
-// Per prd-v2.json: SELECT * FROM claim_tokens WHERE token = $1
+// FindByToken retrieves a claim token by its token value, matched on its SHA-256.
+// Returns nil, nil if no token is found (not an error). The row's Token is the value the
+// caller presented: the database does not hold it.
 func (r *ClaimTokenRepository) FindByToken(ctx context.Context, tokenValue string) (*models.ClaimToken, error) {
 	query := `
-		SELECT id, token, agent_id, expires_at, used_at, used_by_human_id, created_at
+		SELECT id, agent_id, expires_at, used_at, used_by_human_id, created_at
 		FROM claim_tokens
-		WHERE token = $1
+		WHERE token_hash = $1
 	`
 
-	token := &models.ClaimToken{}
-	err := r.pool.QueryRow(ctx, query, tokenValue).Scan(
+	token := &models.ClaimToken{Token: tokenValue}
+	err := r.pool.QueryRow(ctx, query, hashClaimToken(tokenValue)).Scan(
 		&token.ID,
-		&token.Token,
 		&token.AgentID,
 		&token.ExpiresAt,
 		&token.UsedAt,
@@ -89,10 +110,12 @@ func (r *ClaimTokenRepository) FindByToken(ctx context.Context, tokenValue strin
 
 // FindActiveByAgentID retrieves the active (unexpired, unused) claim token for an agent.
 // Returns nil, nil if no active token exists (not an error).
-// Per prd-v2.json: Query for unexpired, unused tokens.
+// Token is opened from the sealed copy; it is empty when that copy cannot be opened (the
+// row predates sealing, or the seal secret is not the one it was sealed under), and the
+// caller must then replace the token rather than show it.
 func (r *ClaimTokenRepository) FindActiveByAgentID(ctx context.Context, agentID string) (*models.ClaimToken, error) {
 	query := `
-		SELECT id, token, agent_id, expires_at, used_at, used_by_human_id, created_at
+		SELECT id, token_hash, token_sealed, agent_id, expires_at, used_at, used_by_human_id, created_at
 		FROM claim_tokens
 		WHERE agent_id = $1 AND used_at IS NULL AND expires_at > NOW()
 		ORDER BY created_at DESC
@@ -100,9 +123,12 @@ func (r *ClaimTokenRepository) FindActiveByAgentID(ctx context.Context, agentID 
 	`
 
 	token := &models.ClaimToken{}
+	var hash string
+	var sealed []byte
 	err := r.pool.QueryRow(ctx, query, agentID).Scan(
 		&token.ID,
-		&token.Token,
+		&hash,
+		&sealed,
 		&token.AgentID,
 		&token.ExpiresAt,
 		&token.UsedAt,
@@ -118,7 +144,24 @@ func (r *ClaimTokenRepository) FindActiveByAgentID(ctx context.Context, agentID 
 		return nil, err
 	}
 
+	if value, err := r.sealer.open(sealed, hash); err == nil {
+		token.Token = value
+	}
+
 	return token, nil
+}
+
+// DeleteUnusedByAgentID deletes every unused claim token of an agent, expired or not, and
+// returns how many. Used tokens stay: they record who claimed the agent. It clears the
+// way (the partial unique index allows one unused token per agent) for replacing a live
+// token whose sealed copy can no longer be opened.
+func (r *ClaimTokenRepository) DeleteUnusedByAgentID(ctx context.Context, agentID string) (int64, error) {
+	result, err := r.pool.Exec(ctx, `DELETE FROM claim_tokens WHERE agent_id = $1 AND used_at IS NULL`, agentID)
+	if err != nil {
+		LogQueryError(ctx, "DeleteUnusedByAgentID", "claim_tokens", err)
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 // MarkUsed marks a claim token as used by a human.

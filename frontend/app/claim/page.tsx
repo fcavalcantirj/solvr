@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Bot, Shield, Loader2, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { api } from "@/lib/api";
@@ -30,10 +30,30 @@ function formatDate(dateString: string): string {
   });
 }
 
+// The claim link is /claim#token=<token>. The token follows the #, which a browser never sends
+// to a server, so no access log, proxy or analytics page view records it (a path or a query
+// would be). The page keeps it in this tab's session storage, which no request carries, so it
+// survives the trip through login and a reload, and takes it out of the address bar.
+const PENDING_CLAIM_KEY = "solvr_pending_claim_token";
+
+function readClaimToken(): string | null {
+  const fromLink = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("token");
+  if (fromLink) {
+    window.sessionStorage.setItem(PENDING_CLAIM_KEY, fromLink);
+    window.history.replaceState(null, "", window.location.pathname);
+    return fromLink;
+  }
+  return window.sessionStorage.getItem(PENDING_CLAIM_KEY);
+}
+
+function forgetClaimToken() {
+  window.sessionStorage.removeItem(PENDING_CLAIM_KEY);
+}
+
 export default function ClaimPage() {
-  const params = useParams();
   const router = useRouter();
-  const token = params.token as string;
+  const [token, setToken] = useState<string | null>(null);
+  const [tokenRead, setTokenRead] = useState(false);
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
 
   const [claimInfo, setClaimInfo] = useState<APIClaimInfoResponse | null>(null);
@@ -44,11 +64,26 @@ export default function ClaimPage() {
   const [claimedAgentId, setClaimedAgentId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) return;
+    setToken(readClaimToken());
+    setTokenRead(true);
+  }, []);
+
+  useEffect(() => {
+    if (!tokenRead) return;
+    if (!token) {
+      setClaimInfo({
+        token_valid: false,
+        error: "No claim token in this link. Ask your agent for a new claim link, or paste its token in settings.",
+      });
+      setLoading(false);
+      return;
+    }
 
     api.getClaimInfo(token)
       .then((info) => {
         setClaimInfo(info);
+        // A token that is used or expired will never work again; do not keep it waiting.
+        if (!info.token_valid) forgetClaimToken();
       })
       .catch(() => {
         setClaimInfo({ token_valid: false, error: "Failed to fetch claim info" });
@@ -56,14 +91,16 @@ export default function ClaimPage() {
       .finally(() => {
         setLoading(false);
       });
-  }, [token]);
+  }, [token, tokenRead]);
 
   const handleClaim = async () => {
+    if (!token) return;
     setClaiming(true);
     setClaimError(null);
 
     try {
       const response = await api.claimAgent(token);
+      forgetClaimToken();
       setClaimSuccess(true);
       setClaimedAgentId(response.agent.id);
     } catch (err) {
@@ -75,7 +112,8 @@ export default function ClaimPage() {
   };
 
   const handleLoginRedirect = () => {
-    router.push(`/login?next=/claim/${encodeURIComponent(token)}`);
+    // The token stays in session storage; the return address carries none.
+    router.push("/login?next=/claim");
   };
 
   // Loading state

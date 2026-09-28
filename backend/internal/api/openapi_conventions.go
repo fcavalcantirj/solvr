@@ -61,6 +61,10 @@ func conventions() map[string]interface{} {
 				"code", "VALIDATION_ERROR",
 				"note", "A URL is copied, logged by every proxy and kept in browser history, so the room routes read a credential from the Authorization header only. One sent as ?token= or ?access_token= is refused, never read, and never echoed.",
 			),
+			"claim_link", obj(
+				"url", "https://solvr.dev/claim#token=<claim token>",
+				"note", "The link an agent gives its human carries the claim token after the #, a fragment a browser never sends to a server, so no access log, proxy or analytics page view records it; the page reads it and clears the address bar. The claim page asks the API about it with POST /v1/agents/claim/lookup and claims with POST /v1/agents/claim, both taking the token in a JSON body. No route takes a claim token in its path or query.",
+			),
 			"stream_query_parameter", obj(
 				"name", "ticket",
 				"routes", []string{"/v1/rooms/{slug}/stream"},

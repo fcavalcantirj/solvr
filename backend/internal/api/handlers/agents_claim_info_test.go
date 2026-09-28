@@ -1,24 +1,15 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
-
-// addChiURLParam adds a chi URL parameter to the request context.
-func addChiURLParam(r *http.Request, key, value string) *http.Request {
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add(key, value)
-	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-}
 
 // TestGetClaimInfo_ValidToken tests successful claim info retrieval.
 func TestGetClaimInfo_ValidToken(t *testing.T) {
@@ -49,11 +40,10 @@ func TestGetClaimInfo_ValidToken(t *testing.T) {
 	handler := NewAgentsHandler(agentRepo, "test-secret")
 	handler.SetClaimTokenRepository(claimRepo)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/claim/valid_token_value", nil)
-	req = addChiURLParam(req, "token", "valid_token_value")
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/claim/lookup", strings.NewReader(`{"token":"valid_token_value"}`))
 	w := httptest.NewRecorder()
 
-	handler.GetClaimInfo(w, req)
+	handler.LookupClaim(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
@@ -92,11 +82,10 @@ func TestGetClaimInfo_TokenNotFound(t *testing.T) {
 	handler := NewAgentsHandler(agentRepo, "test-secret")
 	handler.SetClaimTokenRepository(claimRepo)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/claim/nonexistent", nil)
-	req = addChiURLParam(req, "token", "nonexistent")
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/claim/lookup", strings.NewReader(`{"token":"nonexistent"}`))
 	w := httptest.NewRecorder()
 
-	handler.GetClaimInfo(w, req)
+	handler.LookupClaim(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
@@ -138,11 +127,10 @@ func TestGetClaimInfo_ExpiredToken(t *testing.T) {
 	handler := NewAgentsHandler(agentRepo, "test-secret")
 	handler.SetClaimTokenRepository(claimRepo)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/claim/expired_token_value", nil)
-	req = addChiURLParam(req, "token", "expired_token_value")
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/claim/lookup", strings.NewReader(`{"token":"expired_token_value"}`))
 	w := httptest.NewRecorder()
 
-	handler.GetClaimInfo(w, req)
+	handler.LookupClaim(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
@@ -188,11 +176,10 @@ func TestGetClaimInfo_UsedToken(t *testing.T) {
 	handler := NewAgentsHandler(agentRepo, "test-secret")
 	handler.SetClaimTokenRepository(claimRepo)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/claim/used_token_value", nil)
-	req = addChiURLParam(req, "token", "used_token_value")
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/claim/lookup", strings.NewReader(`{"token":"used_token_value"}`))
 	w := httptest.NewRecorder()
 
-	handler.GetClaimInfo(w, req)
+	handler.LookupClaim(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
@@ -215,11 +202,10 @@ func TestGetClaimInfo_NoClaimRepo(t *testing.T) {
 	handler := NewAgentsHandler(agentRepo, "test-secret")
 	// NOT setting claim token repository
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/claim/some_token", nil)
-	req = addChiURLParam(req, "token", "some_token")
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/claim/lookup", strings.NewReader(`{"token":"some_token"}`))
 	w := httptest.NewRecorder()
 
-	handler.GetClaimInfo(w, req)
+	handler.LookupClaim(w, req)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, w.Code)

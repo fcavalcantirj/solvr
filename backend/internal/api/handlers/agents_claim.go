@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
@@ -40,6 +38,14 @@ type ClaimAgentRequest struct {
 	Token string `json:"token"`
 }
 
+// ClaimLookupRequest is the request body for POST /v1/agents/claim/lookup.
+type ClaimLookupRequest struct {
+	Token string `json:"token"`
+}
+
+// maxClaimLookupBody caps the lookup body: a claim token is 64 characters.
+const maxClaimLookupBody = 4 << 10
+
 // ClaimAgentResponse is the response for POST /v1/agents/claim.
 type ClaimAgentResponse struct {
 	Success bool         `json:"success"`
@@ -47,7 +53,7 @@ type ClaimAgentResponse struct {
 	Message string       `json:"message"`
 }
 
-// ClaimInfoResponse is the response for GET /v1/claim/{token}.
+// ClaimInfoResponse is the response for POST /v1/agents/claim/lookup.
 // Returns claim token validity and associated agent info (public, no auth required).
 type ClaimInfoResponse struct {
 	Agent      *models.Agent `json:"agent,omitempty"`
@@ -59,10 +65,14 @@ type ClaimInfoResponse struct {
 // GenerateClaim handles POST /v1/agents/me/claim - generate claim URL for human linking.
 // Per AGENT-LINKING requirement:
 // - Generate unique claim token
-// - Create claim_url: https://solvr.dev/claim/{token}
+// - Create claim_url: https://solvr.dev/claim#token={token}
 // - Token expires in 4 hours
 // - Return claim_url to agent
 // - Agent sends URL to their human
+//
+// The token rides in the URL fragment, which a browser never sends to a server, so it stays
+// out of access logs and proxies; a path or query would be recorded by the frontend host and
+// by analytics.
 func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 	// Require API key authentication (agent must be authenticated)
 	agent := auth.AgentFromContext(r.Context())
@@ -80,18 +90,28 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 	// Check for existing active token
 	existingToken, err := h.claimTokenRepo.FindActiveByAgentID(r.Context(), agent.ID)
 	if err == nil && existingToken != nil && existingToken.IsActive() {
-		// Return existing active token
-		resp := GenerateClaimResponse{
-			Token:        existingToken.Token,
-			ClaimURL:     "https://solvr.dev/claim/" + existingToken.Token,
-			ExpiresAt:    existingToken.ExpiresAt,
-			Instructions: generateClaimInstructions(),
-		}
+		if existingToken.Token != "" {
+			// Return existing active token: asking again must not kill the link already sent.
+			resp := GenerateClaimResponse{
+				Token:        existingToken.Token,
+				ClaimURL:     h.claimURL(existingToken.Token),
+				ExpiresAt:    existingToken.ExpiresAt,
+				Instructions: generateClaimInstructions(),
+			}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
-		return
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		// A live token whose value cannot be recovered (issued before tokens were stored
+		// sealed, or under a server secret that has changed) cannot be shown again. Replace
+		// it rather than hand out a blank link; the one-unused-token-per-agent index needs
+		// the old row gone first.
+		if _, err := h.claimTokenRepo.DeleteUnusedByAgentID(r.Context(), agent.ID); err != nil {
+			writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to replace claim token")
+			return
+		}
 	}
 
 	// Clean up expired unused tokens for this agent (unblocks unique index)
@@ -122,7 +142,7 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 	// Return token and instructions
 	resp := GenerateClaimResponse{
 		Token:        tokenValue,
-		ClaimURL:     "https://solvr.dev/claim/" + tokenValue,
+		ClaimURL:     h.claimURL(tokenValue),
 		ExpiresAt:    claimToken.ExpiresAt,
 		Instructions: generateClaimInstructions(),
 	}
@@ -130,6 +150,11 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(resp)
+}
+
+// claimURL is the link an agent gives its human. The token follows the # so no server sees it.
+func (h *AgentsHandler) claimURL(token string) string {
+	return h.baseURL + "/claim#token=" + token
 }
 
 // generateClaimInstructions returns instructions for the agent to share with their human.
@@ -272,17 +297,19 @@ func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(resp)
 }
 
-// GetClaimInfo handles GET /v1/claim/{token} - get claim token info for confirmation page.
-// Public endpoint (no auth required) so the page can show agent info before login.
-func (h *AgentsHandler) GetClaimInfo(w http.ResponseWriter, r *http.Request) {
-	tokenValue := chi.URLParam(r, "token")
+// LookupClaim handles POST /v1/agents/claim/lookup - get claim token info for the
+// confirmation page. Public (no auth) so the page can show the agent before login.
+// The token is read from the JSON body, never from the URL: a URL is recorded by every proxy,
+// log and analytics tool between the browser and here.
+func (h *AgentsHandler) LookupClaim(w http.ResponseWriter, r *http.Request) {
+	var req ClaimLookupRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxClaimLookupBody)).Decode(&req); err != nil {
+		writeAgentError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
+		return
+	}
+	tokenValue := req.Token
 	if tokenValue == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(ClaimInfoResponse{
-			TokenValid: false,
-			Error:      "token is required",
-		})
+		writeAgentError(w, http.StatusBadRequest, "MISSING_TOKEN", "token is required")
 		return
 	}
 

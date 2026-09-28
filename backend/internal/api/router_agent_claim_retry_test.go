@@ -61,7 +61,7 @@ func claimBurst(t *testing.T, client *http.Client, ts *httptest.Server, jwts []s
 		wg.Wait()
 	}
 	run(func(i int) {
-		resp, err := client.Get(ts.URL + "/v1/claim/" + token)
+		resp, err := client.Post(ts.URL+"/v1/agents/claim/lookup", "application/json", strings.NewReader(`{"token":"`+token+`"}`))
 		if err != nil {
 			errs[i] = err
 			return
@@ -150,7 +150,7 @@ func TestAgentClaim_RetriesAndRacesLinkTheAgentOnce(t *testing.T) {
 				require.Equal(t, repBefore+handlers.ReputationBonusOnClaim, repAfter, "the claim bonus is granted once")
 				var usedBy *string
 				require.NoError(t, pool.QueryRow(context.Background(),
-					`SELECT used_by_human_id::text FROM claim_tokens WHERE token = $1`, token).Scan(&usedBy))
+					`SELECT used_by_human_id::text FROM claim_tokens WHERE token_hash = encode(sha256(convert_to($1::text, 'UTF8')), 'hex')`, token).Scan(&usedBy))
 				require.NotNil(t, usedBy)
 				require.Equal(t, userIDs[winner], *usedBy, "the token records the winning human")
 

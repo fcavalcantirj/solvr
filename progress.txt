@@ -5380,3 +5380,195 @@ UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: (1) apply 000107 on produ
   Realtime/DebugView confirm no page_location contains "token=eyJ".
 
 ================================================================================
+
+2026-09-26 13:37: RALPH ITERATION TIMEOUT — claude was killed after 45m with no result (iteration 1). Ledger untouched.
+
+================================================================================
+2026-09-28 — Task idx 75 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Keep credentials safe and revocation reliable across streams and multiple agent sessions"
+SLICE 6 of N. Step 5 remainder (a) of slice 5 is fixed: the claim link no longer puts the claim
+token in a URL a server sees, and claim_tokens no longer stores the token in the clear.
+================================================================================
+
+HOW THIS SLICE CAME TO BE [REAL]: the 2026-09-26 13:37 iteration (the TIMEOUT line above) wrote
+  this slice and was killed at 45 min before verifying, journalling or committing. Its work sat
+  uncommitted in the tree. This iteration read that diff file by file, verified it, trimmed one
+  file (api-base.ts, below) and commits it. I did NOT observe its RED phase: no RED logs from it
+  are named anywhere, so the RED claim for this slice rests only on the two mutations below.
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73-95; no
+  description starts with URGENT; idx 24/52/53/67/68/73/74 stay gated exactly as slices 2-5
+  recorded; idx 75 is the first buildable false task and slice 5's REMAINING (a) named this work.
+
+WHAT WAS WRONG [REAL, read at HEAD 4989880]: GenerateClaim returned claim_url
+  https://solvr.dev/claim/<token> (token in the page PATH: frontend host log, GA page view,
+  history); the page app/claim/[token] then called GET /v1/claim/{token} (token in the API path);
+  claim_tokens.token held the live token in the clear (migration 000017) and a repeat request
+  re-issued the stored value.
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` / `git diff --numstat` before this append:
+  22 tracked files changed besides progress.txt (2 deleted, 1 added-staged), 9 untracked new]:
+  Design: claim_url is {base}/claim#token=<token>. A fragment is never sent to a server. The page
+  reads it, stores it in sessionStorage (survives the login round trip, never sent in a request),
+  replaceState's it out of the address bar, and asks the API with POST /v1/agents/claim/lookup
+  {"token": ...}; claiming stays POST /v1/agents/claim (already a body). Storage: a row keeps
+  token_hash = sha256 hex (lookup) and token_sealed = AES-256-GCM(token) under
+  HMAC-SHA256(JWT_SECRET, "solvr/claim-token-seal/v1"), with the row's hash as additional data, so
+  a repeat POST /v1/agents/me/claim still returns the SAME live link and no table holds the token.
+  A live row whose seal cannot be opened (pre-000108 rows, or a changed JWT_SECRET) is deleted
+  and replaced with a new token instead of returning a blank link.
+  Backend production:
+  N migrations/000108_claim_token_hash.{up,down}.sql: add token_hash (backfilled with
+    encode(sha256(convert_to(token,'UTF8')),'hex'), NOT NULL, UNIQUE) + token_sealed BYTEA, drop
+    idx_claim_tokens_token and the token column. Down re-adds token filled with token_hash (the
+    clear tokens are gone for good; old links stop working after a down).
+  N db/claim_token_seal.go (68): hashClaimToken, claimTokenSealer (seal/open; nil sealer = no key).
+  M db/claim_tokens.go: WithSealSecret; Create inserts hash + seal; FindByToken matches token_hash
+    and returns the presented value as Token; FindActiveByAgentID opens the seal (Token "" when it
+    cannot); new DeleteUnusedByAgentID (used rows kept: they record who claimed).
+  M models/claim_token.go: comment only (what Token now means).
+  M handlers/agents.go: ClaimTokenRepositoryInterface gains DeleteUnusedByAgentID.
+  M handlers/agents_claim.go: claimURL() builds {baseURL}/claim#token=; GenerateClaim replaces an
+    unopenable live token; GetClaimInfo (chi path param) -> LookupClaim (JSON body, 4 KiB cap,
+    400 VALIDATION_ERROR bad body, 400 MISSING_TOKEN empty token; the rest unchanged: 200 with
+    token_valid). chi import dropped.
+  M router.go: claimTokenRepoConcrete.WithSealSecret(jwtSecret); r.Get("/claim/{token}") ->
+    r.Post("/agents/claim/lookup"). M route_families.go: "GET /v1/claim/{token}" -> "POST
+    /v1/agents/claim/lookup" (agent-accounts, keep). M middleware/logging.go: comment only.
+  M discovery.go / openapi_paths.go / openapi_schemas.go / openapi_conventions.go: /claim/{token}
+    replaced by /agents/claim (confirm) and /agents/claim/lookup; ClaimTokenRequest schema;
+    ClaimInfoResponse now matches the handler (token_valid, agent, expires_at, error); a
+    conventions "claim_link" entry.
+  Frontend:
+  D app/claim/[token]/page.tsx, A app/claim/page.tsx (296): same UI; token from the fragment or
+    sessionStorage key solvr_pending_claim_token; forgets it once used or reported invalid; login
+    redirect is /login?next=/claim (login/page.tsx honours ?next=, [REAL] read line 38). A token
+    in the query or a path is not read.
+  M lib/api-base.ts: getClaimInfo POSTs {token} to /v1/agents/claim/lookup. THIS ITERATION trimmed
+    the WIP's 8-line version to 4 lines: the WIP had taken the file from 800 to 804 lines, over the
+    800 rule. Now 800 [REAL, wc -l].
+  M components/api/api-endpoint-data-core.ts: docs data now shows POST /agents/claim/lookup and the
+    fragment claim_url; the "POST /claim/{token}" entry is removed ([REAL] never wired: HEAD's
+    router.go has no such route). M frontend/public/references/api.md and skill/references/api.md
+    (2 lines each): claim_url and how the page uses it.
+  Tests (new): handlers/agents_claim_link_test.go (5), api/openapi_claim_link_test.go (1),
+    api/router_claim_link_test.go (3, real router + Postgres, incl. access-log check),
+    db/claim_token_seal_test.go (4), db/claim_tokens_storage_test.go (6), frontend
+    lib/api.test.ts (+1), app/claim/page.test.tsx (14 = the 8 carried from [token] + 6 new).
+
+CHANGED EXISTING TESTS (each pinned exactly the behavior this slice replaces):
+  - frontend app/claim/[token]/page.test.tsx DELETED with its page. Its 8 tests are carried into
+    app/claim/page.test.tsx; 7 keep their names and assertions (loading, invalid, expired, not
+    authenticated, authenticated, success, claim fails). The 8th, "calls getClaimInfo with correct
+    token", asserted getClaimInfo was called with 'test-token-123' taken from useParams; its
+    replacement "calls getClaimInfo with the token from the link fragment" asserts the same call
+    with the token taken from #token=. All 14 PASS [TEST] (/tmp/solvr_idx75_s6_fe_targeted.log).
+  - handlers/agents_claim_info_test.go TestGetClaimInfo_{ValidToken,TokenNotFound,ExpiredToken,
+    UsedToken,NoClaimRepo}: called GetClaimInfo with a chi URL param on GET /v1/claim/<t>; now call
+    LookupClaim with {"token":"<t>"} on POST /v1/agents/claim/lookup; response assertions
+    unchanged. 5 PASS [TEST].
+  - router_test.go TestGetClaimInfoEndpointExists asserted GET /v1/claim/test_token_123 is not 404;
+    now POST /v1/agents/claim/lookup is not 404. TestConfirmClaimEndpointExists asserted GET
+    /v1/claim/{token} is neither 405 nor 404 ("wired as GET"); now asserts GET
+    /v1/agents/claim/lookup is 405/404 (POST only) and GET /v1/claim/{token} is 404 (retired).
+    Both PASS [TEST].
+  - router_agent_claim_retry_test.go: its lookup is the POST body route and its used_by query reads
+    by token_hash. db/claim_tokens_test.go: fixtures insert token_hash instead of token; the
+    FindActiveByAgentID test builds the repo WithSealSecret; the MarkUsed fixture now sets
+    users.referral_code (NOT NULL), which is why TestClaimTokenRepository_MarkUsed, failing in
+    slice 5's full log, now passes. handlers/agents_claim_test.go: the mock records
+    deleteUnusedCalled. No test skipped or loosened otherwise.
+
+EVIDENCE (this iteration, DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test,
+  local docker solvr-postgres; nothing else touched):
+  MIGRATION [REAL]: solvr_test was already at 108 (applied by the timed-out iteration). `migrate
+    down 1` then `up 1`: down leaves columns id..created_at,token; up leaves ...,token_hash,
+    token_sealed; version 108 dirty=false; 0 rows with NULL token_hash
+    (/tmp/solvr_idx75_s6_migrate_roundtrip.log).
+  TARGETED [TEST]: `go test -count=1 -p 1 -v -run 'Claim|OpenAPI|RouteFamilies|Discovery'` over
+    internal/db, internal/api/handlers, internal/api, internal/api/middleware: 139 PASS, 0 SKIP,
+    2 FAIL lines = TestAgentClaim_RetriesAndRacesLinkTheAgentOnce/several_humans_race_one_token
+    "duplicate key value violates unique constraint users_username_key" in the shared fixture
+    router_rooms_test.go:60 (username roomtest_<UnixNano%1e6>); run alone: PASS
+    (/tmp/solvr_idx75_s6_targeted.log, /tmp/solvr_idx75_s6_retry_alone.log). All 19 new backend
+    tests and every changed test listed above PASS in that log, plus TestRouteFamilies_PublishedInSpec.
+  MUTATIONS [REAL], each restored from a cp copy and cmp-verified, then `go build ./...` OK:
+    (M1) claimURL -> "/claim/" + token: TestGenerateClaim_LinkCarriesTheTokenInAFragment... and
+    ..._ALiveTokenThatCannotBeShownIsReplacedNotReturnedBlank FAIL (/tmp/solvr_idx75_s6_mut1.log);
+    (M2) Create seals with a nil sealer: TestClaimTokenRepository_StoresAHashAndASealedCopy...,
+    ..._ReissuesTheLiveTokenOnlyToTheHolderOfTheKey/same_server_secret and
+    TestClaimTokenRepository_FindActiveByAgentID FAIL (/tmp/solvr_idx75_s6_mut2.log).
+  FULL BACKEND [REAL, executed once]: `go test ./... -p 1 -count=1` exit 1,
+    /tmp/solvr_idx75_s6_full.log; failing packages internal/api (408 s), internal/api/handlers,
+    internal/db = the documented set. Unique `--- FAIL:` names (subtests included): 72 now vs 77 in
+    slice 5 (/tmp/solvr_idx75_s5_full.log). NEW 3: the claim race fixture collision above
+    ("failed to create test user"; alone PASS); TestRoomExpiry_ExpiredRoomLeavesEveryListingBefore
+    TheReaper ("precondition: homepage activity lists the live room"; alone PASS,
+    /tmp/solvr_idx75_s6_roomexpiry_alone.log: shared-DB data-state); TestServiceCheckRepository_
+    GetUptimePercentage ("expected uptime ~75%, got 72.42%": the data-state flip slice 4 recorded).
+    GONE 9: TestClaimTokenRepository_MarkUsed (fixed here) and 8 homepage/search-pulse data-state
+    tests. None of this slice's tests is in the list.
+  FULL FRONTEND [TEST]: `npx vitest run` exit 0: 182 files, 1645 tests passed
+    (/tmp/solvr_idx75_s6_fe_full.log). This ran BEFORE the api-base.ts trim; after the trim
+    lib/api.test.ts + app/claim/page.test.tsx re-ran: 22 passed (/tmp/solvr_idx75_s6_fe_after_trim.log).
+    `npx tsc --noEmit` exit 0 (before and after the trim). eslint on the three claim files: 0
+    errors, 33 warnings (unused imports already in api-base.ts).
+  go vet OK on internal/api/..., internal/db/..., internal/models/...; gofmt clean on every new Go
+    file; agents.go, agents_claim_test.go, openapi_paths.go, openapi_schemas.go, discovery.go are
+    NOT gofmt-clean but were not at HEAD either (`git show HEAD:<f> | gofmt -d` non-empty for each);
+    not reformatted. check-file-size.sh: 35 violations, same count as slice 5; router.go 1228 ->
+    1235, openapi_paths.go 880 -> 887, openapi_schemas.go 867 -> 876 (all three already over).
+  [REAL] check-file-size.sh line 35 `find frontend -name "*.ts" -o -name "*.tsx" -type f -print0`
+    binds -print0 to the .tsx branch only, so NO .ts file is ever checked (api-base.ts at 804 went
+    unreported; api-endpoint-data-core.ts is 833, down from 851, and also unreported). Not changed:
+    not this task's file; owner call.
+
+BEHAVIOR CHANGE (v0) [TEST]:
+  - claim_url is https://solvr.dev/claim#token=<token>; GET /v1/claim/{token} is gone (404); the
+    lookup is POST /v1/agents/claim/lookup {"token"}; an empty token is now 400 MISSING_TOKEN (was
+    200 token_valid:false). /claim/<token> page URLs 404 on the new frontend.
+  - A repeat POST /v1/agents/me/claim still returns the same live link while the seal opens; after
+    a JWT_SECRET change it returns a NEW token and the link sent earlier stops working.
+
+DEPLOY ORDER [REAL, read]: 000108 drops claim_tokens.token, so the OLD backend's claim INSERT/SELECT
+  fail after it, and the NEW backend fails without it: apply 000108 and deploy the backend in the
+  same window; deploy the frontend with them (the new backend's /claim#token= link needs the new
+  /claim page; the old one only has /claim/[token]). Rows existing at migration time keep working
+  by hash (a human can paste the token in settings), but GenerateClaim replaces them on the next
+  request. Migrations 000101/000102/000104/000105/000106/000107/000108 are the owner's.
+
+NOT VERIFIED [UNVERIFIED]:
+  - ANALYTICS ON /claim: <GoogleAnalytics> (@next/third-parties, app/layout.tsx:63, stock config,
+    no page_location override [REAL, grep]) may send its first page_view while the address still
+    holds #token=, before the page's effect runs replaceState. Whether GA4's page_location keeps the
+    fragment I do not know (no browser, no GA property). Unlike slice 5's login code (single use,
+    60 s), a claim token is readable for up to 4 h until used. So step 5's "analytics" item is NOT
+    closed for the claim link.
+  - No real browser: fragment/sessionStorage/replaceState behavior was tested in jsdom only.
+  - Error reports [REAL, read]: app/global-error.tsx renders error.message on screen and sends it
+    nowhere; there is no app/error.tsx; no error-reporting SDK (slice 3 F6). Not changed.
+  - SPEC.md line ~5229 still lists `GET /v1/claim/{token}` under agent-accounts (not checked by
+    TestRouteFamilies_PublishedInSpec because the family is keep); not edited: idx 75's steps do not
+    name SPEC.md. frontend/public/solvr-skill.zip still stale and scripts still accept --room-token
+    (slice 4/5; idx 78 step 1).
+
+REMAINING FOR idx 75 [UNVERIFIED]:
+  (a) Keep the claim fragment out of GA: e.g. configure gtag's page_location without the hash (or
+      no automatic page_view on /claim), with a test that pins it; then a UAT check in GA DebugView.
+  (b) Closure pass: re-run verbosely the step 1-4 tests named in slices 1-4 (a -v log, 0 SKIP) so
+      the pass rests on this session's evidence, then decide whether the stale zip belongs to
+      idx 78 (it teaches retired flags; it exposes no secret).
+REMAINING FOR idx 74 (untouched): step 5 "require" If-Match, owner decision.
+
+UAT (for when idx 75 closes) [UNVERIFIED, owner-only]: apply 000108 on production through the admin
+  query route after 000107, in the same window as the backend AND frontend deploy. Then: (1) with a
+  throwaway agent, `curl -s -X POST https://api.solvr.dev/v1/agents/me/claim -H "Authorization:
+  Bearer <agent key>"` twice: both claim_url values are identical and start with
+  https://solvr.dev/claim#token=; (2) open that link in a browser: the page shows the agent and the
+  address bar shows /claim with no token; (3) `curl -s -o /dev/null -w '%{http_code}'
+  https://api.solvr.dev/v1/claim/x` prints 404; (4) via the admin query route
+  `SELECT count(*) FROM information_schema.columns WHERE table_name='claim_tokens' AND
+  column_name='token'` returns 0.
+
+================================================================================
+CORRECTION to the slice 6 entry above [REAL, git diff --numstat]: 23 tracked files are modified or deleted besides progress.txt (2 of them deleted), plus 1 staged add (app/claim/page.tsx) and 9 untracked new files; not 22.

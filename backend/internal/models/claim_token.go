@@ -13,7 +13,9 @@ type ClaimToken struct {
 	// ID is the unique identifier for the claim token.
 	ID string `json:"id"`
 
-	// Token is the unique claim token string (64 chars hex).
+	// Token is the unique claim token string (64 chars hex). The database does not hold it
+	// (only its SHA-256 and a sealed copy): it is the value the caller presented, or the one
+	// opened from the sealed copy, and is empty when that copy cannot be opened.
 	Token string `json:"token"`
 
 	// AgentID is the ID of the agent that generated the token.

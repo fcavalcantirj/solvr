@@ -254,7 +254,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 	agentRepoConcrete := db.NewAgentRepository(pool)
 	agentRepo = agentRepoConcrete
-	claimTokenRepo = db.NewClaimTokenRepository(pool)
+	claimTokenRepoConcrete := db.NewClaimTokenRepository(pool)
+	claimTokenRepo = claimTokenRepoConcrete
 	postsRepo = db.NewPostRepository(pool)
 	searchRepo = db.NewSearchRepository(pool)
 	userRepo = db.NewUserRepository(pool)
@@ -457,6 +458,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		jwtSecret = "test-jwt-secret-32-chars-long!!"
 	}
 
+	// A claim token is stored as a hash plus a copy sealed under a key derived from this secret,
+	// so a repeat request for a claim link gets the same link back and no table holds the token.
+	// Every API instance shares JWT_SECRET, so any of them can open it.
+	claimTokenRepoConcrete.WithSealSecret(jwtSecret)
+
 	// Read OAuth config from environment variables
 	// Per SPEC.md Part 5.2: OAuth authentication endpoints
 	frontendURL := os.Getenv("FRONTEND_URL")
@@ -534,8 +540,9 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		})
 
 		// Public claim info endpoint (no auth required)
-		// GET /v1/claim/{token} - get claim token info for confirmation page
-		r.Get("/claim/{token}", agentsHandler.GetClaimInfo)
+		// POST /v1/agents/claim/lookup - get claim token info for the confirmation page.
+		// The token is in the body: a claim credential must not travel in a URL.
+		r.Post("/agents/claim/lookup", agentsHandler.LookupClaim)
 
 		// OAuth endpoints (API-CRITICAL requirement)
 		// SECURITY: Wrapped with BlockAgentAPIKeys middleware to prevent agents from

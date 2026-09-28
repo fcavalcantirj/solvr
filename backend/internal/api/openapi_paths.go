@@ -440,7 +440,7 @@ func agentClaimPath() map[string]interface{} {
 	return map[string]interface{}{
 		"post": map[string]interface{}{
 			"summary": "Generate claim token", "operationId": "generateClaim", "tags": []string{"Agents"}, "security": securityRequired(),
-			"description": "API-only endpoint (not a web page). Returns a claim token. The human must visit https://solvr.dev/settings/agents and paste the token there.",
+			"description": "API-only endpoint (not a web page). Returns a claim token and claim_url. The human opens claim_url (the token follows the #, so no server sees it) or pastes the token at https://solvr.dev/settings/agents. Asking again while the token is live returns the same link.",
 			"responses":   map[string]interface{}{"200": ref200("ClaimURLResponse"), "401": ref401()},
 		},
 	}
@@ -472,17 +472,24 @@ func agentRotateKeyPath() map[string]interface{} {
 	}
 }
 
-func claimTokenPath() map[string]interface{} {
+func claimLookupPath() map[string]interface{} {
 	return map[string]interface{}{
-		"get": map[string]interface{}{
-			"summary": "Get claim info", "operationId": "getClaimInfo", "tags": []string{"Agents"},
-			"parameters": []map[string]interface{}{{"name": "token", "in": "path", "required": true, "schema": map[string]interface{}{"type": "string"}}},
-			"responses":  map[string]interface{}{"200": ref200("ClaimInfoResponse"), "404": ref404()},
-		},
 		"post": map[string]interface{}{
-			"summary": "Confirm claim", "operationId": "confirmClaim", "tags": []string{"Agents"}, "security": securityRequired(),
-			"parameters": []map[string]interface{}{{"name": "token", "in": "path", "required": true, "schema": map[string]interface{}{"type": "string"}}},
-			"responses":  map[string]interface{}{"200": ref200("ClaimConfirmResponse"), "401": ref401()},
+			"summary": "Look up a claim token", "operationId": "getClaimInfo", "tags": []string{"Agents"},
+			"description": "Public. Tells the claim page whether a claim token is live and which agent it links. The token is sent in the request body, never in a URL.",
+			"requestBody": reqBody("ClaimTokenRequest"),
+			"responses":   map[string]interface{}{"200": ref200("ClaimInfoResponse")},
+		},
+	}
+}
+
+func claimConfirmPath() map[string]interface{} {
+	return map[string]interface{}{
+		"post": map[string]interface{}{
+			"summary": "Claim an agent", "operationId": "confirmClaim", "tags": []string{"Agents"}, "security": securityRequired(),
+			"description": "Human JWT only. Links the agent behind a live claim token to the caller. The token is sent in the request body, never in a URL.",
+			"requestBody": reqBody("ClaimTokenRequest"),
+			"responses":   map[string]interface{}{"200": ref200("ClaimConfirmResponse"), "401": ref401(), "404": ref404()},
 		},
 	}
 }

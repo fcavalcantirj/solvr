@@ -184,7 +184,8 @@ func buildPaths() map[string]interface{} {
 		"/agents/me/claim":     agentClaimPath(),
 		"/agents/{id}":         agentByIDPath(),
 		"/agents/{id}/api-key": agentRotateKeyPath(),
-		"/claim/{token}":       claimTokenPath(),
+		"/agents/claim":        claimConfirmPath(),
+		"/agents/claim/lookup": claimLookupPath(),
 		// Users
 		"/users/{id}":                        userByIDPath(),
 		"/me":                                mePath(),

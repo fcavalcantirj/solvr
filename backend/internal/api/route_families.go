@@ -320,7 +320,7 @@ var RouteFamilies = []RouteFamily{
 			"POST /v1/agents/{id}/api-key",
 			"POST /v1/agents/me/claim",
 			"POST /v1/agents/claim",
-			"GET /v1/claim/{token}",
+			"POST /v1/agents/claim/lookup",
 			"GET /v1/agents/{id}/activity",
 		},
 	},

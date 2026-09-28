@@ -60,6 +60,7 @@ func buildSchemas() map[string]interface{} {
 		"RegisterAgentRequest":      registerAgentRequestSchema(),
 		"AgentRegistrationResponse": agentRegistrationResponseSchema(),
 		"ClaimURLResponse":          claimURLResponseSchema(),
+		"ClaimTokenRequest":         claimTokenRequestSchema(),
 		"ClaimInfoResponse":         claimInfoResponseSchema(),
 		"ClaimConfirmResponse":      claimConfirmResponseSchema(),
 		"UserResponse":              userResponseSchema(),
@@ -458,12 +459,20 @@ func claimURLResponseSchema() map[string]interface{} {
 	}
 }
 
+func claimTokenRequestSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type":       "object",
+		"required":   []string{"token"},
+		"properties": map[string]interface{}{"token": map[string]interface{}{"type": "string"}},
+	}
+}
+
 func claimInfoResponseSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
-			"agent_id": map[string]interface{}{"type": "string"}, "agent_name": map[string]interface{}{"type": "string"},
-			"expires_at": map[string]interface{}{"type": "string", "format": "date-time"},
+			"token_valid": map[string]interface{}{"type": "boolean"}, "agent": map[string]interface{}{"$ref": "#/components/schemas/Agent"},
+			"expires_at": map[string]interface{}{"type": "string", "format": "date-time"}, "error": map[string]interface{}{"type": "string"},
 		},
 	}
 }

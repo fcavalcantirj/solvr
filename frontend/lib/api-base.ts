@@ -715,9 +715,9 @@ export class SolvrAPIBase {
     return this.fetch<APIAgentActivityResponse>(`/v1/agents/${id}/activity?page=${page}&per_page=${perPage}`);
   }
 
-  // Get claim token info (public, no auth required)
+  // Get claim token info (public, no auth). The token goes in a body: never in a URL.
   async getClaimInfo(token: string): Promise<APIClaimInfoResponse> {
-    return this.fetch<APIClaimInfoResponse>(`/v1/claim/${encodeURIComponent(token)}`);
+    return this.fetch<APIClaimInfoResponse>('/v1/agents/claim/lookup', { method: 'POST', body: JSON.stringify({ token }) });
   }
 
   // Secure agent claiming (requires JWT auth)

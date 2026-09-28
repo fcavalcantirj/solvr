@@ -451,45 +451,49 @@ func TestClaimEndpointExists(t *testing.T) {
 	}
 }
 
-// TestGetClaimInfoEndpointExists verifies GET /v1/claim/{token} endpoint exists.
-// Per API-CRITICAL requirement: Wire /v1/claim/{token} endpoints.
+// TestGetClaimInfoEndpointExists verifies POST /v1/agents/claim/lookup endpoint exists.
+// Per API-CRITICAL requirement: wire the claim info endpoint. It replaced GET /v1/claim/{token}
+// (idx 75 step 5): a claim token is a credential and must not travel in a URL.
 func TestGetClaimInfoEndpointExists(t *testing.T) {
 	router := setupTestRouter(t)
 
-	// GET /v1/claim/{token} should not return 404
-	req := httptest.NewRequest(http.MethodGet, "/v1/claim/test_token_123", nil)
+	// POST /v1/agents/claim/lookup should not return 404
+	req := httptest.NewRequest(http.MethodPost, "/v1/agents/claim/lookup", strings.NewReader(`{"token":"test_token_123"}`))
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	// Should NOT return 404 - endpoint should be wired
 	if w.Code == http.StatusNotFound {
-		t.Errorf("GET /v1/claim/{token} returned 404 - endpoint not wired")
+		t.Errorf("POST /v1/agents/claim/lookup returned 404 - endpoint not wired")
 	}
 
-	// GetClaimInfo returns 200 with token_valid: false for invalid tokens
+	// LookupClaim returns 200 with token_valid: false for invalid tokens
 	// or 500 if claim token repo not configured
 	if w.Code != http.StatusOK && w.Code != http.StatusInternalServerError {
 		t.Errorf("expected status 200 or 500, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
-// TestConfirmClaimEndpointExists verifies GET /v1/claim/{token} endpoint exists.
-// Per API-CRITICAL requirement: Wire /v1/claim/{token} endpoints.
+// TestConfirmClaimEndpointExists verifies the claim info endpoint is a POST and the retired
+// path-token GET route is gone.
 func TestConfirmClaimEndpointExists(t *testing.T) {
 	router := setupTestRouter(t)
 
-	// GET /v1/claim/{token} is a public endpoint - should return 200, 404 (not found), or 500
-	req := httptest.NewRequest(http.MethodGet, "/v1/claim/test_token_123", nil)
+	// The lookup is public and wired as POST: a GET must not be answered as if it were wired.
+	req := httptest.NewRequest(http.MethodGet, "/v1/agents/claim/lookup", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
-	// Should NOT return 405 (method not allowed) - endpoint is wired as GET
-	if w.Code == http.StatusMethodNotAllowed {
-		t.Errorf("GET /v1/claim/{token} returned 405 - wrong HTTP method registered")
+	if w.Code != http.StatusMethodNotAllowed && w.Code != http.StatusNotFound {
+		t.Errorf("GET /v1/agents/claim/lookup returned %d, want 405 (wired as POST only)", w.Code)
 	}
-	// Should NOT return 404 - endpoint should be wired
-	if w.Code == http.StatusNotFound {
-		t.Errorf("GET /v1/claim/{token} returned 404 - endpoint not wired")
+
+	// GET /v1/claim/{token} put the credential in the path; it is retired.
+	req = httptest.NewRequest(http.MethodGet, "/v1/claim/test_token_123", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("GET /v1/claim/{token} returned %d, want 404 (retired)", w.Code)
 	}
 }
 

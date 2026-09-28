@@ -65,6 +65,7 @@ type ClaimTokenRepositoryInterface interface {
 	FindActiveByAgentID(ctx context.Context, agentID string) (*models.ClaimToken, error)
 	MarkUsed(ctx context.Context, tokenID, humanID string) error
 	DeleteExpiredByAgentID(ctx context.Context, agentID string) (int64, error)
+	DeleteUnusedByAgentID(ctx context.Context, agentID string) (int64, error)
 }
 
 // RoomOwnerBackfiller backfills room ownership when an agent is claimed by a human.

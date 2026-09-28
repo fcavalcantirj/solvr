@@ -51,15 +51,15 @@ func TestClaimTokenRepository_DeleteExpiredTokens(t *testing.T) {
 	// Insert expired tokens (should be deleted), one per agent to satisfy the unique index
 	expiredTime := time.Now().Add(-1 * time.Hour)
 	_, err := pool.Exec(ctx, `
-		INSERT INTO claim_tokens (token, agent_id, expires_at, used_at)
-		VALUES ('expired_token_1', $1, $2, NULL)
+		INSERT INTO claim_tokens (token_hash, agent_id, expires_at, used_at)
+		VALUES (encode(sha256('expired_token_1'::bytea), 'hex'), $1, $2, NULL)
 	`, agentID1, expiredTime)
 	if err != nil {
 		t.Fatalf("failed to insert expired token 1: %v", err)
 	}
 	_, err = pool.Exec(ctx, `
-		INSERT INTO claim_tokens (token, agent_id, expires_at, used_at)
-		VALUES ('expired_token_2', $1, $2, NULL)
+		INSERT INTO claim_tokens (token_hash, agent_id, expires_at, used_at)
+		VALUES (encode(sha256('expired_token_2'::bytea), 'hex'), $1, $2, NULL)
 	`, agentID2, expiredTime)
 	if err != nil {
 		t.Fatalf("failed to insert expired token 2: %v", err)
@@ -68,8 +68,8 @@ func TestClaimTokenRepository_DeleteExpiredTokens(t *testing.T) {
 	// Insert non-expired tokens (should NOT be deleted)
 	futureTime := time.Now().Add(1 * time.Hour)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO claim_tokens (token, agent_id, expires_at, used_at)
-		VALUES ('active_token', $1, $2, NULL)
+		INSERT INTO claim_tokens (token_hash, agent_id, expires_at, used_at)
+		VALUES (encode(sha256('active_token'::bytea), 'hex'), $1, $2, NULL)
 	`, agentID3, futureTime)
 	if err != nil {
 		t.Fatalf("failed to insert active token: %v", err)
@@ -77,8 +77,8 @@ func TestClaimTokenRepository_DeleteExpiredTokens(t *testing.T) {
 
 	// Insert expired but used tokens (should NOT be deleted - already used)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO claim_tokens (token, agent_id, expires_at, used_at)
-		VALUES ('used_token', $1, $2, NOW())
+		INSERT INTO claim_tokens (token_hash, agent_id, expires_at, used_at)
+		VALUES (encode(sha256('used_token'::bytea), 'hex'), $1, $2, NOW())
 	`, agentID3, expiredTime)
 	if err != nil {
 		t.Fatalf("failed to insert used token: %v", err)
@@ -97,7 +97,7 @@ func TestClaimTokenRepository_DeleteExpiredTokens(t *testing.T) {
 
 	// Verify active token still exists
 	var count int
-	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM claim_tokens WHERE token = 'active_token'").Scan(&count)
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM claim_tokens WHERE token_hash = encode(sha256('active_token'::bytea), 'hex')").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to count active tokens: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestClaimTokenRepository_DeleteExpiredTokens(t *testing.T) {
 	}
 
 	// Verify used token still exists
-	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM claim_tokens WHERE token = 'used_token'").Scan(&count)
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM claim_tokens WHERE token_hash = encode(sha256('used_token'::bytea), 'hex')").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to count used tokens: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestClaimTokenRepository_Create(t *testing.T) {
 
 	// Verify token exists in database
 	var count int
-	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM claim_tokens WHERE token = $1", token.Token).Scan(&count)
+	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM claim_tokens WHERE token_hash = $1", hashClaimToken(token.Token)).Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to count tokens: %v", err)
 	}
@@ -316,7 +316,9 @@ func TestClaimTokenRepository_FindActiveByAgentID(t *testing.T) {
 	}
 	defer pool.Close()
 
-	repo := NewClaimTokenRepository(pool)
+	// The token is stored sealed, so getting it back needs the seal secret the router gives
+	// the repository (see claim_tokens_storage_test.go for the no-secret and wrong-secret cases).
+	repo := NewClaimTokenRepository(pool).WithSealSecret("test-seal-secret")
 	ctx := context.Background()
 
 	// Create test agent
@@ -387,9 +389,9 @@ func TestClaimTokenRepository_FindActiveByAgentID_ExpiredNotReturned(t *testing.
 
 	// Insert an expired token directly (bypassing Create to set past expiry)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO claim_tokens (token, agent_id, expires_at, used_at)
+		INSERT INTO claim_tokens (token_hash, agent_id, expires_at, used_at)
 		VALUES ($1, $2, $3, NULL)
-	`, "expired_token_"+time.Now().Format("150405"), agentID, time.Now().Add(-1*time.Hour))
+	`, hashClaimToken("expired_token_"+time.Now().Format("150405")), agentID, time.Now().Add(-1*time.Hour))
 	if err != nil {
 		t.Fatalf("failed to insert expired token: %v", err)
 	}
@@ -431,9 +433,9 @@ func TestClaimTokenRepository_FindActiveByAgentID_UsedNotReturned(t *testing.T) 
 
 	// Insert a used token (not expired but used_at is set)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO claim_tokens (token, agent_id, expires_at, used_at)
+		INSERT INTO claim_tokens (token_hash, agent_id, expires_at, used_at)
 		VALUES ($1, $2, $3, NOW())
-	`, "used_token_"+time.Now().Format("150405"), agentID, time.Now().Add(24*time.Hour))
+	`, hashClaimToken("used_token_"+time.Now().Format("150405")), agentID, time.Now().Add(24*time.Hour))
 	if err != nil {
 		t.Fatalf("failed to insert used token: %v", err)
 	}
@@ -465,8 +467,8 @@ func TestClaimTokenRepository_MarkUsed(t *testing.T) {
 	// Create test human user
 	humanID := "00000000-0000-0000-0000-000000000001"
 	_, _ = pool.Exec(ctx, `
-		INSERT INTO users (id, username, display_name, email, auth_provider, auth_provider_id)
-		VALUES ($1, 'markused_test_user', 'Mark Used Test', 'markused@test.com', 'github', 'gh_markused')
+		INSERT INTO users (id, username, display_name, email, auth_provider, auth_provider_id, referral_code)
+		VALUES ($1, 'markused_test_user', 'Mark Used Test', 'markused@test.com', 'github', 'gh_markused', 'MKUSEDT1')
 		ON CONFLICT (id) DO NOTHING
 	`, humanID)
 	defer pool.Exec(ctx, "DELETE FROM users WHERE id = $1", humanID)
@@ -575,8 +577,8 @@ func TestClaimTokenRepository_DeleteExpiredTokens_NoExpired(t *testing.T) {
 	// Insert only non-expired tokens
 	futureTime := time.Now().Add(24 * time.Hour)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO claim_tokens (token, agent_id, expires_at, used_at)
-		VALUES ('future_token', $1, $2, NULL)
+		INSERT INTO claim_tokens (token_hash, agent_id, expires_at, used_at)
+		VALUES (encode(sha256('future_token'::bytea), 'hex'), $1, $2, NULL)
 	`, agentID, futureTime)
 	if err != nil {
 		t.Fatalf("failed to insert future token: %v", err)

@@ -24,6 +24,7 @@ type MockClaimTokenRepository struct {
 	markUsedErr               error
 	deleteExpiredByAgentCalled bool
 	deleteExpiredByAgentErr   error
+	deleteUnusedCalled        bool
 }
 
 func NewMockClaimTokenRepository() *MockClaimTokenRepository {

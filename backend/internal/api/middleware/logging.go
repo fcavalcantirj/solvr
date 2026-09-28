@@ -31,8 +31,9 @@ var sensitiveParams = []string{
 }
 
 // sensitivePathParams lists route parameter names whose VALUE in the URL path is a
-// secret (the claim link GET /v1/claim/{token}). The value is redacted in logs, exactly as
-// a sensitive query parameter is.
+// secret (the claim lookup used to be GET /v1/claim/{token}; it now takes the token in a
+// body, and this keeps a secret routed in a path out of the log if a route ever has one).
+// The value is redacted in logs, exactly as a sensitive query parameter is.
 var sensitivePathParams = []string{
 	"token",
 	"claim_token",

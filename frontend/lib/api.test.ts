@@ -193,3 +193,32 @@ describe('SolvrAPI room stream ticket (idx 75 step 2)', () => {
     expect(res.data.ticket).toBe('solvr_st_t');
   });
 });
+
+describe('SolvrAPI claim token transport', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('looks a claim token up with a POST body, never a URL', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ token_valid: false, error: 'invalid or unknown token' }),
+    });
+
+    await api.getClaimInfo('claim-secret-value');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [calledUrl, init] = fetchMock.mock.calls[0];
+    expect(String(calledUrl)).toMatch(/\/v1\/agents\/claim\/lookup$/);
+    expect(String(calledUrl)).not.toContain('claim-secret-value');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ token: 'claim-secret-value' });
+  });
+});

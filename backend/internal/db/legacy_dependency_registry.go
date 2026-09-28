@@ -51,7 +51,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"relation:archived-cids":              done(LegacyActionRemap, "approach archived_cid is copied into reply provenance; post CIDs stay"),
 
 	// Declared workers and features (task step 3).
-	"feature:briefing":            pending(LegacyActionRefactor, "briefing reads approaches/answers/comments and legacy post types"),
+	"feature:briefing":            pending(LegacyActionRefactor, "per-agent sections (open items, suggested actions, opportunities, reputation changes, crystallizations; also /me/diff reputation) are served by CanonicalBriefingRepository; platform pulse, victories, hardcore, rising ideas, recommendations and the diff counts still read legacy tables and types"),
 	"feature:badges":              pending(LegacyActionRefactor, "milestones count solved problems and accepted answers; keep earned badges, award none from backfill"),
 	"feature:leaderboards":        pending(LegacyActionRefactor, "leaderboards count answers and problems; move to posts and replies"),
 	"feature:reputation":          pending(LegacyActionRefactor, "sql_builder scores answers/responses/comments; preserve earned totals as history"),
@@ -97,7 +97,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"code:internal/db/inferred_specialties.go":     pending(LegacyActionRefactor, "specialties are inferred using answers/approaches; use replies"),
 	"code:internal/db/leaderboard.go":              pending(LegacyActionRefactor, "see feature:leaderboards"),
 	"code:internal/db/leaderboard_tags.go":         pending(LegacyActionRefactor, "see feature:leaderboards (per-tag)"),
-	"code:internal/db/briefing.go":                 pending(LegacyActionRefactor, "see feature:briefing"),
+	"code:internal/db/briefing.go":                 pending(LegacyActionRetire, "legacy per-agent BriefingRepository, unwired: the router serves those sections from CanonicalBriefingRepository (briefing_canonical.go); drops with the tables"),
 	"code:internal/db/briefing_platform.go":        pending(LegacyActionRefactor, "see feature:briefing (platform section)"),
 	"code:internal/db/briefing_recommendations.go": pending(LegacyActionRefactor, "see feature:briefing (recommendations)"),
 	"code:internal/db/briefing_diff.go":            pending(LegacyActionRefactor, "see feature:briefing (diff counts legacy post types)"),

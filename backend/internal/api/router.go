@@ -865,7 +865,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// Per FIX-005: GET /v1/me - current authenticated entity info
 			// Works with both JWT (humans) and API key (agents)
 			meHandler := handlers.NewMeHandler(oauthConfig, userRepo, agentRepo, authMethodRepo, pool)
-			briefingRepo := db.NewBriefingRepository(pool)
+			// Task idx 76 step 3: the per-agent sections read canonical posts, replies and votes.
+			briefingRepo := db.NewCanonicalBriefingRepository(pool)
 			briefingSvc := services.NewBriefingServiceWithDeps(services.BriefingDeps{
 				InboxRepo:               notificationsRepoConcrete,
 				OpenItemsRepo:           briefingRepo,

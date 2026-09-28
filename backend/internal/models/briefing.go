@@ -41,7 +41,10 @@ type BriefingInboxItem struct {
 }
 
 // OpenItemsResult holds the aggregated open items data for an agent briefing.
+// PostsNoReplies counts every open post of the agent that has no contributor reply;
+// the problem/question counters are its legacy-typed subsets.
 type OpenItemsResult struct {
+	PostsNoReplies       int        `json:"posts_no_replies"`
 	ProblemsNoApproaches int        `json:"problems_no_approaches"`
 	QuestionsNoAnswers   int        `json:"questions_no_answers"`
 	ApproachesStale      int        `json:"approaches_stale"`

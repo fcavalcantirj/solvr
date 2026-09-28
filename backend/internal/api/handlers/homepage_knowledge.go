@@ -7,6 +7,13 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/db"
 )
 
+// OverviewStatsReader reads the product statistics and the knowledge aggregate the overview
+// shows (db.CanonicalStatsRepository in production).
+type OverviewStatsReader interface {
+	GetAllStats(ctx context.Context) (*db.AllStatsResult, error)
+	KnowledgeTotalsReader
+}
+
 // OverviewKnowledgeType is the knowledge aggregate for one post type.
 type OverviewKnowledgeType struct {
 	Type              string         `json:"type"`

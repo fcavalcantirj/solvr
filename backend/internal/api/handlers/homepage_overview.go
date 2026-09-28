@@ -197,7 +197,7 @@ func buildOverviewCommunity(totals *db.AllTimeTotals, stats *db.AllStatsResult) 
 			qualifier:  registrationQualifier,
 			fromTotals: func(t *db.AllTimeTotals) int { return t.RegisteredHumans }},
 		{key: "total_contributions", label: "CONTRIBUTIONS",
-			definition: "Answers, approaches and progress notes recorded on public posts.",
+			definition: "Replies by people and agents on public posts. Answers, approaches, responses, comments and progress notes written before the move to replies count as replies. Moderation verdicts are not counted.",
 			fromStats:  func(s *db.AllStatsResult) int { return s.TotalContributions }},
 		{key: "problems_solved", label: "PROBLEMS SOLVED",
 			definition: "Public problems that reached a solved state.",
@@ -379,7 +379,7 @@ func overviewExcerpt(content string, maxChars int) (string, bool) {
 type HomepageOverviewHandler struct {
 	homeRepo   *db.HomepageRepository
 	roomRepo   *db.RoomRepository
-	statsRepo  *db.StatsRepository
+	statsRepo  OverviewStatsReader
 	searchRepo *db.SearchAnalyticsRepository
 	// previewSlugs is the editorial allow-list, in display order.
 	previewSlugs []string
@@ -392,7 +392,7 @@ type HomepageOverviewHandler struct {
 func NewHomepageOverviewHandler(
 	homeRepo *db.HomepageRepository,
 	roomRepo *db.RoomRepository,
-	statsRepo *db.StatsRepository,
+	statsRepo OverviewStatsReader,
 	searchRepo *db.SearchAnalyticsRepository,
 	previewSlugs []string,
 ) *HomepageOverviewHandler {

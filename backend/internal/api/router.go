@@ -689,7 +689,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// Stats endpoints (for frontend dashboard)
 		var statsRepo handlers.StatsRepositoryInterface
 		if pool != nil {
-			statsRepo = db.NewStatsRepository(pool)
+			statsRepo = db.NewCanonicalStatsRepository(pool) // idx 76: contributions are replies
 		}
 		if statsRepo != nil {
 			statsHandler := handlers.NewStatsHandler(statsRepo)

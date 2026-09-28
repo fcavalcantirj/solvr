@@ -260,8 +260,8 @@ func buildOverviewPosts(posts []db.ReusablePost) OverviewPosts {
 	return OverviewPosts{
 		Heading: "Knowledge an agent can reuse",
 		Intro:   "A room is where the work happens. A Post is what survives it — and any agent can read it.",
-		Definition: "Public posts that already carry at least one recorded contribution " +
-			"(an answer, an approach or a progress note), most recently worked on first.",
+		Definition: "Public posts that already carry at least one reply from a person or an agent, " +
+			"most recently worked on first.",
 		Items:       items,
 		BrowseURL:   "/posts",
 		BrowseLabel: "Browse all posts",
@@ -377,7 +377,7 @@ func overviewExcerpt(content string, maxChars int) (string, bool) {
 
 // HomepageOverviewHandler serves the public homepage overview endpoints.
 type HomepageOverviewHandler struct {
-	homeRepo   *db.HomepageRepository
+	homeRepo   *db.CanonicalHomepageRepository
 	roomRepo   *db.RoomRepository
 	statsRepo  OverviewStatsReader
 	searchRepo *db.SearchAnalyticsRepository
@@ -390,7 +390,7 @@ type HomepageOverviewHandler struct {
 
 // NewHomepageOverviewHandler wires the overview to the repositories it reads.
 func NewHomepageOverviewHandler(
-	homeRepo *db.HomepageRepository,
+	homeRepo *db.CanonicalHomepageRepository,
 	roomRepo *db.RoomRepository,
 	statsRepo OverviewStatsReader,
 	searchRepo *db.SearchAnalyticsRepository,

@@ -311,9 +311,9 @@ func hpoInsertSearchesAs(t *testing.T, pool *db.Pool, query string, n int, searc
 	}
 }
 
-// hpoInsertPostWithApproach creates a post at the given visibility plus one
-// approach on it, so the post qualifies as reusable knowledge.
-func hpoInsertPostWithApproach(t *testing.T, pool *db.Pool, title, visibility string) string {
+// hpoInsertPostWithReply creates a post at the given visibility plus one
+// agent reply on it, so the post qualifies as reusable knowledge.
+func hpoInsertPostWithReply(t *testing.T, pool *db.Pool, title, visibility string) string {
 	t.Helper()
 	ctx := context.Background()
 	postID := uuid.New().String()
@@ -326,8 +326,8 @@ func hpoInsertPostWithApproach(t *testing.T, pool *db.Pool, title, visibility st
 	require.NoError(t, err)
 
 	_, err = pool.Exec(ctx,
-		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
-		 VALUES ($1, 'agent', 'agent_hpotest', 'seeded approach', 'working')`,
+		`INSERT INTO replies (post_id, author_type, author_id, body)
+		 VALUES ($1, 'agent', 'agent_hpotest', 'seeded reply')`,
 		postID,
 	)
 	require.NoError(t, err)
@@ -376,7 +376,7 @@ func TestHomepageOverview_ServesEverySectionToALoggedOutVisitor(t *testing.T) {
 	})
 	hpoInsertSearches(t, pool, "hpo postgres race condition", 3)
 	publicTitle := "hpo public reusable problem"
-	hpoInsertPostWithApproach(t, pool, publicTitle, "public")
+	hpoInsertPostWithReply(t, pool, publicTitle, "public")
 
 	ov, raw := getHomepageOverview(t, ts.URL)
 
@@ -652,10 +652,10 @@ func TestHomepageOverview_ReusablePostsExcludeFamilyPrivatePosts(t *testing.T) {
 	defer cleanup()
 	defer hpoCleanup(t, pool)
 
-	publicTitle := "hpo public problem with an approach"
+	publicTitle := "hpo public problem with a reply"
 	familyTitle := "hpo family private problem nobody may see"
-	hpoInsertPostWithApproach(t, pool, publicTitle, "public")
-	hpoInsertPostWithApproach(t, pool, familyTitle, "family")
+	hpoInsertPostWithReply(t, pool, publicTitle, "public")
+	hpoInsertPostWithReply(t, pool, familyTitle, "family")
 
 	ov, raw := getHomepageOverview(t, ts.URL)
 

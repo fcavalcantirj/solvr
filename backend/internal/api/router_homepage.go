@@ -44,7 +44,7 @@ func mountHomepageRoutes(r chi.Router, pool *db.Pool) {
 	r.Get("/v1/homepage/example", exampleHandler.GetExample)
 
 	overviewHandler := handlers.NewHomepageOverviewHandler(
-		db.NewHomepageRepository(pool),
+		db.NewCanonicalHomepageRepository(pool),
 		db.NewRoomRepository(pool),
 		db.NewCanonicalStatsRepository(pool),
 		db.NewSearchAnalyticsRepository(pool),

@@ -50,7 +50,7 @@ func TestHomepageOverview_AllTimeTotalsDoNotMoveWithTheActivityWindow(t *testing
 	require.NoError(t, err)
 
 	// One published post, and two that were never published to anyone.
-	hpoInsertPostWithApproach(t, pool, "hpo published all-time post", "public")
+	hpoInsertPostWithReply(t, pool, "hpo published all-time post", "public")
 	for _, unpublished := range []struct{ title, status, visibility string }{
 		{"hpo draft all-time post", "draft", "public"},
 		{"hpo family all-time post", "open", "family"},

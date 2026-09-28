@@ -7111,3 +7111,135 @@ UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to produ
   may want the count of production posts the new crystallization rule makes eligible
   (public + published + approved, no CID, updated > 7d ago, with a live human/agent reply)
   to confirm the IPFS pin volume. This slice adds no migration.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 11 of N: step 3, briefing (per-agent sections). This entry VERIFIES AND JOURNALS work
+that is already committed: HEAD 2f81ee4b is a ralph.sh HOST AUTO-COMMIT (backstop at
+ralph.sh:466-471; its message is the truncated last dated journal line, slice 10's header).
+The iteration that wrote the code ended without a journal entry or a commit of its own, so
+no test evidence existed for it until this session. feature:briefing stays pending.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated as slice 1
+  recorded. idx 76 continues from slice 10's REMAINING list (first item: briefing). Working
+  tree was clean at start [REAL, git status --porcelain]; nothing uncommitted was lost.
+
+WHAT HEAD 2f81ee4b CHANGED [REAL, `git show --numstat HEAD`; this iteration changes no code,
+  only this journal]:
+  A backend/internal/db/briefing_canonical.go (276): CanonicalBriefingRepository
+    (NewCanonicalBriefingRepository(pool)) over posts, replies and votes only. "Contributor
+    reply" = live (deleted_at IS NULL) reply whose author_type <> 'system'.
+    - GetOpenItemsForAgent: the agent's live, published + approved posts of ANY type, status
+      not in solved/answered/closed/evolved, with no contributor reply; oldest first, items
+      capped at 10, counters over all of them. New counter PostsNoReplies (all types);
+      ProblemsNoApproaches/QuestionsNoAnswers = the problem/question-typed subsets;
+      ApproachesStale always 0 (approach working-status lifecycle retired).
+    - GetSuggestedActionsForAgent: up to 5 "respond_to_reply" actions, newest first:
+      contributor replies by someone else on the agent's live posts after last_briefing_at
+      (all when never briefed). The legacy "update_approach_status" (stale working approach)
+      and "respond_to_comment" actions are no longer produced.
+    - GetOpportunitiesForAgent: public + published + approved posts of ANY type, status in
+      open/in_progress/active, tag overlap with specialties, not the agent's own; fewest
+      contributor replies first then newest; ProblemsInMyDomain counts the same predicate;
+      ApproachesCount carries the contributor reply count.
+    - GetReputationChangesSince: 10 newest confirmed votes after since on the agent's posts
+      (post_upvoted/post_downvoted) and replies (reply_upvoted/reply_downvoted, titled by the
+      reply's post), +10/-1, signed sum. Legacy approach/answer vote targets and the
+      "answer_accepted" event are not read.
+    - GetRecentCrystallizations: live posts crystallized after since that the agent wrote or
+      holds a live reply on created before crystallized_at (legacy: a succeeded approach).
+  M backend/internal/api/router.go (+2/-1): briefingRepo = db.NewCanonicalBriefingRepository
+    for OpenItems/SuggestedActions/Opportunities/Reputation/Crystallizations on GET /v1/me
+    (agent briefing, also GET /v1/agents/{id}/briefing) and for BriefingReputationRepo of
+    GET /v1/me/diff. Platform pulse, trending, hardcore, rising ideas, victories,
+    recommendations, inferred specialties and the diff repository are unchanged (legacy).
+    Nothing else constructs NewBriefingRepository in production [REAL, grep].
+  M backend/internal/models/briefing.go (+3): OpenItemsResult.PostsNoReplies
+    (json "posts_no_replies") + comment. File was already gofmt-dirty at HEAD~1 (checked with
+    git show HEAD~1:... | gofmt -l); not reformatted.
+  M backend/internal/db/legacy_dependency_registry.go (+2/-2): feature:briefing stays
+    pending(refactor), note says which sections moved and which still read legacy tables;
+    code:internal/db/briefing.go pending(refactor) -> pending(retire): unwired, drops with
+    the tables.
+  A backend/internal/db/briefing_canonical_test.go (360, 7 integration tests):
+    TestCanonicalBriefing_OpenItems (6 of mine incl. system-only, deleted-reply-only and
+    family posts; human-replied, self-replied, draft/pending/solved/deleted and someone
+    else's excluded; typed subsets; ApproachesStale 0; order; age), ..._OpenItems_Items
+    CappedCountNot (12 counted, 10 listed, empty -> non-nil []), ..._SuggestedActions (only
+    the 2 new human/agent replies by others; mine, system, deleted, pre-briefing, other
+    posts and deleted post excluded), ..._SuggestedActions_AtMostFiveAndNeverBriefedMeansAll,
+    ..._Opportunities (count == items predicate, order, reply count 2 = live human+agent,
+    limit), ..._ReputationChanges ("+19", reply votes, unconfirmed/pre-since/not-mine/legacy
+    'approach' target excluded), ..._Crystallizations.
+  A backend/internal/api/router_briefing_canonical_test.go (175, 1 integration test):
+    TestAgentBriefingRoutes_ServeCanonicalPersonalSections registers an agent through the
+    real router, seeds canonical posts/replies/reply votes, and reads GET /v1/me and
+    GET /v1/me/diff (none of the seeded rows is visible to the legacy queries).
+  No migration, no frontend change, no SPEC.md change. No existing test deleted, skipped or
+  weakened (the HEAD commit touches no pre-existing test file).
+
+VERIFICATION [all runs against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable]:
+  go build ./... clean; go vet ./internal/db/ ./internal/api/ ./internal/models/ clean; gofmt
+    -l clean on the 3 new files, router.go and the registry.
+  DB + registry [TEST] /tmp/solvr_idx76_s11_db.log (-run TestCanonicalBriefing_|Legacy|
+    TestExtractStaticSQL over internal/db): 26 PASS, 0 FAIL, 0 SKIP; the 7 new tests PASS.
+  Dropped-table probes [TEST] /tmp/solvr_idx76_s11_probes.log: both
+    TestLegacyDroppedDatabase_* PASS. Static probe: 583 extracted (+6 vs slice 10 = the six
+    new statements), 516 prepared (+6), 67 did not (unchanged); briefing_canonical.go reaches
+    no dropped relation; legacy briefing.go 9 statements, briefing_platform.go 3,
+    briefing_recommendations.go 2 reach dropped relations (all pending). Worker probe:
+    Cleanup/Crystallization/Translation/HealthCheck/PresenceReaper reach none; StaleContent/
+    AutoSolve reach [approaches] (pending, as before).
+  Briefing-related api/handlers/services [TEST] /tmp/solvr_idx76_s11_api.log (-run Briefing|
+    MeDiff|Diff|Opportunit|OpenItems|SuggestedAction|Reputation|Crystalliz): 3 packages ok,
+    91 PASS, 0 FAIL, 0 SKIP; TestAgentBriefingRoutes_ServeCanonicalPersonalSections PASS.
+  MUTATIONS [TEST], sources restored from cp and cmp-verified:
+    mut1 router back to db.NewBriefingRepository -> router test FAIL at
+      router_briefing_canonical_test.go:142 "expected: 1 actual: 0" (/tmp/solvr_idx76_s11_
+      mut1.log).
+    mut2 system filter removed from liveContributorReply -> TestCanonicalBriefing_OpenItems
+      ("every live published approved post of mine without a contributor reply"),
+      _SuggestedActions and _Opportunities ("live human and agent replies only") FAIL
+      (/tmp/solvr_idx76_s11_mut2.log).
+  internal/api/... + services + models [TEST] once, -p 1 -v -> /tmp/solvr_idx76_s11_apipkg.log:
+    internal/api ok (207s), middleware ok, response ok, services ok, models ok; handlers FAIL
+    on 4 tests only: TestGitHubOAuthRedirect_Integration ("expected status 302, got 200"),
+    TestGitHubCallback_MissingCode/_GitHubError/_InvalidCode_Integration ("expected status
+    302, got 400"). Totals 2143 PASS, 4 FAIL, 5 SKIP (TestIntegration_* OAuth linking). The
+    same 4 tests FAIL identically at HEAD~1 0d2578d9 in a detached worktree
+    (/tmp/solvr_idx76_s11_oauth_headminus1.log; worktree removed): pre-existing, unrelated.
+  check-file-size.sh: 35 violations, same as slices 1-10; none of these files (largest new:
+    briefing_canonical_test.go 360). My tests left 0 cbrf_% agents/posts/replies/votes
+    [REAL, psql].
+  NOT RUN this slice: internal/db full package, internal/jobs full package, cmd/..., frontend.
+    RED for the new tests was not captured by the iteration that wrote them; mut1/mut2 above
+    are the evidence that they fail without the code under test.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL unless stated]:
+  - Agent briefing personal sections now count/list canonical posts of every type and
+    replies; unpublished or unapproved own posts no longer appear in my_open_items
+    (legacy listed any live problem/question).
+  - suggested_actions only emits "respond_to_reply"; opportunities cover every post type.
+  - FRONTEND GAP [REAL, grep]: frontend/components/agents/agent-briefing.tsx:140-168 renders
+    problems_no_approaches / questions_no_answers / approaches_stale and not
+    posts_no_replies, so open canonical 'post' items appear in the list while the counters
+    read 0. Not changed here (idx 78 / the product redesign owns client surfaces).
+  - SPEC.md briefing section not edited (this task names no SPEC.md step) [UNVERIFIED
+    whether it lists the retired action names].
+
+REMAINING (next slices, in order):
+  step 3: briefing platform sections (briefing_platform.go: pulse, victories, hardcore,
+    rising ideas), briefing_recommendations.go and briefing_diff.go; then badges,
+    leaderboards, reputation, stats and the other pending code: entries; retire
+    stale-content/auto-solve/forgetting. Preserve earned badges/reputation as history, award
+    nothing from migrated rows. Both dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
+  000105-000108, deploys, then runs `backfill-embeddings --content-types replies --dry-run`
+  and, if the count/cost is acceptable, the real run; optionally counts production posts the
+  crystallization rule makes eligible (slice 10). This slice adds no migration.

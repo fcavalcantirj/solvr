@@ -41,8 +41,9 @@ const canonicalUserReputation = `(SELECT COALESCE(SUM(e.points), 0)
 	FROM (` + canonicalReputationPoints + `) e WHERE e.owner_type = 'human' AND e.owner_id = u.id::text)`
 
 // CanonicalReputationAgentRepository is the AgentRepository the API serves: List scores
-// reputation canonically and GetAgentStats (profile_stats_canonical.go) counts canonical posts,
-// replies and votes with that reputation. Every other method is AgentRepository's.
+// reputation canonically, GetAgentStats (profile_stats_canonical.go) counts canonical posts,
+// replies and votes with that reputation, and GetActivity (activity_canonical.go) lists canonical
+// posts and replies. Every other method is AgentRepository's.
 type CanonicalReputationAgentRepository struct {
 	*AgentRepository
 }

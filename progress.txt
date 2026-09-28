@@ -8338,3 +8338,160 @@ UAT (for when idx 76 closes, not now): owner applies 000109, 000110 and 000111 t
   above), then `backfill-embeddings --content-types replies --dry-run` and, if the count/cost
   is acceptable, the real run; optionally counts production posts the crystallization rule
   makes eligible (slice 10).
+
+2026-09-28 20:03 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 18 of N: steps 3/5, the agent activity feed (GET /v1/agents/{id}/activity), the last
+legacy reader slice 17 left in internal/db/agents.go.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues; slice 17's REMAINING list starts with agents.go GetActivity. Tree clean at start,
+  HEAD c298b45e [REAL, git status --porcelain / git log].
+
+WHAT THIS COMMIT CHANGES [REAL, git status --porcelain + git diff --stat]: 6 files.
+  A backend/internal/db/activity_canonical.go (72): CanonicalReputationAgentRepository.GetActivity
+    overrides the embedded legacy AgentRepository.GetActivity. One CTE (canonicalAgentActivity)
+    = the agent's live PUBLIC posts (type "post", action "created", title, post_type, status —
+    identical to the legacy post items) UNION ALL every live reply the agent wrote (replies
+    JOIN posts): type "reply", action "replied", title LEFT(body, 100), post_type "", status
+    "accepted" when posts.accepted_answer_id = the reply else "", target_id = post id,
+    target_title = post title only when the post is public. ORDER BY created_at DESC, id;
+    LIMIT/OFFSET page. Total = COUNT(*) over the SAME CTE (second query). Unknown/deleted agent
+    -> ErrAgentNotFound via FindByID, as before. Names no legacy table [REAL: scanner test].
+  M backend/internal/db/reputation_canonical.go (+3/-2, comment only): the
+    CanonicalReputationAgentRepository doc now names GetActivity (activity_canonical.go).
+  M backend/internal/db/legacy_dependency_registry.go (1 line, note only):
+    code:internal/db/agents.go stays pending(refactor) Done=false; note now says the legacy
+    GetActivity, GetAgentStats and legacyAgentListReputation are all unwired and names
+    activity_canonical.go + profile_stats_canonical.go. Registry counts unchanged (30 pending
+    retire, 12 pending refactor, 3 remap) [INFERRED: no entry added/removed/flipped].
+  M backend/internal/models/activity.go (comments only): ActivityItem field docs now list the
+    served values ("post"/"reply", "created"/"replied"), legacy values named as the unwired
+    query's.
+  A backend/internal/db/activity_canonical_test.go (209):
+    TestLegacyAgentActivity_ServedCanonically (source guard: no production caller of
+      "AgentRepository.GetActivity("; scanner does not list activity_canonical.go; agents.go
+      registry entry pending refactor, not Done, note names both canonical files).
+    TestCanonicalAgentActivity_ListsPostsAndRepliesAcrossTheCutover on a scratch DB: legacy
+      GetActivity before MigrateContributions + RemapLegacyRelations lists 6 items (2 public
+      posts, 2 live answers — one accepted, one on a family question —, 1 live approach, 1
+      response; no comment, no deleted row, no family/deleted post, not agent b's answer) with
+      total 7 (it also counts the family post). Canonical after the cutover = each legacy item
+      as the reply it became (looked up by legacy_type/legacy_id: same created_at, target_id,
+      target_title; type reply, title = body[:100], "accepted" only for the accepted answer)
+      + both comments (top-level on a question, child on an answer), total 8 = len(items);
+      family-post reply has empty target_title. Unchanged after dropLegacy(). Native replies:
+      accepted native reply (150-char body -> 100-char title), its child reply and a reply on
+      the family question are listed newest-first; a deleted reply and agent b's reply are not;
+      page 2 of 4 = items[4:8]; a page past the end is empty with the full total; unknown
+      agent -> ErrAgentNotFound.
+  A backend/internal/api/router_agent_activity_canonical_test.go (118):
+    TestAgentActivityRoute_ListsCanonicalReplies through NewRouter on solvr_test: registered
+    agent, public idea + family idea, native top-level reply (accepted) and child reply on a
+    human's question -> GET /v1/agents/{id}/activity returns [child, accepted reply, idea] with
+    exact JSON fields, meta.total 3 (family idea not counted), has_more false; ?page=2&per_page=2
+    -> [idea], total 3, has_more false. Cleanup deletes the agent's and user's posts (replies
+    cascade) and the agent.
+  No existing test was deleted, skipped, renamed or changed. Frontend untouched.
+
+DELIBERATE BEHAVIOR CHANGES (owner should know) [TEST unless stated]:
+  - Item type/action for every contribution is now "reply"/"replied" (was answer/answered,
+    approach/started_approach, response/responded). Item id is the REPLY id (for migrated rows
+    a new UUID; the legacy id lives in replies.legacy_id). Approach titles become the reply body
+    prefix ("**Approach:** <angle>..." from the migration's buildApproachBody) instead of the
+    bare angle. Status: "accepted" or "" (was "pending" for answers, approach status such as
+    "succeeded"; replies carry no status workflow).
+  - Comments and progress notes (now replies) and native child replies ARE listed; the legacy
+    feed never listed comments.
+  - meta.total/has_more count exactly the listed items. The legacy total also counted the
+    agent's family (non-public) posts, which the feed never lists, so has_more stayed true on
+    the last page and the total leaked the family-post count. (Legacy responses also had no
+    deleted_at filter; canonical replies all filter deleted_at.)
+  - Ties on created_at are now broken by id (legacy order was undefined on ties).
+  - Frontend: components/agents/agent-activity-feed.tsx renders any type (badge = type
+    uppercased -> "REPLY", MessageSquare icon); getActivityLink's default for a non-post type is
+    /problems/{target_id}, which middleware.ts 308-redirects to /posts/{target_id} (pinned by
+    middleware.test.ts:14) [code read; browser check UNVERIFIED — owner visual UAT].
+  - KEPT AS LEGACY (not changed, flagged for the owner): a reply on a FAMILY post is still
+    listed on the public profile with its body excerpt as title (only target_title is blanked),
+    exactly like legacy answers/approaches/responses on family posts (BART-151 blanked only the
+    post title). Replies on deleted posts are still listed (legacy joined posts without a
+    deleted filter). Changing either is a privacy/product decision I did not take.
+
+VERIFICATION [all against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable; scratch DBs on the same
+  server, 0 solvr_scratch* left after (REAL, psql)]:
+  RED [TEST] /tmp/solvr_idx76_s18_red.log (tests written first, before activity_canonical.go):
+    TestLegacyAgentActivity_ FAIL :31 (note lacks activity_canonical.go);
+    TestCanonicalAgentActivity_ FAIL :162 (legacy answer/approach/response items served),
+    :163 (total 7, want 8), :171, :174 (error after dropLegacy: legacy query needs the tables).
+  GREEN targeted DB [TEST] /tmp/solvr_idx76_s18_db.log (-run TestLegacyAgentActivity_|
+    TestCanonicalAgentActivity_|TestLegacyProfileStats_|TestCanonicalProfileStats_|
+    TestLegacyDependency|TestExtractStaticSQL|TestLegacyReputation_|TestCanonicalReputation_):
+    13 PASS, 0 FAIL, 0 SKIP.
+  API/handlers [TEST] /tmp/solvr_idx76_s18_api.log (-run TestAgentActivityRoute_|
+    TestProfileStatsRoutes_|TestGetActivity): 9 PASS (route test + 7 handler mock tests + profile
+    stats route), 0 FAIL, 0 SKIP.
+  MUTATIONS [TEST] /tmp/solvr_idx76_s18_mut{1..6}.log, source restored from cp after each (cmp
+    identical):
+    mut1 override renamed away (legacy GetActivity served) -> DB test FAIL :106/:162/:163/:171/
+      :174, route test FAIL :105/:110/:114. (TestLegacyAgentActivity_ string guard would NOT
+      catch this — same limitation slice 17 recorded; the behavior tests do.)
+    mut2 no `r.deleted_at IS NULL` -> DB test FAIL :162/:163/:189; route test PASS (no deleted
+      reply in its fixture).
+    mut3 posts without `visibility = 'public'` -> DB FAIL :162/:163/:189, route FAIL :105/:110/:114.
+    mut4 accepted status always '' -> DB FAIL :162/:196, route FAIL :105.
+    mut5 target_title not blanked for family posts -> DB FAIL :162/:168/:192; route PASS.
+    mut6 total + family posts (legacy counting) -> DB FAIL :163/:190, route FAIL :110/:116.
+  go build ./... clean; go vet ./internal/db/ ./internal/api/... ./internal/models/ clean;
+    gofmt -l prints nothing for the 6 changed files.
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 40m ./...` ->
+    /tmp/solvr_idx76_s18_full.log: 4682 PASS, 68 FAIL, 12 SKIP (slice 17: 4684/63/12, same
+    counting: grep -cE '^\s*--- (PASS|FAIL|SKIP)'). Packages FAIL: internal/api (new, see
+    below), internal/api/handlers (the 4 standing GitHub OAuth tests), internal/db.
+    All HEAD tests, the handler GetActivity mock tests, the slice 14-17 profile/reputation tests
+    and both TestLegacyDroppedDatabase_* probes PASS in it. 0 "cannot scan NULL".
+    Top-level FAIL names vs slice 17 (comm): 1 gone (TestSearch_Similarity_PopulatedAndTop
+    Similarity), 5 new:
+    * TestAgentClaim_RetriesAndRacesLinkTheAgentOnce/several_humans_race_one_token (the
+      internal/api package FAIL): router_rooms_test.go:70 "exec failed: ERROR: duplicate key
+      value violates unique constraint "users_username_key"" — fixture username
+      roomtest_<UnixNano%1000000> collided. Claim/users code untouched by this commit [REAL, diff].
+    * TestGetTrendingPosts_ExcludesDraft/_ExcludesPendingReview/_ExcludesRejected: stats_test.go
+      :54 "expected open post ... to appear in trending, but it did not". Cause [REAL, psql on
+      solvr_test]: 11 leftover live public posts (mostly 'xqzsortvotes...' high-vote fixtures
+      from today's runs) outrank ANY fresh zero-vote post under GetTrendingPosts' formula, so a
+      top-10 can never include the test's post.
+    * TestSearchPulse_WithResultsCountsOnlyProductiveSearches: homepage_search_test.go:286
+      "\"[]\" should have 1 item(s), but has 0". Cause [UNVERIFIED — I don't know]: solvr_test
+      has 8 terms with >=3 searches in 24h vs an 11-row fetch, which by itself should not push
+      the fixture term out. It flipped before with no code change (FAIL slice 16, PASS 17).
+    A/B [TEST] for the 4 db ones: /tmp/solvr_idx76_s18_ab_with.log (this diff) and
+      _ab_without.log (git stash -u -> HEAD c298b45e, then stash pop, tree verified): all 4
+      FAIL identically in both. Not caused by this commit; shared-DB state. I deleted nothing
+      from solvr_test this slice.
+    The other 63 failures are the standing set (46 referral_code NOT NULL fixture lines, the 4
+      OAuth tests, approaches_problem_id_fkey cleanup errors, ...).
+  Dropped-table probes [TEST, in the full log]: both TestLegacyDroppedDatabase_* PASS. Static
+    probe: 624 extracted (+3 vs slice 17), 553 prepared (+2), 71 did not (+1). The +1 is
+    internal/db/activity_canonical.go:1 [REAL for the per-file map]: the canonicalAgentActivity
+    constant alone is a bare WITH (PREPARE of such a fragment = "syntax error at end of input",
+    REAL psql); that it is the counted statement is [INFERRED]. Its two full queries run after
+    dropLegacy() in TestCanonicalAgentActivity_ [TEST].
+  check-file-size.sh: 35 violations, same as slices 1-17; agents.go 937 and router.go 1244
+    unchanged; new files at most 209 lines.
+  My tests left 0 agent_activity*/aar_* agents, 0 probe posts, 0 scratch DBs [REAL, psql].
+  NOT RUN: frontend (untouched); golangci-lint.
+
+REMAINING (next slices, in order):
+  step 3/4: homepage_overview.go counts, search, posts joins/filters, visibility, resurrection,
+    sitemap, backfill-embeddings, the ideas sidebar in stats.go and the other pending code:
+    entries; retire stale-content/auto-solve/forgetting. Both dropped-table probes must stay
+    green. agents.go/users.go legacy methods are now ALL unwired (drop with the tables).
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): as slice 17, plus: owner looks at an agent profile's
+  Activity tab after the cutover deploy — reply items show a "REPLY" badge and open the post.
+  Decide whether replies on family posts should leave the public feed (see KEPT AS LEGACY).

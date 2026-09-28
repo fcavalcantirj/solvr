@@ -65,7 +65,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"job:CleanupJob":               keep("prunes claim tokens and idempotency keys; touches no legacy table"),
 	"job:HealthCheckJob":           keep("checks API, database and IPFS health; touches no legacy table"),
 	"job:PresenceReaperJob":        keep("reaps room presence; the room model is not the knowledge model"),
-	"job:TranslationJob":           keep("translates posts through original_* columns; posts keep their UUIDs"),
+	"job:TranslationJob":           pending(LegacyActionRefactor, "translation itself uses posts original_* columns, but its moderation trigger writes the verdict as a legacy comment (comments table), found by the dropped-table job probe; must write a reply (feature:moderation)"),
 	"job:CrystallizationJob":       pending(LegacyActionRefactor, "see feature:crystallization; runs on posts.go legacy queries"),
 	"job:StaleContentJob":          pending(LegacyActionRetire, "warns/abandons approaches and marks ideas dormant: legacy lifecycles"),
 	"job:AutoSolveJob":             pending(LegacyActionRetire, "auto-solves problems from succeeded approaches; no status workflow remains"),

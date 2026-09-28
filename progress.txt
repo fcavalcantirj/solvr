@@ -6084,3 +6084,122 @@ REMAINING (next slices, in order):
 
 UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
   000105-000108.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 4 of N: step 5, second half (run the workers against a database with the legacy tables
+removed). Steps 3/4, the static-query half of the dropped-table probe, and the step-6 gate
+still open.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated exactly as
+  slice 1 recorded. idx 76 continues from slice 3's REMAINING list (step 5 second half first).
+
+SPIKE [REAL, reading code]: every job swallows its database errors into log.Printf (RunOnce
+  returns counts, not errors), so a returned value cannot show a missing table: the probe
+  needs a query tracer on the pool. cmd/api/main.go:178,186 wires the TranslationJob's
+  moderation trigger with db.NewCommentsRepository, and ModerationTrigger.moderate
+  (handlers/moderation_trigger.go:151-167) writes the approve/reject verdict as a system
+  comment. The registry had job:TranslationJob as keep, and the slice-1 source scan could not
+  see this: moderation_trigger.go has no legacy SQL.
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` before this append: 2 tracked files
+  modified, 2 untracked new files; `git diff --stat`: pool.go +15/-1,
+  legacy_dependency_registry.go +1/-1]:
+  M backend/internal/db/pool.go: PoolOption + WithQueryTracer(pgx.QueryTracer); NewPool(ctx,
+    url, opts ...PoolOption) applies options after the defaults. Variadic, so every existing
+    caller is unchanged (go vet ./... compiles all packages and tests: exit 0).
+  A backend/internal/db/pool_tracer_test.go (69, 1 test, package db_test):
+    TestNewPool_WithQueryTracerSeesStatementsAndFailures (tracer sees both statements and the
+    42P01 of a query on a missing table).
+  A backend/internal/jobs/legacy_dropped_workers_test.go (396, 1 test, package jobs_test):
+    newLegacyDroppedDatabase: CREATE DATABASE solvr_legacy_dropped_<ns> next to DATABASE_URL,
+    applies every migrations/*.up.sql in order (110 files, same single-Exec-per-file shape as
+    golang-migrate), asserts the 6 legacy tables exist, runs a plain DROP TABLE of all 6,
+    records the 2BP01 DETAIL lines, drops them with CASCADE, asserts they are gone, opens a
+    traced db.Pool; t.Cleanup DROP DATABASE ... WITH (FORCE).
+    TestLegacyDroppedDatabase_ScheduledJobsExposeOnlyRegisteredDependencies: runs all 7 jobs
+    wired as main.go wires them (real repositories; only IPFS, the Groq translator and the LLM
+    moderation are fakes), one seeded agent + one 'pt' draft so the translation path and its
+    async moderation actually run (the test waits for the author notification INSERT).
+    Asserts: every job runs >= 1 statement; every traced error is a missing legacy relation
+    (42P01/42704/42883 naming a legacy table), anything else fails; a job reaching a dropped
+    relation must be non-keep and not Done; every job:<Name> the source scan finds is
+    exercised; at least one job hits a dropped relation (positive control); every object the
+    plain DROP refused over must be Done or keep in the registry.
+  M backend/internal/db/legacy_dependency_registry.go: job:TranslationJob keep -> pending
+    refactor, note names the moderation trigger's legacy comment write (feature:moderation).
+  No existing test changed, skipped or removed. No migration, handler, job or frontend change.
+
+RESULT [TEST] /tmp/solvr_idx76_s4_green.log (local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test; scratch DB created and dropped there):
+  plain DROP TABLE refused only because of hybrid_search_answers / hybrid_search_approaches
+    ("depends on type answers|approaches"), both Done since slice 3: the prediction from slice 3
+    is now measured.
+  job:CleanupJob 2 statements, none legacy. job:HealthCheckJob 3, none. job:PresenceReaperJob
+    2, none. job:CrystallizationJob 1 -> approaches (the candidate list itself,
+    posts.go:926). job:StaleContentJob 3 -> approaches. job:AutoSolveJob 2 -> approaches.
+    job:TranslationJob 5 -> comments (HIDDEN DEPENDENCY, now registered).
+
+TDD:
+  RED [TEST] /tmp/solvr_idx76_s4_red.log: build failed, "too many arguments in call to
+    db.NewPool", "undefined: db.WithQueryTracer".
+  RED 2 [TEST] /tmp/solvr_idx76_s4_red2.log (pool option in, registry unchanged): FAIL
+    "job:TranslationJob reaches dropped legacy relations [comments] but is recorded as keep
+    (done=false): a hidden legacy dependency". Every other assertion held.
+  GREEN [TEST] /tmp/solvr_idx76_s4_green.log: PASS, 0 SKIP (registry flipped).
+  MUTATIONS [TEST], sources restored from cp and cmp-verified:
+    mut1 job:CrystallizationJob marked done -> FAIL "reaches dropped legacy relations
+      [approaches] but is recorded as refactor (done=true)" (mut1.log);
+    mut2 function:hybrid_search_answers made pending -> FAIL "dropping the legacy tables
+      destroys function:hybrid_search_answers, whose refactor is still pending" (mut2.log);
+    mut3 reaper worker keyed under another name -> FAIL "job:PresenceReaperJob is scheduled in
+      the sources but not exercised by this probe" (mut3.log; a first attempt that deleted the
+      worker only failed to build, unused import, and was redone);
+    mut4 pool opened without the tracer -> FAIL "ran no SQL: the probe exercised nothing" for
+      every job (mut4.log).
+  jobs package [TEST] `go test ./internal/jobs/ -count=1 -v` -> /tmp/solvr_idx76_s4_jobs.log:
+    52 PASS, 0 FAIL, 0 SKIP.
+  db subset [TEST] -run 'Legacy|Remap|ContributionMigration|CanonicalNotificationLink|
+    HybridSearchReplies|NewPool|TestPool_' -> /tmp/solvr_idx76_s4_db.log: 35 PASS, 0 FAIL,
+    0 SKIP (includes every registry test after the TranslationJob flip).
+  FULL internal/db PACKAGE [TEST] once, -p 1 -v, same DB -> /tmp/solvr_idx76_s4_dbpkg.log:
+    657 PASS, 63 FAIL, 6 SKIP vs slice 3 (655/64/6). comm: 0 new FAIL names; 1 gone,
+    TestListPosts_AuthorSeesOwnHidden, which passes whenever no leftover 'test-hidden-author'
+    row exists (slice 3's cause). This run left one again (2681f13d..., 12:16 UTC); deleted it.
+    +2 PASS = the new tracer test + that one.
+  go vet ./... exit 0; gofmt -l on the 4 touched files empty. check-file-size.sh: 35
+    violations, same as slices 1-3, none of these files. Scratch databases left behind: 0
+    (pg_database checked after the mutation runs).
+  FULL BACKEND (`go test ./...`): not run; go vet ./... compiled every package's tests against
+    the variadic NewPool.
+
+NOT VERIFIED / LIMITS [UNVERIFIED unless stated]:
+  - Only paths each job reaches with this data ran. Crystallization, stale content and
+    auto-solve stop at their first legacy query, so what runs after it (per-candidate
+    crystallize through ApproachesRepository, warning notifications) did not run; those are
+    already pending. Once refactored, the probe will run them only if seeds reach them.
+  - LISTEN consumers were not run (room channels are not the knowledge model;
+    OverviewChannel only drops snapshots, its query is code:homepage_overview.go, pending).
+  - cmd/backfill-embeddings and cmd/moderate-existing (one-off commands) were not run; both
+    are pending code: entries.
+  - The TranslationJob moderation path also sets the legacy status 'open' and builds a
+    /{postType}s/<id> notification link (services/notification.go); neither is a table
+    dependency, both belong to feature:moderation / the notification writers (slice 2 note).
+  - CI's backend job has no DATABASE_URL, so this probe SKIPs there [REAL, workflow grep];
+    it runs only against a local database.
+
+REMAINING (next slices, in order):
+  step 5, static queries: prepare every static SQL literal of the non-test Go sources on the
+    migrated scratch database before and after the drop; a statement that prepares before and
+    fails after names a file that must be a registered, pending code: entry (checks the
+    regex scan's limits from slice 1).
+  step 3/4: refactor or retire each pending code:/feature:/job: entry, incl. the translation
+    moderation verdict (comment -> reply) and embedding workers writing replies.embedding;
+    preserve earned badges/reputation as history, award nothing from migrated rows.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
+  000105-000108. This slice adds no migration.

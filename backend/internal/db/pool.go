@@ -59,13 +59,24 @@ func (t *txWrapper) Rollback(ctx context.Context) error {
 	return t.tx.Rollback(ctx)
 }
 
+// PoolOption adjusts the pgx pool configuration after the defaults are applied.
+type PoolOption func(*pgxpool.Config)
+
+// WithQueryTracer installs a pgx query tracer on every connection of the pool, so every
+// statement and every database error is observable, including errors a caller only logs.
+func WithQueryTracer(tracer pgx.QueryTracer) PoolOption {
+	return func(config *pgxpool.Config) {
+		config.ConnConfig.Tracer = tracer
+	}
+}
+
 // NewPool creates a new database connection pool with configured settings.
 // Configuration per SPEC.md requirements:
 // - MaxConns: 10
 // - MinConns: 2
 // - MaxConnIdleTime: 30s
 // - HealthCheckPeriod: 30s
-func NewPool(ctx context.Context, databaseURL string) (*Pool, error) {
+func NewPool(ctx context.Context, databaseURL string, opts ...PoolOption) (*Pool, error) {
 	if databaseURL == "" {
 		return nil, errors.New("database URL is required")
 	}
@@ -84,6 +95,9 @@ func NewPool(ctx context.Context, databaseURL string) (*Pool, error) {
 	// Registers pgvector types so pgx can scan vector columns into pgvector.Vector type
 	config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 		return pgxvec.RegisterTypes(ctx, conn)
+	}
+	for _, opt := range opts {
+		opt(config)
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)

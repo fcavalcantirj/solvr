@@ -26,7 +26,8 @@ var (
 	ErrNotSolved          = errors.New("problem must be solved before crystallization")
 	ErrAlreadyCrystallized = errors.New("problem is already crystallized")
 	ErrNotStableYet       = errors.New("problem has not been stable long enough for crystallization")
-	ErrNoVerifiedApproach = errors.New("problem has no succeeded approach")
+	// ErrNoVerifiedApproach is the legacy case of ErrNothingToCrystallize.
+	ErrNoVerifiedApproach = fmt.Errorf("problem has no succeeded approach: %w", ErrNothingToCrystallize)
 )
 
 // PostFinder retrieves a post by ID.

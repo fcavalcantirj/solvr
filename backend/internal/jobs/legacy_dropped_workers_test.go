@@ -262,9 +262,13 @@ func scheduledWorkers(pool *db.Pool, tracer *dbErrorTracer) []probeWorker {
 			_, _ = job.CleanupExpiredTokens(ctx)
 			_, _ = job.PruneExpiredIdempotencyKeys(ctx)
 		}},
-		{"job:CrystallizationJob", func(ctx context.Context, _ *testing.T) {
-			svc := services.NewCrystallizationService(postRepo, postRepo, db.NewApproachesRepository(pool), probeIPFS{}, probeIPFS{})
-			jobs.NewCrystallizationJob(postRepo, svc, jobs.DefaultCrystallizationStabilityPeriod).RunOnce(ctx)
+		{"job:CrystallizationJob", func(ctx context.Context, t *testing.T) {
+			repo := db.NewPostCrystallizationRepository(pool)
+			svc := services.NewPostCrystallizationService(repo, postRepo, db.NewReplyRepository(pool), probeIPFS{}, probeIPFS{})
+			result := jobs.NewCrystallizationJob(repo, svc, jobs.DefaultCrystallizationStabilityPeriod).RunOnce(ctx)
+			if result.Crystallized != 1 {
+				t.Errorf("crystallization job = %+v, want the 1 seeded stable post crystallized", result)
+			}
 		}},
 		{"job:StaleContentJob", func(ctx context.Context, _ *testing.T) {
 			repo := db.NewStaleContentRepository(pool, notifRepo)
@@ -344,6 +348,22 @@ func TestLegacyDroppedDatabase_ScheduledJobsExposeOnlyRegisteredDependencies(t *
 		VALUES ('question', 'Titulo da pergunta de teste', 'Descricao longa o bastante para a pergunta de teste',
 		        'agent', $1, 'draft', 'pt')`, agentID); err != nil {
 		t.Fatalf("seed translation draft: %v", err)
+	}
+	// And one stable public post with an agent reply, so crystallization runs past its candidate list.
+	var crystalPost string
+	if err := d.pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status,
+		                   publication_state, moderation_state, visibility, created_at, updated_at)
+		VALUES ('post', 'Probe crystallization post', 'A stable public post with one reply', 'agent', $1, 'open',
+		        'published', 'approved', 'public', NOW() - INTERVAL '10 days', NOW() - INTERVAL '10 days')
+		RETURNING id::text`, agentID).Scan(&crystalPost); err != nil {
+		t.Fatalf("seed crystallization post: %v", err)
+	}
+	if _, err := d.pool.Exec(ctx, `
+		INSERT INTO replies (post_id, author_type, author_id, body, created_at, updated_at)
+		VALUES ($1, 'agent', $2, 'Probe reply', NOW() - INTERVAL '10 days', NOW() - INTERVAL '10 days')`,
+		crystalPost, agentID); err != nil {
+		t.Fatalf("seed crystallization reply: %v", err)
 	}
 	d.tracer.take()
 

@@ -22,14 +22,14 @@ func (m *mockCandidateLister) ListCrystallizationCandidates(ctx context.Context,
 	return m.candidateIDs, nil
 }
 
-// mockCrystallizer implements ProblemCrystallizer for testing.
+// mockCrystallizer implements PostCrystallizer for testing.
 type mockCrystallizer struct {
 	crystallizedIDs []string
 	errMap          map[string]error // per-ID errors
 	defaultErr      error
 }
 
-func (m *mockCrystallizer) CrystallizeProblem(ctx context.Context, problemID string) (string, error) {
+func (m *mockCrystallizer) CrystallizePost(ctx context.Context, problemID string) (string, error) {
 	if m.errMap != nil {
 		if err, ok := m.errMap[problemID]; ok {
 			return "", err
@@ -229,5 +229,29 @@ func TestCrystallizationJob_SkipsNoVerifiedApproach(t *testing.T) {
 	}
 	if result.Skipped != 1 {
 		t.Errorf("RunOnce() skipped = %d, want 1", result.Skipped)
+	}
+}
+
+// TestCrystallizationJob_SkipsPostWithNothingToCrystallize tests that RunOnce skips a
+// canonical post whose replies vanished between listing and crystallizing, instead of
+// counting it as a failure (idx 76, feature:crystallization).
+func TestCrystallizationJob_SkipsPostWithNothingToCrystallize(t *testing.T) {
+	lister := &mockCandidateLister{
+		candidateIDs: []string{"post-emptied", "post-ok", "post-broken"},
+	}
+	crystallizer := &mockCrystallizer{
+		errMap: map[string]error{
+			"post-emptied": services.ErrNothingToCrystallize,
+			"post-broken":  errors.New("ipfs down"),
+		},
+	}
+
+	result := NewCrystallizationJob(lister, crystallizer, DefaultCrystallizationStabilityPeriod).RunOnce(context.Background())
+
+	if result.Crystallized != 1 || result.Skipped != 1 || result.Failed != 1 {
+		t.Errorf("RunOnce() = %+v, want 1 crystallized, 1 skipped, 1 failed", result)
+	}
+	if len(crystallizer.crystallizedIDs) != 1 || crystallizer.crystallizedIDs[0] != "post-ok" {
+		t.Errorf("crystallized %v, want [post-ok]", crystallizer.crystallizedIDs)
 	}
 }

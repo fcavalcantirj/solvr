@@ -6919,3 +6919,195 @@ REMAINING (next slices, in order):
 UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
   000105-000108, deploys, then runs `backfill-embeddings --content-types replies --dry-run`
   and, if the count/cost is acceptable, the real run. This slice adds no migration.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 10 of N: step 3, crystallization — the daily job now lists and snapshots canonical
+posts and replies (any post type), so feature:crystallization and job:CrystallizationJob
+flip Done. Other step 3/4 entries and the step-6 gate still open.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated as slice 1
+  recorded. idx 76 continues from slice 9's REMAINING list (first item: crystallization).
+
+SPIKE [REAL, grep + psql on local solvr_test + slice 4's probe log]:
+  - The job's candidate query (PostRepository.ListCrystallizationCandidates) needs
+    type='problem', status='solved' and an EXISTS on approaches; the service's post read
+    (PostRepository.FindByID) LEFT JOINs answers/approaches/comments counts, and it lists
+    approaches through ApproachesRepository. So swapping only the candidate query would still
+    reach dropped tables through FindByID: the canonical path needs its own post read.
+  - Canonical states exist on every post (publication_state, moderation_state, visibility)
+    and models.Post.PublicEligible() is the public rule; it treats an EMPTY visibility as
+    public, so the canonical read must return the stored visibility.
+  - Moderation writes a system reply on every moderated post (slice 8 finding), so a system
+    verdict must neither qualify a post nor count as recent discussion.
+  - idx 56 (closed) requires retained snapshot actions to work on the canonical Post model,
+    not only a solved Problem; the frontend's saved-snapshot section is keyed on the CID only.
+  - Legacy TestCrystallization_PostModelFields/SetCrystallizationCID/ListCandidates/
+    ListCandidates_Limit already FAIL at slice 9 (null value in column "referral_code" of
+    relation "users"; /tmp/solvr_idx76_s9_dbpkg.log).
+
+DECISION (canonical eligibility, recorded in the registry note): a candidate is a live post of
+  ANY type that is public + published + approved, has no crystallization_cid, was last
+  updated more than 7 days ago, has at least one live human or agent reply, and has no live
+  human/agent reply updated inside those 7 days. Longest-stable first, 50 per run (unchanged
+  limit). Snapshot format "2.0" = post (title, body, tags, votes, author, created/updated) +
+  every live human/agent reply (id, parent_reply_id, body, votes, legacy_type, author,
+  created_at), system verdicts left out. Existing v1.0 CIDs are untouched.
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` before this append: 6 tracked files
+  modified, 4 untracked new files; `git diff --numstat`: cmd/api/main.go +4/-5,
+  legacy_dependency_registry.go +3/-3, jobs/crystallization.go +14/-14,
+  jobs/crystallization_test.go +26/-2, jobs/legacy_dropped_workers_test.go +23/-3,
+  services/crystallization.go +2/-1]:
+  A backend/internal/db/post_crystallization.go (101): PostCrystallizationRepository
+    (NewPostCrystallizationRepository(pool)). ListCrystallizationCandidates(ctx, stability,
+    limit) implements the rule above over posts + replies only. FindSnapshotPost(ctx, id):
+    live post with author display name (users/agents, falling back to posted_by_id), stored
+    visibility/publication/moderation states, CID; no visibility filter (the service decides);
+    deleted/absent/malformed id -> ErrPostNotFound.
+  A backend/internal/services/post_crystallization.go (226): PostCrystallizationService
+    (NewPostCrystallizationService / ...WithConfig) with CrystallizePost(ctx, id): refuses a
+    post that is not PublicEligible or whose visibility is not exactly "public"
+    (ErrNotPubliclyEligible), already crystallized (ErrAlreadyCrystallized), or changed
+    inside the period (ErrNotStableYet); reads EVERY reply page (100 per page) through
+    SnapshotReplyLister (db.ReplyRepository.ListByPost), drops system replies, refuses a
+    recently edited reply (ErrNotStableYet) and an empty result (ErrNothingToCrystallize);
+    then IPFS add, pin (failure non-fatal, as before), SetCrystallizationCID. PostSnapshot /
+    SnapshotPost / SnapshotReply types, PostCrystallizationVersion "2.0".
+  M backend/internal/services/crystallization.go: ErrNoVerifiedApproach now wraps
+    ErrNothingToCrystallize (message "problem has no succeeded approach: nothing to
+    crystallize"), so the job's single skip rule covers the legacy case too. Nothing else in
+    the legacy service changed.
+  M backend/internal/jobs/crystallization.go: ProblemCrystallizer{CrystallizeProblem} ->
+    PostCrystallizer{CrystallizePost}; the job skips errors.Is(err, ErrNothingToCrystallize)
+    (was ErrNoVerifiedApproach); variable/log/comment wording problem -> post.
+  M backend/cmd/api/main.go: the crystallization job is wired with
+    db.NewPostCrystallizationRepository (lister + snapshot post finder),
+    db.NewPostRepository (SetCrystallizationCID, unchanged SQL) and db.NewReplyRepository;
+    ApproachesRepository is no longer constructed there.
+  M backend/internal/jobs/crystallization_test.go: mockCrystallizer's method renamed
+    CrystallizeProblem -> CrystallizePost and its comment (mechanical, follows the interface);
+    no assertion changed; TestCrystallizationJob_SkipsNoVerifiedApproach is unchanged and
+    PASSES. New TestCrystallizationJob_SkipsPostWithNothingToCrystallize (1 crystallized,
+    1 skipped, 1 failed).
+  M backend/internal/jobs/legacy_dropped_workers_test.go: the probe's CrystallizationJob
+    worker mirrors the new main.go wiring and now ASSERTS Crystallized == 1; the probe seeds
+    one stable public post with an agent reply (10 days old) so the full crystallize path
+    runs on the database with the legacy tables dropped (slice 4 noted the old path stopped
+    at its first legacy query). Old wiring (NewCrystallizationService +
+    NewApproachesRepository) replaced because the probe must run what main.go schedules.
+  A backend/internal/db/post_crystallization_test.go (196, 2 integration tests):
+    TestPostCrystallizationRepository_ListCandidates (included: 10d post, 8d 'idea' post, 9d
+    post whose only recent reply is a system one; excluded: no replies, system-only, deleted
+    reply only, family, draft, archived, pending, rejected, already crystallized, deleted,
+    post edited 1d ago, reply edited 1d ago; order by stability; limit 1 -> 1 row; a 9.5d
+    period drops the 8d post) and TestPostCrystallizationRepository_FindSnapshotPost (every
+    field incl. resolved agent display name; family visibility returned as stored; deleted,
+    random uuid and "not-a-uuid" -> ErrPostNotFound). Own cleanup.
+  A backend/internal/services/post_crystallization_test.go (288, 7 unit tests): snapshot
+    content (system verdict left out, thread parent + legacy_type kept, no legacy
+    problem/problem_id/approaches keys), 230 replies read across 3 pages in order, 6
+    ineligible post states refused before IPFS, crystallized/unstable post/unstable reply/
+    no replies/system-only refused before IPFS, custom period, failure paths (finder, reply
+    lister, IPFS add -> no CID, pin failure keeps the CID, CID setter),
+    TestErrNoVerifiedApproach_IsNothingToCrystallize.
+  M backend/internal/db/legacy_dependency_registry.go: feature:crystallization and
+    job:CrystallizationJob -> done(refactor) with notes; code:internal/db/posts.go stays
+    pending(refactor), note adds that the approach-based ListCrystallizationCandidates is
+    unwired and goes with the other legacy joins.
+  No migration, no handler/router/frontend change, no SPEC.md change (no API shape changed).
+  No existing test deleted, skipped or weakened; no assertion replaced.
+
+TDD [all runs against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable]:
+  RED  [TEST] /tmp/solvr_idx76_s10_red.log: db, services and jobs builds failed — "undefined:
+    NewPostCrystallizationRepository", "undefined: PostCrystallizationService", "undefined:
+    services.ErrNothingToCrystallize", ...
+  GREEN 1 [TEST] /tmp/solvr_idx76_s10_green.log: my 2 DB tests FAILED in MY fixture
+    ("inconsistent types deduced for parameter $2 (SQLSTATE 42P08)": title reused in a text
+    concatenation); fixed the fixture, not the code under test. The 4 legacy
+    TestCrystallization_* failures above also showed (referral_code, pre-existing).
+  GREEN 2 [TEST] /tmp/solvr_idx76_s10_green2.log (new tests + TestCrystallizeProblem_* +
+    TestBuildSnapshot_* + TestFindCrystallizationCandidates_* + TestCrystallizationJob_* +
+    the worker probe): 36 top-level PASS, 0 FAIL, 0 SKIP. Probe: job:CrystallizationJob ran 5
+    statements, reached no dropped legacy relation, crystallized the seeded post.
+  Registry/legacy [TEST] /tmp/solvr_idx76_s10_registry.log (-run Legacy|TestExtractStaticSQL|
+    TestModerationReplyWriter|TestFlagTargetTypes|TestContentDuplicateRepository_|
+    TestReplyRepository_|TestHybridSearchReplies|TestRemapLegacyRelations|
+    TestPostCrystallizationRepository_ over db + jobs), AFTER the registry flip: 41 PASS, 0
+    FAIL, 0 SKIP. Static-query probe: 577 extracted (+2: the two new statements), 510
+    prepared (+2), 67 did not (= slice 9). Worker probe: Cleanup/Crystallization/Translation/
+    HealthCheck/PresenceReaper reach no dropped relation; StaleContent/AutoSolve reach
+    [approaches] (pending, and they keep the probe's positive control).
+  MUTATIONS [TEST], sources restored from cp and cmp-verified:
+    mut1 probe lister back to the legacy PostRepository with the job flipped done -> FAIL
+      "job:CrystallizationJob reaches dropped legacy relations [approaches] but is recorded
+      as refactor (done=true): a hidden legacy dependency" (/tmp/solvr_idx76_s10_mut1.log).
+    mut2a system filter removed from the qualifying EXISTS -> FAIL "a post whose only reply
+      is a system verdict must not be a crystallization candidate" (mut2a.log).
+    mut2b recent-reply NOT EXISTS disabled -> FAIL "a post whose discussion changed inside
+      the stability period must not be a crystallization candidate" (mut2b.log).
+    (A first mut2 attempt inverted NOT EXISTS into EXISTS instead of removing it; it failed on
+    "an eligible post of any type must be a candidate" (mut2.log) and was redone as 2a/2b.)
+  services + jobs + models + cmd/... [TEST] once, -p 1 -v ->
+    /tmp/solvr_idx76_s10_svc_jobs_cmd.log: all packages ok, 395 top-level PASS, 0 FAIL, 0
+    SKIP. comm vs slice 9's services/jobs/models PASS set: 0 lost; new = the 8 tests of this
+    slice + 54 cmd/... tests slice 9 did not run. cmd/api reports "[no tests to run]": the
+    main.go wiring is checked by go build and by the probe that mirrors it, not by a test of
+    main itself.
+  FULL internal/db PACKAGE [TEST] once, -p 1 -v -> /tmp/solvr_idx76_s10_dbpkg.log: 677 PASS,
+    55 FAIL, 6 SKIP vs slice 9 (666/64/6); both new DB tests PASS in it. comm of FAIL names:
+    1 new, 10 gone (TestAgentRepository_List_{Empty,FilterByStatus,SortByNewest,
+    SortByReputation,WithAgents}, TestGetTrendingPosts_Excludes{Draft,PendingReview,
+    Rejected}, TestReputation_CrossEndpointConsistency, TestUsersPage_AgentsCount — shared
+    data slice 9 cleaned; not investigated further [UNVERIFIED]). The new one, cause [REAL,
+    exact assertion + psql]: TestSearchUnified_PostsAndAnswers "expected to find answer ...
+    in unified results (total: 90)" — 6 leftover 'Golang concurrency patterns for web
+    servers'/'Best practices for Go APIs' fixture posts (14:06 and 15:00 UTC, search_test.go
+    :497 cleanup fails on approaches_problem_id_fkey; 0 approaches/answers, 1 fixture reply
+    referenced them). Deleted those 6 posts from solvr_test; the test then PASSES alone
+    (/tmp/solvr_idx76_s10_unified_after.log). No search code touched; test left unchanged.
+    The 4 legacy TestCrystallization_* referral_code failures are unchanged (slice 9 set).
+  My tests left 0 posts and 0 agents (psql, agent_cry_%); 0 scratch databases left.
+  go build ./... clean; go vet on internal/db, internal/services, internal/jobs, cmd/api
+    clean; gofmt -l clean on the 4 new files, jobs/crystallization*.go, the probe and the
+    registry. services/crystallization.go and cmd/api/main.go were gofmt-dirty at HEAD
+    (checked with git show | gofmt -l); not reformatted. check-file-size.sh: 35 violations,
+    same as slices 1-9; none of this slice's files (largest: legacy_dropped_workers_test.go
+    424). internal/api/... [NOT RUN]: not modified, and nothing there references the changed
+    symbols (grep). Frontend untouched, not run. FULL BACKEND (`go test ./...`) not run as
+    one command.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL unless stated]:
+  - Crystallization is BROADER: it used to pin only solved problems with a succeeded
+    approach; now any public, published, approved post with a human/agent reply that has
+    been quiet for 7 days. After deploy, migrated posts of every type with replies become
+    candidates, 50 per daily run, pinned to the Solvr IPFS node. How many production posts
+    qualify is unknown here [UNVERIFIED, no production access].
+  - New snapshots use format 2.0 (post + replies); nothing reads snapshot contents in the
+    API or frontend (the UI only links the CID), so v1.0 and v2.0 coexist.
+  - The legacy CrystallizationService.CrystallizeProblem and
+    PostRepository.ListCrystallizationCandidates are now unwired (no production caller);
+    they and their tests stay until the legacy tables and code paths drop (idx 93).
+  - Briefing's crystallizations section still credits approach authors through the legacy
+    approaches table (feature:briefing, pending); authors of replies on a crystallized post
+    are not credited there until the briefing slice.
+  - SPEC.md (briefing crystallizations note ~l.1304, CrystallizationJob section ~l.1937)
+    still describes the legacy eligibility; not edited (this task names no SPEC.md step).
+  - Unchanged: SetCrystallizationCID still sets posts.updated_at = NOW().
+
+REMAINING (next slices, in order):
+  step 3/4: briefing, badges, leaderboards, reputation, stats and the other pending code:
+    entries; retire stale-content/auto-solve/forgetting. Preserve earned badges/reputation
+    as history, award nothing from migrated rows. Both dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
+  000105-000108, deploys, then runs `backfill-embeddings --content-types replies --dry-run`
+  and, if the count/cost is acceptable, the real run. Before or after that deploy, the owner
+  may want the count of production posts the new crystallization rule makes eligible
+  (public + published + approved, no CID, updated > 7d ago, with a live human/agent reply)
+  to confirm the IPFS pin volume. This slice adds no migration.

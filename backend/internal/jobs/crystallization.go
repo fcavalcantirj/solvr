@@ -15,8 +15,8 @@ const (
 	// DefaultCrystallizationInterval is how often the crystallization scan runs.
 	DefaultCrystallizationInterval = 24 * time.Hour
 
-	// DefaultCrystallizationStabilityPeriod is how long a solved problem must be
-	// unchanged before it becomes eligible for crystallization.
+	// DefaultCrystallizationStabilityPeriod is how long a post and its replies must be
+	// unchanged before the post becomes eligible for crystallization.
 	DefaultCrystallizationStabilityPeriod = 7 * 24 * time.Hour
 
 	// DefaultCrystallizationCandidateLimit is the max number of candidates to
@@ -29,9 +29,9 @@ type CrystallizationCandidateLister interface {
 	ListCrystallizationCandidates(ctx context.Context, stabilityPeriod time.Duration, limit int) ([]string, error)
 }
 
-// ProblemCrystallizer crystallizes a single problem to IPFS.
-type ProblemCrystallizer interface {
-	CrystallizeProblem(ctx context.Context, problemID string) (string, error)
+// PostCrystallizer crystallizes a single canonical post to IPFS.
+type PostCrystallizer interface {
+	CrystallizePost(ctx context.Context, postID string) (string, error)
 }
 
 // CrystallizationResult holds the results of a single crystallization job run.
@@ -41,17 +41,17 @@ type CrystallizationResult struct {
 	Skipped      int
 }
 
-// CrystallizationJob handles periodic scanning and crystallization of solved problems.
+// CrystallizationJob handles periodic scanning and crystallization of stable posts.
 type CrystallizationJob struct {
 	lister          CrystallizationCandidateLister
-	crystallizer    ProblemCrystallizer
+	crystallizer    PostCrystallizer
 	stabilityPeriod time.Duration
 }
 
 // NewCrystallizationJob creates a new crystallization job.
 func NewCrystallizationJob(
 	lister CrystallizationCandidateLister,
-	crystallizer ProblemCrystallizer,
+	crystallizer PostCrystallizer,
 	stabilityPeriod time.Duration,
 ) *CrystallizationJob {
 	return &CrystallizationJob{
@@ -79,19 +79,19 @@ func (j *CrystallizationJob) RunOnce(ctx context.Context) CrystallizationResult 
 
 	log.Printf("Crystallization job: found %d candidates", len(candidates))
 
-	for _, problemID := range candidates {
-		cid, err := j.crystallizer.CrystallizeProblem(ctx, problemID)
+	for _, postID := range candidates {
+		cid, err := j.crystallizer.CrystallizePost(ctx, postID)
 		if err != nil {
-			if errors.Is(err, services.ErrNoVerifiedApproach) {
-				log.Printf("Crystallization job: skipping %s (no succeeded approach)", problemID)
+			if errors.Is(err, services.ErrNothingToCrystallize) {
+				log.Printf("Crystallization job: skipping %s (%v)", postID, err)
 				result.Skipped++
 				continue
 			}
-			log.Printf("Crystallization job: failed to crystallize %s: %v", problemID, err)
+			log.Printf("Crystallization job: failed to crystallize %s: %v", postID, err)
 			result.Failed++
 			continue
 		}
-		log.Printf("Crystallization job: crystallized %s → %s", problemID, cid)
+		log.Printf("Crystallization job: crystallized %s → %s", postID, cid)
 		result.Crystallized++
 	}
 

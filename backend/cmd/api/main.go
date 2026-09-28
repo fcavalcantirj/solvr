@@ -124,14 +124,13 @@ func main() {
 		if ipfsURL == "" {
 			ipfsURL = "http://localhost:5001"
 		}
-		postRepo := db.NewPostRepository(pool)
-		approachRepo := db.NewApproachesRepository(pool)
+		crystallizationRepo := db.NewPostCrystallizationRepository(pool)
 		ipfsSvc := services.NewKuboIPFSService(ipfsURL)
-		crystallizationSvc := services.NewCrystallizationService(
-			postRepo, postRepo, approachRepo, ipfsSvc, ipfsSvc,
+		crystallizationSvc := services.NewPostCrystallizationService(
+			crystallizationRepo, db.NewPostRepository(pool), db.NewReplyRepository(pool), ipfsSvc, ipfsSvc,
 		)
 		crystallizationJob := jobs.NewCrystallizationJob(
-			postRepo, crystallizationSvc, jobs.DefaultCrystallizationStabilityPeriod,
+			crystallizationRepo, crystallizationSvc, jobs.DefaultCrystallizationStabilityPeriod,
 		)
 		var crystallizationCtx context.Context
 		crystallizationCtx, crystallizationCancel = context.WithCancel(context.Background())

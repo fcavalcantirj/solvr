@@ -865,8 +865,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// Per FIX-005: GET /v1/me - current authenticated entity info
 			// Works with both JWT (humans) and API key (agents)
 			meHandler := handlers.NewMeHandler(oauthConfig, userRepo, agentRepo, authMethodRepo, pool)
-			// Task idx 76 step 3: the per-agent sections read canonical posts, replies and votes.
+			// Task idx 76 step 3: every briefing section reads canonical posts, replies, votes
+			// and room outcomes.
 			briefingRepo := db.NewCanonicalBriefingRepository(pool)
+			platformRepo := db.NewCanonicalPlatformBriefingRepository(pool)
 			briefingSvc := services.NewBriefingServiceWithDeps(services.BriefingDeps{
 				InboxRepo:               notificationsRepoConcrete,
 				OpenItemsRepo:           briefingRepo,
@@ -874,13 +876,13 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 				OpportunitiesRepo:       briefingRepo,
 				ReputationRepo:          briefingRepo,
 				AgentRepo:               agentRepoConcrete,
-				PlatformPulseRepo:       db.NewPlatformBriefingRepository(pool),
-				TrendingRepo:            db.NewPlatformBriefingRepository(pool),
-				HardcoreRepo:            db.NewPlatformBriefingRepository(pool),
-				RisingIdeasRepo:         db.NewPlatformBriefingRepository(pool),
-				VictoriesRepo:           db.NewPlatformBriefingRepository(pool),
-				RecommendationsRepo:     db.NewRecommendationRepository(pool),
-				InferredSpecialtiesRepo: db.NewInferredSpecialtiesRepository(pool),
+				PlatformPulseRepo:       platformRepo,
+				TrendingRepo:            platformRepo,
+				HardcoreRepo:            platformRepo,
+				RisingIdeasRepo:         platformRepo,
+				VictoriesRepo:           platformRepo,
+				RecommendationsRepo:     db.NewCanonicalRecommendationRepository(pool),
+				InferredSpecialtiesRepo: db.NewCanonicalInferredSpecialtiesRepository(pool),
 				CrystallizationsRepo:    briefingRepo,
 				CheckpointFinder:        pinsRepoConcrete,
 			})

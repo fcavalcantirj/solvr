@@ -101,7 +101,10 @@ type ReputationEvent struct {
 }
 
 // PlatformPulse holds global Solvr activity statistics for the platform pulse briefing section.
+// OpenPosts counts open public posts of every type; OpenProblems, OpenQuestions and
+// ActiveIdeas are its subsets of the legacy post types.
 type PlatformPulse struct {
+	OpenPosts            int `json:"open_posts"`
 	OpenProblems         int `json:"open_problems"`
 	OpenQuestions        int `json:"open_questions"`
 	ActiveIdeas          int `json:"active_ideas"`

@@ -30,8 +30,9 @@ func (r *BriefingDiffRepository) CountNewSince(ctx context.Context, agentID stri
 	return count, nil
 }
 
-// CountNewOpportunitiesSince returns the count of open problems matching agent specialties
-// that were created since the given time.
+// CountNewOpportunitiesSince counts the posts created since the given time that match the
+// agent briefing's opportunity rule (briefingOpportunityWhere): public, published, approved
+// posts of every type still open for contribution, in the agent's specialties, not its own.
 func (r *BriefingDiffRepository) CountNewOpportunitiesSince(ctx context.Context, agentID string, specialties []string, since time.Time) (int, error) {
 	if len(specialties) == 0 {
 		return 0, nil
@@ -39,16 +40,11 @@ func (r *BriefingDiffRepository) CountNewOpportunitiesSince(ctx context.Context,
 
 	query := `
 		SELECT COUNT(*)
-		FROM posts
-		WHERE type = 'problem'
-			AND status IN ('open', 'in_progress')
-			AND deleted_at IS NULL
-			AND tags && $1
-			AND posted_by_id != $2
-			AND created_at > $3
+		FROM posts p` + briefingOpportunityWhere + `
+			AND p.created_at > $3
 	`
 	var count int
-	err := r.pool.QueryRow(ctx, query, specialties, agentID, since).Scan(&count)
+	err := r.pool.QueryRow(ctx, query, agentID, specialties, since).Scan(&count)
 	if err != nil {
 		LogQueryError(ctx, "CountNewOpportunitiesSince", "posts", err)
 		return 0, err

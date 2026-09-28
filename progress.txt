@@ -7243,3 +7243,244 @@ UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to produ
   000105-000108, deploys, then runs `backfill-embeddings --content-types replies --dry-run`
   and, if the count/cost is acceptable, the real run; optionally counts production posts the
   crystallization rule makes eligible (slice 10). This slice adds no migration.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 12 of N: step 3, briefing (platform sections, recommendations, inferred specialties,
+/me/diff opportunities). Every briefing section now reads canonical posts, replies, votes and
+room outcomes, so feature:briefing flips Done. Other step 3/4 entries and the step-6 gate stay
+open.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated as slice 1
+  recorded. idx 76 continues from slice 11's REMAINING list (first item: briefing platform
+  sections, recommendations, diff). Working tree clean at start [REAL, git status].
+
+SPIKE [REAL, code read + psql on local solvr_test + slice 11 probe log]:
+  - Static probe (slice 11): briefing_platform.go 3 statements reach dropped relations
+    (victories + hardcore read approaches, rising ideas reads responses),
+    briefing_recommendations.go 2 (approaches/answers in the "interacted" CTE),
+    inferred_specialties.go 2 (approaches, answers; wired into the briefing as the
+    no-specialties fallback). briefing_diff.go is flagged only for `type = 'problem'` in
+    CountNewOpportunitiesSince; its other three queries touch no legacy relation.
+  - Canonical 'post' type allows only draft/open/closed/stale status: no canonical post can
+    become "solved", replies have no status workflow (000089 comment), and weight /
+    evolved_into are problem/idea-only columns idx 68 removes. The step names "room
+    outcomes": posts.source_room_id marks a post saved from a room (FindPublishedBySourceRoom).
+  - The legacy platform queries filter on status only: pulse, trending (status draft/closed)
+    and /me/diff counted family/draft/pending posts too.
+  - Legacy PlatformBriefingRepository / RecommendationRepository / InferredSpecialties tests
+    (briefing_platform_test.go, briefing_rising_ideas_test.go, briefing_recommendations_test.go,
+    inferred_specialties_test.go) pin the legacy behavior, so the canonical code is new
+    repositories (slice 11 pattern) and the legacy ones stay, unwired, until the tables drop.
+    BriefingDiffRepository has no DB test (handler tests use mocks), so its opportunity query
+    changed in place.
+
+DECISIONS (recorded in the feature:briefing registry note):
+  public post = live, visibility public, published, approved. contributor reply = live, author
+  not 'system' (liveContributorReply from slice 11).
+  - pulse: open_posts (NEW json field) = public posts with status open/in_progress/active, any
+    type; open_problems/open_questions/active_ideas = the problem/question/idea subsets of that
+    (type passed as a parameter; they read 0 once posts_type_check narrows);
+    new_posts_last_24h and solved_last_7d (status 'solved', updated in 7d) over public posts
+    only; contributors_this_week = distinct (type,id) authors of this week's public posts and
+    contributor replies on public posts. Active agents and blog count unchanged.
+  - trending: same velocity (confirmed post votes + views in 7d), public posts not closed,
+    own-post exclusion by (agent, id).
+  - rising ideas: public posts of ANY type not dormant/closed with a contributor reply or an
+    upvote, ranked by contributor replies, upvotes, recency; evolved_count always 0.
+  - hardcore: public posts not solved/answered/closed/evolved with 3+ contributor replies, or
+    older than 30 days with a positive score; difficulty (1+replies)*ln(age_days+2)*
+    (1+max(score,0)*0.5); weight always 1, failed_count always 0 (retired).
+  - recent victories: public posts saved from a room (source_room_id) in the last 14 days,
+    newest first; solver = post author (display name, fallback id), total_approaches =
+    contributor replies, days_to_solve = whole days room.created_at -> post.created_at (0 if
+    the room row is gone), solved_at = post created_at in UTC. Legacy solved-problem victories
+    no longer appear.
+  - you might like: same two steps; interacted = the agent's post votes, its votes on a
+    post's replies, its live replies; candidates public and not closed; co-occurring tags
+    learned from public posts only; voter_type 'agent' required.
+  - inferred specialties (agent): posts written 2, live replies on live posts 2, confirmed
+    post upvotes 1 (legacy: approaches 2, answers 1, comments/responses 0).
+  - /me/diff new_opportunities = briefingOpportunityWhere (same rule as the briefing's
+    opportunities, every post type) + created after since. CountTrendingSince, CountNewSince
+    and ListAwardedSince unchanged (no legacy dependency).
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain` before this append: 4 tracked files
+  modified, 5 untracked new files; `git diff --numstat`: api/router.go +10/-8,
+  db/briefing_diff.go +6/-10, db/legacy_dependency_registry.go +4/-5, models/briefing.go +3/-0]:
+  A backend/internal/db/briefing_platform_canonical.go (260): CanonicalPlatformBriefingRepository
+    (NewCanonicalPlatformBriefingRepository(pool)) with GetPlatformPulse, GetTrendingNow,
+    GetRisingIdeas, GetHardcoreUnsolved, GetRecentVictories per the decisions; constants
+    canonicalPublicPost, canonicalAuthorJoins, canonicalAgeHours; helpers
+    collectBriefingRows (generic, never nil) and nonNilTags.
+  A backend/internal/db/briefing_recommendations_canonical.go (193):
+    CanonicalRecommendationRepository.GetYouMightLike and
+    CanonicalInferredSpecialtiesRepository.InferSpecialtiesForAgent (agent only: the user
+    variant of the legacy repository has no production caller).
+  M backend/internal/db/briefing_diff.go: CountNewOpportunitiesSince uses
+    `FROM posts p` + briefingOpportunityWhere + `AND p.created_at > $3` (args reordered to
+    agentID, specialties, since); doc comment rewritten. Nothing else in the file changed.
+  M backend/internal/models/briefing.go: PlatformPulse.OpenPosts (json "open_posts") + doc
+    comment. File was gofmt-dirty at HEAD (git show HEAD:... | gofmt -l); not reformatted.
+  M backend/internal/api/router.go: platformRepo := db.NewCanonicalPlatformBriefingRepository
+    for PlatformPulse/Trending/Hardcore/RisingIdeas/Victories; RecommendationsRepo =
+    db.NewCanonicalRecommendationRepository; InferredSpecialtiesRepo =
+    db.NewCanonicalInferredSpecialtiesRepository; comment updated. Nothing else in production
+    constructs the legacy three [REAL, grep].
+  M backend/internal/db/legacy_dependency_registry.go: feature:briefing -> done(refactor) with
+    the decisions above; code:internal/db/briefing_platform.go, briefing_recommendations.go
+    and inferred_specialties.go -> pending(retire) "unwired ... drops with the tables";
+    code:internal/db/briefing_diff.go entry REMOVED because the source scan no longer finds
+    the file (its only legacy match was the rewritten `type = 'problem'`); the registry test
+    requires no entry for a dependency that no longer exists.
+  A backend/internal/db/briefing_platform_canonical_test.go (360, 5 integration tests):
+    TestCanonicalPlatformBriefing_Pulse (deltas: open_posts +4 incl. canonical post, typed
+    subsets +1 each, new 24h +4, solved 7d +1, contributors +2; family/draft/pending/deleted/
+    closed/old/system/deleted-reply/family-reply/8-day-old reply excluded), _Trending (order
+    by velocity, unconfirmed and 8-day-old votes ignored, own/family/closed/draft/pending/
+    deleted excluded, author name, score, views, age, limit), _RisingPosts (any type, 3 live
+    human/agent replies counted, system + deleted not, upvote-only included, zero engagement/
+    system-only/closed/dormant/family/draft/pending excluded, evolved_count 0),
+    _HardcoreUnsolved (3-reply and 40-day-scored posts in difficulty order, exact scores,
+    2 contributor + 3 system replies, old unscored, weight-5 problem, solved/answered/closed/
+    evolved/family/draft/pending excluded, weight 1, failed 0),
+    _RecentVictoriesAreRoomOutcomes (order, solver resolution + fallback, 2 replies, 2 days,
+    solved_at format, missing room -> 0 days; family/draft/pending/deleted/15-day/solved
+    problem without room excluded). Global-ranking lists are checked with limit 1000 by
+    relative position of my fixtures, plus a limit-1 check.
+  A backend/internal/db/briefing_recommendations_canonical_test.go (165, 3 integration tests):
+    TestCanonicalRecommendations_YouMightLike (exact 4 results: 2 voted_tags in score order,
+    2 adjacent_tags; upvoted/replied/reply-voted/own/family/closed/draft/pending/deleted and a
+    tag co-occurring only in a family post excluded; limit 1; no history -> non-nil empty),
+    TestCanonicalInferredSpecialties_ForAgent (reply 2 ties post 2 and beats upvote 1 by tag
+    order; deleted reply, reply on deleted post, someone else's reply ignored; max 5; empty
+    non-nil), TestBriefingDiff_CountNewOpportunitiesSince_CanonicalPosts (4 of 13: post,
+    problem, idea, question; old/own/family/draft/pending/deleted/solved/closed/other-tag
+    excluded; no specialties -> 0). Unique tags per run.
+  A backend/internal/api/router_briefing_platform_canonical_test.go (185, 1 integration test):
+    TestAgentBriefingRoutes_ServeCanonicalPlatformSections: two agents registered through the
+    real router; GET /v1/me shows open_posts >= 5, the agent's room outcome as
+    recent_victories[0] (solver id, 2 days), a voted-tag post in you_might_like and neither
+    the replied nor the upvoted post; GET /v1/me/diff new_opportunities == 1 for a canonical
+    post in its specialty; a second agent with no specialties gets opportunities
+    inferred_from "inferred" from its reply.
+  No migration, no frontend change, no SPEC.md change (SPEC documents only the unchanged
+  /me/diff shape; the platform sections are not described there [REAL, grep]). No existing
+  test deleted, skipped, renamed or weakened; no existing test file touched.
+
+TDD [all runs against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable]:
+  RED [TEST] /tmp/solvr_idx76_s12_red.log: db build failed "undefined:
+    NewCanonicalPlatformBriefingRepository / NewCanonicalRecommendationRepository /
+    NewCanonicalInferredSpecialtiesRepository"; the router test failed in MY fixture (rooms has
+    no token_hash any more; then "inconsistent types deduced for parameter $1" for slug and
+    display_name) -> fixed the fixtures, not the code. RED 2 [TEST]
+    /tmp/solvr_idx76_s12_red_router.log with the legacy wiring: router test FAIL
+    router_briefing_platform_canonical_test.go:127 "\"0\" is not greater than or equal to
+    \"5\"" (open_posts).
+  GREEN [TEST] /tmp/solvr_idx76_s12_green.log: the 9 new tests PASS, 0 SKIP.
+  Registry/probes [TEST] /tmp/solvr_idx76_s12_green2.log (-run over db, api, jobs:
+    TestCanonicalPlatformBriefing_|TestCanonicalRecommendations_|TestCanonicalInferred
+    Specialties_|TestBriefingDiff_|TestAgentBriefingRoutes_|Legacy|TestExtractStaticSQL),
+    AFTER the registry change: 43 PASS, 0 FAIL, 0 SKIP (includes slice 11's
+    TestAgentBriefingRoutes_ServeCanonicalPersonalSections). Static probe: 592 extracted (+9
+    = the nine new statements), 525 prepared (+9), 67 did not (unchanged); no canonical
+    briefing file reaches a dropped relation; briefing_platform.go / briefing_recommendations.go
+    / inferred_specialties.go still do (now pending retire, unwired). A first run showed 68
+    "did not prepare" because the extractor recorded a SELECT-prefixed column constant alone
+    ($2 without $1); SELECT moved to the call sites, count back to 67.
+  MUTATIONS [TEST], sources restored from cp and cmp-verified:
+    mut1 platformRepo back to db.NewPlatformBriefingRepository -> router test FAIL :127
+      "\"0\" is not greater than or equal to \"5\"" (/tmp/solvr_idx76_s12_mut1.log).
+    mut2 RecommendationsRepo back to legacy -> FAIL :139 "a post the agent replied to is not
+      recommended" (mut2.log).
+    mut3 visibility clause removed from canonicalPublicPost -> all 5 platform tests and the
+      recommendations test FAIL ("family must not trend", "... be rising", "... be hardcore",
+      "... be a victory", pulse "open public published approved posts of every type")
+      (mut3.log).
+    mut4 CountNewOpportunitiesSince back to the legacy query -> diff DB test ("the briefing's
+      opportunity rule ...") and router test ("the diff counts a canonical post in the
+      agent's domain") FAIL (mut4.log).
+    mut5 InferredSpecialtiesRepo back to legacy -> router test FAIL :181 "specialties inferred
+      from a reply select opportunities" (mut5.log).
+  go build ./... clean; go vet ./internal/db/ ./internal/api/ ./internal/models/ clean; gofmt
+    -l clean on every new/changed file except models/briefing.go (dirty at HEAD).
+    check-file-size.sh: 35 violations, same as slices 1-11; api/router.go was already one
+    (1241 -> 1243 lines, +2 this slice); new files <= 360 lines.
+
+  internal/api/... + services + models + jobs + cmd/... [TEST] once, -p 1 -v ->
+    /tmp/solvr_idx76_s12_apipkg.log: middleware, response, services, models, jobs, cmd/* ok
+    (cmd/api "[no tests to run]"); api and handlers FAIL. Totals 2248 PASS, 8 FAIL, 5 SKIP
+    (the TestIntegration_* OAuth linking skips, as slice 11). The 8:
+    * TestGitHubOAuthRedirect_Integration, TestGitHubCallback_{MissingCode,GitHubError,
+      InvalidCode}_Integration: slice 11's standing set (fail at HEAD~1 too).
+    * TestAgentClaim_RetriesAndRacesLinkTheAgentOnce/several_humans_race_one_token:
+      "duplicate key value violates unique constraint users_referral_code_key" from the
+      helper at router_rooms_test.go:64 (referral code "RT%06d" of UnixNano%1e6 collides
+      between users created in the race). PASSES at HEAD in a detached worktree and again
+      alone after this slice [TEST] (/tmp/solvr_idx76_s12_head_four.log,
+      /tmp/solvr_idx76_s12_after_cleanup.log): flaky fixture, not touched.
+    * TestHomepageOverview_ServesEverySectionToALoggedOutVisitor, TestHomepageSearch_Never
+      PublishesAProtectedOrUnrepeatedTerm, ..._NeverPublishesPastedSecretsOrPersonalData:
+      top search terms were ["test","async handlers","matrix-marker-*" x2..4] so the seeded
+      "hpo ..." terms fell off. FAIL IDENTICALLY at HEAD in the detached worktree
+      (head_four.log; worktree removed). Cause [REAL, psql]: 4 matrix-marker-* terms x 7
+      searches written by router_rooms_entries_test.go at 15:49 and 16:26 UTC today.
+  FULL internal/db PACKAGE [TEST] once, -p 1 -v -> /tmp/solvr_idx76_s12_dbpkg.log: 683 PASS,
+    64 FAIL, 6 SKIP vs slice 10 (677/55/6); all 8 new DB tests and slice 11's 7 PASS in it.
+    comm of FAIL names vs slice 10: 0 gone, 9 new, all shared-data failures slice 9 also
+    had: TestAgentRepository_List_{FilterByStatus,SortByNewest,SortByReputation,WithAgents}
+    ("cannot scan NULL into *string" dest[2]), TestReputation_CrossEndpointConsistency and
+    TestUsersPage_AgentsCount (dest[3]), TestSearchAnalyticsRepository_GetTrending ("expected
+    3 test trending results, got 1"), TestSearchPulse_{PublishesOnlyPublicScopeTerms,
+    WithResultsCountsOnlyProductiveSearches} ("[]" should have 1 item). Cause [REAL, psql]:
+    23 NULL-bio agents (agent_rm_*, agent_bf_owner, agent_migpres_*, *hr1328*, agent_pres_*,
+    agent_tok_x, agent_hf*) and 2 NULL-avatar users (fxhf13282649069, bf132842) created
+    16:28 UTC by other tests in this run, plus leftover public search terms (zqxfamsearch 4,
+    zqxprivatekw 3, zqxviewerkw 2, room-token-optional-auth 2 from posts_visibility_test.go,
+    search_visibility_test.go, search_viewer_scoped_test.go,
+    router_room_token_optional_auth_test.go) filling the top-5.
+    Deleted from solvr_test ONLY (local test DB): 28 matrix-marker-* search rows, those 23
+    agents, those 2 users, then 38 search rows of the four zqx*/room-token terms written
+    today. After that all 13 (9 db + 3 homepage + claim) PASS alone [TEST]
+    (/tmp/solvr_idx76_s12_after_cleanup.log: 12 PASS + TestSearchPulse_PublishesOnlyPublic
+    ScopeTerms still failing on the zqx* terms; /tmp/solvr_idx76_s12_after_cleanup2.log: it
+    PASSES after the second delete). No agents/users/search/homepage code touched; those
+    tests unchanged. The 55 slice-10 standing failures (referral_code NOT NULL fixtures incl.
+    the legacy TestGetPlatformPulse/TestGetRecentVictories/TestGetTrendingNow/
+    TestGetHardcoreUnsolved/TestGetYouMightLike/TestGetRisingIdeas ones, etc.) are unchanged.
+  My tests left 0 cbrf_/agent_cbpl agents, 0 cbpl- rooms, 0 cbpl- replies/votes [REAL, psql].
+  NOT RUN: frontend (untouched).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL unless stated]:
+  - Platform pulse, trending and /me/diff opportunities now count/list only public,
+    published, approved posts (the legacy queries also counted family, draft and pending
+    posts). /me/diff new_trending_count (CountTrendingSince) still counts every live post
+    with >= 3 upvotes including family ones: not a legacy dependency, left unchanged.
+  - platform_pulse gains open_posts. FRONTEND GAP [REAL, grep]:
+    frontend/components/agents/agent-briefing-platform.tsx:70-76 and lib/api-types.ts:1150
+    render open_problems/open_questions/active_ideas, not open_posts, so canonical posts are
+    invisible in the UI pulse. Not changed here (idx 78 / redesign owns clients).
+  - recent_victories are now published room outcomes only; migrated solved problems stop
+    appearing there. rising_ideas and hardcore_unsolved list every post type; hardcore no
+    longer uses weight or failed approaches; rising no longer reports idea evolution.
+  - Inferred specialties count every live reply (weight 2), including former comments; a
+    former answer's weight rises from 1 to 2.
+  - The legacy PlatformBriefingRepository, RecommendationRepository and
+    InferredSpecialtiesRepository (incl. its unused InferSpecialtiesForUser) are unwired and
+    stay, with their tests, until the legacy tables drop (idx 93).
+
+REMAINING (next slices, in order):
+  step 3/4: badges, leaderboards, reputation, stats, homepage overview, agents/users stats,
+    search, posts joins, resurrection, sitemap and the other pending code: entries; retire
+    stale-content/auto-solve/forgetting. Preserve earned badges/reputation as history, award
+    nothing from migrated rows. Both dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to production after
+  000105-000108, deploys, then runs `backfill-embeddings --content-types replies --dry-run`
+  and, if the count/cost is acceptable, the real run; optionally counts production posts the
+  crystallization rule makes eligible (slice 10). This slice adds no migration.

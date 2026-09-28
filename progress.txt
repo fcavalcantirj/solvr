@@ -7628,3 +7628,200 @@ UAT (for when idx 76 closes, not now): owner applies 000109 then 000110 to produ
   and, if the count/cost is acceptable, the real run; optionally counts production posts the
   crystallization rule makes eligible (slice 10). This slice adds no migration.
 CORRECTION (slice 13 entry above) [REAL, wc -l after commit]: router_badges_history_test.go is 180 lines, not 182; the largest file this slice touches is 180 lines.
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 14 of N: steps 3-4, leaderboards. This entry VERIFIES AND JOURNALS work that is
+already committed: HEAD 6310fe47 is a ralph.sh HOST AUTO-COMMIT (backstop at
+ralph.sh:466-471; its message is the truncated header of slice 13, the last dated journal line).
+The iteration that wrote the code hit RALPH_ITER_TIMEOUT (45m, ralph.sh:38) before it
+journaled, so this session produced the first test evidence for it. feature:leaderboards was
+already flipped to done in that commit; the evidence below backs it. This iteration changes no
+code, only this journal.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24/52/53/67/68/73/74 stay gated as slice 1
+  recorded. idx 76 continues. Slice 13's REMAINING list starts with leaderboards, but HEAD
+  already held unjournaled leaderboard work, so this slice verifies it before reputation.
+  Working tree clean at start [REAL, git status --porcelain].
+
+WHAT HEAD 6310fe47 CHANGED [REAL, `git show --numstat HEAD`]:
+  A backend/migrations/000111_reputation_history.{up,down}.sql (50/1): table
+    reputation_history (source CHECK over 12 legacy earning events, source_id UUID, owner_type
+    agent|human, owner_id, post_id FK posts ON DELETE SET NULL, points, earned_at, recorded_at;
+    PK (source, source_id)); unique partial index on source_id for the 5 vote sources (a vote
+    freezes once), owner index (owner_type, owner_id, earned_at), partial post index.
+  A backend/internal/db/reputation_history.go (113): FreezeLegacyReputation(ctx, pool) runs
+    12 INSERT ... SELECT ... ON CONFLICT DO NOTHING statements in one transaction:
+    problem_solved 100, problem_contributed 25, idea_posted 15, answer_given 10,
+    answer_accepted 50, response_given 5, comment_given 2, answer/response up +2 / down -1,
+    approach_vote 0 (so a retargeted approach vote never scores). Filters match the legacy
+    formula (live rows, agent/human authors, confirmed votes). Post votes are NOT frozen (they
+    stay live). Idempotent.
+  M backend/internal/db/legacy_relation_remap.go (+8/-2): RemapLegacyRelations calls
+    FreezeLegacyReputation FIRST, before RemapContributionVotesAndReports retargets votes;
+    report gains ReputationHistory.
+  A backend/internal/db/leaderboard_canonical.go (224): CanonicalLeaderboardRepository.
+    Main board = agent bonus (agents.reputation) + SUM(history points, earned_at >= window) +
+    live confirmed votes (+2/-1) on posts and on replies whose vote id is not frozen. Tag board
+    = no bonus, history sources problem_solved/answer_accepted/answer_upvote/answer_downvote on
+    posts with the tag, live votes on tagged posts and replies to them, positive only. Key
+    stats: problems_solved, answers_accepted = history counts; upvotes = frozen answer upvotes +
+    live upvotes. getMonthStart/getWeekStart/getTimeframeDate moved here unchanged.
+  M backend/internal/db/leaderboard.go (0/-40): only those three helpers moved out (same
+    package, the legacy repository still calls them).
+  M backend/internal/api/router.go (+2/-1): /v1/leaderboard and /v1/leaderboard/tags/{tag}
+    use db.NewCanonicalLeaderboardRepository(pool). Handler and response shape unchanged.
+  M backend/internal/db/legacy_dependency_registry.go (+5/-4): feature:leaderboards
+    pending -> done(refactor); feature:reputation stays pending (note now names sql_builder,
+    GetAgentStats, GetUserStats and the agents/users lists); code:leaderboard.go and
+    code:leaderboard_tags.go pending(refactor) -> pending(retire, unwired); new
+    code:internal/db/reputation_history.go pending(retire) (the freeze reads legacy tables).
+  A tests (new files only; no existing test file touched [REAL, git diff HEAD~1 HEAD --stat
+    -- '*_test.go' = 3 added files]):
+    internal/db/reputation_history_test.go (161) TestFreezeLegacyReputation_RecordsEachEarned
+      EventOnce: exact set of 14 frozen events with owner/post/points; nothing for questions,
+      canonical posts, deleted rows, system comments, unconfirmed votes, post votes; earned_at
+      = legacy created_at; second run records 0.
+    internal/db/leaderboard_canonical_test.go (291) TestLegacyLeaderboards_ServedByTheCanonical
+      Repository (source guard: only leaderboard.go constructs the legacy repo; router
+      constructs the canonical one; registry flags) and TestCanonicalLeaderboard_KeepsEarned
+      ReputationAcrossTheCutover: 12 views (all/agents/users x all_time/monthly/weekly + tag x
+      3). Legacy board before (holder 265, user 141, newcomer 0) == canonical board after
+      MigrateContributions + RemapLegacyRelations, entry by entry incl. key stats; then live
+      votes on a migrated answer reply, a migrated approach reply, a native post and a native
+      reply score, writing a reply scores nothing; a second cutover run changes nothing.
+    internal/api/router_leaderboard_canonical_test.go (102) TestLeaderboardRoutes_ServeFrozen
+      HistoryPlusLiveVotes: through the real router, bonus + a frozen 100 + a live post upvote
+      on the main board, no bonus on the tag board.
+
+VERIFICATION [all runs against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable]:
+  Schema [REAL, psql \d reputation_history]: columns, 4 indexes, 2 checks and the FK in
+    solvr_test match 000111 up.sql. down.sql then up.sql run clean inside BEGIN..ROLLBACK
+    (recreated table 0 rows; rollback kept the data).
+  go build ./... clean; go vet ./internal/db/ ./internal/api/ clean; gofmt -l clean on every
+    HEAD file except internal/db/leaderboard.go, which was already gofmt-dirty at HEAD~1
+    (gofmt -l on `git show HEAD~1:...` lists it too); not reformatted.
+  Targeted DB [TEST] /tmp/solvr_idx76_s14_db.log (-run TestLegacyLeaderboards_|TestCanonical
+    Leaderboard_|TestFreezeLegacyReputation_|Legacy|TestExtractStaticSQL|Leaderboard|Remap|
+    Reputation over internal/db): 59 PASS, 6 FAIL, 0 SKIP. All 3 new DB tests PASS. The 6:
+    TestAgentRepository_List_SortByReputation ("cannot scan NULL into *string" dest[2]) and
+    TestBriefing_Reputation_{UpvoteOnApproach,DownvoteOnPost,AcceptedAnswer} (referral_code
+    NOT NULL fixture) fail identically in slice 13's full log; TestReputation_CrossEndpoint
+    Consistency and TestUserReputation_AfterCommenting ("dest[3]" NULL avatar_url in the users
+    list) PASS alone right after [TEST] (/tmp/solvr_idx76_s14_two_alone.log). No NULL-avatar
+    user was left in solvr_test afterwards [REAL, psql]; which test held one during the run is
+    [UNVERIFIED]. HEAD touches no users code.
+  Probes + API [TEST] /tmp/solvr_idx76_s14_probes_api.log (-run Legacy|Leaderboard over jobs,
+    api, handlers): 3 packages ok, 54 PASS, 0 FAIL, 0 SKIP; both TestLegacyDroppedDatabase_*
+    PASS; TestLeaderboardRoutes_ServeFrozenHistoryPlusLiveVotes PASS. Static probe: 608
+    extracted (+16 vs slice 13), 539 prepared (+14), 69 did not (+2). reputation_history.go:
+    9 statements reach dropped relations (answers/responses/comments/approaches; registered
+    pending retire). leaderboard_canonical.go reaches none. A throwaway program (created under
+    backend/, run, deleted; tree clean after [REAL, git status]) prepared each statement of the
+    two new files on solvr_test: both full leaderboard queries (leaderboard_canonical.go:82,
+    :103) and all 12 freeze inserts PREPARE; the 2 that do not are fragments:
+    canonicalVotesReceived (:32, uses $3 alone: "could not determine data type of parameter
+    $1") and the bare reputationHistoryInsert prefix (:10, "syntax error at end of input").
+    Their SQL is inside the prepared full statements, so the probe does cover it.
+  MUTATIONS [TEST] (RED was never captured by the writing iteration; these show the tests
+    fail without the code). Sources restored from cp; `git diff --quiet` confirmed each:
+    mut1 router back to db.NewLeaderboardRepository -> router test FAIL :96 "expected: 102
+      actual: 2" (bonus + frozen history + live upvote), :97 key stats ProblemsSolved 0, :100
+      tag board 2; and TestLegacyLeaderboards_ FAIL :84 (/tmp/solvr_idx76_s14_mut1.log).
+    mut2 FreezeLegacyReputation call removed from RemapLegacyRelations -> cutover test FAIL
+      :246 "the fixture's earned events are frozen" and :256 on every view "earned reputation
+      and key stats are unchanged by the cutover" (mut2.log).
+    mut3 frozen-vote NOT EXISTS removed from canonicalVotesReceived -> :256 FAIL on the
+      all_time, monthly and tag views (frozen answer/response votes scored twice) (mut3.log).
+    mut4 approach_vote freeze event removed -> freeze test FAIL ("exactly the scored legacy
+      events ...", "a second run records nothing new") and cutover test FAIL ("new votes
+      score, the migrated approach vote does not", plus :256 on several views) (mut4.log).
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 30m ./...` ->
+    /tmp/solvr_idx76_s14_full.log: 4664 PASS, 74 FAIL, 12 SKIP. Packages FAIL: internal/api,
+    internal/api/handlers (the 4 standing TestGitHubOAuth*/TestGitHubCallback_*), internal/db.
+    All 4 HEAD tests, both dropped-table probes and slice 13's two badge tests PASS in it.
+    FAIL names vs slice 13's full log (comm): 3 gone (TestBadges_AwardAndList/_HasBadge/
+    _IdempotentAward), 7 new:
+    * TestAgentClaim_RetriesAndRacesLinkTheAgentOnce/several_humans_race_one_token:
+      "duplicate key value violates unique constraint users_username_key" at
+      router_agent_claim_retry_test.go:129 (fixture name collision; slice 12 saw the same race
+      collide on users_referral_code_key).
+    * TestAgentRepository_AddReputation_Success: agents_test.go:626 "agent ID already exists".
+      The test creates display name "Reputation Test Agent" with no cleanup and the display
+      name is unique. My targeted DB run above created it (it PASSED there, 14:57), and the
+      full run collided with it. The same class slice 13 hit with TestBadges_*.
+    * TestGetTrendingPosts_ExcludesDraft/_ExcludesPendingReview/_ExcludesRejected: stats_test.go
+      :54/:100/:146 "expected open post ... to appear in trending". Cause [REAL, psql + code]:
+      the top 10 trending rows were 12 leftover test-user posts (xqzsortvotes* with 10 up, and
+      "Pattern: Solvr API Key Not in Environment" with 5 up) from search_test.go, 3-4 per full
+      run at 15:00, 16:28, 16:58 and 18:04 UTC today. Its cleanupTestData (search_test.go:497)
+      deletes every test-user post in ONE statement, and that statement fails on the standing
+      approaches_problem_id_fkey error, 159 times in this log (157 in slice 13). So nothing is
+      deleted and the posts pile up. stats.go is untouched.
+    * TestSearchPulse_PublishesOnlyPublicScopeTerms / _WithResultsCountsOnlyProductiveSearches:
+      "[]" should have 1 item: the top public terms were test, async handlers, 4
+      matrix-marker-* x5, zqxfamsearch 4, zqxprivatekw 3 (slice 12's class).
+    Deleted from solvr_test ONLY (local test DB), in one transaction: 28 matrix-marker-*
+    search rows, 38 zqxfamsearch/zqxprivatekw/zqxviewerkw/room-token-optional-auth search
+    rows from today, and the 12 leftover test-user posts above. After that all 7 PASS alone
+    [TEST] (/tmp/solvr_idx76_s14_after_cleanup.log: 7 PASS, 0 FAIL). The other 67 failures
+    are slice 13's standing set (referral_code NOT NULL fixtures, the NULL-bio agents of
+    TestAgentRepository_List_*, the 4 OAuth tests, TestSearch_MinSimilarity_HonestFilter, ...).
+  check-file-size.sh: 35 violations, same as slices 1-13; api/router.go was already one
+    (1243 -> 1244, +1 net in HEAD); the new files are at most 291 lines.
+  My tests left 0 agent_lb*/agent_frz* agents, 0 lbc* users, 0 lbc/frz/route-probe posts and
+    0 of their reputation_history rows [REAL, psql]. reputation_history in solvr_test holds
+    4594 rows written by the RemapLegacyRelations calls of tests over shared legacy rows.
+  NOT RUN: frontend (untouched by HEAD).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL, code read + tests above, unless stated]:
+  - DEPLOY ORDER. The served leaderboard now reads reputation_history, and only the cutover
+    fills it (RemapLegacyRelations -> FreezeLegacyReputation). No command wires the cutover:
+    it has no production caller [REAL, grep] and its runner belongs to idx 93. Deploying this
+    code without 000111 makes both leaderboard routes fail on the missing relation
+    [UNVERIFIED, inferred from the SQL]. Deploying with 000111 but BEFORE the freeze runs
+    makes the leaderboard show only the agent bonus plus votes on posts: every problem, idea,
+    answer, response and comment point and every answer/response vote point disappears from
+    the board until the freeze runs. mut2 shows the board differs without it [TEST]. The
+    freeze is idempotent and can run on its own before the rest of the cutover.
+  - Legacy writes that keep coming in after the freeze (legacy routes stay live during the
+    transition) are not scored until the freeze runs again.
+  - After the cutover nothing scores for writing: posts and replies earn 0, and so does
+    solving (no status workflow). Only confirmed votes on posts and replies score (+2/-1).
+    Before, a problem earned 25, an idea 15, an answer 10, a response 5 and a comment 2.
+  - GAP: the profile and list reputation surfaces still use the legacy formulas:
+    GetAgentStats, GetUserStats, the agents list (agents.go:925-950) and the users list
+    (BuildReputationSQL). After the cutover they will disagree with the served leaderboard.
+    TestReputation_CrossEndpointConsistency compares GetUserStats and the users list against
+    the LEGACY LeaderboardRepository (reputation_integration_test.go:30), not the served
+    board, so nothing guards that agreement right now. This is feature:reputation, the next
+    slice.
+  - The legacy formulas already disagree with each other [REAL, code read]: agent stats and
+    the agents list do not score comments; BuildReputationSQL does. The frozen history uses
+    BuildReputationSQL's events, comments included.
+
+REMAINING (next slices, in order):
+  step 3/4: reputation. Move GetAgentStats, GetUserStats, the agents list and the users list
+    onto reputation_history + live votes (+ bonus for agents), then retire sql_builder, and
+    point a cross-endpoint consistency test at the served board. After that: stats
+    (stats.go, stats_questions.go), homepage overview, search, posts joins/filters,
+    visibility, resurrection, sitemap and the other pending code: entries; retire
+    stale-content/auto-solve/forgetting. Both dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): owner applies 000109, 000110 and 000111 to production
+  after 000105-000108, then runs the cutover freeze (FreezeLegacyReputation, first step of
+  RemapLegacyRelations) BEFORE or together with the deploy that serves the canonical
+  leaderboard, then `backfill-embeddings --content-types replies --dry-run` and, if the
+  count/cost is acceptable, the real run; optionally counts production posts the
+  crystallization rule makes eligible (slice 10).
+CORRECTION (slice 14 entry above) [REAL, ralph.sh:385-397 + grep progress.txt]: the writing
+  iteration did NOT hit RALPH_ITER_TIMEOUT. On a timeout ralph.sh appends a "RALPH ITERATION
+  TIMEOUT" line and exits BEFORE the host auto-commit at ralph.sh:466. The last such line is
+  2026-09-26 13:37, and the auto-commit ran, so that engine call ENDED without journaling or
+  committing. Why it ended that way is [UNVERIFIED]. Also, the agents-list reputation
+  expression is agents.go:931-950, not 925-950.

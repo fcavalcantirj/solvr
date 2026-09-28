@@ -5725,3 +5725,106 @@ UAT: owner applies migrations 000105, 000106, 000107 and 000108, in that order, 
   open https://solvr.dev/claim#token=x and https://solvr.dev/auth/callback?code=x with DevTools
   Network open and confirm no request goes to googletagmanager.com or google-analytics.com, while
   https://solvr.dev/ still sends one (GA Realtime shows the / visit).
+
+================================================================================
+2026-09-28 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 1 of N: step 1 (inventory) and step 6 (explicit disposition gate). Steps 2-5 not started.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no description starts with URGENT. idx 24 (acceptance) still needs idx 78; idx 52/53,
+  67, 68 and 73's remainder stay gated as recorded in idx 74's slices; idx 74 stays open on its
+  step 5 If-Match owner decision; idx 75 closed last iteration. idx 76 is the first buildable
+  false task: every step can run against the local solvr_test database.
+
+SPIKE [REAL, psql on local solvr_test, schema_migrations version 108 dirty=f]: legacy tables
+  approaches, answers, responses, comments, approach_relationships, progress_notes; 6 FKs touch
+  them (all owned by legacy tables); functions hybrid_search_answers / hybrid_search_approaches
+  read them (hybrid_search does not); no view/matview/trigger touches them; 5 check constraints
+  outside them name legacy types (posts_type, votes/reports/flags target_type, replies
+  legacy_type); posts.accepted_answer_id holds an answer identity; replies has NO embedding
+  column. Source: 32 non-test Go files carry legacy SQL (table in FROM/JOIN/INTO/UPDATE/TABLE
+  position, or `type = 'problem'`-style literal). Existing remap code (read):
+  RemapContributionVotesAndReports, RemapAcceptedAnswerReferences, MigrateContributions (keeps
+  approach status/outcome/solution/archived_cid in reply body + provenance). Nothing remaps
+  flags, notifications, approach_relationships or progress_notes today.
+
+WHAT THIS SLICE DOES [REAL, `git status --porcelain`: 4 untracked new files, 0 tracked files
+  modified (`git diff --stat` empty) before this append]:
+  A backend/internal/db/legacy_dependencies.go (198): LegacyTables; LegacyDependency{Kind, Key,
+    Owner, Detail}; actions remap/refactor/retire/keep; LegacyDependencyDisposition{Action, Done,
+    Note}; LegacyCleanupBlockers(deps, registry) = sorted keys with no disposition (own or the
+    owning table's) or a non-keep disposition not Done -> schema cleanup is complete only when
+    it is empty (step 6); ScanLegacySourceDependencies(root) = code:<file> for legacy SQL,
+    job:<Name> for jobs.New<Name>Job(, consumer:<Const> for "LISTEN "+Const;
+    DeclaredLegacyDependencies() = the 10 relations of step 2 + 9 features of step 3.
+  A backend/internal/db/legacy_dependencies_catalog.go (143): DiscoverLegacySchemaDependencies
+    reads pg_catalog (read-only): tables, FKs, views+matviews, non-extension functions (body
+    regex), triggers, indexes, check constraints, columns. Objects on a legacy table carry
+    Owner=table:<name> (e.g. the 38 legacy-table indexes) and inherit its disposition.
+  A backend/internal/db/legacy_dependency_registry.go (105): LegacyDependencyDispositions, 80
+    entries, one decision + note each. Done=false on EVERY non-keep entry (nothing is migrated
+    by this slice). keep (reviewed, no legacy dependency): relation:bookmarks (post_id only),
+    relation:translations (posts original_* columns), check:replies.replies_legacy_type_check,
+    jobs Cleanup/HealthCheck/PresenceReaper/Translation, the 4 LISTEN consumers. retire:
+    6 tables, job:StaleContentJob, job:AutoSolveJob, feature:forgetting, the 8 legacy repos
+    (approaches/answers/responses/comments/approach_relationships/problems/questions/ideas),
+    contribution_migration.go, auto_solve.go, stale_content.go. remap: votes, reports, flags
+    check, notifications, accepted-answer, approach-relationships, progress-notes,
+    verification-records, archived-cids, posts.accepted_answer_id. refactor: the rest.
+  A backend/internal/db/legacy_dependencies_test.go (203, 7 tests).
+  No existing test changed, skipped or removed. No migration, no handler, no job changed.
+
+TDD:
+  RED [TEST] /tmp/solvr_idx76_s1_red.log: build failed, "undefined: LegacyDependency" etc.
+  RED 2 [TEST] /tmp/solvr_idx76_s1_red2.log (functions present, empty registry): 3 FAIL, 80
+    distinct "discovered legacy dependency without a disposition" keys = the registry built.
+  GREEN [TEST] DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+    solvr-postgres), `go test ./internal/db/ -run Legacy -count=1 -v` ->
+    /tmp/solvr_idx76_s1_green.log: 7 new PASS, 0 SKIP (TestScanLegacySourceDependencies_*,
+    TestLegacyCleanupBlockers_*, TestDeclaredLegacyDependencies_*, TestLegacyDependencyRegistry_
+    CoversTheSourceTree / CoversTheDeclaredLists / EveryEntryIsADecision,
+    TestDiscoverLegacySchemaDependencies_EveryCatalogObjectHasADisposition).
+  MUTATIONS [TEST], registry restored from cp and cmp-verified: (M1) delete
+    function:hybrid_search_answers -> catalog test FAIL "without a disposition"
+    (/tmp/solvr_idx76_s1_mut1.log); (M2) add code:internal/db/gone.go -> source test FAIL
+    "disposition for a dependency that no longer exists" (/tmp/solvr_idx76_s1_mut2.log).
+  One self-match found and fixed during GREEN: a registry note containing "from answers" matched
+    the case-insensitive SQL regex; reworded ("inferred using answers/approaches").
+  go vet ./internal/db/ clean. check-file-size.sh: 35 violations, same count as idx 75 slice 7,
+    none of the new files (largest 203 lines).
+  FULL internal/db PACKAGE [TEST] once, -p 1, same DB -> /tmp/solvr_idx76_s1_dbpkg.log: 63
+    FAIL lines. 60 are in the idx 75 slice 6 standing set (/tmp/solvr_idx75_s6_full.log). 3 are
+    not: TestAgentRepository_List_Empty ("scan failed: can't scan into dest[2]: cannot scan NULL
+    into *string", the same error as the standing TestAgentRepository_List_* failures) and
+    TestSearchPulse_PublishesOnlyPublicScopeTerms / _WithResultsCountsOnlyProductiveSearches
+    ("[]" should have 1 item(s)). All 3 also FAIL run alone (/tmp/solvr_idx76_s1_three.log).
+    NOT caused by this slice [REAL]: no tracked file is modified and no file outside the 4 new
+    ones references a new symbol (grep). Cause not investigated [UNVERIFIED: shared solvr_test
+    data - a NULL agent column / search_queries time window].
+  FULL BACKEND (`go test ./...`): not run; only new files in internal/db were added.
+
+LIMITS OF THE INVENTORY [UNVERIFIED unless stated]:
+  - The source scan is regex over SQL position words and quoted type literals. Code that
+    selects legacy types through Go constants (models.PostTypeProblem as a query argument) or
+    builds SQL table names dynamically is NOT found; handlers/services are only covered through
+    the declared features (badges -> services/badges.go, duplicate-detection ->
+    services/moderation.go similarity check [REAL, grep]).
+  - Frontend, MCP servers, SDKs, skill and CLI are idx 52/78, not in this inventory.
+  - "verification records": no such table exists [REAL, table list]; interpreted as the approach
+    status/outcome/solution (and answer is_accepted) that MigrateContributions keeps.
+  - notifications.link contents were not sampled; the remap note says links may name legacy
+    pages. Next slice must look at real link formats before writing the rewrite.
+
+REMAINING (next slices, in order):
+  step 2: remap flags (target_type + check), approach_relationships and progress_notes onto
+    replies; notifications link rewrite; wire votes/reports/accepted-answer remaps into one
+    cutover routine with a test on seeded rows; no notification/email sent during backfill.
+  step 5: replies embedding column + HNSW index + one replies hybrid search function; then a
+    scratch database with the 6 legacy tables DROPPED, run every job's RunOnce and the scanned
+    queries there to expose hidden dependencies (this is also the check for the regex limits).
+  step 3/4: refactor each pending code:/feature: entry or retire it; preserve earned badges
+    and reputation as history; flip Done only with a test.
+  step 6 gate: LegacyCleanupBlockers over catalog + source + declared deps must be empty before
+    the task (and idx 68's table drop) can pass.

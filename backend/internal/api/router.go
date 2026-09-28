@@ -742,7 +742,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// GET /v1/leaderboard - global leaderboard (no auth required)
 		// GET /v1/leaderboard/tags/{tag} - tag-specific leaderboard (no auth required)
 		if pool != nil {
-			leaderboardRepo := db.NewLeaderboardRepository(pool)
+			// idx 76 (feature:leaderboards): earned reputation frozen at the cutover plus live votes.
+			leaderboardRepo := db.NewCanonicalLeaderboardRepository(pool)
 			leaderboardHandler := handlers.NewLeaderboardHandler(leaderboardRepo)
 			r.Get("/leaderboard", leaderboardHandler.GetLeaderboard)
 			r.Get("/leaderboard/tags/{tag}", leaderboardHandler.GetLeaderboardByTag)

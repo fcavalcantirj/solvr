@@ -20,6 +20,7 @@ const LegacyRemapExceptionUnresolved = "unresolved_reference"
 // dependent row it could not resolve. Counts are changes made by this run, so a second run
 // over the same data reports zeros.
 type LegacyRelationRemapReport struct {
+	ReputationHistory     int64
 	AcceptedAnswers       int64
 	Votes                 int64
 	Reports               int64
@@ -48,12 +49,17 @@ func (r *LegacyRelationRemapReport) unresolved(kind, id, detail string) {
 // reports and flags are retargeted; approach relationships are kept in the from-reply's
 // provenance; progress notes become child replies; stored notification links are rewritten
 // to canonical destinations; answer/approach embeddings are copied onto their replies
-// (step 5). It only updates or inserts rows in replies, posts, votes,
-// reports, flags and notifications.link: it never creates a notification or sends email.
+// (step 5). First, before any vote is retargeted, the reputation earned under the legacy
+// rules is frozen into reputation_history (FreezeLegacyReputation, steps 3-4). It only
+// updates or inserts rows in reputation_history, replies, posts, votes, reports, flags and
+// notifications.link: it never creates a notification or sends email.
 // Every step is idempotent, so a partial run can simply be repeated.
 func RemapLegacyRelations(ctx context.Context, pool *Pool) (*LegacyRelationRemapReport, error) {
 	rep := &LegacyRelationRemapReport{}
 	var err error
+	if rep.ReputationHistory, err = FreezeLegacyReputation(ctx, pool); err != nil {
+		return rep, err
+	}
 	if rep.AcceptedAnswers, err = RemapAcceptedAnswerReferences(ctx, pool); err != nil {
 		return rep, err
 	}

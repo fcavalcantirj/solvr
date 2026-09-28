@@ -81,46 +81,6 @@ func (r *LeaderboardRepository) GetLeaderboard(ctx context.Context, opts models.
 	return entries, totalCount, nil
 }
 
-// getMonthStart returns the start of the current calendar month (midnight on the 1st).
-func getMonthStart() time.Time {
-	now := time.Now().UTC()
-	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-}
-
-// getWeekStart returns the start of the current week (Monday at midnight).
-// Per ISO 8601, weeks start on Monday.
-func getWeekStart() time.Time {
-	now := time.Now().UTC()
-	weekday := now.Weekday()
-
-	// Calculate days to subtract to get to Monday
-	// Sunday = 0, Monday = 1, ..., Saturday = 6
-	var daysToMonday int
-	if weekday == time.Sunday {
-		daysToMonday = 6 // Sunday is 6 days after Monday
-	} else {
-		daysToMonday = int(weekday) - 1
-	}
-
-	monday := now.AddDate(0, 0, -daysToMonday)
-	return time.Date(monday.Year(), monday.Month(), monday.Day(), 0, 0, 0, 0, time.UTC)
-}
-
-// getTimeframeDate returns the start date for timeframe filter.
-// Returns nil for "all_time".
-func getTimeframeDate(timeframe string) *time.Time {
-	switch timeframe {
-	case "monthly":
-		start := getMonthStart()
-		return &start
-	case "weekly":
-		start := getWeekStart()
-		return &start
-	default:
-		return nil
-	}
-}
-
 // buildLeaderboardQuery constructs the SQL query based on options.
 func (r *LeaderboardRepository) buildLeaderboardQuery(opts models.LeaderboardOptions) string {
 	var typeFilter string

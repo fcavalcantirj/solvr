@@ -8495,3 +8495,158 @@ REMAINING (next slices, in order):
 UAT (for when idx 76 closes, not now): as slice 17, plus: owner looks at an agent profile's
   Activity tab after the cutover deploy — reply items show a "REPLY" badge and open the post.
   Decide whether replies on family posts should leave the public feed (see KEPT AS LEGACY).
+
+2026-09-28 20:57 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 19 of N: steps 3/5, the homepage overview's "Knowledge an agent can reuse" section
+(GET /v1/homepage/overview posts), the first item of slice 18's REMAINING list.
+This entry VERIFIES AND JOURNALS work that is already committed: HEAD 3d104f22 is a ralph.sh
+HOST AUTO-COMMIT (its message is the truncated header of slice 18's entry). Same pattern as
+slices 14-17: the engine call that wrote the code ended without journaling or committing; why
+is [UNVERIFIED]. This iteration changes no code, only this journal.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues. Tree clean at start, HEAD 3d104f22 [REAL, git status --porcelain / git log].
+
+WHAT HEAD 3d104f22 CHANGED [REAL, `git show --stat` + diff read]: 8 files, +311/-16.
+  A backend/internal/db/homepage_reusable_canonical.go (62): CanonicalHomepageRepository embeds
+    HomepageRepository and overrides only ListReusablePosts: live public posts (deleted_at IS
+    NULL, visibility 'public', status not draft/pending_review/rejected) with >= 1 reply
+    matching liveContributorReply (briefing_canonical.go:34: `r.deleted_at IS NULL AND
+    r.author_type <> 'system'`), child replies included; ContributionCount = that reply count;
+    ORDER BY GREATEST(updated_at, created_at) DESC; limit <= 0 -> 6. Rooms/activity/search/usage
+    reads stay the embedded repository's.
+  M backend/internal/api/router_homepage.go (1 line): the overview handler gets
+    db.NewCanonicalHomepageRepository(pool) instead of db.NewHomepageRepository(pool).
+  M backend/internal/api/handlers/homepage_overview.go (+4/-4): homeRepo field and constructor
+    param typed *db.CanonicalHomepageRepository; OverviewPosts.Definition text is now "Public
+    posts that already carry at least one reply from a person or an agent, most recently worked
+    on first." (was "...at least one recorded contribution (an answer, an approach or a progress
+    note), ...").
+  M backend/internal/db/legacy_dependency_registry.go (1 line, note only):
+    code:internal/db/homepage_overview.go stays pending(refactor) Done=false; note now says the
+    legacy ListReusablePosts is unwired and names homepage_reusable_canonical.go.
+  A backend/internal/db/homepage_reusable_canonical_test.go (179):
+    TestLegacyReusablePosts_ServedCanonically (source guard: only router_homepage.go builds the
+      canonical repo; only homepage_overview.go + the wrapper call NewHomepageRepository(;
+      scanner does not list the new file; registry entry pending refactor, not Done, note
+      names the file).
+    TestCanonicalReusablePosts_KeepTheLegacyListAcrossTheCutover on a scratch DB: legacy list
+      before MigrateContributions + RemapLegacyRelations == canonical after, same order and
+      fields, except comments now count (+1 on the approach+comment problem and on the answered
+      question; a comment-only question becomes reusable); family, draft, deleted posts and a
+      deleted-approach-only problem stay out; unchanged after dropLegacy(); limit 2 keeps the
+      newest; limit 0 = default; native replies: agent reply + child count 2, human reply +1,
+      deleted reply and system verdict count nothing and make no post reusable.
+  A backend/internal/api/router_homepage_reusable_canonical_test.go (54):
+    TestHomepageOverviewReusablePosts_CountCanonicalReplies through the router: new Definition
+    text; a post with only an UNMIGRATED legacy approach and a verdict-only post are not listed;
+    reply + child = 2 contributions ("2 contributions"), verdict and deleted reply not counted;
+    URL /problems/{id}.
+  M backend/internal/api/router_homepage_overview_test.go and router_homepage_totals_test.go —
+    EXISTING TESTS CHANGED (golden rule):
+    (a) TestHomepageOverview_ServesEverySectionToALoggedOutVisitor,
+        TestHomepageOverview_ReusablePostsExcludeFamilyPrivatePosts,
+        TestHomepageOverview_AllTimeTotalsDoNotMoveWithTheActivityWindow. Their fixture helper
+        hpoInsertPostWithApproach (seeded one row in `approaches`) is renamed
+        hpoInsertPostWithReply and seeds one agent row in `replies`; one fixture title changed
+        ("hpo public problem with an approach" -> "... with a reply").
+    (b) NO ASSERTION CHANGED [REAL, diff]: still `assert.Contains(t, postTitles, publicTitle)`
+        (overview :487), `assert.Positive(t, item.ContributionCount, ...)`, `assert.NotContains(
+        t, raw, familyTitle, "a family-private post must not reach the homepage")` (:662) and
+        `assert.Contains(t, titles, publicTitle)` (:668). What moved is what qualifies a post:
+        a reply, not an unmigrated approach.
+    (c) Why [TEST, /tmp/solvr_idx76_s19_oldtests.log]: I put the 8c2ed66b (HEAD~1) versions of
+        both files back (new route test moved aside, it uses the renamed helper) and ran them
+        against HEAD code on a fresh scratch DB: ServesEverySection FAIL :487 `[]string{} does
+        not contain "hpo public reusable problem"`, ReusablePostsExclude FAIL :668 `[]string{}
+        does not contain "hpo public problem with an approach"`, AllTimeTotals PASS (its
+        assertions do not read the reusable list). A legacy approach no longer makes a post
+        reusable until the cutover migrates it into a reply. Also: with the old approach
+        fixture, the family NotContains would pass vacuously on HEAD (nothing listed); with a
+        reply it guards again. Files restored from cp, `git diff --quiet` confirmed.
+    (d) "approach qualifies" is now pinned post-cutover by TestCanonicalReusablePosts_KeepThe
+        LegacyListAcrossTheCutover (legacy approach -> migrated reply -> listed, count kept) and
+        "unmigrated approach does not qualify" by TestHomepageOverviewReusablePosts_Count
+        CanonicalReplies. All PASS (below).
+  No test deleted, skipped or weakened. Frontend untouched.
+
+VERIFICATION [DB tests against local docker solvr-postgres, DATABASE_URL=
+  postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable (their scratch DBs on the
+  same server); route re-runs against solvr_scratch_s19, a fresh DB I created on the same server
+  with all 111 up migrations applied in order via psql ON_ERROR_STOP, dropped after]:
+  go build ./... clean; go vet ./internal/db/ ./internal/api/... clean; gofmt -l prints nothing
+    for the 8 HEAD files.
+  Targeted DB [TEST] /tmp/solvr_idx76_s19_db.log (-run TestLegacyReusablePosts_|TestCanonical
+    ReusablePosts_|TestLegacyDependency|TestExtractStaticSQL|TestLegacyAgentActivity_|
+    TestCanonicalAgentActivity_): 11 PASS, 0 FAIL, 0 SKIP.
+  Homepage routes on solvr_test [TEST] /tmp/solvr_idx76_s19_api.log (-run TestHomepageOverview|
+    TestHomepage): 42 PASS, 3 FAIL, 0 SKIP. The 3: ServesEverySection :464, TestHomepageSearch_
+    NeverPublishesAProtectedOrUnrepeatedTerm :235, TestHomepageSearch_NeverPublishesPasted
+    SecretsOrPersonalData :260, all `[]string{"test", "async handlers", "matrix-marker-...",
+    ...} does not contain "hpo ..."` — the 6-row top-searches list. Cause [REAL, psql on
+    solvr_test]: leftover searches from today's runs repeated more than the fixture's 3
+    ("test" x31, "zqxprivatekw" x20, "zqxfamsearch" x18, "async handlers" x10, four
+    "MATRIX-MARKER-*" x7). A/B [TEST] /tmp/solvr_idx76_s19_ab_without.log: the same 3 tests
+    in a temporary git worktree at 8c2ed66b (removed after) FAIL identically. Not caused by
+    HEAD; HEAD touches no search code. I deleted nothing from solvr_test.
+  Homepage routes on fresh solvr_scratch_s19 [TEST] /tmp/solvr_idx76_s19_api_fresh.log (-run
+    TestHomepageOverview|TestHomepageSearch): 20 PASS, 0 FAIL, 0 SKIP — incl. the 3 changed
+    tests, the new route test and both search tests.
+  MUTATIONS [TEST] /tmp/solvr_idx76_s19_mut{1..6}.log (RED was never captured by the writing
+    iteration). Each: DB tests on solvr_test + TestHomepageOverview* on solvr_scratch_s19.
+    Source restored from cp after each; `git diff --quiet` confirmed.
+    mut1 override renamed away (embedded legacy ListReusablePosts serves) -> DB FAIL :104/:151,
+      route FAIL overview :487, :668, reusable route :46/:50-:53. TestLegacyReusablePosts_
+      string guard still PASSES under mut1 (same limitation slices 17-18 recorded).
+    mut2 liveContributorReply -> TRUE (verdicts and deleted replies count) -> DB FAIL :151/:173,
+      reusable route FAIL :47/:51/:52.
+    mut3 no visibility filter -> DB FAIL :151, overview FAIL :662 (family post leaks).
+    mut4 no status filter -> DB FAIL :151 only (no route fixture has a draft post with a reply).
+    mut5 contributions >= 0 -> DB FAIL :151/:173, reusable route FAIL :46/:47.
+    mut6 ORDER BY ASC -> DB FAIL :151/:173 only.
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 40m ./...` on solvr_test ->
+    /tmp/solvr_idx76_s19_full.log: 4684 PASS, 69 FAIL, 12 SKIP (slice 18: 4682/68/12, same
+    counting). Packages FAIL: internal/api, internal/api/handlers (only the 4 standing GitHub
+    OAuth integration tests), internal/db. All HEAD tests, the 3 changed tests except
+    ServesEverySection (search leftovers, above), both TestLegacyDroppedDatabase_* probes and
+    the slice 18 activity tests PASS in it. 0 "cannot scan NULL".
+    Top-level FAIL names vs slice 18 (comm): 1 gone (TestAgentClaim_RetriesAndRacesLinkThe
+    AgentOnce: fixture username collision did not recur), 3 new = exactly the 3 search-leftover
+    tests above (same error text; the list now also shows "zqxprivatekw"). Skips [REAL, diff of
+    SKIP names]: 11 of 12 identical to slice 18 (hybrid-search, OAuth-linking,
+    TestListAnswersWithHumanAuthor); the 12th is TestTypeSpecificListEndpoints/Question_created
+    _via_/v1/posts_appears_in_/v1/questions (slice 18 skipped the Idea subtest instead — the
+    GROQ-timed subtests slice 17 noted). None touches homepage code.
+    Static probe: 625 extracted (+1 vs 624), 554 prepared (+1), 71 did not (=). The +1 is the
+    canonical ListReusablePosts query; homepage_reusable_canonical.go is not in the did-not
+    per-file map [REAL, log]; it also runs after dropLegacy() in TestCanonicalReusablePosts_.
+  check-file-size.sh: 35 violations, same as slices 1-18; HEAD files at most 777 lines
+    (handlers/homepage_overview.go).
+  My runs left 0 'hpo %' posts, 0 agent_hpotest/hpo-human replies, 0 agent_reuse* agents and 0
+    solvr_scratch* databases [REAL, psql].
+  NOT RUN: frontend (untouched by HEAD); golangci-lint.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL, code read + tests above, unless stated]:
+  - DEPLOY ORDER (same shape as slices 14-18). Deployed BEFORE the cutover [INFERRED from SQL,
+    shown locally by the old-fixture run]: the homepage reusable-posts section lists only posts
+    with native replies (legacy answers/approaches/responses are not replies yet) — it can go
+    empty. After the cutover: comments count (a comment-only post becomes reusable; comments add
+    to counts); system verdict replies never count.
+  - Definition copy changed (above). frontend/components/homepage/overview-fixture.ts:540 still
+    carries the OLD definition text; it is a test-only mock payload and the page renders the
+    API's text, so no frontend test depends on the backend copy [INFERRED from grep: used only
+    by *.test.ts(x)]. Not changed here.
+
+REMAINING (next slices, in order):
+  step 3/4: search, posts joins/filters, visibility, resurrection, sitemap, backfill-embeddings,
+    the ideas sidebar in stats.go and the other pending code: entries; retire stale-content/
+    auto-solve/forgetting. Both dropped-table probes must stay green. homepage_overview.go's
+    legacy ListReusablePosts is unwired (drops with the tables).
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): as slice 18, plus: after the cutover deploy the owner
+  looks at the homepage "Knowledge an agent can reuse" section — it lists posts and reply
+  counts, not empty.

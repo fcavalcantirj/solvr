@@ -9455,3 +9455,105 @@ REMAINING (next slices, in order):
 
 UAT (for when idx 76 closes, not now): as slice 23, plus: after the cutover deploy the owner
   opens one agent's resurrection bundle and checks approaches carry reply ids.
+
+2026-09-29 08:51 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 25 of N: step 3, the sitemap (code:internal/db/sitemap.go). This entry VERIFIES AND
+JOURNALS work that is already committed: HEAD 9e2012d6 is a ralph.sh HOST AUTO-COMMIT (its
+message is the truncated header of slice 24). The engine call that wrote it was cut off mid
+full-suite run: /tmp/solvr_idx76_s25_full.log (the killed iteration's own log) was last
+written 08:26:45 inside TestCommentsCount_ProblemsShowCountAfterComment, two seconds before
+the commit time 08:26:47 [REAL, stat + log tail + git log]; it wrote no journal entry. This
+iteration changes no code, only this journal. I did not cite that iteration's
+/tmp/solvr_idx76_s25_* logs; every result below is from my own runs (/tmp/solvr_idx76_s25v_*).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues; slice 24's REMAINING list starts with sitemap, which HEAD already holds
+  unjournaled. Tree clean at start [REAL, git status --porcelain].
+
+WHAT HEAD 9e2012d6 CHANGED [REAL, git show --stat 9e2012d6 + diff read]: 3 files, +153/-30.
+  M backend/internal/db/sitemap.go (357 -> 343): new const sitemapPostEligible = deleted_at IS
+    NULL AND visibility='public' AND publication_state='published' AND moderation_state=
+    'approved' AND status NOT IN ('draft','pending_review','rejected'); GetSitemapURLs,
+    GetSitemapCounts and GetPaginatedSitemapURLs(type=posts) all use it. REMOVED: the legacy
+    type-based quality filter (problem: solved or net votes >= 1; idea: net votes >= 2;
+    question: any). Posts still return id, type, updated_at; order updated_at DESC unchanged.
+    Agents/users/blog/rooms queries untouched.
+  M backend/internal/db/legacy_dependency_registry.go: pending(refactor) entry
+    "code:internal/db/sitemap.go" removed (the file names no legacy table or type now).
+  A backend/internal/db/sitemap_canonical_test.go (138):
+    - TestLegacySitemap_ServedCanonically: source scan finds no sitemap.go; no disposition.
+    - TestCanonicalSitemap_ListsEveryPublicEligiblePostAcrossTheCutover (scratch DB via
+      newMigratedScratchDatabase): 5 eligible posts (open problem 0 votes, solved problem, idea
+      net 1, open question, canonical 'post') + 9 never-listed (draft, pending_review,
+      rejected, archived closed question, deleted, family, draft+pending with status open,
+      published+pending, published+approved with status rejected). Asserts URLs order/types,
+      counts = 5, pagination per_page=2 over 4 pages; the same before the cutover, after
+      dropLegacy (6 legacy tables dropped), and after UPDATE posts SET type='post'.
+  Frontend: no change needed — frontend/app/sitemap-posts.xml/route.ts already maps every post
+    to ${BASE_URL}/posts/{id} and ignores type [REAL, file read], which covers the removed
+    registry note's "emit /posts URLs".
+
+EXISTING TESTS CHANGED: none. The only _test.go in 9e2012d6 is the new file [REAL, git show
+  --stat]. handlers/sitemap_test.go (mock repo), handlers/sitemap_rooms_test.go and api
+  TestPostVisibility_FamilyPrivate_LeakSweep (private post absent from /v1/sitemap/urls) PASS in
+  the full run below.
+
+VERIFICATION [solvr_test = postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres, schema_migrations 111 dirty=f); the scenario test creates/drops its own
+  scratch DB on that server]:
+  go build ./... clean; go vet ./internal/db/ clean; gofmt -l clean on the 3 files.
+  RED [TEST] /tmp/solvr_idx76_s25v_red.log: detached worktree at 28df1bb0 (slice 24, before the
+    sitemap change) + the new test file copied in: guard FAIL :19/:22; scenario FAIL :100/:101/
+    :102/:115/:123 before the cutover and after the drop (the legacy rule lists the closed
+    question, omits the open problem / net-1 idea / canonical post). Worktree removed.
+  GREEN [TEST] /tmp/solvr_idx76_s25v_green.log: both new tests + TestLegacyDependency*/
+    TestLegacyCleanup* PASS, 0 SKIP. /tmp/solvr_idx76_s25v_probes.log: both dropped-table
+    probes PASS (static: 624 extracted, 554 prepared, 70 did not — same as slice 24).
+  MUTATIONS [TEST] on sitemapPostEligible, sitemap.go restored from a backup after each (cmp
+    clean, git status clean after all five): mut1 drop moderation_state FAIL :100/:101/:106/
+    :115; mut2 drop publication_state FAIL :100/:101/:102/:106; mut3 drop the status NOT IN
+    clause FAIL :100/:101/:106/:115; mut4 drop visibility FAIL :100/:101/:106/:115; mut5
+    deleted_at IS NULL -> TRUE FAIL :100/:101/:106/:115. Logs /tmp/solvr_idx76_s25v_mut{1..5}.log.
+  FULL BACKEND [TEST], once, main tree at 9e2012d6: `go test -p 1 -count=1 -v -timeout 40m
+    ./...` -> /tmp/solvr_idx76_s25v_full.log: 4697 PASS, 69 FAIL, 12 SKIP (slice 24: 4688/76/
+    12, same counting). Packages FAIL: internal/api, internal/api/handlers, internal/db (same as
+    slice 24). Top-level FAIL names vs slice 24 (comm): 0 new, 6 gone, all PASS this run:
+    TestGetTrendingPosts_ExcludesDraft/PendingReview/Rejected (slice 24 failed them on
+    "expected open post ... to appear in trending" after a cleanup FK error — data state, legacy
+    stats code, not in this diff), TestRoomExpiry_ExpiredRoomLeavesEveryListingBeforeThe
+    Reaper and TestSaveAsPost_IdempotencyKeyNamesOneOutcome (run-order, slice 24 recorded them
+    passing alone), TestSearchRepository_Search_PerformanceTarget (timing flake per slice 24).
+    SKIP names identical to slice 24.
+  check-file-size.sh -> /tmp/solvr_idx76_s25v_filesize.log: 35 violations, same count as
+    slices 1-24; sitemap.go 343, new test 138.
+  0 solvr_scratch*/solvr_legacy_* databases left [REAL, psql]. NOT RUN: frontend (untouched);
+    golangci-lint.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (GET /v1/sitemap/urls, /v1/sitemap/counts; response
+  shape unchanged) [REAL from code + tests above unless stated]:
+  - The posts sitemap now lists EVERY publicly eligible post (published + approved + public +
+    live, status not draft/pending_review/rejected), whatever its type, votes or solved state.
+    Before: only solved or net>=1 problems, net>=2 ideas, and questions. This matches idx 80
+    step 1 ("approved published posts ... eligible for indexing") [REAL, spec.json read].
+  - A post in publication_state archived (e.g. a closed question) or moderation_state pending
+    is no longer listed; the legacy rule listed any non-hidden question [TEST, x4 + mut2].
+  - More URLs: frontend sitemap-posts.xml fetches ONE page of per_page=5000 (handler max,
+    handlers/sitemap.go:14); if production eligible posts exceed 5000 the rest are silently
+    absent [INFERRED, production count not queried — local only]. Sharding is the CLAUDE.md
+    roadmap item; for idx 80/81.
+  - DEPLOY ORDER: none needed; the rule reads columns that exist before and after the cutover.
+
+git status at journal time [REAL]: M progress.txt (this entry) only; spec.json unchanged,
+  passes stays false.
+
+REMAINING (next slices, in order):
+  step 3/4: backfill-embeddings, the ideas sidebar in stats.go and the other pending code:
+    entries (homepage_overview.go, agents.go, users.go: unwired legacy methods). Both
+    dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): as slice 24, plus: after deploy the owner fetches
+  https://solvr.dev/sitemap-posts.xml and checks the URL count against /v1/sitemap/counts.

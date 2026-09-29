@@ -8650,3 +8650,159 @@ REMAINING (next slices, in order):
 UAT (for when idx 76 closes, not now): as slice 18, plus: after the cutover deploy the owner
   looks at the homepage "Knowledge an agent can reuse" section — it lists posts and reply
   counts, not empty.
+
+2026-09-28 21:40 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 20 of N: steps 3/5, retire the stale-content job, the auto-solve job and the forgetting
+lifecycle (the three "retire" entries slice 19's REMAINING list ended with).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues. Tree clean at start, HEAD 433c9ab7 [REAL, git status --porcelain / git log].
+  Picked the retirements before search: bounded, the registry already decided "retire", and
+  idx 68 step 5 removes the legacy post status constraints these jobs drive.
+
+SPIKE [REAL, code read + grep]: cmd/api/main.go scheduled StaleContentJob (warn at 23d / abandon
+  at 30d idle working|starting approaches, mark open problems with no approaches dormant at
+  60d) and AutoSolveJob (warn at 7d / solve at 14d problems with a succeeded approach). Both
+  send notifications (approach_abandonment_warning, auto_solve_warning, auto_solved). Forgetting:
+  services.ForgettingService has NO production caller; MarkForForgetting, ArchiveApproach and
+  ListStaleApproaches (approach_relationships.go) are called only by it and tests, so no
+  production path writes approaches.forget_after/archived_at. MigrateContributions keeps
+  archived_cid in reply provenance (relation:archived-cids, already done), not archived_at or
+  forget_after.
+
+WHAT THIS COMMIT CHANGES [REAL, git status --porcelain + git diff --stat: 6 modified, 2 new]:
+  M backend/cmd/api/main.go (+4/-31): the StaleContentJob and AutoSolveJob start blocks and
+    their two shutdown cancels are removed; a 4-line comment says both are retired and why.
+    Behavior: the API no longer runs either job.
+  M backend/internal/db/legacy_dependency_registry.go (+3/-5): job:StaleContentJob and
+    job:AutoSolveJob entries REMOVED (the source scan no longer discovers them, and
+    TestLegacyDependencyRegistry_CoversTheSourceTree fails on an entry for a dependency that no
+    longer exists; re-scheduling either job now fails that test with "without a disposition").
+    feature:forgetting pending(retire) -> done(retire), note names the unwired service.
+    code:internal/db/stale_content.go and code:internal/db/auto_solve.go stay pending(retire),
+    Done=false (they still hold legacy SQL; drop with the tables), notes now say "unscheduled".
+    Counts [REAL, grep]: 78 -> 76 entries; pending retire 30 -> 27, pending refactor 12, pending
+    remap 3, done 23 -> 24, keep 10.
+  M backend/internal/jobs/stale_content.go, auto_solve.go, backend/internal/services/
+    forgetting.go (+3 each, doc comments only): "Retired: ..." on StaleContentJob,
+    AutoSolveJob, ForgettingService. The code itself stays (unwired, drops with the tables).
+  A backend/internal/jobs/legacy_lifecycles_retired_test.go (178):
+    TestRetiredLegacyLifecycles_NoScheduledJobAbandonsSolvesOrMarksDormant on a fresh scratch DB
+    migrated to head WITH the legacy tables (new helper newMigratedDatabase): the probe's
+    worker list must equal the jobs the sources schedule (both directions) and must not include
+    the two retired jobs; seeds the probe data plus rows inside each retired window (working
+    approach idle 31d, starting approach idle 25d, open problem 61d with no approaches, problem
+    with a succeeded approach 15d, another 10d); runs every scheduled worker; asserts no status
+    changed and 0 lifecycle notifications. Positive control: the retired jobs run directly still
+    act on exactly those rows (StaleContent {1,1,1}, AutoSolve {Warned 1, Solved 1}; abandoned,
+    dormant, solved; one notification of each type), so the negative checks are not vacuous.
+  A backend/internal/db/legacy_lifecycles_retired_test.go (104):
+    TestLegacyLifecycles_RetiredFromProductionPaths: the source scan finds neither job; neither
+    has a job: entry; the only non-test files containing NewStaleContentJob(, NewAutoSolveJob(,
+    NewStaleContentRepository(, NewAutoSolveRepository(, NewForgettingService(,
+    NewForgettingServiceWithConfig(, .ArchiveApproach(, .ListStaleApproaches(,
+    .MarkForForgetting( are their own definitions (services/forgetting.go for the service's
+    calls); feature:forgetting done retire; the two code: entries pending retire, "unscheduled".
+  M backend/internal/jobs/legacy_dropped_workers_test.go (+104/-48, mostly moved code) —
+    EXISTING TEST CHANGED (golden rule):
+    Refactor, no assertion changed: newMigratedScratchURL (create DB + all migrations + legacy
+      tables present, the first half of newLegacyDroppedDatabase, scratch name prefix now a
+      parameter), newMigratedDatabase (new), seedScheduledWorkerData (the probe's agent/draft/
+      crystallization seeding moved verbatim, d.pool -> pool), scheduledJobKeys (the probe's
+      source scan moved verbatim).
+    Removed from scheduledWorkers: the job:StaleContentJob and job:AutoSolveJob workers (they
+      are no longer scheduled; the probe fails any scanned job it does not exercise and, new
+      in this slice, any worker the sources do not schedule). Their SQL is still prepared
+      before/after the drop by TestLegacyDroppedDatabase_StaticQueriesExposeOnlyRegistered
+      Dependencies (code:internal/db/stale_content.go 3 statements and auto_solve.go 2 reach
+      dropped relations, both still pending — log below), and the jobs themselves run in the
+      new positive control.
+    (a) TestLegacyDroppedDatabase_ScheduledJobsExposeOnlyRegisteredDependencies.
+    (b) Replaced assertion: `if !hitAny { t.Error("no job reached a dropped legacy relation:
+        the drop or the tracing is not working") }`. With the two jobs retired no scheduled job
+        reaches a dropped table any more, so this sanity guard would fail on a correct tree.
+    (c) Replacement, same test: for every table in db.LegacyTables it runs `SELECT 1 FROM
+        <table> LIMIT 1` on the traced pool and fails "a statement on dropped legacy table %s
+        was not traced as reaching it ...: the drop or the tracing is not working" unless the
+        tracer recorded that table via missingLegacyObject. It checks the drop and the tracing
+        directly for all 6 tables instead of relying on some job happening to hit one.
+    (d) PASS below; mut2 below shows it catches broken tracing. Also added, stricter: a worker
+        the sources do not schedule is an error (was: only the other direction).
+  No test deleted, skipped or weakened. services/forgetting_test.go, jobs/stale_content_test.go,
+  jobs/auto_solve_test.go and db/stale_content_test.go are untouched and PASS (full run).
+  Frontend untouched. SPEC.md untouched (golden rule: only when the task says to document an
+  API change); SPEC 5.10 and 10.4 "StaleContentJob" still describe the retired job, like the
+  crystallization section after slice 10.
+
+VERIFICATION [DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable,
+  local docker solvr-postgres; the jobs tests build their own scratch DBs solvr_legacy_present_*
+  / solvr_legacy_dropped_* on that server; 0 left after, REAL psql]:
+  RED [TEST] /tmp/solvr_idx76_s20_red.log + _red2.log (tests written first, main.go and the
+    registry unchanged): TestLegacyLifecycles_ FAIL :67 x2 (jobs scanned), :69 x2 (job: entries
+    exist), :89 x4 (main.go constructs the repos/jobs), :95/:96 (forgetting not done); the jobs
+    test FAIL :120 x2 (retired jobs still scheduled), :142 x3 (approach abandoned, problem
+    dormant, problem solved), :146 (map[approach_abandonment_warning:1 auto_solve_warning:1
+    auto_solved:1]), control :155/:160 (nothing left to act on). First RED run also showed my
+    own test bug: without tracer.take() per worker the translation worker's "saw INSERT INTO
+    notifications" wait matched the stale-content job's notification and returned early
+    ("translation moderation did not record its verdict as a reply"); fixed, _red2 clean.
+  GREEN targeted [TEST] /tmp/solvr_idx76_s20_green.log: 16 PASS, 0 FAIL, 0 SKIP (both new
+    tests, both TestLegacyDroppedDatabase_* probes, all TestLegacyDependency*/TestScanLegacy*/
+    TestLegacyCleanupBlockers/TestDeclaredLegacy/TestDiscoverLegacySchema/TestExtractStaticSQL).
+  MUTATIONS [TEST], source restored from cp after each (cmp identical, git status checked):
+    mut1 HEAD main.go back (both jobs scheduled) /tmp/solvr_idx76_s20_mut1.log -> 4 FAIL:
+      CoversTheSourceTree "discovered legacy dependency without a disposition: job:StaleContentJob
+      (scheduled in cmd/api/main.go)" (+AutoSolve), TestLegacyLifecycles_ (scan + callers
+      cmd/api/main.go), the probe "job:StaleContentJob is scheduled in the sources but not
+      exercised by this probe" (+AutoSolve), the jobs test :111 worker set != scheduled set.
+    mut2 TraceQueryEnd returns before recording /tmp/solvr_idx76_s20_mut2.log -> probe FAIL :480
+      for all 6 tables "(errors []): the drop or the tracing is not working".
+    mut3 a production file in internal/api calling services.NewForgettingService
+      /tmp/solvr_idx76_s20_mut3.log -> TestLegacyLifecycles_ FAIL "production code outside
+      the retired definitions uses \"NewForgettingService(\"".
+  go build ./... clean; go vet ./internal/jobs/ ./internal/services/ ./internal/db/ ./cmd/api/
+    clean; gofmt -l clean on the 8 changed/new files except cmd/api/main.go, whose one gofmt
+    finding (extra blank line after the imports, :24) is in HEAD too [REAL: gofmt -l on
+    `git show HEAD:backend/cmd/api/main.go`]; not touched.
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 40m ./...` ->
+    /tmp/solvr_idx76_s20_full.log: 4685 PASS, 70 FAIL, 12 SKIP (slice 19: 4684/69/12, same
+    counting). Packages FAIL: internal/api, internal/api/handlers (the 4 standing GitHub OAuth
+    tests), internal/db. Top-level FAIL names vs slice 19 (comm): 0 gone, 1 new =
+    TestSearchAnalyticsRepository_GetZeroResults, search_analytics_test.go:240 "expected
+    'test_missing topic' in zero-result queries". Cause [REAL, psql on solvr_test]: the query is
+    a top-10 of zero-result terms over 7 days; 11 terms already have count >= 4 (zqxfamsearch
+    16, zqxprivatekw 14, eight matrix-marker-* 6 each, room-token-optional-auth 4) against the
+    fixture's 3, so it cannot make the list whatever the code. Same leftover-search pattern as
+    slice 19's 3 homepage search failures; this commit touches no search code [REAL, diff]. No
+    A/B run: the arithmetic decides it. SKIP names identical to slice 19 [REAL, diff]. Both
+    TestLegacyDroppedDatabase_* and all new tests PASS in it; 0 "cannot scan NULL". Static
+    probe: 625 extracted, 554 prepared, 71 did not (= slice 19). I deleted nothing from
+    solvr_test.
+  check-file-size.sh: 35 violations, same as slices 1-19; changed/new files at most 480 lines
+    (legacy_dropped_workers_test.go).
+  NOT RUN: frontend (untouched); golangci-lint.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL, code + tests above, unless stated]:
+  - After this deploys, even BEFORE the cutover, nothing abandons idle approaches, warns about
+    them, marks unapproached problems dormant, or auto-solves problems, and none of the
+    approach_abandonment_warning / auto_solve_warning / auto_solved notifications are sent any
+    more. Existing statuses and notifications are left as they are (nothing is reverted).
+  - Forgetting never ran in production [INFERRED from code: no caller]; nothing changes at
+    runtime. KEPT AS IS: approaches.archived_at/forget_after are not copied into reply
+    provenance (only archived_cid is); with no production writer they should be NULL on every
+    row [INFERRED — prod data not queried, production is off-limits]. If the owner knows of
+    rows written another way, say so before the tables drop.
+  - Frontend notification rendering for the three retired types and SPEC 5.10/10.4 are left
+    as they are (not in this task's steps).
+
+REMAINING (next slices, in order):
+  step 3/4: search, posts joins/filters, visibility, resurrection, sitemap, backfill-embeddings,
+    the ideas sidebar in stats.go and the other pending code: entries. Both dropped-table
+    probes must stay green; every scheduled job now runs clean on a legacy-dropped database.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): as slice 19, plus: after deploy the owner confirms the
+  API log no longer prints "Stale content cleanup job started" or "Auto-solve job started".

@@ -138,31 +138,10 @@ func main() {
 		log.Println("Crystallization job started (runs every 24 hours)")
 	}
 
-	// Start stale content cleanup job if database is available
-	// Per prd-v5: abandon stale approaches (30d), warn before abandonment (23d), mark dormant posts (60d)
-	var staleContentCancel context.CancelFunc
-	if pool != nil {
-		notifRepo := db.NewNotificationsRepository(pool)
-		staleContentRepo := db.NewStaleContentRepository(pool, notifRepo)
-		staleContentJob := jobs.NewStaleContentJob(staleContentRepo, staleContentRepo, staleContentRepo)
-		var staleContentCtx context.Context
-		staleContentCtx, staleContentCancel = context.WithCancel(context.Background())
-		go staleContentJob.RunScheduled(staleContentCtx, jobs.DefaultStaleContentInterval)
-		log.Println("Stale content cleanup job started (runs every 24 hours)")
-	}
-
-	// Start auto-solve job if database is available.
-	// Auto-solves problems with succeeded approaches after 14 days (warns at 7 days).
-	var autoSolveCancel context.CancelFunc
-	if pool != nil {
-		autoSolveNotifRepo := db.NewNotificationsRepository(pool)
-		autoSolveRepo := db.NewAutoSolveRepository(pool, autoSolveNotifRepo)
-		autoSolveJob := jobs.NewAutoSolveJob(autoSolveRepo, autoSolveRepo)
-		var autoSolveCtx context.Context
-		autoSolveCtx, autoSolveCancel = context.WithCancel(context.Background())
-		go autoSolveJob.RunScheduled(autoSolveCtx, jobs.DefaultAutoSolveInterval)
-		log.Println("Auto-solve job started (runs every 24 hours)")
-	}
+	// The stale-content and auto-solve jobs are retired: they warned about and abandoned idle
+	// approaches, marked unanswered problems dormant and auto-solved problems, status
+	// lifecycles replies do not have. Their code drops with the legacy tables
+	// (internal/db/legacy_dependency_registry.go).
 
 	// Start auto-translation job if database and Groq API key are available.
 	// Runs twice daily (every 12 hours) to translate non-English draft posts.
@@ -268,12 +247,6 @@ func main() {
 	}
 	if crystallizationCancel != nil {
 		crystallizationCancel()
-	}
-	if staleContentCancel != nil {
-		staleContentCancel()
-	}
-	if autoSolveCancel != nil {
-		autoSolveCancel()
 	}
 	if translationCancel != nil {
 		translationCancel()

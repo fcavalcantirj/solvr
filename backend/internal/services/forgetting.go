@@ -70,6 +70,9 @@ type ForgettingSnapshot struct {
 }
 
 // ForgettingService handles auto-archival of stale approaches to IPFS.
+//
+// Retired: no production code constructs it and replies have no forget/archive lifecycle;
+// it drops with the legacy tables.
 type ForgettingService struct {
 	lister   StaleApproachLister
 	archiver ApproachArchiver

@@ -106,10 +106,10 @@ type legacyDroppedDatabase struct {
 	dependents []string
 }
 
-// newLegacyDroppedDatabase creates a scratch database, applies every up migration in
-// order, runs beforeDrop on the fully migrated schema, drops the legacy tables and returns
-// a traced pool on it. The database is dropped when the test ends.
-func newLegacyDroppedDatabase(t *testing.T, beforeDrop ...func(ctx context.Context, conn *pgx.Conn)) *legacyDroppedDatabase {
+// newMigratedScratchURL creates a scratch database named <prefix><nanos>, applies every up
+// migration in order, checks the legacy tables are there and returns its URL. The
+// database is dropped when the test ends.
+func newMigratedScratchURL(t *testing.T, prefix string) string {
 	t.Helper()
 	base := os.Getenv("DATABASE_URL")
 	if base == "" {
@@ -122,7 +122,7 @@ func newLegacyDroppedDatabase(t *testing.T, beforeDrop ...func(ctx context.Conte
 	if err != nil {
 		t.Fatalf("connect admin: %v", err)
 	}
-	name := fmt.Sprintf("solvr_legacy_dropped_%d", time.Now().UnixNano())
+	name := fmt.Sprintf("%s%d", prefix, time.Now().UnixNano())
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
 		admin.Close(ctx)
 		t.Fatalf("create scratch database: %v", err)
@@ -169,6 +169,39 @@ func newLegacyDroppedDatabase(t *testing.T, beforeDrop ...func(ctx context.Conte
 			t.Fatalf("migrated scratch database must hold legacy table %s before the drop (present=%v, err=%v)", table, present, err)
 		}
 	}
+	return scratchURL
+}
+
+// newMigratedDatabase returns a traced pool on a scratch database migrated to head that
+// still holds the legacy tables: the state between the cutover deploy and schema cleanup.
+func newMigratedDatabase(t *testing.T) (*db.Pool, *dbErrorTracer) {
+	t.Helper()
+	scratchURL := newMigratedScratchURL(t, "solvr_legacy_present_")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	tracer := &dbErrorTracer{}
+	pool, err := db.NewPool(ctx, scratchURL, db.WithQueryTracer(tracer))
+	if err != nil {
+		t.Fatalf("open traced pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool, tracer
+}
+
+// newLegacyDroppedDatabase creates a scratch database, applies every up migration in
+// order, runs beforeDrop on the fully migrated schema, drops the legacy tables and returns
+// a traced pool on it. The database is dropped when the test ends.
+func newLegacyDroppedDatabase(t *testing.T, beforeDrop ...func(ctx context.Context, conn *pgx.Conn)) *legacyDroppedDatabase {
+	t.Helper()
+	scratchURL := newMigratedScratchURL(t, "solvr_legacy_dropped_")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	conn, err := pgx.Connect(ctx, scratchURL)
+	if err != nil {
+		t.Fatalf("connect scratch: %v", err)
+	}
+	defer conn.Close(ctx)
 
 	for _, hook := range beforeDrop {
 		hook(ctx, conn)
@@ -270,14 +303,6 @@ func scheduledWorkers(pool *db.Pool, tracer *dbErrorTracer) []probeWorker {
 				t.Errorf("crystallization job = %+v, want the 1 seeded stable post crystallized", result)
 			}
 		}},
-		{"job:StaleContentJob", func(ctx context.Context, _ *testing.T) {
-			repo := db.NewStaleContentRepository(pool, notifRepo)
-			jobs.NewStaleContentJob(repo, repo, repo).RunOnce(ctx)
-		}},
-		{"job:AutoSolveJob", func(ctx context.Context, _ *testing.T) {
-			repo := db.NewAutoSolveRepository(pool, notifRepo)
-			jobs.NewAutoSolveJob(repo, repo).RunOnce(ctx)
-		}},
 		{"job:TranslationJob", func(ctx context.Context, t *testing.T) {
 			trigger := handlers.NewModerationTrigger(probeModeration{}, postRepo, logger)
 			trigger.SetCommentRepo(db.NewModerationReplyWriter(pool))
@@ -312,6 +337,57 @@ func scheduledWorkers(pool *db.Pool, tracer *dbErrorTracer) []probeWorker {
 	}
 }
 
+// seedScheduledWorkerData seeds the rows the data-gated worker paths need and returns the
+// seeding agent's id.
+func seedScheduledWorkerData(ctx context.Context, t *testing.T, pool *db.Pool) string {
+	t.Helper()
+	// Data the data-gated paths need: one draft awaiting translation by a real agent.
+	agentID := fmt.Sprintf("probe_agent_%d", time.Now().UnixNano())
+	if _, err := pool.Exec(ctx, `INSERT INTO agents (id, display_name) VALUES ($1, 'Probe Agent')`, agentID); err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, original_language)
+		VALUES ('question', 'Titulo da pergunta de teste', 'Descricao longa o bastante para a pergunta de teste',
+		        'agent', $1, 'draft', 'pt')`, agentID); err != nil {
+		t.Fatalf("seed translation draft: %v", err)
+	}
+	// And one stable public post with an agent reply, so crystallization runs past its candidate list.
+	var crystalPost string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status,
+		                   publication_state, moderation_state, visibility, created_at, updated_at)
+		VALUES ('post', 'Probe crystallization post', 'A stable public post with one reply', 'agent', $1, 'open',
+		        'published', 'approved', 'public', NOW() - INTERVAL '10 days', NOW() - INTERVAL '10 days')
+		RETURNING id::text`, agentID).Scan(&crystalPost); err != nil {
+		t.Fatalf("seed crystallization post: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO replies (post_id, author_type, author_id, body, created_at, updated_at)
+		VALUES ($1, 'agent', $2, 'Probe reply', NOW() - INTERVAL '10 days', NOW() - INTERVAL '10 days')`,
+		crystalPost, agentID); err != nil {
+		t.Fatalf("seed crystallization reply: %v", err)
+	}
+	return agentID
+}
+
+// scheduledJobKeys returns the jobs the non-test sources schedule (jobs.New<Name>Job), i.e.
+// what cmd/api/main.go runs.
+func scheduledJobKeys(t *testing.T) map[string]bool {
+	t.Helper()
+	src, err := db.ScanLegacySourceDependencies("../..")
+	if err != nil {
+		t.Fatalf("scan sources: %v", err)
+	}
+	scheduled := map[string]bool{}
+	for _, dep := range src {
+		if dep.Kind == "job" {
+			scheduled[dep.Key] = true
+		}
+	}
+	return scheduled
+}
+
 // Every scheduled job runs against a database without the legacy tables. A job that
 // reaches for a dropped legacy relation must carry a pending (non-keep, not done)
 // disposition: that is the dependency the migration still owes. A job recorded as keep
@@ -338,48 +414,15 @@ func TestLegacyDroppedDatabase_ScheduledJobsExposeOnlyRegisteredDependencies(t *
 		}
 	}
 
-	// Data the data-gated paths need: one draft awaiting translation by a real agent.
-	agentID := fmt.Sprintf("probe_agent_%d", time.Now().UnixNano())
-	if _, err := d.pool.Exec(ctx, `INSERT INTO agents (id, display_name) VALUES ($1, 'Probe Agent')`, agentID); err != nil {
-		t.Fatalf("seed agent: %v", err)
-	}
-	if _, err := d.pool.Exec(ctx, `
-		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status, original_language)
-		VALUES ('question', 'Titulo da pergunta de teste', 'Descricao longa o bastante para a pergunta de teste',
-		        'agent', $1, 'draft', 'pt')`, agentID); err != nil {
-		t.Fatalf("seed translation draft: %v", err)
-	}
-	// And one stable public post with an agent reply, so crystallization runs past its candidate list.
-	var crystalPost string
-	if err := d.pool.QueryRow(ctx, `
-		INSERT INTO posts (type, title, description, posted_by_type, posted_by_id, status,
-		                   publication_state, moderation_state, visibility, created_at, updated_at)
-		VALUES ('post', 'Probe crystallization post', 'A stable public post with one reply', 'agent', $1, 'open',
-		        'published', 'approved', 'public', NOW() - INTERVAL '10 days', NOW() - INTERVAL '10 days')
-		RETURNING id::text`, agentID).Scan(&crystalPost); err != nil {
-		t.Fatalf("seed crystallization post: %v", err)
-	}
-	if _, err := d.pool.Exec(ctx, `
-		INSERT INTO replies (post_id, author_type, author_id, body, created_at, updated_at)
-		VALUES ($1, 'agent', $2, 'Probe reply', NOW() - INTERVAL '10 days', NOW() - INTERVAL '10 days')`,
-		crystalPost, agentID); err != nil {
-		t.Fatalf("seed crystallization reply: %v", err)
-	}
+	seedScheduledWorkerData(ctx, t, d.pool)
 	d.tracer.take()
 
-	src, err := db.ScanLegacySourceDependencies("../..")
-	if err != nil {
-		t.Fatalf("scan sources: %v", err)
-	}
-	scheduled := map[string]bool{}
-	for _, dep := range src {
-		if dep.Kind == "job" {
-			scheduled[dep.Key] = true
-		}
-	}
+	scheduled := scheduledJobKeys(t)
 
-	hitAny := false
 	for _, w := range scheduledWorkers(d.pool, d.tracer) {
+		if !scheduled[w.key] {
+			t.Errorf("%s is exercised by this probe but the sources do not schedule it", w.key)
+		}
 		delete(scheduled, w.key)
 		w.run(ctx, t)
 		statements, errs := d.tracer.take()
@@ -409,7 +452,6 @@ func TestLegacyDroppedDatabase_ScheduledJobsExposeOnlyRegisteredDependencies(t *
 		if len(rels) == 0 {
 			continue
 		}
-		hitAny = true
 		if disp.Action == db.LegacyActionKeep || disp.Done {
 			t.Errorf("%s reaches dropped legacy relations %v but is recorded as %s (done=%v): a hidden legacy dependency",
 				w.key, rels, disp.Action, disp.Done)
@@ -418,7 +460,21 @@ func TestLegacyDroppedDatabase_ScheduledJobsExposeOnlyRegisteredDependencies(t *
 	for key := range scheduled {
 		t.Errorf("%s is scheduled in the sources but not exercised by this probe", key)
 	}
-	if !hitAny {
-		t.Error("no job reached a dropped legacy relation: the drop or the tracing is not working")
+
+	// The drop and the tracing work: a statement on each dropped table is traced as reaching
+	// it. The jobs that still reached the legacy tables used to show this; every scheduled
+	// job now runs clean, so it is checked directly.
+	for _, table := range db.LegacyTables {
+		_, _ = d.pool.Exec(ctx, "SELECT 1 FROM "+table+" LIMIT 1")
+		_, errs := d.tracer.take()
+		reached := false
+		for _, e := range errs {
+			if rel, ok := missingLegacyObject(e); ok && rel == table {
+				reached = true
+			}
+		}
+		if !reached {
+			t.Errorf("a statement on dropped legacy table %s was not traced as reaching it (errors %+v): the drop or the tracing is not working", table, errs)
+		}
 	}
 }

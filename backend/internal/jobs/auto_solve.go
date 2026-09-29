@@ -40,6 +40,9 @@ type AutoSolveResult struct {
 // AutoSolveJob handles periodic auto-solving of problems:
 // 1. Warns problem owners 7 days before auto-solve
 // 2. Auto-solves problems with succeeded approaches older than 14 days
+//
+// Retired: cmd/api/main.go no longer schedules it (replies have no status workflow); it
+// drops with the legacy tables.
 type AutoSolveJob struct {
 	warner AutoSolveWarner
 	solver AutoSolver

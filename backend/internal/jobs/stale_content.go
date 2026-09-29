@@ -51,6 +51,9 @@ type StaleContentResult struct {
 // 1. Warns approach authors 7 days before auto-abandonment
 // 2. Abandons approaches in 'working'/'starting' status for 30+ days
 // 3. Marks open problems with zero approaches as dormant after 60 days
+//
+// Retired: cmd/api/main.go no longer schedules it (replies have no status workflow); it
+// drops with the legacy tables.
 type StaleContentJob struct {
 	updater StaleApproachUpdater
 	warner  StaleApproachWarner

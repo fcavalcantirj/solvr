@@ -10145,3 +10145,129 @@ REMAINING (next slices, in order):
 UAT (for when idx 76 closes, not now): as slice 28, plus: after the cutover and deploy, the
   owner opens a profile with legacy answers/approaches on https://solvr.dev and checks the
   contributions tab still lists them and links to the right posts.
+
+2026-09-29 11:55 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 30 of N: step 5, the ROUTE half of the dropped-table probe: every GET route the API
+serves runs through the real router against a database without the legacy tables, so SQL
+built at run time (list filters, sort orders, search content types) is exercised. Found NO
+hidden dependency; its power is shown by mutations.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues. Tree clean at start [REAL, git status --porcelain].
+
+WHY THIS SLICE [REAL, journal + code read this session]: slice 29's REMAINING said "one pass on
+  runtime-built SQL (the 70 statements that do not prepare)". The static probe (slice 5) only
+  prepares compile-time SQL, and the regex scan reads source text; neither runs a request. No
+  test ran a ROUTE on a dropped database [REAL, grep newLegacyDroppedDatabase: only the jobs
+  and static-query probes]. Slice 29's contributions bug (legacy repos swallowing the error
+  into an empty 200) is the shape a status-only check would miss, so the probe also traces
+  database errors.
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain: one untracked file; git diff --stat:
+  empty (no tracked file modified)]:
+  A backend/internal/jobs/legacy_dropped_routes_test.go (401, package jobs_test, reuses
+    newLegacyDroppedDatabase / dbErrorTracer / missingLegacyObject from
+    legacy_dropped_workers_test.go):
+    TestLegacyDroppedDatabase_GetRoutesExposeOnlyLegacyRouteFamilies.
+    - beforeDrop hook on the migrated scratch DB: lifts rate_limit_config (scratch DB only; the
+      probe sends ~210 requests per caller), registers an agent through POST /v1/agents/register,
+      creates a user (repo) + JWT, one post of each type problem/question/idea/post (public,
+      published, approved, tag probe), per post one native reply and one migrated reply
+      (legacy_type approach/answer/response/comment, provenance status succeeded), a bookmark and
+      a notification for the human and the agent, a room seeded from the problem (RoomRepository).
+    - Requests: every "GET ..." route in api.RouteFamilies (125 routes), path params filled from
+      the fixture by the preceding segment (posts/bookmarks -> each of the 4 posts, replies ->
+      all 8 replies, rooms|r/{slug} -> the room, agents/users -> the ids, room entries/messages
+      -> "1", others -> a random uuid/slug), plus query variants for runtime SQL: /v1/posts
+      (type x4, status, tags, has_answer, needs_help, sort newest/votes/top/hot/approaches/
+      answers, timeframe, author filters), /v1/search (types, sort, tags, content_types incl.
+      answers/approaches), leaderboard (+tags), sitemap/urls types, agents/users sort, overview
+      windows, /v1/me/diff since=-2h, /admin/cohort-comparison launch, /v1/reports/check for
+      post/reply/answer/approach/response/comment. Each as anonymous, human JWT, agent key;
+      /admin/* also with X-Admin-API-Key (t.Setenv ADMIN_API_KEY). 633 requests.
+    - Each request: 500ms context deadline (stream routes), 15s hard guard (t.Fatalf on hang).
+      Run once BEFORE the drop (own traced pool, closed before DROP TABLE) and once AFTER on a
+      fresh router over the traced pool. A request that was 5xx/429 before is not judged (log).
+    - Verdict: after the drop, 5xx OR a traced pg error that the same request did not raise
+      before -> must be in legacyRepositoryFamilies (legacy-feed, legacy-typed-discovery,
+      legacy-typed-reads, legacy-typed-writes, legacy-comments, legacy-status-commands = the idx
+      52 families); anywhere else -> "hidden legacy dependencies" with code, message and SQL.
+      contribution-listings and type-specific-statistics are deliberately NOT in the list (they
+      are served canonically now). A 429 after the drop fails (probe would be measuring the
+      limiter). Positive control: GET /v1/questions/{id}/answers must be seen reaching the
+      dropped answers table. Logs: gated requests, routes no caller reached with 2xx, the
+      expected legacy-family failures.
+  No production code, registry entry, migration, handler or frontend changed. No existing test
+  changed, skipped or removed.
+
+RESULT [TEST] /tmp/solvr_idx76_s30_final.log (DATABASE_URL=postgres://solvr:solvr_dev@localhost:
+  5435/solvr_test, local docker solvr-postgres; the probe creates/drops its own scratch DB):
+  633 GET requests over 125 GET routes. Gated (5xx before the drop): 3, all /v1/health/ipfs 503
+  (no IPFS wired into the test router). 0 hidden dependencies. 42 requests in legacy families
+  reach dropped tables: /v1/questions/{id} and /v1/ideas/{id} 200->200 with missing answers/
+  responses (swallowed), /v1/questions/{id}/answers and /v1/ideas/{id}/responses 200->200
+  (swallowed), /v1/problems/{id}/approaches, .../approaches/{approachId}/history, /export,
+  /v1/posts/{id}/comments (all 4 posts), /v1/{answers,approaches,responses}/{id}/comments
+  -> 500. GET /v1/problems/{id} does NOT reach a legacy table.
+  COVERAGE [TEST, same log]: 25 of 125 routes answered no caller with 2xx after the drop: the
+  8 /r/{slug}/* room-transport routes (401: need a per-agent room token, not minted), OAuth
+  github/google + callbacks (302/400/403), /v1/blog/{slug} 404 (no blog post seeded),
+  /v1/email/unsubscribe 400 (needs a signed token), /v1/pins/{requestid} (401/404),
+  /v1/rooms/{slug}/entries/{entry_id} and messages/{id} 404 (no entry seeded), /v1/health/ipfs
+  (gated), and the 7 legacy routes that now 500. For those the probe ran auth/validation/a
+  lookup only [REAL].
+
+TDD / POWER [TEST]: the probe passed on its first complete run (/tmp/solvr_idx76_s30_spike3.log;
+  spike1/2 failed on my own seed SQL: "inconsistent types deduced for parameter" x2, fixed). With
+  nothing hidden to find, RED is shown by mutations, sources restored from /tmp backups and
+  cmp-verified, git status clean of them afterwards:
+  mut1 router.go contributions back to db.NewAnswers/Approaches/ResponsesRepository (slice 29's
+    bug) -> FAIL "hidden legacy dependencies": /v1/users/{id}/contributions x3 callers and
+    /v1/me/contributions (human, agent) "200 -> 200, missing [answers approaches responses]"
+    with the three SELECT COUNT(*) statements (/tmp/solvr_idx76_s30_mut1.log).
+  mut2 posts.go sort=answers ORDER BY built as "(SELECT COUNT(*) FROM " + "ans" + "wers a ...)"
+    -> FAIL only on /v1/posts?sort=answers x3 callers "200 -> 500, missing [answers]"
+    (/tmp/solvr_idx76_s30_mut2.log). Under the SAME mutation the regex source scan
+    (TestLegacyDependencyRegistry_CoversTheSourceTree) PASSES and the static-query probe PASSES
+    ("621 extracted, 551 prepared, 70 did not") (/tmp/solvr_idx76_s30_mut2_{scan,static}.log):
+    this dependency is visible only to the route probe.
+  mut3 judge on status only (fresh DB errors ignored) + mut1 -> contributions NOT reported, legacy
+    count 42 -> 30 (the 12 swallowed 200->200 requests vanish), test FAILS only on the positive
+    control (/tmp/solvr_idx76_s30_mut3.log): the control pins the error tracing.
+  jobs package [TEST] once, `go test ./internal/jobs/ -count=1 -v` -> /tmp/solvr_idx76_s30_jobs.log:
+    58 PASS, 0 FAIL, 0 SKIP incl. all three TestLegacyDroppedDatabase_* probes. After that, two
+    comment-only edits to the new file; the three probes re-ran green in
+    /tmp/solvr_idx76_s30_final.log (then one more comment re-wrap: gofmt/vet clean, not re-run).
+  go vet ./internal/jobs/ clean; gofmt -l clean on the new file (gofmt -l on the package lists
+    translation.go/translation_test.go, pre-existing, untouched). check-file-size.sh ->
+    /tmp/solvr_idx76_s30_filesize.log: "Found 34 file(s) exceeding 800 lines", same as slice 29.
+  0 solvr_scratch*/solvr_legacy_* databases left [REAL, psql]. NOT RUN: full backend
+    (`go test ./...`) — this slice adds one test file in internal/jobs and touches no other
+    package; frontend (untouched); golangci-lint.
+
+LIMITS [UNVERIFIED unless stated]:
+  - GET only. POST/PATCH/DELETE routes (reply create/edit/vote, post PATCH, reports, bookmarks,
+    follows, room writes) are not exercised on the dropped DB; write paths with runtime SQL
+    are the next gap.
+  - The 25 unreached routes above ran only up to auth/validation/lookup.
+  - The judge counts only pg errors reaching the tracer; a handler that checks a table's
+    existence some other way would not show [none known].
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW: none — test only.
+
+git status at journal time [REAL]: ?? backend/internal/jobs/legacy_dropped_routes_test.go,
+  M progress.txt (this entry); spec.json unchanged, passes stays false.
+
+REMAINING (next slices, in order):
+  step 5: the WRITE half of the route probe (POST/PATCH/DELETE on the canonical families with
+    minimal bodies, same before/after + tracer verdict); mint a room token to reach /r/{slug}/*.
+  step 3/4: the unwired legacy methods in stats.go/homepage_overview.go/agents.go/users.go go
+    with the tables (pinned Done=false by earlier slices).
+  step 6 gate: LegacyCleanupBlockers empty — blocked on the table drop (idx 68/93) and on the
+    legacy routes (idx 52); whether idx 76 can close before that is an owner question
+    [UNVERIFIED reading of step 6].
+
+UAT (for when idx 76 closes, not now): as slice 29.

@@ -10696,3 +10696,140 @@ REMAINING / ASSESSMENT FOR THE NEXT ITERATION [UNVERIFIED reading; the evidence 
     its remaining dispositions owned by idx 52/68/73/78/83/93.
 
 UAT (for when idx 76 closes, not now): as slice 29.
+
+2026-09-29 15:12 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 1 of N: verify and journal the host-auto-committed room activity projection (b9d7644c,
+migration 000112, never journaled), and pin the one path it claims but no test ran: a room
+hard-deleted by the presence reaper cascading its messages through the new delete trigger.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 of idx 76
+  recorded. idx 76: slice 33's assessment taken after checking the registry [REAL, read
+  legacy_dependency_registry.go]: its pending entries are table:* retire, check:* narrowing
+  "at cleanup", code:*/typeref:* retirements, all blocked by slice 32's all-or-nothing gate
+  until the table drop (idx 68/93) and idx 52's routes; no idx 76 slice is buildable now that
+  is not another task's work. idx 77 is the first buildable task. Tree clean at start [REAL].
+
+WHAT b9d7644c DOES [REAL, git show read this session] (13:10, journal-header message, idx 76
+  in the title but idx 77 content):
+  A migrations/000112_room_activity_projection.{up,down}.sql: room_entries_activity() trigger
+    function + 3 triggers on room_entries (AFTER INSERT WHEN kind='message'; AFTER UPDATE OF
+    deleted_at WHEN a message's liveness flips; AFTER DELETE WHEN kind='message'):
+    rooms.message_count = live message entries, rooms.last_active_at = GREATEST(created_at,
+    newest message incl. soft-deleted), updated_at (room ETag) advances; room_activity_drift(uuid)
+    read-only reconciliation; rebuild_room_activity(uuid) locks rooms FOR NO KEY UPDATE, then
+    recounts, rewrites only drifted rooms, returns the count. Rebuild path documented in the
+    migration header (step 2's "documented rebuild path" for room message_count/latest activity).
+  A db/room_activity.go (65): RoomRepository.ActivityDrift / RebuildActivity over those functions.
+  M db/rooms.go: removed UpdateActivity, IncrementMessageCount, DecrementMessageCount.
+  M handlers/rooms_entry_submit.go: afterMessageCreated no longer bumps the count/activity
+    (the insert's transaction does); rooms_concurrency.go comment only.
+  A db/room_activity_test.go (317, 4 tests), A api/router_room_activity_test.go (109, 1 test:
+    a caller cancelled right after the INSERT on each of the 3 write routes is still counted).
+  M 3 api test seed helpers, 1 line each (router_homepage_example_test.go:120,
+    router_homepage_overview_test.go:280, router_rooms_multi_instance_overview_test.go:41):
+    removed `require.NoError(t, roomRepo.IncrementMessageCount(ctx, room.ID))` after each
+    seeded message. Not an assertion: it was the seed's manual count, which the trigger now
+    does, so keeping it would double-count. The assertions of those tests are unchanged and
+    PASS below (TestHomepageExample_*, TestHomepageOverview_PreviewsHonourTheAllowListAndIgnore
+    Volume, TestRoomOverview_*).
+  Callers of the removed methods [REAL, git grep at b9d7644c^]: production only rooms_entry_
+    submit.go (Increment/UpdateActivity); DecrementMessageCount had NO production caller, so
+    before 000112 a soft-deleted message stayed counted; now it is not (behavior change below).
+    Tests only the 3 seed lines above; no test of those methods existed, none was deleted.
+  Lock reasoning [REAL, pg_get_functiondef on solvr_test]: room_entries_allocate takes
+    `PERFORM 1 FROM rooms WHERE id = NEW.room_id FOR NO KEY UPDATE` when sequence is NULL; the
+    insert trigger's own UPDATE rooms locks the row as well (covers explicit-sequence inserts,
+    e.g. cmd/migrate-quorum InsertMessagesWithSequence) [INFERRED from PG row locking].
+  Other writers of the projection [REAL, grep non-test .go]: rooms.go Create inserts
+    message_count 0; cmd/migrate-quorum UpdateRoomMessageCount sets the absolute live count
+    (consistent with the trigger, no double count). Soft delete/hard delete of messages: no
+    production Go path; hard delete of rooms: DeleteExpiredRooms, called by jobs/presence_
+    reaper.go:89 (FK room_entries_room_id_fkey is ON DELETE CASCADE [REAL, pg_constraint]).
+
+THE GAP AND THE NEW TEST: the migration says the delete trigger "matches no row" when the room
+  itself is being deleted (cascade), but no test deleted a room with messages and checked the
+  result: room test cleanups run `DELETE FROM rooms` with errors ignored (//nolint:errcheck,
+  room_messages_test.go:18, room_entries_test.go:21) and TestRoomRepository_DeleteExpiredRooms
+  seeds a room with no messages. The reaper is a live background job.
+  M backend/internal/db/room_activity_test.go (317 -> 357):
+    TestRoomActivity_DeletingARoomCascadesThroughTheProjection (scratch DB): a kept room with 2
+    messages, an expired room with 3 (one soft-deleted); DeleteExpiredRooms -> no error, 1 room;
+    0 room_entries left for it; the kept room's (message_count, last_active_at, updated_at)
+    unchanged; ActivityDrift(nil) empty.
+  RED: not observed by construction — it pins existing behavior; its bite is shown by mut2.
+
+VERIFICATION [DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local docker
+  solvr-postgres, schema_migrations 112 dirty=f; scratch DBs migrate from the files]:
+  [TEST] go build ./... ok.
+  [TEST] once: `go test ./internal/db/ -run 'TestRoomActivity|TestRoomRepository_DeleteExpiredRooms'
+    -count=1 -v` -> /tmp/solvr_idx77_s1_db.log: ok, 6 PASS (the 4 b9d7644c tests, the new one,
+    DeleteExpiredRooms), 0 FAIL, 0 SKIP.
+  [TEST] once: `go test ./internal/api/ -run 'TestRoomActivity|TestHomepageExample|
+    TestHomepageOverview|TestHomepageActivity|TestRoomOverview' -count=1 -v` ->
+    /tmp/solvr_idx77_s1_api.log: 22 PASS, 1 FAIL, 0 SKIP. PASS includes TestRoomActivity_A
+    CallerThatLeavesRightAfterTheInsertIsStillCounted and every test of the 3 seed-edited files
+    except the one below. FAIL TestHomepageOverview_ServesEverySectionToALoggedOutVisitor
+    router_homepage_overview_test.go:463 `[]string{"test", "zqxfamsearch", ...} does not contain
+    "hpo postgres race condition"` (search top terms, an assert, so the room sections after it
+    still ran) — PRE-EXISTING: the identical message is in slice 32's full run
+    (/tmp/solvr_idx76_s32_full.log), one of its 80 FAILs; shared solvr_test search data, not
+    room activity [INFERRED cause, not investigated, not this task].
+  Slice 32's full run at a tree containing b9d7644c [REAL, grep that log]: all 5 TestRoomActivity_*
+    PASS.
+  MUTATIONS [TEST] on migrations/000112 up (scratch DBs pick it up), restored from
+    /tmp/solvr_idx77_s1_000112.up.sql.bak and cmp-verified after each:
+    mut1 rebuild without the FOR NO KEY UPDATE lock -> ARebuildWaitsForAnInFlightMessage FAIL
+      :313 "expected: 4 actual: 3 ... the in-flight message is counted" (/tmp/solvr_idx77_s1_mut1.log);
+    mut2 delete branch raises when the room row is gone -> only the NEW test FAILs :347
+      "room 4f541221-... is gone (SQLSTATE P0001)" (/tmp/solvr_idx77_s1_mut2.log): no other
+      test exercised the cascade path;
+    mut3 soft-delete trigger removed -> TheTimelineMoves... FAIL :125 "expected: 2 actual: 3
+      ... a soft-deleted message is not counted" (/tmp/solvr_idx77_s1_mut3.log).
+  go vet ./internal/db/ clean; gofmt -l clean on room_activity{,_test}.go.
+  check-file-size.sh -> /tmp/solvr_idx77_s1_filesize.log "Found 34 file(s) exceeding 800
+    lines", same as slices 32/33; room_activity_test.go 357.
+  0 solvr_scratch*/solvr_legacy_* databases left [REAL, psql].
+  NOT RUN: full backend `go test ./...` (only one test file changed; slice 32's full run already
+    covers b9d7644c); handlers package (b9d7644c's handler change is covered by the api-level
+    test above and slice 32's full run); frontend (untouched); golangci-lint (config/version
+    mismatch, slice 31). No mutation of the API-level test (it runs on the shared solvr_test,
+    where 000112 is already applied).
+
+MEASURED ON THE SHARED LOCAL solvr_test (read-only, room_activity_drift()) [REAL]: 3849 of 5471
+  rooms drift (3494 on message_count, 2463 on last_active_at), created 2026-09-23..09-29: rows
+  written before 000112 or by fixtures. The 5 drifted rooms created after b9d7644c are all
+  testroomlf-* = rooms_listfiltered_test.go, which writes message_count/last_active_at directly
+  (:76, :101, :104, :158, :168, :198, :286) — fixture writes, not a trigger miss. Not repaired
+  (shared test data left as is). This is what an un-rebuilt database looks like after 000112:
+  the migration does NOT run the rebuild itself.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (from b9d7644c, runtime):
+  - rooms.message_count now counts only live messages: a soft-deleted message is uncounted,
+    a restored one counted again (before: never decremented).
+  - A message counts / moves last_active_at even when the caller's request dies right after the
+    insert; events never count; a client_entry_id replay counts nothing.
+  - Deploy ordering [INFERRED from the code]: 000112 applied before the new API is deployed
+    = old code bumps AND the trigger bumps (double count); new API before 000112 = nothing
+    bumps. Either window is repaired by the rebuild below.
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan, from the task steps]:
+  step 2/3: the other projections — posts/replies reply_count and scores, public activity
+    previews, search documents, overview aggregates: inventory which are stored vs computed,
+    give each stored one a drift + rebuild path; step 3's "replaying a worker cannot
+    double-count an entry or activation" for the activation milestone.
+  step 1: measured query plans on representative data for the listed lookups.
+  step 4: raw eligible search events vs time buckets + retention windows; no summed distincts.
+  step 5: reconcile counters/sampled search after migration and rebuilds; visibility/deletion
+    removes public projections promptly.
+  step 6: no new infrastructure without a measured bottleneck (state, check at close).
+
+git status at journal time [REAL]: M backend/internal/db/room_activity_test.go (+40),
+  M progress.txt (this entry); spec.json unchanged, passes stays false.
+
+UAT (for when idx 77 closes, not now): apply migration 000112 on production together with the
+  API deploy that carries b9d7644c, then run `SELECT * FROM room_activity_drift();` and
+  `SELECT rebuild_room_activity();` and confirm a second `SELECT * FROM room_activity_drift();`
+  returns 0 rows.

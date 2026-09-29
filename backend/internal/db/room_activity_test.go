@@ -315,3 +315,43 @@ func TestRoomActivity_ARebuildWaitsForAnInFlightMessage(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, drift)
 }
+
+// The presence reaper hard-deletes expired rooms (DeleteExpiredRooms); their entries go
+// with them through the room_entries foreign key's cascade, and every cascaded message
+// fires the projection's delete trigger against a room row that is already gone. That
+// must be a no-op: the reaper succeeds, the entries are removed, and no other room's
+// projection moves.
+func TestRoomActivity_DeletingARoomCascadesThroughTheProjection(t *testing.T) {
+	pool, _ := newMigratedScratchDatabase(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	msgs := NewMessageRepository(pool)
+	rooms := NewRoomRepository(pool)
+
+	kept := insertActivityRoom(ctx, t, pool, "activity-kept")
+	expired := insertActivityRoom(ctx, t, pool, "activity-expired")
+	for i := 0; i < 2; i++ {
+		postActivityMessage(ctx, t, msgs, kept, "planner", fmt.Sprintf("kept %d", i))
+	}
+	var doomed []*models.Message
+	for i := 0; i < 3; i++ {
+		doomed = append(doomed, postActivityMessage(ctx, t, msgs, expired, "executor", fmt.Sprintf("expired %d", i)))
+	}
+	_, err := pool.Exec(ctx, `UPDATE room_entries SET deleted_at = NOW() WHERE id = $1`, doomed[0].ID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `UPDATE rooms SET expires_at = NOW() - INTERVAL '1 hour' WHERE id = $1`, expired)
+	require.NoError(t, err)
+	keptBefore := readRoomActivity(ctx, t, pool, kept)
+
+	n, err := rooms.DeleteExpiredRooms(ctx)
+	require.NoError(t, err, "the cascade through the projection trigger must not fail the reaper")
+	require.Equal(t, int64(1), n)
+
+	var left int
+	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM room_entries WHERE room_id = $1`, expired).Scan(&left))
+	require.Zero(t, left, "the expired room's entries went with it")
+	require.Equal(t, keptBefore, readRoomActivity(ctx, t, pool, kept), "another room's projection does not move")
+	drift, err := rooms.ActivityDrift(ctx, nil)
+	require.NoError(t, err)
+	require.Empty(t, drift)
+}

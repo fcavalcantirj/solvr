@@ -10271,3 +10271,156 @@ REMAINING (next slices, in order):
     [UNVERIFIED reading of step 6].
 
 UAT (for when idx 76 closes, not now): as slice 29.
+
+2026-09-29 12:25 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 31 of N: step 5, the WRITE half of the route probe: every POST/PATCH/DELETE route runs
+through the real router in one fixed order on two scratch databases seeded alike (legacy
+tables present / dropped), call i judged against call i. Found NO hidden dependency; power
+shown by 4 mutations. Found one PRE-EXISTING bug unrelated to legacy tables (claim-referral).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues. Tree clean at start [REAL, git status --porcelain].
+
+WHY THIS SLICE [REAL, journal]: slice 30's REMAINING, first item: "the WRITE half of the route
+  probe (POST/PATCH/DELETE on the canonical families ...); mint a room token to reach /r/{slug}/*".
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain: 2 untracked files; git diff --stat: empty
+  (no tracked file modified)]:
+  A backend/internal/jobs/legacy_dropped_write_routes_test.go (422, package jobs_test; reuses
+    seedRouteProbeData / newRouteProbeRouter / legacyRepositoryFamilies / routeProbeAdminKey from
+    legacy_dropped_routes_test.go and dbErrorTracer / missingLegacyObject / newMigratedScratchURL
+    / newLegacyDroppedDatabase from legacy_dropped_workers_test.go):
+    - WHY TWO DATABASES: a write changes what later writes see (deletes, claims, rotations), so
+      the GET probe's before/after on one database does not work. Present DB = newMigratedScratch
+      URL + traced pool; dropped DB = newLegacyDroppedDatabase, seeded in its beforeDrop hook.
+      seedWriteProbeData = seedRouteProbeData + each caller's seeded notification id.
+    - Env for hermeticity: GROQ_API_KEY="" (no external moderation/translation), RESEND_API_KEY=""
+      (never send email; the broadcast call also sets dry_run), IPFS_API_URL=http://127.0.0.1:9
+      (closed port on both runs), ADMIN_API_KEY=probe key.
+    - runWriteProbe: steps in order, each builds its calls from what earlier calls captured;
+      per call a 10s context, 20s hard guard (t.Fatalf on hang), 20ms settle, then the traced pg
+      errors; captures from 2xx bodies (keep funcs); after the last call it sleeps
+      writeProbeDrain = 8s (async pin retries a closed IPFS port at 1s+2s+3s, services/ipfs.go:
+      19-21,234) and returns the errors traced meanwhile ("late").
+    - judgeWriteProbe(before, after) (pure): refuses runs of different length or order; a call
+      5xx/429 on the present DB is gated (logged); 429 on the dropped DB is reported as limiter;
+      otherwise dropped-side 5xx or a pg error the present call did not raise -> "expected" in
+      legacyRepositoryFamilies (idx 52), "hidden" anywhere else. Late errors on the dropped DB
+      naming a dropped legacy table -> hidden ("background work after the last call").
+    - Coverage asserts: every non-GET route in api.RouteFamilies is called (98 routes); every
+      canonical (non-legacy-family) write route completes 2xx at least once on the present DB
+      unless listed in writeProbeValidationOnly with a reason; a listed route that starts
+      completing fails the test (stale list). Positive control: POST /v1/questions/{id}/answers
+      must reach the dropped answers table. Every capture must succeed on the present DB.
+    - TestJudgeWriteProbe_EachClause (no DB, always runs): synthetic runs covering a swallowed
+      42P01 on a canonical route (200->200) -> hidden, 201->500 -> hidden, the same 23505 on both
+      sides -> not judged, unchanged 400 -> nothing, legacy family 201->500 -> expected + control,
+      present 500 -> gated, dropped 429 -> limited, reached map, length mismatch refused.
+  A backend/internal/jobs/legacy_dropped_write_steps_test.go (437): writeProbeSteps, 214 calls:
+    agent2 register; human2 /auth/register, login, claim-referral, oauth exchange (unknown code),
+    moltbook (empty body: a real token calls the external service); PATCH /v1/me x2, api key
+    create/regenerate, PATCH agents/{id} x2, identity, follow x2; agent2 claim token -> lookup ->
+    human claims agent2; POST /v1/posts 2 callers x 4 types; PATCH/solve/vote/reply/bookmark/view
+    on the 4 fixture posts; threaded reply/edit/vote on the 8 fixture replies; bookmark removal;
+    reports on post/reply/answer/approach/response/comment targets; MCP initialize/tools/list/
+    solvr_search x2/solvr_get x4; funnel x2; ALL legacy writes (approaches, answers, responses,
+    progress, approach PATCH/verify, answer PATCH/vote/DELETE, 4 comment creates + DELETE,
+    accept, evolve, POST problems/questions/ideas); rooms: create x2, PATCH, members add,
+    handshake -> per-agent room token -> /r join/heartbeat/message/claim/renew/release/events/
+    pin/unpin/leave, entries x2, human message, stream-ticket x2, save-as-post -> publish,
+    archive, reopen, token revoke, member remove, room delete; blog create/PATCH/vote/view/
+    DELETE; admin query, translation run, broadcast (dry_run), incident create/PATCH/update;
+    notifications read/read-all/delete/delete-read x2; unfollow x2; reply and post deletes;
+    api-key revoke; agent2 key rotation; storage LAST (checkpoint, pins x2, /v1/add) then pin
+    delete, agent2 self-delete, admin hard-delete agent2, human2 self-delete, admin hard-delete
+    human2.
+  No production code, registry entry, migration, handler or frontend changed. No existing test
+  changed, skipped or removed.
+
+RESULT [TEST] /tmp/solvr_idx76_s31_jobs.log (DATABASE_URL=postgres://solvr:solvr_dev@localhost:
+  5435/solvr_test, local docker solvr-postgres; the probe creates/drops its own 2 scratch DBs):
+  `go test ./internal/jobs/ -count=1 -v`, once: 58 PASS (= the 58 tests `go test -list` names),
+  0 FAIL, 0 SKIP. Write probe (23.84s): 214 calls over 98 write routes; 0 hidden dependencies;
+  0 late legacy errors. Gated (5xx with legacy tables present): 3 — /admin/email/broadcast 503
+  (no sender without RESEND_API_KEY), /admin/jobs/translation/run 503 (runner wired only with
+  GROQ_API_KEY), /v1/add 500 (IPFS closed). 15 legacy-family calls reach dropped tables, all
+  2xx -> 500 with the missing table named (approaches/answers/responses/comments), incl. the
+  positive control. POST /v1/problems|questions|ideas and /v1/ideas/{id}/evolve (legacy
+  families) touch no legacy table. Every other canonical write route completed 2xx on the
+  present DB; validation-only list (6): oauth/exchange, moltbook, /v1/add, translation run,
+  email broadcast, claim-referral (below).
+  The other three probes (static, GET routes, scheduled jobs) PASS in the same run.
+
+SPIKES [TEST] (probe bugs, fixed before judging): spike1 /tmp/solvr_idx76_s31_spike1.log: POST
+  /v1/pins 409 DUPLICATE_CONTENT (the checkpoint had pinned the same CID for the same agent ->
+  separate probePinCID); DELETE /v1/comments/{id} ran with the placeholder id (built in the same
+  step as the comment create -> own step); claim-referral 401. spike2 /tmp/solvr_idx76_s31_
+  spike2.log PASS.
+
+TDD / POWER [TEST], sources restored from /tmp backups and cmp-verified after each, git status
+  shows only the 2 new files:
+  mutJ judge ignores fresh pg errors (status only) -> TestJudgeWriteProbe_EachClause FAIL
+    :392 "hidden = [POST /v1/posts], want [DELETE /v1/me POST /v1/posts]"
+    (/tmp/solvr_idx76_s31_mutJ.log).
+  mut1 db.UserRepository.Delete first runs a runtime-built "UPDATE "+"ans"+"wers SET deleted_at"
+    and returns its error -> probe FAIL "DELETE /v1/me (user-accounts) as human2: 200 -> 500,
+    missing [answers]" with the SQL (/tmp/solvr_idx76_s31_mut1.log).
+  mut2 same statement, error swallowed -> probe FAIL "200 -> 200, missing [answers]": only the
+    tracer comparison sees it (/tmp/solvr_idx76_s31_mut2.log).
+  mut3 db.PinRepository.UpdateStatus runs a swallowed legacy SELECT when marking a pin failed
+    (async, ~6s after the call). With storage mid-sequence (/tmp/solvr_idx76_s31_mut3.log) it was
+    caught but ONE error landed in a later call's window (DELETE /v1/posts) — had that call been
+    in a legacy family it would have passed as expected. Fix: storage calls moved to the end,
+    after every legacy-family call; rerun (/tmp/solvr_idx76_s31_mut3b.log): all 3 async failures
+    (checkpoint pin + 2 pins) reported as "background work after the last call".
+
+OTHER CHECKS: go vet ./internal/jobs/ clean; gofmt -l clean on both new files; check-file-size.sh
+  -> /tmp/solvr_idx76_s31_filesize.log "Found 34 file(s) exceeding 800 lines" (same as slice 30;
+  new files 422/437). 0 solvr_scratch*/solvr_legacy_* databases left [REAL, psql].
+  NOT RUN: golangci-lint — `golangci-lint run ./internal/jobs/` exits 3 "can't load config: ...
+  'output.formats' expected a map, got 'slice'" (installed v2.11.4 vs the repo's v1-style
+  config; pre-existing, /tmp/solvr_idx76_s31_lint.log). Full backend `go test ./...` — only
+  internal/jobs test files were added. Frontend untouched.
+
+PRE-EXISTING BUG FOUND, NOT FIXED (unrelated to legacy tables; owner decision) [TEST]:
+  POST /v1/auth/claim-referral is mounted at backend/internal/api/router.go:572 on the bare /v1
+  router, outside every auth middleware (the JWT group is router.go:542-543), and the handler
+  (handlers/auth.go ClaimReferral) 401s when auth.ClaimsFromContext is nil. In the probe the
+  SAME human2 JWT got 401 there and 200 on DELETE /v1/me. The handler tests
+  (handlers/claim_referral_test.go) inject claims into the context and bypass the router, so no
+  test sees it. frontend/app/auth/callback/page.tsx:67 calls it after OAuth signup, so OAuth
+  referral attribution most likely never records [INFERRED; production not checked — local
+  only]. The probe lists the route as validation-only with that reason; the stale-list check
+  fails the probe once it is fixed, forcing the entry out.
+
+LIMITS [UNVERIFIED unless stated]:
+  - The GROQ moderation/translation path (posts.go moderatePostAsync -> ModerationReplyWriter,
+    notifications, status updater) is not exercised: NewRouter wires it only from GROQ_API_KEY
+    and has no injection point for a fake. The admin email broadcast recipient query is not run
+    (503 before it without a sender).
+  - A background error can still land in a later call's window; ordering (storage last) keeps
+    every known async writer (pins, checkpoints) out of legacy-family windows [TEST: mut3b].
+  - Calls are hand-written bodies; a route's other branches (e.g. PATCH /v1/posts on a family
+    post, room private flows) are covered only where a call exercises them.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW: none — test only.
+
+git status at journal time [REAL]: ?? backend/internal/jobs/legacy_dropped_write_routes_test.go,
+  ?? backend/internal/jobs/legacy_dropped_write_steps_test.go, M progress.txt (this entry);
+  spec.json unchanged, passes stays false.
+
+REMAINING (next slices, in order):
+  owner: decide on the claim-referral mount (fix = move the route into the JWT group; out of
+    idx 76's scope).
+  step 3/4: the unwired legacy methods in stats.go/homepage_overview.go/agents.go/users.go/
+    briefing*.go/leaderboard*.go/inferred_specialties.go/reputation_history.go/reputation/
+    sql_builder.go go with the tables (pinned Done=false by earlier slices; no GET or write route
+    reaches them [TEST: slices 30-31]).
+  step 6 gate: LegacyCleanupBlockers empty — blocked on the table drop (idx 68/93) and on the
+    legacy routes (idx 52); whether idx 76 can close before that is an owner question
+    [UNVERIFIED reading of step 6].
+
+UAT (for when idx 76 closes, not now): as slice 29.

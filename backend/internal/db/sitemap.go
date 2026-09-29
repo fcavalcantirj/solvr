@@ -8,6 +8,17 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
+// sitemapPostEligible is the sitemap's post rule: the canonical public-eligibility rule
+// (models.Post.PublicEligible: published, moderation-approved, public, not deleted) for a
+// post of any type, whatever its votes or solved state. The legacy hidden statuses stay
+// excluded while writers that set status alone exist (cmd/moderate-existing rejects that
+// way). BART-151: private posts are never in the public sitemap.
+const sitemapPostEligible = `deleted_at IS NULL
+		AND visibility = 'public'
+		AND publication_state = 'published'
+		AND moderation_state = 'approved'
+		AND status NOT IN ('draft', 'pending_review', 'rejected')`
+
 // SitemapRepository provides sitemap URL data from the database.
 type SitemapRepository struct {
 	pool *Pool
@@ -19,7 +30,7 @@ func NewSitemapRepository(pool *Pool) *SitemapRepository {
 }
 
 // GetSitemapURLs returns all indexable content URLs for sitemap generation.
-// Excludes drafts and soft-deleted content.
+// Posts follow sitemapPostEligible; drafts and soft-deleted content are excluded.
 func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.SitemapURLs, error) {
 	result := &models.SitemapURLs{
 		Posts:     []models.SitemapPost{},
@@ -29,18 +40,10 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 		Rooms:     []models.SitemapRoom{},
 	}
 
-	// Get quality posts only: solved problems, ideas with votes/responses
 	postRows, err := r.pool.Query(ctx, `
 		SELECT id, type, updated_at
 		FROM posts
-		WHERE deleted_at IS NULL
-		AND visibility = 'public' -- BART-151: private posts never in the public sitemap
-		AND status NOT IN ('draft', 'pending_review', 'rejected')
-		AND (
-			(type = 'problem' AND (status = 'solved' OR upvotes - downvotes >= 1))
-			OR (type = 'idea' AND (upvotes - downvotes >= 2))
-			OR (type = 'question')
-		)
+		WHERE `+sitemapPostEligible+`
 		ORDER BY updated_at DESC
 	`)
 	if err != nil {
@@ -148,18 +151,8 @@ func (r *SitemapRepository) GetSitemapURLs(ctx context.Context) (*models.Sitemap
 func (r *SitemapRepository) GetSitemapCounts(ctx context.Context) (*models.SitemapCounts, error) {
 	counts := &models.SitemapCounts{}
 
-	// Count quality posts only
 	err := r.pool.QueryRow(ctx, `
-		SELECT COUNT(*)
-		FROM posts
-		WHERE deleted_at IS NULL
-		AND visibility = 'public' -- BART-151: private posts never in the public sitemap
-		AND status NOT IN ('draft', 'pending_review', 'rejected')
-		AND (
-			(type = 'problem' AND (status = 'solved' OR upvotes - downvotes >= 1))
-			OR (type = 'idea' AND (upvotes - downvotes >= 2))
-			OR (type = 'question')
-		)
+		SELECT COUNT(*) FROM posts WHERE `+sitemapPostEligible+`
 	`).Scan(&counts.Posts)
 	if err != nil {
 		return nil, err
@@ -220,14 +213,7 @@ func (r *SitemapRepository) GetPaginatedSitemapURLs(ctx context.Context, opts mo
 		rows, err := r.pool.Query(ctx, `
 			SELECT id, type, updated_at
 			FROM posts
-			WHERE deleted_at IS NULL
-			AND visibility = 'public' -- BART-151: private posts never in the public sitemap
-			AND status NOT IN ('draft', 'pending_review', 'rejected')
-			AND (
-				(type = 'problem' AND (status = 'solved' OR upvotes - downvotes >= 1))
-				OR (type = 'idea' AND (upvotes - downvotes >= 2))
-				OR (type = 'question')
-			)
+			WHERE `+sitemapPostEligible+`
 			ORDER BY updated_at DESC
 			LIMIT $1 OFFSET $2
 		`, opts.PerPage, offset)

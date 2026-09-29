@@ -9851,3 +9851,148 @@ REMAINING (next slices, in order):
 
 UAT (for when idx 76 closes, not now): as slice 26, plus: after deploy the owner opens the
   ideas page sidebar on https://solvr.dev and checks the counts match GET /v1/stats/ideas.
+
+2026-09-29 10:42 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 28 of N: steps 3 and 5, a HIDDEN DEPENDENCY the inventory missed: the canonical
+PATCH /v1/posts/{id} read the legacy approaches table to decide whether an owner may mark a
+problem solved. It now reads the replies migrated from succeeded approaches.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues. Tree clean at start [REAL, git status --porcelain].
+
+WHY THIS SLICE, NOT slice 27's REMAINING list [REAL, code read this session]: the listed
+  pending code: entries hold only unwired legacy methods, pinned by earlier slices to go with
+  the tables (e.g. homepage_reusable_canonical_test.go:32 asserts code:internal/db/
+  homepage_overview.go stays Done=false "must lose it when the tables go"). stats.go's
+  remaining legacy-typed methods are overridden by CanonicalStatsRepository or never called
+  (GetProblemsSolvedCount/GetQuestionsAnsweredCount are only in StatsRepositoryInterface; the
+  handler never calls them [REAL, grep]). While checking what still WIRES a legacy repository
+  (`grep NewApproachesRepository(` in non-test code), router.go:292 gave the canonical posts
+  handler `SetApproachChecker(db.NewApproachesRepository(pool))`: posts.go:693 calls
+  HasSucceededApproach (SELECT ... FROM approaches WHERE status='succeeded') on every PATCH
+  that sets a problem to solved. Slice 1's regex inventory cannot see it (the SQL lives in
+  approaches.go, already pending retire, and the dropped-table probe accepts that file's
+  queries failing). After dropLegacy that PATCH would answer 500 "failed to check approaches"
+  [INFERRED from posts.go:695-697]; after the cutover a problem whose succeeded approach
+  became a reply is still judged from the legacy row. No earlier journal entry names it
+  [REAL, grep approachChecker/HasSucceededApproach/SetApproachChecker in progress.txt: 0 hits].
+  The other production NewApproachesRepository users (problems.go = legacy problem routes;
+  router.go:415 = GET /v1/users/{id}/contributions) stay: the contributions rewire is
+  deferred as entangled with the cutover (idx 72 slices) and the legacy routes are idx 52.
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain + git diff --stat: 2 modified (+2/-2),
+  3 new]:
+  A backend/internal/db/approach_checker_canonical.go (33): CanonicalApproachCheckerRepository
+    / NewCanonicalApproachCheckerRepository(pool) / HasSucceededApproach(ctx, problemID) =
+    EXISTS a reply on the post matching canonicalSucceededApproachReply (stats_canonical.go:
+    live, legacy_type 'approach', provenance status 'succeeded') — the same predicate the
+    served solved-problem statistics already use. Native replies have no status and never
+    count.
+  M backend/internal/api/router.go (1 line, :292): SetApproachChecker(db.NewCanonicalApproach
+    CheckerRepository(pool)). ApproachCheckerInterface and posts.go unchanged.
+  M backend/internal/db/legacy_dependency_registry.go: code:internal/db/approaches.go note only
+    (still pending retire, Done=false): it stays wired to the legacy problem/approach routes and
+    GET /v1/users/{id}/contributions, while PATCH /v1/posts uses approach_checker_canonical.go.
+  A backend/internal/db/approach_checker_canonical_test.go (102):
+    - TestLegacyApproachChecker_ServedCanonically: only router.go builds the canonical checker;
+      no production file contains `SetApproachChecker(db.NewApproachesRepository(`; the source
+      scan does not report the new file; the approaches.go entry is retire, not done, and its
+      note names approach_checker_canonical.go.
+    - TestCanonicalApproachChecker_KeepsTheLegacyAnswerAcrossTheCutover (scratch DB via
+      newMigratedScratchDatabase): 6 problems (succeeded / failed+succeeded / deleted succeeded
+      / working+stuck / failed / none). Legacy repo answers {T,T,F,F,F,F}; canonical answers all
+      F before the cutover, the legacy map after MigrateContributions + RemapLegacyRelations,
+      the same after dropLegacy; then a native reply on the no-approach problem stays F and
+      soft-deleting the migrated reply flips the succeeded problem to F.
+  A backend/internal/api/router_approach_checker_canonical_test.go (82):
+    TestPostsPatchSolved_ChecksTheCanonicalSucceededApproach, real router + solvr_test: owner
+    PATCH {"status":"solved"} on a problem with only a migrated succeeded-approach reply -> 200,
+    status solved; on a problem with only an unmigrated succeeded approaches row -> 400
+    "no succeeded approach exists", status stays open.
+
+EXISTING TESTS CHANGED: none [REAL, git diff --stat lists no _test.go]. The handler's mock-
+  based tests TestUpdatePost_SolvedBlockedWithoutSucceededApproach / _SolvedAllowedWith
+  SucceededApproach / _SolvedAllowedWhenCheckerNil PASS unchanged (green log below).
+
+VERIFICATION [DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres, schema_migrations 111 dirty=f); scenario test creates/drops its own scratch
+  DB on that server]:
+  go build ./... clean; go vet ./internal/db/ ./internal/api/ clean; gofmt -l clean on the 5
+    files.
+  RED [TEST] /tmp/solvr_idx76_s28_red.log: router test FAIL router_approach_checker_canonical_
+    test.go:75 "expected: 200 actual: 400" (the legacy checker finds no approaches row);
+    internal/db build failed "undefined: NewCanonicalApproachCheckerRepository".
+  GREEN [TEST] /tmp/solvr_idx76_s28_green.log: 70 PASS, 0 FAIL, 0 SKIP: the 3 new tests, the
+    Legacy registry/scan/catalog tests (TestLegacyDependencyRegistry_*, TestScanLegacySource
+    Dependencies_*, TestDiscoverLegacySchemaDependencies_*, TestLegacyCleanupBlockers_*,
+    TestDeclaredLegacyDependencies_*), handlers -run 'Approach|Solved|TestUpdatePost'.
+  PROBES [TEST] /tmp/solvr_idx76_s28_probes.log (internal/jobs): TestLegacyDroppedDatabase_
+    StaticQueriesExposeOnlyRegisteredDependencies PASS "619 extracted, 549 prepared ..., 70 did
+    not" (slice 27: 618/548/70 — the +1 is the new canonical query, which prepares on the
+    dropped schema); _ScheduledJobsExposeOnlyRegisteredDependencies PASS.
+  MUTATIONS [TEST], files restored from /tmp backups and cmp-verified:
+    mut1 checker ignores the status (legacy_type 'approach' only) -> scenario FAIL :93/:96/:101
+      (/tmp/solvr_idx76_s28_mut1.log);
+    mut2 router back to db.NewApproachesRepository -> router test FAIL :75 and guard FAIL :17/:20
+      (/tmp/solvr_idx76_s28_mut2.log).
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 40m ./...` ->
+    /tmp/solvr_idx76_s28_full.log: 4692 PASS, 78 FAIL, 11 SKIP lines (subtests included; slice
+    27: 4693/73/12). Packages FAIL: internal/api, internal/api/handlers, internal/db (same three
+    as slice 27). The 3 new tests PASS in it. Top-level FAIL names vs slice 27's log (comm):
+    3 gone (TestHomepageAPIUsage_CountsRequestsThatActuallyArrived, TestHomepageSearch_Chart
+    AddsUpToTheTotalBesideIt, TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring — the
+    clock/order-dependent ones slice 27 recorded), 4 new. Top-level SKIP names identical; the
+    line-count deltas include subtests and were not reconciled line by line [UNVERIFIED].
+  THE 4 NEW FAILS ARE NOT THIS DIFF [REAL, /tmp/solvr_idx76_s28_four_{head,parent}.log: run
+    alone in the working tree and in a clean worktree at 1af18ebe (parent), same DB; both FAIL
+    identically]:
+    - TestGetTrendingPosts_ExcludesDraft / _ExcludesPendingReview / _ExcludesRejected
+      (stats_test.go:54/100/146 "expected open post ... to appear in trending, but it did not"),
+      each preceded by the search_test.go:497 cleanup FK error (approaches_problem_id_fkey)
+      [cause UNVERIFIED: likely rows accumulating in the shared solvr_test crowding the top-N;
+      slice 27's targeted run had them PASS].
+    - TestSearchRepository_Search_PerformanceTarget (search_test.go:658 "search took
+      170.277917ms, expected < 100ms" and 3 more subtests) — wall-clock threshold on a shared
+      DB.
+  check-file-size.sh -> /tmp/solvr_idx76_s28_filesize.log: "Found 34 file(s) exceeding 800
+    lines", same count as slice 27. router.go (1244) was already on the list; this slice
+    swaps one line there. New files 33/102/82.
+  0 solvr_scratch*/solvr_legacy_* databases left [REAL, psql]. NOT RUN: frontend (untouched);
+    golangci-lint.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (PATCH /v1/posts/{id} with status "solved" on a
+  problem; response shape and error text unchanged) [REAL from code + tests above]:
+  - The succeeded-approach precondition now reads replies migrated from succeeded approaches,
+    not the approaches table.
+  - DEPLOY ORDER as slices 14-24: deployed BEFORE the cutover, no approach is a reply yet, so
+    every such PATCH answers 400 "cannot mark as solved: no succeeded approach exists" [TEST:
+    scenario "before the cutover" + router test]. The legacy POST /v1/approaches/{id}/verify
+    route is untouched [UNVERIFIED whether it marks the problem solved itself; not read]. Deploy
+    with or after the cutover.
+  - After the cutover a new approach posted as a native reply has no status and can never
+    satisfy the check; only the legacy verify route (idx 52's adapters) can produce a succeeded
+    approach until idx 73/74 decide what "solved" means canonically [INFERRED].
+
+git status at journal time [REAL]: M backend/internal/api/router.go, M backend/internal/db/
+  legacy_dependency_registry.go, ?? backend/internal/api/router_approach_checker_canonical_
+  test.go, ?? backend/internal/db/approach_checker_canonical.go, ?? backend/internal/db/
+  approach_checker_canonical_test.go, M progress.txt (this entry); spec.json unchanged, passes
+  stays false.
+
+REMAINING (next slices, in order):
+  step 3/5: keep hunting hidden dependencies the regex inventory cannot see — production
+    callers of legacy repositories from CANONICAL routes (grep `db.New(Answers|Approaches|
+    Responses|Comments|Problems|Questions|Ideas)Repository(` in non-test code and read each
+    call site; this slice found one; router.go:415 contributions is known and deferred).
+  step 3/4: the unwired legacy methods in stats.go/homepage_overview.go/agents.go/users.go go
+    with the tables (pinned Done=false by earlier slices).
+  step 6 gate: LegacyCleanupBlockers empty — blocked on the table drop (idx 68/93) for the
+    table:/check: entries and the legacy-route repositories; whether idx 76 can close before
+    that is an open question for the owner [UNVERIFIED reading of step 6].
+
+UAT (for when idx 76 closes, not now): as slice 27, plus: after the cutover and deploy, the
+  owner PATCHes a problem that had a succeeded approach to "solved" on production and checks it
+  is accepted.

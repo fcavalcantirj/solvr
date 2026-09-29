@@ -73,7 +73,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"consumer:OverviewChannel":     keep("homepage overview refresh signal; the query it triggers is listed separately"),
 
 	// Application queries (non-test Go files whose SQL names a legacy table or type).
-	"code:internal/db/approaches.go":               pending(LegacyActionRetire, "legacy approach repository incl. progress notes; replaced by replies"),
+	"code:internal/db/approaches.go":               pending(LegacyActionRetire, "legacy approach repository incl. progress notes; replaced by replies; still wired to the legacy problem/approach routes and GET /v1/users/{id}/contributions, while PATCH /v1/posts checks a solved problem with CanonicalApproachCheckerRepository (approach_checker_canonical.go)"),
 	"code:internal/db/answers.go":                  pending(LegacyActionRetire, "legacy answer repository; replaced by replies"),
 	"code:internal/db/responses.go":                pending(LegacyActionRetire, "legacy response repository; replaced by replies"),
 	"code:internal/db/comments.go":                 pending(LegacyActionRetire, "legacy comment repository; replaced by replies"),

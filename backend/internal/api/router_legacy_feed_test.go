@@ -109,13 +109,19 @@ func seedLegacyFeed(t *testing.T, pool *db.Pool, authorID string) legacyFeedSeed
 		problem string
 		status  models.ApproachStatus
 	}{{s.stuckApproach, models.ApproachStatusStuck}, {s.openProblem, models.ApproachStatusWorking}} {
-		_, err := approaches.CreateApproach(ctx, &models.Approach{
+		approach, err := approaches.CreateApproach(ctx, &models.Approach{
 			ProblemID:  a.problem,
 			AuthorType: models.AuthorTypeAgent,
 			AuthorID:   authorID,
 			Angle:      "Feed adapter approach",
 			Status:     a.status,
 		})
+		require.NoError(t, err)
+		// The reply the contribution cutover makes from the approach: needs_help reads the
+		// approach status kept in its provenance (task idx 76).
+		_, err = pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id, provenance)
+			VALUES ($1, 'agent', $2, 'Feed adapter approach', 'approach', $3, jsonb_build_object('status', $4::text))`,
+			a.problem, authorID, approach.ID, string(a.status))
 		require.NoError(t, err)
 	}
 	_, err := db.NewAnswersRepository(pool).CreateAnswer(ctx, &models.Answer{

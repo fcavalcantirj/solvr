@@ -8806,3 +8806,142 @@ REMAINING (next slices, in order):
 
 UAT (for when idx 76 closes, not now): as slice 19, plus: after deploy the owner confirms the
   API log no longer prints "Stale content cleanup job started" or "Auto-solve job started".
+
+2026-09-28 22:02 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 21 of N: steps 3/5, the posts list needs_help filter (code:internal/db/posts_list_filters.go)
+and the shared visibility file (code:internal/db/visibility.go) — the "posts joins/filters" and
+"visibility" items of slice 20's REMAINING list.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues. Tree clean at start, HEAD 86dac2ac (slice 20's own commit) [REAL, git status /
+  git log]. Picked these two over search/posts.go: both small, bounded, and both "refactor".
+
+SPIKE [REAL, code read + grep + psql \d replies on solvr_test]:
+  - needsHelpCondition (GET /v1/posts?needs_help=true, which also serves legacy GET
+    /v1/feed/stuck) = in_progress OR a live stuck row in `approaches`. MigrateContributions keeps
+    the approach status in reply provenance ("status": a.status, contribution_migration.go:241),
+    and stats_canonical.go already reads it the same way (canonicalSucceededApproachReply:
+    r.legacy_type = 'approach' AND r.provenance->>'status' = 'succeeded').
+  - visibility.go's only legacy SQL was ApproachesRepository.ApproachVisibleTo, called only via
+    ProblemsRepository.ApproachVisibleTo -> handlers/problems.go findVisibleApproach (the legacy
+    approach routes). Replies are already covered: every reply route checks the reply's post
+    through ReplyRepository.PostVisibleTo (handlers/replies.go checkPostVisible).
+  - The type regex (\btype\s*=\s*'approach') does not match `legacy_type = 'approach'` (no word
+    boundary after "_"), so the new SQL is not a scanned legacy dependency.
+
+WHAT THIS COMMIT CHANGES [REAL, git status --porcelain + git diff --stat: 5 modified, 1 new]:
+  M backend/internal/db/posts_list_filters.go (+8/-5): needsHelpCondition now =
+    p.status = 'in_progress' OR EXISTS (SELECT 1 FROM replies nh WHERE nh.post_id = p.id AND
+    nh.deleted_at IS NULL AND nh.legacy_type = 'approach' AND nh.provenance->>'status' =
+    'stuck'). Doc comment updated. BEHAVIOR CHANGE, see below.
+  M backend/internal/db/visibility.go (-22) / M backend/internal/db/approaches.go (+22):
+    ApproachesRepository.ApproachVisibleTo moved VERBATIM (doc comment + body) from visibility.go
+    to the end of approaches.go (code:internal/db/approaches.go, pending retire: it drops with
+    the legacy approach repository and routes). No behavior change.
+  M backend/internal/db/legacy_dependency_registry.go (-2): entries
+    code:internal/db/posts_list_filters.go and code:internal/db/visibility.go REMOVED — the scan
+    no longer finds either file, and TestLegacyDependencyRegistry_CoversTheSourceTree fails on an
+    entry for a dependency that no longer exists. Counts [REAL, parsed]: 76 -> 74 entries;
+    pending refactor 12 -> 10, pending retire 27, pending remap 3, done 24, keep 10.
+  A backend/internal/db/posts_needs_help_canonical_test.go (128):
+    TestLegacyNeedsHelpAndVisibility_ServedCanonically (source guard: the scan finds neither file;
+      neither has a disposition; the only production definition of ApproachesRepository.
+      ApproachVisibleTo is in internal/db/approaches.go; approaches.go stays pending retire).
+    TestCanonicalNeedsHelp_KeepsTheLegacyFilterAcrossTheCutover on a scratch DB (legacy tables
+      present): in_progress post; stuck approach; working+stuck; working only; deleted stuck
+      approach; solved + failed approach; open question; family post with a stuck approach;
+      deleted in_progress post. PostRepository.List(NeedsHelp) BEFORE the cutover = only the
+      in_progress post; after MigrateContributions + RemapLegacyRelations = {in_progress, stuck,
+      working+stuck}; the bare predicate gives the same set, and again after dropLegacy();
+      then a native reply with provenance {"status":"stuck"} and a native reply add nothing, and
+      deleting the migrated stuck reply drops working+stuck.
+  M backend/internal/api/router_legacy_feed_test.go (+7/-1) — EXISTING TEST CHANGED (golden rule):
+    (a) TestLegacyFeed_ServedByCanonicalPostsList and TestLegacyFeed_KeepsFeedItemShape (their
+        shared fixture seedLegacyFeed; the other three TestLegacyFeed_* tests use it too).
+    (b) NO ASSERTION CHANGED [REAL, diff]: still `assert.ElementsMatch(t, []string{s.inProgress,
+        s.stuckApproach}, feedIDs(stuck))` (:178), `require.Len(t, stuck.Data, 2)` (:194) and
+        `assert.Equal(t, 1, d.ApproachCount)`. What changed: for each legacy approach the fixture
+        creates (stuck, working), it now also inserts the reply the cutover makes from it
+        (legacy_type 'approach', legacy_id = the approach id, provenance {"status": <status>}).
+        The legacy approach row stays, so approach_count (still read by posts.go) is unchanged.
+    (c) Why [TEST, /tmp/solvr_idx76_s21_oldfixture.log]: the HEAD version of the file run against
+        the new code FAILS :172 (stuck set elements differ: only the in_progress post) and :188
+        ("should have 2 item(s), but has 1"); the other three pass. An unmigrated stuck approach
+        no longer marks a post as needing help. File restored from cp, cmp confirmed.
+    (d) "a stuck approach needs help" is pinned post-cutover by TestCanonicalNeedsHelp_Keeps
+        TheLegacyFilterAcrossTheCutover and through the route by the changed fixture; "an
+        unmigrated approach does not count" by the same DB test's pre-cutover assertion. All PASS.
+  No test deleted, skipped or weakened. Frontend untouched. SPEC.md untouched.
+
+VERIFICATION [DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable,
+  local docker solvr-postgres; the scratch-DB tests build and drop their own DBs on that server]:
+  RED [TEST] /tmp/solvr_idx76_s21_red.log (tests written first, production unchanged):
+    TestLegacyNeedsHelpAndVisibility_ FAIL :20, :21 (both files scanned), :25 x2 (entries exist),
+    :27 (ApproachVisibleTo defined in visibility.go); TestCanonicalNeedsHelp_ FAIL :107 (legacy
+    counts the unmigrated stuck approaches: 3 posts, want 1) and :119 `ERROR: relation
+    "approaches" does not exist (SQLSTATE 42P01)` after the drop. The post-cutover List
+    assertions (:115/:116) already passed on HEAD, i.e. legacy and canonical agree after the
+    cutover.
+  GREEN [TEST] /tmp/solvr_idx76_s21_green_db.log: 15 PASS, 0 FAIL, 0 SKIP (both new tests,
+    TestLegacyDependency*, TestScanLegacy*, TestLegacyCleanupBlockers*, TestDeclaredLegacy*,
+    TestDiscoverLegacySchema*, TestExtractStaticSQL*, TestLegacyLifecycles_).
+  Routes [TEST] /tmp/solvr_idx76_s21_api.log: TestLegacyFeed_* (5) and TestLegacyChildRoutes_
+    FollowParentVisibilityAndAbsenceContract (approach_history/approach_progress family and
+    deleted-parent cases, i.e. the moved ApproachVisibleTo) all PASS, 0 SKIP.
+  Probes [TEST] /tmp/solvr_idx76_s21_jobs.log: TestLegacyDroppedDatabase_StaticQueries...,
+    _ScheduledJobs..., TestRetiredLegacyLifecycles_ PASS. Static probe 625 extracted, 554
+    prepared, 71 did not (= slice 20).
+  MUTATIONS [TEST] /tmp/solvr_idx76_s21_mut{1,2,3}.log, each on TestCanonicalNeedsHelp_, file
+    restored from cp after (cmp confirmed):
+    mut1 drop `nh.legacy_type = 'approach'` (native replies' status counts) -> FAIL :127.
+    mut2 drop `nh.deleted_at IS NULL` -> FAIL :115/:116/:119/:127 (deleted stuck approach counts).
+    mut3 drop the status = 'stuck' check -> FAIL :115/:116/:119/:127 (any approach counts).
+    The old approach-based condition is the RED run above.
+  go build ./... clean; go vet ./internal/db/ ./internal/api/ clean; gofmt -l clean on all 6
+    changed/new files.
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 40m ./...` ->
+    /tmp/solvr_idx76_s21_full.log: 4683 PASS, 74 FAIL, 12 SKIP (slice 20: 4685/70/12, same
+    counting). Packages FAIL: internal/api, internal/api/handlers (the 4 standing GitHub OAuth
+    tests), internal/db. All new tests, both changed legacy-feed tests, the child-route
+    visibility test and both TestLegacyDroppedDatabase_* PASS in it; 0 "cannot scan NULL".
+    Top-level FAIL names vs slice 20 (comm): 0 gone, 2 new:
+    - TestAgentClaim_RetriesAndRacesLinkTheAgentOnce/several_humans_race_one_token: "failed to
+      create test user ... duplicate key value violates unique constraint "users_username_key""
+      — the fixture username collision slice 18 had (gone in 19-20). Test-fixture data, no claim
+      or user code in this diff.
+    - TestSearchRepository_Search_PerformanceTarget: wall-clock `search took 114ms, expected
+      < 100ms` (simple_single_term). Alone on this tree [TEST /tmp/solvr_idx76_s21_perf.log]:
+      FAIL, 3 subtests 151-234ms. A/B [TEST /tmp/solvr_idx76_s21_perf_head.log]: the same test
+      in a temporary git worktree at HEAD 86dac2ac (removed after) FAILS the same way (228ms,
+      182ms). Not caused by this diff; search.go untouched.
+    SKIP names identical to slice 20 [REAL, diff]. The 3 homepage search-leftover failures and
+    TestSearchAnalyticsRepository_GetZeroResults recur, as slices 19-20 recorded.
+  check-file-size.sh: 35 violations, same as slices 1-20; changed/new files at most 559 lines
+    (approaches.go).
+  My runs left 0 solvr_scratch*/solvr_legacy_* databases, 0 legacy-feed fixture posts or
+    replies, 0 agent_needs_help [REAL, psql]. I deleted nothing from solvr_test.
+  NOT RUN: frontend (untouched); golangci-lint.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL, code + tests above, unless stated]:
+  - DEPLOY ORDER (same shape as slices 14-19). Deployed BEFORE the cutover: GET
+    /v1/posts?needs_help=true and GET /v1/feed/stuck list only in_progress posts — a post whose
+    only "needs help" signal is a stuck approach drops out until MigrateContributions turns the
+    approach into a reply [REAL for the local fixture; prod data not queried]. After the cutover
+    the list is the legacy one again.
+  - After the cutover a stuck approach's status is frozen in its reply's provenance: replies have
+    no status workflow, so nothing un-sticks it except the post's own status or deleting the
+    reply. A native reply can never mark a post as needing help.
+  - visibility.go: no behavior change (code move).
+
+REMAINING (next slices, in order):
+  step 3/4: search, posts.go joins (approach/answer/comment counts, has_answer, approaches/answers
+    sorts), resurrection, sitemap, backfill-embeddings, the ideas sidebar in stats.go and the
+    other pending code: entries. Both dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): as slice 20, plus: after the cutover deploy the owner opens
+  /v1/feed/stuck (or GET /v1/posts?needs_help=true) and sees problems with stuck approaches listed
+  again, not only in-progress ones.

@@ -2,9 +2,6 @@ package db
 
 import (
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -128,28 +125,7 @@ func ScanLegacySourceDependencies(root string) ([]LegacyDependency, error) {
 			deps = append(deps, d)
 		}
 	}
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			if name := entry.Name(); name == "vendor" || name == "node_modules" || (strings.HasPrefix(name, ".") && path != root) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		src, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
+	err := walkGoSources(root, func(_, rel string, src []byte) error {
 		text := string(src)
 		tables := uniqueLower(legacySQLTableRe.FindAllStringSubmatch(text, -1))
 		types := uniqueLower(legacySQLTypeRe.FindAllStringSubmatch(text, -1))

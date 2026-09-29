@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { OVERVIEW, STALE_META } from './overview-fixture';
+import { OVERVIEW, STALE_META, HEALTHY_META_NULL_ERRORS } from './overview-fixture';
 import { LiveOverview } from './live-overview';
 import { api } from '@/lib/api';
 
@@ -129,6 +129,22 @@ describe('LiveOverview layout', () => {
 });
 
 describe('LiveOverview meta banner', () => {
+  it('renders the meta banner when the API sends partial_errors as null', () => {
+    // A healthy Solvr sends partial_errors: null (Go nil slice). Reading .length off
+    // it threw "Cannot read properties of null" and took the whole homepage down —
+    // on a perfectly healthy system. Measured against the live API 2026-09-29.
+    mockUseOverview.mockReturnValue({
+      overview: OVERVIEW,
+      meta: HEALTHY_META_NULL_ERRORS,
+      loading: false,
+      error: null,
+    });
+
+    expect(() => render(<LiveOverview />)).not.toThrow();
+    expect(screen.getByText(HEALTHY_META_NULL_ERRORS.last_updated_label)).toBeInTheDocument();
+    expect(screen.queryByTestId('overview-partial-errors')).not.toBeInTheDocument();
+  });
+
   it('renders the Last updated timestamp when meta is present', () => {
     mockUseOverview.mockReturnValue({ overview: OVERVIEW, meta: STALE_META, loading: false, error: null });
     render(<LiveOverview />);
@@ -150,7 +166,7 @@ describe('LiveOverview meta banner', () => {
 
     const errorNodes = screen.getAllByTestId('overview-partial-errors')[0];
     expect(errorNodes).toBeInTheDocument();
-    for (const err of STALE_META.partial_errors) {
+    for (const err of STALE_META.partial_errors ?? []) {
       expect(errorNodes).toHaveTextContent('Temporarily unavailable: ' + err);
     }
   });

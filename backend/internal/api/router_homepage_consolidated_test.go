@@ -104,6 +104,30 @@ func getConsolidatedActivity(t *testing.T, baseURL string, offset, limit int) (h
 
 // --- RED tests: these will fail until /v1/overview and /v1/overview/activity exist ---
 
+// TestOverviewConsolidated_PartialErrorsIsAnEmptyArrayNotNull pins the wire format on the
+// HEALTHY path. `var partialErrors []string` stays nil when every subsystem reads fine, and Go
+// marshals a nil slice to `null`, which crashed the homepage
+// (live-overview.tsx: meta.partial_errors.length on null). It is asserted on the RAW BYTES on
+// purpose: decoding into []string turns null and [] into the same empty slice, which is exactly
+// how this escaped every existing test.
+func TestOverviewConsolidated_PartialErrorsIsAnEmptyArrayNotNull(t *testing.T) {
+	ts, _, cleanup := setupRoomTestServer(t)
+	defer cleanup()
+
+	resp, err := http.Get(ts.URL + "/v1/overview")
+	require.NoError(t, err)
+	defer resp.Body.Close() //nolint:errcheck
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	raw, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	require.NotContains(t, string(raw), `"partial_errors":null`,
+		"a healthy read must not send partial_errors as null: the client dereferences .length on it")
+	require.Contains(t, string(raw), `"partial_errors":[]`,
+		"a healthy read must send an empty array")
+}
+
 func TestOverviewConsolidated_EnvelopeShape(t *testing.T) {
 	t.Setenv("HOMEPAGE_PREVIEW_ROOM_SLUGS", hpoSlug("env"))
 	ts, pool, cleanup := setupRoomTestServer(t)

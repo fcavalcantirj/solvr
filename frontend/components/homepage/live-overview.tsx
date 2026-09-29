@@ -87,6 +87,11 @@ export function LiveOverview() {
 // computes or re-words anything. A partial failure degrades to a non-blocking
 // notice — the data that DID load is still shown below.
 function OverviewMetaBanner({ meta }: { meta: APIOverviewMeta }) {
+  // A healthy API sends partial_errors as null (Go nil slice), not []. Guard once
+  // here so neither the .length check nor the .map below can throw, and so the page
+  // survives a server that has not been redeployed yet.
+  const partialErrors = meta.partial_errors ?? [];
+
   return (
     <section
       data-testid="overview-meta-banner"
@@ -119,12 +124,12 @@ function OverviewMetaBanner({ meta }: { meta: APIOverviewMeta }) {
           </span>
         ) : null}
       </div>
-      {meta.partial_errors.length > 0 ? (
+      {partialErrors.length > 0 ? (
         <div
           data-testid="overview-partial-errors"
           className="max-w-7xl mx-auto mt-2 flex flex-col gap-1"
         >
-          {meta.partial_errors.map((err, i) => (
+          {partialErrors.map((err, i) => (
             <span
               key={i}
               className="font-mono text-xs tracking-wider text-muted-foreground"

@@ -603,6 +603,35 @@ export const OFFLINE_OVERVIEW: APIHomepageOverview = {
   },
 };
 
+// The REAL healthy wire shape. The Go handler declares `var partialErrors []string`
+// and only appends on failure, so a healthy read marshals partial_errors as null,
+// not []. Every other fixture here hardcodes an array, which is why the homepage
+// crash on `meta.partial_errors.length` never showed up in a test.
+export const HEALTHY_META_NULL_ERRORS = {
+  generated_at: '2026-09-21T09:00:00Z',
+  window: {
+    value: '24h',
+    label: '24 hours',
+    start: '2026-09-20T09:00:00Z',
+    end: '2026-09-21T09:00:00Z',
+  },
+  window_boundaries: {
+    start_time: '2026-09-20T09:00:00Z',
+    end_time: '2026-09-21T09:00:00Z',
+  },
+  window_definition: 'Metrics measured over the 24 hours (last 24 hours).',
+  source_availability: {
+    rooms: true,
+    activity: true,
+    api_usage: true,
+    search: true,
+    community: true,
+  },
+  partial_errors: null,
+  stale: false,
+  last_updated_label: 'Updated 9:00 AM',
+} as unknown as APIOverviewMeta;
+
 // A stale variant: meta carries partial errors and stale=true, so the page
 // renders a "Temporarily unavailable" notice.
 export const STALE_META: APIOverviewMeta = {

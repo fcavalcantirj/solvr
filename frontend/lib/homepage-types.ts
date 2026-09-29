@@ -394,7 +394,9 @@ export interface APIOverviewMeta {
   window_boundaries: APIOverviewMetaBoundaries;
   window_definition: string;
   source_availability: Record<string, boolean>;
-  partial_errors: string[];
+  // Nullable on the wire: a Go nil slice marshals to null, which is what a healthy
+  // Solvr sends. Always read it through a ?? [] guard.
+  partial_errors: string[] | null;
   // True when any subsystem degraded: the snapshot retained prior values rather
   // than serving a fresh read. The page must label this so a quiet period or
   // failed refresh is never mistaken for "nothing happened".

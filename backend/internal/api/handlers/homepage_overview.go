@@ -485,7 +485,10 @@ type OverviewResponse struct {
 // recording which sources succeeded and which partially failed. The returned
 // partialErrors slice names every subsystem that could not be read.
 func (h *HomepageOverviewHandler) buildOverview(ctx Context, window db.RoomStatsWindow) (HomepageOverview, []string) {
-	var partialErrors []string
+	// Initialised, never nil: a nil slice marshals to `null`, and the client reads
+	// meta.partial_errors.length off it. An empty list is also the honest answer —
+	// nothing failed. len() semantics below (Stale, buildStaleLabel) are unchanged.
+	partialErrors := []string{}
 
 	pulse, err := h.homeRepo.GetRoomPulse(ctx, window)
 	if err != nil {

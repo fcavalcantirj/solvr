@@ -273,12 +273,17 @@ func routeProbeRequests(fx routeProbeFixture) []routeProbeRequest {
 	return reqs
 }
 
-// serveRouteProbe runs one request with a deadline (stream routes hold the connection open
-// until their context ends) and returns its status and the database errors traced meanwhile.
+// serveRouteProbe runs one request with a deadline and returns its status and the database
+// errors traced meanwhile. Stream routes hold the connection open until their context ends,
+// so they get a short one; every other route gets the write probe's per-call 10s.
 func serveRouteProbe(t *testing.T, router http.Handler, tracer *dbErrorTracer, fx routeProbeFixture, r routeProbeRequest) routeProbeResult {
 	t.Helper()
 	tracer.take()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	deadline := 10 * time.Second
+	if strings.HasSuffix(r.route, "/stream") {
+		deadline = 500 * time.Millisecond
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
 	req := httptest.NewRequest(http.MethodGet, r.path, nil).WithContext(ctx)
 	switch r.caller {
@@ -298,11 +303,47 @@ func serveRouteProbe(t *testing.T, router http.Handler, tracer *dbErrorTracer, f
 	}()
 	select {
 	case <-done:
-	case <-time.After(15 * time.Second):
-		t.Fatalf("%s as %s did not return within 15s of its 500ms deadline", r.path, r.caller)
+	case <-time.After(deadline + 15*time.Second):
+		t.Fatalf("%s as %s did not return within 15s of its %s deadline", r.path, r.caller, deadline)
 	}
 	_, errs := tracer.take()
 	return routeProbeResult{status: rec.Code, errs: errs}
+}
+
+// The short deadline exists for stream routes, which hold the connection open until their
+// context ends. An ordinary GET that is merely slow (a loaded machine) must not be cut off
+// by it and answer 500 after the drop: the judge would report a hidden legacy dependency
+// for a query that reads no legacy table (2026-09-29: /admin/search-analytics/summary,
+// 509ms, "200 -> 500, missing []"). Needs no database.
+func TestServeRouteProbe_OnlyStreamRoutesGetTheShortDeadline(t *testing.T) {
+	router := http.NewServeMux()
+	router.HandleFunc("/v1/slow", func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(700 * time.Millisecond):
+			w.WriteHeader(http.StatusOK)
+		case <-r.Context().Done():
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	})
+	router.HandleFunc("/v1/rooms/probe/stream", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		<-r.Context().Done()
+	})
+	tracer := &dbErrorTracer{}
+
+	slow := serveRouteProbe(t, router, tracer, routeProbeFixture{},
+		routeProbeRequest{route: "GET /v1/slow", family: "probe", path: "/v1/slow", caller: "anonymous"})
+	if slow.status != http.StatusOK {
+		t.Errorf("a GET that takes 700ms answered %d: the stream deadline cut it off", slow.status)
+	}
+
+	start := time.Now()
+	stream := serveRouteProbe(t, router, tracer, routeProbeFixture{},
+		routeProbeRequest{route: "GET /v1/rooms/{slug}/stream", family: "probe", path: "/v1/rooms/probe/stream", caller: "anonymous"})
+	if elapsed := time.Since(start); stream.status != http.StatusOK || elapsed > 2*time.Second {
+		t.Errorf("stream route: status %d after %s, want 200 once its short deadline ends", stream.status, elapsed)
+	}
 }
 
 func TestLegacyDroppedDatabase_GetRoutesExposeOnlyLegacyRouteFamilies(t *testing.T) {

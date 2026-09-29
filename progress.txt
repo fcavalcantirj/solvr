@@ -10575,3 +10575,124 @@ REMAINING (next slices, in order):
     question [UNVERIFIED reading of step 6].
 
 UAT (for when idx 76 closes, not now): as slice 29.
+
+2026-09-29 14:50 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 33 of N: verify and journal the host-auto-committed legacy post type scanner (939f4b7f,
+never journaled), and fix a false positive its verification exposed in the GET-route probe
+(slice 30): a 500ms deadline meant for stream routes cut off an ordinary slow GET.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues. Tree clean at start [REAL, git status --porcelain].
+
+WHY THIS SLICE [REAL, git show --stat]: HEAD 939f4b7f (14:21, message = slice 32's journal
+  header, no journal entry of its own) is a host auto-commit of idx 76 work: A backend/internal/
+  db/legacy_post_type_refs.go (130), A legacy_post_type_refs_test.go (83), M legacy_dependencies.go
+  (+1 -25: its file walk moved into walkGoSources), M legacy_dependency_registry.go (+29: 24
+  typeref: entries). Precedent: slices 25/27 verified host auto-commits. b9d7644c (13:10, also a
+  journal-header message) is room-activity content (migration 000112 room_activity_projection:
+  trigger-maintained rooms.message_count/last_active_at + room_activity_drift()/
+  rebuild_room_activity()) — that is idx 77 step 2/3 work, NOT verified here (one task only).
+
+WHAT 939f4b7f DOES [REAL, read]: ScanLegacyPostTypeReferences(root) parses every non-test Go
+  file (go/parser, comments not parsed) and reports typeref:<file> for a PostTypeProblem/
+  Question/Idea identifier or a string literal exactly equal to problem/question/idea; a file
+  whose text also matches the legacy SQL regexes is Owner=code:<file>. It catches the types the
+  SQL scan cannot see (bound parameters, Go-side comparisons, API schema enums). The 24 registry
+  entries: 3 keep (the scanner's own table; models/response.go ResponseTypeQuestion = the idea-
+  response kind; handlers/homepage_activity.go:123 "question" = a room message action label —
+  both read this session), 21 pending (refactor/retire, each naming the task that owns it:
+  idx 52 legacy routes, idx 68 posts_type_check narrowing, idx 73 step 3 per-type statistics,
+  idx 78 MCP/OpenAPI enums, idx 83 legacy page links).
+  Scan output on the real tree [TEST, throwaway spike test created and deleted,
+  /tmp/solvr_idx76_s33_spike.log]: 28 files = 24 with their own entry + 4 owned by code:
+  entries (db/briefing.go, ideas.go, problems.go, questions.go).
+  Two "no production caller" notes checked [REAL, grep non-test .go]: NewCooldownService/
+  DefaultCooldownConfig/NewInMemoryCooldownStore and NewCrystallizationService appear only at
+  their definitions.
+
+VERIFICATION OF 939f4b7f [DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test,
+  local docker solvr-postgres, schema_migrations 112]:
+  [TEST] `go test ./internal/db/ -run Legacy -count=1 -v` once -> /tmp/solvr_idx76_s33_legacy.log:
+    ok, 48 top-level PASS, 0 FAIL, 0 SKIP, incl. the 3 new typeref tests. Every test that calls
+    ScanLegacySourceDependencies/ScanLegacyPostTypeReferences in internal/db (20, mapped by
+    grep to their Test funcs) is among the PASS lines. Gate log: "56 legacy cleanup blockers"
+    = slice 32's 35 + the 21 pending typeref entries (the gate adds every registry key).
+  [TEST] outside internal/db the scanner is called by cmd/backfill-embeddings and internal/jobs
+    tests: `go test ./cmd/backfill-embeddings/ ./internal/jobs/ -count=1 -v` once ->
+    /tmp/solvr_idx76_s33_jobs.log: backfill ok; jobs FAIL, 1 test (below), the rest PASS.
+  MUTATIONS [TEST], sources restored from /tmp/solvr_idx76_s33_{refs,registry}.go.bak and
+    cmp-verified after each (logs /tmp/solvr_idx76_s33_mut{1..4}.log):
+    mut1 PostType identifiers ignored -> FindsConstantsAndLiterals FAIL (:30,:42,:45,:46) and
+      CoversThePostTypeReferences FAIL (:74,:76);
+    mut2 string literals ignored -> both FAIL (:30,:43,:44; :76);
+    mut3 Owner never set -> both FAIL; real tree "discovered legacy dependency without a
+      disposition: typeref:internal/db/briefing.go (problem,question at lines 95,119)";
+    mut4 registry entry typeref:internal/services/cooldown.go deleted -> CoversThePostTypeReferences
+      FAIL "... without a disposition: typeref:internal/services/cooldown.go (idea,problem,
+      question at lines 16,17,18)".
+  go vet ./internal/db/ clean; gofmt -l clean on the 3 files; go build ./... ok.
+
+PROBE FALSE POSITIVE FOUND AND FIXED:
+  [TEST, /tmp/solvr_idx76_s33_jobs.log] TestLegacyDroppedDatabase_GetRoutesExposeOnlyLegacyRoute
+    Families FAIL: "hidden legacy dependencies ... /admin/search-analytics/summary (administration)
+    as anonymous: 200 -> 500, missing []", with no traced database error under it.
+  [MEASURED, same log] that request ran 509ms ("error":"failed to get search analytics summary")
+    and serveRouteProbe gave EVERY GET a 500ms deadline (legacy_dropped_routes_test.go:281, meant
+    for stream routes); the next two identical calls answered 200 in 379ms and 19ms; the handler
+    (db/search_analytics.go GetSummary) reads only search_queries. Neighbouring post-drop calls
+    ran 3-30x slower than in slice 31's log (/admin/search-analytics/trending 83/90ms vs ~3ms).
+    Machine load average 14.5-17 during the runs [REAL, uptime]; slowness cause beyond that
+    [INFERRED: load; not investigated]. Not a legacy dependency; not caused by 939f4b7f (no
+    handler or probe file in it).
+  FIX (test code only) M backend/internal/jobs/legacy_dropped_routes_test.go (401 -> 442):
+    serveRouteProbe gives routes ending in "/stream" (the repo's existing stream idiom, e.g.
+    router_malformed_body_contract_test.go:45; the only SSE handler is mounted at /stream
+    [REAL, grep]) the 500ms deadline, every other GET the write probe's per-call 10s; the hang
+    guard is now deadline+15s. The judge is unchanged: a legacy-table error comes back at once,
+    so the longer deadline removes only timeouts, not detection.
+    New TestServeRouteProbe_OnlyStreamRoutesGetTheShortDeadline (no DB, never skips): a GET that
+    takes 700ms must answer 200; a stream route must end with 200 within 2s.
+  RED [TEST] /tmp/solvr_idx76_s33_red.log: ":333: a GET that takes 700ms answered 500: the stream
+    deadline cut it off".
+  GREEN [TEST] `go test ./internal/jobs/ -count=1 -v` once -> /tmp/solvr_idx76_s33_green.log: ok,
+    59 PASS (= the 59 tests `go test -list` names), 0 FAIL, 0 SKIP, load average ~17; all four
+    TestLegacyDroppedDatabase_* probes PASS. In that run /v1/homepage/overview took 546ms and
+    answered 200 [MEASURED] — the old deadline would have made it a second false positive; the
+    6 stream requests still ended at 492-512ms.
+  MUTATION [TEST] /tmp/solvr_idx76_s33_mut5.log: streams also given 10s -> ":345: stream route:
+    status 200 after 10.001299709s"; restored, cmp-verified.
+  go vet ./internal/jobs/ clean; gofmt -l on internal/jobs lists translation.go and
+    translation_test.go only (untouched, pre-existing).
+  check-file-size.sh -> /tmp/solvr_idx76_s33_filesize2.log "Found 34 file(s) exceeding 800
+    lines", same as slice 32. 0 solvr_scratch*/solvr_legacy_* databases left [REAL, psql].
+  NOT RUN: full backend `go test ./...` (only one internal/jobs test file changed; the jobs and
+    db-Legacy runs above cover every caller of the changed code); frontend (untouched);
+    golangci-lint (config/version mismatch recorded in slice 31).
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain before this append: " M backend/internal/
+  jobs/legacy_dropped_routes_test.go"; git diff --stat: 1 file, +46 -5]: that test file only.
+  No production file, registry entry, migration, handler or frontend changed. No test deleted,
+  skipped or weakened (the probe's judge and coverage asserts are unchanged).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW: none — test only.
+
+git status at journal time [REAL]: M backend/internal/jobs/legacy_dropped_routes_test.go,
+  M progress.txt (this entry); spec.json unchanged, passes stays false.
+
+REMAINING / ASSESSMENT FOR THE NEXT ITERATION [UNVERIFIED reading; the evidence is slice 32's
+  REMAINING list and the 56 blockers above]:
+  Every open idx 76 item is now owned elsewhere: the 6 tables, 4 checks and the code: retirements
+  go with the table drop (idx 68/93, GATE DECISION of slice 32); the legacy route repositories
+  and legacy typeref files retire with idx 52's routes; the post type narrowing belongs to idx 68;
+  per-type statistics to idx 73 step 3; MCP/OpenAPI enums to idx 78; legacy page links to idx 83.
+  No buildable idx 76 slice is left that is not one of those tasks' work. Recommendation: treat
+  idx 76 as gated like 52/53/67/68/73/74 and take idx 77, starting by verifying and journaling
+  the host-auto-committed b9d7644c (000112 room activity projection).
+  owner: claim-referral mount (slice 31); staged vs all-at-once cleanup (slice 32); the two
+    24h-window search tests on shared solvr_test data (slice 32); whether idx 76 may close with
+    its remaining dispositions owned by idx 52/68/73/78/83/93.
+
+UAT (for when idx 76 closes, not now): as slice 29.

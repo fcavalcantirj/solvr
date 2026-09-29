@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// ResurrectionIdea is a lightweight idea for the resurrection bundle.
+// ResurrectionIdea is a lightweight post of any type for the resurrection bundle.
 type ResurrectionIdea struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
@@ -13,7 +13,8 @@ type ResurrectionIdea struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// ResurrectionApproach is a lightweight approach for the resurrection bundle.
+// ResurrectionApproach is a lightweight approach for the resurrection bundle: a reply migrated
+// from an approach (ID is the reply id, ProblemID its post id).
 type ResurrectionApproach struct {
 	ID        string    `json:"id"`
 	ProblemID string    `json:"problem_id"`
@@ -23,7 +24,7 @@ type ResurrectionApproach struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// ResurrectionProblem is a lightweight problem for the resurrection bundle.
+// ResurrectionProblem is a lightweight open post of any type for the resurrection bundle.
 type ResurrectionProblem struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`

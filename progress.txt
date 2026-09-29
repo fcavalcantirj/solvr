@@ -9329,3 +9329,129 @@ REMAINING (next slices, in order):
 
 UAT (for when idx 76 closes, not now): as slice 22, plus: after the cutover deploy the owner runs
   a search with content_types=answers and opens one hit through /v1/replies/{id}.
+
+2026-09-29 00:15 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 24 of N: step 3, the resurrection bundle (code:internal/db/resurrection.go) reads posts
+and replies. HEAD at start = e445e995 (slice 23 journal); tree clean at start [REAL].
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues; slice 23's REMAINING list starts with resurrection.
+
+WHAT CHANGED [REAL, git status --porcelain + git diff --stat: 3 modified, 1 new]:
+  M backend/internal/db/resurrection.go (126 -> 136): the three knowledge queries of GET
+    /v1/agents/{id}/resurrection-bundle (router.go:432, unchanged wiring) no longer read the
+    approaches table or compare a legacy post type:
+    - GetAgentIdeas: `type = 'idea'` dropped -> the agent's live public posts of EVERY type,
+      (upvotes - downvotes) DESC, created_at DESC, limit 50 (as before). Status unfiltered (as
+      before).
+    - GetAgentOpenProblems: `type = 'problem'` dropped -> live public posts of every type with
+      status IN ('draft','open','in_progress','active') (the union of each post type's
+      unresolved statuses: problem draft/open/in_progress, question draft/open, idea draft/
+      open/active, post draft/open), created_at DESC, id.
+    - GetAgentApproaches: FROM replies r WHERE replyApproachBucket (COALESCE(r.legacy_type,'')
+      = 'approach', posts_reply_counts.go) AND agent author AND r.deleted_at IS NULL: id = REPLY
+      id, problem_id = r.post_id, angle/method/status = provenance->>'angle'/'method'/'status'
+      (MigrateContributions writes those keys, contribution_migration.go:239-243; a NULL method
+      -> "" as the legacy COALESCE did), created_at DESC, r.id, limit 50.
+    Kept exactly as legacy: visibility='public' + deleted_at IS NULL on posts; NO post join on
+    approaches (legacy had none either -> see observations).
+  M backend/internal/models/resurrection.go: doc comments only (ResurrectionIdea/Problem = a
+    post of any type; ResurrectionApproach = a reply migrated from an approach). No field change.
+  M backend/internal/db/legacy_dependency_registry.go: pending(refactor) entry
+    "code:internal/db/resurrection.go" removed (the file names no legacy table or type now).
+  A backend/internal/db/resurrection_canonical_test.go (186):
+    - TestLegacyResurrection_ServedCanonically: the source scan finds no resurrection.go; no
+      disposition for it.
+    - TestCanonicalResurrection_ServesEveryPostTypeAndMigratedApproachesAcrossTheCutover
+      (scratch DB via newMigratedScratchDatabase): agent a has 11 posts (idea active 5/1,
+      problem solved 3/0, problem open 2/0, problem in_progress 1/0, question open 1/0, post
+      open, question draft, idea evolved, question answered 0/1, a deleted idea, a family
+      problem) + another agent's post; approaches of a: succeeded w/ method (t+1h), failed w/
+      NULL method (t+2h), a deleted one, and one of agent b; an answer of a. Asserts ideas =
+      9 ids in net-votes/newest order + limit 2; problems = the 6 open ones newest first;
+      ideas[0] fields (status, votes, tags, created_at). Before the cutover approaches = [] (no
+      reply yet); after MigrateContributions + RemapLegacyRelations approaches = [reply(ap2)
+      {pSolved, "the second angle", "", failed}, reply(ap1){pProblem, ..., "the first method",
+      succeeded}] with created_at = the approach's, limit 1 = [reply(ap2)]; identical after
+      dropLegacy (all 6 legacy tables dropped); native top-level + child replies of a added
+      after the drop change nothing (native replies are never approaches).
+  Comment wording: "replies migrated from approaches" in prose matched the scan's
+    legacySQLTableRe ("FROM approaches", case-insensitive) — reworded to "replies that were
+    approaches before the cutover". Next iterations: avoid "from <legacy table>" in comments.
+
+EXISTING TESTS CHANGED: none. No test deleted, skipped, renamed or edited [REAL, git diff --stat:
+  the only _test.go in the diff is the new file]. handlers/resurrection_test.go (mock repos) is
+  untouched and PASSes in the full run.
+
+VERIFICATION [solvr_test = postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres); the new scenario test creates/drops its own scratch DB on that server]:
+  go build ./... clean; go vet ./internal/db/ clean; gofmt -l clean on the 4 changed files.
+  RED [TEST] /tmp/solvr_idx76_s24_red.log, new test file against the unchanged code: guard FAIL
+    :19 (resurrection.go scanned) and :22 (entry exists); scenario FAIL :142-:144 (ideas/
+    problems only the idea/problem type), :155 (before the cutover the legacy approaches are
+    served), after the drop "ERROR: relation "approaches" does not exist (SQLSTATE 42P01)".
+  GREEN [TEST] /tmp/solvr_idx76_s24_green.log: both new tests + the TestLegacyDependency*/
+    TestLegacyCleanup* registry tests PASS.
+  MUTATIONS [TEST] on the scenario, resurrection.go restored from a backup after each (cmp
+    clean): mut1 approach bucket -> TRUE FAIL :172/:173 (the answer reply and native replies
+    become approaches); mut2 drop r.deleted_at IS NULL FAIL :172/:173; mut3 drop 'active' from
+    the open set FAIL :144 (the active idea); mut4 drop visibility='public' on ideas FAIL :142/
+    :143 (the family post); mut5 drop r.author_id = $1 FAIL :128/:155. Logs
+    /tmp/solvr_idx76_s24_mut*.log.
+  FULL BACKEND [TEST], once, main tree: `go test -p 1 -count=1 -v -timeout 40m ./...` ->
+    /tmp/solvr_idx76_s24_full.log: 4688 PASS, 76 FAIL, 12 SKIP (slice 23: 4688/74/12, same
+    counting). Packages FAIL: internal/api, internal/api/handlers, internal/db (same as slice
+    23). Top-level FAIL names vs slice 23 (comm): 1 gone (TestAgentClaim_RetriesAndRacesLink
+    TheAgentOnce now PASSes), 3 new; SKIP names identical. The 3 new ones do not reach
+    resurrection.go (only ResurrectionHandler.GetBundle calls it) [REAL, grep], and:
+      - TestRoomExpiry_ExpiredRoomLeavesEveryListingBeforeTheReaper (:63 "does not contain
+        test-hpo-exp-..." — homepage activity limit 6 was filled by rooms other tests of the
+        same run had just written) and TestSaveAsPost_IdempotencyKeyNamesOneOutcome (:73
+        expected 1 actual 2 posts): both PASS run alone on this tree [TEST,
+        /tmp/solvr_idx76_s24_newfails_iso.log]. Run-order/data-state, not this change.
+      - TestSearchRepository_Search_PerformanceTarget (one of 8 searches > 100ms, a different
+        one each run): TIMING FLAKE [TEST]: prebuilt test binaries of HEAD (e445e995, worktree)
+        and of this tree, interleaved 3x each: head FAIL/PASS/FAIL, tree FAIL/FAIL/FAIL; load
+        average 12.6-15 at the time [REAL, uptime]. search code is not in this diff [REAL].
+    Both dropped-table probes PASS (TestLegacyDroppedDatabase_StaticQueries... 624 extracted,
+    554 prepared, 70 did not, same as slice 23; ..._ScheduledJobs... PASS);
+    TestRetiredLegacyLifecycles_ PASS; handlers TestResurrectionBundle_* (7) PASS.
+  check-file-size.sh: 35 violations, same count as slices 1-23; resurrection.go 136, new test
+    186.
+  My runs left 0 solvr_scratch*/solvr_legacy_* databases [REAL, psql]; worktree /tmp/solvr_wt_s24
+    removed. NOT RUN: frontend (untouched); golangci-lint.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (GET /v1/agents/{id}/resurrection-bundle; response shape
+  unchanged) [REAL from code + tests above unless stated]:
+  - knowledge.ideas = the agent's top 50 live public posts of EVERY type by net votes (was: idea
+    posts only). knowledge.problems = its live public posts of every type still open (draft/
+    open/in_progress/active) (was: problem posts in draft/open/in_progress). An open post can
+    appear in both lists. The frontend's IDEAS/PROBLEMS cards (agent-profile-client.tsx:350)
+    now count posts of every type [INFERRED, not rendered].
+  - knowledge.approaches = the agent's replies migrated from approaches: id is the REPLY id,
+    problem_id the post id. Native replies never appear, so an agent that only writes replies
+    after the cutover has an empty approaches list [TEST, last check()].
+  - DEPLOY ORDER as slices 14-23: deployed BEFORE the cutover, approaches is [] until
+    MigrateContributions runs; deploy with or after the cutover.
+  - Pre-existing, unchanged: approaches are not filtered by their post's visibility or deletion
+    (the legacy query did not join posts either), so a public bundle lists the angle/method of
+    approaches on family/deleted posts [INFERRED from the SQL; not tested]. Not changed here
+    (unasked behavior change) — owner decision.
+  - OpenAPI text still says "Top 50 ideas by votes" / "Open problems only"
+    (openapi_schemas.go:848-850) — not edited in this slice; for idx 78 or a later slice.
+
+git status at journal time [REAL]: M legacy_dependency_registry.go, M db/resurrection.go,
+  M models/resurrection.go, ?? db/resurrection_canonical_test.go, M progress.txt (this entry);
+  spec.json unchanged, passes stays false.
+
+REMAINING (next slices, in order):
+  step 3/4: sitemap, backfill-embeddings, the ideas sidebar in stats.go and the other pending
+    code: entries (homepage_overview.go, agents.go, users.go: unwired legacy methods). Both
+    dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): as slice 23, plus: after the cutover deploy the owner
+  opens one agent's resurrection bundle and checks approaches carry reply ids.

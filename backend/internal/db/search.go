@@ -38,7 +38,8 @@ func (r *SearchRepository) SetEmbeddingService(svc QueryEmbedder) {
 	r.embeddingService = svc
 }
 
-// Search performs a search across posts, answers, and approaches.
+// Search performs a search across posts and, on request, their replies: content_types
+// "answers" and "approaches" search the replies the post counts put in those buckets.
 // When an embedding service is configured, uses hybrid RRF search
 // (combining full-text keyword matching with vector semantic similarity).
 // Falls back to full-text only search if embedding service is nil or fails.
@@ -89,22 +90,16 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 		allResults = append(allResults, posts...)
 	}
 
-	// Search answers if explicitly requested
-	if containsContentType(contentTypes, "answers") {
-		answers, err := r.searchAnswers(ctx, tsquery, opts)
+	// Search reply buckets if explicitly requested (full text only)
+	for _, src := range []replySearchSource{answerReplySearch, approachReplySearch} {
+		if !containsContentType(contentTypes, src.contentType) {
+			continue
+		}
+		replies, err := r.searchReplies(ctx, src, tsquery, opts)
 		if err != nil {
 			return nil, 0, "", nil, err
 		}
-		allResults = append(allResults, answers...)
-	}
-
-	// Search approaches if explicitly requested
-	if containsContentType(contentTypes, "approaches") {
-		approaches, err := r.searchApproaches(ctx, tsquery, opts)
-		if err != nil {
-			return nil, 0, "", nil, err
-		}
-		allResults = append(allResults, approaches...)
+		allResults = append(allResults, replies...)
 	}
 
 	// Sort merged results by score descending
@@ -203,16 +198,14 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 			) as author_name,
 			ts_rank(to_tsvector('english', p.title || ' ' || p.description), to_tsquery('english', $1)) as score,
 			(p.upvotes - p.downvotes) as vote_score,
-			COALESCE((SELECT COUNT(*) FROM answers WHERE question_id = p.id AND deleted_at IS NULL), 0) as answers_count,
-			COALESCE((SELECT COUNT(*) FROM approaches WHERE problem_id = p.id AND deleted_at IS NULL), 0) as approaches_count,
-			COALESCE((SELECT COUNT(*) FROM comments WHERE target_id = p.id AND target_type = 'post' AND deleted_at IS NULL), 0) as comments_count,
+			` + postReplyCountColumns + `,
 			COALESCE(p.view_count, 0) as view_count,
 			p.created_at,
 			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at,
 			NULL::float8 as similarity
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
-		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
+		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id` + postReplyCountsJoin + `
 		WHERE p.deleted_at IS NULL
 		AND p.status NOT IN ('pending_review', 'rejected', 'draft')
 		AND to_tsvector('english', p.title || ' ' || p.description) @@ to_tsquery('english', $1)
@@ -296,9 +289,7 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 			) as author_name,
 			hs.rrf_score as score,
 			(p.upvotes - p.downvotes) as vote_score,
-			COALESCE((SELECT COUNT(*) FROM answers WHERE question_id = p.id AND deleted_at IS NULL), 0) as answers_count,
-			COALESCE((SELECT COUNT(*) FROM approaches WHERE problem_id = p.id AND deleted_at IS NULL), 0) as approaches_count,
-			COALESCE((SELECT COUNT(*) FROM comments WHERE target_id = p.id AND target_type = 'post' AND deleted_at IS NULL), 0) as comments_count,
+			` + postReplyCountColumns + `,
 			COALESCE(p.view_count, 0) as view_count,
 			p.created_at,
 			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at,
@@ -309,7 +300,7 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 		FROM hybrid_search($1, $2, $3, 2.0, 1.0, 60, $5::uuid) hs
 		JOIN posts p ON p.id = hs.post_id
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
-		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id
+		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id` + postReplyCountsJoin + `
 		WHERE p.status NOT IN ('pending_review', 'rejected', 'draft')
 	`
 
@@ -343,150 +334,6 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 	// Tag all results with source "post"
 	for i := range results {
 		results[i].Source = "post"
-	}
-
-	return results, nil
-}
-
-// searchAnswers searches answers using full-text search on content.
-// TODO: Wire up hybrid_search_answers() SQL function (migration 000045) for semantic search.
-// Currently only full-text; the SQL function exists but is not called from Go code.
-func (r *SearchRepository) searchAnswers(ctx context.Context, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
-	args := []any{tsquery}
-	argNum := 2
-	// BART-152: family-scoped visibility (public, or the caller's own family) on the
-	// parent question — mirrors post search so an owner can find their own private answers.
-	visibility := searchVisibilityClause("p", opts.ViewerHuman, &args, &argNum)
-	query := `
-		SELECT
-			a.id::text,
-			'answer' as type,
-			ts_headline('english', a.content, to_tsquery('english', $1),
-				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=30, MaxFragments=1') as title,
-			a.content as description,
-			ts_headline('english', a.content, to_tsquery('english', $1),
-				'StartSel=<mark>, StopSel=</mark>, MaxWords=80, MinWords=40, MaxFragments=1') as snippet,
-			COALESCE(p.tags, ARRAY[]::text[]) as tags,
-			CASE WHEN a.is_accepted THEN 'accepted' ELSE '' END as status,
-			a.author_type,
-			a.author_id,
-			COALESCE(
-				CASE WHEN a.author_type = 'human' THEN u.display_name
-					 ELSE ag.display_name
-				END,
-				a.author_id
-			) as author_name,
-			ts_rank(to_tsvector('english', a.content), to_tsquery('english', $1)) as score,
-			(a.upvotes - a.downvotes) as vote_score,
-			0 as answers_count,
-			0 as approaches_count,
-			0 as comments_count,
-			0 as view_count,
-			a.created_at,
-			NULL::timestamptz as solved_at,
-			NULL::float8 as similarity
-		FROM answers a
-		LEFT JOIN posts p ON a.question_id = p.id
-		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
-		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
-		WHERE a.deleted_at IS NULL
-		AND ` + visibility + `
-		AND to_tsvector('english', a.content) @@ to_tsquery('english', $1)
-		ORDER BY score DESC
-	`
-
-	rows, err := r.pool.Query(ctx, query, args...)
-	if err != nil {
-		LogQueryError(ctx, "Search.Answers", "answers", err)
-		return nil, fmt.Errorf("search answers query failed: %w", err)
-	}
-	defer rows.Close()
-
-	results, err := scanSearchResults(rows)
-	if err != nil {
-		return nil, err
-	}
-
-	// Tag all results with source "answer"
-	for i := range results {
-		results[i].Source = "answer"
-	}
-
-	return results, nil
-}
-
-// searchApproaches searches approaches using full-text search on angle, method, outcome, solution.
-// TODO: Wire up hybrid_search_approaches() SQL function (migration 000045) for semantic search.
-// Currently only full-text; the SQL function exists but is not called from Go code.
-func (r *SearchRepository) searchApproaches(ctx context.Context, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
-	args := []any{tsquery}
-	argNum := 2
-	// BART-152: family-scoped visibility on the parent problem — mirrors post search.
-	visibility := searchVisibilityClause("p", opts.ViewerHuman, &args, &argNum)
-	query := `
-		SELECT
-			a.id::text,
-			'approach' as type,
-			ts_headline('english',
-				COALESCE(a.angle, '') || ' ' || COALESCE(a.method, ''),
-				to_tsquery('english', $1),
-				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20, MaxFragments=1') as title,
-			COALESCE(a.angle, '') || ' ' || COALESCE(a.method, '') as description,
-			ts_headline('english',
-				COALESCE(a.angle, '') || ' ' || COALESCE(a.method, '') || ' ' ||
-				COALESCE(a.outcome, '') || ' ' || COALESCE(a.solution, ''),
-				to_tsquery('english', $1),
-				'StartSel=<mark>, StopSel=</mark>, MaxWords=80, MinWords=40, MaxFragments=1') as snippet,
-			COALESCE(p.tags, ARRAY[]::text[]) as tags,
-			a.status::text,
-			a.author_type,
-			a.author_id,
-			COALESCE(
-				CASE WHEN a.author_type = 'human' THEN u.display_name
-					 ELSE ag.display_name
-				END,
-				a.author_id
-			) as author_name,
-			ts_rank(to_tsvector('english',
-				COALESCE(a.angle, '') || ' ' || COALESCE(a.method, '') || ' ' ||
-				COALESCE(a.outcome, '') || ' ' || COALESCE(a.solution, '')),
-				to_tsquery('english', $1)) as score,
-			0 as vote_score,
-			0 as answers_count,
-			0 as approaches_count,
-			0 as comments_count,
-			0 as view_count,
-			a.created_at,
-			NULL::timestamptz as solved_at,
-			NULL::float8 as similarity
-		FROM approaches a
-		LEFT JOIN posts p ON a.problem_id = p.id
-		LEFT JOIN users u ON a.author_type = 'human' AND a.author_id = u.id::text
-		LEFT JOIN agents ag ON a.author_type = 'agent' AND a.author_id = ag.id
-		WHERE a.deleted_at IS NULL
-		AND ` + visibility + `
-		AND to_tsvector('english',
-			COALESCE(a.angle, '') || ' ' || COALESCE(a.method, '') || ' ' ||
-			COALESCE(a.outcome, '') || ' ' || COALESCE(a.solution, ''))
-			@@ to_tsquery('english', $1)
-		ORDER BY score DESC
-	`
-
-	rows, err := r.pool.Query(ctx, query, args...)
-	if err != nil {
-		LogQueryError(ctx, "Search.Approaches", "approaches", err)
-		return nil, fmt.Errorf("search approaches query failed: %w", err)
-	}
-	defer rows.Close()
-
-	results, err := scanSearchResults(rows)
-	if err != nil {
-		return nil, err
-	}
-
-	// Tag all results with source "approach"
-	for i := range results {
-		results[i].Source = "approach"
 	}
 
 	return results, nil

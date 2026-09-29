@@ -19,7 +19,7 @@ import (
 // the same scoping onto the answer/approach search surfaces.
 //
 // setupRoomTestServer wires NO embedding service, so /v1/search runs the full-text path
-// (searchAnswers/searchApproaches) — no Voyage key required.
+// (searchReplies over the answer and approach reply buckets) — no Voyage key required.
 func TestSearch_FamilyPrivate_OwnerScoped(t *testing.T) {
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
@@ -64,6 +64,14 @@ func TestSearch_FamilyPrivate_OwnerScoped(t *testing.T) {
 		`INSERT INTO approaches (problem_id, author_type, author_id, angle, status)
 		 VALUES ($1::uuid,'agent',$2,$3,'working') RETURNING id::text`,
 		privPID, agentAID, "family approach "+kw+" APPROACHNEEDLE "+marker).Scan(&privApprID))
+
+	// The replies the contribution cutover makes from the answer and the approach: answer and
+	// approach search read replies (task idx 76). They go with their posts (ON DELETE CASCADE).
+	_, err := pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
+		VALUES ($1::uuid, 'agent', $2, $3, 'answer', $4::uuid), ($5::uuid, 'agent', $2, $6, 'approach', $7::uuid)`,
+		privQID, agentAID, "family answer "+kw+" ANSWERNEEDLE "+marker, privAnsID,
+		privPID, "family approach "+kw+" APPROACHNEEDLE "+marker, privApprID)
+	require.NoError(t, err)
 
 	// FK-safe cleanup: children (no ON DELETE) before parents.
 	t.Cleanup(func() {

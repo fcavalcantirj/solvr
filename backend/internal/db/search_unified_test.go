@@ -30,6 +30,14 @@ func TestSearchUnified_PostsAndAnswers(t *testing.T) {
 	answerID := insertTestAnswer(t, pool, ctx, questionID,
 		"Use goroutines for concurrent request handling in your Golang web server. Channels are great for coordination.",
 		"human", "test-user")
+	// The reply the contribution cutover makes from the answer: answer search reads replies
+	// and returns the reply's id (task idx 76).
+	cutoverRepliesFor(t, pool, ctx, questionID)
+	var answerReplyID string
+	if err := pool.QueryRow(ctx, `SELECT id::text FROM replies WHERE legacy_type = 'answer' AND legacy_id = $1`,
+		answerID).Scan(&answerReplyID); err != nil {
+		t.Fatalf("failed to find the reply migrated from the answer: %v", err)
+	}
 
 	// Search with content_types=posts,answers — should find both
 	results, total, _, _, err := repo.Search(ctx, "golang concurrency", models.SearchOptions{
@@ -57,7 +65,7 @@ func TestSearchUnified_PostsAndAnswers(t *testing.T) {
 				t.Errorf("expected source 'post' for post result, got '%s'", r.Source)
 			}
 		}
-		if r.ID == answerID {
+		if r.ID == answerReplyID {
 			foundAnswer = true
 			if r.Source != "answer" {
 				t.Errorf("expected source 'answer' for answer result, got '%s'", r.Source)
@@ -70,7 +78,7 @@ func TestSearchUnified_PostsAndAnswers(t *testing.T) {
 	}
 
 	if !foundAnswer {
-		t.Errorf("expected to find answer %s in unified results (total: %d)", answerID, total)
+		t.Errorf("expected to find the reply %s migrated from answer %s in unified results (total: %d)", answerReplyID, answerID, total)
 	}
 	t.Logf("Found post: %v, found answer: %v, total: %d", foundPost, foundAnswer, total)
 }

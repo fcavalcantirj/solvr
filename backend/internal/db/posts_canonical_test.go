@@ -148,6 +148,10 @@ func TestPostRepository_Canonical_ReplyCount(t *testing.T) {
 		}
 	}
 
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, post.ID)
+
 	got, err := repo.FindByID(ctx, post.ID)
 	if err != nil {
 		t.Fatalf("FindByID failed: %v", err)

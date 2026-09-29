@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
@@ -123,4 +124,61 @@ func (r *ProblemsRepository) UpdateProblemStatus(ctx context.Context, problemID 
 // Update updates a problem post.
 func (r *ProblemsRepository) Update(ctx context.Context, post *models.Post) (*models.Post, error) {
 	return r.postRepo.Update(ctx, post)
+}
+
+// ListCrystallizationCandidates returns post IDs of solved problems that are
+// eligible for crystallization: type=problem, status=solved, not deleted,
+// not already crystallized, and stable for at least stabilityPeriod.
+// Results are ordered by oldest updated_at first (crystallize oldest stable problems first).
+func (r *PostRepository) ListCrystallizationCandidates(ctx context.Context, stabilityPeriod time.Duration, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := `
+		SELECT id::text
+		FROM posts
+		WHERE type = 'problem'
+		  AND status = 'solved'
+		  AND deleted_at IS NULL
+		  AND visibility = 'public' -- BART-151: never pin family-private posts to public IPFS
+		  AND crystallization_cid IS NULL
+		  AND updated_at < NOW() - $1::interval
+		  AND EXISTS (
+		    SELECT 1 FROM approaches
+		    WHERE problem_id = posts.id AND status = 'succeeded' AND deleted_at IS NULL
+		  )
+		ORDER BY updated_at ASC
+		LIMIT $2
+	`
+
+	// Convert Go time.Duration to PostgreSQL interval string
+	intervalStr := fmt.Sprintf("%d seconds", int(stabilityPeriod.Seconds()))
+
+	rows, err := r.pool.Query(ctx, query, intervalStr, limit)
+	if err != nil {
+		LogQueryError(ctx, "ListCrystallizationCandidates", "posts", err)
+		return nil, fmt.Errorf("list crystallization candidates: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan crystallization candidate: %w", err)
+		}
+		ids = append(ids, id)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate crystallization candidates: %w", err)
+	}
+
+	// Return empty slice instead of nil for consistent API
+	if ids == nil {
+		ids = []string{}
+	}
+
+	return ids, nil
 }

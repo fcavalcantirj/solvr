@@ -169,6 +169,10 @@ func TestPostRepository_List_SortByHot_EngagementMatters(t *testing.T) {
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2)", postEngaged.ID, postDead.ID)
 	}()
 
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, postEngaged.ID)
+
 	// Execute: List with sort="hot"
 	posts, _, err := repo.List(ctx, models.PostListOptions{
 		Sort:    "hot",

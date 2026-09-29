@@ -131,13 +131,13 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	whereClause := strings.Join(conditions, " AND ")
 
 	// Build answer count filter condition for main query
-	// This will be added after the LEFT JOIN so ans_cnt.cnt is available
+	// This will be added after the LEFT JOIN so rc.ans is available
 	var answerCountFilter string
 	if opts.HasAnswer != nil {
 		if *opts.HasAnswer {
-			answerCountFilter = " AND COALESCE(ans_cnt.cnt, 0) > 0"
+			answerCountFilter = " AND COALESCE(rc.ans, 0) > 0"
 		} else {
-			answerCountFilter = " AND COALESCE(ans_cnt.cnt, 0) = 0"
+			answerCountFilter = " AND COALESCE(rc.ans, 0) = 0"
 		}
 	}
 
@@ -163,14 +163,10 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			SELECT COUNT(*) FROM (
 				SELECT p.id
 				FROM posts p
-				LEFT JOIN (
-					SELECT question_id, COUNT(*) as cnt
-					FROM answers WHERE deleted_at IS NULL
-					GROUP BY question_id
-				) ans_cnt ON ans_cnt.question_id = p.id
+				%s
 				WHERE %s%s
 			) counted
-		`, whereClause, answerCountFilter)
+		`, postReplyCountsJoin, whereClause, answerCountFilter)
 	} else {
 		countQuery = fmt.Sprintf(`SELECT COUNT(*) FROM posts p WHERE %s`, whereClause)
 	}
@@ -187,13 +183,13 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 	case "votes", "top": // "top" is frontend alias for vote-based sorting
 		orderClause = "(p.upvotes - p.downvotes) DESC, p.created_at DESC"
 	case "hot": // trending: engagement-weighted score + recency decay
-		orderClause = "(LOG(GREATEST(ABS(COALESCE(p.upvotes,0) - COALESCE(p.downvotes,0)) + COALESCE(cmt_cnt.cnt,0) * 2 + COALESCE(ans_cnt.cnt,0) * 3 + COALESCE(app_cnt.cnt,0) * 3 + COALESCE(p.view_count,0) * 0.01, 1) + 1) + EXTRACT(EPOCH FROM (p.created_at - (NOW() - INTERVAL '7 days'))) / 45000.0) DESC"
+		orderClause = "(LOG(GREATEST(ABS(COALESCE(p.upvotes,0) - COALESCE(p.downvotes,0)) + COALESCE(rc.cmt,0) * 2 + COALESCE(rc.ans,0) * 3 + COALESCE(rc.app,0) * 3 + COALESCE(p.view_count,0) * 0.01, 1) + 1) + EXTRACT(EPOCH FROM (p.created_at - (NOW() - INTERVAL '7 days'))) / 45000.0) DESC"
 	case "new": // frontend alias for newest
 		orderClause = "p.created_at DESC"
 	case "approaches":
-		orderClause = "COALESCE(app_cnt.cnt, 0) DESC, p.created_at DESC"
+		orderClause = "COALESCE(rc.app, 0) DESC, p.created_at DESC"
 	case "answers":
-		orderClause = "COALESCE(ans_cnt.cnt, 0) DESC, p.created_at DESC"
+		orderClause = "COALESCE(rc.ans, 0) DESC, p.created_at DESC"
 	}
 
 	// Build viewer vote column and JOIN
@@ -223,9 +219,7 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 			COALESCE(p.original_description, '') as original_description,
 			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
-			COALESCE(ans_cnt.cnt, 0) as answers_count,
-			COALESCE(app_cnt.cnt, 0) as approaches_count,
-			COALESCE(cmt_cnt.cnt, 0) as comments_count,
+			%s,
 			COALESCE(ag.human_id::text, '') as agent_human_id,
 			%s,
 			p.visibility,
@@ -235,27 +229,12 @@ func (r *PostRepository) List(ctx context.Context, opts models.PostListOptions) 
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
-		LEFT JOIN (
-			SELECT question_id, COUNT(*) as cnt
-			FROM answers WHERE deleted_at IS NULL
-			GROUP BY question_id
-		) ans_cnt ON ans_cnt.question_id = p.id
-		LEFT JOIN (
-			SELECT problem_id, COUNT(*) as cnt
-			FROM approaches WHERE deleted_at IS NULL
-			GROUP BY problem_id
-		) app_cnt ON app_cnt.problem_id = p.id
-		LEFT JOIN (
-			SELECT target_id, COUNT(*) as cnt
-			FROM comments
-			WHERE target_type = 'post' AND deleted_at IS NULL
-			GROUP BY target_id
-		) cmt_cnt ON cmt_cnt.target_id = p.id
+		%s
 		%s
 		WHERE %s%s
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, viewerVoteColumn, viewerVoteJoin, whereClause, answerCountFilter, orderClause, argNum, argNum+1)
+	`, postReplyCountColumns, viewerVoteColumn, postReplyCountsJoin, viewerVoteJoin, whereClause, answerCountFilter, orderClause, argNum, argNum+1)
 
 	args = append(args, perPage, offset)
 
@@ -347,7 +326,7 @@ func (r *PostRepository) scanPostWithAuthorRows(rows pgx.Rows) (*models.PostWith
 	// Compute vote score
 	post.VoteScore = post.Upvotes - post.Downvotes
 
-	// Canonical unified reply count = answers + approaches + comments (BART-583).
+	// Canonical unified reply count (BART-583): the buckets partition the post's live replies.
 	post.ReplyCount = post.AnswersCount + post.ApproachesCount + post.CommentsCount
 
 	return &post, nil
@@ -559,9 +538,7 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 			COALESCE(p.original_description, '') as original_description,
 			COALESCE(u.display_name, ag.display_name, '') as author_display_name,
 			COALESCE(u.avatar_url, ag.avatar_url, '') as author_avatar_url,
-			COALESCE(ans_cnt.cnt, 0) as answers_count,
-			COALESCE(app_cnt.cnt, 0) as approaches_count,
-			COALESCE(cmt_cnt.cnt, 0) as comments_count,
+			%s,
 			COALESCE(ag.human_id::text, '') as agent_human_id,
 			%s,
 			p.visibility,
@@ -571,25 +548,10 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 		FROM posts p
 		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
 		LEFT JOIN agents ag ON p.posted_by_type = 'agent' AND p.posted_by_id = ag.id
-		LEFT JOIN (
-			SELECT question_id, COUNT(*) as cnt
-			FROM answers WHERE deleted_at IS NULL
-			GROUP BY question_id
-		) ans_cnt ON ans_cnt.question_id = p.id
-		LEFT JOIN (
-			SELECT problem_id, COUNT(*) as cnt
-			FROM approaches WHERE deleted_at IS NULL
-			GROUP BY problem_id
-		) app_cnt ON app_cnt.problem_id = p.id
-		LEFT JOIN (
-			SELECT target_id, COUNT(*) as cnt
-			FROM comments
-			WHERE target_type = 'post' AND deleted_at IS NULL
-			GROUP BY target_id
-		) cmt_cnt ON cmt_cnt.target_id = p.id
+		%s
 		%s
 		WHERE p.id = $1 AND p.deleted_at IS NULL AND %s
-	`, viewerVoteColumn, viewerVoteJoin, visClause)
+	`, postReplyCountColumns, viewerVoteColumn, postReplyCountsJoin, viewerVoteJoin, visClause)
 
 	row := r.pool.QueryRow(ctx, query, args...)
 
@@ -657,7 +619,7 @@ func (r *PostRepository) findByIDInternal(ctx context.Context, id string, viewer
 	// Compute vote score
 	post.VoteScore = post.Upvotes - post.Downvotes
 
-	// Canonical unified reply count = answers + approaches + comments (BART-583).
+	// Canonical unified reply count (BART-583): the buckets partition the post's live replies.
 	post.ReplyCount = post.AnswersCount + post.ApproachesCount + post.CommentsCount
 
 	return &post, nil
@@ -902,63 +864,6 @@ func (r *PostRepository) GetUserVote(ctx context.Context, postID, voterType, vot
 		return nil, nil // No vote
 	}
 	return &direction, nil
-}
-
-// ListCrystallizationCandidates returns post IDs of solved problems that are
-// eligible for crystallization: type=problem, status=solved, not deleted,
-// not already crystallized, and stable for at least stabilityPeriod.
-// Results are ordered by oldest updated_at first (crystallize oldest stable problems first).
-func (r *PostRepository) ListCrystallizationCandidates(ctx context.Context, stabilityPeriod time.Duration, limit int) ([]string, error) {
-	if limit <= 0 {
-		limit = 50
-	}
-
-	query := `
-		SELECT id::text
-		FROM posts
-		WHERE type = 'problem'
-		  AND status = 'solved'
-		  AND deleted_at IS NULL
-		  AND visibility = 'public' -- BART-151: never pin family-private posts to public IPFS
-		  AND crystallization_cid IS NULL
-		  AND updated_at < NOW() - $1::interval
-		  AND EXISTS (
-		    SELECT 1 FROM approaches
-		    WHERE problem_id = posts.id AND status = 'succeeded' AND deleted_at IS NULL
-		  )
-		ORDER BY updated_at ASC
-		LIMIT $2
-	`
-
-	// Convert Go time.Duration to PostgreSQL interval string
-	intervalStr := fmt.Sprintf("%d seconds", int(stabilityPeriod.Seconds()))
-
-	rows, err := r.pool.Query(ctx, query, intervalStr, limit)
-	if err != nil {
-		LogQueryError(ctx, "ListCrystallizationCandidates", "posts", err)
-		return nil, fmt.Errorf("list crystallization candidates: %w", err)
-	}
-	defer rows.Close()
-
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan crystallization candidate: %w", err)
-		}
-		ids = append(ids, id)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate crystallization candidates: %w", err)
-	}
-
-	// Return empty slice instead of nil for consistent API
-	if ids == nil {
-		ids = []string{}
-	}
-
-	return ids, nil
 }
 
 // SetCrystallizationCID sets the IPFS CID for a crystallized problem snapshot.

@@ -8945,3 +8945,238 @@ REMAINING (next slices, in order):
 UAT (for when idx 76 closes, not now): as slice 20, plus: after the cutover deploy the owner opens
   /v1/feed/stuck (or GET /v1/posts?needs_help=true) and sees problems with stuck approaches listed
   again, not only in-progress ones.
+
+2026-09-28 22:43 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 22 of N: steps 3/5, the posts list and detail counts (code:internal/db/posts.go): answer,
+approach and comment counts, reply_count, the has_answer filter and the answers/approaches/hot
+sorts now read replies; the unwired approach-based crystallization lister moves out of posts.go.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues; slice 21's REMAINING list starts with search and the posts.go joins. Tree clean at
+  start, HEAD b8d046f7 (slice 21's own commit) [REAL, git status --porcelain / git log]. Picked
+  posts.go over search: every GET /v1/posts and GET /v1/posts/{id} joins the legacy tables, so
+  both 500 once they drop; search.go is bigger and idx 53 owns its query comparison.
+
+SPIKE [REAL, code read + psql on solvr_test + the RED runs below]:
+  - PostRepository.List and findByIDInternal joined three aggregates over answers, approaches
+    and post-level comments; reply_count = their sum (BART-583), so a native reply (POST
+    /v1/posts/{id}/replies) was counted NOWHERE: the RED route run shows reply_count 0 while
+    GET /v1/posts/{id}/replies reports meta.total 3 for the same post, and has_answer=false
+    still lists a question answered by a native reply.
+  - The reply list total (ReplyRepository.ListPageByPost / CountByPost) counts every live reply:
+    top-level and child, human, agent and system. components/posts/post-detail.tsx renders
+    "REPLIES (reply_count)" above that list.
+  - Moderation approval writes a system verdict reply after the status update
+    (handlers/posts_moderation.go:101 then :127, ModerationReplyWriter since slice 6).
+  - The legacy contribution routes (POST /v1/posts/{id}/comments, /questions/{id}/answers, ...)
+    still write the legacy tables; nothing routes them into replies until idx 52's adapters.
+  - The canonical stats already define an answer as a top-level live human/agent reply
+    (stats_canonical.go canonicalAnswerReply).
+  - posts.go's last legacy SQL outside the counts was PostRepository.ListCrystallizationCandidates
+    (type 'problem' + succeeded approaches), unwired since slice 10; only tests call it.
+  - EXPLAIN ANALYZE of the new FindByID shape on solvr_test (2280 replies): the post id is
+    pushed into the reply aggregate (Bitmap Index Scan on idx_replies_post), 0.23 ms.
+
+DESIGN (my decision, owner can overrule; see BEHAVIOR CHANGES): every live reply of a post lands
+  in exactly one bucket, so answers_count + approaches_count + comments_count = reply_count = the
+  reply list total:
+    approaches_count = replies migrated from approaches (legacy_type 'approach');
+    answers_count    = top-level human/agent replies other than migrated approaches, comments
+                       and progress notes (native replies, migrated answers AND responses);
+    comments_count   = every other live reply (child replies incl. progress notes and comments
+                       on contributions, migrated post comments, system verdicts).
+  has_answer keeps its legacy definition answers_count > 0; sort=answers / sort=approaches order
+  by those buckets; the hot formula keeps its weights (comments*2 + answers*3 + approaches*3).
+  For migrated legacy rows this keeps the legacy counts except: responses now count as answers,
+  and comments on contributions / progress notes now count as comments.
+
+WHAT THIS COMMIT CHANGES [REAL, git status --porcelain + git diff --numstat: 12 modified, 4 new]:
+  A backend/internal/db/posts_reply_counts.go (33): replyApproachBucket, replyAnswerBucket,
+    postReplyCountsJoin (one LEFT JOIN aggregate over live replies per post -> rc.ans/app/cmt)
+    and postReplyCountColumns. Names no legacy table or type [TEST: scanner guard below].
+  M backend/internal/db/posts.go (+16/-111): List and findByIDInternal select and join the
+    buckets instead of the three legacy aggregates (answers / approaches / post comments); the
+    has_answer filter (rc.ans > 0 / = 0), the has_answer count query, sort=answers,
+    sort=approaches and the hot formula read rc.*. scanPostWithAuthorRows and FindByID keep
+    ReplyCount = answers + approaches + comments (comment reworded: the buckets partition the
+    replies). PostRepository.ListCrystallizationCandidates REMOVED from here (moved, below).
+    1030 -> 935 lines (still one of the 35 standing size violations, now smaller).
+  M backend/internal/db/problems.go (+58): PostRepository.ListCrystallizationCandidates moved
+    VERBATIM to the end [REAL: diff of the extracted block against the file tail, 56 lines
+    identical] + the "time" import. No behavior change; still only called by tests
+    (crystallization_test.go, post_crystallization_test.go).
+  M backend/internal/db/legacy_dependency_registry.go (+1/-2): entry code:internal/db/posts.go
+    REMOVED (the scan no longer finds it, and CoversTheSourceTree fails on an entry for a
+    dependency that no longer exists); code:internal/db/problems.go stays pending(retire), note
+    now names the moved lister. Counts [REAL, parsed]: 74 -> 73 entries; pending refactor
+    10 -> 9, pending retire 27, pending remap 3, done 24, keep 10.
+  M backend/internal/models/post.go (+3/-1, doc comment only): ReplyCount says the three counts
+    partition the live replies and equal the GET /v1/posts/{id}/replies total.
+  A backend/internal/db/posts_reply_counts_canonical_test.go (215):
+    TestLegacyPostCounts_ServedCanonically (source guard: scan does not list posts.go; no
+      disposition for it; ListCrystallizationCandidates defined only in problems.go; problems.go
+      pending retire, not Done).
+    TestCanonicalPostCounts_KeepTheLegacyCountsAcrossTheCutover on a scratch DB: q1 (live +
+      deleted answer, agent + system post comment, comment on the answer), q2 (post comment
+      only), q3 (bare), p1 (live + deleted approach, progress note + comment on the approach,
+      post comment), p2 (3 approaches), i1 (2 responses + post comment). Before the cutover all
+      counts are 0 (List and FindByID). cutoverRepliesFor(all six) must produce exactly the 17
+      replies MigrateContributions + RemapLegacyRelations produce (post, legacy type/id, parent's
+      legacy type/id, author, deleted) — guard for the fixture helper below. After the real
+      cutover: q1 {ans 1, cmt 3, replies 4}, q2 {cmt 1}, q3 {}, p1 {app 1, cmt 3, replies 4},
+      p2 {app 3}, i1 {ans 2, cmt 1, replies 3}; List == FindByID; reply_count == CountByPost;
+      answers+approaches+comments == reply_count; has_answer=true -> [q1], false -> {q2,q3};
+      sort=approaches (type problem) -> [p2, p1]; sort=answers leads with i1; sort=hot lists all
+      6. Identical after dropLegacy(). Then native replies on q3 (top-level agent reply, its
+      child, a system verdict, a deleted reply) -> q3 {ans 1, cmt 2, replies 3}, has_answer=true
+      -> {q1,q3}, false -> [q2].
+  A backend/internal/db/cutover_replies_helpers_test.go (46): cutoverRepliesFor(postIDs...)
+    inserts, for those posts only, the replies the cutover makes from their approaches, answers,
+    responses, post comments, contribution comments and progress notes (ON CONFLICT skip). Used
+    by the shared-database fixtures below, because the global MigrateContributions would
+    convert every other test's legacy rows in solvr_test too.
+  A backend/internal/api/router_post_counts_canonical_test.go (95):
+    TestPostCountsRoute_CountCanonicalReplies through NewRouter on solvr_test: a public
+    published approved question with a native top-level human reply, its child, a system
+    verdict and a deleted reply -> GET /v1/posts/{id} {answers 1, approaches 0, comments 2,
+    reply_count 3}; GET /v1/posts/{id}/replies meta.total 3; GET /v1/posts?type=question&
+    has_answer=true&tags=<tag> -> [that question], has_answer=false -> [the bare question].
+    Cleanup deletes the tagged posts (replies cascade) and the user.
+
+EXISTING TESTS CHANGED (golden rule) — 22 tests in 9 files. NO test deleted, skipped or renamed.
+  GROUP A — fixture only, NO assertion changed [REAL, git diff -U0: the only removed lines are
+  the two seeds' `_, err := ...CreateAnswer(` becoming `answer, err := ...`]: each test
+  now calls cutoverRepliesFor(<its posts>) (db) or inserts the migrated answer reply (api)
+  before its Act step, i.e. it asserts on the rows the cutover makes from its legacy fixture.
+    (a)/(b) the tests and what they still assert:
+    posts_test.go: TestPostRepository_FindByID_IncludesCommentCount (`found.CommentsCount != 2`),
+      _List_SortByAnswers (q1 before q2; AnswersCount 3 and 1), _List_SortByApproaches (p1
+      before p2; ApproachesCount 3 and 1), _List_CountsExcludeSoftDeleted (`p.AnswersCount != 2`),
+      _List_IncludesCommentCount (`found.CommentsCount != 3`), _List_CommentsCountAllTypes
+      (CommentsCount 1 for question, problem, idea).
+    posts_sort_timeframe_test.go: TestPostRepository_List_SortByHot_EngagementMatters (engaged
+      post above the dead one).
+    posts_canonical_test.go: TestPostRepository_Canonical_ReplyCount (ReplyCount == sum;
+      CommentsCount >= 2).
+    posts_ideas_comments_test.go: TestIdeasCommentsCount (comments 3, answers 0, approaches 0),
+      TestQuestionsProblemsCommentsCount (question 2, problem 4).
+    posts_comments_count_test.go: TestPostList_CountsSystemComments (1), TestPostGet_
+      CountsSystemComments (1), TestPostList_CountMatchesFeedCount (2).
+    router_legacy_feed_test.go seedLegacyFeed (used by TestLegacyFeed_ServedByCanonicalPosts
+      List, _KeepsFeedItemShape, _AcceptsLenientLegacyQueryShape): the answered question's
+      answer now also gets its migrated reply; assertions unchanged (unanswered feed =
+      [s.unanswered], AnswerCount 1).
+    router_legacy_discovery_test.go seedLegacyDiscovery (used by TestPostsList_HasAnswerFilter
+      DefinedOnce, TestLegacyTypedDiscovery_ServedByCanonicalPostsList, _AcceptsLenientLegacy
+      QueryShape): same; has_answer=false -> 1 row, has_answer=true -> the answered question.
+      The two TestLegacyTypedDiscovery_* assert no counts and passed either way.
+    (c) why [TEST]: the HEAD files run against the new code FAIL on exactly those assertions,
+      all "got 0" or order flipped: /tmp/solvr_idx76_s22_existing_db.log (posts_test.go:848,
+      :2459/:2464/:2467, :2554/:2558/:2561, :2624, :3375, :3491/:3515/:3539;
+      posts_sort_timeframe_test.go:201; posts_canonical_test.go:160;
+      posts_ideas_comments_test.go:99/:237/:262), /tmp/solvr_idx76_s22_oldfixture_pcc.log
+      (posts_comments_count_test.go:58/:93/:155, CommentsCount 0), /tmp/solvr_idx76_s22_
+      existing_api.log (router_legacy_discovery_test.go:204, router_legacy_feed_test.go:180/
+      :209/:258). A legacy row that was never migrated no longer counts.
+    (d) the same behaviors (per-kind counts, soft-delete exclusion, system comments counted,
+      has_answer, answers/approaches/hot sorts) are pinned on real cutover output by
+      TestCanonicalPostCounts_KeepTheLegacyCountsAcrossTheCutover and, for native replies,
+      by TestPostCountsRoute_CountCanonicalReplies; all PASS, and the 20 changed tests PASS.
+  GROUP B — ASSERTION VALUES CHANGED: router_comments_test.go
+    (a) TestCommentsCount_ProblemsShowCountAfterComment, _IdeasShowCountAfterComment,
+        _FeedShowsCommentCount (real GROQ moderation E2Es through POST /v1/posts/{id}/comments).
+    (b) old: `if int(cnt) != 1` (problems, ideas) and `if int(cnt) != 2` (feed).
+        new: each legacy-route comment also gets its migrated reply (new helper
+        cutoverCommentReplies), the helper waits (<=10 s) for the approval verdict reply and the
+        test expects comments + verdicts: `if int(cnt) != want` (2 and 3 in the run).
+    (c) why [TEST]: under the new rule the approval verdict (a system reply written after the
+        status flips, since slice 6) IS a comment, as posts_comments_count_test.go already
+        demands for system comments. With the HEAD file the feed test FAILS "expected
+        comments_count=2 in feed, got 1" (/tmp/solvr_idx76_s22_existing_api.log:
+        router_comments_test.go:244): the 1 is the verdict, not the 2 comments. The problems
+        and ideas variants still PASSED with the HEAD file for the same wrong reason (count 1 =
+        the verdict while their comment was not counted) [INFERRED from the feed failure: same
+        code path, one comment each] — kept as they were they would guard nothing.
+    (d) new values PASS: /tmp/solvr_idx76_s22_existing_api2.log (17 PASS, 0 FAIL, 0 SKIP) and in
+        the full run. If the migrated comment were not counted they would read want-1.
+
+VERIFICATION [DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test?sslmode=disable,
+  local docker solvr-postgres; scratch-DB tests build and drop their own DBs on that server]:
+  RED [TEST] /tmp/solvr_idx76_s22_red.log + _red_api.log (tests first, production unchanged):
+    guard FAIL :20 (posts.go scanned), :23 (entry exists), :24 (lister in posts.go); scratch
+    test FAIL :135/:139/:142 (legacy counts before the cutover, e.g. p2 approaches 3) and after
+    the drop "ERROR: relation "answers" does not exist (SQLSTATE 42P01)"; route FAIL: reply_count
+    0 while the replies list total is 3, has_answer=true -> [], has_answer=false -> both.
+  GREEN [TEST] /tmp/solvr_idx76_s22_green_db.log 17 PASS, 0 FAIL, 0 SKIP (both new db tests, all
+    TestLegacyDependency*/TestScanLegacy*/TestLegacyCleanupBlockers*/TestDeclaredLegacy*/
+    TestDiscoverLegacySchema*/TestExtractStaticSQL*, TestLegacyLifecycles_, both needs-help
+    tests); /tmp/solvr_idx76_s22_green_api.log 1 PASS. Helper guard [TEST]
+    /tmp/solvr_idx76_s22_helper_guard.log PASS (17 rows identical to the real cutover).
+  MUTATIONS [TEST] /tmp/solvr_idx76_s22_mut{1..4}.log on TestCanonicalPostCounts_, file restored
+    from cp after each (cmp confirmed): mut1 drop `r.parent_reply_id IS NULL` (children become
+    answers) FAIL :135/:139/:186; mut2 count deleted replies FAIL :135/:139/:142/:172/:176/:186;
+    mut3 migrated comments become answers FAIL :135..:188 incl. the has_answer lines; mut4 drop
+    the system exclusion FAIL :135/:139/:186.
+  Existing tests [TEST]: /tmp/solvr_idx76_s22_existing_db2.log 78 PASS, 4 FAIL (TestCrystallization_
+    PostModelFields/_SetCrystallizationCID/_ListCandidates/_ListCandidates_Limit, all "null value
+    in column "referral_code"" at user creation — the standing set, FAIL in slice 21 too);
+    TestCrystallization_ListCandidates_Empty (calls the moved lister) PASS.
+  Probes [TEST] /tmp/solvr_idx76_s22_jobs.log: TestLegacyDroppedDatabase_StaticQueries...,
+    _ScheduledJobs..., TestRetiredLegacyLifecycles_ PASS; static 625 extracted, 554 prepared, 71
+    did not (= slice 21).
+  go build ./... clean; go vet ./internal/db/ ./internal/api/ ./internal/models/ clean; gofmt -l
+    clean on every changed/new file except internal/models/post.go and internal/api/
+    router_comments_test.go, whose findings (PostStatusRejected / struct field alignment;
+    testCommentsSetup's inline interface) are in HEAD too [REAL: gofmt -l on the HEAD copies];
+    not touched.
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 40m ./...` ->
+    /tmp/solvr_idx76_s22_full.log: 4688 PASS, 72 FAIL, 12 SKIP (slice 21: 4683/74/12, same
+    counting). Packages FAIL: internal/api (same 4 top-level names as slice 21), internal/api/
+    handlers (the 4 standing GitHub OAuth tests), internal/db. Top-level FAIL names vs slice 21
+    (comm): 0 new, 1 gone (TestSearchRepository_Search_PerformanceTarget, the wall-clock test
+    slice 21 showed failing at HEAD too; search.go untouched). SKIP names identical. All new and
+    changed tests PASS in it (35 checked by name, 0 FAIL/SKIP); 0 "cannot scan NULL".
+  check-file-size.sh: 35 violations, same count as slices 1-21. New files <= 215 lines;
+    posts.go 1030 -> 935; posts_test.go (standing violator) 3760 -> 3784 (+24 fixture lines).
+  My runs left 0 solvr_scratch*/solvr_legacy_* databases and 0 route-test posts/replies [REAL,
+    psql]. I deleted nothing from solvr_test.
+  NOT RUN: frontend (untouched); golangci-lint.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL, code + tests above, unless stated]:
+  - reply_count now equals the post's reply list total (GET /v1/posts/{id}/replies meta.total),
+    so the post page's "REPLIES (N)" matches the list under it. Native replies were counted
+    NOWHERE before; they now count on every GET /v1/posts list and detail.
+  - DEPLOY ORDER (same shape as slices 14-21): deployed BEFORE the cutover, every legacy
+    answer/approach/response/comment that is not yet a reply stops counting — counts drop to the
+    native replies + moderation verdicts, has_answer=false (and /v1/feed/unanswered, GET
+    /v1/questions?has_answer=false) lists questions answered only through the legacy route, and
+    the answers/approaches/hot sorts ignore legacy rows [REAL for the fixtures; prod data not
+    queried]. The legacy write routes (POST /v1/posts/{id}/comments, /questions/{id}/answers,
+    /problems/{id}/approaches, /ideas/{id}/responses, contribution comments) still write the
+    legacy tables, so what they write is invisible in counts until the cutover, and anything
+    they write AFTER a one-off cutover stays invisible until idx 52's adapters route them into
+    replies. Deploy this with or after the cutover and the adapters.
+  - The approval/rejection verdict (a system reply since slice 6) counts as a comment, so a
+    freshly approved post shows comments_count 1 / reply_count 1 with no human reply.
+  - After the cutover, vs the legacy counts on the same rows: idea responses now count as
+    answers (were counted nowhere; has_answer and sort=answers now see them); comments on
+    answers/approaches and progress notes now count as comments (legacy counted post-level
+    comments only). Approaches, answers and post comments are unchanged.
+  - has_answer=true now means "has a top-level human/agent reply that is not a migrated comment,
+    approach or progress note": a native reply answers any post, incl. problems and ideas.
+  - The hot sort keeps its weights over the new buckets, so rankings shift slightly where those
+    reclassified rows exist [INFERRED].
+  - search.go keeps its own legacy counts (answers_count etc. in search results) until its slice.
+
+REMAINING (next slices, in order):
+  step 3/4: search, resurrection, sitemap, backfill-embeddings, the ideas sidebar in stats.go and
+    the other pending code: entries (homepage_overview.go, agents.go, users.go: unwired legacy
+    methods). Both dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): as slice 21, plus: after the cutover deploy the owner opens
+  a post with replies and checks that "REPLIES (N)" equals the number of replies listed, and that
+  a question answered by a reply no longer appears on /v1/feed/unanswered.

@@ -72,6 +72,10 @@ func TestIdeasCommentsCount(t *testing.T) {
 		}
 	}
 
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, idea.ID)
+
 	// Query the idea through List() - this is what the API uses
 	ideas, _, err := postRepo.List(ctx, models.PostListOptions{
 		Type:    models.PostTypeIdea,
@@ -211,6 +215,10 @@ func TestQuestionsProblemsCommentsCount(t *testing.T) {
 			t.Fatalf("failed to create comment on problem: %v", err)
 		}
 	}
+
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, question.ID, problem.ID)
 
 	// Query questions
 	questions, _, err := postRepo.List(ctx, models.PostListOptions{

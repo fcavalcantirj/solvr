@@ -33,6 +33,10 @@ func TestPostList_CountsSystemComments(t *testing.T) {
 		t.Fatalf("failed to create system comment: %v", err)
 	}
 
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, post.ID)
+
 	// List() should count the system comment
 	posts, _, err := postRepo.List(ctx, models.PostListOptions{
 		Type:    models.PostTypeQuestion,
@@ -84,6 +88,10 @@ func TestPostGet_CountsSystemComments(t *testing.T) {
 		t.Fatalf("failed to create system comment: %v", err)
 	}
 
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, post.ID)
+
 	result, err := postRepo.FindByID(ctx, post.ID)
 	if err != nil {
 		t.Fatalf("FindByID failed: %v", err)
@@ -129,6 +137,10 @@ func TestPostList_CountMatchesFeedCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create human comment: %v", err)
 	}
+
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, post.ID)
 
 	// List() should return 2 (matches what feed counts)
 	posts, _, err := postRepo.List(ctx, models.PostListOptions{

@@ -1,13 +1,17 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/db"
 )
 
 // testCommentsSetup creates an agent and returns the API key.
@@ -32,6 +36,50 @@ func testCommentsSetup(t *testing.T, router interface{ ServeHTTP(http.ResponseWr
 		t.Fatal("expected api_key in registration response")
 	}
 	return apiKey
+}
+
+// cutoverCommentReplies inserts the reply the contribution cutover makes from each comment
+// created through the legacy comment route (task idx 76: post counts read replies, and that
+// route still writes the legacy comments table), waits for the verdict the moderation approval
+// records as a system reply, and returns the comments_count the post must show: the comments
+// plus the verdicts.
+func cutoverCommentReplies(t *testing.T, postID string, created ...*httptest.ResponseRecorder) int {
+	t.Helper()
+	ctx := context.Background()
+	pool, err := db.NewPool(ctx, os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer pool.Close()
+	for _, w := range created {
+		var resp struct {
+			Data struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.Data.ID == "" {
+			t.Fatalf("decode created comment: %v %s", err, w.Body.String())
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id, created_at, updated_at)
+			SELECT target_id, author_type, author_id, content, 'comment', id, created_at, created_at
+			FROM comments WHERE id = $1`, resp.Data.ID); err != nil {
+			t.Fatalf("insert the cutover reply: %v", err)
+		}
+	}
+	var verdicts int
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(100 * time.Millisecond) {
+		if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM replies
+			WHERE post_id = $1 AND author_type = 'system' AND deleted_at IS NULL`, postID).Scan(&verdicts); err != nil {
+			t.Fatalf("count verdicts: %v", err)
+		}
+		if verdicts > 0 || time.Now().After(deadline) {
+			break
+		}
+	}
+	if verdicts == 0 {
+		t.Fatal("the moderation approval recorded no verdict reply")
+	}
+	return len(created) + verdicts
 }
 
 // TestCommentsCount_ProblemsShowCountAfterComment verifies:
@@ -78,6 +126,7 @@ func TestCommentsCount_ProblemsShowCountAfterComment(t *testing.T) {
 	if cmtW.Code != http.StatusCreated {
 		t.Fatalf("create comment failed: %d %s", cmtW.Code, cmtW.Body.String())
 	}
+	want := cutoverCommentReplies(t, postID, cmtW)
 
 	// GET /v1/problems and find our post
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/problems?sort=newest&per_page=50", nil)
@@ -97,8 +146,8 @@ func TestCommentsCount_ProblemsShowCountAfterComment(t *testing.T) {
 		if p["id"] == postID {
 			found = true
 			cnt, _ := p["comments_count"].(float64)
-			if int(cnt) != 1 {
-				t.Errorf("expected comments_count=1 for problem, got %v", p["comments_count"])
+			if int(cnt) != want {
+				t.Errorf("expected comments_count=%d for problem (1 comment + the moderation verdict), got %v", want, p["comments_count"])
 			}
 			break
 		}
@@ -148,6 +197,7 @@ func TestCommentsCount_IdeasShowCountAfterComment(t *testing.T) {
 	if cmtW.Code != http.StatusCreated {
 		t.Fatalf("create comment failed: %d %s", cmtW.Code, cmtW.Body.String())
 	}
+	want := cutoverCommentReplies(t, postID, cmtW)
 
 	// GET /v1/ideas and find our post
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/ideas?sort=newest&per_page=50", nil)
@@ -167,8 +217,8 @@ func TestCommentsCount_IdeasShowCountAfterComment(t *testing.T) {
 		if p["id"] == postID {
 			found = true
 			cnt, _ := p["comments_count"].(float64)
-			if int(cnt) != 1 {
-				t.Errorf("expected comments_count=1 for idea, got %v", p["comments_count"])
+			if int(cnt) != want {
+				t.Errorf("expected comments_count=%d for idea (1 comment + the moderation verdict), got %v", want, p["comments_count"])
 			}
 			break
 		}
@@ -209,6 +259,7 @@ func TestCommentsCount_FeedShowsCommentCount(t *testing.T) {
 	}
 
 	// Add 2 comments
+	var created []*httptest.ResponseRecorder
 	for i := 0; i < 2; i++ {
 		cmtURL := fmt.Sprintf("/v1/posts/%s/comments", postID)
 		body := fmt.Sprintf(`{"content":"feed comment %d"}`, i+1)
@@ -220,9 +271,11 @@ func TestCommentsCount_FeedShowsCommentCount(t *testing.T) {
 		if cmtW.Code != http.StatusCreated {
 			t.Fatalf("create comment %d failed: %d %s", i+1, cmtW.Code, cmtW.Body.String())
 		}
+		created = append(created, cmtW)
 	}
+	want := cutoverCommentReplies(t, postID, created...)
 
-	// GET /v1/posts and verify comments_count == 2
+	// GET /v1/posts and verify comments_count == 2 (+ the moderation verdict)
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/posts?sort=newest&per_page=50", nil)
 	listW := httptest.NewRecorder()
 	router.ServeHTTP(listW, listReq)
@@ -240,8 +293,8 @@ func TestCommentsCount_FeedShowsCommentCount(t *testing.T) {
 		if p["id"] == postID {
 			found = true
 			cnt, _ := p["comments_count"].(float64)
-			if int(cnt) != 2 {
-				t.Errorf("expected comments_count=2 in feed, got %v", p["comments_count"])
+			if int(cnt) != want {
+				t.Errorf("expected comments_count=%d in feed (2 comments + the moderation verdict), got %v", want, p["comments_count"])
 			}
 			break
 		}

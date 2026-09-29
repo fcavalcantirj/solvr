@@ -837,6 +837,10 @@ func TestPostRepository_FindByID_IncludesCommentCount(t *testing.T) {
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.ID)
 	}()
 
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, post.ID)
+
 	// Act: FindByID
 	found, err := repo.FindByID(ctx, post.ID)
 	if err != nil {
@@ -2427,6 +2431,10 @@ func TestPostRepository_List_SortByAnswers(t *testing.T) {
 		t.Fatalf("failed to insert answer for q2: %v", err)
 	}
 
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, q1.ID, q2.ID)
+
 	// List with sort=answers, filtered by tag to isolate our test data
 	posts, _, err := repo.List(ctx, models.PostListOptions{
 		Type: models.PostTypeQuestion, Sort: "answers",
@@ -2524,6 +2532,10 @@ func TestPostRepository_List_SortByApproaches(t *testing.T) {
 		t.Fatalf("failed to insert approach for p2: %v", err)
 	}
 
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, p1.ID, p2.ID)
+
 	posts, _, err := repo.List(ctx, models.PostListOptions{
 		Type: models.PostTypeProblem, Sort: "approaches",
 		Tags: []string{"sort_approaches_test"}, Page: 1, PerPage: 10,
@@ -2609,6 +2621,10 @@ func TestPostRepository_List_CountsExcludeSoftDeleted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to soft-delete answer: %v", err)
 	}
+
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, q.ID)
 
 	// List and verify count is 2 (not 3)
 	posts, _, err := repo.List(ctx, models.PostListOptions{
@@ -3348,6 +3364,10 @@ func TestPostRepository_List_IncludesCommentCount(t *testing.T) {
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id = $1", post.ID)
 	}()
 
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, post.ID)
+
 	// Act: List posts
 	posts, _, err := repo.List(ctx, models.PostListOptions{
 		Type:    models.PostTypeQuestion,
@@ -3466,6 +3486,10 @@ func TestPostRepository_List_CommentsCountAllTypes(t *testing.T) {
 		_, _ = pool.Exec(ctx, "DELETE FROM comments WHERE target_id IN ($1, $2, $3)", question.ID, problem.ID, idea.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM posts WHERE id IN ($1, $2, $3)", question.ID, problem.ID, idea.ID)
 	}()
+
+	// The replies the contribution cutover makes from these legacy rows (task idx 76): post
+	// counts are read from replies.
+	cutoverRepliesFor(t, pool, ctx, question.ID, problem.ID, idea.ID)
 
 	// Test Questions - Should return comments_count = 1
 	questions, _, err := repo.List(ctx, models.PostListOptions{

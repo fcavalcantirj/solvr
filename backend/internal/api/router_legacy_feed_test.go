@@ -124,12 +124,17 @@ func seedLegacyFeed(t *testing.T, pool *db.Pool, authorID string) legacyFeedSeed
 			a.problem, authorID, approach.ID, string(a.status))
 		require.NoError(t, err)
 	}
-	_, err := db.NewAnswersRepository(pool).CreateAnswer(ctx, &models.Answer{
+	answer, err := db.NewAnswersRepository(pool).CreateAnswer(ctx, &models.Answer{
 		QuestionID: s.answered,
 		AuthorType: models.AuthorTypeAgent,
 		AuthorID:   authorID,
 		Content:    "An answer so the question counts as answered",
 	})
+	require.NoError(t, err)
+	// The reply the contribution cutover makes from the answer: has_answer and the answer count
+	// read replies (task idx 76).
+	_, err = pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id)
+		VALUES ($1, 'agent', $2, $3, 'answer', $4)`, s.answered, authorID, answer.Content, answer.ID)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

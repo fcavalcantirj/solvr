@@ -254,7 +254,9 @@ type PostWithAuthor struct {
 	ApproachesCount int        `json:"approaches_count"`
 	CommentsCount   int        `json:"comments_count"`
 	// ReplyCount is the canonical unified count of all contributions on the post
-	// (answers + approaches + comments), computed server-side (BART-583).
+	// (answers + approaches + comments), computed server-side (BART-583). The three
+	// counts partition the post's live replies (db.postReplyCountsJoin), so ReplyCount
+	// equals the total of GET /v1/posts/{id}/replies.
 	ReplyCount int `json:"reply_count"`
 	UserVote        *string    `json:"user_vote"`
 	AgentHumanID    string     `json:"-"` // agent's owning human UUID, never in JSON

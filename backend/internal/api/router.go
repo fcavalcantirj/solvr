@@ -409,11 +409,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	usersHandler.SetAgentRepository(agentRepo)
 	// Per prd-v4: Set user list repository for GET /v1/users endpoint
 	usersHandler.SetUserListRepository(usersListRepo)
-	// Per prd-v4: Set contribution repositories for GET /v1/users/{id}/contributions endpoint
+	// Per prd-v4 + idx 76: GET /v1/users/{id}/contributions lists migrated replies (db/contributions_canonical.go)
 	usersHandler.SetContributionRepositories(
-		db.NewAnswersRepository(pool),
-		db.NewApproachesRepository(pool),
-		db.NewResponsesRepository(pool),
+		db.NewCanonicalAnswerContributionsRepository(pool),
+		db.NewCanonicalApproachContributionsRepository(pool),
+		db.NewCanonicalResponseContributionsRepository(pool),
 	)
 
 	// Create IPFS pinning handler (uses ipfsAPIURL passed from NewRouter)

@@ -9996,3 +9996,152 @@ REMAINING (next slices, in order):
 UAT (for when idx 76 closes, not now): as slice 27, plus: after the cutover and deploy, the
   owner PATCHes a problem that had a succeeded approach to "solved" on production and checks it
   is accepted.
+
+2026-09-29 11:20 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 29 of N: steps 3 and 5, a HIDDEN DEPENDENCY from a live route: GET /v1/users/{id}/
+contributions and GET /v1/me/contributions listed answers/approaches/responses straight from the
+legacy tables. They now read the replies migrated from those rows.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues. Tree clean at start [REAL, git status --porcelain].
+
+WHY THIS SLICE [REAL, code read this session]: slice 28's REMAINING said grep production
+  callers of legacy repositories. `grep -rnE "New(Answers|Approaches|Responses|Comments|Problems|
+  Questions|Ideas|ApproachRelationships|...)Repository\("` in non-test code: router.go:266-269,377
+  feed the problems/questions/ideas/comments handlers, whose routes (router.go:776-982) are all in
+  the legacy families of route_families.go (legacy-typed-reads/-writes, legacy-comments incl.
+  /v1/posts/{id}/comments) = idx 52. The one non-legacy route left was router.go:412-416:
+  usersHandler.SetContributionRepositories(db.NewAnswersRepository, db.NewApproachesRepository,
+  db.NewResponsesRepository) for GET /v1/users/{id}/contributions (public) and GET /v1/me/
+  contributions. users_contributions.go fetchContributions drops each repo error (`if err == nil`)
+  and AnswersRepository/ResponsesRepository.ListByAuthor return an empty list on
+  isTableNotFoundError, so after the table drop both routes would answer 200 with no items: silent
+  loss, not a 500 [INFERRED from the code; the router test below shows the legacy wiring lists a
+  legacy row and not the migrated reply]. Slices 5/6 of idx 72 deferred this rewire because
+  RETIRING the route changes the ContributionItem shape; this slice does not retire it: the
+  handler, its interfaces and the response shape are unchanged.
+  Also checked, not dependencies: services.NotificationService (legacy answer/approach event
+  types) is built only by NewModerationNotificationService with nil lookups; every services.New*
+  in cmd/api and internal/api is canonical [REAL, grep].
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain + git diff --stat: 2 modified (+7/-7),
+  3 new]:
+  A backend/internal/db/contributions_canonical.go (163): CanonicalAnswer/Approach/Response
+    ContributionsRepository (+ New...), each with ListByAuthor of the legacy signature (so it
+    satisfies handlers.ContribAnswers/Approaches/ResponsesRepositoryInterface), over one helper
+    listMigratedContributions: live replies (deleted_at IS NULL) with legacy_type = the type
+    (bound from models.ReplyLegacyAnswer/Approach/Response), author_type AND author_id; COUNT for
+    the total; newest first (tie r.id DESC); page<1 -> 1, per_page<1 -> 20, cap 50 (legacy
+    bounds); parent title only when posts.visibility = 'public' (legacy rule). Preview: body for
+    answers/responses (MigrateContributions copies content verbatim), provenance angle for
+    approaches, status from provenance. Items carry id (the REPLY's), parent post id, author
+    type/id, preview, status, parent title, created_at — what fetchContributions reads; display
+    name, avatar, votes are not filled.
+  M backend/internal/api/router.go (:412-416): comment line reworded + the three constructors
+    swapped to the canonical ones. Net 0 lines (1244; already on the >800 list).
+  M backend/internal/db/legacy_dependency_registry.go: notes only, all three still pending
+    retire (Done=false): code:internal/db/approaches.go drops "and GET /v1/users/{id}/
+    contributions" and names contributions_canonical.go; answers.go / responses.go notes now say
+    they stay on the legacy question/answer and idea/response routes and name
+    contributions_canonical.go.
+  A backend/internal/db/contributions_canonical_test.go (277):
+    - TestLegacyContributions_ServedCanonically: only router.go builds each canonical
+      constructor; no production file contains db.NewAnswersRepository( / db.NewApproaches
+      Repository( / db.NewResponsesRepository( (questions.go/ideas.go/problems.go build them
+      without the db. prefix, inside the legacy repos); the source scan does not report the new
+      file; the three entries are retire, not done, notes name contributions_canonical.go.
+    - TestCanonicalContributions_KeepTheLegacyListsAcrossTheCutover (scratch DB via
+      newMigratedScratchDatabase): agents a, b and a human id h; public/family/soft-deleted
+      questions, a problem, an idea; answers (live, family post, deleted, on deleted post, other
+      author, human), approaches (succeeded, working, deleted, other author), responses (agent,
+      human), two comments. Legacy snapshot pinned (a: 3 answers newest first, family title "",
+      deleted public post keeps its title; 2 approaches with angle/status; totals; "human a" 0).
+      Canonical snapshot: all empty before the cutover; after MigrateContributions +
+      RemapLegacyRelations = the legacy snapshot with each id replaced by its reply id; same after
+      dropLegacy. Then page 2 of 1, page 0/per_page 0 = page 1 of 20; a native reply (on the
+      question and on the idea) is not listed; soft-deleting a1's reply removes it (total 2).
+  A backend/internal/api/router_contributions_canonical_test.go (85):
+    TestUserContributions_ListTheMigratedReplies, real router + solvr_test: a live user, a public
+    question, one reply with legacy_type 'answer' and one unmigrated answers row by the user.
+    GET /v1/users/{id}/contributions and GET /v1/me/contributions (JWT) each return exactly the
+    reply: id = reply id, type answer, parent_id/parent_type question/parent_title,
+    content_preview, meta.total 1.
+
+EXISTING TESTS CHANGED: none [REAL, git diff --stat lists no _test.go]. The 10 mock-based
+  handler tests (users_contributions_test.go: TestGetUserContributions_AllTypes/Filter*/
+  Pagination/InvalidUserID/UserNotFound/Empty, TestGetMyContributions_*) PASS unchanged.
+
+VERIFICATION [DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres); the scenario test creates/drops its own scratch DB on that server]:
+  go build ./... clean; go vet ./internal/db/ ./internal/api/ clean; gofmt -l clean on the 5
+    files (gofmt -l on the whole packages lists many untouched files, pre-existing).
+  RED [TEST] /tmp/solvr_idx76_s29_red.log: router test FAIL router_contributions_canonical_
+    test.go:76/:81 x2 routes (id = the legacy answer's, preview "a legacy answer that was never
+    migrated"); internal/db build failed "undefined: NewCanonicalAnswerContributionsRepository".
+  One GREEN-time fix: my first router comment ("... migrated from answers, ...") matched the
+    SQL-table regex -> TestLegacyDependencyRegistry_CoversTheSourceTree FAIL "code:internal/api/
+    router.go (tables=answers)"; comment reworded (same self-match slice 1 recorded).
+  GREEN [TEST] /tmp/solvr_idx76_s29_green.log: 66 PASS, 0 FAIL, 0 SKIP (3 new tests, slice 28's
+    checker tests, db -run Legacy|TestExtractStaticSQL, handlers -run Contributions).
+    /tmp/solvr_idx76_s29_post_comment.log: after folding the router comment into one line, the
+    router test + guard + registry/scan tests PASS again.
+  PROBES [TEST] /tmp/solvr_idx76_s29_probes.log (internal/jobs): both dropped-table probes PASS;
+    static "621 extracted, 551 prepared, 70 did not" (slice 28: 619/549/70; +2 = the two new
+    canonical statements, which prepare on the dropped schema).
+  MUTATIONS [TEST], files restored from /tmp backups, cmp clean:
+    mut1 router back to the three legacy repos -> router test FAIL :76/:81, guard FAIL :24/:28;
+    mut2 list query without deleted_at IS NULL -> scenario FAIL :258/:262/:266/:267/:273;
+    mut3 parent title always shown -> scenario FAIL :258/:262/:267/:273;
+    mut4 author_type ignored -> scenario FAIL :258/:262.
+    Logs /tmp/solvr_idx76_s29_mut{1..4}.log.
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 40m ./...` ->
+    /tmp/solvr_idx76_s29_full.log: 4694 PASS, 78 FAIL, 12 SKIP lines (slice 28: 4692/78/11).
+    Packages FAIL: internal/api, internal/api/handlers, internal/db (same three). Top-level FAIL
+    names vs slice 28's log (comm): 0 new, 0 gone. The 3 new tests PASS in it. SKIP: 1 new,
+    TestTypeSpecificListEndpoints/Question_created_via_/v1/posts_appears_in_/v1/questions
+    (router_content_test.go:404 "did not become open within 35s (GROQ may be slow ...)") —
+    the external GROQ moderation wait, not this diff. PASS +2 = 3 new tests - 1 new skip.
+    This run was taken before the router comment was folded into one line (comment-only).
+  check-file-size.sh -> /tmp/solvr_idx76_s29_filesize.log: "Found 34 file(s) exceeding 800
+    lines", same as slice 28; router.go 1244 after the fold (unchanged). New files 163/277/85.
+  0 solvr_scratch*/solvr_legacy_* databases left [REAL, psql]. NOT RUN: frontend (untouched);
+    golangci-lint.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (GET /v1/users/{id}/contributions, GET /v1/me/
+  contributions; response shape unchanged) [REAL from code + tests above unless stated]:
+  - Items come from migrated replies; each item's id is the REPLY id (was the legacy row id).
+    The frontend (components/users/contributions-list.tsx) uses id only as a React key and links
+    by parent_type + parent_id, which are unchanged [REAL, read].
+  - DEPLOY ORDER as slices 14-28: deployed BEFORE the cutover, no contribution is a reply yet,
+    so both routes list nothing (total 0) until MigrateContributions runs [TEST: scenario "before
+    the cutover"]. Deploy with or after the cutover.
+  - Native replies are not listed (they have no answer/approach/response type), same as today.
+    After the cutover new contributions are native replies, so these lists stop growing; the
+    route family is RETIRE in route_families.go (canonical: GET /v1/posts?author_type=&
+    author_id=) — whether to list native replies or retire the route is idx 73's call
+    [INFERRED].
+  - Pagination keeps the legacy per-type cap: fetchContributions asks each repo for page 1 of
+    min(page*per_page,100) and both old and new repos cap at 50 per type (unchanged quirk).
+
+git status at journal time [REAL]: M backend/internal/api/router.go, M backend/internal/db/
+  legacy_dependency_registry.go, ?? backend/internal/api/router_contributions_canonical_test.go,
+  ?? backend/internal/db/contributions_canonical.go, ?? backend/internal/db/contributions_
+  canonical_test.go, M progress.txt (this entry); spec.json unchanged, passes stays false.
+
+REMAINING (next slices, in order):
+  step 3/5: no production route outside the legacy families (idx 52) now builds a legacy
+    answers/approaches/responses repository [TEST: guard above; REAL: grep]. Still worth one
+    pass: handlers/services that reach legacy tables through NON-legacy repositories via
+    runtime-built SQL (the 70 statements that do not prepare; slice 5 reviewed 67 of them).
+  step 3/4: the unwired legacy methods in stats.go/homepage_overview.go/agents.go/users.go go
+    with the tables (pinned Done=false by earlier slices).
+  step 6 gate: LegacyCleanupBlockers empty — blocked on the table drop (idx 68/93) and on the
+    legacy routes (idx 52); whether idx 76 can close before that is an owner question
+    [UNVERIFIED reading of step 6].
+
+UAT (for when idx 76 closes, not now): as slice 28, plus: after the cutover and deploy, the
+  owner opens a profile with legacy answers/approaches on https://solvr.dev and checks the
+  contributions tab still lists them and links to the right posts.

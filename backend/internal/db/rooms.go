@@ -497,18 +497,6 @@ func (r *RoomRepository) Reopen(ctx context.Context, roomID uuid.UUID) (*models.
 	return r.scanRoomFromRow(ctx, "Reopen", query, roomID)
 }
 
-// UpdateActivity updates last_active_at and updated_at on a room.
-// Called after each message.
-func (r *RoomRepository) UpdateActivity(ctx context.Context, roomID uuid.UUID) error {
-	query := `UPDATE rooms SET last_active_at = NOW(), updated_at = NOW() WHERE id = $1`
-	_, err := r.pool.Exec(ctx, query, roomID)
-	if err != nil {
-		LogQueryError(ctx, "UpdateActivity", "rooms", err)
-		return err
-	}
-	return nil
-}
-
 // DeleteExpiredRooms deletes rooms where expires_at has passed.
 // Returns the number of rooms deleted.
 func (r *RoomRepository) DeleteExpiredRooms(ctx context.Context) (int64, error) {
@@ -519,28 +507,6 @@ func (r *RoomRepository) DeleteExpiredRooms(ctx context.Context) (int64, error) 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-// IncrementMessageCount atomically increments the message_count on a room.
-func (r *RoomRepository) IncrementMessageCount(ctx context.Context, roomID uuid.UUID) error {
-	query := `UPDATE rooms SET message_count = message_count + 1 WHERE id = $1`
-	_, err := r.pool.Exec(ctx, query, roomID)
-	if err != nil {
-		LogQueryError(ctx, "IncrementMessageCount", "rooms", err)
-		return err
-	}
-	return nil
-}
-
-// DecrementMessageCount atomically decrements the message_count on a room (floor at 0).
-func (r *RoomRepository) DecrementMessageCount(ctx context.Context, roomID uuid.UUID) error {
-	query := `UPDATE rooms SET message_count = message_count - 1 WHERE id = $1 AND message_count > 0`
-	_, err := r.pool.Exec(ctx, query, roomID)
-	if err != nil {
-		LogQueryError(ctx, "DecrementMessageCount", "rooms", err)
-		return err
-	}
-	return nil
 }
 
 // scanRoom scans a single room row from a query that returns all 15 columns.

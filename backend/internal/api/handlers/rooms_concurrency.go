@@ -7,7 +7,7 @@ import (
 
 // roomETag derives a strong entity tag for a room from its last-modified time,
 // using the same shared format as every other conditional resource. A room's
-// updated_at also advances on activity (UpdateActivity after each message), so
+// updated_at also advances on activity (with each message, migration 000112), so
 // the validator tracks the whole representation GET returns, including
 // last_active_at: an owner editing settings in a busy room refetches and
 // retries rather than overwriting a revision they never saw.

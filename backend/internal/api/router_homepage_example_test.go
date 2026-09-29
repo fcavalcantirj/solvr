@@ -117,7 +117,6 @@ func seedHomepageExampleRoom(t *testing.T, pool *db.Pool, slug string) *models.R
 			ContentType: "text",
 		})
 		require.NoError(t, err)
-		require.NoError(t, roomRepo.IncrementMessageCount(ctx, room.ID))
 	}
 
 	refreshed, err := roomRepo.GetBySlug(ctx, slug)

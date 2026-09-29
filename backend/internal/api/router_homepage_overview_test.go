@@ -277,7 +277,6 @@ func hpoSeedRoom(t *testing.T, pool *db.Pool, slug, name, purpose string, privat
 			ContentType: "text",
 		})
 		require.NoError(t, err)
-		require.NoError(t, roomRepo.IncrementMessageCount(ctx, room.ID))
 	}
 
 	refreshed, err := roomRepo.GetBySlug(ctx, slug)

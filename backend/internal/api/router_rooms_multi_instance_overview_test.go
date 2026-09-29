@@ -38,7 +38,6 @@ func overviewRoom(t *testing.T, inst *roomInstance, slug string) string {
 			Content: fmt.Sprintf("overview message %d", i), ContentType: "text",
 		})
 		require.NoError(t, err)
-		require.NoError(t, roomRepo.IncrementMessageCount(ctx, room.ID))
 	}
 	return ownerJWT
 }

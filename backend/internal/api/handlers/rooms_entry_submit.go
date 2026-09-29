@@ -56,8 +56,9 @@ func (e *submitError) write(w http.ResponseWriter) {
 // stores exactly one timeline entry (a retry with the same client_entry_id from the same
 // author returns the existing entry with created=false; the same key with a different
 // payload is 409 CLIENT_ENTRY_ID_REUSED), and on a new entry applies the
-// side effects once: message count, room activity, the author's presence heartbeat, the
-// activation milestone and the live broadcast.
+// side effects once: the author's presence heartbeat, the activation milestone and the
+// live broadcast. The room's message count and activity move with the insert itself
+// (migration 000112), so a replay, a rollback or a caller gone mid-request cannot skew them.
 func (h *RoomMessagesHandler) submitMessage(ctx context.Context, room *models.Room, s messageSubmission) (*models.Message, bool, *submitError) {
 	if room.IsArchived() {
 		return nil, false, &submitError{http.StatusConflict, "ROOM_ARCHIVED", archivedRoomMessage}
@@ -140,18 +141,10 @@ func (h *RoomMessagesHandler) storeMessage(ctx context.Context, params models.Cr
 }
 
 // afterMessageCreated applies the once-per-entry side effects of a new message. Each is
-// best-effort: a failed statistic never fails a stored message.
+// best-effort: a failed side effect never fails a stored message. D-30's message count and
+// the room activity timestamp are not among them: the database moves both in the insert's
+// transaction (room_entries_activity, migration 000112).
 func (h *RoomMessagesHandler) afterMessageCreated(ctx context.Context, room *models.Room, msg *models.Message) {
-	if h.roomRepo != nil {
-		// D-30: message count; plus the room activity timestamp.
-		if err := h.roomRepo.IncrementMessageCount(ctx, room.ID); err != nil {
-			slog.Error("failed to increment message count", "error", err, "room_id", room.ID)
-		}
-		if err := h.roomRepo.UpdateActivity(ctx, room.ID); err != nil {
-			slog.Error("failed to update room activity", "error", err, "room_id", room.ID)
-		}
-	}
-
 	// D-28: implicit heartbeat -- an agent's message renews its own presence.
 	if msg.AuthorType == "agent" && msg.AuthorID != nil && h.presenceRepo != nil {
 		if _, err := h.presenceRepo.UpdateHeartbeat(ctx, room.ID, *msg.AuthorID); err != nil {

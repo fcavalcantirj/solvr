@@ -11000,3 +11000,17 @@ CORRECTION to the entry above [REAL, wc -l]: the new files are vote_scores_test.
   claim [REAL, grep INSERT INTO votes in non-test Go]: the only post/reply vote writers are the
   two single-statement pool.Exec upserts in posts.go:747 and replies.go:371 (blog_posts.go:510
   writes blog_post votes, outside 000113).
+
+2026-09-29 16:55 — Task idx 93 (spec.json, category data) — HAND WORK (owner's builder session, not the loop), passes STAYS false
+CUTOVER REHEARSAL on a restored production dump (db-backups/solvr_prod_2026-09-29_15-49-50.dump) in scratch DB
+solvr_cutover_rehearsal. Plan/review: docs/handovers/2026-09-29-solvr-v13-cutover/{PLAN-r1,REVIEW-r1}.md.
+[TEST] migrate force 84 + up 84->113: clean, 7s. Cutover sequence VerifyPostMigration/RemapPostStates (0),
+  MigrateContributions (3327 = 3349 - 22 orphan system comments on hard-deleted posts), RemapLegacyRelations
+  (0 unresolved), rebuild_vote_scores (2 answers lose an upvote with no vote row), rebuild_room_activity (57 rooms,
+  timing drift) — second pass all zeros. Content/author/time/deletion/post-linkage checks: 0 mismatches.
+[TEST] new API on the result: 0 5xx; total_contributions 633 -> 792 (explained: -38 on deleted posts, +34 comments,
+  +163 progress notes); search totals and top-5 identical to old code for 5 queries.
+[TEST] down 113->84 FAILS at 000089.down when any vote targets a reply (votes_target_type_check); after exporting and
+  deleting reply votes it completes. Down loses native replies, keeps rewritten /posts/ notification links (old
+  frontend has no /posts route), and leaves 0/78 room token hashes valid. Old code then serves with 0 5xx.
+No production write. No code change in the main tree. The production runner (cmd/cutover) does not exist yet.

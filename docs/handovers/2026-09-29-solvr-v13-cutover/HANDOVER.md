@@ -1,8 +1,8 @@
 ---
 slug: solvr-v13-cutover
 date: 2026-09-29
-status: open
-round: 0
+status: approved
+round: 1
 author_session: Claude Code session that scaffolded the ralph loop, audited every batch 0/95 → 69/96, fixed four harness defects and two production-class bugs, and migrated production to schema 84
 ---
 

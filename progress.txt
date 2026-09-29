@@ -9557,3 +9557,166 @@ REMAINING (next slices, in order):
 
 UAT (for when idx 76 closes, not now): as slice 24, plus: after deploy the owner fetches
   https://solvr.dev/sitemap-posts.xml and checks the URL count against /v1/sitemap/counts.
+
+2026-09-29 09:22 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 26 of N: steps 3 and 5, the embedding backfill (code:cmd/backfill-embeddings/main.go).
+The command's answers/approaches content types are RETIRED: it embeds posts and replies only,
+and runs against a database whose legacy tables are dropped.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues; slice 25's REMAINING list starts with backfill-embeddings. Tree clean at start
+  (HEAD 0cb1fa96) [REAL, git status --porcelain].
+
+WHY RETIRE, NOT KEEP UNTIL THE DROP [REAL, grep + file reads this session]:
+  - Nothing outside the backfill and the cutover reads answers.embedding/approaches.embedding:
+    hybrid_search_answers/_approaches have no Go caller (registry done entries; grep finds only
+    the registry). Legacy create/edit still write those vectors (answers.go:157/:281,
+    approaches.go:317).
+  - The cutover copies them: RemapLegacyRelations -> copyLegacyEmbeddings
+    (legacy_relation_remap.go:95) sets replies.embedding from the answer/approach vector, and
+    the replies type (repliesPendingEmbedding, replies.go) embeds every live non-system reply
+    still without one, so a migrated answer/approach without a vector gets one after the
+    cutover from its reply body.
+
+WHAT CHANGED [REAL, git status --porcelain + git diff --stat: 4 modified, 1 new; +120/-692]:
+  M backend/cmd/backfill-embeddings/main.go (653 -> 344): removed answerRow, approachRow,
+    buildApproachText, runAnswers, runApproaches, the 6 answer/approach backfillDB methods
+    (interface + pgBackfillDB), their backfillResult fields. parseContentTypes now returns
+    ([]string, error): "all"/"" = [posts replies]; "answers" or "approaches" anywhere in the
+    list is an ERROR ("content type %q was retired: answers and approaches are replies now,
+    use -content-types=replies"), main() log.Fatal's on it; other unknown names are still
+    ignored (existing contract, unchanged). Flag help and the final summary line name posts
+    and replies only. gofmt applied (the file was already not gofmt-clean at HEAD [REAL,
+    git show HEAD:... | gofmt -l]).
+  M backend/internal/db/legacy_dependency_registry.go: entry code:cmd/backfill-embeddings/
+    main.go removed (the command names no legacy table now); feature:embedding-workers note
+    (still done) reworded: backfill embeds posts and replies only, its answers/approaches types
+    retired, the cutover copies their vectors.
+  M backend/cmd/backfill-embeddings/backfill_test.go: see EXISTING TESTS CHANGED. gofmt
+    applied (also not gofmt-clean at HEAD).
+  M backend/cmd/backfill-embeddings/backfill_replies_test.go (2 lines, mechanical): the two
+    parseContentTypes calls go through the new mustParseContentTypes(t, s) helper; assertions
+    unchanged.
+  A backend/cmd/backfill-embeddings/backfill_canonical_test.go (247):
+    - TestLegacyBackfill_ReadsNoLegacyTable: the source scan finds no code:cmd/backfill-
+      embeddings/ file and the registry holds no such key.
+    - TestParseContentTypes_RejectsRetiredLegacyTypes: answers, approaches, posts,answers,
+      "replies, approaches " all error and name replies; all = [posts replies].
+    - TestBackfill_EmbedsMigratedContributionsOnceTheLegacyTablesAreGone (own scratch DB
+      solvr_scratch_backfill_<nanos>, every up migration applied; helper
+      newBackfillScratchDatabase, since the internal/db and internal/jobs scratch helpers are
+      test-only in other packages): question post (no vector), problem post (vector), answer
+      (no vector), approach "bare" (no vector), approach "embedded" (vector). Before the
+      cutover a dry run of "all" finds posts=1 replies=0 total=1. Then MigrateContributions +
+      RemapLegacyRelations, then DROP TABLE <LegacyTables> CASCADE, then a real run of "all"
+      (batch size 1): posts 1 + replies 2 embedded, 0 errors; embedding inputs = exactly the
+      question's "title description", the answer reply's body and the bare approach reply's
+      body (which contains its angle, method and outcome); both have 1024 dims; the reply of
+      the embedded approach keeps the copied vector (not re-embedded); nothing left pending.
+
+EXISTING TESTS CHANGED (backfill_test.go) — each described the retired answers/approaches
+  types [REAL, diff read]:
+  DELETED, with named replacements (all PASS below):
+  - TestBackfillWorker_AnswersOnly: asserted "answersEmbedded=3", "0 post update calls", "3
+    answer update calls" for contentTypes [answers]. Replaced by TestParseContentTypes_Rejects
+    RetiredLegacyTypes (the type is now rejected), TestBackfill_EmbedsMigratedContributions
+    OnceTheLegacyTablesAreGone (a migrated answer is embedded as a reply from its body) and
+    the existing TestBackfillWorker_RepliesOnly (a single-type run does not touch posts).
+  - TestBackfillWorker_ApproachesOnly: asserted "approachesEmbedded=2", 2 approach updates, 0
+    post/answer updates. Same replacements as above (the bare approach's reply is embedded).
+  - TestBackfillWorker_ApproachTextCombination: asserted text "My angle My method My outcome My
+    solution". Replaced by TestBackfill_EmbedsMigratedContributionsOnceTheLegacyTablesAreGone:
+    the input is the migrated reply body, asserted to contain angle, method and outcome.
+  - TestBackfillWorker_ApproachTextOmitsEmptyFields: asserted "My angle My method" with empty
+    outcome/solution. The text is now the reply body; empty optional sections are omitted by
+    buildApproachBody, pinned by the existing TestBuildApproachBody_PreservesAllFields
+    (internal/db/contribution_migration_test.go:46-51, "should omit empty optional sections"),
+    PASS in the full run below.
+  - TestBackfillWorker_AnswerEmbeddingError: asserted answersEmbedded=2, answersErrors=1 when
+    the 2nd of 3 embedding calls fails. Replaced by the existing TestBackfillWorker_Reply
+    ErrorsAreCountedAndSkipped (same shape for replies: embedded 2, errors 1, total errors 1).
+  REWRITTEN IN PLACE (same names, the retired types swapped for replies):
+  - TestBackfillWorker_AllContentTypes: was posts/answers/approaches 1 each, embedded = sum, 3
+    calls; now "all" (mustParseContentTypes) with posts 1 + replies 1, embedded = sum, 2 calls.
+  - TestBackfillWorker_DryRunAllTypes: was postsFound 2, answersFound 1, approachesFound 1, 0
+    calls; now "all": postsFound 2, repliesFound 1, totalFound 3, 0 calls.
+  - TestParseContentTypes_All / _EmptyDefaultsToAll: 4 types -> 2 (posts, replies).
+  - TestParseContentTypes_Single: "answers" -> "posts" (answers now errors, see Rejects...).
+  - TestParseContentTypes_Multiple: "posts,approaches" -> "posts,replies".
+  Untouched: DryRun, ProcessesBatches, ContinuesOnEmbeddingError, ContinuesOnDBError,
+    EmptyDatabase, ContextCanceled (posts), and every test in backfill_replies_test.go
+    (assertions unchanged).
+
+VERIFICATION [solvr_test = postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres, schema_migrations 111 dirty=f); the scenario test creates/drops its own
+  scratch DB on that server]:
+  go build ./... clean; go vet ./cmd/backfill-embeddings/ ./internal/db/ clean; gofmt -l clean
+    on the 5 files.
+  RED [TEST]:
+    /tmp/solvr_idx76_s26_red1.log: new test file on the HEAD tree: build failed ("assignment
+      mismatch: 2 variables but parseContentTypes returns 1 value") — expected, signature.
+    /tmp/solvr_idx76_s26_red2.log: detached worktree at 0cb1fa96 + the new test file with a
+      RED-only shim (parseContentTypesShim wrapping the old single-value parser): guard FAIL
+      :29/:34 (main.go scanned, disposition present); RejectsRetired FAIL :43 x4 + :52 (all =
+      [posts answers approaches replies]); scenario FAIL :120 "before the cutover found
+      posts=1 replies=0 total=3".
+    /tmp/solvr_idx76_s26_red3.log: same worktree, pre-cutover assertion bypassed: FAIL :144
+      "backfill without the legacy tables: count answers: ERROR: relation "answers" does not
+      exist (SQLSTATE 42P01)". Worktree removed.
+  GREEN [TEST] /tmp/solvr_idx76_s26_green.log: go test ./cmd/backfill-embeddings/ -v: 20 PASS,
+    0 FAIL, 0 SKIP (incl. the 3 new tests and TestPGBackfillDB_EmbedsLiveHumanAndAgent
+    RepliesOnly). /tmp/solvr_idx76_s26_registry.log: internal/db -run Legacy: 47 PASS, 0
+    FAIL/SKIP. /tmp/solvr_idx76_s26_probes.log: both dropped-table probes PASS (static: 618
+    extracted, 548 prepared, 70 did not — slice 25 was 624/554/70: the 6 removed answer/
+    approach statements).
+  MUTATIONS [TEST], main.go/replies.go restored from backups after each (cmp clean):
+    mut1 retired names ignored again -> RejectsRetired FAIL; mut2 drop "embedding IS NULL"
+    from repliesPendingEmbedding -> scenario FAIL :147 (replies=1, want 2) and
+    TestPGBackfillDB_EmbedsLiveHumanAndAgentRepliesOnly FAIL; mut3 all = [posts] ->
+    RejectsRetired, scenario, DryRunCountsReplies, AllContentTypes, DryRunAllTypes FAIL; mut4
+    append `SELECT id FROM answers` const to main.go -> guard FAIL. Logs
+    /tmp/solvr_idx76_s26_mut{1..4}.log.
+  FULL BACKEND [TEST], once, main tree: `go test -p 1 -count=1 -v -timeout 40m ./...` ->
+    /tmp/solvr_idx76_s26_full.log: 4693 PASS, 69 FAIL, 14 SKIP (slice 25: 4697/69/12, same
+    counting). Packages FAIL: internal/api, internal/api/handlers, internal/db (same as slice
+    25). Top-level FAIL names vs slice 25 (comm): 0 new, 0 gone. PASS -4 = 5 deleted + 3 new
+    tests (-2) and 2 new SKIPs (-2). The 2 new SKIPs are both in internal/api and are the
+    GROQ moderation wait: TestE2E_PostAppearsInList (router_e2e_test.go:383 "post did not
+    become open within 35s - GROQ rate limited or slow") and TestTypeSpecificListEndpoints/
+    Idea_created_via_/v1/posts_appears_in_/v1/ideas (same 35s wait); external service timing,
+    and internal/api cannot import a main package, so not this diff [REAL].
+  check-file-size.sh -> /tmp/solvr_idx76_s26_filesize.log: 35 violations, same count as slices
+    1-25; none in cmd/backfill-embeddings (largest 447).
+  0 solvr_scratch*/solvr_legacy_* databases left [REAL, psql]. NOT RUN: frontend (untouched);
+    golangci-lint.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (go run ./cmd/backfill-embeddings; operator CLI, no
+  API change) [REAL from code + tests above unless stated]:
+  - -content-types all (default) now embeds posts and replies only. Before the cutover, legacy
+    answers/approaches without a vector are no longer embedded by this command; after the
+    cutover their replies are (from the reply body; for approaches that is the labeled
+    buildApproachBody text, not "angle method outcome solution"). Embedding API calls move
+    from before to after the cutover; their number is unchanged [INFERRED].
+  - -content-types answers / approaches (alone or in a list) now exits with the "retired"
+    error instead of running. SPEC.md:4253 still shows `--content-types posts,answers,
+    approaches` — not edited (SPEC edits are for API changes the task names); now a stale
+    example, for idx 78 or the owner.
+  - DEPLOY ORDER: none; the command reads posts and replies, which exist before and after
+    the cutover.
+
+git status at journal time [REAL]: M backfill_replies_test.go, M backfill_test.go, M main.go,
+  M legacy_dependency_registry.go, ?? backfill_canonical_test.go, M progress.txt (this entry);
+  spec.json unchanged, passes stays false.
+
+REMAINING (next slices, in order):
+  step 3/4: the ideas sidebar in stats.go and the other pending code: entries
+    (homepage_overview.go, agents.go, users.go: unwired legacy methods). Both dropped-table
+    probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): as slice 25, plus: after the cutover the owner runs
+  `go run ./cmd/backfill-embeddings -dry-run` against production and checks the replies count
+  is the migrated replies that had no legacy vector.

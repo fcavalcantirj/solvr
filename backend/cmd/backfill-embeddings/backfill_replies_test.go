@@ -92,7 +92,7 @@ func TestBackfillWorker_ReplyErrorsAreCountedAndSkipped(t *testing.T) {
 func TestBackfillWorker_DryRunCountsReplies(t *testing.T) {
 	mdb := &mockDB{replies: []replyRow{{ID: "rep-1", Body: "a"}}}
 	embSvc := &mockEmbeddingService{}
-	worker := &backfillWorker{db: mdb, embeddingService: embSvc, batchSize: 10, dryRun: true, contentTypes: parseContentTypes("all")}
+	worker := &backfillWorker{db: mdb, embeddingService: embSvc, batchSize: 10, dryRun: true, contentTypes: mustParseContentTypes(t, "all")}
 
 	result, err := worker.run(context.Background())
 	if err != nil {
@@ -104,7 +104,7 @@ func TestBackfillWorker_DryRunCountsReplies(t *testing.T) {
 }
 
 func TestParseContentTypes_Replies(t *testing.T) {
-	types := parseContentTypes("replies,posts")
+	types := mustParseContentTypes(t, "replies,posts")
 	if len(types) != 2 || types[0] != "replies" || types[1] != "posts" {
 		t.Fatalf("parseContentTypes(replies,posts) = %v, want [replies posts]", types)
 	}

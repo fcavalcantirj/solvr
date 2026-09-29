@@ -706,8 +706,10 @@ func (r *PostRepository) Delete(ctx context.Context, id string) error {
 
 // Vote adds or updates a vote on a post.
 // If the voter hasn't voted, it inserts a new vote.
-// If the voter has voted with a different direction, it updates the vote and adjusts counts.
+// If the voter has voted with a different direction, it updates the vote.
 // If the voter has voted with the same direction, it's a no-op.
+// The post's upvotes/downvotes follow the vote row inside the same statement (migration
+// 000113 triggers), so concurrent or replayed requests from one voter count once.
 // Per SPEC.md Part 2.9: One vote per entity per target.
 func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, direction string) error {
 	// Validate direction
@@ -739,90 +741,21 @@ func (r *PostRepository) Vote(ctx context.Context, postID, voterType, voterID, d
 		return ErrPostNotFound
 	}
 
-	// Check for existing vote
-	var existingDirection string
-	err = r.pool.QueryRow(ctx,
-		`SELECT direction FROM votes
-		 WHERE target_type = 'post' AND target_id = $1
-		 AND voter_type = $2 AND voter_id = $3`,
-		postID, voterType, voterID,
-	).Scan(&existingDirection)
-
-	if err != nil && err.Error() != "no rows in result set" {
-		LogQueryError(ctx, "Vote.CheckExisting", "votes", err)
-		return fmt.Errorf("failed to check existing vote: %w", err)
+	// One statement: a concurrent first vote from the same voter becomes an update instead
+	// of a unique-key failure, and repeating the current direction writes nothing.
+	_, err = r.pool.Exec(ctx,
+		`INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed)
+		 VALUES ('post', $1, $2, $3, $4, true)
+		 ON CONFLICT ON CONSTRAINT votes_unique_per_target
+		 DO UPDATE SET direction = EXCLUDED.direction
+		 WHERE votes.direction IS DISTINCT FROM EXCLUDED.direction`,
+		postID, voterType, voterID, direction,
+	)
+	if err != nil {
+		LogQueryError(ctx, "Vote.Upsert", "votes", err)
+		return fmt.Errorf("failed to record vote: %w", err)
 	}
-
-	// If same vote exists, nothing to do
-	if existingDirection == direction {
-		return nil
-	}
-
-	// Use WithTx for atomicity
-	return r.pool.WithTx(ctx, func(tx Tx) error {
-		if existingDirection == "" {
-			// No existing vote - insert new vote and update post counts
-			_, err = tx.Exec(ctx,
-				`INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed)
-				 VALUES ('post', $1, $2, $3, $4, true)`,
-				postID, voterType, voterID, direction,
-			)
-			if err != nil {
-				LogQueryError(ctx, "Vote.InsertVote", "votes", err)
-				return fmt.Errorf("failed to insert vote: %w", err)
-			}
-
-			// Update post vote counts
-			if direction == "up" {
-				_, err = tx.Exec(ctx,
-					"UPDATE posts SET upvotes = upvotes + 1 WHERE id = $1",
-					postID,
-				)
-			} else {
-				_, err = tx.Exec(ctx,
-					"UPDATE posts SET downvotes = downvotes + 1 WHERE id = $1",
-					postID,
-				)
-			}
-			if err != nil {
-				LogQueryError(ctx, "Vote.UpdateCounts", "posts", err)
-				return fmt.Errorf("failed to update post vote counts: %w", err)
-			}
-		} else {
-			// Existing vote with different direction - update vote and adjust counts
-			_, err = tx.Exec(ctx,
-				`UPDATE votes SET direction = $4
-				 WHERE target_type = 'post' AND target_id = $1
-				 AND voter_type = $2 AND voter_id = $3`,
-				postID, voterType, voterID, direction,
-			)
-			if err != nil {
-				LogQueryError(ctx, "Vote.UpdateDirection", "votes", err)
-				return fmt.Errorf("failed to update vote: %w", err)
-			}
-
-			// Adjust post vote counts: decrement old, increment new
-			if direction == "up" {
-				// Was down, now up: downvotes--, upvotes++
-				_, err = tx.Exec(ctx,
-					"UPDATE posts SET upvotes = upvotes + 1, downvotes = downvotes - 1 WHERE id = $1",
-					postID,
-				)
-			} else {
-				// Was up, now down: upvotes--, downvotes++
-				_, err = tx.Exec(ctx,
-					"UPDATE posts SET upvotes = upvotes - 1, downvotes = downvotes + 1 WHERE id = $1",
-					postID,
-				)
-			}
-			if err != nil {
-				LogQueryError(ctx, "Vote.AdjustCounts", "posts", err)
-				return fmt.Errorf("failed to adjust post vote counts: %w", err)
-			}
-		}
-
-		return nil
-	})
+	return nil
 }
 
 // GetUserVote returns the user's current vote on a post, or nil if not voted.

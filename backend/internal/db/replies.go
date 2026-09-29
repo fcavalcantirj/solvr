@@ -340,9 +340,10 @@ func (r *ReplyRepository) loadOwner(ctx context.Context, id string) (*models.Rep
 	return &reply, nil
 }
 
-// Vote records or updates a confirmed vote on a reply and keeps the reply's
-// upvote/downvote counters in sync. Votes target the canonical Reply identity
-// (target_type = 'reply'), the same polymorphic votes table posts use.
+// Vote records or updates a confirmed vote on a reply. Votes target the canonical
+// Reply identity (target_type = 'reply'), the same polymorphic votes table posts use.
+// The reply's upvote/downvote counters follow the vote row inside the same statement
+// (migration 000113 triggers), so concurrent or replayed requests count once.
 func (r *ReplyRepository) Vote(ctx context.Context, replyID, voterType, voterID, direction string) error {
 	if direction != "up" && direction != "down" {
 		return ErrInvalidVoteDirection
@@ -366,64 +367,18 @@ func (r *ReplyRepository) Vote(ctx context.Context, replyID, voterType, voterID,
 		return models.ErrReplyNotFound
 	}
 
-	var existingDirection string
-	err = r.pool.QueryRow(ctx,
-		`SELECT direction FROM votes
-		 WHERE target_type = 'reply' AND target_id = $1 AND voter_type = $2 AND voter_id = $3`,
-		replyID, voterType, voterID,
-	).Scan(&existingDirection)
-	if err != nil && err.Error() != "no rows in result set" {
-		LogQueryError(ctx, "Reply.Vote.CheckExisting", "votes", err)
-		return fmt.Errorf("check existing vote: %w", err)
+	if _, err := r.pool.Exec(ctx,
+		`INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed)
+		 VALUES ('reply', $1, $2, $3, $4, true)
+		 ON CONFLICT ON CONSTRAINT votes_unique_per_target
+		 DO UPDATE SET direction = EXCLUDED.direction
+		 WHERE votes.direction IS DISTINCT FROM EXCLUDED.direction`,
+		replyID, voterType, voterID, direction,
+	); err != nil {
+		LogQueryError(ctx, "Reply.Vote.Upsert", "votes", err)
+		return fmt.Errorf("record vote: %w", err)
 	}
-	if existingDirection == direction {
-		return nil
-	}
-
-	return r.pool.WithTx(ctx, func(tx Tx) error {
-		if existingDirection == "" {
-			if _, err := tx.Exec(ctx,
-				`INSERT INTO votes (target_type, target_id, voter_type, voter_id, direction, confirmed)
-				 VALUES ('reply', $1, $2, $3, $4, true)`,
-				replyID, voterType, voterID, direction,
-			); err != nil {
-				LogQueryError(ctx, "Reply.Vote.Insert", "votes", err)
-				return fmt.Errorf("insert vote: %w", err)
-			}
-			col := "upvotes"
-			if direction == "down" {
-				col = "downvotes"
-			}
-			if _, err := tx.Exec(ctx,
-				fmt.Sprintf("UPDATE replies SET %s = %s + 1 WHERE id = $1", col, col), replyID,
-			); err != nil {
-				LogQueryError(ctx, "Reply.Vote.UpdateCounts", "replies", err)
-				return fmt.Errorf("update reply vote counts: %w", err)
-			}
-			return nil
-		}
-
-		if _, err := tx.Exec(ctx,
-			`UPDATE votes SET direction = $4
-			 WHERE target_type = 'reply' AND target_id = $1 AND voter_type = $2 AND voter_id = $3`,
-			replyID, voterType, voterID, direction,
-		); err != nil {
-			LogQueryError(ctx, "Reply.Vote.UpdateDirection", "votes", err)
-			return fmt.Errorf("update vote: %w", err)
-		}
-		if direction == "up" {
-			_, err = tx.Exec(ctx,
-				"UPDATE replies SET upvotes = upvotes + 1, downvotes = downvotes - 1 WHERE id = $1", replyID)
-		} else {
-			_, err = tx.Exec(ctx,
-				"UPDATE replies SET upvotes = upvotes - 1, downvotes = downvotes + 1 WHERE id = $1", replyID)
-		}
-		if err != nil {
-			LogQueryError(ctx, "Reply.Vote.AdjustCounts", "replies", err)
-			return fmt.Errorf("adjust reply vote counts: %w", err)
-		}
-		return nil
-	})
+	return nil
 }
 
 // GetUserVote returns the caller's current vote direction on a reply, or nil.

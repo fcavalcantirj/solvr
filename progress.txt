@@ -10833,3 +10833,170 @@ UAT (for when idx 77 closes, not now): apply migration 000112 on production toge
   API deploy that carries b9d7644c, then run `SELECT * FROM room_activity_drift();` and
   `SELECT rebuild_room_activity();` and confirm a second `SELECT * FROM room_activity_drift();`
   returns 0 rows.
+
+2026-09-29 15:55 — Task idx 77 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Make indexes, counters, search projections, and analytics rebuildable from authoritative records"
+SLICE 2 of N: post and reply scores (upvotes/downvotes) become a projection of their confirmed
+votes, maintained by triggers on votes inside the vote's own transaction, with a documented
+drift check and rebuild (step 2); concurrent/replayed votes from one voter count once (step 3).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. 24/52/53/67/68/73/74/76 stay gated as slice 1 of idx 77 recorded.
+  idx 77 continues. Tree clean at start [REAL, git status --porcelain]; HEAD 8a7eb2bd = slice 1.
+
+INVENTORY [REAL, information_schema + grep of non-test Go on solvr_test]: stored counters on the
+  canonical tables: posts.upvotes/downvotes, replies.upvotes/downvotes (API-maintained in
+  PostRepository.Vote / ReplyRepository.Vote), rooms.message_count/last_active_at (000112,
+  slice 1), posts.view_count (views.go), tags.usage_count (tags.go), agents.reputation
+  (claim_tokens.go, agents_linking.go), blog_posts.upvotes/downvotes/view_count. Legacy
+  answers/responses counters are the legacy tables' own (retire with them). Scores taken first:
+  SPEC.md:184 says "score / upvotes / downvotes: int (server-computed from confirmed votes)", and
+  the spike below measured them wrong under concurrency.
+
+SPIKE FIRST [TEST, throwaway zz_spike_vote_race_test.go on a scratch DB, deleted before commit,
+  /tmp/solvr_idx77_s2_spike.log]: the old Vote read the voter's previous vote OUTSIDE its
+  transaction, then moved the counters itself. 5 rounds of (vote up, then 8 concurrent "down"
+  from the same voter) left the post at upvotes=-26 downvotes=32 while its confirmed votes said
+  up=1 down=5; the reply at -30/35 vs 0/5. 8 concurrent FIRST votes from one voter: 7 failed with
+  `duplicate key value violates unique constraint "votes_unique_per_target" (SQLSTATE 23505)`
+  (a 500 for a double click). Measured, not inferred.
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain / git diff --stat before this append]:
+  A backend/migrations/000113_vote_score_projection.up.sql:
+    - votes_score_projection() + 3 triggers on votes: AFTER INSERT (WHEN target_type IN
+      ('post','reply') AND confirmed), AFTER UPDATE OF direction, confirmed (WHEN the target is
+      unchanged and direction or confirmed changed), AFTER DELETE (WHEN a confirmed post/reply
+      vote). One UPDATE of the target row per event with the net delta (a flip = -1/+1 in one
+      write), clamped at 0 (GREATEST, as 000112), NULL counters treated as 0.
+    - vote_score_drift(p_target_type text, p_target_id uuid) read-only: posts/replies whose
+      stored counters differ (IS DISTINCT FROM, so NULL is drift) from confirmed votes.
+    - rebuild_vote_scores(p_target_type, p_target_id): refuses other target types (RAISE),
+      locks the rows FOR NO KEY UPDATE first, then rewrites only drifted rows; returns the count.
+    - Header documents the rebuild path and one deliberate non-event: a statement that
+      RETARGETS a vote (target_type/target_id) moves nothing. Reason [REAL, read
+      contribution_migration.go:449-456,483-490]: MigrateContributions copies the legacy
+      upvotes/downvotes into replies and RemapContributionVotesAndReports then retargets those
+      votes; counting the move would count them twice. Run the rebuild after a retarget.
+  A backend/migrations/000113_vote_score_projection.down.sql: drops the 3 triggers + 3 functions.
+  M backend/internal/db/posts.go (935 -> 868) and M backend/internal/db/replies.go (493 -> 448):
+    Vote keeps its validation and existence check; the pre-read, the transaction and every
+    counter UPDATE are replaced by ONE statement:
+      INSERT INTO votes (...) VALUES ('post'|'reply', ..., true)
+      ON CONFLICT ON CONSTRAINT votes_unique_per_target DO UPDATE SET direction = EXCLUDED.direction
+      WHERE votes.direction IS DISTINCT FROM EXCLUDED.direction
+    Error text "failed to insert vote"/"insert vote" -> "failed to record vote"/"record vote"
+    (no caller matches on it [REAL, grep internal/api internal/services for 23505/votes_unique:
+    none]).
+  A backend/internal/db/vote_scores_test.go (342, scratch DBs, 4 tests):
+    - EveryVoteEventMovesTheScoreInItsOwnTransaction: for post and reply: 2 ups, a flip, a
+      repeat; un-confirm/re-confirm; an unconfirmed insert (not counted); a confirmed raw insert;
+      raw deletes; a rolled-back insert (not counted); score == confirmed votes; drift empty.
+    - ConcurrentVotesByOneVoterCountOnce: the spike's shape (8 racers on post and reply per
+      phase, 4 voters, up/down/up flips): no error, each voter counted once (2/2), drift empty.
+    - DriftNamesEveryBrokenScoreAndTheRebuildRepairsIt: a NULL downvotes with right upvotes, a
+      wrong reply counter, and a retargeted vote (both ends drift, nothing moved); type/id
+      filters; one-target rebuild = 1; full rebuild = 3; consistent rows not rewritten (xmin
+      unchanged); replay = 0; rebuild_vote_scores('answer') refused.
+    - ARebuildAndAVoteNeverLoseEachOther: (1) a vote in flight: the rebuild waits on its lock
+      (pg_stat_activity), then counts it (4); (2) a rebuild in flight: a Vote waits, then lands on
+      the rebuilt value (5).
+  A docs/handovers/2026-09-29-solvr-v13-cutover/HANDOVER.md — NOT this slice's work: written
+    15:49-15:50 by another (owner's) Claude session while this iteration ran; not read beyond its
+    header, not modified; staged only because this loop's commit step is `git add .`.
+  No existing test changed, skipped or removed. No handler, frontend or SPEC.md change (no API
+  shape change).
+
+VERIFICATION [DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local docker
+  solvr-postgres; scratch DBs migrate from the files]:
+  RED [TEST] /tmp/solvr_idx77_s2_red.log: 4 FAIL — :124 "expected {up:1 down:0} actual {1 1}
+    post: an unconfirmed vote is not counted"; concurrent test "duplicate key value violates
+    unique constraint votes_unique_per_target"; "function vote_score_drift(unknown, uuid) does
+    not exist"; "function rebuild_vote_scores(unknown, uuid) does not exist".
+  GREEN [TEST] /tmp/solvr_idx77_s2_green.log then (after the NULL-drift tightening below)
+    /tmp/solvr_idx77_s2_green2.log: 4 PASS, 0 FAIL, 0 SKIP.
+  MUTATIONS [TEST], sources restored from /tmp/solvr_idx77_s2_{000113.up.sql,posts.go,
+    replies.go}.bak / by hand and cmp- or diff-stat-verified after each:
+    mut1 rebuild without the posts FOR NO KEY UPDATE -> NeverLoseEachOther FAIL :325 "expected
+      {4 0} actual {3 0} the in-flight vote is counted" (/tmp/solvr_idx77_s2_mut1.log);
+    mut2 trigger counts unconfirmed votes -> EveryVoteEvent FAIL :124 (mut2.log);
+    mut3 drift compares with <> -> SURVIVED (mut3.log): the NULL post also had a wrong upvotes,
+      which flagged it anyway. Test tightened (only downvotes NULL, upvotes right); mut3b ->
+      Drift FAIL :228 "exactly the four broken targets" lists 3 (mut3b.log);
+    mut4 Vote without ON CONFLICT -> EveryVoteEvent FAIL :117 "failed to record vote: ...
+      duplicate key ... votes_unique_per_target" and the concurrent test fails (mut4.log).
+  [REAL] solvr_test migrated 112 -> 113 with `migrate ... up 1`; `down 1` (triggers 0, functions
+    0, version 112) and `up 1` again (3 triggers, 3 functions, version 113, dirty=f).
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 40m ./...` ->
+    /tmp/solvr_idx77_s2_full.log: 4693 PASS, 100 FAIL, 12 SKIP lines; packages FAIL: internal/api,
+    internal/api/handlers, internal/db (the same three as slice 32). All 14 vote tests PASS in it
+    (the 4 new + TestPostRepository_Vote_{Upvote,Downvote,ChangeVote,MultipleVoters,
+    SameVoteTwice,PostNotFound,InvalidDirection,InvalidVoterType,SetsConfirmedTrue} +
+    TestReplyRepository_VoteTargetsReplyIdentity); all 41 TestLegacy* PASS; gate log "56 legacy
+    cleanup blockers" (= slice 33, 000113 adds no cleanup statement).
+    Top-level FAIL names vs slice 32's log (comm): 0 gone, 21 new:
+      20 TestAgentRepository_* / TestBadges_* — "agent ID already exists" / idx_agents_display_
+        name_unique. Postgres log at 18:49:31Z: "Key (display_name)=(List Test Agent 1) already
+        exists", "(Low Reputation Agent)", "(Older Agent)", "(New Name)"...: rows with those
+        fixed fixture names existed BEFORE the tests ran, and were gone after the run [REAL, psql]
+        — users_test.go:1410 and user_api_keys_test.go:731 run `DELETE FROM agents` later in the
+        package. Origin of the leftover rows: unknown (only agents_list_test.go creates "List Test
+        Agent 1"; a run interrupted before its cleanup is a guess [INFERRED]). Not agent code in
+        this diff.
+      1 TestRoomExpiry_ExpiredRoomLeavesEveryListingBeforeTheReaper — :63 precondition "overview
+        lists the live room" (a 3s expiry window; load average ~15-20) [cause not investigated].
+    NOT caused by this slice [TEST]: all 21 re-run ALONE on this tree, once, after the full run:
+      /tmp/solvr_idx77_s2_agents_alone.log 20 PASS 0 FAIL 0 SKIP; /tmp/solvr_idx77_s2_expiry_
+      alone.log PASS.
+  go vet ./internal/db/ clean; gofmt -l clean on posts.go, replies.go, vote_scores_test.go.
+  check-file-size.sh -> /tmp/solvr_idx77_s2_filesize.log "Found 34 file(s) exceeding 800 lines",
+    same as slice 1; posts.go still one of them (868, was 935); new files 342/166/8.
+  0 solvr_scratch*/solvr_legacy_* databases left [REAL, psql]. NOT RUN: frontend (untouched);
+    golangci-lint (config/version mismatch, slice 31).
+
+MEASURED ON THE SHARED LOCAL solvr_test (read-only) [REAL]: vote_score_drift() = 51 posts and
+  102 replies (of 8977 posts / 3465 replies), fixture writes of upvotes/downvotes (e.g. sort
+  tests) — not repaired. EXPLAIN ANALYZE of SELECT count(*) FROM vote_score_drift(): 55ms
+  execution over those 12.4k targets.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (runtime):
+  - Double clicks / retries on POST .../vote no longer 500 on the unique key, and no longer move
+    the score more than once.
+  - Scores count CONFIRMED votes only, whatever writes the vote row (SPEC.md:184); un-confirming
+    a vote uncounts it. A re-vote on a legacy unconfirmed vote changes its direction without
+    confirming it, and moves no counter (before: moved the counters ±1 as if counted).
+  - Deploy ordering [INFERRED from the code, as 000112]: 000113 before the new API = old code AND
+    the trigger both count (double); new API before 000113 = nothing counts. Either window is
+    repaired by the rebuild below.
+
+LIMITS [UNVERIFIED unless stated]: blog_post votes still go through blog_posts.go's own
+  read-then-write counters (same race shape, not measured, not covered by 000113); rebuild
+  locks all posts then all replies — a transaction that votes on a reply and then a post
+  concurrently with a full rebuild could deadlock (no production path votes twice in one
+  transaction [REAL, grep]).
+
+REMAINING for idx 77 (next slices, in order) [UNVERIFIED plan]:
+  step 2/3: blog_posts scores (same pattern); tags.usage_count, posts.view_count,
+    agents.reputation — decide stored vs derived, give each stored one drift + rebuild; public
+    activity previews, search documents, overview aggregates; the activation milestone replay.
+  step 1: measured query plans on representative data for the listed lookups.
+  step 4: raw eligible search events vs time buckets + retention windows.
+  step 5: reconcile counters/sampled search after migration and rebuilds; visibility/deletion.
+  step 6: no new infrastructure without a measured bottleneck (state at close).
+
+git status at journal time [REAL]: M backend/internal/db/posts.go, M backend/internal/db/
+  replies.go, ?? backend/internal/db/vote_scores_test.go, ?? backend/migrations/000113_vote_
+  score_projection.{up,down}.sql, ?? docs/handovers/ (not mine, above), M progress.txt (this
+  entry); spec.json unchanged, passes stays false.
+
+UAT (for when idx 77 closes, not now): apply 000112 AND 000113 on production together with the
+  API deploy carrying b9d7644c and this commit; then `SELECT * FROM vote_score_drift();` (read
+  the list first — it shows how far the old counters drifted), `SELECT rebuild_vote_scores();`,
+  and confirm a second `SELECT * FROM vote_score_drift();` returns 0 rows; plus slice 1's
+  room_activity_drift()/rebuild_room_activity() check. After the contribution cutover
+  (RemapLegacyRelations), run `SELECT rebuild_vote_scores('reply');` once more.
+CORRECTION to the entry above [REAL, wc -l]: the new files are vote_scores_test.go 342,
+  000113 up 175 (not 166), down 8. The "no production path votes twice in one transaction"
+  claim [REAL, grep INSERT INTO votes in non-test Go]: the only post/reply vote writers are the
+  two single-statement pool.Exec upserts in posts.go:747 and replies.go:371 (blog_posts.go:510
+  writes blog_post votes, outside 000113).

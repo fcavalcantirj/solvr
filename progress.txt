@@ -9180,3 +9180,152 @@ REMAINING (next slices, in order):
 UAT (for when idx 76 closes, not now): as slice 21, plus: after the cutover deploy the owner opens
   a post with replies and checks that "REPLIES (N)" equals the number of replies listed, and that
   a question answered by a reply no longer appears on /v1/feed/unanswered.
+
+2026-09-28 23:38 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 23 of N: step 5, search (code:internal/db/search.go). This entry VERIFIES AND JOURNALS
+work that is already committed: HEAD 15ad6a6e is a ralph.sh HOST AUTO-COMMIT (its message is
+the truncated header of slice 22). The engine call that wrote it was cut off mid full-suite run:
+/tmp/solvr_idx76_s23_full.log (the killed iteration's own log) ends at 23:11:38 inside
+TestCommentAndViewSurfaces_..., one second before the commit time 23:11:39 [REAL, log tail +
+git log]; no RALPH ITERATION TIMEOUT line was appended [REAL, grep]. This iteration changes no
+code, only this journal. I did not cite that iteration's /tmp/solvr_idx76_s23_* logs; every
+result below is from my own runs (/tmp/solvr_idx76_s23v_*).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues; slice 22's REMAINING list starts with search, which HEAD already holds unjournaled.
+  Tree clean at start [REAL, git status --porcelain].
+
+WHAT HEAD 15ad6a6e CHANGED [REAL, git show --stat HEAD + diff read]: 6 files, +338/-169.
+  M backend/internal/db/search.go (653 -> 500): searchAnswers and searchApproaches (full text
+    over the answers / approaches tables) are deleted; Search loops over two replySearchSource
+    values and calls searchReplies for each content type asked for. searchPosts and
+    searchPostsHybrid replace their three correlated COUNT subqueries over answers/approaches/
+    comments with postReplyCountColumns + postReplyCountsJoin (posts_reply_counts.go, slice 22),
+    so search post results count replies in the same buckets as GET /v1/posts.
+  A backend/internal/db/search_replies.go (94): replySearchSource {contentType, source, bucket,
+    status}; answerReplySearch = content_types "answers", bucket replyAnswerBucket, status
+    'accepted' when posts.accepted_answer_id = the reply id; approachReplySearch = "approaches",
+    bucket replyApproachBucket, status = provenance->>'status'. searchReplies: full text over
+    r.body of live replies (r.deleted_at IS NULL) in the bucket whose post is live, not
+    pending_review/rejected/draft, and passes searchVisibilityClause (public or the viewer's
+    family); vote_score = reply upvotes - downvotes; Source/Type = "answer"/"approach"; the
+    result ID is the REPLY id. Full text only, as before (the legacy functions were too).
+  M backend/internal/db/legacy_dependency_registry.go: the pending(refactor) entry
+    "code:internal/db/search.go" is removed (search.go names no legacy table any more).
+  A backend/internal/db/search_replies_canonical_test.go (213): TestLegacySearch_Served
+    Canonically (source scanner finds neither search.go nor search_replies.go; no disposition
+    for search.go) and TestCanonicalSearch_FindsMigratedContributionsAcrossTheCutover on a
+    scratch DB: before the cutover answer/approach search finds nothing and post counts are 0 on
+    both paths; after MigrateContributions + RemapLegacyRelations, anonymous answer search =
+    {reply of the accepted live answer: status accepted, votes 3; reply of the idea response};
+    the owner also finds the family question's answer; the draft's answer and deleted answers
+    never; approach search = {reply of the succeeded live approach, status succeeded}; post
+    counts q1 {ans 1, cmt 2}, p1 {app 1, cmt 1 (progress note)}, i1 {ans 1} on full text AND
+    hybrid (method asserted, similarity present only on hybrid); identical after the legacy
+    tables are dropped; then native replies: a top-level agent reply answers q2 and is found,
+    its child and a system reply count as comments, a deleted reply is nothing, replies on a
+    draft, a rejected and a deleted post are never found.
+  M backend/internal/db/search_unified_test.go and M backend/internal/api/search_visibility_
+    test.go: see EXISTING TESTS CHANGED.
+
+EXISTING TESTS CHANGED (golden rule) — 2 tests in 2 files. NO test deleted, skipped or renamed.
+  1. TestSearch_FamilyPrivate_OwnerScoped (internal/api/search_visibility_test.go) — FIXTURE
+     ONLY: inserts the replies the cutover makes from its family answer and approach (legacy_
+     type/legacy_id set, same body text); one comment line updated. No assertion changed [REAL,
+     diff]. (a)(b) it still asserts owner/sibling see and foreign/anon do not see "ANSWERNEEDLE"
+     and "APPROACHNEEDLE" via /v1/search?content_types=answers|approaches, and the private post.
+     (c) [TEST] the HEAD~1 file run against HEAD code on a clean DB FAILS "answers: owner sees
+     own family answer" (search_visibility_test.go:91): a legacy row not yet a reply is not
+     searchable. (d) the HEAD file PASSES on the clean DB and in the full run.
+  2. TestSearchUnified_PostsAndAnswers (internal/db/search_unified_test.go) — ASSERTION
+     CHANGED: (b) old `if r.ID == answerID` (and the message "expected to find answer %s");
+     new: fixture calls cutoverRepliesFor(questionID), looks up the reply with legacy_type
+     'answer' / legacy_id answerID, and asserts `if r.ID == answerReplyID` with Source "answer".
+     (c) an answer hit now IS the migrated reply and carries its id; [TEST] the HEAD~1 file on
+     HEAD code, clean DB: FAIL "expected to find answer <id> in unified results (total: 3)",
+     "Found post: true, found answer: false". (d) the HEAD file PASSES on the clean DB ("Found
+     post: true, found answer: true, total: 2"); reply-id identity with source/type is also
+     pinned by TestCanonicalSearch_FindsMigratedContributionsAcrossTheCutover (PASS).
+     NOTE: on solvr_test this test FAILS both before (slice 22 log: "expected to find post ...
+     total: 793", "Found post: false") and now ("total: 853", post not found either): solvr_test
+     holds hundreds of leftover "golang concurrency" rows, so the post itself falls off the
+     first page. Standing data-state failure, not this change.
+
+VERIFICATION [solvr_test = postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres); scratch tests create/drop their own DBs on that server; "clean DB" =
+  solvr_s23v_clean, created on the same server with all 111 *.up.sql applied in order via psql
+  ON_ERROR_STOP (as newMigratedScratchDatabase does), dropped afterwards]:
+  go build ./... clean; go vet ./internal/db/ ./internal/api/ clean; gofmt -l clean on the
+    changed files except internal/api/search_visibility_test.go, whose finding (cleanup comment
+    alignment) is in the HEAD~1 copy too [REAL: gofmt -l on git show HEAD~1:...]. Not touched.
+  RED [TEST] /tmp/solvr_idx76_s23v_red.log: the two new tests in a worktree at HEAD~1 (6be8ce34)
+    with only the new test file copied in: guard FAIL :20 (search.go scanned) and :24 (entry
+    exists); scenario FAIL :151-:154 (before the cutover legacy search finds the legacy answers
+    and approach and counts them), :185 (legacy ids, status "" not accepted) and after the drop
+    :188 "error iterating search results: ERROR: relation "answers" does not exist (SQLSTATE
+    42P01)".
+  GREEN [TEST] full run below: TestLegacySearch_ServedCanonically, TestCanonicalSearch_Finds
+    MigratedContributionsAcrossTheCutover, TestSearch_FamilyPrivate_OwnerScoped PASS.
+  MUTATIONS [TEST] on TestCanonicalSearch_..., in the worktree at HEAD, each file restored with
+    git checkout after the run (git status clean after): mut1b visibility bypassed (AND (TRUE OR
+    visibility)) FAIL :180 "anonymous answer search"; mut2 drop the post status filter FAIL :180/
+    :181; mut3 count deleted replies FAIL :180-:182; mut4 answer status always '' FAIL :180/:181;
+    mut5 drop p.deleted_at IS NULL FAIL :212 (the deleted post's reply); mut6 drop the bucket
+    predicate FAIL :180-:182; mut7 hybrid post counts zeroed in search.go FAIL :146/:183 "hybrid
+    post results count replies". (mut1, dropping the clause outright, did not compile: "declared
+    and not used: visibility" — redone as mut1b.) Logs /tmp/solvr_idx76_s23v_mut*.log.
+  FULL BACKEND [TEST], once, at HEAD, main tree: `go test -p 1 -count=1 -v -timeout 40m ./...`
+    -> /tmp/solvr_idx76_s23v_full.log: 4688 PASS, 74 FAIL, 12 SKIP (slice 22: 4688/72/12, same
+    counting). Packages FAIL: internal/api, internal/api/handlers, internal/db (same as slice 22).
+    Top-level FAIL names vs slice 22 (comm): 0 gone, 2 new, SKIP names identical:
+      - TestSearch_Similarity_PopulatedAndTopSimilarity ("post A missing or similarity nil")
+      - TestHomepageSearch_EveryPublishedTermLinksToCanonicalPostsSearch
+        ("/posts?q=room-token-optional-auth" should not contain "token")
+    BOTH ARE DATA-STATE, NOT THIS CHANGE [TEST]: each FAILS the same way at HEAD~1 (slice 22
+    code, worktree) against the current solvr_test (/tmp/solvr_idx76_s23v_bisect_*_head1.log),
+    and each PASSES at HEAD on the clean DB (/tmp/solvr_idx76_s23v_clean_{sim,hp}.log).
+    Why [REAL psql on solvr_test]: 38 live "zebracorn%" posts with embeddings are left over from
+    earlier runs (the test inserts 2 per run and PerPage is 20; ties crowding post A off page 1
+    is [INFERRED]); "room-token-optional-auth" (searched by router_room_token_optional_auth_
+    test.go:38) is in search_queries 7 times in 7 distinct minutes, so it now crosses the
+    homepage pulse's repeat threshold and is published. I deleted nothing from solvr_test.
+    Static probe: 624 extracted, 554 prepared, 70 did not (slice 22: 625/554/71); both dropped-
+    table probes and TestRetiredLegacyLifecycles_ PASS; 0 "cannot scan NULL";
+    TestSearchRepository_Search_PerformanceTarget PASS.
+  check-file-size.sh: 35 violations, same count as slices 1-22; search.go 653 -> 500, new files
+    <= 213; search_test.go (999) and handlers/search_integration_test.go (911) are standing
+    violators, untouched.
+  My runs left 0 solvr_scratch*/solvr_legacy_*/solvr_s23v* databases [REAL, psql]; worktree
+  /tmp/solvr_wt_s23 removed.
+  NOT RUN: frontend (untouched); golangci-lint.
+
+git status at journal time [REAL]: only progress.txt modified (this entry); spec.json unchanged,
+  passes stays false.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [REAL from code + tests above unless stated]:
+  - /v1/search?content_types=answers|approaches returns REPLY ids (source/type still "answer"/
+    "approach"); they resolve through GET /v1/replies/{id} (router.go:666). A client that fed a
+    hit id to PATCH/DELETE /v1/answers/{id} or /v1/approaches/{id} gets the wrong table [INFERRED;
+    no such client call checked].
+  - Answer hits now include idea responses and native top-level human/agent replies on any post
+    type; approach hits are migrated approaches only (native replies are never "approaches").
+  - Search post results' answers/approaches/comments counts now equal GET /v1/posts counts.
+  - DEPLOY ORDER as slices 14-22: deployed BEFORE the cutover, answer/approach search finds only
+    what is already a reply and post counts drop to replies; deploy with or after the cutover and
+    idx 52's adapters.
+
+STANDING DATA-STATE FAILURES ON solvr_test (for the next iteration; not code): TestSearchUnified_
+  PostsAndAnswers, TestSearch_Similarity_PopulatedAndTopSimilarity, TestHomepageSearch_Every
+  PublishedTermLinksToCanonicalPostsSearch. All three PASS on a freshly migrated DB [TEST].
+
+REMAINING (next slices, in order):
+  step 3/4: resurrection, sitemap, backfill-embeddings, the ideas sidebar in stats.go and the
+    other pending code: entries (homepage_overview.go, agents.go, users.go: unwired legacy
+    methods). Both dropped-table probes must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): as slice 22, plus: after the cutover deploy the owner runs
+  a search with content_types=answers and opens one hit through /v1/replies/{id}.

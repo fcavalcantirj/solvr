@@ -9720,3 +9720,134 @@ REMAINING (next slices, in order):
 UAT (for when idx 76 closes, not now): as slice 25, plus: after the cutover the owner runs
   `go run ./cmd/backfill-embeddings -dry-run` against production and checks the replies count
   is the migrated replies that had no legacy vector.
+
+2026-09-29 10:11 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 27 of N: step 3, the /v1/stats/ideas sidebar (code:internal/db/stats.go). This entry
+VERIFIES AND JOURNALS work that is already committed: HEAD 7992e7c7 is a ralph.sh HOST
+AUTO-COMMIT (its message is the truncated header of slice 26). The engine call that wrote it
+was cut off mid full-suite run: /tmp/solvr_idx76_s27_full.log was last written 09:45:39, one
+second before the commit time 09:45:40 [REAL, ls -laT + git log]; it wrote no journal entry.
+This iteration changes no code, only this journal. I did not cite that iteration's
+/tmp/solvr_idx76_s27_* logs; every result below is from my own runs (/tmp/solvr_idx76_s27v_*).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues; slice 26's REMAINING list starts with the ideas sidebar in stats.go, which HEAD
+  already holds unjournaled. Tree clean at start [REAL, git status --porcelain].
+
+WHAT HEAD 7992e7c7 CHANGED [REAL, git show --stat 7992e7c7 + diff read]: 4 files, +501/-312.
+  M backend/internal/db/stats.go (806 -> 495, was over the 800 limit): "Ideas-specific stats" removed
+    (IdeaStatusCount, GetIdeasCountByStatus, FreshSparkDB, GetFreshSparks, GetReadyToDevelop,
+    TopSparklerDB, GetTopSparklers, IdeaPipelineStats, GetIdeaPipelineStats,
+    GetRecentlyRealized). The unwired legacy methods (GetAllStats ... GetTopProblemSolvers)
+    stay.
+  A backend/internal/db/stats_ideas.go (320): the same block, still methods on
+    *StatsRepository. `diff -w` of the removed block against the new file [REAL]: the ONLY
+    differences are the 6 queries' literal `type = 'idea'` / `p.type = 'idea'` replaced by a
+    bound parameter ($1 or $2) passed statsIdeaType (= string(models.PostTypeIdea) = "idea",
+    declared in profile_stats_canonical.go:65), and gofmt alignment of IdeaPipelineStats.
+    Same SQL predicates, ordering, limits, defaults, nil->[] handling. Header comment: the
+    idea figures are a posts.type subset and read zero once check:posts.posts_type_check
+    narrows the column to 'post'.
+  M backend/internal/db/legacy_dependency_registry.go: the pending(refactor) note of
+    "code:internal/db/stats.go" reworded: the ideas sidebar moved to stats_ideas.go (posts
+    only, type as a parameter). The entry itself stays pending — stats.go still holds the
+    unwired legacy methods that read answers/approaches/responses.
+  A backend/internal/db/stats_ideas_canonical_test.go (180):
+    - TestLegacyStats_IdeaSidebarNamesNoLegacyType: stats.go has no legacySQLTypeRe match
+      for 'idea'; each of the 6 idea methods is defined only in internal/db/stats_ideas.go;
+      the source scan yields no code:internal/db/stats_ideas.go and the registry has no
+      such key.
+    - TestCanonicalIdeaStats_ReadOnlyPostsAcrossTheCutover (scratch DB via
+      newMigratedScratchDatabase), through NewCanonicalStatsRepository (what router.go:692
+      serves /v1/stats/ideas from; it embeds *StatsRepository [REAL, grep]): 1 problem + 7
+      ideas (open, 2 active, evolved with evolved_into, dormant, family-visibility, deleted)
+      + a legacy response row. Asserts exact counts (open 1/active 2/evolved 1/dormant 1/
+      total 5), fresh sparks, ready-to-develop with validation scores 75/100, top sparklers
+      (agent a 2/1, agent b 2/0, human 1/0 with display name), pipeline 66/33/50/4 days,
+      recently realized -> target. Same snapshot before the cutover, after MigrateContributions
+      + RemapLegacyRelations, and after dropLegacy; then UPDATE posts SET type='post' gives
+      zeros / empty lists without an error.
+
+EXISTING TESTS CHANGED: none. The only _test.go in 7992e7c7 is the new file [REAL, git show
+  --stat]. Existing idea-stats tests PASS unchanged below: TestStatsRepository_GetTopSparklers
+  (stats_test.go), TestSectionStats_/TestPublicStatsLists_ExcludeFamilyPrivatePosts
+  (stats_visibility_test.go), handlers stats_test.go incl. TestGetIdeasStats_CacheControl.
+
+VERIFICATION [solvr_test = postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres, schema_migrations 111 dirty=f); the scenario test creates/drops its own
+  scratch DB on that server]:
+  go build ./... clean; go vet ./internal/db/ clean; gofmt -l clean on the 4 files.
+  RED [TEST] /tmp/solvr_idx76_s27v_red.log: detached worktree at f5105f75 (slice 26, before the
+    move) + the new test file copied in: guard FAIL :29 (stats.go has 6x "type = 'idea'")
+    and :33 x6 (methods defined in stats.go). The scenario test PASSES there: expected —
+    7992e7c7 is a move + parameterization, the sidebar's behavior did not change (it
+    already read only posts); the scenario pins that behavior across cutover, drop and type
+    narrowing, it is not a RED for this commit. Worktree removed.
+  GREEN [TEST] /tmp/solvr_idx76_s27v_green.log: both new tests, TestStatsRepository_GetTop
+    Sparklers, TestLegacyDependency*/TestLegacyCleanup* — 9 PASS, 0 FAIL/SKIP.
+    /tmp/solvr_idx76_s27v_green2.log: TestGetTrendingPosts_Excludes* x3, TestGetAllStats_* x2,
+    TestPublicPostCounters_/TestSectionStats_/TestPublicStatsLists_ExcludeFamilyPrivatePosts —
+    8 PASS. /tmp/solvr_idx76_s27v_handlers.log: handlers -run 'Stats|Ideas' 44 PASS, 0 FAIL/
+    SKIP. /tmp/solvr_idx76_s27v_probes.log: both dropped-table probes PASS (static: 618
+    extracted, 548 prepared, 70 did not — same as slice 26).
+  MUTATIONS [TEST], stats_ideas.go/stats.go restored from backups after each (cmp clean, git
+    status clean after all four): mut1 GetIdeasCountByStatus drops visibility='public' ->
+    scenario FAIL :158; mut2 GetTopSparklers drops deleted_at IS NULL -> scenario FAIL :158;
+    mut3 ready-to-develop threshold 10 -> 2 -> scenario FAIL :158; mut4 append a
+    `type = 'idea'` SQL const to stats.go -> guard FAIL :29. Logs
+    /tmp/solvr_idx76_s27v_mut{1..4}.log.
+  FULL BACKEND [TEST], once, main tree at 7992e7c7: `go test -p 1 -count=1 -v -timeout 40m
+    ./...` -> /tmp/solvr_idx76_s27v_full.log: 4693 PASS, 73 FAIL, 12 SKIP (slice 26: 4693/69/
+    14, same counting). Packages FAIL: internal/api, internal/api/handlers, internal/db (same
+    as slice 26). Both new tests PASS in it. Top-level FAIL names vs slice 26 (comm): 0 gone,
+    4 new; SKIP: 0 new, 1 gone (TestE2E_PostAppearsInList and the Idea_created_via_/v1/posts
+    subtest PASS this run — the GROQ 35s wait slice 26 skipped on). PASS arithmetic: +2 new
+    tests +2 former skips -4 new fails = 0.
+  THE 4 NEW FAILS ARE NOT THIS DIFF [REAL, /tmp/solvr_idx76_s27v_four_{head,parent}.log: the 4
+    run alone at 13:10 UTC, at HEAD and in a clean worktree at f5105f75, same DB]:
+    - TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring (homepage_search_test.go:353
+      "expected: 517 actual: 514 ... the series must add up") and TestHomepageSearch_Chart
+      AddsUpToTheTotalBesideIt (router_homepage_search_test.go:389 "expected: 521 actual:
+      518"): FAIL identically at HEAD and parent. Same pair the journal already records as
+      clock/data-dependent pre-existing fails (idx 23 s1, earlier slices) [cause UNVERIFIED].
+    - TestCanonicalPlatformBriefing_RisingPosts (briefing_platform_canonical_test.go:213 "any
+      post type, ranked by contributor replies then upvotes: busy=122 idea=437 upvoted=-1"):
+      FAIL identically at HEAD and parent; preceded by a search_test.go:497 cleanup FK error
+      (approaches_problem_id_fkey) — the upvoted fixture is missing from the rising list
+      [cause UNVERIFIED: likely rows accumulated in the shared solvr_test crowding it; the
+      briefing reads no stats_ideas.go code].
+    - TestHomepageAPIUsage_CountsRequestsThatActuallyArrived (router_homepage_api_usage_
+      test.go:87 "2 is not greater than or equal to 3"): PASSES alone at both HEAD and parent
+      -> run-order/timing in the full suite.
+  check-file-size.sh -> /tmp/solvr_idx76_s27v_filesize.log: "Found 34 file(s) exceeding 800
+    lines" (slice 26's log: 35). The one file gone from the list is backend/internal/db/
+    stats.go (806 at f5105f75 -> 495): the move brought it under the limit [REAL, diff of the
+    two lists]. stats_ideas.go 320, new test 180.
+  0 solvr_scratch*/solvr_legacy_* databases left [REAL, psql]. NOT RUN: frontend (untouched);
+    golangci-lint.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW (GET /v1/stats/ideas; response shape unchanged)
+  [REAL from the diff + tests above]:
+  - None visible: same SQL, the idea type now a bound parameter.
+  - The source scanner no longer sees an 'idea' type literal in the sidebar; the dependency on
+    the posts.type column is stated in stats_ideas.go's header and pinned by the scenario's
+    type='post' assertion (sidebar reads zero, no error). Same convention as the problem/
+    question figures in profile_stats_canonical.go and stats_canonical.go.
+  - When idx 68 narrows posts.type, the ideas sidebar shows zeros. Retiring type-specific
+    statistics is idx 73 step 3 [REAL, spec.json read]; not done here.
+  - DEPLOY ORDER: none; the sidebar reads columns that exist before and after the cutover.
+
+git status at journal time [REAL]: M progress.txt (this entry) only; spec.json unchanged,
+  passes stays false.
+
+REMAINING (next slices, in order):
+  step 3/4: the other pending code: entries (homepage_overview.go, agents.go, users.go:
+    unwired legacy methods; stats.go: its unwired legacy methods). Both dropped-table probes
+    must stay green.
+  step 6 gate: LegacyCleanupBlockers empty.
+
+UAT (for when idx 76 closes, not now): as slice 26, plus: after deploy the owner opens the
+  ideas page sidebar on https://solvr.dev and checks the counts match GET /v1/stats/ideas.

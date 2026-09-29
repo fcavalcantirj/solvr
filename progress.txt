@@ -10424,3 +10424,154 @@ REMAINING (next slices, in order):
     [UNVERIFIED reading of step 6].
 
 UAT (for when idx 76 closes, not now): as slice 29.
+
+2026-09-29 13:50 — Task idx 76 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Migrate every dependent relationship and background job to the canonical models"
+SLICE 32 of N: step 6, the gate bound to where schema cleanup is written. LegacyCleanupBlockers
+existed but only a synthetic unit test called it; nothing stopped an up migration from dropping
+a legacy table while dispositions were pending (and a stale-entry failure invited deleting the
+registry entry instead). Now a migration that removes legacy runtime storage fails the tests
+until every dependency's disposition is done or keep.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74,
+  76-95; no URGENT description. idx 24/52/53/67/68/73/74 stay gated as slice 1 recorded. idx 76
+  continues. Tree clean at start [REAL, git status --porcelain]. HEAD b9d7644c is a commit
+  after slice 31 with a journal-header message but room-activity content (migration 000112,
+  db/room_activity.go, handlers/rooms_entry_submit.go ...); not this iteration's work.
+
+WHY THIS SLICE [REAL, grep this session]: `grep -rn LegacyCleanupBlockers backend` -> only
+  legacy_dependencies.go (definition) and legacy_dependencies_test.go:102/:112 (synthetic
+  registry). Step 6 says "Require an explicit disposition for every discovered dependency
+  before schema cleanup is considered complete"; the requirement was a function, not a gate.
+
+WHAT THIS SLICE CHANGED [REAL, git status --porcelain: 2 untracked files; git diff --stat:
+  empty (no tracked file modified) before this append]:
+  A backend/internal/db/legacy_cleanup_gate.go (255):
+    - ScanLegacySchemaCleanup(dir, legacyFunctions): reads *.up.sql in name order, blanks
+      -- and /* */ comments (line breaks kept), splits on ';', reports per statement (file:line):
+      DROP TABLE of a LegacyTables table (lists, public./quoted names, CASCADE); ALTER TABLE
+      [IF EXISTS] [ONLY] <legacy table> RENAME TO; DROP [COLUMN] on a legacy table, or of a
+      column matching legacyColumnRe (accepted_answer_id ...) on any table (DROP CONSTRAINT/
+      DEFAULT/NOT NULL/IDENTITY/EXPRESSION are not columns); DROP FUNCTION of a name carrying a
+      legacy table as an _-delimited part (hybrid_search_answers) or passed in; a named CHECK
+      constraint (inline or ADD CONSTRAINT) redefined without a legacy type literal its previous
+      definition admitted ("narrows posts_type_check (no longer admits ...)"). Down migrations
+      ignored.
+    - LegacySchemaCleanupGate(dir, deps, registry): function names from the registry's
+      function: keys; when the scan finds any cleanup, LegacyCleanupBlockers over deps PLUS every
+      registry key (registryDependencies: a pending entry blocks even when no scan rediscovers
+      its object, e.g. catalog objects without a database) must be empty, else an error listing
+      each cleanup statement and each blocker. nil when there is no cleanup.
+    - Not a code: dependency itself [TEST: TestLegacyDependencyRegistry_CoversTheSourceTree
+      PASS with the file present].
+  A backend/internal/db/legacy_cleanup_gate_test.go (154), no DB needed, never skips:
+    - TestScanLegacySchemaCleanup_FindsRemovalsNotMaintenance: the real history's shapes (check
+      widened by DROP+ADD, DROP CONSTRAINT on approaches/comments, ALTER COLUMN ... DROP NOT
+      NULL, rooms DROP COLUMN, DROP FUNCTION hybrid_search(...), DROP TABLE comments_archive, a
+      $$ body, a commented-out drop, a .down.sql drop) report nothing; a cleanup migration
+      reports exactly 8 findings (2 tables in one statement, 2 functions, posts.accepted_answer_id,
+      posts_type_check narrowed to 'post', comments renamed, progress_notes.note).
+    - TestScanLegacySchemaCleanup_FunctionNamesComeFromTheCaller.
+    - TestLegacySchemaCleanupGate_BlocksCleanupWhileAnyDispositionIsPending: no cleanup -> nil;
+      cleanup + a pending registry-only entry -> error naming both; keep entries never block; an
+      undisposed dep -> "(no disposition)"; all done/keep -> nil.
+    - TestLegacySchemaCleanupGate_TheRealMigrations: deps = source scan + declared lists; the
+      gate over backend/migrations with LegacyDependencyDispositions must be nil; then all real
+      migrations copied to a temp dir plus 999999_drop_legacy.up.sql (DROP TABLE IF EXISTS
+      approaches) -> error naming that statement and EVERY current real blocker (if the blockers
+      are ever empty, it asserts nil instead, so the test does not break on legitimate progress).
+  No production file modified, no registry entry flipped, no migration, handler or frontend
+  changed. No existing test changed, skipped or removed.
+
+GATE DECISION (for idx 68/93) [REAL from code]: the gate is all-or-nothing: ANY legacy removal
+  in an up migration requires EVERY non-keep disposition done. The change that drops the tables
+  must flip table:*, check:* and the code:* retirements (removing the legacy code) in the same
+  change; a staged drop (one table first) is blocked too. Chosen because dropping any table while
+  code:* entries are pending means routes still wired to it 500 (slices 30-31 measured exactly
+  that on the legacy families). If the owner wants staged cleanup, the gate needs per-object
+  scoping — owner call [UNVERIFIED preference].
+
+CURRENT BLOCKERS [TEST, logged by TestLegacySchemaCleanupGate_TheRealMigrations,
+  /tmp/solvr_idx76_s32_green.log]: 35 = 4 checks (flags/reports/votes target_type remap
+  pending, posts_type_check refactor pending), 6 tables (retire pending), 25 code: files
+  (agents.go/homepage_overview.go/stats.go/users.go refactor pending; answers, approach_
+  relationships, approaches, auto_solve, briefing, briefing_platform, briefing_recommendations,
+  comments, contribution_migration, ideas, inferred_specialties, leaderboard, leaderboard_tags,
+  legacy_relation_remap, problems, questions, reputation_history, responses, stale_content,
+  stats_questions, reputation/sql_builder.go retire pending). Real history (112 up migrations)
+  contains 0 cleanup statements [TEST: gate nil on the real dir while 35 blockers exist].
+
+VERIFICATION [DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local docker
+  solvr-postgres, schema_migrations 112 dirty=f]:
+  RED [TEST] /tmp/solvr_idx76_s32_red.log: build failed "undefined: LegacySchemaCleanup",
+    "undefined: ScanLegacySchemaCleanup", "undefined: LegacySchemaCleanupGate",
+    "undefined: registryDependencies".
+  GREEN [TEST] /tmp/solvr_idx76_s32_green.log: first run, 4 new PASS + the 10 existing legacy
+    registry/catalog tests PASS, 0 SKIP. After a lint tidy (strings.SplitSeq, error text via
+    strings.Join, errors.New): /tmp/solvr_idx76_s32_final.log 11 PASS (-run LegacySchemaCleanup|
+    LegacyDependencyRegistry|LegacyCleanupBlockers|DiscoverLegacySchema), 0 FAIL, 0 SKIP.
+  MUTATIONS [TEST], gate file restored from /tmp/solvr_idx76_s32_gate.go.bak and cmp-verified
+    after each (logs /tmp/solvr_idx76_s32_mut{1..5}.log):
+    mut1 DROP TABLE never legacy -> 3 FAIL (scanner :62, gate :104, real-migrations :149: the
+      appended drop is not blocked);
+    mut2 gate uses deps only (no registry keys) -> 2 FAIL (gate :104; real :152: table:*/check:*
+      blockers missing from the error);
+    mut3 narrowing never reported -> scanner FAIL :62;
+    mut4 -- comments not blanked -> scanner FAIL :62 (adds "000002_widen.up.sql:1 drops table
+      approaches" from the comment);
+    mut5 DROP CONSTRAINT read as a column -> scanner :62 and real-migrations :128 FAIL, the real
+      history flagged "000029/000054 ... drops column comments.constraint", "000061 ... drops
+      column approaches.constraint": the real-history run exercises the parser.
+  go vet ./internal/db/ clean; gofmt -l clean on both new files.
+  FULL BACKEND [TEST], once: `go test -p 1 -count=1 -v -timeout 40m ./...` ->
+    /tmp/solvr_idx76_s32_full.log: 4704 PASS, 80 FAIL, 12 SKIP lines (slice 29: 4694/78/12).
+    Packages FAIL: internal/api, internal/api/handlers, internal/db (same three as slice 29).
+    Top-level FAIL names vs slice 29's log (comm): 0 gone, 2 new:
+      TestHomepageSearch_ChartAddsUpToTheTotalBesideIt (router_homepage_search_test.go:389
+        "expected: 614 actual: 608", "window 24h: the chart and the total are one measurement")
+      TestSearchPulse_SeriesCoversTheWindowAndExcludesMonitoring (homepage_search_test.go:353
+        "expected: 639 actual: 633", "window 24h: the series must add up to the eligible total")
+    NOT caused by this slice [TEST]: both also FAIL with the two new files moved out of the tree
+      (/tmp/solvr_idx76_s32_{pulse,chart}_without.log: 639/633 and 643/637), and alone with them
+      (/tmp/solvr_idx76_s32_{pulse,chart}_alone.log). Same delta 6 each time, 24h window only ->
+      shared solvr_test search rows near the 24h boundary [INFERRED; cause not investigated,
+      not this task]. SKIP set identical to slice 29. The 4 new tests and all four
+      TestLegacyDroppedDatabase_* probes PASS in the full run; static probe "620 extracted, 550
+      prepared, 70 did not" (slice 29: 621/551/70; the -1 is not from this slice — the new file
+      holds no SQL — [INFERRED: b9d7644c's rooms.go -34 lines]).
+  check-file-size.sh -> /tmp/solvr_idx76_s32_filesize.log: "Found 34 file(s) exceeding 800
+    lines", same as slice 31; new files 255/154.
+  0 solvr_scratch*/solvr_legacy_* databases left [REAL, psql]. NOT RUN: frontend (untouched);
+    golangci-lint (config/version mismatch recorded in slice 31).
+
+LIMITS [UNVERIFIED unless stated]:
+  - Static regex over migration text: cleanup done outside backend/migrations (the prod
+    /admin/query route, a Go-built statement, a DO block with dynamic EXECUTE of a built
+    string) is not seen. Prod has no schema_migrations table and migrations are run by hand
+    via /admin/query (memory note) — the gate protects the repo's migration files, not a
+    hand-typed prod statement; the owner runbook must run only committed migrations.
+  - Narrowing is detected only for NAMED checks, relative to the previous named definition
+    (every legacy check the registry lists has one today [REAL, grep: posts 000088, votes/
+    reports 000089, flags/replies 000109]); a check dropped without re-adding is a widening
+    and not reported; DROP INDEX/TRIGGER/VIEW are not reported (their data lives elsewhere).
+  - The gate's deps are source + declared + registry keys; catalog objects are covered through
+    their registry entries (TestDiscoverLegacySchemaDependencies_... pins registry <-> catalog).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW: none at runtime — test-time gate only. For idx 68/93:
+  the drop migration cannot land while any of the 35 blockers above is pending.
+
+git status at journal time [REAL]: ?? backend/internal/db/legacy_cleanup_gate.go,
+  ?? backend/internal/db/legacy_cleanup_gate_test.go, M progress.txt (this entry); spec.json
+  unchanged, passes stays false.
+
+REMAINING (next slices, in order):
+  owner: claim-referral mount (slice 31); staged vs all-at-once cleanup (GATE DECISION above);
+    the two 24h-window search tests failing on shared solvr_test data (not idx 76).
+  step 3/4: the unwired legacy methods listed in CURRENT BLOCKERS go with the tables (no GET or
+    write route reaches them [TEST: slices 30-31]).
+  step 6: the gate now enforces it; LegacyCleanupBlockers empty is blocked on the table drop
+    (idx 68/93) and the legacy routes (idx 52); whether idx 76 can close before that is an owner
+    question [UNVERIFIED reading of step 6].
+
+UAT (for when idx 76 closes, not now): as slice 29.

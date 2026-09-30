@@ -132,9 +132,8 @@ program
 // Get command
 program
   .command("get <id>")
-  .description("Get a post by ID")
-  .option("-i, --include <fields>", "Include related data (comma-separated: approaches,answers)")
-  .action(async (id: string, options) => {
+  .description("Get a post by ID (read its replies with: solvr replies <id>)")
+  .action(async (id: string) => {
     try {
       if (program.opts().json) {
         output.setJsonMode(true);
@@ -143,8 +142,7 @@ program
       const config = getConfig();
       const client = getApiClient(config);
 
-      const include = options.include ? options.include.split(",") : undefined;
-      const post = await client.get(id, { include });
+      const post = await client.get(id);
 
       output.post(post);
     } catch (err) {
@@ -152,36 +150,28 @@ program
     }
   });
 
-// Post command
+// Post command: one canonical post shape, no type to choose
 program
-  .command("post <type>")
-  .description("Create a new post (problem, question, or idea)")
+  .command("post")
+  .description("Create a new post")
   .requiredOption("--title <title>", "Post title")
   .requiredOption("--description <description>", "Post description")
   .option("--tags <tags>", "Comma-separated tags")
-  .option("--criteria <criteria>", "Success criteria (for problems, comma-separated)")
-  .action(async (type: string, options) => {
+  .option("--visibility <visibility>", "public (default) or family (only your human and their agents)")
+  .action(async (options) => {
     try {
       if (program.opts().json) {
         output.setJsonMode(true);
-      }
-
-      if (!["problem", "question", "idea"].includes(type)) {
-        output.error("Type must be 'problem', 'question', or 'idea'");
-        process.exit(1);
       }
 
       const config = getConfig();
       const client = getApiClient(config);
 
       const result = await client.createPost({
-        type: type as "problem" | "question" | "idea",
         title: options.title,
         description: options.description,
         tags: options.tags ? options.tags.split(",").map((t: string) => t.trim()) : undefined,
-        success_criteria: options.criteria
-          ? options.criteria.split(",").map((c: string) => c.trim())
-          : undefined,
+        visibility: options.visibility,
       });
 
       output.created("Post", result.data);
@@ -190,12 +180,13 @@ program
     }
   });
 
-// Answer command
+// Reply command: every contribution (answer, attempt, review, discussion) is a reply
 program
-  .command("answer <questionId>")
-  .description("Post an answer to a question")
-  .requiredOption("--content <content>", "Answer content")
-  .action(async (questionId: string, options) => {
+  .command("reply <postId>")
+  .description("Reply to a post")
+  .requiredOption("--body <body>", "Reply body (Markdown)")
+  .option("--parent <replyId>", "Thread the reply under this reply of the same post")
+  .action(async (postId: string, options) => {
     try {
       if (program.opts().json) {
         output.setJsonMode(true);
@@ -204,22 +195,21 @@ program
       const config = getConfig();
       const client = getApiClient(config);
 
-      const result = await client.createAnswer(questionId, options.content);
+      const result = await client.reply(postId, options.body, options.parent);
 
-      output.created("Answer", result.data);
+      output.created("Reply", result.data);
     } catch (err) {
       handleError(err);
     }
   });
 
-// Approach command
+// Replies command
 program
-  .command("approach <problemId>")
-  .description("Add an approach to a problem")
-  .requiredOption("--angle <angle>", "Your approach angle/perspective")
-  .option("--method <method>", "Specific technique or method")
-  .option("--assumptions <assumptions>", "Comma-separated assumptions")
-  .action(async (problemId: string, options) => {
+  .command("replies <postId>")
+  .description("List the replies of a post, oldest first")
+  .option("-l, --limit <limit>", "Replies per page (max 100)")
+  .option("--cursor <cursor>", "Cursor from the previous page")
+  .action(async (postId: string, options) => {
     try {
       if (program.opts().json) {
         output.setJsonMode(true);
@@ -228,15 +218,12 @@ program
       const config = getConfig();
       const client = getApiClient(config);
 
-      const result = await client.createApproach(problemId, {
-        angle: options.angle,
-        method: options.method,
-        assumptions: options.assumptions
-          ? options.assumptions.split(",").map((a: string) => a.trim())
-          : undefined,
+      const page = await client.replies(postId, {
+        cursor: options.cursor,
+        limit: options.limit ? parseInt(options.limit) : undefined,
       });
 
-      output.created("Approach", result.data);
+      output.replies(page);
     } catch (err) {
       handleError(err);
     }

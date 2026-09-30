@@ -35,6 +35,47 @@ describe("CLI Commands", () => {
     });
   });
 
+  describe("canonical posts and replies", () => {
+    it("lists reply and replies, and no answer or approach command", () => {
+      const { stdout } = runCli("--help");
+      expect(stdout).toMatch(/^  reply \[options\] <postId>/m);
+      expect(stdout).toMatch(/^  replies \[options\] <postId>/m);
+      expect(stdout).not.toMatch(/^  answer /m);
+      expect(stdout).not.toMatch(/^  approach /m);
+    });
+
+    it("post takes no type argument", () => {
+      const { stdout } = runCli("post --help");
+      expect(stdout).toContain("Usage: solvr post [options]");
+      expect(stdout).not.toContain("<type>");
+      expect(stdout).not.toContain("--criteria");
+      expect(stdout).toContain("--visibility");
+    });
+
+    it("reply takes a body and an optional parent reply", () => {
+      const { stdout } = runCli("reply --help");
+      expect(stdout).toContain("Usage: solvr reply [options] <postId>");
+      expect(stdout).toContain("--body <body>");
+      expect(stdout).toContain("--parent <replyId>");
+    });
+
+    it("get has no include option", () => {
+      const { stdout } = runCli("get --help");
+      expect(stdout).not.toContain("--include");
+    });
+
+    it("rejects the removed answer command", () => {
+      // Hermetic: no config file and an unroutable base URL, so a regression can never reach a real API.
+      const { stderr, exitCode } = runCli("answer post_123 --content x", {
+        SOLVR_CONFIG_PATH: path.join(os.tmpdir(), `solvr-cli-absent-${Date.now()}`, "config.json"),
+        SOLVR_BASE_URL: "http://127.0.0.1:9",
+        SOLVR_API_KEY: "solvr_sk_hermetic_test",
+      });
+      expect(exitCode).not.toBe(0);
+      expect(stderr).toContain("unknown command 'answer'");
+    });
+  });
+
   describe("--version", () => {
     it("displays version", () => {
       const { stdout } = runCli("--version");

@@ -108,18 +108,21 @@ describe('SolvrApiClient', () => {
       expect(result).toEqual(mockPost);
     });
 
-    it('includes query params when include option provided', async () => {
+    it('requests the post alone (its contributions are read with listReplies)', async () => {
       (fetch as Mock).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ data: {} }),
       });
 
-      await client.getPost('post_123', { include: ['approaches', 'answers'] });
+      // An old caller may still pass an include list; nothing is appended to the URL.
+      await (client.getPost as (id: string, options?: unknown) => Promise<unknown>)(
+        'post_123',
+        { include: ['approaches', 'answers'] }
+      );
 
-      // URL encodes the comma
       expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('include=approaches%2Canswers'),
-        expect.any(Object)
+        `${mockApiUrl}/v1/posts/post_123`,
+        { headers: { 'Authorization': `Bearer ${mockApiKey}` } }
       );
     });
 
@@ -135,9 +138,9 @@ describe('SolvrApiClient', () => {
   });
 
   describe('createPost', () => {
-    it('calls POST /v1/posts', async () => {
+    it('calls POST /v1/posts with a canonical post (no type)', async () => {
       const mockResponse = {
-        data: { id: 'new_post_123', title: 'New Question', type: 'question' }
+        data: { id: 'new_post_123', title: 'How to test MCP servers?', type: 'post' }
       };
       (fetch as Mock).mockResolvedValueOnce({
         ok: true,
@@ -145,7 +148,6 @@ describe('SolvrApiClient', () => {
       });
 
       const result = await client.createPost({
-        type: 'question',
         title: 'How to test MCP servers?',
         description: 'I need help testing MCP servers with vitest',
         tags: ['mcp', 'testing'],
@@ -160,7 +162,6 @@ describe('SolvrApiClient', () => {
             'Content-Type': 'application/json',
           }),
           body: JSON.stringify({
-            type: 'question',
             title: 'How to test MCP servers?',
             description: 'I need help testing MCP servers with vitest',
             tags: ['mcp', 'testing'],
@@ -168,6 +169,22 @@ describe('SolvrApiClient', () => {
         })
       );
       expect(result).toEqual(mockResponse);
+    });
+
+    it('sends visibility when given', async () => {
+      (fetch as Mock).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { id: 'p1', type: 'post' } }),
+      });
+
+      await client.createPost({ title: 'Private notes', description: 'For my human', visibility: 'family' });
+
+      const [, init] = (fetch as Mock).mock.calls[0];
+      expect(JSON.parse(init.body)).toEqual({
+        title: 'Private notes',
+        description: 'For my human',
+        visibility: 'family',
+      });
     });
 
     it('throws error on validation failure', async () => {
@@ -178,61 +195,92 @@ describe('SolvrApiClient', () => {
       });
 
       await expect(client.createPost({
-        type: 'question',
         title: '',
         description: 'desc',
       })).rejects.toThrow('API request failed');
     });
   });
 
-  describe('createAnswer', () => {
-    it('calls POST /v1/questions/:id/answers', async () => {
+  describe('createReply', () => {
+    it('calls POST /v1/posts/:id/replies with the body', async () => {
       const mockResponse = {
-        data: { id: 'answer_123', content: 'Here is the answer' }
+        data: { id: 'reply_123', post_id: 'post_123', body: 'Pin the pool size.' }
       };
       (fetch as Mock).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockResponse),
       });
 
-      const result = await client.createAnswer('question_123', 'Here is the answer');
+      const result = await client.createReply('post_123', 'Pin the pool size.');
 
       expect(fetch).toHaveBeenCalledWith(
-        `${mockApiUrl}/v1/questions/question_123/answers`,
+        `${mockApiUrl}/v1/posts/post_123/replies`,
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
             'Authorization': `Bearer ${mockApiKey}`,
             'Content-Type': 'application/json',
           }),
-          body: JSON.stringify({ content: 'Here is the answer' }),
+          body: JSON.stringify({ body: 'Pin the pool size.' }),
         })
       );
       expect(result).toEqual(mockResponse);
     });
 
-    it('creates approach when post is a problem', async () => {
+    it('threads a reply under a parent reply', async () => {
+      (fetch as Mock).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { id: 'reply_2', parent_reply_id: 'reply_1' } }),
+      });
+
+      await client.createReply('post_123', 'Confirmed on Go 1.23.', 'reply_1');
+
+      const [url, init] = (fetch as Mock).mock.calls[0];
+      expect(url).toBe(`${mockApiUrl}/v1/posts/post_123/replies`);
+      expect(JSON.parse(init.body)).toEqual({ body: 'Confirmed on Go 1.23.', parent_reply_id: 'reply_1' });
+    });
+  });
+
+  describe('listReplies', () => {
+    it('calls GET /v1/posts/:id/replies', async () => {
       const mockResponse = {
-        data: { id: 'approach_123', angle: 'Test approach' }
+        data: [{ id: 'reply_1', body: 'First' }],
+        meta: { total: 1, has_more: false },
       };
       (fetch as Mock).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockResponse),
       });
 
-      const result = await client.createApproach('problem_123', {
-        angle: 'Test approach',
-        content: 'My approach details',
-      });
+      const result = await client.listReplies('post_123');
 
       expect(fetch).toHaveBeenCalledWith(
-        `${mockApiUrl}/v1/problems/problem_123/approaches`,
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ angle: 'Test approach', content: 'My approach details' }),
-        })
+        `${mockApiUrl}/v1/posts/post_123/replies`,
+        { headers: { 'Authorization': `Bearer ${mockApiKey}` } }
       );
       expect(result).toEqual(mockResponse);
+    });
+
+    it('pages with a cursor and a limit', async () => {
+      (fetch as Mock).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: [], meta: { total: 0, has_more: false } }),
+      });
+
+      await client.listReplies('post_123', { cursor: 'abc', limit: 10 });
+
+      expect(fetch).toHaveBeenCalledWith(
+        `${mockApiUrl}/v1/posts/post_123/replies?cursor=abc&limit=10`,
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('legacy contribution routes', () => {
+    it('has no method that calls a retired answer or approach route', () => {
+      const methods = client as unknown as Record<string, unknown>;
+      expect(methods.createAnswer).toBeUndefined();
+      expect(methods.createApproach).toBeUndefined();
     });
   });
 
@@ -261,6 +309,35 @@ describe('SolvrApiClient', () => {
       });
 
       await expect(client.search('test')).rejects.toThrow('API request failed: 429');
+    });
+
+    it('includes the API error code and message from the body', async () => {
+      (fetch as Mock).mockResolvedValueOnce({
+        ok: false,
+        status: 410,
+        statusText: 'Gone',
+        json: () => Promise.resolve({
+          error: {
+            code: 'ENDPOINT_RETIRED',
+            message: 'POST /v1/questions/{id}/answers was retired with the canonical knowledge model; use POST /v1/posts/{id}/replies instead.',
+          },
+        }),
+      });
+
+      await expect(client.createReply('post_123', 'x')).rejects.toThrow(
+        'API request failed: 410 Gone: ENDPOINT_RETIRED: POST /v1/questions/{id}/answers was retired with the canonical knowledge model; use POST /v1/posts/{id}/replies instead.'
+      );
+    });
+
+    it('keeps the status line when the error body is not JSON', async () => {
+      (fetch as Mock).mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: 'Bad Gateway',
+        json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+      });
+
+      await expect(client.search('test')).rejects.toThrow(/^API request failed: 502 Bad Gateway$/);
     });
   });
 });

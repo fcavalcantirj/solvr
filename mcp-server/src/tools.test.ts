@@ -8,8 +8,8 @@ vi.mock('./api.js', () => ({
     search: vi.fn(),
     getPost: vi.fn(),
     createPost: vi.fn(),
-    createAnswer: vi.fn(),
-    createApproach: vi.fn(),
+    createReply: vi.fn(),
+    listReplies: vi.fn(),
     claim: vi.fn(),
   })),
 }));
@@ -20,8 +20,8 @@ describe('SolvrTools', () => {
     search: Mock;
     getPost: Mock;
     createPost: Mock;
-    createAnswer: Mock;
-    createApproach: Mock;
+    createReply: Mock;
+    listReplies: Mock;
     claim: Mock;
   };
 
@@ -40,7 +40,7 @@ describe('SolvrTools', () => {
         'solvr_search',
         'solvr_get',
         'solvr_post',
-        'solvr_answer',
+        'solvr_reply',
         'solvr_claim',
       ]);
     });
@@ -63,8 +63,9 @@ describe('SolvrTools', () => {
 
       expect(getTool).toBeDefined();
       expect(getTool?.description).toContain('Get full details');
+      expect(getTool?.description).toContain('replies');
       expect(getTool?.inputSchema.properties).toHaveProperty('id');
-      expect(getTool?.inputSchema.properties).toHaveProperty('include');
+      expect(getTool?.inputSchema.properties).not.toHaveProperty('include');
       expect(getTool?.inputSchema.required).toContain('id');
     });
 
@@ -74,23 +75,33 @@ describe('SolvrTools', () => {
 
       expect(postTool).toBeDefined();
       expect(postTool?.description).toContain('Create a new');
-      expect(postTool?.inputSchema.properties).toHaveProperty('type');
+      expect(postTool?.inputSchema.properties).not.toHaveProperty('type');
       expect(postTool?.inputSchema.properties).toHaveProperty('title');
       expect(postTool?.inputSchema.properties).toHaveProperty('description');
       expect(postTool?.inputSchema.properties).toHaveProperty('tags');
-      expect(postTool?.inputSchema.required).toEqual(['type', 'title', 'description']);
+      expect(postTool?.inputSchema.properties.visibility?.enum).toEqual(['public', 'family']);
+      expect(postTool?.inputSchema.required).toEqual(['title', 'description']);
+      expect(postTool?.description).not.toMatch(/problem|question|idea/i);
     });
 
-    it('solvr_answer tool has correct schema', () => {
+    it('solvr_reply tool has correct schema', () => {
       const manifest = tools.getManifest();
-      const answerTool = manifest.tools.find(t => t.name === 'solvr_answer');
+      const replyTool = manifest.tools.find(t => t.name === 'solvr_reply');
 
-      expect(answerTool).toBeDefined();
-      expect(answerTool?.description).toContain('answer');
-      expect(answerTool?.inputSchema.properties).toHaveProperty('post_id');
-      expect(answerTool?.inputSchema.properties).toHaveProperty('content');
-      expect(answerTool?.inputSchema.properties).toHaveProperty('approach_angle');
-      expect(answerTool?.inputSchema.required).toEqual(['post_id', 'content']);
+      expect(replyTool).toBeDefined();
+      expect(replyTool?.description).toContain('Reply to a Solvr post');
+      expect(Object.keys(replyTool?.inputSchema.properties ?? {})).toEqual(['post_id', 'body', 'parent_reply_id']);
+      expect(replyTool?.inputSchema.required).toEqual(['post_id', 'body']);
+    });
+
+    it('offers no legacy typed choice (post type, approach angle, answer tool)', () => {
+      const manifest = tools.getManifest();
+
+      expect(manifest.tools.map(t => t.name)).not.toContain('solvr_answer');
+      for (const tool of manifest.tools.filter(t => t.name !== 'solvr_search')) {
+        expect(tool.inputSchema.properties).not.toHaveProperty('type');
+        expect(tool.inputSchema.properties).not.toHaveProperty('approach_angle');
+      }
     });
 
     it('solvr_claim tool has correct schema', () => {
@@ -159,24 +170,38 @@ describe('SolvrTools', () => {
           data: { id: 'post_123', title: 'Test Post', type: 'question', description: 'Details' }
         };
         mockClient.getPost.mockResolvedValue(mockPost);
+        mockClient.listReplies.mockResolvedValue({ data: [], meta: { total: 0, has_more: false } });
 
         const result = await tools.executeTool('solvr_get', { id: 'post_123' });
 
-        expect(mockClient.getPost).toHaveBeenCalledWith('post_123', {});
+        expect(mockClient.getPost).toHaveBeenCalledWith('post_123');
         expect(result.content[0].text).toContain('Test Post');
+        expect(result.content[0].text).toContain('No replies yet.');
       });
 
-      it('passes include options', async () => {
-        mockClient.getPost.mockResolvedValue({ data: {} });
-
-        await tools.executeTool('solvr_get', {
-          id: 'post_123',
-          include: ['approaches', 'answers']
+      it('shows the replies of the post, threaded ones marked with their parent', async () => {
+        mockClient.getPost.mockResolvedValue({
+          data: { id: 'post_123', title: 'Pool exhaustion', type: 'post', description: 'Details' }
+        });
+        mockClient.listReplies.mockResolvedValue({
+          data: [
+            { id: 'reply_1', post_id: 'post_123', author_type: 'agent', author_id: 'bot_a', body: 'Pin the pool size to 10.', score: 3 },
+            { id: 'reply_2', post_id: 'post_123', parent_reply_id: 'reply_1', author_type: 'human', author_id: 'u_b', body: 'Confirmed.', score: 0 },
+          ],
+          meta: { total: 3, has_more: true, next_cursor: 'cur_1' },
         });
 
-        expect(mockClient.getPost).toHaveBeenCalledWith('post_123', {
-          include: ['approaches', 'answers']
-        });
+        const result = await tools.executeTool('solvr_get', { id: 'post_123' });
+
+        expect(mockClient.listReplies).toHaveBeenCalledWith('post_123', { limit: 20 });
+        const text = result.content[0].text;
+        expect(text).toContain('## Replies (3)');
+        expect(text).toContain('reply_1');
+        expect(text).toContain('Pin the pool size to 10.');
+        expect(text).toContain('agent bot_a');
+        expect(text).toContain('in reply to reply_1');
+        expect(text).toContain('Confirmed.');
+        expect(text).toContain('Showing 2 of 3 replies');
       });
 
       it('returns error when post not found', async () => {
@@ -192,31 +217,46 @@ describe('SolvrTools', () => {
     describe('solvr_post', () => {
       it('creates a new post', async () => {
         const mockResponse = {
-          data: { id: 'new_post', title: 'New Question', type: 'question' }
+          data: { id: 'new_post', title: 'How to test?', type: 'post' }
         };
         mockClient.createPost.mockResolvedValue(mockResponse);
 
         const result = await tools.executeTool('solvr_post', {
-          type: 'question',
           title: 'How to test?',
           description: 'I need help',
           tags: ['testing'],
         });
 
         expect(mockClient.createPost).toHaveBeenCalledWith({
-          type: 'question',
           title: 'How to test?',
           description: 'I need help',
           tags: ['testing'],
         });
+        expect(result.content[0].text).toContain('Created post: How to test?');
         expect(result.content[0].text).toContain('new_post');
+      });
+
+      it('never sends a type, even when a caller still passes one', async () => {
+        mockClient.createPost.mockResolvedValue({ data: { id: 'p1', title: 'T', type: 'post' } });
+
+        await tools.executeTool('solvr_post', {
+          type: 'problem',
+          title: 'T',
+          description: 'D',
+          visibility: 'family',
+        });
+
+        expect(mockClient.createPost).toHaveBeenCalledWith({
+          title: 'T',
+          description: 'D',
+          visibility: 'family',
+        });
       });
 
       it('returns error on validation failure', async () => {
         mockClient.createPost.mockRejectedValue(new Error('400 Bad Request'));
 
         const result = await tools.executeTool('solvr_post', {
-          type: 'question',
           title: '',
           description: 'desc',
         });
@@ -225,50 +265,59 @@ describe('SolvrTools', () => {
       });
     });
 
-    describe('solvr_answer', () => {
-      it('creates answer for question', async () => {
-        mockClient.getPost.mockResolvedValue({ data: { type: 'question' } });
-        mockClient.createAnswer.mockResolvedValue({
-          data: { id: 'answer_123', content: 'The answer' }
+    describe('solvr_reply', () => {
+      it('replies to a post without looking up its type', async () => {
+        mockClient.createReply.mockResolvedValue({
+          data: { id: 'reply_123', post_id: 'post_123', body: 'The fix' }
         });
 
-        const result = await tools.executeTool('solvr_answer', {
-          post_id: 'question_123',
-          content: 'The answer',
+        const result = await tools.executeTool('solvr_reply', {
+          post_id: 'post_123',
+          body: 'The fix',
         });
 
-        expect(mockClient.createAnswer).toHaveBeenCalledWith('question_123', 'The answer');
-        expect(result.content[0].text).toContain('answer_123');
+        expect(mockClient.getPost).not.toHaveBeenCalled();
+        expect(mockClient.createReply).toHaveBeenCalledWith('post_123', 'The fix', undefined);
+        expect(result.isError).toBeUndefined();
+        expect(result.content[0].text).toContain('Reply posted');
+        expect(result.content[0].text).toContain('reply_123');
       });
 
-      it('creates approach for problem with angle', async () => {
-        mockClient.getPost.mockResolvedValue({ data: { type: 'problem' } });
-        mockClient.createApproach.mockResolvedValue({
-          data: { id: 'approach_123', angle: 'My angle' }
+      it('threads the reply under parent_reply_id', async () => {
+        mockClient.createReply.mockResolvedValue({
+          data: { id: 'reply_2', post_id: 'post_123', parent_reply_id: 'reply_1', body: 'Confirmed' }
         });
 
-        const result = await tools.executeTool('solvr_answer', {
-          post_id: 'problem_123',
-          content: 'My approach details',
-          approach_angle: 'My angle',
+        const result = await tools.executeTool('solvr_reply', {
+          post_id: 'post_123',
+          body: 'Confirmed',
+          parent_reply_id: 'reply_1',
         });
 
-        expect(mockClient.createApproach).toHaveBeenCalledWith('problem_123', {
-          angle: 'My angle',
-          content: 'My approach details',
-        });
-        expect(result.content[0].text).toContain('approach_123');
+        expect(mockClient.createReply).toHaveBeenCalledWith('post_123', 'Confirmed', 'reply_1');
+        expect(result.content[0].text).toContain('in reply to reply_1');
       });
 
-      it('returns error when post not found', async () => {
-        mockClient.getPost.mockRejectedValue(new Error('404 Not Found'));
+      it('returns the API error when the post is not found', async () => {
+        mockClient.createReply.mockRejectedValue(new Error('API request failed: 404 Not Found: NOT_FOUND: post not found'));
 
-        const result = await tools.executeTool('solvr_answer', {
+        const result = await tools.executeTool('solvr_reply', {
           post_id: 'invalid',
-          content: 'answer',
+          body: 'reply',
         });
 
         expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('post not found');
+      });
+    });
+
+    describe('solvr_answer', () => {
+      it('is no longer a tool (replaced by solvr_reply)', async () => {
+        const result = await tools.executeTool('solvr_answer', { post_id: 'p', content: 'c' });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('Unknown tool: solvr_answer');
+        expect(mockClient.createReply).not.toHaveBeenCalled();
       });
     });
 

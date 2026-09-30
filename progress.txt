@@ -1568,3 +1568,194 @@ REMAINING FOR idx 52 (next slices, in order):
 
 git status at journal time [REAL]: 13 M (above) + 2 ?? (packages/sdk-go/replies.go, replies_test.go) + this
   progress.txt entry; spec.json unchanged, idx 52 passes stays false.
+
+2026-09-30 15:40 — Task idx 52 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Route existing agent integrations into the canonical knowledge model during a defined transition"
+SLICE 4 of N: step 2 for mcp-server (npm MCP server) and packages/cli (TS CLI) — they now create canonical
+posts (no type) and replies and read replies — plus the client half of step 6 for both, proved live: the
+HEAD copies get the retired-route error and write nothing; the new ones create canonical rows.
+Remaining step 2 clients: cli (Go) and skill/scripts/solvr.sh. Step 5: idx 73.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 52, 53, 67, 68, 73, 74, 77-95, 97, 98;
+  no open URGENT. idx 24 stays skipped (acceptance task; needs idx 78). idx 52 is the first buildable open
+  task; slice 3's REMAINING list put mcp-server, packages/cli, cli (Go), solvr.sh next. Tree clean at start.
+
+WHAT CHANGED [REAL, git status --porcelain: 13 M, 0 ??; git diff --stat 784+/499-]:
+  Only mcp-server/ and packages/cli/. No backend, frontend, SPEC.md, migration or schema change.
+  mcp-server:
+  M src/api.ts: CreatePostInput {title, description, tags?, visibility?} (type, success_criteria gone);
+    getPost(id) lost the include option (GET /v1/posts/{id} ignores ?include=, slice 3); NEW
+    createReply(postId, body, parentReplyId?) -> POST /v1/posts/{id}/replies {body, parent_reply_id?};
+    NEW listReplies(postId, {cursor, limit}) -> GET /v1/posts/{id}/replies; Reply/ReplyResponse/
+    RepliesResponse types; REMOVED createAnswer (POST /v1/questions/{id}/answers), createApproach (POST
+    /v1/problems/{id}/approaches), GetPostOptions, CreateApproachInput, AnswerResponse, ApproachResponse,
+    PostResponse.approaches/answers/comments. A failed request's message now appends the API envelope
+    ": <code>: <message>" when the body is JSON (errorDetail); a non-JSON body keeps the old status line.
+  M src/tools.ts: tool solvr_answer (post_id, content, approach_angle; looked up the post type and called
+    the answer or approach route) is REPLACED by solvr_reply (post_id, body, parent_reply_id?; one
+    createReply call, no type lookup). solvr_post: no `type` property (a stray type argument is not
+    forwarded), required [title, description], NEW optional visibility enum [public, family], output
+    "Created post: <title>" + ID + Status. solvr_get: no include property; fetches the post and the first
+    20 replies (listReplies limit 20) and prints "## Replies (<total>)", each reply's id, author, score,
+    "in reply to <parent>" and body (first 1000 chars), "No replies yet." or "Showing n of total ... cursor".
+    solvr_search untouched (its type filter belongs to idx 53). Tool count stays 5.
+  M README.md: tool docs for solvr_get/solvr_post/solvr_reply + a note that solvr_answer was removed.
+  packages/cli:
+  M src/api.ts: CreatePostInput {title, description, tags?, visibility?}; get(id) without include; NEW
+    reply(postId, body, parentReplyId?), replies(postId, {cursor, limit}); Reply, RepliesResponse,
+    ListRepliesOptions; REMOVED createAnswer, createApproach, GetOptions, CreateApproachInput,
+    Post.approaches/answers/success_criteria.
+  M src/index.ts: `post <type>` -> `post` (--title --description --tags --visibility; --criteria and the
+    type check gone); REMOVED `answer <questionId>` and `approach <problemId>`; NEW `reply <postId> --body
+    [--parent <replyId>]` and `replies <postId> [--limit] [--cursor]`; `get <id>` lost --include (its text
+    output never printed contributions anyway [REAL, output.post]).
+  M src/output.ts: NEW replies(page) formatter (JSON mode prints the page; text: "<total> replies", id,
+    author, score, "in reply to", body, "More: solvr replies <post> --cursor <next>"; "No replies yet").
+  M README.md: Get/Post/Reply/Replies sections + a note naming the removed commands.
+
+EXISTING TESTS THAT DESCRIBED THE REPLACED BEHAVIOR (golden rule a-d; every replacement PASSES [TEST]):
+  mcp-server src/api.test.ts:
+  - getPost "includes query params when include option provided" asserted the URL contains
+    'include=approaches%2Canswers'. Replaced by "requests the post alone (its contributions are read with
+    listReplies)" (same call -> exactly /v1/posts/post_123) + listReplies "calls GET /v1/posts/:id/replies"
+    and "pages with a cursor and a limit".
+  - createPost "calls POST /v1/posts" asserted body JSON.stringify({type:'question', title, description,
+    tags}). Replaced by "calls POST /v1/posts with a canonical post (no type)" (same route, headers and
+    response; body without type) + "sends visibility when given". "throws error on validation failure"
+    only lost `type: 'question'` from its input; its assertion is unchanged.
+  - createAnswer "calls POST /v1/questions/:id/answers" (route, body {content}) and "creates approach when
+    post is a problem" (POST /v1/problems/problem_123/approaches {angle, content}): both routes answer 410
+    since slice 1. Replaced by createReply "calls POST /v1/posts/:id/replies with the body", "threads a
+    reply under a parent reply", "has no method that calls a retired answer or approach route", and error
+    handling "includes the API error code and message from the body" (410 ENDPOINT_RETIRED text) + "keeps
+    the status line when the error body is not JSON". The 401/429/network tests are unchanged and pass.
+  mcp-server src/tools.test.ts:
+  - "returns tool manifest with all tools" asserted names [search, get, post, solvr_answer, claim]; now
+    solvr_reply in that slot (length 5 unchanged).
+  - "solvr_get tool has correct schema" asserted toHaveProperty('include'); now not.toHaveProperty('include')
+    and the description mentions replies.
+  - "solvr_post tool has correct schema" asserted a 'type' property and required [type, title,
+    description]; now no type, required [title, description], visibility enum, description names no type.
+  - "solvr_answer tool has correct schema" (post_id, content, approach_angle; required [post_id, content])
+    -> "solvr_reply tool has correct schema" (exactly post_id, body, parent_reply_id; required [post_id,
+    body]) + "offers no legacy typed choice (post type, approach angle, answer tool)".
+  - solvr_get "executes get with id" asserted getPost('post_123', {}); now getPost('post_123') (+ "No
+    replies yet."). "passes include options" (getPost called with include) -> "shows the replies of the
+    post, threaded ones marked with their parent".
+  - solvr_post "creates a new post" asserted createPost({type:'question', ...}); now without type and the
+    text "Created post: How to test?"; + "never sends a type, even when a caller still passes one".
+    "returns error on validation failure": input lost type, assertion unchanged.
+  - solvr_answer "creates answer for question" (createAnswer('question_123','The answer'), text has
+    answer_123), "creates approach for problem with angle" (createApproach('problem_123', {angle, content})),
+    "returns error when post not found" (getPost rejects -> isError) -> solvr_reply "replies to a post
+    without looking up its type", "threads the reply under parent_reply_id", "returns the API error when the
+    post is not found", + solvr_answer "is no longer a tool (replaced by solvr_reply)".
+  mcp-server src/mcp-e2e.test.ts:
+  - tools/list toContain('solvr_answer') -> toContain('solvr_reply') and not.toContain('solvr_answer').
+  - "solvr_get with include option fetches related content" (getPost called with include ['answers'];
+    text has 'Answers', 'First answer') -> "solvr_get returns the post with its replies" (getPost(id),
+    listReplies(id, {limit: 20}), '## Replies (2)', 'First reply', 'Second reply').
+  - "solvr_get with approaches for problems" (text has 'Approaches', 'Database optimization') -> "solvr_get
+    shows migrated approaches and answers as replies of a legacy post" ('[PROBLEM] Complex problem',
+    'Database optimization', 'Caching layer').
+  - "executes solvr_post via MCP to create a question" / "... a problem" / "... an idea" (createPost with
+    type; text 'Created question|problem|idea' + id) -> "executes solvr_post via MCP to create a canonical
+    post" (exact args without type, 'Created post: ...', id) + "solvr_post does not forward a legacy type
+    argument" (each of problem/question/idea: createPost last called without type, 'Created post' + id).
+  - "creates answer for question via MCP" (createAnswer('q_123', ...), 'Answer posted') and "creates
+    approach for problem via MCP" (createApproach('p_456', {angle, content}), 'Approach added') ->
+    "replies to a post via MCP without looking up its type" and "threads a reply under another reply via
+    MCP". "solvr_get via MCP returns post details" only gained a listReplies mock. The two full-workflow
+    tests keep their assertions (the second now gets 'Working solution'/'succeeded' from a reply body
+    instead of an approach angle/status); solvr_post/validation inputs lost `type`.
+  packages/cli src/__tests__/api.test.ts:
+  - get "includes include parameter" (URL ...?include=approaches%2Canswers) -> "requests the post alone
+    (its replies are read with replies())" + replies "makes GET request to /v1/posts/:id/replies" and
+    "pages with a cursor and a limit".
+  - createPost "makes POST request to /v1/posts" asserted the body contains '"type":"problem"' -> "... with
+    a canonical post (no type)" (exact body without type, response type 'post') + "sends visibility when
+    given".
+  - createAnswer "makes POST request to /v1/questions/:id/answers" and createApproach "makes POST request
+    to /v1/problems/:id/approaches" -> reply "makes POST request to /v1/posts/:id/replies with the body",
+    "threads a reply under a parent reply", "has no method that calls a retired answer or approach route",
+    "exposes the migration details of a retired route" (410 -> ApiError code/details).
+  commands.test.ts and output.test.ts: additions only (5 command tests, 3 output tests). No other test
+  changed.
+
+VERIFICATION:
+  Deps [REAL]: `npm ci` in mcp-server and packages/cli (node_modules gitignored, not committed).
+  BASELINE on HEAD [TEST]: mcp 65 passed, tsc clean; cli 37 passed; cli `tsc --noEmit` FAILS on HEAD with 2
+    errors ("'data' is of type 'unknown'", "Type 'unknown' is not assignable to type 'T'") — pre-existing,
+    same class as sdk-ts (/tmp/solvr_idx52_s4_{mcp,cli}_{base,tsc_base}.log).
+  RED [TEST]: mcp 24 failed (/tmp/solvr_idx52_s4_mcp_red.log; the 3 unchanged error-handling tests failed
+    there only because mockResolvedValueOnce values queued by tests calling missing methods leaked into
+    them — they pass once the methods exist); cli 15 failed/35 passed (/tmp/solvr_idx52_s4_cli_red.log).
+  GREEN [TEST]: mcp 4 files, 73 passed, 0 skipped (/tmp/solvr_idx52_s4_mcp_final.log), tsc clean; cli 4 files,
+    50 passed, 0 skipped (/tmp/solvr_idx52_s4_cli_final.log); cli tsc: the same 2 HEAD errors, nothing new
+    (/tmp/solvr_idx52_s4_cli_tsc.log).
+  MUTATIONS [TEST], sources restored from /tmp/solvr_idx52_s4_*.bak and cmp-verified:
+    mcp solvr_post forwards args.type -> FAIL "never sends a type, even when a caller still passes one" and
+      e2e "solvr_post does not forward a legacy type argument" (/tmp/solvr_idx52_s4_mutM.log);
+    cli reply sends parent_id instead of parent_reply_id -> FAIL "threads a reply under a parent reply"
+      (/tmp/solvr_idx52_s4_mutC.log).
+  LIVE PROBE (step 6 client half) [REAL, /tmp/solvr_idx52_s4_probe2.log, driver /tmp/solvr_idx52_s4_probe/
+    drive.sh + mcp_call.mjs (spawns the real stdio server, initialize + tools/list + tools/call)]: API binary
+    built from this tree (`go build ./cmd/api`), run on :8095 against DATABASE_URL=postgres://solvr:
+    solvr_dev@localhost:5435/solvr_test (local docker solvr-postgres, schema_migrations 114 dirty=f),
+    IPFS pointed at 127.0.0.1:9, GROQ/VOYAGE/RESEND unset; stopped afterwards (:8095 free). The CLI ran with
+    SOLVR_CONFIG_PATH at an absent file and SOLVR_BASE_URL=http://localhost:8095. Old = `git archive HEAD`
+    of mcp-server + packages/cli in /tmp/solvr_idx52_s4_old (package-lock.json identical, node_modules
+    shared).
+    NEW mcp-server: tools/list = search, get, post, solvr_reply, claim. Agent A solvr_post (with a stray
+      type "problem") -> DB type 'post' (status pending_review, no moderator); solvr_reply -> top-level reply;
+      solvr_reply with parent_reply_id -> DB parent = r1, legacy_type null on both; agent B solvr_get prints
+      "## Replies (2)" with both, the second "in reply to <r1>". B's solvr_reply on the OLD client's typed
+      question -> canonical reply (legacy_type null).
+    OLD mcp-server (HEAD): tools/list still has solvr_answer; solvr_answer on a question and on a problem ->
+      both isError "Error executing solvr_answer: API request failed: 410 Gone"; 0 replies on those posts.
+    NEW packages/cli: `post` -> type 'post'; `reply` -> r1; `reply --parent r1` -> DB parent = r1; agent B
+      `replies --limit 1` -> has_more true + next_cursor, `replies --cursor` -> the threaded reply.
+    OLD packages/cli (HEAD): `answer <question>` -> "ENDPOINT_RETIRED: POST /v1/questions/{id}/answers was
+      retired with the canonical knowledge model; use POST /v1/posts/{id}/replies instead." + details
+      {retired_route, replacement, instructions}, EXIT=1; `approach <problem>` -> the approaches equivalent,
+      EXIT=1; 0 replies on those posts.
+    Legacy tables before == after: "25 answers, 541 approaches, 6 responses, 4948 comments, 138
+      progress_notes" -> LEGACY TABLES UNCHANGED.
+    New mcp-server error surfacing [REAL, /tmp/solvr_idx52_s4_probe_err.log]: solvr_reply/solvr_get on an
+      absent post -> "API request failed: 404 Not Found: NOT_FOUND: post not found".
+    PROBE HARNESS FIXES (first run /tmp/solvr_idx52_s4_probe.log): one agent creating two posts got 429
+      Too Many Requests on the second (per-agent post limit) -> one fresh agent per post; packages/cli has no
+      local tsx -> `npx --no-install tsx` as its own commands.test does. Its legacy counts were unchanged too.
+  Not run: backend and frontend suites (nothing under backend/ or frontend/ changed); eslint for either
+    package. check-file-size.sh -> "Found 34 file(s) exceeding 800 lines" (unchanged; the largest touched
+    file is mcp-server/src/mcp-e2e.test.ts, 724) (/tmp/solvr_idx52_s4_filesize.log).
+
+SAFETY NOTE [REAL]: the RED run of the new "rejects the removed answer command" test executed the HEAD CLI
+  `answer post_123` with no SOLVR_CONFIG_PATH; it stopped at "No API key configured" (~/.solvr/config is not
+  the TS CLI's ~/.solvr/config.json), so nothing left the machine. The test now sets SOLVR_CONFIG_PATH to an
+  absent file, SOLVR_BASE_URL=http://127.0.0.1:9 and a fake key, so a regression cannot reach a real API.
+
+LIMITS / NOT DONE [REAL unless stated]:
+  - The HEAD mcp-server never read error bodies, so an old MCP user sees "410 Gone" without the migration
+    text. It is an error, never a silent success, and writes nothing (probe above).
+  - Old clients still CREATE TYPED POSTS through POST /v1/posts {type: question|problem} (201; rows in posts
+    with type question/problem, status pending_review) [REAL, probe]. posts is not a legacy table; removing
+    legacy post types is idx 68 step 5.
+  - Still advertising typed posts / solvr_answer (not edited, idx 78 "consistent names" + "remove legacy
+    problem/idea/answer choices"): backend /v1/mcp (handlers/mcp.go: solvr_post requires type, solvr_answer
+    with approach_angle; it writes nothing and returns text), discovery.go tool list, frontend
+    components/mcp/mcp-tools.tsx and components/api/api-mcp.tsx, api-sdks.tsx (`solvr post problem`,
+    `solvr answer`), SPEC.md MCP/CLI sections, frontend/public/heartbeat.md and skill/HEARTBEAT.md. The npm
+    mcp-server now names the reply tool solvr_reply while /v1/mcp still says solvr_answer.
+  - solvr_search type / `solvr search --type` filters untouched (idx 53). No reply vote in either client.
+
+REMAINING FOR idx 52 (next slices, in order):
+  step 2: cli (Go: post.go `post <type>`, answer.go -> POST questions/{id}/answers, get.go reads
+    approaches/answers + --include), skill/scripts/solvr.sh (post <type>, answer :225, approach :262), each
+    with the same live old/new probe. Then decide at close whether backend /v1/mcp's type selection (it
+    creates nothing) is idx 52 or idx 78.
+  step 5: redirects exist (frontend/middleware.ts 308); legacy READ routes follow idx 73.
+
+git status at journal time [REAL]: 13 M (above), 0 ?? + this progress.txt entry; spec.json unchanged, idx 52
+  passes stays false.

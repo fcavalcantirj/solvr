@@ -28,8 +28,8 @@ vi.mock('./api.js', () => ({
     search: vi.fn(),
     getPost: vi.fn(),
     createPost: vi.fn(),
-    createAnswer: vi.fn(),
-    createApproach: vi.fn(),
+    createReply: vi.fn(),
+    listReplies: vi.fn(),
   })),
 }));
 
@@ -136,8 +136,8 @@ describe('MCP Server E2E Tests', () => {
     search: Mock;
     getPost: Mock;
     createPost: Mock;
-    createAnswer: Mock;
-    createApproach: Mock;
+    createReply: Mock;
+    listReplies: Mock;
   };
 
   beforeEach(() => {
@@ -182,7 +182,8 @@ describe('MCP Server E2E Tests', () => {
       expect(toolNames).toContain('solvr_search');
       expect(toolNames).toContain('solvr_get');
       expect(toolNames).toContain('solvr_post');
-      expect(toolNames).toContain('solvr_answer');
+      expect(toolNames).toContain('solvr_reply');
+      expect(toolNames).not.toContain('solvr_answer');
       expect(toolNames).toContain('solvr_claim');
     });
 
@@ -343,6 +344,7 @@ describe('MCP Server E2E Tests', () => {
           tags: ['testing', 'mcp', 'e2e'],
         },
       });
+      mockApiClient.listReplies.mockResolvedValue({ data: [], meta: { total: 0, has_more: false } });
 
       const response = await client.sendRequest('tools/call', {
         name: 'solvr_get',
@@ -359,38 +361,41 @@ describe('MCP Server E2E Tests', () => {
       expect(result.content[0].text).toContain('QUESTION');
     });
 
-    it('solvr_get with include option fetches related content', async () => {
+    it('solvr_get returns the post with its replies', async () => {
       mockApiClient.getPost.mockResolvedValue({
         data: {
-          id: 'post_with_answers',
-          type: 'question',
-          title: 'Question with answers',
-          description: 'A question that has been answered.',
-          status: 'answered',
-          answers: [
-            { id: 'ans_1', content: 'First answer with detailed explanation' },
-            { id: 'ans_2', content: 'Second answer with alternative approach' },
-          ],
+          id: 'post_with_replies',
+          type: 'post',
+          title: 'Post with replies',
+          description: 'A post that has been answered.',
+          status: 'open',
         },
+      });
+      mockApiClient.listReplies.mockResolvedValue({
+        data: [
+          { id: 'rep_1', post_id: 'post_with_replies', author_type: 'agent', author_id: 'a1', body: 'First reply with detailed explanation', score: 2 },
+          { id: 'rep_2', post_id: 'post_with_replies', author_type: 'agent', author_id: 'a2', body: 'Second reply with an alternative', score: 0 },
+        ],
+        meta: { total: 2, has_more: false },
       });
 
       const response = await client.sendRequest('tools/call', {
         name: 'solvr_get',
-        arguments: { id: 'post_with_answers', include: ['answers'] },
+        arguments: { id: 'post_with_replies' },
       });
 
-      expect(mockApiClient.getPost).toHaveBeenCalledWith('post_with_answers', {
-        include: ['answers'],
-      });
+      expect(mockApiClient.getPost).toHaveBeenCalledWith('post_with_replies');
+      expect(mockApiClient.listReplies).toHaveBeenCalledWith('post_with_replies', { limit: 20 });
 
       const result = response.result as {
         content: Array<{ type: string; text: string }>;
       };
-      expect(result.content[0].text).toContain('Answers');
-      expect(result.content[0].text).toContain('First answer');
+      expect(result.content[0].text).toContain('## Replies (2)');
+      expect(result.content[0].text).toContain('First reply');
+      expect(result.content[0].text).toContain('Second reply');
     });
 
-    it('solvr_get with approaches for problems', async () => {
+    it('solvr_get shows migrated approaches and answers as replies of a legacy post', async () => {
       mockApiClient.getPost.mockResolvedValue({
         data: {
           id: 'problem_with_approaches',
@@ -398,23 +403,27 @@ describe('MCP Server E2E Tests', () => {
           title: 'Complex problem',
           description: 'A problem with multiple approaches.',
           status: 'in_progress',
-          approaches: [
-            { id: 'app_1', angle: 'Database optimization', status: 'working' },
-            { id: 'app_2', angle: 'Caching layer', status: 'failed' },
-          ],
         },
+      });
+      mockApiClient.listReplies.mockResolvedValue({
+        data: [
+          { id: 'rep_a', post_id: 'problem_with_approaches', author_type: 'agent', author_id: 'a1', body: 'Database optimization: add the missing index', legacy_type: 'approach', score: 1 },
+          { id: 'rep_b', post_id: 'problem_with_approaches', author_type: 'agent', author_id: 'a2', body: 'Caching layer (failed: stale reads)', legacy_type: 'approach', score: 0 },
+        ],
+        meta: { total: 2, has_more: false },
       });
 
       const response = await client.sendRequest('tools/call', {
         name: 'solvr_get',
-        arguments: { id: 'problem_with_approaches', include: ['approaches'] },
+        arguments: { id: 'problem_with_approaches' },
       });
 
       const result = response.result as {
         content: Array<{ type: string; text: string }>;
       };
-      expect(result.content[0].text).toContain('Approaches');
+      expect(result.content[0].text).toContain('[PROBLEM] Complex problem');
       expect(result.content[0].text).toContain('Database optimization');
+      expect(result.content[0].text).toContain('Caching layer');
     });
 
     it('solvr_get handles not found error', async () => {
@@ -435,20 +444,20 @@ describe('MCP Server E2E Tests', () => {
   });
 
   describe('MCP Protocol: Tool Call - solvr_post', () => {
-    it('executes solvr_post via MCP to create a question', async () => {
+    it('executes solvr_post via MCP to create a canonical post', async () => {
       mockApiClient.createPost.mockResolvedValue({
         data: {
-          id: 'new_question_123',
-          type: 'question',
+          id: 'new_post_123',
+          type: 'post',
           title: 'How to implement MCP?',
           description: 'Detailed description of my question.',
+          status: 'open',
         },
       });
 
       const response = await client.sendRequest('tools/call', {
         name: 'solvr_post',
         arguments: {
-          type: 'question',
           title: 'How to implement MCP?',
           description: 'Detailed description of my question.',
           tags: ['mcp', 'implementation'],
@@ -457,7 +466,6 @@ describe('MCP Server E2E Tests', () => {
 
       expect(response.error).toBeUndefined();
       expect(mockApiClient.createPost).toHaveBeenCalledWith({
-        type: 'question',
         title: 'How to implement MCP?',
         description: 'Detailed description of my question.',
         tags: ['mcp', 'implementation'],
@@ -466,61 +474,35 @@ describe('MCP Server E2E Tests', () => {
       const result = response.result as {
         content: Array<{ type: string; text: string }>;
       };
-      expect(result.content[0].text).toContain('Created question');
-      expect(result.content[0].text).toContain('new_question_123');
+      expect(result.content[0].text).toContain('Created post: How to implement MCP?');
+      expect(result.content[0].text).toContain('new_post_123');
     });
 
-    it('executes solvr_post via MCP to create a problem', async () => {
-      mockApiClient.createPost.mockResolvedValue({
-        data: {
-          id: 'new_problem_456',
-          type: 'problem',
+    it('solvr_post does not forward a legacy type argument', async () => {
+      for (const legacyType of ['problem', 'question', 'idea']) {
+        mockApiClient.createPost.mockResolvedValueOnce({
+          data: { id: `new_${legacyType}`, type: 'post', title: 'Race condition in async code' },
+        });
+
+        const response = await client.sendRequest('tools/call', {
+          name: 'solvr_post',
+          arguments: {
+            type: legacyType,
+            title: 'Race condition in async code',
+            description: 'Description of the problem.',
+          },
+        });
+
+        expect(mockApiClient.createPost).toHaveBeenLastCalledWith({
           title: 'Race condition in async code',
           description: 'Description of the problem.',
-        },
-      });
-
-      const response = await client.sendRequest('tools/call', {
-        name: 'solvr_post',
-        arguments: {
-          type: 'problem',
-          title: 'Race condition in async code',
-          description: 'Description of the problem.',
-          tags: ['async', 'concurrency'],
-        },
-      });
-
-      const result = response.result as {
-        content: Array<{ type: string; text: string }>;
-      };
-      expect(result.content[0].text).toContain('Created problem');
-      expect(result.content[0].text).toContain('new_problem_456');
-    });
-
-    it('executes solvr_post via MCP to create an idea', async () => {
-      mockApiClient.createPost.mockResolvedValue({
-        data: {
-          id: 'new_idea_789',
-          type: 'idea',
-          title: 'Observation about patterns',
-          description: 'I noticed an interesting pattern...',
-        },
-      });
-
-      const response = await client.sendRequest('tools/call', {
-        name: 'solvr_post',
-        arguments: {
-          type: 'idea',
-          title: 'Observation about patterns',
-          description: 'I noticed an interesting pattern...',
-        },
-      });
-
-      const result = response.result as {
-        content: Array<{ type: string; text: string }>;
-      };
-      expect(result.content[0].text).toContain('Created idea');
-      expect(result.content[0].text).toContain('new_idea_789');
+        });
+        const result = response.result as {
+          content: Array<{ type: string; text: string }>;
+        };
+        expect(result.content[0].text).toContain('Created post');
+        expect(result.content[0].text).toContain(`new_${legacyType}`);
+      }
     });
 
     it('solvr_post handles validation errors', async () => {
@@ -531,7 +513,6 @@ describe('MCP Server E2E Tests', () => {
       const response = await client.sendRequest('tools/call', {
         name: 'solvr_post',
         arguments: {
-          type: 'question',
           title: '',
           description: 'Missing title',
         },
@@ -546,65 +527,55 @@ describe('MCP Server E2E Tests', () => {
     });
   });
 
-  describe('MCP Protocol: Tool Call - solvr_answer', () => {
-    it('creates answer for question via MCP', async () => {
-      mockApiClient.getPost.mockResolvedValue({
-        data: { id: 'q_123', type: 'question' },
-      });
-      mockApiClient.createAnswer.mockResolvedValue({
-        data: { id: 'answer_e2e_1', content: 'Here is my answer...' },
+  describe('MCP Protocol: Tool Call - solvr_reply', () => {
+    it('replies to a post via MCP without looking up its type', async () => {
+      mockApiClient.createReply.mockResolvedValue({
+        data: { id: 'reply_e2e_1', post_id: 'q_123', body: 'Here is my answer to your question.' },
       });
 
       const response = await client.sendRequest('tools/call', {
-        name: 'solvr_answer',
+        name: 'solvr_reply',
         arguments: {
           post_id: 'q_123',
-          content: 'Here is my answer to your question.',
+          body: 'Here is my answer to your question.',
         },
       });
 
-      expect(mockApiClient.createAnswer).toHaveBeenCalledWith(
+      expect(mockApiClient.getPost).not.toHaveBeenCalled();
+      expect(mockApiClient.createReply).toHaveBeenCalledWith(
         'q_123',
-        'Here is my answer to your question.'
+        'Here is my answer to your question.',
+        undefined
       );
 
       const result = response.result as {
         content: Array<{ type: string; text: string }>;
       };
-      expect(result.content[0].text).toContain('Answer posted');
-      expect(result.content[0].text).toContain('answer_e2e_1');
+      expect(result.content[0].text).toContain('Reply posted');
+      expect(result.content[0].text).toContain('reply_e2e_1');
     });
 
-    it('creates approach for problem via MCP', async () => {
-      mockApiClient.getPost.mockResolvedValue({
-        data: { id: 'p_456', type: 'problem' },
-      });
-      mockApiClient.createApproach.mockResolvedValue({
-        data: {
-          id: 'approach_e2e_1',
-          angle: 'Database indexing strategy',
-        },
+    it('threads a reply under another reply via MCP', async () => {
+      mockApiClient.createReply.mockResolvedValue({
+        data: { id: 'reply_e2e_2', post_id: 'p_456', parent_reply_id: 'reply_e2e_1', body: 'Indexing fixed it here too.' },
       });
 
       const response = await client.sendRequest('tools/call', {
-        name: 'solvr_answer',
+        name: 'solvr_reply',
         arguments: {
           post_id: 'p_456',
-          content: 'My approach involves optimizing database indexes.',
-          approach_angle: 'Database indexing strategy',
+          body: 'Indexing fixed it here too.',
+          parent_reply_id: 'reply_e2e_1',
         },
       });
 
-      expect(mockApiClient.createApproach).toHaveBeenCalledWith('p_456', {
-        angle: 'Database indexing strategy',
-        content: 'My approach involves optimizing database indexes.',
-      });
+      expect(mockApiClient.createReply).toHaveBeenCalledWith('p_456', 'Indexing fixed it here too.', 'reply_e2e_1');
 
       const result = response.result as {
         content: Array<{ type: string; text: string }>;
       };
-      expect(result.content[0].text).toContain('Approach added');
-      expect(result.content[0].text).toContain('approach_e2e_1');
+      expect(result.content[0].text).toContain('in reply to reply_e2e_1');
+      expect(result.content[0].text).toContain('reply_e2e_2');
     });
   });
 
@@ -667,14 +638,13 @@ describe('MCP Server E2E Tests', () => {
       mockApiClient.createPost.mockResolvedValue({
         data: {
           id: 'new_post_workflow',
-          type: 'problem',
+          type: 'post',
           title: 'My specific problem',
         },
       });
       const postResponse = await client.sendRequest('tools/call', {
         name: 'solvr_post',
         arguments: {
-          type: 'problem',
           title: 'My specific problem',
           description: 'Detailed description of what I tried...',
           tags: ['workflow', 'test'],
@@ -724,18 +694,24 @@ describe('MCP Server E2E Tests', () => {
           title: 'Similar problem already solved',
           description: 'Original description...',
           status: 'solved',
-          approaches: [
-            {
-              id: 'winning_approach',
-              angle: 'Working solution',
-              status: 'succeeded',
-            },
-          ],
         },
+      });
+      mockApiClient.listReplies.mockResolvedValue({
+        data: [
+          {
+            id: 'winning_reply',
+            post_id: 'solved_post',
+            author_type: 'agent',
+            author_id: 'solver',
+            body: 'Working solution: pin the pool size. Verified, the approach succeeded.',
+            score: 5,
+          },
+        ],
+        meta: { total: 1, has_more: false },
       });
       const getResponse = await client.sendRequest('tools/call', {
         name: 'solvr_get',
-        arguments: { id: 'solved_post', include: ['approaches'] },
+        arguments: { id: 'solved_post' },
       });
 
       const getResult = getResponse.result as {

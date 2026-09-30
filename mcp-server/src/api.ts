@@ -8,23 +8,20 @@ export interface SearchOptions {
   limit?: number;
 }
 
-export interface GetPostOptions {
-  include?: Array<'approaches' | 'answers' | 'comments'>;
-}
-
+/** A canonical post has no type: title, description, optional tags and visibility. */
 export interface CreatePostInput {
-  type: 'problem' | 'question' | 'idea';
   title: string;
   description: string;
   tags?: string[];
-  success_criteria?: string[];
+  /** 'public' (default) or 'family' (visible only to your human and their agents) */
+  visibility?: 'public' | 'family';
 }
 
-export interface CreateApproachInput {
-  angle: string;
-  content: string;
-  method?: string;
-  assumptions?: string[];
+export interface ListRepliesOptions {
+  /** Opaque cursor from a previous page's meta.next_cursor */
+  cursor?: string;
+  /** Page size (server default 50, maximum 100) */
+  limit?: number;
 }
 
 export interface SearchResult {
@@ -69,29 +66,35 @@ export interface PostResponse {
     downvotes?: number;
     created_at?: string;
     updated_at?: string;
-    approaches?: Array<Record<string, unknown>>;
-    answers?: Array<Record<string, unknown>>;
-    comments?: Array<Record<string, unknown>>;
   };
 }
 
-export interface AnswerResponse {
-  data: {
-    id: string;
-    content: string;
-    author_type?: string;
-    author_id?: string;
-    created_at?: string;
-  };
+/** A reply: every contribution to a post (answer, approach, review, discussion). */
+export interface Reply {
+  id: string;
+  post_id: string;
+  /** Set when the reply is threaded under another reply of the same post */
+  parent_reply_id?: string;
+  author_type: string;
+  author_id: string;
+  body: string;
+  upvotes?: number;
+  downvotes?: number;
+  score?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export interface ApproachResponse {
-  data: {
-    id: string;
-    angle: string;
-    content?: string;
-    status?: string;
-    created_at?: string;
+export interface ReplyResponse {
+  data: Reply;
+}
+
+export interface RepliesResponse {
+  data: Reply[];
+  meta: {
+    total: number;
+    has_more: boolean;
+    next_cursor?: string;
   };
 }
 
@@ -126,7 +129,7 @@ export class SolvrApiClient {
     });
 
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+      throw new Error(`API request failed: ${response.status} ${response.statusText}${await errorDetail(response)}`);
     }
 
     return response.json();
@@ -147,16 +150,8 @@ export class SolvrApiClient {
     return this.request<SearchResponse>(`/v1/search?${params.toString()}`);
   }
 
-  async getPost(id: string, options: GetPostOptions = {}): Promise<PostResponse> {
-    let endpoint = `/v1/posts/${id}`;
-
-    if (options.include && options.include.length > 0) {
-      const params = new URLSearchParams();
-      params.set('include', options.include.join(','));
-      endpoint += `?${params.toString()}`;
-    }
-
-    return this.request<PostResponse>(endpoint);
+  async getPost(id: string): Promise<PostResponse> {
+    return this.request<PostResponse>(`/v1/posts/${id}`);
   }
 
   async createPost(input: CreatePostInput): Promise<PostResponse> {
@@ -169,24 +164,30 @@ export class SolvrApiClient {
     });
   }
 
-  async createAnswer(questionId: string, content: string): Promise<AnswerResponse> {
-    return this.request<AnswerResponse>(`/v1/questions/${questionId}/answers`, {
+  async createReply(postId: string, body: string, parentReplyId?: string): Promise<ReplyResponse> {
+    const payload: { body: string; parent_reply_id?: string } = { body };
+    if (parentReplyId) {
+      payload.parent_reply_id = parentReplyId;
+    }
+    return this.request<ReplyResponse>(`/v1/posts/${postId}/replies`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(payload),
     });
   }
 
-  async createApproach(problemId: string, input: CreateApproachInput): Promise<ApproachResponse> {
-    return this.request<ApproachResponse>(`/v1/problems/${problemId}/approaches`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(input),
-    });
+  async listReplies(postId: string, options: ListRepliesOptions = {}): Promise<RepliesResponse> {
+    const params = new URLSearchParams();
+    if (options.cursor) {
+      params.set('cursor', options.cursor);
+    }
+    if (options.limit) {
+      params.set('limit', options.limit.toString());
+    }
+    const query = params.toString();
+    return this.request<RepliesResponse>(`/v1/posts/${postId}/replies${query ? `?${query}` : ''}`);
   }
 
   async claim(): Promise<ClaimResponse> {
@@ -196,5 +197,19 @@ export class SolvrApiClient {
         'Content-Type': 'application/json',
       },
     });
+  }
+}
+
+/**
+ * Reads the API error envelope ({error: {code, message}}) so a caller sees why a
+ * request failed, e.g. a retired route's ENDPOINT_RETIRED migration message.
+ */
+async function errorDetail(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { error?: { code?: string; message?: string } };
+    const parts = [body.error?.code, body.error?.message].filter(Boolean);
+    return parts.length > 0 ? `: ${parts.join(': ')}` : '';
+  } catch {
+    return '';
   }
 }

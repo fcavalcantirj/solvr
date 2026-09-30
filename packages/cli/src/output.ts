@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import type { SearchResponse, Post, ApiResponse } from "./api.js";
+import type { SearchResponse, Post, ApiResponse, RepliesResponse } from "./api.js";
 
 /**
  * Output formatting for CLI
@@ -166,6 +166,35 @@ export class Output {
     }
     console.log(chalk.dim(`Created: ${post.created_at}`));
     console.log();
+  }
+
+  /**
+   * Format and output one page of a post's replies
+   */
+  replies(page: RepliesResponse): void {
+    if (this.jsonMode) {
+      this.json(page);
+      return;
+    }
+
+    if (page.data.length === 0) {
+      console.log(chalk.dim("No replies yet"));
+      return;
+    }
+
+    console.log(chalk.dim(`${page.meta.total} replies\n`));
+    for (const reply of page.data) {
+      const threaded = reply.parent_reply_id ? `  in reply to ${reply.parent_reply_id}` : "";
+      console.log(
+        chalk.bold(reply.id) +
+          chalk.dim(`  ${reply.author_type} ${reply.author_id}  Score: ${reply.score}${threaded}`)
+      );
+      console.log(reply.body);
+      console.log();
+    }
+    if (page.meta.has_more && page.meta.next_cursor) {
+      console.log(chalk.dim(`More: solvr replies ${page.data[0].post_id} --cursor ${page.meta.next_cursor}`));
+    }
   }
 
   /**

@@ -95,92 +95,163 @@ describe("ApiClient", () => {
       expect(post.data.id).toBe("abc123");
     });
 
-    it("includes include parameter", async () => {
+    it("requests the post alone (its replies are read with replies())", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ data: { id: "abc123" } }),
       });
 
-      await client.get("abc123", { include: ["approaches", "answers"] });
+      // An old caller may still pass an include list; nothing is appended to the URL.
+      await (client.get as (id: string, options?: unknown) => Promise<unknown>)("abc123", {
+        include: ["approaches", "answers"],
+      });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.solvr.dev/v1/posts/abc123?include=approaches%2Canswers",
-        expect.any(Object)
+        "https://api.solvr.dev/v1/posts/abc123",
+        expect.objectContaining({ method: "GET" })
       );
     });
   });
 
   describe("createPost", () => {
-    it("makes POST request to /v1/posts", async () => {
+    it("makes POST request to /v1/posts with a canonical post (no type)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: { id: "new123", title: "New Post", type: "problem" },
+          data: { id: "new123", title: "Test Post", type: "post" },
         }),
       });
 
       const post = await client.createPost({
-        type: "problem",
-        title: "Test Problem",
+        title: "Test Post",
         description: "This is a test",
         tags: ["test", "example"],
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
         "https://api.solvr.dev/v1/posts",
-        expect.objectContaining({
-          method: "POST",
-          body: expect.stringContaining('"type":"problem"'),
-        })
+        expect.objectContaining({ method: "POST" })
       );
+      const [, init] = mockFetch.mock.calls[0];
+      expect(JSON.parse(init.body)).toEqual({
+        title: "Test Post",
+        description: "This is a test",
+        tags: ["test", "example"],
+      });
       expect(post.data.id).toBe("new123");
+      expect(post.data.type).toBe("post");
+    });
+
+    it("sends visibility when given", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { id: "p1", type: "post" } }),
+      });
+
+      await client.createPost({ title: "T", description: "D", visibility: "family" });
+
+      const [, init] = mockFetch.mock.calls[0];
+      expect(JSON.parse(init.body)).toEqual({ title: "T", description: "D", visibility: "family" });
     });
   });
 
-  describe("createAnswer", () => {
-    it("makes POST request to /v1/questions/:id/answers", async () => {
+  describe("reply", () => {
+    it("makes POST request to /v1/posts/:id/replies with the body", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: { id: "ans123", content: "This is my answer" },
+          data: { id: "rep123", post_id: "p123", body: "This is my reply" },
         }),
       });
 
-      const answer = await client.createAnswer("q123", "This is my answer");
+      const reply = await client.reply("p123", "This is my reply");
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.solvr.dev/v1/questions/q123/answers",
-        expect.objectContaining({
-          method: "POST",
-          body: expect.stringContaining('"content":"This is my answer"'),
-        })
+        "https://api.solvr.dev/v1/posts/p123/replies",
+        expect.objectContaining({ method: "POST" })
       );
-      expect(answer.data.id).toBe("ans123");
+      const [, init] = mockFetch.mock.calls[0];
+      expect(JSON.parse(init.body)).toEqual({ body: "This is my reply" });
+      expect(reply.data.id).toBe("rep123");
+    });
+
+    it("threads a reply under a parent reply", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { id: "rep2", parent_reply_id: "rep1" } }),
+      });
+
+      await client.reply("p123", "Confirmed", "rep1");
+
+      const [, init] = mockFetch.mock.calls[0];
+      expect(JSON.parse(init.body)).toEqual({ body: "Confirmed", parent_reply_id: "rep1" });
     });
   });
 
-  describe("createApproach", () => {
-    it("makes POST request to /v1/problems/:id/approaches", async () => {
+  describe("replies", () => {
+    it("makes GET request to /v1/posts/:id/replies", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        json: async () => ({ data: [{ id: "rep1", body: "First" }], meta: { total: 1, has_more: false } }),
+      });
+
+      const page = await client.replies("p123");
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://api.solvr.dev/v1/posts/p123/replies",
+        expect.objectContaining({ method: "GET" })
+      );
+      expect(page.data[0].id).toBe("rep1");
+      expect(page.meta.total).toBe(1);
+    });
+
+    it("pages with a cursor and a limit", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [], meta: { total: 0, has_more: false } }),
+      });
+
+      await client.replies("p123", { cursor: "abc", limit: 10 });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://api.solvr.dev/v1/posts/p123/replies?cursor=abc&limit=10",
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe("legacy contribution routes", () => {
+    it("has no method that calls a retired answer or approach route", () => {
+      const methods = client as unknown as Record<string, unknown>;
+      expect(methods.createAnswer).toBeUndefined();
+      expect(methods.createApproach).toBeUndefined();
+    });
+
+    it("exposes the migration details of a retired route", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 410,
         json: async () => ({
-          data: { id: "apr123", angle: "Testing approach" },
+          error: {
+            code: "ENDPOINT_RETIRED",
+            message:
+              "POST /v1/questions/{id}/answers was retired with the canonical knowledge model; use POST /v1/posts/{id}/replies instead.",
+            details: {
+              retired_route: "POST /v1/questions/{id}/answers",
+              replacement: "POST /v1/posts/{id}/replies",
+            },
+          },
         }),
       });
 
-      const approach = await client.createApproach("p123", {
-        angle: "Testing approach",
-        method: "Use this method",
+      await expect(client.reply("p123", "x")).rejects.toMatchObject({
+        status: 410,
+        code: "ENDPOINT_RETIRED",
+        details: {
+          retired_route: "POST /v1/questions/{id}/answers",
+          replacement: "POST /v1/posts/{id}/replies",
+        },
       });
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.solvr.dev/v1/problems/p123/approaches",
-        expect.objectContaining({
-          method: "POST",
-          body: expect.stringContaining('"angle":"Testing approach"'),
-        })
-      );
-      expect(approach.data.id).toBe("apr123");
     });
   });
 

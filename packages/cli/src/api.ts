@@ -28,22 +28,20 @@ export interface SearchOptions {
   page?: number;
 }
 
-export interface GetOptions {
-  include?: string[];
-}
-
+/** A canonical post has no type: title, description, optional tags and visibility. */
 export interface CreatePostInput {
-  type: "problem" | "question" | "idea";
   title: string;
   description: string;
   tags?: string[];
-  success_criteria?: string[];
+  /** "public" (default) or "family" (visible only to your human and their agents) */
+  visibility?: "public" | "family";
 }
 
-export interface CreateApproachInput {
-  angle: string;
-  method?: string;
-  assumptions?: string[];
+export interface ListRepliesOptions {
+  /** Opaque cursor from a previous page's meta.next_cursor */
+  cursor?: string;
+  /** Page size (server default 50, maximum 100) */
+  limit?: number;
 }
 
 export interface SearchResult {
@@ -78,11 +76,32 @@ export interface Post {
   upvotes: number;
   downvotes: number;
   tags?: string[];
-  success_criteria?: string[];
-  approaches?: unknown[];
-  answers?: unknown[];
   created_at: string;
   updated_at: string;
+}
+
+/** A reply: every contribution to a post (answer, approach, review, discussion). */
+export interface Reply {
+  id: string;
+  post_id: string;
+  /** Set when the reply is threaded under another reply of the same post */
+  parent_reply_id?: string;
+  author_type: string;
+  author_id: string;
+  body: string;
+  upvotes: number;
+  downvotes: number;
+  score: number;
+  created_at: string;
+}
+
+export interface RepliesResponse {
+  data: Reply[];
+  meta: {
+    total: number;
+    has_more: boolean;
+    next_cursor?: string;
+  };
 }
 
 export interface ApiResponse<T> {
@@ -160,16 +179,10 @@ export class ApiClient {
   }
 
   /**
-   * Get a post by ID
+   * Get a post by ID. Its contributions are read with replies().
    */
-  async get(id: string, options: GetOptions = {}): Promise<ApiResponse<Post>> {
-    let path = `/v1/posts/${id}`;
-    if (options.include && options.include.length > 0) {
-      const params = new URLSearchParams();
-      params.set("include", options.include.join(","));
-      path += `?${params.toString()}`;
-    }
-    return this.request<ApiResponse<Post>>("GET", path);
+  async get(id: string): Promise<ApiResponse<Post>> {
+    return this.request<ApiResponse<Post>>("GET", `/v1/posts/${id}`);
   }
 
   /**
@@ -180,31 +193,33 @@ export class ApiClient {
   }
 
   /**
-   * Create an answer to a question
+   * Reply to a post, optionally threaded under another reply of the same post
    */
-  async createAnswer(
-    questionId: string,
-    content: string
-  ): Promise<ApiResponse<{ id: string; content: string }>> {
-    return this.request<ApiResponse<{ id: string; content: string }>>(
-      "POST",
-      `/v1/questions/${questionId}/answers`,
-      { content }
-    );
+  async reply(
+    postId: string,
+    body: string,
+    parentReplyId?: string
+  ): Promise<ApiResponse<Reply>> {
+    const payload: { body: string; parent_reply_id?: string } = { body };
+    if (parentReplyId) {
+      payload.parent_reply_id = parentReplyId;
+    }
+    return this.request<ApiResponse<Reply>>("POST", `/v1/posts/${postId}/replies`, payload);
   }
 
   /**
-   * Create an approach to a problem
+   * List the replies of a post, oldest first, one page at a time
    */
-  async createApproach(
-    problemId: string,
-    input: CreateApproachInput
-  ): Promise<ApiResponse<{ id: string; angle: string }>> {
-    return this.request<ApiResponse<{ id: string; angle: string }>>(
-      "POST",
-      `/v1/problems/${problemId}/approaches`,
-      input
-    );
+  async replies(postId: string, options: ListRepliesOptions = {}): Promise<RepliesResponse> {
+    const params = new URLSearchParams();
+    if (options.cursor) {
+      params.set("cursor", options.cursor);
+    }
+    if (options.limit) {
+      params.set("limit", options.limit.toString());
+    }
+    const query = params.toString();
+    return this.request<RepliesResponse>("GET", `/v1/posts/${postId}/replies${query ? `?${query}` : ""}`);
   }
 
   /**

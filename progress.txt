@@ -2149,3 +2149,144 @@ git status at journal time [REAL]: 12 M (SPEC.md, backend discovery.go, discover
   api-endpoint-data-core.ts, api-endpoint-data.test.ts, api-mcp.test.tsx, api-mcp.tsx, mcp/mcp-tools.tsx)
   + 2 ?? (handlers/mcp_canonical_test.go, mcp/mcp-tools.test.tsx) + this progress.txt entry; spec.json
   unchanged, idx 52 passes stays false.
+
+2026-09-30 17:45 — Task idx 52 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Route existing agent integrations into the canonical knowledge model during a defined transition"
+SLICE 8: step 2 for the web client (/new no longer offers a type choice: it 308s to the canonical composer
+/posts/new) + the /api-docs SDK/CLI/quickstart samples (typed creates, approach/answer calls, include) now teach
+canonical posts and replies and are checked against the real SDK sources + HEARTBEAT.md (both copies) no longer
+teaches commands solvr.sh refuses. Remaining: the published references/{api,examples}.md (curl to retired routes).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 52, 53, 67, 68, 73, 74, 77-95, 97, 98;
+  no open URGENT. idx 24 stays skipped (acceptance task; needs idx 78). idx 52 is the first buildable task.
+  Tree clean at start [REAL, git status]; HEAD fffa1c9d (slice 7). Only this loop iteration running (ps).
+
+WHAT CHANGED [REAL, git status --porcelain: 8 M + 2 ??; git diff --stat 128+/70- on tracked files]:
+  PRODUCTION (frontend):
+  M frontend/middleware.ts (+6): canonicalPath('/new') = '/posts/new' (exact path only; /news, /newsletter
+    untouched) and '/new' added to config.matcher, so /new is a 308 like /problems/new, /ideas/new and
+    /questions/new already were. The query string is preserved as for every legacy route (/new?type=problem ->
+    /posts/new?type=problem; the composer reads no type). /new was the ONE reachable page that rendered the
+    typed NewPostForm (problem/idea choice, sends `type` to POST /v1/posts). app/new/page.tsx, the typed form
+    and hooks/use-create-post.ts are left in the tree, unreachable, like the other legacy pages (owner decision
+    4: legacy code goes all at once).
+  M frontend/components/collaboration-showcase.tsx: empty-state CTA href "/new?type=problem" -> "/posts/new"
+    (component is rendered by no page; app/page.test.tsx pins it gone from the homepage). Label unchanged.
+  M frontend/components/api/api-quickstart.tsx (/api-docs step 04): solvr.post({type: 'problem', ...}) ->
+    solvr.post({title, description, tags}) + solvr.reply('post_abc123', '...').
+  M frontend/components/api/api-sdks.tsx (/api-docs SDKS & CLI; `sdks` is now exported for the test):
+    TS: get(id, {include}) -> get(id) + replies(id); post without type; solvr.approach(...) -> reply(...) and a
+      threaded reply ({ parentReplyId: reply.data.id }).
+    Python: `for r in results` -> `results.data` (SearchResponse has .data, no iteration); get(include=...) ->
+      get(id) + replies(id); post without type; client.approach(...) -> reply(...) + parent_reply_id.
+    Go: the sample called functions sdk-go never had (solvr.New, client.Search(query, solvr.SearchOpts),
+      client.Get(id, solvr.GetOpts{Include}), client.Post(solvr.Post{Type})). Now NewClient, Search(ctx, q,
+      &solvr.SearchOptions{Type, PerPage}), results.Data, GetPost, ListReplies, CreatePost(ctx,
+      solvr.CreatePostRequest{Title, Description, Tags}), CreateReply(ctx, id, solvr.CreateReplyRequest{Body,
+      ParentReplyID}). Install/import path "github.com/fcavalcantirj/solvr-go" UNCHANGED (sdk-go's go.mod says
+      github.com/fcavalcantirj/solvr/packages/sdk-go; whether solvr-go exists as a published mirror is
+      [UNVERIFIED], not touched).
+    CLI: `get --include approaches,answers` -> `get` + `replies`; `post problem --title ...` -> `post --title`;
+      `answer post_abc123 --content` -> `reply post_abc123 --body`.
+    Search examples keep their `type` filter (search is idx 53).
+  M skill/HEARTBEAT.md + M frontend/public/heartbeat.md (identical after, cmp): `solvr approach PROBLEM_ID` ->
+    `solvr reply POST_ID`; `solvr.sh approach PROBLEM_ID` (2x) -> `solvr.sh reply POST_ID`; `solvr.sh
+    approach-status APPROACH_ID "succeeded" ...` (a command solvr.sh never had: `git log -S approach-status --
+    skill/scripts/solvr.sh` is empty [REAL]) -> `solvr.sh reply POST_ID "Succeeded: ..." --parent REPLY_ID`
+    (PATCH /v1/approaches/{id} is retired with "record the outcome as a reply"); `solvr.sh post problem` ->
+    `post "Title"`; quick reference `post problem` / `approach` / `answer` -> `post "Title"`, `reply POST_ID`,
+    `replies POST_ID`. Prose about approaches/status (lines ~22-24, 54, 56, 74, 90-102, 123, 137, 164, 211-237)
+    NOT rewritten: it describes briefing fields (idx 78).
+  TESTS (all new, additive; no existing assertion changed):
+  M frontend/middleware.test.ts: import adds `config`; + describe "the old /new composer": canonicalPath('/new')
+    == '/posts/new' and null for /news, /newsletter, /posts/new; /new?type=problem -> 308 /posts/new; matcher
+    contains '/new'.
+  A frontend/app/web-create-canonical.test.ts (68): walks app/**/page.tsx; every page importing
+    '@/components/new-post/new-post-form' must be redirected to /posts/new by canonicalPath AND covered by
+    config.matcher (non-vacuous: asserts /new is among them); no source under app/components/hooks/lib links
+    (href / push / replace) to /new or /new?....
+  A frontend/components/api/api-sdk-examples.test.tsx (133): each sample checked against the SDK SOURCE in
+    packages/ (not a hand list): TS solvr.* methods exist as `async m(` in sdk-ts client.ts and solvr.post keys
+    are CreatePostInput fields; Python client.* methods exist and every keyword of every call is a parameter of
+    that def; Go client.* are `func (c *Client) M(`, solvr.F( are package funcs, every solvr.T{} literal's keys
+    are fields of T (CreatePostRequest has no Type); CLI commands exist as .command("c") and every --flag exists
+    in packages/cli/src/index.ts, `solvr post` takes flags only; no approach/answer/include/approach_angle or
+    /answers|/approaches anywhere; quickstart's rendered solvr.post has no type.
+  M backend/internal/api/published_docs_canonical_commands_test.go: + TestPublishedHeartbeat_TeachesCanonical
+    PostAndReplyCommands (both heartbeat copies: no line matches `\bsolvr(\.sh)? (post (problem|question|idea)\b|
+    answer |approach(-status)? |get \S+ --include)`; must contain the canonical post/reply/replies commands).
+
+VERIFICATION:
+  RED [TEST, /tmp/solvr_idx52_s8_red.log]: 10 of the new frontend tests FAIL on the HEAD sources (canonicalPath
+    ('/new') null; /new answered 200 not 308; matcher lacks /new; reachable typed page ['/new']; showcase link;
+    TS/Python samples lack reply; Go sample calls Search/Get/Post, not CreatePost; CLI lacks reply; quickstart
+    post has `type: 'problem'`). Backend RED [TEST, /tmp/solvr_idx52_s8_hb_red.log]: "skill/HEARTBEAT.md:55
+    teaches a retired solvr command"; second RED after the first edit caught line 60 (`solvr.sh approach`).
+  GREEN [TEST]: the 3 frontend files 20/20 (/tmp/solvr_idx52_s8_green3.log; two test-side fixes on the way:
+    the Go blanket `Type: "problem"` check was narrowed to the CreatePostRequest literal because it also hit
+    the search filter (idx 53), and the flag lookup now accepts `--json"`). Backend -run 'TestPublishedHeartbeat|
+    TestPublishedSkill|TestSpecMCPSections' 3 PASS (/tmp/solvr_idx52_s8_hb_green.log); go vet ./internal/api clean.
+  SAMPLES COMPILED AGAINST THE REAL SDKS [REAL]:
+    Go: the rendered Go sample (template literal evaluated as the page shows it), import path swapped to the
+      local module + go.mod replace -> packages/sdk-go: `go vet` + `go build` EXIT 0 (/tmp/solvr_idx52_s8_gosample).
+    TS: the rendered TS sample and quickstart step 04, import swapped to packages/sdk-ts/src/index.js: `tsc
+      --noEmit --strict --module nodenext` EXIT 0. Negative control: HEAD's TS sample -> 3 errors ("Expected 1
+      arguments, but got 2" on get(id, {include}); "'type' does not exist in type 'CreatePostInput'"; "Property
+      'approach' does not exist on type 'Solvr'") (/tmp/solvr_idx52_s8_tssample).
+    Python: sample parses (ast) and every call binds to the real signature via inspect.signature(...).bind.
+  LIVE PROBE [REAL]: `next dev -p 3095` from this tree (killed after; :3095 free, no next process left):
+    GET /new?type=problem -> "308 Permanent Redirect", location /posts/new?type=problem; GET /new -> 308
+    /posts/new; GET /posts/new -> 200, HTML has "New post" and no problem/idea/question type option; GET /news
+    -> 404 (not redirected). The composer's POST payload has no type: pinned by the existing
+    post-composer.test.tsx ('publishes through the canonical API with NO type field'), PASS in the full run.
+    Not re-probed against the API/DB this slice: that POST /v1/posts without a type stores type 'post' was
+    probed live by slices 3-6.
+  FULL SUITES:
+    [TEST] frontend `npm test -- --run`: "Test Files 188 passed (188)  Tests 1688 passed (1688)", EXIT 0
+      (/tmp/solvr_idx52_s8_frontend_full.log; 1677 at slice 7 + 11 new). Run BEFORE the heartbeat edit; no
+      frontend test reads public/heartbeat.md [REAL, grep]. `npm run typecheck` EXIT 0; eslint on the 7 touched
+      frontend files EXIT 0.
+    [TEST] backend `DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test go test ./internal/api/...
+      -count=1` (local docker solvr-postgres, schema_migrations 114 dirty=f; /tmp/solvr_idx52_s8_backend_api.log):
+      handlers, middleware, response ok; internal/api FAIL with 5 tests, none touching this slice (no
+      production Go file changed; the one Go change is a test that reads two markdown files):
+      TestHomepageOverview_ServesEverySectionToALoggedOutVisitor, TestHomepageSearch_NeverPublishesAProtected
+      OrUnrepeatedTerm, TestHomepageSearch_NeverPublishesPastedSecretsOrPersonalData, TestIPFSHealthEndpoint —
+      the same 4 slice 7 recorded as pre-existing on untouched HEAD; and TestRoomHumanPost_PrivateRoom_Members
+      Only: "duplicate key value violates unique constraint \"users_username_key\" ... failed to create test
+      user" (router_rooms_test.go:61 names users roomtest_<UnixNano()%1000000>), which PASSES run alone on this
+      tree [TEST, /tmp/solvr_idx52_s8_roomhuman_alone.log] [INFERRED: shared-DB fixture collision]. Every
+      TestPublished*/TestSpecMCPSections/TestMCP*/TestLegacyWrite* test passed in that run (none in the FAIL
+      list). internal/db and the other packages were NOT run this slice (nothing under them changed).
+    check-file-size.sh -> "Found 34 file(s) exceeding 800 lines" (unchanged; none touched). Largest touched code
+      file: api-sdks.tsx 240.
+
+LIMITS / NOT DONE [REAL unless stated]:
+  - STEP 1/2/4 PUBLISHED REFERENCES NOT DONE: skill/references/api.md == frontend/public/references/api.md
+    (1355 lines, identical) still document POST /v1/posts with "type": "problem"/"question" (lines ~134, 211,
+    263), GET/POST /problems/:id/approaches, PATCH /approaches/:id, POST /approaches/:id/progress, POST
+    /questions/:id/answers, POST /ideas/:id/responses, POST /answers|approaches/:id/vote (lines ~297-458);
+    skill/references/examples.md == frontend/public/references/examples.md (460 lines) curl those retired
+    routes (lines ~23-188). An agent following them gets 410 ENDPOINT_RETIRED.
+  - frontend/components/api-section.tsx still says "POST /approaches — Document attempts"; it is rendered by
+    no page (grep) — dead, left for the all-at-once legacy removal.
+  - /api-docs response samples that show "type": "problem" (api-endpoint-data-core.ts ~304/343/396,
+    -content.ts ~39) are GET read shapes (idx 73), not creates; search `type` filters stay (idx 53).
+  - /api-docs quickstart step 03 uses `existing.results` but the SDK's SearchResponse has `data`: pre-existing,
+    not a write shape, not changed.
+  - CLAUDE.md (owner's) still teaches POST /v1/problems/{id}/approaches in its "Use Solvr" section; not
+    touched (reference file).
+
+REMAINING FOR idx 52 (next slices, in order):
+  step 1/2/4: skill/references/{api,examples}.md + the frontend/public/references copies -> canonical POST
+    /v1/posts (no type) and POST /v1/posts/{id}/replies, each retired route named with its replacement (same
+    mapping as legacy_write_retirement.go), with a backend published-docs test like the heartbeat one.
+  step 5: redirects exist (frontend/middleware.ts 308, now incl. /new); legacy READ routes follow idx 73.
+  Then re-read all 6 steps against the journal and decide whether idx 52 can close.
+
+git status at journal time [REAL]: 8 M (backend published_docs_canonical_commands_test.go, frontend
+  api-quickstart.tsx, api-sdks.tsx, collaboration-showcase.tsx, middleware.test.ts, middleware.ts,
+  public/heartbeat.md, skill/HEARTBEAT.md) + 2 ?? (frontend/app/web-create-canonical.test.ts,
+  frontend/components/api/api-sdk-examples.test.tsx) + this progress.txt entry; spec.json unchanged, idx 52
+  passes stays false.

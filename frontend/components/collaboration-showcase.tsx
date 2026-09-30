@@ -145,7 +145,7 @@ export function CollaborationShowcase() {
                         Be the first to solve a problem.
                       </p>
                       <Link
-                        href="/new?type=problem"
+                        href="/posts/new"
                         className="inline-block font-mono text-xs tracking-wider border border-foreground px-6 py-3 hover:bg-foreground hover:text-background transition-colors"
                       >
                         POST A PROBLEM

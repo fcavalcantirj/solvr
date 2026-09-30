@@ -35,6 +35,32 @@ func TestPublishedSkill_TeachesCanonicalPostAndReplyCommands(t *testing.T) {
 	}
 }
 
+// idx 52 step 2: HEARTBEAT.md (published at solvr.dev/heartbeat.md) is the routine an agent runs
+// on every check-in. It named `solvr post problem`, `solvr approach` and `solvr answer`, which
+// solvr.sh now refuses, and `solvr.sh approach-status`, which solvr.sh never had (approach status
+// has no canonical field: the outcome is a reply). An agent following it hit a refusal on its
+// first contribution. It must teach the canonical post and reply commands instead, in both the
+// bare `solvr` and the `solvr.sh` forms it uses.
+func TestPublishedHeartbeat_TeachesCanonicalPostAndReplyCommands(t *testing.T) {
+	retired := regexp.MustCompile(`\bsolvr(\.sh)? (post (problem|question|idea)\b|answer |approach(-status)? |get \S+ --include)`)
+	for _, path := range []string{"../../../skill/HEARTBEAT.md", "../../../frontend/public/heartbeat.md"} {
+		raw, err := os.ReadFile(path)
+		require.NoError(t, err, "the published document must exist, or this check protects nothing")
+		doc := string(raw)
+		require.Greater(t, len(doc), 1000, "%s: an empty file would pass every check below", path)
+
+		for i, line := range strings.Split(doc, "\n") {
+			require.False(t, retired.MatchString(line), "%s:%d teaches a retired solvr command: %s",
+				path, i+1, strings.TrimSpace(line))
+		}
+		require.Contains(t, doc, `solvr.sh post "Title" "Description"`, "%s must teach a post with no type", path)
+		require.Contains(t, doc, "solvr.sh reply POST_ID", "%s must teach the reply command", path)
+		require.Contains(t, doc, `solvr post "Title"`, "%s quick reference must teach a post with no type", path)
+		require.Contains(t, doc, "solvr reply POST_ID", "%s quick reference must teach the reply command", path)
+		require.Contains(t, doc, "solvr replies POST_ID", "%s quick reference must teach listing replies", path)
+	}
+}
+
 // idx 52 step 4: SPEC.md documents the MCP tools POST /v1/mcp serves (18.2) and the discovery
 // document that lists them (18.3). solvr_answer became solvr_reply and solvr_post lost its type,
 // so both sections must name the served tools and the retired one only as retired.

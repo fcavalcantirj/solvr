@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 
-const sdks = [
+export const sdks = [
   {
     language: "JavaScript / TypeScript",
     package: "@solvr/sdk",
@@ -15,24 +15,20 @@ const solvr = new Solvr({ apiKey: process.env.SOLVR_API_KEY });
 // Search
 const results = await solvr.search('async postgres race condition');
 
-// Get post details
-const post = await solvr.get('post_abc123', { 
-  include: ['approaches', 'answers'] 
-});
+// Get a post, then its replies
+const post = await solvr.get('post_abc123');
+const replies = await solvr.replies('post_abc123');
 
-// Create a problem
+// Create a post (a post has no type)
 const newPost = await solvr.post({
-  type: 'problem',
   title: 'Memory leak in Node.js worker threads',
   description: 'Detailed description...',
   tags: ['nodejs', 'memory', 'workers']
 });
 
-// Add an approach
-await solvr.approach('post_abc123', {
-  angle: 'Heap snapshot analysis',
-  method: 'Using Chrome DevTools...'
-});`,
+// Reply to a post (every contribution is a reply)
+const reply = await solvr.reply('post_abc123', 'Heap snapshot analysis showed...');
+await solvr.reply('post_abc123', 'Confirmed on Node 22.', { parentReplyId: reply.data.id });`,
   },
   {
     language: "Python",
@@ -50,25 +46,23 @@ results = client.search(
     limit=5
 )
 
-for r in results:
+for r in results.data:
     print(f"{r.title} (score: {r.score})")
 
-# Get post details
-post = client.get("post_abc123", include=["approaches", "answers"])
+# Get a post, then its replies
+post = client.get("post_abc123")
+replies = client.replies("post_abc123")
 
-# Create a problem
+# Create a post (a post has no type)
 new_post = client.post(
-    type="problem",
     title="Race condition in async PostgreSQL queries",
     description="When running multiple async queries...",
     tags=["postgresql", "async", "python"]
 )
 
-# Add an approach
-client.approach("post_abc123", 
-    angle="Connection pool isolation",
-    method="Separate pools per worker..."
-)`,
+# Reply to a post (every contribution is a reply)
+reply = client.reply("post_abc123", "Separate pools per worker fixed it...")
+client.reply("post_abc123", "Confirmed on Python 3.12.", parent_reply_id=reply.id)`,
   },
   {
     language: "Go",
@@ -77,36 +71,46 @@ client.approach("post_abc123",
     code: `package main
 
 import (
+    "context"
     "fmt"
     "os"
-    
+
     solvr "github.com/fcavalcantirj/solvr-go"
 )
 
 func main() {
-    client := solvr.New(os.Getenv("SOLVR_API_KEY"))
-    
+    ctx := context.Background()
+    client := solvr.NewClient(os.Getenv("SOLVR_API_KEY"))
+
     // Search
-    results, _ := client.Search("async postgres race condition", solvr.SearchOpts{
-        Type:  "problem",
-        Limit: 5,
+    results, _ := client.Search(ctx, "async postgres race condition", &solvr.SearchOptions{
+        Type:    "problem",
+        PerPage: 5,
     })
-    
-    for _, r := range results {
+
+    for _, r := range results.Data {
         fmt.Printf("%s (score: %.2f)\\n", r.Title, r.Score)
     }
-    
-    // Get post details
-    post, _ := client.Get("post_abc123", solvr.GetOpts{
-        Include: []string{"approaches", "answers"},
-    })
-    
-    // Create a problem
-    newPost, _ := client.Post(solvr.Post{
-        Type:        "problem",
+
+    // Get a post, then its replies
+    post, _ := client.GetPost(ctx, "post_abc123")
+    replies, _ := client.ListReplies(ctx, "post_abc123", nil)
+
+    // Create a post (a post has no type)
+    newPost, _ := client.CreatePost(ctx, solvr.CreatePostRequest{
         Title:       "Race condition in async PostgreSQL queries",
         Description: "When running multiple async queries...",
         Tags:        []string{"postgresql", "async", "go"},
+    })
+    fmt.Println(post.Data.Title, len(replies.Data), newPost.Data.ID)
+
+    // Reply to a post (every contribution is a reply)
+    reply, _ := client.CreateReply(ctx, "post_abc123", solvr.CreateReplyRequest{
+        Body: "Separate pools per worker fixed it...",
+    })
+    client.CreateReply(ctx, "post_abc123", solvr.CreateReplyRequest{
+        Body:          "Confirmed on Go 1.23.",
+        ParentReplyID: &reply.Data.ID,
     })
 }`,
   },
@@ -121,17 +125,18 @@ solvr config set api-key solvr_sk_xxxxx
 solvr search "async postgres race condition"
 solvr search "error: ECONNREFUSED" --type problem --limit 10
 
-# Get post details
-solvr get post_abc123 --include approaches,answers
+# Get a post, then its replies
+solvr get post_abc123
+solvr replies post_abc123
 
-# Create a problem
-solvr post problem \\
+# Create a post (a post has no type)
+solvr post \\
   --title "Race condition in async PostgreSQL queries" \\
   --description "When running multiple async queries..." \\
   --tags go,postgres,async
 
-# Add an answer
-solvr answer post_abc123 --content "The solution is..."
+# Reply to a post (every contribution is a reply)
+solvr reply post_abc123 --body "The solution is..."
 
 # Quick search (returns JSON, perfect for piping)
 solvr search "query" --json | jq '.data[0]'`,

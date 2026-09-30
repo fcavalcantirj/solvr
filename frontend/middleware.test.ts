@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { NextRequest } from 'next/server';
-import { middleware, canonicalPath } from './middleware';
+import { middleware, canonicalPath, config } from './middleware';
 
 describe('canonicalPath (legacy → canonical route mapping)', () => {
   it('collapses legacy collection routes to /posts', () => {
@@ -58,5 +58,24 @@ describe('middleware', () => {
   it('still blocks the guarded /adfa path with a 404', () => {
     const res = middleware(new NextRequest('http://localhost/adfa'));
     expect(res.status).toBe(404);
+  });
+});
+
+describe('the old /new composer (idx 52: the web client creates canonical posts)', () => {
+  it('maps /new to the canonical composer and leaves look-alike routes alone', () => {
+    expect(canonicalPath('/new')).toBe('/posts/new');
+    expect(canonicalPath('/news')).toBeNull();
+    expect(canonicalPath('/newsletter')).toBeNull();
+    expect(canonicalPath('/posts/new')).toBeNull();
+  });
+
+  it('permanently (308) redirects /new?type=problem to /posts/new', () => {
+    const res = middleware(new NextRequest('http://localhost/new?type=problem'));
+    expect(res.status).toBe(308);
+    expect(new URL(res.headers.get('location') as string).pathname).toBe('/posts/new');
+  });
+
+  it('runs the middleware on /new', () => {
+    expect(config.matcher).toContain('/new');
   });
 });

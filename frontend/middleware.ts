@@ -17,11 +17,16 @@ const LEGACY_SEGMENTS = ['problems', 'ideas', 'questions']
 //   /problems/{id}/edit    -> /posts/{id}/edit
 //   /problems/new          -> /posts/new
 //   /feed                  -> /posts   (the aggregate has no sub-routes)
+//   /new                   -> /posts/new (the old typed composer; the canonical
+//                                         one asks for no type)
 // It never rewrites a /posts path, so a legacy -> canonical redirect can never
 // bounce back into a second redirect (no loops or chains).
 export function canonicalPath(pathname: string): string | null {
   if (pathname === '/feed' || pathname.startsWith('/feed/')) {
     return '/posts'
+  }
+  if (pathname === '/new') {
+    return '/posts/new'
   }
   const segment = pathname.split('/')[1]
   if (LEGACY_SEGMENTS.includes(segment)) {
@@ -57,6 +62,7 @@ export const config = {
     '/adfa/:path*',
     '/feed',
     '/feed/:path*',
+    '/new',
     '/problems',
     '/problems/:path*',
     '/ideas',

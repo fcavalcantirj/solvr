@@ -508,19 +508,8 @@ func TestGoogleCallback_GoogleAPIError(t *testing.T) {
 
 	handler.GoogleCallback(rec, req)
 
-	// Should return 502 BAD_GATEWAY per SPEC.md
-	if rec.Code != http.StatusBadGateway {
-		t.Errorf("expected status %d, got %d", http.StatusBadGateway, rec.Code)
-	}
-
-	var resp ErrorResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if resp.Error.Code != "BAD_GATEWAY" {
-		t.Errorf("expected error code BAD_GATEWAY, got %s", resp.Error.Code)
-	}
+	// Google is unreachable or failing: the browser lands on the error page.
+	requireCallbackErrorRedirect(t, rec, OAuthErrorProviderUnavailable)
 }
 
 // TestGoogleCallback_InvalidCode tests error handling when code is invalid.
@@ -549,10 +538,8 @@ func TestGoogleCallback_InvalidCode(t *testing.T) {
 
 	handler.GoogleCallback(rec, req)
 
-	// Should return 400 for invalid code
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
+	// Google refuses the code: its own error code is passed on.
+	requireCallbackErrorRedirect(t, rec, "invalid_grant")
 }
 
 // TestGoogleCallback_UserInfoFetchFails tests when user info fetch fails.
@@ -591,10 +578,8 @@ func TestGoogleCallback_UserInfoFetchFails(t *testing.T) {
 
 	handler.GoogleCallback(rec, req)
 
-	// Should return 502 BAD_GATEWAY
-	if rec.Code != http.StatusBadGateway {
-		t.Errorf("expected status %d, got %d. Body: %s", http.StatusBadGateway, rec.Code, rec.Body.String())
-	}
+	// The profile fetch fails: the browser lands on the error page.
+	requireCallbackErrorRedirect(t, rec, OAuthErrorProviderUnavailable)
 }
 
 // Mock types for Google OAuth testing

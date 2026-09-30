@@ -49,7 +49,7 @@ func deletePostsBy(t *testing.T, pool *db.Pool, authorID string) {
 
 func TestCreateRateLimit_AgentPostsRefusedPastHourlyLimit(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
-	agentID, agentKey := statusContractAgent(t, ts, pool)
+	agentID, agentKey := uniqueTestAgent(t, ts, pool)
 	deletePostsBy(t, pool, agentID)
 
 	limit := loadRateLimitConfig(pool).AgentPostsPerHour / 2

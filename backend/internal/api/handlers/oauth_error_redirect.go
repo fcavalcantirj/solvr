@@ -9,9 +9,17 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/db"
 )
 
-// OAuthErrorAccountSuspended is the ?error= code the frontend's /auth/callback page shows when
-// a banned or tombstoned identity tries to sign in.
-const OAuthErrorAccountSuspended = "account_suspended"
+// Codes a browser OAuth flow ends with on the frontend's /auth/callback?error=… page. An error
+// the provider reports (access_denied, bad_verification_code, invalid_grant, …) is passed on
+// under the provider's own code.
+const (
+	OAuthErrorAccountSuspended    = "account_suspended"    // a banned or tombstoned identity
+	OAuthErrorMissingCode         = "missing_code"         // the callback carried no authorization code
+	OAuthErrorProviderUnavailable = "provider_unavailable" // GitHub or Google could not be reached or answered badly
+	OAuthErrorLoginFailed         = "login_failed"         // the account or the session could not be set up
+	OAuthErrorLoginUnavailable    = "login_unavailable"    // login codes are not configured on this server
+	oauthErrorFromProvider        = "oauth_error"          // the provider refused without a code
+)
 
 // frontendBaseURL is where browser OAuth flows land (FE-022).
 func (h *OAuthHandlers) frontendBaseURL() string {
@@ -22,8 +30,12 @@ func (h *OAuthHandlers) frontendBaseURL() string {
 }
 
 // redirectWithError ends a browser OAuth flow on the frontend callback page with an error
-// code, instead of rendering a JSON body in the browser.
+// code, instead of rendering a JSON body in the browser. Every GitHub and Google callback
+// error ends here (Felipe, 2026-09-30).
 func (h *OAuthHandlers) redirectWithError(w http.ResponseWriter, r *http.Request, code string) {
+	if code == "" {
+		code = oauthErrorFromProvider
+	}
 	http.Redirect(w, r, fmt.Sprintf("%s/auth/callback?error=%s", h.frontendBaseURL(), url.QueryEscape(code)), http.StatusFound)
 }
 

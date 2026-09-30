@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -179,15 +178,15 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Check for error from GitHub
 	if errParam := r.URL.Query().Get("error"); errParam != "" {
-		errDesc := r.URL.Query().Get("error_description")
-		writeOAuthError(w, errParam, errDesc)
+		slog.Info("OAuth provider returned an error", "error", errParam, "description", r.URL.Query().Get("error_description"))
+		h.redirectWithError(w, r, errParam)
 		return
 	}
 
 	// Extract authorization code
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		writeValidationError(w, "authorization code is required")
+		h.redirectWithError(w, r, OAuthErrorMissingCode)
 		return
 	}
 
@@ -202,12 +201,13 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Check if it's an OAuth error (e.g., invalid code)
 		if oauthErr, ok := err.(*OAuthError); ok {
-			writeOAuthError(w, oauthErr.Code, oauthErr.Description)
+			slog.Info("OAuth code exchange refused", "error", oauthErr.Code, "description", oauthErr.Description)
+			h.redirectWithError(w, r, oauthErr.Code)
 			return
 		}
 		// Other errors are gateway errors
 		slog.Error("GitHub token exchange failed", "error", err)
-		writeBadGateway(w, "Failed to communicate with GitHub")
+		h.redirectWithError(w, r, OAuthErrorProviderUnavailable)
 		return
 	}
 
@@ -215,7 +215,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	ghUser, err := gitHubClient.GetUser(ctx, tokenResp.AccessToken)
 	if err != nil {
 		slog.Error("GitHub user fetch failed", "error", err)
-		writeBadGateway(w, "Failed to fetch user info from GitHub")
+		h.redirectWithError(w, r, OAuthErrorProviderUnavailable)
 		return
 	}
 
@@ -225,7 +225,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		email, err = gitHubClient.GetPrimaryEmail(ctx, tokenResp.AccessToken)
 		if err != nil {
 			slog.Error("GitHub email fetch failed", "error", err)
-			writeBadGateway(w, "Failed to fetch user email from GitHub")
+			h.redirectWithError(w, r, OAuthErrorProviderUnavailable)
 			return
 		}
 	}
@@ -252,7 +252,7 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			slog.Error("User creation/lookup failed", "error", err)
-			writeInternalError(w, "Failed to create or find user")
+			h.redirectWithError(w, r, OAuthErrorLoginFailed)
 			return
 		}
 	} else {
@@ -312,15 +312,15 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Check for error from Google
 	if errParam := r.URL.Query().Get("error"); errParam != "" {
-		errDesc := r.URL.Query().Get("error_description")
-		writeOAuthError(w, errParam, errDesc)
+		slog.Info("OAuth provider returned an error", "error", errParam, "description", r.URL.Query().Get("error_description"))
+		h.redirectWithError(w, r, errParam)
 		return
 	}
 
 	// Extract authorization code
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		writeValidationError(w, "authorization code is required")
+		h.redirectWithError(w, r, OAuthErrorMissingCode)
 		return
 	}
 
@@ -336,12 +336,13 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Check if it's an OAuth error (e.g., invalid code)
 		if oauthErr, ok := err.(*OAuthError); ok {
-			writeOAuthError(w, oauthErr.Code, oauthErr.Description)
+			slog.Info("OAuth code exchange refused", "error", oauthErr.Code, "description", oauthErr.Description)
+			h.redirectWithError(w, r, oauthErr.Code)
 			return
 		}
 		// Other errors are gateway errors
 		slog.Error("Google token exchange failed", "error", err)
-		writeBadGateway(w, "Failed to communicate with Google")
+		h.redirectWithError(w, r, OAuthErrorProviderUnavailable)
 		return
 	}
 
@@ -349,7 +350,7 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	googleUser, err := googleClient.GetUser(ctx, tokenResp.AccessToken)
 	if err != nil {
 		slog.Error("Google user fetch failed", "error", err)
-		writeBadGateway(w, "Failed to fetch user info from Google")
+		h.redirectWithError(w, r, OAuthErrorProviderUnavailable)
 		return
 	}
 
@@ -380,7 +381,7 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			slog.Error("User creation/lookup failed", "error", err)
-			writeInternalError(w, "Failed to create or find user")
+			h.redirectWithError(w, r, OAuthErrorLoginFailed)
 			return
 		}
 	} else {
@@ -455,38 +456,12 @@ func writeValidationError(w http.ResponseWriter, message string) {
 	})
 }
 
-func writeOAuthError(w http.ResponseWriter, errCode, errDesc string) {
-	message := fmt.Sprintf("OAuth error: %s", errCode)
-	if errDesc != "" {
-		message = fmt.Sprintf("%s - %s", message, errDesc)
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": map[string]string{
-			"code":    "OAUTH_ERROR",
-			"message": message,
-		},
-	})
-}
-
 func writeInternalError(w http.ResponseWriter, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"error": map[string]string{
 			"code":    "INTERNAL_ERROR",
-			"message": message,
-		},
-	})
-}
-
-func writeBadGateway(w http.ResponseWriter, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadGateway)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": map[string]string{
-			"code":    "BAD_GATEWAY",
 			"message": message,
 		},
 	})

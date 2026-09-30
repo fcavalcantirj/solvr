@@ -14,7 +14,7 @@ import (
 
 func TestAgentKey_RefusedOnceItsOwnerIsSoftDeleted(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
-	agentID, agentKey := statusContractAgent(t, ts, pool)
+	agentID, agentKey := uniqueTestAgent(t, ts, pool)
 	ownerID, _ := createLiveTestUser(t, pool, models.UserRoleUser)
 	claimAgentToUser(t, pool, agentID, ownerID)
 	deletePostsBy(t, pool, agentID)
@@ -40,7 +40,7 @@ func TestAgentKey_RefusedOnceItsOwnerIsSoftDeleted(t *testing.T) {
 
 func TestAgentClaim_SoftDeletedAgentIsNotFound(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
-	agentID, agentKey := statusContractAgent(t, ts, pool)
+	agentID, agentKey := uniqueTestAgent(t, ts, pool)
 	_, jwt := createLiveTestUser(t, pool, models.UserRoleUser)
 
 	status, out := claimGenerate(t, ts, agentKey)

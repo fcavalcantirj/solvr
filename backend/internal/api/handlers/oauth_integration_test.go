@@ -45,7 +45,7 @@ func TestGitHubOAuthRedirect_Integration(t *testing.T) {
 	defer server.Close()
 
 	// Make request to GitHub OAuth redirect endpoint
-	resp, err := http.Get(server.URL + "/v1/auth/github")
+	resp, err := noRedirectClient.Get(server.URL + "/v1/auth/github")
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestGitHubCallback_MissingCode_Integration(t *testing.T) {
 	defer server.Close()
 
 	// Make request to callback without code parameter
-	resp, err := http.Get(server.URL + "/v1/auth/github/callback")
+	resp, err := noRedirectClient.Get(server.URL + "/v1/auth/github/callback")
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestGitHubCallback_GitHubError_Integration(t *testing.T) {
 
 	// Make request to callback with GitHub error
 	errorURL := fmt.Sprintf("%s/v1/auth/github/callback?error=access_denied&error_description=User+denied+access", server.URL)
-	resp, err := http.Get(errorURL)
+	resp, err := noRedirectClient.Get(errorURL)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestGitHubCallback_InvalidCode_Integration(t *testing.T) {
 	// Make request to callback with invalid code
 	// This will attempt to call the real GitHub API and should fail
 	invalidCodeURL := fmt.Sprintf("%s/v1/auth/github/callback?code=invalid_code_12345&state=state", server.URL)
-	resp, err := http.Get(invalidCodeURL)
+	resp, err := noRedirectClient.Get(invalidCodeURL)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -242,6 +242,12 @@ func TestGitHubCallback_InvalidCode_Integration(t *testing.T) {
 	if !strings.Contains(location, "error=") {
 		t.Errorf("expected error parameter in redirect URL due to invalid code, got %s", location)
 	}
+}
+
+// noRedirectClient returns the 302 itself: these tests assert where a redirect points, and a
+// default client would follow it (to GitHub, or to whatever answers on the frontend URL).
+var noRedirectClient = &http.Client{
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 }
 
 // setupTestRouter creates a minimal router for integration testing.

@@ -91,7 +91,7 @@ func TestCreateRateLimit_HumanAPIKeyPostsRefusedPastHourlyLimit(t *testing.T) {
 // The limiter is mounted once per create route: each create spends exactly one.
 func TestCreateRateLimit_OneCountPerRequest(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
-	agentID, key := statusContractAgent(t, ts, pool)
+	agentID, key := uniqueTestAgent(t, ts, pool)
 	deletePostsBy(t, pool, agentID)
 	first := postWithHeaders(t, ts.URL+"/v1/posts", key, uniquePostBody(), "")
 	second := postWithHeaders(t, ts.URL+"/v1/posts", key, uniquePostBody(), "")
@@ -105,7 +105,7 @@ func TestCreateRateLimit_OneCountPerRequest(t *testing.T) {
 // limit: the limiter sits inside the idempotency middleware.
 func TestCreateRateLimit_IdempotentReplayAtTheLimitIsNotRefused(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
-	agentID, key := statusContractAgent(t, ts, pool)
+	agentID, key := uniqueTestAgent(t, ts, pool)
 	deletePostsBy(t, pool, agentID)
 	idem := uuid.NewString()
 	body := uniquePostBody()
@@ -122,7 +122,7 @@ func TestCreateRateLimit_IdempotentReplayAtTheLimitIsNotRefused(t *testing.T) {
 // General and search limits stay as they were: not enforced for authenticated callers.
 func TestCreateRateLimit_GeneralLimitsUnchanged(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
-	_, key := statusContractAgent(t, ts, pool)
+	_, key := uniqueTestAgent(t, ts, pool)
 	for i := 0; i < 70; i++ {
 		answer, err := callStatusContract(http.DefaultClient, http.MethodGet, ts.URL+"/v1/me", key, "")
 		require.NoError(t, err)

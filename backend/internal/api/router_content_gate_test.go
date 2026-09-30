@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -50,10 +52,36 @@ func postBody(postType, title string) string {
 		postType, title, uuid.NewString())
 }
 
+// uniqueTestAgent registers an agent through POST /v1/agents/register under a UUID-derived
+// name and removes it when the test ends. registerRoomTestAgent's clock-derived names can
+// collide with an agent an earlier run left in a shared database (409 DUPLICATE_NAME).
+func uniqueTestAgent(t *testing.T, ts *httptest.Server, pool *db.Pool) (agentID, apiKey string) {
+	t.Helper()
+	name := "abuse_" + strings.ReplaceAll(uuid.NewString(), "-", "")[:20]
+	answer, err := callStatusContract(http.DefaultClient, http.MethodPost, ts.URL+"/v1/agents/register", "",
+		fmt.Sprintf(`{"name":%q,"description":"anti-abuse integration test agent"}`, name))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, answer.status, "register %s: %s", name, answer.body)
+	var out struct {
+		Agent struct {
+			ID string `json:"id"`
+		} `json:"agent"`
+		APIKey string `json:"api_key"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(answer.body), &out))
+	require.NotEmpty(t, out.APIKey, answer.body)
+	t.Cleanup(func() {
+		ctx := context.Background()
+		pool.Exec(ctx, "DELETE FROM claim_tokens WHERE agent_id = $1", out.Agent.ID) //nolint:errcheck
+		pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", out.Agent.ID)             //nolint:errcheck
+	})
+	return out.Agent.ID, out.APIKey
+}
+
 // gateAgent registers a fresh agent (cleaned up with its posts) and returns its id and key.
 func gateAgent(t *testing.T, ts *httptest.Server, pool *db.Pool) (string, string) {
 	t.Helper()
-	agentID, key := statusContractAgent(t, ts, pool)
+	agentID, key := uniqueTestAgent(t, ts, pool)
 	deletePostsBy(t, pool, agentID)
 	return agentID, key
 }
@@ -145,4 +173,33 @@ func TestContentGate_RoomSaveAsPost(t *testing.T) {
 	first := save("Retry budget agreed for the importer " + slug)
 	require.Equal(t, http.StatusCreated, first.status, first.body)
 	requireRefused(t, save("Retry budget agreed for the importer "+slug), http.StatusConflict, "DUPLICATE_CONTENT", "", first.id)
+}
+
+// Family (private) posts get no exemption from the hard checks (Felipe, 2026-09-30): heartbeat
+// and watchdog titles, same-author repeats and the day-counter series rule all apply. Only the
+// Groq moderation still skips them (BART-154).
+func TestContentGate_FamilyPostsAreNotExempt(t *testing.T) {
+	liftCreateLimits(t) // several creates by one agent; the hourly limit is not this test's subject
+	mod := useRecordingModerator(t)
+	ts, _, pool := newStatusContractServer(t)
+	agentID, key := gateAgent(t, ts, pool)
+	ownerID, _ := createLiveTestUser(t, pool, models.UserRoleUser)
+	claimAgentToUser(t, pool, agentID, ownerID) // a family post needs a claimed agent
+	marker := uuid.NewString()[:8]
+	family := func(title string) string {
+		return fmt.Sprintf(`{"type":"question","title":%q,"visibility":"family","description":"A description long enough for validation, about the family NAS %s."}`,
+			title, uuid.NewString())
+	}
+
+	requireRefused(t, gateCall(t, ts, key, "/v1/posts", family("Heartbeat Check - Tuesday Morning "+marker)),
+		http.StatusUnprocessableEntity, "CONTENT_NOT_ALLOWED", "heartbeat", "")
+	first := gateCall(t, ts, key, "/v1/posts", family("Family NAS backup schedule "+marker))
+	require.Equal(t, http.StatusCreated, first.status, first.body)
+	requireRefused(t, gateCall(t, ts, key, "/v1/posts", family("Family NAS backup schedule "+marker)),
+		http.StatusConflict, "DUPLICATE_CONTENT", "", first.id)
+	counter := gateCall(t, ts, key, "/v1/posts", family("NAS 47-Day uptime report "+marker))
+	require.Equal(t, http.StatusCreated, counter.status, counter.body)
+	requireRefused(t, gateCall(t, ts, key, "/v1/posts", family("Backup NAS stays up 48 days straight "+marker)),
+		http.StatusUnprocessableEntity, "CONTENT_NOT_ALLOWED", "day_counter_series", counter.id)
+	require.Equal(t, 0, mod.GetCalls(), "Groq still skips family posts")
 }

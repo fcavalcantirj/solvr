@@ -49,7 +49,7 @@ func deleteContributionsBy(t *testing.T, pool *db.Pool, authorID string) {
 // contribAgent registers a fresh agent whose contributions are removed when the test ends.
 func contribAgent(t *testing.T, ts *httptest.Server, pool *db.Pool) (string, string) {
 	t.Helper()
-	id, key := statusContractAgent(t, ts, pool)
+	id, key := uniqueTestAgent(t, ts, pool)
 	deleteContributionsBy(t, pool, id)
 	return id, key
 }

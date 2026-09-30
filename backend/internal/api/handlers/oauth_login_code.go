@@ -42,13 +42,13 @@ func (h *OAuthHandlers) WithLoginCodes(store OAuthLoginCodeStore) *OAuthHandlers
 func (h *OAuthHandlers) redirectWithLoginCode(w http.ResponseWriter, r *http.Request, userID string) {
 	if h.loginCodes == nil {
 		slog.Error("OAuth login attempted without a login code store")
-		writeInternalError(w, "Login is temporarily unavailable")
+		h.redirectWithError(w, r, OAuthErrorLoginUnavailable)
 		return
 	}
 	code, err := h.loginCodes.Issue(r.Context(), userID, auth.LoginCodeTTL)
 	if err != nil {
 		slog.Error("Login code issue failed", "error", err)
-		writeInternalError(w, "Failed to start the session")
+		h.redirectWithError(w, r, OAuthErrorLoginFailed)
 		return
 	}
 

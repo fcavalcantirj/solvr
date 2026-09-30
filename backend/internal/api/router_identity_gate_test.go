@@ -108,13 +108,13 @@ func TestIdentityGate_ClaimFlowsRefuseBannedIdentities(t *testing.T) {
 	_, jwt := createLiveTestUser(t, pool, models.UserRoleUser)
 
 	// POST /v1/agents/me/claim by a banned agent.
-	bannedID, bannedKey := statusContractAgent(t, ts, pool)
+	bannedID, bannedKey := uniqueTestAgent(t, ts, pool)
 	banRow(t, pool, "agent_id", "", bannedID)
 	answer, err := callStatusContract(http.DefaultClient, http.MethodPost, ts.URL+"/v1/agents/me/claim", bannedKey, "")
 	requireSuspended(t, answer, err, "claim link for a banned agent")
 
 	// POST /v1/agents/claim of an agent banned after it issued its link.
-	laterID, laterKey := statusContractAgent(t, ts, pool)
+	laterID, laterKey := uniqueTestAgent(t, ts, pool)
 	status, out := claimGenerate(t, ts, laterKey)
 	require.Equal(t, http.StatusCreated, status, "%v", out)
 	banRow(t, pool, "agent_id", "", laterID)
@@ -123,7 +123,7 @@ func TestIdentityGate_ClaimFlowsRefuseBannedIdentities(t *testing.T) {
 	requireSuspended(t, answer, err, "claiming a banned agent")
 
 	// POST /v1/agents/claim by a human whose email is banned.
-	_, cleanKey := statusContractAgent(t, ts, pool)
+	_, cleanKey := uniqueTestAgent(t, ts, pool)
 	status, out = claimGenerate(t, ts, cleanKey)
 	require.Equal(t, http.StatusCreated, status, "%v", out)
 	humanID, humanJWT := createLiveTestUser(t, pool, models.UserRoleUser)
@@ -137,11 +137,11 @@ func TestIdentityGate_ClaimFlowsRefuseBannedIdentities(t *testing.T) {
 
 func TestIdentityGate_RoomHandshakeRefusesABannedAgent(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
-	_, ownerKey := statusContractAgent(t, ts, pool)
+	_, ownerKey := uniqueTestAgent(t, ts, pool)
 	slug, _ := createTestRoomWithAgentKey(t, ts, ownerKey)
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM rooms WHERE slug = $1", slug) }) //nolint:errcheck
 
-	bannedID, bannedKey := statusContractAgent(t, ts, pool)
+	bannedID, bannedKey := uniqueTestAgent(t, ts, pool)
 	banRow(t, pool, "agent_id", "", bannedID)
 	answer, err := callStatusContract(http.DefaultClient, http.MethodPost, ts.URL+"/v1/rooms/"+slug+"/handshake", bannedKey, "{}")
 	requireSuspended(t, answer, err, "handshake by a banned agent")
@@ -150,7 +150,7 @@ func TestIdentityGate_RoomHandshakeRefusesABannedAgent(t *testing.T) {
 func TestAdminBans_TombstonesAndBansThroughTheRouter(t *testing.T) {
 	t.Setenv("ADMIN_API_KEY", "anti-abuse-test-admin-key")
 	ts, _, pool := newStatusContractServer(t)
-	agentID, agentKey := statusContractAgent(t, ts, pool)
+	agentID, agentKey := uniqueTestAgent(t, ts, pool)
 	t.Cleanup(func() {
 		pool.Exec(context.Background(), "DELETE FROM banned_identities WHERE value = $1", agentID) //nolint:errcheck
 	})

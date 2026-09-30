@@ -171,16 +171,15 @@ func TestOAuthCallbacks_IssueTheCodeForTheAuthenticatedUserWithAShortLife(t *tes
 
 func TestOAuthCallbacks_FailClosedWithoutACodeStore(t *testing.T) {
 	failing := &fakeLoginCodes{issueErr: context.DeadlineExceeded}
-	for name, codes := range map[string]OAuthLoginCodeStore{"no store": nil, "store fails": failing} {
-		for provider, callback := range loginCodeCallbacks(t, codes) {
+	// Without a login code the callback ends on the error page, never falling back to a token in
+	// the URL (every callback error redirects; Felipe, 2026-09-30).
+	for name, tc := range map[string]struct {
+		codes OAuthLoginCodeStore
+		want  string
+	}{"no store": {nil, OAuthErrorLoginUnavailable}, "store fails": {failing, OAuthErrorLoginFailed}} {
+		for provider, callback := range loginCodeCallbacks(t, tc.codes) {
 			t.Run(name+"/"+provider, func(t *testing.T) {
-				rec := callback()
-				if rec.Code != http.StatusInternalServerError {
-					t.Fatalf("status = %d, want 500 (never fall back to a token in the URL)", rec.Code)
-				}
-				if loc := rec.Header().Get("Location"); loc != "" {
-					t.Fatalf("no redirect may be issued without a code, got Location %q", loc)
-				}
+				requireCallbackErrorRedirect(t, callback(), tc.want)
 			})
 		}
 	}

@@ -894,3 +894,10 @@ Cutover (idx 93) blockers, from the handovers: legacy create routes write tables
       pending human checks were carried forward (count unchanged).
   13. Blog stays open to anyone, with moderation and the content gates.
 Ledger now: 99 tasks (the URGENT idx 96, then idx 97 claim-referral, then idx 98 time-window search tests).
+
+2026-09-30 — OWNER DECISIONS, addendum (loop stopped):
+  - Headroom (context compression) was spiked in an isolated venv, proxy mode only. It works with the Max login through
+    claude -p (1 request, 0 failures). On normal Go test logs it saved only 9-10% (without its optional torch text
+    model); it saved 96% on a highly repetitive log. It kept the failing test names but dropped 1 of 7 key diagnostic
+    lines. Its anonymous beacon is on by default. Decision: NOT wired into the loop for now.
+  - BATCH_PAUSE_MINS goes to 2 (the owner edits .env.ralph.local).

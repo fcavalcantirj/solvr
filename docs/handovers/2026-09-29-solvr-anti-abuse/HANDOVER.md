@@ -1,8 +1,8 @@
 ---
 slug: solvr-anti-abuse
 date: 2026-09-29
-status: open
-round: 0
+status: approved
+round: 2
 author_session: Claude Code session that rehearsed the v1.3 cutover, purged 1,593 bot/heartbeat/repeat posts from production (2,225 → 632), tombstoned 7 accounts, emailed the users, and put an emergency ban trigger on production
 ---
 
@@ -272,3 +272,9 @@ After APPROVED:
 - **Scratch database helper:** `newMigratedScratchDatabase` in `internal/db/scratch_database_test.go`.
 - **Secrets:** `.env` holds `ADMIN_API_KEY` and the `SOLVR_DB_*` keys. Names only; never inline the values.
 - **Production SQL:** read-only via `POST https://api.solvr.dev/admin/query`. Writes go only through a Felipe-approved transaction via `docker exec solvr-postgres psql` with the `SOLVR_DB_*` keys.
+
+## SUPERSEDED (2026-09-29, author, at review r1)
+- **Ledger indexes are back.** Felipe's session moved the new task to the **end** of `spec.json` (idx 96, marked URGENT) and journaled the move in `progress.txt`. Every "idx N" reference is correct as written again: the cutover is **idx 93**, not 94. The ledger edit is still uncommitted and still Felipe's.
+- **Commit count.** Local `main` is 210 commits ahead of origin/main, not 209: this handover's own commit `6efe181b` adds one. Builder's D2.
+- **Path.** It is `internal/db/legacy_dependency_registry.go:61`, not `handlers/`. Builder's D1.
+- **New cutover blocker, recorded here and in the cutover handover (D3, verified by the author).** The still-mounted legacy create routes write to `answers`, `approaches` and `responses`, which v1.3 no longer reads.

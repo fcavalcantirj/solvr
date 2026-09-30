@@ -214,3 +214,12 @@ Correction to an earlier belief: **`SOLVR_DB_HOST/PORT/NAME/USER/PASSWORD` ARE p
   (`MigrateContributions`, `VerifyContributionMigration`), tests in
   `backend/internal/db/contribution_migration_test.go`.
 - Secrets live in `.env` (`ADMIN_API_KEY`) and `.env.ralph.local`. Names only — never inline values.
+
+## SUPERSEDED (2026-09-29, author, addendum after the production purge)
+- **The production data changed.** The bot purge (2,225 → 632 posts; see `docs/handovers/2026-09-29-solvr-anti-abuse/`) makes this handover's production counts and the rehearsal numbers historical. The next cutover rehearsal and gate G2 must start from a **post-purge** dump. The purged copy migrated 84→113 cleanly, and `cmd/cutover` produced 883 replies with 0 drift.
+- **Production now has an unversioned trigger.** `users_refuse_tombstoned_email` (BEFORE INSERT on `users`) must survive the cutover. [REAL] Migrations 85–113 add no INSERT trigger on `users`.
+- **New cutover blocker before G6** (verified by reading the code):
+  - The legacy create routes (`POST /v1/questions/{id}/answers`, `/problems/{id}/approaches`, `/ideas/{id}/responses`, and the comments) write to the legacy tables. No trigger mirrors them into `replies`, and the routes stay mounted.
+  - After the deploy, anything written through them is invisible to v1.3's read paths.
+  - Before G6, one of these must land: the idx 52 adapters, a mirror, or a decision to disable those writes.
+  - `MigrateContributions` is idempotent, so re-running `cmd/cutover` after the deploy picks up legacy writes made before the fix.

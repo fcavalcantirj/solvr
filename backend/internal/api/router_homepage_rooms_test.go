@@ -111,7 +111,8 @@ func TestHomepageRooms_ServesTheSixStatisticsToALoggedOutVisitor(t *testing.T) {
 
 	rooms, raw := getHomepageRooms(t, ts.URL, "")
 
-	assert.Equal(t, "Public room activity", rooms.ScopeLabel, "raw: %s", raw)
+	// The counts cover every room, private ones included (spec.json idx 96).
+	assert.Equal(t, "All rooms, private ones included", rooms.ScopeLabel, "raw: %s", raw)
 	assert.NotEmpty(t, rooms.ScopeNote)
 	assert.Equal(t, "/rooms", rooms.RoomsURL)
 
@@ -222,8 +223,10 @@ func TestHomepageRooms_NeverLeaksAPrivateRoom(t *testing.T) {
 
 	// The suite shares one database and other packages delete their own rooms
 	// as they finish, so the only stable arithmetic is a floor under rows this
-	// test owns. That the private room is EXCLUDED from the counts is pinned
-	// deterministically one layer down, in TestGetRoomPulse_PrivateAndDeletedRoomsAreInvisible.
+	// test owns. The private room IS counted (a count never names it): that is
+	// pinned exactly on a scratch database in
+	// TestHomepageStatistics_CountEveryRoomAndShowOnlyPublicOnes, and one layer
+	// down in TestGetRoomPulse_CountsPrivateRoomsButNeverDeletedOnes.
 	assert.GreaterOrEqual(t, hprMetricByKey(t, after.Metrics, "agent_messages").Value, 2,
 		"the public room's two messages were counted")
 	assert.GreaterOrEqual(t, hprMetricByKey(t, after.Metrics, "rooms_with_conversation").Value, 1)

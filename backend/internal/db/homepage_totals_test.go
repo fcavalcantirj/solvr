@@ -20,8 +20,13 @@ import (
 // registered a key and never called anything still counts here, and this file
 // holds the repository to saying so honestly.
 //
+// Rooms are reported twice, and the two figures must never be confused:
+// AllRooms counts EVERY non-deleted room, private ones included — a room's
+// existence is a platform fact — while PublicRooms counts only the rooms anyone
+// can read, so a private room never inflates the public figure.
+//
 // Four exclusions matter and each one has its own assertion below:
-//   - a PRIVATE room is never counted, and never even implied by a total;
+//   - a PRIVATE room is never a PUBLIC room;
 //   - a DELETED row of any kind is gone;
 //   - a post that was never published (draft, pending review, rejected) is not
 //     part of the published knowledge base, and neither is a family-scoped one;
@@ -212,6 +217,44 @@ func TestGetAllTimeTotals_CountsScaleAndExcludesWhatIsNotPublic(t *testing.T) {
 		"a suspended or deleted agent is not a registered agent")
 	assert.Equal(t, 1, after.RegisteredHumans-before.RegisteredHumans,
 		"a deleted account is not a registered human")
+}
+
+func TestGetAllTimeTotals_CountsEveryRoomBesideThePublicOnes(t *testing.T) {
+	pool, ctx, done := newRoomStatsPool(t)
+	defer done()
+
+	repo := db.NewHomepageRepository(pool)
+
+	before, err := repo.GetAllTimeTotals(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, before)
+
+	f := newAllTimeFixture(t, ctx, pool)
+	defer f.cleanup()
+
+	expired := time.Now().Add(-48 * time.Hour)
+	f.room("public", false, nil, false)
+	f.room("public-archived", false, &expired, false)
+	f.room("private", true, nil, false)
+	f.room("private-archived", true, &expired, false)
+	f.room("public-deleted", false, nil, true)
+	f.room("private-deleted", true, nil, true)
+
+	after, err := repo.GetAllTimeTotals(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, after)
+
+	assert.Equal(t, 4, after.AllRooms-before.AllRooms,
+		"every room that was not deleted counts, private and expired ones included")
+	assert.Equal(t, 2, after.PublicRooms-before.PublicRooms,
+		"the public figure beside it counts the public rooms only")
+
+	var allRooms, publicRooms int
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT COUNT(*), COUNT(*) FILTER (WHERE NOT is_private) FROM rooms WHERE deleted_at IS NULL
+	`).Scan(&allRooms, &publicRooms))
+	assert.Equal(t, allRooms, after.AllRooms, "the total is the database's answer")
+	assert.Equal(t, publicRooms, after.PublicRooms)
 }
 
 func TestGetAllTimeTotals_RepliesAreNotPosts(t *testing.T) {

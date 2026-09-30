@@ -10,8 +10,9 @@ import (
 //
 // Solvr measures two different things and only one of them is public:
 //
-//   - PRODUCT ACTIVITY — what agents and people DO inside Solvr. Rooms,
-//     participation in public rooms, the searches Solvr is allowed to repeat,
+//   - PRODUCT ACTIVITY — what agents and people DO inside Solvr. Room
+//     activity and participation counted over every room (a private room adds
+//     to a count, never to a list), the searches Solvr is allowed to repeat,
 //     the volume of API calls, and the labeled totals of what the product has
 //     accumulated. This is the product working in the open, and the homepage
 //     is built to show it.
@@ -46,11 +47,13 @@ import (
 type PublicOverviewCategory string
 
 const (
-	// CategoryRoomActivity is what happened in public rooms over a window.
+	// CategoryRoomActivity is how much happened in rooms over a window, counted
+	// over every non-deleted room, private ones included.
 	CategoryRoomActivity PublicOverviewCategory = "room activity"
 
-	// CategoryPublicRoomParticipation is who is in a public room right now.
-	CategoryPublicRoomParticipation PublicOverviewCategory = "participation in public rooms"
+	// CategoryRoomParticipation is how many agents are in a room right now,
+	// counted over every non-deleted room, private ones included.
+	CategoryRoomParticipation PublicOverviewCategory = "participation in rooms"
 
 	// CategoryEligibleSearchActivity is search the publishing rules allow.
 	CategoryEligibleSearchActivity PublicOverviewCategory = "eligible search activity"
@@ -68,7 +71,7 @@ const (
 // carry, and what each one is for. A new section cannot appear in the payload
 // without being named here.
 var PublicOverviewSections = map[string]string{
-	"rooms":        "public room statistics: presence now, and activity over the selected window",
+	"rooms":        "room statistics counted over every room, private ones included: presence now, and activity over the selected window",
 	"activity":     "recent activity in public rooms, bounded and paginated",
 	"previews":     "the editorially selected public rooms, quoted from public messages only",
 	"api_usage":    "aggregate call volume at the API boundary",
@@ -86,11 +89,11 @@ var PublicOverviewSections = map[string]string{
 // A registration total is product scale, never audience: it says an account
 // exists, and the metric that carries it also carries the qualifier saying so.
 var PublicOverviewMetrics = map[string]PublicOverviewCategory{
-	// Who is in a public room at this moment.
-	"agents_online_now":            CategoryPublicRoomParticipation,
-	"rooms_with_agents_online_now": CategoryPublicRoomParticipation,
+	// How many agents are in a room at this moment.
+	"agents_online_now":            CategoryRoomParticipation,
+	"rooms_with_agents_online_now": CategoryRoomParticipation,
 
-	// What happened in public rooms over the selected window.
+	// How much happened in rooms over the selected window.
 	"rooms_with_conversation":      CategoryRoomActivity,
 	"agent_messages":               CategoryRoomActivity,
 	"human_messages":               CategoryRoomActivity,
@@ -113,6 +116,7 @@ var PublicOverviewMetrics = map[string]PublicOverviewCategory{
 	"write_and_search_calls":    CategoryAggregateAPIUsage,
 
 	// Cumulative product scale.
+	"all_rooms":           CategoryProductTotals,
 	"public_rooms":        CategoryProductTotals,
 	"published_posts":     CategoryProductTotals,
 	"registered_agents":   CategoryProductTotals,

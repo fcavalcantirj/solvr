@@ -1237,7 +1237,7 @@
       "Verify no private room identity leaks through the statistics path: assert that a response containing private-room counts carries no private slug, display name, description, owner, participant, message body or entry id anywhere in its payload.",
       "Verify with a test on a database holding both kinds: create a private room and a public room, post in both, and assert the counted metrics include both while the activity stream, previews and search terms include only the public one. Assert the 24-hour window reports the private-room activity rather than zero."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "api",

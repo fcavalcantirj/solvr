@@ -381,7 +381,8 @@ func TestHomepageOverview_ServesEverySectionToALoggedOutVisitor(t *testing.T) {
 
 	// --- live room statistics -------------------------------------------
 	require.NotEmpty(t, ov.Rooms.Heading, "raw: %s", raw)
-	assert.Equal(t, "Public room activity", ov.Rooms.ScopeLabel)
+	// The counts cover every room, private ones included (spec.json idx 96).
+	assert.Equal(t, "All rooms, private ones included", ov.Rooms.ScopeLabel)
 	require.Len(t, ov.Rooms.PresenceMetrics, 2, "the two Now figures")
 	require.Len(t, ov.Rooms.Metrics, 4, "the four windowed figures")
 	for _, m := range append(append([]hpoMetric{}, ov.Rooms.PresenceMetrics...), ov.Rooms.Metrics...) {

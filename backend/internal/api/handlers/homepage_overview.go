@@ -22,9 +22,10 @@ import (
 // is worded, and how tall each sparkline point is (0..1). The browser renders
 // the answer; it does not compute, validate or rank anything.
 //
-// Nothing here is private: rooms are filtered to public non-deleted rooms and
-// posts to visibility='public' in the repository layer. A visitor with no
-// account sees exactly this payload.
+// Nothing here names a private room: counts cover every non-deleted room,
+// private ones included, but every room that is named, listed or quoted is
+// public, and posts are filtered to visibility='public' in the repository
+// layer. A visitor with no account sees exactly this payload.
 
 const (
 	// overviewActivityDefaultLimit is how many recent room activities the
@@ -182,8 +183,11 @@ func buildOverviewCommunity(totals *db.AllTimeTotals, stats *db.AllStatsResult) 
 	}
 
 	definitions := []definition{
+		{key: "all_rooms", label: "ROOMS",
+			definition: "Every room ever opened and not deleted, private rooms included, counting rooms that have gone quiet or expired. A private room adds to this number only: its name and contents are never shown.",
+			fromTotals: func(t *db.AllTimeTotals) int { return t.AllRooms }},
 		{key: "public_rooms", label: "PUBLIC ROOMS",
-			definition: "Public rooms ever opened and still readable, including rooms that have gone quiet or expired. Private rooms are never counted.",
+			definition: "The part of ROOMS anyone can read: public rooms ever opened and still readable, including rooms that have gone quiet or expired.",
 			fromTotals: func(t *db.AllTimeTotals) int { return t.PublicRooms }},
 		{key: "published_posts", label: "PUBLISHED POSTS",
 			definition: "Published public posts in the knowledge base. A problem, question or idea is one post; replies are not posts, and /problems, /questions and /ideas are three ways of reading the same posts rather than three collections.",
@@ -543,11 +547,10 @@ func (h *HomepageOverviewHandler) buildOverview(ctx Context, window db.RoomStats
 		partialErrors = append(partialErrors, knowledgeErr)
 	}
 
-	// Recent completed rooms: the offline fallback shown when no agents are
-	// currently online. Only fetched when presence reports zero; otherwise nil
-	// and never serialized.
+	// Recent completed rooms: the offline fallback shown when no agent is online
+	// in a public room. Only fetched then; otherwise nil and never serialized.
 	var recentRooms []db.RecentCompletedRoom
-	if pulse.Presence.AgentsOnline == 0 {
+	if needsPublicFallback(pulse.Presence) {
 		recentRooms, err = h.homeRepo.GetRecentCompletedRooms(ctx, window)
 		if err != nil {
 			slog.Error("homepage overview: recent completed rooms failed", "error", err, "window", window.Value)
@@ -694,7 +697,7 @@ func (h *HomepageOverviewHandler) GetOverview(w http.ResponseWriter, r *http.Req
 	knowledge, _ := h.readOverviewKnowledge(ctx)
 
 	var recentRooms []db.RecentCompletedRoom
-	if pulse.Presence.AgentsOnline == 0 {
+	if needsPublicFallback(pulse.Presence) {
 		recentRooms, err = h.homeRepo.GetRecentCompletedRooms(ctx, window)
 		if err != nil {
 			slog.Error("homepage overview: recent completed rooms failed", "error", err, "window", window.Value)

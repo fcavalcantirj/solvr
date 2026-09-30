@@ -6,7 +6,8 @@ import { api } from '@/lib/api';
 import type { APIOverviewRooms, APIOverviewLiveMarker, APIOverviewRecentCollaboration, APIOverviewSparkline } from '@/lib/api-types';
 import { MetricGrid, SectionHeading } from './metric';
 
-// The public room statistics.
+// The room statistics. The API counts every room, private ones included, and
+// names or quotes only public ones; the scope note it sends says so.
 //
 // Two groups, and the split is the API's, not this component's: the presence
 // figures are measured NOW and the time-window selector does not touch them,

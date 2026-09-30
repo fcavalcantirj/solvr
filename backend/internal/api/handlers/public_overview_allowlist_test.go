@@ -33,6 +33,7 @@ func buildPublicOverviewFixture() HomepageOverview {
 	window := db.DefaultRoomStatsWindow()
 	pulse := db.RoomPulse{
 		Window:      window,
+		AllRooms:    57,
 		PublicRooms: 52,
 		Messages24h: 321,
 		Presence:    db.RoomPresenceStats{AgentsOnline: 5, RoomsWithAgentsOnline: 2},
@@ -53,7 +54,7 @@ func buildPublicOverviewFixture() HomepageOverview {
 		}),
 		Search: buildOverviewSearch(searchPulse),
 		Community: buildOverviewCommunity(
-			&db.AllTimeTotals{PublicRooms: 214, PublishedPosts: 2098, RegisteredAgents: 64, RegisteredHumans: 1003},
+			&db.AllTimeTotals{AllRooms: 219, PublicRooms: 214, PublishedPosts: 2098, RegisteredAgents: 64, RegisteredHumans: 1003},
 			&db.AllStatsResult{TotalContributions: 3327, ProblemsSolved: 41, CrystallizedPosts: 12},
 		),
 		Posts:       buildOverviewPosts(nil),
@@ -91,11 +92,11 @@ func TestPublicOverviewAllowlist_NamesEveryMetricThePagePublishes(t *testing.T) 
 // agreed to publish about itself.
 func TestPublicOverviewAllowlist_UsesOnlyThePublishableCategories(t *testing.T) {
 	allowed := map[PublicOverviewCategory]bool{
-		CategoryRoomActivity:            true,
-		CategoryPublicRoomParticipation: true,
-		CategoryEligibleSearchActivity:  true,
-		CategoryAggregateAPIUsage:       true,
-		CategoryProductTotals:           true,
+		CategoryRoomActivity:           true,
+		CategoryRoomParticipation:      true,
+		CategoryEligibleSearchActivity: true,
+		CategoryAggregateAPIUsage:      true,
+		CategoryProductTotals:          true,
 	}
 
 	for key, category := range PublicOverviewMetrics {

@@ -18,10 +18,12 @@ import "context"
 // the SQL: RegisteredAgents and RegisteredHumans count accounts that exist, not
 // accounts that did anything, and the section that renders them says so.
 //
-// Public-only by construction, exactly like the rest of the homepage reads: a
-// private room, a family-scoped post and a soft-deleted row of any kind are
-// invisible here, and a missing predicate is a privacy leak rather than a
-// cosmetic bug.
+// Rooms are counted twice. AllRooms counts every room that has not been
+// deleted, private ones included: a room's existence is a platform fact, and a
+// count never says which room. PublicRooms is the part of it anyone can read,
+// reported beside it so a private-inclusive total is never mistaken for a count
+// of readable rooms. Everything else is public-only by construction: a
+// family-scoped post and a soft-deleted row of any kind are invisible here.
 
 // publishedPostStatuses are the post statuses that mean "published". A post
 // that is still a draft, waiting for review, or rejected was never published,
@@ -36,7 +38,7 @@ var publishedPostStatuses = []string{"draft", "pending_review", "rejected"}
 
 // AllTimeTotals is the scale of Solvr, with no window and no sampling.
 //
-// PublicRooms includes rooms that have expired. An expired room is ARCHIVED,
+// AllRooms and PublicRooms include rooms that have expired. An expired room is ARCHIVED,
 // not erased: its transcript is still public and the collaboration really
 // happened, so removing it from the total would make Solvr appear to shrink
 // every time a room went quiet.
@@ -48,6 +50,7 @@ var publishedPostStatuses = []string{"draft", "pending_review", "rejected"}
 // RegisteredAgents and RegisteredHumans are REGISTRATIONS. Neither is a measure
 // of use and neither may be presented as an active-user count.
 type AllTimeTotals struct {
+	AllRooms         int
 	PublicRooms      int
 	PublishedPosts   int
 	RegisteredAgents int
@@ -63,6 +66,8 @@ func (r *HomepageRepository) GetAllTimeTotals(ctx context.Context) (*AllTimeTota
 	err := r.pool.QueryRow(ctx, `
 		SELECT
 			(SELECT COUNT(*) FROM rooms
+				WHERE deleted_at IS NULL),
+			(SELECT COUNT(*) FROM rooms
 				WHERE is_private = FALSE AND deleted_at IS NULL),
 			(SELECT COUNT(*) FROM posts
 				WHERE deleted_at IS NULL
@@ -73,7 +78,7 @@ func (r *HomepageRepository) GetAllTimeTotals(ctx context.Context) (*AllTimeTota
 			(SELECT COUNT(*) FROM users
 				WHERE deleted_at IS NULL)
 	`, publishedPostStatuses).Scan(
-		&t.PublicRooms, &t.PublishedPosts, &t.RegisteredAgents, &t.RegisteredHumans,
+		&t.AllRooms, &t.PublicRooms, &t.PublishedPosts, &t.RegisteredAgents, &t.RegisteredHumans,
 	)
 	if err != nil {
 		return nil, err

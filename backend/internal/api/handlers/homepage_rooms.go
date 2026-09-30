@@ -9,8 +9,13 @@ import (
 	"github.com/fcavalcantirj/solvr/internal/db"
 )
 
-// The homepage's public room statistics: the rooms section of
+// The homepage's room statistics: the rooms section of
 // GET /v1/homepage/overview, and GET /v1/homepage/rooms behind its selector.
+//
+// Every number here counts every room that has not been deleted, private ones
+// included: a room's existence and its volume are platform facts. Nothing here
+// names, lists or quotes a private room — the recently completed rooms are
+// public-only — and the section says both things in its own scope note.
 //
 // The section is split in two on purpose, and the split is the whole point:
 //
@@ -82,10 +87,10 @@ type OverviewRooms struct {
 	RoomsURL   string             `json:"rooms_url"`
 	RoomsLabel string             `json:"rooms_label"`
 
-	// RecentCompletedRooms is the offline fallback: rooms that had activity in
-	// the window but currently have no agents online. The API only returns this
-	// when agents_online_now == 0, so the browser renders it or doesn't — it
-	// never decides when to show it. Absent when agents are online.
+	// RecentCompletedRooms is the offline fallback: PUBLIC rooms that had
+	// activity in the window but currently have no agents online. The API only
+	// returns this when no agent is online in a public room, so the browser
+	// renders it or doesn't — it never decides when to show it.
 	RecentCompletedRooms []RecentCompletedRoom `json:"recent_completed_rooms,omitempty"`
 	// LiveMarker carries the green live point + text label. The API decides the
 	// wording; the browser renders the point and the text. Absent when there is
@@ -94,8 +99,9 @@ type OverviewRooms struct {
 }
 
 // RecentCompletedRoom is a public room that had recent activity but currently
-// has no agents online. The API returns these as a meaningful offline fallback
-// instead of an empty "no agents" state.
+// has no agents online — never a private one, because this list names rooms.
+// The API returns these as a meaningful offline fallback instead of an empty
+// "no agents" state.
 type RecentCompletedRoom struct {
 	RoomID          string `json:"room_id"`
 	Slug            string `json:"slug"`
@@ -115,9 +121,16 @@ type OverviewLiveMarker struct {
 // presenceWindowLabel is what a presence metric states instead of a window.
 const presenceWindowLabel = "now"
 
+// needsPublicFallback is when the recently completed PUBLIC rooms are shown:
+// no agent is online in a public room. Agents working in private rooms are
+// counted in the live figure, but they neither hide this list nor change it.
+func needsPublicFallback(p db.RoomPresenceStats) bool {
+	return p.PublicAgentsOnline == 0
+}
+
 // buildOverviewRooms turns one reading into the whole section.
-// When no agents are online now (pulse.Presence.AgentsOnline == 0), the API
-// also fetches recently-completed rooms as a meaningful offline fallback.
+// When no agent is online in a public room, the API also fetches
+// recently-completed public rooms as a meaningful offline fallback.
 func buildOverviewRooms(pulse db.RoomPulse, recent []db.RecentCompletedRoom) OverviewRooms {
 	window := pulse.Window
 	if window.Value == "" {
@@ -125,19 +138,21 @@ func buildOverviewRooms(pulse db.RoomPulse, recent []db.RecentCompletedRoom) Ove
 	}
 
 	var recentRooms []RecentCompletedRoom
-	if pulse.Presence.AgentsOnline == 0 {
+	if needsPublicFallback(pulse.Presence) {
 		recentRooms = toRecentCompletedRooms(recent, window)
 	}
 
 	return OverviewRooms{
 		Heading: "Rooms, live",
-		Intro:   "Agents connect to a room and work there. These are the rooms anyone can read.",
+		Intro:   "Agents connect to a room and work there. The numbers count every room; only public rooms are ever named or quoted.",
 
-		ScopeLabel: "Public room activity",
+		ScopeLabel: "All rooms, private ones included",
 		ScopeNote: fmt.Sprintf(
-			"Every number below is measured over the %s public rooms that exist and have not been deleted. "+
-				"Private rooms are never counted, and their contents never reach this page.",
-			formatOverviewNumber(pulse.PublicRooms)),
+			"Every number below counts all %s rooms that exist and have not been deleted: %s public and %s private. "+
+				"A private room adds to the counts and nothing else: its name, participants and messages never reach this page, "+
+				"and every room named or quoted here is public.",
+			formatOverviewNumber(pulse.AllRooms), formatOverviewNumber(pulse.PublicRooms),
+			formatOverviewNumber(max(pulse.AllRooms-pulse.PublicRooms, 0))),
 
 		PresenceHeading: "Now",
 		PresenceNote:    "Measured at this moment from unexpired presence. The time window below does not change these two numbers.",
@@ -153,18 +168,27 @@ func buildOverviewRooms(pulse db.RoomPulse, recent []db.RecentCompletedRoom) Ove
 		RoomsURL:             "/rooms",
 		RoomsLabel:           "Browse all rooms",
 		RecentCompletedRooms: recentRooms,
-		LiveMarker:           buildLiveMarker(pulse.Presence.AgentsOnline, len(recentRooms) > 0),
+		LiveMarker:           buildLiveMarker(pulse.Presence, len(recentRooms) > 0),
 	}
 }
 
 // buildLiveMarker decides the green live point and its text label. The API owns
-// the wording so the browser renders it without deciding anything.
-func buildLiveMarker(agentsOnline int, hasRecent bool) *OverviewLiveMarker {
-	if agentsOnline > 0 {
-		return &OverviewLiveMarker{
-			Online: true,
-			Label:  fmt.Sprintf("%d agents online now", agentsOnline),
+// the wording so the browser renders it without deciding anything. The count
+// covers every room; when some of those agents are in private rooms the label
+// says how many are in public ones, so nobody goes looking for a live room they
+// cannot read.
+func buildLiveMarker(p db.RoomPresenceStats, hasRecent bool) *OverviewLiveMarker {
+	if p.AgentsOnline > 0 {
+		label := fmt.Sprintf("%d agents online now", p.AgentsOnline)
+		switch {
+		case p.PublicAgentsOnline == 0 && hasRecent:
+			label += ", all in private rooms. Recent public rooms below."
+		case p.PublicAgentsOnline == 0:
+			label += ", all in private rooms."
+		case p.PublicAgentsOnline < p.AgentsOnline:
+			label += fmt.Sprintf(", %s of them in public rooms", formatOverviewNumber(p.PublicAgentsOnline))
 		}
+		return &OverviewLiveMarker{Online: true, Label: label}
 	}
 	if hasRecent {
 		return &OverviewLiveMarker{
@@ -243,14 +267,14 @@ func buildRoomPresenceMetrics(p db.RoomPresenceStats) []OverviewMetric {
 		{
 			Key: "agents_online_now", Label: "AGENTS ONLINE NOW", Value: p.AgentsOnline,
 			Presence: true,
-			Definition: "Distinct agents in public rooms whose presence heartbeat has not expired. " +
+			Definition: "Distinct agents in any room, private rooms included, whose presence heartbeat has not expired. " +
 				"Archived and expired rooms are excluded.",
 			Qualifier: identityQualifier(p),
 		},
 		{
 			Key: "rooms_with_agents_online_now", Label: "ROOMS WITH AGENTS ONLINE NOW",
 			Value: p.RoomsWithAgentsOnline, Presence: true,
-			Definition: "Public rooms holding at least one agent with an unexpired presence heartbeat.",
+			Definition: "Rooms, private ones included, holding at least one agent with an unexpired presence heartbeat.",
 		},
 	}
 	for i := range metrics {
@@ -276,17 +300,17 @@ func buildRoomWindowMetrics(s db.RoomWindowStats, w db.RoomStatsWindow) []Overvi
 		{
 			Key: "rooms_with_conversation", Label: "ROOMS WITH CONVERSATION",
 			Value: s.RoomsWithConversation,
-			Definition: "Distinct public rooms holding at least one stored, undeleted message in this window. " +
+			Definition: "Distinct rooms, private ones included, holding at least one stored, undeleted message in this window. " +
 				"System notices and presence events are not conversation.",
 		},
 		{
 			Key: "agent_messages", Label: "AGENT MESSAGES", Value: s.AgentMessages,
-			Definition: "Messages posted by agents in public rooms in this window.",
+			Definition: "Messages posted by agents in any room, private rooms included, in this window.",
 			Qualifier:  unverifiedMessageQualifier(s),
 		},
 		{
 			Key: "human_messages", Label: "HUMAN MESSAGES", Value: s.HumanMessages,
-			Definition: "Messages posted by signed-in people in public rooms in this window.",
+			Definition: "Messages posted by signed-in people in any room, private rooms included, in this window.",
 		},
 		buildTwoWayExchangeMetric(s, w),
 	}
@@ -319,7 +343,7 @@ func buildTwoWayExchangeMetric(s db.RoomWindowStats, w db.RoomStatsWindow) Overv
 	metric := OverviewMetric{
 		Key: "rooms_with_two_way_exchanges", Label: "ROOMS WITH TWO-WAY EXCHANGES",
 		Value: s.TwoWayExchangeRooms,
-		Definition: "Distinct public rooms that recorded their first two-way exchange milestone in this window — " +
+		Definition: "Distinct rooms, private ones included, that recorded their first two-way exchange milestone in this window — " +
 			"the moment a second participant answered.",
 	}
 
@@ -382,7 +406,7 @@ func buildOverviewSparkline(series []db.BucketCount, w db.RoomStatsWindow) *Over
 	return &OverviewSparkline{
 		Label:      label,
 		Window:     fmt.Sprintf("last %s, UTC", w.Label),
-		Definition: fmt.Sprintf("One bar per %s: messages posted in public rooms during it.", w.BucketUnit),
+		Definition: fmt.Sprintf("One bar per %s: messages posted in any room, private rooms included, during it.", w.BucketUnit),
 		MaxValue:   maxValue,
 		Points:     points,
 	}
@@ -421,7 +445,7 @@ func (h *HomepageOverviewHandler) GetRooms(w http.ResponseWriter, r *http.Reques
 	}
 
 	var recentRooms []db.RecentCompletedRoom
-	if pulse.Presence.AgentsOnline == 0 {
+	if needsPublicFallback(pulse.Presence) {
 		recentRooms, _ = h.homeRepo.GetRecentCompletedRooms(r.Context(), window)
 	}
 

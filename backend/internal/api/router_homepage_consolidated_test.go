@@ -269,7 +269,8 @@ func TestOverviewConsolidated_PartialErrorDegradation(t *testing.T) {
 	_, raw := getConsolidatedOverview(t, ts.URL)
 
 	// rooms data must always be present — a search failure never kills the page.
-	assert.Contains(t, raw, "Public room activity", "rooms section must survive even if search fails: %s", raw)
+	// (The section's scope label is the marker; spec.json idx 96 reworded it.)
+	assert.Contains(t, raw, "All rooms, private ones included", "rooms section must survive even if search fails: %s", raw)
 }
 
 func TestOverviewConsolidated_CacheInvalidatedOnVisibilityChange(t *testing.T) {

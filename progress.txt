@@ -901,3 +901,155 @@ Ledger now: 99 tasks (the URGENT idx 96, then idx 97 claim-referral, then idx 98
     model); it saved 96% on a highly repetitive log. It kept the failing test names but dropped 1 of 7 key diagnostic
     lines. Its anonymous beacon is on by default. Decision: NOT wired into the loop for now.
   - BATCH_PAUSE_MINS goes to 2 (the owner edits .env.ralph.local).
+
+2026-09-30 17:30 — Task idx 96 (spec.json, category analytics, URGENT) — DONE, passes=true
+"URGENT: Count every room in the public statistics while keeping private room contents invisible"
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks are 24, 52, 53, 67, 68, 73, 74, 77-98;
+  idx 96 is the only URGENT description, so it goes first. Tree clean at start [REAL, git status].
+
+WHAT CHANGED [REAL, git status --porcelain: 14 modified + 2 new; git diff --stat 383+/134-]:
+  PRODUCTION (backend):
+  M internal/db/homepage_rooms.go: new countedRoomPredicate (`r.deleted_at IS NULL`) and
+    countedLiveRoomPredicate for every COUNT in GetRoomPulse (agents online, verified online, rooms
+    with agents online, rooms with conversation, agent/unverified/human messages, two-way milestone
+    rooms + first-milestone date, Messages24h) and messageSeries. publicRoomPredicate/liveRoomPredicate
+    are UNCHANGED and still used by everything that names a room: GetRecentCompletedRooms,
+    NextPublicRoomExpiry, and the activity feed CTE in homepage_activity.go (which reads
+    liveRoomPredicate). New fields: RoomPulse.AllRooms (beside PublicRooms, same query) and
+    RoomPresenceStats.PublicAgentsOnline (agents online in public live rooms).
+  M internal/db/homepage_totals.go: AllTimeTotals.AllRooms (every non-deleted room) beside PublicRooms.
+  M internal/api/handlers/homepage_rooms.go: scope label "All rooms, private ones included"; scope
+    note now "Every number below counts all N rooms ...: P public and Q private. A private room adds to
+    the counts and nothing else: its name, participants and messages never reach this page, and every
+    room named or quoted here is public." (the old "Private rooms are never counted" sentence is gone);
+    intro no longer says "These are the rooms anyone can read"; the 6 metric definitions and the
+    sparkline definition say "private rooms/ones included". needsPublicFallback(): the recently
+    completed PUBLIC rooms are fetched/shown when PublicAgentsOnline == 0 (was AgentsOnline == 0), so
+    agents in private rooms neither hide nor change that list. Live marker counts every room and states
+    the public share: "N agents online now" / ", M of them in public rooms" / ", all in private rooms."
+    (+ " Recent public rooms below." when the fallback shows).
+  M internal/api/handlers/homepage_overview.go: new all-time metric all_rooms ("ROOMS", every non-deleted
+    room, private included, "its name and contents are never shown") right before public_rooms, whose
+    definition no longer says "Private rooms are never counted"; the two fallback gates use
+    needsPublicFallback; header comment. 783 lines (limit 800).
+  M internal/api/handlers/public_overview_allowlist.go: "all_rooms" allowlisted (product totals);
+    CategoryPublicRoomParticipation renamed CategoryRoomParticipation ("participation in rooms");
+    section/category comments reworded. No other metric added or removed.
+  FRONTEND: M components/homepage/overview-fixture.ts (test fixture mirroring the API: new copy + an
+    all_rooms metric); M room-stats-section.tsx (comment only). No component logic changed: the page
+    renders whatever metrics/labels the API sends.
+  TESTS: A internal/api/router_homepage_all_rooms_test.go (492), A internal/api/handlers/
+    homepage_room_counts_test.go (159); M db/homepage_rooms_test.go, db/homepage_totals_test.go,
+    handlers/homepage_rooms_test.go, handlers/public_overview_allowlist_test.go, router_homepage_
+    {overview,rooms,consolidated}_test.go (details below).
+
+TESTS THAT DESCRIBED BEHAVIOR THIS TASK REPLACES (golden rule a-d):
+  1. db TestGetRoomPulse_PrivateAndDeletedRoomsAreInvisible asserted (via a census over `NOT is_private
+     AND deleted_at IS NULL`) that a live private room's presence and message are NOT counted. Replaced
+     by TestGetRoomPulse_CountsPrivateRoomsButNeverDeletedOnes (census now over every non-deleted room,
+     plus a private-only slice of the same snapshot; deleted public AND deleted private rooms still
+     excluded) — PASS [TEST]. takeRoomCensus/assertMatchesCensus now use the all-room definition and
+     also compare PublicAgentsOnline, TwoWayExchangeRooms, AllRooms, Messages24h; every other census
+     test still PASSES [TEST].
+  2. handlers TestOverviewRooms_ScopesEveryNumberToPublicRooms asserted ScopeLabel == "Public room
+     activity", ScopeNote contains "52" and "Private". Replaced by TestOverviewRooms_ScopeSaysCounts
+     IncludeEveryRoomAndContentsStayPrivate — PASS [TEST].
+  3. router TestHomepageOverview_ServesEverySectionToALoggedOutVisitor (:384) and TestHomepageRooms_
+     ServesTheSixStatisticsToALoggedOutVisitor (:114) asserted ScopeLabel == "Public room activity";
+     TestOverviewConsolidated_PartialErrorDegradation (:272) used that string as its "rooms section is
+     present" marker. All three now expect "All rooms, private ones included". The new label is also
+     pinned by TestHomepageStatistics_CountEveryRoomAndShowOnlyPublicOnes — PASS [TEST]. Rooms_Serves...
+     and PartialErrorDegradation PASS [TEST, /tmp/solvr_idx96_router_final.log]; Overview_ServesEvery...
+     passes the label assertion but still FAILS at :464 on the pre-existing search-term pollution
+     (below), exactly as it does on untouched HEAD.
+  Additive (not weakening): samplePulse and buildPublicOverviewFixture gained AllRooms; db
+  TestGetAllTimeTotals_CountsScaleAndExcludesWhatIsNotPublic unchanged except its header comment
+  (its PublicRooms delta of 3 still holds); router_homepage_rooms_test.go comment updated.
+
+NEW TESTS [TEST, all PASS]:
+  - TestHomepageStatistics_CountEveryRoomAndShowOnlyPublicOnes (SCRATCH database, migrated from zero,
+    dropped after): 1 public room (2 agent msgs, 1 agent online, milestone), 1 private room with a
+    human owner (2 agent msgs + 1 owner msg, 2 agents online, milestone), 1 deleted private room with a
+    live agent and a message; both rooms allow-listed in HOMEPAGE_PREVIEW_ROOM_SLUGS; a public search
+    term x3 and the private room's name searched x3 with public_scope=false. Exact counts on
+    /v1/homepage/overview, /v1/homepage/rooms, /v1/overview (24h): agents_online_now 3,
+    rooms_with_agents_online_now 2, rooms_with_conversation 2, agent_messages 4, human_messages 1,
+    two-way 2, sparkline sum 5, all_rooms 2, public_rooms 1, marker "3 agents online now, 1 of them in
+    public rooms". Content: activity (overview + /v1/homepage/activity) only the public slug; exactly 1
+    preview (public); search terms include the public term, not the private one. Step 5: a JSON walker
+    over all six responses (incl. /v1/overview?window=30d and /v1/homepage/search) asserts no string
+    carries the private slug, display name, description, room uuid, owner uuid, participant names,
+    message bodies or search term, and no id-shaped field carries any private entry id (messages +
+    milestone event, as N, message-N, event-N).
+  - TestHomepageStatistics_PrivateActivityIsCountedButNeverListed (scratch DB): everyone offline ->
+    fallback lists only the public room; private agents back online -> agents_online_now 2, fallback
+    still [public], marker "2 agents online now, all in private rooms. Recent public rooms below.";
+    public entries moved 3 days back -> 24h window reports agent_messages 2, human 1, rooms with
+    conversation 1, two-way 1, sparkline 3 (the private room's activity, not zero); 7d back to 4/2;
+    activity stream still only the public room. Identity walker on every response.
+  - db: TestGetRoomPulse_SeriesCountsPrivateRoomMessages, TestGetAllTimeTotals_CountsEveryRoomBeside
+    ThePublicOnes (delta AllRooms 4 / PublicRooms 2 over 6 rooms incl. expired and deleted, plus
+    equality with SQL).
+  - handlers: TestOverviewRooms_EveryCountSaysPrivateRoomsAreIncluded, TestBuildOverviewRooms_Fallback
+    FollowsPublicPresenceWhileTheMarkerCountsEveryRoom (4 subtests), TestOverviewAllTimeSection_Reports
+    EveryRoomBesideThePublicRooms, TestPublicOverview_NoCopyPromisesPrivateRoomsAreNotCounted.
+
+VERIFICATION (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local docker
+  solvr-postgres, schema_migrations 114 dirty=f; the two router tests create/drop their own
+  solvr_scratch_hpa_* databases, 0 left [REAL, psql]):
+  RED [TEST]: /tmp/solvr_idx96_red_build.log (db/handlers: "PublicAgentsOnline undefined", "unknown
+    field AllRooms"); /tmp/solvr_idx96_red_router2.log (e.g. agents_online_now expected 3 actual 1,
+    agent_messages expected 4 actual 2, scope label "Public room activity", 0 leak findings). First
+    router RED was a fixture bug (users insert "inconsistent types deduced for parameter $1"), fixed.
+  MUTATIONS [TEST], sources restored + cmp-verified after each (logs /tmp/solvr_idx96_mut*.log):
+    mut1 GetRecentCompletedRooms on countedRoomPredicate -> router FAIL, 4 leak findings;
+    mut2 liveRoomPredicate (activity stream) on the counted floor -> router FAIL, 110 leak findings;
+    mut3 agent_messages back to publicRoomPredicate -> router + db FAIL;
+    mut4 fallback gated on AgentsOnline again -> router + handler FAIL;
+    mut5 countedRoomPredicate = TRUE (deleted rooms counted) -> router FAIL.
+  FULL BACKEND once: `go test -p 1 -count=1 -v -timeout 50m ./...` -> /tmp/solvr_idx96_full.log:
+    4780 PASS, 94 FAIL, 13 SKIP lines; FAIL packages internal/api and internal/db only (handlers now ok).
+    All 30 homepage-room tests PASS in it (list in the log). Top-level failures (89) vs slice 32's
+    full log: new names are TestAgentRepository_* (17), TestBadges_* (3), TestE2E_AgentCreatesPost,
+    TestOverviewConsolidated_PartialErrorDegradation. The last one was this task's (old label as
+    marker) and now PASSES. The agent/badge ones are shared-DB display_name/second-granularity id
+    collisions: the same `-run 'TestAgentRepository_|TestBadges_'` subset on an untouched HEAD
+    worktree fails 20 [TEST, /tmp/solvr_idx96_agents_subset_base.log] vs 3 on this tree [TEST].
+    TestE2E_AgentCreatesPost: 409 DUPLICATE_CONTENT against leftover post 52ca3a69 (2026-09-28, same
+    title) — the anti-abuse duplicate gate on shared data; post-create path untouched [INFERRED].
+    PRE-EXISTING on untouched HEAD [TEST, /tmp/solvr_idx96_baseline_router.log]: TestHomepageSearch_
+    {ChartAddsUp..., NeverPublishesAProtected..., NeverPublishesPastedSecrets...}, TestHomepageOverview_
+    ServesEverySection... (:463/:464, top terms crowded by leftover "matrix-marker-*"/"zqxfamsearch"),
+    TestHomepageAPIUsage_{CountsRequests..., DoesNotCountTheOverview...} (these two passed in the full
+    run). internal/db: TestRoomRepository_* "room slug already exists" also fails on HEAD [TEST].
+  handlers package alone after the last edit: 1811 PASS, 0 FAIL, 6 SKIP [TEST, /tmp/solvr_idx96_
+    handlers_final.log]. go vet clean on db/handlers/api; gofmt clean on every touched Go file.
+  FRONTEND: `npm test -- --run` -> 183 files, 1663 tests PASS [TEST, /tmp/solvr_idx96_frontend_full.log];
+    `npm run typecheck` clean; eslint clean on the two touched files.
+  check-file-size.sh -> "Found 34 file(s) exceeding 800 lines" (unchanged; none of the touched files).
+  NOT RUN: golangci-lint (config/version mismatch, slice 31).
+
+LIMITS / NOTES [UNVERIFIED unless stated]:
+  - Shared-DB hygiene: roomStatsFixture's cleanup leaks rows (1933 rooms matching ^(hr|at)[0-9]+-
+    back to 2026-09-25, and its agents, e.g. plannerhr*/secrethr*) [REAL, psql] — pre-existing; this
+    task's new db test adds rows of the same kind. Belongs with idx 98-style isolation work.
+  - Frontend renders `recent_collaborations` while the API sends `recent_completed_rooms` [REAL, read]:
+    pre-existing mismatch, not touched here.
+  - Search terms read search_queries (public_scope), not rooms; the assertion is that the private
+    room's name searched with a private scope never appears and no response carries its identity.
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW:
+  - Homepage/overview room counts, live marker and series now include private rooms; a new all-time
+    ROOMS total sits beside PUBLIC ROOMS. A visitor can now infer that private rooms are active (e.g.
+    "2 agents online now, all in private rooms") — by design per this task; no name, slug, member,
+    excerpt or entry id is exposed [TEST].
+  - No migration, no schema change, no new endpoint.
+
+UAT: owner deploys backend + frontend (no migration), then eyeballs https://solvr.dev: the rooms section
+UAT: reads "All rooms, private ones included" with the N/P/Q scope note, the All time section shows ROOMS
+UAT: beside PUBLIC ROOMS, and no copy still says "Private rooms are never counted".
+
+git status at journal time [REAL]: 14 M (listed above) + 2 ?? test files + this progress.txt entry;
+  spec.json idx 96 passes -> true in the same commit.

@@ -16,10 +16,12 @@ import (
 // The public room statistics behind the homepage.
 //
 // Every assertion here is about an HONEST number: presence is "now" and never
-// windowed, historical counts move with the selected window, private rooms are
-// invisible, expired rooms drop out of the live figures but keep their history,
-// and an agent identity that was never authenticated is counted as unverified
-// rather than silently mixed in with the ones that were.
+// windowed, historical counts move with the selected window, every non-deleted
+// room is counted (private ones included: a room's existence and volume are
+// platform facts, its contents are not) while deleted rooms are gone, expired
+// rooms drop out of the live figures but keep their history, and an agent
+// identity that was never authenticated is counted as unverified rather than
+// silently mixed in with the ones that were.
 
 // roomStatsFixture is one isolated slice of room data: every row it writes is
 // namespaced by the same suffix so it can be removed again without touching
@@ -195,17 +197,34 @@ func newRoomStatsPool(t *testing.T) (*db.Pool, context.Context, func()) {
 // while these tests run, so a before/after delta on a global aggregate is not a
 // stable measurement. Comparing the repository against a census taken in the
 // same breath is: ambient rows land in BOTH numbers, and a wrong predicate --
-// counting a private room, a deleted message, a system notice, an expired
-// room's presence -- shows up as a disagreement no matter what else is going on.
+// dropping a private room, counting a deleted room or message, a system notice,
+// an expired room's presence -- shows up as a disagreement no matter what else
+// is going on.
+//
+// The census counts EVERY non-deleted room, private ones included, and reads
+// the public-only figures the repository reports beside them (public rooms,
+// agents online in public rooms) plus a private-only slice of the same
+// snapshot, so a test can prove the private rooms are really in the totals.
 type roomCensus struct {
 	AgentsOnline          int
+	PublicAgentsOnline    int
 	VerifiedAgentsOnline  int
 	RoomsWithAgentsOnline int
 	RoomsWithConversation int
 	AgentMessages         int
 	UnverifiedAgentMsgs   int
 	HumanMessages         int
+	TwoWayExchangeRooms   int
+	AllRooms              int
 	PublicRooms           int
+	Messages24h           int
+
+	// What the private rooms alone contribute, from the same snapshot.
+	PrivateAgentMessages int
+	PrivateHumanMessages int
+	PrivateTalkingRooms  int
+	PrivateExchangeRooms int
+	PrivateMessages24h   int
 }
 
 func takeRoomCensus(t *testing.T, ctx context.Context, pool *db.Pool, window db.RoomStatsWindow) roomCensus {
@@ -213,24 +232,27 @@ func takeRoomCensus(t *testing.T, ctx context.Context, pool *db.Pool, window db.
 
 	var c roomCensus
 	err := pool.QueryRow(ctx, `
-		WITH public_rooms AS (
-			SELECT id, expires_at FROM rooms WHERE NOT is_private AND deleted_at IS NULL
+		WITH counted_rooms AS (
+			SELECT id, expires_at, is_private FROM rooms WHERE deleted_at IS NULL
 		), live_rooms AS (
-			SELECT id FROM public_rooms WHERE expires_at IS NULL OR expires_at > NOW()
+			SELECT id, is_private FROM counted_rooms WHERE expires_at IS NULL OR expires_at > NOW()
 		), online AS (
-			SELECT ap.agent_id, ap.room_id
-			  FROM agent_presence ap
-			 WHERE ap.room_id IN (SELECT id FROM live_rooms)
-			   AND ap.last_seen + make_interval(secs => ap.ttl_seconds) > NOW()
+			SELECT ap.agent_id, ap.room_id, lr.is_private
+			  FROM agent_presence ap JOIN live_rooms lr ON lr.id = ap.room_id
+			 WHERE ap.last_seen + make_interval(secs => ap.ttl_seconds) > NOW()
 		), talk AS (
-			SELECT m.room_id, m.author_type, m.author_id, m.created_at
-			  FROM messages m
-			 WHERE m.room_id IN (SELECT id FROM public_rooms)
-			   AND m.deleted_at IS NULL
+			SELECT m.room_id, m.author_type, m.author_id, m.created_at, cr.is_private
+			  FROM messages m JOIN counted_rooms cr ON cr.id = m.room_id
+			 WHERE m.deleted_at IS NULL
 			   AND m.author_type IN ('agent', 'human')
+		), milestones AS (
+			SELECT e.room_id, e.created_at, cr.is_private
+			  FROM room_events e JOIN counted_rooms cr ON cr.id = e.room_id
+			 WHERE e.event_type = $2
 		)
 		SELECT
 			(SELECT COUNT(DISTINCT agent_id) FROM online),
+			(SELECT COUNT(DISTINCT agent_id) FROM online WHERE NOT is_private),
 			(SELECT COUNT(DISTINCT o.agent_id) FROM online o
 			  WHERE o.agent_id IN (
 			        SELECT rt.agent_id FROM room_agent_tokens rt
@@ -242,11 +264,23 @@ func takeRoomCensus(t *testing.T, ctx context.Context, pool *db.Pool, window db.
 			(SELECT COUNT(*) FROM talk WHERE author_type = 'agent' AND author_id IS NULL
 			   AND created_at > NOW() - $1::interval),
 			(SELECT COUNT(*) FROM talk WHERE author_type = 'human' AND created_at > NOW() - $1::interval),
-			(SELECT COUNT(*) FROM public_rooms)
-	`, fmt.Sprintf("%d seconds", int(window.Duration.Seconds()))).Scan(
-		&c.AgentsOnline, &c.VerifiedAgentsOnline, &c.RoomsWithAgentsOnline,
+			(SELECT COUNT(DISTINCT room_id) FROM milestones WHERE created_at > NOW() - $1::interval),
+			(SELECT COUNT(*) FROM counted_rooms),
+			(SELECT COUNT(*) FROM counted_rooms WHERE NOT is_private),
+			(SELECT COUNT(*) FROM talk WHERE created_at > NOW() - make_interval(hours => 24)),
+			(SELECT COUNT(*) FROM talk WHERE is_private AND author_type = 'agent'
+			   AND created_at > NOW() - $1::interval),
+			(SELECT COUNT(*) FROM talk WHERE is_private AND author_type = 'human'
+			   AND created_at > NOW() - $1::interval),
+			(SELECT COUNT(DISTINCT room_id) FROM talk WHERE is_private AND created_at > NOW() - $1::interval),
+			(SELECT COUNT(DISTINCT room_id) FROM milestones WHERE is_private AND created_at > NOW() - $1::interval),
+			(SELECT COUNT(*) FROM talk WHERE is_private AND created_at > NOW() - make_interval(hours => 24))
+	`, fmt.Sprintf("%d seconds", int(window.Duration.Seconds())), db.RoomActivationEventType).Scan(
+		&c.AgentsOnline, &c.PublicAgentsOnline, &c.VerifiedAgentsOnline, &c.RoomsWithAgentsOnline,
 		&c.RoomsWithConversation, &c.AgentMessages, &c.UnverifiedAgentMsgs,
-		&c.HumanMessages, &c.PublicRooms,
+		&c.HumanMessages, &c.TwoWayExchangeRooms, &c.AllRooms, &c.PublicRooms, &c.Messages24h,
+		&c.PrivateAgentMessages, &c.PrivateHumanMessages, &c.PrivateTalkingRooms,
+		&c.PrivateExchangeRooms, &c.PrivateMessages24h,
 	)
 	require.NoError(t, err)
 	return c
@@ -256,13 +290,17 @@ func takeRoomCensus(t *testing.T, ctx context.Context, pool *db.Pool, window db.
 func assertMatchesCensus(t *testing.T, pulse db.RoomPulse, c roomCensus) {
 	t.Helper()
 	assert.Equal(t, c.AgentsOnline, pulse.Presence.AgentsOnline, "agents online")
+	assert.Equal(t, c.PublicAgentsOnline, pulse.Presence.PublicAgentsOnline, "agents online in public rooms")
 	assert.Equal(t, c.VerifiedAgentsOnline, pulse.Presence.VerifiedAgentsOnline, "verified agents online")
 	assert.Equal(t, c.RoomsWithAgentsOnline, pulse.Presence.RoomsWithAgentsOnline, "rooms with agents online")
 	assert.Equal(t, c.RoomsWithConversation, pulse.Stats.RoomsWithConversation, "rooms with conversation")
 	assert.Equal(t, c.AgentMessages, pulse.Stats.AgentMessages, "agent messages")
 	assert.Equal(t, c.UnverifiedAgentMsgs, pulse.Stats.UnverifiedAgentMessages, "unverified agent messages")
 	assert.Equal(t, c.HumanMessages, pulse.Stats.HumanMessages, "human messages")
+	assert.Equal(t, c.TwoWayExchangeRooms, pulse.Stats.TwoWayExchangeRooms, "rooms with two-way exchanges")
+	assert.Equal(t, c.AllRooms, pulse.AllRooms, "all rooms")
 	assert.Equal(t, c.PublicRooms, pulse.PublicRooms, "public rooms")
+	assert.Equal(t, c.Messages24h, pulse.Messages24h, "messages in the last 24 hours")
 }
 
 func TestRoomStatsWindows_OfferTwentyFourHoursSevenDaysThirtyDays(t *testing.T) {
@@ -370,29 +408,58 @@ func TestGetRoomPulse_SeparatesVerifiedIdentitiesFromNameOnlyPresence(t *testing
 		"the agent that only claimed a name is unverified, not verified")
 }
 
-func TestGetRoomPulse_PrivateAndDeletedRoomsAreInvisible(t *testing.T) {
+// A room's existence and its volume are platform facts, so a PRIVATE room is
+// counted like any other; a DELETED room, private or public, is gone. (This
+// replaces TestGetRoomPulse_PrivateAndDeletedRoomsAreInvisible, which held that a
+// private room was excluded from every count — spec.json idx 96 reversed that.)
+func TestGetRoomPulse_CountsPrivateRoomsButNeverDeletedOnes(t *testing.T) {
 	pool, ctx, done := newRoomStatsPool(t)
 	defer done()
 
 	f := newRoomStatsFixture(t, ctx, pool)
 
 	private := f.room("private", true, nil, false)
-	f.presence(private, "secret"+f.suffix, true)
-	f.message(private, "agent", "secret"+f.suffix, nil, time.Minute, false)
+	secret := "secret" + f.suffix
+	f.presence(private, secret, true)
+	f.message(private, "agent", secret, nil, time.Minute, false)
+	f.message(private, "human", "person"+f.suffix, nil, time.Minute, false)
+	f.activate(private, time.Hour)
 
 	deleted := f.room("deleted", false, nil, true)
 	f.presence(deleted, "gone"+f.suffix, true)
 	f.message(deleted, "agent", "gone"+f.suffix, nil, time.Minute, false)
 
+	deletedPrivate := f.room("deletedprivate", true, nil, true)
+	f.presence(deletedPrivate, "vanished"+f.suffix, true)
+	f.message(deletedPrivate, "agent", "vanished"+f.suffix, nil, time.Minute, false)
+
 	repo := db.NewHomepageRepository(pool)
-	window := db.DefaultRoomStatsWindow()
+	window := mustWindow(t, "24h")
 	pulse, err := repo.GetRoomPulse(ctx, window)
 	require.NoError(t, err)
 	census := takeRoomCensus(t, ctx, pool, window)
 
-	// A live private room and a live deleted room are sitting in the data. If
-	// any predicate let one through, the repository would out-count the census.
+	// The census counts every non-deleted room. A repository that still dropped
+	// the private room would come up short of it; one that let either deleted
+	// room through would out-count it.
 	assertMatchesCensus(t, pulse, census)
+
+	// And the census really does hold the private room's activity: in the same
+	// snapshot, the private rooms alone contribute at least this fixture.
+	assert.GreaterOrEqual(t, census.PrivateAgentMessages, 1, "the private room's agent message is counted")
+	assert.GreaterOrEqual(t, census.PrivateHumanMessages, 1, "the private room's human message is counted")
+	assert.GreaterOrEqual(t, census.PrivateTalkingRooms, 1, "the private room is a room with conversation")
+	assert.GreaterOrEqual(t, census.PrivateExchangeRooms, 1, "the private room's milestone is counted")
+	assert.GreaterOrEqual(t, census.PrivateMessages24h, 2,
+		"the last 24 hours report the private room's two messages rather than zero")
+
+	// The public-only figures beside the totals stay public-only: the private
+	// room is a counted room but not a public one, and the agent that is online
+	// only in the private room is online but not in a public room.
+	assert.GreaterOrEqual(t, pulse.AllRooms-pulse.PublicRooms, 1,
+		"the private room is counted, and not as a public room")
+	assert.GreaterOrEqual(t, pulse.Presence.AgentsOnline-pulse.Presence.PublicAgentsOnline, 1,
+		"an agent online only in a private room is online, but not in a public room")
 }
 
 func TestGetRoomPulse_ExpiredRoomsLeaveLiveFiguresButKeepTheirHistory(t *testing.T) {
@@ -609,6 +676,39 @@ func TestGetRoomPulse_KeepsAFixedTwentyFourHourMessageCountForTheAPISection(t *t
 
 	assert.Equal(t, day.Messages24h, month.Messages24h,
 		"the API-usage section states 'last 24 hours'; the room selector must not rewrite it")
+}
+
+// The series is a count too: a message in a private room is a bar, and the
+// private room still never becomes a row the series can name.
+func TestGetRoomPulse_SeriesCountsPrivateRoomMessages(t *testing.T) {
+	pool, ctx, done := newRoomStatsPool(t)
+	defer done()
+
+	f := newRoomStatsFixture(t, ctx, pool)
+	private := f.room("privateseries", true, nil, false)
+	f.message(private, "agent", "quiet"+f.suffix, nil, time.Minute, false)
+
+	window := mustWindow(t, "24h")
+	pulse, err := db.NewHomepageRepository(pool).GetRoomPulse(ctx, window)
+	require.NoError(t, err)
+
+	// Recompute everything the bars cover, from the first bucket's start, over
+	// every non-deleted room, and compare it with the bars' sum.
+	require.Len(t, pulse.Stats.Series, window.Buckets)
+	sum := 0
+	for _, b := range pulse.Stats.Series {
+		sum += b.Count
+	}
+	var covered, privateCovered int
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT COUNT(*), COUNT(*) FILTER (WHERE r.is_private)
+		  FROM messages m JOIN rooms r ON r.id = m.room_id
+		 WHERE r.deleted_at IS NULL AND m.deleted_at IS NULL AND m.author_type <> 'system'
+		   AND m.created_at >= $1
+	`, pulse.Stats.Series[0].BucketStart).Scan(&covered, &privateCovered))
+
+	assert.Equal(t, covered, sum, "the bars count every non-deleted room")
+	assert.GreaterOrEqual(t, privateCovered, 1, "and the private room's message is among them")
 }
 
 func mustWindow(t *testing.T, value string) db.RoomStatsWindow {

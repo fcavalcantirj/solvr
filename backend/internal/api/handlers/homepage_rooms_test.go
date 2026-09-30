@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,6 +49,7 @@ func samplePulse(window db.RoomStatsWindow) db.RoomPulse {
 			ActivationInstrumentedSince: &activated,
 			Series:                      series,
 		},
+		AllRooms:    57,
 		PublicRooms: 52,
 		Messages24h: 300,
 	}
@@ -251,12 +253,26 @@ func TestOverviewRooms_ActivationInsideTheWindowDeclaresThePartialHistory(t *tes
 		"history before instrumentation is declared unavailable, not counted as zero")
 }
 
-func TestOverviewRooms_ScopesEveryNumberToPublicRooms(t *testing.T) {
-	section := buildOverviewRooms(samplePulse(db.DefaultRoomStatsWindow()), nil)
+// The scope note used to promise "Private rooms are never counted". The counts
+// now cover every non-deleted room (spec.json idx 96), so the note says exactly
+// that, states the public figure beside the total, and still promises that a
+// private room's contents never reach the page. (Replaces
+// TestOverviewRooms_ScopesEveryNumberToPublicRooms.)
+func TestOverviewRooms_ScopeSaysCountsIncludeEveryRoomAndContentsStayPrivate(t *testing.T) {
+	pulse := samplePulse(db.DefaultRoomStatsWindow())
+	pulse.AllRooms, pulse.PublicRooms = 1057, 1052
 
-	assert.Equal(t, "Public room activity", section.ScopeLabel)
-	assert.Contains(t, section.ScopeNote, "52", "the public room count is stated as context")
-	assert.Contains(t, section.ScopeNote, "Private")
+	section := buildOverviewRooms(pulse, nil)
+
+	assert.Equal(t, "All rooms, private ones included", section.ScopeLabel)
+	assert.Contains(t, section.ScopeNote, "1,057", "the all-room total is stated as context")
+	assert.Contains(t, section.ScopeNote, "1,052 public", "the public figure sits beside it")
+	assert.Contains(t, section.ScopeNote, "5 private")
+	assert.Contains(t, section.ScopeNote, "never reach this page", "a private room's contents stay private")
+	assert.NotContains(t, strings.ToLower(section.ScopeNote), "never counted",
+		"the note must not contradict the numbers it sits above")
+	assert.NotContains(t, section.Intro, "These are the rooms anyone can read",
+		"the intro must not scope counts that include private rooms to public ones")
 }
 
 func TestOverviewRooms_SparklineFollowsTheSelectedWindow(t *testing.T) {

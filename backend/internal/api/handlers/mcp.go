@@ -89,7 +89,7 @@ var mcpTools = []map[string]interface{}{
 	},
 	{
 		"name":        "solvr_get",
-		"description": "Get full details of a Solvr post by ID, including approaches, answers, and comments.",
+		"description": "Get a Solvr post by ID. Its replies are listed at GET /v1/posts/{id}/replies.",
 		"inputSchema": map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -97,26 +97,16 @@ var mcpTools = []map[string]interface{}{
 					"type":        "string",
 					"description": "The post ID to retrieve",
 				},
-				"include": map[string]interface{}{
-					"type":        "array",
-					"description": "Related content to include",
-					"items":       map[string]interface{}{"type": "string"},
-				},
 			},
 			"required": []string{"id"},
 		},
 	},
 	{
 		"name":        "solvr_post",
-		"description": "Create a new problem, question, or idea on Solvr to share knowledge or get help.",
+		"description": "Create a post on Solvr to share knowledge or get help. Posts take no type.",
 		"inputSchema": map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
-				"type": map[string]interface{}{
-					"type":        "string",
-					"description": "Type of post to create",
-					"enum":        []string{"problem", "question", "idea"},
-				},
 				"title": map[string]interface{}{
 					"type":        "string",
 					"description": "Title of the post (max 200 characters)",
@@ -131,31 +121,40 @@ var mcpTools = []map[string]interface{}{
 					"items":       map[string]interface{}{"type": "string"},
 				},
 			},
-			"required": []string{"type", "title", "description"},
+			"required": []string{"title", "description"},
 		},
 	},
 	{
-		"name":        "solvr_answer",
-		"description": "Post an answer to a question or add an approach to a problem. For problems, include approach_angle to describe your strategy.",
+		"name":        "solvr_reply",
+		"description": "Reply to a Solvr post: what you tried, what happened, or the solution. Set parent_reply_id to thread under another reply of the same post.",
 		"inputSchema": map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
 				"post_id": map[string]interface{}{
 					"type":        "string",
-					"description": "The ID of the question or problem to respond to",
+					"description": "The ID of the post to reply to",
 				},
-				"content": map[string]interface{}{
+				"body": map[string]interface{}{
 					"type":        "string",
-					"description": "Your answer or approach content",
+					"description": "The reply text (Markdown)",
 				},
-				"approach_angle": map[string]interface{}{
+				"parent_reply_id": map[string]interface{}{
 					"type":        "string",
-					"description": "For problems: describe your unique angle or strategy",
+					"description": "Optional: the reply of the same post this one responds to",
 				},
 			},
-			"required": []string{"post_id", "content"},
+			"required": []string{"post_id", "body"},
 		},
 	},
+}
+
+// MCPToolNames returns the names of the tools served by tools/list, in order.
+func MCPToolNames() []string {
+	names := make([]string, 0, len(mcpTools))
+	for _, tool := range mcpTools {
+		names = append(names, tool["name"].(string))
+	}
+	return names
 }
 
 // Handle handles POST /mcp - MCP over HTTP transport.
@@ -232,9 +231,13 @@ func (h *MCPHandler) handleToolsCall(w http.ResponseWriter, ctx context.Context,
 	case "solvr_get":
 		result, err = h.executeGet(ctx, args)
 	case "solvr_post":
-		result, err = h.executePost(ctx, args)
+		result, err = h.executePost(args)
+	case "solvr_reply":
+		result, err = h.executeReply(args)
 	case "solvr_answer":
-		result, err = h.executeAnswer(ctx, args)
+		// Retired with the canonical knowledge model (idx 52): answers and approaches are replies.
+		err = &ValidationError{Message: "solvr_answer was retired with the canonical knowledge model; " +
+			"use solvr_reply (POST /v1/posts/{id}/replies) instead"}
 	default:
 		h.writeRPCResult(w, req.ID, map[string]interface{}{
 			"content": []map[string]interface{}{
@@ -318,42 +321,50 @@ func (h *MCPHandler) executeGet(ctx context.Context, args map[string]interface{}
 	}, nil
 }
 
-func (h *MCPHandler) executePost(ctx context.Context, args map[string]interface{}) (interface{}, error) {
-	postType, _ := args["type"].(string)
+// executePost creates nothing (this endpoint is unauthenticated); it names the canonical route.
+// A legacy "type" argument is ignored: posts take no type.
+func (h *MCPHandler) executePost(args map[string]interface{}) (interface{}, error) {
 	title, _ := args["title"].(string)
 	description, _ := args["description"].(string)
 
-	// Note: This is a simplified implementation
-	// In production, you'd need to authenticate and create properly
 	text := "Post creation via MCP requires authentication. " +
-		"Use the Solvr web interface or CLI with your API key to create posts.\n\n" +
+		"Create it with POST /v1/posts using your API key (posts take no type), " +
+		"or use the Solvr web interface or CLI.\n\n" +
 		"Intended post:\n" +
-		"Type: " + postType + "\n" +
 		"Title: " + title + "\n" +
 		"Description: " + description[:min(100, len(description))] + "..."
 
-	return map[string]interface{}{
-		"content": []map[string]interface{}{
-			{"type": "text", "text": text},
-		},
-	}, nil
+	return mcpText(text), nil
 }
 
-func (h *MCPHandler) executeAnswer(ctx context.Context, args map[string]interface{}) (interface{}, error) {
+// executeReply creates nothing (this endpoint is unauthenticated); it names the canonical route.
+func (h *MCPHandler) executeReply(args map[string]interface{}) (interface{}, error) {
 	postID, _ := args["post_id"].(string)
-	content, _ := args["content"].(string)
+	body, _ := args["body"].(string)
+	parentID, _ := args["parent_reply_id"].(string)
+	if postID == "" || body == "" {
+		return nil, &ValidationError{Message: "post_id and body are required"}
+	}
 
-	text := "Answer/approach creation via MCP requires authentication. " +
-		"Use the Solvr web interface or CLI with your API key.\n\n" +
-		"Intended answer:\n" +
-		"Post ID: " + postID + "\n" +
-		"Content: " + content[:min(100, len(content))] + "..."
+	text := "Reply creation via MCP requires authentication. " +
+		"Create it with POST /v1/posts/" + postID + "/replies using your API key, " +
+		"or use the Solvr web interface or CLI.\n\n" +
+		"Intended reply:\n" +
+		"Post ID: " + postID + "\n"
+	if parentID != "" {
+		text += "In reply to: " + parentID + "\n"
+	}
+	text += "Body: " + body[:min(100, len(body))] + "..."
 
+	return mcpText(text), nil
+}
+
+func mcpText(text string) map[string]interface{} {
 	return map[string]interface{}{
 		"content": []map[string]interface{}{
 			{"type": "text", "text": text},
 		},
-	}, nil
+	}
 }
 
 func (h *MCPHandler) writeRPCResult(w http.ResponseWriter, id interface{}, result interface{}) {

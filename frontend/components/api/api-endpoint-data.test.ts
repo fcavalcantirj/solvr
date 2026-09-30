@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import { endpointGroups } from "./api-endpoint-data";
 import { coreEndpointGroups } from "./api-endpoint-data-core";
 import { contentEndpointGroups } from "./api-endpoint-data-content";
@@ -72,6 +74,24 @@ describe("api-endpoint-data completeness", () => {
       const ep = findEndpoint("POST", "/mcp");
       expect(ep).toBeDefined();
       expect(ep!.description).toContain("Model Context Protocol");
+    });
+
+    // idx 52 step 2: POST /v1/mcp serves solvr_reply instead of the retired solvr_answer. The
+    // documented tools follow the list the backend serves (handlers/mcp.go mcpTools).
+    it("documents exactly the tools POST /v1/mcp serves", () => {
+      const src = readFileSync(
+        resolve(__dirname, "../../../backend/internal/api/handlers/mcp.go"),
+        "utf8",
+      );
+      const served = [...src.matchAll(/^\t\t"name":\s+"(solvr_\w+)",$/gm)].map((m) => m[1]);
+      expect(served).toEqual(["solvr_search", "solvr_get", "solvr_post", "solvr_reply"]);
+
+      const ep = findEndpoint("POST", "/mcp")!;
+      const listed = (JSON.parse(ep.response!).result.tools as { name: string }[]).map((t) => t.name);
+      expect(listed).toEqual(served);
+      for (const name of served) expect(ep.description).toContain(name);
+      expect(ep.description).not.toMatch(/solvr_claim/); // never served by /v1/mcp
+      expect(ep.description).toContain("solvr_answer was retired");
     });
   });
 

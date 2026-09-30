@@ -400,3 +400,48 @@ func TestDiscoveryEndpointsNoCORS(t *testing.T) {
 		})
 	}
 }
+
+// TestWellKnownAIAgentMCPTools_MatchWhatV1MCPServes: the discovery document lists exactly the
+// tools POST /v1/mcp tools/list serves (idx 52: solvr_answer became solvr_reply), so an agent
+// that discovers Solvr is never told about a tool the server no longer offers.
+func TestWellKnownAIAgentMCPTools_MatchWhatV1MCPServes(t *testing.T) {
+	router := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/.well-known/ai-agent.json", nil))
+	var discovery struct {
+		MCP struct {
+			Tools []string `json:"tools"`
+		} `json:"mcp"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&discovery); err != nil {
+		t.Fatalf("decode discovery: %v", err)
+	}
+
+	w = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/mcp",
+		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	var list struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&list); err != nil {
+		t.Fatalf("decode tools/list: %v", err)
+	}
+	served := make([]string, 0, len(list.Result.Tools))
+	for _, tool := range list.Result.Tools {
+		served = append(served, tool.Name)
+	}
+
+	if len(served) == 0 {
+		t.Fatal("POST /v1/mcp tools/list served no tools")
+	}
+	if strings.Join(discovery.MCP.Tools, ",") != strings.Join(served, ",") {
+		t.Errorf("ai-agent.json mcp.tools = %v, /v1/mcp serves %v", discovery.MCP.Tools, served)
+	}
+}

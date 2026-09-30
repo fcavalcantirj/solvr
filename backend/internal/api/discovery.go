@@ -5,6 +5,8 @@ package api
 import (
 	"net/http"
 
+	"github.com/fcavalcantirj/solvr/internal/api/handlers"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -60,7 +62,7 @@ func wellKnownAIAgentHandler(w http.ResponseWriter, r *http.Request) {
 		},
 		MCP: MCPInfo{
 			URL:   "mcp://solvr.dev",
-			Tools: []string{"solvr_search", "solvr_get", "solvr_post", "solvr_answer"},
+			Tools: handlers.MCPToolNames(), // exactly what POST /v1/mcp tools/list serves
 		},
 		CLI: CLIInfo{
 			NPM: "@solvr/cli",

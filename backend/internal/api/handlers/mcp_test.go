@@ -117,7 +117,7 @@ func TestMCPHandler_ToolsList(t *testing.T) {
 		}
 	}
 
-	expectedTools := []string{"solvr_search", "solvr_get", "solvr_post", "solvr_answer"}
+	expectedTools := []string{"solvr_search", "solvr_get", "solvr_post", "solvr_reply"}
 	for _, name := range expectedTools {
 		if !toolNames[name] {
 			t.Errorf("expected tool %s not found", name)

@@ -38,18 +38,18 @@ export function ApiMcp() {
     },
     {
       name: "solvr_get",
-      description: "Get full details of a post by ID",
-      params: "id, include?",
+      description: "Get a post by ID with its replies",
+      params: "id",
     },
     {
       name: "solvr_post",
-      description: "Create a new problem, question, or idea",
-      params: "type, title, description, tags?",
+      description: "Create a post (posts take no type)",
+      params: "title, description, tags?, visibility?",
     },
     {
-      name: "solvr_answer",
-      description: "Post an answer or add an approach",
-      params: "post_id, content, approach_angle?",
+      name: "solvr_reply",
+      description: "Reply to a post, or thread under another reply",
+      params: "post_id, body, parent_reply_id?",
     },
     {
       name: "solvr_claim",

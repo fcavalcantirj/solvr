@@ -1932,3 +1932,220 @@ REMAINING FOR idx 52 (next slices, in order):
 git status at journal time [REAL]: 16 staged paths under cli/ (above) + this progress.txt entry; spec.json
   unchanged, idx 52 passes stays false.
   CORRECTION to the entry above [REAL, `printf %s ... | wc -c`]: the rejected old-client description in probe run 1 was 48 characters, not 47.
+
+2026-09-30 17:21 — Task idx 52 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Route existing agent integrations into the canonical knowledge model during a defined transition"
+SLICE 6 AUDIT + SLICE 7: (a) the skill slice (solvr.sh) that the previous iteration built and the host
+auto-committed WITHOUT a journal entry (6fb4533a), audited and re-verified here; (b) step 2/4 for the
+second MCP implementation, backend POST /v1/mcp: no type selection, solvr_answer -> solvr_reply, and the
+docs that describe it. Remaining step 2 client: the web /new page (typed create, found this session).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 52, 53, 67, 68, 73, 74, 77-95, 97, 98;
+  no open URGENT. idx 24 stays skipped (acceptance task; needs idx 78). idx 52 is the first buildable task.
+  Tree clean at start [REAL, git status]. This iteration is loop batch #2 (ralph-claude.log, 17:08).
+
+(a) SLICE 6 AUDIT — commit 6fb4533a "2026-09-30 16:20 — Task idx 52 ... IN PROGRE" [REAL]:
+  ralph-claude.log shows "Host auto-commit: 2026-09-30 16:20 — Task idx 52 ..." after "Iteration 1 took
+  00:11:24": the previous iteration ended without journaling or committing, and the host committed its tree
+  with the last journal header as the message. So progress.txt had NO entry for 6 files (428+/105-):
+  M skill/scripts/solvr.sh: `post <type> <title> <body>` -> `post <title> <body> [--tags] [--visibility]
+    [--json]`; a third positional argument is refused before any request ('posts take no type: "<arg>" is
+    not accepted; use: solvr post "<title>" "<body>" ...'); payload has no type, visibility only when given.
+    `answer` -> `reply <post_id> <body> [--parent <reply_id>] [--json]` (POST /posts/{id}/replies {body,
+    parent_reply_id?}); `approach` removed; `answer|approach` now exit 1 with "solvr <cmd> was retired; use:
+    solvr reply <post_id> <body>" and send nothing. NEW `replies <post_id> [--limit] [--cursor] [--json]`
+    (GET /posts/{id}/replies; "[migrated <legacy_type>]", "(in reply to <parent>)", "More: ... --cursor").
+    `get --include` refused ("get --include was removed; use: solvr replies <id>"); get ends "Replies: solvr
+    replies <id>". Help text updated.
+  A skill/scripts/test_canonical_posts.sh (237): 55 checks against a stub `curl` on PATH (no network).
+  M skill/scripts/test.sh: "help shows answer"/"help shows approach" (asserted help contains "answer" /
+    "approach") -> "help shows reply" ("reply <post_id> <body>") / "help shows replies"; "post requires 3
+    args" -> "post requires title and body" (bare `post` exits 1, same assertion); "post requires valid type"
+    (`post invalid title body` exits 1) -> "post rejects a type argument" (same command, same exit 1);
+    "answer requires 2 args"/"approach requires 2 args" (bare command exits 1) -> "answer is retired"/
+    "approach is retired" (same exit 1) + NEW "reply requires post id and body", "replies requires post id";
+    "help shows --include flag" -> "help shows --parent flag" + "help shows --cursor flag". Each old
+    behavior's replacement is also covered with its request count in test_canonical_posts.sh (items 3-5, 14,
+    16) — all PASS below.
+  M skill/SKILL.md + M frontend/public/skill.md (identical hunks): Create a Post / Reply to a Post / Get Post
+    Details sections teach `post "Title" "Description"`, `reply POST_ID ... [--parent REPLY_ID]`, `replies
+    POST_ID`; the answer/approach/--include commands are named as retired.
+  A backend/internal/api/published_docs_canonical_commands_test.go (34 at 6fb4533a):
+    TestPublishedSkill_TeachesCanonicalPostAndReplyCommands — no line of either doc teaches `solvr.sh post
+    problem|question|idea`, `answer `, `approach ` or `get ... --include`; both teach post/reply/--parent/replies.
+  EVIDENCE the previous iteration left in /tmp (read this session, not re-run) [REAL, file contents]:
+    /tmp/solvr_idx52_s6_probe/probe.log (driver drive.sh there): API on :8095 against DATABASE_URL=
+    postgres://solvr:solvr_dev@localhost:5435/solvr_test. NEW solvr.sh: `post` -> DB type 'post' status
+    pending_review; `post problem|question|idea ...` refused, posts 9892 before == after; `reply` -> r1;
+    `reply --parent r1` (agent b) -> DB parent = r1, legacy_type null; `replies --limit 1` -> "Showing 1 of 2"
+    + cursor, `--cursor` -> r2 "(in reply to r1)"; answer/approach/get --include refused with "api requests
+    during the three refused commands: 0". OLD solvr.sh (HEAD~1): `post question` -> 201 type 'question'
+    (typed create still accepted by POST /v1/posts, idx 68); `answer` on the question and on the canonical
+    post, `approach` -> "Error (410): POST /v1/questions/{id}/answers was retired ...; use POST
+    /v1/posts/{id}/replies instead." EXIT=1; replies on the question 0. "LEGACY BEFORE/AFTER: 25 answers, 541
+    approaches, 6 responses, 4948 comments, 138 progress_notes" unchanged. Migrated post: "Showing 1 of 4
+    replies", "[migrated approach]". skill/scripts/solvr.sh mtime 16:51:59 < probe 16:54-16:55, so the probe
+    ran the committed script [REAL, stat]. Mutations mut1-5 logs: each FAILs the matching check (post sends a
+    type; parent key; cursor param; migrated label; type-argument refusal). /tmp/solvr_idx52_s6_go_red.log:
+    the backend test FAILED on the old skill.md ("frontend/public/skill.md:142 teaches a retired solvr.sh
+    command: ... post problem ...").
+  RE-VERIFIED THIS SESSION:
+    [TEST] bash skill/scripts/test_canonical_posts.sh -> "Passed: 55  Failed: 0" (/tmp/solvr_idx52_s6_canon.log).
+    [TEST] RED: the same test file run against HEAD~1's solvr.sh (git archive HEAD~1 skill -> /tmp/
+      solvr_idx52_s6_old) -> "Passed: 10  Failed: 45", EXIT=1 (/tmp/solvr_idx52_s6_red.log).
+    [TEST] bash skill/scripts/test.sh -> "Passed: 106, Failed: 0" (/tmp/solvr_idx52_s6_testsh.log).
+    [TEST] go test ./internal/api -run TestPublishedSkill_TeachesCanonicalPostAndReplyCommands -> PASS.
+    NOTE: my canon/red/testsh logs overwrote same-named logs the previous iteration had left in /tmp.
+  !! PRODUCTION CONTACT BY MY test.sh RUN [REAL]: skill/scripts/test.sh has an "API tests (with credentials)"
+    section that runs whenever SOLVR_API_KEY is set OR ~/.config/solvr/credentials.json exists. That file
+    exists (only an api_key field, no URL) and SOLVR_API_URL defaults to https://api.solvr.dev/v1, so my run
+    sent READ-ONLY requests to PRODUCTION with the owner's agent key: `solvr test` (health), 2 searches
+    ("test query placeholder", "test query") and ~10 `solvr briefing` calls. No write command is in that
+    section. The two searches are now in production search analytics as fake queries. Future runs: `HOME=
+    /tmp/<isolated> SOLVR_API_KEY= bash skill/scripts/test.sh` (the section then prints "Skipping API tests").
+    Not fixed here (harness behavior of an existing test script; owner's call).
+
+(b) SLICE 7 — backend POST /v1/mcp (the second MCP implementation named in step 1) + its docs.
+WHAT CHANGED [REAL, git status --porcelain: 12 M + 2 ??; git diff --stat 212+/77- on tracked files]:
+  PRODUCTION:
+  M backend/internal/api/handlers/mcp.go (480 -> 491): tools/list = solvr_search, solvr_get, solvr_post,
+    solvr_reply (count stays 4). solvr_get lost `include` (description: "Its replies are listed at GET
+    /v1/posts/{id}/replies."). solvr_post lost the required `type` enum (problem/question/idea); required
+    [title, description]; its text no longer echoes "Type:" and names "POST /v1/posts using your API key
+    (posts take no type)"; a stray `type` argument is ignored. solvr_answer (post_id, content,
+    approach_angle) -> solvr_reply (post_id, body, parent_reply_id; required post_id, body): validates
+    post_id/body ("post_id and body are required", isError), text names "POST /v1/posts/<id>/replies" and
+    "In reply to: <parent>" when threaded. tools/call solvr_answer -> isError "solvr_answer was retired with
+    the canonical knowledge model; use solvr_reply (POST /v1/posts/{id}/replies) instead" (at HEAD it
+    returned a NON-error "requires authentication" text — a silent success that did nothing). Both write
+    tools still create nothing: the endpoint is unauthenticated (unchanged). NEW exported MCPToolNames()
+    (names of the served list) + mcpText helper; executePost/executeReply lost the unused ctx parameter.
+    solvr_search and its `type` filter untouched (idx 53).
+  M backend/internal/api/discovery.go: /.well-known/ai-agent.json mcp.tools = handlers.MCPToolNames()
+    instead of the hardcoded list that still said solvr_answer.
+  M frontend/components/api/api-endpoint-data-core.ts (/api-docs "POST /mcp"): description and example
+    response list the 4 served tools (it listed solvr_answer and solvr_claim; /v1/mcp never served
+    solvr_claim), say the endpoint creates nothing and names the canonical routes, and that solvr_answer was
+    retired. (File 833 -> 832 lines; it was already over 800 at HEAD and is not in check-file-size's list.)
+  M frontend/components/api/api-mcp.tsx (/api-docs MCP section, documents the npm server): solvr_get "id"
+    (was "id, include?"), solvr_post "title, description, tags?, visibility?" (was "type, title, ..."),
+    solvr_answer -> solvr_reply "post_id, body, parent_reply_id?".
+  M frontend/components/mcp/mcp-tools.tsx (/mcp page, npm server): same three tools with the npm server's
+    parameters/descriptions (mcp-server/src/tools.ts); still five tools with solvr_claim.
+  M SPEC.md 18.2 (MCP tools JSON: solvr_get without include, solvr_post without type, solvr_reply instead
+    of solvr_answer + a paragraph: /v1/mcp creates nothing and names the canonical routes, legacy type
+    ignored, solvr_answer retired with an error naming solvr_reply, npm server takes the same parameters plus
+    visibility and solvr_claim) and 18.3 (ai-agent.json example tools list). Step 4 (document retired write
+    shapes with their replacement).
+  TESTS:
+  A backend/internal/api/handlers/mcp_canonical_test.go (219): _ToolsAreSearchGetPostAndReply (served order
+    + MCPToolNames), _PostToolTakesNoType, _GetToolHasNoIncludeOption, _ReplyToolSchema,
+    _NoWriteToolOffersALegacyTypeChoice (no tool but solvr_search mentions problem/question/idea/approach/
+    answer; no solvr_answer/approach_angle in tools/list), _PostCallPointsToTheCanonicalRouteAndDropsAType,
+    _ReplyCallPointsToTheCanonicalReplyRoute, _ReplyCallRequiresPostIDAndBody, _RetiredAnswerToolPointsToReply.
+  M backend/internal/api/discovery_test.go: + TestWellKnownAIAgentMCPTools_MatchWhatV1MCPServes (through the
+    router: ai-agent.json mcp.tools == POST /v1/mcp tools/list names).
+  M backend/internal/api/published_docs_canonical_commands_test.go: + TestSpecMCPSections_DocumentTheServedTools
+    (SPEC 18.2 JSON names == MCPToolNames(), no approach_angle/"include", "`solvr_answer` was retired";
+    18.3 lists the served tools).
+  A frontend/components/mcp/mcp-tools.test.tsx (4 tests): rendered tool names == the `name: 'solvr_*'` list
+    parsed from mcp-server/src/tools.ts; solvr_reply params; no solvr_answer/approach_angle/include, `type`
+    only once (solvr_search); visibility documented.
+  M frontend/components/api/api-endpoint-data.test.ts: + "documents exactly the tools POST /v1/mcp serves"
+    (names parsed from handlers/mcp.go == the documented response list; description names each, not
+    solvr_claim, and says "solvr_answer was retired").
+  EXISTING TESTS THAT DESCRIBED THE REPLACED BEHAVIOR (golden rule a-d):
+  - handlers/mcp_test.go TestMCPHandler_ToolsList asserted expectedTools {"solvr_search", "solvr_get",
+    "solvr_post", "solvr_answer"} (+ len 4). Now {"solvr_search", "solvr_get", "solvr_post", "solvr_reply"}
+    (len 4 unchanged); the retired name is covered by TestMCPHandler_NoWriteToolOffersALegacyTypeChoice and
+    TestMCPHandler_RetiredAnswerToolPointsToReply. PASS.
+  - frontend api-mcp.test.tsx 'renders MCP section with tools' asserted getByText('solvr_answer'). Now
+    getByText('solvr_reply') + queryByText('solvr_answer') absent; + NEW 'lists exactly the npm mcp-server
+    tools with their canonical parameters' (names == mcp-server/src/tools.ts list, "title, description,
+    tags?, visibility?", "post_id, body, parent_reply_id?", no approach_angle/include?). PASS.
+  - router_test.go TestMCPToolsListEndpoint: only its comment named solvr_answer; assertion (4 tools)
+    unchanged. PASS.
+
+VERIFICATION:
+  RED [TEST]: handlers -run TestMCPHandler -> 8 of the 9 new tests FAIL on the HEAD handler (the 9th,
+    _ReplyCallRequiresPostIDAndBody, passed only because HEAD answered "Unknown tool: solvr_reply" with
+    isError) (/tmp/solvr_idx52_s7_red.log; first run was a compile failure, undefined MCPToolNames, so
+    MCPToolNames was added first). Discovery test FAIL: "ai-agent.json mcp.tools = [solvr_search solvr_get
+    solvr_post solvr_answer], /v1/mcp serves [... solvr_reply]" (/tmp/solvr_idx52_s7_red_disc.log). SPEC
+    test FAIL "SPEC.md 18.2 must list the tools /v1/mcp serves" (/tmp/solvr_idx52_s7_spec_red.log).
+    Frontend: 7 FAIL in the 3 files (/tmp/solvr_idx52_s7_fe_red.log).
+  GREEN [TEST]: handlers TestMCP* 17 PASS (/tmp/solvr_idx52_s7_green_handlers.log); api TestWellKnownAIAgent*
+    / TestMCP* / TestPublished* / TestSpecMCPSections 10 PASS (/tmp/solvr_idx52_s7_spec_green.log); vitest
+    the 3 files: 60 passed (/tmp/solvr_idx52_s7_fe_green.log). One GREEN iteration: my own new frontend
+    assertion forbade "solvr_answer" in the /mcp endpoint description, which conflicted with the retirement
+    note I had put there; the assertion now REQUIRES "solvr_answer was retired" and forbids solvr_claim.
+  LIVE PROBE [REAL, /tmp/solvr_idx52_s7_probe/probe.log]: `go build ./cmd/api` from this tree, run on :8095
+    under env -i with DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (schema_migrations
+    114 dirty=f), IPFS_API_URL=http://127.0.0.1:9, fake JWT_SECRET; stopped afterwards (:8095 free).
+    tools/list -> solvr_search [limit,query,type], solvr_get [id], solvr_post [description,tags,title]
+    required [title,description], solvr_reply [body,parent_reply_id,post_id] required [post_id,body].
+    solvr_post with type "problem" -> text names POST /v1/posts, no "Type:", isError=false. solvr_reply
+    threaded -> "POST /v1/posts/p_probe/replies", "In reply to: r_probe". solvr_reply without body ->
+    "Error: post_id and body are required" isError=true. solvr_answer -> "Error: solvr_answer was retired
+    ... use solvr_reply (POST /v1/posts/{id}/replies) instead" isError=true. /.well-known/ai-agent.json
+    mcp.tools = ["solvr_search","solvr_get","solvr_post","solvr_reply"]. DB: 0 posts titled "Probe title",
+    0 replies with the probe body (nothing written).
+  FULL SUITES:
+    [TEST] frontend `npm test` (vitest run): "Test Files 186 passed (186)  Tests 1677 passed (1677)", EXIT=0
+      (/tmp/solvr_idx52_s7_frontend_full.log). `npm run typecheck` EXIT=0. eslint on the 6 touched frontend
+      files EXIT=0, no output.
+    [TEST] backend `DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test go test ./... -count=1`
+      (default parallel packages; /tmp/solvr_idx52_s7_backend_full.log): 18 packages ok, 2 FAIL:
+      internal/db (84 tests) — every sampled failure is a fixture collision on the shared DB, e.g.
+        "agents_list_test.go:78: failed to create agent1: agent ID already exists" (IDs with second
+        granularity, `duplicate key ... agent_id=list_agent1_20260930171602`). NOT MINE [REAL]: git diff
+        touches no internal/db file and `go list -deps ./internal/db` includes no internal/api package.
+      internal/api (6): TestHomepageOverview_ServesEverySectionToALoggedOutVisitor, TestHomepageSearch_
+        NeverPublishesAProtectedOrUnrepeatedTerm, TestHomepageSearch_NeverPublishesPastedSecretsOrPersonal
+        Data — recorded PRE-EXISTING on untouched HEAD by slices 1 and 2. The other 3, run alone on this
+        tree AND on an untouched HEAD worktree (/tmp/solvr_idx52_s7_head, removed afterwards) [TEST,
+        /tmp/solvr_idx52_s7_pre_{mine,base}.log], behave identically on both:
+        TestCommentsCount_FeedShowsCommentCount (full run: "409 DUPLICATE_CONTENT ... you already posted
+        this") and TestE2E_AgentRegistrationAndPosting (full run: "Step 2 FAILED ... 401 INVALID_API_KEY")
+        PASS alone on both [INFERRED: shared-DB/parallel-package interference]; TestIPFSHealthEndpoint FAILS
+        on both ("expected status 503, got 200 ... without running IPFS node" — the local solvr-ipfs node is
+        up) [INFERRED: environment]. Every MCP/discovery/published-docs test PASSES in the full run.
+    [TEST] after the last SPEC wording edit: go vet ./internal/api ./internal/api/handlers clean; -run
+      'TestSpecMCPSections|TestPublishedSkill|TestWellKnownAIAgent|TestMCP' ok on both packages
+      (/tmp/solvr_idx52_s7_final_targeted.log). gofmt -l clean on the touched Go files (discovery.go was
+      already unformatted at HEAD: its struct field alignment; not touched).
+    check-file-size.sh -> "Found 34 file(s) exceeding 800 lines" (unchanged count) (/tmp/solvr_idx52_s7_
+      filesize.log). Largest touched code file: handlers/mcp.go 491.
+  Not run: mcp-server, packages/*, cli (nothing there changed); golangci-lint; mutations beyond the RED runs.
+
+LIMITS / NOT DONE [REAL unless stated]:
+  - STEP 2 WEB CLIENT IS NOT DONE (found this session, grep): /new (frontend/app/new/page.tsx -> components/
+    new-post/new-post-form.tsx -> hooks/use-create-post.ts) still offers a problem/idea type choice and
+    sends `type` to POST /v1/posts (then routes to /problems|/ideas/<id>, which middleware 308s to /posts).
+    /new is not in the middleware matcher (only /feed, /problems, /ideas, /questions), disallowed in
+    robots.ts, and linked from components/collaboration-showcase.tsx ("/new?type=problem"), which no page
+    imports. The canonical web composer is components/posts/post-composer.tsx (api.createPost({title,
+    description, tags, visibility}) — no type). The typed create is still ACCEPTED by the API (idx 68 step 5).
+  - Direct-HTTP examples on /api-docs still show `type: 'problem'` creates: components/api/api-hero.tsx:92,
+    api-quickstart.tsx:42, api-sdks.tsx:25 (+ api-sdks' `solvr post problem`/`solvr answer` CLI lines noted
+    by slice 5). Step 1 inventories "direct-HTTP examples"; not edited here.
+  - skill/SKILL.md prose still says "start an approach" / "Post the approach BEFORE you start" / "Update
+    approach status" (lines ~22, 100, 119, 416, 418) — briefing/workflow prose, not commands; idx 78.
+  - The owner's installed ~/.claude/skills/solvr copy (outside the repo) still has the old solvr.sh; not
+    touched (home directory, owner's). CLAUDE.md references it.
+  - backend /v1/mcp still creates nothing (unauthenticated); solvr_search keeps its type filter (idx 53).
+  - SPEC.md other MCP/CLI mentions outside 18.2/18.3 not audited.
+
+REMAINING FOR idx 52 (next slices, in order):
+  step 2 web: /new -> the canonical composer (redirect /new to /posts/new or render the canonical composer;
+    remove the type choice), with a live probe that the web path creates a type 'post' row; then the typed
+    direct-HTTP examples on /api-docs (api-hero, api-quickstart, api-sdks).
+  step 5: redirects exist (frontend/middleware.ts 308); legacy READ routes follow idx 73.
+  Then re-read all 6 steps against the journal and decide whether idx 52 can close.
+
+git status at journal time [REAL]: 12 M (SPEC.md, backend discovery.go, discovery_test.go, handlers/mcp.go,
+  handlers/mcp_test.go, published_docs_canonical_commands_test.go, router_test.go, frontend
+  api-endpoint-data-core.ts, api-endpoint-data.test.ts, api-mcp.test.tsx, api-mcp.tsx, mcp/mcp-tools.tsx)
+  + 2 ?? (handlers/mcp_canonical_test.go, mcp/mcp-tools.test.tsx) + this progress.txt entry; spec.json
+  unchanged, idx 52 passes stays false.

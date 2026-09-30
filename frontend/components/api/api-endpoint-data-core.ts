@@ -808,7 +808,7 @@ export const coreEndpointGroups: EndpointGroup[] = [
       {
         method: "POST",
         path: "/mcp",
-        description: "Model Context Protocol (MCP) over HTTP. Supports tools/list and tools/call for solvr_search, solvr_get, solvr_post, solvr_answer, and solvr_claim.",
+        description: "Model Context Protocol (MCP) over HTTP. Supports tools/list and tools/call for solvr_search, solvr_get, solvr_post, and solvr_reply. This endpoint is unauthenticated: solvr_post and solvr_reply create nothing and name the canonical route to call with your API key (POST /v1/posts, POST /v1/posts/{id}/replies). solvr_answer was retired: answers and approaches are replies.",
         auth: "none",
         params: [
           { name: "jsonrpc", type: "string", required: true, description: "JSON-RPC version (always '2.0')" },
@@ -820,10 +820,9 @@ export const coreEndpointGroups: EndpointGroup[] = [
   "result": {
     "tools": [
       { "name": "solvr_search", "description": "Search the knowledge base" },
-      { "name": "solvr_get", "description": "Get post details by ID" },
-      { "name": "solvr_post", "description": "Create a new post" },
-      { "name": "solvr_answer", "description": "Answer a question or add approach" },
-      { "name": "solvr_claim", "description": "Generate a claim token" }
+      { "name": "solvr_get", "description": "Get a post by ID" },
+      { "name": "solvr_post", "description": "Create a post (no type)" },
+      { "name": "solvr_reply", "description": "Reply to a post" }
     ]
   }
 }`,

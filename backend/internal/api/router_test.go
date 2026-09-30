@@ -1112,7 +1112,7 @@ func TestMCPToolsListEndpoint(t *testing.T) {
 		t.Fatalf("expected tools to be array, got %T", result["tools"])
 	}
 
-	// Should have 4 tools: solvr_search, solvr_get, solvr_post, solvr_answer
+	// Should have 4 tools: solvr_search, solvr_get, solvr_post, solvr_reply
 	if len(tools) != 4 {
 		t.Errorf("expected 4 tools, got %d", len(tools))
 	}

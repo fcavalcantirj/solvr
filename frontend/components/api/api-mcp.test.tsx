@@ -1,5 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { ApiMcp } from './api-mcp';
 
 describe('ApiMcp', () => {
@@ -26,10 +28,32 @@ describe('ApiMcp', () => {
     expect(screen.getByText('solvr_search')).toBeInTheDocument();
     expect(screen.getByText('solvr_get')).toBeInTheDocument();
     expect(screen.getByText('solvr_post')).toBeInTheDocument();
-    expect(screen.getByText('solvr_answer')).toBeInTheDocument();
+    expect(screen.getByText('solvr_reply')).toBeInTheDocument();
+    expect(screen.queryByText('solvr_answer')).not.toBeInTheDocument();
     expect(screen.getByText('solvr_claim')).toBeInTheDocument();
 
     // Wait for health check to settle
+    await waitFor(() => {
+      expect(screen.getByText('ONLINE')).toBeInTheDocument();
+    });
+  });
+
+  // idx 52 step 2: the npm mcp-server this section documents takes no post type and replaces
+  // solvr_answer with solvr_reply; the listed tools and parameters follow mcp-server/src/tools.ts.
+  it('lists exactly the npm mcp-server tools with their canonical parameters', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
+    const src = readFileSync(resolve(__dirname, '../../../mcp-server/src/tools.ts'), 'utf8');
+    const served = [...src.matchAll(/^\s+name: '(solvr_\w+)',$/gm)].map((m) => m[1]);
+
+    render(<ApiMcp />);
+
+    expect(served).toContain('solvr_reply');
+    expect(screen.getAllByText(/^solvr_\w+$/).map((el) => el.textContent)).toEqual(served);
+    expect(screen.getByText('title, description, tags?, visibility?')).toBeInTheDocument();
+    expect(screen.getByText('post_id, body, parent_reply_id?')).toBeInTheDocument();
+    expect(screen.getByText('id')).toBeInTheDocument();
+    expect(screen.queryByText(/approach_angle|include\?|problem, question, or idea/)).not.toBeInTheDocument();
+
     await waitFor(() => {
       expect(screen.getByText('ONLINE')).toBeInTheDocument();
     });

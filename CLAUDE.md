@@ -163,7 +163,8 @@ cd frontend && npm test > /tmp/<task>-frontend.log 2>&1; tail -n 10 /tmp/<task>-
 - **Read only `tail -n 10` of the saved log.** The package `ok`/`FAIL` lines and the summary are enough.
 - **On a failure, extract only the failing names and their assertion lines from the saved file:**
   `grep -E -- '--- FAIL|_test\.go:[0-9]+:|Error:|expected|actual' <log> | head -40`.
-  Never `cat` the log, and never stream the output of `go test -v`.
+  Read wider context from the log only when that grep is not enough to diagnose it. Never stream a whole run's output
+  (for example `go test -v`) into context.
 - **Never re-run a suite to see more.** Extract from the file you already saved.
 
 ---

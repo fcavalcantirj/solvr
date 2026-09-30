@@ -663,10 +663,10 @@
     "steps": [
       "Inventory the web client, Solvr skill, both MCP implementations, TypeScript, Python, and Go SDKs, CLI, webhooks, and direct-HTTP examples that create or consume legacy posts and contributions.",
       "Update first-party clients to create canonical posts and replies without type selection before switching the public UI.",
-      "For a 90-day transition after cutover, accept documented legacy write shapes through adapters that map to the same canonical storage and retain incoming specialized content as labeled body sections.",
-      "Mark legacy API shapes and endpoints deprecated with a published sunset date and migration instructions; ensure compatibility responses serialize legacy shapes consistently where needed.",
-      "After the transition, return a machine-readable migration error for retired writes rather than silently dropping fields; keep permanent public URL redirects.",
-      "Verify an old client and a new client cannot create parallel representations of the same post or reply through the compatibility layer."
+      "At cutover, retire the legacy WRITE routes (answers, approaches, responses, comments, progress notes and the legacy typed problem/question/idea creates): each returns a machine-readable migration error naming its canonical replacement. No transition adapters (owner decision 2026-09-30).",
+      "Document every retired write shape with its canonical replacement in the API docs and migration notes; there is no sunset period.",
+      "Keep permanent public URL redirects for legacy post URLs; legacy READ routes follow task idx 73 keep/merge/adapt/retire decision per route family.",
+      "Verify an old client gets the migration error (never a silent success and never a new row in a legacy table) and a new client creates canonical posts and replies."
     ],
     "passes": false
   },
@@ -975,7 +975,7 @@
       "Change search SQL functions and vector indexes alongside the schema; run workers against a database with old tables removed to expose hidden dependencies.",
       "Require an explicit disposition for every discovered dependency before schema cleanup is considered complete."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "data",
@@ -1194,7 +1194,7 @@
       "Use an expand-migrate-cutover sequence or a documented brief write pause so writes arriving during migration cannot be lost between old and new tables.",
       "Verify record counts, content hashes, relationship mappings, visibility checks, search results, and legacy URLs before switching reads and navigation.",
       "Keep a migration ledger and an explicit rollback procedure that accounts for posts and replies created after cutover rather than discarding them.",
-      "Migrate the room model in a separate verified step: preserve room IDs and URLs, token validity through the stated transition, memberships, every message/event, claims, and sequence mappings; do not couple room downtime to the knowledge conversion.",
+      "Migrate the room model in a separate verified step: preserve room IDs and URLs, shared room tokens retired at cutover with no grace period (owner decision 2026-09-30; agents rejoin through the handshake), memberships, every message/event, claims, and sequence mappings; do not couple room downtime to the knowledge conversion.",
       "After the 90-day compatibility period and verified reconciliation, export a checksummed recovery archive and remove legacy runtime tables, fields, code paths, and jobs; retain only compact identifier mappings needed for permanent redirects and archived provenance."
     ],
     "passes": false
@@ -1236,6 +1236,26 @@
       "Separate the two numbers wherever it helps a reader trust them: report the public-room figure alongside the all-room figure, or label the all-room figure plainly, so nobody reads a private-inclusive count as a public-content count.",
       "Verify no private room identity leaks through the statistics path: assert that a response containing private-room counts carries no private slug, display name, description, owner, participant, message body or entry id anywhere in its payload.",
       "Verify with a test on a database holding both kinds: create a private room and a public room, post in both, and assert the counted metrics include both while the activity stream, previews and search terms include only the public one. Assert the 24-hour window reports the private-room activity rather than zero."
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Fix POST /v1/auth/claim-referral so referral credit after an OAuth signup is recorded",
+    "steps": [
+      "Mount POST /v1/auth/claim-referral inside the JWT-authenticated group: today it sits on the bare /v1 router outside every auth middleware, so auth.ClaimsFromContext is nil and it always returns 401.",
+      "Add a router-level test with a real JWT: a human who signed up through OAuth claims a referral code and the referral row is recorded; the same call without a JWT returns 401.",
+      "Verify the call made by frontend/app/auth/callback/page.tsx after OAuth signup succeeds against the real router."
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "Make the two time-window search tests independent of shared test data",
+    "steps": [
+      "Move TestSearchAnalyticsRepository_GetTrending and TestSearch_MinSimilarity_HonestFilter onto their own scratch database (newMigratedScratchDatabase), so leftover rows in solvr_test cannot change their counts.",
+      "Pin their time windows so the result does not depend on the wall clock when they run.",
+      "Run each three times in a row with every run passing, then drop them from the known-failure baseline in the journal."
     ],
     "passes": false
   }

@@ -179,14 +179,14 @@ func TestCanonicalPlatformBriefing_RisingPosts(t *testing.T) {
 	}
 	replies := func(postID string, n int) {
 		for i := 0; i < n; i++ {
-			cbInsertReply(t, pool, ctx, postID, "agent", fmt.Sprintf("cbpl-replier-%d", i), time.Hour, false)
+			cbInsertReply(t, pool, ctx, postID, "agent", authorAgent(ctx, t, pool, fmt.Sprintf("cbpl-replier-%d", i)), time.Hour, false)
 		}
 	}
 
 	busy := byOther("rising busy post", cbPostSeed{age: 5 * time.Hour})
 	replies(busy, 3)
 	cbInsertReply(t, pool, ctx, busy, "system", "moderation", time.Hour, false)
-	cbInsertReply(t, pool, ctx, busy, "human", "cbpl-gone", time.Hour, true)
+	cbInsertReply(t, pool, ctx, busy, "human", authorHuman(ctx, t, pool, "cbpl-gone"), time.Hour, true)
 	idea := byOther("rising idea", cbPostSeed{postType: "idea", age: 4 * time.Hour})
 	replies(idea, 1)
 	cpSetPost(t, pool, ctx, idea, `evolved_into = ARRAY[$2::uuid]`, busy)
@@ -239,7 +239,14 @@ func TestCanonicalPlatformBriefing_HardcoreUnsolved(t *testing.T) {
 	}
 	replies := func(postID, authorType string, n int) {
 		for i := 0; i < n; i++ {
-			cbInsertReply(t, pool, ctx, postID, authorType, fmt.Sprintf("cbpl-hard-%d", i), time.Hour, false)
+			author := fmt.Sprintf("cbpl-hard-%d", i)
+			switch authorType {
+			case "agent":
+				author = authorAgent(ctx, t, pool, author)
+			case "human":
+				author = authorHuman(ctx, t, pool, author)
+			}
+			cbInsertReply(t, pool, ctx, postID, authorType, author, time.Hour, false)
 		}
 	}
 
@@ -309,8 +316,8 @@ func TestCanonicalPlatformBriefing_RecentVictoriesAreRoomOutcomes(t *testing.T) 
 	}
 
 	agentWin := outcome("victory by an agent", room, cbPostSeed{age: time.Hour, tags: []string{"cbpl", "win"}})
-	cbInsertReply(t, pool, ctx, agentWin, "agent", "cbpl-r1", time.Minute, false)
-	cbInsertReply(t, pool, ctx, agentWin, "human", "cbpl-r2", time.Minute, false)
+	cbInsertReply(t, pool, ctx, agentWin, "agent", authorAgent(ctx, t, pool, "cbpl-r1"), time.Minute, false)
+	cbInsertReply(t, pool, ctx, agentWin, "human", authorHuman(ctx, t, pool, "cbpl-r2"), time.Minute, false)
 	cbInsertReply(t, pool, ctx, agentWin, "system", "moderation", time.Minute, false)
 	ghost := fmt.Sprintf("cbpl-ghost-%d", time.Now().UnixNano())
 	humanWin := outcome("victory by an unresolved human", room, cbPostSeed{byType: "human", byID: ghost, age: 10 * time.Minute})

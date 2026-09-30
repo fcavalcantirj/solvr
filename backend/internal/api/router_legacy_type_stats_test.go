@@ -67,6 +67,7 @@ func seedTypeStats(t *testing.T, pool *db.Pool) {
 	t.Helper()
 	ctx := context.Background()
 	tag := fmt.Sprintf("typestats%d", time.Now().UnixNano()%1000000000)
+	replier, _ := createLiveTestUser(t, pool, "user") // a reply names its author (000116)
 	insert := func(postType, status, visibility string) string {
 		var id string
 		require.NoError(t, pool.QueryRow(ctx, `
@@ -80,8 +81,8 @@ func seedTypeStats(t *testing.T, pool *db.Pool) {
 		var id string
 		require.NoError(t, pool.QueryRow(ctx, `
 			INSERT INTO replies (post_id, author_type, author_id, body)
-			VALUES ($1, 'human', 'typestats-user', 'Type statistics reply fixture.') RETURNING id::text`,
-			postID).Scan(&id))
+			VALUES ($1, 'human', $2, 'Type statistics reply fixture.') RETURNING id::text`,
+			postID, replier).Scan(&id))
 		return id
 	}
 

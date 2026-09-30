@@ -111,6 +111,7 @@ func TestCanonicalBriefing_OpenItems(t *testing.T) {
 	pool := setupTestDB(t)
 	t.Cleanup(pool.Close)
 	ctx := context.Background()
+	someone := authorHuman(ctx, t, pool, "someone")
 	me := cbInsertAgent(t, pool, ctx, nil, nil)
 	other := cbInsertAgent(t, pool, ctx, nil, nil)
 	mine := func(title string, s cbPostSeed) string {
@@ -124,11 +125,11 @@ func TestCanonicalBriefing_OpenItems(t *testing.T) {
 	systemOnly := mine("only a system verdict", cbPostSeed{age: 20 * time.Hour})
 	cbInsertReply(t, pool, ctx, systemOnly, "system", "moderation", time.Hour, false)
 	deletedOnly := mine("only a deleted reply", cbPostSeed{age: 10 * time.Hour})
-	cbInsertReply(t, pool, ctx, deletedOnly, "human", "someone", time.Hour, true)
+	cbInsertReply(t, pool, ctx, deletedOnly, "human", someone, time.Hour, true)
 	family := mine("family post waiting", cbPostSeed{visibility: "family", age: 5 * time.Hour})
 
 	humanReplied := mine("a human replied", cbPostSeed{})
-	cbInsertReply(t, pool, ctx, humanReplied, "human", "someone", time.Hour, false)
+	cbInsertReply(t, pool, ctx, humanReplied, "human", someone, time.Hour, false)
 	selfReplied := mine("I replied myself", cbPostSeed{})
 	cbInsertReply(t, pool, ctx, selfReplied, "agent", me, time.Hour, false)
 	mine("draft", cbPostSeed{publication: "draft"})
@@ -184,21 +185,22 @@ func TestCanonicalBriefing_SuggestedActions(t *testing.T) {
 	pool := setupTestDB(t)
 	t.Cleanup(pool.Close)
 	ctx := context.Background()
+	someone := authorHuman(ctx, t, pool, "someone")
 	lastBriefing := time.Now().UTC().Add(-time.Hour)
 	me := cbInsertAgent(t, pool, ctx, nil, &lastBriefing)
 	other := cbInsertAgent(t, pool, ctx, nil, nil)
 
 	post := cbInsertPost(t, pool, ctx, "my post with new replies", cbPostSeed{byID: me})
-	human := cbInsertReply(t, pool, ctx, post, "human", "someone", 10*time.Minute, false)
+	human := cbInsertReply(t, pool, ctx, post, "human", someone, 10*time.Minute, false)
 	agent := cbInsertReply(t, pool, ctx, post, "agent", other, 5*time.Minute, false)
 	cbInsertReply(t, pool, ctx, post, "agent", me, 4*time.Minute, false)            // mine
 	cbInsertReply(t, pool, ctx, post, "system", "moderation", 3*time.Minute, false) // a verdict
-	cbInsertReply(t, pool, ctx, post, "human", "someone", 2*time.Minute, true)      // deleted
-	cbInsertReply(t, pool, ctx, post, "human", "someone", 2*time.Hour, false)       // before my last briefing
+	cbInsertReply(t, pool, ctx, post, "human", someone, 2*time.Minute, true)        // deleted
+	cbInsertReply(t, pool, ctx, post, "human", someone, 2*time.Hour, false)         // before my last briefing
 	theirs := cbInsertPost(t, pool, ctx, "someone else's post", cbPostSeed{byID: other})
-	cbInsertReply(t, pool, ctx, theirs, "human", "someone", time.Minute, false)
+	cbInsertReply(t, pool, ctx, theirs, "human", someone, time.Minute, false)
 	gone := cbInsertPost(t, pool, ctx, "my deleted post", cbPostSeed{byID: me, deleted: true})
-	cbInsertReply(t, pool, ctx, gone, "human", "someone", time.Minute, false)
+	cbInsertReply(t, pool, ctx, gone, "human", someone, time.Minute, false)
 
 	got, err := NewCanonicalBriefingRepository(pool).GetSuggestedActionsForAgent(ctx, me)
 	require.NoError(t, err)
@@ -216,10 +218,11 @@ func TestCanonicalBriefing_SuggestedActions_AtMostFiveAndNeverBriefedMeansAll(t 
 	pool := setupTestDB(t)
 	t.Cleanup(pool.Close)
 	ctx := context.Background()
+	someone := authorHuman(ctx, t, pool, "someone")
 	me := cbInsertAgent(t, pool, ctx, nil, nil)
 	post := cbInsertPost(t, pool, ctx, "busy post", cbPostSeed{byID: me})
 	for i := 0; i < 7; i++ {
-		cbInsertReply(t, pool, ctx, post, "human", "someone", time.Duration(i+1)*24*time.Hour, false)
+		cbInsertReply(t, pool, ctx, post, "human", someone, time.Duration(i+1)*24*time.Hour, false)
 	}
 	got, err := NewCanonicalBriefingRepository(pool).GetSuggestedActionsForAgent(ctx, me)
 	require.NoError(t, err)
@@ -230,6 +233,7 @@ func TestCanonicalBriefing_Opportunities(t *testing.T) {
 	pool := setupTestDB(t)
 	t.Cleanup(pool.Close)
 	ctx := context.Background()
+	someone := authorHuman(ctx, t, pool, "someone")
 	tag := fmt.Sprintf("cbrf-tag-%d", time.Now().UnixNano())
 	me := cbInsertAgent(t, pool, ctx, []string{tag}, nil)
 	other := cbInsertAgent(t, pool, ctx, nil, nil)
@@ -243,10 +247,10 @@ func TestCanonicalBriefing_Opportunities(t *testing.T) {
 
 	fresh := theirs("fresh canonical post", cbPostSeed{age: 90 * time.Minute})
 	replied := theirs("replied canonical post", cbPostSeed{age: 30 * time.Minute})
-	cbInsertReply(t, pool, ctx, replied, "human", "someone", 10*time.Minute, false)
+	cbInsertReply(t, pool, ctx, replied, "human", someone, 10*time.Minute, false)
 	cbInsertReply(t, pool, ctx, replied, "agent", me, 5*time.Minute, false)
 	cbInsertReply(t, pool, ctx, replied, "system", "moderation", time.Minute, false)
-	cbInsertReply(t, pool, ctx, replied, "human", "someone", time.Minute, true)
+	cbInsertReply(t, pool, ctx, replied, "human", someone, time.Minute, true)
 	idea := theirs("active idea", cbPostSeed{postType: "idea", status: "active", age: 2 * time.Hour})
 	problem := theirs("problem in progress", cbPostSeed{postType: "problem", status: "in_progress", age: 3 * time.Hour})
 

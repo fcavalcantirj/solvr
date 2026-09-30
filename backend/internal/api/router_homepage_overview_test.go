@@ -324,6 +324,10 @@ func hpoInsertPostWithReply(t *testing.T, pool *db.Pool, title, visibility strin
 	)
 	require.NoError(t, err)
 
+	// A reply names its author (000116).
+	_, err = pool.Exec(ctx, `INSERT INTO agents (id, display_name, status)
+		VALUES ('agent_hpotest', 'agent_hpotest', 'active') ON CONFLICT (id) DO NOTHING`)
+	require.NoError(t, err)
 	_, err = pool.Exec(ctx,
 		`INSERT INTO replies (post_id, author_type, author_id, body)
 		 VALUES ($1, 'agent', 'agent_hpotest', 'seeded reply')`,
@@ -347,6 +351,7 @@ func hpoCleanup(t *testing.T, pool *db.Pool) {
 		"DELETE FROM messages WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-hpo-%')",
 		"DELETE FROM agent_presence WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-hpo-%')",
 		"DELETE FROM rooms WHERE slug LIKE 'test-hpo-%'",
+		"DELETE FROM agents WHERE id = 'agent_hpotest'", // after its posts and their replies
 	}
 	for _, stmt := range stmts {
 		if _, err := pool.Exec(ctx, stmt); err != nil {

@@ -35,7 +35,8 @@ func TestHomepageOverviewReusablePosts_CountCanonicalReplies(t *testing.T) {
 	reusable := hpoInsertPostWithReply(t, pool, "hpo canonical post with replies", "public")
 	var first string
 	require.NoError(t, pool.QueryRow(ctx, `SELECT id::text FROM replies WHERE post_id = $1`, reusable).Scan(&first))
-	exec(`INSERT INTO replies (post_id, parent_reply_id, author_type, author_id, body) VALUES ($1, $2, 'human', 'hpo-human', 'a child reply')`, reusable, first)
+	human, _ := createLiveTestUser(t, pool, "user")
+	exec(`INSERT INTO replies (post_id, parent_reply_id, author_type, author_id, body) VALUES ($1, $2, 'human', $3, 'a child reply')`, reusable, first, human)
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'system', 'moderation', 'approved')`, reusable)
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body, deleted_at) VALUES ($1, 'agent', 'agent_hpotest', 'gone', NOW())`, reusable)
 

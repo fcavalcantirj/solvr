@@ -34,7 +34,7 @@ func TestCanonicalRecommendations_YouMightLike(t *testing.T) {
 	replied := byOther("rec I replied here", []string{liked}, cbPostSeed{})
 	cbInsertReply(t, pool, ctx, replied, "agent", me, time.Hour, false)
 	votedReply := byOther("rec I voted on a reply here", []string{liked}, cbPostSeed{})
-	reply := cbInsertReply(t, pool, ctx, votedReply, "human", "cbpl-someone", time.Hour, false)
+	reply := cbInsertReply(t, pool, ctx, votedReply, "human", authorHuman(ctx, t, pool, "cbpl-someone"), time.Hour, false)
 	cbInsertVote(t, pool, ctx, "reply", reply, me, "up", true, time.Hour)
 	mine := cbInsertPost(t, pool, ctx, "rec my own post", cbPostSeed{byID: me, tags: []string{liked}})
 	excluded := map[string]string{"upvoted": upvoted, "replied": replied, "voted a reply": votedReply, "mine": mine}
@@ -104,7 +104,7 @@ func TestCanonicalInferredSpecialties_ForAgent(t *testing.T) {
 	cbInsertVote(t, pool, ctx, "post", onOther([]string{upvoteTag}, cbPostSeed{}), me, "up", true, time.Hour)
 	cbInsertReply(t, pool, ctx, onOther([]string{deletedReplyTag}, cbPostSeed{}), "agent", me, time.Hour, true)
 	cbInsertReply(t, pool, ctx, onOther([]string{deletedPostTag}, cbPostSeed{deleted: true}), "agent", me, time.Hour, false)
-	cbInsertReply(t, pool, ctx, onOther([]string{notMineTag}, cbPostSeed{}), "agent", other+"x", time.Hour, false)
+	cbInsertReply(t, pool, ctx, onOther([]string{notMineTag}, cbPostSeed{}), "agent", authorAgent(ctx, t, pool, other+"x"), time.Hour, false)
 
 	got, err := repo.InferSpecialtiesForAgent(ctx, me)
 	require.NoError(t, err)

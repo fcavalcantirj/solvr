@@ -253,26 +253,6 @@ func (r *AgentRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// HardDelete permanently removes an agent from the database (admin-only).
-// Per PRD-v5 Task 17: Admin hard-delete endpoints.
-// This is IRREVERSIBLE - the agent record is permanently deleted.
-// Returns ErrAgentNotFound if agent doesn't exist.
-func (r *AgentRepository) HardDelete(ctx context.Context, id string) error {
-	query := `DELETE FROM agents WHERE id = $1`
-
-	result, err := r.pool.Exec(ctx, query, id)
-	if err != nil {
-		LogQueryError(ctx, "HardDelete", "agents", err)
-		return err
-	}
-
-	if result.RowsAffected() == 0 {
-		return ErrAgentNotFound
-	}
-
-	return nil
-}
-
 // ListDeleted returns soft-deleted agents with pagination.
 // Per PRD-v5 Task 17: Admin endpoints to review deleted accounts before permanent deletion.
 // Returns agents ordered by deleted_at DESC (most recently deleted first).

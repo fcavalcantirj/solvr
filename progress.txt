@@ -2873,3 +2873,155 @@ UAT (for when idx 68 closes, not now): apply 000115 on production, together with
 
 git status at journal time [REAL]: the 3 M + 3 ?? listed above, plus this entry. spec.json unchanged;
   idx 68 passes stays false.
+
+================================================================================
+2026-09-30 20:28 — Task idx 68 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Reduce the live knowledge database to posts and replies with enforceable relationships"
+SLICE 2 of N: step 3 for REPLIES. A reply names its human or agent author through a foreign key,
+with an exactly-one-author constraint. A migrated reply whose author has no account keeps its
+label as historical attribution. Posts get the same treatment in a later slice (sized below).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 73, 74, 77-95, 97, 98;
+  no open URGENT. idx 24 and 67 stay skipped (acceptance tasks, as recorded). idx 68 is first
+  buildable; slice 1 left step 3 as "OPEN, next". Tree clean at start; HEAD 625ae60f.
+
+MEASURED FIRST [REAL, read-only counts on local restores]:
+  - solvr_rehearsal_purge113 (production after the purge, at 113): 446 agent and 13 human replies,
+    ALL naming an existing account; 559 system notes (solvr-moderator). Posts 444 agent + 188
+    human, all resolve.
+  - solvr_cutover_rehearsal (before the purge): 0 unresolved authors in posts and replies.
+  - Legacy tables the cutover migrates (pristine, prepurge, purge copies): approaches, answers,
+    responses and comments have 0 unresolved human/agent authors. The only account-less authors
+    are the system comments.
+  - solvr_test (shared local test DB): 1329 agent and 2209 human replies name no account (fixture
+    junk), plus 7588 human and 2983 agent posts.
+
+SPIKES [REAL, /tmp/solvr_idx68_s2/]:
+  - Draft 1: generated FK columns on posts AND replies. Full suite on a fresh DB: 216 new failing
+    tests in 70 files (spike_full.log). Too big for one slice.
+  - Draft 2: replies only, generated columns. 43 FK-caused failures in 23 files (spike_replies.log).
+    It also showed that the production cutover (MigrateContributions) aborts on ANY legacy
+    contribution whose author has no account. That contradicts step 3 ("preserve legacy
+    unresolved authors as labeled historical attribution"). So the design changed to v3 (below).
+  - Draft 3 on THROWAWAY COPIES of the two DBs above, inside BEGIN ... ROLLBACK (spike3b.log):
+    the prod copy links all 446+13 replies, keeps the 559 system notes, and has 0 historical rows.
+    The test copy turns 3538 rows historical. Refused: native unknown agent (FK), native unknown
+    human UUID (FK), native non-UUID human (trigger, same constraint name), blank system label
+    (CHECK), hard delete of an author (FK), and unlinking with triggers off (session_replication_
+    role=replica, CHECK). Allowed: a legacy row with an unknown agent or human (historical), a
+    native reply by a real agent. A write of historical_author=true on a linked row is recomputed.
+    ALTERs on the prod copy: 467 ms posts (draft 1 only), 129 ms replies.
+
+MISTAKE DURING THE SPIKE, REVERTED [REAL]: the first run of the draft-3 spike was piped through a zsh
+  `echo '\timing on'`. zsh turned \t into a tab, so psql glued that line to `BEGIN;` as one syntax
+  error. The rest ran in AUTOCOMMIT on two LOCAL databases, solvr_rehearsal_purge113 and solvr_test.
+  Production was never touched. Committed there: the draft-3 schema (3 columns, 4 constraints, 2
+  indexes, function, trigger) and 3 probe replies per DB (body 'b', 2 legacy + 1 native). Two
+  UPDATEs were recomputed by the trigger to the same values. Reverted in one transaction per DB
+  (/tmp/solvr_idx68_s2/revert_v3.sql): the 3 rows deleted by id pattern, and the trigger, function,
+  constraints and columns dropped. After the revert the reply counts equal the pre-accident
+  measurements (purge113 446/13/559; solvr_test 1352/2209/501) and each DB's constraint list
+  equals its version's (113 / 115). All further spikes ran on CREATE DATABASE ... TEMPLATE copies.
+  Lesson: psql spike files are built with printf/cat and checked with head -1 before running.
+
+DESIGN (migration 000116_reply_author_fks) [TEST + REAL]:
+  - replies gains author_human_id uuid -> users, author_agent_id varchar(50) -> agents (no ON DELETE
+    action: an account that replies name is not hard-deleted), and historical_author boolean.
+  - The BEFORE trigger replies_resolve_author derives the three columns from author_type,
+    author_id and legacy_id on insert and on any change of them. Writers keep writing only
+    author_type/author_id. A native reply (legacy_id NULL) links its account: the FK refuses an
+    unknown one, and a non-UUID human is refused by the trigger under replies_author_human_fkey.
+    A migrated reply (legacy_id set) whose author has no account becomes historical_author=true
+    and keeps author_type/author_id verbatim. No account is invented.
+  - CHECK replies_exactly_one_author: system or historical rows link 0 accounts and need a
+    non-blank label; the rest link exactly 1. CHECK replies_author_matches_label: a link is the
+    account the label names, and a system note is never historical.
+  - Rows already stored are resolved once. Unresolved ones become historical, so the migration
+    also applies to a DB holding orphans (solvr_test).
+  - Down: drops the trigger, function, constraints and columns. The columns are derived, so no
+    data is lost.
+  - AdminHandler.HardDeleteUser/HardDeleteAgent: an account named by replies answers 409
+    ACCOUNT_AUTHORS_CONTENT ("replies still name this agent as their author; it cannot be hard-
+    deleted") instead of the 500 the raw FK error would give.
+
+WHAT CHANGED [REAL, git status --porcelain: 19 M + 6 ??; git diff --stat 74+/74- on tracked files]:
+  PRODUCTION:
+  A backend/migrations/000116_reply_author_fks.up.sql / .down.sql (above).
+  A backend/internal/db/account_hard_delete.go: ErrAccountAuthorsContent; authorsContent(err) maps
+    23503 on replies_author_{human,agent}_fkey. UserRepository.HardDelete and AgentRepository.
+    HardDelete MOVED here verbatim from users.go and agents.go (-20 lines each; agents.go 937->917,
+    still over 800 as before). Each gains the 3-line mapping.
+  M backend/internal/api/handlers/admin.go: "errors" import; the 409 branch in both hard deletes.
+  M backend/cmd/cutover/main.go: --expect-version default 115 -> 116 (the cutover runs on the
+    schema main ships; checkSchema refuses any other version).
+  NEW TESTS:
+  A internal/db/replies_author_integrity_test.go (4 tests, scratch DBs):
+    TestReplyAuthors_ANativeReplyNamesExactlyOneExistingAccount,
+    TestReplyAuthors_AMigratedReplyWithoutAnAccountKeepsItsLabel (runs MigrateContributions),
+    TestReplyAuthors_TheMigrationLinksStoredRepliesAndLabelsTheRest (116.down, rows, 116.up),
+    TestReplyAuthors_AnAccountThatAuthorsRepliesIsNotHardDeleted.
+  A internal/db/reply_author_fixtures_test.go: authorAgent / authorHuman fixture helpers.
+  A internal/api/handlers/admin_hard_delete_authors_test.go:
+    TestAdminHandler_HardDeleteAnAccountThatAuthorsRepliesIsAConflict (409 + both accounts stay).
+  CHANGED EXISTING TESTS. No assertion was loosened, none deleted or skipped:
+  - Version pins moved by the new migration: cmd/cutover/main_test.go asserted the default 115 and
+    checkSchema cases at 115; they now use 116 and PASS. internal/db/cutover_rollback_test.go
+    asserted `require.Equal(t, 31, applied, "down migrations 000115..000085")`; it now asserts 32
+    (000116..000085) and PASSES.
+  - Fixture setup only: a native reply's author now exists. vote_scores_test extraReply registers
+    score_author; replies_thread_integrity_test registers thread_author in 2 tests;
+    briefing_canonical_test uses a created human instead of the label "someone" (4 tests);
+    briefing_platform_canonical_test and briefing_recommendations_canonical_test register the
+    repliers they name; knowledge_totals_test, homepage_reusable_canonical_test,
+    router_legacy_type_stats_test and router_homepage_reusable_canonical_test use a created human;
+    router_homepage_overview_test registers agent_hpotest (and hpoCleanup deletes it after its
+    posts); cutover_rollback_test registers rb-agent-2.
+  - Cleanup order: router_rooms_test's two cleanups, and cleanupTestDB / cleanupTestDBWithAPIKeys,
+    delete the replies that name the accounts before deleting those accounts. MEASURED why
+    [REAL, post-run DB]: 7 agent_roomtest_* agents authored replies, so the bulk `DELETE FROM agents
+    WHERE id LIKE 'agent_roomtest_%'` failed as a whole. 285 agents stayed, they kept 31 users
+    claimed, and 155 roomtest_ users stayed. Their time-based usernames and referral codes then
+    collided (23505) in ~20 room tests. The wholesale wipe left "emailuser" behind the same way.
+
+VERIFICATION (DATABASE_URL = a FRESH local DB built from all up migrations; never production):
+  RED [TEST, red.log, 000116 moved out]: all 4 TestReplyAuthors_* FAIL.
+    [TEST, red_handler.log]: the new handler test FAILS with status 500 INTERNAL_ERROR.
+  GREEN targeted [TEST, green_new.log, green_handler2.log]: 4/4 and 7/7 PASS.
+  HEAD BASELINE [TEST, base_head.log, detached worktree of 625ae60f on a fresh DB at 115]: 47
+    failing tests: the recorded 46 + TestSearchAnalyticsRepository_GetTrending.
+  FULL BACKEND [TEST, run_fix1.log, go test ./... -count=1 -p 1 -v on a fresh DB at 116]:
+    internal/api and internal/db FAIL with 47 failing tests, the SAME 47 names as the HEAD
+    baseline. 0 new, 0 fixed. 64 PASS and 0 SKIP/FAIL among the new tests and every changed test.
+    13 SKIPs total, as in the baseline.
+  After the one-line cleanup change [TEST, users_rerun.log]: only the baseline
+    TestUserRepository_FindByAuthProvider_NullPasswordHash fails.
+  go vet ./internal/db ./internal/api/... ./cmd/cutover clean. gofmt -l clean on every touched
+    file except users_test.go, which was already unformatted at HEAD (left as is).
+    check-file-size.sh: 34 violations, unchanged. users_test.go 1413 -> 1414 (+1 line).
+  LIVE PROBE [REAL, /tmp/solvr_idx68_s2/probe/]: go build ./cmd/api, run on :8097 under env -i
+    against a fresh local DB at 116 (IPFS_API_URL=http://127.0.0.1:9, fake JWT_SECRET, ADMIN_API_KEY
+    probe key). Agent registered, post 201, reply 201. The reply row has author_agent_id =
+    agent_probe_author_s2 and historical_author f. DELETE /admin/agents/<id> answered 409
+    ACCOUNT_AUTHORS_CONTENT, and the agent still exists. GET /v1/posts/<id>/replies 200. 0 5xx in
+    api.log. Server stopped; :8097 free. (The 409 message was reworded after the probe; the handler
+    test re-ran green.)
+  LOCAL DBs [REAL]: solvr_test got 000116.up in one transaction, version 116; its 3538 orphan
+    replies are historical. solvr_rehearsal_purge113 and solvr_cutover_rehearsal are unchanged
+    (113). Temporary DBs dropped; the baseline worktree removed.
+
+STEP MAP (idx 68):
+  1 OPEN: ER diagram + migration contract.
+  2 DONE (slice 1).
+  3 REPLIES DONE (this slice). POSTS OPEN: same design on posts.posted_by_type/posted_by_id.
+    Sizing from draft 1 [REAL]: 117 posts_author_agent_fkey + 56 non-UUID human failures, mostly
+    internal/db posts_test.go (49) and search_test.go (18). Posts have no legacy_id; the
+    historical marker for posts must be decided from data first (0 unresolved in production).
+  4 OPEN: typed columns vs JSON audit.
+  5-6 GATED by owner decision 4.
+UAT (for when idx 68 closes, not now): apply 000115 and 000116 on production before the idx 93
+  cutover (cmd/cutover now expects 116). Expect 0 historical replies there (measured on the
+  post-purge copy).
+
+git status at journal time [REAL]: the 19 M + 6 ?? listed above, plus this entry. spec.json
+  unchanged; idx 68 passes stays false.

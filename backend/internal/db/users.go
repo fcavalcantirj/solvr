@@ -211,26 +211,6 @@ func (r *UserRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// HardDelete permanently removes a user from the database (admin-only).
-// Per PRD-v5 Task 17: Admin hard-delete endpoints.
-// This is IRREVERSIBLE - the user record is permanently deleted.
-// Returns ErrNotFound if user doesn't exist.
-func (r *UserRepository) HardDelete(ctx context.Context, id string) error {
-	query := `DELETE FROM users WHERE id = $1`
-
-	result, err := r.pool.Exec(ctx, query, id)
-	if err != nil {
-		LogQueryError(ctx, "HardDelete", "users", err)
-		return err
-	}
-
-	if result.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-
-	return nil
-}
-
 // ListDeleted returns soft-deleted users with pagination.
 // Per PRD-v5 Task 17: Admin endpoints to review deleted accounts before permanent deletion.
 // Returns users ordered by deleted_at DESC (most recently deleted first).

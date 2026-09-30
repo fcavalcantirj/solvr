@@ -165,7 +165,8 @@ func TestCanonicalReusablePosts_KeepTheLegacyListAcrossTheCutover(t *testing.T) 
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'system', 'moderation', 'approved')`, pVerdict)
 	pGone := post("post", "reuse post with a deleted reply only")
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body, deleted_at) VALUES ($1, 'agent', $2, 'gone', NOW())`, pGone, a)
-	exec(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'human', 'some-human', 'a human reply')`, iResponse)
+	exec(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'human', $2, 'a human reply')`, iResponse,
+		authorHuman(ctx, t, pool, "some-human"))
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body, deleted_at) VALUES ($1, 'agent', $2, 'gone too', NOW())`, pApproach, a)
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'system', 'moderation', 'approved')`, qAnswers)
 

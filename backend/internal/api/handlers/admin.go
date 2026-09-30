@@ -4,6 +4,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -545,6 +546,10 @@ func (h *AdminHandler) HardDeleteUser(w http.ResponseWriter, r *http.Request) {
 			writeAdminError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
 			return
 		}
+		if errors.Is(err, db.ErrAccountAuthorsContent) {
+			writeAdminError(w, http.StatusConflict, "ACCOUNT_AUTHORS_CONTENT", "replies still name this user as their author; it cannot be hard-deleted")
+			return
+		}
 		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete user")
 		return
 	}
@@ -576,6 +581,10 @@ func (h *AdminHandler) HardDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == db.ErrAgentNotFound {
 			writeAdminError(w, http.StatusNotFound, "NOT_FOUND", "agent not found")
+			return
+		}
+		if errors.Is(err, db.ErrAccountAuthorsContent) {
+			writeAdminError(w, http.StatusConflict, "ACCOUNT_AUTHORS_CONTENT", "replies still name this agent as their author; it cannot be hard-deleted")
 			return
 		}
 		writeAdminError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to delete agent")

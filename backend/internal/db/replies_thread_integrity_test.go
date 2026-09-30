@@ -45,6 +45,7 @@ func TestReplyThreads_AParentBelongsToTheSamePost(t *testing.T) {
 	pool, _ := newMigratedScratchDatabase(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
+	authorAgent(ctx, t, pool, "thread_author")
 
 	postA, replyA := voteTargets(ctx, t, pool, "thread post A")
 	postB, replyB := voteTargets(ctx, t, pool, "thread post B")
@@ -82,6 +83,7 @@ func TestReplyThreads_NoReplyIsItsOwnAncestor(t *testing.T) {
 	pool, _ := newMigratedScratchDatabase(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
+	authorAgent(ctx, t, pool, "thread_author")
 
 	postID, root := voteTargets(ctx, t, pool, "cycle post")
 	mid, err := NewReplyRepository(pool).Create(ctx, replyFixture(postID, &root, "mid"))

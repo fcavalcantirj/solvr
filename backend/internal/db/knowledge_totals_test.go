@@ -30,10 +30,10 @@ func insertKnowledgeReply(t *testing.T, pool *Pool, postID string, deleted bool)
 	var id string
 	err := pool.QueryRow(context.Background(), `
 		INSERT INTO replies (post_id, author_type, author_id, body, deleted_at)
-		VALUES ($1, 'human', 'knowledge-user', 'Knowledge totals reply fixture.',
+		VALUES ($1, 'human', $3, 'Knowledge totals reply fixture.',
 		        CASE WHEN $2 THEN NOW() ELSE NULL END)
 		RETURNING id::text
-	`, postID, deleted).Scan(&id)
+	`, postID, deleted, authorHuman(context.Background(), t, pool, "knowledge-user")).Scan(&id)
 	if err != nil {
 		t.Fatalf("insertKnowledgeReply(%s): %v", postID, err)
 	}

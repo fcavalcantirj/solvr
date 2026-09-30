@@ -84,7 +84,7 @@ func voteTargets(ctx context.Context, t *testing.T, pool *Pool, label string) (p
 func extraReply(ctx context.Context, t *testing.T, pool *Pool, postID, label string) string {
 	t.Helper()
 	reply, err := NewReplyRepository(pool).Create(ctx, &models.Reply{
-		PostID: postID, AuthorType: models.AuthorTypeAgent, AuthorID: "score_author", Body: "reply " + label,
+		PostID: postID, AuthorType: models.AuthorTypeAgent, AuthorID: authorAgent(ctx, t, pool, "score_author"), Body: "reply " + label,
 	})
 	require.NoError(t, err)
 	return reply.ID

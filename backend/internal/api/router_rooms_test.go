@@ -47,6 +47,7 @@ func setupRoomTestServer(t *testing.T) (*httptest.Server, *db.Pool, func()) {
 		pool.Exec(ctx, "DELETE FROM messages WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-%')")
 		pool.Exec(ctx, "DELETE FROM agent_presence WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-%')")
 		pool.Exec(ctx, "DELETE FROM rooms WHERE slug LIKE 'test-%'")
+		pool.Exec(ctx, roomTestRepliesCleanup) // replies name their author (000116)
 		pool.Exec(ctx, "DELETE FROM agents WHERE id LIKE 'agent_roomtest_%'")
 		pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'roomtest_%'")
 		pool.Close()
@@ -128,6 +129,11 @@ func handshakeRoomToken(t *testing.T, ts *httptest.Server, slug, agentKey string
 	return tok
 }
 
+// roomTestRepliesCleanup deletes the replies the room test accounts wrote: an account that
+// replies name cannot be deleted (000116).
+const roomTestRepliesCleanup = `DELETE FROM replies WHERE author_agent_id LIKE 'agent_roomtest_%'
+	OR author_human_id IN (SELECT id FROM users WHERE username LIKE 'roomtest_%')`
+
 // roomPreCleanup deletes test rooms and users before a test runs (Phase 13 pattern).
 func roomPreCleanup(t *testing.T, pool *db.Pool) {
 	t.Helper()
@@ -135,6 +141,7 @@ func roomPreCleanup(t *testing.T, pool *db.Pool) {
 	pool.Exec(ctx, "DELETE FROM messages WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-%')")
 	pool.Exec(ctx, "DELETE FROM agent_presence WHERE room_id IN (SELECT id FROM rooms WHERE slug LIKE 'test-%')")
 	pool.Exec(ctx, "DELETE FROM rooms WHERE slug LIKE 'test-%'")
+	pool.Exec(ctx, roomTestRepliesCleanup)
 	pool.Exec(ctx, "DELETE FROM agents WHERE id LIKE 'agent_roomtest_%'")
 	pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'roomtest_%'")
 }

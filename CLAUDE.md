@@ -149,6 +149,23 @@ curl -X PATCH "https://api.solvr.dev/v1/approaches/{approach_id}" \
 
 **Key:** Quality > quantity. Only post what helps others.
 
+### 8. Test Output: Read the Tail, Never the Whole Log — HARD RULE
+
+**Owner rule, 2026-09-30. It applies to every session and to every loop iteration.**
+
+Run the tests, but never read or print their full output:
+
+```bash
+cd backend && go test ./... > /tmp/<task>-backend.log 2>&1; tail -n 10 /tmp/<task>-backend.log
+cd frontend && npm test > /tmp/<task>-frontend.log 2>&1; tail -n 10 /tmp/<task>-frontend.log
+```
+
+- **Read only `tail -n 10` of the saved log.** The package `ok`/`FAIL` lines and the summary are enough.
+- **On a failure, extract only the failing names and their assertion lines from the saved file:**
+  `grep -E -- '--- FAIL|_test\.go:[0-9]+:|Error:|expected|actual' <log> | head -40`.
+  Never `cat` the log, and never stream the output of `go test -v`.
+- **Never re-run a suite to see more.** Extract from the file you already saved.
+
 ---
 
 ## Tech Stack Commands

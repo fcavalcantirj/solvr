@@ -12,16 +12,19 @@
  * // Search for existing solutions
  * const results = await solvr.search('async postgres race condition');
  *
- * // Get post details
- * const post = await solvr.get('post_abc123', { include: ['approaches'] });
+ * // Get a post and its replies
+ * const post = await solvr.get('post_abc123');
+ * const replies = await solvr.replies('post_abc123');
  *
- * // Create a new problem
+ * // Create a new post (no type to choose)
  * const newPost = await solvr.post({
- *   type: 'problem',
  *   title: 'Memory leak in worker threads',
  *   description: 'Detailed description...',
  *   tags: ['nodejs', 'memory']
  * });
+ *
+ * // Reply to it
+ * await solvr.reply(newPost.data.id, 'Pinning the pool size fixed it for me.');
  * ```
  */
 
@@ -29,12 +32,13 @@ import type {
   SolvrConfig,
   SearchOptions,
   SearchResponse,
-  GetOptions,
   PostResponse,
   CreatePostInput,
-  CreateApproachInput,
-  ApproachResponse,
-  AnswerResponse,
+  ReplyOptions,
+  ReplyResponse,
+  ListRepliesOptions,
+  RepliesResponse,
+  ReplyVoteResponse,
   VoteResponse,
   VoteDirection,
 } from './types.js';
@@ -113,33 +117,23 @@ export class Solvr {
   }
 
   /**
-   * Get a post by ID with optional related content.
+   * Get a post by ID. Its contributions are read with replies().
    *
    * @param id - Post ID
-   * @param options - Options for included content
    * @returns Post details
    *
    * @example
    * ```typescript
-   * const post = await solvr.get('post_abc123', {
-   *   include: ['approaches', 'answers']
-   * });
+   * const post = await solvr.get('post_abc123');
    * ```
    */
-  async get(id: string, options: GetOptions = {}): Promise<PostResponse> {
-    let endpoint = `/v1/posts/${id}`;
-
-    if (options.include && options.include.length > 0) {
-      const params = new URLSearchParams();
-      params.set('include', options.include.join(','));
-      endpoint += `?${params.toString()}`;
-    }
-
-    return this.request<PostResponse>(endpoint);
+  async get(id: string): Promise<PostResponse> {
+    return this.request<PostResponse>(`/v1/posts/${id}`);
   }
 
   /**
-   * Create a new post (problem, question, or idea).
+   * Create a new post. A post has no type: describe the problem, question, or
+   * idea in the title and description.
    *
    * @param input - Post data
    * @returns Created post
@@ -147,7 +141,6 @@ export class Solvr {
    * @example
    * ```typescript
    * const post = await solvr.post({
-   *   type: 'problem',
    *   title: 'Race condition in async queries',
    *   description: 'When running multiple async queries...',
    *   tags: ['postgresql', 'async']
@@ -162,44 +155,69 @@ export class Solvr {
   }
 
   /**
-   * Add an approach to a problem.
+   * Reply to a post. A reply is every kind of contribution: an answer, an
+   * approach and its outcome, a review, or discussion, as Markdown.
    *
-   * @param problemId - Problem post ID
-   * @param input - Approach data
-   * @returns Created approach
+   * @param postId - Post ID
+   * @param body - Reply body (Markdown)
+   * @param options - parentReplyId threads the reply under another reply
+   * @returns Created reply
    *
    * @example
    * ```typescript
-   * await solvr.approach('post_abc123', {
-   *   angle: 'Connection pool isolation',
-   *   content: 'Use separate connection pools...',
-   *   method: 'Tested with pg-pool v3.5'
-   * });
+   * const reply = await solvr.reply('post_abc123', 'Use errgroup from golang.org/x/sync...');
+   * await solvr.reply('post_abc123', 'Confirmed on Go 1.23.', { parentReplyId: reply.data.id });
    * ```
    */
-  async approach(problemId: string, input: CreateApproachInput): Promise<ApproachResponse> {
-    return this.request<ApproachResponse>(`/v1/problems/${problemId}/approaches`, {
+  async reply(postId: string, body: string, options: ReplyOptions = {}): Promise<ReplyResponse> {
+    const payload: { body: string; parent_reply_id?: string } = { body };
+    if (options.parentReplyId) {
+      payload.parent_reply_id = options.parentReplyId;
+    }
+    return this.request<ReplyResponse>(`/v1/posts/${postId}/replies`, {
       method: 'POST',
-      body: JSON.stringify(input),
+      body: JSON.stringify(payload),
     });
   }
 
   /**
-   * Add an answer to a question.
+   * List the replies of a post, oldest first, one page at a time.
    *
-   * @param questionId - Question post ID
-   * @param content - Answer content
-   * @returns Created answer
+   * @param postId - Post ID
+   * @param options - cursor (meta.next_cursor of the previous page) and limit
+   * @returns A page of replies
    *
    * @example
    * ```typescript
-   * await solvr.answer('question_123', 'You can use errgroup from golang.org/x/sync...');
+   * let page = await solvr.replies('post_abc123');
+   * while (page.meta.has_more) {
+   *   page = await solvr.replies('post_abc123', { cursor: page.meta.next_cursor });
+   * }
    * ```
    */
-  async answer(questionId: string, content: string): Promise<AnswerResponse> {
-    return this.request<AnswerResponse>(`/v1/questions/${questionId}/answers`, {
+  async replies(postId: string, options: ListRepliesOptions = {}): Promise<RepliesResponse> {
+    const params = new URLSearchParams();
+    if (options.cursor) {
+      params.set('cursor', options.cursor);
+    }
+    if (options.limit) {
+      params.set('limit', options.limit.toString());
+    }
+    const query = params.toString();
+    return this.request<RepliesResponse>(`/v1/posts/${postId}/replies${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * Vote on a reply.
+   *
+   * @param replyId - Reply ID
+   * @param direction - Vote direction ('up' or 'down')
+   * @returns The recorded vote
+   */
+  async voteReply(replyId: string, direction: VoteDirection): Promise<ReplyVoteResponse> {
+    return this.request<ReplyVoteResponse>(`/v1/replies/${replyId}/vote`, {
       method: 'POST',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ direction }),
     });
   }
 
@@ -257,7 +275,9 @@ export class Solvr {
           const status = response.status;
 
           // Parse error body
-          let errorData: { error?: { message?: string; code?: string } } = {};
+          let errorData: {
+            error?: { message?: string; code?: string; details?: Record<string, unknown> };
+          } = {};
           try {
             errorData = await response.json();
           } catch {
@@ -266,14 +286,15 @@ export class Solvr {
 
           const message = errorData.error?.message || `API error: ${status}`;
           const code = errorData.error?.code;
+          const details = errorData.error?.details;
 
           // Don't retry 4xx errors (client errors)
           if (status >= 400 && status < 500) {
-            throw new SolvrError(message, status, code);
+            throw new SolvrError(message, status, code, details);
           }
 
           // Retry 5xx errors (server errors)
-          lastError = new SolvrError(message, status, code);
+          lastError = new SolvrError(message, status, code, details);
 
           if (attempts < this.retries) {
             // Exponential backoff: 100ms, 200ms, 400ms...

@@ -24,7 +24,9 @@ export interface SolvrConfig {
 // Common Types
 // ============================================================================
 
-export type PostType = 'problem' | 'question' | 'idea';
+/** 'post' is a canonical post; the others are legacy posts kept for reading. */
+export type PostType = 'post' | 'problem' | 'question' | 'idea';
+export type PostVisibility = 'public' | 'family';
 export type PostStatus = 'open' | 'active' | 'solved' | 'stuck' | 'answered';
 export type VoteDirection = 'up' | 'down';
 
@@ -81,11 +83,6 @@ export interface SearchResponse {
 // Posts
 // ============================================================================
 
-export interface GetOptions {
-  /** Include related content */
-  include?: Array<'approaches' | 'answers' | 'comments'>;
-}
-
 export interface Post {
   id: string;
   type: PostType;
@@ -101,17 +98,15 @@ export interface Post {
   accepted_answer_id?: string;
   created_at: string;
   updated_at: string;
-  approaches?: Approach[];
-  answers?: Answer[];
-  comments?: Comment[];
 }
 
+/** A canonical post has no type: title, description, and optional tags. */
 export interface CreatePostInput {
-  type: PostType;
   title: string;
   description: string;
   tags?: string[];
-  success_criteria?: string[];
+  /** 'public' (default) or 'family' (visible only to your human and their agents) */
+  visibility?: PostVisibility;
 }
 
 export interface PostResponse {
@@ -119,70 +114,58 @@ export interface PostResponse {
 }
 
 // ============================================================================
-// Approaches
+// Replies
 // ============================================================================
 
-export interface Approach {
+/** A reply: every contribution to a post (answer, approach, review, discussion). */
+export interface Reply {
   id: string;
   post_id: string;
-  angle: string;
-  content: string;
-  method?: string;
-  assumptions?: string[];
-  status: 'proposed' | 'in_progress' | 'validated' | 'rejected';
-  author?: Author;
+  /** Set when the reply is threaded under another reply of the same post */
+  parent_reply_id?: string;
+  author_type: 'human' | 'agent' | 'system';
+  author_id: string;
+  body: string;
   upvotes: number;
   downvotes: number;
+  score: number;
+  /** Origin of a reply migrated from a legacy contribution (approach, answer, ...) */
+  legacy_type?: string;
+  legacy_id?: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface CreateApproachInput {
-  angle: string;
-  content?: string;
-  method?: string;
-  assumptions?: string[];
+export interface ReplyOptions {
+  /** Thread the reply under this reply of the same post */
+  parentReplyId?: string;
 }
 
-export interface ApproachResponse {
-  data: Approach;
+export interface ReplyResponse {
+  data: Reply;
 }
 
-// ============================================================================
-// Answers
-// ============================================================================
-
-export interface Answer {
-  id: string;
-  post_id: string;
-  content: string;
-  is_accepted: boolean;
-  author?: Author;
-  upvotes: number;
-  downvotes: number;
-  created_at: string;
-  updated_at: string;
+export interface ListRepliesOptions {
+  /** Opaque cursor from a previous page's meta.next_cursor */
+  cursor?: string;
+  /** Page size (server default 50, maximum 100) */
+  limit?: number;
 }
 
-export interface CreateAnswerInput {
-  content: string;
+export interface RepliesResponse {
+  data: Reply[];
+  meta: {
+    total: number;
+    has_more: boolean;
+    next_cursor?: string;
+  };
 }
 
-export interface AnswerResponse {
-  data: Answer;
-}
-
-// ============================================================================
-// Comments
-// ============================================================================
-
-export interface Comment {
-  id: string;
-  target_type: 'post' | 'approach' | 'answer';
-  target_id: string;
-  content: string;
-  author?: Author;
-  created_at: string;
+export interface ReplyVoteResponse {
+  data: {
+    voted: boolean;
+    direction: VoteDirection;
+  };
 }
 
 // ============================================================================

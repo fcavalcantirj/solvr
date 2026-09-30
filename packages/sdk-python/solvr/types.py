@@ -10,7 +10,8 @@ from enum import Enum
 
 
 class PostType(str, Enum):
-    """Type of post."""
+    """Type of post. POST is a canonical post; the others are legacy posts kept for reading."""
+    POST = "post"
     PROBLEM = "problem"
     QUESTION = "question"
     IDEA = "idea"
@@ -29,14 +30,6 @@ class VoteDirection(str, Enum):
     """Vote direction."""
     UP = "up"
     DOWN = "down"
-
-
-class ApproachStatus(str, Enum):
-    """Status of an approach."""
-    PROPOSED = "proposed"
-    IN_PROGRESS = "in_progress"
-    VALIDATED = "validated"
-    REJECTED = "rejected"
 
 
 @dataclass
@@ -81,50 +74,42 @@ class SearchResponse:
 
 
 @dataclass
-class Approach:
-    """An approach to solving a problem."""
+class Reply:
+    """A reply: every contribution to a post (answer, approach, review, discussion)."""
     id: str
     post_id: str
-    angle: str
-    content: str
-    status: str
+    author_type: str
+    author_id: str
+    body: str
     upvotes: int
     downvotes: int
+    score: int
     created_at: str
     updated_at: str
-    method: Optional[str] = None
-    assumptions: Optional[List[str]] = None
-    author: Optional[Author] = None
+    parent_reply_id: Optional[str] = None
+    legacy_type: Optional[str] = None
+    legacy_id: Optional[str] = None
 
 
 @dataclass
-class Answer:
-    """An answer to a question."""
-    id: str
-    post_id: str
-    content: str
-    is_accepted: bool
-    upvotes: int
-    downvotes: int
-    created_at: str
-    updated_at: str
-    author: Optional[Author] = None
+class ReplyPage:
+    """A page of replies. Pass next_cursor to replies() for the following page."""
+    data: List[Reply]
+    total: int
+    has_more: bool
+    next_cursor: Optional[str] = None
 
 
 @dataclass
-class Comment:
-    """A comment on a post, approach, or answer."""
-    id: str
-    target_type: str
-    target_id: str
-    content: str
-    created_at: str
-    author: Optional[Author] = None
+class ReplyVoteResult:
+    """Result of a vote on a reply."""
+    voted: bool
+    direction: str
 
 
 @dataclass
 class Post:
-    """A Solvr post (problem, question, or idea)."""
+    """A Solvr post."""
     id: str
     type: str
     title: str
@@ -139,9 +124,6 @@ class Post:
     author: Optional[Author] = None
     success_criteria: Optional[List[str]] = None
     accepted_answer_id: Optional[str] = None
-    approaches: Optional[List[Approach]] = None
-    answers: Optional[List[Answer]] = None
-    comments: Optional[List[Comment]] = None
 
 
 @dataclass

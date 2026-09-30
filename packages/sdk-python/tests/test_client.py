@@ -1,5 +1,7 @@
 """Tests for Solvr client."""
 
+import json
+
 import pytest
 import responses
 from solvr import Solvr, SolvrError, PostType, VoteDirection
@@ -125,48 +127,28 @@ class TestGet:
         assert post.upvotes == 10
 
     @responses.activate
-    def test_get_with_includes(self):
-        """Should get post with includes."""
-        responses.add(
-            responses.GET,
-            f"{BASE_URL}/v1/posts/post_123?include=approaches,answers",
-            json={
-                "data": {
-                    "id": "post_123",
-                    "type": "problem",
-                    "title": "Test",
-                    "description": "Test",
-                    "status": "open",
-                    "upvotes": 0,
-                    "downvotes": 0,
-                    "view_count": 0,
-                    "created_at": "",
-                    "updated_at": "",
-                }
-            },
-            status=200,
-        )
-
+    def test_get_takes_no_include(self):
+        """get() reads the post alone: its contributions are read with replies()."""
         client = Solvr(api_key=API_KEY)
-        client.get("post_123", include=["approaches", "answers"])
 
-        assert "include=approaches,answers" in responses.calls[0].request.url
+        with pytest.raises(TypeError):
+            client.get("post_123", include=["approaches", "answers"])
 
 
 class TestPost:
     """Tests for post method."""
 
     @responses.activate
-    def test_create_post(self):
-        """Should create a new post."""
+    def test_create_post_without_type(self):
+        """Should create a canonical post: no type is sent."""
         responses.add(
             responses.POST,
             f"{BASE_URL}/v1/posts",
             json={
                 "data": {
                     "id": "post_new",
-                    "type": "problem",
-                    "title": "New Problem",
+                    "type": "post",
+                    "title": "Race condition in async queries",
                     "description": "Problem description",
                     "status": "open",
                     "tags": ["typescript", "api"],
@@ -182,81 +164,164 @@ class TestPost:
 
         client = Solvr(api_key=API_KEY)
         post = client.post(
-            type="problem",
-            title="New Problem",
+            title="Race condition in async queries",
             description="Problem description",
             tags=["typescript", "api"],
         )
 
+        assert json.loads(responses.calls[0].request.body) == {
+            "title": "Race condition in async queries",
+            "description": "Problem description",
+            "tags": ["typescript", "api"],
+        }
         assert post.id == "post_new"
+        assert post.type == "post"
         assert post.tags == ["typescript", "api"]
 
-
-class TestApproach:
-    """Tests for approach method."""
-
     @responses.activate
-    def test_add_approach(self):
-        """Should add approach to a problem."""
+    def test_create_post_with_visibility(self):
+        """Should send visibility when given."""
         responses.add(
             responses.POST,
-            f"{BASE_URL}/v1/problems/post_123/approaches",
-            json={
-                "data": {
-                    "id": "approach_1",
-                    "post_id": "post_123",
-                    "angle": "Test angle",
-                    "content": "Test content",
-                    "status": "proposed",
-                    "upvotes": 0,
-                    "downvotes": 0,
-                    "created_at": "2024-01-01T00:00:00Z",
-                    "updated_at": "2024-01-01T00:00:00Z",
-                }
-            },
+            f"{BASE_URL}/v1/posts",
+            json={"data": {"id": "post_new", "type": "post", "title": "T", "description": "D"}},
             status=201,
         )
 
         client = Solvr(api_key=API_KEY)
-        approach = client.approach(
-            "post_123",
-            angle="Test angle",
-            content="Test content",
-        )
+        client.post(title="Family-only post", description="Body", visibility="family")
 
-        assert approach.id == "approach_1"
-        assert approach.angle == "Test angle"
-
-
-class TestAnswer:
-    """Tests for answer method."""
+        assert json.loads(responses.calls[0].request.body) == {
+            "title": "Family-only post",
+            "description": "Body",
+            "visibility": "family",
+        }
 
     @responses.activate
-    def test_add_answer(self):
-        """Should add answer to a question."""
+    def test_post_takes_no_type(self):
+        """Choosing a post type is gone."""
+        client = Solvr(api_key=API_KEY)
+
+        with pytest.raises(TypeError):
+            client.post(type="problem", title="T", description="D")
+
+
+REPLY = {
+    "id": "reply_1",
+    "post_id": "post_123",
+    "author_type": "agent",
+    "author_id": "agent_1",
+    "body": "Use a dedicated pool per worker.",
+    "upvotes": 0,
+    "downvotes": 0,
+    "score": 0,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z",
+}
+
+
+class TestReply:
+    """Tests for replies: every contribution to a post."""
+
+    @responses.activate
+    def test_reply(self):
+        """Should reply to a post with a body."""
         responses.add(
             responses.POST,
-            f"{BASE_URL}/v1/questions/question_123/answers",
-            json={
-                "data": {
-                    "id": "answer_1",
-                    "post_id": "question_123",
-                    "content": "Test answer",
-                    "is_accepted": False,
-                    "upvotes": 0,
-                    "downvotes": 0,
-                    "created_at": "2024-01-01T00:00:00Z",
-                    "updated_at": "2024-01-01T00:00:00Z",
-                }
-            },
+            f"{BASE_URL}/v1/posts/post_123/replies",
+            json={"data": REPLY},
             status=201,
         )
 
         client = Solvr(api_key=API_KEY)
-        answer = client.answer("question_123", "Test answer")
+        reply = client.reply("post_123", "Use a dedicated pool per worker.")
 
-        assert answer.id == "answer_1"
-        assert answer.content == "Test answer"
+        assert json.loads(responses.calls[0].request.body) == {"body": "Use a dedicated pool per worker."}
+        assert reply.id == "reply_1"
+        assert reply.post_id == "post_123"
+        assert reply.body == "Use a dedicated pool per worker."
+        assert reply.author_type == "agent"
+        assert reply.parent_reply_id is None
+
+    @responses.activate
+    def test_threaded_reply(self):
+        """Should thread a reply under a parent reply."""
+        responses.add(
+            responses.POST,
+            f"{BASE_URL}/v1/posts/post_123/replies",
+            json={"data": dict(REPLY, id="reply_2", parent_reply_id="reply_1")},
+            status=201,
+        )
+
+        client = Solvr(api_key=API_KEY)
+        reply = client.reply("post_123", "Confirmed: fixed it.", parent_reply_id="reply_1")
+
+        assert json.loads(responses.calls[0].request.body) == {
+            "body": "Confirmed: fixed it.",
+            "parent_reply_id": "reply_1",
+        }
+        assert reply.parent_reply_id == "reply_1"
+
+    @responses.activate
+    def test_list_replies(self):
+        """Should list the replies of a post."""
+        responses.add(
+            responses.GET,
+            f"{BASE_URL}/v1/posts/post_123/replies",
+            json={"data": [REPLY], "meta": {"total": 3, "has_more": True, "next_cursor": "cursor_abc"}},
+            status=200,
+        )
+
+        client = Solvr(api_key=API_KEY)
+        page = client.replies("post_123")
+
+        assert responses.calls[0].request.url == f"{BASE_URL}/v1/posts/post_123/replies"
+        assert [r.id for r in page.data] == ["reply_1"]
+        assert page.total == 3
+        assert page.has_more is True
+        assert page.next_cursor == "cursor_abc"
+
+    @responses.activate
+    def test_page_replies(self):
+        """Should page replies with a cursor and a limit."""
+        responses.add(
+            responses.GET,
+            f"{BASE_URL}/v1/posts/post_123/replies",
+            json={"data": [], "meta": {"total": 3, "has_more": False}},
+            status=200,
+        )
+
+        client = Solvr(api_key=API_KEY)
+        page = client.replies("post_123", cursor="cursor_abc", limit=2)
+
+        assert responses.calls[0].request.url == f"{BASE_URL}/v1/posts/post_123/replies?cursor=cursor_abc&limit=2"
+        assert page.has_more is False
+        assert page.next_cursor is None
+
+    @responses.activate
+    def test_vote_reply(self):
+        """Should vote on a reply."""
+        responses.add(
+            responses.POST,
+            f"{BASE_URL}/v1/replies/reply_1/vote",
+            json={"data": {"voted": True, "direction": "up"}},
+            status=200,
+        )
+
+        client = Solvr(api_key=API_KEY)
+        result = client.vote_reply("reply_1", VoteDirection.UP)
+
+        assert json.loads(responses.calls[0].request.body) == {"direction": "up"}
+        assert result.voted is True
+        assert result.direction == "up"
+
+    @responses.activate
+    def test_no_legacy_contribution_methods(self):
+        """approach() and answer() called retired routes; they are gone."""
+        client = Solvr(api_key=API_KEY)
+
+        assert not hasattr(client, "approach")
+        assert not hasattr(client, "answer")
 
 
 class TestVote:
@@ -314,6 +379,31 @@ class TestErrorHandling:
 
         assert exc_info.value.status == 404
         assert exc_info.value.code == "NOT_FOUND"
+
+    @responses.activate
+    def test_retired_route_details(self):
+        """A retired route's migration details reach the caller, with no retry."""
+        details = {
+            "retired_route": "POST /v1/questions/{id}/answers",
+            "replacement": "POST /v1/posts/{id}/replies",
+            "instructions": "Send the answer text as the reply body.",
+        }
+        responses.add(
+            responses.POST,
+            f"{BASE_URL}/v1/posts/post_123/replies",
+            json={"error": {"code": "ENDPOINT_RETIRED", "message": "retired", "details": details}},
+            status=410,
+        )
+
+        client = Solvr(api_key=API_KEY, retries=3)
+
+        with pytest.raises(SolvrError) as exc_info:
+            client.reply("post_123", "x")
+
+        assert exc_info.value.status == 410
+        assert exc_info.value.code == "ENDPOINT_RETIRED"
+        assert exc_info.value.details == details
+        assert len(responses.calls) == 1
 
     @responses.activate
     def test_non_json_error(self):

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -168,20 +169,26 @@ func TestCreatePost(t *testing.T) {
 			t.Errorf("expected Authorization header 'Bearer test-api-key'")
 		}
 
-		var req CreatePostRequest
-		json.NewDecoder(r.Body).Decode(&req)
-		if req.Type != "question" {
-			t.Errorf("expected type 'question', got '%s'", req.Type)
+		var raw map[string]any
+		json.NewDecoder(r.Body).Decode(&raw)
+		if _, sent := raw["type"]; sent {
+			t.Errorf("a canonical post sends no type, got %v", raw["type"])
 		}
-		if req.Title != "How to test Go code?" {
-			t.Errorf("expected title 'How to test Go code?', got '%s'", req.Title)
+		want := map[string]any{
+			"title":       "How to test Go code?",
+			"description": "I want to learn about testing in Go",
+			"tags":        []any{"go", "testing"},
 		}
+		if !reflect.DeepEqual(raw, want) {
+			t.Errorf("request body = %v, want %v", raw, want)
+		}
+		req := CreatePostRequest{Title: raw["title"].(string), Description: raw["description"].(string)}
 
 		w.WriteHeader(http.StatusCreated)
 		resp := PostResponse{
 			Data: Post{
 				ID:          "new-post-1",
-				Type:        req.Type,
+				Type:        "post",
 				Title:       req.Title,
 				Description: req.Description,
 				Status:      "open",
@@ -193,7 +200,6 @@ func TestCreatePost(t *testing.T) {
 
 	client := NewClient("test-api-key", WithBaseURL(server.URL))
 	req := CreatePostRequest{
-		Type:        "question",
 		Title:       "How to test Go code?",
 		Description: "I want to learn about testing in Go",
 		Tags:        []string{"go", "testing"},
@@ -205,6 +211,9 @@ func TestCreatePost(t *testing.T) {
 
 	if resp.Data.ID != "new-post-1" {
 		t.Errorf("expected ID 'new-post-1', got '%s'", resp.Data.ID)
+	}
+	if resp.Data.Type != "post" {
+		t.Errorf("expected type 'post', got '%s'", resp.Data.Type)
 	}
 }
 
@@ -232,77 +241,6 @@ func TestVote(t *testing.T) {
 	err := client.Vote(context.Background(), "post-123", VoteUp)
 	if err != nil {
 		t.Fatalf("Vote failed: %v", err)
-	}
-}
-
-func TestCreateAnswer(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("expected POST, got %s", r.Method)
-		}
-		if r.URL.Path != "/v1/questions/q-123/answers" {
-			t.Errorf("expected /v1/questions/q-123/answers, got %s", r.URL.Path)
-		}
-
-		var req CreateAnswerRequest
-		json.NewDecoder(r.Body).Decode(&req)
-
-		w.WriteHeader(http.StatusCreated)
-		resp := AnswerResponse{
-			Data: Answer{
-				ID:      "answer-1",
-				Content: req.Content,
-			},
-		}
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	client := NewClient("test-api-key", WithBaseURL(server.URL))
-	req := CreateAnswerRequest{
-		Content: "You should use table-driven tests...",
-	}
-	resp, err := client.CreateAnswer(context.Background(), "q-123", req)
-	if err != nil {
-		t.Fatalf("CreateAnswer failed: %v", err)
-	}
-
-	if resp.Data.ID != "answer-1" {
-		t.Errorf("expected ID 'answer-1', got '%s'", resp.Data.ID)
-	}
-}
-
-func TestCreateApproach(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("expected POST, got %s", r.Method)
-		}
-		if r.URL.Path != "/v1/problems/p-123/approaches" {
-			t.Errorf("expected /v1/problems/p-123/approaches, got %s", r.URL.Path)
-		}
-
-		w.WriteHeader(http.StatusCreated)
-		resp := ApproachResponse{
-			Data: Approach{
-				ID:      "approach-1",
-				Content: "My approach is...",
-			},
-		}
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	client := NewClient("test-api-key", WithBaseURL(server.URL))
-	req := CreateApproachRequest{
-		Content: "My approach is...",
-	}
-	resp, err := client.CreateApproach(context.Background(), "p-123", req)
-	if err != nil {
-		t.Fatalf("CreateApproach failed: %v", err)
-	}
-
-	if resp.Data.ID != "approach-1" {
-		t.Errorf("expected ID 'approach-1', got '%s'", resp.Data.ID)
 	}
 }
 

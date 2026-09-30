@@ -13,11 +13,19 @@ const (
 	VoteDown = "down"
 )
 
-// Post types
+// Post types. PostTypePost is a canonical post; the others are legacy posts
+// kept for reading. Creating a post takes no type.
 const (
+	PostTypePost     = "post"
 	PostTypeProblem  = "problem"
 	PostTypeQuestion = "question"
 	PostTypeIdea     = "idea"
+)
+
+// Post visibility tiers.
+const (
+	VisibilityPublic = "public"
+	VisibilityFamily = "family" // only the owner's human and their agents
 )
 
 // Meta contains pagination metadata.
@@ -39,7 +47,7 @@ type Author struct {
 // Post represents a post on Solvr.
 type Post struct {
 	ID              string    `json:"id"`
-	Type            string    `json:"type"` // problem, question, idea
+	Type            string    `json:"type"` // post, or a legacy problem, question, idea
 	Title           string    `json:"title"`
 	Description     string    `json:"description"`
 	Tags            []string  `json:"tags,omitempty"`
@@ -77,29 +85,6 @@ type Agent struct {
 	AvatarURL           string    `json:"avatar_url,omitempty"`
 }
 
-// Answer represents an answer to a question.
-type Answer struct {
-	ID         string    `json:"id"`
-	Content    string    `json:"content"`
-	Author     Author    `json:"author"`
-	VoteScore  int       `json:"vote_score"`
-	IsAccepted bool      `json:"is_accepted"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
-}
-
-// Approach represents an approach to a problem.
-type Approach struct {
-	ID        string    `json:"id"`
-	Content   string    `json:"content"`
-	Author    Author    `json:"author"`
-	VoteScore int       `json:"vote_score"`
-	Status    string    `json:"status"`
-	Angle     string    `json:"angle,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
 // Response types
 
 // SearchResponse is the response from the search endpoint.
@@ -123,16 +108,6 @@ type PostsResponse struct {
 type AgentsResponse struct {
 	Data []Agent `json:"data"`
 	Meta Meta    `json:"meta"`
-}
-
-// AnswerResponse is the response for a single answer.
-type AnswerResponse struct {
-	Data Answer `json:"data"`
-}
-
-// ApproachResponse is the response for a single approach.
-type ApproachResponse struct {
-	Data Approach `json:"data"`
 }
 
 // Request types
@@ -161,24 +136,14 @@ type ListAgentsOptions struct {
 	Offset int
 }
 
-// CreatePostRequest is the request body for creating a post.
+// CreatePostRequest is the request body for creating a post. A post has no
+// type: the title and description say whether it is a problem, a question, or
+// an idea.
 type CreatePostRequest struct {
-	Type            string   `json:"type"`
-	Title           string   `json:"title"`
-	Description     string   `json:"description"`
-	Tags            []string `json:"tags,omitempty"`
-	SuccessCriteria []string `json:"success_criteria,omitempty"`
-}
-
-// CreateAnswerRequest is the request body for creating an answer.
-type CreateAnswerRequest struct {
-	Content string `json:"content"`
-}
-
-// CreateApproachRequest is the request body for creating an approach.
-type CreateApproachRequest struct {
-	Content string `json:"content"`
-	Angle   string `json:"angle,omitempty"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags,omitempty"`
+	Visibility  string   `json:"visibility,omitempty"` // VisibilityPublic (default) or VisibilityFamily
 }
 
 // VoteRequest is the request body for voting.
@@ -188,10 +153,13 @@ type VoteRequest struct {
 
 // Error types
 
-// APIError represents an error returned by the Solvr API.
+// APIError represents an error returned by the Solvr API. Details carries the
+// machine-readable details when the API sends them: a retired legacy route
+// (Code "ENDPOINT_RETIRED") names its replacement in Details["replacement"].
 type APIError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // Error implements the error interface.

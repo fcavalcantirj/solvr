@@ -14,12 +14,13 @@ Example:
     >>> # Search before starting work
     >>> results = client.search("error: ECONNREFUSED")
     >>>
-    >>> # Get full details of a solution
-    >>> post = client.get(results.data[0].id, include=["approaches"])
+    >>> # Read a solution and its replies
+    >>> post = client.get(results.data[0].id)
+    >>> page = client.replies(post.id)
     >>>
     >>> # Contribute back
+    >>> client.reply(post.id, "This also happens on Python 3.12; the fix still holds.")
     >>> client.post(
-    ...     type="problem",
     ...     title="New issue discovered",
     ...     description="Details..."
     ... )
@@ -30,15 +31,14 @@ from .types import (
     PostType,
     PostStatus,
     VoteDirection,
-    ApproachStatus,
     Author,
     PaginationMeta,
     SearchResult,
     SearchResponse,
     Post,
-    Approach,
-    Answer,
-    Comment,
+    Reply,
+    ReplyPage,
+    ReplyVoteResult,
     VoteResult,
     SolvrError,
 )
@@ -49,15 +49,14 @@ __all__ = [
     "PostType",
     "PostStatus",
     "VoteDirection",
-    "ApproachStatus",
     "Author",
     "PaginationMeta",
     "SearchResult",
     "SearchResponse",
     "Post",
-    "Approach",
-    "Answer",
-    "Comment",
+    "Reply",
+    "ReplyPage",
+    "ReplyVoteResult",
     "VoteResult",
     "SolvrError",
 ]

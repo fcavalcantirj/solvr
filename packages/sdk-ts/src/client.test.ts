@@ -133,27 +133,27 @@ describe('Solvr', () => {
       expect(result.data.id).toBe('post_123');
     });
 
-    it('should get post with includes', async () => {
+    it('should request the post alone (contributions are read with replies())', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ data: { id: 'post_123' } }),
       });
 
       const solvr = new Solvr({ apiKey });
+      // @ts-expect-error get() has no include option: read contributions with replies()
       await solvr.get('post_123', { include: ['approaches', 'answers'] });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.solvr.dev/v1/posts/post_123?include=approaches%2Canswers',
+        'https://api.solvr.dev/v1/posts/post_123',
         expect.any(Object)
       );
     });
   });
 
   describe('post', () => {
-    it('should create a new post', async () => {
+    it('should create a canonical post without a type', async () => {
       const input = {
-        type: 'problem' as const,
-        title: 'New Problem',
+        title: 'Race condition in async queries',
         description: 'Problem description',
         tags: ['typescript', 'api'],
       };
@@ -161,6 +161,7 @@ describe('Solvr', () => {
       const mockResponse = {
         data: {
           id: 'post_new',
+          type: 'post',
           ...input,
           status: 'open',
           upvotes: 0,
@@ -189,79 +190,140 @@ describe('Solvr', () => {
           }),
         })
       );
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body)).not.toHaveProperty('type');
       expect(result.data.id).toBe('post_new');
+      expect(result.data.type).toBe('post');
     });
-  });
 
-  describe('approach', () => {
-    it('should add approach to a problem', async () => {
-      const mockResponse = {
-        data: {
-          id: 'approach_1',
-          post_id: 'post_123',
-          angle: 'Test angle',
-          content: 'Test content',
-          status: 'proposed',
-          upvotes: 0,
-          downvotes: 0,
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
-        },
-      };
-
+    it('should send visibility when given', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockResponse),
+        json: () => Promise.resolve({ data: { id: 'post_new', type: 'post' } }),
       });
 
       const solvr = new Solvr({ apiKey });
-      const result = await solvr.approach('post_123', {
-        angle: 'Test angle',
-        content: 'Test content',
-      });
+      await solvr.post({ title: 'Family-only post', description: 'Body', visibility: 'family' });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.solvr.dev/v1/problems/post_123/approaches',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ angle: 'Test angle', content: 'Test content' }),
-        })
-      );
-      expect(result.data.id).toBe('approach_1');
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({
+        title: 'Family-only post',
+        description: 'Body',
+        visibility: 'family',
+      });
     });
   });
 
-  describe('answer', () => {
-    it('should add answer to a question', async () => {
-      const mockResponse = {
-        data: {
-          id: 'answer_1',
-          post_id: 'question_123',
-          content: 'Test answer',
-          is_accepted: false,
-          upvotes: 0,
-          downvotes: 0,
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
-        },
-      };
+  describe('reply', () => {
+    const mockReply = {
+      id: 'reply_1',
+      post_id: 'post_123',
+      author_type: 'agent',
+      author_id: 'agent_1',
+      body: 'Use a dedicated pool per worker.',
+      upvotes: 0,
+      downvotes: 0,
+      score: 0,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+    };
 
+    it('should reply to a post with a body', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockResponse),
+        json: () => Promise.resolve({ data: mockReply }),
       });
 
       const solvr = new Solvr({ apiKey });
-      const result = await solvr.answer('question_123', 'Test answer');
+      const result = await solvr.reply('post_123', 'Use a dedicated pool per worker.');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.solvr.dev/v1/questions/question_123/answers',
+        'https://api.solvr.dev/v1/posts/post_123/replies',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ content: 'Test answer' }),
+          body: JSON.stringify({ body: 'Use a dedicated pool per worker.' }),
         })
       );
-      expect(result.data.id).toBe('answer_1');
+      expect(result.data.id).toBe('reply_1');
+      expect(result.data.body).toBe('Use a dedicated pool per worker.');
+    });
+
+    it('should thread a reply under a parent reply', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { ...mockReply, id: 'reply_2', parent_reply_id: 'reply_1' } }),
+      });
+
+      const solvr = new Solvr({ apiKey });
+      const result = await solvr.reply('post_123', 'Confirmed: fixed it.', { parentReplyId: 'reply_1' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.solvr.dev/v1/posts/post_123/replies',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ body: 'Confirmed: fixed it.', parent_reply_id: 'reply_1' }),
+        })
+      );
+      expect(result.data.parent_reply_id).toBe('reply_1');
+    });
+
+    it('should list the replies of a post', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          data: [mockReply],
+          meta: { total: 3, has_more: true, next_cursor: 'cursor_abc' },
+        }),
+      });
+
+      const solvr = new Solvr({ apiKey });
+      const result = await solvr.replies('post_123');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.solvr.dev/v1/posts/post_123/replies',
+        expect.any(Object)
+      );
+      expect(result.data[0].id).toBe('reply_1');
+      expect(result.meta.next_cursor).toBe('cursor_abc');
+      expect(result.meta.has_more).toBe(true);
+    });
+
+    it('should page the replies of a post with a cursor and a limit', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: [], meta: { total: 3, has_more: false } }),
+      });
+
+      const solvr = new Solvr({ apiKey });
+      await solvr.replies('post_123', { cursor: 'cursor_abc', limit: 2 });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.solvr.dev/v1/posts/post_123/replies?cursor=cursor_abc&limit=2',
+        expect.any(Object)
+      );
+    });
+
+    it('should vote on a reply', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { voted: true, direction: 'up' } }),
+      });
+
+      const solvr = new Solvr({ apiKey });
+      const result = await solvr.voteReply('reply_1', 'up');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.solvr.dev/v1/replies/reply_1/vote',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ direction: 'up' }),
+        })
+      );
+      expect(result.data).toEqual({ voted: true, direction: 'up' });
+    });
+
+    it('should call no legacy contribution route', () => {
+      const solvr = new Solvr({ apiKey }) as unknown as Record<string, unknown>;
+      expect(solvr.approach).toBeUndefined();
+      expect(solvr.answer).toBeUndefined();
     });
   });
 
@@ -329,6 +391,34 @@ describe('Solvr', () => {
         expect((error as SolvrError).status).toBe(404);
         expect((error as SolvrError).code).toBe('NOT_FOUND');
       }
+    });
+
+    it('should expose the migration details of a retired route', async () => {
+      const details = {
+        retired_route: 'POST /v1/questions/{id}/answers',
+        replacement: 'POST /v1/posts/{id}/replies',
+        instructions: 'Send the answer text as the reply body.',
+      };
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 410,
+        json: () => Promise.resolve({
+          error: {
+            code: 'ENDPOINT_RETIRED',
+            message: 'POST /v1/questions/{id}/answers was retired with the canonical knowledge model; use POST /v1/posts/{id}/replies instead.',
+            details,
+          },
+        }),
+      });
+
+      const solvr = new Solvr({ apiKey, retries: 3 });
+
+      const error = await solvr.reply('post_123', 'x').catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(SolvrError);
+      expect((error as SolvrError).status).toBe(410);
+      expect((error as SolvrError).code).toBe('ENDPOINT_RETIRED');
+      expect((error as SolvrError).details).toEqual(details);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('should handle non-JSON error responses', async () => {

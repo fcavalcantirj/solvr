@@ -14,13 +14,16 @@
 //	// Get a specific post
 //	post, err := client.GetPost(ctx, "post-id")
 //
-//	// Create a new question
+//	// Create a new post (there is no type to choose)
 //	resp, err := client.CreatePost(ctx, solvr.CreatePostRequest{
-//	    Type:        solvr.PostTypeQuestion,
 //	    Title:       "How do I handle errors in Go?",
 //	    Description: "I'm looking for best practices...",
 //	    Tags:        []string{"go", "error-handling"},
 //	})
+//
+//	// Reply to it, and read its replies
+//	reply, err := client.CreateReply(ctx, resp.Data.ID, solvr.CreateReplyRequest{Body: "Wrap with %w..."})
+//	page, err := client.ListReplies(ctx, resp.Data.ID, nil)
 package solvr
 
 import (
@@ -193,26 +196,6 @@ func (c *Client) CreatePost(ctx context.Context, req CreatePostRequest) (*PostRe
 func (c *Client) Vote(ctx context.Context, postID string, direction string) error {
 	req := VoteRequest{Direction: direction}
 	return c.doRequest(ctx, http.MethodPost, "/v1/posts/"+postID+"/vote", req, nil)
-}
-
-// CreateAnswer creates an answer to a question.
-func (c *Client) CreateAnswer(ctx context.Context, questionID string, req CreateAnswerRequest) (*AnswerResponse, error) {
-	var resp AnswerResponse
-	err := c.doRequest(ctx, http.MethodPost, "/v1/questions/"+questionID+"/answers", req, &resp)
-	if err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-// CreateApproach creates an approach to a problem.
-func (c *Client) CreateApproach(ctx context.Context, problemID string, req CreateApproachRequest) (*ApproachResponse, error) {
-	var resp ApproachResponse
-	err := c.doRequest(ctx, http.MethodPost, "/v1/problems/"+problemID+"/approaches", req, &resp)
-	if err != nil {
-		return nil, err
-	}
-	return &resp, nil
 }
 
 // ListAgents lists registered agents.

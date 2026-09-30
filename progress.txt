@@ -1423,3 +1423,148 @@ REMAINING FOR idx 52 (next slices, in order):
 git status at journal time [REAL]: 8 M (SPEC.md, discovery.go, legacy_write_retirement.go, 5 frontend
   components/api files) + 5 ?? (2 Go files, 3 frontend files) + this progress.txt entry; spec.json unchanged,
   idx 52 passes stays false.
+
+2026-09-30 15:20 — Task idx 52 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Route existing agent integrations into the canonical knowledge model during a defined transition"
+SLICE 3 of N: step 2 for the three SDKs (packages/sdk-ts, packages/sdk-python, packages/sdk-go) — they now
+create canonical posts (no type) and replies — plus the client half of step 6 for those SDKs, proved live:
+an old (HEAD) SDK call gets the migration error and writes nothing; a new SDK creates canonical rows.
+Remaining step 2 clients: mcp-server, packages/cli, cli (Go), skill/scripts/solvr.sh. Step 5: idx 73.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 52, 53, 67, 68, 73, 74, 77-95, 97, 98;
+  no open URGENT. idx 24 stays skipped (acceptance task; needs idx 78). idx 52 is the first buildable open
+  task; slice 2's REMAINING list put step 2 (first-party clients) next. Tree clean at start [REAL].
+
+WHAT CHANGED [REAL, git status --porcelain: 13 M + 2 ??; git diff --stat 676+/618- on tracked files]:
+  Only packages/sdk-*. No backend, frontend, SPEC.md, migration or schema change.
+  packages/sdk-ts:
+  M src/client.ts: post(input) unchanged route, input has no type; NEW reply(postId, body, {parentReplyId})
+    -> POST /v1/posts/{id}/replies {body, parent_reply_id?}; NEW replies(postId, {cursor, limit}) -> GET
+    /v1/posts/{id}/replies[?cursor=&limit=]; NEW voteReply(replyId, direction) -> POST /v1/replies/{id}/vote;
+    REMOVED approach() (POST /v1/problems/{id}/approaches) and answer() (POST /v1/questions/{id}/answers);
+    get(id) lost the include option (GET /v1/posts/{id} ignores ?include= [REAL, handlers/posts.go Get reads
+    no query]); SolvrError now carries error.details from the body (the constructor already accepted it).
+  M src/types.ts: PostType += 'post', PostVisibility; CreatePostInput {title, description, tags?,
+    visibility?} (type and success_criteria gone); Reply, ReplyOptions, ReplyResponse, ListRepliesOptions,
+    RepliesResponse {data, meta{total, has_more, next_cursor?}}, ReplyVoteResponse {voted, direction} —
+    shapes read from models/reply.go and handlers/replies.go this session; GetOptions, Approach, Answer,
+    Comment, CreateApproachInput, CreateAnswerInput, ApproachResponse, AnswerResponse and Post.approaches/
+    answers/comments removed. M src/index.ts exports; M README.md examples/API reference + a retired-route note.
+  packages/sdk-python:
+  M solvr/client.py: post(title, description, tags=None, visibility=None) (type and success_criteria gone);
+    NEW reply(post_id, body, parent_reply_id=None), replies(post_id, cursor=None, limit=None) -> ReplyPage,
+    vote_reply(reply_id, direction) -> ReplyVoteResult; REMOVED approach(), answer(), _parse_approach,
+    _parse_answer; get(id) lost include; SolvrError gets details. M solvr/types.py: PostType.POST; Reply,
+    ReplyPage, ReplyVoteResult; ApproachStatus, Approach, Answer, Comment and Post.approaches/answers/comments
+    removed. M solvr/__init__.py exports; M README.md.
+  packages/sdk-go:
+  A replies.go (112): Reply, CreateReplyRequest {Body, ParentReplyID *string}, ReplyResponse,
+    ListRepliesOptions {Cursor, Limit}, RepliesMeta {Total, HasMore, NextCursor}, RepliesResponse, ReplyVote,
+    ReplyVoteResponse; CreateReply, ListReplies, VoteReply.
+  M client.go: REMOVED CreateAnswer and CreateApproach; package doc example without Type.
+  M types.go: CreatePostRequest {Title, Description, Tags, Visibility} (Type, SuccessCriteria gone);
+    PostTypePost, VisibilityPublic/VisibilityFamily; APIError.Details map[string]any; Answer, Approach,
+    AnswerResponse, ApproachResponse, CreateAnswerRequest, CreateApproachRequest removed.
+
+EXISTING TESTS THAT DESCRIBED THE REPLACED BEHAVIOR (golden rule a-d; every replacement PASSES [TEST]):
+  sdk-ts src/client.test.ts:
+  - "get > should get post with includes" asserted get('post_123', {include:['approaches','answers']})
+    requested '/v1/posts/post_123?include=approaches%2Canswers'. Replaced by "should request the post alone
+    (contributions are read with replies())" (the same call now requests /v1/posts/post_123) + the
+    reply-list tests below.
+  - "post > should create a new post" asserted the body JSON.stringify({type:'problem', title, description,
+    tags}) is POSTed to /v1/posts. Replaced by "should create a canonical post without a type" (same route
+    and headers, body has no type, response type 'post') + "should send visibility when given".
+  - "approach > should add approach to a problem" asserted POST /v1/problems/post_123/approaches {angle,
+    content}; "answer > should add answer to a question" asserted POST /v1/questions/question_123/answers
+    {content}. Both routes answer 410 since slice 1. Replaced by "reply > should reply to a post with a
+    body", "should thread a reply under a parent reply", "should list the replies of a post", "should page
+    the replies ... with a cursor and a limit", "should vote on a reply", "should call no legacy
+    contribution route", and error handling "should expose the migration details of a retired route".
+  sdk-python tests/test_client.py:
+  - TestGet.test_get_with_includes asserted "include=approaches,answers" in the request URL. Replaced by
+    test_get_takes_no_include (TypeError) + TestReply.test_list_replies/test_page_replies.
+  - TestPost.test_create_post asserted post(type="problem", ...) returns id and tags. Replaced by
+    test_create_post_without_type (exact body, no type; id/type 'post'/tags), test_create_post_with_visibility,
+    test_post_takes_no_type.
+  - TestApproach.test_add_approach (POST /v1/problems/post_123/approaches, id/angle) and
+    TestAnswer.test_add_answer (POST /v1/questions/question_123/answers, id/content). Replaced by TestReply
+    (test_reply, test_threaded_reply, test_list_replies, test_page_replies, test_vote_reply,
+    test_no_legacy_contribution_methods) + TestErrorHandling.test_retired_route_details.
+  sdk-go client_test.go:
+  - TestCreatePost asserted the decoded request had Type "question". It now asserts the body has no "type"
+    key and equals {title, description, tags} exactly, and the response type is "post"; TestCreatePostWith
+    Visibility (replies_test.go) covers visibility.
+  - TestCreateAnswer (POST /v1/questions/q-123/answers, ID answer-1) and TestCreateApproach (POST
+    /v1/problems/p-123/approaches, ID approach-1) REMOVED with their methods. Replaced in replies_test.go by
+    TestCreateReply, TestCreateThreadedReply, TestListReplies, TestListRepliesWithCursorAndLimit,
+    TestVoteReply, TestAPIErrorCarriesRetiredRouteDetails, TestClientHasNoLegacyContributionMethods.
+  No other existing test changed.
+
+VERIFICATION:
+  Deps [REAL]: packages/sdk-ts had no node_modules -> `npm ci` (218 packages); packages/sdk-python got a
+    .venv (gitignored) with `pip install -e '.[dev]'`. Neither is committed.
+  BASELINE on HEAD [TEST]: ts 20 passed, py 19 passed, go ok (/tmp/solvr_idx52_s3_{ts,py,go}_base.log).
+  RED [TEST]: ts 8 failed/18 passed (/tmp/solvr_idx52_s3_ts_red.log); py 11 failed/15 passed
+    (/tmp/solvr_idx52_s3_py_red.log); go build failed "client.CreateReply undefined", "undefined:
+    CreateReplyRequest" (/tmp/solvr_idx52_s3_go_red.log).
+  GREEN [TEST]: ts 26 passed (/tmp/solvr_idx52_s3_ts_final.log); py 26 passed, 0 skipped
+    (/tmp/solvr_idx52_s3_py_final.log); go 31 --- PASS, 0 FAIL, 0 SKIP (/tmp/solvr_idx52_s3_go_final.log);
+    go vet and gofmt -l clean on sdk-go.
+  MUTATIONS [TEST], each source restored from /tmp/solvr_idx52_s3_*.bak and cmp-verified:
+    ts reply drops parent_reply_id -> FAIL "should thread a reply under a parent reply" (mutT.log);
+    py details dropped from SolvrError -> FAIL test_retired_route_details (mutP.log);
+    go ListReplies sends "after" instead of "cursor" -> FAIL TestListRepliesWithCursorAndLimit (mutG.log).
+  LIVE PROBE (step 6 client half) [REAL, /tmp/solvr_idx52_s3_probe.log, driver /tmp/solvr_idx52_s3_probe/
+    drive.sh]: API binary built from this tree (`go build ./cmd/api`), run on :8095 against
+    DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker solvr-postgres,
+    schema_migrations 114 dirty=f), GROQ/VOYAGE/RESEND/IPFS unset; stopped afterwards (:8095 free). Per SDK,
+    two freshly registered agents: the NEW SDK (A) created a post without type -> API and DB type 'post'
+    (status pending_review, no moderator configured), a top-level reply and a reply threaded under it (DB:
+    parent = r1, legacy_type null); B paged the replies with limit=1 (has_more true, next_cursor) and the
+    cursor (the second reply), and upvoted r1 -> {voted:true, direction:up}, DB upvotes=1. The OLD SDK
+    (git archive HEAD of packages/sdk-{ts,python,go}; the Python import path was checked to be the HEAD copy)
+    called answer()/approach() (Go: CreateAnswer/CreateApproach) on that post as agent A -> every call
+    SolvrError/APIError 410 ENDPOINT_RETIRED "POST /v1/questions/{id}/answers was retired with the
+    canonical knowledge model; use POST /v1/posts/{id}/replies instead." (and the approaches equivalent);
+    replies on the post stayed 2; legacy tables before == after: "25 answers, 541 approaches, 6 responses,
+    4948 comments" -> LEGACY TABLES UNCHANGED. All three SDKs, same result.
+  Not run: backend and frontend suites (nothing under backend/ or frontend/ changed). check-file-size.sh ->
+    "Found 34 file(s) exceeding 800 lines" (unchanged; the largest touched file is sdk-go/client_test.go,
+    632) (/tmp/solvr_idx52_s3_filesize.log).
+
+PRE-EXISTING, NOT MINE [TEST, same command on HEAD via git stash of the package sources]:
+  - sdk-ts `npx tsc --noEmit` fails on HEAD with the same 2 errors (response.json() is `unknown` under lib
+    ES2022: "Type 'unknown' is not assignable to type '{ error?: ...}'" and "... to type 'T'")
+    (/tmp/solvr_idx52_s3_ts_tsc_head.log vs _tsc.log). Not fixed (not asked).
+  - sdk-python mypy fails on HEAD with the same 1 error ("Returning Any from function declared to return
+    dict[str, Any]" in _request) (/tmp/solvr_idx52_s3_py_mypy_head.log). Not fixed.
+
+INCIDENT [REAL]: the first Python RED run had two new tests (test_get_takes_no_include,
+  test_post_takes_no_type) without @responses.activate, so the HEAD SDK code they exercised sent two requests
+  to the DEFAULT base URL https://api.solvr.dev with the fake test key "solvr_sk_test_key": GET
+  /v1/posts/post_123?include=approaches,answers -> 404 NOT_FOUND, and POST /v1/posts -> 401 INVALID_API_KEY
+  (quoted from /tmp/solvr_idx52_s3_py_red.log). Nothing could be written (invalid key). Both tests (and
+  test_no_legacy_contribution_methods) now carry @responses.activate, so an unregistered URL raises instead
+  of reaching the network. Note for later iterations: in the SDK suites a Python test without
+  @responses.activate reaches production.
+
+LIMITS / NOT DONE [REAL unless stated]:
+  - SPEC.md's SDK usage section (around line 2985) still shows typed posts and get(..., include) for the
+    Python/TS SDKs, and a Go example (`solvr.New`, `client.Get`) that matches no SDK API. Not edited: the
+    rules allow SPEC edits only where a task step asks; left for idx 78 (SDK/CLI/MCP/skill consistency).
+  - SearchOptions.type filters (problem|question|idea) in the three SDKs are untouched: search belongs to
+    idx 53, and the backend search still accepts them.
+  - No PATCH/DELETE reply methods in the SDKs (not needed to create canonical posts and replies).
+  - The SDK package versions stay 1.0.0; nothing is published (publishing is the owner's).
+
+REMAINING FOR idx 52 (next slices, in order):
+  step 2: mcp-server/src/api.ts + tools.ts (solvr_post type, answers/approaches), packages/cli (post <type>,
+    answer/approach), cli (Go: answer.go -> POST questions/{id}/answers, get.go reads approaches/answers,
+    post.go type), skill/scripts/solvr.sh (post <type>, answer :225, approach :262), each with the same
+    live old/new probe.
+  step 5: redirects exist (frontend/middleware.ts 308); legacy READ routes follow idx 73.
+
+git status at journal time [REAL]: 13 M (above) + 2 ?? (packages/sdk-go/replies.go, replies_test.go) + this
+  progress.txt entry; spec.json unchanged, idx 52 passes stays false.

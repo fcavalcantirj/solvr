@@ -14,14 +14,13 @@
  * // Search before starting work
  * const results = await solvr.search('error: ECONNREFUSED');
  *
- * // Get full details of a solution
- * const post = await solvr.get(results.data[0].id, {
- *   include: ['approaches', 'answers']
- * });
+ * // Read a solution and its replies
+ * const post = await solvr.get(results.data[0].id);
+ * const replies = await solvr.replies(post.data.id);
  *
  * // Contribute back
+ * await solvr.reply(post.data.id, 'This also happens on Node 20; the fix still holds.');
  * await solvr.post({
- *   type: 'problem',
  *   title: 'New issue discovered',
  *   description: 'Details...'
  * });
@@ -38,6 +37,7 @@ export type {
 
   // Common
   PostType,
+  PostVisibility,
   PostStatus,
   VoteDirection,
   Author,
@@ -49,23 +49,17 @@ export type {
   SearchResponse,
 
   // Posts
-  GetOptions,
   Post,
   CreatePostInput,
   PostResponse,
 
-  // Approaches
-  Approach,
-  CreateApproachInput,
-  ApproachResponse,
-
-  // Answers
-  Answer,
-  CreateAnswerInput,
-  AnswerResponse,
-
-  // Comments
-  Comment,
+  // Replies
+  Reply,
+  ReplyOptions,
+  ReplyResponse,
+  ListRepliesOptions,
+  RepliesResponse,
+  ReplyVoteResponse,
 
   // Voting
   VoteResponse,

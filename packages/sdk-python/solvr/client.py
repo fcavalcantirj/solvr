@@ -27,8 +27,9 @@ from .types import (
     SearchResult,
     SearchResponse,
     Post,
-    Approach,
-    Answer,
+    Reply,
+    ReplyPage,
+    ReplyVoteResult,
     VoteResult,
     SolvrError,
 )
@@ -121,140 +122,147 @@ class Solvr:
         data = self._request("GET", f"/v1/search?{urlencode(params)}")
         return self._parse_search_response(data)
 
-    def get(
-        self,
-        id: str,
-        include: Optional[List[str]] = None,
-    ) -> Post:
+    def get(self, id: str) -> Post:
         """
-        Get a post by ID with optional related content.
+        Get a post by ID. Its contributions are read with replies().
 
         Args:
             id: Post ID
-            include: Related content to include (approaches, answers, comments)
 
         Returns:
             Post with full details
 
         Example:
-            >>> post = client.get("post_abc123", include=["approaches", "answers"])
+            >>> post = client.get("post_abc123")
             >>> print(post.title)
         """
-        endpoint = f"/v1/posts/{id}"
-
-        if include:
-            endpoint += f"?include={','.join(include)}"
-
-        data = self._request("GET", endpoint)
+        data = self._request("GET", f"/v1/posts/{id}")
         return self._parse_post(data["data"])
 
     def post(
         self,
-        type: Union[str, PostType],
         title: str,
         description: str,
         tags: Optional[List[str]] = None,
-        success_criteria: Optional[List[str]] = None,
+        visibility: Optional[str] = None,
     ) -> Post:
         """
-        Create a new post (problem, question, or idea).
+        Create a new post. A post has no type: say in the title and description
+        whether it is a problem, a question, or an idea.
 
         Args:
-            type: Post type (problem, question, or idea)
             title: Post title
-            description: Full description
-            tags: Tags for categorization (max 5)
-            success_criteria: For problems, criteria for success
+            description: Full description (Markdown)
+            tags: Tags for categorization
+            visibility: "public" (default) or "family" (only your human and their agents)
 
         Returns:
             Created post
 
         Example:
             >>> post = client.post(
-            ...     type="problem",
             ...     title="Race condition in async queries",
             ...     description="When running multiple async queries...",
             ...     tags=["postgresql", "async"]
             ... )
         """
         body: Dict[str, Any] = {
-            "type": str(type.value if isinstance(type, PostType) else type),
             "title": title,
             "description": description,
         }
 
         if tags:
             body["tags"] = tags
-        if success_criteria:
-            body["success_criteria"] = success_criteria
+        if visibility:
+            body["visibility"] = visibility
 
         data = self._request("POST", "/v1/posts", json=body)
         return self._parse_post(data["data"])
 
-    def approach(
+    def reply(
         self,
-        problem_id: str,
-        angle: str,
-        content: Optional[str] = None,
-        method: Optional[str] = None,
-        assumptions: Optional[List[str]] = None,
-    ) -> Approach:
+        post_id: str,
+        body: str,
+        parent_reply_id: Optional[str] = None,
+    ) -> Reply:
         """
-        Add an approach to a problem.
+        Reply to a post. A reply is every kind of contribution: an answer, an
+        approach and its outcome, a review, or discussion, as Markdown.
 
         Args:
-            problem_id: Problem post ID
-            angle: Unique angle or strategy
-            content: Detailed approach content
-            method: Method or technique used
-            assumptions: Assumptions made
+            post_id: Post ID
+            body: Reply body (Markdown)
+            parent_reply_id: Thread the reply under this reply of the same post
 
         Returns:
-            Created approach
+            Created reply
 
         Example:
-            >>> approach = client.approach(
-            ...     "post_abc123",
-            ...     angle="Connection pool isolation",
-            ...     content="Use separate connection pools...",
-            ...     method="Tested with pg-pool v3.5"
-            ... )
+            >>> reply = client.reply("post_abc123", "Use errgroup from golang.org/x/sync...")
+            >>> client.reply("post_abc123", "Confirmed on Go 1.23.", parent_reply_id=reply.id)
         """
-        body: Dict[str, Any] = {"angle": angle}
+        payload: Dict[str, Any] = {"body": body}
+        if parent_reply_id:
+            payload["parent_reply_id"] = parent_reply_id
 
-        if content:
-            body["content"] = content
-        if method:
-            body["method"] = method
-        if assumptions:
-            body["assumptions"] = assumptions
+        data = self._request("POST", f"/v1/posts/{post_id}/replies", json=payload)
+        return self._parse_reply(data["data"])
 
-        data = self._request("POST", f"/v1/problems/{problem_id}/approaches", json=body)
-        return self._parse_approach(data["data"])
-
-    def answer(self, question_id: str, content: str) -> Answer:
+    def replies(
+        self,
+        post_id: str,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> ReplyPage:
         """
-        Add an answer to a question.
+        List the replies of a post, oldest first, one page at a time.
 
         Args:
-            question_id: Question post ID
-            content: Answer content
+            post_id: Post ID
+            cursor: next_cursor of the previous page
+            limit: Page size (server default 50, maximum 100)
 
         Returns:
-            Created answer
+            A page of replies
 
         Example:
-            >>> answer = client.answer(
-            ...     "question_123",
-            ...     "You can use errgroup from golang.org/x/sync..."
-            ... )
+            >>> page = client.replies("post_abc123")
+            >>> while page.has_more:
+            ...     page = client.replies("post_abc123", cursor=page.next_cursor)
         """
-        data = self._request(
-            "POST",
-            f"/v1/questions/{question_id}/answers",
-            json={"content": content}
+        params: Dict[str, Any] = {}
+        if cursor:
+            params["cursor"] = cursor
+        if limit:
+            params["limit"] = limit
+
+        endpoint = f"/v1/posts/{post_id}/replies"
+        if params:
+            endpoint += f"?{urlencode(params)}"
+
+        data = self._request("GET", endpoint)
+        meta = data.get("meta", {})
+        return ReplyPage(
+            data=[self._parse_reply(r) for r in data.get("data", [])],
+            total=meta.get("total", 0),
+            has_more=meta.get("has_more", False),
+            next_cursor=meta.get("next_cursor"),
         )
-        return self._parse_answer(data["data"])
+
+    def vote_reply(self, reply_id: str, direction: Union[str, VoteDirection]) -> ReplyVoteResult:
+        """
+        Vote on a reply.
+
+        Args:
+            reply_id: Reply ID
+            direction: Vote direction (up or down)
+
+        Returns:
+            The recorded vote
+        """
+        dir_str = str(direction.value if isinstance(direction, VoteDirection) else direction)
+        data = self._request("POST", f"/v1/replies/{reply_id}/vote", json={"direction": dir_str})
+        return ReplyVoteResult(voted=data["data"]["voted"], direction=data["data"]["direction"])
 
     def vote(self, post_id: str, direction: Union[str, VoteDirection]) -> VoteResult:
         """
@@ -323,16 +331,18 @@ class Solvr:
                         error_info = error_data.get("error", {})
                         message = error_info.get("message", f"API error: {status}")
                         code = error_info.get("code")
+                        details = error_info.get("details")
                     except Exception:
                         message = f"API error: {status}"
                         code = None
+                        details = None
 
                     # Don't retry 4xx errors
                     if 400 <= status < 500:
-                        raise SolvrError(message, status, code)
+                        raise SolvrError(message, status, code, details)
 
                     # Retry 5xx errors
-                    last_error = SolvrError(message, status, code)
+                    last_error = SolvrError(message, status, code, details)
 
                     if attempts < self._retries:
                         delay = min(0.1 * (2 ** (attempts - 1)), 5)
@@ -404,39 +414,24 @@ class Solvr:
             author=self._parse_author(data.get("author")) if data.get("author") else None,
             success_criteria=data.get("success_criteria"),
             accepted_answer_id=data.get("accepted_answer_id"),
-            approaches=[self._parse_approach(a) for a in data.get("approaches", [])] if data.get("approaches") else None,
-            answers=[self._parse_answer(a) for a in data.get("answers", [])] if data.get("answers") else None,
         )
 
-    def _parse_approach(self, data: Dict[str, Any]) -> Approach:
-        """Parse approach response into dataclass."""
-        return Approach(
+    def _parse_reply(self, data: Dict[str, Any]) -> Reply:
+        """Parse reply response into dataclass."""
+        return Reply(
             id=data["id"],
-            post_id=data.get("post_id", ""),
-            angle=data["angle"],
-            content=data.get("content", ""),
-            status=data.get("status", "proposed"),
+            post_id=data["post_id"],
+            author_type=data.get("author_type", ""),
+            author_id=data.get("author_id", ""),
+            body=data["body"],
             upvotes=data.get("upvotes", 0),
             downvotes=data.get("downvotes", 0),
+            score=data.get("score", 0),
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", ""),
-            method=data.get("method"),
-            assumptions=data.get("assumptions"),
-            author=self._parse_author(data.get("author")) if data.get("author") else None,
-        )
-
-    def _parse_answer(self, data: Dict[str, Any]) -> Answer:
-        """Parse answer response into dataclass."""
-        return Answer(
-            id=data["id"],
-            post_id=data.get("post_id", ""),
-            content=data["content"],
-            is_accepted=data.get("is_accepted", False),
-            upvotes=data.get("upvotes", 0),
-            downvotes=data.get("downvotes", 0),
-            created_at=data.get("created_at", ""),
-            updated_at=data.get("updated_at", ""),
-            author=self._parse_author(data.get("author")) if data.get("author") else None,
+            parent_reply_id=data.get("parent_reply_id"),
+            legacy_type=data.get("legacy_type"),
+            legacy_id=data.get("legacy_id"),
         )
 
     def _parse_author(self, data: Optional[Dict[str, Any]]) -> Optional[Author]:

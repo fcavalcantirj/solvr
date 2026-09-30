@@ -11014,3 +11014,17 @@ solvr_cutover_rehearsal. Plan/review: docs/handovers/2026-09-29-solvr-v13-cutove
   deleting reply votes it completes. Down loses native replies, keeps rewritten /posts/ notification links (old
   frontend has no /posts route), and leaves 0/78 room token hashes valid. Old code then serves with 0 5xx.
 No production write. No code change in the main tree. The production runner (cmd/cutover) does not exist yet.
+
+2026-09-29 — LEDGER NOTE (owner session, loop stopped): task numbering restored.
+    A new task was briefly inserted at index 24, which shifted every task after it by one and made
+    every historical "idx N" reference in this journal point at the wrong task (idx 93, the
+    cutover, briefly became idx 94). That is now undone: the new task was moved to the END of
+    spec.json as idx 96, so every index written in this journal and in the handovers is correct
+    again as written. idx 68, 76, 77 and 93 all resolve to what they always did.
+    The new task keeps priority without moving: its description starts with the URGENT marker,
+    which the loop prompt (step 2) already honours ahead of top-to-bottom order.
+    [REAL] verified after the move: 97 tasks, 69 passing, schema still
+    {category,description,passes,steps}, idx 93 = "Cut over the knowledge model with a verified
+    recovery path", idx 96 = the URGENT statistics task, and it is what the loop picks next.
+    RULE GOING FORWARD: never insert into the middle of spec.json. Append, and use the URGENT
+    marker for priority — indices are referenced by every journal entry ever written.

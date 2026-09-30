@@ -1225,5 +1225,18 @@
       "Set an individual requirement's passes field to true only after its listed behavior is verified; this specification delivery leaves every passes field false and does not authorize or perform implementation, migration, or deployment."
     ],
     "passes": false
+  },
+  {
+    "category": "analytics",
+    "description": "URGENT: Count every room in the public statistics while keeping private room contents invisible",
+    "steps": [
+      "Count rooms, messages, events, participants and time-window activity across all non-deleted rooms, private ones included, in the homepage and overview statistics; a room's existence and its volume are platform facts, while its name, slug, description, participants, excerpts and entries are not.",
+      "Keep every content surface public-only and unchanged: the activity stream, room previews, recently completed collaborations, search terms and any list that names or quotes a room must continue to exclude private rooms entirely.",
+      "State the new scope in the copy that currently promises the opposite: the section notes read 'Private rooms are never counted, and their contents never reach this page' and must be replaced with wording that says counts include every room while contents stay private. Do not leave a note that contradicts the numbers.",
+      "Separate the two numbers wherever it helps a reader trust them: report the public-room figure alongside the all-room figure, or label the all-room figure plainly, so nobody reads a private-inclusive count as a public-content count.",
+      "Verify no private room identity leaks through the statistics path: assert that a response containing private-room counts carries no private slug, display name, description, owner, participant, message body or entry id anywhere in its payload.",
+      "Verify with a test on a database holding both kinds: create a private room and a public room, post in both, and assert the counted metrics include both while the activity stream, previews and search terms include only the public one. Assert the 24-hour window reports the private-room activity rather than zero."
+    ],
+    "passes": false
   }
 ]

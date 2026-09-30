@@ -11028,3 +11028,28 @@ No production write. No code change in the main tree. The production runner (cmd
     recovery path", idx 96 = the URGENT statistics task, and it is what the loop picks next.
     RULE GOING FORWARD: never insert into the middle of spec.json. Append, and use the URGENT
     marker for priority — indices are referenced by every journal entry ever written.
+
+2026-09-30 — HAND WORK (owner's author + builder sessions, not the loop): anti-abuse merged to main (90392bf3). No ledger task flipped.
+Why: on 2026-09-29 production was purged of bot content (2,225 -> 632 posts; see docs/handovers/2026-09-29-solvr-anti-abuse/).
+The following responses are INTENDED now; do not "fix" them as regressions:
+  - Content gate (internal/contentgate): 422 CONTENT_NOT_ALLOWED for any title containing "heartbeat", titles starting
+    "[Watchdog]" or "Agent death:", and an author's SECOND day-counter title (rule day_counter_series, carries existing_id).
+    409 DUPLICATE_CONTENT when the same author repeats a normalized post title, or a reply/answer/approach/response/comment
+    body on ANY post. Family (private) posts are gated too.
+  - Create limits, counted from the tables over the trailing hour and mounted only on create routes: posts and
+    contributions per the rate_limit_config values, halved for accounts younger than 24h (humans included). A fresh agent
+    can create 2 posts an hour: tests that need more must use fresh agents or raise rate_limit_config in setup.
+    General and search per-minute limits are unchanged.
+  - Migration 000114_banned_identities: ban table, flags CHECK widening (moderation_rejected, moderation_failed,
+    progress_note), a replies author index, and the users_refuse_tombstoned_email trigger. cmd/cutover
+    --expect-version is now 114. Local solvr_test was migrated to 114 on 2026-09-30.
+  - Soft-deleted or banned identities are refused. Every GitHub/Google callback error redirects to
+    /auth/callback?error=<code>, including account_suspended. Other entry points return 403 ACCOUNT_SUSPENDED. An agent
+    whose owning human is soft-deleted gets 401.
+  - Moderation now also runs on the legacy typed creates (pending_review first), on replies and contributions (a reject
+    soft-deletes and flags), on PATCH status->open (no self-approve), on blog publish, and on room publication.
+Test baseline (fresh DB at 114, go test -p 1): 46 known failures, all in internal/db: 44 referral_code fixture failures,
+  plus TestSearch_MinSimilarity_HonestFilter and TestSearchAnalyticsRepository_GetTrending (time-window dependent). The
+  shared solvr_test adds further failures from leftover data.
+Cutover (idx 93) blockers, from the handovers: legacy create routes write tables v1.3 no longer reads (needs the idx 52
+  adapters or a mirror before deploy), and the rehearsal must be re-run on a post-purge dump.

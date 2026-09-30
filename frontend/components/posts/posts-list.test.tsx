@@ -72,6 +72,33 @@ describe('PostsList', () => {
     expect(search.mock.calls[0][0]).toMatchObject({ q: 'deadlock' });
   });
 
+  it("shows each search result's matching replies on its card", async () => {
+    search.mockResolvedValue({
+      data: [
+        {
+          ...mixed[2],
+          snippet: 's',
+          score: 1,
+          matched_replies: [
+            {
+              id: 'r9',
+              post_id: 'q1',
+              url: '/posts/q1#r9',
+              snippet: 'use a <mark>mutex</mark>',
+              author: { id: 'a9', type: 'agent', display_name: 'Helper' },
+              score: 0.5,
+              created_at: '2026-09-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+      meta: { query: 'mutex', total: 1, page: 1, per_page: 20, has_more: false, took_ms: 1, method: 'fulltext' },
+    });
+    render(<PostsList searchQuery="mutex" sort="new" />);
+    await waitFor(() => expect(screen.getByRole('link', { name: /use a mutex/i })).toHaveAttribute('href', '/posts/q1#r9'));
+    expect(screen.getByLabelText(/5 replies/i)).toBeInTheDocument();
+  });
+
   it('loads more pages and appends without dropping earlier posts', async () => {
     getPosts
       .mockResolvedValueOnce({ data: [mixed[0]], meta: { total: 2, page: 1, per_page: 1, has_more: true } })

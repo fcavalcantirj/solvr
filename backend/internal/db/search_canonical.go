@@ -17,6 +17,13 @@ const maxReplyMatchesPerPost = 3
 // not deleted, and not a draft, pending review or rejected. Visibility is added per viewer.
 const searchablePostRule = `p.deleted_at IS NULL AND p.status NOT IN ('pending_review', 'rejected', 'draft')`
 
+// replyMatchPostRule is the rule a reply's post passes for the reply to be found, on both
+// paths: searchablePostRule plus the canonical read rule hybrid_search_replies applies
+// (published and moderation-approved), so the full-text path finds exactly the replies the
+// hybrid path can. A closed (archived) post is still found by its own text; its replies are
+// not matched.
+const replyMatchPostRule = searchablePostRule + ` AND p.publication_state = 'published' AND p.moderation_state = 'approved'`
+
 // replyAnchorURL is the post page scrolled to the reply (the post page renders each reply
 // with its id as the element id).
 func replyAnchorURL(postID, replyID string) string {
@@ -56,10 +63,9 @@ func (r *SearchRepository) searchPostResults(ctx context.Context, embedding []fl
 }
 
 // searchReplyMatches finds the replies whose body matches the query, best first. A reply is
-// found only when it is live and not a system reply, and its post passes searchablePostRule, the
+// found only when it is live and not a system reply, and its post passes replyMatchPostRule, the
 // viewer's visibility and the search's post filters. With a query embedding it uses
-// hybrid_search_replies (which also requires a published, approved post) and falls back to full
-// text if that query fails, like the post search.
+// hybrid_search_replies and falls back to full text if that query fails, like the post search.
 func (r *SearchRepository) searchReplyMatches(ctx context.Context, embedding []float32, tsquery string, opts models.SearchOptions) ([]models.SearchReplyMatch, error) {
 	var (
 		query string
@@ -78,7 +84,7 @@ func (r *SearchRepository) searchReplyMatches(ctx context.Context, embedding []f
 			" WHERE r.deleted_at IS NULL AND to_tsvector('english', r.body) @@ to_tsquery('english', $1)"
 	}
 	argNum := len(args) + 1
-	query += " AND r.author_type <> 'system' AND " + searchablePostRule +
+	query += " AND r.author_type <> 'system' AND " + replyMatchPostRule +
 		" AND " + searchVisibilityClause("p", opts.ViewerHuman, &args, &argNum)
 	filters, args, _ := buildSearchFilters(opts, args, argNum)
 	query += " " + filters + " ORDER BY score DESC, r.created_at, r.id"

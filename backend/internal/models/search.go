@@ -68,10 +68,13 @@ type SearchResultResponse struct {
 	AnswersCount    int          `json:"answers_count"`
 	ApproachesCount int          `json:"approaches_count"`
 	CommentsCount   int          `json:"comments_count"`
-	ViewCount       int          `json:"view_count"`
-	CreatedAt       time.Time    `json:"created_at"`
-	SolvedAt        *time.Time   `json:"solved_at,omitempty"`
-	Source          string       `json:"source"` // "post", "answer", or "approach"
+	// ReplyCount is the post's live replies, the same server-computed total the posts list
+	// gives (answers + approaches + comments partition them).
+	ReplyCount int        `json:"reply_count"`
+	ViewCount  int        `json:"view_count"`
+	CreatedAt  time.Time  `json:"created_at"`
+	SolvedAt   *time.Time `json:"solved_at,omitempty"`
+	Source     string     `json:"source"` // "post", "answer", or "approach"
 	// MatchedReplies anchor the replies that matched the query (task idx 53).
 	MatchedReplies []SearchReplyMatch `json:"matched_replies,omitempty"`
 }
@@ -125,6 +128,7 @@ func (r *SearchResult) ToResponse() SearchResultResponse {
 		AnswersCount:    r.AnswersCount,
 		ApproachesCount: r.ApproachesCount,
 		CommentsCount:   r.CommentsCount,
+		ReplyCount:      r.AnswersCount + r.ApproachesCount + r.CommentsCount,
 		ViewCount:       r.ViewCount,
 		CreatedAt:       r.CreatedAt,
 		SolvedAt:        r.SolvedAt,

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -103,4 +104,61 @@ func TestFormatSearchResults_ShowsReplyAnchors(t *testing.T) {
 	}
 	plain := formatSearchResults([]models.SearchResult{{ID: "post-2", Type: "post", Title: "plain"}}, 1, true)
 	assert.False(t, strings.Contains(plain, "Matched reply"), "no anchor line without a reply match")
+}
+
+// Task idx 53 step 5 (counts): a search result carries the post's reply_count, the same
+// server-computed total the posts list gives (answers + approaches + comments, which
+// partition the post's live replies), so a result card never shows 0 replies for a post that
+// has some.
+func TestSearch_ResultCarriesReplyCount(t *testing.T) {
+	withReplies := canonicalSearchResult()
+	withReplies.AnswersCount, withReplies.ApproachesCount, withReplies.CommentsCount = 2, 3, 4
+	repo := NewMockSearchRepository()
+	repo.SetResults([]models.SearchResult{withReplies, {ID: "post-2", Type: "post", Title: "no replies", Source: "post"}}, 2)
+	w := httptest.NewRecorder()
+	NewSearchHandler(repo).Search(w, httptest.NewRequest(http.MethodGet, "/v1/search?q=post", nil))
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var body struct {
+		Data []map[string]json.RawMessage `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.Len(t, body.Data, 2)
+	assert.JSONEq(t, `9`, string(body.Data[0]["reply_count"]))
+	assert.JSONEq(t, `0`, string(body.Data[1]["reply_count"]), "reply_count is always present")
+}
+
+// Task idx 53 step 3: an agent searches through MCP with a query alone. solvr_search offers
+// query and limit, and neither its description nor its schema names a legacy post type.
+func TestMCPHandler_SearchToolTakesNoLegacyType(t *testing.T) {
+	schemas, _ := mcpToolSchemas(t)
+	search, ok := schemas["solvr_search"]
+	require.True(t, ok, "solvr_search is listed")
+	assert.Equal(t, "limit,query", strings.Join(schemaKeys(search), ","))
+	assert.Equal(t, "query", strings.Join(schemaRequired(search), ","))
+
+	tools, _ := mcpRPC(t, "tools/list", nil)["tools"].([]interface{})
+	for _, raw := range tools {
+		tool := raw.(map[string]interface{})
+		if tool["name"] != "solvr_search" {
+			continue
+		}
+		text, _ := json.Marshal(tool)
+		for _, legacy := range []string{"problem", "question", "idea", "approach", "answer"} {
+			assert.NotContains(t, string(text), legacy, "solvr_search still mentions %q", legacy)
+		}
+	}
+}
+
+// A legacy type argument from an older client is ignored: it no longer narrows the search to
+// posts migrated from that type, so the agent still gets every post and its reply anchors.
+func TestMCPExecuteSearch_IgnoresALegacyTypeArgument(t *testing.T) {
+	repo := NewMockSearchRepository()
+	repo.SetResults([]models.SearchResult{canonicalSearchResult()}, 1)
+	res, err := NewMCPHandler(repo, nil).executeSearch(context.Background(),
+		map[string]interface{}{"query": "failed", "type": "problem"})
+	require.NoError(t, err)
+	assert.Empty(t, repo.searchOpts.Type, "the legacy type argument is not a filter")
+	assert.Empty(t, repo.searchOpts.ContentTypes)
+	assert.Contains(t, mcpResultText(t, res), "Matched reply: /posts/post-1#reply-1 by Agent Two (approach, failed)")
 }

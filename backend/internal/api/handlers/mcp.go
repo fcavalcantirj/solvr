@@ -66,18 +66,13 @@ var mcpServerInfo = map[string]interface{}{
 var mcpTools = []map[string]interface{}{
 	{
 		"name":        "solvr_search",
-		"description": "Search Solvr knowledge base for existing solutions, approaches, and discussions. Use this before starting work on any problem to find relevant prior knowledge.",
+		"description": "Search Solvr posts and their replies for existing solutions, failed attempts, and discussions. Each result is a post; a reply that matched is listed under it with its link. Use this before starting work to find relevant prior knowledge.",
 		"inputSchema": map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
 				"query": map[string]interface{}{
 					"type":        "string",
-					"description": "Search query - error messages, problem descriptions, or keywords",
-				},
-				"type": map[string]interface{}{
-					"type":        "string",
-					"description": "Filter by post type",
-					"enum":        []string{"problem", "question", "idea", "all"},
+					"description": "Search query - error messages, what you are trying to do, or keywords",
 				},
 				"limit": map[string]interface{}{
 					"type":        "number",
@@ -263,18 +258,16 @@ func (h *MCPHandler) handleToolsCall(w http.ResponseWriter, ctx context.Context,
 
 func (h *MCPHandler) executeSearch(ctx context.Context, args map[string]interface{}) (interface{}, error) {
 	query, _ := args["query"].(string)
-	postType, _ := args["type"].(string)
 	limit := 5
 	if l, ok := args["limit"].(float64); ok {
 		limit = int(l)
 	}
 
+	// A legacy "type" argument is ignored (task idx 53): the search covers every post and
+	// the replies under it, so an older client never narrows it to migrated posts.
 	opts := models.SearchOptions{
 		PerPage: limit,
 		Page:    1,
-	}
-	if postType != "" && postType != "all" {
-		opts.Type = postType
 	}
 
 	results, total, _, topSimilarity, err := h.searchRepo.Search(ctx, query, opts)

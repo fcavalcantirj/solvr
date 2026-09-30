@@ -2582,3 +2582,158 @@ git status at journal time [REAL]: 3 M (backend/internal/api/handlers/mcp.go, ba
   backend/internal/db/search_canonical.go, backend/internal/db/search_canonical_fold_test.go,
   backend/internal/db/search_canonical_test.go) + this progress.txt entry. spec.json unchanged (passes
   stays false).
+
+2026-09-30 19:15 — Task idx 53 (spec.json, category functional) — PASSES (set true this iteration)
+"Let agents and humans search the retained knowledge through one consistent model"
+SLICE 2 (final): steps 3-6 and the human half of step 2, on top of slice 1 (47209007).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: first false task is idx 24 (acceptance; stays skipped,
+  needs idx 78), then idx 53 (slice 1 committed, REMAINING 1-5 listed). No open URGENT. Tree clean at start,
+  HEAD 39884b2d.
+
+DECISIONS (reversible, owner may overrule):
+  - REST GET /v1/search `type` stays what it is: a filter on the legacy provenance, the same as GET /v1/posts
+    `type`. Not warned about: TestSearch_KnownParams_NoWarnings pins that type=problem gives no warnings.
+    The default search needs no type [TEST slice 1]. The backend MCP tool is the one agents are led to use a
+    type with, so it no longer offers one (below). SDK SearchOptions.type (3 SDKs), `solvr search --type`
+    (Go CLI and TS CLI), the npm mcp-server solvr_search type enum, and the skill/api-docs text belong to idx
+    78 step 5 ("remove legacy user-facing problem/idea/answer choices from first-party clients"). None was
+    changed here.
+  - Reply matches now follow ONE rule on both paths. hybrid_search_replies (000110) requires a
+    published + moderation-approved post; TestHybridSearchReplies_FusesTextAndVectorOverEligibleReplies pins
+    that archived posts are excluded. The full-text reply path (searchReplyMatches) used only the status rule,
+    so the replies of a CLOSED (= archived) post were found by full text but never by hybrid. The full-text
+    path now also requires published + approved (replyMatchPostRule). A closed post is still found by its own
+    text (the post rule is unchanged); its replies are no longer matched on either path.
+    [REAL, read-only count on the local solvr_cutover_rehearsal copy]: 0 closed posts have live non-system
+    replies. The legacy content_types=answers|approaches buckets (search_replies.go, idx 76) keep the status
+    rule and were not changed.
+
+WHAT CHANGED [REAL, git status --porcelain: 10 M + 3 ??; git diff --stat 218+/42- on the 10 tracked files]:
+  M backend/internal/models/search.go: SearchResultResponse gains reply_count (= answers + approaches +
+    comments, the posts list's server-computed total). Before this, /posts search cards showed "0 replies"
+    because the search response had no reply_count and PostCard reads post.reply_count.
+  M backend/internal/db/search_canonical.go: replyMatchPostRule (searchablePostRule + publication_state
+    'published' + moderation_state 'approved') is used in searchReplyMatches on both paths. The doc
+    comments were updated to match.
+  M backend/internal/api/handlers/mcp.go: solvr_search has no `type` property. The description names no
+    legacy type ("posts and their replies ... a reply that matched is listed under it with its link").
+    executeSearch ignores a legacy `type` argument, the same way solvr_post already ignores one.
+  M backend/internal/db/legacy_dependency_registry.go: the "typeref:internal/api/handlers/mcp.go" pending
+    entry was removed. The scan no longer finds a legacy type in mcp.go, and
+    TestLegacyDependencyRegistry_CoversThePostTypeReferences failed on the stale entry ("disposition for a
+    dependency that no longer exists"). That test was not changed.
+  A frontend/lib/api-search-types.ts: APISearchReplyMatch, APISearchResult (post + snippet + score +
+    matched_replies?) and APISearchResponse. These moved out of api-types.ts, which re-exports them
+    (export * from './api-search-types'). api-types.ts shrinks 1614 -> 1600 lines.
+  M frontend/components/posts/post-card.tsx: new optional matchedReplies prop, rendered as a "Matching replies"
+    list. Each item has a link to the reply's API url, the API excerpt, author display name, relative time and,
+    when present, legacy_type + legacy_status. The Excerpt helper renders the API's <mark>...</mark> as
+    <mark> elements and everything else as React text, never as HTML. The client makes no decision.
+  M frontend/components/posts/posts-list.tsx: state items may carry matched_replies; passes them to PostCard.
+  TESTS (new; no existing test changed, skipped or removed):
+  A backend/internal/db/search_cutover_compare_test.go: TestCanonicalSearch_RepresentativeQueriesBeforeAndAfter
+    Cutover (step 4). Scratch DB, all migrations. Legacy fixture: solved problem, answered question, active
+    idea, embedded problem, closed question, draft question. Contributions: a succeeded approach (embedded),
+    a failed approach, a human answer (embedded), a response, a post comment, an answer on the closed post,
+    an answer on the draft, and a deleted answer. 15 keyword probes x both paths and 3 semantic probes
+    (hybrid) run BEFORE and AFTER RunKnowledgeCutover. Asserts:
+    - exact hits before and after;
+    - no post found before is lost after;
+    - a probe that no contribution matches returns the same order, total and top_similarity;
+    - every contribution the LEGACY contribution search matched (SQL oracle over answers.content and
+      approaches angle/method/outcome/solution, taken before the cutover) is an anchor after, except the two
+      on the closed and draft posts, which must NOT surface;
+    - responses and comments, never searchable before, are found after;
+    - the copied legacy embeddings give semantic anchors with similarity 1, and the post's own embedding
+      matches the same before and after;
+    - each result's counts partition its live replies (the deleted answer is not counted).
+  A backend/internal/db/search_room_scope_test.go: TestCanonicalSearch_RoomChatterStaysOutOfKnowledgeSearch
+    (step 6). A public room with 30 messages plus a post saved from it (source_room_id). On both paths the
+    chatter, room name and room description words find nothing, and the saved outcome post is found alone
+    with no anchors. RoomRepository.ListFiltered finds the room by name and by description, never by
+    chatter or by the outcome word.
+  M backend/internal/api/handlers/search_canonical_test.go (+3 tests): TestSearch_ResultCarriesReplyCount,
+    TestMCPHandler_SearchToolTakesNoLegacyType (keys limit,query; the tool JSON names no
+    problem/question/idea/approach/answer), TestMCPExecuteSearch_IgnoresALegacyTypeArgument.
+  M frontend/components/posts/post-card.test.tsx (+3): anchors list with link, one <mark>, author and
+    origin; an excerpt with <img onerror> stays text (no img element); no list without matches.
+  M frontend/components/posts/posts-list.test.tsx (+1): a search result's matched reply renders as a link
+    to /posts/q1#r9 and the card shows the API reply_count.
+
+VERIFICATION:
+  RED [TEST, /tmp/solvr_idx53_s2_red_db.log, /tmp/solvr_idx53_s2_red_handlers.log,
+    /tmp/solvr_idx53_s2_fe_red.log]:
+    - comparison test: fails ONLY on "cmpkappa" full-text after the cutover (the reply on the closed post
+      surfaced: total 1, want 0);
+    - reply_count absent;
+    - the MCP schema still had the type enum; executeSearch passed Type "problem";
+    - 3 frontend tests failed.
+    The room-scope test passed on first run: it pins behavior that already holds by construction (search
+    reads posts/replies only; room discovery matches name/description only).
+  GREEN targeted [TEST, /tmp/solvr_idx53_s2_green_db.log, -v, scratch DBs off solvr_test]: 8 PASS, 0 SKIP.
+    The 8: TestCanonicalSearch_* x4, TestHybridSearchReplies_FusesText..., TestFoldReplyMatches...,
+    TestReplyOnlyPostIDs..., TestLegacySearch_ServedCanonically.
+  FULL BACKEND [TEST, /tmp/solvr_idx53_s2_backend_full.log, go test ./... -count=1 -p 1 -v] on a FRESH local
+    DB solvr_idx53_s2_fresh (all 114 up migrations via psql; dropped afterwards):
+    - 18 packages ok; internal/api and internal/db FAIL with 47 failing tests;
+    - 44 of them are the recorded "referral_code" fixture failures, plus TestIPFSHealthEndpoint and
+      TestSearch_MinSimilarity_HonestFilter (same message as recorded: the fixture cleanup hit
+      approaches_problem_id_fkey), which is the recorded baseline of 46;
+    - the 47th was TestLegacyDependencyRegistry_CoversThePostTypeReferences (the stale mcp.go entry). After
+      removing the entry, a targeted rerun of the legacy registry and gate tests on a local fresh DB gave
+      8 PASS [TEST, /tmp/solvr_idx53_s2_registry.log];
+    - every new or related test PASSES in the full log, none SKIPs. The 13 SKIPs are pre-existing
+      (VOYAGE, OAuth, Kubo).
+  FRONTEND [TEST, /tmp/solvr_idx53_s2_frontend_final.log, npm test after the last frontend change]: 188
+    files, 1692 tests passed. npm run typecheck exit 0. eslint on the 6 touched files exit 0.
+    npm run build was NOT run.
+  gofmt -l clean on the touched Go files. go vet ./internal/db ./internal/api/handlers ./internal/models:
+    clean. golangci-lint was NOT run: the local binary rejects the repo config ("'output.formats' expected a
+    map, got 'slice'"), a pre-existing environment mismatch. check-file-size.sh still reports 34 violations
+    (unchanged; none in a touched file). NOTE: that script's find expression only checks .tsx on the
+    frontend, not .ts; not changed.
+  LIVE PROBE [REAL, /tmp/solvr_idx53_s2_probe/]: go build ./cmd/api, run on :8097 under env -i against the
+    fresh local DB solvr_idx53_s2_probe (dropped afterwards; IPFS_API_URL=http://127.0.0.1:9, fake JWT_SECRET,
+    no GROQ/VOYAGE key).
+    - Two agents registered. POST /v1/posts -> pending_review, approved by SQL on the local DB.
+    - A reply "... qqzlockfile ..." by the other agent. GET /v1/search?q=qqzlockfile: total 1, reply_count 1,
+      one anchor (url /posts/<post>#<reply>, author s2replier, <mark> excerpt).
+    - MCP tools/list: solvr_search properties [limit, query]. tools/call {"query":"qqzlockfile",
+      "type":"problem"} still returns the canonical post with its "Matched reply" line.
+    - Room: POST /v1/rooms (agent) plus the handshake, then 5 x POST /r/<slug>/message "qqzroomchatter ...
+      qqzlockfile ..." (201 each). /v1/search?q=qqzroomchatter -> 0; ?q=qqzroomname -> 0; ?q=qqzlockfile ->
+      still 1 result with 1 anchor. /v1/rooms?q=qqzroomname -> the room; ?q=qqzroomchatter -> none.
+    - PATCH /v1/posts/<post> {"status":"closed"} -> closed/archived/approved. After that, ?q=qqzlockfile -> 0,
+      ?q=deploy queue draining -> the closed post (reply_count 1, no anchors), and GET replies total 1.
+    - 0 responses with a 5xx status in api.log. Server stopped, :8097 free.
+
+STEP MAP (idx 53):
+  1 [TEST] slice 1 + comparison test.
+  2 [TEST] db/handler/MCP/frontend; [REAL] probe.
+  3 [TEST] REST without type (slice 1), MCP without type; [REAL] probe.
+  4 [TEST] comparison before/after the cutover plus the copied embeddings. Replies with no legacy vector are
+    embedded by the existing cmd/backfill-embeddings replies path (package ok in the full run).
+    [REAL, read-only on the local rehearsal copy]: 215 of 792 live non-system replies there have no
+    embedding.
+  5 [TEST]:
+    - excerpts, total and top_similarity: slice 1;
+    - counts: the comparison test;
+    - suggestions: the existing TestHomepageSearch_NeverPublishesAProtectedOrUnrepeatedTerm and
+      TestHomepageSearch_RecordsTheScopeOfARealSearch, which PASS in the full run;
+    - semantic: slice 1 and the comparison test.
+  6 [TEST] room-scope test; [REAL] probe.
+UAT: owner, at the idx 93 cutover. (a) Re-run the representative-query comparison on the post-purge
+  rehearsal dump (default /v1/search before and after cutover for a handful of real queries: no post lost,
+  former answer/approach hits appear as matched_replies). (b) After the production cutover, run
+  cmd/backfill-embeddings for replies (the rehearsal copy had 215 of 792 without a vector). (c) Visually
+  confirm /posts?q=<a word only in a reply> shows the "Matching replies" list under the card and that the link
+  scrolls to the reply.
+LEFT FOR OTHER TASKS (not idx 53):
+  - idx 78: SDK/CLI/npm mcp-server `type` options and the docs.
+  - Frontend: the dead legacy lists (problems-list, questions-list, ideas-list, feed-list) still call useSearch
+    with a type; no route renders them.
+  - Pre-existing: the repository sorts merged results by score, so sort=newest|votes|activity are overridden.
+
+git status at journal time [REAL]: 10 M + 3 ?? as listed above, plus this entry. spec.json idx 53 passes -> true.

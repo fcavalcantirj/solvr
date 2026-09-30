@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import type { APIPost } from "@/lib/api-types";
+import type { APIPost, APISearchReplyMatch } from "@/lib/api-types";
 import { PostCard } from "./post-card";
 
 const PER_PAGE = 20;
@@ -19,7 +19,8 @@ interface PostsListProps {
 // Renders the canonical Posts collection. All ordering, filtering and search is
 // the API's job; this component only fetches, paginates and displays.
 export function PostsList({ initialPosts = [], searchQuery, sort }: PostsListProps) {
-  const [posts, setPosts] = useState<APIPost[]>(initialPosts);
+  // A search result also carries the replies that matched; a browsed post has none.
+  const [posts, setPosts] = useState<Array<APIPost & { matched_replies?: APISearchReplyMatch[] }>>(initialPosts);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -78,7 +79,7 @@ export function PostsList({ initialPosts = [], searchQuery, sort }: PostsListPro
     <div>
       <div className="flex flex-col gap-4">
         {posts.map((post) => (
-          <PostCard key={post.id} post={post} />
+          <PostCard key={post.id} post={post} matchedReplies={post.matched_replies} />
         ))}
       </div>
       {hasMore && (

@@ -681,7 +681,7 @@
       "Verify drafts, rejected content, private/family content, and deleted records do not leak through excerpts, counts, suggestions, or semantic results.",
       "Keep room search scoped to room discovery so raw room chatter does not overwhelm reusable knowledge results."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

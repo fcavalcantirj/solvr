@@ -2,6 +2,7 @@
 // Extracted from api.ts to keep files under 800 lines
 
 export * from './status-types';
+export * from './api-search-types';
 
 export interface APIAuthor {
   id: string;
@@ -72,20 +73,6 @@ export interface APIPostsResponse {
     page: number;
     per_page: number;
     has_more: boolean;
-  };
-}
-
-export interface APISearchResponse {
-  data: Array<APIPost & { snippet: string; score: number }>;
-  meta: {
-    query: string;
-    total: number;
-    page: number;
-    per_page: number;
-    has_more: boolean;
-    took_ms: number;
-    // Indicates search method: 'hybrid' (semantic + keyword) or 'fulltext' (keyword only)
-    method: 'hybrid' | 'fulltext';
   };
 }
 

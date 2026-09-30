@@ -2737,3 +2737,139 @@ LEFT FOR OTHER TASKS (not idx 53):
   - Pre-existing: the repository sorts merged results by score, so sort=newest|votes|activity are overridden.
 
 git status at journal time [REAL]: 10 M + 3 ?? as listed above, plus this entry. spec.json idx 53 passes -> true.
+
+================================================================================
+2026-09-30 19:45 — Task idx 68 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Reduce the live knowledge database to posts and replies with enforceable relationships"
+SLICE 1 of N: step 2 in the database. A reply's parent must belong to the same post, and no parent
+reference may make a reply its own ancestor. This now holds for every writer, not only
+ReplyRepository.Create.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 73, 74, 77-95, 97, 98; no
+  open URGENT.
+  - idx 24 stays skipped (acceptance task; needs idx 78).
+  - idx 67 stays skipped: an acceptance task that needs two clean agent environments against a test
+    deployment, as recorded since 2026-09-25.
+  - idx 68 was recorded as gated on "drop live legacy tables". That gate covers only steps 5-6, which
+    owner decision 4 (2026-09-30) defers: keep the legacy tables, drop them later all at once, finish
+    development first. Steps 2-4 are development on the canonical tables and can be built now, so
+    idx 68 is the first buildable task.
+  - Tree clean at start; HEAD 887443d0.
+
+WHAT WAS THERE [REAL, \d replies on solvr_test + code read]:
+  - replies.parent_reply_id REFERENCES replies(id) only. Nothing in the database tied a parent to the
+    same post or stopped a cycle (no trigger on replies).
+  - Only ReplyRepository.Create checked the parent's post, as a read before the insert. Two other paths
+    insert threaded replies and do not go through that check: contribution_migration.go
+    (MigrateContributions) and legacy_relation_remap.go (migrateProgressNotes). Any operator UPDATE
+    also bypasses it.
+
+SPIKE [REAL, /tmp/solvr_idx68_s1/spike.sql, spike2.sql, spike.log]:
+  - Data on solvr_cutover_rehearsal (read-only counts): 3510 replies, 183 threaded, 0 cross-post
+    parents, 0 cycles, depth at most 2.
+  - The draft migration ran inside BEGIN ... ROLLBACK on that copy. The ALTERs took 18 ms, 4 ms and
+    6 ms. Refused: a cross-post parent insert (FK), a re-parent that makes a cycle, a self-parent
+    (trigger), a two-row INSERT whose rows name each other (trigger), and moving a parent to another
+    post while its child stays (FK). Allowed: a valid threaded insert. Deleting the parent cascaded
+    the child.
+  - After the rollback, the rehearsal copy's constraints were unchanged (replies_parent_reply_id_fkey
+    still present).
+
+WHAT CHANGED [REAL, git status --porcelain: 3 M + 3 ??; git diff --stat 10+/10- on the 3 tracked files]:
+  A backend/migrations/000115_reply_thread_integrity.up.sql:
+    - UNIQUE (id, post_id) replies_id_post_key.
+    - replies_parent_reply_id_fkey is replaced by replies_parent_same_post_fkey:
+      (parent_reply_id, post_id) -> replies (id, post_id) ON DELETE CASCADE.
+    - Function replies_refuse_parent_cycle() backs the CONSTRAINT TRIGGER replies_parent_acyclic
+      (AFTER INSERT OR UPDATE OF parent_reply_id, FOR EACH ROW WHEN parent_reply_id IS NOT NULL). It
+      takes a per-post pg_advisory_xact_lock, walks the ancestors with a recursive CTE (UNION, so it
+      terminates), and raises check_violation with CONSTRAINT replies_parent_acyclic.
+    - The header comment records the measured data.
+  A backend/migrations/000115_reply_thread_integrity.down.sql: drops the trigger, the function, the
+    FK and the unique constraint, and restores the 000089 FK replies_parent_reply_id_fkey.
+  M backend/cmd/cutover/main.go: the --expect-version default goes 114 -> 115. The cutover must run on
+    the schema main ships, and checkSchema refuses any other version. The anti-abuse precedent did the
+    same (113 -> 114 in 8e9ee7eb).
+  No other production Go changed. The API's behavior is unchanged: Create's own check still answers
+    400 VALIDATION_ERROR before the database is reached.
+  TESTS:
+  A backend/internal/db/replies_thread_integrity_test.go (3 new tests, each on a scratch DB):
+    - TestReplyThreads_AParentBelongsToTheSamePost: cross-post insert, cross-post re-parent and moving
+      a parent to another post are each refused by replies_parent_same_post_fkey. A same-post thread
+      via ReplyRepository.Create is allowed, and deleting the parent deletes its thread.
+    - TestReplyThreads_NoReplyIsItsOwnAncestor: self-parent, a root re-parented under its own leaf,
+      and a two-row INSERT cycle are each refused by replies_parent_acyclic. A tree-keeping re-parent
+      is allowed.
+    - TestReplyThreads_ConcurrentReparentsCannotCloseACycle: tx1 sets A.parent=B. tx2 sets B.parent=A,
+      is shown waiting on the lock (pg_stat_activity), and after tx1 commits it is refused by
+      replies_parent_acyclic. Only tx1's half is stored.
+  CHANGED EXISTING TESTS (version pins moved by the new migration; no assertion loosened):
+    - cmd/cutover/main_test.go TestParseOptions_GuardsTheProductionRun asserted
+      "opts.expectVersion != 114 ... want the default 114". It now pins 115, and it PASSES.
+    - cmd/cutover/main_test.go TestCheckSchema_RefusesAnythingButTheExpectedCleanVersion asserted that
+      clean 114 is accepted and that dirty 114 and 84 are refused against want=114. The same three
+      cases now use 115, and it PASSES.
+    - internal/db/cutover_rollback_test.go TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutover
+      Write asserted `require.Equal(t, 30, applied, "down migrations 000114..000085")`. It now asserts
+      31 (000115..000085), because the down path includes 000115.down, and it PASSES over the
+      post-cutover rows. The doc comment says 115.
+
+VERIFICATION:
+  RED [TEST, /tmp/solvr_idx68_s1/red.log]: all 3 new tests failed. The database accepted the
+    cross-post write and the cycle, and the second re-parent "finished (err=<nil>) instead of waiting
+    for the lock".
+  GREEN targeted [TEST, /tmp/solvr_idx68_s1/green_db.log, -v, scratch DBs off solvr_test]: 36 PASS,
+    0 FAIL, 0 SKIP. They include the 3 new tests, TestCutoverRollback_*,
+    TestKnowledgeCutover_AppliesTheWholeSequenceAndASecondRunChangesNothing (plus DryRun and
+    StopsBefore...), TestContributionMigration_ConvertsAllTypesAndIsResumable,
+    TestRemapLegacyRelations_*, TestPostMigration_RemapFixesStatesAndPreservesContent and
+    TestCanonicalSearch_FindsMigratedContributionsAcrossTheCutover. That is, the cutover's threaded
+    inserts all satisfy the new constraints.
+    [TEST, /tmp/solvr_idx68_s1/green_cmd.log]: go test ./cmd/cutover ok.
+  FULL BACKEND [TEST, /tmp/solvr_idx68_s1/backend_full.log, go test ./... -count=1 -p 1 -v] on a FRESH
+    local DB solvr_idx68_s1_fresh (all 115 up migrations via psql; dropped afterwards):
+    - 18 packages ok. internal/api and internal/db FAIL with 46 failing tests, exactly the recorded
+      baseline: 44 referral_code fixture failures (attributed by === RUN), plus TestIPFSHealthEndpoint
+      ("expected status 503, got 200") and TestSearch_MinSimilarity_HonestFilter (the recorded
+      approaches_problem_id_fkey cleanup warning; "expected exactly 1 result above bar, got total=2").
+    - The 3 new tests PASS, and none SKIP. The 12 SKIPs are pre-existing (VOYAGE, OAuth, Kubo, a
+      legacy answers list).
+  gofmt -l clean on the touched Go files. go vet ./internal/db ./cmd/cutover clean.
+    check-file-size.sh still reports 34 violations, unchanged; none in a touched file (the new test is
+    156 lines).
+  LIVE PROBE [REAL, /tmp/solvr_idx68_s1/probe/]: go build ./cmd/api, run on :8097 under env -i against a
+    fresh local DB solvr_idx68_s1_probe at 115 (dropped afterwards). IPFS_API_URL=http://127.0.0.1:9,
+    fake JWT_SECRET, no GROQ/VOYAGE key.
+    - One agent registered and two posts created.
+    - POST /v1/posts/A/replies: root reply 201, and a child with parent_reply_id=root 201.
+    - POST /v1/posts/B/replies naming A's root: 400 VALIDATION_ERROR "parent reply is invalid for this
+      post" (Create's own check, unchanged).
+    - Raw SQL on the same DB: a cross-post INSERT is refused by replies_parent_same_post_fkey, and
+      root.parent=child is refused by replies_parent_acyclic.
+    - GET /v1/posts/A/replies shows the thread (2 replies, the child with its parent).
+    - 0 responses with a 5xx status in api.log. The server was stopped; :8097 is free.
+    - The API-level reply DELETE was not probed live. The soft delete touches deleted_at only, which is
+      outside the trigger's column list. The reply delete tests pass in the full run.
+  LOCAL DB [REAL]: solvr_test had 0 cross-post parents and 0 cycles. 000115.up was applied there in one
+    transaction and schema_migrations was set to 115. It holds the 3 constraints/trigger.
+    solvr_cutover_rehearsal was NOT changed (at 113 as before).
+
+STEP MAP (idx 68):
+  1 OPEN: the ER diagram and migration contract (posts, replies, votes, snapshots, source links as
+    supporting relations).
+  2 DONE [TEST + REAL]: post UUIDs, reply UUIDs and the reply->post FK already existed (000089). This
+    slice adds the same-post parent FK and the acyclic-parent constraint trigger.
+  3 OPEN: replies and posts still use polymorphic author_type/author_id VARCHAR with no FK. Next: explicit
+    human/agent author FKs with an exactly-one-author CHECK for normal content, and unresolved legacy
+    and 'system' authors kept as labeled historical attribution. Measure the unresolved authors on the
+    rehearsal copy first (per the 000089 comment, 2678 of production's 2716 comments were
+    system-authored).
+  4 OPEN (not audited this slice): the typed columns vs JSON on posts/replies.
+  5-6 GATED by owner decision 4 (the legacy tables are kept for now and dropped all at once later). The
+    scratch helper's dropLegacy already exists for step 6's "legacy tables absent" proof.
+UAT (for when idx 68 closes, not now): apply 000115 on production, together with 000114, before the
+  idx 93 cutover. cmd/cutover now expects 115.
+
+git status at journal time [REAL]: the 3 M + 3 ?? listed above, plus this entry. spec.json unchanged;
+  idx 68 passes stays false.

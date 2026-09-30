@@ -64,3 +64,55 @@ Standing rules:
 - Never run a loop runner, and never touch `spec.json`.
 
 The author validates your results (the red and green logs, the targeted runs, and the full-run diff against the named baseline) and does not write code.
+
+## Post-approval rulings (2026-09-30, author, with Felipe's decisions)
+
+The author checked the builder's logs directly: `backend-full.log`, `fix-reruns*.log` and `full-new.txt`.
+
+- Tests run: 4,878 vs the baseline's 4,809. Nothing was skipped.
+- Of the 14 new failures, 11 are fixed in re-runs. Four are open, and they are handled below.
+
+1. **Agents of a tombstoned human are shut out: 401. FELIPE decided.**
+   - Update `TestRoomFamily_DeletedHumansSiblingLosesClosedRoomAndToken` to assert 401. Keep the scenario, and add a one-line comment saying why: the owner is gone, so the agent cannot authenticate anywhere.
+   - `DELETE /v1/me` still unclaims agents first, so self-deleted users' agents keep working. Do not change that.
+2. **Every GitHub/Google callback error redirects to `/auth/callback?error=…`. FELIPE decided.**
+   - Update the 12 currently passing tests that assert JSON errors so they assert the redirect, keeping each case and its error code.
+   - Report the 4 named-baseline OAuth tests that flip as "baseline failures fixed".
+3. **No exemption for family (private) posts from the W1 hard checks. FELIPE decided.** The heartbeat and watchdog titles, same-author repeats and the N-day series rule all apply. Groq still skips family posts, as today.
+4. **Registry entry for the cutover runner. The author's defect, from commit `f803d727`.**
+   - Add `"code:internal/db/knowledge_cutover.go"` to `internal/db/legacy_dependency_registry.go`, mirroring the existing `contribution_migration.go` entry: `pending(LegacyActionRetire, "the cutover runner reads legacy tables by design; remove with them")`.
+   - This fixes `TestLegacyDependencyRegistry_CoversTheSourceTree` and the line-102 failure in `TestLegacyDroppedDatabase_StaticQueriesExposeOnlyRegisteredDependencies`.
+   - Also check that test's line 117 ("pending code entries with no failing static statement: content_duplicates.go, create_counts.go, …"). If it is an assertion, fix the registrations it names.
+5. **Fix your `TestContentGate_LegacyTypedCreates`** (`router_content_gate_test.go:103`: expected 201, got 409). Most likely the repeat gate fires between the test's own cases. Fix the test data or the gate, and say which.
+6. **Then ONE final full backend run and one frontend run** on the finished branch, with the logs saved.
+   - Diff the failures by name against the named baseline.
+   - Log `TestSearchAnalyticsRepository_GetTrending` as "baseline test passed (time-window test)", not as fixed.
+   - Report to the author before any commit.
+7. **Landing: FELIPE decided.** After the author validates that final log, and only when Felipe says commit, `anti-abuse-wip` merges into `main`. No push. Production gates P1–P10 are unchanged.
+
+The other validator's point about `cmd/cutover --expect-version` is already done: the branch default is 114 (`cmd/cutover/main.go:41`).
+
+## Final validation (2026-09-30, author): PASSED
+
+Checked against the builder's saved logs and the diff, not against its summary.
+
+- **Backend.** `backend-final.log` (fresh DB at 114, one run): 4,879 run, 4,816 PASS (including subtests), 46 FAIL, 17 SKIP.
+  - Only `internal/db` fails. No panic, timeout or build failure.
+  - Failing names vs the named baseline: **0 new**.
+  - 4 baseline failures fixed: `TestGitHubCallback_{GitHubError,InvalidCode,MissingCode}_Integration` and `TestGitHubOAuthRedirect_Integration`.
+  - `TestSearchAnalyticsRepository_GetTrending` failed this run, as in the baseline. It is time-window dependent.
+- **Frontend.** `frontend-final.log`: 183 files, 1,663 tests, all pass.
+- **Deleted tests (17), all accounted for.**
+  - 13 in `services/duplicate_test.go`, the deleted dead in-memory store (approved).
+  - 4 in `moderation*_test.go`, covering only the deleted hash-store path.
+  - The surviving DB-backed duplicate path keeps its tests (`AutoFlag_DuplicatePostFromCanonicalPosts`, `…ReplyOnTheSamePost`, `CheckContentDuplicate_*`, `…FinderErrorIsReturned`).
+  - 49 test functions were added.
+- **Rulings 1–6, verified in the diff:**
+  1. The room-family test asserts 401, with a comment.
+  2. The OAuth callback tests assert the redirect through `requireCallbackErrorRedirect` (302, `/auth/callback`, exact `error=` code, no code or token leak), with each case's code kept. The 4 integration tests only switched to a non-following client; their assertions are unchanged.
+  3. The content gate runs outside the family-visibility block (`posts.go:524`), so there is no family exemption.
+  4. The registry has `code:internal/db/knowledge_cutover.go` at `legacy_dependency_registry.go:88`.
+  5. The gate tests use UUID agent names.
+- **Merge check.** Base `6efe181b`. `main` changed only handover documents since then, and the branch touches none of them, so the merge will be clean.
+
+**Ready to land:** commit the builder's 17 uncommitted files onto `anti-abuse-wip`, then merge into `main`. This waits for Felipe's "commit"; nothing is pushed. Production gates P1–P10 are unchanged and still each need Felipe's "yes".

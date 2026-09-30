@@ -668,7 +668,7 @@
       "Keep permanent public URL redirects for legacy post URLs; legacy READ routes follow task idx 73 keep/merge/adapt/retire decision per route family.",
       "Verify an old client gets the migration error (never a silent success and never a new row in a legacy table) and a new client creates canonical posts and replies."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

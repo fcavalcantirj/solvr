@@ -2290,3 +2290,163 @@ git status at journal time [REAL]: 8 M (backend published_docs_canonical_command
   public/heartbeat.md, skill/HEARTBEAT.md) + 2 ?? (frontend/app/web-create-canonical.test.ts,
   frontend/components/api/api-sdk-examples.test.tsx) + this progress.txt entry; spec.json unchanged, idx 52
   passes stays false.
+
+2026-09-30 18:10 — Task idx 52 (spec.json, category api) — PASSES (set true this iteration)
+"Route existing agent integrations into the canonical knowledge model during a defined transition"
+SLICE 9 (last): the published direct-HTTP references skill/references/{api,examples}.md (installed by
+install.sh from GitHub raw main/skill, served at solvr.dev/references/ from frontend/public/references) now
+teach canonical posts and replies, document the canonical reply family endpoint by endpoint, and list all 19
+retired write routes with the replacement the API answers. Then all 6 steps re-read against the journal.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 52, 53, 67, 68, 73, 74, 77-95, 97, 98;
+  no open URGENT (96 is true). idx 24 stays skipped (acceptance task; needs idx 78). idx 52 is the first
+  buildable task. Tree clean at start [REAL, git status]; HEAD 09d2cefd (slice 8). Only this loop iteration
+  running (ps: ralph.sh 1 -> this claude process).
+
+WHAT CHANGED [REAL, git status --porcelain: 4 M + 1 ??; git diff --stat 408+/334- on the 4 tracked files]:
+  DOCS (published; no production code changed):
+  M skill/references/api.md == M frontend/public/references/api.md (identical, cmp):
+    - GET /posts/:id: dropped the `include` query param (GET /v1/posts/{id} reads no include: grep of
+      handlers/posts.go) and the example response with an "approaches" array; the example is now the real
+      shape from the probe below (abridged: type "post", publication_state, moderation_state, author,
+      vote_score, reply_count, user_vote), and it points to GET /posts/:id/replies for contributions.
+    - POST /posts: request body has no "type" (and no problems-only success_criteria/weight); the example
+      curl creates without type; "answers/approaches/comments inherit" -> "its replies inherit".
+    - NEW "## Replies Endpoints": GET /posts/:id/replies (oldest first, limit default 50 max 100, cursor =
+      meta.next_cursor, real example shape incl. parent_reply_id, legacy_type/legacy_id note), POST
+      /posts/:id/replies (body, parent_reply_id; 201; 404 unknown post; 400 VALIDATION_ERROR on a foreign
+      parent), GET /replies/:id (ETag), PATCH /replies/:id (author only, 403 otherwise; optional If-Match ->
+      412 PRECONDITION_FAILED; new ETag), DELETE /replies/:id ({"data":{"deleted":true}}), POST
+      /replies/:id/vote (no self-vote 403; {"data":{"voted":true,"direction":"up"}}).
+    - Removed "## Approaches Endpoints", "## Answers Endpoints", "## Responses Endpoints (for Ideas)" (they
+      documented GET/POST /problems/:id/approaches, PATCH /approaches/:id, POST /approaches/:id/progress,
+      GET /questions/:id, POST /questions/:id/answers + accept, GET /ideas/:id, POST /ideas/:id/responses +
+      evolve) and, from Voting, POST /answers/:id/vote (410) and POST /approaches/:id/vote (the API serves no
+      such route: live probe answered 404 NOT_FOUND).
+    - NEW "## Retired Write Routes": 410 ENDPOINT_RETIRED, no sunset, no adapter, the error envelope with
+      details {retired_route, replacement, instructions}, and a 19-row table (retired route | use instead |
+      how) GENERATED from the live 410 answers of the probe (so each row is exactly what the API says);
+      legacy GET reads named as deprecated with GET /v1/posts/{id} + /replies as the destination.
+    - Error codes table: + ENDPOINT_RETIRED | 410.
+  M skill/references/examples.md == M frontend/public/references/examples.md (identical, cmp):
+    - "The Core Workflow: Approach-First" -> "Reply Before You Work": approach = POST /v1/posts/POST_ID/
+      replies {"body"}; the 3 progress notes and the Succeeded/Failed/Stuck outcomes = replies with
+      parent_reply_id REPLY_ID (was POST /problems/{id}/approaches, POST /approaches/{id}/progress x3,
+      PATCH /approaches/{id} x3); a note names the three retired routes and links api.md#retired-write-routes.
+    - Posting a Problem / Ask / Posting Solutions (had "type": "solution", which the API rejects: probe 400)
+      / Post an Idea: no type. Answer and "Respond to an Idea" -> POST /v1/posts/POST_ID/replies {"body"};
+      the response_type list removed. + "Comment on a Reply (thread)", + "Reading a Post and Its Replies",
+      + "Editing and Deleting Your Reply" (GET ETag, PATCH with If-Match, DELETE), Voting + reply vote.
+    - NOT changed: search examples' type/status filters (idx 53), the briefing JSON (idx 78), the Claim
+      section's "MCP `solvr_claim`" (not a knowledge write; /v1/mcp serves no solvr_claim), rooms.
+  TESTS:
+  A backend/internal/api/published_docs_canonical_references_test.go (245, no DB), 4 tests over both copies of
+    each file. The parser reads every curl in ```bash blocks (method from -X, else POST when -d, else GET;
+    body = the -d '...' text) and every api.md "### METHOD /path" heading (:param -> placeholder, /v1 prefix),
+    and resolves each call to its RouteFamilies route (fewest parameters wins, as in chi):
+    TestPublishedReferences_TeachOnlyKeptKnowledgeRoutes: every knowledge call (/v1/posts|replies|problems|
+      questions|ideas|approaches|answers|responses|comments) is a route of a DispositionKeep family — not in
+      LegacyWriteRetirements (410), not a retiring legacy read, not unserved; each file teaches POST /v1/posts
+      and POST /v1/posts/{id}/replies.
+    TestPublishedReferences_CreatePostsWithNoType: no POST /v1/posts body has "type" (at least one create per
+      file, non-vacuous); api.md's "### POST /posts" section has no "type".
+    TestPublishedAPIReference_NamesEveryRetiredWriteWithItsReplacement: "410 ENDPOINT_RETIRED" present; for
+      every LegacyWriteRetirements entry a table row names `route` and `replacement` (or "no canonical
+      equivalent"); api.md has an endpoint heading for each of the 6 canonical-replies family routes.
+    TestPublishedExamples_TeachRepliesAndThreading: each reply curl sends "body"; >=1 threaded reply.
+  No existing test changed or removed.
+
+VERIFICATION:
+  RED [TEST, /tmp/solvr_idx52_s9_red.log]: all 4 FAIL on the HEAD docs (api.md curl POST /v1/questions/
+    abc123/answers -> 410 route; ### headings for 7 retired writes, 3 retiring legacy reads, and POST
+    /v1/approaches/X/vote "the API serves no ..."; 5 typed creates; no "410 ENDPOINT_RETIRED"; no reply
+    example). NEGATIVE CONTROL after a regex fix (a closing fence must start a line, because the outcome
+    example carries ```go inside its JSON string) [TEST, /tmp/solvr_idx52_s9_negctl2.log]: HEAD's
+    examples.md restored temporarily -> the 9 retired curls (1 approaches, 3 progress, 3 PATCH approaches,
+    1 answers, 1 responses) each reported; new file copied back, cmp identical to the public copy.
+  GREEN [TEST, /tmp/solvr_idx52_s9_green.log + /tmp/solvr_idx52_s9_step6.log, -v, DATABASE_URL=postgres://
+    solvr:solvr_dev@localhost:5435/solvr_test (local docker solvr-postgres, schema_migrations 114 dirty=f)]:
+    PASS, none SKIP: the 4 new tests, TestPublishedSkill_*, TestPublishedHeartbeat_*, TestSpecMCPSections_*,
+    TestPublishedAgentDocs_* (2), TestLegacyWriteRetirements_CoverEveryLegacyWriteRouteAndNameAServed
+    Replacement, TestLegacyWriteRoutes_AnswerTheMigrationErrorAndWriteNothing, TestLegacyWriteRetirement_
+    NewClientCreatesCanonicalPostsAndReplies. gofmt -l clean, go vet ./internal/api clean.
+  LIVE PROBE [REAL, /tmp/solvr_idx52_s9_probe/]: `go build ./cmd/api` from this tree, run on :8095 under env -i
+    (DATABASE_URL solvr_test above, IPFS_API_URL=http://127.0.0.1:9, fake JWT_SECRET); stopped after (:8095
+    free, no process). Fresh agents registered locally.
+    - Canonical: POST /v1/posts (no type) 201 type "post"; reply 201; threaded reply 201 with
+      parent_reply_id; foreign parent 400 "parent reply is invalid for this post"; list with limit=2 ->
+      has_more true + next_cursor, total 3; GET /v1/replies/{id} ETag; PATCH If-Match stale 412
+      PRECONDITION_FAILED, fresh 200 + new ETag; non-author PATCH 403; vote 200 {"direction":"up","voted":true};
+      self-vote 403; DELETE 200 {"deleted":true}; POST /v1/approaches/{id}/vote 404 NOT_FOUND; POST /v1/posts
+      with "type":"solution" 400.
+    - Retired: all 19 LegacyWriteRetirements routes, called with a legacy body and a valid agent key -> 410
+      ENDPOINT_RETIRED with details {retired_route, replacement (null for the 4 status commands),
+      instructions} (retired.json; the api.md table is generated from it). DB after: 0 approaches/answers/
+      responses/comments/progress_notes rows with the probe text and 0 posts titled with the probe title; the
+      newest legacy approaches row is 20:44:55Z and comments 20:16:58Z, before the probe (21:00Z).
+    - THE DOCS THEMSELVES: run_examples.py extracted every knowledge curl from the NEW public api.md and
+      examples.md, pointed it at :8095 (placeholders -> a probe post/reply, key per call, fresh ETag), and ran
+      it in bash: "TOTAL 25 ALL_2XX True" (examples_run.log: GET post 200, POST post 201 x6, POST replies 201
+      x11, GET replies 200 x2, GET reply 200, PATCH with If-Match 200, DELETE 200, post vote 200, reply vote
+      200). DB: the 3 progress-note replies and the 3 outcome replies all stored WITH parent_reply_id (6/6,
+      3/3); the 8 posts they created are all type 'post'. (First attempt hit RATE_LIMITED 429, X-RateLimit-
+      Limit 7 per agent per hour; the runner then used a fresh agent per create.)
+  FULL SUITES:
+    [TEST] backend `DATABASE_URL=...solvr_test go test ./internal/api/... -count=1`
+      (/tmp/solvr_idx52_s9_backend_api.log): handlers, middleware, response ok; internal/api FAIL with 7:
+      the 4 recorded pre-existing by slices 7-8 (TestHomepageOverview_ServesEverySectionToALoggedOutVisitor,
+      TestHomepageSearch_NeverPublishesAProtectedOrUnrepeatedTerm, TestHomepageSearch_NeverPublishesPasted
+      SecretsOrPersonalData, TestIPFSHealthEndpoint) and 3 more, each run alone once
+      (/tmp/solvr_idx52_s9_three_alone.log): TestAgentClaim_RetriesAndRacesLinkTheAgentOnce ("duplicate key
+      ... users_referral_code_key ... failed to create test user") PASS alone; TestCommentsEndpoints (409
+      DUPLICATE_CONTENT "you already posted this") PASS alone [INFERRED: shared-DB fixture collisions];
+      TestHomepageSearch_EveryPublishedTermLinksToCanonicalPostsSearch ("/posts?q=room-token-optional-auth"
+      should not contain "token") FAILS alone AND on an untouched HEAD worktree (/tmp/solvr_idx52_s9_head,
+      removed; /tmp/solvr_idx52_s9_head_homepage.log) [TEST: pre-existing, driven by stored search terms].
+      The only Go change is a no-DB test file reading markdown. Other backend packages not run (untouched).
+    [TEST] frontend `npm test -- --run`: "Test Files 188 passed (188)  Tests 1688 passed (1688)", EXIT 0
+      (/tmp/solvr_idx52_s9_frontend_full.log); `npx vitest run middleware.test.ts` 12 passed (legacy URL 308s).
+      No frontend test reads public/references [REAL, grep].
+    skill/scripts/test.sh NOT run (its solvr.sh cases can reach the network); its 12 grep patterns for api.md
+      and examples.md (enriched /me, /pins, storage, heartbeat, /r/ message, agents/register, POST /blog,
+      notifications, pin, Rooms (A2A) ...) all still match [REAL, grep -E each].
+    check-file-size.sh -> "Found 34 file(s) exceeding 800 lines" (unchanged; new test file 245).
+
+STEP-BY-STEP CLOSE-OUT (the 6 steps of idx 52 against this journal):
+  1 inventory: slice 1 (web client, both MCPs, 3 SDKs, both CLIs, solvr.sh), slice 8 (/new, /api-docs
+    samples, HEARTBEAT.md), this slice (references). Webhooks [REAL, grep this session]: models/webhook.go
+    event names (answer.created, comment.created, approach.stuck, problem.solved, mention) exist, but
+    handlers.NewWebhooksHandler is mounted by no router and services.NewWebhookDeliveryService is
+    constructed by no production code, so no webhook creates or consumes knowledge at runtime (discovery.go
+    still lists a "webhooks" capability: idx 78).
+  2 first-party clients create canonical posts/replies with no type: SDKs (3), mcp-server + TS CLI (4), Go
+    CLI (5), solvr.sh + SKILL.md (6), backend /v1/mcp (7), web /new -> /posts/new composer + /api-docs (8),
+    references (9). packages/, mcp-server/, cli/ and skill/scripts unchanged since their green slices [REAL,
+    git log].
+  3 the 19 legacy writes answer 410 ENDPOINT_RETIRED naming the replacement (slice 1; live again above).
+  4 documented: served OpenAPI + SPEC.md migration notes + /api-docs (slice 2), MCP docs (7), references (9).
+  5 permanent redirects: frontend/middleware.ts 308s /problems|/questions|/ideas (+ /new) to /posts (12
+    tests PASS); legacy READ routes follow idx 73 by the step's own text.
+  6 old client -> migration error, no row; new client -> canonical rows: the two DB-backed retirement tests
+    PASS (-v, not skipped) + the live probe above.
+
+LIMITS / NOT DONE [REAL unless stated]:
+  - frontend/components/api-section.tsx ("POST /approaches — Document attempts") and the legacy web
+    helpers in lib/api-base.ts are dead code (no page renders/calls them); removal is owner decision 4's
+    all-at-once legacy cleanup.
+  - /api-docs GET response samples still show "type": "problem" (read shapes, idx 73); search `type`
+    filters (idx 53); SKILL.md / HEARTBEAT.md workflow PROSE about approaches, the briefing JSON and the
+    "webhooks" capability (idx 78); examples.md "MCP `solvr_claim`" in the Claim section (not served).
+  - install.sh downloads the references from raw.githubusercontent.com/.../main/skill: installs see this
+    change only after the owner pushes.
+
+UAT: owner — (1) push main and deploy the API + frontend (cutover, idx 93): production still serves the
+  legacy write routes until the 410 retirement and these docs ship; (2) re-run install.sh (or copy skill/)
+  into ~/.claude/skills/solvr, whose installed solvr.sh and references predate idx 52; (3) update the
+  "Use Solvr" section of CLAUDE.md (the owner's instructions file), which still teaches POST
+  /v1/problems/{id}/approaches and PATCH /v1/approaches/{id} — after deploy both answer 410.
+
+git status at journal time [REAL]: 4 M (frontend/public/references/api.md, frontend/public/references/
+  examples.md, skill/references/api.md, skill/references/examples.md) + 1 ?? (backend/internal/api/
+  published_docs_canonical_references_test.go) + this progress.txt entry + spec.json idx 52 passes -> true.

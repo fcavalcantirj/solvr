@@ -104,6 +104,7 @@ func TestSaveAsPost_IdempotencyKeyNamesOneOutcome(t *testing.T) {
 // outcome changes nothing, and a late one cannot republish an outcome that was archived
 // or rejected by moderation after it was approved.
 func TestApprovePublication_RetryCannotRepublish(t *testing.T) {
+	useRecordingModerator(t) // anti-abuse D5c: approval submits to moderation, which approves
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	roomPreCleanup(t, pool)
@@ -134,6 +135,7 @@ func TestApprovePublication_RetryCannotRepublish(t *testing.T) {
 	postID := saveDraft("Outcome approved exactly once")
 	st, out := doJSON(t, "POST", approveURL(postID), ownerKey, "")
 	require.Equal(t, http.StatusOK, st, "%v", out)
+	waitForValue(t, pool, "published", `SELECT publication_state FROM posts WHERE id = $1::uuid`, postID)
 	status, pub, _, approvedAt := state(postID)
 	require.Equal(t, "open", status)
 	require.Equal(t, "published", pub)

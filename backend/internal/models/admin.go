@@ -38,8 +38,9 @@ var ValidFlagReasons = []string{"spam", "offensive", "duplicate", "incorrect", "
 
 // ValidFlagTargetTypes defines the valid flag target types. It mirrors the database's
 // flags_target_type_check (pinned by a db test): reply is the canonical contribution; the
-// legacy contribution types stay until that check is narrowed at legacy cleanup.
-var ValidFlagTargetTypes = []string{"post", "reply", "comment", "answer", "approach", "response"}
+// legacy contribution types (and progress_note, flagged by contribution moderation since
+// 000114) stay until that check is narrowed at legacy cleanup.
+var ValidFlagTargetTypes = []string{"post", "reply", "comment", "answer", "approach", "response", "progress_note"}
 
 // IsValidFlagStatus checks if a status is valid
 func IsValidFlagStatus(status string) bool {

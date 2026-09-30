@@ -77,6 +77,7 @@ type OAuthHandlers struct {
 	userRepo      UserRepositoryInterface      // For user lookup
 	logoutDB      LogoutRefreshTokenDBInterface // For logout token deletion
 	loginCodes    OAuthLoginCodeStore           // One-time codes the callbacks redirect with (idx 75 step 5)
+	identityGate  IdentityRefuser               // Refuses banned accounts at the code exchange
 }
 
 // NewOAuthHandlers creates a new OAuthHandlers instance.
@@ -246,6 +247,9 @@ func (h *OAuthHandlers) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	var user *OAuthUserResult
 	if h.userService != nil {
 		user, _, err = h.userService.FindOrCreateUser(ctx, userInfo)
+		if h.refuseSuspendedSignIn(w, r, err) {
+			return
+		}
 		if err != nil {
 			slog.Error("User creation/lookup failed", "error", err)
 			writeInternalError(w, "Failed to create or find user")
@@ -371,6 +375,9 @@ func (h *OAuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	var user *OAuthUserResult
 	if h.userService != nil {
 		user, _, err = h.userService.FindOrCreateUser(ctx, userInfo)
+		if h.refuseSuspendedSignIn(w, r, err) {
+			return
+		}
 		if err != nil {
 			slog.Error("User creation/lookup failed", "error", err)
 			writeInternalError(w, "Failed to create or find user")

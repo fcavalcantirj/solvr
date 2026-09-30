@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/fcavalcantirj/solvr/internal/referral"
@@ -95,14 +94,10 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) (*models
 	created.ReferralCode = referralCode.String
 
 	if err != nil {
-		// Check for unique constraint violations
-		if strings.Contains(err.Error(), "users_username_key") {
-			slog.Info("duplicate key constraint", "op", "Create", "table", "users", "constraint", "username")
-			return nil, ErrDuplicateUsername
-		}
-		if strings.Contains(err.Error(), "users_email_key") {
-			slog.Info("duplicate key constraint", "op", "Create", "table", "users", "constraint", "email")
-			return nil, ErrDuplicateEmail
+		// Unique violations and the tombstone trigger's refusal map to sentinel errors.
+		if mapped := mapUserInsertError(err); mapped != err {
+			slog.Info("user insert refused", "op", "Create", "table", "users", "reason", mapped)
+			return nil, mapped
 		}
 		LogQueryError(ctx, "Create", "users", err)
 		return nil, err

@@ -14,7 +14,7 @@ import (
 // rehearsal on the restored production dump showed the down path aborting on the first row
 // the new model can write and the old schema cannot hold: 000089.down re-adds the vote and
 // report target checks without 'reply', and 000088.down re-adds the typed-only posts check
-// although new posts default to the canonical type 'post'. Every down migration from 113 to
+// although new posts default to the canonical type 'post'. Every down migration from 114 to
 // 85 must now run over such rows, and each row the old schema cannot hold must be archived
 // in rollback_archive rather than dropped silently.
 func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing.T) {
@@ -84,6 +84,11 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 			VALUES ('reply', $1, 'agent', 'rb-agent-3', 'spam', 'pending')`, target)
 	}
 
+	// Anti-abuse (000114): a ban row and a flag reason the old CHECK rejects are archived too.
+	exec(`INSERT INTO banned_identities (kind, value, reason) VALUES ('agent_id', 'rb-banned-agent', 'rollback test')`)
+	exec(`INSERT INTO flags (target_type, target_id, reporter_type, reporter_id, reason, status)
+		VALUES ('answer', $1, 'system', 'content-moderation', 'moderation_rejected', 'pending')`, answer)
+
 	// Run every down migration above 000084, newest first, as `migrate down` would.
 	files, err := filepath.Glob(filepath.Join(backendRoot(t), "migrations", "*.down.sql"))
 	require.NoError(t, err)
@@ -99,7 +104,7 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 		require.NoError(t, err, "apply %s", filepath.Base(f))
 		applied++
 	}
-	require.Equal(t, 29, applied, "down migrations 000113..000085")
+	require.Equal(t, 30, applied, "down migrations 000114..000085")
 
 	var replies *string
 	require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('replies')::text`).Scan(&replies))
@@ -116,7 +121,14 @@ func TestCutoverRollback_DownPathKeepsOrArchivesEveryPostCutoverWrite(t *testing
 		archived[table] = n
 	}
 	rows.Close()
-	require.Equal(t, map[string]int{"votes": 2, "reports": 1, "replies": 3, "flags": 1, "posts": 1}, archived)
+	require.Equal(t, map[string]int{"votes": 2, "reports": 1, "replies": 3, "flags": 2, "posts": 1, "banned_identities": 1}, archived)
+	require.Equal(t, 1, countRows(t, pool, ctx, `SELECT count(*) FROM rollback_archive
+		WHERE source_table = 'flags' AND row_data->>'reason' = 'moderation_rejected'`))
+
+	// The emergency ban trigger outlives the rollback, back on its original body (000114.down).
+	require.Equal(t, 1, countRows(t, pool, ctx, `SELECT count(*) FROM pg_trigger WHERE tgname = 'users_refuse_tombstoned_email'`))
+	require.Equal(t, 0, countRows(t, pool, ctx, `SELECT count(*) FROM pg_proc
+		WHERE proname = 'users_refuse_tombstoned_email' AND prosrc LIKE '%banned_identities%'`))
 	require.Equal(t, 1, countRows(t, pool, ctx, `SELECT count(*) FROM rollback_archive
 		WHERE source_table = 'replies' AND row_data->>'id' = $1 AND row_data->>'body' = 'native reply'`, native))
 	require.Equal(t, 1, countRows(t, pool, ctx, `SELECT count(*) FROM rollback_archive

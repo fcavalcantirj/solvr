@@ -53,11 +53,7 @@ func (h *OAuthHandlers) redirectWithLoginCode(w http.ResponseWriter, r *http.Req
 	}
 
 	// Per FE-022: Browser OAuth flow redirects to frontend callback page
-	frontendURL := h.config.FrontendURL
-	if frontendURL == "" {
-		frontendURL = "http://localhost:3000"
-	}
-	callbackURL := fmt.Sprintf("%s/auth/callback?code=%s", frontendURL, url.QueryEscape(code))
+	callbackURL := fmt.Sprintf("%s/auth/callback?code=%s", h.frontendBaseURL(), url.QueryEscape(code))
 	http.Redirect(w, r, callbackURL, http.StatusFound)
 }
 
@@ -93,6 +89,9 @@ func (h *OAuthHandlers) ExchangeLoginCode(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		slog.Error("Login code redeem failed", "error", err)
 		writeInternalError(w, "Failed to complete the login")
+		return
+	}
+	if refuseIdentity(w, r, h.identityGate, db.IdentityQuery{Email: user.Email}) {
 		return
 	}
 

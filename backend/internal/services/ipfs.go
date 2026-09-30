@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"time"
 )
@@ -99,7 +100,7 @@ func (s *KuboIPFSService) Pin(ctx context.Context, cid string) error {
 		return ErrEmptyCID
 	}
 
-	url := fmt.Sprintf("%s/api/v0/pin/add?arg=%s&progress=false", s.baseURL, cid)
+	url := fmt.Sprintf("%s/api/v0/pin/add?arg=%s&progress=false", s.baseURL, escapeArg(cid))
 	_, err := s.doWithRetry(ctx, url)
 	return err
 }
@@ -110,7 +111,7 @@ func (s *KuboIPFSService) Unpin(ctx context.Context, cid string) error {
 		return ErrEmptyCID
 	}
 
-	url := fmt.Sprintf("%s/api/v0/pin/rm?arg=%s", s.baseURL, cid)
+	url := fmt.Sprintf("%s/api/v0/pin/rm?arg=%s", s.baseURL, escapeArg(cid))
 	_, err := s.doWithRetry(ctx, url)
 	return err
 }
@@ -121,7 +122,7 @@ func (s *KuboIPFSService) PinStatus(ctx context.Context, cid string) (string, er
 		return "", ErrEmptyCID
 	}
 
-	url := fmt.Sprintf("%s/api/v0/pin/ls?arg=%s", s.baseURL, cid)
+	url := fmt.Sprintf("%s/api/v0/pin/ls?arg=%s", s.baseURL, escapeArg(cid))
 	body, err := s.doWithRetry(ctx, url)
 	if err != nil {
 		return "", err
@@ -204,7 +205,7 @@ func (s *KuboIPFSService) ObjectStat(ctx context.Context, cid string) (int64, er
 		return 0, ErrEmptyCID
 	}
 
-	url := fmt.Sprintf("%s/api/v0/dag/stat?arg=%s", s.baseURL, cid)
+	url := fmt.Sprintf("%s/api/v0/dag/stat?arg=%s", s.baseURL, escapeArg(cid))
 	body, err := s.doWithRetry(ctx, url)
 	if err != nil {
 		return 0, err
@@ -220,6 +221,28 @@ func (s *KuboIPFSService) ObjectStat(ctx context.Context, cid string) (int64, er
 	}
 
 	return result.TotalSize, nil
+}
+
+// escapeArg makes a CID safe to place in an API query string: an operator-supplied value must
+// not be able to add or change query parameters.
+func escapeArg(cid string) string {
+	return neturl.QueryEscape(cid)
+}
+
+// RepoGC runs Kubo's repo/gc (removes unpinned blocks) and returns how many keys it removed.
+// It can take minutes on a large repo: give the service a long timeout.
+func (s *KuboIPFSService) RepoGC(ctx context.Context) (int, error) {
+	body, err := s.doWithRetry(ctx, s.baseURL+"/api/v0/repo/gc")
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	for _, line := range bytes.Split(body, []byte("\n")) {
+		if len(bytes.TrimSpace(line)) > 0 && bytes.Contains(line, []byte(`"Key"`)) {
+			removed++
+		}
+	}
+	return removed, nil
 }
 
 // doWithRetry performs a POST request with retry logic for transient failures.

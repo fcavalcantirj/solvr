@@ -17,7 +17,15 @@ type AgentDB interface {
 
 // APIKeyValidator validates API keys against the database.
 type APIKeyValidator struct {
-	db AgentDB
+	db       AgentDB
+	accounts AccountChecker
+}
+
+// WithOwnerCheck makes the validator refuse a claimed agent's key once its owning human is
+// no longer live (soft-deleted or banned), the same way a forged key is refused.
+func (v *APIKeyValidator) WithOwnerCheck(accounts AccountChecker) *APIKeyValidator {
+	v.accounts = accounts
+	return v
 }
 
 // NewAPIKeyValidator creates a new APIKeyValidator with the given database.
@@ -47,6 +55,17 @@ func (v *APIKeyValidator) ValidateAPIKey(ctx context.Context, key string) (*mode
 	// No matching agent found
 	if agent == nil {
 		return nil, NewAuthError(ErrCodeInvalidAPIKey, "invalid API key")
+	}
+
+	// A claimed agent authenticates only while its owner does.
+	if v.accounts != nil && agent.HumanID != nil {
+		active, err := v.accounts.IsActiveUser(ctx, *agent.HumanID)
+		if err != nil {
+			return nil, NewAuthError(ErrCodeInvalidAPIKey, "failed to validate API key")
+		}
+		if !active {
+			return nil, NewAuthError(ErrCodeInvalidAPIKey, "invalid API key")
+		}
 	}
 
 	return agent, nil

@@ -79,6 +79,7 @@ func newLegacyChildVisibilityFixture(
 // contract also keeps valid public history readable and maps an absent evolution target to
 // 404 rather than treating ordinary absence as a service failure.
 func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T) {
+	liftCreateLimits(t) // many creates by one identity; the hourly limit is not this test's subject
 	ts, _, pool := newStatusContractServer(t)
 	ctx := context.Background()
 	client := &http.Client{}
@@ -168,7 +169,8 @@ func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T
 		require.Equal(t, before+1, progressCount(family.approach))
 
 		before = progressCount(public.approach)
-		got = call(t, http.MethodPost, path(public), siblingKey, body)
+		// A distinct note: the anti-abuse gate refuses an author's repeated progress note.
+		got = call(t, http.MethodPost, path(public), siblingKey, `{"content":"visibility-scoped progress on the public approach"}`)
 		require.Equal(t, http.StatusCreated, got.status, got.body)
 		require.Equal(t, before+1, progressCount(public.approach))
 	})

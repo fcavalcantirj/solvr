@@ -75,23 +75,24 @@ func (r *PostRepository) FindPublishedBySourceRoom(ctx context.Context, roomID s
 	return posts, nil
 }
 
-// PublishDraftOutcome publishes an outcome that is still an undecided draft, in one
-// conditional write, and reports whether it did. A post that is already published,
-// archived or rejected by moderation is left untouched, so a retried or late approval
-// can neither write again nor undo a newer decision.
-func (r *PostRepository) PublishDraftOutcome(ctx context.Context, postID string) (bool, error) {
-	pub, mod := models.DeriveStates(models.PostStatusOpen)
+// SubmitDraftOutcomeForModeration sends an outcome that is still an undecided draft to
+// content moderation (pending_review), in one conditional write, and reports whether it did;
+// moderation publishes it (anti-abuse D5c). A post already submitted, published, archived or
+// rejected by moderation is left untouched, so a retried or late approval can neither write
+// again nor undo a newer decision.
+func (r *PostRepository) SubmitDraftOutcomeForModeration(ctx context.Context, postID string) (bool, error) {
+	pub, mod := models.DeriveStates(models.PostStatusPendingReview)
 	result, err := r.pool.Exec(ctx,
 		`UPDATE posts SET status = $2, publication_state = $3, moderation_state = $4, updated_at = NOW()
-		 WHERE id = $1 AND deleted_at IS NULL
+		 WHERE id = $1 AND deleted_at IS NULL AND status = $7
 		   AND publication_state = $5 AND moderation_state <> $6`,
-		postID, models.PostStatusOpen, pub, mod, models.PublicationDraft, models.ModerationRejected,
+		postID, models.PostStatusPendingReview, pub, mod, models.PublicationDraft, models.ModerationRejected, models.PostStatusDraft,
 	)
 	if err != nil {
 		if isInvalidUUIDError(err) {
 			return false, ErrPostNotFound
 		}
-		LogQueryError(ctx, "PublishDraftOutcome", "posts", err)
+		LogQueryError(ctx, "SubmitDraftOutcomeForModeration", "posts", err)
 		return false, err
 	}
 	return result.RowsAffected() == 1, nil

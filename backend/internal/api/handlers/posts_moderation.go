@@ -18,9 +18,10 @@ func (h *PostsHandler) moderatePostAsync(postID, title, description string, tags
 	defer cancel()
 
 	input := ModerationInput{
-		Title:       title,
-		Description: description,
-		Tags:        tags,
+		Title:              title,
+		Description:        description,
+		Tags:               tags,
+		AuthorRecentTitles: h.authorRecentTitles(ctx, authorType, authorID, postID),
 	}
 
 	maxAttempts := len(h.retryDelays)

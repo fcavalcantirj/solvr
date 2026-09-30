@@ -200,7 +200,7 @@ func (r *ClaimTokenRepository) ClaimAgent(ctx context.Context, tokenID, agentID,
 				reputation = reputation + $3,
 				has_human_backed_badge = true,
 				updated_at = NOW()
-			WHERE id = $1 AND human_id IS NULL
+			WHERE id = $1 AND human_id IS NULL AND deleted_at IS NULL
 		`, agentID, humanID, reputationBonus)
 		if err != nil {
 			if strings.Contains(err.Error(), "agent_already_claimed") {
@@ -210,7 +210,7 @@ func (r *ClaimTokenRepository) ClaimAgent(ctx context.Context, tokenID, agentID,
 		}
 		if result.RowsAffected() == 0 {
 			var exists bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agents WHERE id = $1)`, agentID).Scan(&exists); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agents WHERE id = $1 AND deleted_at IS NULL)`, agentID).Scan(&exists); err != nil {
 				return err
 			}
 			if exists {

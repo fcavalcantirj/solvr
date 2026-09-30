@@ -16,6 +16,13 @@ type ContentModerationAdapter struct {
 	svc *services.ContentModerationService
 }
 
+// wrapContentModerator is how the router hands the Groq moderation service to handlers.
+// Router tests replace it with a recording mock (anti-abuse W2), so moderation can be
+// exercised through the real router without calling Groq.
+var wrapContentModerator = func(svc *services.ContentModerationService) handlers.ContentModerationServiceInterface {
+	return NewContentModerationAdapter(svc)
+}
+
 // NewContentModerationAdapter wraps a ContentModerationService.
 func NewContentModerationAdapter(svc *services.ContentModerationService) *ContentModerationAdapter {
 	return &ContentModerationAdapter{svc: svc}
@@ -24,9 +31,10 @@ func NewContentModerationAdapter(svc *services.ContentModerationService) *Conten
 // ModerateContent delegates to the underlying service, converting types.
 func (a *ContentModerationAdapter) ModerateContent(ctx context.Context, input handlers.ModerationInput) (*handlers.ModerationResult, error) {
 	result, err := a.svc.ModerateContent(ctx, services.ModerationInput{
-		Title:       input.Title,
-		Description: input.Description,
-		Tags:        input.Tags,
+		Title:              input.Title,
+		Description:        input.Description,
+		Tags:               input.Tags,
+		AuthorRecentTitles: input.AuthorRecentTitles,
 	})
 	if err != nil {
 		return nil, err

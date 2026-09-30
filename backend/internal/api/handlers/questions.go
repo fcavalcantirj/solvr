@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/contentgate"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -51,6 +52,9 @@ type QuestionsRepositoryInterface interface {
 
 // QuestionsHandler handles question-related HTTP requests.
 type QuestionsHandler struct {
+	postModerator    PostModerator          // starts async moderation of a pending_review post (nil: none)
+	contentGate      *contentgate.Gate      // anti-abuse checks before the insert (nil admits all)
+	contribModerator *ContributionModerator // async moderation of new contributions (nil: none)
 	repo             QuestionsRepositoryInterface
 	postsRepo        PostsRepositoryInterface // For listing questions (shares data with /v1/posts)
 	embeddingService EmbeddingServiceInterface
@@ -303,6 +307,10 @@ func (h *QuestionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if refuseContent(w, h.contentGate.CheckPost(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, req.Title)) {
+		return
+	}
+
 	// Create question with author info from authentication
 	post := &models.Post{
 		Type:         models.PostTypeQuestion,
@@ -311,7 +319,7 @@ func (h *QuestionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Tags:         req.Tags,
 		PostedByType: authInfo.AuthorType,
 		PostedByID:   authInfo.AuthorID,
-		Status:       models.PostStatusOpen,
+		Status:       models.PostStatusPendingReview, // moderated like POST /v1/posts (anti-abuse W2)
 	}
 
 	createdPost, err := h.repo.CreateQuestion(r.Context(), post)
@@ -319,6 +327,7 @@ func (h *QuestionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeQuestionsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create question")
 		return
 	}
+	startPostModeration(h.postModerator, createdPost)
 
 	writeQuestionsJSON(w, http.StatusCreated, map[string]interface{}{
 		"data": createdPost,
@@ -372,6 +381,10 @@ func (h *QuestionsHandler) CreateAnswer(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if refuseContent(w, h.contentGate.CheckContribution(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, req.Content)) {
+		return
+	}
+
 	// Create answer with author info from authentication
 	answer := &models.Answer{
 		QuestionID: questionID,
@@ -400,6 +413,7 @@ func (h *QuestionsHandler) CreateAnswer(w http.ResponseWriter, r *http.Request) 
 		writeQuestionsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create answer")
 		return
 	}
+	h.contribModerator.Moderate("answer", createdAnswer.ID, req.Content, string(authInfo.AuthorType), authInfo.AuthorID)
 
 	writeQuestionsJSON(w, http.StatusCreated, map[string]interface{}{
 		"data": createdAnswer,

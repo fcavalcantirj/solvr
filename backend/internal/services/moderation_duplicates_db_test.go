@@ -66,7 +66,7 @@ func TestModerationService_DuplicateFinderOnTheDatabase(t *testing.T) {
 	secondReply := insertReply()
 
 	flags := &MockFlagCreator{}
-	svc := NewModerationService(flags, nil, nil, nil)
+	svc := NewModerationService(flags, nil, nil)
 	svc.SetDuplicateFinder(db.NewContentDuplicateRepository(pool))
 
 	postContent := ModerationContent{Title: title, Description: desc}

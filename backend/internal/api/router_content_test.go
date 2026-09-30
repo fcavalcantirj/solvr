@@ -301,6 +301,8 @@ func TestCommentsEndpoints(t *testing.T) {
 // in type-specific list endpoints (/v1/problems, /v1/questions, /v1/ideas).
 // Per FIX-020: Type-specific list endpoints should return posts of their type.
 func TestTypeSpecificListEndpoints(t *testing.T) {
+	liftCreateLimits(t)      // many creates by one identity; the hourly limit is not this test's subject
+	useRecordingModerator(t) // legacy creates are moderated now (anti-abuse W2); the mock approves
 	router := setupTestRouter(t)
 
 	// Create a valid JWT token for auth (its account must exist and be live)

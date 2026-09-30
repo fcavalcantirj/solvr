@@ -21,7 +21,7 @@ import (
 var (
 	ErrDuplicateAgentID   = errors.New("agent ID already exists")
 	ErrDuplicateAgentName = errors.New("agent name already exists")
-	ErrAgentNotFound      = errors.New("agent not found")
+	ErrAgentNotFound      = db.ErrAgentNotFound // one sentinel, so a repository miss is a 404 everywhere
 	ErrDuplicateAMCPAID   = errors.New("amcp_aid already in use by another agent")
 )
 
@@ -82,6 +82,7 @@ type AgentsHandler struct {
 	roomBackfiller RoomOwnerBackfiller
 	jwtSecret      string
 	baseURL        string // Base URL for claim URLs (e.g., "https://solvr.dev")
+	identityGate   IdentityRefuser
 }
 
 // NewAgentsHandler creates a new AgentsHandler.
@@ -280,6 +281,9 @@ func (h *AgentsHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 
 	// Generate unique agent ID from name
 	agentID := generateAgentID(req.Name)
+	if refuseIdentity(w, r, h.identityGate, db.IdentityQuery{AgentID: agentID, Email: req.Email}) {
+		return
+	}
 
 	// Generate API key
 	apiKey := auth.GenerateAPIKey()
@@ -878,28 +882,6 @@ func (h *AgentsHandler) GetActivity(w http.ResponseWriter, r *http.Request, agen
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
-}
-
-// writeAgentError writes an error response.
-func writeAgentError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":    code,
-			"message": message,
-		},
-	})
-}
-
-// writeAgentUnauthorized writes a 401 Unauthorized error.
-func writeAgentUnauthorized(w http.ResponseWriter, message string) {
-	writeAgentError(w, http.StatusUnauthorized, "UNAUTHORIZED", message)
-}
-
-// writeAgentValidationError writes a 400 Validation Error.
-func writeAgentValidationError(w http.ResponseWriter, message string) {
-	writeAgentError(w, http.StatusBadRequest, "VALIDATION_ERROR", message)
 }
 
 // generateNameSuggestions generates alternative name suggestions for a duplicate name.

@@ -193,10 +193,12 @@ func (d *SpamDetector) CheckLinkSpam(content ModerationContent) LinkSpamResult {
 	}
 }
 
+// DefaultDuplicateMaxAge is how far back CheckContentDuplicate looks (24 hours).
+const DefaultDuplicateMaxAge = 24 * time.Hour
+
 // ModerationService provides content moderation functionality.
 type ModerationService struct {
 	flagCreator     FlagCreator
-	duplicateDetect *DuplicateDetectionService
 	duplicateFinder ContentDuplicateFinder
 	rateChecker     RateLimitChecker
 	spamDetector    *SpamDetector
@@ -206,7 +208,6 @@ type ModerationService struct {
 // NewModerationService creates a new moderation service.
 func NewModerationService(
 	flagCreator FlagCreator,
-	duplicateDetect *DuplicateDetectionService,
 	rateChecker RateLimitChecker,
 	spamDetector *SpamDetector,
 ) *ModerationService {
@@ -214,18 +215,16 @@ func NewModerationService(
 		spamDetector = NewSpamDetector()
 	}
 	return &ModerationService{
-		flagCreator:     flagCreator,
-		duplicateDetect: duplicateDetect,
-		rateChecker:     rateChecker,
-		spamDetector:    spamDetector,
-		rateConfig:      DefaultRateAbuseConfig(),
+		flagCreator:  flagCreator,
+		rateChecker:  rateChecker,
+		spamDetector: spamDetector,
+		rateConfig:   DefaultRateAbuseConfig(),
 	}
 }
 
 // NewModerationServiceWithRateConfig creates a moderation service with custom rate config.
 func NewModerationServiceWithRateConfig(
 	flagCreator FlagCreator,
-	duplicateDetect *DuplicateDetectionService,
 	rateChecker RateLimitChecker,
 	spamDetector *SpamDetector,
 	rateConfig RateAbuseConfig,
@@ -234,34 +233,11 @@ func NewModerationServiceWithRateConfig(
 		spamDetector = NewSpamDetector()
 	}
 	return &ModerationService{
-		flagCreator:     flagCreator,
-		duplicateDetect: duplicateDetect,
-		rateChecker:     rateChecker,
-		spamDetector:    spamDetector,
-		rateConfig:      rateConfig,
+		flagCreator:  flagCreator,
+		rateChecker:  rateChecker,
+		spamDetector: spamDetector,
+		rateConfig:   rateConfig,
 	}
-}
-
-// CheckDuplicate checks if content is a duplicate of existing content.
-func (s *ModerationService) CheckDuplicate(ctx context.Context, content ModerationContent) (*DuplicateCheckResult, error) {
-	if s.duplicateDetect == nil {
-		return &DuplicateCheckResult{IsDuplicate: false}, nil
-	}
-
-	record, err := s.duplicateDetect.CheckDuplicate(ctx, content.Title, content.Description)
-	if err != nil {
-		return nil, err
-	}
-
-	if record == nil {
-		return &DuplicateCheckResult{IsDuplicate: false}, nil
-	}
-
-	return &DuplicateCheckResult{
-		IsDuplicate:    true,
-		OriginalPostID: record.PostID,
-		Similarity:     1.0, // exact match
-	}, nil
 }
 
 // SetDuplicateFinder makes duplicate detection read the canonical posts and replies
@@ -351,15 +327,6 @@ func (s *ModerationService) AutoFlagIfNeeded(ctx context.Context, targetID uuid.
 			if dupResult.OriginalTargetType == "reply" {
 				details += " on post " + dupResult.OriginalPostID.String()
 			}
-			return s.createSystemFlag(ctx, targetID, targetType, "duplicate", details)
-		}
-	} else if s.duplicateDetect != nil {
-		dupResult, err := s.CheckDuplicate(ctx, content)
-		if err != nil {
-			return err
-		}
-		if dupResult.IsDuplicate {
-			details := "duplicate of post " + dupResult.OriginalPostID.String()
 			return s.createSystemFlag(ctx, targetID, targetType, "duplicate", details)
 		}
 	}

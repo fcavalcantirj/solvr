@@ -484,6 +484,9 @@ var RouteFamilies = []RouteFamily{
 			"POST /admin/incidents",
 			"PATCH /admin/incidents/{id}",
 			"POST /admin/incidents/{id}/updates",
+			"POST /admin/bans",
+			"POST /admin/ipfs/unpin",
+			"POST /admin/ipfs/gc",
 		},
 	},
 }

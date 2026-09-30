@@ -135,6 +135,7 @@ func TestSaveAsPost_IdempotentByKey(t *testing.T) {
 // author publishes the draft through the ordinary Post flow and it then appears as the
 // room's published outcome.
 func TestSaveAsPost_PublicRoomPublishThenListed(t *testing.T) {
+	useRecordingModerator(t) // anti-abuse D5a: a publish edit goes through moderation (approves)
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	roomPreCleanup(t, pool)
@@ -152,6 +153,8 @@ func TestSaveAsPost_PublicRoomPublishThenListed(t *testing.T) {
 	pub := doRoomRequest(t, "PATCH", ts.URL+"/v1/posts/"+postID, `{"status":"open"}`, apiKey)
 	defer pub.Body.Close()
 	require.Equal(t, http.StatusOK, pub.StatusCode, "public-room author must publish through the normal flow")
+	assert.Equal(t, "pending_review", dataObj(t, pub)["status"], "the edit submits the outcome to moderation")
+	waitForValue(t, pool, "published", `SELECT publication_state FROM posts WHERE id = $1::uuid`, postID)
 
 	// Room now links to the published outcome.
 	listResp := doRoomRequest(t, "GET", ts.URL+"/v1/rooms/"+slug+"/posts", "", "")
@@ -168,6 +171,7 @@ func TestSaveAsPost_PublicRoomPublishThenListed(t *testing.T) {
 // TestSaveAsPost_PrivateRoomOwnerApprovalRequired covers step 5: a private-room outcome
 // cannot be pushed public by an ordinary author edit; only the room owner approves it.
 func TestSaveAsPost_PrivateRoomOwnerApprovalRequired(t *testing.T) {
+	useRecordingModerator(t) // anti-abuse D5c: owner approval goes through moderation (approves)
 	ts, pool, cleanup := setupRoomTestServer(t)
 	defer cleanup()
 	roomPreCleanup(t, pool)
@@ -195,7 +199,8 @@ func TestSaveAsPost_PrivateRoomOwnerApprovalRequired(t *testing.T) {
 	// The room owner approves publication.
 	approved := doRoomRequest(t, "POST", ts.URL+"/v1/rooms/"+slug+"/posts/"+postID+"/publish", "", ownerKey)
 	require.Equal(t, http.StatusOK, approved.StatusCode, "room owner must be able to approve publication")
-	assert.Equal(t, "published", dataObj(t, approved)["publication_state"])
+	assert.Equal(t, "pending_review", dataObj(t, approved)["status"], "approval submits the outcome to moderation")
+	waitForValue(t, pool, "published", `SELECT publication_state FROM posts WHERE id = $1::uuid`, postID)
 
 	// Owner can now see it among the room's published outcomes.
 	listResp := doRoomRequest(t, "GET", ts.URL+"/v1/rooms/"+slug+"/posts", "", ownerKey)

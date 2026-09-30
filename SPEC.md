@@ -5097,9 +5097,10 @@ the router does not serve, or if this Part disagrees with the registry.
 **Dispositions.** `keep` — canonical or separately useful (account, status, storage, blog,
 administration). `merge` — the purpose is served by another canonical family. `adapt` — stays
 served, but only as an adapter over the canonical implementation. `retire` — no canonical
-future; clients move to the named destination. During the transition a retired route is still
-served; runtime deprecation signals and the actionable migration error for legacy status
-commands with no canonical equivalent are introduced route family by route family.
+future; clients move to the named destination. Retired READ routes stay served (with
+`Deprecation`/`Link` signals where 26.5 says so) until each family's own removal; retired
+WRITE routes are not served at all: each answers `410 ENDPOINT_RETIRED` naming its
+replacement (26.6), with no sunset period.
 
 ## 26.2 Route Families
 
@@ -5333,6 +5334,57 @@ from the legacy tables until the typed sidebars leave the UI, then removed): pro
 
 Behavior change: the three count sets no longer include `pending_review`, `rejected` or
 `draft` posts (the old queries counted every public, non-deleted post).
+
+## 26.6 Retired Legacy Writes (migration notes)
+
+Owner decision 2026-09-30: the legacy write routes are deleted at the knowledge-model cutover,
+with no transition adapters and **no sunset period**. Every retired write answers every
+caller — anonymous or authenticated, owner or not — with the same `410` `ENDPOINT_RETIRED`; it reads no
+body, checks no credential and writes nothing (no row in a legacy table, no canonical row):
+
+```
+HTTP/1.1 410 Gone
+{"error": {"code": "ENDPOINT_RETIRED",
+           "message": "POST /v1/questions/{id}/answers was retired with the canonical knowledge model; use POST /v1/posts/{id}/replies instead.",
+           "details": {"retired_route": "POST /v1/questions/{id}/answers",
+                       "replacement": "POST /v1/posts/{id}/replies",
+                       "instructions": "Send the text as body to POST /v1/posts/{id}/replies; the post id is unchanged."},
+           "request_id": "..."}}
+```
+
+`details.replacement` is `null` for a command with no canonical equivalent. The table the
+router mounts is `LegacyWriteRetirements` (`backend/internal/api/legacy_write_retirement.go`);
+the served OpenAPI document (`GET /v1/openapi.json`) publishes each of these operations as
+`deprecated` with only the `410` response (`components.responses.EndpointRetired`) and an
+`x-solvr-retired` object carrying the same `replacement` and `instructions`.
+
+| Retired route | Canonical replacement | Old request shape → canonical request shape |
+|---------------|-----------------------|---------------------------------------------|
+| `POST /v1/problems` | `POST /v1/posts` | `{title, description, tags, success_criteria, weight}` → `{title, description, tags}`, no `type` |
+| `POST /v1/questions` | `POST /v1/posts` | `{title, description, tags}` → the same, no `type` |
+| `POST /v1/ideas` | `POST /v1/posts` | `{title, description, tags}` → the same, no `type` |
+| `POST /v1/problems/{id}/approaches` | `POST /v1/posts/{id}/replies` | `{angle, method, assumptions, differs_from}` → `{body}`: one Markdown body; the post id is unchanged |
+| `POST /v1/questions/{id}/answers` | `POST /v1/posts/{id}/replies` | `{content}` → `{body}` |
+| `POST /v1/ideas/{id}/responses` | `POST /v1/posts/{id}/replies` | `{content, response_type}` → `{body}` |
+| `POST /v1/approaches/{id}/progress` | `POST /v1/posts/{id}/replies` | `{content}` → `{body, parent_reply_id}`: the parent is the reply whose `legacy_type` is `approach` and `legacy_id` is the approach id, found in `GET /v1/posts/{post_id}/replies` |
+| `PATCH /v1/answers/{id}` | `PATCH /v1/replies/{id}` | `{content}` → `{body}` on the reply whose `legacy_type` is `answer` and `legacy_id` is the answer id, with `If-Match` |
+| `DELETE /v1/answers/{id}` | `DELETE /v1/replies/{id}` | no body; the reply id of the migrated answer (`legacy_type` `answer`) |
+| `POST /v1/answers/{id}/vote` | `POST /v1/replies/{id}/vote` | `{direction}` → the same, on the reply id of the migrated answer |
+| `POST /v1/posts/{id}/comments` | `POST /v1/posts/{id}/replies` | `{content}` → `{body}` |
+| `POST /v1/approaches/{id}/comments` | `POST /v1/posts/{id}/replies` | `{content}` → `{body, parent_reply_id}`: the parent is the migrated approach (`legacy_type` `approach`) |
+| `POST /v1/answers/{id}/comments` | `POST /v1/posts/{id}/replies` | `{content}` → `{body, parent_reply_id}`: the parent is the migrated answer (`legacy_type` `answer`) |
+| `POST /v1/responses/{id}/comments` | `POST /v1/posts/{id}/replies` | `{content}` → `{body, parent_reply_id}`: the parent is the migrated response (`legacy_type` `response`) |
+| `DELETE /v1/comments/{id}` | `DELETE /v1/replies/{id}` | no body; the reply id of the migrated comment (`legacy_type` `comment`) |
+| `PATCH /v1/approaches/{id}` | none | `{status, outcome, method}`: approach status has no canonical field; record the outcome as a reply or a new post |
+| `POST /v1/approaches/{id}/verify` | none | `{verified}`: verification has no canonical field; record the outcome as a reply or a new post |
+| `POST /v1/questions/{id}/accept/{aid}` | none | no body; accepting an answer has no canonical command; record the outcome as a reply or a new post |
+| `POST /v1/ideas/{id}/evolve` | none | `{evolved_post_id}`: idea evolution has no canonical command; record the outcome as a reply or a new post |
+
+Migrated contributions keep their original id as `legacy_id` beside a `legacy_type`
+(`approach`, `answer`, `response`, `comment`, `progress_note`) on the reply the cutover made,
+so a client holding an old id finds the reply id to use with one `GET /v1/posts/{post_id}/replies`.
+Legacy READ routes are unchanged by this section; their fate is their family's disposition
+above. Public legacy page URLs keep their permanent redirects to `/posts/{id}`.
 
 
 ---

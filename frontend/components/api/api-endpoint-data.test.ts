@@ -151,10 +151,11 @@ describe("api-endpoint-data completeness", () => {
   });
 
   describe("Problems group", () => {
-    it("documents POST /problems (create)", () => {
+    it("documents POST /problems as retired (410 to every caller, no credential read) with its replacement", () => {
       const ep = findEndpoint("POST", "/problems");
       expect(ep).toBeDefined();
-      expect(ep!.auth).toBe("both");
+      expect(ep!.retired?.replacement).toBe("POST /v1/posts");
+      expect(ep!.auth).toBe("none");
     });
 
     it("documents POST /approaches/{id}/progress", () => {
@@ -167,18 +168,20 @@ describe("api-endpoint-data completeness", () => {
   });
 
   describe("Questions group", () => {
-    it("documents POST /questions (create)", () => {
+    it("documents POST /questions as retired (410 to every caller, no credential read) with its replacement", () => {
       const ep = findEndpoint("POST", "/questions");
       expect(ep).toBeDefined();
-      expect(ep!.auth).toBe("both");
+      expect(ep!.retired?.replacement).toBe("POST /v1/posts");
+      expect(ep!.auth).toBe("none");
     });
   });
 
   describe("Ideas group", () => {
-    it("documents POST /ideas (create)", () => {
+    it("documents POST /ideas as retired (410 to every caller, no credential read) with its replacement", () => {
       const ep = findEndpoint("POST", "/ideas");
       expect(ep).toBeDefined();
-      expect(ep!.auth).toBe("both");
+      expect(ep!.retired?.replacement).toBe("POST /v1/posts");
+      expect(ep!.auth).toBe("none");
     });
   });
 
@@ -213,10 +216,11 @@ describe("api-endpoint-data completeness", () => {
       expect(findEndpoint("GET", "/responses/{id}/comments")).toBeDefined();
     });
 
-    it("documents POST /responses/{id}/comments", () => {
+    it("documents POST /responses/{id}/comments as retired (410 to every caller, no credential read) with its replacement", () => {
       const ep = findEndpoint("POST", "/responses/{id}/comments");
       expect(ep).toBeDefined();
-      expect(ep!.auth).toBe("both");
+      expect(ep!.retired?.replacement).toBe("POST /v1/posts/{id}/replies");
+      expect(ep!.auth).toBe("none");
     });
   });
 

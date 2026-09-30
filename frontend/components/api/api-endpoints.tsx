@@ -211,6 +211,11 @@ function EndpointCard({
           <code className="font-mono text-xs sm:text-sm truncate">
             {endpoint.path}
           </code>
+          {endpoint.retired && (
+            <span className="font-mono text-[9px] tracking-wider px-1.5 py-0.5 border border-border text-muted-foreground shrink-0">
+              RETIRED
+            </span>
+          )}
           {endpoint.auth && endpoint.auth !== "none" && (
             <span className="hidden sm:flex items-center gap-1 font-mono text-[9px] text-muted-foreground">
               <Lock size={10} />
@@ -236,6 +241,21 @@ function EndpointCard({
             <p className="text-sm text-muted-foreground mb-4 md:hidden">
               {endpoint.description}
             </p>
+            {endpoint.retired && (
+              <div className="mb-4 border border-border p-3">
+                <h4 className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground mb-2">
+                  MIGRATION
+                </h4>
+                {endpoint.retired.replacement ? (
+                  <p className="text-sm">
+                    Use <code className="font-mono text-xs">{endpoint.retired.replacement}</code> instead.
+                  </p>
+                ) : (
+                  <p className="text-sm">This command has no canonical equivalent.</p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">{endpoint.retired.migration}</p>
+              </div>
+            )}
             <div className="grid md:grid-cols-2 gap-4 md:gap-6">
               {/* Parameters */}
               <div>
@@ -293,7 +313,8 @@ function EndpointCard({
               </div>
             </div>
 
-            {/* Try it button */}
+            {/* Try it button (a retired route answers 410 to everyone) */}
+            {!endpoint.retired && (
             <div className="mt-4 pt-4 border-t border-border">
               <button
                 onClick={(e) => {
@@ -306,6 +327,7 @@ function EndpointCard({
                 Try it
               </button>
             </div>
+            )}
           </div>
         </div>
       )}

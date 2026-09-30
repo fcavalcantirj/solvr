@@ -78,9 +78,9 @@ type retiredRouteDetails struct {
 	Instructions string  `json:"instructions"`
 }
 
-// retiredLegacyWrite answers every call to ret's route with 410 ENDPOINT_RETIRED. It reads
-// no body, checks no credential and touches no storage: the answer is the same for everyone.
-func retiredLegacyWrite(ret LegacyWriteRetirement) http.HandlerFunc {
+// retirementAnswer is the error message and details every call to ret's route receives; the
+// served API document (openapi_retired_writes.go) publishes the same message.
+func retirementAnswer(ret LegacyWriteRetirement) (string, retiredRouteDetails) {
 	details := retiredRouteDetails{RetiredRoute: ret.Route, Instructions: ret.Instructions}
 	message := ret.Route + " was retired with the canonical knowledge model"
 	if ret.Replacement != "" {
@@ -90,6 +90,13 @@ func retiredLegacyWrite(ret LegacyWriteRetirement) http.HandlerFunc {
 	} else {
 		message += " and has no canonical equivalent."
 	}
+	return message, details
+}
+
+// retiredLegacyWrite answers every call to ret's route with 410 ENDPOINT_RETIRED. It reads
+// no body, checks no credential and touches no storage: the answer is the same for everyone.
+func retiredLegacyWrite(ret LegacyWriteRetirement) http.HandlerFunc {
+	message, details := retirementAnswer(ret)
 	return func(w http.ResponseWriter, _ *http.Request) {
 		response.WriteErrorWithDetails(w, http.StatusGone, ErrCodeEndpointRetired, message, details)
 	}

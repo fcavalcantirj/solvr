@@ -1250,3 +1250,176 @@ ADDENDUM 14:14 [TEST, /tmp/solvr_idx52_s1_full.log]: the full run got further th
   The remaining packages (api/handlers, middleware, db, jobs, ...) were not reached in the full run;
   internal/jobs ran green in the targeted run above. The run was then killed; the HEAD worktree
   /tmp/solvr_idx52_base was removed.
+
+2026-09-30 14:45 — Task idx 52 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Route existing agent integrations into the canonical knowledge model during a defined transition"
+SLICE 2 of N: step 4 (document every retired write shape with its canonical replacement in the API
+docs and migration notes; no sunset period) — served OpenAPI, SPEC.md migration notes and the /api-docs
+page. Steps 2 (first-party clients), 5 (legacy READ routes per idx 73) and the client half of 6 remain.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 52, 53, 67, 68, 73, 74, 77-95, 97,
+  98; no open URGENT. idx 24 stays skipped for the reason slice 1 recorded (acceptance task; its step 3
+  needs the SDK/adapter work of idx 78). idx 52 is the first buildable open task; slice 1's REMAINING
+  list put step 4 next. Tree clean at start [REAL, git status].
+
+WHAT CHANGED [REAL, git status --porcelain: 8 M + 5 ??; git diff --stat 245+/279- on tracked files]:
+  PRODUCTION (backend):
+  A backend/internal/api/openapi_retired_writes.go (83): documentRetiredWrites(spec) walks
+    LegacyWriteRetirements and REPLACES the documented operation of each of the 19 retired routes with:
+    summary "Retired: <old summary>", operationId/tags kept, deprecated true, security [] (the route
+    reads no credential), path parameters from the template only, no requestBody, responses ONLY
+    {"410": $ref components/responses/EndpointRetired}, description = the served error message + the
+    instructions, and x-solvr-retired {replacement (null when none), instructions}. Adds
+    components.responses.EndpointRetired and components.schemas.RetiredEndpointError (code enum
+    [ENDPOINT_RETIRED], details {retired_route, replacement nullable, instructions}, request_id).
+  M backend/internal/api/legacy_write_retirement.go: message/details construction moved out of
+    retiredLegacyWrite into retirementAnswer(ret), used by the handler AND the document (behavior of
+    the handler unchanged; slice-1 DB tests re-run green, below).
+  M backend/internal/api/discovery.go: getOpenAPISpec calls documentRetiredWrites(spec) after
+    addOperations (1 line).
+  DOCS:
+  M SPEC.md Part 26: 26.1 "During the transition a retired route is still served; ..." replaced (retired
+    READ routes stay served until their family's removal; retired WRITE routes answer 410
+    ENDPOINT_RETIRED naming the replacement, no sunset period). NEW "## 26.6 Retired Legacy Writes
+    (migration notes)": the 410 example body, where the table lives, what the OpenAPI publishes, and a
+    19-row table `retired route | canonical replacement (or none) | old request shape -> canonical
+    request shape`, plus how a client holding an old id finds the reply (legacy_type/legacy_id).
+    Request shapes read from the structs this session [REAL]: CreatePostRequest, CreateApproachRequest
+    {angle, method, assumptions, differs_from}, CreateAnswerRequest/UpdateAnswerRequest {content},
+    CreateResponseRequest {content, response_type}, ProgressNoteRequest/CreateCommentRequest {content},
+    UpdateApproachRequest {status, outcome, method}, VerifyApproachRequest {verified}, EvolveIdea
+    {evolved_post_id}, VoteRequest {direction}, CreateReplyRequest {body, parent_reply_id}.
+  FRONTEND (/api-docs page; static content, no logic):
+  M components/api/api-endpoint-types.ts: Endpoint.retired?: Retirement {replacement: string|null,
+    migration: string}.
+  A components/api/api-endpoint-retired.ts (36): retiredEndpoint(method, path, route, replacement,
+    migration) builds the entry: auth "none", description "Retired: use X instead" / "Retired: no
+    canonical equivalent", response = the 410 body with the backend's exact message format.
+  M components/api/api-endpoint-data-content.ts (475 -> 391) and -user.ts (447 -> 401): the 19 legacy
+    write entries (14 + 5) replaced IN PLACE by retiredEndpoint(...) with the SPEC 26.6 replacement and
+    migration text; the page had NO canonical knowledge writes, so added POST /posts (title,
+    description, tags, visibility; no type) to "Posts" and a new "Replies" group (GET/POST
+    /posts/{id}/replies, PATCH/DELETE /replies/{id}, POST /replies/{id}/vote) with response shapes read
+    from handlers/replies.go and models/reply.go [REAL]. Legacy READ entries untouched (idx 73).
+  M components/api/api-endpoints.tsx: RETIRED badge beside the path; expanded card shows a MIGRATION
+    block ("Use <code>replacement</code> instead." or "This command has no canonical equivalent." + the
+    migration line); "Try it" is not rendered for a retired entry.
+  TESTS: A backend/internal/api/openapi_retired_writes_test.go (149), A frontend/components/api/
+    api-endpoint-retired.test.ts (99), A frontend/components/api/api-endpoints.test.tsx (41),
+    M frontend/components/api/api-endpoint-data.test.ts (below).
+
+SINGLE SOURCE CHAIN: Go LegacyWriteRetirements (mounted by the router, slice 1) -> served OpenAPI
+  (generated from it) and SPEC.md 26.6 (pinned to it by a Go test) -> /api-docs page data (pinned to
+  SPEC.md 26.6 by a vitest that parses the table).
+
+NEW TESTS:
+  backend (DB-less; they read GET /v1/openapi.json through NewRouter(nil,nil,nil) and SPEC.md):
+  - TestOpenAPIRetiredWrites_EveryRetiredRouteIsDocumentedAsGoneWithItsReplacement: for all 19: deprecated,
+    no requestBody, responses == {410} -> EndpointRetired, security [], x-solvr-retired replacement/
+    instructions == the table, description contains the instructions, every path variable declared.
+  - TestOpenAPIRetiredWrites_TheDocumentedAnswerIsTheServedAnswer: EndpointRetired schema: code enum
+    [ENDPOINT_RETIRED], details properties == json fields of retiredRouteDetails, replacement nullable;
+    for each route the handler mountRetiredLegacyWrites mounts is called and its description must open
+    with the served message and the served details keys equal the documented ones. (A nil-pool router
+    mounts no /v1 route at all — router.go "V1 API routes will not be mounted" — so the handler is
+    called directly; the mount itself is pinned by slice 1's TestLegacyWriteRoutes_AnswerTheMigration
+    ErrorAndWriteNothing, re-run green below.)
+  - TestLegacyWriteRetirements_PublishedInSpecMigrationNotes: Part 26 has 26.6; it states 410,
+    `ENDPOINT_RETIRED`, "no sunset period", retired_route/replacement/instructions; one row
+    "| `ROUTE` | `REPLACEMENT` |" (or "| none |") per table entry; Part 26 no longer says "During the
+    transition a retired route is still served".
+  frontend:
+  - api-endpoint-retired.test.ts (5): SPEC 26.6 parses to 19 rows; every row's route is on the page with
+    retired == {replacement, migration} from SPEC, auth "none", a 410 body with ENDPOINT_RETIRED,
+    retired_route and the backend's message; nothing else is marked retired; every non-null replacement
+    is a documented, non-retired, auth "both" endpoint on the page; POST /posts has no type param and
+    POST /posts/{id}/replies has body and parent_reply_id.
+  - api-endpoints.test.tsx (3): a retired card shows RETIRED, the replacement <code>, the migration line
+    and no Try it; a command with no replacement says "This command has no canonical equivalent." and
+    has no Try it; a live endpoint (POST /replies/{id}/vote) has Try it and no RETIRED.
+
+EXISTING TESTS THAT DESCRIBED THE REPLACED BEHAVIOR (golden rule a-d):
+  frontend/components/api/api-endpoint-data.test.ts — 4 tests asserted the page documents a retired
+  write as a live authenticated route: "documents POST /problems (create)", "documents POST /questions
+  (create)", "documents POST /ideas (create)" and "documents POST /responses/{id}/comments", each
+  `expect(ep).toBeDefined(); expect(ep!.auth).toBe("both");`. Since slice 1 those routes answer 410 to
+  every caller without reading a credential. Each is now "documents <route> as retired (410 to every
+  caller, no credential read) with its replacement": still toBeDefined, plus retired.replacement ==
+  "POST /v1/posts" (the three creates) / "POST /v1/posts/{id}/replies" (response comment) and auth
+  "none". The same facts for all 19 are covered by api-endpoint-retired.test.ts "marks every retired
+  route as retired with the SPEC replacement and migration" — both PASS [TEST]. No other test changed.
+  The Posts-group tests "does not document generic PATCH/DELETE /posts/{id}" are untouched and still
+  pass (no PATCH/DELETE /posts/{id} was added).
+
+VERIFICATION (backend DB tests against DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local
+  docker solvr-postgres, schema_migrations 114 dirty=f [REAL, psql]):
+  RED [TEST]: /tmp/solvr_idx52_s2_red.log (post /v1/problems "must be marked deprecated", "spec has no
+    x-solvr-retired", "spec has no components.responses.EndpointRetired", "Part 26 has no 26.6");
+    /tmp/solvr_idx52_s2_fe_red.log ("POST /v1/problems is not marked retired", "POST /v1/posts
+    (replacement of POST /v1/problems) is not documented"); /tmp/solvr_idx52_s2_fe_red2.log ("Unable to
+    find an element with the text: RETIRED").
+  GREEN [TEST]: 3 new Go tests PASS (/tmp/solvr_idx52_s2_green4.log, 41 PASS 0 SKIP with the OpenAPI/route-family/
+    discovery set); the slice-1 DB tests TestLegacyWriteRoutes_AnswerTheMigrationErrorAndWriteNothing and
+    TestLegacyWriteRetirement_NewClientCreatesCanonicalPostsAndReplies re-run PASS after the retirementAnswer
+    refactor (/tmp/solvr_idx52_s2_db.log). Frontend components/api: 6 files, 73 tests PASS
+    (/tmp/solvr_idx52_s2_fe_green4.log).
+  MUTATIONS [TEST], sources restored and cmp-verified after each:
+    mutE doc pass skips POST /v1/questions/{id}/answers (old 201 doc survives) -> FAIL "must be marked
+      deprecated", "documents a request body", "must document only 410" (/tmp/solvr_idx52_s2_mutE.log);
+    mutF served message changed, doc not -> FAIL "description ... must open with the served message"
+      (/tmp/solvr_idx52_s2_mutF.log);
+    mutG table replacement of the answer vote changed, SPEC not -> FAIL "the migration notes do not map
+      POST /v1/answers/{id}/vote to `POST /v1/posts/{id}/vote`" (/tmp/solvr_idx52_s2_mutG.log);
+    mutH Try it rendered for retired entries -> 2 render tests FAIL (/tmp/solvr_idx52_s2_fe_mutH.log).
+  FULL internal/api PACKAGE once: `go test -p 1 -count=1 -v -timeout 30m ./internal/api/` ->
+    /tmp/solvr_idx52_s2_apipkg.log: 440 top-level PASS, 0 SKIP, 4 FAIL, 393s. Three are the pre-existing
+    shared-DB failures slice 1 recorded as identical on untouched HEAD: TestHomepageOverview_ServesEvery
+    SectionToALoggedOutVisitor, TestHomepageSearch_NeverPublishesAProtectedOrUnrepeatedTerm,
+    TestHomepageSearch_NeverPublishesPastedSecretsOrPersonalData. The fourth,
+    TestNAgentRoom_ConcurrentFirstMessagesOnTwoInstancesActivateOnce, failed in its fixture: "failed to
+    register agent ... 409 DUPLICATE_NAME ... roomtest_89586000" (router_rooms_manage_test.go:31, a
+    second-granularity name collision on the shared DB, same class as slice 1's TestAgentClaim_Retries...)
+    and PASSES run alone [TEST, /tmp/solvr_idx52_s2_nagent_alone.log]. Every OpenAPI, route-family and
+    legacy-write test PASSES in the package run. Other backend packages were not run: nothing outside
+    internal/api changed.
+  FRONTEND FULL once: `npm test -- --run` -> 185 files, 1671 tests PASS (was 183/1663; +2 files, +8 tests)
+    (/tmp/solvr_idx52_s2_fe_full.log); `npm run typecheck` clean; eslint clean on all 8 touched/new files.
+  go build ./... ok; go vet ./internal/api/ clean; gofmt -l clean on my 3 Go files (discovery.go was
+    already gofmt-unclean at HEAD [REAL, git show HEAD | gofmt -l]; I added 1 line and did not reformat it).
+    check-file-size.sh -> "Found 34 file(s) exceeding 800 lines" (unchanged; the largest touched file is
+    391 lines) (/tmp/solvr_idx52_s2_filesize.log). golangci-lint not run (config/version mismatch, as before).
+
+LIMITS / NOTES [REAL unless stated]:
+  - POST /v1/replies/{id}/vote (the answer-vote replacement) is served and is now on the /api-docs page, but
+    is still NOT an operation in the served OpenAPI (replyPaths documents only /posts/{id}/replies and
+    /replies/{id}); its response {voted, direction} differs from the VoteResponse schema. Pre-existing gap,
+    left for idx 73/74; x-solvr-retired still names it.
+  - The legacy path functions in openapi_paths.go still build the old 201 operations; documentRetiredWrites
+    overwrites them. They go away with the legacy code (owner decision 4: all at once).
+  - /api-docs pre-existing quirk: the card expand key is group+path, so a GET and a POST on the same path
+    (e.g. /questions/{id}/answers) open together [TEST, seen in the first render run]. Not changed.
+  - The /api-docs page is still missing other canonical routes (GET /v1/posts list, PATCH/DELETE posts;
+    two existing tests even pin that PATCH/DELETE /posts/{id} are NOT documented). Out of step 4's scope.
+  - SPEC.md 26.6 says PATCH replies "with If-Match"; whether a missing If-Match is 428 is idx 74's work
+    (owner decision 8) [UNVERIFIED here].
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW:
+  - GET /v1/openapi.json|yaml now marks the 19 legacy writes deprecated with only a 410 answer (a client
+    generator will stop emitting working 201 methods for them), and adds EndpointRetired /
+    RetiredEndpointError to components [TEST].
+  - The /api-docs page shows the 19 as RETIRED with a MIGRATION block and no Try it, and gains POST /posts
+    and a Replies group [TEST].
+  - No migration, no schema change, no new endpoint. Nothing deploys from this (main is the cutover build).
+
+REMAINING FOR idx 52 (next slices, in order):
+  step 2: first-party clients to canonical posts/replies without type selection: mcp-server/src/api.ts,
+    packages/sdk-ts, packages/sdk-python, packages/sdk-go, packages/cli, cli (Go: answer.go, get.go),
+    skill/scripts/solvr.sh (slice 1's inventory).
+  step 6 client half: an old SDK call gets the migration error; a new SDK creates canonical rows.
+  step 5: redirects exist (frontend/middleware.ts 308); legacy READ routes follow idx 73.
+  full backend suite over all packages (only internal/api ran for this slice's change).
+
+git status at journal time [REAL]: 8 M (SPEC.md, discovery.go, legacy_write_retirement.go, 5 frontend
+  components/api files) + 5 ?? (2 Go files, 3 frontend files) + this progress.txt entry; spec.json unchanged,
+  idx 52 passes stays false.

@@ -1,4 +1,5 @@
 import { EndpointGroup } from "./api-endpoint-types";
+import { retiredEndpoint } from "./api-endpoint-retired";
 
 export const userEndpointGroups: EndpointGroup[] = [
   {
@@ -27,20 +28,7 @@ export const userEndpointGroups: EndpointGroup[] = [
   "meta": { "total": 5, "page": 1, "per_page": 20, "has_more": false }
 }`,
       },
-      {
-        method: "POST",
-        path: "/approaches/{id}/comments",
-        description: "Add comment to an approach",
-        auth: "both",
-        params: [{ name: "content", type: "string", required: true, description: "Comment text (max 2000 chars)" }],
-        response: `{
-  "data": {
-    "id": "c3d4e5f6-a1b2-3456-7890-abcdef012345",
-    "content": "This worked for me!",
-    "created_at": "2026-01-16T12:30:00Z"
-  }
-}`,
-      },
+      retiredEndpoint("POST", "/approaches/{id}/comments", "POST /v1/approaches/{id}/comments", "POST /v1/posts/{id}/replies", "{content} → {body, parent_reply_id}: the parent is the migrated approach (legacy_type approach)"),
       {
         method: "GET",
         path: "/answers/{id}/comments",
@@ -56,16 +44,7 @@ export const userEndpointGroups: EndpointGroup[] = [
   "meta": { "total": 3, "page": 1, "per_page": 20, "has_more": false }
 }`,
       },
-      {
-        method: "POST",
-        path: "/answers/{id}/comments",
-        description: "Add comment to an answer",
-        auth: "both",
-        params: [{ name: "content", type: "string", required: true, description: "Comment text (max 2000 chars)" }],
-        response: `{
-  "data": { "id": "d4e5f6a1-b2c3-4567-8901-bcdef0123456" }
-}`,
-      },
+      retiredEndpoint("POST", "/answers/{id}/comments", "POST /v1/answers/{id}/comments", "POST /v1/posts/{id}/replies", "{content} → {body, parent_reply_id}: the parent is the migrated answer (legacy_type answer)"),
       {
         method: "GET",
         path: "/responses/{id}/comments",
@@ -81,16 +60,7 @@ export const userEndpointGroups: EndpointGroup[] = [
   "meta": { "total": 2, "page": 1, "per_page": 20, "has_more": false }
 }`,
       },
-      {
-        method: "POST",
-        path: "/responses/{id}/comments",
-        description: "Add comment to an idea response",
-        auth: "both",
-        params: [{ name: "content", type: "string", required: true, description: "Comment text (max 2000 chars)" }],
-        response: `{
-  "data": { "id": "e5f6a1b2-c3d4-5678-9012-cdef01234567" }
-}`,
-      },
+      retiredEndpoint("POST", "/responses/{id}/comments", "POST /v1/responses/{id}/comments", "POST /v1/posts/{id}/replies", "{content} → {body, parent_reply_id}: the parent is the migrated response (legacy_type response)"),
       {
         method: "GET",
         path: "/posts/{id}/comments",
@@ -106,24 +76,8 @@ export const userEndpointGroups: EndpointGroup[] = [
   "meta": { "total": 8, "page": 1, "per_page": 20, "has_more": false }
 }`,
       },
-      {
-        method: "POST",
-        path: "/posts/{id}/comments",
-        description: "Add comment to a post",
-        auth: "both",
-        params: [{ name: "content", type: "string", required: true, description: "Comment text (max 2000 chars)" }],
-        response: `{
-  "data": { "id": "f6a1b2c3-d4e5-6789-0123-def012345678" }
-}`,
-      },
-      {
-        method: "DELETE",
-        path: "/comments/{id}",
-        description: "Delete a comment (author only)",
-        auth: "both",
-        params: [{ name: "id", type: "string", required: true, description: "Comment ID" }],
-        response: `// 204 No Content`,
-      },
+      retiredEndpoint("POST", "/posts/{id}/comments", "POST /v1/posts/{id}/comments", "POST /v1/posts/{id}/replies", "{content} → {body}"),
+      retiredEndpoint("DELETE", "/comments/{id}", "DELETE /v1/comments/{id}", "DELETE /v1/replies/{id}", "no body; the reply id of the migrated comment (legacy_type comment)"),
     ],
   },
   {

@@ -27,13 +27,16 @@ func TestPostCommand_InteractiveShortFlag(t *testing.T) {
 	}
 }
 
-// TestPostCommand_InteractivePromptsForType tests that interactive mode prompts for type
-func TestPostCommand_InteractivePromptsForType(t *testing.T) {
+// TestPostCommand_InteractiveNeverPromptsForType tests that interactive mode
+// asks for the title first: there is no type to choose
+func TestPostCommand_InteractiveNeverPromptsForType(t *testing.T) {
+	var receivedPayload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&receivedPayload)
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Test",
 			},
 		}
@@ -43,8 +46,8 @@ func TestPostCommand_InteractivePromptsForType(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Simulate user input: type=1 (question), title, description
-	input := "1\nTest Title\nTest description that is long enough for validation\n\n"
+	// Simulate user input: title, description, empty tags
+	input := "Test Title\nTest description that is long enough for validation\n\n"
 	stdinReader := strings.NewReader(input)
 
 	postCmd := NewPostCmd()
@@ -62,9 +65,17 @@ func TestPostCommand_InteractivePromptsForType(t *testing.T) {
 	}
 
 	output := buf.String()
-	// Should prompt for type selection
-	if !strings.Contains(output, "Type") && !strings.Contains(output, "type") {
-		t.Errorf("expected output to prompt for type, got: %s", output)
+	if strings.Contains(output, "Select post type") || strings.Contains(output, "Type (1-3") {
+		t.Errorf("expected no type prompt, got: %s", output)
+	}
+	if !strings.HasPrefix(output, "Title: ") {
+		t.Errorf("expected the first prompt to be the title, got: %s", output)
+	}
+	if _, hasType := receivedPayload["type"]; hasType {
+		t.Errorf("expected no type in payload, got %v", receivedPayload)
+	}
+	if receivedPayload["title"] != "Test Title" {
+		t.Errorf("expected title 'Test Title', got '%v'", receivedPayload["title"])
 	}
 }
 
@@ -74,7 +85,7 @@ func TestPostCommand_InteractivePromptsForTitle(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Prompted Title",
 			},
 		}
@@ -95,7 +106,7 @@ func TestPostCommand_InteractivePromptsForTitle(t *testing.T) {
 	postCmd.SetIn(stdinReader)
 	postCmd.Flags().Set("api-url", server.URL)
 	postCmd.Flags().Set("interactive", "true")
-	postCmd.SetArgs([]string{"question"}) // type provided as arg
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -115,7 +126,7 @@ func TestPostCommand_InteractivePromptsForDescription(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Test",
 			},
 		}
@@ -137,7 +148,7 @@ func TestPostCommand_InteractivePromptsForDescription(t *testing.T) {
 	postCmd.Flags().Set("api-url", server.URL)
 	postCmd.Flags().Set("interactive", "true")
 	postCmd.Flags().Set("title", "Test Title") // title provided via flag
-	postCmd.SetArgs([]string{"question"})      // type provided as arg
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -157,7 +168,7 @@ func TestPostCommand_InteractivePromptsForTags(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Test",
 			},
 		}
@@ -180,7 +191,7 @@ func TestPostCommand_InteractivePromptsForTags(t *testing.T) {
 	postCmd.Flags().Set("interactive", "true")
 	postCmd.Flags().Set("title", "Test Title")
 	postCmd.Flags().Set("description", "Test description that is long enough for validation")
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -204,7 +215,7 @@ func TestPostCommand_InteractiveUsesProvidedFlags(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "problem",
+				"type":  "post",
 				"title": "Flag Title",
 			},
 		}
@@ -228,7 +239,7 @@ func TestPostCommand_InteractiveUsesProvidedFlags(t *testing.T) {
 	postCmd.Flags().Set("title", "Flag Title")
 	postCmd.Flags().Set("description", "Flag description that is long enough for validation")
 	postCmd.Flags().Set("tags", "test,flag")
-	postCmd.SetArgs([]string{"problem"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -239,8 +250,8 @@ func TestPostCommand_InteractiveUsesProvidedFlags(t *testing.T) {
 	if receivedPayload["title"] != "Flag Title" {
 		t.Errorf("expected title 'Flag Title', got '%v'", receivedPayload["title"])
 	}
-	if receivedPayload["type"] != "problem" {
-		t.Errorf("expected type 'problem', got '%v'", receivedPayload["type"])
+	if _, hasType := receivedPayload["type"]; hasType {
+		t.Errorf("expected no type in payload, got '%v'", receivedPayload["type"])
 	}
 }
 
@@ -254,7 +265,7 @@ func TestPostCommand_InteractiveSendsCorrectPayload(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "idea",
+				"type":  "post",
 				"title": "Interactive Title",
 			},
 		}
@@ -264,8 +275,8 @@ func TestPostCommand_InteractiveSendsCorrectPayload(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Simulate full interactive input: type (3=idea), title, description, tags
-	input := "3\nInteractive Title\nInteractive description that is long enough for validation\ngo,interactive\n"
+	// Simulate full interactive input: title, description, tags
+	input := "Interactive Title\nInteractive description that is long enough for validation\ngo,interactive\n"
 	stdinReader := strings.NewReader(input)
 
 	postCmd := NewPostCmd()
@@ -283,8 +294,8 @@ func TestPostCommand_InteractiveSendsCorrectPayload(t *testing.T) {
 	}
 
 	// Verify payload
-	if receivedPayload["type"] != "idea" {
-		t.Errorf("expected type 'idea', got '%v'", receivedPayload["type"])
+	if _, hasType := receivedPayload["type"]; hasType {
+		t.Errorf("expected no type in payload, got '%v'", receivedPayload["type"])
 	}
 	if receivedPayload["title"] != "Interactive Title" {
 		t.Errorf("expected title 'Interactive Title', got '%v'", receivedPayload["title"])
@@ -294,8 +305,9 @@ func TestPostCommand_InteractiveSendsCorrectPayload(t *testing.T) {
 	}
 }
 
-// TestPostCommand_InteractiveTypeByName tests selecting type by name instead of number
-func TestPostCommand_InteractiveTypeByName(t *testing.T) {
+// TestPostCommand_InteractiveFirstAnswerIsTitle tests that a former type name
+// typed at the first prompt is taken as the title, not as a type
+func TestPostCommand_InteractiveFirstAnswerIsTitle(t *testing.T) {
 	var receivedPayload map[string]interface{}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -304,7 +316,7 @@ func TestPostCommand_InteractiveTypeByName(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Test",
 			},
 		}
@@ -314,8 +326,8 @@ func TestPostCommand_InteractiveTypeByName(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Simulate input with type name instead of number
-	input := "question\nTest Title\nTest description that is long enough for validation\n\n"
+	// A former type name at the first prompt is just the title
+	input := "question\nTest description that is long enough for validation\n\n"
 	stdinReader := strings.NewReader(input)
 
 	postCmd := NewPostCmd()
@@ -332,8 +344,14 @@ func TestPostCommand_InteractiveTypeByName(t *testing.T) {
 		t.Fatalf("interactive mode failed: %v", err)
 	}
 
-	if receivedPayload["type"] != "question" {
-		t.Errorf("expected type 'question', got '%v'", receivedPayload["type"])
+	if receivedPayload["title"] != "question" {
+		t.Errorf("expected title 'question', got '%v'", receivedPayload["title"])
+	}
+	if receivedPayload["description"] != "Test description that is long enough for validation" {
+		t.Errorf("expected the second answer as description, got '%v'", receivedPayload["description"])
+	}
+	if _, hasType := receivedPayload["type"]; hasType {
+		t.Errorf("expected no type in payload, got '%v'", receivedPayload["type"])
 	}
 }
 
@@ -343,7 +361,7 @@ func TestPostCommand_InteractiveEmptyTagsAllowed(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Test",
 			},
 		}
@@ -354,7 +372,7 @@ func TestPostCommand_InteractiveEmptyTagsAllowed(t *testing.T) {
 	defer server.Close()
 
 	// Simulate input with empty tags (just press enter)
-	input := "1\nTest Title\nTest description that is long enough for validation\n\n"
+	input := "Test Title\nTest description that is long enough for validation\n\n"
 	stdinReader := strings.NewReader(input)
 
 	postCmd := NewPostCmd()
@@ -372,25 +390,15 @@ func TestPostCommand_InteractiveEmptyTagsAllowed(t *testing.T) {
 	}
 }
 
-// TestPostCommand_InteractiveInvalidTypeRetry tests that invalid type prompts again
-func TestPostCommand_InteractiveInvalidTypeRetry(t *testing.T) {
+// TestPostCommand_InteractiveRejectsTypeArgument tests that a type argument is
+// refused in interactive mode too, before any prompt or request
+func TestPostCommand_InteractiveRejectsTypeArgument(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
-				"id":    "post-123",
-				"type":  "question",
-				"title": "Test",
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(response)
+		t.Error("API should not be called when a type argument is given")
 	}))
 	defer server.Close()
 
-	// Simulate input: invalid type first, then valid
-	input := "invalid\n1\nTest Title\nTest description that is long enough for validation\n\n"
-	stdinReader := strings.NewReader(input)
+	stdinReader := strings.NewReader("Test Title\nTest description that is long enough for validation\n\n")
 
 	postCmd := NewPostCmd()
 	buf := new(bytes.Buffer)
@@ -399,17 +407,17 @@ func TestPostCommand_InteractiveInvalidTypeRetry(t *testing.T) {
 	postCmd.SetIn(stdinReader)
 	postCmd.Flags().Set("api-url", server.URL)
 	postCmd.Flags().Set("interactive", "true")
-	postCmd.SetArgs([]string{})
+	postCmd.SetArgs([]string{"invalid"})
 
 	err := postCmd.Execute()
-	if err != nil {
-		t.Fatalf("interactive mode should retry on invalid type: %v", err)
+	if err == nil {
+		t.Fatal("expected interactive mode to refuse a type argument")
 	}
-
-	output := buf.String()
-	// Should show error message for invalid type
-	if !strings.Contains(strings.ToLower(output), "invalid") {
-		t.Errorf("expected output to mention 'invalid' type, got: %s", output)
+	if !strings.Contains(err.Error(), "posts take no type") {
+		t.Errorf("expected the no-type error, got: %v", err)
+	}
+	if strings.Contains(buf.String(), "Title: ") {
+		t.Errorf("expected no prompt before the refusal, got: %s", buf.String())
 	}
 }
 
@@ -431,13 +439,13 @@ func TestPostCommand_InteractiveHelpText(t *testing.T) {
 	}
 }
 
-// TestPostCommand_InteractiveNoArgsTriggersPrompt tests that no args with -i triggers type prompt
+// TestPostCommand_InteractiveNoArgsTriggersPrompt tests that no args with -i triggers the prompts
 func TestPostCommand_InteractiveNoArgsTriggersPrompt(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "problem",
+				"type":  "post",
 				"title": "Test",
 			},
 		}
@@ -448,7 +456,7 @@ func TestPostCommand_InteractiveNoArgsTriggersPrompt(t *testing.T) {
 	defer server.Close()
 
 	// Simulate input for all fields
-	input := "2\nProblem Title\nProblem description that is long enough for validation\ngo,test\n"
+	input := "Problem Title\nProblem description that is long enough for validation\ngo,test\n"
 	stdinReader := strings.NewReader(input)
 
 	postCmd := NewPostCmd()
@@ -458,7 +466,7 @@ func TestPostCommand_InteractiveNoArgsTriggersPrompt(t *testing.T) {
 	postCmd.SetIn(stdinReader)
 	postCmd.Flags().Set("api-url", server.URL)
 	postCmd.Flags().Set("interactive", "true")
-	postCmd.SetArgs([]string{}) // No type arg
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -474,7 +482,7 @@ func TestPostCommand_NonInteractiveStillRequiresFields(t *testing.T) {
 	postCmd.SetErr(buf)
 	// No interactive flag, no title
 	postCmd.Flags().Set("description", "Some description")
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err == nil {

@@ -43,7 +43,8 @@ Use "solvr [command] --help" for more information about a command.`,
 	rootCmd.AddCommand(NewSearchCmd())
 	rootCmd.AddCommand(NewGetCmd())
 	rootCmd.AddCommand(NewPostCmd())
-	rootCmd.AddCommand(NewAnswerCmd())
+	rootCmd.AddCommand(NewReplyCmd())
+	rootCmd.AddCommand(NewRepliesCmd())
 	rootCmd.AddCommand(NewClaimCmd())
 	rootCmd.AddCommand(NewPinCmd())
 

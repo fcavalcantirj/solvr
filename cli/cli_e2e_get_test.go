@@ -266,70 +266,33 @@ func TestE2E_GetCommand_JSONOutput(t *testing.T) {
 	}
 }
 
-func TestE2E_GetCommand_WithApproaches(t *testing.T) {
+func TestE2E_RepliesCommand_MigratedContributions(t *testing.T) {
 	requestPaths := []string{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestPaths = append(requestPaths, r.URL.Path)
-
-		if r.URL.Path == "/v1/posts/prob-app" {
-			response := GetAPIResponse{
-				Data: PostDetail{
-					ID:          "prob-app",
-					Type:        "problem",
-					Title:       "Problem with approaches",
-					Description: "Test problem",
-					Tags:        []string{},
-					Status:      "working",
-					Author: AuthorInfo{
-						ID:          "user-1",
-						Type:        "human",
-						DisplayName: "Test",
-					},
-					Upvotes:   1,
-					Downvotes: 0,
-					VoteScore: 1,
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
-		} else if r.URL.Path == "/v1/problems/prob-app/approaches" {
-			response := ApproachesAPIResponse{
-				Data: []ApproachDetail{
-					{
-						ID:        "app-1",
-						ProblemID: "prob-app",
-						Angle:     "Try using connection pooling",
-						Method:    "Implement pgx pool",
-						Status:    "succeeded",
-						Outcome:   "Reduced connection overhead by 50%",
-						Author: AuthorInfo{
-							ID:          "agent_claude",
-							Type:        "agent",
-							DisplayName: "Claude",
-						},
-						CreatedAt: time.Now(),
-						UpdatedAt: time.Now(),
-					},
-					{
-						ID:        "app-2",
-						ProblemID: "prob-app",
-						Angle:     "Optimize query structure",
-						Status:    "working",
-						Author: AuthorInfo{
-							ID:          "user-2",
-							Type:        "human",
-							DisplayName: "Developer",
-						},
-						CreatedAt: time.Now(),
-						UpdatedAt: time.Now(),
-					},
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+		if r.URL.Path != "/v1/posts/prob-app/replies" {
+			http.NotFound(w, r)
+			return
 		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"id": "reply-app-1", "post_id": "prob-app", "author_type": "agent", "author_id": "agent_claude",
+					"body":        "Try using connection pooling: implement a pgx pool. Reduced connection overhead by 50%",
+					"score":       1,
+					"legacy_type": "approach",
+					"legacy_id":   "app-1",
+				},
+				{
+					"id": "reply-app-2", "post_id": "prob-app", "author_type": "human", "author_id": "user-2",
+					"body":        "Optimize query structure",
+					"legacy_type": "approach",
+					"legacy_id":   "app-2",
+				},
+			},
+			"meta": map[string]interface{}{"total": 2, "has_more": false},
+		})
 	}))
 	defer server.Close()
 
@@ -337,116 +300,53 @@ func TestE2E_GetCommand_WithApproaches(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(new(bytes.Buffer))
-	rootCmd.SetArgs([]string{"get", "--api-url", server.URL + "/v1", "--include", "approaches", "prob-app"})
+	rootCmd.SetArgs([]string{"replies", "--api-url", server.URL + "/v1", "--api-key", "test_key", "prob-app"})
 
 	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
 
-	// Verify both endpoints were called
-	if len(requestPaths) != 2 {
-		t.Errorf("expected 2 API requests, got %d", len(requestPaths))
+	// One call to the canonical replies endpoint, none to a legacy route
+	if len(requestPaths) != 1 {
+		t.Errorf("expected 1 API request, got %d: %v", len(requestPaths), requestPaths)
 	}
 
 	output := stdout.String()
-	if !strings.Contains(output, "Approaches") {
-		t.Error("output should contain Approaches section")
+	if !strings.Contains(output, "2 replies") {
+		t.Error("output should count the replies")
 	}
 	if !strings.Contains(output, "Try using connection pooling") {
-		t.Error("output should contain approach angle")
+		t.Error("output should contain the migrated approach body")
 	}
-	if !strings.Contains(output, "succeeded") {
-		t.Error("output should contain approach status")
+	if strings.Count(output, "migrated approach") != 2 {
+		t.Errorf("output should label both migrated approaches, got: %s", output)
 	}
 }
 
-func TestE2E_GetCommand_WithAnswers(t *testing.T) {
-	requestPaths := []string{}
+func TestE2E_RepliesCommand_Threaded(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestPaths = append(requestPaths, r.URL.Path)
-
-		if r.URL.Path == "/v1/posts/q-ans" {
-			response := GetAPIResponse{
-				Data: PostDetail{
-					ID:          "q-ans",
-					Type:        "question",
-					Title:       "Question with answers",
-					Description: "Test question",
-					Tags:        []string{},
-					Status:      "answered",
-					Author: AuthorInfo{
-						ID:          "user-1",
-						Type:        "human",
-						DisplayName: "Test",
-					},
-					Upvotes:   5,
-					Downvotes: 0,
-					VoteScore: 5,
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
-		} else if r.URL.Path == "/v1/questions/q-ans" {
-			response := QuestionAPIResponse{
-				Data: QuestionWithAnswers{
-					PostDetail: PostDetail{
-						ID:          "q-ans",
-						Type:        "question",
-						Title:       "Question with answers",
-						Description: "Test question",
-						Tags:        []string{},
-						Status:      "answered",
-						Author: AuthorInfo{
-							ID:          "user-1",
-							Type:        "human",
-							DisplayName: "Test",
-						},
-						Upvotes:   5,
-						Downvotes: 0,
-						VoteScore: 5,
-						CreatedAt: time.Now(),
-						UpdatedAt: time.Now(),
-					},
-					Answers: []AnswerDetail{
-						{
-							ID:         "ans-1",
-							QuestionID: "q-ans",
-							Content:    "You can use the time.After function for retries",
-							IsAccepted: true,
-							Author: AuthorInfo{
-								ID:          "agent_claude",
-								Type:        "agent",
-								DisplayName: "Claude",
-							},
-							Upvotes:   10,
-							Downvotes: 0,
-							VoteScore: 10,
-							CreatedAt: time.Now(),
-						},
-						{
-							ID:         "ans-2",
-							QuestionID: "q-ans",
-							Content:    "Consider using a library like backoff",
-							IsAccepted: false,
-							Author: AuthorInfo{
-								ID:          "user-2",
-								Type:        "human",
-								DisplayName: "Helper",
-							},
-							Upvotes:   3,
-							Downvotes: 1,
-							VoteScore: 2,
-							CreatedAt: time.Now(),
-						},
-					},
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+		if r.URL.Path != "/v1/posts/q-ans/replies" {
+			http.NotFound(w, r)
+			return
 		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"id": "reply-ans-1", "post_id": "q-ans", "author_type": "agent", "author_id": "agent_claude",
+					"body":        "Use context.WithTimeout instead of time.After in the loop",
+					"score":       2,
+					"legacy_type": "answer",
+				},
+				{
+					"id": "reply-ans-2", "post_id": "q-ans", "parent_reply_id": "reply-ans-1",
+					"author_type": "human", "author_id": "user-3",
+					"body": "That fixed it, thanks",
+				},
+			},
+			"meta": map[string]interface{}{"total": 2, "has_more": false},
+		})
 	}))
 	defer server.Close()
 
@@ -454,116 +354,52 @@ func TestE2E_GetCommand_WithAnswers(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(new(bytes.Buffer))
-	rootCmd.SetArgs([]string{"get", "--api-url", server.URL + "/v1", "--include", "answers", "q-ans"})
+	rootCmd.SetArgs([]string{"replies", "--api-url", server.URL + "/v1", "--api-key", "test_key", "q-ans"})
 
 	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
 
-	// Verify both endpoints were called
-	if len(requestPaths) != 2 {
-		t.Errorf("expected 2 API requests, got %d", len(requestPaths))
-	}
-
 	output := stdout.String()
-	if !strings.Contains(output, "Answers") {
-		t.Error("output should contain Answers section")
-	}
 	if !strings.Contains(output, "time.After") {
-		t.Error("output should contain answer content")
+		t.Error("output should contain the reply body")
 	}
-	if !strings.Contains(output, "Accepted") {
-		t.Error("output should show accepted answer")
+	if !strings.Contains(output, "migrated answer") {
+		t.Error("output should label the migrated answer")
+	}
+	if !strings.Contains(output, "in reply to reply-ans-1") {
+		t.Error("output should mark the threaded reply")
 	}
 }
 
-func TestE2E_GetCommand_WithResponses(t *testing.T) {
+func TestE2E_GetCommand_PointsToReplies(t *testing.T) {
 	requestPaths := []string{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestPaths = append(requestPaths, r.URL.Path)
-
-		if r.URL.Path == "/v1/posts/idea-resp" {
-			response := GetAPIResponse{
-				Data: PostDetail{
-					ID:          "idea-resp",
-					Type:        "idea",
-					Title:       "Idea with responses",
-					Description: "Test idea",
-					Tags:        []string{},
-					Status:      "exploring",
-					Author: AuthorInfo{
-						ID:          "user-1",
-						Type:        "human",
-						DisplayName: "Test",
-					},
-					Upvotes:   3,
-					Downvotes: 1,
-					VoteScore: 2,
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
-		} else if r.URL.Path == "/v1/ideas/idea-resp" {
-			response := IdeaAPIResponse{
-				Data: IdeaWithResponses{
-					PostDetail: PostDetail{
-						ID:          "idea-resp",
-						Type:        "idea",
-						Title:       "Idea with responses",
-						Description: "Test idea",
-						Tags:        []string{},
-						Status:      "exploring",
-						Author: AuthorInfo{
-							ID:          "user-1",
-							Type:        "human",
-							DisplayName: "Test",
-						},
-						Upvotes:   3,
-						Downvotes: 1,
-						VoteScore: 2,
-						CreatedAt: time.Now(),
-						UpdatedAt: time.Now(),
-					},
-					Responses: []ResponseDetail{
-						{
-							ID:           "resp-1",
-							IdeaID:       "idea-resp",
-							Content:      "Great idea! We should prototype this.",
-							ResponseType: "support",
-							Author: AuthorInfo{
-								ID:          "agent_gpt4",
-								Type:        "agent",
-								DisplayName: "GPT-4",
-							},
-							Upvotes:   5,
-							Downvotes: 0,
-							VoteScore: 5,
-							CreatedAt: time.Now(),
-						},
-						{
-							ID:           "resp-2",
-							IdeaID:       "idea-resp",
-							Content:      "Have you considered the performance implications?",
-							ResponseType: "concern",
-							Author: AuthorInfo{
-								ID:          "user-2",
-								Type:        "human",
-								DisplayName: "Reviewer",
-							},
-							Upvotes:   2,
-							Downvotes: 0,
-							VoteScore: 2,
-							CreatedAt: time.Now(),
-						},
-					},
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+		if r.URL.Path != "/v1/posts/idea-resp" {
+			http.NotFound(w, r)
+			return
 		}
+		response := GetAPIResponse{
+			Data: PostDetail{
+				ID:          "idea-resp",
+				Type:        "idea",
+				Title:       "Idea with responses",
+				Description: "Test idea",
+				Tags:        []string{},
+				Status:      "active",
+				Author: AuthorInfo{
+					ID:          "user-1",
+					Type:        "human",
+					DisplayName: "Test",
+				},
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -571,27 +407,24 @@ func TestE2E_GetCommand_WithResponses(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(new(bytes.Buffer))
-	rootCmd.SetArgs([]string{"get", "--api-url", server.URL + "/v1", "--include", "responses", "idea-resp"})
+	rootCmd.SetArgs([]string{"get", "--api-url", server.URL + "/v1", "--api-key", "test_key", "idea-resp"})
 
 	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
 
-	// Verify both endpoints were called
-	if len(requestPaths) != 2 {
-		t.Errorf("expected 2 API requests, got %d", len(requestPaths))
+	// get reads the post only; its contributions are replies
+	if len(requestPaths) != 1 || requestPaths[0] != "/v1/posts/idea-resp" {
+		t.Errorf("expected exactly one request to /v1/posts/idea-resp, got %v", requestPaths)
 	}
 
 	output := stdout.String()
-	if !strings.Contains(output, "Responses") {
-		t.Error("output should contain Responses section")
+	if !strings.Contains(output, "Idea with responses") {
+		t.Error("output should contain the post")
 	}
-	if !strings.Contains(output, "Great idea") {
-		t.Error("output should contain response content")
-	}
-	if !strings.Contains(output, "support") {
-		t.Error("output should show response type")
+	if !strings.Contains(output, "Replies: solvr replies idea-resp") {
+		t.Errorf("output should point to the replies command, got: %s", output)
 	}
 }
 
@@ -634,74 +467,25 @@ func TestE2E_GetCommand_MissingID(t *testing.T) {
 	}
 }
 
-func TestE2E_GetCommand_JSONWithIncludes(t *testing.T) {
+func TestE2E_RepliesCommand_JSONOutput(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/posts/q-json-inc" {
-			response := GetAPIResponse{
-				Data: PostDetail{
-					ID:          "q-json-inc",
-					Type:        "question",
-					Title:       "JSON with includes",
-					Description: "Test",
-					Tags:        []string{},
-					Status:      "answered",
-					Author: AuthorInfo{
-						ID:          "user-1",
-						Type:        "human",
-						DisplayName: "Test",
-					},
-					Upvotes:   1,
-					Downvotes: 0,
-					VoteScore: 1,
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
-		} else if r.URL.Path == "/v1/questions/q-json-inc" {
-			response := QuestionAPIResponse{
-				Data: QuestionWithAnswers{
-					PostDetail: PostDetail{
-						ID:          "q-json-inc",
-						Type:        "question",
-						Title:       "JSON with includes",
-						Description: "Test",
-						Tags:        []string{},
-						Status:      "answered",
-						Author: AuthorInfo{
-							ID:          "user-1",
-							Type:        "human",
-							DisplayName: "Test",
-						},
-						Upvotes:   1,
-						Downvotes: 0,
-						VoteScore: 1,
-						CreatedAt: time.Now(),
-						UpdatedAt: time.Now(),
-					},
-					Answers: []AnswerDetail{
-						{
-							ID:         "ans-json-1",
-							QuestionID: "q-json-inc",
-							Content:    "JSON answer content",
-							IsAccepted: true,
-							Author: AuthorInfo{
-								ID:          "agent_claude",
-								Type:        "agent",
-								DisplayName: "Claude",
-							},
-							Upvotes:   5,
-							Downvotes: 0,
-							VoteScore: 5,
-							CreatedAt: time.Now(),
-						},
-					},
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
+		if r.URL.Path != "/v1/posts/q-json-inc/replies" {
+			http.NotFound(w, r)
+			return
 		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"id": "reply-json-1", "post_id": "q-json-inc", "author_type": "agent", "author_id": "agent_claude",
+					"body":        "JSON reply body",
+					"upvotes":     5,
+					"score":       5,
+					"legacy_type": "answer",
+				},
+			},
+			"meta": map[string]interface{}{"total": 1, "has_more": false},
+		})
 	}))
 	defer server.Close()
 
@@ -709,29 +493,27 @@ func TestE2E_GetCommand_JSONWithIncludes(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(new(bytes.Buffer))
-	rootCmd.SetArgs([]string{"get", "--api-url", server.URL + "/v1", "--json", "--include", "answers", "q-json-inc"})
+	rootCmd.SetArgs([]string{"replies", "--api-url", server.URL + "/v1", "--api-key", "test_key", "--json", "q-json-inc"})
 
 	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
 
-	// Verify output is valid JSON with answers included
+	// Verify output is valid JSON with the replies page
 	var result map[string]interface{}
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("output is not valid JSON: %v", err)
 	}
 
-	data, ok := result["data"].(map[string]interface{})
+	replies, ok := result["data"].([]interface{})
 	if !ok {
-		t.Fatal("expected data field in JSON response")
+		t.Fatal("expected data array in JSON response")
 	}
-
-	answers, ok := data["answers"].([]interface{})
-	if !ok {
-		t.Fatal("expected answers field in data")
+	if len(replies) != 1 {
+		t.Errorf("expected 1 reply, got %d", len(replies))
 	}
-	if len(answers) != 1 {
-		t.Errorf("expected 1 answer, got %d", len(answers))
+	if _, ok := result["meta"].(map[string]interface{}); !ok {
+		t.Error("expected meta in JSON response")
 	}
 }

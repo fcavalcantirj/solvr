@@ -2,23 +2,20 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 )
 
-// CreatePostRequest is the request body for creating a post
+// CreatePostRequest is the request body for creating a post. A post has no
+// type: problems, questions and ideas are all posts.
 type CreatePostRequest struct {
-	Type        string   `json:"type"`
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
 	Tags        []string `json:"tags,omitempty"`
+	Visibility  string   `json:"visibility,omitempty"`
 }
 
 // CreatePostResponse is the response from creating a post
@@ -36,11 +33,13 @@ type CreatedPost struct {
 	CreatedAt string   `json:"created_at,omitempty"`
 }
 
-// validPostTypes are the allowed post types
-var validPostTypes = map[string]bool{
-	"problem":  true,
-	"question": true,
-	"idea":     true,
+// rejectTypeArgument refuses the old "solvr post <type>" form before any
+// prompt or request: posts take no type.
+func rejectTypeArgument(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	return fmt.Errorf(`posts take no type: %q is not accepted; use solvr post --title "..." --description "..."`, args[0])
 }
 
 // NewPostCmd creates the post command
@@ -50,52 +49,32 @@ func NewPostCmd() *cobra.Command {
 	var title string
 	var description string
 	var tags string
+	var visibility string
 	var jsonOutput bool
 	var interactive bool
 
 	cmd := &cobra.Command{
-		Use:   "post [type]",
+		Use:   "post",
 		Short: "Create a new post on Solvr",
-		Long: `Create a new problem, question, or idea on the Solvr knowledge base.
+		Long: `Create a new post on the Solvr knowledge base.
 
-Valid types: problem, question, idea
+A post is a problem, question, idea or finding worth sharing; there is no
+type to choose. Contributions to it are replies (see "solvr reply").
 
 Use --interactive (-i) to be prompted for missing fields.
 
 Examples:
-  solvr post problem --title "Race condition in async code" --description "Details..."
-  solvr post question --title "How to fix async bugs?" --description "I have..."
-  solvr post idea --title "New approach to caching" --description "What if..."
-  solvr post question --title "Title" --description "Content" --tags "go,async,postgres"
-  solvr post problem --title "Title" --description "Content" --json
+  solvr post --title "Race condition in async code" --description "Details..."
+  solvr post --title "Title" --description "Content" --tags "go,async,postgres"
+  solvr post --title "Title" --description "Content" --visibility family
+  solvr post --title "Title" --description "Content" --json
   solvr post --interactive  # Prompts for all fields`,
-		Args: cobra.MaximumNArgs(1),
+		Args: rejectTypeArgument,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var postType string
-			if len(args) > 0 {
-				postType = args[0]
-			}
-
-			// Interactive mode: prompt for missing fields
 			if interactive {
-				var err error
-				postType, title, description, tags, err = runInteractiveMode(cmd, postType, title, description, tags)
-				if err != nil {
-					return err
-				}
-			} else {
-				// Non-interactive: require type as argument
-				if postType == "" {
-					return fmt.Errorf("type is required (use --interactive to be prompted)")
-				}
+				title, description, tags = runInteractiveMode(cmd, title, description, tags)
 			}
 
-			// Validate post type
-			if !validPostTypes[postType] {
-				return fmt.Errorf("invalid type '%s': must be one of: problem, question, idea", postType)
-			}
-
-			// Validate required fields
 			if title == "" {
 				return fmt.Errorf("--title is required")
 			}
@@ -103,27 +82,8 @@ Examples:
 				return fmt.Errorf("--description is required")
 			}
 
-			// Try to load API key from config if not provided via flag
-			if apiKey == "" {
-				config, err := loadConfig()
-				if err == nil {
-					if key, ok := config["api-key"]; ok {
-						apiKey = key
-					}
-				}
-			}
+			apiURL, apiKey = resolveAPISettings(apiURL, apiKey)
 
-			// Try to load API URL from config if not overridden
-			if apiURL == defaultAPIURL {
-				config, err := loadConfig()
-				if err == nil {
-					if url, ok := config["api-url"]; ok {
-						apiURL = url
-					}
-				}
-			}
-
-			// Parse tags
 			var tagList []string
 			if tags != "" {
 				for _, tag := range strings.Split(tags, ",") {
@@ -134,66 +94,23 @@ Examples:
 				}
 			}
 
-			// Build request
-			reqBody := CreatePostRequest{
-				Type:        postType,
+			respBody, err := callAPI("POST", fmt.Sprintf("%s/posts", apiURL), apiKey, CreatePostRequest{
 				Title:       title,
 				Description: description,
 				Tags:        tagList,
-			}
-
-			// Marshal to JSON
-			reqJSON, err := json.Marshal(reqBody)
+				Visibility:  visibility,
+			})
 			if err != nil {
-				return fmt.Errorf("failed to encode request: %w", err)
+				return err
 			}
 
-			// Create HTTP request
-			postURL := fmt.Sprintf("%s/posts", apiURL)
-			req, err := http.NewRequest("POST", postURL, bytes.NewReader(reqJSON))
-			if err != nil {
-				return fmt.Errorf("failed to create request: %w", err)
-			}
-
-			req.Header.Set("Content-Type", "application/json")
-
-			// Add auth header if API key is set
-			if apiKey != "" {
-				req.Header.Set("Authorization", "Bearer "+apiKey)
-			}
-
-			// Execute request
-			client := &http.Client{Timeout: 30 * time.Second}
-			resp, err := client.Do(req)
-			if err != nil {
-				return fmt.Errorf("failed to call API: %w", err)
-			}
-			defer resp.Body.Close()
-
-			// Read response body
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return fmt.Errorf("failed to read response: %w", err)
-			}
-
-			// Check for error response
-			if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-				var apiErr APIError
-				if json.Unmarshal(body, &apiErr) == nil && apiErr.Error.Message != "" {
-					return fmt.Errorf("API error: %s", apiErr.Error.Message)
-				}
-				return fmt.Errorf("API returned status %d", resp.StatusCode)
-			}
-
-			// Parse response
 			var createResp CreatePostResponse
-			if err := json.Unmarshal(body, &createResp); err != nil {
+			if err := json.Unmarshal(respBody, &createResp); err != nil {
 				return fmt.Errorf("failed to parse response: %w", err)
 			}
 
-			// Output as JSON or pretty display
 			if jsonOutput {
-				displayPostJSONOutput(cmd, createResp)
+				printJSON(cmd.OutOrStdout(), createResp)
 			} else {
 				displayCreatedPost(cmd, createResp.Data)
 			}
@@ -208,6 +125,7 @@ Examples:
 	cmd.Flags().StringVar(&title, "title", "", "Title of the post (required unless --interactive)")
 	cmd.Flags().StringVar(&description, "description", "", "Description/content of the post (required unless --interactive)")
 	cmd.Flags().StringVar(&tags, "tags", "", "Comma-separated tags (e.g., 'go,async,postgres')")
+	cmd.Flags().StringVar(&visibility, "visibility", "", "Who can read the post: public (default) or family")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON response")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Prompt for missing fields interactively")
 
@@ -220,7 +138,6 @@ func displayCreatedPost(cmd *cobra.Command, post CreatedPost) {
 
 	fmt.Fprintf(out, "Post created successfully!\n\n")
 	fmt.Fprintf(out, "ID: %s\n", post.ID)
-	fmt.Fprintf(out, "Type: %s\n", post.Type)
 	fmt.Fprintf(out, "Title: %s\n", post.Title)
 
 	if len(post.Tags) > 0 {
@@ -234,74 +151,28 @@ func displayCreatedPost(cmd *cobra.Command, post CreatedPost) {
 	fmt.Fprintf(out, "\nView at: solvr get %s\n", post.ID)
 }
 
-// displayPostJSONOutput outputs the create response as raw JSON
-func displayPostJSONOutput(cmd *cobra.Command, resp CreatePostResponse) {
-	out := cmd.OutOrStdout()
-	encoder := json.NewEncoder(out)
-	encoder.SetIndent("", "  ")
-	encoder.Encode(resp)
-}
-
 // runInteractiveMode prompts for missing fields interactively
-func runInteractiveMode(cmd *cobra.Command, postType, title, description, tags string) (string, string, string, string, error) {
+func runInteractiveMode(cmd *cobra.Command, title, description, tags string) (string, string, string) {
 	out := cmd.OutOrStdout()
-	in := cmd.InOrStdin()
-	reader := bufio.NewReader(in)
+	reader := bufio.NewReader(cmd.InOrStdin())
 
-	// Prompt for type if not provided
-	if postType == "" {
-		postType = promptForType(out, reader)
-	} else if !validPostTypes[postType] {
-		fmt.Fprintf(out, "Invalid type '%s'.\n", postType)
-		postType = promptForType(out, reader)
-	}
-
-	// Prompt for title if not provided
 	if title == "" {
 		fmt.Fprint(out, "Title: ")
 		input, _ := reader.ReadString('\n')
 		title = strings.TrimSpace(input)
 	}
 
-	// Prompt for description if not provided
 	if description == "" {
 		fmt.Fprint(out, "Description: ")
 		input, _ := reader.ReadString('\n')
 		description = strings.TrimSpace(input)
 	}
 
-	// Prompt for tags if not provided
 	if tags == "" {
 		fmt.Fprint(out, "Tags (comma-separated, optional): ")
 		input, _ := reader.ReadString('\n')
 		tags = strings.TrimSpace(input)
 	}
 
-	return postType, title, description, tags, nil
-}
-
-// promptForType displays type options and reads user selection
-func promptForType(out io.Writer, reader *bufio.Reader) string {
-	for {
-		fmt.Fprintln(out, "Select post type:")
-		fmt.Fprintln(out, "  1. question")
-		fmt.Fprintln(out, "  2. problem")
-		fmt.Fprintln(out, "  3. idea")
-		fmt.Fprint(out, "Type (1-3 or name): ")
-
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
-
-		// Accept number or name
-		switch input {
-		case "1", "question":
-			return "question"
-		case "2", "problem":
-			return "problem"
-		case "3", "idea":
-			return "idea"
-		default:
-			fmt.Fprintf(out, "Invalid type '%s'. Please enter 1-3 or a valid type name.\n", input)
-		}
-	}
+	return title, description, tags
 }

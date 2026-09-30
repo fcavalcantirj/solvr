@@ -1759,3 +1759,176 @@ REMAINING FOR idx 52 (next slices, in order):
 
 git status at journal time [REAL]: 13 M (above), 0 ?? + this progress.txt entry; spec.json unchanged, idx 52
   passes stays false.
+
+2026-09-30 16:20 — Task idx 52 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Route existing agent integrations into the canonical knowledge model during a defined transition"
+SLICE 5 of N: step 2 for the Go CLI (cli/) — it now creates canonical posts (no type) and replies, and reads
+replies — plus the client half of step 6, proved live: the HEAD CLI gets the retired-route error and writes
+nothing; the new one creates canonical rows. Remaining step 2 client: skill/scripts/solvr.sh. Step 5: idx 73.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 52, 53, 67, 68, 73, 74, 77-95, 97, 98;
+  no open URGENT. idx 24 stays skipped (acceptance task; needs idx 78). idx 52 is the first buildable task.
+
+INHERITED STATE [REAL]: the tree was NOT clean at start. An earlier iteration (loop batch #6, started 15:46)
+  wrote cli/ test changes + an untracked cli/client.go between 15:50 and 15:55, never journaled or committed,
+  and the loop was restarted at 16:06 (ralph-claude.log). No other agent was running (ps). I audited every
+  inherited file before building on it and kept it, with ONE correction: its reply fixtures (replies_test.go,
+  cli_e2e_get_test.go) carried an `author: {id, type, display_name}` object and expected "Helper (human)" /
+  "Claude (agent)" output — GET /v1/posts/{id}/replies returns no such object (backend models.Reply has only
+  author_type + author_id; the Go SDK Reply matches). Removed the invented field; the tests now expect
+  "<author_id> (<author_type>)".
+
+WHAT CHANGED [REAL, git status --porcelain + git diff --cached --stat -M: 16 paths, 1863+/2552-]:
+  Only cli/. No backend, frontend, SPEC.md, migration or schema change.
+  production:
+  D answer.go -> A reply.go (git sees delete+add): `answer <post_id> --content/-c` (POST
+    /questions/{id}/answers {content}) is REPLACED by `reply <post_id> --body/-b [--parent <reply_id>]
+    [--editor/-e] [--json]` -> POST /posts/{id}/replies {body, parent_reply_id?}. Editor mode kept
+    (getContentFromEditor -> getBodyFromEditor, temp file solvr-reply-*.md). Output: "Reply created
+    successfully!", ID, Post ID, "In reply to: <parent>" when threaded, Body (100 chars), Author, "View at:
+    solvr replies <post>". Types CreateAnswerRequest/CreateAnswerResponse/CreatedAnswer -> CreateReplyRequest,
+    Reply, ReplyResponse.
+  A replies.go: NEW `replies <post_id> [--limit n] [--cursor c] [--json]` -> GET /posts/{id}/replies (limit/
+    cursor sent only when given). Text: "No replies yet." | "<n> replies" | "1 reply" | "Showing n of total
+    replies"; per reply "<i>. <id> [migrated <legacy_type>] (in reply to <parent>)", "By: <author_id>
+    (<author_type>)  Score: <score>", the full body indented; "More: solvr replies <post> --cursor <next>"
+    when has_more. --json prints the API page as returned (json.Indent of the raw body).
+  M get.go: --include removed with fetchApproaches/fetchQuestionWithAnswers/fetchIdeaWithResponses (GET
+    /problems/{id}/approaches, /questions/{id}, /ideas/{id}), ApproachDetail/AnswerDetail/ResponseDetail/
+    QuestionWithAnswers/IdeaWithResponses/GetResponseWithIncludes and their displays. get makes ONE call
+    (GET /posts/{id}); text output ends with "Replies: solvr replies <id>"; help points to `solvr replies`.
+    displayPostDetails is unchanged (legacy posts still show their type, weight, success criteria).
+  M post.go: `post [type]` -> `post`. Any positional argument is refused by the cobra Args validator (before
+    any prompt or request): `posts take no type: "problem" is not accepted; use solvr post --title "..."
+    --description "..."`. CreatePostRequest has no Type; NEW --visibility (forwarded as given, omitted when
+    empty; the API validates). Interactive mode prompts Title/Description/Tags only (promptForType and
+    validPostTypes removed — at HEAD promptForType loops forever once stdin hits EOF, see RED). Output lost
+    the "Type:" line.
+  M main.go: NewAnswerCmd -> NewReplyCmd + NewRepliesCmd.
+  A client.go (inherited, kept): resolveAPISettings (config key/url fallback), callAPI (one request; non-2xx
+    -> apiErrorFrom), apiErrorFrom ("API error: CODE: message", or the bare status when not the envelope),
+    printJSON. Used by reply, replies, get and post; search/claim/pin untouched.
+
+EXISTING TESTS THAT DESCRIBED THE REPLACED BEHAVIOR (golden rule a-d; every replacement PASSES [TEST]):
+  answer_test.go -> reply_test.go (one-to-one, `answer`->`reply`, --content/-c -> --body/-b, payload key
+  content -> body): _Exists (Use "answer <post_id>" -> "reply <post_id>"), _RequiresPostID,
+  _RequiresContent -> _RequiresBody, _AcceptsContentFlag -> _AcceptsBodyFlag, _UsesAPIKey, _JSONOutput,
+  _Unauthorized, _NotFound, _ContentShortFlag -> _BodyShortFlag, _ContentTrimmed (asserted "  Content with
+  whitespace  " preserved) -> _BodyPreserved (same assertion), _EmptyContentRejected/_WhitespaceOnlyContent
+  Rejected -> _EmptyBodyRejected/_WhitespaceOnlyBodyRejected. _SendsCorrectPayload asserted POST
+  "/questions/post_123/answers" with content "My detailed answer here" -> _SendsCorrectPayload asserts POST
+  "/posts/post_123/replies" with ONLY {body} + NEW _ThreadsUnderParentReply (parent_reply_id, "In reply to:")
+  + NEW _AnswerCommandRemoved (unknown command "answer", no request). _DisplaysCreatedAnswer ("answer_456",
+  "Answer"/"created") -> _DisplaysCreatedReply (ID, Post ID, body, author, "solvr replies"). _APIError now
+  also requires the code. _HelpText asserted help mentions "content" and "answer" -> mentions "body",
+  "reply", "--parent".
+  answer_editor_test.go -> reply_editor_test.go: the 12 editor tests renamed TestAnswerCommand_* ->
+  TestReplyCommand_*, command `reply`, payload key body, error keyword "body" instead of "content"; same
+  assertions otherwise (git: 70% similarity rename).
+  get_include_test.go -> replies_test.go: _IncludeFlag asserted the --include flag exists -> _NoIncludeFlag
+  (flag absent, `get --include answers` fails "unknown flag: --include", no request). _IncludeApproaches
+  (GET /problems/prob-123/approaches, "Approaches", "Use mutex locks") -> TestRepliesCommand_ListsReplies (one
+  GET /posts/prob-123/replies, "Use mutex locks", "[migrated approach]" on the migrated reply only).
+  _IncludeAnswers (GET /questions/q-123, "Answers", "channels for synchronization", "✓ Accepted") ->
+  _MarksThreadedReplies ("Use channels for synchronization", "in reply to reply-1" once). _IncludeResponses
+  (GET /ideas/idea-123, "Responses", "Redis", "support") -> covered by _ListsReplies (any legacy_type is
+  labeled) and _NoReplies ("No replies yet"). _IncludeMultiple (include value "approaches,answers") ->
+  _PagesWithLimitAndCursor (limit=1, cursor=cur_prev, "Showing 1 of 9 replies", "More: ... --cursor
+  cur_next") + _FirstPageSendsNoCursor (no query, no hint). _IncludeHelpText ("--include", "approaches") ->
+  _HelpText ("replies <post_id>", --limit, --cursor, --json; get help names "solvr replies").
+  _IncludeJSONFormat (data.answers present) -> _JSONOutput (data array + meta.total). + _APIError
+  ("NOT_FOUND: post not found"), _RequiresPostID.
+  cli_e2e_get_test.go: _WithApproaches (2 requests incl. /v1/problems/prob-app/approaches, "Approaches",
+  angle, "succeeded") -> TestE2E_RepliesCommand_MigratedContributions (1 request, "2 replies", body, "migrated
+  approach" x2); _WithAnswers ("Answers", "time.After", "Accepted") -> _RepliesCommand_Threaded ("time.After",
+  "migrated answer", "in reply to reply-ans-1"); _WithResponses (/v1/ideas/idea-resp, "Responses", "Great
+  idea", "support") -> _GetCommand_PointsToReplies (exactly one request to /v1/posts/idea-resp, title,
+  "Replies: solvr replies idea-resp"); _JSONWithIncludes (data.answers len 1) -> _RepliesCommand_JSONOutput
+  (data array len 1 + meta). _Problem/_Question/_Idea/_JSONOutput/_APIError/_MissingID unchanged.
+  cli_e2e_post_test.go: _Problem (type "problem") -> _CanonicalPost (no type, title, 3 tags, ID);
+  _Question/_Idea (type question/idea sent) -> _LegacyTypeRejected (problem/question/idea each: "posts take no
+  type" naming the type, 0 requests); _InvalidType ("invalid type") -> _AnyTypeArgumentRejected;
+  _MissingType ("type is required") -> _NoTypeRequired (created, 1 request, ID). The others only lost the
+  type argument (+ isolateHome/unreachable URL on the error-path ones).
+  post_test.go: _RequiresType (bare `post` errors) -> _WithoutFieldsFails ("--title is required");
+  _RequiresValidType ("invalid type") -> _RejectsTypeArgument; _AcceptsProblemType/_Question/_Idea ->
+  _CreatesCanonicalPost (no type in payload, no "Type:" line) + _RejectsLegacyTypes (3 subtests, no request)
+  + NEW _SendsVisibility. _SendsCorrectPayload asserted type "question" -> asserts NO type (title/description
+  unchanged). _HelpText asserted a type name in help -> Use "post", no "Valid types", mentions --visibility.
+  _PostsToCorrectEndpoint (3 typed subtests, /posts) -> one POST /posts. The rest only lost the type arg.
+  post_interactive_test.go: _InteractivePromptsForType (output has "Type") -> _InteractiveNeverPromptsForType
+  (first prompt "Title: ", no type prompt, no type in payload); _InteractiveTypeByName (type "question") ->
+  _InteractiveFirstAnswerIsTitle ("question" becomes the title); _InteractiveInvalidTypeRetry (re-prompt,
+  "invalid") -> _InteractiveRejectsTypeArgument (error before any prompt); _UsesProvidedFlags /
+  _SendsCorrectPayload asserted type problem/idea -> assert no type. The rest only lost the "1\n"/"2\n" type
+  answer from stdin.
+  NOT REPLACED (behavior gone with the API): the "✓ Accepted" marker — replies carry no acceptance flag
+  (models.Reply has none; only the legacy post field accepted_answer_id exists).
+
+VERIFICATION (Go CLI suite always run with HOME=/tmp/solvr_idx52_s5_home and HTTP(S)_PROXY=127.0.0.1:9:
+  ~/.solvr/config holds a real api-key and the default URL is production, so a test without --api-url could
+  otherwise reach api.solvr.dev with it; loopback httptest servers are not proxied):
+  BASELINE on HEAD [TEST]: `git archive HEAD cli` -> /tmp/solvr_idx52_s5_head; go test -v: 187 top-level
+    PASS, 0 FAIL, 0 SKIP (/tmp/solvr_idx52_s5_base.log).
+  RED [TEST]: inherited tests on HEAD production code: 14 FAIL (TestE2E_Replies*/Post* ...) then the run
+    HUNG in TestPostCommand_InteractiveNeverPromptsForType ("panic: test timed out after 45s") — HEAD's
+    promptForType re-prompts forever on EOF (/tmp/solvr_idx52_s5_red_timeout.log). NOTE: my first RED run had
+    no -timeout and was moved to the background; a second run was started before it was killed, so both
+    wrote the same log; the counts above come from the -timeout 45s run.
+  GREEN [TEST]: `go test ./... -count=1 -v -timeout 60s`: 191 top-level PASS, 0 FAIL, 0 "SKIP" anywhere
+    (/tmp/solvr_idx52_s5_green.log). go vet clean. gofmt -l lists only cli/config_test.go, which is
+    unchanged from HEAD (pre-existing, not touched).
+  MUTATIONS [TEST], sources restored from /tmp/solvr_idx52_s5_*.go.bak and cmp-verified:
+    reply json tag parent_reply_id -> parent_id: FAIL TestReplyCommand_ThreadsUnderParentReply (mut1.log);
+    post accepts one positional arg: FAIL _RejectsTypeArgument, _RejectsLegacyTypes, _InteractiveRejects
+      TypeArgument, TestE2E_PostCommand_LegacyTypeRejected, _AnyTypeArgumentRejected (mut2.log);
+    replies sends "after" instead of "cursor": FAIL TestRepliesCommand_PagesWithLimitAndCursor (mut3.log);
+    replies drops the migrated label: FAIL TestRepliesCommand_ListsReplies, TestE2E_RepliesCommand_Migrated
+      Contributions, TestE2E_RepliesCommand_Threaded (mut4.log).
+  LIVE PROBE (step 6 client half) [REAL, /tmp/solvr_idx52_s5_probe/probe.log, driver drive.sh there]:
+    Docker Desktop was not running (docker.sock refused, pg_isready "no response" on 5435); started it with
+    `open -a Docker` (its containers auto-started: solvr-postgres, solvr-ipfs and the owner's temporal/deploy
+    containers). API binary built from this tree (`go build ./cmd/api`), run on :8095 under env -i with
+    DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (schema_migrations 114 dirty=f),
+    JWT_SECRET=probe value, IPFS_API_URL=http://127.0.0.1:9, no GROQ/VOYAGE/RESEND; stopped afterwards (:8095
+    free). CLIs: solvr-new (this tree) and solvr-old (HEAD archive), HOME isolated, fresh agents a-d.
+    NEW: `post` -> DB type 'post' status pending_review (no moderator configured); `post problem ...` ->
+      refused, EXIT=1, posts count 9890 before == after; `reply` -> r1; `reply --parent r1` as agent B ->
+      "In reply to: r1", DB parent = r1, legacy_type null on both; `replies --limit 1` -> "Showing 1 of 2
+      replies" + "More: ... --cursor <c>"; `--cursor <c>` -> r2 "(in reply to r1)"; `--json` -> the raw
+      page; `get` -> ends "Replies: solvr replies <id>"; `answer ...` -> unknown command "answer", EXIT=1;
+      `get --include answers` -> unknown flag, EXIT=1. New `reply` on the OLD client's typed question ->
+      canonical reply, no legacy_type.
+    OLD (HEAD): `post question ...` -> 201, DB type 'question' status pending_review (typed create still
+      accepted by POST /v1/posts; removing legacy types is idx 68 step 5); `answer <question>` and `answer
+      <canonical post>` -> "API error: POST /v1/questions/{id}/answers was retired with the canonical
+      knowledge model; use POST /v1/posts/{id}/replies instead.", EXIT=1 both; replies on the question 0, on
+      the canonical post still 2.
+    Legacy tables before == after: "25 answers, 541 approaches, 6 responses, 4948 comments, 138
+      progress_notes" -> LEGACY TABLES UNCHANGED.
+    Migrated data [REAL, probe_legacy.log]: `replies 092f3cc5-... --limit 2` on a post with 4 migrated
+      approaches -> "Showing 2 of 4 replies", each "[migrated approach]" with its Markdown body, next cursor.
+    PROBE HARNESS FIX: run 1 (probe_run1.log) gave the old-client question a 47-char description -> "API
+      error: description must be at least 50 characters", so its old-client half had no post; lengthened
+      the description and ran the whole driver once more (probe.log above).
+  Not run: backend and frontend suites (nothing under backend/ or frontend/ changed); golangci-lint.
+    check-file-size.sh -> "Found 34 file(s) exceeding 800 lines" (unchanged count; none under cli/; largest
+    touched file cli/post_test.go 650) (/tmp/solvr_idx52_s5_filesize.log).
+
+LIMITS / NOT DONE [REAL unless stated]:
+  - Pre-existing CLI UX, both old and new binaries: an error prints "Error: <msg>" + usage, then main() prints
+    the error again (cobra SilenceErrors/SilenceUsage are not set). Not changed (not asked).
+  - `solvr search --type` (problem|question|idea) untouched (idx 53). No reply vote/edit/delete commands.
+  - Still advertising the Go CLI's old `solvr post problem` / `solvr answer` / `--include` (idx 78):
+    frontend components/api/api-sdks.tsx, SPEC.md CLI section, heartbeat docs — see slice 4's list.
+  - The CLI Version constant stays 0.1.0; nothing is released (the owner's).
+
+REMAINING FOR idx 52 (next slices, in order):
+  step 2: skill/scripts/solvr.sh (post <type>, answer, approach) with the same live old/new probe. Then decide
+    at close whether backend /v1/mcp's type selection (it creates nothing) is idx 52 or idx 78.
+  step 5: redirects exist (frontend/middleware.ts 308); legacy READ routes follow idx 73.
+
+git status at journal time [REAL]: 16 staged paths under cli/ (above) + this progress.txt entry; spec.json
+  unchanged, idx 52 passes stays false.
+  CORRECTION to the entry above [REAL, `printf %s ... | wc -c`]: the rejected old-client description in probe run 1 was 48 characters, not 47.

@@ -20,25 +20,30 @@ func TestPostCommand_Exists(t *testing.T) {
 	}
 }
 
-func TestPostCommand_RequiresType(t *testing.T) {
+// TestPostCommand_WithoutFieldsFails verifies a bare "post" still fails: there
+// is no type to give, but a title and a description are required.
+func TestPostCommand_WithoutFieldsFails(t *testing.T) {
+	isolateHome(t)
 	rootCmd := NewRootCmd()
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
 	rootCmd.SetErr(buf)
-	rootCmd.SetArgs([]string{"post"})
+	rootCmd.SetArgs([]string{"post", "--api-url", unreachableAPI})
 
 	err := rootCmd.Execute()
-	// Should fail because no type provided
 	if err == nil {
-		t.Error("expected error when no type provided")
+		t.Fatal("expected error when no title is provided")
+	}
+	if !strings.Contains(err.Error(), "--title is required") {
+		t.Errorf("expected the missing title error, got: %v", err)
 	}
 }
 
-func TestPostCommand_RequiresValidType(t *testing.T) {
-	// Create mock API server
+// TestPostCommand_RejectsTypeArgument verifies any positional argument is
+// refused with the canonical command, before the API is called.
+func TestPostCommand_RejectsTypeArgument(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Should not be called for invalid type
-		t.Error("API should not be called for invalid type")
+		t.Error("API should not be called when a type argument is given")
 	}))
 	defer server.Close()
 
@@ -53,20 +58,24 @@ func TestPostCommand_RequiresValidType(t *testing.T) {
 
 	err := postCmd.Execute()
 	if err == nil {
-		t.Error("expected error for invalid type")
+		t.Fatal("expected error for a type argument")
 	}
-	if !strings.Contains(err.Error(), "invalid type") {
-		t.Errorf("expected error message to mention 'invalid type', got: %v", err)
+	if !strings.Contains(err.Error(), "posts take no type") || !strings.Contains(err.Error(), "solvr post --title") {
+		t.Errorf("expected the no-type error naming the canonical command, got: %v", err)
 	}
 }
 
-func TestPostCommand_AcceptsProblemType(t *testing.T) {
+// TestPostCommand_CreatesCanonicalPost verifies a post is created with no type
+func TestPostCommand_CreatesCanonicalPost(t *testing.T) {
+	var receivedPayload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&receivedPayload)
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
-				"id":    "post-123",
-				"type":  "problem",
-				"title": "Test Problem",
+				"id":     "post-123",
+				"type":   "post",
+				"title":  "Test Post",
+				"status": "open",
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -80,28 +89,59 @@ func TestPostCommand_AcceptsProblemType(t *testing.T) {
 	postCmd.SetOut(buf)
 	postCmd.SetErr(buf)
 	postCmd.Flags().Set("api-url", server.URL)
-	postCmd.Flags().Set("title", "Test Problem")
-	postCmd.Flags().Set("description", "This is a test description for the problem that is long enough")
-	postCmd.SetArgs([]string{"problem"})
+	postCmd.Flags().Set("title", "Test Post")
+	postCmd.Flags().Set("description", "This is a test description for the post that is long enough")
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
-		t.Fatalf("post command failed for problem type: %v", err)
+		t.Fatalf("post command failed: %v", err)
+	}
+	if _, hasType := receivedPayload["type"]; hasType {
+		t.Errorf("a canonical post has no type, got payload %v", receivedPayload)
+	}
+	if strings.Contains(buf.String(), "Type:") {
+		t.Errorf("the output should not offer a type, got: %s", buf.String())
 	}
 }
 
-func TestPostCommand_AcceptsQuestionType(t *testing.T) {
+// TestPostCommand_RejectsLegacyTypes verifies the old typed invocations
+// (problem, question, idea) fail and send nothing.
+func TestPostCommand_RejectsLegacyTypes(t *testing.T) {
+	for _, legacyType := range []string{"problem", "question", "idea"} {
+		t.Run(legacyType, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				t.Errorf("API should not be called for 'post %s'", legacyType)
+			}))
+			defer server.Close()
+
+			postCmd := NewPostCmd()
+			buf := new(bytes.Buffer)
+			postCmd.SetOut(buf)
+			postCmd.SetErr(buf)
+			postCmd.Flags().Set("api-url", server.URL)
+			postCmd.Flags().Set("title", "Test")
+			postCmd.Flags().Set("description", "This is a test description that is long enough")
+			postCmd.SetArgs([]string{legacyType})
+
+			err := postCmd.Execute()
+			if err == nil {
+				t.Fatalf("expected 'post %s' to fail", legacyType)
+			}
+			if !strings.Contains(err.Error(), `"`+legacyType+`"`) {
+				t.Errorf("expected the error to name %q, got: %v", legacyType, err)
+			}
+		})
+	}
+}
+
+// TestPostCommand_SendsVisibility verifies --visibility is forwarded as given
+func TestPostCommand_SendsVisibility(t *testing.T) {
+	var receivedPayload map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
-				"id":    "post-456",
-				"type":  "question",
-				"title": "Test Question",
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
+		json.NewDecoder(r.Body).Decode(&receivedPayload)
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(map[string]interface{}{"data": map[string]interface{}{"id": "post-1"}})
 	}))
 	defer server.Close()
 
@@ -110,43 +150,16 @@ func TestPostCommand_AcceptsQuestionType(t *testing.T) {
 	postCmd.SetOut(buf)
 	postCmd.SetErr(buf)
 	postCmd.Flags().Set("api-url", server.URL)
-	postCmd.Flags().Set("title", "Test Question")
-	postCmd.Flags().Set("description", "This is a test description for the question that is long enough")
-	postCmd.SetArgs([]string{"question"})
+	postCmd.Flags().Set("title", "Family note")
+	postCmd.Flags().Set("description", "Only for my agents and me, long enough to pass")
+	postCmd.Flags().Set("visibility", "family")
+	postCmd.SetArgs([]string{})
 
-	err := postCmd.Execute()
-	if err != nil {
-		t.Fatalf("post command failed for question type: %v", err)
+	if err := postCmd.Execute(); err != nil {
+		t.Fatalf("post command failed: %v", err)
 	}
-}
-
-func TestPostCommand_AcceptsIdeaType(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := map[string]interface{}{
-			"data": map[string]interface{}{
-				"id":    "post-789",
-				"type":  "idea",
-				"title": "Test Idea",
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	postCmd := NewPostCmd()
-	buf := new(bytes.Buffer)
-	postCmd.SetOut(buf)
-	postCmd.SetErr(buf)
-	postCmd.Flags().Set("api-url", server.URL)
-	postCmd.Flags().Set("title", "Test Idea")
-	postCmd.Flags().Set("description", "This is a test description for the idea that is long enough")
-	postCmd.SetArgs([]string{"idea"})
-
-	err := postCmd.Execute()
-	if err != nil {
-		t.Fatalf("post command failed for idea type: %v", err)
+	if receivedPayload["visibility"] != "family" {
+		t.Errorf("expected visibility 'family', got %v", receivedPayload["visibility"])
 	}
 }
 
@@ -163,7 +176,7 @@ func TestPostCommand_RequiresTitle(t *testing.T) {
 	postCmd.Flags().Set("api-url", server.URL)
 	postCmd.Flags().Set("description", "This is a test description for the post that is long enough")
 	// No title set
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err == nil {
@@ -187,7 +200,7 @@ func TestPostCommand_RequiresDescription(t *testing.T) {
 	postCmd.Flags().Set("api-url", server.URL)
 	postCmd.Flags().Set("title", "Test Title")
 	// No description set
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err == nil {
@@ -214,7 +227,7 @@ func TestPostCommand_SendsCorrectPayload(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Test Question",
 			},
 		}
@@ -231,7 +244,7 @@ func TestPostCommand_SendsCorrectPayload(t *testing.T) {
 	postCmd.Flags().Set("api-url", server.URL)
 	postCmd.Flags().Set("title", "My Test Question")
 	postCmd.Flags().Set("description", "This is a detailed description of my question that is long enough")
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -248,9 +261,9 @@ func TestPostCommand_SendsCorrectPayload(t *testing.T) {
 		t.Errorf("expected path '/posts', got '%s'", receivedPath)
 	}
 
-	// Check payload
-	if receivedPayload["type"] != "question" {
-		t.Errorf("expected type 'question', got '%v'", receivedPayload["type"])
+	// Check payload: a canonical post has no type
+	if _, hasType := receivedPayload["type"]; hasType {
+		t.Errorf("expected no type in payload, got '%v'", receivedPayload["type"])
 	}
 	if receivedPayload["title"] != "My Test Question" {
 		t.Errorf("expected title 'My Test Question', got '%v'", receivedPayload["title"])
@@ -269,7 +282,7 @@ func TestPostCommand_SupportsTags(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Test Question",
 			},
 		}
@@ -287,7 +300,7 @@ func TestPostCommand_SupportsTags(t *testing.T) {
 	postCmd.Flags().Set("title", "Test Question with Tags")
 	postCmd.Flags().Set("description", "This is a detailed description of my question that is long enough")
 	postCmd.Flags().Set("tags", "go,async,postgres")
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -319,7 +332,7 @@ func TestPostCommand_UsesAPIKey(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Test",
 			},
 		}
@@ -337,7 +350,7 @@ func TestPostCommand_UsesAPIKey(t *testing.T) {
 	postCmd.Flags().Set("api-key", "solvr_test_key")
 	postCmd.Flags().Set("title", "Test Question")
 	postCmd.Flags().Set("description", "This is a detailed description of my question that is long enough")
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -354,7 +367,7 @@ func TestPostCommand_DisplaysCreatedPost(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-abc123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Created Question",
 			},
 		}
@@ -371,7 +384,7 @@ func TestPostCommand_DisplaysCreatedPost(t *testing.T) {
 	postCmd.Flags().Set("api-url", server.URL)
 	postCmd.Flags().Set("title", "Created Question")
 	postCmd.Flags().Set("description", "This is a detailed description of my question that is long enough")
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -393,7 +406,7 @@ func TestPostCommand_JSONOutput(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Test Question",
 			},
 		}
@@ -411,7 +424,7 @@ func TestPostCommand_JSONOutput(t *testing.T) {
 	postCmd.Flags().Set("title", "Test Question")
 	postCmd.Flags().Set("description", "This is a detailed description of my question that is long enough")
 	postCmd.Flags().Set("json", "true")
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -444,7 +457,7 @@ func TestPostCommand_APIError(t *testing.T) {
 	postCmd.Flags().Set("api-url", server.URL)
 	postCmd.Flags().Set("title", "Test")
 	postCmd.Flags().Set("description", "This is a detailed description of my question that is long enough")
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err == nil {
@@ -466,7 +479,7 @@ func TestPostCommand_Unauthorized(t *testing.T) {
 	postCmd.Flags().Set("api-url", server.URL)
 	postCmd.Flags().Set("title", "Test Question")
 	postCmd.Flags().Set("description", "This is a detailed description of my question that is long enough")
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err == nil {
@@ -503,8 +516,15 @@ func TestPostCommand_HelpText(t *testing.T) {
 	if !strings.Contains(output, "--tags") {
 		t.Error("help should mention '--tags' flag")
 	}
-	if !strings.Contains(output, "problem") && !strings.Contains(output, "question") && !strings.Contains(output, "idea") {
-		t.Error("help should mention valid types")
+	if !strings.Contains(output, "--visibility") {
+		t.Error("help should mention '--visibility' flag")
+	}
+	// No type choice is offered any more
+	if postCmd.Use != "post" {
+		t.Errorf("expected Use 'post' (no type argument), got '%s'", postCmd.Use)
+	}
+	if strings.Contains(output, "Valid types") {
+		t.Error("help should not offer post types")
 	}
 }
 
@@ -517,7 +537,7 @@ func TestPostCommand_TagsOptional(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Test Question",
 			},
 		}
@@ -535,7 +555,7 @@ func TestPostCommand_TagsOptional(t *testing.T) {
 	postCmd.Flags().Set("title", "Test Question")
 	postCmd.Flags().Set("description", "This is a detailed description of my question that is long enough")
 	// No tags set
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -552,7 +572,7 @@ func TestPostCommand_TrimsTagWhitespace(t *testing.T) {
 		response := map[string]interface{}{
 			"data": map[string]interface{}{
 				"id":    "post-123",
-				"type":  "question",
+				"type":  "post",
 				"title": "Test Question",
 			},
 		}
@@ -570,7 +590,7 @@ func TestPostCommand_TrimsTagWhitespace(t *testing.T) {
 	postCmd.Flags().Set("title", "Test Question")
 	postCmd.Flags().Set("description", "This is a detailed description of my question that is long enough")
 	postCmd.Flags().Set("tags", "  go , async ,  postgres  ")
-	postCmd.SetArgs([]string{"question"})
+	postCmd.SetArgs([]string{})
 
 	err := postCmd.Execute()
 	if err != nil {
@@ -591,52 +611,40 @@ func TestPostCommand_TrimsTagWhitespace(t *testing.T) {
 }
 
 func TestPostCommand_PostsToCorrectEndpoint(t *testing.T) {
-	tests := []struct {
-		postType     string
-		expectedPath string
-	}{
-		{"problem", "/posts"},
-		{"question", "/posts"},
-		{"idea", "/posts"},
+	var receivedPath, receivedMethod string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		receivedMethod = r.Method
+
+		response := map[string]interface{}{
+			"data": map[string]interface{}{
+				"id":    "post-123",
+				"type":  "post",
+				"title": "Test",
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	postCmd := NewPostCmd()
+	buf := new(bytes.Buffer)
+	postCmd.SetOut(buf)
+	postCmd.SetErr(buf)
+	postCmd.Flags().Set("api-url", server.URL)
+	postCmd.Flags().Set("title", "Test Post")
+	postCmd.Flags().Set("description", "This is a detailed description of my post that is long enough")
+	postCmd.SetArgs([]string{})
+
+	err := postCmd.Execute()
+	if err != nil {
+		t.Fatalf("post command failed: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.postType, func(t *testing.T) {
-			var receivedPath string
-
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				receivedPath = r.URL.Path
-
-				response := map[string]interface{}{
-					"data": map[string]interface{}{
-						"id":    "post-123",
-						"type":  tt.postType,
-						"title": "Test",
-					},
-				}
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusCreated)
-				json.NewEncoder(w).Encode(response)
-			}))
-			defer server.Close()
-
-			postCmd := NewPostCmd()
-			buf := new(bytes.Buffer)
-			postCmd.SetOut(buf)
-			postCmd.SetErr(buf)
-			postCmd.Flags().Set("api-url", server.URL)
-			postCmd.Flags().Set("title", "Test Post")
-			postCmd.Flags().Set("description", "This is a detailed description of my post that is long enough")
-			postCmd.SetArgs([]string{tt.postType})
-
-			err := postCmd.Execute()
-			if err != nil {
-				t.Fatalf("post command failed for type %s: %v", tt.postType, err)
-			}
-
-			if receivedPath != tt.expectedPath {
-				t.Errorf("expected path '%s', got '%s'", tt.expectedPath, receivedPath)
-			}
-		})
+	if receivedMethod != "POST" || receivedPath != "/posts" {
+		t.Errorf("expected POST /posts, got %s %s", receivedMethod, receivedPath)
 	}
 }

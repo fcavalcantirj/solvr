@@ -35,7 +35,7 @@ func mountFunnelRoutes(r chi.Router, pool *db.Pool) {
 	if jwtSecret == "" {
 		jwtSecret = "test-jwt-secret-32-chars-long!!"
 	}
-	apiKeyValidator := auth.NewAPIKeyValidator(db.NewAgentRepository(pool))
+	apiKeyValidator := auth.NewAPIKeyValidator(db.NewAgentRepository(pool)).WithOwnerCheck(db.NewUserRepository(pool))
 	userAPIKeyValidator := auth.NewUserAPIKeyValidator(db.NewUserAPIKeyRepository(pool))
 	optionalAuth := auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, db.NewUserRepository(pool))
 

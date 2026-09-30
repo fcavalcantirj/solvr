@@ -30,6 +30,7 @@ type AuthHandlers struct {
 	userRepo       UserRepositoryForAuth
 	authMethodRepo AuthMethodRepository
 	referralRepo   ReferralRepositoryForAuth
+	identityGate   IdentityRefuser
 }
 
 // UserRepositoryForAuth defines required DB methods for auth operations.
@@ -135,6 +136,10 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 
 	if err := validateUsername(req.Username); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "INVALID_USERNAME", err.Error())
+		return
+	}
+
+	if refuseIdentity(w, r, h.identityGate, db.IdentityQuery{Email: req.Email}) {
 		return
 	}
 
@@ -297,6 +302,10 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	// Step 2: Validate input
 	if req.Email == "" || req.Password == "" {
 		writeErrorResponse(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "Invalid email or password")
+		return
+	}
+
+	if refuseIdentity(w, r, h.identityGate, db.IdentityQuery{Email: req.Email}) {
 		return
 	}
 

@@ -45,6 +45,30 @@ type OAuthUserInfo struct {
 type OAuthUserService struct {
 	repo           UserRepository
 	authMethodRepo AuthMethodRepository
+	identityGate   IdentityRefuser
+}
+
+// ErrAccountSuspended is returned for an OAuth identity that is banned or belongs to a
+// tombstoned account.
+var ErrAccountSuspended = db.ErrAccountSuspended
+
+// IdentityRefuser reports whether an identity is banned or tombstoned
+// (db.BannedIdentityRepository).
+type IdentityRefuser interface {
+	IsRefused(ctx context.Context, q db.IdentityQuery) (bool, error)
+}
+
+// userAuthMethodCreator creates a user and its first auth method in one transaction
+// (db.UserRepository). Repositories without it fall back to two separate inserts.
+type userAuthMethodCreator interface {
+	CreateWithAuthMethod(ctx context.Context, user *models.User, method *models.AuthMethod) (*models.User, error)
+}
+
+// WithIdentityGate makes FindOrCreateUser refuse banned and tombstoned identities before it
+// looks anything up.
+func (s *OAuthUserService) WithIdentityGate(gate IdentityRefuser) *OAuthUserService {
+	s.identityGate = gate
+	return s
 }
 
 // NewOAuthUserService creates a new OAuthUserService.
@@ -62,6 +86,35 @@ func NewOAuthUserService(repo UserRepository, authMethodRepo AuthMethodRepositor
 // 3. If not found, create new user
 // Returns the user and a boolean indicating if the user is new.
 func (s *OAuthUserService) FindOrCreateUser(ctx context.Context, info *OAuthUserInfo) (*models.User, bool, error) {
+	if s.identityGate != nil {
+		refused, err := s.identityGate.IsRefused(ctx, db.IdentityQuery{
+			Email: info.Email, Provider: info.Provider, ProviderID: info.ProviderID,
+		})
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to check identity: %w", err)
+		}
+		if refused {
+			return nil, false, ErrAccountSuspended
+		}
+	}
+
+	// A duplicate email on create means a live account took the email between the lookup
+	// and the insert: the second pass links to it. Never more than two passes — an email
+	// held by a tombstoned account would otherwise loop forever.
+	var err error
+	for attempt := 0; attempt < 2; attempt++ {
+		var user *models.User
+		var isNew bool
+		user, isNew, err = s.findOrCreateOnce(ctx, info)
+		if !errors.Is(err, db.ErrDuplicateEmail) {
+			return user, isNew, err
+		}
+	}
+	return nil, false, fmt.Errorf("failed to create user: %w", err)
+}
+
+// findOrCreateOnce is one pass of FindOrCreateUser's lookup-link-create sequence.
+func (s *OAuthUserService) findOrCreateOnce(ctx context.Context, info *OAuthUserInfo) (*models.User, bool, error) {
 	// Step 1: Try to find user by OAuth provider ID (existing OAuth user)
 	user, err := s.repo.FindByAuthProvider(ctx, info.Provider, info.ProviderID)
 	if err == nil {
@@ -131,12 +184,31 @@ func (s *OAuthUserService) FindOrCreateUser(ctx context.Context, info *OAuthUser
 		Role:           models.UserRoleUser,
 	}
 
+	authMethod := &models.AuthMethod{
+		AuthProvider:   info.Provider,
+		AuthProviderID: info.ProviderID,
+		LastUsedAt:     time.Now(),
+	}
+	if txRepo, ok := s.repo.(userAuthMethodCreator); ok {
+		createdUser, err := txRepo.CreateWithAuthMethod(ctx, newUser, authMethod)
+		if errors.Is(err, db.ErrDuplicateUsername) {
+			newUser.Username = s.generateUniqueUsername(ctx, newUser.Username)
+			createdUser, err = txRepo.CreateWithAuthMethod(ctx, newUser, authMethod)
+		}
+		if err != nil {
+			if errors.Is(err, db.ErrDuplicateEmail) {
+				return nil, false, err // FindOrCreateUser retries once
+			}
+			return nil, false, fmt.Errorf("failed to create user: %w", err)
+		}
+		slog.Info("new oauth user created", "user_id", createdUser.ID, "email", createdUser.Email, "provider", info.Provider)
+		return createdUser, true, nil
+	}
+
 	createdUser, err := s.repo.Create(ctx, newUser)
 	if err != nil {
 		if errors.Is(err, db.ErrDuplicateEmail) {
-			// Race condition: email was registered between FindByEmail and Create
-			// Retry the whole flow (will hit Step 2 this time)
-			return s.FindOrCreateUser(ctx, info)
+			return nil, false, err // FindOrCreateUser retries once
 		}
 		if errors.Is(err, db.ErrDuplicateUsername) {
 			// Handle duplicate username by retrying with a suffix
@@ -151,12 +223,7 @@ func (s *OAuthUserService) FindOrCreateUser(ctx context.Context, info *OAuthUser
 	}
 
 	// Create auth_method for OAuth provider
-	authMethod := &models.AuthMethod{
-		UserID:         createdUser.ID,
-		AuthProvider:   info.Provider,
-		AuthProviderID: info.ProviderID,
-		LastUsedAt:     time.Now(),
-	}
+	authMethod.UserID = createdUser.ID
 
 	_, err = s.authMethodRepo.Create(ctx, authMethod)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/fcavalcantirj/solvr/internal/contentgate"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -37,8 +38,11 @@ type IdeasRepositoryInterface interface {
 
 // IdeasHandler handles idea-related HTTP requests.
 type IdeasHandler struct {
-	repo      IdeasRepositoryInterface
-	postsRepo PostsRepositoryInterface // For listing ideas (shares data with /v1/posts)
+	postModerator    PostModerator          // starts async moderation of a pending_review post (nil: none)
+	contentGate      *contentgate.Gate      // anti-abuse checks before the insert (nil admits all)
+	contribModerator *ContributionModerator // async moderation of new contributions (nil: none)
+	repo             IdeasRepositoryInterface
+	postsRepo        PostsRepositoryInterface // For listing ideas (shares data with /v1/posts)
 }
 
 // NewIdeasHandler creates a new IdeasHandler.
@@ -281,6 +285,10 @@ func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if refuseContent(w, h.contentGate.CheckPost(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, req.Title)) {
+		return
+	}
+
 	// Create idea with author info from authentication
 	post := &models.Post{
 		Type:         models.PostTypeIdea,
@@ -289,7 +297,7 @@ func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Tags:         req.Tags,
 		PostedByType: authInfo.AuthorType,
 		PostedByID:   authInfo.AuthorID,
-		Status:       models.PostStatusOpen,
+		Status:       models.PostStatusPendingReview, // moderated like POST /v1/posts (anti-abuse W2)
 	}
 
 	createdPost, err := h.repo.CreateIdea(r.Context(), post)
@@ -297,6 +305,7 @@ func (h *IdeasHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create idea")
 		return
 	}
+	startPostModeration(h.postModerator, createdPost)
 
 	writeIdeasJSON(w, http.StatusCreated, map[string]interface{}{
 		"data": createdPost,
@@ -356,6 +365,10 @@ func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if refuseContent(w, h.contentGate.CheckContribution(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, req.Content)) {
+		return
+	}
+
 	// Create response with author info from authentication
 	response := &models.Response{
 		IdeaID:       ideaID,
@@ -370,6 +383,7 @@ func (h *IdeasHandler) CreateResponse(w http.ResponseWriter, r *http.Request) {
 		writeIdeasError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create response")
 		return
 	}
+	h.contribModerator.Moderate("response", createdResponse.ID, req.Content, string(authInfo.AuthorType), authInfo.AuthorID)
 
 	writeIdeasJSON(w, http.StatusCreated, map[string]interface{}{
 		"data": createdResponse,

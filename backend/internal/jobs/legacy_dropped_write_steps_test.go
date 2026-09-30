@@ -362,6 +362,12 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 			call("PATCH /admin/incidents/{id}", "admin", incident, j(map[string]any{"status": "monitoring"})),
 			call("POST /admin/incidents/{id}/updates", "admin", incident+"/updates",
 				j(map[string]any{"status": "resolved", "message": "route probe update"})),
+			// Anti-abuse operator routes: dry runs, so the probe bans and unpins nothing.
+			call("POST /admin/bans", "admin", "/admin/bans", j(map[string]any{
+				"account_type": "agent", "account_id": s.agent2ID, "reason": "route probe", "dry_run": true})),
+			call("POST /admin/ipfs/unpin", "admin", "/admin/ipfs/unpin", j(map[string]any{
+				"cids": []string{"QmbrPqJC7j1mVmPsjbjyzhU2qq8FFeYyMxox7N5Ztsdzip"}, "dry_run": true})),
+			call("POST /admin/ipfs/gc", "admin", "/admin/ipfs/gc", `{}`),
 		}
 	},
 	func(s *writeProbeState) []writeProbeCall {

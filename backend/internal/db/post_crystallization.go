@@ -20,9 +20,9 @@ func NewPostCrystallizationRepository(pool *Pool) *PostCrystallizationRepository
 }
 
 // ListCrystallizationCandidates returns ids of live, public, published and approved posts
-// of any type that are not crystallized yet, have at least one live human or agent reply,
-// and whose post and non-system replies were all last changed before the stability
-// period. System replies (moderation verdicts) neither qualify a post nor keep it
+// of any type, by an author who is neither deleted nor banned, that are not crystallized
+// yet, have at least one live human or agent reply, and whose post and non-system replies
+// were all last changed before the stability period. System replies (moderation verdicts) neither qualify a post nor keep it
 // unstable. The longest-stable posts come first.
 func (r *PostCrystallizationRepository) ListCrystallizationCandidates(ctx context.Context, stabilityPeriod time.Duration, limit int) ([]string, error) {
 	if limit <= 0 {
@@ -38,6 +38,13 @@ func (r *PostCrystallizationRepository) ListCrystallizationCandidates(ctx contex
 		  AND p.moderation_state = 'approved'
 		  AND p.crystallization_cid IS NULL
 		  AND p.updated_at < NOW() - $1::interval
+		  -- Anti-abuse W5: never crystallize content by a deleted (tombstoned) or banned author.
+		  AND NOT EXISTS (SELECT 1 FROM users u
+		    WHERE p.posted_by_type = 'human' AND u.id::text = p.posted_by_id AND u.deleted_at IS NOT NULL)
+		  AND NOT EXISTS (SELECT 1 FROM agents a
+		    WHERE p.posted_by_type = 'agent' AND a.id = p.posted_by_id AND a.deleted_at IS NOT NULL)
+		  AND NOT EXISTS (SELECT 1 FROM banned_identities b
+		    WHERE p.posted_by_type = 'agent' AND b.kind = 'agent_id' AND b.value = p.posted_by_id COLLATE "C")
 		  AND EXISTS (
 		    SELECT 1 FROM replies rp
 		    WHERE rp.post_id = p.id AND rp.deleted_at IS NULL AND rp.author_type <> 'system'

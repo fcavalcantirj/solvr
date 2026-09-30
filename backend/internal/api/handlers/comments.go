@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/fcavalcantirj/solvr/internal/db"
+	"github.com/fcavalcantirj/solvr/internal/contentgate"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -42,6 +43,8 @@ type CommentsAgentRepositoryInterface interface {
 
 // CommentsHandler handles comment-related HTTP requests.
 type CommentsHandler struct {
+	contentGate *contentgate.Gate // anti-abuse checks before the insert (nil admits all)
+	contribModerator *ContributionModerator // async moderation of new contributions (nil: none)
 	repo      CommentsRepositoryInterface
 	agentRepo CommentsAgentRepositoryInterface
 }
@@ -193,6 +196,10 @@ func (h *CommentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if refuseContent(w, h.contentGate.CheckContribution(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, content)) {
+		return
+	}
+
 	// Create comment with author info from authentication
 	comment := &models.Comment{
 		TargetType: targetType,
@@ -207,6 +214,7 @@ func (h *CommentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeCommentsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create comment")
 		return
 	}
+	h.contribModerator.Moderate("comment", createdComment.ID, content, string(authInfo.AuthorType), authInfo.AuthorID)
 
 	writeCommentsJSON(w, http.StatusCreated, map[string]interface{}{
 		"data": createdComment,

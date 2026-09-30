@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fcavalcantirj/solvr/internal/contentgate"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -22,7 +23,7 @@ type outcomePostRepo interface {
 	FindByIdempotencyKey(ctx context.Context, authorType, authorID, key string) (*models.PostWithAuthor, error)
 	FindPublishedBySourceRoom(ctx context.Context, roomID string) ([]*models.PostWithAuthor, error)
 	FindByIDForViewer(ctx context.Context, id string, viewerType models.AuthorType, viewerID string, callerHuman string) (*models.PostWithAuthor, error)
-	PublishDraftOutcome(ctx context.Context, postID string) (bool, error)
+	SubmitDraftOutcomeForModeration(ctx context.Context, postID string) (bool, error)
 }
 
 // outcomeRoomRepo looks up rooms by slug. *db.RoomRepository satisfies it.
@@ -43,10 +44,12 @@ type outcomeMemberRepo interface {
 // the result is a DRAFT until deliberately published (public rooms) or approved by the room
 // owner (private rooms).
 type RoomSavePostHandler struct {
-	posts   outcomePostRepo
-	rooms   outcomeRoomRepo
-	members outcomeMemberRepo
-	logger  *slog.Logger
+	postModerator PostModerator     // starts async moderation of a pending_review post (nil: none)
+	contentGate   *contentgate.Gate // anti-abuse checks before the insert (nil admits all)
+	posts         outcomePostRepo
+	rooms         outcomeRoomRepo
+	members       outcomeMemberRepo
+	logger        *slog.Logger
 }
 
 // NewRoomSavePostHandler builds a RoomSavePostHandler.
@@ -189,6 +192,10 @@ func (h *RoomSavePostHandler) SaveAsPost(w http.ResponseWriter, r *http.Request)
 		IdempotencyKey:   keyPtr,
 	}
 
+	if refuseContent(w, h.contentGate.CheckPost(r.Context(), string(info.AuthorType), info.AuthorID, req.Title)) {
+		return
+	}
+
 	created, err := h.posts.Create(r.Context(), post)
 	if err != nil {
 		// A concurrent save under the same key trips the unique index; return the winner.
@@ -293,10 +300,10 @@ func (h *RoomSavePostHandler) ApprovePublication(w http.ResponseWriter, r *http.
 		writePostsError(w, http.StatusBadRequest, "VALIDATION_ERROR", "post is not an outcome of this room")
 		return
 	}
-	// Only an undecided draft is published. A retry of an approval answers with the
-	// published outcome without writing again; an outcome archived or rejected since
-	// cannot be republished by a late approval.
-	changed, err := h.posts.PublishDraftOutcome(r.Context(), postID)
+	// Only an undecided draft is submitted; content moderation publishes it (anti-abuse D5c).
+	// A retry of an approval answers with the outcome's current state without writing again;
+	// an outcome archived or rejected since cannot be resubmitted by a late approval.
+	changed, err := h.posts.SubmitDraftOutcomeForModeration(r.Context(), postID)
 	if err != nil {
 		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to publish outcome")
 		return
@@ -306,7 +313,7 @@ func (h *RoomSavePostHandler) ApprovePublication(w http.ResponseWriter, r *http.
 		writePostsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to load published post")
 		return
 	}
-	if !changed && current.PublicationState != models.PublicationPublished {
+	if !changed && current.PublicationState != models.PublicationPublished && current.Status != models.PostStatusPendingReview {
 		state := string(current.PublicationState)
 		if current.ModerationState == models.ModerationRejected {
 			state = "rejected by moderation"
@@ -314,6 +321,9 @@ func (h *RoomSavePostHandler) ApprovePublication(w http.ResponseWriter, r *http.
 		writePostsError(w, http.StatusConflict, "PUBLICATION_STATE_CONFLICT",
 			"outcome is "+state+"; only a draft outcome can be approved for publication")
 		return
+	}
+	if changed {
+		startPostModeration(h.postModerator, &current.Post)
 	}
 	writePostsJSON(w, http.StatusOK, map[string]interface{}{"data": current})
 }

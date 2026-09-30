@@ -80,6 +80,7 @@ func commentVisibilityFixture(t *testing.T, pool *db.Pool, agentID, visibility, 
 // everyone, and nobody who may not read the post can comment on it or count a view.
 // Family members read (with a total that matches what they see), comment and count views.
 func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
+	liftCreateLimits(t) // many creates by one identity; the hourly limit is not this test's subject
 	ts, _, pool := newStatusContractServer(t)
 	ctx := context.Background()
 	client := &http.Client{}
@@ -168,7 +169,9 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 				require.NoError(t, json.Unmarshal([]byte(got.body), &list))
 				require.Equal(t, len(list.Data), list.Meta.Total, "%s: the total counts what the caller sees", route)
 				before := comments(id)
-				got = call(t, "POST", "/v1/"+route+"/"+id+"/comments", bearer, newComment)
+				// A distinct body per target: the anti-abuse gate refuses an author's repeated comment.
+				got = call(t, "POST", "/v1/"+route+"/"+id+"/comments", bearer,
+					`{"content":"a comment written by the visibility contract test on `+route+` `+id+`"}`)
 				require.Equal(t, http.StatusCreated, got.status, "%s: %s", route, got.body)
 				require.Equal(t, before+1, comments(id))
 			}
@@ -186,7 +189,8 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 			got := call(t, "GET", "/v1/"+route+"/"+id+"/comments", "", "")
 			require.Equal(t, http.StatusOK, got.status, "%s: %s", route, got.body)
 			require.Contains(t, got.body, secret, route)
-			got = call(t, "POST", "/v1/"+route+"/"+id+"/comments", foreignKey, newComment)
+			got = call(t, "POST", "/v1/"+route+"/"+id+"/comments", foreignKey,
+				`{"content":"a comment written by the visibility contract test on `+route+` `+id+`"}`)
 			require.Equal(t, http.StatusCreated, got.status, "%s: %s", route, got.body)
 		}
 		got := call(t, "GET", "/v1/posts/"+public.views+"/views", "", "")

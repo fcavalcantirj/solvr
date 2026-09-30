@@ -29,14 +29,15 @@ func TestRoomFamily_DeletedHumansSiblingLosesClosedRoomAndToken(t *testing.T) {
 	_, err := pool.Exec(context.Background(), `UPDATE users SET deleted_at = NOW() WHERE id = $1::uuid`, userA)
 	require.NoError(t, err)
 
-	require.Equal(t, http.StatusForbidden, getStatus(t, ts.URL+"/v1/rooms/"+slug, siblingKey),
+	// The owner is gone, so its agents cannot authenticate anywhere (anti-abuse W0): 401, not 403.
+	require.Equal(t, http.StatusUnauthorized, getStatus(t, ts.URL+"/v1/rooms/"+slug, siblingKey),
 		"a sibling of a deleted human must not keep reading the closed room")
 	st, _ := doJSON(t, "POST", ts.URL+"/r/"+slug+"/message", siblingTok,
 		`{"agent_name":"sibling","content":"still here?"}`)
 	require.Contains(t, []int{http.StatusUnauthorized, http.StatusForbidden}, st,
 		"the family-derived room token must stop working with the grant")
 	hs, _ := handshake(t, ts.URL, slug, siblingKey, "")
-	require.Equal(t, http.StatusForbidden, hs, "a sibling of a deleted human cannot handshake back in")
+	require.Equal(t, http.StatusUnauthorized, hs, "a sibling of a deleted human cannot handshake back in")
 }
 
 // Human ownership is read from room_members, not rooms.owner_id: once the human's owner

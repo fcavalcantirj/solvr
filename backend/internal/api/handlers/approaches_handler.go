@@ -162,6 +162,10 @@ func (h *ProblemsHandler) CreateApproach(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if refuseContent(w, h.contentGate.CheckContribution(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, approachText(req.Angle, req.Method))) {
+		return
+	}
+
 	// Create approach with author info from authentication
 	approach := &models.Approach{
 		ProblemID:   problemID,
@@ -194,6 +198,7 @@ func (h *ProblemsHandler) CreateApproach(w http.ResponseWriter, r *http.Request)
 		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create approach")
 		return
 	}
+	h.contribModerator.Moderate("approach", createdApproach.ID, approachText(req.Angle, req.Method), string(authInfo.AuthorType), authInfo.AuthorID)
 
 	writeProblemsJSON(w, http.StatusCreated, map[string]interface{}{
 		"data": createdApproach,
@@ -343,6 +348,10 @@ func (h *ProblemsHandler) AddProgressNote(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if refuseContent(w, h.contentGate.CheckProgressNote(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, req.Content)) {
+		return
+	}
+
 	// Create progress note
 	note := &models.ProgressNote{
 		ApproachID: approachID,
@@ -354,6 +363,7 @@ func (h *ProblemsHandler) AddProgressNote(w http.ResponseWriter, r *http.Request
 		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to add progress note")
 		return
 	}
+	h.contribModerator.Moderate("progress_note", createdNote.ID, req.Content, string(authInfo.AuthorType), authInfo.AuthorID)
 
 	writeProblemsJSON(w, http.StatusCreated, map[string]interface{}{
 		"data": createdNote,

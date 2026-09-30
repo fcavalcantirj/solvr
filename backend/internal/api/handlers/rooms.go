@@ -17,6 +17,7 @@ import (
 
 // RoomHandler handles HTTP requests for room CRUD operations.
 type RoomHandler struct {
+	identityGate   IdentityRefuser // refuses a banned agent at the handshake
 	roomRepo       *db.RoomRepository
 	msgRepo        *db.MessageRepository
 	presenceRepo   *db.AgentPresenceRepository

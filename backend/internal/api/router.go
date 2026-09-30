@@ -149,6 +149,7 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 		adminHandler.SetUserEmailRepo(db.NewUserRepository(pool))
 	}
 	r.With(operatorOnly).Post("/admin/email/broadcast", adminHandler.BroadcastEmail)
+	mountAbuseAdminRoutes(r, pool, operatorOnly, ipfsAPIURL)
 	r.With(operatorOnly).Get("/admin/email/history", adminHandler.ListBroadcasts)
 
 	// Admin search analytics endpoints
@@ -196,7 +197,7 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 	if len(embeddingService) > 0 {
 		embedSvc = embeddingService[0]
 	}
-	mountV1Routes(r, pool, ipfsAPIURL, embedSvc)
+	postModerator := mountV1Routes(r, pool, ipfsAPIURL, embedSvc)
 
 	// Homepage routes (public proof of the product; see router_homepage.go)
 	mountHomepageRoutes(r, pool)
@@ -210,7 +211,7 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 			jwtSecret = "test-jwt-secret-32-chars-long!!"
 		}
 		agentRepo := db.NewAgentRepository(pool)
-		apiKeyValidator := auth.NewAPIKeyValidator(agentRepo)
+		apiKeyValidator := auth.NewAPIKeyValidator(agentRepo).WithOwnerCheck(db.NewUserRepository(pool))
 		userAPIKeyRepo := db.NewUserAPIKeyRepository(pool)
 		userAPIKeyValidator := auth.NewUserAPIKeyValidator(userAPIKeyRepo)
 		accounts := db.NewUserRepository(pool)
@@ -218,14 +219,15 @@ func NewRouter(pool *db.Pool, hubMgr *hub.HubManager, registry *hub.PresenceRegi
 		// Optional auth identifies callers without rejecting omitted credentials, so
 		// RoomAccessGuard can enforce closed rooms. Presented invalid credentials are 401.
 		optionalAuthMW := auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts)
-		mountRoomRoutes(r, pool, hubMgr, registry, authMW, optionalAuthMW, jwtSecret)
+		mountRoomRoutes(r, pool, hubMgr, registry, authMW, optionalAuthMW, jwtSecret, postModerator)
 	}
 
 	return r
 }
 
 // mountV1Routes mounts all v1 API routes.
-func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingService services.EmbeddingService) {
+func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingService services.EmbeddingService) handlers.PostModerator {
+	limitPosts, limitContributions := createRateLimits(pool, loadRateLimitConfig(pool)) // per-author hourly create limits (W3)
 	// Create repositories and handlers
 	var agentRepo handlers.AgentRepositoryInterface
 	var claimTokenRepo handlers.ClaimTokenRepositoryInterface
@@ -249,7 +251,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	}
 	if pool == nil {
 		log.Println("WARNING: Database pool is nil. V1 API routes will not be mounted.")
-		return
+		return nil
 	}
 
 	agentRepoConcrete := db.NewCanonicalReputationAgentRepository(pool) // idx 76: canonical reputation
@@ -276,7 +278,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	referralRepo := db.NewReferralRepository(pool)
 	roomRepo := db.NewRoomRepository(pool)
 
-	agentsHandler := handlers.NewAgentsHandler(agentRepo, "")
+	agentsHandler := handlers.NewAgentsHandler(agentRepo, "").WithIdentityGate(db.NewBannedIdentityRepository(pool))
 	agentsHandler.SetClaimTokenRepository(claimTokenRepo)
 	agentsHandler.SetBaseURL("https://solvr.dev")
 	// Room repo lets ClaimAgentWithToken give the claiming human owner membership of rooms an agent created
@@ -306,7 +308,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			modOpts = append(modOpts, services.WithGroqModel(groqModel))
 		}
 		modSvc := services.NewContentModerationService(groqAPIKey, modOpts...)
-		postsHandler.SetContentModerationService(NewContentModerationAdapter(modSvc))
+		postsHandler.SetContentModerationService(wrapContentModerator(modSvc))
 		if pr, ok := postsRepo.(*db.PostRepository); ok {
 			postsHandler.SetPostStatusUpdater(pr)
 		}
@@ -452,9 +454,12 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 	// Create blog handler
 	blogHandler := handlers.NewBlogHandler(db.NewBlogPostRepository(pool))
+	wireContentGate(pool, postsHandler, repliesHandler, problemsHandler, questionsHandler, ideasHandler, commentsHandler, blogHandler)
+	wireAntiAbuseModeration(pool, moderationTargets{posts: postsHandler, blog: blogHandler, problems: problemsHandler,
+		questions: questionsHandler, ideas: ideasHandler, replies: repliesHandler, comments: commentsHandler, notify: notificationsRepoConcrete.Create})
 	if groqAPIKey := os.Getenv("GROQ_API_KEY"); groqAPIKey != "" {
 		modSvc := services.NewContentModerationService(groqAPIKey)
-		blogHandler.SetContentModerationService(NewContentModerationAdapter(modSvc))
+		blogHandler.SetContentModerationService(wrapContentModerator(modSvc))
 	}
 
 	// JWT secret for auth middleware - read from env or use test default
@@ -497,10 +502,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	if pool != nil {
 		userRepoForOAuth := db.NewUserRepository(pool)
 		authMethodRepoForOAuth := db.NewAuthMethodRepository(pool)
-		oauthUserService := services.NewOAuthUserService(userRepoForOAuth, authMethodRepoForOAuth)
+		oauthUserService := services.NewOAuthUserService(userRepoForOAuth, authMethodRepoForOAuth).WithIdentityGate(db.NewBannedIdentityRepository(pool))
 		oauthUserAdapter := services.NewOAuthUserServiceAdapter(oauthUserService)
 		oauthHandlers = handlers.NewOAuthHandlersWithUserService(oauthConfig, pool, nil, oauthUserAdapter).
-			WithLoginCodes(db.NewOAuthLoginCodeRepository(pool))
+			WithLoginCodes(db.NewOAuthLoginCodeRepository(pool)).WithIdentityGate(db.NewBannedIdentityRepository(pool))
 		authUserRepo = db.NewUserRepository(pool)
 		authMethodRepo = authMethodRepoForOAuth
 		authReferralRepo = db.NewReferralRepository(pool)
@@ -513,8 +518,8 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 
 	// Create API key validator for agent authentication
 	// The agentRepo implements auth.AgentDB interface with GetAgentByAPIKeyHash
-	apiKeyValidator := auth.NewAPIKeyValidator(agentRepo)
 	accounts := db.NewUserRepository(pool) // a JWT authenticates only while its account is live
+	apiKeyValidator := auth.NewAPIKeyValidator(agentRepo).WithOwnerCheck(accounts)
 
 	// Create user API key validator for human programmatic access
 	// userAPIKeysRepo implements auth.UserAPIKeyDB interface when backed by db.UserAPIKeyRepository
@@ -566,7 +571,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		// Email/password authentication (API-CRITICAL per PRD Task 48 & 49)
 		// SECURITY: Wrapped with BlockAgentAPIKeys middleware to prevent agents from
 		// registering as humans (see SPEC.md Part 21: Security)
-		authHandler := handlers.NewAuthHandlers(oauthConfig, authUserRepo, authMethodRepo, authReferralRepo)
+		authHandler := handlers.NewAuthHandlers(oauthConfig, authUserRepo, authMethodRepo, authReferralRepo).WithIdentityGate(db.NewBannedIdentityRepository(pool))
 		r.With(apimiddleware.BlockAgentAPIKeys).Post("/auth/register", authHandler.Register)
 		r.With(apimiddleware.BlockAgentAPIKeys).Post("/auth/login", authHandler.Login)
 		r.Post("/auth/claim-referral", authHandler.ClaimReferral) // OAuth referral attribution
@@ -817,7 +822,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Use(auth.UnifiedAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
 
 			// Per SPEC.md Part 5.6: POST /v1/posts - create post (requires auth)
-			r.With(apimiddleware.Idempotency(idempotencyStore, "post.create")).Post("/posts", postsHandler.Create)
+			r.With(apimiddleware.Idempotency(idempotencyStore, "post.create"), limitPosts).Post("/posts", postsHandler.Create)
 			// Per SPEC.md Part 5.6: PATCH /v1/posts/:id - update post (requires auth)
 			r.Patch("/posts/{id}", postsHandler.Update)
 			// Per SPEC.md Part 5.6: DELETE /v1/posts/:id - delete post (requires auth)
@@ -828,13 +833,13 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/posts/{id}/my-vote", postsHandler.GetMyVote)
 
 			// Canonical Reply model (BART-585): one write path for every contribution.
-			r.With(apimiddleware.Idempotency(idempotencyStore, "reply.create")).Post("/posts/{id}/replies", repliesHandler.Create)
+			r.With(apimiddleware.Idempotency(idempotencyStore, "reply.create"), limitContributions).Post("/posts/{id}/replies", repliesHandler.Create)
 			r.Patch("/replies/{id}", repliesHandler.Update)
 			r.Delete("/replies/{id}", repliesHandler.Delete)
 			r.Post("/replies/{id}/vote", repliesHandler.Vote)
 
 			// Blog write endpoints (PRD-v5: authenticated writes)
-			r.Post("/blog", blogHandler.Create)
+			r.With(limitPosts).Post("/blog", blogHandler.Create)
 			r.Patch("/blog/{slug}", blogHandler.Update)
 			r.Delete("/blog/{slug}", blogHandler.Delete)
 			r.Post("/blog/{slug}/vote", blogHandler.Vote)
@@ -954,31 +959,31 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/me/contributions", usersHandler.GetMyContributions)
 
 			// Protected problems endpoints (API-CRITICAL per PRD-v2)
-			r.Post("/problems", problemsHandler.Create)
-			r.Post("/problems/{id}/approaches", problemsHandler.CreateApproach)
+			r.With(limitPosts).Post("/problems", problemsHandler.Create)
+			r.With(limitContributions).Post("/problems/{id}/approaches", problemsHandler.CreateApproach)
 			r.Patch("/approaches/{id}", problemsHandler.UpdateApproach)
-			r.Post("/approaches/{id}/progress", problemsHandler.AddProgressNote)
+			r.With(limitContributions).Post("/approaches/{id}/progress", problemsHandler.AddProgressNote)
 			r.Post("/approaches/{id}/verify", problemsHandler.VerifyApproach)
 
 			// Protected questions endpoints (API-CRITICAL per PRD-v2)
-			r.Post("/questions", questionsHandler.Create)
-			r.Post("/questions/{id}/answers", questionsHandler.CreateAnswer)
+			r.With(limitPosts).Post("/questions", questionsHandler.Create)
+			r.With(limitContributions).Post("/questions/{id}/answers", questionsHandler.CreateAnswer)
 			r.Patch("/answers/{id}", questionsHandler.UpdateAnswer)
 			r.Delete("/answers/{id}", questionsHandler.DeleteAnswer)
 			r.Post("/answers/{id}/vote", questionsHandler.VoteOnAnswer)
 			r.Post("/questions/{id}/accept/{aid}", questionsHandler.AcceptAnswer)
 
 			// Protected ideas endpoints (API-CRITICAL per PRD-v2)
-			r.Post("/ideas", ideasHandler.Create)
-			r.Post("/ideas/{id}/responses", ideasHandler.CreateResponse)
+			r.With(limitPosts).Post("/ideas", ideasHandler.Create)
+			r.With(limitContributions).Post("/ideas/{id}/responses", ideasHandler.CreateResponse)
 			r.Post("/ideas/{id}/evolve", ideasHandler.Evolve)
 
 			// Protected comments endpoints (API-CRITICAL per PRD-v2)
-			r.Post("/approaches/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "approach"))
-			r.Post("/answers/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "answer"))
-			r.Post("/responses/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "response"))
+			r.With(limitContributions).Post("/approaches/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "approach"))
+			r.With(limitContributions).Post("/answers/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "answer"))
+			r.With(limitContributions).Post("/responses/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "response"))
 			// FIX-019: POST /v1/posts/{id}/comments - create comment on posts (requires auth)
-			r.Post("/posts/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "post"))
+			r.With(limitContributions).Post("/posts/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "post"))
 			r.Delete("/comments/{id}", commentsHandler.Delete)
 
 			// Notifications endpoints (API-CRITICAL per PRD-v2)
@@ -1059,29 +1064,7 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Post("/add", uploadHandler.AddContent)
 		})
 	})
-}
-
-// loadRateLimitConfig loads rate limit configuration from database with fallback to defaults.
-func loadRateLimitConfig(pool *db.Pool) *apimiddleware.RateLimitConfig {
-	if pool == nil {
-		return apimiddleware.DefaultRateLimitConfig()
-	}
-
-	// Load from database
-	configRepo := db.NewRateLimitConfigRepository(pool)
-	dbConfig := configRepo.LoadConfig(context.Background())
-
-	// Convert to middleware config
-	return apimiddleware.RateLimitConfigFromDB(
-		dbConfig.AgentGeneralLimit,
-		dbConfig.HumanGeneralLimit,
-		dbConfig.SearchLimitPerMin,
-		dbConfig.AgentPostsPerHour,
-		dbConfig.HumanPostsPerHour,
-		dbConfig.AgentAnswersPerHour,
-		dbConfig.HumanAnswersPerHour,
-		dbConfig.NewAccountThresholdHours,
-	)
+	return postsHandler.StartModeration // room publication hands approved outcomes to moderation
 }
 
 // requestIDMiddleware adds a unique request ID to each request

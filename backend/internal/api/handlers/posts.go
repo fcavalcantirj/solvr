@@ -14,6 +14,7 @@ import (
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
 	"github.com/fcavalcantirj/solvr/internal/auth"
+	"github.com/fcavalcantirj/solvr/internal/contentgate"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -102,9 +103,10 @@ type EmbeddingServiceInterface interface {
 // ModerationInput contains the post content to be moderated.
 // Mirrors services.ModerationInput to avoid import cycle.
 type ModerationInput struct {
-	Title       string
-	Description string
-	Tags        []string
+	Title              string
+	Description        string
+	Tags               []string
+	AuthorRecentTitles []string // the author's latest other post titles (prompt rule 7)
 }
 
 // ModerationResult contains the moderation decision.
@@ -167,6 +169,8 @@ type PostTranslationTrigger interface {
 var defaultRetryDelays = []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second}
 
 type PostsHandler struct {
+	recentTitles       AuthorTitlesReader // the author's recent titles for moderation (nil: none)
+	contentGate        *contentgate.Gate  // anti-abuse checks before the insert (nil admits all)
 	repo               PostsRepositoryInterface
 	logger             *slog.Logger
 	embeddingService   EmbeddingServiceInterface
@@ -517,6 +521,10 @@ func (h *PostsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		initialStatus = models.PostStatusOpen
 	}
 
+	if refuseContent(w, h.contentGate.CheckPost(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, req.Title)) {
+		return
+	}
+
 	// Canonical publication/moderation states derived from the initial status (BART-583).
 	// The request never carries moderation_state, so an author cannot self-approve: a
 	// public post starts published-pending and is not publicly eligible until moderated.
@@ -726,17 +734,17 @@ func (h *PostsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Determine if content (title/description) was changed
 	contentChanged := req.Title != nil || req.Description != nil
 
-	// Re-moderation: if content changed and status is open, rejected, or pending_review,
-	// set status to pending_review and trigger async moderation
-	needsReModeration := contentChanged && h.contentModService != nil &&
-		existingPost.Visibility != models.VisibilityFamily && // BART-154: family posts are never re-moderated
-		(existingPost.Status == models.PostStatusOpen ||
-			existingPost.Status == models.PostStatusRejected ||
-			existingPost.Status == models.PostStatusPendingReview)
-
-	if needsReModeration {
+	// Re-moderation: changed content on an open, rejected or pending_review post, or a status
+	// edit that would publish a post moderation has not approved (D5a), goes back to
+	// pending_review and through async moderation — the latter even without a moderator.
+	unapprovedPublish := publishesUnapproved(existingPost.Post, updatedPost)
+	needsReModeration := existingPost.Visibility != models.VisibilityFamily && // BART-154: family posts are never re-moderated
+		(unapprovedPublish || contentChanged && (existingPost.Status == models.PostStatusOpen ||
+			existingPost.Status == models.PostStatusRejected || existingPost.Status == models.PostStatusPendingReview))
+	if needsReModeration && (h.contentModService != nil || unapprovedPublish) {
 		updatedPost.Status = models.PostStatusPendingReview
 	}
+	needsReModeration = needsReModeration && h.contentModService != nil
 
 	// Regenerate embedding if title or description changed
 	if contentChanged && h.embeddingService != nil {

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/contentgate"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
 )
@@ -58,6 +59,9 @@ type ApproachRelationshipsRepositoryInterface interface {
 
 // ProblemsHandler handles problem-related HTTP requests.
 type ProblemsHandler struct {
+	postModerator    PostModerator          // starts async moderation of a pending_review post (nil: none)
+	contentGate      *contentgate.Gate      // anti-abuse checks before the insert (nil admits all)
+	contribModerator *ContributionModerator // async moderation of new contributions (nil: none)
 	repo             ProblemsRepositoryInterface
 	postsRepo        PostsRepositoryInterface // For listing problems (shares data with /v1/posts)
 	relRepo          ApproachRelationshipsRepositoryInterface
@@ -250,6 +254,10 @@ func (h *ProblemsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if refuseContent(w, h.contentGate.CheckPost(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, req.Title)) {
+		return
+	}
+
 	// Create problem with author info from authentication
 	post := &models.Post{
 		Type:            models.PostTypeProblem,
@@ -258,7 +266,7 @@ func (h *ProblemsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Tags:            req.Tags,
 		PostedByType:    authInfo.AuthorType,
 		PostedByID:      authInfo.AuthorID,
-		Status:          models.PostStatusOpen,
+		Status:          models.PostStatusPendingReview, // moderated like POST /v1/posts (anti-abuse W2)
 		SuccessCriteria: req.SuccessCriteria,
 		Weight:          req.Weight,
 	}
@@ -268,6 +276,7 @@ func (h *ProblemsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeProblemsError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to create problem")
 		return
 	}
+	startPostModeration(h.postModerator, createdPost)
 
 	writeProblemsJSON(w, http.StatusCreated, map[string]interface{}{
 		"data": createdPost,

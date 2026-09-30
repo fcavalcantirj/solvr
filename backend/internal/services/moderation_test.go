@@ -198,52 +198,6 @@ func TestDetectSpam_CustomConfig(t *testing.T) {
 
 // --- Duplicate Detection Tests ---
 
-func TestModerationService_CheckDuplicate_NoDuplicate(t *testing.T) {
-	dupService := NewDuplicateDetectionService(NewInMemoryDuplicateStore())
-	modService := NewModerationService(nil, dupService, nil, nil)
-
-	content := ModerationContent{
-		Title:       "Unique title here",
-		Description: "This is a unique description that has not been posted before.",
-	}
-
-	result, err := modService.CheckDuplicate(context.Background(), content)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if result.IsDuplicate {
-		t.Error("Expected no duplicate for new content")
-	}
-}
-
-func TestModerationService_CheckDuplicate_Found(t *testing.T) {
-	dupStore := NewInMemoryDuplicateStore()
-	dupService := NewDuplicateDetectionService(dupStore)
-	modService := NewModerationService(nil, dupService, nil, nil)
-
-	// Register existing content
-	postID := uuid.New()
-	title := "How to test Go code"
-	desc := "I want to learn about testing in Go. What's the best approach?"
-	_ = dupService.RegisterContent(context.Background(), postID, title, desc, time.Now())
-
-	content := ModerationContent{
-		Title:       title,
-		Description: desc,
-	}
-
-	result, err := modService.CheckDuplicate(context.Background(), content)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if !result.IsDuplicate {
-		t.Error("Expected duplicate detection")
-	}
-	if result.OriginalPostID != postID {
-		t.Errorf("Expected original post ID %s, got %s", postID, result.OriginalPostID)
-	}
-}
-
 // --- Rate Abuse Detection Tests ---
 
 func TestModerationService_CheckRateAbuse_NoAbuse(t *testing.T) {
@@ -251,7 +205,7 @@ func TestModerationService_CheckRateAbuse_NoAbuse(t *testing.T) {
 		RateLimitHits: map[string]int{"human:user123": 2},
 		Threshold:     10,
 	}
-	modService := NewModerationService(nil, nil, mockChecker, nil)
+	modService := NewModerationService(nil, mockChecker, nil)
 
 	result, err := modService.CheckRateAbuse(context.Background(), "human", "user123")
 	if err != nil {
@@ -267,7 +221,7 @@ func TestModerationService_CheckRateAbuse_Detected(t *testing.T) {
 		RateLimitHits: map[string]int{"human:user123": 15},
 		Threshold:     10,
 	}
-	modService := NewModerationService(nil, nil, mockChecker, nil)
+	modService := NewModerationService(nil, mockChecker, nil)
 
 	result, err := modService.CheckRateAbuse(context.Background(), "human", "user123")
 	if err != nil {
@@ -289,7 +243,7 @@ func TestModerationService_CheckRateAbuse_CustomThreshold(t *testing.T) {
 		Threshold: 3,  // Custom lower threshold
 		Window:    time.Hour,
 	}
-	modService := NewModerationServiceWithRateConfig(nil, nil, mockChecker, nil, config)
+	modService := NewModerationServiceWithRateConfig(nil, mockChecker, nil, config)
 
 	result, err := modService.CheckRateAbuse(context.Background(), "agent", "bot1")
 	if err != nil {
@@ -357,7 +311,7 @@ func TestDetectLinkSpam_Excessive(t *testing.T) {
 
 func TestModerationService_AutoFlag_Spam(t *testing.T) {
 	mockFlagCreator := &MockFlagCreator{}
-	modService := NewModerationService(mockFlagCreator, nil, nil, nil)
+	modService := NewModerationService(mockFlagCreator, nil, nil)
 
 	ctx := context.Background()
 	postID := uuid.New()
@@ -389,7 +343,7 @@ func TestModerationService_AutoFlag_Spam(t *testing.T) {
 
 func TestModerationService_AutoFlag_NoFlagForCleanContent(t *testing.T) {
 	mockFlagCreator := &MockFlagCreator{}
-	modService := NewModerationService(mockFlagCreator, nil, nil, nil)
+	modService := NewModerationService(mockFlagCreator, nil, nil)
 
 	ctx := context.Background()
 	postID := uuid.New()
@@ -410,7 +364,7 @@ func TestModerationService_AutoFlag_NoFlagForCleanContent(t *testing.T) {
 
 func TestModerationService_AutoFlag_LinkSpam(t *testing.T) {
 	mockFlagCreator := &MockFlagCreator{}
-	modService := NewModerationService(mockFlagCreator, nil, nil, nil)
+	modService := NewModerationService(mockFlagCreator, nil, nil)
 
 	ctx := context.Background()
 	postID := uuid.New()
@@ -426,42 +380,6 @@ func TestModerationService_AutoFlag_LinkSpam(t *testing.T) {
 
 	if len(mockFlagCreator.CreatedFlags) == 0 {
 		t.Error("Expected flag to be created for link spam")
-	}
-}
-
-func TestModerationService_AutoFlag_Duplicate(t *testing.T) {
-	mockFlagCreator := &MockFlagCreator{}
-	dupStore := NewInMemoryDuplicateStore()
-	dupService := NewDuplicateDetectionService(dupStore)
-	modService := NewModerationService(mockFlagCreator, dupService, nil, nil)
-
-	ctx := context.Background()
-
-	// Register existing content
-	existingID := uuid.New()
-	title := "How to test Go code"
-	desc := "I want to learn about testing in Go applications. What is the best approach?"
-	_ = dupService.RegisterContent(ctx, existingID, title, desc, time.Now())
-
-	// Try to post duplicate
-	newPostID := uuid.New()
-	content := ModerationContent{
-		Title:       title,
-		Description: desc,
-	}
-
-	err := modService.AutoFlagIfNeeded(ctx, newPostID, "post", content)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if len(mockFlagCreator.CreatedFlags) == 0 {
-		t.Error("Expected flag to be created for duplicate content")
-	}
-
-	flag := mockFlagCreator.CreatedFlags[0]
-	if flag.Reason != "duplicate" {
-		t.Errorf("Expected reason 'duplicate', got '%s'", flag.Reason)
 	}
 }
 
@@ -514,11 +432,10 @@ func containsReason(reasons []string, target string) bool {
 func TestModerationService_FullModerationFlow(t *testing.T) {
 	// Setup
 	mockFlagCreator := &MockFlagCreator{}
-	dupService := NewDuplicateDetectionService(NewInMemoryDuplicateStore())
 	mockRateChecker := &MockRateLimitChecker{
 		RateLimitHits: map[string]int{},
 	}
-	modService := NewModerationService(mockFlagCreator, dupService, mockRateChecker, nil)
+	modService := NewModerationService(mockFlagCreator, mockRateChecker, nil)
 
 	ctx := context.Background()
 
@@ -546,18 +463,6 @@ func TestModerationService_FullModerationFlow(t *testing.T) {
 	}
 	if len(mockFlagCreator.CreatedFlags) != 1 {
 		t.Errorf("Expected 1 flag for spam content, got %d", len(mockFlagCreator.CreatedFlags))
-	}
-
-	// Test 3: Register clean content, then check duplicate
-	postID := uuid.New()
-	_ = dupService.RegisterContent(ctx, postID, cleanContent.Title, cleanContent.Description, time.Now())
-
-	duplicateResult, err := modService.CheckDuplicate(ctx, cleanContent)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if !duplicateResult.IsDuplicate {
-		t.Error("Expected duplicate detection for registered content")
 	}
 }
 

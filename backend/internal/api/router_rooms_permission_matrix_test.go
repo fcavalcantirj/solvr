@@ -42,6 +42,7 @@ func requireRefusedEverywhere(t *testing.T, surfaces []string, caller matrixCall
 }
 
 func TestRoomPermissionMatrix_EverySurfaceFollowsVisibilityMembershipOwnershipAndDeletion(t *testing.T) {
+	useRecordingModerator(t) // anti-abuse D5: publishing goes through moderation, which approves
 	inst := startRoomInstance(t, RoomRelayOptions{SweepInterval: -1})
 	base := inst.ts.URL
 	t.Cleanup(func() {
@@ -129,6 +130,7 @@ func TestRoomPermissionMatrix_EverySurfaceFollowsVisibilityMembershipOwnershipAn
 				status, out := doJSON(t, "PATCH", base+"/v1/posts/"+postID, room.executorKey, `{"status":"open"}`)
 				require.Equal(t, http.StatusOK, status, "author publishes: %v", out)
 			}
+			waitForValue(t, inst.pool, "published", `SELECT publication_state FROM posts WHERE id = $1::uuid`, postID)
 			_, body := getRaw(t, base+"/v1/search?q="+url.QueryEscape(marker), "")
 			require.Contains(t, body, postID, "the published outcome is searchable, so the probe is live")
 
@@ -203,6 +205,7 @@ func TestRoomPermissionMatrix_EverySurfaceFollowsVisibilityMembershipOwnershipAn
 // (or the reaper removing an expired one) must not let the author publish the draft by a
 // plain edit, while a public room's outcome still publishes through the normal flow.
 func TestRoomPermissionMatrix_PrivateOutcomeStaysOwnerOnlyAfterTheRoomIsGone(t *testing.T) {
+	useRecordingModerator(t) // anti-abuse D5a: a publish edit goes through moderation, which approves
 	inst := startRoomInstance(t, RoomRelayOptions{SweepInterval: -1})
 	base := inst.ts.URL
 	t.Cleanup(func() {
@@ -237,6 +240,9 @@ func TestRoomPermissionMatrix_PrivateOutcomeStaysOwnerOnlyAfterTheRoomIsGone(t *
 
 			status, out := doJSON(t, "PATCH", base+"/v1/posts/"+postID, room.executorKey, `{"status":"open"}`)
 			require.Equal(t, tc.wantPublish, status, "author publishes by a plain edit: %v", out)
+			if tc.wantPublish == http.StatusOK {
+				waitForValue(t, inst.pool, "published", `SELECT publication_state FROM posts WHERE id = $1::uuid`, postID)
+			}
 			status, out = doJSON(t, "GET", base+"/v1/posts/"+postID, room.executorKey, "")
 			require.Equal(t, http.StatusOK, status, "%v", out)
 			post, _ := out["data"].(map[string]any)

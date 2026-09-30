@@ -30,6 +30,7 @@ func mountRoomRoutes(
 	authMiddleware func(http.Handler) http.Handler,
 	optionalAuthMiddleware func(http.Handler) http.Handler,
 	streamTicketSecret string,
+	postModerator handlers.PostModerator, // content moderation for outcomes the owner approves
 ) {
 	roomRepo := db.NewRoomRepository(pool)
 	msgRepo := db.NewMessageRepository(pool)
@@ -39,7 +40,7 @@ func mountRoomRoutes(
 	eventRepo := db.NewRoomEventRepository(pool)
 	agentTokenRepo := db.NewRoomAgentTokenRepository(pool)
 
-	roomHandler := handlers.NewRoomHandler(roomRepo, msgRepo, presenceRepo, memberRepo, agentTokenRepo, eventRepo)
+	roomHandler := handlers.NewRoomHandler(roomRepo, msgRepo, presenceRepo, memberRepo, agentTokenRepo, eventRepo).WithIdentityGate(db.NewBannedIdentityRepository(pool))
 	msgHandler := handlers.NewRoomMessagesHandler(msgRepo, roomRepo, presenceRepo, eventRepo, hubMgr)
 	presenceHandler := handlers.NewRoomPresenceHandler(presenceRepo, roomRepo, hubMgr, registry)
 
@@ -61,6 +62,9 @@ func mountRoomRoutes(
 	eventsHandler := handlers.NewRoomEventsHandler(entryRepo, hubMgr)
 	roomConnectHandler := handlers.NewRoomConnectHandler(roomRepo, msgRepo)
 	roomSavePostHandler := handlers.NewRoomSavePostHandler(db.NewPostRepository(pool), roomRepo, memberRepo)
+	limitPosts, _ := createRateLimits(pool, loadRateLimitConfig(pool)) // per-author hourly create limit (W3)
+	wireContentGate(pool, roomSavePostHandler)
+	roomSavePostHandler.SetPostModerator(postModerator)
 	streamTicketHandler := handlers.NewRoomStreamTicketHandler(streamTicketSecret)
 	streamTicketLimit := httprate.LimitByIP(30, time.Minute)
 
@@ -157,7 +161,7 @@ func mountRoomRoutes(
 			// Turn a room outcome into a reusable canonical draft Post (author reviews and
 			// publishes it via the normal Post flow; a private-room outcome is published only
 			// through the owner-approval endpoint below).
-			r.With(apimiddleware.Idempotency(idempotencyStore, "room.save_as_post")).Post("/{slug}/save-as-post", roomSavePostHandler.SaveAsPost)
+			r.With(apimiddleware.Idempotency(idempotencyStore, "room.save_as_post"), limitPosts).Post("/{slug}/save-as-post", roomSavePostHandler.SaveAsPost)
 			r.Post("/{slug}/posts/{postID}/publish", roomSavePostHandler.ApprovePublication)
 		})
 	})

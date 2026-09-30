@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/api/response"
+	"github.com/fcavalcantirj/solvr/internal/contentgate"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -33,9 +34,12 @@ type BlogPostRepositoryInterface interface {
 
 // BlogHandler handles blog-related HTTP requests.
 type BlogHandler struct {
+	contentGate       *contentgate.Gate // anti-abuse checks before the insert (nil admits all)
 	repo              BlogPostRepositoryInterface
 	logger            *slog.Logger
 	contentModService ContentModerationServiceInterface
+	unpublisher       BlogUnpublisher      // returns a rejected published post to draft
+	notify            ContributionNotifier // tells the author (nil: no notification)
 }
 
 // NewBlogHandler creates a new BlogHandler.
@@ -273,6 +277,10 @@ func (h *BlogHandler) Create(w http.ResponseWriter, r *http.Request) {
 		MetaDescription: req.MetaDescription,
 	}
 
+	if refuseContent(w, h.contentGate.CheckBlog(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, req.Title)) {
+		return
+	}
+
 	createdPost, err := h.repo.Create(r.Context(), post)
 	if err != nil {
 		if errors.Is(err, db.ErrDuplicateSlug) {
@@ -291,6 +299,7 @@ func (h *BlogHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.WriteInternalErrorWithLog(w, "failed to create blog post", err, ctx, h.logger)
 		return
 	}
+	h.moderatePublished(createdPost)
 
 	writeBlogJSON(w, http.StatusCreated, BlogPostResponse{Data: createdPost})
 }
@@ -407,6 +416,9 @@ func (h *BlogHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		response.WriteInternalErrorWithLog(w, "failed to update blog post", err, ctx, h.logger)
 		return
+	}
+	if req.Title != nil || req.Body != nil || existing.Status != models.BlogPostStatusPublished {
+		h.moderatePublished(result)
 	}
 
 	writeBlogJSON(w, http.StatusOK, BlogPostResponse{Data: result})

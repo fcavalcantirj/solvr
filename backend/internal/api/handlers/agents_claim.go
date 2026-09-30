@@ -80,6 +80,9 @@ func (h *AgentsHandler) GenerateClaim(w http.ResponseWriter, r *http.Request) {
 		writeAgentUnauthorized(w, "agent authentication required")
 		return
 	}
+	if refuseIdentity(w, r, h.identityGate, db.IdentityQuery{AgentID: agent.ID}) {
+		return
+	}
 
 	// Check if claim token repository is configured
 	if h.claimTokenRepo == nil {
@@ -228,6 +231,9 @@ func (h *AgentsHandler) ClaimAgentWithToken(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		writeAgentError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get agent")
+		return
+	}
+	if refuseIdentity(w, r, h.identityGate, db.IdentityQuery{AgentID: agent.ID, Email: claims.Email}) {
 		return
 	}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -542,20 +543,14 @@ func TestGitHubOAuthCallbackEndpoint(t *testing.T) {
 		t.Errorf("GET /v1/auth/github/callback returned 404 - endpoint not wired")
 	}
 
-	// Should return 400 Bad Request (missing authorization code)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400 (missing code), got %d: %s", w.Code, w.Body.String())
+	// A callback without an authorization code ends on the frontend's error page (every
+	// callback error redirects; Felipe, 2026-09-30).
+	if w.Code != http.StatusFound {
+		t.Fatalf("expected status 302 (missing code), got %d: %s", w.Code, w.Body.String())
 	}
-
-	// Verify error response is JSON
-	var response map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	// Should have error object
-	if response["error"] == nil {
-		t.Error("expected error object in response")
+	loc, err := url.Parse(w.Header().Get("Location"))
+	if err != nil || loc.Path != "/auth/callback" || loc.Query().Get("error") != "missing_code" {
+		t.Errorf("expected a redirect to /auth/callback?error=missing_code, got %q", w.Header().Get("Location"))
 	}
 }
 
@@ -613,20 +608,14 @@ func TestGoogleOAuthCallbackEndpoint(t *testing.T) {
 		t.Errorf("GET /v1/auth/google/callback returned 404 - endpoint not wired")
 	}
 
-	// Should return 400 Bad Request (missing authorization code)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400 (missing code), got %d: %s", w.Code, w.Body.String())
+	// A callback without an authorization code ends on the frontend's error page (every
+	// callback error redirects; Felipe, 2026-09-30).
+	if w.Code != http.StatusFound {
+		t.Fatalf("expected status 302 (missing code), got %d: %s", w.Code, w.Body.String())
 	}
-
-	// Verify error response is JSON
-	var response map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	// Should have error object
-	if response["error"] == nil {
-		t.Error("expected error object in response")
+	loc, err := url.Parse(w.Header().Get("Location"))
+	if err != nil || loc.Path != "/auth/callback" || loc.Query().Get("error") != "missing_code" {
+		t.Errorf("expected a redirect to /auth/callback?error=missing_code, got %q", w.Header().Get("Location"))
 	}
 }
 

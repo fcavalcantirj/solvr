@@ -193,6 +193,7 @@ var writeProbeValidationOnly = map[string]string{
 	"POST /v1/auth/oauth/exchange":     "a login code is minted only by the OAuth callback round trip with the provider",
 	"POST /v1/auth/moltbook":           "a valid identity token is verified against the external Moltbook service",
 	"POST /v1/add":                     "uploads go straight to IPFS, which the probe points at a closed port",
+	"POST /admin/ipfs/gc":              "repo/gc goes straight to IPFS, which the probe points at a closed port",
 	"POST /admin/jobs/translation/run": "the job runner is wired only when GROQ_API_KEY is set; the probe unsets it (the scheduled-jobs probe runs TranslationJob)",
 	"POST /admin/email/broadcast":      "the email sender is wired only when RESEND_API_KEY is set; the probe unsets it so nothing is ever sent",
 }

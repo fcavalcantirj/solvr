@@ -100,18 +100,7 @@ func TestOAuthHandlers_GitHubCallback_MissingCode(t *testing.T) {
 
 	handler.GitHubCallback(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
-
-	var resp ErrorResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if resp.Error.Code != "VALIDATION_ERROR" {
-		t.Errorf("expected error code VALIDATION_ERROR, got %s", resp.Error.Code)
-	}
+	requireCallbackErrorRedirect(t, rec, OAuthErrorMissingCode)
 }
 
 // TestOAuthHandlers_GoogleCallback_MissingCode tests Google callback without code.
@@ -124,18 +113,7 @@ func TestOAuthHandlers_GoogleCallback_MissingCode(t *testing.T) {
 
 	handler.GoogleCallback(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
-
-	var resp ErrorResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if resp.Error.Code != "VALIDATION_ERROR" {
-		t.Errorf("expected error code VALIDATION_ERROR, got %s", resp.Error.Code)
-	}
+	requireCallbackErrorRedirect(t, rec, OAuthErrorMissingCode)
 }
 
 // TestOAuthHandlers_GitHubCallback_WithError tests GitHub callback with error from GitHub.
@@ -148,18 +126,7 @@ func TestOAuthHandlers_GitHubCallback_WithError(t *testing.T) {
 
 	handler.GitHubCallback(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
-
-	var resp ErrorResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if resp.Error.Code != "OAUTH_ERROR" {
-		t.Errorf("expected error code OAUTH_ERROR, got %s", resp.Error.Code)
-	}
+	requireCallbackErrorRedirect(t, rec, "access_denied")
 }
 
 // TestOAuthHandlers_GoogleCallback_WithError tests Google callback with error from Google.
@@ -172,18 +139,7 @@ func TestOAuthHandlers_GoogleCallback_WithError(t *testing.T) {
 
 	handler.GoogleCallback(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
-
-	var resp ErrorResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if resp.Error.Code != "OAUTH_ERROR" {
-		t.Errorf("expected error code OAUTH_ERROR, got %s", resp.Error.Code)
-	}
+	requireCallbackErrorRedirect(t, rec, "access_denied")
 }
 
 // ErrorResponse is used for parsing error responses in tests.
@@ -677,19 +633,8 @@ func TestGitHubCallback_GitHubAPIError(t *testing.T) {
 
 	handler.GitHubCallback(rec, req)
 
-	// Should return 502 BAD_GATEWAY per SPEC.md
-	if rec.Code != http.StatusBadGateway {
-		t.Errorf("expected status %d, got %d", http.StatusBadGateway, rec.Code)
-	}
-
-	var resp ErrorResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if resp.Error.Code != "BAD_GATEWAY" {
-		t.Errorf("expected error code BAD_GATEWAY, got %s", resp.Error.Code)
-	}
+	// GitHub is unreachable or failing: the browser lands on the error page.
+	requireCallbackErrorRedirect(t, rec, OAuthErrorProviderUnavailable)
 }
 
 // TestGitHubCallback_InvalidCode tests error handling when code is invalid.
@@ -719,10 +664,8 @@ func TestGitHubCallback_InvalidCode(t *testing.T) {
 
 	handler.GitHubCallback(rec, req)
 
-	// Should return 400 for invalid code
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
+	// GitHub refuses the code: its own error code is passed on.
+	requireCallbackErrorRedirect(t, rec, "bad_verification_code")
 }
 
 // Mock types for testing

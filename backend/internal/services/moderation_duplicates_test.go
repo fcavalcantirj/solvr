@@ -49,7 +49,7 @@ func TestModerationService_AutoFlag_DuplicatePostFromCanonicalPosts(t *testing.T
 	finder := &fakeDuplicateFinder{post: &models.ContentDuplicate{
 		TargetType: "post", TargetID: original.String(), PostID: original.String(),
 	}}
-	svc := NewModerationService(flags, nil, nil, nil)
+	svc := NewModerationService(flags, nil, nil)
 	svc.SetDuplicateFinder(finder)
 
 	newPost := uuid.New()
@@ -86,7 +86,7 @@ func TestModerationService_AutoFlag_DuplicateReplyOnTheSamePost(t *testing.T) {
 	finder := &fakeDuplicateFinder{reply: &models.ContentDuplicate{
 		TargetType: "reply", TargetID: original.String(), PostID: postID.String(),
 	}}
-	svc := NewModerationService(flags, nil, nil, nil)
+	svc := NewModerationService(flags, nil, nil)
 	svc.SetDuplicateFinder(finder)
 
 	newReply := uuid.New()
@@ -119,7 +119,7 @@ func TestModerationService_AutoFlag_DuplicateReplyOnTheSamePost(t *testing.T) {
 func TestModerationService_AutoFlag_UniqueReplyIsNotFlagged(t *testing.T) {
 	flags := &MockFlagCreator{}
 	finder := &fakeDuplicateFinder{}
-	svc := NewModerationService(flags, nil, nil, nil)
+	svc := NewModerationService(flags, nil, nil)
 	svc.SetDuplicateFinder(finder)
 
 	content := ModerationContent{Description: "Thanks, that worked.", PostID: uuid.NewString()}
@@ -136,7 +136,7 @@ func TestModerationService_AutoFlag_UniqueReplyIsNotFlagged(t *testing.T) {
 
 func TestModerationService_CheckContentDuplicate_ReturnsTheOriginal(t *testing.T) {
 	postID, original := uuid.New(), uuid.New()
-	svc := NewModerationService(nil, nil, nil, nil)
+	svc := NewModerationService(nil, nil, nil)
 	svc.SetDuplicateFinder(&fakeDuplicateFinder{reply: &models.ContentDuplicate{
 		TargetType: "reply", TargetID: original.String(), PostID: postID.String(),
 	}})
@@ -155,7 +155,7 @@ func TestModerationService_CheckContentDuplicate_ReturnsTheOriginal(t *testing.T
 // Legacy contribution target types are not canonical: they are never looked up.
 func TestModerationService_CheckContentDuplicate_SkipsLegacyTargetTypes(t *testing.T) {
 	finder := &fakeDuplicateFinder{post: &models.ContentDuplicate{TargetType: "post", TargetID: uuid.NewString(), PostID: uuid.NewString()}}
-	svc := NewModerationService(nil, nil, nil, nil)
+	svc := NewModerationService(nil, nil, nil)
 	svc.SetDuplicateFinder(finder)
 
 	for _, legacy := range []string{"answer", "approach", "response", "comment"} {
@@ -175,7 +175,7 @@ func TestModerationService_CheckContentDuplicate_SkipsLegacyTargetTypes(t *testi
 func TestModerationService_AutoFlag_DuplicateFinderErrorIsReturned(t *testing.T) {
 	flags := &MockFlagCreator{}
 	boom := errors.New("database unavailable")
-	svc := NewModerationService(flags, nil, nil, nil)
+	svc := NewModerationService(flags, nil, nil)
 	svc.SetDuplicateFinder(&fakeDuplicateFinder{err: boom})
 
 	err := svc.AutoFlagIfNeeded(context.Background(), uuid.New(), "reply",
@@ -185,29 +185,5 @@ func TestModerationService_AutoFlag_DuplicateFinderErrorIsReturned(t *testing.T)
 	}
 	if len(flags.CreatedFlags) != 0 {
 		t.Errorf("no flag may be created when the lookup failed")
-	}
-}
-
-// The canonical finder replaces the hash store: content registered only in the store is
-// not a duplicate once the finder is set.
-func TestModerationService_DuplicateFinderTakesPrecedenceOverTheHashStore(t *testing.T) {
-	flags := &MockFlagCreator{}
-	dup := NewDuplicateDetectionService(NewInMemoryDuplicateStore())
-	title := "How to test Go code"
-	desc := "I want to learn about testing in Go applications. What is the best approach?"
-	_ = dup.RegisterContent(context.Background(), uuid.New(), title, desc, time.Now())
-
-	finder := &fakeDuplicateFinder{}
-	svc := NewModerationService(flags, dup, nil, nil)
-	svc.SetDuplicateFinder(finder)
-
-	if err := svc.AutoFlagIfNeeded(context.Background(), uuid.New(), "post", ModerationContent{Title: title, Description: desc}); err != nil {
-		t.Fatalf("AutoFlagIfNeeded: %v", err)
-	}
-	if len(finder.postCalls) != 1 {
-		t.Errorf("want the finder consulted once, got %d", len(finder.postCalls))
-	}
-	if len(flags.CreatedFlags) != 0 {
-		t.Errorf("the hash store must not be consulted when the finder is set, got flag %+v", flags.CreatedFlags[0])
 	}
 }

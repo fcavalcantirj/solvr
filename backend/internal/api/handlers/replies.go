@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/contentgate"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 	"github.com/go-chi/chi/v5"
@@ -35,6 +36,8 @@ type RepliesRepositoryInterface interface {
 // RepliesHandler serves the one create/list/update/delete/vote reply API family
 // under posts and replies. There is no approach/answer/response/comment choice.
 type RepliesHandler struct {
+	contentGate      *contentgate.Gate      // anti-abuse checks before the insert (nil admits all)
+	contribModerator *ContributionModerator // async moderation of new contributions (nil: none)
 	repo             RepliesRepositoryInterface
 	embeddingService EmbeddingServiceInterface
 	logger           *slog.Logger
@@ -99,6 +102,9 @@ func (h *RepliesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if refuseContent(w, h.contentGate.CheckContribution(r.Context(), string(authInfo.AuthorType), authInfo.AuthorID, req.Body)) {
+		return
+	}
 	reply := &models.Reply{
 		PostID:        postID,
 		ParentReplyID: req.ParentReplyID,
@@ -121,6 +127,7 @@ func (h *RepliesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	h.contribModerator.Moderate("reply", created.ID, req.Body, string(authInfo.AuthorType), authInfo.AuthorID)
 	writeRepliesJSON(w, http.StatusCreated, map[string]any{"data": created})
 }
 

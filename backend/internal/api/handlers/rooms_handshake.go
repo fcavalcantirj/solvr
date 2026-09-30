@@ -48,6 +48,9 @@ func (h *RoomHandler) Handshake(w http.ResponseWriter, r *http.Request) {
 		roomWriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "agent API key required to handshake")
 		return
 	}
+	if refuseIdentity(w, r, h.identityGate, db.IdentityQuery{AgentID: agent.ID}) {
+		return
+	}
 	if h.agentTokenRepo == nil {
 		roomWriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "per-agent tokens not configured")
 		return

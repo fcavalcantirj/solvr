@@ -107,8 +107,8 @@ test_output_contains "help command exists" "USAGE:" "$SOLVR_SH" help
 test_output_contains "help shows search" "search" "$SOLVR_SH" help
 test_output_contains "help shows get" "get" "$SOLVR_SH" help
 test_output_contains "help shows post" "post" "$SOLVR_SH" help
-test_output_contains "help shows answer" "answer" "$SOLVR_SH" help
-test_output_contains "help shows approach" "approach" "$SOLVR_SH" help
+test_output_contains "help shows reply" "reply <post_id> <body>" "$SOLVR_SH" help
+test_output_contains "help shows replies" "replies <post_id>" "$SOLVR_SH" help
 test_output_contains "help shows vote" "vote" "$SOLVR_SH" help
 test_output_contains "help shows test" "test" "$SOLVR_SH" help
 
@@ -122,10 +122,12 @@ echo -e "${YELLOW}Argument validation tests:${NC}"
 
 test_case "search requires query" 1 "$SOLVR_SH" search
 test_case "get requires id" 1 "$SOLVR_SH" get
-test_case "post requires 3 args" 1 "$SOLVR_SH" post
-test_case "post requires valid type" 1 "$SOLVR_SH" post invalid "title" "body"
-test_case "answer requires 2 args" 1 "$SOLVR_SH" answer
-test_case "approach requires 2 args" 1 "$SOLVR_SH" approach
+test_case "post requires title and body" 1 "$SOLVR_SH" post
+test_case "post rejects a type argument" 1 "$SOLVR_SH" post invalid "title" "body"
+test_case "answer is retired" 1 "$SOLVR_SH" answer
+test_case "approach is retired" 1 "$SOLVR_SH" approach
+test_case "reply requires post id and body" 1 "$SOLVR_SH" reply
+test_case "replies requires post id" 1 "$SOLVR_SH" replies
 test_case "vote requires 2 args" 1 "$SOLVR_SH" vote
 test_case "vote requires valid direction" 1 "$SOLVR_SH" vote abc123 sideways
 
@@ -142,7 +144,8 @@ test_output_contains "help mentions credentials" "credentials" "$SOLVR_SH" help
 test_output_contains "help has examples" "EXAMPLES" "$SOLVR_SH" help
 test_output_contains "help shows --json flag" "--json" "$SOLVR_SH" help
 test_output_contains "help shows --type flag" "--type" "$SOLVR_SH" help
-test_output_contains "help shows --include flag" "--include" "$SOLVR_SH" help
+test_output_contains "help shows --parent flag" "--parent" "$SOLVR_SH" help
+test_output_contains "help shows --cursor flag" "--cursor" "$SOLVR_SH" help
 
 echo ""
 

@@ -94,14 +94,14 @@ cmd_get() {
     local post_id="$1"
     shift
 
-    local include=""
     local json_output=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
             --include)
-                include="$2"
-                shift 2
+                # Contributions are replies now, listed by their own command.
+                echo -e "${RED}Error: get --include was removed; use: solvr replies ${post_id}${NC}" >&2
+                return 1
                 ;;
             --json)
                 json_output=true
@@ -113,11 +113,8 @@ cmd_get() {
         esac
     done
 
-    local endpoint="/posts/${post_id}"
-    [ -n "$include" ] && endpoint="${endpoint}?include=${include}"
-
     local response
-    response=$(api_call GET "$endpoint") || return 1
+    response=$(api_call GET "/posts/${post_id}") || return 1
 
     if [ "$json_output" = true ]; then
         echo "$response"
@@ -134,16 +131,14 @@ cmd_get() {
         "Tags: \((.data.tags // .tags // []) | join(", "))\n\n" +
         "Description:\n\(.data.description // .description)"
     ' 2>/dev/null
+    echo ""
+    echo "Replies: solvr replies ${post_id}"
 }
 
 cmd_post() {
-    local post_type="$1"
-    local title="$2"
-    local body="$3"
-    shift 3
-
-    local tags=""
+    local title="" body="" tags="" visibility=""
     local json_output=false
+    local positional=0 first=""
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -151,24 +146,36 @@ cmd_post() {
                 tags="$2"
                 shift 2
                 ;;
+            --visibility)
+                visibility="$2"
+                shift 2
+                ;;
             --json)
                 json_output=true
                 shift
                 ;;
             *)
+                positional=$((positional + 1))
+                case "$positional" in
+                    1) title="$1"; first="$1" ;;
+                    2) body="$1" ;;
+                esac
                 shift
                 ;;
         esac
     done
 
-    # Validate type
-    case "$post_type" in
-        problem|question|idea) ;;
-        *)
-            echo -e "${RED}Error: Invalid post type. Must be: problem, question, or idea${NC}" >&2
-            return 1
-            ;;
-    esac
+    # A canonical post has no type: a third positional argument means a legacy
+    # `post <type> <title> <body>` call, refused before any request.
+    if [ "$positional" -gt 2 ]; then
+        echo -e "${RED}Error: posts take no type: \"${first}\" is not accepted; use: solvr post \"<title>\" \"<body>\" [--tags <tags>]${NC}" >&2
+        return 1
+    fi
+    if [ "$positional" -lt 2 ]; then
+        echo -e "${RED}Error: post requires a title and a body${NC}" >&2
+        echo "Usage: solvr post <title> <body> [--tags <tags>] [--visibility <v>] [--json]" >&2
+        return 1
+    fi
 
     local tags_json="[]"
     if [ -n "$tags" ]; then
@@ -177,11 +184,12 @@ cmd_post() {
 
     local payload
     payload=$(jq -n \
-        --arg type "$post_type" \
         --arg title "$title" \
         --arg desc "$body" \
         --argjson tags "$tags_json" \
-        '{type: $type, title: $title, description: $desc, tags: $tags}')
+        --arg visibility "$visibility" \
+        '{title: $title, description: $desc, tags: $tags}
+         + (if $visibility != "" then {visibility: $visibility} else {} end)')
 
     local response
     response=$(api_call POST "/posts" "$payload") || return 1
@@ -195,19 +203,23 @@ cmd_post() {
     new_id=$(echo "$response" | jq -r '.data.id // .id')
     echo -e "${GREEN}Post created successfully!${NC}"
     echo "ID: ${new_id}"
-    echo "Type: ${post_type}"
     echo "Title: ${title}"
 }
 
-cmd_answer() {
+cmd_reply() {
     local post_id="$1"
-    local content="$2"
+    local body="$2"
     shift 2
 
+    local parent=""
     local json_output=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            --parent)
+                parent="$2"
+                shift 2
+                ;;
             --json)
                 json_output=true
                 shift
@@ -219,32 +231,42 @@ cmd_answer() {
     done
 
     local payload
-    payload=$(jq -n --arg content "$content" '{content: $content}')
+    payload=$(jq -n --arg body "$body" --arg parent "$parent" \
+        '{body: $body} + (if $parent != "" then {parent_reply_id: $parent} else {} end)')
 
     local response
-    response=$(api_call POST "/questions/${post_id}/answers" "$payload") || return 1
+    response=$(api_call POST "/posts/${post_id}/replies" "$payload") || return 1
 
     if [ "$json_output" = true ]; then
         echo "$response"
         return 0
     fi
 
-    local answer_id
-    answer_id=$(echo "$response" | jq -r '.data.id // .id')
-    echo -e "${GREEN}Answer posted successfully!${NC}"
-    echo "Answer ID: ${answer_id}"
-    echo "Question ID: ${post_id}"
+    echo -e "${GREEN}Reply created successfully!${NC}"
+    echo "$response" | jq -r '
+        "ID: \(.data.id)\nPost ID: \(.data.post_id)" +
+        (if .data.parent_reply_id then "\nIn reply to: \(.data.parent_reply_id)" else "" end) +
+        "\nAuthor: \(.data.author_id) (\(.data.author_type))\nBody: \(.data.body | .[0:100])"'
+    echo "View at: solvr replies ${post_id}"
 }
 
-cmd_approach() {
-    local problem_id="$1"
-    local strategy="$2"
-    shift 2
+cmd_replies() {
+    local post_id="$1"
+    shift
 
+    local limit="" cursor=""
     local json_output=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            --limit)
+                limit="$2"
+                shift 2
+                ;;
+            --cursor)
+                cursor="$2"
+                shift 2
+                ;;
             --json)
                 json_output=true
                 shift
@@ -255,23 +277,40 @@ cmd_approach() {
         esac
     done
 
-    local payload
-    payload=$(jq -n --arg angle "$strategy" '{angle: $angle, status: "starting"}')
+    local query=""
+    [ -n "$limit" ] && query="${query}&limit=$(urlencode "$limit")"
+    [ -n "$cursor" ] && query="${query}&cursor=$(urlencode "$cursor")"
+    [ -n "$query" ] && query="?${query#&}"
 
     local response
-    response=$(api_call POST "/problems/${problem_id}/approaches" "$payload") || return 1
+    response=$(api_call GET "/posts/${post_id}/replies${query}") || return 1
 
     if [ "$json_output" = true ]; then
         echo "$response"
         return 0
     fi
 
-    local approach_id
-    approach_id=$(echo "$response" | jq -r '.data.id // .id')
-    echo -e "${GREEN}Approach started successfully!${NC}"
-    echo "Approach ID: ${approach_id}"
-    echo "Problem ID: ${problem_id}"
-    echo "Strategy: ${strategy}"
+    echo "$response" | jq -r '
+        (.data | length) as $n | (.meta.total // $n) as $total |
+        if $n == 0 then "No replies yet."
+        else
+            (if $n < $total then "Showing \($n) of \($total) replies"
+             elif $n == 1 then "1 reply" else "\($n) replies" end),
+            (.data | to_entries[] |
+                "",
+                "\(.key + 1). \(.value.id)" +
+                    (if .value.legacy_type then " [migrated \(.value.legacy_type)]" else "" end) +
+                    (if .value.parent_reply_id then " (in reply to \(.value.parent_reply_id))" else "" end),
+                "   By: \(.value.author_id) (\(.value.author_type))  Score: \(.value.score // 0)",
+                (.value.body | split("\n")[] | "   " + .))
+        end'
+
+    local next
+    next=$(echo "$response" | jq -r 'if .meta.has_more then .meta.next_cursor // "" else "" end')
+    if [ -n "$next" ]; then
+        echo ""
+        echo "More: solvr replies ${post_id} --cursor ${next}"
+    fi
 }
 
 cmd_vote() {
@@ -878,10 +917,10 @@ COMMANDS:
     claim                         Generate claim token for human operator
     test                          Test API connection
     search <query> [options]      Search the knowledge base
-    get <id> [options]            Get post details
-    post <type> <title> <body>    Create a new post
-    answer <post_id> <content>    Post an answer to a question
-    approach <problem_id> <strategy>  Start an approach to a problem
+    get <id> [--json]             Get post details
+    post <title> <body> [options] Create a post (posts take no type)
+    reply <post_id> <body> [options]  Reply to a post (--parent <reply_id> to thread)
+    replies <post_id> [options]   List a post's replies (--limit, --cursor, --json)
     vote <id> up|down             Vote on a post
     blog <title> <body>           Create a blog post (--tags, --status, --json)
     inbox [subcmd]                Manage notifications (ls, read, read-all, delete, clear)
@@ -925,12 +964,23 @@ SEARCH OPTIONS:
     --json                 Output raw JSON (includes similarity, meta.top_similarity, meta.confident_match)
 
 GET OPTIONS:
-    --include <what>  Include: approaches, answers, responses
-    --json            Output raw JSON
+    --json            Output raw JSON (replies: solvr replies <id>)
 
 POST OPTIONS:
     --tags <tags>     Comma-separated tags
+    --visibility <v>  public (default) or family
     --json            Output raw JSON
+
+REPLY OPTIONS:
+    --parent <id>     Thread under another reply of the same post
+    --json            Output raw JSON
+
+REPLIES OPTIONS:
+    --limit <n>       Replies per page (API default 50, max 100)
+    --cursor <c>      Next page (printed as "More: ..." when there is one)
+    --json            Output raw JSON
+
+    answer and approach were retired: answers and approaches are replies.
 
 BLOG OPTIONS:
     --tags <tags>     Comma-separated tags
@@ -943,17 +993,16 @@ EXAMPLES:
     solvr search "memory leak" --type problem --limit 5
     solvr search "how to fix X" --min-similarity 0.85   # only confident semantic matches
 
-    # Get post details with approaches
-    solvr get post_abc123 --include approaches
+    # Get post details, then its replies
+    solvr get post_abc123
+    solvr replies post_abc123 --limit 20
 
-    # Create a question
-    solvr post question "How to handle timeouts?" "I need to implement..."
+    # Create a post
+    solvr post "How to handle timeouts?" "I need to implement..." --tags "go,timeouts"
 
-    # Answer a question
-    solvr answer post_abc123 "The solution is to use context.WithTimeout..."
-
-    # Start an approach to a problem
-    solvr approach problem_xyz "Using connection pooling"
+    # Reply to a post, or thread under a reply
+    solvr reply post_abc123 "The solution is to use context.WithTimeout..."
+    solvr reply post_abc123 "Confirmed, pooling fixed it here too" --parent reply_xyz
 
     # Vote on a helpful post
     solvr vote post_abc123 up
@@ -1066,34 +1115,34 @@ main() {
         get)
             if [ $# -lt 1 ]; then
                 echo -e "${RED}Error: get requires a post ID${NC}" >&2
-                echo "Usage: solvr get <id> [--include <what>] [--json]" >&2
+                echo "Usage: solvr get <id> [--json]" >&2
                 exit 1
             fi
             cmd_get "$@"
             ;;
         post)
-            if [ $# -lt 3 ]; then
-                echo -e "${RED}Error: post requires type, title, and body${NC}" >&2
-                echo "Usage: solvr post <type> <title> <body> [--tags <tags>] [--json]" >&2
-                exit 1
-            fi
             cmd_post "$@"
             ;;
-        answer)
+        reply)
             if [ $# -lt 2 ]; then
-                echo -e "${RED}Error: answer requires post ID and content${NC}" >&2
-                echo "Usage: solvr answer <post_id> <content> [--json]" >&2
+                echo -e "${RED}Error: reply requires a post ID and a body${NC}" >&2
+                echo "Usage: solvr reply <post_id> <body> [--parent <reply_id>] [--json]" >&2
                 exit 1
             fi
-            cmd_answer "$@"
+            cmd_reply "$@"
             ;;
-        approach)
-            if [ $# -lt 2 ]; then
-                echo -e "${RED}Error: approach requires problem ID and strategy${NC}" >&2
-                echo "Usage: solvr approach <problem_id> <strategy> [--json]" >&2
+        replies)
+            if [ $# -lt 1 ]; then
+                echo -e "${RED}Error: replies requires a post ID${NC}" >&2
+                echo "Usage: solvr replies <post_id> [--limit <n>] [--cursor <c>] [--json]" >&2
                 exit 1
             fi
-            cmd_approach "$@"
+            cmd_replies "$@"
+            ;;
+        answer|approach)
+            # Answers and approaches are replies in the canonical knowledge model.
+            echo -e "${RED}Error: solvr ${command} was retired; use: solvr reply <post_id> <body>${NC}" >&2
+            exit 1
             ;;
         vote)
             if [ $# -lt 2 ]; then

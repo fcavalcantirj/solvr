@@ -1053,3 +1053,200 @@ UAT: beside PUBLIC ROOMS, and no copy still says "Private rooms are never counte
 
 git status at journal time [REAL]: 14 M (listed above) + 2 ?? test files + this progress.txt entry;
   spec.json idx 96 passes -> true in the same commit.
+
+2026-09-30 14:10 — Task idx 52 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Route existing agent integrations into the canonical knowledge model during a defined transition"
+SLICE 1 of N: step 3 (retire the 19 legacy WRITE routes with a machine-readable migration error)
+and the backend half of step 6 (old client: error, never a silent success, never a row; new client:
+canonical posts and replies). Steps 1 (inventory, recorded below), 2, 4 and 5 remain.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 52, 53, 67, 68, 73, 74, 77-95,
+  97, 98; no URGENT description open. idx 24 is an acceptance task (needs idx 78). idx 52 had been
+  gated on the "90-day transition" wording; owner decision 2 of 2026-09-30 rewrote it (legacy writes
+  deleted at cutover, no adapters), and main IS what ships at cutover (not deployed; memory note
+  cutover-rehearsal: "legacy create routes write tables v1.3 no longer reads" was a named cutover
+  blocker). So idx 52 is buildable now and is the first false task. Tree clean at start [REAL].
+
+STEP 1 INVENTORY [REAL, grep this session] (who still calls a legacy write route):
+  - web client: frontend/lib/api-base.ts voteOnAnswer/createAnswer/createApproach/addProgressNote/
+    createResponse/createComment/deleteComment/acceptAnswer/verifyApproach/createIdeaResponse, used
+    only by hooks mounted under components/{problems,questions,ideas}/detail + shared/comments-list,
+    which render only on app/{problems,questions,ideas}/... — and frontend/middleware.ts 308s all of
+    those paths to /posts. So the live web UI calls none of them (dead code, not removed here).
+  - backend MCP (/v1/mcp handlers/mcp.go): solvr_post/solvr_answer only return text, write nothing.
+  - STILL CALLING RETIRED ROUTES (step 2, next slices): mcp-server/src/api.ts (answers, approaches),
+    packages/sdk-ts/src/client.ts, packages/sdk-python/solvr/client.py, packages/sdk-go/client.go,
+    packages/cli/src/api.ts, cli/answer.go (POST questions/{id}/answers; cli/get.go reads approaches),
+    skill/scripts/solvr.sh (answers :225, approaches :262). The installed ~/.claude/skills/solvr copy
+    was not inspected. Webhooks: none found for legacy writes [UNVERIFIED beyond grep].
+
+WHAT CHANGED [REAL, git status --porcelain: 16 M + 2 ??; git diff --stat 302+/334- on tracked files]:
+  PRODUCTION:
+  A backend/internal/api/legacy_write_retirement.go (105): LegacyWriteRetirements = 19 entries
+    {Route, Replacement, Instructions}; retiredLegacyWrite answers 410, error.code ENDPOINT_RETIRED,
+    message "<route> was retired with the canonical knowledge model; use <replacement> instead." (or
+    "... and has no canonical equivalent."), error.details {retired_route, replacement (null when
+    none), instructions}; request_id added by the envelope middleware. It reads no body, checks no
+    credential, touches no storage. mountRetiredLegacyWrites mounts them on /v1 outside every auth,
+    rate-limit and content-gate middleware (same answer for everyone: nothing leaks about a parent).
+    Mapping: POST /v1/problems|questions|ideas -> POST /v1/posts (omit type); POST .../approaches,
+    .../answers, .../responses, POST /v1/posts/{id}/comments -> POST /v1/posts/{id}/replies;
+    progress + approach/answer/response comments -> POST /v1/posts/{id}/replies threaded under the
+    migrated reply (found by legacy_type/legacy_id); PATCH/DELETE answers -> PATCH/DELETE
+    /v1/replies/{id}; answer vote -> POST /v1/replies/{id}/vote; DELETE /v1/comments/{id} -> DELETE
+    /v1/replies/{id}; PATCH approaches, verify, accept, evolve -> no canonical equivalent ("record the
+    outcome as a reply or a new post", the RouteFamilies text).
+  M backend/internal/api/router.go (1227 -> 1195, still over 800 as before): the 19 old mounts
+    (problems/questions/ideas handlers, comments create/delete) removed from the auth group;
+    mountRetiredLegacyWrites(r) after the legacy GET group; wrapCommentsCreateWithType deleted (no
+    caller left). Legacy READ routes untouched (idx 73). Legacy handlers/repositories kept (owner
+    decision 4: code and tables go all at once later).
+  TESTS: A backend/internal/api/router_legacy_write_retirement_test.go (275), 3 tests:
+    TestLegacyWriteRetirements_CoverEveryLegacyWriteRouteAndNameAServedReplacement (no DB): the table
+      == the 19 non-GET routes of legacy-typed-writes/legacy-comments/legacy-status-commands, no
+      duplicates, every replacement is a route of a keep family, only status commands lack one.
+    TestLegacyWriteRoutes_AnswerTheMigrationErrorAndWriteNothing: fixture posts + approach/answer/
+      response/comment OWNED BY the calling agent (so the old handlers would have been authorized);
+      every route x {anonymous, agent key} with a legacy-shaped body -> 410 ENDPOINT_RETIRED,
+      details exact, request_id; then a row snapshot (posts, replies, 4 legacy tables, progress
+      notes, votes, approach status, answer content/accepted/deleted, comment deleted, question
+      accepted answer, idea evolved_into) must be identical.
+    TestLegacyWriteRetirement_NewClientCreatesCanonicalPostsAndReplies: POST /v1/posts without type
+      -> 201 and type 'post'; reply on the question + threaded reply -> 201, no new answers row; a
+      migrated answer reply is found in GET /v1/posts/{id}/replies by legacy_type/legacy_id (the
+      instructions' path) and a new reply threads under it -> 201.
+    + requireRetiredRecorder helper.
+
+EXISTING TESTS THAT DESCRIBED THE REPLACED BEHAVIOR (golden rule a-d) — all now PASS [TEST] unless noted:
+  1. router_content_test.go TestProblemsEndpoints/TestQuestionsEndpoints/TestIdeasEndpoints/
+     TestCommentsEndpoints/TestPostCommentsEndpoints: 8 subtests "<route> requires auth" asserted
+     "Expected status 401 without auth". Renamed "<route> is retired (410 ENDPOINT_RETIRED)", now
+     assert 410 + code + retired_route (requireRetiredRecorder); covered also by
+     TestLegacyWriteRoutes_AnswerTheMigrationErrorAndWriteNothing (anonymous caller). The GET
+     /v1/approaches/:id/comments subtest kept its assertion; its approach fixture is now SQL-seeded
+     (createCommentTargetApproach no longer POSTs to the retired route).
+  2. router_comments_test.go TestCommentsCount_{Problems,Ideas,Feed}...: created comments through
+     POST /v1/posts/{id}/comments then simulated the cutover (cutoverCommentReplies). Now
+     cutoverComments seeds the reply the cutover makes (top-level, legacy_type 'comment'); the
+     comments_count assertions are unchanged. NOTE [REAL, db/posts_reply_counts.go]: a NATIVE
+     top-level reply counts in answers_count, not comments_count (first attempt with native
+     replies failed "expected comments_count=2 ... got 1"), so migrated comments stay the subject.
+     Problems variant SKIPped once (post not opened in 35s, real GROQ call) and PASSED on rerun
+     (/tmp/solvr_idx52_s1_fix3b.log).
+  3. router_content_gate_contrib_test.go: SameAuthorBodyOnADifferentPost asserted answer 201, the
+     same answer on another question 409, the same text as a reply 409, a unique answer 201. Now:
+     the author's answer is seeded, the same text as a reply -> 409 existing_id = that answer, a
+     unique reply 201. ReplyApproachResponseProgressRoutes: reply dup kept; approach/response dups
+     now = seeded legacy row + reply with the same text -> 409 naming it; the progress-note dup is
+     gone with its route (CheckProgressNote has no other caller [REAL, grep]). CommentRoutes asserted
+     a comment dup across 4 comment routes; now a seeded answer comment and post comment, each
+     repeated as a reply -> 409 naming the comment. Retirement of the routes themselves: the new test.
+  4. router_content_gate_test.go TestContentGate_LegacyTypedCreates asserted 201/409/422 on POST
+     /v1/problems|questions|ideas. Now each legacy route -> 410, and the same typed post through
+     POST /v1/posts -> 201, 409 duplicate, 422 heartbeat.
+  5. router_moderation_test.go TestModeration_LegacyTypedCreates: same move (legacy route 410 and
+     moderator NOT called; pending_review->open and reject flow now via POST /v1/posts per type).
+  6. router_moderation_contrib_test.go: contributionCases had 8 cases (reply + 7 legacy routes),
+     each 201 then moderated. Now only the reply case; TestModeration_RejectedProgressNoteIsFlagged
+     Only (asserted a rejected progress note is flagged, not hidden) is REMOVED, replaced by NEW
+     TestModeration_RetiredContributionRoutesModerateNothing (the 8 retired contribution creates
+     incl. progress -> 410, moderator not called, 0 notifications, 0 flags) + the retirement test.
+  7. router_legacy_child_visibility_test.go: subtests "approach progress" and "answer vote" asserted
+     outsider/deleted 404 and member 201/200 +1 row; "absent evolution target" asserted 404. Now
+     every caller x parent (family/deleted/public) -> 410, message names the route, no marker, row
+     counts unchanged; "absent evolution target" renamed "idea evolution" (410, evolved_into
+     unchanged). Canonical reply write visibility (outsider 404, member 201/vote 200) is pinned by
+     the existing TestReplySurfaces_FollowTheParentPostVisibility — PASS [TEST].
+  8. router_comment_view_visibility_test.go: outsider comment writes asserted 404 + no row; members
+     and public asserted 201 +1 row. Now 410 ENDPOINT_RETIRED + no secret + no row for every caller;
+     all GET/view assertions unchanged; canonical writes: TestReplySurfaces_... (above).
+  9. posts_visibility_test.go leak sweep item 8 (foreign answer on private question -> 404) now:
+     legacy route 410 AND POST /v1/posts/{id}/replies by the foreign agent -> 404; item 10 (sibling
+     answers own private question, not 404) now via the reply route.
+  10. router_create_ratelimit_more_test.go AgentContributionsRefusedPastHourlyLimit: same loop and
+     429 assertion, on POST /v1/posts/{id}/replies (same limitContributions middleware).
+  11. router_deleted_account_test.go: the 401 list's POST /v1/problems entry -> POST /v1/posts.
+  12. router_status_contract_test.go UnknownResourceIDIsNotFound: 7 retired rows (comment on a post,
+     delete a comment, edit/delete an answer, edit an approach, progress, verify) replaced by their
+     canonical replacements (POST /v1/posts/{id}/replies, PATCH/DELETE /v1/replies/{id}, POST
+     /v1/replies/{id}/vote) — all 404 NOT_FOUND for malformed and absent ids [TEST].
+  13. internal/jobs write probe: legacy steps no longer capture ids (410 creates nothing; they name
+     writeProbeMissing); state fields approachID/answerID/responseID/commentID removed. The live
+     positive control "POST /v1/questions/{id}/answers must reach the dropped answers table" is
+     REPLACED by (a) every retired route answers 410 ENDPOINT_RETIRED with 0 traced database errors
+     on BOTH databases and (b) a direct control: SELECT on answers through the dropped pool fails and
+     its tracer records the missing table. judgeWriteProbe and TestJudgeWriteProbe_EachClause are
+     unchanged (their controlSeen clause is now exercised only by the synthetic runs).
+
+VERIFICATION (DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test, local docker
+  solvr-postgres, schema_migrations 114 dirty=f; the jobs probe makes/drops its own scratch DBs):
+  RED [TEST]: /tmp/solvr_idx52_s1_red.log build failed "undefined: LegacyWriteRetirements",
+    "undefined: ErrCodeEndpointRetired"; /tmp/solvr_idx52_s1_red3.log (table present, not mounted):
+    "expected: 410 actual: 401 ... POST /v1/problems as anonymous".
+  GREEN [TEST]: /tmp/solvr_idx52_s1_green.log, /tmp/solvr_idx52_s1_new.log: 3 new PASS.
+  AFFECTED PACKAGES, once on the first cut: `go test -p 1 -count=1 -v ./internal/api/ ./internal/jobs/`
+    -> /tmp/solvr_idx52_s1_apijobs.log: api 24 top-level FAIL, jobs 1 FAIL (the probe). Each fixed
+    as listed above; then every touched test re-run together: /tmp/solvr_idx52_s1_fix2.log (all PASS
+    except the 3 comment-count tests, fixed -> /tmp/solvr_idx52_s1_fix3*.log PASS),
+    /tmp/solvr_idx52_s1_fix1.log (status contract, rate limit, deleted account PASS),
+    /tmp/solvr_idx52_s1_jobsprobe.log (probe + judge PASS: 217 calls over 101 write routes, 0 hidden,
+    "0 calls in legacy route families reach dropped legacy tables").
+  PRE-EXISTING, NOT MINE [TEST, same -run on this tree and on an untouched HEAD worktree
+    /tmp/solvr_idx52_base: /tmp/solvr_idx52_s1_preexisting_{mine,base}.log]: TestAgentClaim_Retries
+    AndRacesLinkTheAgentOnce ("failed to create test user", roomtest_ username collision),
+    TestHomepageOverview_ServesEverySectionToALoggedOutVisitor, TestHomepageSearch_NeverPublishesA
+    ProtectedOrUnrepeatedTerm, TestHomepageSearch_NeverPublishesPastedSecretsOrPersonalData fail
+    identically on both. TestRoomSecrets_NoRoomSurfaceRevealsCredentials failed once in the package
+    run (stream read error) and PASSES alone on both trees [INFERRED: load flake].
+  MUTATIONS [TEST], sources restored from /tmp/solvr_idx52_{router,retire}.go.bak, cmp-verified:
+    mutA answers route re-mounted to the old handler -> new test FAIL (401 as anonymous) AND jobs
+      probe FAIL "retired legacy write routes must answer 410 ... present database: 201 ... dropped
+      database: 500, 1 database errors" (/tmp/solvr_idx52_s1_mutA_{api,jobs}.log);
+    mutS DELETE /v1/comments/{id} still answers 410 but soft-deletes the comment -> snapshot FAIL
+      "comment=true" vs "comment=false" (/tmp/solvr_idx52_s1_mutS.log);
+    mutB 404 instead of 410 -> FAIL; mutC replacement always null -> FAIL; mutD one table entry
+      removed -> coverage test FAIL "DELETE /v1/comments/{id} has no retirement entry" and
+      TestRouteFamilies_CoverEveryServedRoute FAIL (/tmp/solvr_idx52_s1_mut{B,C,D}.log).
+  go build ./... ok; go vet ./internal/api/ ./internal/jobs/ clean; gofmt -l clean on every file I
+    touched. check-file-size.sh -> "Found 34 file(s) exceeding 800 lines" (unchanged; router.go
+    shrank 1227 -> 1195) (/tmp/solvr_idx52_s1_filesize.log).
+  NOT FINISHED: full backend `go test -p 1 -count=1 -v ./...` was started (/tmp/solvr_idx52_s1_full.log)
+    but takes ~45 min and the iteration budget (45 min) ran out; it was stopped at commit time with
+    only the cmd/* packages done (all ok). Frontend untouched, npm test not run. golangci-lint not
+    run (config/version mismatch, slice 31 of idx 76).
+
+BEHAVIOR CHANGES THE OWNER SHOULD KNOW [TEST]:
+  - The 19 legacy write routes answer 410 ENDPOINT_RETIRED to every caller, authenticated or not.
+    Any external client still posting answers/approaches/comments (incl. our own SDKs, CLI, MCP
+    server and skill, until step 2) gets that error after the cutover deploy.
+  - Nothing deploys from this: main is the cutover build (owner gates G1-G7 unchanged).
+
+LIMITS [UNVERIFIED unless stated]:
+  - The served OpenAPI (openapi_paths.go) still documents the retired writes with 201 responses —
+    step 4's work (next slice), together with SPEC.md/migration notes.
+  - middleware/ratelimit.go still classifies /v1/questions/{id}/answers etc. as op "answers" (dead
+    classification now; untouched).
+  - The frontend's dead legacy hooks/components still reference the retired routes (unreachable
+    behind middleware 308s); removing them is cleanup for idx 83 / the legacy page retirement.
+
+REMAINING FOR idx 52 (next slices, in order):
+  step 4: OpenAPI — the 19 operations documented as retired (410 ENDPOINT_RETIRED + replacement),
+    SPEC.md migration notes (retired shape -> canonical shape).
+  step 2: first-party clients to canonical posts/replies without type selection: mcp-server,
+    sdk-ts, sdk-python, sdk-go, packages/cli, cli (Go), skill/scripts/solvr.sh.
+  step 5: redirects already exist (frontend/middleware.ts 308 legacy -> /posts); legacy READ routes
+    follow idx 73.
+  step 6 client half: an old SDK call gets the migration error; a new SDK creates canonical rows.
+  full backend suite on this slice's code (not completed this iteration).
+
+git status at journal time [REAL]: 16 M (listed above) + 2 ?? + this progress.txt entry; spec.json
+  unchanged, passes stays false.
+ADDENDUM 14:14 [TEST, /tmp/solvr_idx52_s1_full.log]: the full run got further than the entry above
+  says before it was stopped: cmd/* all ok, and internal/api FAIL with exactly 5 top-level failures,
+  all pre-existing — TestAgentClaim_RetriesAndRacesLinkTheAgentOnce and 3 homepage tests (identical on
+  untouched HEAD, above) plus TestHomepageSearch_ChartAddsUpToTheTotalBesideIt (the idx 98 time-window
+  test, pre-existing per the idx 96 entry). None of the tests this slice touched or added failed there.
+  The remaining packages (api/handlers, middleware, db, jobs, ...) were not reached in the full run;
+  internal/jobs ran green in the targeted run above. The run was then killed; the HEAD worktree
+  /tmp/solvr_idx52_base was removed.

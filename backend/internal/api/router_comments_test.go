@@ -38,12 +38,13 @@ func testCommentsSetup(t *testing.T, router interface{ ServeHTTP(http.ResponseWr
 	return apiKey
 }
 
-// cutoverCommentReplies inserts the reply the contribution cutover makes from each comment
-// created through the legacy comment route (task idx 76: post counts read replies, and that
-// route still writes the legacy comments table), waits for the verdict the moderation approval
-// records as a system reply, and returns the comments_count the post must show: the comments
-// plus the verdicts.
-func cutoverCommentReplies(t *testing.T, postID string, created ...*httptest.ResponseRecorder) int {
+// cutoverComments inserts, for each body, the reply the contribution cutover makes from a
+// legacy comment on the post (a top-level reply with legacy_type 'comment': comments_count's
+// bucket). The legacy comment route is retired (task idx 52), so no client can write one any
+// more; migrated comments are what the count still has to show. It then waits for the verdict
+// the moderation approval records as a system reply and returns the comments_count the post
+// must show: the comments plus the verdicts.
+func cutoverComments(t *testing.T, postID string, bodies ...string) int {
 	t.Helper()
 	ctx := context.Background()
 	pool, err := db.NewPool(ctx, os.Getenv("DATABASE_URL"))
@@ -51,18 +52,9 @@ func cutoverCommentReplies(t *testing.T, postID string, created ...*httptest.Res
 		t.Fatalf("connect: %v", err)
 	}
 	defer pool.Close()
-	for _, w := range created {
-		var resp struct {
-			Data struct {
-				ID string `json:"id"`
-			} `json:"data"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.Data.ID == "" {
-			t.Fatalf("decode created comment: %v %s", err, w.Body.String())
-		}
+	for _, body := range bodies {
 		if _, err := pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id, created_at, updated_at)
-			SELECT target_id, author_type, author_id, content, 'comment', id, created_at, created_at
-			FROM comments WHERE id = $1`, resp.Data.ID); err != nil {
+			VALUES ($1, 'agent', 'agent_comments_count_seed', $2, 'comment', gen_random_uuid(), NOW(), NOW())`, postID, body); err != nil {
 			t.Fatalf("insert the cutover reply: %v", err)
 		}
 	}
@@ -79,12 +71,12 @@ func cutoverCommentReplies(t *testing.T, postID string, created ...*httptest.Res
 	if verdicts == 0 {
 		t.Fatal("the moderation approval recorded no verdict reply")
 	}
-	return len(created) + verdicts
+	return len(bodies) + verdicts
 }
 
 // TestCommentsCount_ProblemsShowCountAfterComment verifies:
 // 1. Create a problem
-// 2. Add a comment via POST /v1/posts/{id}/comments
+// 2. A comment on it, as the cutover migrates one (the legacy comment route is retired)
 // 3. GET /v1/problems → the specific problem shows comments_count == 1
 func TestCommentsCount_ProblemsShowCountAfterComment(t *testing.T) {
 	router := setupTestRouter(t)
@@ -116,17 +108,8 @@ func TestCommentsCount_ProblemsShowCountAfterComment(t *testing.T) {
 		t.Skip("post did not become open within 35s - GROQ rate limited or slow")
 	}
 
-	// Add a comment
-	cmtURL := fmt.Sprintf("/v1/posts/%s/comments", postID)
-	cmtReq := httptest.NewRequest(http.MethodPost, cmtURL, strings.NewReader(`{"content":"test comment on problem"}`))
-	cmtReq.Header.Set("Content-Type", "application/json")
-	cmtReq.Header.Set("Authorization", "Bearer "+apiKey)
-	cmtW := httptest.NewRecorder()
-	router.ServeHTTP(cmtW, cmtReq)
-	if cmtW.Code != http.StatusCreated {
-		t.Fatalf("create comment failed: %d %s", cmtW.Code, cmtW.Body.String())
-	}
-	want := cutoverCommentReplies(t, postID, cmtW)
+	// A comment on the post, as the cutover migrated it
+	want := cutoverComments(t, postID, "test comment on problem")
 
 	// GET /v1/problems and find our post
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/problems?sort=newest&per_page=50", nil)
@@ -187,17 +170,8 @@ func TestCommentsCount_IdeasShowCountAfterComment(t *testing.T) {
 		t.Skip("post did not become open within 35s - GROQ rate limited or slow")
 	}
 
-	// Add a comment
-	cmtURL := fmt.Sprintf("/v1/posts/%s/comments", postID)
-	cmtReq := httptest.NewRequest(http.MethodPost, cmtURL, strings.NewReader(`{"content":"test comment on idea"}`))
-	cmtReq.Header.Set("Content-Type", "application/json")
-	cmtReq.Header.Set("Authorization", "Bearer "+apiKey)
-	cmtW := httptest.NewRecorder()
-	router.ServeHTTP(cmtW, cmtReq)
-	if cmtW.Code != http.StatusCreated {
-		t.Fatalf("create comment failed: %d %s", cmtW.Code, cmtW.Body.String())
-	}
-	want := cutoverCommentReplies(t, postID, cmtW)
+	// A comment on the post, as the cutover migrated it
+	want := cutoverComments(t, postID, "test comment on idea")
 
 	// GET /v1/ideas and find our post
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/ideas?sort=newest&per_page=50", nil)
@@ -258,22 +232,8 @@ func TestCommentsCount_FeedShowsCommentCount(t *testing.T) {
 		t.Skip("post did not become open within 35s - GROQ rate limited or slow")
 	}
 
-	// Add 2 comments
-	var created []*httptest.ResponseRecorder
-	for i := 0; i < 2; i++ {
-		cmtURL := fmt.Sprintf("/v1/posts/%s/comments", postID)
-		body := fmt.Sprintf(`{"content":"feed comment %d"}`, i+1)
-		cmtReq := httptest.NewRequest(http.MethodPost, cmtURL, strings.NewReader(body))
-		cmtReq.Header.Set("Content-Type", "application/json")
-		cmtReq.Header.Set("Authorization", "Bearer "+apiKey)
-		cmtW := httptest.NewRecorder()
-		router.ServeHTTP(cmtW, cmtReq)
-		if cmtW.Code != http.StatusCreated {
-			t.Fatalf("create comment %d failed: %d %s", i+1, cmtW.Code, cmtW.Body.String())
-		}
-		created = append(created, cmtW)
-	}
-	want := cutoverCommentReplies(t, postID, created...)
+	// 2 comments on the post, as the cutover migrated them
+	want := cutoverComments(t, postID, "feed comment 1", "feed comment 2")
 
 	// GET /v1/posts and verify comments_count == 2 (+ the moderation verdict)
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/posts?sort=newest&per_page=50", nil)

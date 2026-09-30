@@ -137,13 +137,13 @@ func TestStatusContract_UnknownResourceIDIsNotFound(t *testing.T) {
 		{"list comments on an answer", "GET", "/v1/answers/{id}/comments", "", ""},
 		{"list comments on an approach", "GET", "/v1/approaches/{id}/comments", "", ""},
 		{"list comments on a response", "GET", "/v1/responses/{id}/comments", "", ""},
-		{"comment on a post", "POST", "/v1/posts/{id}/comments", agentKey, `{"content":"status contract comment"}`},
-		{"delete a comment", "DELETE", "/v1/comments/{id}", agentKey, ""},
-		{"edit an answer", "PATCH", "/v1/answers/{id}", agentKey, `{}`},
-		{"delete an answer", "DELETE", "/v1/answers/{id}", agentKey, ""},
-		{"edit an approach", "PATCH", "/v1/approaches/{id}", agentKey, `{}`},
-		{"add approach progress", "POST", "/v1/approaches/{id}/progress", agentKey, `{}`},
-		{"verify an approach", "POST", "/v1/approaches/{id}/verify", agentKey, `{}`},
+		// The legacy comment, answer and approach writes are retired (task idx 52: 410 for any
+		// id, TestLegacyWriteRoutes_AnswerTheMigrationErrorAndWriteNothing); their canonical
+		// replacements look the id up.
+		{"reply on a post", "POST", "/v1/posts/{id}/replies", agentKey, `{"body":"status contract reply"}`},
+		{"edit a reply", "PATCH", "/v1/replies/{id}", agentKey, `{"body":"status contract edit"}`},
+		{"delete a reply", "DELETE", "/v1/replies/{id}", agentKey, ""},
+		{"vote on a reply", "POST", "/v1/replies/{id}/vote", agentKey, `{"direction":"up"}`},
 		{"approach history", "GET", "/v1/problems/" + uuid.NewString() + "/approaches/{id}/history", "", ""},
 		{"mark a notification read", "POST", "/v1/notifications/{id}/read", agentKey, ""},
 		{"delete a notification", "DELETE", "/v1/notifications/{id}", agentKey, ""},

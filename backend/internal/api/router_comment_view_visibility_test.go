@@ -77,8 +77,11 @@ func commentVisibilityFixture(t *testing.T, pool *db.Pool, agentID, visibility, 
 // Comments and view counts live under a post, so they answer what GET /v1/posts/{id}
 // answers: a family-only post's comments (on the post or on any of its contributions) and
 // its view routes are 404 to anyone outside the family, a deleted post's are 404 to
-// everyone, and nobody who may not read the post can comment on it or count a view.
-// Family members read (with a total that matches what they see), comment and count views.
+// everyone, and nobody who may not read the post can count a view. Family members read
+// (with a total that matches what they see) and count views. The comment create routes are
+// retired (task idx 52): every caller gets the same migration error on every parent and no
+// comment is written; canonical reply writes are pinned by
+// TestReplySurfaces_FollowTheParentPostVisibility.
 func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 	liftCreateLimits(t) // many creates by one identity; the hourly limit is not this test's subject
 	ts, _, pool := newStatusContractServer(t)
@@ -127,14 +130,22 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 		require.NoError(t, err)
 		return got
 	}
+	retiredComment := func(t *testing.T, route, id, bearer, body string) {
+		t.Helper()
+		before := comments(id)
+		got := call(t, "POST", "/v1/"+route+"/"+id+"/comments", bearer, body)
+		require.Equal(t, http.StatusGone, got.status, "%s: %s", route, got.body)
+		require.Equal(t, ErrCodeEndpointRetired, got.code, got.body)
+		require.Equal(t, got.headerID, got.requestID, "the envelope carries the response's request id")
+		require.NotContains(t, got.body, secret)
+		require.Equal(t, before, comments(id), "no comment was written on %s", route)
+	}
 	refused := func(t *testing.T, set commentTargets, bearer string, write bool) {
 		t.Helper()
 		for route, id := range set.ids {
 			notFound(t, call(t, "GET", "/v1/"+route+"/"+id+"/comments", bearer, ""))
 			if write {
-				before := comments(id)
-				notFound(t, call(t, "POST", "/v1/"+route+"/"+id+"/comments", bearer, newComment))
-				require.Equal(t, before, comments(id), "no comment was written on %s", route)
+				retiredComment(t, route, id, bearer, newComment)
 			}
 		}
 		notFound(t, call(t, "GET", "/v1/posts/"+set.views+"/views", bearer, ""))
@@ -168,12 +179,7 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 				}
 				require.NoError(t, json.Unmarshal([]byte(got.body), &list))
 				require.Equal(t, len(list.Data), list.Meta.Total, "%s: the total counts what the caller sees", route)
-				before := comments(id)
-				// A distinct body per target: the anti-abuse gate refuses an author's repeated comment.
-				got = call(t, "POST", "/v1/"+route+"/"+id+"/comments", bearer,
-					`{"content":"a comment written by the visibility contract test on `+route+` `+id+`"}`)
-				require.Equal(t, http.StatusCreated, got.status, "%s: %s", route, got.body)
-				require.Equal(t, before+1, comments(id))
+				retiredComment(t, route, id, bearer, newComment)
 			}
 			got := call(t, "GET", "/v1/posts/"+family.views+"/views", bearer, "")
 			require.Equal(t, http.StatusOK, got.status, got.body)
@@ -189,9 +195,7 @@ func TestCommentAndViewSurfaces_FollowTheParentPostVisibility(t *testing.T) {
 			got := call(t, "GET", "/v1/"+route+"/"+id+"/comments", "", "")
 			require.Equal(t, http.StatusOK, got.status, "%s: %s", route, got.body)
 			require.Contains(t, got.body, secret, route)
-			got = call(t, "POST", "/v1/"+route+"/"+id+"/comments", foreignKey,
-				`{"content":"a comment written by the visibility contract test on `+route+` `+id+`"}`)
-			require.Equal(t, http.StatusCreated, got.status, "%s: %s", route, got.body)
+			retiredComment(t, route, id, foreignKey, newComment)
 		}
 		got := call(t, "GET", "/v1/posts/"+public.views+"/views", "", "")
 		require.Equal(t, http.StatusOK, got.status, got.body)

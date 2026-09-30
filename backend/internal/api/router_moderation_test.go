@@ -24,9 +24,10 @@ func dataField(t *testing.T, body, field string) string {
 	return v
 }
 
-// T-M1 and T-M2: the legacy typed creates start at pending_review and go through the post
-// moderation flow; approved posts open, rejected posts are rejected with a verdict reply and
-// a notification.
+// T-M1 and T-M2: the legacy typed create routes are retired (task idx 52) and moderate
+// nothing; a typed post created through POST /v1/posts starts at pending_review and goes
+// through the post moderation flow: approved posts open, rejected posts are rejected with a
+// verdict reply and a notification.
 func TestModeration_LegacyTypedCreates(t *testing.T) {
 	mod := useRecordingModerator(t)
 	ts, _, pool := newStatusContractServer(t)
@@ -39,15 +40,20 @@ func TestModeration_LegacyTypedCreates(t *testing.T) {
 		})
 
 		calls := mod.GetCalls()
+		retired := gateCall(t, ts, key, route.path, postBody(route.postType, "Worker pool drains slowly under load "+uuid.NewString()[:8]))
+		require.Equal(t, http.StatusGone, retired.status, "%s: %s", route.path, retired.body)
+		require.Equal(t, ErrCodeEndpointRetired, retired.code, retired.body)
+		require.Equal(t, calls, mod.GetCalls(), "%s: a retired route moderates nothing", route.path)
+
 		mod.QueueResults(approved())
-		ok := gateCall(t, ts, key, route.path, postBody(route.postType, "Worker pool drains slowly under load "+uuid.NewString()[:8]))
+		ok := gateCall(t, ts, key, "/v1/posts", postBody(route.postType, "Worker pool drains slowly under load "+uuid.NewString()[:8]))
 		require.Equal(t, http.StatusCreated, ok.status, "%s: %s", route.path, ok.body)
 		require.Equal(t, "pending_review", dataField(t, ok.body, "status"), "%s starts pending_review", route.path)
 		waitForValue(t, pool, "open", `SELECT status FROM posts WHERE id = $1::uuid`, ok.id)
 		require.Equal(t, calls+1, mod.GetCalls(), "%s: moderated once", route.path)
 
 		mod.QueueResults(rejected("advertising"))
-		bad := gateCall(t, ts, key, route.path, postBody(route.postType, "Buy cheap followers for your repo "+uuid.NewString()[:8]))
+		bad := gateCall(t, ts, key, "/v1/posts", postBody(route.postType, "Buy cheap followers for your repo "+uuid.NewString()[:8]))
 		require.Equal(t, http.StatusCreated, bad.status, "%s: %s", route.path, bad.body)
 		waitForValue(t, pool, "rejected", `SELECT status FROM posts WHERE id = $1::uuid`, bad.id)
 		waitForValue(t, pool, "1", `SELECT count(*)::text FROM replies WHERE post_id = $1::uuid AND author_type = 'system'`, bad.id)

@@ -236,53 +236,45 @@ var writeProbeSteps = []func(s *writeProbeState) []writeProbeCall{
 		return calls
 	},
 
-	// Legacy writes: served by the legacy repositories until idx 52 retires them.
+	// Legacy writes: retired (idx 52). Every call answers 410 ENDPOINT_RETIRED before it reads a
+	// body, a credential or a table, so none creates anything later calls could use: the ids of
+	// the legacy rows they name are placeholders.
 	func(s *writeProbeState) []writeProbeCall {
-		approach := call("POST /v1/problems/{id}/approaches", "agent", "/v1/problems/"+s.posts["problem"]+"/approaches",
-			j(map[string]any{"angle": "A legacy probe angle", "method": "A legacy probe method"}))
-		approach.keep = keepID(func(s *writeProbeState) *string { return &s.approachID }, "id")
-		answer := call("POST /v1/questions/{id}/answers", "agent", "/v1/questions/"+s.posts["question"]+"/answers",
-			j(map[string]any{"content": "A legacy probe answer, long enough to be accepted by the legacy route."}))
-		answer.keep = keepID(func(s *writeProbeState) *string { return &s.answerID }, "id")
-		response := call("POST /v1/ideas/{id}/responses", "human", "/v1/ideas/"+s.posts["idea"]+"/responses",
-			j(map[string]any{"content": "A legacy probe response to the idea.", "response_type": "build"}))
-		response.keep = keepID(func(s *writeProbeState) *string { return &s.responseID }, "id")
-		calls := []writeProbeCall{approach, answer, response}
+		calls := []writeProbeCall{
+			call("POST /v1/problems/{id}/approaches", "agent", "/v1/problems/"+s.posts["problem"]+"/approaches",
+				j(map[string]any{"angle": "A legacy probe angle", "method": "A legacy probe method"})),
+			call("POST /v1/questions/{id}/answers", "agent", "/v1/questions/"+s.posts["question"]+"/answers",
+				j(map[string]any{"content": "A legacy probe answer, long enough to be accepted by the legacy route."})),
+			call("POST /v1/ideas/{id}/responses", "human", "/v1/ideas/"+s.posts["idea"]+"/responses",
+				j(map[string]any{"content": "A legacy probe response to the idea.", "response_type": "build"})),
+		}
 		for _, typ := range []string{"problem", "question", "idea"} {
 			calls = append(calls, call("POST /v1/"+typ+"s", "agent", "/v1/"+typ+"s",
 				j(map[string]any{"title": "Legacy probe " + typ, "description": probeDescription})))
 		}
-		return calls
-	},
-	func(s *writeProbeState) []writeProbeCall {
-		comment := call("POST /v1/answers/{id}/comments", "human", "/v1/answers/"+or(s.answerID)+"/comments",
-			j(map[string]any{"content": "A legacy probe comment."}))
-		comment.keep = keepID(func(s *writeProbeState) *string { return &s.commentID }, "id")
-		return []writeProbeCall{
-			call("POST /v1/approaches/{id}/progress", "agent", "/v1/approaches/"+or(s.approachID)+"/progress",
+		legacyRow := writeProbeMissing
+		return append(calls,
+			call("POST /v1/approaches/{id}/progress", "agent", "/v1/approaches/"+legacyRow+"/progress",
 				j(map[string]any{"content": "Legacy probe progress."})),
-			call("PATCH /v1/approaches/{id}", "agent", "/v1/approaches/"+or(s.approachID), j(map[string]any{"status": "working"})),
-			call("POST /v1/approaches/{id}/verify", "agent", "/v1/approaches/"+or(s.approachID)+"/verify", `{}`),
-			call("PATCH /v1/answers/{id}", "agent", "/v1/answers/"+or(s.answerID),
+			call("PATCH /v1/approaches/{id}", "agent", "/v1/approaches/"+legacyRow, j(map[string]any{"status": "working"})),
+			call("POST /v1/approaches/{id}/verify", "agent", "/v1/approaches/"+legacyRow+"/verify", `{}`),
+			call("PATCH /v1/answers/{id}", "agent", "/v1/answers/"+legacyRow,
 				j(map[string]any{"content": "An edited legacy probe answer, still long enough."})),
-			call("POST /v1/answers/{id}/vote", "human", "/v1/answers/"+or(s.answerID)+"/vote", j(map[string]any{"direction": "up"})),
-			comment,
-			call("POST /v1/approaches/{id}/comments", "human", "/v1/approaches/"+or(s.approachID)+"/comments",
+			call("POST /v1/answers/{id}/vote", "human", "/v1/answers/"+legacyRow+"/vote", j(map[string]any{"direction": "up"})),
+			call("POST /v1/answers/{id}/comments", "human", "/v1/answers/"+legacyRow+"/comments",
 				j(map[string]any{"content": "A legacy probe comment."})),
-			call("POST /v1/responses/{id}/comments", "agent", "/v1/responses/"+or(s.responseID)+"/comments",
+			call("POST /v1/approaches/{id}/comments", "human", "/v1/approaches/"+legacyRow+"/comments",
+				j(map[string]any{"content": "A legacy probe comment."})),
+			call("POST /v1/responses/{id}/comments", "agent", "/v1/responses/"+legacyRow+"/comments",
 				j(map[string]any{"content": "A legacy probe comment."})),
 			call("POST /v1/posts/{id}/comments", "agent", "/v1/posts/"+s.posts["post"]+"/comments",
 				j(map[string]any{"content": "A legacy probe comment."})),
-			call("POST /v1/questions/{id}/accept/{aid}", "human", "/v1/questions/"+s.posts["question"]+"/accept/"+or(s.answerID), `{}`),
+			call("POST /v1/questions/{id}/accept/{aid}", "human", "/v1/questions/"+s.posts["question"]+"/accept/"+legacyRow, `{}`),
 			call("POST /v1/ideas/{id}/evolve", "agent", "/v1/ideas/"+s.posts["idea"]+"/evolve",
 				j(map[string]any{"evolved_post_id": or(s.created["agent problem"])})),
-		}
-	},
-	func(s *writeProbeState) []writeProbeCall {
-		return []writeProbeCall{
-			call("DELETE /v1/comments/{id}", "human", "/v1/comments/"+or(s.commentID), ""),
-			call("DELETE /v1/answers/{id}", "agent", "/v1/answers/"+or(s.answerID), ""),
-		}
+			call("DELETE /v1/comments/{id}", "human", "/v1/comments/"+legacyRow, ""),
+			call("DELETE /v1/answers/{id}", "agent", "/v1/answers/"+legacyRow, ""),
+		)
 	},
 
 	// Rooms, the room transport and its adapters.

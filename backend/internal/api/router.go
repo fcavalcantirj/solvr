@@ -815,6 +815,11 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			r.Get("/posts/{id}/comments", wrapCommentsListWithType(commentsHandler, "post"))
 		}) // end BART-151 OptionalAuth group for problems/questions/ideas/comments GETs
 
+		// The legacy WRITE routes (typed creates, approaches, answers, responses, progress
+		// notes, comments and the status commands) are retired: 410 ENDPOINT_RETIRED naming
+		// the canonical replacement, for every caller (task idx 52, legacy_write_retirement.go).
+		mountRetiredLegacyWrites(r)
+
 		// Protected posts routes (require authentication)
 		// Per FIX-003: Use UnifiedAuthMiddleware so JWT (humans), agent API keys, and user API keys all work
 		r.Group(func(r chi.Router) {
@@ -958,34 +963,6 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			// GET /v1/me/contributions - list own contributions
 			r.Get("/me/contributions", usersHandler.GetMyContributions)
 
-			// Protected problems endpoints (API-CRITICAL per PRD-v2)
-			r.With(limitPosts).Post("/problems", problemsHandler.Create)
-			r.With(limitContributions).Post("/problems/{id}/approaches", problemsHandler.CreateApproach)
-			r.Patch("/approaches/{id}", problemsHandler.UpdateApproach)
-			r.With(limitContributions).Post("/approaches/{id}/progress", problemsHandler.AddProgressNote)
-			r.Post("/approaches/{id}/verify", problemsHandler.VerifyApproach)
-
-			// Protected questions endpoints (API-CRITICAL per PRD-v2)
-			r.With(limitPosts).Post("/questions", questionsHandler.Create)
-			r.With(limitContributions).Post("/questions/{id}/answers", questionsHandler.CreateAnswer)
-			r.Patch("/answers/{id}", questionsHandler.UpdateAnswer)
-			r.Delete("/answers/{id}", questionsHandler.DeleteAnswer)
-			r.Post("/answers/{id}/vote", questionsHandler.VoteOnAnswer)
-			r.Post("/questions/{id}/accept/{aid}", questionsHandler.AcceptAnswer)
-
-			// Protected ideas endpoints (API-CRITICAL per PRD-v2)
-			r.With(limitPosts).Post("/ideas", ideasHandler.Create)
-			r.With(limitContributions).Post("/ideas/{id}/responses", ideasHandler.CreateResponse)
-			r.Post("/ideas/{id}/evolve", ideasHandler.Evolve)
-
-			// Protected comments endpoints (API-CRITICAL per PRD-v2)
-			r.With(limitContributions).Post("/approaches/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "approach"))
-			r.With(limitContributions).Post("/answers/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "answer"))
-			r.With(limitContributions).Post("/responses/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "response"))
-			// FIX-019: POST /v1/posts/{id}/comments - create comment on posts (requires auth)
-			r.With(limitContributions).Post("/posts/{id}/comments", wrapCommentsCreateWithType(commentsHandler, "post"))
-			r.Delete("/comments/{id}", commentsHandler.Delete)
-
 			// Notifications endpoints (API-CRITICAL per PRD-v2)
 			// Per SPEC.md Part 5.6: GET /notifications - list notifications
 			r.Get("/notifications", notificationsHandler.List)
@@ -1107,15 +1084,6 @@ func wrapCommentsListWithType(h *handlers.CommentsHandler, targetType string) ht
 		rctx := chi.RouteContext(r.Context())
 		rctx.URLParams.Add("target_type", targetType)
 		h.List(w, r)
-	}
-}
-
-// wrapCommentsCreateWithType wraps the CommentsHandler.Create with a target_type param set.
-func wrapCommentsCreateWithType(h *handlers.CommentsHandler, targetType string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		rctx := chi.RouteContext(r.Context())
-		rctx.URLParams.Add("target_type", targetType)
-		h.Create(w, r)
 	}
 }
 

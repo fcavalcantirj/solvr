@@ -38,8 +38,6 @@ type writeProbeState struct {
 	created                              map[string]string // author caller + type -> post id made by POST /v1/posts
 	roomSlug2, roomToken, messageID      string
 	savedPostID, blogSlug, pinID         string
-	approachID, answerID, responseID     string // legacy rows, made only while the legacy tables exist
-	commentID                            string
 	captureFailures                      []string
 }
 
@@ -361,8 +359,45 @@ func TestLegacyDroppedDatabase_WriteRoutesExposeOnlyLegacyRouteFamilies(t *testi
 		t.Errorf("hidden legacy dependencies: served outside the legacy route families, these fail once the legacy tables are gone:\n%s",
 			strings.Join(hidden, "\n"))
 	}
-	if !v.controlSeen {
-		t.Errorf("positive control: POST /v1/questions/{id}/answers must reach the dropped answers table")
+
+	// The legacy writes are retired (idx 52): on both databases every call to one answers the
+	// migration error and raises no database error.
+	retired := map[string]bool{}
+	for _, r := range api.LegacyWriteRetirements {
+		retired[r.Route] = true
+	}
+	var notRetired []string
+	for run, results := range map[string][]writeProbeResult{"present": before, "dropped": after} {
+		for _, r := range results {
+			if !retired[r.call.route] {
+				continue
+			}
+			if r.status != http.StatusGone || !strings.Contains(r.body, `"code":"`+api.ErrCodeEndpointRetired+`"`) || len(r.errs) > 0 {
+				notRetired = append(notRetired, fmt.Sprintf("%s %s as %s on the %s database: %d, %d database errors, %.200s",
+					r.call.route, r.call.path, r.call.caller, run, r.status, len(r.errs), strings.TrimSpace(r.body)))
+			}
+		}
+	}
+	if len(notRetired) > 0 {
+		t.Errorf("retired legacy write routes must answer 410 %s and touch no table:\n%s",
+			api.ErrCodeEndpointRetired, strings.Join(notRetired, "\n"))
+	}
+
+	// Positive control: the dropped database really lacks the legacy tables, and its tracer
+	// (the one every call above was judged by) sees a statement that reaches for one.
+	d.tracer.take()
+	if _, err := d.pool.Exec(ctx, "SELECT 1 FROM answers LIMIT 1"); err == nil {
+		t.Errorf("positive control: the answers table still exists on the dropped database")
+	}
+	_, controlErrs := d.tracer.take()
+	controlSeen := false
+	for _, e := range controlErrs {
+		if table, ok := missingLegacyObject(e); ok && table == "answers" {
+			controlSeen = true
+		}
+	}
+	if !controlSeen {
+		t.Errorf("positive control: the dropped database's tracer must record the missing answers table, got %v", controlErrs)
 	}
 }
 

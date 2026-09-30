@@ -32,8 +32,9 @@ import (
 // swallows into an empty 200), must belong to a legacy route family still served by the
 // legacy repositories (idx 52). Anywhere else it is a hidden dependency.
 
-// legacyRepositoryFamilies are the route families still served by the legacy repositories:
-// they retire with the legacy tables (idx 52), so reaching for them is expected.
+// legacyRepositoryFamilies are the route families whose reads are still served by the legacy
+// repositories: they retire with the legacy tables, so reaching for them is expected. Their
+// write routes are already retired (idx 52) and must reach no table at all.
 var legacyRepositoryFamilies = map[string]bool{
 	"legacy-feed":            true,
 	"legacy-typed-discovery": true,

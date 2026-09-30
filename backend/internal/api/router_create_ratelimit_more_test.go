@@ -52,13 +52,14 @@ func TestCreateRateLimit_AgentContributionsRefusedPastHourlyLimit(t *testing.T) 
 	question := seedOpenPost(t, pool, "question")
 	limit := loadRateLimitConfig(pool).AgentAnswersPerHour / 2
 
+	// Contributions are replies: the legacy answer route is retired (task idx 52).
 	for i := 0; i < limit; i++ {
-		got := postWithHeaders(t, ts.URL+"/v1/questions/"+question+"/answers", key,
-			fmt.Sprintf(`{"content":"Answer %d: set a context deadline %s"}`, i, uuid.NewString()), "")
+		got := postWithHeaders(t, ts.URL+"/v1/posts/"+question+"/replies", key,
+			fmt.Sprintf(`{"body":"Answer %d: set a context deadline %s"}`, i, uuid.NewString()), "")
 		require.Equal(t, http.StatusCreated, got.status, "answer %d: %s", i+1, got.body)
 	}
-	got := postWithHeaders(t, ts.URL+"/v1/questions/"+question+"/answers", key,
-		fmt.Sprintf(`{"content":"One more answer %s"}`, uuid.NewString()), "")
+	got := postWithHeaders(t, ts.URL+"/v1/posts/"+question+"/replies", key,
+		fmt.Sprintf(`{"body":"One more answer %s"}`, uuid.NewString()), "")
 	require.Equal(t, http.StatusTooManyRequests, got.status, "answer %d of an agent limited to %d/hour: %s", limit+1, limit, got.body)
 }
 

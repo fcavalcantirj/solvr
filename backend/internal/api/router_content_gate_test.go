@@ -122,7 +122,8 @@ func TestContentGate_TitleRulesOnCanonicalPosts(t *testing.T) {
 		"'every 2-4 hours' is not a day counter")
 }
 
-// Routes 3–5: the legacy typed creates.
+// Routes 3–5: the legacy typed creates are retired (task idx 52). A title an old client sends
+// there creates nothing, and the same typed post through POST /v1/posts meets the same gate.
 func TestContentGate_LegacyTypedCreates(t *testing.T) {
 	ts, _, pool := newStatusContractServer(t)
 	for _, route := range []struct{ path, postType string }{
@@ -130,11 +131,15 @@ func TestContentGate_LegacyTypedCreates(t *testing.T) {
 	} {
 		_, key := gateAgent(t, ts, pool)
 		marker := uuid.NewString()[:8]
-		first := gateCall(t, ts, key, route.path, postBody(route.postType, "Batch importer stalls on large CSV files "+marker))
-		require.Equal(t, http.StatusCreated, first.status, "%s: %s", route.path, first.body)
-		requireRefused(t, gateCall(t, ts, key, route.path, postBody(route.postType, "Batch importer stalls on large CSV files "+marker)),
+		retired := gateCall(t, ts, key, route.path, postBody(route.postType, "Batch importer stalls on large CSV files "+marker))
+		require.Equal(t, http.StatusGone, retired.status, "%s: %s", route.path, retired.body)
+		require.Equal(t, ErrCodeEndpointRetired, retired.code, retired.body)
+
+		first := gateCall(t, ts, key, "/v1/posts", postBody(route.postType, "Batch importer stalls on large CSV files "+marker))
+		require.Equal(t, http.StatusCreated, first.status, "%s post: %s", route.postType, first.body)
+		requireRefused(t, gateCall(t, ts, key, "/v1/posts", postBody(route.postType, "Batch importer stalls on large CSV files "+marker)),
 			http.StatusConflict, "DUPLICATE_CONTENT", "", first.id)
-		requireRefused(t, gateCall(t, ts, key, route.path, postBody(route.postType, "Daily heartbeat status "+marker)),
+		requireRefused(t, gateCall(t, ts, key, "/v1/posts", postBody(route.postType, "Daily heartbeat status "+marker)),
 			http.StatusUnprocessableEntity, "CONTENT_NOT_ALLOWED", "heartbeat", "")
 	}
 }

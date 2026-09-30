@@ -62,7 +62,7 @@ func TestDeletedAccount_CredentialsStopAuthenticating(t *testing.T) {
 			{"GET", "/v1/heartbeat", ""},
 			{"GET", "/v1/me/posts", ""},
 			{"GET", "/v1/notifications", ""},
-			{"POST", "/v1/problems", `{"title":"A deleted account must not publish this problem","description":"Written with a credential of an account that was deleted before this request was sent.","tags":["contract"]}`},
+			{"POST", "/v1/posts", `{"title":"A deleted account must not publish this post","description":"Written with a credential of an account that was deleted before this request was sent.","tags":["contract"]}`},
 			{"POST", "/v1/rooms", fmt.Sprintf(`{"display_name":"Deleted account room","slug":"gone-%d"}`, time.Now().UnixNano()%1000000000)},
 			{"POST", "/v1/users/me/api-keys", `{"name":"after deletion"}`},
 		}

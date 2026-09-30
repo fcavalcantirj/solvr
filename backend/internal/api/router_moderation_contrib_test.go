@@ -12,33 +12,44 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Anti-abuse W2 through the real router: replies and legacy contributions are moderated after
-// they are created. A reject hides a reply, answer, approach or comment (soft delete), flags it
-// moderation_rejected and notifies the author; responses and progress notes, which cannot be
-// hidden, are flagged and notified only. An approve leaves the row alone.
+// Anti-abuse W2 through the real router: replies are moderated after they are created. A
+// reject hides the reply (soft delete), flags it moderation_rejected and notifies the author;
+// an approve leaves the row alone. The legacy contribution create routes (approaches, answers,
+// responses, comments, progress notes) are retired (task idx 52): they create and moderate
+// nothing.
 
 type contributionCase struct {
 	kind, table, path, body string
 	hideable                bool
 }
 
-// contributionCases builds one create per contribution route, on seeded open targets.
+// contributionCases builds one create per contribution route that still creates, on seeded
+// open targets: the canonical reply route.
 func contributionCases(t *testing.T, pool *db.Pool) []contributionCase {
 	t.Helper()
 	m := uuid.NewString()[:8]
+	post := seedOpenPost(t, pool, "post")
+	return []contributionCase{
+		{"reply", "replies", "/v1/posts/" + post + "/replies", `{"body":"reply ` + m + `"}`, true},
+	}
+}
+
+// retiredContributionPaths are the retired legacy contribution creates, on seeded open targets.
+func retiredContributionPaths(t *testing.T, pool *db.Pool) map[string]string {
+	t.Helper()
 	post, question, problem, idea := seedOpenPost(t, pool, "post"), seedOpenPost(t, pool, "question"), seedOpenPost(t, pool, "problem"), seedOpenPost(t, pool, "idea")
 	answer := seedLegacy(t, pool, `INSERT INTO answers (question_id, author_type, author_id, content) VALUES ($1, 'agent', 'agent_gate_seed', 'seed answer') RETURNING id::text`, question)
 	approach := seedLegacy(t, pool, `INSERT INTO approaches (problem_id, author_type, author_id, angle) VALUES ($1, 'agent', 'agent_gate_seed', 'seed angle') RETURNING id::text`, problem)
 	response := seedLegacy(t, pool, `INSERT INTO responses (idea_id, author_type, author_id, content, response_type) VALUES ($1, 'agent', 'agent_gate_seed', 'seed response', 'build') RETURNING id::text`, idea)
-	return []contributionCase{
-		{"reply", "replies", "/v1/posts/" + post + "/replies", `{"body":"reply ` + m + `"}`, true},
-		{"approach", "approaches", "/v1/problems/" + problem + "/approaches", `{"angle":"approach angle","method":"approach ` + m + `"}`, true},
-		{"answer", "answers", "/v1/questions/" + question + "/answers", `{"content":"answer ` + m + `"}`, true},
-		{"comment", "comments", "/v1/answers/" + answer + "/comments", `{"content":"answer comment ` + m + `"}`, true},
-		{"comment", "comments", "/v1/approaches/" + approach + "/comments", `{"content":"approach comment ` + m + `"}`, true},
-		{"comment", "comments", "/v1/responses/" + response + "/comments", `{"content":"response comment ` + m + `"}`, true},
-		{"comment", "comments", "/v1/posts/" + post + "/comments", `{"content":"post comment ` + m + `"}`, true},
-		{"response", "responses", "/v1/ideas/" + idea + "/responses", `{"content":"response ` + m + `","response_type":"build"}`, false},
+	return map[string]string{
+		"/v1/problems/" + problem + "/approaches":  `{"angle":"approach angle","method":"approach method"}`,
+		"/v1/questions/" + question + "/answers":   `{"content":"answer content"}`,
+		"/v1/answers/" + answer + "/comments":      `{"content":"answer comment"}`,
+		"/v1/approaches/" + approach + "/comments": `{"content":"approach comment"}`,
+		"/v1/approaches/" + approach + "/progress": `{"content":"progress note"}`,
+		"/v1/responses/" + response + "/comments":  `{"content":"response comment"}`,
+		"/v1/posts/" + post + "/comments":          `{"content":"post comment"}`,
+		"/v1/ideas/" + idea + "/responses":         `{"content":"response content","response_type":"build"}`,
 	}
 }
 
@@ -108,23 +119,22 @@ func TestModeration_ApprovedContributions(t *testing.T) {
 	}
 }
 
-// T-M8 (progress notes): a rejected note on the author's own approach is flagged, not hidden.
-func TestModeration_RejectedProgressNoteIsFlaggedOnly(t *testing.T) {
+// T-M3 … T-M8 on the retired legacy contribution routes (approaches, answers, comments,
+// responses, progress notes): an old client's create is refused with the migration error before
+// anything is stored, so there is nothing to moderate, flag or notify.
+func TestModeration_RetiredContributionRoutesModerateNothing(t *testing.T) {
 	mod := useRecordingModerator(t)
 	ts, _, pool := newStatusContractServer(t)
 	agentID, key := moderationAgent(t, ts, pool)
-	problem := seedOpenPost(t, pool, "problem")
-	approach := gateCall(t, ts, key, "/v1/problems/"+problem+"/approaches", `{"angle":"own approach","method":"own `+uuid.NewString()[:8]+`"}`)
-	require.Equal(t, http.StatusCreated, approach.status, approach.body)
-	require.Eventually(t, func() bool { return mod.GetCalls() == 1 }, waitTimeout, waitTick)
-
-	mod.QueueResults(rejected(agentID))
-	note := gateCall(t, ts, key, "/v1/approaches/"+approach.id+"/progress", `{"content":"note `+uuid.NewString()[:8]+`"}`)
-	require.Equal(t, http.StatusCreated, note.status, note.body)
-	waitForValue(t, pool, "1", `SELECT count(*)::text FROM flags
-		WHERE target_type = 'progress_note' AND target_id = $1::uuid AND reason = 'moderation_rejected'`, note.id)
-	waitForValue(t, pool, "1", `SELECT count(*)::text FROM notifications WHERE agent_id = $1 AND type = 'contribution_flagged'`, agentID)
-	require.Equal(t, "1", queryText(t, pool, `SELECT count(*)::text FROM progress_notes WHERE id = $1::uuid`, note.id), "the note stays")
+	for path, body := range retiredContributionPaths(t, pool) {
+		calls := mod.GetCalls()
+		got := gateCall(t, ts, key, path, body)
+		require.Equal(t, http.StatusGone, got.status, "%s: %s", path, got.body)
+		require.Equal(t, ErrCodeEndpointRetired, got.code, got.body)
+		require.Equal(t, calls, mod.GetCalls(), "%s: a retired route moderates nothing", path)
+	}
+	require.Equal(t, "0", queryText(t, pool, `SELECT count(*)::text FROM notifications WHERE agent_id = $1`, agentID))
+	require.Equal(t, "0", queryText(t, pool, `SELECT count(*)::text FROM flags WHERE details = $1`, agentID))
 }
 
 func queryText(t *testing.T, pool *db.Pool, query string, args ...any) string {

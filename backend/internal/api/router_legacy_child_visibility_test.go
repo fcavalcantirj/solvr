@@ -74,10 +74,10 @@ func newLegacyChildVisibilityFixture(
 	return fixture
 }
 
-// Legacy contribution routes remain supported during the canonical transition, but their
-// child identifiers must never bypass the owning post's family/deletion rules. The same
-// contract also keeps valid public history readable and maps an absent evolution target to
-// 404 rather than treating ordinary absence as a service failure.
+// Legacy contribution READ routes remain served during the canonical transition, but their
+// child identifiers must never bypass the owning post's family/deletion rules; valid public
+// history stays readable. The legacy child WRITE routes are retired (task idx 52) and answer
+// every caller the same migration error.
 func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T) {
 	liftCreateLimits(t) // many creates by one identity; the hourly limit is not this test's subject
 	ts, _, pool := newStatusContractServer(t)
@@ -151,51 +151,41 @@ func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T
 			"/v1/problems/"+uuid.NewString()+"/approaches/"+public.approach+"/history", "", ""))
 	})
 
+	// The legacy child WRITE routes are retired (task idx 52): progress notes, answer votes and
+	// idea evolution answer the same migration error to every caller on every parent (family,
+	// deleted, public), so the answer carries nothing about the parent and changes nothing.
+	retired := func(t *testing.T, got statusContractAnswer, route string) {
+		t.Helper()
+		require.Equal(t, http.StatusGone, got.status, got.body)
+		require.Equal(t, ErrCodeEndpointRetired, got.code, got.body)
+		require.Contains(t, got.message, route, got.body)
+		require.Equal(t, got.headerID, got.requestID, "the envelope carries the response's request id")
+		require.NotContains(t, got.body, marker)
+	}
+	callers := map[string]string{"anonymous": "", "foreign agent": foreignKey, "foreign human": foreignJWT,
+		"family owner": ownerJWT, "sibling agent": siblingKey}
+	parents := map[string]legacyChildVisibilityFixture{"family": family, "deleted": deleted, "public": public}
+
 	t.Run("approach progress", func(t *testing.T) {
-		path := func(f legacyChildVisibilityFixture) string { return "/v1/approaches/" + f.approach + "/progress" }
-		body := `{"content":"visibility-scoped progress"}`
-
-		before := progressCount(family.approach)
-		notFound(t, call(t, http.MethodPost, path(family), foreignKey, body))
-		require.Equal(t, before, progressCount(family.approach), "an outsider did not add progress")
-
-		before = progressCount(deleted.approach)
-		notFound(t, call(t, http.MethodPost, path(deleted), siblingKey, body))
-		require.Equal(t, before, progressCount(deleted.approach), "a deleted parent did not gain progress")
-
-		before = progressCount(family.approach)
-		got := call(t, http.MethodPost, path(family), siblingKey, body)
-		require.Equal(t, http.StatusCreated, got.status, got.body)
-		require.Equal(t, before+1, progressCount(family.approach))
-
-		before = progressCount(public.approach)
-		// A distinct note: the anti-abuse gate refuses an author's repeated progress note.
-		got = call(t, http.MethodPost, path(public), siblingKey, `{"content":"visibility-scoped progress on the public approach"}`)
-		require.Equal(t, http.StatusCreated, got.status, got.body)
-		require.Equal(t, before+1, progressCount(public.approach))
+		for parent, f := range parents {
+			for who, bearer := range callers {
+				before := progressCount(f.approach)
+				retired(t, call(t, http.MethodPost, "/v1/approaches/"+f.approach+"/progress", bearer,
+					`{"content":"visibility-scoped progress"}`), "POST /v1/approaches/{id}/progress")
+				require.Equal(t, before, progressCount(f.approach), "%s parent, %s: no progress was added", parent, who)
+			}
+		}
 	})
 
 	t.Run("answer vote", func(t *testing.T) {
-		path := func(f legacyChildVisibilityFixture) string { return "/v1/answers/" + f.answer + "/vote" }
-		body := `{"direction":"up"}`
-
-		before := answerUpvotes(family.answer)
-		notFound(t, call(t, http.MethodPost, path(family), foreignKey, body))
-		require.Equal(t, before, answerUpvotes(family.answer), "an outsider did not vote")
-
-		before = answerUpvotes(deleted.answer)
-		notFound(t, call(t, http.MethodPost, path(deleted), ownerJWT, body))
-		require.Equal(t, before, answerUpvotes(deleted.answer), "a deleted parent's answer did not gain a vote")
-
-		before = answerUpvotes(family.answer)
-		got := call(t, http.MethodPost, path(family), ownerJWT, body)
-		require.Equal(t, http.StatusOK, got.status, got.body)
-		require.Equal(t, before+1, answerUpvotes(family.answer))
-
-		before = answerUpvotes(public.answer)
-		got = call(t, http.MethodPost, path(public), foreignKey, body)
-		require.Equal(t, http.StatusOK, got.status, got.body)
-		require.Equal(t, before+1, answerUpvotes(public.answer))
+		for parent, f := range parents {
+			for who, bearer := range callers {
+				before := answerUpvotes(f.answer)
+				retired(t, call(t, http.MethodPost, "/v1/answers/"+f.answer+"/vote", bearer, `{"direction":"up"}`),
+					"POST /v1/answers/{id}/vote")
+				require.Equal(t, before, answerUpvotes(f.answer), "%s parent, %s: no vote was counted", parent, who)
+			}
+		}
 	})
 
 	t.Run("current post vote", func(t *testing.T) {
@@ -217,14 +207,14 @@ func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T
 		require.Equal(t, http.StatusOK, got.status, got.body)
 	})
 
-	t.Run("absent evolution target", func(t *testing.T) {
+	t.Run("idea evolution", func(t *testing.T) {
 		path := "/v1/ideas/" + public.idea + "/evolve"
-		for _, target := range []string{uuid.NewString(), malformedResourceID} {
-			notFound(t, call(t, http.MethodPost, path, siblingKey, `{"evolved_post_id":"`+target+`"}`))
+		for _, target := range []string{uuid.NewString(), malformedResourceID, family.question, public.question} {
+			retired(t, call(t, http.MethodPost, path, siblingKey, `{"evolved_post_id":"`+target+`"}`), "POST /v1/ideas/{id}/evolve")
 		}
 		var evolved int
 		require.NoError(t, pool.QueryRow(ctx,
 			"SELECT COALESCE(array_length(evolved_into, 1), 0) FROM posts WHERE id = $1::uuid", public.idea).Scan(&evolved))
-		require.Zero(t, evolved, "failed evolution attempts did not change the source idea")
+		require.Zero(t, evolved, "evolution attempts did not change the source idea")
 	})
 }

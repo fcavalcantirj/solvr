@@ -104,9 +104,13 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 	require.False(t, bodyContains("/v1/questions/"+privQID+"/answers", "", "secret answer "+kw), "answers: private question answers absent for anon")
 	require.False(t, bodyContains("/v1/questions/"+privQID+"/answers", agentCKey, "secret answer "+kw), "answers: private question answers absent for foreign")
 
-	// 8. Write blocked — a foreign agent cannot answer a private question (parent hidden -> 404)
+	// 8. Write blocked — a foreign agent cannot reply to a private question (parent hidden -> 404).
+	// The legacy answer route is retired (task idx 52): it answers 410 to everyone, which says
+	// nothing about the parent.
 	stAns, _ := doJSON(t, "POST", ts.URL+"/v1/questions/"+privQID+"/answers", agentCKey, `{"content":"`+strings.Repeat("y", 60)+`"}`)
-	require.Equal(t, http.StatusNotFound, stAns, "foreign answering private question -> 404")
+	require.Equal(t, http.StatusGone, stAns, "the retired answer route refuses every caller alike")
+	stRep, _ := doJSON(t, "POST", ts.URL+"/v1/posts/"+privQID+"/replies", agentCKey, `{"body":"`+strings.Repeat("y", 60)+`"}`)
+	require.Equal(t, http.StatusNotFound, stRep, "foreign replying to private question -> 404")
 
 	// 9. Write gate — an unclaimed agent cannot create a family post
 	_, unclaimedKey := registerRoomTestAgent(t, ts) // not claimed
@@ -114,11 +118,12 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 	st, _ := doJSON(t, "POST", ts.URL+"/v1/posts", unclaimedKey, body)
 	require.Equal(t, http.StatusBadRequest, st, "create: unclaimed agent family post -> 400")
 
-	// 10. Family usability — a sibling reads + answers its OWN private question via the
-	// /v1/questions/{id} alias route (OptionalAuth + ctx-scoped findQuestion); foreign 404s.
+	// 10. Family usability — a sibling reads its OWN private question via the /v1/questions/{id}
+	// alias route (OptionalAuth + ctx-scoped findQuestion) and replies to it through the
+	// canonical reply route (the legacy answer route is retired); foreign 404s.
 	require.Equal(t, http.StatusOK, getStatus(t, ts.URL+"/v1/questions/"+privQID, agentBKey), "sibling reads own private question via /questions/{id}")
 	require.Equal(t, http.StatusNotFound, getStatus(t, ts.URL+"/v1/questions/"+privQID, agentCKey), "foreign 404 on private question via /questions/{id}")
-	stSib, _ := doJSON(t, "POST", ts.URL+"/v1/questions/"+privQID+"/answers", agentBKey, `{"content":"`+strings.Repeat("z", 60)+`"}`)
+	stSib, _ := doJSON(t, "POST", ts.URL+"/v1/posts/"+privQID+"/replies", agentBKey, `{"body":"`+strings.Repeat("z", 60)+`"}`)
 	require.NotEqual(t, http.StatusNotFound, stSib, "sibling can participate on its own private question")
 
 	// 11. Caveat #1 — GET echoes the visibility field (for the owner)

@@ -11,14 +11,17 @@ package api
  */
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/models"
 )
 
@@ -57,17 +60,14 @@ func TestProblemsEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /v1/problems requires auth", func(t *testing.T) {
+	t.Run("POST /v1/problems is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
 		reqBody := `{"title":"Test problem","description":"Test description","success_criteria":["Test passes"]}`
 		req := httptest.NewRequest(http.MethodPost, "/v1/problems", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		// Without auth, should return 401
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
-		}
+		requireRetiredRecorder(t, w, "POST /v1/problems")
 	})
 
 	t.Run("GET /v1/problems/:id/approaches returns list", func(t *testing.T) {
@@ -115,28 +115,24 @@ func TestQuestionsEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /v1/questions requires auth", func(t *testing.T) {
+	t.Run("POST /v1/questions is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
 		reqBody := `{"title":"Test question","description":"Test description"}`
 		req := httptest.NewRequest(http.MethodPost, "/v1/questions", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
-		}
+		requireRetiredRecorder(t, w, "POST /v1/questions")
 	})
 
-	t.Run("POST /v1/questions/:id/answers requires auth", func(t *testing.T) {
+	t.Run("POST /v1/questions/:id/answers is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
 		reqBody := `{"content":"Test answer content"}`
 		req := httptest.NewRequest(http.MethodPost, "/v1/questions/test-id/answers", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
-		}
+		requireRetiredRecorder(t, w, "POST /v1/questions/{id}/answers")
 	})
 
 	// FIX-022: Test GET /v1/questions/:id/answers endpoint
@@ -185,28 +181,24 @@ func TestIdeasEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /v1/ideas requires auth", func(t *testing.T) {
+	t.Run("POST /v1/ideas is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
 		reqBody := `{"title":"Test idea","description":"Test description"}`
 		req := httptest.NewRequest(http.MethodPost, "/v1/ideas", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
-		}
+		requireRetiredRecorder(t, w, "POST /v1/ideas")
 	})
 
-	t.Run("POST /v1/ideas/:id/responses requires auth", func(t *testing.T) {
+	t.Run("POST /v1/ideas/:id/responses is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
 		reqBody := `{"content":"Test response","response_type":"build"}`
 		req := httptest.NewRequest(http.MethodPost, "/v1/ideas/test-id/responses", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
-		}
+		requireRetiredRecorder(t, w, "POST /v1/ideas/{id}/responses")
 	})
 
 	// FIX-024: Test GET /v1/ideas/:id/responses endpoint
@@ -229,10 +221,23 @@ func createCommentTargetProblem(t *testing.T, router http.Handler, apiKey string
 	return createCommentTarget(t, router, apiKey, "/v1/posts", body)
 }
 
-// createCommentTargetApproach creates an approach on problemID with apiKey and returns its id.
-func createCommentTargetApproach(t *testing.T, router http.Handler, apiKey, problemID string) string {
+// createCommentTargetApproach inserts an approach on problemID and returns its id. The legacy
+// approach create route is retired (task idx 52), so the row the comment list reads is seeded.
+func createCommentTargetApproach(t *testing.T, problemID string) string {
 	t.Helper()
-	return createCommentTarget(t, router, apiKey, "/v1/problems/"+problemID+"/approaches", `{"angle":"Comment list wiring approach"}`)
+	ctx := context.Background()
+	pool, err := db.NewPool(ctx, os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	var id string
+	if err := pool.QueryRow(ctx, `INSERT INTO approaches (problem_id, author_type, author_id, angle)
+		VALUES ($1::uuid, 'agent', 'agent_comment_list_seed', 'Comment list wiring approach') RETURNING id::text`, problemID).Scan(&id); err != nil {
+		t.Fatalf("seed approach: %v", err)
+	}
+	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM approaches WHERE id = $1::uuid", id) }) //nolint:errcheck
+	return id
 }
 
 func createCommentTarget(t *testing.T, router http.Handler, apiKey, path, body string) string {
@@ -263,7 +268,7 @@ func TestCommentsEndpoints(t *testing.T) {
 	t.Run("GET /v1/approaches/:id/comments returns list", func(t *testing.T) {
 		// An approach that exists: a missing one is 404 (TestStatusContract_UnknownResourceIDIsNotFound).
 		apiKey := testCommentsSetup(t, router)
-		approachID := createCommentTargetApproach(t, router, apiKey, createCommentTargetProblem(t, router, apiKey))
+		approachID := createCommentTargetApproach(t, createCommentTargetProblem(t, router, apiKey))
 		req := httptest.NewRequest(http.MethodGet, "/v1/approaches/"+approachID+"/comments", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -274,26 +279,22 @@ func TestCommentsEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /v1/approaches/:id/comments requires auth", func(t *testing.T) {
+	t.Run("POST /v1/approaches/:id/comments is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
 		reqBody := `{"content":"Test comment"}`
 		req := httptest.NewRequest(http.MethodPost, "/v1/approaches/00000000-0000-0000-0000-000000000001/comments", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
-		}
+		requireRetiredRecorder(t, w, "POST /v1/approaches/{id}/comments")
 	})
 
-	t.Run("DELETE /v1/comments/:id requires auth", func(t *testing.T) {
+	t.Run("DELETE /v1/comments/:id is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodDelete, "/v1/comments/test-id", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
-		}
+		requireRetiredRecorder(t, w, "DELETE /v1/comments/{id}")
 	})
 }
 
@@ -515,15 +516,13 @@ func TestPostCommentsEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /v1/posts/:id/comments requires auth", func(t *testing.T) {
+	t.Run("POST /v1/posts/:id/comments is retired (410 ENDPOINT_RETIRED)", func(t *testing.T) {
 		reqBody := `{"content":"Test comment on post"}`
 		req := httptest.NewRequest(http.MethodPost, "/v1/posts/00000000-0000-0000-0000-000000000001/comments", strings.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("Expected status 401 without auth, got %d: %s", w.Code, w.Body.String())
-		}
+		requireRetiredRecorder(t, w, "POST /v1/posts/{id}/comments")
 	})
 }

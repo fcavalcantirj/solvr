@@ -29,6 +29,26 @@ type SearchResult struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	SolvedAt        *time.Time `json:"solved_at,omitempty"`
 	Source          string     `json:"source"` // "post", "answer", or "approach"
+	// MatchedReplies are the replies of this post that matched the query, best first
+	// (default search only). Nil when the post matched by its own text alone.
+	MatchedReplies []SearchReplyMatch `json:"matched_replies,omitempty"`
+}
+
+// SearchReplyMatch is a reply whose body matched the query, anchored in its canonical post
+// (task idx 53). URL is the post page scrolled to the reply. A reply migrated from a legacy
+// contribution keeps its origin: LegacyType (answer, approach, response, comment,
+// progress_note) and, for an approach, LegacyStatus (e.g. succeeded, failed).
+type SearchReplyMatch struct {
+	ID           string       `json:"id"`
+	PostID       string       `json:"post_id"`
+	URL          string       `json:"url"`
+	Snippet      string       `json:"snippet"`
+	Author       SearchAuthor `json:"author"`
+	LegacyType   *string      `json:"legacy_type,omitempty"`
+	LegacyStatus *string      `json:"legacy_status,omitempty"`
+	Score        float64      `json:"score"`
+	Similarity   *float64     `json:"similarity,omitempty"`
+	CreatedAt    time.Time    `json:"created_at"`
 }
 
 // SearchResultResponse is the JSON response format for a search result.
@@ -52,6 +72,8 @@ type SearchResultResponse struct {
 	CreatedAt       time.Time    `json:"created_at"`
 	SolvedAt        *time.Time   `json:"solved_at,omitempty"`
 	Source          string       `json:"source"` // "post", "answer", or "approach"
+	// MatchedReplies anchor the replies that matched the query (task idx 53).
+	MatchedReplies []SearchReplyMatch `json:"matched_replies,omitempty"`
 }
 
 // SearchAuthor represents the author info in search results.
@@ -73,7 +95,7 @@ type SearchOptions struct {
 	Sort         string    // Sort order (relevance, newest, votes, activity)
 	Page         int       // Page number (1-indexed)
 	PerPage      int       // Results per page
-	ContentTypes []string  // Filter by content source: "posts", "answers", "approaches" (default: all)
+	ContentTypes []string  // Content sources: "posts", "answers", "approaches"; empty = posts with their matching replies as anchors
 	ViewerHuman  string    // Caller's family human UUID for visibility scoping ("" = public-only)
 	// MinSimilarity is an OPT-IN cosine-similarity floor (0–1). When > 0, results are
 	// filtered to those whose Similarity >= MinSimilarity (nil-similarity/keyword-only
@@ -107,6 +129,7 @@ func (r *SearchResult) ToResponse() SearchResultResponse {
 		CreatedAt:       r.CreatedAt,
 		SolvedAt:        r.SolvedAt,
 		Source:          r.Source,
+		MatchedReplies:  r.MatchedReplies,
 	}
 }
 

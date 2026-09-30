@@ -420,6 +420,18 @@ func formatSearchResults(results []models.SearchResult, total int, confidentMatc
 		if r.Status != "" {
 			text += "Status: " + r.Status + "\n"
 		}
+		// Task idx 53: the replies that matched, each with its link, original author and origin.
+		for _, m := range r.MatchedReplies {
+			text += "Matched reply: " + m.URL + " by " + m.Author.DisplayName
+			if m.LegacyType != nil {
+				origin := *m.LegacyType
+				if m.LegacyStatus != nil {
+					origin += ", " + *m.LegacyStatus
+				}
+				text += " (" + origin + ")"
+			}
+			text += "\n  " + m.Snippet + "\n"
+		}
 		text += "\n"
 	}
 	return text

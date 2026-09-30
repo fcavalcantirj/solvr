@@ -38,13 +38,14 @@ func (r *SearchRepository) SetEmbeddingService(svc QueryEmbedder) {
 	r.embeddingService = svc
 }
 
-// Search performs a search across posts and, on request, their replies: content_types
-// "answers" and "approaches" search the replies the post counts put in those buckets.
+// Search performs a search across posts and their replies. With no ContentTypes it searches
+// the canonical knowledge (task idx 53): posts found by their own text or by a reply's, one
+// result per post, each matching reply attached as an anchor (searchKnowledge). ContentTypes
+// "posts" searches the posts' own text only; "answers" and "approaches" return the replies the
+// post counts put in those buckets as results of their own.
 // When an embedding service is configured, uses hybrid RRF search
 // (combining full-text keyword matching with vector semantic similarity).
 // Falls back to full-text only search if embedding service is nil or fails.
-// Supports ContentTypes filter to search specific content sources.
-// When ContentTypes is empty, searches only posts (backwards compatible).
 func (r *SearchRepository) Search(ctx context.Context, query string, opts models.SearchOptions) ([]models.SearchResult, int, string, *float64, error) {
 	start := time.Now()
 	tsquery := buildTsQuery(query)
@@ -75,15 +76,16 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 
 	var allResults []models.SearchResult
 
-	// Search posts if requested or default
-	if searchAll || containsContentType(contentTypes, "posts") {
-		var posts []models.SearchResult
-		var err error
-		if queryEmbedding != nil {
-			posts, err = r.searchPostsHybrid(ctx, queryEmbedding, tsquery, opts)
-		} else {
-			posts, err = r.searchPosts(ctx, tsquery, opts)
+	// The default search (task idx 53) finds posts by their own text and by their replies'
+	// text, one result per post; content_types=posts searches the posts' own text only.
+	if searchAll {
+		knowledge, err := r.searchKnowledge(ctx, queryEmbedding, tsquery, opts)
+		if err != nil {
+			return nil, 0, "", nil, err
 		}
+		allResults = append(allResults, knowledge...)
+	} else if containsContentType(contentTypes, "posts") {
+		posts, err := r.searchPostResults(ctx, queryEmbedding, tsquery, opts)
 		if err != nil {
 			return nil, 0, "", nil, err
 		}
@@ -102,8 +104,8 @@ func (r *SearchRepository) Search(ctx context.Context, query string, opts models
 		allResults = append(allResults, replies...)
 	}
 
-	// Sort merged results by score descending
-	sort.Slice(allResults, func(i, j int) bool {
+	// Sort merged results by score descending; ties keep the order the queries returned.
+	sort.SliceStable(allResults, func(i, j int) bool {
 		return allResults[i].Score > allResults[j].Score
 	})
 
@@ -178,34 +180,8 @@ func maxSimilarity(results []models.SearchResult) *float64 {
 
 // searchPosts searches posts using full-text search (existing logic).
 func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
-	baseQuery := `
-		SELECT
-			p.id,
-			p.type,
-			p.title,
-			p.description,
-			ts_headline('english', p.description, to_tsquery('english', $1),
-				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=30, MaxFragments=1') as snippet,
-			p.tags,
-			p.status,
-			p.posted_by_type,
-			p.posted_by_id,
-			COALESCE(
-				CASE WHEN p.posted_by_type = 'human' THEN u.display_name
-					 ELSE a.display_name
-				END,
-				p.posted_by_id
-			) as author_name,
-			ts_rank(to_tsvector('english', p.title || ' ' || p.description), to_tsquery('english', $1)) as score,
-			(p.upvotes - p.downvotes) as vote_score,
-			` + postReplyCountColumns + `,
-			COALESCE(p.view_count, 0) as view_count,
-			p.created_at,
-			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at,
-			NULL::float8 as similarity
-		FROM posts p
-		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
-		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id` + postReplyCountsJoin + `
+	baseQuery := searchPostSelect("$1", "ts_rank(to_tsvector('english', p.title || ' ' || p.description), to_tsquery('english', $1))",
+		"NULL::float8", "posts p") + `
 		WHERE p.deleted_at IS NULL
 		AND p.status NOT IN ('pending_review', 'rejected', 'draft')
 		AND to_tsvector('english', p.title || ' ' || p.description) @@ to_tsquery('english', $1)
@@ -251,56 +227,18 @@ func (r *SearchRepository) searchPosts(ctx context.Context, tsquery string, opts
 // which we JOIN with posts to get full data and format into SearchResult.
 func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []float32, tsquery string, opts models.SearchOptions) ([]models.SearchResult, error) {
 	queryVec := pgvector.NewVector(embedding)
-
-	limit := opts.PerPage
-	if limit == 0 {
-		limit = 20
-	}
-	if limit > 50 {
-		limit = 50
-	}
-	// Request more results from hybrid_search to allow for post-filtering
-	matchCount := limit * 3
-	if matchCount < 60 {
-		matchCount = 60
-	}
+	matchCount := hybridMatchCount(opts)
 
 	// Use hybrid_search SQL function which returns (post_id, rrf_score),
 	// then JOIN with posts to get full data. The rrf_score is the real
 	// Reciprocal Rank Fusion score — no need to re-derive from ROW_NUMBER.
 	// FTS weight 2.0 > VEC weight 1.0 so keyword matches outrank semantic-only.
-	baseQuery := `
-		SELECT
-			p.id,
-			p.type,
-			p.title,
-			p.description,
-			ts_headline('english', p.description, to_tsquery('english', $4),
-				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=30, MaxFragments=1') as snippet,
-			p.tags,
-			p.status,
-			p.posted_by_type,
-			p.posted_by_id,
-			COALESCE(
-				CASE WHEN p.posted_by_type = 'human' THEN u.display_name
-					 ELSE a.display_name
-				END,
-				p.posted_by_id
-			) as author_name,
-			hs.rrf_score as score,
-			(p.upvotes - p.downvotes) as vote_score,
-			` + postReplyCountColumns + `,
-			COALESCE(p.view_count, 0) as view_count,
-			p.created_at,
-			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at,
-			-- BART-155: calibrated cosine similarity (0–1) of the post to the query vector.
-			-- $2 is the query embedding (already bound for hybrid_search); NULL when the
-			-- post has no embedding. Ranking still uses hs.rrf_score below.
-			CASE WHEN p.embedding IS NOT NULL THEN 1 - (p.embedding <=> $2::vector) END as similarity
-		FROM hybrid_search($1, $2, $3, 2.0, 1.0, 60, $5::uuid) hs
-		JOIN posts p ON p.id = hs.post_id
-		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
-		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id` + postReplyCountsJoin + `
+	// BART-155: the similarity column is the calibrated cosine similarity (0–1) of the post
+	// to the query vector. $2 is the query embedding (already bound for hybrid_search); NULL
+	// when the post has no embedding. Ranking still uses hs.rrf_score below.
+	baseQuery := searchPostSelect("$4", "hs.rrf_score",
+		"CASE WHEN p.embedding IS NOT NULL THEN 1 - (p.embedding <=> $2::vector) END",
+		"hybrid_search($1, $2, $3, 2.0, 1.0, 60, $5::uuid) hs JOIN posts p ON p.id = hs.post_id") + `
 		WHERE p.status NOT IN ('pending_review', 'rejected', 'draft')
 	`
 
@@ -339,6 +277,22 @@ func (r *SearchRepository) searchPostsHybrid(ctx context.Context, embedding []fl
 	return results, nil
 }
 
+// hybridMatchCount is how many candidates a hybrid search function returns: three pages'
+// worth, at least 60, to allow for post-filtering.
+func hybridMatchCount(opts models.SearchOptions) int {
+	limit := opts.PerPage
+	if limit == 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	if limit*3 < 60 {
+		return 60
+	}
+	return limit * 3
+}
+
 // containsContentType checks if a content type is in the list.
 func containsContentType(types []string, target string) bool {
 	for _, t := range types {
@@ -347,6 +301,40 @@ func containsContentType(types []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// searchPostSelect is the SELECT list and joins every post search query shares, in the scan
+// order of scanSearchResults. tsArg is the placeholder of the tsquery the snippet highlights,
+// score and similarity are the SQL of those columns, and from names the posts row as p.
+func searchPostSelect(tsArg, score, similarity, from string) string {
+	return `
+		SELECT
+			p.id,
+			p.type,
+			p.title,
+			p.description,
+			ts_headline('english', p.description, to_tsquery('english', ` + tsArg + `),
+				'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=30, MaxFragments=1') as snippet,
+			p.tags,
+			p.status,
+			p.posted_by_type,
+			p.posted_by_id,
+			COALESCE(
+				CASE WHEN p.posted_by_type = 'human' THEN u.display_name
+					 ELSE a.display_name
+				END,
+				p.posted_by_id
+			) as author_name,
+			` + score + ` as score,
+			(p.upvotes - p.downvotes) as vote_score,
+			` + postReplyCountColumns + `,
+			COALESCE(p.view_count, 0) as view_count,
+			p.created_at,
+			CASE WHEN p.status = 'solved' THEN p.updated_at ELSE NULL END as solved_at,
+			` + similarity + ` as similarity
+		FROM ` + from + `
+		LEFT JOIN users u ON p.posted_by_type = 'human' AND p.posted_by_id = u.id::text
+		LEFT JOIN agents a ON p.posted_by_type = 'agent' AND p.posted_by_id = a.id` + postReplyCountsJoin
 }
 
 // buildTsQuery converts a search query to PostgreSQL's websearch-compatible tsquery format.

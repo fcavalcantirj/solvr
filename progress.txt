@@ -2450,3 +2450,135 @@ UAT: owner — (1) push main and deploy the API + frontend (cutover, idx 93): pr
 git status at journal time [REAL]: 4 M (frontend/public/references/api.md, frontend/public/references/
   examples.md, skill/references/api.md, skill/references/examples.md) + 1 ?? (backend/internal/api/
   published_docs_canonical_references_test.go) + this progress.txt entry + spec.json idx 52 passes -> true.
+
+2026-09-30 18:40 — Task idx 53 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Let agents and humans search the retained knowledge through one consistent model"
+SLICE 1 of N: the DEFAULT search (GET /v1/search and backend MCP solvr_search with no content_types)
+finds posts by their own text AND by their replies' text, one result per canonical post, each matching
+reply attached as an anchor (link, excerpt, original author/time/origin). Core of steps 1-3, plus the
+result half of step 5 (hidden replies never leak through results, total or top_similarity).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 53, 67, 68, 73, 74, 77-95, 97, 98;
+  no open URGENT. idx 24 stays skipped (acceptance task; needs idx 78). idx 53 was gated on "compare
+  before and after cutover"; that gate is the same one idx 52 lifted: main is what ships at cutover and
+  the cutover runner exists (db.RunKnowledgeCutover / cmd/cutover), so the before/after comparison can be
+  run on a local scratch database (step 4, a later slice). idx 53 is the first buildable task. Tree clean
+  at start [REAL, git status]; HEAD fe1479c1.
+
+WHAT WAS THERE [REAL, read this session]: the default search (no content_types) searched posts only;
+  reply text was searchable only with content_types=answers|approaches, full text only, and each hit came
+  back as a bare reply id with type answer/approach and NO post id, so it did not resolve to a post.
+  hybrid_search_replies (000110) and reply embeddings (create path + cmd/backfill-embeddings +
+  copyLegacyEmbeddings at cutover) existed, but no Go code called hybrid_search_replies.
+
+WHAT CHANGED [REAL, git status --porcelain: 3 M + 4 ??; git diff --stat 111+/88- on the 3 tracked files]:
+  M backend/internal/models/search.go (142): new SearchReplyMatch {id, post_id, url, snippet, author
+    {id,type,display_name}, legacy_type?, legacy_status?, score, similarity?, created_at};
+    SearchResult/SearchResultResponse gain matched_replies (omitempty); ToResponse maps it.
+  A backend/internal/db/search_canonical.go (225): searchKnowledge = post results (hybrid or full text,
+    searchPostResults) + searchReplyMatches + loadSearchPosts for posts found only through replies +
+    foldReplyMatches. Reply matches: live, not author_type 'system', post passes searchablePostRule
+    (not deleted, status not draft/pending_review/rejected — the post results' rule), the viewer's
+    visibility and the post filters (tags/status/type/author/dates apply to the POST). Hybrid path =
+    hybrid_search_replies(fts 2.0, vec 1.0) + cosine similarity per reply, falls back to full text on a
+    query error (like the post path). Fold: one result per post, <= 3 anchors best first, score =
+    max(post, best reply), similarity = max(post, all matches). url = /posts/<post>#<reply> (post-detail
+    renders <li id={reply.id}>; same convention as CanonicalNotificationLink). legacy_status = the
+    approach provenance status (succeeded/failed/...) for migrated approaches only.
+  M backend/internal/db/search.go (488): Search() routes empty ContentTypes to searchKnowledge and
+    content_types=posts to searchPostResults (posts' own text only, unchanged behavior); the explicit
+    answers/approaches buckets are unchanged. REFACTOR: the SELECT list shared by searchPosts and
+    searchPostsHybrid is now searchPostSelect(tsArg, score, similarity, from) (also used by
+    loadSearchPosts); hybridMatchCount(opts) extracted (same numbers). The merge sort is now
+    sort.SliceStable (ties keep query order; was sort.Slice).
+  M backend/internal/api/handlers/mcp.go (503): formatSearchResults prints each anchor:
+    "Matched reply: <url> by <display name> (<legacy_type>, <legacy_status>)" + the excerpt.
+  TESTS (new; no existing test changed or removed):
+  A backend/internal/db/search_canonical_test.go (209)
+    TestCanonicalSearch_DefaultResolvesKnowledgeToPostsAndReplyAnchors, on a scratch database
+    (newMigratedScratchDatabase, all migrations): legacy problem + succeeded and failed approaches,
+    question + human answer, idea + response, then db.RunKnowledgeCutover (the production sequence).
+    Default search (no type, no content_types), BOTH paths (full text; hybrid with a fixed query
+    vector): each distinct word finds exactly the expected posts with exactly the expected anchors
+    (reply id migrated from the contribution, author id/display name/type — incl. the human answerer —,
+    legacy_type, legacy_status succeeded/failed, created_at = the legacy row's), url, <mark> excerpt on
+    full text, total = distinct posts, a post matched by its own text and a reply's listed once, two
+    matching replies = one result with two anchors. Hidden: replies on draft, rejected, pending_review
+    and deleted posts, a deleted answer, a system reply, a family post's reply (anon and a non-owner
+    human) are never found; the owner finds the family one. Leak power: every hidden reply's embedding
+    IS the query vector (similarity 1) while the one visible embedded reply is 0.866 — hybrid
+    top_similarity stays 0.866 for everyone but the family owner (1.0 there, correctly).
+  A backend/internal/db/search_canonical_fold_test.go (70, no DB): TestFoldReplyMatches_OneResultPer
+    PostWithItsBestAnchors, TestReplyOnlyPostIDs_ListsPostsFoundOnlyThroughReplies.
+  A backend/internal/api/handlers/search_canonical_test.go (106, mock repo): TestSearch_ResultCarries
+    ReplyAnchors (exact JSON of matched_replies; no type/content_types needed),
+    TestSearch_ResultWithoutReplyMatchesOmitsAnchors, TestFormatSearchResults_ShowsReplyAnchors.
+
+VERIFICATION:
+  RED [TEST, /tmp/solvr_idx53_s1_red.log]: go vet on the tests before the code: undefined
+    models.SearchReplyMatch / MatchedReplies / foldReplyMatches / replyOnlyPostIDs.
+  GREEN, shared solvr_test (postgres://solvr:...@localhost:5435/solvr_test, schema 114) [TEST,
+    /tmp/solvr_idx53_s1_db.log, -v]: the 3 new db tests + TestLegacySearch_ServedCanonically +
+    TestCanonicalSearch_FindsMigratedContributionsAcrossTheCutover PASS, none SKIP. 8 other search tests
+    FAIL there: GetTrending, GetZeroResults, Similarity_PopulatedAndTopSimilarity, MinSimilarity_Honest
+    Filter, Search_PerformanceTarget, SearchUnified_PostsAndAnswers, SearchPulse_PublishesOnlyPublicScope
+    Terms, SearchPulse_WithResultsCountsOnlyProductiveSearches. The SAME 8 fail on an untouched HEAD
+    worktree against the same DB with the same messages [TEST, /tmp/solvr_idx53_s1_head.log; worktree
+    removed] -> pre-existing shared-data pollution (e.g. unified: total 2227 on HEAD).
+  GREEN, FRESH local DB solvr_idx53_fresh (all 114 up migrations via psql, dropped afterwards) [TEST,
+    /tmp/solvr_idx53_s1_db_fresh.log, -v -p 1]: -run 'TestCanonicalSearch_|TestFoldReplyMatches|
+    TestReplyOnlyPostIDs|TestSearch|TestLegacySearch|TestHybridSearchReplies' -> ok, 53 PASS, 0 FAIL,
+    5 SKIP (TestSearchRepository_HybridSearch_* x2, TestSearchHybrid_* x3: need VOYAGE_API_KEY,
+    pre-existing, none mine). Handlers [TEST, /tmp/solvr_idx53_s1_handlers.log]: -run 'TestSearch|
+    TestFormatSearchResults|TestMCP' ok, the 3 new PASS.
+  FULL BACKEND on the fresh DB [TEST, /tmp/solvr_idx53_s1_backend_full.log, go test ./... -count=1 -p 1]:
+    every package ok except internal/db and internal/api; 46 failing tests = 44 "null value in column
+    referral_code" fixture failures (briefing, crystallization, GetHardcoreUnsolved, GetRecentVictories,
+    GetRisingIdeas, GetTrendingNow, GetYouMightLike, GetPlatformPulse, FindByAuthProvider...) +
+    TestIPFSHealthEndpoint (local IPFS on 5001 answers, recorded pre-existing by idx 52) +
+    TestSearch_MinSimilarity_HonestFilter ("got total=2": the fixture cleanup failed on
+    approaches_problem_id_fkey, so the previous test's "zebracorn alpha" post (similarity 1.0) stayed;
+    [REAL, psql] 6 zebracorn POSTS, 0 zebracorn replies -> not reply matches). Same count (46) as the
+    recorded fresh-DB baseline; it passed in the targeted fresh run above.
+  LIVE PROBE [REAL, /tmp/solvr_idx53_s1_probe/]: go build ./cmd/api, run on :8096 under env -i
+    (DATABASE_URL=solvr_idx53_fresh, IPFS_API_URL=http://127.0.0.1:9, fake JWT_SECRET, no GROQ key).
+    Two agents registered; POST /v1/posts (no type) -> 201 status pending_review (no GROQ key); POST
+    reply by the other agent "... zyxwaitflag ...". GET /v1/search?q=zyxwaitflag -> total 0 while the post
+    is pending_review (hidden, post AND reply). Post approved by SQL on the local DB (status open,
+    published, approved — simulating moderation). Then: ?q=zyxwaitflag -> total 1, the post (type post,
+    author idx53poster) with matched_replies[0] = the reply id, post_id, url /posts/<post>#<reply>,
+    author idx53replier, no legacy_type, "<mark>zyxwaitflag</mark>" excerpt; &content_types=posts ->
+    total 0 (posts-only unchanged); ?q=zyxwaitflag flaky -> the post once with the anchor; &type=problem ->
+    total 0 (see REMAINING 1). POST /v1/mcp tools/call solvr_search {"query":"zyxwaitflag"} -> "[POST]
+    Probe post ..." + "Matched reply: /posts/<post>#<reply> by idx53replier" + the excerpt. DELETE
+    /v1/replies/<reply> 200 -> search total 0. Server stopped (:8096 free, no process).
+  gofmt -l clean on the 7 files; go vet ./internal/db ./internal/api/handlers ./internal/models clean;
+  check-file-size.sh "Found 34 file(s) exceeding 800 lines" (unchanged; largest touched file 503).
+  Frontend untouched (the response change is additive; /posts search still renders PostCard) - not run.
+
+REMAINING FOR idx 53 (next slices, in order):
+  1. Step 3, legacy filters: `type` (problem|question|idea) now EXCLUDES canonical posts (type 'post'):
+     live probe &type=problem -> 0. Decide/implement: drop or reject `type` (and the problem-only
+     `status` values) on /v1/search, remove the type arg from MCP solvr_search (backend + mcp-server),
+     SDK SearchOptions.type (3 SDKs), `solvr search --type` (Go CLI, TS CLI), frontend api.search type;
+     content_types=answers|approaches (legacy buckets) -> fold into the default or retire. Docs
+     (skill references, api-docs) teach search without type.
+  2. Step 4: a fixed set of representative queries compared before and after cutover on local data
+     (templates solvr_rehearsal_pristine / solvr_rehearsal_schema113 per memory, or a scratch fixture):
+     the pre-cutover code path vs the canonical path; embeddings: copyLegacyEmbeddings + backfill for
+     replies without one. hybrid_search_replies requires publication_state published+approved, so a
+     CLOSED (archived) post's replies are found by full text but not by the hybrid function — align
+     (migration) or document.
+  3. Step 5 remainder: "counts" (answers/approaches/comments_count on results count system replies as
+     comments), "suggestions" (homepage search pulse / trending terms), min_similarity path.
+  4. Step 6: prove room messages never enter /v1/search and room discovery stays in /v1/rooms.
+  5. Frontend /posts search: render each matched reply excerpt linking to its url (dumb rendering).
+  NOTE (pre-existing, not changed): Search() sorts merged results by score, so sort=newest|votes|activity
+  are overridden in the repository (now stable on ties).
+
+git status at journal time [REAL]: 3 M (backend/internal/api/handlers/mcp.go, backend/internal/db/search.go,
+  backend/internal/models/search.go) + 4 ?? (backend/internal/api/handlers/search_canonical_test.go,
+  backend/internal/db/search_canonical.go, backend/internal/db/search_canonical_fold_test.go,
+  backend/internal/db/search_canonical_test.go) + this progress.txt entry. spec.json unchanged (passes
+  stays false).

@@ -148,6 +148,28 @@ func operationSchemas() map[string]interface{} {
 			"supersedes_entry_id", typed("integer", "format", "int64"),
 			"client_entry_id", typed("string", "description", "Caller-chosen id that makes the write retry-safe; scoped to the authenticated actor."),
 		)),
+		"RoomStreamFrame", objectOf(obj(
+			"id", typed("integer", "format", "int64", "description", "The entry id, also the frame's SSE id; absent on presence and room-update frames."),
+			"sequence", typed("integer", "description", "The entry's position in the room's timeline; absent on presence and room-update frames."),
+			"type", typed("string", "description", "message, event (a typed event), presence_join, presence_leave or room_update; also the frame's SSE event name."),
+			"room_id", uuidStr(), "agent_name", typed("string"),
+			"event", typed("string", "description", "The typed event name (type event)."),
+			"issue", typed("string", "description", "The issue a typed event belongs to."),
+			"payload", typed("object", "description", "On a message frame, the RoomStreamMessage; on a typed event frame, the event (id, room_id, sequence, type, issue, actor, payload, created_at)."),
+			"timestamp", stamp(),
+		), "type", "room_id", "timestamp"),
+		"RoomStreamMessage", objectOf(obj(
+			"id", typed("integer", "format", "int64", "description", "The entry id."), "room_id", uuidStr(),
+			"author_type", typed("string", "enum", []string{"human", "agent"}), "author_id", typed("string"),
+			"agent_name", typed("string", "description", "The author's actor label."),
+			"content", typed("string", "description", "The message text (the entry's body)."), "content_type", typed("string"),
+			"metadata", typed("object", "description", "The entry's extension."),
+			"reply_to_entry_id", typed("integer", "format", "int64"),
+			"addressed_member_ids", typed("array", "items", typed("string")),
+			"sequence_num", typed("integer", "description", "The entry's sequence."),
+			"pinned_at", stamp(), "supersedes_entry_id", typed("integer", "format", "int64"),
+			"created_at", stamp(),
+		), "id", "room_id", "author_type", "agent_name", "content", "content_type", "created_at"),
 
 		"ReplyAuthor", objectOf(obj(
 			"id", typed("string"), "type", typed("string", "enum", []string{"human", "agent", "system"}),

@@ -116,8 +116,9 @@ func roomPaths() map[string]interface{} {
 					queryParam("type", "Only frames of this hub event type or typed event name.", obj("type", "string")),
 					queryParam("issue", "Only typed events of this issue.", obj("type", "string")),
 				},
-				"responses", withErrors(obj("200", obj("description", "An event stream",
-					"content", obj("text/event-stream", obj("schema", obj("type", "string"))))), "400", "401", "403", "404", "503"),
+				"responses", withErrors(obj("200", obj("description", "An event stream. The data of every frame is a RoomStreamFrame (x-solvr-frame-schema), except the access_revoked and credential_rotated frames that end a stream, which carry {code, message}.",
+					"content", obj("text/event-stream", obj("schema", obj("type", "string"),
+						"x-solvr-frame-schema", ref("schemas", "RoomStreamFrame"))))), "400", "401", "403", "404", "503"),
 			),
 		),
 	)

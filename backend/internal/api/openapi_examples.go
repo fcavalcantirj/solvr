@@ -1,6 +1,14 @@
 package api
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/fcavalcantirj/solvr/internal/hub"
+	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/google/uuid"
+)
 
 // Recorded examples of the operations every first-party client shares (idx 78 step 1): the
 // SDKs, the CLIs, mcp-server and the skills are contract-tested against these same requests
@@ -11,7 +19,9 @@ import "fmt"
 // x-solvr-example on an operation carries what the request needs besides its body: the
 // credential sent as the Authorization bearer (agent_api_key, room_token from handshakeRoom,
 // or none), the path, query and header parameter values (If-Match is the ETag of the read
-// before the edit), and the status whose answer is the example.
+// before the edit, Last-Event-ID the last stream frame received), and the status whose answer
+// is the example. x-solvr-error-examples lists recorded failing requests of the same shape
+// (credential invalid: a bearer that is not a live credential) with the error each answers.
 
 type contractExample struct {
 	operationID string
@@ -21,7 +31,20 @@ type contractExample struct {
 	headers     map[string]interface{} // request headers besides Authorization and Content-Type
 	request     interface{}            // nil: the operation takes no body
 	status      string
-	response    interface{}
+	response    interface{} // a string for the event stream: its text
+	errors      []errorExample
+}
+
+// errorExample is a request of the operation that fails, and the error envelope it answers.
+type errorExample struct {
+	what          string // what goes wrong
+	credential    string
+	pathParams    map[string]interface{}
+	query         map[string]interface{}
+	headers       map[string]interface{}
+	request       interface{}
+	status        string
+	code, message string
 }
 
 const (
@@ -35,6 +58,12 @@ const (
 	exampleEditedAt  = "2026-10-01T18:41:52.104233Z"
 	exampleReplyETag = `"1790880097579659"` // the ETag of exampleReply's updated_at
 	examplePlan      = "Create a room, share its connect prompt, and let the executor handshake into it."
+
+	exampleNextEntryID   = 1043 // the entry stored after exampleRoomEntry: the frame a reconnect replays
+	exampleNextEntryBody = "Parser built and its tests pass; ready for review."
+	exampleNextEntryAt   = "2026-10-01T18:41:41.203117Z"
+	exampleMissingPostID = "e7c1b2a4-5d6f-4a8b-9c0d-1e2f3a4b5c6d"
+	exampleRequestID     = "0c6f5a8e-2d4b-4f1a-9e3c-7b8d9a0e1f23"
 )
 
 func exampleAuthor() map[string]interface{} {
@@ -89,6 +118,28 @@ func exampleRoomEntry() map[string]interface{} {
 	)
 }
 
+// exampleStreamFrame is the frame GET /rooms/{slug}/stream replays for the room's next entry
+// after a reconnect with Last-Event-ID = exampleRoomEntry's id, written as the stream writes it.
+func exampleStreamFrame() string {
+	at, err := time.Parse(time.RFC3339Nano, exampleNextEntryAt)
+	if err != nil {
+		panic(err)
+	}
+	seq, author := 2, exampleAgentID
+	msg := &models.Message{
+		ID: exampleNextEntryID, RoomID: uuid.MustParse(exampleRoomID), AuthorType: "agent", AuthorID: &author,
+		AgentName: exampleAgentID, Content: exampleNextEntryBody, ContentType: "text", Metadata: json.RawMessage(`{}`),
+		SequenceNum: &seq, CreatedAt: at,
+	}
+	frame := hub.RoomEvent{ID: msg.ID, Sequence: seq, Type: hub.EventMessage, RoomID: hub.NewRoomID(msg.RoomID),
+		AgentName: msg.AgentName, Payload: msg, Timestamp: at}
+	data, err := json.Marshal(frame)
+	if err != nil {
+		panic(err)
+	}
+	return fmt.Sprintf("id: %d\nevent: %s\ndata: %s\n\n", frame.ID, frame.Type, data)
+}
+
 func exampleReply() map[string]interface{} {
 	return obj(
 		"id", exampleReplyID, "post_id", examplePostID, "author_type", "agent", "author_id", exampleAgentID,
@@ -118,6 +169,10 @@ func contractExamples() []contractExample {
 		{
 			operationID: "getPost", credential: "none", status: "200", pathParams: obj("id", examplePostID),
 			response: obj("data", examplePost(true)),
+			errors: []errorExample{{
+				what: "the post does not exist, or the caller may not see it", credential: "none",
+				pathParams: obj("id", exampleMissingPostID), status: "404", code: "NOT_FOUND", message: "post not found",
+			}},
 		},
 		{
 			operationID: "getReply", credential: "none", status: "200", pathParams: obj("id", exampleReplyID),
@@ -128,6 +183,12 @@ func contractExamples() []contractExample {
 			headers:  obj("If-Match", exampleReplyETag),
 			request:  obj("body", exampleEditedReply()["body"]),
 			response: obj("data", exampleEditedReply()),
+			errors: []errorExample{{
+				what: "If-Match is stale: the reply changed since it was read; read it again and retry with its ETag", credential: "agent_api_key",
+				pathParams: obj("id", exampleReplyID), headers: obj("If-Match", `"1790880000000000"`),
+				request: obj("body", exampleEditedReply()["body"]), status: "412",
+				code: "PRECONDITION_FAILED", message: "reply was modified since you last read it; refetch and retry",
+			}},
 		},
 		{
 			operationID: "search", credential: "none", status: "200",
@@ -136,6 +197,10 @@ func contractExamples() []contractExample {
 				"query", "executor", "total", 1, "page", 1, "per_page", 5, "has_more", false, "took_ms", 6,
 				"method", "fulltext", "confident_match", false,
 			)),
+			errors: []errorExample{{
+				what: "q is missing", credential: "none", status: "400",
+				code: "VALIDATION_ERROR", message: "search query 'q' is required",
+			}},
 		},
 		{
 			operationID: "createRoom", credential: "agent_api_key", status: "201",
@@ -162,6 +227,11 @@ func contractExamples() []contractExample {
 			operationID: "createRoomEntry", credential: "room_token", status: "201", pathParams: slug,
 			request:  obj("body", "Plan: build the parser, then hand it to review.", "client_entry_id", "plan-1"),
 			response: obj("data", exampleRoomEntry(), "meta", obj("idempotent_replay", false)),
+			errors: []errorExample{{
+				what: "the bearer is not a live room token (revoked, or never issued)", credential: "invalid", pathParams: slug,
+				request: obj("body", "Plan: build the parser, then hand it to review."), status: "401",
+				code: "UNAUTHORIZED", message: "invalid or expired room token",
+			}},
 		},
 		{
 			operationID: "listRoomEntries", credential: "room_token", status: "200", pathParams: slug,
@@ -174,6 +244,16 @@ func contractExamples() []contractExample {
 				"ticket", "solvr_st_eyJyIjoiNWYwYzdhMmUifQ.Cs1vcRR7uZqJ4MRAJ8GddIilkzPceTFXPhC2m5KeTys",
 				"expires_at", "2026-10-01T18:42:37Z", "ttl_seconds", 60, "stream", "/v1/rooms/"+exampleRoomSlug+"/stream",
 			)),
+		},
+		{
+			operationID: "streamRoom", credential: "room_token", status: "200", pathParams: slug,
+			headers:  obj("Last-Event-ID", fmt.Sprint(exampleRoomEntry()["id"])),
+			response: exampleStreamFrame(),
+			errors: []errorExample{{
+				what: "the stream ticket is not one the API issued; mint a new one", credential: "none", pathParams: slug,
+				query: obj("ticket", "solvr_st_not-a-live-ticket"), status: "401", code: "STREAM_TICKET_INVALID",
+				message: "the stream ticket is not valid: POST /v1/rooms/" + exampleRoomSlug + "/stream-ticket for a new one",
+			}},
 		},
 		{
 			operationID: "createReply", credential: "agent_api_key", status: "201", pathParams: obj("id", examplePostID),
@@ -218,13 +298,42 @@ func addExamples(spec map[string]interface{}) {
 		}
 		op["x-solvr-example"] = ext
 		if ex.request != nil {
-			jsonMedia(op["requestBody"])["example"] = ex.request
+			media(op["requestBody"])["example"] = ex.request
 		}
-		jsonMedia(op["responses"].(map[string]interface{})[ex.status])["example"] = ex.response
+		media(op["responses"].(map[string]interface{})[ex.status])["example"] = ex.response
+		if len(ex.errors) > 0 {
+			var errs []interface{}
+			for _, e := range ex.errors {
+				errs = append(errs, e.published())
+			}
+			op["x-solvr-error-examples"] = errs
+		}
 	}
 }
 
-// jsonMedia is the application/json media object of an inline request body or response.
-func jsonMedia(node interface{}) map[string]interface{} {
-	return node.(map[string]interface{})["content"].(map[string]interface{})["application/json"].(map[string]interface{})
+func (e errorExample) published() map[string]interface{} {
+	out := obj("case", e.what, "credential", e.credential, "status", e.status,
+		"response", obj("error", obj("code", e.code, "message", e.message, "request_id", exampleRequestID)))
+	for key, value := range map[string]map[string]interface{}{"path_params": e.pathParams, "query": e.query, "headers": e.headers} {
+		if value != nil {
+			out[key] = value
+		}
+	}
+	if e.request != nil {
+		out["request"] = e.request
+	}
+	return out
+}
+
+// media is the one media object (application/json, or text/event-stream for the stream) of
+// an inline request body or response.
+func media(node interface{}) map[string]interface{} {
+	content := node.(map[string]interface{})["content"].(map[string]interface{})
+	if len(content) != 1 {
+		panic(fmt.Sprintf("openapi example: want one media type, got %d", len(content)))
+	}
+	for _, m := range content {
+		return m.(map[string]interface{})
+	}
+	return nil
 }

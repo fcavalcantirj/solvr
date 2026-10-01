@@ -8400,3 +8400,119 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-01 16:45 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 3: watch + errors. GET /rooms/{slug}/stream (streamRoom) now publishes the schema of its frames' data
+(RoomStreamFrame / RoomStreamMessage, pinned to hub.RoomEvent / models.Message) and a recorded reconnect example
+(Last-Event-ID = the createRoomEntry example's entry, one replayed message frame), held to a real replayed frame.
+Five shared operations publish a recorded error answer (x-solvr-error-examples), each held to the running API.
+13 operations in contract/openapi-examples.json; each now carries response_media_type and errors[].
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT. 24/67
+  acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 2 (HEAD a01aa2a7), REMAINING item 3. Tree clean at start.
+
+SPIKE [REAL, throwaway zz_idx78s3_spike_test.go, deleted; /tmp/solvr_idx78_s3/spike.txt] against
+  setupRoomTestServer (local DB): two entries A (seq 1) and B (seq 2); GET /v1/rooms/{slug}/stream with the room
+  token as bearer + Last-Event-ID: A, and with ?ticket=&after=A, both answered 200 text/event-stream and the SAME
+  first frame: `id: <B>` / `event: message` / `data: {id, sequence, type, room_id, agent_name, payload: {id, room_id,
+  author_type, author_id, agent_name, content, content_type, metadata, sequence_num, created_at}, timestamp}`.
+  Candidate errors: getPost unknown uuid 404 NOT_FOUND "post not found"; entry with a bogus room token 401
+  UNAUTHORIZED "invalid or expired room token"; stream ?ticket=bogus 401 STREAM_TICKET_INVALID (message names the
+  slug); updateReply stale If-Match 412 PRECONDITION_FAILED (+ current ETag header), no If-Match 428; search without
+  q 400 VALIDATION_ERROR; search with an unknown param 200 + meta.warnings; stream with an unknown param 400
+  VALIDATION_ERROR; createRoom duplicate slug 409 DUPLICATE_ROOM; handshake on a missing room 404.
+  [REAL code read] writeSSEEvent names a typed-event frame `event: event` (evt.Type), not its event name.
+
+WHAT CHANGED [REAL, git status --porcelain: M openapi_examples.go, M openapi_examples_check_test.go,
+  M openapi_examples_live_test.go, M openapi_examples_test.go, M openapi_operation_schemas.go, M openapi_paths.go,
+  M openapi_room_paths.go (all backend/internal/api/), M contract/openapi-examples.json, ?? openapi_examples_errors_
+  test.go, ?? openapi_examples_stream_test.go; git diff --stat: 8 files, 498+/44-]:
+  PRODUCTION:
+  M openapi_operation_schemas.go (+22): components RoomStreamFrame (the 9 fields of hub.RoomEvent; required type,
+    room_id, timestamp; payload described per frame type) and RoomStreamMessage (the 14 JSON fields of
+    models.Message; required id, room_id, author_type, agent_name, content, content_type, created_at).
+  M openapi_room_paths.go (+3/-2): streamRoom 200 text/event-stream media gains x-solvr-frame-schema ->
+    RoomStreamFrame; the 200 description says every frame's data is one, except access_revoked/credential_rotated
+    ({code, message}).
+  M openapi_paths.go (1 line): getPost 404 is the shared NotFound row ($ref components.responses, which names
+    NOT_FOUND and carries X-Request-ID) instead of the legacy inline "Not found" (869 lines, unchanged count).
+  M openapi_examples.go (230 -> 339): streamRoom example (credential room_token, headers Last-Event-ID = the
+    createRoomEntry example's id 1042, response = the event-stream text of entry 1043 built by json.Marshal of a
+    real hub.RoomEvent carrying a real models.Message, formatted as writeSSEEvent writes it); errorExample and
+    x-solvr-error-examples [{case, credential, status, path_params?, query?, headers?, request?, response: {error:
+    {code, message, request_id}}}] on getPost (404 NOT_FOUND, missing id), updateReply (412 PRECONDITION_FAILED,
+    stale If-Match), search (400 VALIDATION_ERROR, no q), createRoomEntry (401 UNAUTHORIZED, credential "invalid"),
+    streamRoom (401 STREAM_TICKET_INVALID, ticket not issued); messages verbatim from the spike. jsonMedia ->
+    media (the one media object: application/json or text/event-stream; panics on more than one).
+  M contract/openapi-examples.json (454 -> 597, regenerated with SOLVR_WRITE_CLIENT_CONTRACT=1): 13 operations
+    (+streamRoom); every operation gains response_media_type and errors[] ({} / [] when none); description explains
+    credential invalid, Last-Event-ID, the event-stream body and error.code.
+  TESTS:
+  ?? openapi_examples_stream_test.go (103): parseSSE (reuses the package's sseFrame), FrameSchemasDescribeTheJSON
+    TheStreamWrites (schemas vs hub.RoomEvent/models.Message + x-solvr-frame-schema), TheExampleIsAReplayedFrameOf
+    ItsSchema (one frame, event message, SSE id = data.id = payload.id, sequence = stored + 1, room ids agree, both
+    schemas validate), TestParseSSE_ReadsFramesAndSkipsCommentsAndRetries.
+  ?? openapi_examples_errors_test.go (92): EachFamilyPublishesAnErrorExample (the 5 operations and codes),
+    ErrorExamplesAreDeclaredAndValid (status declared on the operation, envelope validates, the code is named in the
+    declared row's description, params declared, credential known incl. invalid).
+  M openapi_examples_check_test.go: publishedExample gains MediaType and Errors (reads text/event-stream examples
+    and x-solvr-error-examples with the declared row's schema).
+  M openapi_examples_test.go: sharedClientOperations + streamRoom (after createRoomStreamTicket); fixture gains
+    response_media_type and errors (orEmpty helper replaces the three nil checks; same output for the old fields).
+  M openapi_examples_live_test.go (140 -> 260): streamRoom: stores the room's next entry (the example frame's
+    content, client_entry_id build-1), reconnects with Last-Event-ID = the entry createRoomEntry stored, reads the
+    first frame with an id under a 5 s context (timeout-guarded), holds it to the example (event, id = the next
+    entry, both schemas, shape). Then every error example is sent (demo slug/post/reply -> this run's, any other
+    value verbatim; credential invalid -> a non-live solvr_rt_ token) and must answer its status and code, validate
+    against the row's schema and match the example's shape. No existing assertion removed or loosened; no test
+    deleted or skipped. No migration. Frontend untouched. SPEC.md untouched.
+
+VERIFICATION [this session; DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+  solvr-postgres, schema 132); logs in /tmp/solvr_idx78_s3/]:
+  [TEST] RED (tdd/red.log): EachFamilyPublishesAnErrorExample, ErrorExamplesAreDeclaredAndValid, the live test,
+    FrameSchemas..., TheExampleIsAReplayedFrame..., SharedOperationsCarryAnExample, ClientFixture FAIL;
+    TestParseSSE PASS (helper).
+  [TEST] GREEN: green1.log showed my live reader parsing a half-read frame (fixed: parse at the blank line);
+    green2.log live PASS; tdd/green.log -run 'TestOpenAPI|TestParseSSE|TestDiscovery' -v: 51 PASS 0 FAIL 0 SKIP.
+  MUTATIONS [TEST] (mut/m1..m6.log), each FAILS as intended, sources restored, `shasum -c mut/orig.sha` OK:
+    m1 example frame without sequence_num -> live `the API answered field "sequence_num" the example omits` +
+    stream example test + golden; m2 rooms error code INVALID_TOKEN -> live `the error code` + family test + golden;
+    m3 Last-Event-ID 1041 -> stream example test + golden; m4 x-solvr-frame-schema renamed -> FrameSchemas test;
+    m5 getPost 404 back to ref404() -> `the 404 row does not name NOT_FOUND`; m6 production writeSSEEvent stops
+    writing `id:` -> live `no frame within 5s` (context deadline exceeded at 5.24 s: the guard holds).
+  [TEST] PACKAGES (pkg.log, once): go test ./internal/api/... -count=1 -p 1 -v -> handlers ok, middleware ok,
+    response ok, internal/api FAIL (296 s): 1969 PASS 11 FAIL 7 SKIP; the 50 TestOpenAPI*/TestParseSSE PASS, none
+    FAIL/SKIP. 8 failures are in the slice-2/idx77-s24 baselines (CreateRateLimit x2, HomepageOverview,
+    HomepageSearch x4 incl. ChartAddsUp, IPFSHealth). 3 others, all shared test-DB residue (duplicate keys):
+    TestAgentClaim_RetriesAndRaces (users_referral_code_key), TestCommentsCount_IdeasShowCountAfterComment
+    (409 DUPLICATE_NAME agent_cmt_test_362000), TestPinsCreateWithAgentAPIKey (409 pin exists for CID+owner) ->
+    fresh.log on a fresh DB migrated to 132 (solvr_idx78s3_fresh, dropped): those 3 + the live examples test
+    4 PASS 0 FAIL 0 SKIP.
+  [REAL] go build ./... ok; go vet ./internal/api ./internal/api/handlers ok; gofmt -l clean on every file this
+    slice wrote or edited; ./scripts/check-file-size.sh -> the same 33 oversize files (openapi_paths.go 869 as at
+    HEAD); no new one.
+  NOT RUN: frontend (no frontend file touched); full serial backend run (only internal/api changed).
+
+FINDINGS, NOT FIXED (step 2 "consistent errors" items for a later slice / owner call):
+  - [REAL spike] GET /search ignores an unknown query parameter (200 + meta.warnings) while GET /rooms/{slug}/stream
+    rejects one (400 VALIDATION_ERROR): two answers to the same client mistake on shared operations.
+  - [REAL spike] createRoom with a taken slug answers 409 DUPLICATE_ROOM, a code the Conflict row does not name.
+  - Error examples carry the body only; the 412's current ETag header is documented on the shared row, not in the
+    example.
+  - Carried: the handshake note points agents at /r/{slug}/*; native replies counted in answers_count.
+
+REMAINING FOR idx 78 (next slices, in order):
+  4.. consumers, one per slice, each a contract test that serves contract/openapi-examples.json (success AND
+    errors[], and the event-stream body for streamRoom) from a local HTTP server and checks the request it sends
+    (method, path, query, headers incl. If-Match/Last-Event-ID, body) + the result/error code it surfaces: Go SDK,
+    TS SDK, Python SDK (adding room create/join/read/send/watch with one naming scheme), then packages/cli, cli/,
+    mcp-server, backend /v1/mcp, skill/scripts.
+  then steps 3, 4 (webhooks: NewWebhooksHandler is mounted by no router; discovery still lists "webhooks"), 5
+    (migration notes, deprecation errors, legacy choices out of first-party clients), 6 (external consumer vs clean
+    + upgraded schema), 7 (participants as collections, third agent without a new room); the consistency findings.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

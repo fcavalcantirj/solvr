@@ -22,7 +22,7 @@ import (
 // (step 2), in the order an agent calls them: the live check sends them in this order.
 var sharedClientOperations = []string{
 	"createPost", "getPost",
-	"createRoom", "handshakeRoom", "createRoomEntry", "listRoomEntries", "createRoomStreamTicket",
+	"createRoom", "handshakeRoom", "createRoomEntry", "listRoomEntries", "createRoomStreamTicket", "streamRoom",
 	"createReply", "listReplies", "getReply", "updateReply", "search",
 }
 
@@ -134,6 +134,20 @@ type clientOperation struct {
 	Headers      map[string]interface{} `json:"headers"`
 	RequestBody  interface{}            `json:"request_body"`
 	Status       int                    `json:"status"`
+	MediaType    string                 `json:"response_media_type"`
+	ResponseBody interface{}            `json:"response_body"`
+	Errors       []clientError          `json:"errors"`
+}
+
+// clientError is one recorded error answer of an operation.
+type clientError struct {
+	Case         string                 `json:"case"`
+	Credential   string                 `json:"credential"`
+	PathParams   map[string]interface{} `json:"path_params"`
+	Query        map[string]interface{} `json:"query"`
+	Headers      map[string]interface{} `json:"headers"`
+	RequestBody  interface{}            `json:"request_body"`
+	Status       int                    `json:"status"`
 	ResponseBody interface{}            `json:"response_body"`
 }
 
@@ -148,25 +162,29 @@ func clientContractFixture(t *testing.T, spec map[string]interface{}) []byte {
 	contract := clientContract{
 		Description: "Generated from the x-solvr-example of each operation in GET /v1/openapi.json by " +
 			"backend/internal/api/openapi_examples_test.go (SOLVR_WRITE_CLIENT_CONTRACT=1). Do not edit by hand. " +
-			"credential names the Authorization bearer: an agent API key, the room token from handshakeRoom, or none. " +
-			"headers are the other request headers the operation needs (If-Match: the ETag of the read before the edit).",
+			"credential names the Authorization bearer: an agent API key, the room token from handshakeRoom, or none " +
+			"(invalid, in errors only: a bearer that is not a live credential). " +
+			"headers are the other request headers the operation needs (If-Match: the ETag of the read before the edit; " +
+			"Last-Event-ID: the last stream frame received). response_media_type text/event-stream means response_body is " +
+			"the event-stream text; each frame's data is a RoomStreamFrame. errors are recorded failing requests and the " +
+			"error the API answers; branch on response_body.error.code.",
 	}
 	for _, ex := range publishedExamples(t, spec) {
 		status, err := strconv.Atoi(ex.Status)
 		require.NoError(t, err)
-		params, query, headers := ex.PathParams, ex.Query, ex.Headers
-		if params == nil {
-			params = map[string]interface{}{}
-		}
-		if query == nil {
-			query = map[string]interface{}{}
-		}
-		if headers == nil {
-			headers = map[string]interface{}{}
+		errors := []clientError{}
+		for _, e := range ex.Errors {
+			errStatus, err := strconv.Atoi(e.Status)
+			require.NoError(t, err)
+			errors = append(errors, clientError{
+				Case: e.Case, Credential: e.Credential, PathParams: orEmpty(e.PathParams), Query: orEmpty(e.Query),
+				Headers: orEmpty(e.Headers), RequestBody: e.Request, Status: errStatus, ResponseBody: e.Response,
+			})
 		}
 		contract.Operations = append(contract.Operations, clientOperation{
 			OperationID: ex.OperationID, Method: ex.Method, Path: "/v1" + ex.Path, Credential: ex.Credential,
-			PathParams: params, Query: query, Headers: headers, RequestBody: ex.Request, Status: status, ResponseBody: ex.Response,
+			PathParams: orEmpty(ex.PathParams), Query: orEmpty(ex.Query), Headers: orEmpty(ex.Headers),
+			RequestBody: ex.Request, Status: status, MediaType: ex.MediaType, ResponseBody: ex.Response, Errors: errors,
 		})
 	}
 	sort.Slice(contract.Operations, func(i, j int) bool {
@@ -178,6 +196,13 @@ func clientContractFixture(t *testing.T, spec map[string]interface{}) []byte {
 	enc.SetIndent("", "  ")
 	require.NoError(t, enc.Encode(contract))
 	return buf.Bytes()
+}
+
+func orEmpty(m map[string]interface{}) map[string]interface{} {
+	if m == nil {
+		return map[string]interface{}{}
+	}
+	return m
 }
 
 func TestOpenAPIExamples_TheClientFixtureIsThePublishedExamples(t *testing.T) {

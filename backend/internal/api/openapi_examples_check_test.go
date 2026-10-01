@@ -28,6 +28,22 @@ type publishedExample struct {
 	Status         string
 	Request        interface{}
 	RequestSchema  interface{}
+	MediaType      string // of the answer: application/json, or text/event-stream for the stream
+	Response       interface{}
+	ResponseSchema interface{}
+	Errors         []publishedError
+}
+
+// publishedError is one entry of an operation's x-solvr-error-examples: a request that fails
+// and the error the API answers, with the schema of the status it answers.
+type publishedError struct {
+	Case           string
+	Credential     string
+	PathParams     map[string]interface{}
+	Query          map[string]interface{}
+	Headers        map[string]interface{}
+	Request        interface{}
+	Status         string
 	Response       interface{}
 	ResponseSchema interface{}
 }
@@ -58,9 +74,27 @@ func publishedExamples(t *testing.T, spec map[string]interface{}) map[string]pub
 			}
 			resp := deref(t, spec, at(t, op, "responses", ex.Status)).(map[string]interface{})
 			if content, ok := resp["content"].(map[string]interface{}); ok {
-				if media, ok := content["application/json"].(map[string]interface{}); ok {
-					ex.Response, ex.ResponseSchema = media["example"], media["schema"]
+				for _, mediaType := range []string{"application/json", "text/event-stream"} {
+					if media, ok := content[mediaType].(map[string]interface{}); ok {
+						ex.MediaType, ex.Response, ex.ResponseSchema = mediaType, media["example"], media["schema"]
+					}
 				}
+			}
+			raw, _ := op["x-solvr-error-examples"].([]interface{})
+			for _, item := range raw {
+				e := item.(map[string]interface{})
+				pe := publishedError{
+					Case: fmt.Sprint(e["case"]), Credential: fmt.Sprint(e["credential"]), Status: fmt.Sprint(e["status"]),
+					Request: e["request"], Response: e["response"],
+				}
+				pe.PathParams, _ = e["path_params"].(map[string]interface{})
+				pe.Query, _ = e["query"].(map[string]interface{})
+				pe.Headers, _ = e["headers"].(map[string]interface{})
+				if row, ok := op["responses"].(map[string]interface{})[pe.Status]; ok {
+					errResp := deref(t, spec, row).(map[string]interface{})
+					pe.ResponseSchema = at(t, errResp, "content", "application/json", "schema")
+				}
+				ex.Errors = append(ex.Errors, pe)
 			}
 			out[ex.OperationID] = ex
 		}

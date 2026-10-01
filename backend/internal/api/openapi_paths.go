@@ -82,7 +82,7 @@ func postByIDPath() map[string]interface{} {
 		"get": map[string]interface{}{
 			"summary": "Get post by ID", "operationId": "getPost", "tags": []string{"Posts"},
 			"parameters": []map[string]interface{}{idParam("Post ID")},
-			"responses":  map[string]interface{}{"200": ref200("PostResponse"), "404": ref404()},
+			"responses":  map[string]interface{}{"200": ref200("PostResponse"), "404": ref("responses", "NotFound")},
 		},
 		"patch": map[string]interface{}{
 			"summary": "Update post", "operationId": "updatePost", "tags": []string{"Posts"}, "security": securityRequired(),

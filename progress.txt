@@ -4013,3 +4013,226 @@ UAT (for when idx 73 closes, not now): the retirements ship with the cutover dep
 
 git status at journal time [REAL]: the 13 M + 1 ?? listed above, plus this entry. spec.json
   unchanged; idx 73 passes stays false.
+
+================================================================================
+2026-10-01 00:20 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and statistics APIs"
+SLICE 5: step 3's RETIRE half, fifth family. The legacy typed reads (family legacy-typed-reads,
+8 GETs): GET /v1/problems/{id}, /v1/questions/{id}, /v1/ideas/{id}, /v1/problems/{id}/approaches,
+/v1/problems/{id}/approaches/{approachId}/history, /v1/problems/{id}/export,
+/v1/questions/{id}/answers, /v1/ideas/{id}/responses now answer every caller 410 ENDPOINT_RETIRED
+naming GET /v1/posts/{id} or GET /v1/posts/{id}/replies and where each legacy field is there,
+published in the served OpenAPI document, SPEC.md 26.7, the /api-docs page and the published API
+reference (step 5). No route of legacy-typed-reads is served any more.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 73, 74, 77-95, 97,
+  98; no open URGENT. idx 24 and 67 stay skipped (acceptance tasks). idx 68: step 1 waits for an
+  owner call, steps 5-6 gated by owner decision 4. idx 73 continues with slice 4's STEP MAP
+  leftover legacy-typed-reads (contribution-listings still needs a canonical list of a user's
+  replies). Tree clean at start; HEAD 7f82647e.
+
+WHY STEP 3 COVERS THESE [INFERRED from code read]: the three single-post GETs were adapters over
+  the canonical read already: findProblem/findQuestion/findIdea call postsRepo.FindByIDForViewer
+  (the repository GET /v1/posts/{id} uses) and 404 a post of another type; questions/ideas also
+  embed up to 100 answers/responses from the legacy tables. The contribution reads read tables the
+  cutover turns into replies: MigrateContributions (approach -> reply legacy_type approach, fields in
+  provenance + labeled Markdown body; answer -> is_accepted in provenance; response ->
+  response_type in provenance) and RemapLegacyRelations (progress note -> child reply legacy_type
+  progress_note; approach relationship -> provenance.approach_relationships of the from-reply with
+  to_reply_id; posts.accepted_answer_id -> the answer's reply id). Export has no canonical renderer:
+  its instructions say so and name the two reads to build it from. Same "adapt = the cutover's
+  migration" reasoning as slice 4. If the owner wants read adapters instead, revert the 8
+  LegacyReadRetirements entries and the router hunk.
+
+CONSUMERS [REAL, grep excluding node_modules/.next/coverage]: frontend lib/api-base.ts
+  getQuestionAnswers/getProblemApproaches/getApproachHistory/exportProblem/getIdeaResponses ->
+  hooks use-question/use-problem/use-idea-responses and copy-research-button, imported only by the
+  app/{problems,questions,ideas}/[id] detail clients, which frontend/middleware.ts 308-redirects to
+  /posts. Dead; left untouched (idx 83, earlier slices' precedent). No call in mcp-server/src,
+  packages/*/src, cli/. skill/skill.json lines 59-60 still advertise "GET/POST
+  /v1/problems/:id/approaches" and "GET/POST /v1/questions/:id/answers" (the POSTs were already
+  retired by idx 52); not touched, no test reads it: for idx 78 (skills consistent).
+
+WHAT CHANGED [REAL, git status --porcelain: 19 M + 1 ??; git diff --stat 384+/258- on tracked files]:
+  PRODUCTION:
+  M backend/internal/api/legacy_read_retirement.go (96 -> 172): legacyPostAsCanonical(type) and
+    consts legacyApproachAsReply, legacyAnswerAsReply, legacyResponseAsReply,
+    legacyContributionListAsReplies; 8 LegacyReadRetirements entries. Single posts: "Call GET
+    /v1/posts/{id}" (+ "and GET /v1/posts/{id}/replies for its answers/responses" for
+    questions/ideas); data is the same post, but the route 404'd another type (check data.type),
+    its user_vote was always null, and the author of a translated post reads the original title and
+    description on the canonical read; question: accepted_answer_id names the accepted answer's
+    reply. Lists: approach/answer/response as a reply (legacy_id, post_id, provenance fields, body;
+    forget_after and archived_at have no canonical equivalent; progress_notes = child replies
+    legacy_type progress_note), replies oldest first (the routes listed newest first), page/per_page
+    -> limit/cursor. History: current = reply legacy_type approach + legacy_id {approachId};
+    relationships in provenance.approach_relationships; history = walk the newest entry's
+    to_reply_id; depth has no equivalent. Export: no canonical export; markdown/token_estimate
+    described; read the post and its replies.
+  M backend/internal/api/router.go (1159 -> 1127): the BART-151 OptionalAuth group (the 8 r.Get
+    mounts) removed; a comment says where they went. problemsHandler/questionsHandler/ideasHandler
+    stay constructed (content gate + moderation wiring use them).
+  M backend/internal/api/handlers/{problems.go (Get, Export), approaches_handler.go
+    (ListApproaches, GetApproachHistory), questions.go (Get, ListAnswers), ideas.go (Get,
+    ListResponses)}: one doc-comment line each, "Unmounted since task idx 73 step 3 retired the
+    route". Code unchanged; their handler unit tests still run.
+  M backend/internal/db/legacy_dependency_registry.go: +1 entry
+    "typeref:internal/api/legacy_read_retirement.go" keep(...): the post-type scanner found the
+    "problem"/"question"/"idea" literals passed to legacyPostAsCanonical (lines 129,132,137); they
+    are 410 text, no branch on post type (precedent: homepage_activity.go keep).
+  M SPEC.md Part 26.7: intro (contribution reads also served through the cutover's replies); 8 new
+    rows generated from the Go table by a throwaway printer test (deleted after use, twice: once
+    more after the vote wording fix below), so the text is identical; closing paragraph on what a
+    typed read's data is after the cutover and that no legacy-typed-reads route is served. 26.2/26.3
+    rows unchanged (the family's Canonical already named both replacements).
+  M frontend/components/api/api-endpoint-data-content.ts (407 -> 330): the 8 live GET entries are
+    retiredEndpoint(...) with the 26.7 texts (consts postAsCanonical, approachAsReply,
+    answerAsReply, responseAsReply, contributionListAsReplies mirror the Go consts).
+  M skill/references/api.md + frontend/public/references/api.md (byte-identical, cmp): line 426 now
+    says the 8 typed reads are retired (410) and where approaches/answers/responses/progress
+    notes/history went; export has no canonical equivalent.
+
+  FINDING DURING THE PROBE [REAL] -> wording fix: the real cutover runner showed the voted answer
+    (legacy upvotes 3, downvotes 1, no vote rows) with score 0. Cause [REAL, code read]: the cutover's
+    vote_scores step (rebuild_vote_scores, migration 000113) recounts reply upvotes/downvotes from
+    CONFIRMED vote rows after RemapContributionVotesAndReports moves the legacy votes; legacy POST
+    /v1/answers/{id}/vote only incremented the counters (db/answers.go VoteOnAnswer, no vote row).
+    Already recorded and accepted in the 2026-09-29 rehearsal ("2 answers lose an upvote with no
+    vote row"). My first text said "upvotes, downvotes unchanged" — wrong; now: "upvotes and
+    downvotes count the confirmed votes the cutover moves from the answer/response to the reply".
+    The test now seeds confirmed/unconfirmed vote rows, runs rebuild_vote_scores('reply', id) on the
+    fixture replies and asserts the recount (legacy counters seeded to different values).
+
+  NEW TEST:
+  A backend/internal/api/router_legacy_typed_reads_test.go (381):
+    TestRetiredTypedReads_CanonicalReadsServeWhatTheRouteServed: legacy problem/question/idea; an
+    older failed approach (assumptions, outcome), a newer one that "updates" it (differs_from, one
+    progress note), a deleted approach; an accepted human answer (posts.accepted_answer_id set), a
+    voted agent answer, a deleted answer; build + critique responses; confirmed vote rows on one
+    answer and one response, an unconfirmed one on the other response. Runs db.MigrateContributions,
+    db.RemapLegacyRelations and rebuild_vote_scores per fixture reply. Subtests: single posts (410,
+    replacement GET /v1/posts/{id}, GET /v1/posts/{id} 200 with id/type/title/author;
+    accepted_answer_id = the accepted answer's reply id), answers, responses, approaches and their
+    progress notes (2 live of 3, provenance fields, body, updated_at, note = child of the newer
+    approach's reply with legacy_id/body/provenance.approach_id/created_at), approach history
+    (approach_relationships entry legacy_id/relation_type/to_approach_id/to_reply_id/created_at, walk
+    ends), export, limit/cursor paging. Every retired answer checked to contain no fixture text.
+  CHANGED EXISTING TESTS (each replaced assertion named with its replacement):
+  - router_legacy_read_retirement_test.go: retiredReadFamilies adds legacy-typed-reads; want-count
+    13 -> 21; retiredReadDestinations and retiredReadFields for the 8 (new vars legacyApproachFields,
+    legacyAnswerFields, legacyResponseFields, legacyListMetaFields). PASS.
+  - router_content_test.go: 6 subtests asserted the typed reads were served: "GET /v1/problems/:id
+    returns single problem or 404" / "GET /v1/questions/:id ..." / "GET /v1/ideas/:id ..." (404 for
+    nonexistent-id) and "GET /v1/problems/:id/approaches returns list" / "GET
+    /v1/questions/:id/answers returns list or 404" / "GET /v1/ideas/:id/responses returns list or 404"
+    (200 or 404). Each now asserts the route is retired (requireRetiredRecorder) and runs the same
+    status assertion on its replacement (GET /v1/posts/nonexistent-id 404; GET
+    /v1/posts/<id>/replies 200 or 404). PASS.
+  - posts_visibility_test.go TestPostVisibility_FamilyPrivate_LeakSweep: step 5 asserted "export:
+    anon/foreign private problem -> 404". Now: export 410 for anon, foreign and sibling with no
+    problem text, and its replacements GET /v1/posts/{id} and /replies 404 for anon and foreign.
+    Step 7 kept its two "answers absent" asserts (still true, 410) and adds: 410 for the sibling
+    too; the answer inserted as the cutover makes it (a reply legacy_type answer) is absent from GET
+    /v1/posts/{id}/replies for anon/foreign and present for the sibling (positive control). Step 10
+    asserted "sibling reads own private question via /questions/{id}" 200 and "foreign 404 on
+    private question via /questions/{id}". Now: the alias answers both 410, and the same 200/404 are
+    asserted on GET /v1/posts/{id}. PASS.
+  - router_optional_auth_contract_test.go: the representative "/v1/problems/0000..." of the BART-151
+    OptionalAuth group was removed with the group (no route left in it); its replacements
+    "/v1/posts/0000..." and "/v1/posts/0000.../replies" (posts OptionalAuth group) are probed
+    instead: 401 INVALID_TOKEN. PASS.
+  - router_status_contract_test.go TestStatusContract_UnknownResourceIDIsNotFound: row "approach
+    history" (404 NOT_FOUND for malformed/absent ids) replaced by "get a post" (GET /v1/posts/{id},
+    same 404 assertions; "list replies on a post" already covers the replies list). The retired route
+    answers 410 for any id: TestLegacyReadRoutes_AnswerTheMigrationErrorToEveryCaller (PASS).
+  - router_legacy_child_visibility_test.go TestLegacyChildRoutes_FollowParentVisibilityAndAbsence
+    Contract: subtest "approach history" asserted 200 with the approach for public and family
+    members, 404 NOT_FOUND without the marker for outsiders and deleted parents, 404 for a wrong
+    problem id. Now every caller on every parent (family, deleted, public) and the wrong problem id
+    get 410 ENDPOINT_RETIRED without the marker (moved below the `retired` helper). Where the
+    replaced visibility is guarded now: TestReplySurfaces_FollowTheParentPostVisibility (replies of
+    family/deleted posts) and TestRetiredTypedReads_* (the approach and its relationships are in
+    those replies), both PASS. Doc comment updated.
+  - internal/jobs/legacy_dropped_routes_test.go TestLegacyDroppedDatabase_GetRoutesExposeOnly
+    LegacyRouteFamilies: the positive control asserted "GET /v1/questions/{id}/answers must reach
+    the dropped answers table" through the served router; after this slice no served GET route
+    reaches a legacy table (log: "0 requests in legacy route families reach dropped legacy tables"),
+    so the control would be vacuous-false. The control now serves the handler that route was mounted
+    on (QuestionsHandler.ListAnswers, kept unmounted) on a probe-only chi router through the same
+    serveRouteProbe/tracer/missingLegacyObject judge and requires "answers" missing. PASS (the in-loop
+    check and the unused slices import removed).
+  - frontend/components/api/api-endpoint-retired.test.ts: 26.7 has 21 rows (was 13); the 8 typed
+    reads must stay on the page and be marked retired with the SPEC replacement and instructions;
+    new it(): their replacements GET /posts/{id} and GET /posts/{id}/replies are documented live,
+    and the 3 contribution lists name "limit (default 50, at most 100) and cursor".
+
+VERIFICATION (DATABASE_URL = local DBs only; never production):
+  RED [TEST, /tmp/solvr_idx73_s5/red.log, solvr_test at 118]: 29x "expected: 410" (actual 200/404)
+    across content, child-visibility, visibility, new test; CoverEvery "Should be true". 0 SKIP.
+    Frontend RED [TEST, fe_red.log]: "to have a length of 21 but got 13", page rows not retired.
+  GREEN targeted [TEST, green2.log, solvr_test, after every edit]: internal/api ok; 68 top-level
+    tests PASS, 0 FAIL, 0 SKIP (new/changed tests, read and write retirements, route families,
+    OpenAPI, published references, status contract, reply visibility, comment lists).
+  jobs [TEST, jobs.log, scratch DBs]: TestLegacyDroppedDatabase_{GetRoutes,WriteRoutes,StaticQueries,
+    ScheduledJobs}* and TestServeRouteProbe_* PASS; "633 GET requests over 125 GET routes", 0
+    requests reach dropped legacy tables, control seen.
+  db registry [TEST, registry.log]: TestLegacyDependencyRegistry_* (incl. CoversThePostTypeReferences)
+    and TestScanLegacyPostTypeReferences_* PASS after the registry entry.
+  FULL BACKEND [TEST, /tmp/solvr_idx73_s5/full1.log, go test ./... -count=1 -p 1 -v, FRESH local DB
+    solvr_idx73_s5_fresh built with `migrate up` to 118; dropped after]: 18 packages ok; internal/api
+    and internal/db FAIL with 49 failing tests. Against slice 4's set (/tmp/solvr_idx73_s4/fails.txt,
+    47): 0 gone, 2 new: (1) TestLegacyDependencyRegistry_CoversThePostTypeReferences — MINE, the
+    typeref scanner (above); fixed by the registry entry, PASS in registry.log; (2)
+    TestSearchAnalyticsRepository_GetTrending "expected 3 test trending results, got 2"
+    (search_analytics_test.go:161) — idx 98's shared-data time-window test (slice 3's set had it,
+    slice 4's did not). Note: the vote-wording edit and the registry entry landed while that run
+    was in progress; internal/api was re-verified by green2.log and internal/db by registry.log. 13
+    SKIPs, the pre-existing set (VOYAGE hybrid search, OAuth integration, Kubo unpin, legacy answers
+    list, E2E list); none mine.
+  FRONTEND [TEST]: npm test 188 files, 1698 tests PASS (fe_full.log; +1 new it()); after the wording
+    fix components/api 7 files, 86 tests PASS (fe_api2.log). typecheck exit 0. eslint on the 2
+    touched TS files exit 0.
+  gofmt -l clean on every touched Go file; go vet ./internal/api ./internal/api/handlers
+    ./internal/jobs clean. check-file-size.sh: 34 violations, the same count (router.go still over,
+    1127); every touched file under 800.
+  solvr_test side effect [REAL]: replies 4082, approaches 566, answers 24 before and after (fixture
+    rows cleaned up, including the test's votes and its owners' reputation_history);
+    reputation_history 10861 -> 10885: FreezeLegacyReputation (inside RemapLegacyRelations) froze
+    24 rows for leftover legacy posts of other tests (idea_posted 10, problem_contributed 14) —
+    idempotent, same class as router_badges_history_test/router_leaderboard_canonical_test.
+  LIVE PROBE [REAL, /tmp/solvr_idx73_s5/probe/probe.sh + probe.out]: fresh local DB at 118 (migrate
+    up), go build ./cmd/api and ./cmd/cutover, API on :8098 under env -i (IPFS_API_URL=
+    http://127.0.0.1:9, fake JWT_SECRET, probe ADMIN_API_KEY). Agent registered; API stopped; legacy
+    problem (2 live approaches + 1 deleted, an "updates" relationship, a progress note), question (2
+    live answers incl. accepted + 1 deleted, accepted_answer_id set), idea (2 responses) seeded by
+    SQL; the REAL cutover runner (cutover --database-url <probe DB> --confirm-prod) exit 0,
+    replies_created 8, pending_after 0. API restarted. The 8 routes: 410 ENDPOINT_RETIRED,
+    retired_route, replacement, instructions, request_id; with an agent key and
+    ?page=2&per_page=5&depth=1: 410, no fixture text. GET /v1/posts/{id}: 200, type
+    problem/question/idea, question accepted_answer_id = the accepted answer's reply id. GET
+    /v1/posts/{id}/replies: problem total 3 (2 approaches with provenance.status failed/working, the
+    newer one's approach_relationships "updates -> <older reply id>", the progress note a child of
+    the newer approach's reply; deleted approach absent), question total 2 (is_accepted true on the
+    accepted one; deleted absent), idea total 2 (response_type build/critique); limit=1 has_more +
+    cursor continues. Neighbors: GET /v1/problems 410, GET /v1/posts/{id}/comments 410, POST
+    /v1/problems/{id}/approaches 410, GET /v1/posts?type=problem 200. /v1/openapi.json: the 8 GET
+    operations deprecated, only "410", x-solvr-retired.replacement as in the table. api.log: 12x200,
+    1x201, 1x400 (GET /v1/users/agent_.../contributions: an agent id is not a user id), 1x404 (GET
+    /v1/agents/{id}/contributions, no such route), 19x410, 0 5xx. Server stopped (:8098 free); probe
+    DB dropped.
+
+STEP MAP (idx 73):
+  1, 2, 4 DONE (earlier slices). 5 DONE for every mapping published so far (SPEC 26.3, 26.5, 26.6,
+    26.7; OpenAPI x-solvr-retired; /api-docs page; the published API reference).
+  3 RETIRE half OPEN:
+    - type-specific-statistics, legacy-feed, legacy-typed-discovery, legacy-comments (reads),
+      legacy-typed-reads (this slice) DONE.
+    - contribution-listings (GET /v1/users/{id}/contributions, GET /v1/me/contributions): Canonical
+      "GET /v1/posts?author_type=&author_id=" lists posts, not a user's replies; needs a canonical
+      way to list a user's replies first (handlers/users_contributions.go labels ParentType from the
+      legacy kind). Not served by legacy tables (the dropped-DB probe passes them).
+UAT (for when idx 73 closes, not now): the retirements ship with the cutover deploy (idx 93).
+
+git status at journal time [REAL]: the 19 M + 1 ?? listed above, plus this entry. spec.json
+  unchanged; idx 73 passes stays false.

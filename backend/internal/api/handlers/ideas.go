@@ -127,6 +127,7 @@ type EvolveRequest struct {
 }
 
 // Get handles GET /v1/ideas/:id - get a single idea with responses.
+// Unmounted since task idx 73 step 3 retired the route (api.LegacyReadRetirements); it goes with the legacy tables.
 // Per FIX-023: Uses findIdea() to find ideas from either postsRepo or ideasRepo.
 func (h *IdeasHandler) Get(w http.ResponseWriter, r *http.Request) {
 	ideaID := chi.URLParam(r, "id")
@@ -176,6 +177,7 @@ type ResponsesListResponse struct {
 }
 
 // ListResponses handles GET /v1/ideas/:id/responses - list responses for an idea.
+// Unmounted since task idx 73 step 3 retired the route (api.LegacyReadRetirements); it goes with the legacy tables.
 // Per FIX-024: Public endpoint (no auth required) to list responses for an idea.
 // Per FIX-023: Uses findIdea() to find ideas from either postsRepo or ideasRepo.
 func (h *IdeasHandler) ListResponses(w http.ResponseWriter, r *http.Request) {

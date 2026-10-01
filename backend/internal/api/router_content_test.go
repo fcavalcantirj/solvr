@@ -39,14 +39,21 @@ func TestProblemsEndpoints(t *testing.T) {
 		requireRetiredRecorder(t, w, "GET /v1/problems")
 	})
 
-	t.Run("GET /v1/problems/:id returns single problem or 404", func(t *testing.T) {
+	t.Run("GET /v1/problems/:id is retired; GET /v1/posts/:id answers 404 for a nonexistent post", func(t *testing.T) {
+		// idx 73: the single-problem read is retired; GET /v1/posts/{id} reads the same post
+		// (TestRetiredTypedReads_CanonicalReadsServeWhatTheRouteServed).
 		req := httptest.NewRequest(http.MethodGet, "/v1/problems/nonexistent-id", nil)
 		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		requireRetiredRecorder(t, w, "GET /v1/problems/{id}")
+
+		req = httptest.NewRequest(http.MethodGet, "/v1/posts/nonexistent-id", nil)
+		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
 		// Should return 404 for nonexistent, not 500 or route error
 		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for nonexistent problem, got %d: %s", w.Code, w.Body.String())
+			t.Errorf("Expected status 404 for nonexistent post, got %d: %s", w.Code, w.Body.String())
 		}
 	})
 
@@ -60,9 +67,15 @@ func TestProblemsEndpoints(t *testing.T) {
 		requireRetiredRecorder(t, w, "POST /v1/problems")
 	})
 
-	t.Run("GET /v1/problems/:id/approaches returns list", func(t *testing.T) {
+	t.Run("GET /v1/problems/:id/approaches is retired; GET /v1/posts/:id/replies returns list or 404", func(t *testing.T) {
+		// idx 73: approaches are replies; GET /v1/posts/{id}/replies lists them.
 		req := httptest.NewRequest(http.MethodGet, "/v1/problems/test-problem-id/approaches", nil)
 		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		requireRetiredRecorder(t, w, "GET /v1/problems/{id}/approaches")
+
+		req = httptest.NewRequest(http.MethodGet, "/v1/posts/test-problem-id/replies", nil)
+		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
 		// Should return 404 for nonexistent problem, or 200 with empty list
@@ -86,13 +99,18 @@ func TestQuestionsEndpoints(t *testing.T) {
 		requireRetiredRecorder(t, w, "GET /v1/questions")
 	})
 
-	t.Run("GET /v1/questions/:id returns single question or 404", func(t *testing.T) {
+	t.Run("GET /v1/questions/:id is retired; GET /v1/posts/:id answers 404 for a nonexistent post", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/questions/nonexistent-id", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
+		requireRetiredRecorder(t, w, "GET /v1/questions/{id}")
+
+		req = httptest.NewRequest(http.MethodGet, "/v1/posts/nonexistent-id", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
 
 		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for nonexistent question, got %d: %s", w.Code, w.Body.String())
+			t.Errorf("Expected status 404 for nonexistent post, got %d: %s", w.Code, w.Body.String())
 		}
 	})
 
@@ -116,10 +134,16 @@ func TestQuestionsEndpoints(t *testing.T) {
 		requireRetiredRecorder(t, w, "POST /v1/questions/{id}/answers")
 	})
 
-	// FIX-022: Test GET /v1/questions/:id/answers endpoint
-	t.Run("GET /v1/questions/:id/answers returns list or 404", func(t *testing.T) {
+	// FIX-022 (viewing answers before answering): answers are replies now (idx 73), listed by
+	// GET /v1/posts/{id}/replies without authentication.
+	t.Run("GET /v1/questions/:id/answers is retired; GET /v1/posts/:id/replies returns list or 404", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/questions/test-question-id/answers", nil)
 		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		requireRetiredRecorder(t, w, "GET /v1/questions/{id}/answers")
+
+		req = httptest.NewRequest(http.MethodGet, "/v1/posts/test-question-id/replies", nil)
+		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
 		// Should return 404 for nonexistent question, or 200 with list
@@ -143,13 +167,18 @@ func TestIdeasEndpoints(t *testing.T) {
 		requireRetiredRecorder(t, w, "GET /v1/ideas")
 	})
 
-	t.Run("GET /v1/ideas/:id returns single idea or 404", func(t *testing.T) {
+	t.Run("GET /v1/ideas/:id is retired; GET /v1/posts/:id answers 404 for a nonexistent post", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/ideas/nonexistent-id", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
+		requireRetiredRecorder(t, w, "GET /v1/ideas/{id}")
+
+		req = httptest.NewRequest(http.MethodGet, "/v1/posts/nonexistent-id", nil)
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, req)
 
 		if w.Code != http.StatusNotFound {
-			t.Errorf("Expected status 404 for nonexistent idea, got %d: %s", w.Code, w.Body.String())
+			t.Errorf("Expected status 404 for nonexistent post, got %d: %s", w.Code, w.Body.String())
 		}
 	})
 
@@ -173,10 +202,16 @@ func TestIdeasEndpoints(t *testing.T) {
 		requireRetiredRecorder(t, w, "POST /v1/ideas/{id}/responses")
 	})
 
-	// FIX-024: Test GET /v1/ideas/:id/responses endpoint
-	t.Run("GET /v1/ideas/:id/responses returns list or 404", func(t *testing.T) {
+	// FIX-024 (viewing responses before responding): responses are replies now (idx 73), listed
+	// by GET /v1/posts/{id}/replies without authentication.
+	t.Run("GET /v1/ideas/:id/responses is retired; GET /v1/posts/:id/replies returns list or 404", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/ideas/test-idea-id/responses", nil)
 		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		requireRetiredRecorder(t, w, "GET /v1/ideas/{id}/responses")
+
+		req = httptest.NewRequest(http.MethodGet, "/v1/posts/test-idea-id/replies", nil)
+		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
 		// Should return 404 for nonexistent idea, or 200 with list

@@ -751,42 +751,10 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 		})
 		r.Post("/blog/{slug}/view", blogHandler.RecordView)
 
-		// BART-151: wrap the problems/questions/ideas GETs in OptionalAuth so a family
-		// caller's identity reaches findProblem/findQuestion/findIdea and it sees its OWN
-		// private posts here too. Omitted credentials see public-only; invalid ones are 401.
-		r.Group(func(r chi.Router) {
-			r.Use(auth.OptionalAuthMiddleware(jwtSecret, apiKeyValidator, userAPIKeyValidator, accounts))
-
-			// Problems endpoints (API-CRITICAL per PRD-v2). The list, GET /v1/problems, is
-			// retired (idx 73 step 3, legacy_read_retirement.go): GET /v1/posts?type=problem.
-			// GET /v1/problems/:id - single problem (no auth required)
-			r.Get("/problems/{id}", problemsHandler.Get)
-			// GET /v1/problems/:id/approaches - list approaches (no auth required)
-			r.Get("/problems/{id}/approaches", problemsHandler.ListApproaches)
-			// GET /v1/problems/:id/approaches/:approachId/history - version chain (no auth required)
-			r.Get("/problems/{id}/approaches/{approachId}/history", problemsHandler.GetApproachHistory)
-			// GET /v1/problems/:id/export - export problem as markdown (no auth required)
-			r.Get("/problems/{id}/export", problemsHandler.Export)
-
-			// Questions endpoints (API-CRITICAL per PRD-v2). The list, GET /v1/questions, is
-			// retired (idx 73 step 3): GET /v1/posts?type=question.
-			// GET /v1/questions/:id - single question (no auth required)
-			r.Get("/questions/{id}", questionsHandler.Get)
-			// GET /v1/questions/:id/answers - list answers (no auth required)
-			// Per FIX-022: Allow viewing answers before answering
-			r.Get("/questions/{id}/answers", questionsHandler.ListAnswers)
-
-			// Ideas endpoints (API-CRITICAL per PRD-v2). The list, GET /v1/ideas, is retired
-			// (idx 73 step 3): GET /v1/posts?type=idea.
-			// GET /v1/ideas/:id - single idea (no auth required)
-			r.Get("/ideas/{id}", ideasHandler.Get)
-			// GET /v1/ideas/:id/responses - list responses (no auth required)
-			// Per FIX-024: Allow viewing responses before responding
-			r.Get("/ideas/{id}/responses", ideasHandler.ListResponses)
-
-			// The comment lists, GET /v1/{posts,approaches,answers,responses}/{id}/comments, are
-			// retired (idx 73 step 3): comments are replies, GET /v1/posts/{id}/replies.
-		}) // end BART-151 OptionalAuth group for problems/questions/ideas GETs
+		// The legacy typed reads (GET /v1/{problems,questions,ideas}, their single-post reads, the
+		// problem's approaches, approach history and export, the question's answers, the idea's
+		// responses) and the comment lists are retired (idx 73 step 3, legacy_read_retirement.go):
+		// GET /v1/posts, GET /v1/posts/{id} and GET /v1/posts/{id}/replies serve them.
 
 		// The legacy WRITE routes (typed creates, approaches, answers, responses, progress
 		// notes, comments and the status commands) are retired: 410 ENDPOINT_RETIRED naming

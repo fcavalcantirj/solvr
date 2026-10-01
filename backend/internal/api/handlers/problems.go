@@ -174,6 +174,7 @@ type CreateProblemRequest struct {
 }
 
 // Get handles GET /v1/problems/:id - get a single problem.
+// Unmounted since task idx 73 step 3 retired the route (api.LegacyReadRetirements); it goes with the legacy tables.
 // Per FIX-023: Uses findProblem() to find problems from either postsRepo or problemsRepo.
 func (h *ProblemsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	problemID := chi.URLParam(r, "id")
@@ -302,6 +303,7 @@ type ProblemExportResponse struct {
 }
 
 // Export handles GET /v1/problems/:id/export - export problem as LLM-friendly markdown.
+// Unmounted since task idx 73 step 3 retired the route (api.LegacyReadRetirements); it goes with the legacy tables.
 // This is a public endpoint (same auth as viewing the problem).
 func (h *ProblemsHandler) Export(w http.ResponseWriter, r *http.Request) {
 	problemID := chi.URLParam(r, "id")

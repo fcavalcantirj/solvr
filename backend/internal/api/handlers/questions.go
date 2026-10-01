@@ -149,6 +149,7 @@ type CreateQuestionRequest struct {
 // Note: VoteRequest is defined in posts.go and shared across handlers.
 
 // Get handles GET /v1/questions/:id - get a single question with answers.
+// Unmounted since task idx 73 step 3 retired the route (api.LegacyReadRetirements); it goes with the legacy tables.
 // Per FIX-023: Uses findQuestion() to find questions from either postsRepo or questionsRepo.
 func (h *QuestionsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	questionID := chi.URLParam(r, "id")
@@ -198,6 +199,7 @@ type AnswersListResponse struct {
 }
 
 // ListAnswers handles GET /v1/questions/:id/answers - list answers for a question.
+// Unmounted since task idx 73 step 3 retired the route (api.LegacyReadRetirements); it goes with the legacy tables.
 // Per FIX-022: Public endpoint (no auth required) to list answers before answering.
 // Per FIX-023: Uses findQuestion() to find questions from either postsRepo or questionsRepo.
 func (h *QuestionsHandler) ListAnswers(w http.ResponseWriter, r *http.Request) {

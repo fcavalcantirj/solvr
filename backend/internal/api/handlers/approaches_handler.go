@@ -32,6 +32,7 @@ type VerifyApproachRequest struct {
 }
 
 // ListApproaches handles GET /v1/problems/:id/approaches - list approaches for a problem.
+// Unmounted since task idx 73 step 3 retired the route (api.LegacyReadRetirements); it goes with the legacy tables.
 // Per FIX-023: Uses findProblem() to find problems from either postsRepo or problemsRepo.
 func (h *ProblemsHandler) ListApproaches(w http.ResponseWriter, r *http.Request) {
 	problemID := chi.URLParam(r, "id")
@@ -461,6 +462,7 @@ func (h *ProblemsHandler) VerifyApproach(w http.ResponseWriter, r *http.Request)
 }
 
 // GetApproachHistory handles GET /v1/problems/:id/approaches/:approachId/history.
+// Unmounted since task idx 73 step 3 retired the route (api.LegacyReadRetirements); it goes with the legacy tables.
 // Returns the version chain for an approach (current + history + relationships).
 // Public endpoint (no auth required).
 func (h *ProblemsHandler) GetApproachHistory(w http.ResponseWriter, r *http.Request) {

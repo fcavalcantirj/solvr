@@ -74,10 +74,9 @@ func newLegacyChildVisibilityFixture(
 	return fixture
 }
 
-// Legacy contribution READ routes remain served during the canonical transition, but their
-// child identifiers must never bypass the owning post's family/deletion rules; valid public
-// history stays readable. The legacy child WRITE routes are retired (task idx 52) and answer
-// every caller the same migration error.
+// A legacy child identifier must never bypass the owning post's family/deletion rules. The
+// legacy child WRITE routes are retired (task idx 52) and the approach history READ route is
+// retired (task idx 73 step 3): each answers every caller the same migration error.
 func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T) {
 	liftCreateLimits(t) // many creates by one identity; the hourly limit is not this test's subject
 	ts, _, pool := newStatusContractServer(t)
@@ -122,35 +121,6 @@ func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T
 		return count
 	}
 
-	t.Run("approach history", func(t *testing.T) {
-		path := func(f legacyChildVisibilityFixture) string {
-			return "/v1/problems/" + f.problem + "/approaches/" + f.approach + "/history"
-		}
-		got := call(t, http.MethodGet, path(public), "", "")
-		require.Equal(t, http.StatusOK, got.status, got.body)
-		require.Contains(t, got.body, marker+" approach")
-
-		for who, bearer := range map[string]string{"family owner": ownerJWT, "sibling agent": siblingKey} {
-			t.Run("family member/"+who, func(t *testing.T) {
-				got := call(t, http.MethodGet, path(family), bearer, "")
-				require.Equal(t, http.StatusOK, got.status, got.body)
-				require.Contains(t, got.body, marker+" approach")
-			})
-		}
-		for who, bearer := range map[string]string{"anonymous": "", "foreign agent": foreignKey, "foreign human": foreignJWT} {
-			t.Run("family outsider/"+who, func(t *testing.T) {
-				notFound(t, call(t, http.MethodGet, path(family), bearer, ""))
-			})
-		}
-		for who, bearer := range map[string]string{"anonymous": "", "owner": ownerJWT, "author": siblingKey} {
-			t.Run("deleted parent/"+who, func(t *testing.T) {
-				notFound(t, call(t, http.MethodGet, path(deleted), bearer, ""))
-			})
-		}
-		notFound(t, call(t, http.MethodGet,
-			"/v1/problems/"+uuid.NewString()+"/approaches/"+public.approach+"/history", "", ""))
-	})
-
 	// The legacy child WRITE routes are retired (task idx 52): progress notes, answer votes and
 	// idea evolution answer the same migration error to every caller on every parent (family,
 	// deleted, public), so the answer carries nothing about the parent and changes nothing.
@@ -165,6 +135,24 @@ func TestLegacyChildRoutes_FollowParentVisibilityAndAbsenceContract(t *testing.T
 	callers := map[string]string{"anonymous": "", "foreign agent": foreignKey, "foreign human": foreignJWT,
 		"family owner": ownerJWT, "sibling agent": siblingKey}
 	parents := map[string]legacyChildVisibilityFixture{"family": family, "deleted": deleted, "public": public}
+
+	// The approach history read is retired too (task idx 73 step 3): every caller gets the same
+	// migration error on every parent and nothing of the approach. The replacement, GET
+	// /v1/posts/{id}/replies, follows the parent's visibility
+	// (TestReplySurfaces_FollowTheParentPostVisibility) and lists the approach as a reply
+	// (TestRetiredTypedReads_CanonicalReadsServeWhatTheRouteServed).
+	t.Run("approach history", func(t *testing.T) {
+		route := "GET /v1/problems/{id}/approaches/{approachId}/history"
+		for parent, f := range parents {
+			for who, bearer := range callers {
+				t.Run(parent+"/"+who, func(t *testing.T) {
+					retired(t, call(t, http.MethodGet, "/v1/problems/"+f.problem+"/approaches/"+f.approach+"/history", bearer, ""), route)
+				})
+			}
+		}
+		retired(t, call(t, http.MethodGet,
+			"/v1/problems/"+uuid.NewString()+"/approaches/"+public.approach+"/history", "", ""), route)
+	})
 
 	t.Run("approach progress", func(t *testing.T) {
 		for parent, f := range parents {

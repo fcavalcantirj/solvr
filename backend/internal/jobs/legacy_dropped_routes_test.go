@@ -9,17 +9,18 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"slices"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/fcavalcantirj/solvr/internal/api"
+	"github.com/fcavalcantirj/solvr/internal/api/handlers"
 	"github.com/fcavalcantirj/solvr/internal/auth"
 	"github.com/fcavalcantirj/solvr/internal/db"
 	"github.com/fcavalcantirj/solvr/internal/hub"
 	"github.com/fcavalcantirj/solvr/internal/models"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -416,9 +417,6 @@ func TestLegacyDroppedDatabase_GetRoutesExposeOnlyLegacyRouteFamilies(t *testing
 		line := fmt.Sprintf("%s (%s) as %s: %d -> %d, missing %v", r.path, r.family, r.caller, b.status, a.status, missing)
 		if legacyRepositoryFamilies[r.family] {
 			expected = append(expected, line)
-			if r.route == "GET /v1/questions/{id}/answers" && slices.Contains(missing, "answers") {
-				controlSeen = true
-			}
 			continue
 		}
 		hidden = append(hidden, line)
@@ -443,7 +441,24 @@ func TestLegacyDroppedDatabase_GetRoutesExposeOnlyLegacyRouteFamilies(t *testing
 		t.Errorf("hidden legacy dependencies: served outside the legacy route families, these fail once the legacy tables are gone:\n%s",
 			strings.Join(hidden, "\n"))
 	}
+
+	// Positive control: the probe must still see a request that reaches a dropped legacy table.
+	// No served route does since the legacy reads were retired (idx 73 step 3), so the control
+	// serves the handler GET /v1/questions/{id}/answers was mounted on until then
+	// (QuestionsHandler.ListAnswers, kept unmounted) through the same probe, tracer and judge.
+	legacy := chi.NewRouter()
+	questions := handlers.NewQuestionsHandler(db.NewQuestionsRepository(d.pool))
+	questions.SetPostsRepository(db.NewPostRepository(d.pool))
+	legacy.Get("/v1/questions/{id}/answers", questions.ListAnswers)
+	control := serveRouteProbe(t, legacy, d.tracer, fx, routeProbeRequest{route: "GET /v1/questions/{id}/answers",
+		family: "legacy-typed-reads", path: "/v1/questions/" + fx.posts["question"] + "/answers", caller: "anonymous"})
+	for _, e := range control.errs {
+		if table, ok := missingLegacyObject(e); ok && table == "answers" {
+			controlSeen = true
+		}
+	}
 	if !controlSeen {
-		t.Errorf("positive control: GET /v1/questions/{id}/answers must reach the dropped answers table")
+		t.Errorf("positive control: the legacy answers list (GET /v1/questions/{id}/answers until idx 73) must reach "+
+			"the dropped answers table; status %d, errors %v", control.status, control.errs)
 	}
 }

@@ -86,9 +86,17 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 	// 4. GET /v1/sitemap/urls — private problem id must never appear (SEO/Google leak)
 	require.False(t, bodyContains("/v1/sitemap/urls", "", privPID), "sitemap: private problem id must be absent")
 
-	// 5. GET /v1/problems/{id}/export — public full-content dump must 404 for non-family
-	require.Equal(t, http.StatusNotFound, getStatus(t, ts.URL+"/v1/problems/"+privPID+"/export", ""), "export: anon private problem -> 404")
-	require.Equal(t, http.StatusNotFound, getStatus(t, ts.URL+"/v1/problems/"+privPID+"/export", agentCKey), "export: foreign private problem -> 404")
+	// 5. GET /v1/problems/{id}/export is retired (idx 73): every caller gets 410 and nothing of the
+	// problem. What it dumped is read through GET /v1/posts/{id} and GET /v1/posts/{id}/replies,
+	// which 404 for non-family.
+	for _, bearer := range []string{"", agentCKey, agentBKey} {
+		require.Equal(t, http.StatusGone, getStatus(t, ts.URL+"/v1/problems/"+privPID+"/export", bearer), "export: retired for every caller")
+		require.False(t, bodyContains("/v1/problems/"+privPID+"/export", bearer, "secret problem "+marker), "export: retired answer reads nothing")
+	}
+	require.Equal(t, http.StatusNotFound, getStatus(t, ts.URL+"/v1/posts/"+privPID, ""), "export replacement: anon private problem -> 404")
+	require.Equal(t, http.StatusNotFound, getStatus(t, ts.URL+"/v1/posts/"+privPID, agentCKey), "export replacement: foreign private problem -> 404")
+	require.Equal(t, http.StatusNotFound, getStatus(t, ts.URL+"/v1/posts/"+privPID+"/replies", ""), "export replacement: anon private problem replies -> 404")
+	require.Equal(t, http.StatusNotFound, getStatus(t, ts.URL+"/v1/posts/"+privPID+"/replies", agentCKey), "export replacement: foreign private problem replies -> 404")
 
 	// 6. Crystallization — a family solved problem is never an IPFS candidate
 	var candidate bool
@@ -101,8 +109,19 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 	require.NoError(t, pool.QueryRow(ctx,
 		`INSERT INTO answers (question_id, author_type, author_id, content) VALUES ($1::uuid,'agent',$2,$3) RETURNING id::text`,
 		privQID, agentAID, "secret answer "+kw).Scan(&privAnsID))
+	// The legacy answer list is retired (idx 73): 410 for every caller, the answer never in it.
 	require.False(t, bodyContains("/v1/questions/"+privQID+"/answers", "", "secret answer "+kw), "answers: private question answers absent for anon")
 	require.False(t, bodyContains("/v1/questions/"+privQID+"/answers", agentCKey, "secret answer "+kw), "answers: private question answers absent for foreign")
+	require.Equal(t, http.StatusGone, getStatus(t, ts.URL+"/v1/questions/"+privQID+"/answers", agentBKey), "answers: retired for family too")
+	// The answer as the cutover migrates it: a reply of the question, listed by GET
+	// /v1/posts/{id}/replies only to the family.
+	_, err := pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id, provenance)
+		VALUES ($1::uuid, 'agent', $2, $3, 'answer', $4, '{"legacy_table":"answers","is_accepted":false}')`,
+		privQID, agentAID, "secret answer "+kw, privAnsID)
+	require.NoError(t, err)
+	require.False(t, bodyContains("/v1/posts/"+privQID+"/replies", "", "secret answer "+kw), "replies: private question answers absent for anon")
+	require.False(t, bodyContains("/v1/posts/"+privQID+"/replies", agentCKey, "secret answer "+kw), "replies: private question answers absent for foreign")
+	require.True(t, bodyContains("/v1/posts/"+privQID+"/replies", agentBKey, "secret answer "+kw), "replies: sibling sees the private question's answers")
 
 	// 8. Write blocked — a foreign agent cannot reply to a private question (parent hidden -> 404).
 	// The legacy answer route is retired (task idx 52): it answers 410 to everyone, which says
@@ -118,11 +137,13 @@ func TestPostVisibility_FamilyPrivate_LeakSweep(t *testing.T) {
 	st, _ := doJSON(t, "POST", ts.URL+"/v1/posts", unclaimedKey, body)
 	require.Equal(t, http.StatusBadRequest, st, "create: unclaimed agent family post -> 400")
 
-	// 10. Family usability — a sibling reads its OWN private question via the /v1/questions/{id}
-	// alias route (OptionalAuth + ctx-scoped findQuestion) and replies to it through the
-	// canonical reply route (the legacy answer route is retired); foreign 404s.
-	require.Equal(t, http.StatusOK, getStatus(t, ts.URL+"/v1/questions/"+privQID, agentBKey), "sibling reads own private question via /questions/{id}")
-	require.Equal(t, http.StatusNotFound, getStatus(t, ts.URL+"/v1/questions/"+privQID, agentCKey), "foreign 404 on private question via /questions/{id}")
+	// 10. Family usability — a sibling reads its OWN private question and replies to it through
+	// the canonical routes; foreign 404s. The /v1/questions/{id} alias is retired (idx 73): 410
+	// to sibling and foreign alike, so it tells neither anything about the question.
+	require.Equal(t, http.StatusGone, getStatus(t, ts.URL+"/v1/questions/"+privQID, agentBKey), "the retired /questions/{id} alias answers the sibling 410")
+	require.Equal(t, http.StatusGone, getStatus(t, ts.URL+"/v1/questions/"+privQID, agentCKey), "the retired /questions/{id} alias answers the foreigner 410")
+	require.Equal(t, http.StatusOK, getStatus(t, ts.URL+"/v1/posts/"+privQID, agentBKey), "sibling reads own private question via /posts/{id}")
+	require.Equal(t, http.StatusNotFound, getStatus(t, ts.URL+"/v1/posts/"+privQID, agentCKey), "foreign 404 on private question via /posts/{id}")
 	stSib, _ := doJSON(t, "POST", ts.URL+"/v1/posts/"+privQID+"/replies", agentBKey, `{"body":"`+strings.Repeat("z", 60)+`"}`)
 	require.NotEqual(t, http.StatusNotFound, stSib, "sibling can participate on its own private question")
 

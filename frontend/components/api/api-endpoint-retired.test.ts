@@ -113,20 +113,33 @@ describe("retired legacy reads on the API docs page", () => {
     "GET /v1/answers/{id}/comments",
     "GET /v1/responses/{id}/comments",
   ];
+  const typedReads = [
+    "GET /v1/problems/{id}",
+    "GET /v1/questions/{id}",
+    "GET /v1/ideas/{id}",
+    "GET /v1/problems/{id}/approaches",
+    "GET /v1/problems/{id}/approaches/{approachId}/history",
+    "GET /v1/problems/{id}/export",
+    "GET /v1/questions/{id}/answers",
+    "GET /v1/ideas/{id}/responses",
+  ];
+  const contributionLists = ["GET /v1/problems/{id}/approaches", "GET /v1/questions/{id}/answers", "GET /v1/ideas/{id}/responses"];
 
-  it("reads all 13 retired reads from SPEC.md 26.7", () => {
-    expect(specRows(READS)).toHaveLength(13);
+  it("reads all 21 retired reads from SPEC.md 26.7", () => {
+    expect(specRows(READS)).toHaveLength(21);
   });
 
-  it("still documents the retired feed routes, typed lists and comment lists, so old callers find the migration", () => {
-    for (const route of [...feed, ...typedLists, ...commentLists]) {
+  it("still documents the retired feed routes, typed lists, comment lists and typed reads, so old callers find the migration", () => {
+    for (const route of [...feed, ...typedLists, ...commentLists, ...typedReads]) {
       expect(pageEndpoint(route), `${route} is not on the page`).toBeDefined();
     }
   });
 
   it("marks every retired read on the page as retired with the SPEC replacement and instructions", () => {
     const onPage = specRows(READS).filter((row) => pageEndpoint(row.route));
-    expect(onPage.map((row) => row.route)).toEqual(expect.arrayContaining([...feed, ...typedLists, ...commentLists]));
+    expect(onPage.map((row) => row.route)).toEqual(
+      expect.arrayContaining([...feed, ...typedLists, ...commentLists, ...typedReads]),
+    );
     for (const row of onPage) {
       const ep = pageEndpoint(row.route)!;
       expect(ep.retired, `${row.route} is not marked retired`).toEqual({
@@ -150,6 +163,18 @@ describe("retired legacy reads on the API docs page", () => {
     expect(list!.params!.map((p) => p.name)).toEqual(expect.arrayContaining(["id", "cursor", "limit"]));
     for (const row of specRows(READS).filter((r) => commentLists.includes(r.route))) {
       expect(row.replacement).toBe("GET /v1/posts/{id}/replies");
+      expect(row.migration).toContain("limit (default 50, at most 100) and cursor");
+    }
+  });
+
+  it("documents GET /posts/{id} and GET /posts/{id}/replies, the typed reads' replacements, as live endpoints", () => {
+    for (const row of specRows(READS).filter((r) => typedReads.includes(r.route))) {
+      expect(["GET /v1/posts/{id}", "GET /v1/posts/{id}/replies"]).toContain(row.replacement);
+      const ep = pageEndpoint(row.replacement!);
+      expect(ep, `${row.replacement} (replacement of ${row.route}) is not documented`).toBeDefined();
+      expect(ep!.retired, `${row.replacement} is itself retired`).toBeUndefined();
+    }
+    for (const row of specRows(READS).filter((r) => contributionLists.includes(r.route))) {
       expect(row.migration).toContain("limit (default 50, at most 100) and cursor");
     }
   });

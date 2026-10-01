@@ -144,7 +144,10 @@ func TestStatusContract_UnknownResourceIDIsNotFound(t *testing.T) {
 		{"edit a reply", "PATCH", "/v1/replies/{id}", agentKey, `{"body":"status contract edit"}`},
 		{"delete a reply", "DELETE", "/v1/replies/{id}", agentKey, ""},
 		{"vote on a reply", "POST", "/v1/replies/{id}/vote", agentKey, `{"direction":"up"}`},
-		{"approach history", "GET", "/v1/problems/" + uuid.NewString() + "/approaches/{id}/history", "", ""},
+		// The legacy typed reads are retired (idx 73 step 3: 410 for any id); the single-post
+		// reads and the export are replaced by GET /v1/posts/{id}, the approach history and the
+		// contribution lists by the replies list above.
+		{"get a post", "GET", "/v1/posts/{id}", "", ""},
 		{"mark a notification read", "POST", "/v1/notifications/{id}/read", agentKey, ""},
 		{"delete a notification", "DELETE", "/v1/notifications/{id}", agentKey, ""},
 		{"get a pin", "GET", "/v1/pins/{id}", agentKey, ""},

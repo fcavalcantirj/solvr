@@ -3495,3 +3495,154 @@ UAT (for when idx 73 closes, not now): the retirements ship with the cutover dep
 
 git status at journal time [REAL]: the 10 M + 2 ?? listed above, plus this entry. spec.json
   unchanged; idx 73 passes stays false.
+
+================================================================================
+2026-09-30 22:50 — Task idx 73 (spec.json, category api) — IN PROGRESS, passes STAYS false
+"Define concrete canonical knowledge endpoints and retire overlapping discovery and statistics APIs"
+SLICE 2: step 3's RETIRE half, second family. GET /v1/feed, /v1/feed/stuck, /v1/feed/unanswered
+(family legacy-feed, adapted by idx 71) now answer every caller 410 ENDPOINT_RETIRED naming
+GET /v1/posts and the exact query that served each route, published in the served OpenAPI
+document, SPEC.md 26.7 and the /api-docs page (step 5).
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 73, 74, 77-95, 97,
+  98; no open URGENT. idx 24 and 67 stay skipped (acceptance tasks). idx 68: step 1 waits for an
+  owner call, steps 5-6 gated by owner decision 4 (slice 4 entry). idx 73 continues with the
+  family slice 1's STEP MAP listed next (legacy-feed). Tree clean at start; HEAD ed88f956.
+
+CONSUMERS OF THE FEED ROUTES [REAL, grep over the repo excluding node_modules/.next/journal]:
+  - frontend/lib/api.ts getStuckProblems (GET /v1/feed/stuck) is called only by
+    components/problems/problems-sidebar.tsx, rendered only by problems-page-client.tsx on
+    /problems, which frontend/middleware.ts 308-redirects to /posts. frontend/lib/api-base.ts
+    getFeed (GET /v1/feed) has no caller. Both dead; left untouched like slice 1's dead stats
+    callers (they go with the legacy pages, idx 83).
+  - /api-docs page (components/api/api-endpoint-data-core.ts "Feed" group) documented the 3 as
+    live: now retired entries (below).
+  - No reference in skill/, frontend/public/references, mcp-server/src, packages/, cli/.
+
+WHAT CHANGED [REAL, git status --porcelain: 13 M; git diff --stat 343+/234-]:
+  PRODUCTION:
+  M backend/internal/api/legacy_read_retirement.go: 3 LegacyReadRetirements entries, replacement
+    GET /v1/posts, instructions = "Call GET /v1/posts?sort=newest" / "?type=problem&needs_help=
+    true&sort=newest" (+ what needs_help lists) / "?type=question&has_answer=false&sort=newest"
+    "with the same query parameters", plus the shared field map (legacyFeedItemsAsPosts):
+    snippet is description, answer_count is answers_count, approach_count is approaches_count,
+    comment_count is comments_count, the rest unchanged, and that invalid or over-50 pagination
+    answers 400 VALIDATION_ERROR instead of being defaulted or clamped. Doc comment updated.
+  M backend/internal/api/router.go (1193 -> 1182): the legacyFeed construction and the 3 r.Get
+    mounts removed (mountRetiredLegacyReads already mounts the table); gofmt removed the 2 blank
+    lines left behind.
+  M backend/internal/api/handlers/legacy_feed.go: doc comment says the adapter is unmounted
+    since idx 73 step 3 and goes with the legacy tables. Code unchanged (kept, unmounted: idx 52
+    precedent, owner decision 4).
+  M backend/internal/db/legacy_dependency_registry.go: text of the pending
+    typeref:internal/api/handlers/legacy_feed.go entry (routes answer 410, unmounted adapter goes
+    with the tables). Disposition unchanged.
+  M SPEC.md Part 26: 26.5 loses the "Legacy feed" adapter block (kept: the needs_help canonical
+    filter sentence) and points to 26.7; 26.7 gets the 3 rows with the exact instructions, and
+    its closing paragraph separates the statistics counts from the feed queries.
+  M frontend/components/api/api-endpoint-data-core.ts (832 -> 785): the Feed group's 3 live
+    entries replaced by retiredEndpoint(...) with replacement GET /v1/posts and the 26.7
+    instructions; group description says they are retired.
+  M frontend/components/api/api-endpoint-data-content.ts: documents GET /posts (the list, the
+    feed's replacement) with type, status, tags, needs_help, has_answer, author_type/author_id,
+    sort, timeframe, page, per_page and a row sample with the canonical count fields. It was
+    not on the page before [REAL, grep].
+  M frontend/components/api/api-endpoint-retired.ts, api-endpoint-types.ts: comments only
+    (a retired route can be a read, 26.7).
+  NEW/CHANGED TESTS:
+  M backend/internal/api/router_legacy_read_retirement_test.go: retiredReadFamilies adds
+    legacy-feed; want-count 3 -> 6; the "data.knowledge.types" check became the per-route
+    retiredReadDestinations map (stats routes still must say data.knowledge.types; feed routes
+    must name their exact GET /v1/posts query); retiredReadFields adds the 12 feed item fields
+    for the feed routes; the SPEC 26.5 check additionally refuses "`GET /v1/...`" of a retired
+    route (stronger; the old "`/v1/...`" check is kept).
+  M backend/internal/api/router_legacy_feed_test.go: REWRITTEN. Seed (seedLegacyFeed) kept.
+    REMOVED adapter tests, behavior the retirement replaces, each with its named replacement:
+    - TestLegacyFeed_ServedByCanonicalPostsList asserted each feed route == its canonical
+      GET /v1/posts query (ids, total, page, per_page, has_more), stuck == {in_progress problem,
+      stuck-approach problem}, unanswered == {unanswered question}, feed == 6 rows. Now:
+      TestRetiredFeed_NamedQueryListsWhatTheRouteListed (route answers 410; the retirement
+      names GET /v1/posts and the query; that query lists exactly those rows; feed 6 rows,
+      total 6, newest first). PASS.
+    - TestLegacyFeed_KeepsFeedItemShape asserted stuck items type problem, snippet from the
+      body, author agent/id/display_name, approach_count 1, answered question answer_count 1.
+      Now: TestRetiredFeed_NamedQueryCarriesEveryFeedItemField (every feed item field present in
+      every canonical row under its own or its moved name; instructions say "<legacy> is
+      <canonical>" for each move; description, tags, status, author, created_at,
+      approaches_count 1, answers_count 1). PASS.
+    - TestLegacyFeed_AnnouncesCanonicalSuccessor asserted Deprecation: true, Link to the query,
+      family legacy-feed with GET /v1/posts in Canonical and each route listed. Now: the query is
+      named in details.instructions (TestRetiredFeed_NamedQueryListsWhatTheRouteListed), and
+      family/canonical/route listing by TestLegacyReadRetirements_CoverEveryRetiredReadFamily
+      AndNameAServedReplacement (Contains(family.Canonical, "GET /v1/posts")). PASS.
+    - TestLegacyFeed_AcceptsLenientLegacyQueryShape asserted per_page=200 clamped to 50,
+      page=abc&per_page=-1 defaulted to 1/20, and pinned filters overriding type/has_answer.
+      Now: TestRetiredFeed_EveryLegacyQueryShapeGetsTheMigrationError (those query shapes all
+      get the identical 410; instructions warn of the 400; the named queries with per_page=200,
+      page=abc, per_page=-1 answer 400 VALIDATION_ERROR). The lenient shape itself stays pinned
+      for typed discovery by router_legacy_discovery_test.go (untouched). PASS.
+    - TestLegacyFeed_EmptyResultIsValidNotError (200, data [] not null, zero meta) moved onto
+      the named queries: TestRetiredFeed_EmptyNamedQueryIsValidNotError. PASS.
+  M backend/internal/api/handlers/feed_test.go: header comment only (where live behavior is
+    guarded now). No assertion touched.
+  M frontend/components/api/api-endpoint-retired.test.ts: specRows takes the SPEC heading;
+    "marks nothing else as retired" now allows the 26.6 AND 26.7 routes (the page may mark a
+    retired read retired; everything else still may not). New describe "retired legacy reads on
+    the API docs page": 26.7 has 6 rows; the 3 feed routes stay on the page; every 26.7 row on
+    the page is marked retired with SPEC replacement and instructions, auth none, no params, the
+    served message; GET /posts is documented live with the filters the instructions name.
+
+VERIFICATION (DATABASE_URL = local DBs only; never production):
+  RED [TEST, /tmp/solvr_idx73_s2/red.log, solvr_test at 118]: "GET /v1/feed has no
+    LegacyReadRetirements entry" (3 new feed tests), "GET /v1/feed/stuck has no retirement
+    entry" (CoverEvery). Frontend RED [TEST, fe_red.log]: "GET /v1/feed is not marked retired",
+    "GET /posts is not documented".
+  GREEN targeted [TEST, green1.log, solvr_test]: 58 PASS, 0 FAIL, 0 SKIP (new/changed tests,
+    write retirements, route families, published docs, discovery, overview, OpenAPI).
+  FULL BACKEND [TEST, /tmp/solvr_idx73_s2/full1.log, go test ./... -count=1 -p 1 -v, on a FRESH
+    local DB solvr_idx73_s2_fresh from all 118 up migrations via psql; dropped after]: 18
+    packages ok; internal/api and internal/db FAIL with 47 failing tests, the IDENTICAL set to
+    slice 1 (/tmp/solvr_idx73_s1/fails.txt; comm shows 0 new, 0 gone): referral_code fixture
+    class, TestIPFSHealthEndpoint (local Kubo is up), TestSearch_MinSimilarity_HonestFilter,
+    TestAgentClaim_RetriesAndRacesLinkTheAgentOnce. 12 SKIPs, all pre-existing (VOYAGE, OAuth,
+    Kubo unpin, legacy answers list); none mine. PASS in the full run: all 4 TestRetiredFeed_*,
+    the 4 read-retirement tests, TestRouteFamilies_* (3),
+    TestLegacyDroppedDatabase_{GetRoutes,WriteRoutes,StaticQueries,ScheduledJobs}*,
+    TestDiscoverLegacySchemaDependencies_EveryCatalogObjectHasADisposition.
+  FRONTEND [TEST, fe_full.log]: npm test 188 files, 1696 tests PASS. typecheck exit 0. eslint
+    on the 5 touched files exit 0.
+  gofmt -l clean on every touched Go file; go vet ./internal/api ./internal/api/handlers
+    ./internal/db clean. check-file-size.sh: 34 violations, same set as slice 1 (router.go
+    still over, 1182).
+  LIVE PROBE [REAL, /tmp/solvr_idx73_s2/probe/]: go build ./cmd/api, run on :8097 under env -i
+    on a fresh local DB at 118 (IPFS_API_URL=http://127.0.0.1:9, fake JWT_SECRET, probe
+    ADMIN_API_KEY). Agent registered 201, POST /v1/posts 201; a problem in_progress and an open
+    question added by SQL on that probe DB. GET /v1/feed, /feed/stuck, /feed/unanswered,
+    /feed?per_page=200, /feed/stuck?page=abc&per_page=-1: 410 ENDPOINT_RETIRED, replacement
+    GET /v1/posts, instructions naming the query, request_id set; /feed/unanswered with an agent
+    key 410. GET /v1/posts?sort=newest&tags=feedprobe 200 (3 rows, count fields present);
+    ?type=problem&needs_help=true&sort=newest 200 (the in_progress problem);
+    ?type=question&has_answer=false&sort=newest 200 (the question); ?per_page=200 400
+    VALIDATION_ERROR. /v1/openapi.json: the 3 /feed operations deprecated, only "410",
+    x-solvr-retired.replacement GET /v1/posts. Neighbors: /v1/stats/problems 410, /v1/overview
+    200, /v1/problems 200, /v1/stats 200, POST /v1/problems 410. api.log: 9x200, 3x201, 1x400,
+    8x410, 0 5xx. Server stopped (:8097 free); probe DB dropped.
+
+STEP MAP (idx 73):
+  1, 2, 4 DONE (earlier slices). 5 DONE for every mapping published so far (SPEC 26.3, 26.5,
+    26.6, 26.7; OpenAPI x-solvr-retired; /api-docs page for writes and the feed).
+  3 RETIRE half OPEN, family by family:
+    - type-specific-statistics DONE (slice 1); legacy-feed DONE (this slice).
+    - legacy-typed-discovery (3): other router tests use GET /v1/problems|questions|ideas as a
+      read probe (router_content_test, router_comments_test, router_content_gate_test,
+      router_moderation_test, router_optional_auth_contract_test); move them to GET
+      /v1/posts?type= first. The /api-docs page documents them live (content groups).
+    - contribution-listings (2): the reachable user profile (contributions-list.tsx) calls GET
+      /v1/users/{id}/contributions; needs a canonical way to list a user's replies first.
+    - legacy-typed-reads + the legacy-comments GETs still read the legacy tables (never adapted);
+      whether step 3 covers them is [UNVERIFIED].
+UAT (for when idx 73 closes, not now): the retirements ship with the cutover deploy (idx 93).
+
+git status at journal time [REAL]: the 13 M listed above, plus this entry. spec.json unchanged;
+  idx 73 passes stays false.

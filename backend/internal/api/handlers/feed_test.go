@@ -10,9 +10,10 @@ import (
 )
 
 // The retired FeedHandler/FeedRepository query stack (idx 72 step 3) was replaced by the
-// LegacyFeedAdapter over the canonical GET /v1/posts list; its live behavior is guarded by
-// internal/api/router_legacy_feed_test.go. models.FeedItem stays alive (the adapter renders
-// canonical rows in that shape), so its shape/serialization guards are kept here.
+// LegacyFeedAdapter over the canonical GET /v1/posts list. Its routes are retired (idx 73 step
+// 3) and the adapter is unmounted; internal/api/router_legacy_feed_test.go pins the canonical
+// queries the 410 names. models.FeedItem stays with the unmounted adapter until the legacy
+// drop, so its shape/serialization guards are kept here.
 
 func TestFeedItem_IncludesRequiredFields(t *testing.T) {
 	now := time.Now()

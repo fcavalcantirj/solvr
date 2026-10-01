@@ -7,6 +7,8 @@ import { Endpoint } from "./api-endpoint-types";
 // idx 52 step 4: the /api-docs page documents every retired legacy write with its canonical
 // replacement. The source is SPEC.md 26.6, whose table the backend test
 // TestLegacyWriteRetirements_PublishedInSpecMigrationNotes pins to the table the router mounts.
+// idx 73 step 5: the same for the retired legacy reads the page documented, from SPEC.md 26.7
+// (pinned by TestLegacyReadRetirements_PublishedInSpecMigrationNotes).
 
 interface SpecRow {
   route: string;
@@ -14,9 +16,9 @@ interface SpecRow {
   migration: string;
 }
 
-function specRows(): SpecRow[] {
+function specRows(heading = "## 26.6 Retired Legacy Writes"): SpecRow[] {
   const spec = readFileSync(resolve(__dirname, "../../../SPEC.md"), "utf8");
-  const start = spec.indexOf("## 26.6 Retired Legacy Writes");
+  const start = spec.indexOf(heading);
   expect(start).toBeGreaterThanOrEqual(0);
   const rest = spec.slice(start + 1);
   const section = rest.slice(0, rest.search(/\n(## |---)/));
@@ -48,6 +50,8 @@ function pageEndpoint(route: string): Endpoint | undefined {
   return allEndpoints().find((e) => routeKey(e.method, e.path) === routeKey(method, path));
 }
 
+const READS = "## 26.7 Retired Legacy Reads";
+
 describe("retired legacy writes on the API docs page", () => {
   it("reads all 19 retired routes from SPEC.md 26.6", () => {
     expect(specRows()).toHaveLength(19);
@@ -72,7 +76,9 @@ describe("retired legacy writes on the API docs page", () => {
   });
 
   it("marks nothing else as retired", () => {
-    const retired = new Set(specRows().map((r) => routeKey(...(r.route.split(" ") as [string, string]))));
+    const retired = new Set(
+      [...specRows(), ...specRows(READS)].map((r) => routeKey(...(r.route.split(" ") as [string, string]))),
+    );
     for (const ep of allEndpoints()) {
       if (ep.retired) {
         expect(retired.has(routeKey(ep.method, ep.path)), `${ep.method} ${ep.path}`).toBe(true);
@@ -95,5 +101,47 @@ describe("retired legacy writes on the API docs page", () => {
     expect(create.params!.map((p) => p.name)).not.toContain("type");
     const reply = pageEndpoint("POST /v1/posts/{id}/replies")!;
     expect(reply.params!.map((p) => p.name)).toEqual(expect.arrayContaining(["body", "parent_reply_id"]));
+  });
+});
+
+describe("retired legacy reads on the API docs page", () => {
+  const feed = ["GET /v1/feed", "GET /v1/feed/stuck", "GET /v1/feed/unanswered"];
+
+  it("reads all 6 retired reads from SPEC.md 26.7", () => {
+    expect(specRows(READS)).toHaveLength(6);
+  });
+
+  it("still documents the retired feed routes, so old callers find the migration", () => {
+    for (const route of feed) {
+      expect(pageEndpoint(route), `${route} is not on the page`).toBeDefined();
+    }
+  });
+
+  it("marks every retired read on the page as retired with the SPEC replacement and instructions", () => {
+    const onPage = specRows(READS).filter((row) => pageEndpoint(row.route));
+    expect(onPage.map((row) => row.route)).toEqual(expect.arrayContaining(feed));
+    for (const row of onPage) {
+      const ep = pageEndpoint(row.route)!;
+      expect(ep.retired, `${row.route} is not marked retired`).toEqual({
+        replacement: row.replacement,
+        migration: row.migration,
+      });
+      expect(ep.auth, `${row.route} reads no credential`).toBe("none");
+      expect(ep.params ?? [], `${row.route} offers no parameters it does not read`).toEqual([]);
+      expect(ep.response).toContain('"code": "ENDPOINT_RETIRED"');
+      expect(ep.response).toContain(`"retired_route": "${row.route}"`);
+      expect(ep.response).toContain(
+        `${row.route} was retired with the canonical knowledge model; use ${row.replacement} instead.`,
+      );
+    }
+  });
+
+  it("documents GET /posts, the feed replacement, with the filters the instructions name", () => {
+    const list = pageEndpoint("GET /v1/posts");
+    expect(list, "GET /posts is not documented").toBeDefined();
+    expect(list!.retired).toBeUndefined();
+    expect(list!.params!.map((p) => p.name)).toEqual(
+      expect.arrayContaining(["type", "needs_help", "has_answer", "sort", "tags", "page", "per_page"]),
+    );
   });
 });

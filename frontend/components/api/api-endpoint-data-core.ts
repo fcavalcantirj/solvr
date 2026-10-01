@@ -1,4 +1,13 @@
 import { EndpointGroup } from "./api-endpoint-types";
+import { retiredEndpoint } from "./api-endpoint-retired";
+
+// How a retired feed item maps onto a GET /posts row (SPEC.md 26.7).
+const feedItemsAsPosts =
+  " Each item of data is a post: snippet is description (the feed cut it to its first 200 bytes), " +
+  "answer_count is answers_count (the feed gave 0 for every type but question), approach_count is " +
+  "approaches_count and comment_count is comments_count; id, type, title, tags, status, author, vote_score " +
+  "and created_at are unchanged. A page or per_page that is not a positive integer, or per_page above 50 " +
+  "answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50.";
 
 export const coreEndpointGroups: EndpointGroup[] = [
   {
@@ -377,72 +386,16 @@ export const coreEndpointGroups: EndpointGroup[] = [
   },
   {
     name: "Feed",
-    description: "Activity feeds and discovery",
+    description: "Retired activity feeds: each names the GET /posts query that served it",
     endpoints: [
-      {
-        method: "GET",
-        path: "/feed",
-        description: "Recent activity feed",
-        auth: "none",
-        params: [
-          { name: "sort", type: "string", required: false, description: "Sort: new, hot, top" },
-          { name: "page", type: "number", required: false, description: "Page number (default: 1)" },
-          { name: "per_page", type: "number", required: false, description: "Results per page (default: 20)" },
-        ],
-        response: `{
-  "data": [
-    {
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "type": "problem",
-      "title": "Memory leak in Go HTTP server",
-      "vote_score": 42,
-      "created_at": "2026-02-05T10:00:00Z"
-    }
-  ],
-  "meta": { "total": 100, "page": 1, "per_page": 20, "has_more": true }
-}`,
-      },
-      {
-        method: "GET",
-        path: "/feed/stuck",
-        description: "Problems needing help (have approaches with status=stuck)",
-        auth: "none",
-        params: [
-          { name: "page", type: "number", required: false, description: "Page number (default: 1)" },
-          { name: "per_page", type: "number", required: false, description: "Results per page (default: 20)" },
-        ],
-        response: `{
-  "data": [
-    {
-      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-      "title": "Cannot reproduce memory issue",
-      "status": "stuck",
-      "stuck_at": "2026-02-04T15:00:00Z"
-    }
-  ],
-  "meta": { "total": 10, "page": 1, "per_page": 20, "has_more": false }
-}`,
-      },
-      {
-        method: "GET",
-        path: "/feed/unanswered",
-        description: "Unanswered questions (zero answers)",
-        auth: "none",
-        params: [
-          { name: "page", type: "number", required: false, description: "Page number (default: 1)" },
-          { name: "per_page", type: "number", required: false, description: "Results per page (default: 20)" },
-        ],
-        response: `{
-  "data": [
-    {
-      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
-      "title": "How to handle concurrent writes?",
-      "created_at": "2026-02-05T09:00:00Z"
-    }
-  ],
-  "meta": { "total": 30, "page": 1, "per_page": 20, "has_more": true }
-}`,
-      },
+      retiredEndpoint("GET", "/feed", "GET /v1/feed", "GET /v1/posts",
+        "Call GET /v1/posts?sort=newest with the same query parameters." + feedItemsAsPosts),
+      retiredEndpoint("GET", "/feed/stuck", "GET /v1/feed/stuck", "GET /v1/posts",
+        "Call GET /v1/posts?type=problem&needs_help=true&sort=newest with the same query parameters: " +
+          "needs_help lists problems in status in_progress or with a stuck approach." + feedItemsAsPosts),
+      retiredEndpoint("GET", "/feed/unanswered", "GET /v1/feed/unanswered", "GET /v1/posts",
+        "Call GET /v1/posts?type=question&has_answer=false&sort=newest with the same query parameters: " +
+          "has_answer=false lists questions without an answer." + feedItemsAsPosts),
     ],
   },
   {

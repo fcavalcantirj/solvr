@@ -5,12 +5,13 @@ export interface Param {
   description: string;
 }
 
-// A legacy write retired at the knowledge-model cutover (SPEC.md 26.6): it answers every
-// caller 410 ENDPOINT_RETIRED and names the canonical route to use instead.
+// A legacy route retired at the knowledge-model cutover (SPEC.md 26.6 writes, 26.7 reads): it
+// answers every caller 410 ENDPOINT_RETIRED and names the canonical route to use instead.
 export interface Retirement {
   // Canonical "METHOD /v1/path" to call instead; null when there is no canonical equivalent.
   replacement: string | null;
-  // The old request shape and the canonical one, as SPEC.md 26.6 states it.
+  // How to move the call, as SPEC.md states it: 26.6's old and canonical request shapes, or
+  // 26.7's instructions.
   migration: string;
 }
 

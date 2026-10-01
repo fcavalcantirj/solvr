@@ -5270,30 +5270,11 @@ where `GET /v1/posts` answers `400 VALIDATION_ERROR`.
 `has_answer=true|false` is a canonical `GET /v1/posts` filter (posts with / without
 answers); `GET /v1/questions?has_answer=` reaches it through the adapter.
 
-**Legacy feed** — `GET /v1/feed`, `GET /v1/feed/stuck`, `GET /v1/feed/unanswered` no
-longer run their own query stack. Each pins its canonical query (caller-supplied values
-for the pinned parameters are overridden), keeps the lenient pagination above, and renders
-the canonical rows in the legacy feed item shape (`snippet` = first 200 bytes of the
-description, `answer_count` = answers for questions and 0 otherwise, `approach_count`,
-`comment_count`, `vote_score`, `author`):
-
-| Legacy route | Served by (and `Link` successor) |
-|---|---|
-| `GET /v1/feed` | `GET /v1/posts?sort=newest` |
-| `GET /v1/feed/stuck` | `GET /v1/posts?type=problem&needs_help=true` |
-| `GET /v1/feed/unanswered` | `GET /v1/posts?type=question&has_answer=false` |
-
-Every response carries `Deprecation: true` and
-`Link: <successor>; rel="successor-version"`.
-
 `needs_help=true` is a canonical `GET /v1/posts` filter: posts with status `in_progress`
 or with a non-deleted approach in status `stuck`.
 
-Behavior changes from the old feed query stack: hidden statuses (`pending_review`,
-`rejected`, `draft`) are excluded as on every canonical list; the caller's own private
-posts are visible to them (BART-151 visibility of `GET /v1/posts`); the feed now honors
-the canonical filters (`tags`, `timeframe`, author); idea `answer_count` is 0 (the canonical
-list has no idea-response count).
+The legacy feed adapters are retired (26.7): each of their routes answers `410` naming the
+`GET /v1/posts` query that served it and how its feed item fields map onto a post.
 
 **Overview knowledge section** — `GET /v1/overview` (and `GET /v1/homepage/overview`) carry
 `data.knowledge`, the one definition of per-type knowledge counts:
@@ -5388,10 +5369,14 @@ and the same `x-solvr-retired` object.
 | `GET /v1/stats/problems` | `GET /v1/overview` | Per-type counts are in data.knowledge.types of GET /v1/overview. In the entry whose type is "problem", total was total_problems and by_status.solved was solved_count. active_approaches, avg_solve_time_days, recently_solved and top_solvers have no canonical equivalent. |
 | `GET /v1/stats/questions` | `GET /v1/overview` | Per-type counts are in data.knowledge.types of GET /v1/overview. In the entry whose type is "question", total was total_questions and with_accepted_reply was answered_count; response_rate was with_accepted_reply * 100 / total. avg_response_time_hours, recently_answered and top_answerers have no canonical equivalent. |
 | `GET /v1/stats/ideas` | `GET /v1/overview` | Per-type counts are in data.knowledge.types of GET /v1/overview. In the entry whose type is "idea", by_status and total were counts_by_status. fresh_sparks, ready_to_develop, top_sparklers, trending_tags, pipeline_stats and recently_realized have no canonical equivalent. |
+| `GET /v1/feed` | `GET /v1/posts` | Call GET /v1/posts?sort=newest with the same query parameters. Each item of data is a post: snippet is description (the feed cut it to its first 200 bytes), answer_count is answers_count (the feed gave 0 for every type but question), approach_count is approaches_count and comment_count is comments_count; id, type, title, tags, status, author, vote_score and created_at are unchanged. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
+| `GET /v1/feed/stuck` | `GET /v1/posts` | Call GET /v1/posts?type=problem&needs_help=true&sort=newest with the same query parameters: needs_help lists problems in status in_progress or with a stuck approach. Each item of data is a post: snippet is description (the feed cut it to its first 200 bytes), answer_count is answers_count (the feed gave 0 for every type but question), approach_count is approaches_count and comment_count is comments_count; id, type, title, tags, status, author, vote_score and created_at are unchanged. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
+| `GET /v1/feed/unanswered` | `GET /v1/posts` | Call GET /v1/posts?type=question&has_answer=false&sort=newest with the same query parameters: has_answer=false lists questions without an answer. Each item of data is a post: snippet is description (the feed cut it to its first 200 bytes), answer_count is answers_count (the feed gave 0 for every type but question), approach_count is approaches_count and comment_count is comments_count; id, type, title, tags, status, author, vote_score and created_at are unchanged. A page or per_page that is not a positive integer, or per_page above 50 answers 400 VALIDATION_ERROR instead of falling back to the default or being clamped to 50. |
 
-The counts these routes served exclude `pending_review`, `rejected` and `draft` posts, as the
-overview knowledge section (26.5) does. Families not in this table keep the disposition and
-runtime behavior recorded above.
+The counts the statistics routes served exclude `pending_review`, `rejected` and `draft` posts,
+as the overview knowledge section (26.5) does. A feed route's query lists what the route listed:
+the feed adapter pinned the same type, filter and `sort=newest`. Families not in this table keep
+the disposition and runtime behavior recorded above.
 
 
 ---

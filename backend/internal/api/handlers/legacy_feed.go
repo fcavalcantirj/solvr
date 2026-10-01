@@ -28,6 +28,8 @@ func LenientLegacyPagination(q url.Values) {
 // /v1/feed/unanswered — family "legacy-feed") through the canonical GET /v1/posts list:
 // each route pins its canonical query, the canonical parser defines filters, ordering,
 // pagination and visibility, and the rows are rendered in the legacy feed item shape.
+// Unmounted since task idx 73 step 3 retired the routes (api.LegacyReadRetirements answers 410
+// naming each query); it goes with the legacy tables.
 type LegacyFeedAdapter struct {
 	repo PostsRepositoryInterface
 }

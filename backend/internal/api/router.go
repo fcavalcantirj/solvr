@@ -357,9 +357,6 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 	searchAnalyticsRepo := db.NewSearchAnalyticsRepository(pool)
 	searchHandler.SetAnalyticsRepo(searchAnalyticsRepo)
 
-	// Legacy feed (GET /feed endpoints) served as adapters over the canonical posts list (task idx 71)
-	legacyFeed := handlers.NewLegacyFeedAdapter(postsRepo)
-
 	// Create content handlers (API-CRITICAL per PRD-v2)
 	problemsHandler := handlers.NewProblemsHandler(problemsRepo)
 	if embeddingService != nil {
@@ -682,14 +679,6 @@ func mountV1Routes(r *chi.Mux, pool *db.Pool, ipfsAPIURL string, embeddingServic
 			unsubHandler := handlers.NewUnsubscribeHandler(db.NewUserRepository(pool), jwtSecret)
 			r.Get("/email/unsubscribe", unsubHandler.Unsubscribe)
 		}
-
-		// Feed endpoints (per SPEC.md Part 5.6 and FIX-004)
-		// GET /v1/feed - recent activity (no auth required)
-		r.Get("/feed", legacyFeed.Feed)
-		// GET /v1/feed/stuck - problems needing help (no auth required)
-		r.Get("/feed/stuck", legacyFeed.Stuck)
-		// GET /v1/feed/unanswered - unanswered questions (no auth required)
-		r.Get("/feed/unanswered", legacyFeed.Unanswered)
 
 		// Stats endpoints (for frontend dashboard)
 		var statsRepo handlers.StatsRepositoryInterface

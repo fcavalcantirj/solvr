@@ -15,13 +15,27 @@ import (
 
 // Task idx 73 step 3, "adapt then retire": the type-specific statistics (GET
 // /v1/stats/problems|questions|ideas) were adapters over the overview knowledge aggregate
-// (idx 72). They are now retired the way the legacy writes were (idx 52): every caller gets
-// the same 410 ENDPOINT_RETIRED naming GET /v1/overview and where each legacy field went, and
-// the API document and SPEC.md Part 26 publish that exact answer (step 5).
+// (idx 72), and the legacy feed (GET /v1/feed, /v1/feed/stuck, /v1/feed/unanswered) an adapter
+// over the canonical GET /v1/posts list (idx 71). They are now retired the way the legacy writes
+// were (idx 52): every caller gets the same 410 ENDPOINT_RETIRED naming the canonical
+// replacement, where the data is there and where each legacy field went, and the API document
+// and SPEC.md Part 26 publish that exact answer (step 5).
 
 // retiredReadFamilies are the RouteFamilies whose GET routes answer the migration error.
 var retiredReadFamilies = map[string]bool{
 	"type-specific-statistics": true,
+	"legacy-feed":              true,
+}
+
+// retiredReadDestinations is where each retired read's data is served now; its instructions
+// must name it exactly. A feed route names the GET /v1/posts query its adapter served.
+var retiredReadDestinations = map[string]string{
+	"GET /v1/stats/problems":  "data.knowledge.types",
+	"GET /v1/stats/questions": "data.knowledge.types",
+	"GET /v1/stats/ideas":     "data.knowledge.types",
+	"GET /v1/feed":            "GET /v1/posts?sort=newest",
+	"GET /v1/feed/stuck":      "GET /v1/posts?type=problem&needs_help=true&sort=newest",
+	"GET /v1/feed/unanswered": "GET /v1/posts?type=question&has_answer=false&sort=newest",
 }
 
 // retiredReadFields are the top-level data fields each retired read used to return; its
@@ -33,7 +47,14 @@ var retiredReadFields = map[string][]string{
 		"recently_answered", "top_answerers"},
 	"GET /v1/stats/ideas": {"counts_by_status", "fresh_sparks", "ready_to_develop", "top_sparklers",
 		"trending_tags", "pipeline_stats", "recently_realized"},
+	"GET /v1/feed":            legacyFeedItemFields,
+	"GET /v1/feed/stuck":      legacyFeedItemFields,
+	"GET /v1/feed/unanswered": legacyFeedItemFields,
 }
+
+// legacyFeedItemFields are the fields of a legacy feed item (models.FeedItem).
+var legacyFeedItemFields = []string{"id", "type", "title", "snippet", "tags", "status", "author", "vote_score",
+	"answer_count", "approach_count", "comment_count", "created_at"}
 
 func TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacement(t *testing.T) {
 	want := map[string]RouteFamily{}
@@ -50,7 +71,7 @@ func TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacem
 			}
 		}
 	}
-	require.Len(t, want, 3, "the GET routes of %v", retiredReadFamilies)
+	require.Len(t, want, 6, "the GET routes of %v", retiredReadFamilies)
 
 	writes := map[string]bool{}
 	for _, w := range LegacyWriteRetirements {
@@ -67,7 +88,9 @@ func TestLegacyReadRetirements_CoverEveryRetiredReadFamilyAndNameAServedReplacem
 			ret.Route, ret.Replacement)
 		require.Contains(t, family.Canonical, ret.Replacement,
 			"%s: the replacement must be the family's recorded canonical destination", ret.Route)
-		require.Contains(t, ret.Instructions, "data.knowledge.types", ret.Route)
+		destination, ok := retiredReadDestinations[ret.Route]
+		require.True(t, ok, "%s: no recorded destination to check", ret.Route)
+		require.Contains(t, ret.Instructions, destination, "%s: name where the data is served now", ret.Route)
 		fields, ok := retiredReadFields[ret.Route]
 		require.True(t, ok, "%s: no legacy field list to check", ret.Route)
 		for _, field := range fields {
@@ -186,6 +209,8 @@ func TestLegacyReadRetirements_PublishedInSpecMigrationNotes(t *testing.T) {
 			"26.7 does not map %s to %s with its instructions", ret.Route, ret.Replacement)
 		_, path, _ := strings.Cut(ret.Route, " ")
 		assert.NotContains(t, section("## 26.5 Runtime Adapters"), "`"+path+"`",
+			"26.5 still describes %s as a served adapter", ret.Route)
+		assert.NotContains(t, section("## 26.5 Runtime Adapters"), "`"+ret.Route+"`",
 			"26.5 still describes %s as a served adapter", ret.Route)
 	}
 }

@@ -30,6 +30,7 @@
  */
 
 export { Solvr } from './client.js';
+export { RoomStream } from './stream.js';
 
 export type {
   // Configuration
@@ -39,13 +40,20 @@ export type {
   PostType,
   PostVisibility,
   PostStatus,
+  PublicationState,
+  ModerationState,
   VoteDirection,
+  AuthorType,
   Author,
   PaginationMeta,
 
   // Search
+  SearchSort,
   SearchOptions,
+  SearchAuthor,
+  SearchReplyMatch,
   SearchResult,
+  SearchMeta,
   SearchResponse,
 
   // Posts
@@ -56,6 +64,8 @@ export type {
   // Replies
   Reply,
   ReplyOptions,
+  CreateReplyInput,
+  UpdateReplyInput,
   ReplyResponse,
   ListRepliesOptions,
   RepliesResponse,
@@ -64,8 +74,30 @@ export type {
   // Voting
   VoteResponse,
 
+  // Rooms
+  Room,
+  CreateRoomInput,
+  RoomResponse,
+  HandshakeRoomInput,
+  RoomHandshake,
+  HandshakeRoomResponse,
+  RoomEntryKind,
+  RoomEntry,
+  CreateRoomEntryInput,
+  RoomEntryResponse,
+  ListRoomEntriesOptions,
+  RoomEntriesResponse,
+  RoomStreamTicket,
+  RoomStreamTicketResponse,
+  StreamRoomOptions,
+  RoomStreamFrameType,
+  RoomStreamFrame,
+  RoomStreamMessage,
+  RoomStreamEvent,
+
   // Errors
   SolvrErrorData,
+  SolvrErrorResponse,
 } from './types.js';
 
 export { SolvrError } from './types.js';

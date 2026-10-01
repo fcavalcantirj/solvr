@@ -8636,3 +8636,132 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-01 17:30 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 5: the second consumer, the TypeScript SDK (packages/sdk-ts). It now exposes all 13 contract operations as
+Solvr methods named exactly after their operationIds (createRoom, handshakeRoom, listRoomEntries, createRoomEntry,
+createRoomStreamTicket, streamRoom, getReply, updateReply, createPost, getPost, createReply, listReplies, search;
+get/post/reply/replies stay as shorthands that delegate). A contract test serves contract/openapi-examples.json
+from a local node:http server and holds what the SDK sends and surfaces to it, and compiles every example request
+and answer against the SDK method's own TypeScript types with the TypeScript compiler API.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT. 24/67
+  acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first buildable;
+  continued from slice 4 (HEAD a663b69d), REMAINING item "5.. consumers": TS SDK next. Tree clean at start.
+
+DESIGN (from code read this session):
+  - Names: TS method = operationId verbatim (the Go rule minus the capital). Existing tests pin get/post/reply/
+    replies/vote/voteReply, so they stay; get/post/reply/replies now call getPost/createPost/createReply/listReplies.
+  - Credential: SolvrConfig.apiKey is string | null. null = anonymous client (no Authorization header). An empty
+    string still throws 'API key is required' (client.test.ts pins that; it also guards an unset env var).
+    withRoomToken(token) returns a NEW client presenting the room token; the original is untouched; '' throws
+    'Room token is required'.
+  - Errors: SolvrError gains requestId (from error.request_id) as its 5th constructor arg; status 0 for a
+    stream-ending code. New SolvrErrorResponse type; SolvrErrorData gains request_id.
+  - ETag: ReplyResponse.etag (from the ETag answer header) on getReply/updateReply; updateReply(id, ifMatch, input)
+    sends If-Match only when ifMatch is non-empty (empty -> the API's 428).
+  - Search: omits q when empty (the "q is missing" error example sends none), adds sort (SearchSort).
+  - Stream: streamRoom(slug, {lastEventId, ticket, type, issue, signal}) -> RoomStream (src/stream.ts) over the
+    fetch body: next() skips ':' comments and retry blocks, joins multi-line data, strips CRLF, tracks lastEventId,
+    answers null on close, rejects with SolvrError(code, status 0) on access_revoked/credential_rotated; RoomStream
+    is also async-iterable. Not retried; the client's (unused) timeout does not apply.
+  - Types: types.ts mirrors the Go SDK's post/search/reply fields (Post: publication_state, moderation_state,
+    posted_by_*, counts, user_vote VoteDirection | null; SearchResult/SearchMeta/SearchReplyMatch/SearchAuthor;
+    Reply.author; CreateReplyInput, UpdateReplyInput). PostStatus is now the backend's 12 statuses
+    (models/post.go: draft..rejected; the old union had a non-existent 'stuck'). SearchResult.votes removed (the
+    API sends vote_score, never votes). New room-types.ts: Room, CreateRoomInput, HandshakeRoomInput/RoomHandshake,
+    RoomEntry, CreateRoomEntryInput, RoomEntriesResponse (next_cursor string | null), RoomStreamTicket,
+    StreamRoomOptions, RoomStreamFrame, RoomStreamMessage, RoomStreamEvent.
+
+WHAT CHANGED [REAL, git status --porcelain: M README.md, M src/client.ts, M src/index.ts, M src/types.ts,
+  ?? src/contract.test.ts, ?? src/room-types.ts, ?? src/rooms.test.ts, ?? src/stream.ts (all packages/sdk-ts/);
+  git diff --stat (tracked): 4 files, 459+/109-]:
+  PRODUCTION (packages/sdk-ts/src):
+  M client.ts (334 -> 487): operationId-named methods + shorthands, withRoomToken, anonymous client, streamRoom;
+    request() split into send() (the unchanged retry/backoff loop, now answering the Response) + request<T>() +
+    requestWithETag(); errorFrom() builds SolvrError incl. request_id; queryString() skips undefined/'' values;
+    roomPath() encodeURIComponent's the slug. Also fixes the 2 PRE-EXISTING `tsc --noEmit` errors (baseline_tsc.log:
+    client.ts(282,13) and (309,9), response.json() typed unknown) by casting.
+  M types.ts (205 -> 326): as DESIGN; re-exports room-types.
+  M index.ts (71 -> 103): exports RoomStream and the new types.
+  ?? room-types.ts (214), ?? stream.ts (140): as DESIGN.
+  M README.md: apiKey null, naming rule + where the contract test lives, search sort/status, getReply/updateReply,
+    a Rooms section, error.requestId.
+  TESTS:
+  ?? contract.test.ts (464): loads ../../../contract/openapi-examples.json. "every operation is a client method
+    named after its operationId"; "each example is what the SDK sends and surfaces" (13: method, encoded path,
+    Authorization per credential incl. none = header absent, exact query with no repeated name, If-Match/
+    Last-Event-ID present iff the example sends them, request body EXACTLY the example's, result holds every
+    answered field; getReply surfaces the ETag the updateReply example sends back; streamRoom: id/event, frame and
+    decoded message); "each error example surfaces the API error code" (5 + a non-empty guard: SolvrError code/
+    message/request_id/details and status); "every example request and answer is a value of the SDK method types"
+    (generates `const answer_<op>: Answer<'<op>'> = <example>` / `request_<op>: Input<'<op>', argIndex>` /
+    frame_ and message_ for the stream / error_<op>_<status>: SolvrErrorResponse, where Answer/Input are derived
+    from the Solvr method signatures, compiles it with the package tsconfig via ts.createProgram and expects zero
+    diagnostics: an answered field the type lacks, a wrong value type, a null the type forbids, or a missing method
+    all fail); a self-test of that type check (5 bad declarations fail, the intact one passes) and of jsonDiff.
+  ?? rooms.test.ts (207): stream parsing (heartbeat/retry/CRLF/multi-line/`data:` without space, presence frame has
+    no message, lastEventId), async iteration, both end frames -> SolvrError status 0, refused stream -> status +
+    code + requestId, non-JSON frame rejects, resume header + filters + room-token bearer + Accept, close() of a
+    stream the server keeps open; withRoomToken scoping, empty room token, anonymous no-Authorization, slug
+    escaping + timeline filters, search empty q + sort, updateReply If-Match + new ETag.
+  client.test.ts: UNCHANGED (not in git status). No test deleted, skipped or loosened.
+  Backend, frontend, contract fixture, SPEC.md, other packages: untouched. No migration.
+
+VERIFICATION [this session; logs in /tmp/solvr_idx78_s5/]:
+  [TEST] baseline.log: before any change, 26/26 client.test.ts pass; baseline_tsc.log: tsc exit 2 (the 2 errors above).
+  [TEST] RED (red.log): 35 failed | 28 passed (the 26 old + the jsonDiff self-test + the error-examples guard).
+  [TEST] GREEN: green1.log 63/63; tsc then flagged ReadableStreamReadResult (DOM-only type) in stream.ts -> fixed;
+    green2.log (`vitest run --coverage`) 63/63, src coverage 95.4% lines (client.ts 95.37, stream.ts 95.49, types.ts
+    100); final.log after README: 3 files, 63 passed, 0 skipped. tsc_final.log: `tsc --noEmit` exit 0. The two new
+    test files also typecheck under --strict (tsc_tests.log exit 0). `npm run build` (tsup cjs+esm+dts) ok; the
+    dist/ it wrote was removed.
+  MUTATIONS [TEST] (mut/mut.py, mut/m*.log; each applied alone, vitest run, source restored; `shasum -c
+    mut/orig.sha` 8/8 OK): FAILED as intended: m1 SearchMeta drops confident_match (type check); m2 Reply drops
+    author (type check); m3 getReply ignores ETag; m4 updateReply drops If-Match (success + 412 cases); m5
+    withRoomToken keeps the API key (7 tests); m6 anonymous sends "Bearer null" (8); m7 no Last-Event-ID; m8 error
+    drops request_id (6); m9 handshake sends no body for {}; m10 next_cursor without null (type check); m11 empty q
+    sent; m12 stream does not decode the message; m13 RoomStreamMessage drops metadata (type check); m14 user_vote
+    without null (type check); m15 slug not escaped. SURVIVED: m16 CreateRoomInput is_private renamed isPrivate —
+    no example sends is_private, so an OPTIONAL request field the examples never use is not held (the Go SDK has
+    the same gap for e.g. category). Closing it needs the request SCHEMAS exported next to the examples.
+  [REAL] smoke/smoke.log: the real API binary (go build ./cmd/api -> /tmp/solvr_idx78_s5/smoke/, env -i with
+    DATABASE_URL = local docker solvr-postgres solvr_test, a throwaway JWT_SECRET, PORT 18094; no env file read)
+    driven by a throwaway node script importing the SDK bundled by tsup into /tmp: register 201; createPost (post,
+    draft, pending); createReply author present; getReply etag "1790886376385500"; updateReply new etag, changed;
+    stale etag -> 412 PRECONDITION_FAILED; no If-Match -> 428 PRECONDITION_REQUIRED; anonymous search('') -> 400
+    VALIDATION_ERROR; search meta method fulltext, confident_match false, per_page 5; listReplies 1; createRoom;
+    handshakeRoom solvr_rt_; createRoomEntry + same client_entry_id -> same id, idempotent_replay true;
+    listRoomEntries 1, limit 50, next_cursor null; streamRoom resumed after entry 242560 -> 242562 with its content,
+    lastEventId updated; anonymous streamRoom with a minted ticket -> same entry; bogus ticket -> 401
+    STREAM_TICKET_INVALID; dead room token -> 401 UNAUTHORIZED (every error carried request_id); handshake
+    rotate:true -> the old token's open stream rejected CREDENTIAL_ROTATED, status 0, after 25 ms. API stopped
+    (pkill; port 18094 free); smoke agent/post/reply/room deleted from solvr_test (smoke/cleanup.log: 4 DELETE 1).
+  NOT RUN: backend suites and the backend examples test (no backend file or the fixture touched; slice 4 ran the
+    latter green against the same fixture); frontend (untouched); ./scripts/check-file-size.sh scans only backend/
+    and frontend/ (all new sdk-ts files are under 500 lines: wc -l above).
+
+FINDINGS, NOT FIXED:
+  - [REAL smoke] an ANONYMOUS GET /v1/posts/{id} answers 200 with the full body of a draft, moderation-pending
+    post (publication_state draft, moderation_state pending, status pending_review); handlers/posts.go Get hides
+    only deleted posts before answering. Search does not list it. Owner call: intended share-by-link, or a leak
+    of unmoderated content?
+  - [REAL] CI (.github/workflows) runs no packages/sdk-ts (nor sdk-go) test: the contract tests guard only when
+    run by hand.
+  - [REAL code read] SolvrConfig.timeout is stored and never applied (pre-existing; requests have no timeout).
+  - [REAL] SearchOptions.type/status still send the legacy filters (step 5 item, as in the Go SDK).
+  - m16 above: optional request fields no example uses are not held by any SDK contract test.
+  - Carried from slice 4: Go SDK tags sent repeated vs search.go comma-split; search ignores unknown params while
+    stream rejects them; createRoom 409 DUPLICATE_ROOM not named; handshake note points at /r/{slug}/*.
+
+REMAINING FOR idx 78 (next slices, in order):
+  6.. consumers: Python SDK (packages/sdk-python: create_room / handshake_room ... per the same rule, contract test on
+    the same fixture), then packages/cli, cli/, mcp-server, backend /v1/mcp, skill/scripts.
+  then steps 3, 4 (webhooks: NewWebhooksHandler is mounted by no router; discovery still lists "webhooks"), 5
+    (migration notes, deprecation errors, legacy choices out of first-party clients), 6 (external consumer vs clean
+    + upgraded schema), 7 (participants as collections, third agent without a new room); the findings above.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

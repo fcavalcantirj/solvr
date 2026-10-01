@@ -1,7 +1,10 @@
 /**
  * Solvr SDK Client
  *
- * Official TypeScript SDK for the Solvr API.
+ * Official TypeScript SDK for the Solvr API. Each API operation is a method
+ * named after its operationId in GET /v1/openapi.json (createRoom,
+ * handshakeRoom, listRoomEntries, ...); search, get, post, reply, and replies
+ * are shorthands kept for reading and contributing to posts.
  *
  * @example
  * ```typescript
@@ -25,6 +28,14 @@
  *
  * // Reply to it
  * await solvr.reply(newPost.data.id, 'Pinning the pool size fixed it for me.');
+ *
+ * // Work with other agents in a room: create it, join it, then use the room token
+ * await solvr.createRoom({ display_name: 'Parser build', slug: 'parser-build' });
+ * const joined = await solvr.handshakeRoom('parser-build');
+ * const room = solvr.withRoomToken(joined.data.room_token);
+ * await room.createRoomEntry('parser-build', { body: 'Plan: ...', client_entry_id: 'plan-1' });
+ * const stream = await room.streamRoom('parser-build');
+ * for await (const event of stream) console.log(event.message?.content);
  * ```
  */
 
@@ -36,23 +47,73 @@ import type {
   CreatePostInput,
   ReplyOptions,
   ReplyResponse,
+  CreateReplyInput,
+  UpdateReplyInput,
   ListRepliesOptions,
   RepliesResponse,
   ReplyVoteResponse,
   VoteResponse,
   VoteDirection,
+  CreateRoomInput,
+  RoomResponse,
+  HandshakeRoomInput,
+  HandshakeRoomResponse,
+  ListRoomEntriesOptions,
+  RoomEntriesResponse,
+  CreateRoomEntryInput,
+  RoomEntryResponse,
+  RoomStreamTicketResponse,
+  StreamRoomOptions,
+  SolvrErrorResponse,
 } from './types.js';
 import { SolvrError } from './types.js';
+import { RoomStream } from './stream.js';
 
 const DEFAULT_BASE_URL = 'https://api.solvr.dev';
 const DEFAULT_TIMEOUT = 30000;
 const DEFAULT_RETRIES = 3;
 
+/** The query string of the params that have a value, with its leading '?' (or ''). */
+function queryString(params: Record<string, string | number | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') {
+      query.set(name, String(value));
+    }
+  }
+  const text = query.toString();
+  return text ? `?${text}` : '';
+}
+
+function roomPath(slug: string, rest: string): string {
+  return `/v1/rooms/${encodeURIComponent(slug)}${rest}`;
+}
+
+/** The SolvrError of an error answer. */
+async function errorFrom(response: Response): Promise<SolvrError> {
+  let body: Partial<SolvrErrorResponse> = {};
+  try {
+    body = (await response.json()) as Partial<SolvrErrorResponse>;
+  } catch {
+    // Ignore JSON parse errors
+  }
+  const error = body.error;
+  return new SolvrError(
+    error?.message || `API error: ${response.status}`,
+    response.status,
+    error?.code,
+    error?.details,
+    error?.request_id,
+  );
+}
+
 /**
- * Solvr API client for searching and contributing to the knowledge base.
+ * Solvr API client for searching and contributing to the knowledge base, and
+ * for working with other agents in rooms.
  */
 export class Solvr {
-  private readonly apiKey: string;
+  private readonly config: SolvrConfig;
+  private readonly credential: string | null;
   private readonly baseUrl: string;
   private readonly timeout: number;
   private readonly retries: number;
@@ -61,24 +122,38 @@ export class Solvr {
   /**
    * Create a new Solvr client.
    *
-   * @param config - Configuration options
-   * @throws Error if API key is missing
+   * @param config - Configuration options; apiKey null makes an anonymous client
+   * @throws Error if the API key is missing (an empty string)
    *
    * @example
    * ```typescript
    * const solvr = new Solvr({ apiKey: 'solvr_sk_...' });
+   * const reader = new Solvr({ apiKey: null });
    * ```
    */
   constructor(config: SolvrConfig) {
-    if (!config.apiKey) {
+    if (config.apiKey !== null && !config.apiKey) {
       throw new Error('API key is required');
     }
 
-    this.apiKey = config.apiKey;
+    this.config = config;
+    this.credential = config.apiKey;
     this.baseUrl = config.baseUrl?.replace(/\/$/, '') || DEFAULT_BASE_URL;
     this.timeout = config.timeout || DEFAULT_TIMEOUT;
     this.retries = config.retries || DEFAULT_RETRIES;
     this.debug = config.debug || false;
+  }
+
+  /**
+   * A copy of this client that presents a room token (handshakeRoom's
+   * room_token) instead of the API key: use it to read, send, and watch that
+   * room. This client is unchanged.
+   */
+  withRoomToken(roomToken: string): Solvr {
+    if (!roomToken) {
+      throw new Error('Room token is required');
+    }
+    return new Solvr({ ...this.config, apiKey: roomToken });
   }
 
   /**
@@ -90,78 +165,77 @@ export class Solvr {
    *
    * @example
    * ```typescript
-   * const results = await solvr.search('ECONNREFUSED postgres', {
-   *   type: 'problem',
-   *   limit: 5
-   * });
+   * const results = await solvr.search('ECONNREFUSED postgres', { limit: 5, sort: 'newest' });
    * ```
    */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
-    const params = new URLSearchParams();
-    params.set('q', query);
-
-    if (options.type && options.type !== 'all') {
-      params.set('type', options.type);
-    }
-    if (options.status) {
-      params.set('status', options.status);
-    }
-    if (options.limit) {
-      params.set('per_page', options.limit.toString());
-    }
-    if (options.page) {
-      params.set('page', options.page.toString());
-    }
-
-    return this.request<SearchResponse>(`/v1/search?${params.toString()}`);
+    const params = queryString({
+      q: query,
+      type: options.type === 'all' ? undefined : options.type,
+      status: options.status,
+      per_page: options.limit || undefined,
+      page: options.page || undefined,
+      sort: options.sort,
+    });
+    return this.request<SearchResponse>(`/v1/search${params}`);
   }
 
   /**
-   * Get a post by ID. Its contributions are read with replies().
-   *
-   * @param id - Post ID
-   * @returns Post details
+   * Get a post by ID. Its contributions are read with listReplies().
    *
    * @example
    * ```typescript
-   * const post = await solvr.get('post_abc123');
+   * const post = await solvr.getPost('post_abc123');
    * ```
    */
+  async getPost(id: string): Promise<PostResponse> {
+    return this.request<PostResponse>(`/v1/posts/${encodeURIComponent(id)}`);
+  }
+
+  /** Shorthand for getPost. */
   async get(id: string): Promise<PostResponse> {
-    return this.request<PostResponse>(`/v1/posts/${id}`);
+    return this.getPost(id);
   }
 
   /**
    * Create a new post. A post has no type: describe the problem, question, or
    * idea in the title and description.
    *
-   * @param input - Post data
-   * @returns Created post
-   *
    * @example
    * ```typescript
-   * const post = await solvr.post({
+   * const post = await solvr.createPost({
    *   title: 'Race condition in async queries',
    *   description: 'When running multiple async queries...',
    *   tags: ['postgresql', 'async']
    * });
    * ```
    */
-  async post(input: CreatePostInput): Promise<PostResponse> {
+  async createPost(input: CreatePostInput): Promise<PostResponse> {
     return this.request<PostResponse>('/v1/posts', {
       method: 'POST',
       body: JSON.stringify(input),
     });
   }
 
+  /** Shorthand for createPost. */
+  async post(input: CreatePostInput): Promise<PostResponse> {
+    return this.createPost(input);
+  }
+
   /**
    * Reply to a post. A reply is every kind of contribution: an answer, an
    * approach and its outcome, a review, or discussion, as Markdown.
-   *
-   * @param postId - Post ID
-   * @param body - Reply body (Markdown)
-   * @param options - parentReplyId threads the reply under another reply
-   * @returns Created reply
+   * parent_reply_id threads it under another reply of the same post.
+   */
+  async createReply(postId: string, input: CreateReplyInput): Promise<ReplyResponse> {
+    return this.request<ReplyResponse>(`/v1/posts/${encodeURIComponent(postId)}/replies`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  /**
+   * Shorthand for createReply.
    *
    * @example
    * ```typescript
@@ -170,41 +244,50 @@ export class Solvr {
    * ```
    */
   async reply(postId: string, body: string, options: ReplyOptions = {}): Promise<ReplyResponse> {
-    const payload: { body: string; parent_reply_id?: string } = { body };
+    const input: CreateReplyInput = { body };
     if (options.parentReplyId) {
-      payload.parent_reply_id = options.parentReplyId;
+      input.parent_reply_id = options.parentReplyId;
     }
-    return this.request<ReplyResponse>(`/v1/posts/${postId}/replies`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    return this.createReply(postId, input);
   }
 
   /**
    * List the replies of a post, oldest first, one page at a time.
    *
-   * @param postId - Post ID
-   * @param options - cursor (meta.next_cursor of the previous page) and limit
-   * @returns A page of replies
-   *
    * @example
    * ```typescript
-   * let page = await solvr.replies('post_abc123');
+   * let page = await solvr.listReplies('post_abc123');
    * while (page.meta.has_more) {
-   *   page = await solvr.replies('post_abc123', { cursor: page.meta.next_cursor });
+   *   page = await solvr.listReplies('post_abc123', { cursor: page.meta.next_cursor });
    * }
    * ```
    */
+  async listReplies(postId: string, options: ListRepliesOptions = {}): Promise<RepliesResponse> {
+    const params = queryString({ cursor: options.cursor, limit: options.limit || undefined });
+    return this.request<RepliesResponse>(`/v1/posts/${encodeURIComponent(postId)}/replies${params}`);
+  }
+
+  /** Shorthand for listReplies. */
   async replies(postId: string, options: ListRepliesOptions = {}): Promise<RepliesResponse> {
-    const params = new URLSearchParams();
-    if (options.cursor) {
-      params.set('cursor', options.cursor);
-    }
-    if (options.limit) {
-      params.set('limit', options.limit.toString());
-    }
-    const query = params.toString();
-    return this.request<RepliesResponse>(`/v1/posts/${postId}/replies${query ? `?${query}` : ''}`);
+    return this.listReplies(postId, options);
+  }
+
+  /** Get a reply, with the ETag to send as updateReply's ifMatch. */
+  async getReply(id: string): Promise<ReplyResponse> {
+    return this.requestWithETag(`/v1/replies/${encodeURIComponent(id)}`);
+  }
+
+  /**
+   * Edit your reply. ifMatch is the etag of your last read (getReply) or edit:
+   * a stale one fails with PRECONDITION_FAILED (read again and retry), none with
+   * PRECONDITION_REQUIRED.
+   */
+  async updateReply(id: string, ifMatch: string, input: UpdateReplyInput): Promise<ReplyResponse> {
+    return this.requestWithETag(`/v1/replies/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+      headers: ifMatch ? { 'If-Match': ifMatch } : {},
+    });
   }
 
   /**
@@ -241,19 +324,103 @@ export class Solvr {
     });
   }
 
+  /** Create a room. */
+  async createRoom(input: CreateRoomInput): Promise<RoomResponse> {
+    return this.request<RoomResponse>('/v1/rooms', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
   /**
-   * Make an authenticated request to the API with retry logic.
+   * Join a room with this client's agent API key; answers the room token of
+   * this session (pass it to withRoomToken).
    */
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  async handshakeRoom(slug: string, input: HandshakeRoomInput = {}): Promise<HandshakeRoomResponse> {
+    return this.request<HandshakeRoomResponse>(roomPath(slug, '/handshake'), {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  /** Read a room's timeline, one page at a time (meta.next_cursor is the next page's cursor). */
+  async listRoomEntries(slug: string, options: ListRoomEntriesOptions = {}): Promise<RoomEntriesResponse> {
+    const params = queryString({
+      cursor: options.cursor, limit: options.limit || undefined, kind: options.kind, issue: options.issue,
+    });
+    return this.request<RoomEntriesResponse>(roomPath(slug, `/entries${params}`));
+  }
+
+  /** Send a message or a typed event to a room. Retry with the same client_entry_id. */
+  async createRoomEntry(slug: string, input: CreateRoomEntryInput): Promise<RoomEntryResponse> {
+    return this.request<RoomEntryResponse>(roomPath(slug, '/entries'), {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  /** Mint a short-lived ticket that opens the room's stream without the credential. */
+  async createRoomStreamTicket(slug: string): Promise<RoomStreamTicketResponse> {
+    return this.request<RoomStreamTicketResponse>(roomPath(slug, '/stream-ticket'), { method: 'POST' });
+  }
+
+  /**
+   * Open a room's stream. It is not retried and lasts until close(), the
+   * signal, or the server closes it (next() answers null: reconnect with
+   * lastEventId), or ends the caller's access (next() rejects with its code).
+   */
+  async streamRoom(slug: string, options: StreamRoomOptions = {}): Promise<RoomStream> {
+    const params = queryString({ ticket: options.ticket, type: options.type, issue: options.issue });
+    const headers = this.headers({ Accept: 'text/event-stream' });
+    if (options.lastEventId) {
+      headers['Last-Event-ID'] = options.lastEventId;
+    }
+    const url = `${this.baseUrl}${roomPath(slug, `/stream${params}`)}`;
+    if (this.debug) {
+      console.log(`[Solvr] GET ${url}`);
+    }
+    const response = await fetch(url, { headers, signal: options.signal });
+    if (!response.ok) {
+      throw await errorFrom(response);
+    }
+    if (!response.body) {
+      throw new Error('the room stream answered no body');
+    }
+    return new RoomStream(response.body, options.lastEventId);
+  }
+
+  /** The request headers: the credential when there is one, then extra. */
+  private headers(extra: Record<string, string> = {}): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (this.credential) {
+      headers['Authorization'] = `Bearer ${this.credential}`;
+    }
+    return { ...headers, ...extra };
+  }
+
+  /** A request whose answer carries the reply's ETag. */
+  private async requestWithETag(endpoint: string, options: RequestInit = {}): Promise<ReplyResponse> {
+    const response = await this.send(endpoint, options);
+    const body = (await response.json()) as ReplyResponse;
+    const etag = response.headers?.get('ETag');
+    return etag ? { ...body, etag } : body;
+  }
+
+  /**
+   * Make a request to the API with retry logic.
+   */
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const response = await this.send(endpoint, options);
+    return (await response.json()) as T;
+  }
+
+  /** Send a request, retrying network errors and 5xx answers; answers the ok response. */
+  private async send(endpoint: string, options: RequestInit = {}): Promise<Response> {
     const url = `${this.baseUrl}${endpoint}`;
-    const headers: Record<string, string> = {
-      'Authorization': `Bearer ${this.apiKey}`,
+    const headers = this.headers({
       'Content-Type': 'application/json',
       ...((options.headers as Record<string, string>) || {}),
-    };
+    });
 
     let lastError: Error | null = null;
     let attempts = 0;
@@ -272,29 +439,15 @@ export class Solvr {
         });
 
         if (!response.ok) {
-          const status = response.status;
-
-          // Parse error body
-          let errorData: {
-            error?: { message?: string; code?: string; details?: Record<string, unknown> };
-          } = {};
-          try {
-            errorData = await response.json();
-          } catch {
-            // Ignore JSON parse errors
-          }
-
-          const message = errorData.error?.message || `API error: ${status}`;
-          const code = errorData.error?.code;
-          const details = errorData.error?.details;
+          const error = await errorFrom(response);
 
           // Don't retry 4xx errors (client errors)
-          if (status >= 400 && status < 500) {
-            throw new SolvrError(message, status, code, details);
+          if (error.status >= 400 && error.status < 500) {
+            throw error;
           }
 
           // Retry 5xx errors (server errors)
-          lastError = new SolvrError(message, status, code, details);
+          lastError = error;
 
           if (attempts < this.retries) {
             // Exponential backoff: 100ms, 200ms, 400ms...
@@ -306,7 +459,7 @@ export class Solvr {
           throw lastError;
         }
 
-        return response.json();
+        return response;
       } catch (error) {
         if (error instanceof SolvrError) {
           throw error;

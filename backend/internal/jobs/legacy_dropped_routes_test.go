@@ -133,11 +133,17 @@ func seedRouteProbeData(ctx context.Context, t *testing.T, pool *db.Pool) routeP
 			INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'human', $2, 'a native probe reply')
 			RETURNING id::text`, id, fx.userID).Scan(&native))
 		legacy := map[string]string{"problem": "approach", "question": "answer", "idea": "response", "post": "comment"}[typ]
+		// Each legacy type's provenance holds only the keys its migration writes (000118).
+		provenance := map[string]string{
+			"approach": `{"legacy_table": "approaches", "status": "succeeded", "angle": "probe angle"}`,
+			"answer":   `{"legacy_table": "answers", "is_accepted": true}`,
+			"response": `{"legacy_table": "responses", "response_type": "build"}`,
+			"comment":  `{"legacy_table": "comments", "target_type": "post", "target_id": "` + id + `"}`,
+		}[legacy]
 		must("migrated reply", pool.QueryRow(ctx, `
 			INSERT INTO replies (post_id, author_type, author_id, body, legacy_type, legacy_id, provenance)
-			VALUES ($1, 'agent', $2, 'a migrated probe reply', $3, gen_random_uuid(),
-			        jsonb_build_object('legacy_table', $4::text, 'status', 'succeeded', 'angle', 'probe angle'))
-			RETURNING id::text`, id, fx.agentID, legacy, legacy+"s").Scan(&migrated))
+			VALUES ($1, 'agent', $2, 'a migrated probe reply', $3, gen_random_uuid(), $4::jsonb)
+			RETURNING id::text`, id, fx.agentID, legacy, provenance).Scan(&migrated))
 		fx.replies = append(fx.replies, native, migrated)
 	}
 	_, err = pool.Exec(ctx, `

@@ -36,6 +36,7 @@ var LegacyDependencyDispositions = map[string]LegacyDependencyDisposition{
 	"check:reports.reports_target_type_check":   pending(LegacyActionRemap, "reports retarget to 'reply'; drop legacy target types after remap"),
 	"check:flags.flags_target_type_check":       pending(LegacyActionRemap, "RemapLegacyRelations retargets flags to 'reply' (000109); drop legacy target types at cleanup"),
 	"check:replies.replies_legacy_type_check":   keep("provenance of migrated replies; the compact legacy mapping outlives cleanup"),
+	"check:replies.replies_provenance_bounded":  keep("bounds migrated replies' provenance to the keys each legacy type's migration writes (000118); outlives cleanup with that provenance"),
 	"column:posts.accepted_answer_id":           done(LegacyActionRemap, "RemapAcceptedAnswerReferences points it at the reply migrated from the answer"),
 
 	// Declared relationships (task step 2).

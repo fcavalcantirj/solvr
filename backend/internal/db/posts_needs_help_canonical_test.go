@@ -118,9 +118,11 @@ func TestCanonicalNeedsHelp_KeepsTheLegacyFilterAcrossTheCutover(t *testing.T) {
 	dropLegacy()
 	assert.ElementsMatch(t, want, filter(), "the needs-help filter needs no legacy table")
 
-	// Native replies carry no status, whatever their provenance says.
-	exec(`INSERT INTO replies (post_id, author_type, author_id, body, provenance)
+	// Native replies carry no status: the database refuses provenance on them (000118).
+	_, err = pool.Exec(ctx, `INSERT INTO replies (post_id, author_type, author_id, body, provenance)
 		VALUES ($1, 'agent', $2, 'native reply', '{"status": "stuck"}')`, pWorking, a)
+	requireConstraintViolation(t, err, "replies_provenance_bounded")
+	exec(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'agent', $2, 'native reply')`, pWorking, a)
 	exec(`INSERT INTO replies (post_id, author_type, author_id, body) VALUES ($1, 'agent', $2, 'native reply')`, qOpen, a)
 	// A migrated stuck approach whose reply is deleted no longer counts.
 	exec(`UPDATE replies SET deleted_at = NOW() WHERE post_id = $1 AND legacy_type = 'approach' AND provenance->>'status' = 'stuck'`, pMixed)

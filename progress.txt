@@ -3201,3 +3201,146 @@ UAT (for when idx 68 closes, not now): apply 000115, 000116 and 000117 on produc
 
 git status at journal time [REAL]: the 39 M + 4 ?? listed above, plus this entry. spec.json
   unchanged; idx 68 passes stays false.
+
+2026-09-30 21:50 — Task idx 68 (spec.json, category data) — IN PROGRESS, passes STAYS false
+"Reduce the live knowledge database to posts and replies with enforceable relationships"
+SLICE 4 of N: step 4. The knowledge domain lives in typed columns the database constrains; JSON is
+only the bounded provenance of a migrated reply. Migration 000118_knowledge_typed_columns.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 73, 74, 77-95, 97, 98;
+  no open URGENT. idx 24 and 67 stay skipped (acceptance tasks, as recorded). idx 68 is first
+  buildable; slice 3 left step 1 and step 4 OPEN. Tree clean at start; HEAD cdf22208.
+
+AUDIT [REAL, \d posts, \d replies, information_schema on solvr_test at 117]:
+  - posts: body = description text NOT NULL; visibility, publication_state, moderation_state are
+    varchar NOT NULL with CHECKs; ownership = owner_human_id uuid -> users plus the 000117 author
+    links. created_at and updated_at were NULLABLE (the only untyped-ness found). No JSON column.
+  - replies: body, created_at, updated_at NOT NULL; author links (000116). Its one JSON column,
+    provenance jsonb, was unbounded: any reply, native or migrated, could hold any JSON.
+  - Writers of provenance (code read): only contribution_migration.go (approach: legacy_table,
+    angle, method, assumptions, differs_from, status, outcome, solution, is_latest, archived_cid;
+    answer: legacy_table, is_accepted; response: legacy_table, response_type; comment:
+    legacy_table, target_type, target_id) and legacy_relation_remap.go (approach_relationships
+    on approach replies; progress_note: legacy_table, approach_id). No API handler sets
+    Reply.Provenance. Runtime readers (stats, needs-help filter, search, contributions,
+    resurrection, approach checker) read only historical approach status/angle/method from
+    migrated approach replies: provenance, not a domain field of native content. Unchanged.
+  - Other JSON columns (agent_presence, audit_log, badges, config, messages, pins, room_entries,
+    room_events, legacy_*) are outside posts/replies; not touched.
+
+MEASURED FIRST [REAL, read-only on local DBs]: solvr_rehearsal_purge113 (production after the
+  purge), solvr_cutover_rehearsal and solvr_test: 0 posts with NULL created_at/updated_at; 0
+  replies with only one of legacy_type/legacy_id; 0 native replies with provenance; 0 provenance
+  keys outside the per-type lists above (/tmp/solvr_idx68_s4/keys.sql). Largest provenance 3486
+  bytes (an approach). (solvr_test also holds 698 family posts with no owner; prod copies 0. Not
+  constrained here: owner_human_id is ON DELETE SET NULL, a CHECK would block user deletes.)
+
+SPIKE [REAL, /tmp/solvr_idx68_s4/spike.sql, spike.log]: the draft 000118 inside BEGIN ... ROLLBACK
+  on CREATE DATABASE ... TEMPLATE copies of solvr_cutover_rehearsal and solvr_rehearsal_purge113
+  (spike file built with printf/cat, checked with head first). ALTERs 1.6-3.9 ms. Refused: native
+  reply with provenance, answer with "status", approach with an array, legacy_type without
+  legacy_id and the reverse, posts created_at/updated_at = NULL. Allowed: an approach with every
+  approach key, a native reply without provenance, a migrated comment without provenance. The
+  down file left 0 of the new constraints. The copy was dropped.
+
+DESIGN (migration 000118_knowledge_typed_columns):
+  - posts.created_at, posts.updated_at SET NOT NULL.
+  - CHECK replies_legacy_pair: legacy_type and legacy_id are set together or not at all.
+  - CHECK replies_provenance_bounded: provenance IS NULL, or the reply is migrated (legacy_id
+    set), provenance is a JSON object, and it holds only the keys its legacy type's migration
+    writes (jsonb - text[] = '{}' per legacy_type; any other type is refused).
+  - Nothing is rewritten: over a row outside the bounds the migration fails as a whole.
+  - Down drops the two CHECKs and the two NOT NULLs; no data changes either way.
+
+WHAT CHANGED [REAL, git status --porcelain: 6 M + 3 ??; git diff --stat 24+/15- on tracked files]:
+  PRODUCTION:
+  A backend/migrations/000118_knowledge_typed_columns.up.sql / .down.sql (above).
+  M backend/internal/db/legacy_dependency_registry.go: +1 disposition
+    "check:replies.replies_provenance_bounded": keep(...). The catalog discovery finds it (its
+    definition holds the 'approach'/'answer'/... literals) and
+    TestDiscoverLegacySchemaDependencies_EveryCatalogObjectHasADisposition requires a decision.
+  M backend/cmd/cutover/main.go: --expect-version default 117 -> 118 (checkSchema refuses any
+    other version; same precedent as 114 -> 115 -> 116 -> 117).
+  NEW TESTS:
+  A backend/internal/db/knowledge_typed_columns_test.go (3 tests, scratch DBs, 213 lines):
+    TestKnowledgeSchema_TheDomainLivesInTypedColumns (type + nullability of the domain columns of
+      posts and replies; replies.provenance is the only JSON column of either table; the 3 states
+      refuse an unknown value by their CHECKs; created_at/updated_at refuse NULL on UPDATE and
+      INSERT),
+    TestKnowledgeSchema_OnlyAMigratedReplyCarriesBoundedProvenance (each legacy type's full key set
+      and no provenance accepted; another type's key or a domain key ("visibility") refused per
+      type; array/string/number refused; a native reply's provenance refused through
+      ReplyRepository.Create, raw INSERT and later UPDATE; legacy_type/legacy_id must pair),
+    TestKnowledgeSchema_TheMigrationRefusesRowsOutsideTheBoundsAndReverts (118.down; a NULL
+      updated_at and a native reply with provenance are stored; 118.up fails on each in turn with
+      the constraint/column named and leaves no constraint behind; once both are fixed it applies
+      and the bounds hold again).
+  CHANGED EXISTING TESTS (no assertion loosened, none deleted or skipped):
+  - Version pins moved by the new migration: cmd/cutover/main_test.go pinned the default 117 and
+    the checkSchema cases at 117; now 118, PASS. internal/db/cutover_rollback_test.go asserted
+    `require.Equal(t, 33, applied, "down migrations 000117..000085")`; now 34 (000118..000085),
+    PASS; its doc comment says 118.
+  - internal/db/posts_needs_help_canonical_test.go TestCanonicalNeedsHelp_KeepsTheLegacyFilter
+    AcrossTheCutover. It asserted, via exec (require.NoError), that a NATIVE reply could be
+    INSERTed with provenance '{"status": "stuck"}' on pWorking, and then that the filter still
+    excluded pWorking ("Native replies carry no status, whatever their provenance says"). That
+    write is what 000118 forbids. Now: the same INSERT must be refused by
+    replies_provenance_bounded (requireConstraintViolation), a native reply without provenance
+    is inserted on pWorking instead, and the unchanged final assertion
+    ElementsMatch({pInProgress, pStuck}, filter()) PASSES. The refusal is also covered by the new
+    TestKnowledgeSchema_OnlyAMigratedReplyCarriesBoundedProvenance (PASS).
+  - internal/jobs/legacy_dropped_routes_test.go route-probe fixture: every migrated probe reply got
+    {legacy_table, status: succeeded, angle: probe angle} whatever its legacy type; answer,
+    response and comment replies with status/angle are now refused. Each type now gets only its
+    own keys (approach unchanged: legacy_table, status, angle; answer is_accepted; response
+    response_type build; comment target_type post, target_id). No assertion reads those keys
+    (grep). TestLegacyDroppedDatabase_GetRoutesExposeOnlyLegacyRouteFamilies PASSES.
+
+VERIFICATION (DATABASE_URL = local DBs only; never production):
+  RED [TEST, /tmp/solvr_idx68_s4/red.log, 000118 files moved aside, scratch DBs off solvr_test]:
+    all 3 new tests FAIL: posts.created_at Nullable:true; "the database accepted a write
+    replies_provenance_bounded forbids"; no 000118 file.
+  GREEN targeted [TEST, green1.log]: 3/3 TestKnowledgeSchema_* PASS.
+  FULL BACKEND [TEST, /tmp/solvr_idx68_s4/full1.log, go test ./... -count=1 -p 1 -v, on a FRESH
+    local DB solvr_idx68_s4_fresh built from all 118 up migrations via psql; dropped after]:
+    18 packages ok; internal/api and internal/db FAIL with 47 failing tests = slice 3's recorded
+    46 (/tmp/solvr_idx68_s3/final_fails.txt) + TestSearchAnalyticsRepository_GetTrending
+    ("search_analytics_test.go:161: expected 3 test trending results, got 2"), which is in the
+    slice 2 baseline and is the time-window test of idx 98. 0 new failures. 12 SKIPs, all
+    pre-existing (VOYAGE, OAuth, Kubo, a legacy answers list); none of mine. PASS: the 3 new tests,
+    TestCanonicalNeedsHelp_KeepsTheLegacyFilterAcrossTheCutover, TestCutoverRollback_DownPath...,
+    TestParseOptions_GuardsTheProductionRun, TestCheckSchema_Refuses..., TestDiscoverLegacySchema
+    Dependencies_EveryCatalogObjectHasADisposition, TestLegacyDroppedDatabase_GetRoutes...,
+    TestContributionMigration_ConvertsAllTypesAndIsResumable, TestRemapLegacyRelations_* (2),
+    TestKnowledgeCutover_AppliesTheWholeSequence..., TestReplyRepository_PreservesProvenance. So
+    the cutover's own provenance writes satisfy the bound.
+  gofmt -l clean on touched Go files; go vet ./internal/db ./internal/jobs ./cmd/cutover clean.
+    check-file-size.sh: 34 violations, unchanged; none in a touched file.
+  LIVE PROBE [REAL, /tmp/solvr_idx68_s4/probe/]: go build ./cmd/api, run on :8097 under env -i
+    against a fresh local DB at 118 (IPFS_API_URL=http://127.0.0.1:9, fake JWT_SECRET, probe
+    ADMIN_API_KEY). Agent registered 201; POST /v1/posts 201; POST /v1/posts/<id>/replies 201;
+    GET post 200; GET replies 200; PATCH with the ETag 200 (updated_at > created_at); DELETE 204
+    (soft delete, timestamps kept). DB: the reply has provenance NULL, legacy_type NULL. Raw SQL
+    on the same DB: provenance on the native reply, a comment-typed reply without legacy_id, an
+    answer with "status", and posts.created_at = NULL are each refused (replies_provenance_bounded,
+    replies_legacy_pair, replies_provenance_bounded, not-null). api.log: 6x200, 3x201, 1x204, 0
+    5xx. Server stopped; :8097 free; probe DB dropped.
+  LOCAL DBs [REAL]: solvr_test got 000118.up in one transaction, version 118, both constraints
+    present. solvr_rehearsal_purge113 and solvr_cutover_rehearsal unchanged (0 new constraints).
+
+STEP MAP (idx 68):
+  1 OPEN, NEEDS AN OWNER CALL: the ER diagram and migration contract need a home. The loop's
+    rules forbid new .md files the task does not name and SPEC.md edits other than API changes;
+    the natural place is SPEC.md Part 6 (Database Schema), which still shows the pre-redesign
+    posts table. The executable part of the contract exists: the 000115-000118 constraints and
+    their tests.
+  2 DONE (slice 1). 3 DONE (slices 2-3).
+  4 DONE [TEST + REAL] (this slice).
+  5-6 GATED by owner decision 4 (legacy tables kept for now, dropped all at once later).
+UAT (for when idx 68 closes, not now): apply 000115, 000116, 000117 and 000118 on production
+  before the idx 93 cutover (cmd/cutover now expects 118). Expect 0 rows outside 000118's bounds
+  (measured on the post-purge copy).
+
+git status at journal time [REAL]: the 6 M + 3 ?? listed above, plus this entry. spec.json
+  unchanged; idx 68 passes stays false.

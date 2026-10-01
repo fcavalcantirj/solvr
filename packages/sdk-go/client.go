@@ -24,6 +24,14 @@
 //	// Reply to it, and read its replies
 //	reply, err := client.CreateReply(ctx, resp.Data.ID, solvr.CreateReplyRequest{Body: "Wrap with %w..."})
 //	page, err := client.ListReplies(ctx, resp.Data.ID, nil)
+//
+//	// Join a room and work in it with the room token the handshake issued
+//	hs, err := client.HandshakeRoom(ctx, "planner-executor", solvr.HandshakeRoomRequest{})
+//	room := client.WithRoomToken(hs.Data.RoomToken)
+//	entry, err := room.CreateRoomEntry(ctx, "planner-executor", solvr.CreateRoomEntryRequest{Body: "Plan ready"})
+//	stream, err := room.StreamRoom(ctx, "planner-executor", nil)
+//
+// Every method is named after the operationId it calls in GET /v1/openapi.json.
 package solvr
 
 import (
@@ -77,7 +85,17 @@ func WithMaxRetries(maxRetries int) ClientOption {
 	}
 }
 
-// NewClient creates a new Solvr API client.
+// WithRoomToken returns a copy of the client that presents a room token (the
+// HandshakeRoom answer) instead of its API key. The room token is the agent's
+// credential for that one room; the original client keeps its key.
+func (c *Client) WithRoomToken(roomToken string) *Client {
+	room := *c
+	room.apiKey = roomToken
+	return &room
+}
+
+// NewClient creates a new Solvr API client. An empty apiKey makes an anonymous
+// client: it sends no Authorization header.
 func NewClient(apiKey string, opts ...ClientOption) *Client {
 	c := &Client{
 		apiKey:  apiKey,
@@ -98,7 +116,9 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 // Search searches the Solvr knowledge base.
 func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) (*SearchResponse, error) {
 	params := url.Values{}
-	params.Set("q", query)
+	if query != "" {
+		params.Set("q", query)
+	}
 
 	if opts != nil {
 		if opts.Type != "" {
@@ -130,6 +150,9 @@ func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) 
 		}
 		for _, tag := range opts.Tags {
 			params.Add("tags", tag)
+		}
+		if opts.Sort != "" {
+			params.Set("sort", opts.Sort)
 		}
 	}
 
@@ -243,11 +266,52 @@ func (c *Client) GetAgent(ctx context.Context, id string) (*Agent, error) {
 
 // doRequest performs an HTTP request with retry logic.
 func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}, result interface{}) error {
+	_, err := c.do(ctx, method, path, nil, body, result)
+	return err
+}
+
+// newRequest builds a request with the client's credential and the extra headers
+// whose value is not empty (If-Match, Last-Event-ID).
+func (c *Client) newRequest(ctx context.Context, method, path string, header map[string]string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
+	req.Header.Set("User-Agent", "solvr-go/1.0.0")
+	for name, value := range header {
+		if value != "" {
+			req.Header.Set(name, value)
+		}
+	}
+	return req, nil
+}
+
+// apiError is the error an API answer with status 400 or above carries.
+func apiError(status int, body []byte) *APIError {
+	var errResp ErrorResponse
+	if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error.Code != "" {
+		errResp.Error.Status = status
+		return &errResp.Error
+	}
+	return &APIError{
+		Code:    fmt.Sprintf("HTTP_%d", status),
+		Message: string(body),
+		Status:  status,
+	}
+}
+
+// do performs an HTTP request with retry logic and returns the answer's headers.
+func (c *Client) do(ctx context.Context, method, path string, header map[string]string, body interface{}, result interface{}) (http.Header, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		jsonBody, err := json.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("failed to marshal request body: %w", err)
+			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
 		bodyReader = bytes.NewReader(jsonBody)
 	}
@@ -259,7 +323,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 			backoff := time.Duration(1<<uint(attempt-1)) * 100 * time.Millisecond
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return nil, ctx.Err()
 			case <-time.After(backoff):
 			}
 
@@ -270,14 +334,10 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 			}
 		}
 
-		req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bodyReader)
+		req, err := c.newRequest(ctx, method, path, header, bodyReader)
 		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
+			return nil, err
 		}
-
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
-		req.Header.Set("User-Agent", "solvr-go/1.0.0")
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
@@ -295,25 +355,18 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 
 		// Handle error responses
 		if resp.StatusCode >= 400 {
-			var errResp ErrorResponse
-			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Code != "" {
-				return &errResp.Error
-			}
-			return &APIError{
-				Code:    fmt.Sprintf("HTTP_%d", resp.StatusCode),
-				Message: string(respBody),
-			}
+			return resp.Header, apiError(resp.StatusCode, respBody)
 		}
 
 		// Parse successful response
 		if result != nil && len(respBody) > 0 {
 			if err := json.Unmarshal(respBody, result); err != nil {
-				return fmt.Errorf("failed to decode response: %w", err)
+				return resp.Header, fmt.Errorf("failed to decode response: %w", err)
 			}
 		}
 
-		return nil
+		return resp.Header, nil
 	}
 
-	return lastErr
+	return nil, lastErr
 }

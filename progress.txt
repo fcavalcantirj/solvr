@@ -8516,3 +8516,123 @@ REMAINING FOR idx 78 (next slices, in order):
 
 git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
   (idx 78 passes stays false).
+
+2026-10-01 17:15 — Task idx 78 (spec.json, category functional) — IN PROGRESS, passes STAYS false
+"Keep SDKs, CLI, MCP, skills, and webhooks consistent with the redesigned product"
+SLICE 4: the first consumer, the Go SDK (packages/sdk-go). It now exposes all 13 contract operations (room
+create/join/read/send/watch + stream ticket, post search/create/get, reply create/list/get/edit), each a Client
+method named after its operationId, and a contract test serves contract/openapi-examples.json (success, errors[]
+and the event-stream body) from a local server and holds the SDK's request and its typed result to it.
+================================================================================
+
+TASK SELECTION [REAL, spec.json read this session]: false tasks 24, 67, 68, 78-95, 97, 98; no open URGENT (96
+  true). 24/67 acceptance (skipped as in every earlier entry); 68 waits on the owner (as journaled). idx 78 first
+  buildable; continued from slice 3 (HEAD 6d9ad08d), REMAINING item "4.. consumers": Go SDK first. Tree clean.
+
+DESIGN (from code read this session):
+  - Names: Go method = operationId with the first letter upper-cased (CreateRoom, HandshakeRoom, ListRoomEntries,
+    CreateRoomEntry, CreateRoomStreamTicket, StreamRoom, GetReply, UpdateReply; the existing Search, GetPost,
+    CreatePost, CreateReply, ListReplies already matched). The TS/Python slices should follow the same rule
+    (createRoom / create_room ...), so "consistent names" is derivable from GET /v1/openapi.json.
+  - Credential scope: Client.WithRoomToken(token) returns a COPY that presents the room token (the handshake's)
+    instead of the API key; the agent client is untouched. An empty API key is now an anonymous client: no
+    Authorization header (it used to send "Bearer "); the contract's credential none requires that.
+  - Errors: APIError gains RequestID (request_id) and Status (HTTP status, json:"-"; 0 for a stream-ending code).
+  - Cursors: RoomEntriesMeta.NextCursor is a string with omitempty, like RepliesMeta.NextCursor.
+  - ETag: ReplyResponse.ETag (json:"-") is read from the answer header by GetReply/UpdateReply; UpdateReply takes
+    ifMatch explicitly (empty -> the API's 428).
+  - Stream: StreamRoom(ctx, slug, *StreamRoomOptions{LastEventID, Ticket, Type, Issue}) -> *RoomStream; Next()
+    skips ": heartbeat" and "retry:" blocks, joins multi-line data, decodes RoomStreamFrame (Frame.Message() for a
+    message frame), tracks LastEventID() for reconnects, answers io.EOF on close and *APIError{Code} for the
+    access_revoked / credential_rotated end frames (format read from rooms_sse.go streamEnd.write). It uses a copy
+    of the http.Client with Timeout 0: the client's request timeout would otherwise kill an open stream.
+
+WHAT CHANGED [REAL, git status --porcelain: M client.go, M client_test.go, M replies.go, M types.go, ?? rooms.go,
+  ?? stream.go, ?? contract_test.go, ?? stream_test.go (all packages/sdk-go/); git diff --stat (tracked): 4 files,
+  212+/59-]:
+  PRODUCTION (packages/sdk-go):
+  M client.go (319 -> 372): package doc shows the room flow and the operationId naming rule; WithRoomToken;
+    NewClient doc (empty key = anonymous); Search sends sort and omits q when empty (the "q is missing" error
+    example sends no q); doRequest now wraps do(ctx, method, path, header, body, result) (http.Header, error);
+    newRequest (credential only when set, extra headers only when non-empty); apiError(status, body) sets Status.
+    Retry/backoff logic unchanged.
+  M types.go (173 -> 240): Post + posted_by_type/id, publication_state, moderation_state, visibility,
+    source_room_id, reply_count, answers/approaches/comments_count, user_vote; SearchResult + snippet, status,
+    author (SearchAuthor), similarity, vote_score, the 5 counts, created_at, solved_at, source, matched_replies
+    (SearchReplyMatch); new SearchMeta (query, took_ms, method, top_similarity, confident_match, warnings + the 4
+    page fields) replaces Meta in SearchResponse; SearchOptions.Sort; APIError RequestID + Status.
+  M replies.go (112 -> 145): Reply.Author; UpdateReplyRequest; ReplyResponse.ETag; GetReply; UpdateReply.
+  ?? rooms.go (234): Room, CreateRoomRequest, RoomResponse, HandshakeRoomRequest/RoomHandshake/Response,
+    RoomEntry, CreateRoomEntryRequest, RoomEntryMeta/Response, ListRoomEntriesOptions, RoomEntriesMeta/Response,
+    RoomStreamTicket/Response; CreateRoom, HandshakeRoom, ListRoomEntries, CreateRoomEntry,
+    CreateRoomStreamTicket (slugs url.PathEscape'd).
+  ?? stream.go (184): StreamRoomOptions, RoomStreamFrame (+Message()), RoomStreamMessage, RoomStreamEvent,
+    RoomStream (Next, LastEventID, Close), StreamRoom.
+  TESTS:
+  ?? contract_test.go (552): loads ../../contract/openapi-examples.json; EveryOperationIsAClientMethodNamedAfter
+    ItsOperationID (reflection + every fixture operation has a caller); EachExampleIsWhatTheSDKSendsAndSurfaces
+    (13 subtests: method, escaped path, Authorization per credential (none = no header, agent_api_key, room_token
+    via WithRoomToken), exact query, If-Match/Last-Event-ID present iff the example sends them, request body
+    EXACTLY the example's (decoded into the SDK request type with DisallowUnknownFields), typed result re-encoded
+    must carry every field the example answered with the same value (null = absent); getReply must surface the
+    ETag the updateReply example sends back; streamRoom: SSE id/event and the frame + its message payload
+    round-trip); EachErrorExampleSurfacesTheAPIErrorCode (5 subtests: *APIError with code/message/request_id and
+    Status = the example status); JSONDiffCatchesALostFieldAValueAndAnExtraRequestField (7 cases).
+  ?? stream_test.go (149): heartbeat/retry/multi-line, end frames -> APIError, refused stream -> APIError with
+    status + request_id, bad JSON frame errors, stream outlives a 100ms client timeout, resume header + filters +
+    room-token bearer, WithRoomToken leaves the agent client alone.
+  M client_test.go (10 lines, 5 literals): `Meta: Meta{` -> `Meta: SearchMeta{` in the 5 SearchResponse server
+    fixtures (TestSearch, TestSearchWithOptions, TestRetryOnNetworkError, TestSearchWithAllOptions,
+    TestSearchLegacyLimitOffset): a compile-only type rename of the served fixture; no assertion changed, removed
+    or loosened; Agents/Posts literals keep Meta. No test deleted or skipped.
+  Backend, frontend, contract fixture, SPEC.md: untouched. No migration.
+
+VERIFICATION [this session; logs in /tmp/solvr_idx78_s4/]:
+  [TEST] RED (tdd/red.log): build failed, the 9 new methods/types undefined.
+  [TEST] GREEN: green1.log one real mismatch: search error example `query map[q:[]], want map[]` (SDK sent q=
+    for an empty query) -> fixed (omit empty q); green2.log ok; tdd/green_v.log -run 'TestContract|TestStreamRoom|
+    TestWithRoomToken' -v: 29 PASS (13 operation + 5 error subtests), 0 FAIL, 0 SKIP. final.log `go test -count=1
+    -cover ./...` ok, coverage 89.8%.
+  MUTATIONS [TEST] (mut/*.log), each FAILS as intended, sources restored, `shasum -c mut/orig.sha` 9/9 OK:
+    m1 SearchMeta drops confident_match -> search result diff; m2 Reply drops author -> createReply/getReply/...;
+    m3b GetReply ignores ETag -> `getReply: the SDK surfaced ETag ""`; m4 UpdateReply drops If-Match -> success
+    and 412 subtests; m5 WithRoomToken keeps the key -> room_token ops Authorization; m6 anonymous sends "Bearer"
+    -> getPost/getReply; m7 no Last-Event-ID -> streamRoom + resume test; m8 no Status -> error subtests; m9
+    rotate without omitempty -> `$.rotate: the SDK sent it, the example does not`; m10 is_private omitempty ->
+    createRoom; m11b request_id tag renamed -> `$.request_id: the example has it, the SDK lost it`; m12 frame
+    drops fields -> streamRoom + stream test. (m3 and m11 first variants failed at compile only; redone as m3b/m11b.)
+  [TEST] backend_examples.log: DATABASE_URL=postgres://solvr:solvr_dev@localhost:5435/solvr_test (local docker
+    solvr-postgres, schema 132) go test ./internal/api -run 'TestOpenAPIExamples|TestOpenAPIStream' -count=1 -v:
+    9 PASS 0 SKIP incl. EachExampleIsWhatTheRunningAPIAnswers: the fixture the SDK is held to still matches the API.
+  [REAL] smoke.log: the real API binary (go build ./cmd/api, env -i with DATABASE_URL = the local solvr_test DB,
+    a throwaway JWT_SECRET, PORT 18093; no env file read) driven by a throwaway program in /tmp using the SDK via
+    replace: register agent 201; CreatePost (type post, draft, pending); CreateReply author present; GetReply ETag
+    "1790885052021797"; UpdateReply new ETag; stale ETag -> 412 PRECONDITION_FAILED; no If-Match -> 428
+    PRECONDITION_REQUIRED; Search("") -> 400 VALIDATION_ERROR; Search meta method fulltext, confident_match false;
+    CreateRoom; HandshakeRoom solvr_rt_; CreateRoomEntry + same client_entry_id -> same id, idempotent_replay true;
+    ListRoomEntries 1, limit 50; StreamRoom resumed after entry 1 -> next entry id/content, LastEventID updated;
+    anonymous StreamRoom with a minted ticket -> same frame; bogus ticket -> 401 STREAM_TICKET_INVALID; dead room
+    token -> 401 UNAUTHORIZED; handshake rotate:true -> the old token's open stream ended with CREDENTIAL_ROTATED
+    (22 ms). API stopped (pkill; port free); the smoke's agent/post/reply/room deleted from solvr_test (4 DELETE 1).
+  [REAL] gofmt -l clean, go vet ok (packages/sdk-go); ./scripts/check-file-size.sh -> the same 33 oversize files,
+    none in packages/sdk-go.
+  NOT RUN: backend full suite and frontend (no file there touched).
+
+FINDINGS, NOT FIXED:
+  - [REAL code read] the Go SDK sends tags as repeated `tags=a&tags=b`, but handlers/search.go reads
+    Query().Get("tags") and splits on commas, so only the first tag filters. TestSearchWithAllOptions pins the
+    repeated form (expects len(q["tags"]) == 2); fixing it means replacing that test -> owner call / later slice.
+  - [REAL] CI (.github/workflows) runs no packages/sdk-go test: these contract tests guard only when run by hand.
+  - [REAL] SearchOptions.Type/Status and ListPosts still send the legacy type/status filters (step 5 item).
+  - Carried from slice 3: search ignores unknown params (200 + warnings) while stream rejects them (400); createRoom
+    duplicate slug 409 DUPLICATE_ROOM not named by the Conflict row; handshake note points at /r/{slug}/*.
+
+REMAINING FOR idx 78 (next slices, in order):
+  5.. consumers: TS SDK, Python SDK (same naming rule, room methods, contract test on the same fixture), then
+    packages/cli, cli/, mcp-server, backend /v1/mcp, skill/scripts.
+  then steps 3, 4 (webhooks: NewWebhooksHandler is mounted by no router; discovery still lists "webhooks"), 5
+    (migration notes, deprecation errors, legacy choices out of first-party clients), 6 (external consumer vs clean
+    + upgraded schema), 7 (participants as collections, third agent without a new room); the consistency findings.
+
+git status at journal time [REAL]: as WHAT CHANGED, plus M progress.txt (this entry). spec.json unchanged
+  (idx 78 passes stays false).

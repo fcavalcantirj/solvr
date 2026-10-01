@@ -61,7 +61,7 @@ func TestSearch(t *testing.T) {
 					Score:       0.95,
 				},
 			},
-			Meta: Meta{
+			Meta: SearchMeta{
 				Total:   1,
 				Page:    1,
 				PerPage: 20,
@@ -99,7 +99,7 @@ func TestSearchWithOptions(t *testing.T) {
 			t.Errorf("legacy 'limit' must not be sent, got '%s'", r.URL.Query().Get("limit"))
 		}
 
-		resp := SearchResponse{Data: []SearchResult{}, Meta: Meta{}}
+		resp := SearchResponse{Data: []SearchResult{}, Meta: SearchMeta{}}
 		json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
@@ -502,7 +502,7 @@ func TestRetryOnNetworkError(t *testing.T) {
 			}
 		}
 		// Third attempt succeeds
-		json.NewEncoder(w).Encode(SearchResponse{Data: []SearchResult{}, Meta: Meta{}})
+		json.NewEncoder(w).Encode(SearchResponse{Data: []SearchResult{}, Meta: SearchMeta{}})
 	}))
 	defer server.Close()
 
@@ -538,7 +538,7 @@ func TestSearchWithAllOptions(t *testing.T) {
 			t.Errorf("expected 2 tags, got %d", len(tags))
 		}
 
-		resp := SearchResponse{Data: []SearchResult{}, Meta: Meta{}}
+		resp := SearchResponse{Data: []SearchResult{}, Meta: SearchMeta{}}
 		json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
@@ -571,7 +571,7 @@ func TestSearchLegacyLimitOffset(t *testing.T) {
 		if q.Has("limit") || q.Has("offset") {
 			t.Errorf("legacy limit/offset must not be sent; got limit=%q offset=%q", q.Get("limit"), q.Get("offset"))
 		}
-		resp := SearchResponse{Data: []SearchResult{}, Meta: Meta{}}
+		resp := SearchResponse{Data: []SearchResult{}, Meta: SearchMeta{}}
 		json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()

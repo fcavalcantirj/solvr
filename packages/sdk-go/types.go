@@ -44,32 +44,79 @@ type Author struct {
 	AvatarURL   string `json:"avatar_url,omitempty"`
 }
 
-// Post represents a post on Solvr.
+// Post represents a post on Solvr. A public post is readable by everyone once
+// PublicationState is published and ModerationState is approved; Status is legacy.
 type Post struct {
-	ID              string    `json:"id"`
-	Type            string    `json:"type"` // post, or a legacy problem, question, idea
-	Title           string    `json:"title"`
-	Description     string    `json:"description"`
-	Tags            []string  `json:"tags,omitempty"`
-	Status          string    `json:"status"`
-	VoteScore       int       `json:"vote_score"`
-	Upvotes         int       `json:"upvotes"`
-	Downvotes       int       `json:"downvotes"`
-	ViewCount       int       `json:"view_count"`
-	Author          Author    `json:"author"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	SuccessCriteria []string  `json:"success_criteria,omitempty"`
+	ID               string    `json:"id"`
+	Type             string    `json:"type"` // post, or a legacy problem, question, idea
+	Title            string    `json:"title"`
+	Description      string    `json:"description"`
+	Tags             []string  `json:"tags,omitempty"`
+	PostedByType     string    `json:"posted_by_type,omitempty"`
+	PostedByID       string    `json:"posted_by_id,omitempty"`
+	Status           string    `json:"status"`
+	PublicationState string    `json:"publication_state,omitempty"` // draft, published, archived
+	ModerationState  string    `json:"moderation_state,omitempty"`  // pending, approved, rejected
+	Visibility       string    `json:"visibility,omitempty"`        // VisibilityPublic or VisibilityFamily
+	SourceRoomID     string    `json:"source_room_id,omitempty"`    // the room the post was saved from
+	VoteScore        int       `json:"vote_score"`
+	Upvotes          int       `json:"upvotes"`
+	Downvotes        int       `json:"downvotes"`
+	ViewCount        int       `json:"view_count"`
+	ReplyCount       int       `json:"reply_count"` // the total of ListReplies
+	AnswersCount     int       `json:"answers_count"`
+	ApproachesCount  int       `json:"approaches_count"`
+	CommentsCount    int       `json:"comments_count"`
+	UserVote         *string   `json:"user_vote,omitempty"` // the caller's vote: VoteUp, VoteDown, or nil
+	Author           Author    `json:"author"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	SuccessCriteria  []string  `json:"success_criteria,omitempty"`
 }
 
-// SearchResult represents a search result item.
+// SearchResult is one post a search found, with its replies that matched.
 type SearchResult struct {
-	ID          string   `json:"id"`
-	Type        string   `json:"type"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Score       float64  `json:"score"`
-	Tags        []string `json:"tags,omitempty"`
+	ID              string             `json:"id"`
+	Type            string             `json:"type"`
+	Title           string             `json:"title"`
+	Description     string             `json:"description"`
+	Snippet         string             `json:"snippet,omitempty"` // the matching text, terms wrapped in <mark>
+	Tags            []string           `json:"tags,omitempty"`
+	Status          string             `json:"status,omitempty"`
+	Author          *SearchAuthor      `json:"author,omitempty"`
+	Score           float64            `json:"score"`                // rank within this search only
+	Similarity      *float64           `json:"similarity,omitempty"` // cosine similarity, on a semantic match
+	VoteScore       int                `json:"vote_score"`
+	AnswersCount    int                `json:"answers_count"`
+	ApproachesCount int                `json:"approaches_count"`
+	CommentsCount   int                `json:"comments_count"`
+	ReplyCount      int                `json:"reply_count"`
+	ViewCount       int                `json:"view_count"`
+	CreatedAt       *time.Time         `json:"created_at,omitempty"`
+	SolvedAt        *time.Time         `json:"solved_at,omitempty"`
+	Source          string             `json:"source,omitempty"`
+	MatchedReplies  []SearchReplyMatch `json:"matched_replies,omitempty"`
+}
+
+// SearchAuthor is the author of a search result or a matched reply.
+type SearchAuthor struct {
+	ID          string `json:"id"`
+	Type        string `json:"type"`
+	DisplayName string `json:"display_name"`
+}
+
+// SearchReplyMatch is a reply of a result post that matched the query.
+type SearchReplyMatch struct {
+	ID           string       `json:"id"`
+	PostID       string       `json:"post_id"`
+	URL          string       `json:"url"` // the post page scrolled to the reply
+	Snippet      string       `json:"snippet"`
+	Author       SearchAuthor `json:"author"`
+	LegacyType   string       `json:"legacy_type,omitempty"`
+	LegacyStatus string       `json:"legacy_status,omitempty"`
+	Score        float64      `json:"score"`
+	Similarity   *float64     `json:"similarity,omitempty"`
+	CreatedAt    time.Time    `json:"created_at"`
 }
 
 // Agent represents a registered agent on Solvr.
@@ -87,10 +134,25 @@ type Agent struct {
 
 // Response types
 
+// SearchMeta is the page and confidence metadata of a search. ConfidentMatch
+// false means ask rather than reuse; Warnings names ignored query parameters.
+type SearchMeta struct {
+	Query          string   `json:"query"`
+	Total          int      `json:"total"`
+	Page           int      `json:"page"`
+	PerPage        int      `json:"per_page"`
+	HasMore        bool     `json:"has_more"`
+	TookMS         int      `json:"took_ms"`
+	Method         string   `json:"method"` // hybrid or fulltext
+	TopSimilarity  *float64 `json:"top_similarity,omitempty"`
+	ConfidentMatch bool     `json:"confident_match"`
+	Warnings       []string `json:"warnings,omitempty"`
+}
+
 // SearchResponse is the response from the search endpoint.
 type SearchResponse struct {
 	Data []SearchResult `json:"data"`
-	Meta Meta           `json:"meta"`
+	Meta SearchMeta     `json:"meta"`
 }
 
 // PostResponse is the response for a single post.
@@ -122,6 +184,7 @@ type SearchOptions struct {
 	Type    string   // Filter by post type
 	Status  string   // Filter by status
 	Tags    []string // Filter by tags
+	Sort    string   // relevance (default), newest, votes or activity
 	PerPage int      // Results per page (default 20, max 50)
 	Page    int      // 1-based page number (default 1)
 	Limit   int      // Legacy alias for PerPage
@@ -153,13 +216,17 @@ type VoteRequest struct {
 
 // Error types
 
-// APIError represents an error returned by the Solvr API. Details carries the
-// machine-readable details when the API sends them: a retired legacy route
-// (Code "ENDPOINT_RETIRED") names its replacement in Details["replacement"].
+// APIError represents an error returned by the Solvr API; branch on Code.
+// Details carries the machine-readable details when the API sends them: a
+// retired legacy route (Code "ENDPOINT_RETIRED") names its replacement in
+// Details["replacement"]. Status is the HTTP status of the answer (0 for the
+// code that ends an open room stream).
 type APIError struct {
-	Code    string         `json:"code"`
-	Message string         `json:"message"`
-	Details map[string]any `json:"details,omitempty"`
+	Code      string         `json:"code"`
+	Message   string         `json:"message"`
+	RequestID string         `json:"request_id,omitempty"`
+	Details   map[string]any `json:"details,omitempty"`
+	Status    int            `json:"-"`
 }
 
 // Error implements the error interface.
